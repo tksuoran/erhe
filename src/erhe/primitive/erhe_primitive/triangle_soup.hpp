@@ -16,6 +16,7 @@ namespace GEO { class Mesh; }
 namespace erhe::primitive {
 
 class Element_mappings;
+class Prepared_primitive_data;
 
 class Triangle_soup
 {
@@ -53,6 +54,11 @@ public:
     [[nodiscard]] virtual auto load() const -> std::shared_ptr<Triangle_soup> = 0;
     // Short description for logs (file and primitive).
     [[nodiscard]] virtual auto describe() const -> std::string = 0;
+    // The validated prepared mesh data of `soup`, the soup load() just
+    // returned, for a source that carries it (a deferred load, see
+    // Primitive_shape::load_payload()); null otherwise and when it is
+    // rejected (the primitive then loads as a plain soup).
+    [[nodiscard]] virtual auto load_prepared_data(const Triangle_soup& soup) const -> std::shared_ptr<Prepared_primitive_data>;
 };
 
 // Process-wide counts of Primitive_shape::get_triangle_soup() reloads.

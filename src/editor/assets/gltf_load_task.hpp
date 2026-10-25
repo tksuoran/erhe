@@ -130,14 +130,16 @@ private:
         erhe::primitive::Build_info           skinned_build_info;
         std::vector<Imported_build_job>       jobs;
         std::size_t                           primitive_count{0};
-        std::size_t                           prepared_count {0};
         std::size_t                           next_job       {0}; // main thread only
+        bool                                  release_soups  {false}; // load.cpu_mesh_data release
         std::chrono::steady_clock::time_point start_time;
 
         // Guarded by mutex: written by the tasks, read by the main thread.
         std::mutex  mutex;
         std::size_t running_count {0};
         std::size_t finished_count{0};
+        std::size_t prepared_count{0};
+        std::size_t released_count{0};
 
         [[nodiscard]] auto is_finished() -> bool;     // every job dispatched and finished
         [[nodiscard]] auto is_worker_idle() -> bool;  // no job task running
@@ -190,6 +192,7 @@ private:
     // is reclaimed by frame completion (plan 2.6).
     std::unique_ptr<erhe::gltf::Image_transfer> m_image_transfer;
     std::shared_ptr<Build_state>  m_build_state;
+    bool                          m_mesh_payload_deferred{false};
     // Highest LOADER-queue ticket the worker build enqueued. Publish waits
     // until Mesh_memory's loader watermark has reached it, because a
     // budget-drained queue does not guarantee "enqueued implies uploaded"

@@ -151,6 +151,8 @@ public:
 };
 
 class Gltf_image_decode_queue; // gltf_fastgltf.cpp: worker decode state shared with the tasks
+class Gltf_prepared_statistics; // gltf_fastgltf.cpp: prepared mesh data counts shared with the soup sources
+class Gltf_source_files;        // gltf_fastgltf.cpp: shared positional read handles of a load's buffer files
 } // namespace erhe::gltf
 namespace erhe::utility {
     class Memory_budget;
@@ -422,7 +424,16 @@ public:
     std::vector<std::vector<Gltf_raw_extensions>> mesh_primitive_extensions;
 
     // Prepared mesh data outcome of the parse (see Gltf_prepared_mesh_statistics).
+    // With Mesh_payload_load::deferred the payloads are validated by the
+    // build jobs; finish_prepared_mesh_statistics() fills this afterwards.
     Gltf_prepared_mesh_statistics                 prepared_mesh_statistics;
+    // The statistics the payload validations record into (shared with the
+    // soup sources of a deferred load).
+    std::shared_ptr<Gltf_prepared_statistics>     prepared_statistics;
+    // The buffer files of a parse from a file, held open for positional
+    // reads while the load reads the primitives' payloads; closed by
+    // close_source_files() (doc/erhe/gltf.md "Reading buffers by range").
+    std::shared_ptr<Gltf_source_files>            source_files;
 };
 
 class Gltf_scan
@@ -509,6 +520,20 @@ enum class Triangle_soup_reload : unsigned int {
     record = 1
 };
 
+// When a soup primitive's payload (its triangle soup and the validation of
+// its prepared mesh data) is read. in_parse: parse_gltf reads it, every soup
+// primitive is complete when the parse returns. deferred: a primitive whose
+// bytes are in the file gets a source and its counts only
+// (erhe::primitive::Primitive(source, counts)); the caller reads the
+// payload per primitive with Primitive::load_payload(), one job each
+// (doc/editor/async_asset_loading.md "Mesh build jobs"), and calls
+// finish_prepared_mesh_statistics() after the last one. A parse from memory
+// always reads in the parse.
+enum class Mesh_payload_load : unsigned int {
+    in_parse = 0,
+    deferred = 1
+};
+
 struct Gltf_parse_arguments
 {
     ::tf::Executor&                           executor;
@@ -536,9 +561,23 @@ struct Gltf_parse_arguments
     // (erhe::primitive::Primitive_shape::get_prepared_data()).
     Prepared_mesh_data_use                    prepared_mesh_data_use{Prepared_mesh_data_use::use};
     Triangle_soup_reload                      triangle_soup_reload{Triangle_soup_reload::none};
+    Mesh_payload_load                         mesh_payload{Mesh_payload_load::in_parse};
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;
+
+// Copies the prepared mesh data statistics the payload validations recorded
+// into Gltf_data::prepared_mesh_statistics and logs the per-file summary
+// line. parse_gltf calls it itself unless the payloads are deferred; then
+// the caller calls it once every payload is loaded.
+void finish_prepared_mesh_statistics(Gltf_data& data, const std::filesystem::path& path);
+
+// Closes the buffer file handles the load read the primitive payloads
+// through. parse_gltf closes them itself unless the payloads are deferred;
+// then the caller closes them once every payload is loaded. Later reads (a
+// released soup read back) open the file for that read only, so no handle
+// stays open and a save may replace the file.
+void close_source_files(Gltf_data& data);
 
 [[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
 

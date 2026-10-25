@@ -139,7 +139,24 @@ public:
     // which make_prepared_raytrace() hands to the raytrace, so the BVH is
     // never held twice.
     Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data);
+    // A soup shape whose payload is not loaded yet (a deferred glTF load,
+    // doc/editor/async_asset_loading.md "Mesh build jobs"): only the source
+    // and the counts are known. load_payload() reads the soup and the
+    // prepared data from the source; until then the shape reads as released
+    // (get_triangle_soup() would read the soup back without prepared data).
+    Primitive_shape(std::shared_ptr<const Triangle_soup_source> source, Triangle_soup_counts counts);
     ~Primitive_shape() noexcept;
+
+    // Loads the payload of a shape made with the source constructor: the soup
+    // (Triangle_soup_source::load()) and its prepared mesh data
+    // (Triangle_soup_source::load_prepared_data()); afterwards the shape is
+    // what the soup + prepared data constructor makes. Returns true when the
+    // payload is loaded (now or before) or the shape has none pending; false,
+    // with an error logged, when the soup cannot be read or its counts
+    // differ from the recorded ones. Runs on a loader worker before the
+    // shape is built or shared (the prepared data is not locked).
+    auto load_payload() -> bool;
+    [[nodiscard]] auto is_payload_pending() const -> bool;
 
     // Two locks, see doc/erhe/primitive_shape_locking.md:
     //
@@ -282,6 +299,7 @@ protected:
     Triangle_soup_counts                      m_triangle_soup_counts{};     // fixed at construction
     bool                                      m_triangle_soup_released{false}; // under m_state_mutex
     std::shared_ptr<const Prepared_primitive_data> m_prepared_data{};
+    bool                                           m_payload_pending{false}; // under m_state_mutex; source constructor until load_payload()
     std::unique_ptr<erhe::raytrace::Prebuilt_bvh>  m_stored_bvh{};          // under m_build_mutex
     bool                                           m_prepared_data_stale{false}; // under m_state_mutex
     Primitive_raytrace                        m_raytrace{};
@@ -307,6 +325,8 @@ public:
     explicit Primitive_render_shape(Buffer_mesh&& renderable_mesh);
     explicit Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup);
     Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data);
+    // Payload not loaded yet, see the Primitive_shape source constructor.
+    Primitive_render_shape(std::shared_ptr<const Triangle_soup_source> source, Triangle_soup_counts counts);
     // A variant build: a soup that is a REORDERING of another shape's, with the
     // Element_mappings already composed to describe that new order
     // (compose_element_mappings()). Mappings normally arrive from a build, and
@@ -400,6 +420,9 @@ public:
     // A soup primitive with validated prepared mesh data on its render shape
     // (Primitive_shape::get_prepared_data()).
     Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data);
+    // A soup primitive whose payload a loader job reads later
+    // (load_payload()); see the Primitive_shape source constructor.
+    Primitive(std::shared_ptr<const Triangle_soup_source> source, Triangle_soup_counts counts);
     explicit Primitive(Buffer_mesh&& renderable_mesh);
     explicit Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
     Primitive(
@@ -439,6 +462,9 @@ public:
     [[nodiscard]] auto make_prepared_meshes    (const Build_info& build_info) -> bool;
     // The render shape carries prepared mesh data.
     [[nodiscard]] auto is_prepared             () const -> bool;
+    // Loads the render shape's pending payload (Primitive_shape::load_payload());
+    // true when nothing is pending.
+    auto load_payload() -> bool;
     // Releases the render shape's CPU triangle soup (and the optimized
     // variant's, when it shares it) once the GPU buffers and the raytrace are
     // built; readers reload it from the soup source through

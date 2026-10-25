@@ -737,6 +737,7 @@ Primitive_shape::Primitive_shape(Primitive_shape&& old) noexcept
     , m_triangle_soup_counts   {old.m_triangle_soup_counts}
     , m_triangle_soup_released {old.m_triangle_soup_released}
     , m_prepared_data          {std::move(old.m_prepared_data)}
+    , m_payload_pending        {old.m_payload_pending}
     , m_stored_bvh             {std::move(old.m_stored_bvh)}
     , m_prepared_data_stale    {old.m_prepared_data_stale}
     , m_raytrace               {std::move(old.m_raytrace)}
@@ -760,6 +761,7 @@ Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept
         m_triangle_soup_counts   = old.m_triangle_soup_counts;
         m_triangle_soup_released = old.m_triangle_soup_released;
         m_prepared_data          = std::move(old.m_prepared_data);
+        m_payload_pending        = old.m_payload_pending;
         m_stored_bvh             = std::move(old.m_stored_bvh);
         m_prepared_data_stale    = old.m_prepared_data_stale;
         m_raytrace               = std::move(old.m_raytrace);
@@ -806,6 +808,11 @@ auto get_triangle_soup_reload_counter() -> Triangle_soup_reload_counter&
 
 Triangle_soup_source::~Triangle_soup_source() noexcept = default;
 
+auto Triangle_soup_source::load_prepared_data(const Triangle_soup&) const -> std::shared_ptr<Prepared_primitive_data>
+{
+    return {};
+}
+
 auto get_triangle_soup_reload_statistics() -> Triangle_soup_reload_statistics
 {
     Triangle_soup_reload_counter& counter = get_triangle_soup_reload_counter();
@@ -831,8 +838,62 @@ Primitive_shape::Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_
     m_prepared_data = std::move(prepared_data);
 }
 
+Primitive_shape::Primitive_shape(std::shared_ptr<const Triangle_soup_source> source, const Triangle_soup_counts counts)
+    : m_triangle_soup_source  {std::move(source)}
+    , m_triangle_soup_counts  {counts}
+    , m_triangle_soup_released{true}
+    , m_payload_pending       {true}
+{
+    ERHE_VERIFY(m_triangle_soup_source);
+}
+
 Primitive_shape::~Primitive_shape() noexcept
 {
+}
+
+auto Primitive_shape::is_payload_pending() const -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_payload_pending;
+}
+
+auto Primitive_shape::load_payload() -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    std::shared_ptr<const Triangle_soup_source> source;
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (!m_payload_pending) {
+            return true;
+        }
+        source = m_triangle_soup_source;
+    }
+    std::shared_ptr<Triangle_soup> soup = source->load();
+    if (!soup) {
+        return false; // the source logged why
+    }
+    const Triangle_soup_counts counts = get_counts(soup);
+    if ((counts.vertex_count != m_triangle_soup_counts.vertex_count) || (counts.index_count != m_triangle_soup_counts.index_count)) {
+        log_primitive->error(
+            "payload load of {}: {} vertices / {} indices, the file listed {} / {} - refused",
+            source->describe(), counts.vertex_count, counts.index_count,
+            m_triangle_soup_counts.vertex_count, m_triangle_soup_counts.index_count
+        );
+        return false;
+    }
+    std::shared_ptr<Prepared_primitive_data> prepared_data = source->load_prepared_data(*soup);
+    if (prepared_data && prepared_data->bvh.has_value()) {
+        m_stored_bvh = std::make_unique<erhe::raytrace::Prebuilt_bvh>(std::move(prepared_data->bvh.value()));
+        prepared_data->bvh.reset();
+    }
+    m_prepared_data = std::move(prepared_data);
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_triangle_soup          = std::move(soup);
+    m_triangle_soup_released = false;
+    m_payload_pending        = false;
+    return true;
 }
 
 auto Primitive_shape::make_geometry() -> bool
@@ -1299,6 +1360,12 @@ Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_so
 
 Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup, std::shared_ptr<Prepared_primitive_data> prepared_data)
     : Primitive_shape{triangle_soup, std::move(prepared_data)}
+    , m_normal_style {Normal_style::corner_normals}
+{
+}
+
+Primitive_render_shape::Primitive_render_shape(std::shared_ptr<const Triangle_soup_source> source, const Triangle_soup_counts counts)
+    : Primitive_shape{std::move(source), counts}
     , m_normal_style {Normal_style::corner_normals}
 {
 }
@@ -1928,6 +1995,16 @@ Primitive::Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup, std::s
 Primitive::Primitive(Buffer_mesh&& renderable_mesh)
     : render_shape{std::make_shared<Primitive_render_shape>(std::move(renderable_mesh))}
 {
+}
+
+Primitive::Primitive(std::shared_ptr<const Triangle_soup_source> source, const Triangle_soup_counts counts)
+    : render_shape{std::make_shared<Primitive_render_shape>(std::move(source), counts)}
+{
+}
+
+auto Primitive::load_payload() -> bool
+{
+    return !render_shape || render_shape->load_payload();
 }
 
 Primitive::Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry)

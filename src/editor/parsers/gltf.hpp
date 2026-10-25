@@ -167,7 +167,8 @@ public:
     erhe::primitive::Primitive*        primitive {nullptr};
     const erhe::primitive::Build_info* build_info{nullptr};
     const erhe::scene::Mesh*           mesh      {nullptr};
-    std::size_t                        upload_byte_count{0};
+    std::size_t                        upload_byte_count {0}; // waits in the loader queue until drained
+    std::size_t                        payload_byte_count{0}; // the soup a deferred payload load reads, for the job's duration
 };
 
 // The build jobs of a parsed glTF, one per unique render shape (a shape
@@ -181,11 +182,24 @@ public:
     std::size_t&                       out_primitive_count
 ) -> std::vector<Imported_build_job>;
 
-// Builds one job's Buffer_meshes (the prepared load build or the renderable
-// soup build) on a worker, inside its own Scoped_worker_context.
-// finalize_imported_meshes still runs afterwards on the main thread and
-// fast-paths over the built primitives.
-void run_imported_build_job(const Imported_build_job& job, erhe::graphics::Device& graphics_device);
+// What run_imported_build_job() did.
+class Imported_build_result
+{
+public:
+    bool prepared{false}; // the primitive carries prepared mesh data
+    bool released{false}; // its CPU soup was released after the build
+};
+
+// Builds one job's primitive on a worker, inside its own
+// Scoped_worker_context: loads its payload when the parse deferred it
+// (Primitive::load_payload(): the soup read from the file and the prepared
+// mesh data validated), then the prepared load build or the renderable soup
+// build. With release_soups (load.cpu_mesh_data release) the soup of a
+// primitive that reached its final state - real raytrace, and the optimized
+// variant when meshes are optimized - is released right away, so a load
+// never holds every soup at once. finalize_imported_meshes still runs
+// afterwards on the main thread and fast-paths over the built primitives.
+auto run_imported_build_job(const Imported_build_job& job, erhe::graphics::Device& graphics_device, bool release_soups) -> Imported_build_result;
 
 // The nodes overload is the implementation and is format-neutral: the USD
 // import (parsers/usd.cpp) hands it its own node list.

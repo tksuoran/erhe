@@ -24,6 +24,8 @@
 #include <taskflow/taskflow.hpp>
 
 #include <cstring>
+#include <filesystem>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -479,6 +481,97 @@ void replace_after(std::string& json, const std::string_view key, const std::siz
 // Prepared mesh data read back (doc/plans/gltf_fast_load.md step 5): every
 // prepared primitive validates and carries its payloads; with the setting
 // off nothing is read.
+// Mesh_payload_load::deferred: the parse gives each soup primitive its source
+// and counts only; Primitive::load_payload() then reads the soup and
+// validates the prepared mesh data, with the same result as a parse that
+// reads them itself. A file changed before the load refuses it.
+TEST(Gltf_roundtrip, deferred_mesh_payload_loads_like_the_parse)
+{
+    const std::string glb = make_prepared_glb();
+    ASSERT_FALSE(glb.empty());
+    const bool has_bvh_backend = !erhe::raytrace::get_prebuilt_bvh_backend().empty();
+
+    erhe::scene::Scene          reference_scene{"reference", nullptr};
+    const erhe::gltf::Gltf_data reference = parse_glb(glb, "deferred_reference.glb", reference_scene, erhe::gltf::Prepared_mesh_data_use::use);
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>> reference_shapes = get_panel_shapes(reference);
+    ASSERT_EQ(reference_shapes.size(), 2u);
+
+    const auto parse_deferred = [&](const std::filesystem::path& path, erhe::scene::Scene& scene) -> erhe::gltf::Gltf_data {
+        tf::Executor executor{1};
+        const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+        return erhe::gltf::parse_gltf(
+            erhe::gltf::Gltf_parse_arguments{
+                .executor     = executor,
+                .root_node    = root_node,
+                .path         = path,
+                .parallel     = false,
+                .mesh_payload = erhe::gltf::Mesh_payload_load::deferred
+            }
+        );
+    };
+    const auto get_primitives = [](const erhe::gltf::Gltf_data& data) -> std::vector<std::shared_ptr<erhe::primitive::Primitive>> {
+        std::vector<std::shared_ptr<erhe::primitive::Primitive>> primitives;
+        const std::shared_ptr<erhe::scene::Node> panel = find_by_name(data.nodes, "Panel");
+        EXPECT_TRUE(panel);
+        if (panel) {
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : erhe::scene::get_mesh(panel.get())->get_primitives()) {
+                primitives.push_back(mesh_primitive.primitive);
+            }
+        }
+        return primitives;
+    };
+
+    const std::filesystem::path path = write_temporary_file("deferred_payload.glb", glb);
+    erhe::scene::Scene    scene{"deferred", nullptr};
+    erhe::gltf::Gltf_data data = parse_deferred(path, scene);
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive>> primitives = get_primitives(data);
+    ASSERT_EQ(primitives.size(), 2u);
+    for (const std::shared_ptr<erhe::primitive::Primitive>& primitive : primitives) {
+        ASSERT_TRUE(primitive->render_shape);
+        EXPECT_TRUE(primitive->render_shape->is_payload_pending());
+        EXPECT_FALSE(primitive->is_prepared());
+        EXPECT_EQ(primitive->render_shape->get_triangle_soup_counts().vertex_count, 4u);
+        EXPECT_EQ(primitive->render_shape->get_triangle_soup_counts().index_count,  6u);
+    }
+    EXPECT_EQ(data.prepared_mesh_statistics.used_count, 0u); // nothing validated yet
+
+    for (std::size_t i = 0; i < primitives.size(); ++i) {
+        ASSERT_TRUE(primitives[i]->load_payload());
+        EXPECT_FALSE(primitives[i]->render_shape->is_payload_pending());
+        EXPECT_TRUE(primitives[i]->is_prepared());
+        EXPECT_EQ(primitives[i]->render_shape->has_stored_bvh(), has_bvh_backend);
+        const std::shared_ptr<erhe::primitive::Triangle_soup> soup      = primitives[i]->render_shape->get_triangle_soup();
+        const std::shared_ptr<erhe::primitive::Triangle_soup> reference_soup = reference_shapes[i]->get_triangle_soup();
+        ASSERT_TRUE(soup);
+        ASSERT_TRUE(reference_soup);
+        EXPECT_EQ(soup->vertex_data, reference_soup->vertex_data);
+        EXPECT_EQ(soup->index_data,  reference_soup->index_data);
+        const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& prepared           = primitives[i]->render_shape->get_prepared_data();
+        const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& reference_prepared = reference_shapes[i]->get_prepared_data();
+        ASSERT_TRUE(prepared);
+        ASSERT_TRUE(reference_prepared);
+        EXPECT_EQ(prepared->content_hash, reference_prepared->content_hash);
+        ASSERT_TRUE(prepared->colocation.has_value());
+        EXPECT_EQ(prepared->colocation->vertex_points, reference_prepared->colocation->vertex_points);
+    }
+    erhe::gltf::finish_prepared_mesh_statistics(data, path);
+    EXPECT_EQ(data.prepared_mesh_statistics.used_count,          2u);
+    EXPECT_EQ(data.prepared_mesh_statistics.rejected_count,      0u);
+    EXPECT_EQ(data.prepared_mesh_statistics.topology_used_count, 2u);
+
+    // A file that changed between the parse and the load: refused.
+    const std::filesystem::path changed_path = write_temporary_file("deferred_payload_changed.glb", glb);
+    erhe::scene::Scene    changed_scene{"changed", nullptr};
+    const erhe::gltf::Gltf_data changed_data = parse_deferred(changed_path, changed_scene);
+    const std::filesystem::file_time_type old_time = std::filesystem::last_write_time(changed_path);
+    static_cast<void>(write_temporary_file("deferred_payload_changed.glb", glb));
+    std::filesystem::last_write_time(changed_path, old_time + std::chrono::seconds{2});
+    for (const std::shared_ptr<erhe::primitive::Primitive>& primitive : get_primitives(changed_data)) {
+        EXPECT_FALSE(primitive->load_payload());
+        EXPECT_TRUE(primitive->render_shape->is_payload_pending());
+    }
+}
+
 TEST(Gltf_roundtrip, prepared_mesh_data_parse_accepts_own_output)
 {
     const std::string glb = make_prepared_glb();

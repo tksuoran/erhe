@@ -1,6 +1,7 @@
 set(_target "erhe_file_tests")
 add_executable(${_target}
     main.cpp
+    test_positional_file_reader.cpp
     test_write_file_via_temp.cpp
 )
 

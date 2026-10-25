@@ -13,6 +13,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_utility/memory_budget.hpp"
+#include "erhe_file/positional_file_reader.hpp"
 #include "erhe_graphics/ktx2_container.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_task/task.hpp"
@@ -1570,11 +1571,77 @@ public:
     std::size_t byte_offset {0};
 };
 
+// Positional read handles of a load's buffer files (Gltf_buffer_origins::files),
+// opened at the first read and shared by every task that reads a primitive's
+// payload, in parallel (erhe::file::Positional_file_reader). close() closes
+// them for good once the load has read every payload; a read after that
+// opens the file for that read only, so no handle outlives the load.
+class Gltf_source_files
+{
+public:
+    explicit Gltf_source_files(std::vector<std::filesystem::path> paths)
+        : m_paths  {std::move(paths)}
+        , m_readers(m_paths.size())
+    {
+    }
+
+    [[nodiscard]] auto read(const std::size_t file_index, const std::uint64_t offset, const std::span<std::byte> out) -> bool
+    {
+        if (file_index >= m_paths.size()) {
+            return false;
+        }
+        const erhe::file::Positional_file_reader* reader = nullptr;
+        {
+            const std::lock_guard<std::mutex> lock{m_mutex};
+            if (!m_closed) {
+                std::unique_ptr<erhe::file::Positional_file_reader>& slot = m_readers[file_index];
+                if (!slot) {
+                    slot = std::make_unique<erhe::file::Positional_file_reader>();
+                    if (!slot->open(m_paths[file_index])) {
+                        slot.reset();
+                        return false;
+                    }
+                }
+                ++m_reads_in_flight;
+                reader = slot.get();
+            }
+        }
+        if (reader != nullptr) {
+            const bool ok = reader->read_at(offset, out);
+            const std::lock_guard<std::mutex> lock{m_mutex};
+            --m_reads_in_flight;
+            if (m_closed && (m_reads_in_flight == 0)) {
+                m_readers.clear();
+            }
+            return ok;
+        }
+        erhe::file::Positional_file_reader one_off;
+        return one_off.open(m_paths[file_index]) && one_off.read_at(offset, out);
+    }
+
+    void close()
+    {
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        m_closed = true;
+        if (m_reads_in_flight == 0) {
+            m_readers.clear();
+        }
+    }
+
+private:
+    std::vector<std::filesystem::path>                               m_paths;
+    std::mutex                                                       m_mutex;
+    std::vector<std::unique_ptr<erhe::file::Positional_file_reader>> m_readers;          // under m_mutex
+    std::size_t                                                      m_reads_in_flight{0}; // under m_mutex
+    bool                                                             m_closed{false};      // under m_mutex
+};
+
 // The buffer origins of one parsed file, shared by the triangle soup sources
 // of all its primitives.
 class Gltf_buffer_origins
 {
 public:
+    std::shared_ptr<Gltf_source_files>             source_files; // read handles; set by the parse
     std::vector<Gltf_source_file>                  files;
     std::vector<std::optional<Gltf_buffer_origin>> buffers;     // per glTF buffer; nullopt: not in a file (data URI)
     std::vector<Gltf_view_place>                   view_places; // per glTF bufferView, as the file has it
@@ -1701,41 +1768,427 @@ namespace {
     return origins;
 }
 
-// Reads byte ranges of the source files of one parse with one open handle
-// per file, shared by the parse's tasks (reads are serialized). The parse
-// reads every soup through it; the handles close with the reader, when the
-// parse ends, so no handle outlives the load (an open handle makes a save's
-// rename onto the file fail on Windows). The files were stamped by
-// resolve_gltf_buffer_origins() at the start of the parse.
-class Gltf_range_reader
+// The prepared mesh data statistics of one parse, shared by the payloads of
+// its primitives (recorded when each one is validated, during the parse or
+// in a deferred load's build jobs).
+class Gltf_prepared_statistics
 {
 public:
-    explicit Gltf_range_reader(std::shared_ptr<const Gltf_buffer_origins> origins)
-        : m_origins{std::move(origins)}
-        , m_files  {m_origins ? m_origins->files.size() : 0}
-    {
-    }
+    std::mutex                    mutex;
+    Gltf_prepared_mesh_statistics statistics;
+};
 
-    [[nodiscard]] auto read(const std::size_t file_index, const std::size_t file_offset, std::span<std::byte> out) -> bool
-    {
-        const std::lock_guard<std::mutex> lock{m_mutex};
-        if (!m_origins || (file_index >= m_files.size())) {
+// A raw bufferView a prepared mesh data extension names.
+class Gltf_prepared_view
+{
+public:
+    bool                   has_stride {false};
+    std::size_t            byte_length{0};
+    bool                   is_resident{false}; // resident_bytes holds the view
+    std::vector<std::byte> resident_bytes;
+    bool                   in_file    {false}; // byte_length bytes at file_offset of origins->files[file_index]
+    std::size_t            file_index {0};
+    std::size_t            file_offset{0};
+};
+
+// Bytes validate() read from the file, kept alive while it runs.
+class Gltf_prepared_read_storage
+{
+public:
+    std::vector<std::vector<std::byte>> blocks;
+};
+
+namespace {
+
+// 16 lowercase hexadecimal digits, most significant first.
+[[nodiscard]] auto parse_hex_hash(const std::string_view text, std::uint64_t& out_value) -> bool
+{
+    if (text.size() != 16) {
+        return false;
+    }
+    std::uint64_t value = 0;
+    for (const char c : text) {
+        std::uint64_t digit = 0;
+        if ((c >= '0') && (c <= '9')) {
+            digit = static_cast<std::uint64_t>(c - '0');
+        } else if ((c >= 'a') && (c <= 'f')) {
+            digit = static_cast<std::uint64_t>(c - 'a') + 10;
+        } else {
             return false;
         }
-        std::ifstream& file = m_files[file_index];
-        if (!file.is_open()) {
-            file.open(m_origins->files[file_index].path, std::ios::binary);
+        value = (value << 4) | digit;
+    }
+    out_value = value;
+    return true;
+}
+
+// Parses one prepared mesh data extension payload: a JSON object with
+// "version": 1.
+[[nodiscard]] auto parse_extension_object(
+    simdjson::dom::parser& json_parser,
+    const std::string&     json,
+    simdjson::dom::object& out_object
+) -> bool
+{
+    simdjson::dom::element root;
+    if (json_parser.parse(simdjson::padded_string{json}).get(root) != simdjson::SUCCESS) {
+        return false;
+    }
+    if (root.get_object().get(out_object) != simdjson::SUCCESS) {
+        return false;
+    }
+    std::uint64_t version = 0;
+    return (out_object.at_key("version").get_uint64().get(version) == simdjson::SUCCESS) && (version == 1);
+}
+
+// The raw bufferView indices a primitive's prepared mesh data names:
+// ERHE_mesh_topology vertex_points and the nodes / primitive_ids of every
+// ERHE_raytrace_bvh build. Malformed JSON names none (validate() rejects it).
+[[nodiscard]] auto collect_prepared_view_indices(const Prepared_extension_json& json) -> std::vector<std::uint64_t>
+{
+    std::vector<std::uint64_t> indices;
+    simdjson::dom::parser json_parser;
+    simdjson::dom::object object;
+    std::uint64_t         value{0};
+    if (!json.topology.empty() && parse_extension_object(json_parser, json.topology, object)) {
+        if (object.at_key("vertex_points").get_uint64().get(value) == simdjson::SUCCESS) {
+            indices.push_back(value);
         }
-        file.clear();
-        file.seekg(static_cast<std::streamoff>(file_offset));
-        file.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(out.size()));
-        return static_cast<bool>(file);
+    }
+    if (!json.bvh.empty() && parse_extension_object(json_parser, json.bvh, object)) {
+        simdjson::dom::array builds;
+        if (object.at_key("builds").get_array().get(builds) == simdjson::SUCCESS) {
+            for (const simdjson::dom::element build_element : builds) {
+                simdjson::dom::object build;
+                if (build_element.get_object().get(build) != simdjson::SUCCESS) {
+                    continue;
+                }
+                if (build.at_key("nodes").get_uint64().get(value) == simdjson::SUCCESS) {
+                    indices.push_back(value);
+                }
+                if (build.at_key("primitive_ids").get_uint64().get(value) == simdjson::SUCCESS) {
+                    indices.push_back(value);
+                }
+            }
+        }
+    }
+    return indices;
+}
+
+} // anonymous namespace
+
+// The prepared mesh data of one soup primitive, captured at the parse
+// (Gltf_parser::make_prepared_payload()) and validated against the soup
+// when it is loaded - during the parse, or in a deferred load's build job
+// (Gltf_triangle_soup_source::load_prepared_data()). All-or-nothing per
+// extension with the dependency rule (a rejected ERHE_mesh_optimized rejects
+// the other two as well); every validation is counted in `statistics`.
+class Gltf_prepared_payload
+{
+public:
+    std::string                                name;
+    std::string                                marker_reason;  // ERHE_mesh_optimized checks of the JSON and accessors; empty = passed
+    erhe::primitive::Prepared_primitive_data   marker;         // its options, content hash, box, sphere
+    std::size_t                                position_count{0};
+    std::string                                topology_json;
+    std::string                                bvh_json;
+    std::map<std::uint64_t, Gltf_prepared_view> views;
+    std::shared_ptr<const Gltf_buffer_origins> origins;
+    std::shared_ptr<Gltf_prepared_statistics>  statistics;
+
+    // The accepted payloads, or null when ERHE_mesh_optimized is rejected
+    // (the primitive then loads as a plain soup). Reads the file-backed
+    // views now, with a handle of its own.
+    [[nodiscard]] auto validate(const erhe::primitive::Triangle_soup& soup) const -> std::shared_ptr<erhe::primitive::Prepared_primitive_data>
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        std::vector<std::string> rejections; // "<extension>: <reason>"
+        const auto reject = [this, &rejections](const char* const extension, const std::string& reason, const std::string& detail) {
+            log_gltf->warn(
+                "prepared mesh data: primitive '{}' {} rejected: {}{}{}",
+                name, extension, reason, detail.empty() ? "" : " - ", detail
+            );
+            rejections.push_back(fmt::format("{}: {}", extension, reason));
+        };
+
+        const std::vector<float>        positions_xyz = erhe::primitive::get_float_positions(soup);
+        const std::span<const uint32_t> indices{soup.index_data};
+        std::shared_ptr<erhe::primitive::Prepared_primitive_data> data = std::make_shared<erhe::primitive::Prepared_primitive_data>(marker);
+        bool topology_used = false;
+        bool bvh_used      = false;
+        Gltf_prepared_read_storage storage;
+
+        std::string optimized_reason = marker_reason;
+        if (optimized_reason.empty() && positions_xyz.empty()) {
+            optimized_reason = "POSITION, NORMAL or TANGENT is not float";
+        }
+        if (optimized_reason.empty() && ((positions_xyz.size() / 3) != position_count)) {
+            optimized_reason = "attribute counts differ";
+        }
+        if (optimized_reason.empty()) {
+            // Contract items 5 and 6, index range, content hash.
+            optimized_reason = erhe::primitive::validate_prepared_core(indices, positions_xyz, marker.content_hash);
+        }
+        if (!optimized_reason.empty()) {
+            reject("ERHE_mesh_optimized", optimized_reason, {});
+            data.reset();
+        } else {
+            if (!topology_json.empty()) {
+                erhe::primitive::Vertex_colocation colocation;
+                const std::string reason = read_mesh_topology(storage, topology_json, positions_xyz, colocation);
+                if (!reason.empty()) {
+                    reject("ERHE_mesh_topology", reason, {});
+                } else {
+                    data->colocation = std::move(colocation);
+                    topology_used = true;
+                }
+            }
+            if (!bvh_json.empty()) {
+                erhe::raytrace::Prebuilt_bvh bvh;
+                std::string                  detail;
+                const std::string reason = read_raytrace_bvh(storage, bvh_json, indices, positions_xyz, bvh, detail);
+                if (!reason.empty()) {
+                    reject("ERHE_raytrace_bvh", reason, detail);
+                } else {
+                    data->bvh = std::move(bvh);
+                    bvh_used = true;
+                }
+            }
+        }
+
+        if (statistics) {
+            const std::lock_guard<std::mutex> lock{statistics->mutex};
+            Gltf_prepared_mesh_statistics& counts = statistics->statistics;
+            if (rejections.empty()) {
+                ++counts.used_count;
+            } else {
+                ++counts.rejected_count;
+                for (const std::string& rejection : rejections) {
+                    ++counts.rejection_reasons[rejection];
+                }
+            }
+            if (topology_used) {
+                ++counts.topology_used_count;
+            }
+            if (bvh_used) {
+                ++counts.bvh_used_count;
+            }
+        }
+        return data;
     }
 
 private:
-    std::shared_ptr<const Gltf_buffer_origins> m_origins;
-    std::mutex                                 m_mutex;
-    std::vector<std::ifstream>                 m_files;
+    // Raw bufferView bytes of a prepared mesh data payload: the view must
+    // exist, have no byteStride, be readable and hold exactly
+    // expected_byte_length bytes (doc/gltf_extensions/ERHE_mesh_topology.md,
+    // ERHE_raytrace_bvh.md). Returns the rejection reason, or empty with
+    // out_bytes set (kept alive by storage).
+    [[nodiscard]] auto get_prepared_buffer_view(
+        Gltf_prepared_read_storage& storage,
+        const std::uint64_t         view_index,
+        const std::size_t           expected_byte_length,
+        std::span<const std::byte>& out_bytes
+    ) const -> std::string
+    {
+        const auto i = views.find(view_index);
+        if (i == views.end()) {
+            return "bufferView out of range";
+        }
+        const Gltf_prepared_view& view = i->second;
+        if (view.has_stride) {
+            return "bufferView has byteStride";
+        }
+        if (view.byte_length != expected_byte_length) {
+            return "bufferView byteLength mismatch";
+        }
+        if (view.is_resident) {
+            out_bytes = std::span<const std::byte>{view.resident_bytes.data(), view.resident_bytes.size()};
+            return {};
+        }
+        if (!view.in_file || !origins || (view.file_index >= origins->files.size())) {
+            return "buffer not loaded";
+        }
+        const Gltf_source_file& expected = origins->files[view.file_index];
+        Gltf_source_file        current;
+        if (!stamp_source_file(expected.path, current) || (current.size != expected.size) || (current.write_time != expected.write_time)) {
+            return "source file changed";
+        }
+        std::vector<std::byte>& bytes = storage.blocks.emplace_back(view.byte_length);
+        if (!origins->source_files->read(view.file_index, view.file_offset, std::span<std::byte>{bytes.data(), bytes.size()})) {
+            return "bufferView outside its buffer";
+        }
+        out_bytes = std::span<const std::byte>{bytes.data(), bytes.size()};
+        return {};
+    }
+
+    // ERHE_mesh_topology (doc/gltf_extensions/ERHE_mesh_topology.md
+    // "Validation / fallback"); the marker is already accepted.
+    [[nodiscard]] auto read_mesh_topology(
+        Gltf_prepared_read_storage&         storage,
+        const std::string&                  json,
+        const std::span<const float>        positions_xyz,
+        erhe::primitive::Vertex_colocation& out_colocation
+    ) const -> std::string
+    {
+        simdjson::dom::parser json_parser;
+        simdjson::dom::object extension_object;
+        if (!parse_extension_object(json_parser, json, extension_object)) {
+            return "malformed JSON or unsupported version";
+        }
+        std::uint64_t point_count{0};
+        std::uint64_t view_index{0};
+        if (
+            (extension_object.at_key("point_count").get_uint64().get(point_count) != simdjson::SUCCESS) ||
+            (extension_object.at_key("vertex_points").get_uint64().get(view_index) != simdjson::SUCCESS) ||
+            (point_count > std::numeric_limits<uint32_t>::max())
+        ) {
+            return "malformed point_count or vertex_points";
+        }
+        const std::size_t          vertex_count = positions_xyz.size() / 3;
+        std::span<const std::byte> bytes;
+        const std::string view_reason = get_prepared_buffer_view(storage, view_index, sizeof(uint32_t) * vertex_count, bytes);
+        if (!view_reason.empty()) {
+            return view_reason;
+        }
+        std::vector<uint32_t> vertex_points(vertex_count);
+        std::memcpy(vertex_points.data(), bytes.data(), bytes.size());
+        const std::string reason = erhe::primitive::validate_vertex_points(vertex_points, static_cast<uint32_t>(point_count), positions_xyz);
+        if (!reason.empty()) {
+            return reason;
+        }
+        out_colocation.vertex_points = std::move(vertex_points);
+        out_colocation.point_count   = static_cast<uint32_t>(point_count);
+        return {};
+    }
+
+    // ERHE_raytrace_bvh (doc/gltf_extensions/ERHE_raytrace_bvh.md
+    // "Validation / fallback"); the marker is already accepted. Runs the full
+    // check, including erhe::raytrace::validate_prebuilt_bvh(); the detailed
+    // reason of a structural rejection goes to out_detail.
+    [[nodiscard]] auto read_raytrace_bvh(
+        Gltf_prepared_read_storage&         storage,
+        const std::string&              json,
+        const std::span<const uint32_t> indices,
+        const std::span<const float>    positions_xyz,
+        erhe::raytrace::Prebuilt_bvh&   out_bvh,
+        std::string&                    out_detail
+    ) const -> std::string
+    {
+        simdjson::dom::parser json_parser;
+        simdjson::dom::object extension_object;
+        if (!parse_extension_object(json_parser, json, extension_object)) {
+            return "malformed JSON or unsupported version";
+        }
+        const std::size_t triangle_count = indices.size() / 3;
+        std::uint64_t     stored_triangle_count{0};
+        if (extension_object.at_key("triangle_count").get_uint64().get(stored_triangle_count) != simdjson::SUCCESS) {
+            return "malformed triangle_count";
+        }
+        if (stored_triangle_count != triangle_count) {
+            return "triangle_count mismatch";
+        }
+        std::string_view triangle_hash_text;
+        std::uint64_t    stored_triangle_hash{0};
+        if (
+            (extension_object.at_key("triangle_hash").get_string().get(triangle_hash_text) != simdjson::SUCCESS) ||
+            !parse_hex_hash(triangle_hash_text, stored_triangle_hash)
+        ) {
+            return "malformed triangle_hash";
+        }
+        const std::uint64_t triangle_hash = erhe::raytrace::compute_triangle_hash(indices, positions_xyz);
+        if (stored_triangle_hash != triangle_hash) {
+            return "triangle_hash mismatch";
+        }
+
+        // The first entry whose backend and library match the running
+        // raytrace backend; entries of other backends are skipped.
+        const std::string_view backend = erhe::raytrace::get_prebuilt_bvh_backend();
+        const std::string_view library = erhe::raytrace::get_prebuilt_bvh_library();
+        simdjson::dom::array builds;
+        if (extension_object.at_key("builds").get_array().get(builds) != simdjson::SUCCESS) {
+            return "malformed builds";
+        }
+        simdjson::dom::object build;
+        bool                  found = false;
+        if (!backend.empty()) {
+            for (const simdjson::dom::element build_element : builds) {
+                simdjson::dom::object candidate;
+                std::string_view      candidate_backend;
+                std::string_view      candidate_library;
+                if (
+                    (build_element.get_object().get(candidate) != simdjson::SUCCESS) ||
+                    (candidate.at_key("backend").get_string().get(candidate_backend) != simdjson::SUCCESS) ||
+                    (candidate.at_key("library").get_string().get(candidate_library) != simdjson::SUCCESS)
+                ) {
+                    continue;
+                }
+                if ((candidate_backend == backend) && (candidate_library == library)) {
+                    build = candidate;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found) {
+            return "no build for the running backend and library";
+        }
+
+        std::string_view quality_text;
+        std::uint64_t    node_count{0};
+        std::uint64_t    nodes_view{0};
+        std::uint64_t    primitive_ids_view{0};
+        if (
+            (build.at_key("quality").get_string().get(quality_text) != simdjson::SUCCESS) ||
+            (build.at_key("node_count").get_uint64().get(node_count) != simdjson::SUCCESS) ||
+            (build.at_key("nodes").get_uint64().get(nodes_view) != simdjson::SUCCESS) ||
+            (build.at_key("primitive_ids").get_uint64().get(primitive_ids_view) != simdjson::SUCCESS) ||
+            (node_count == 0) ||
+            (node_count > (std::numeric_limits<uint32_t>::max() / sizeof(erhe::raytrace::Bvh_node_record)))
+        ) {
+            return "malformed build";
+        }
+        erhe::raytrace::Bvh_build_quality quality{erhe::raytrace::Bvh_build_quality::high};
+        if      (quality_text == "low"   ) { quality = erhe::raytrace::Bvh_build_quality::low;    }
+        else if (quality_text == "medium") { quality = erhe::raytrace::Bvh_build_quality::medium; }
+        else if (quality_text == "high"  ) { quality = erhe::raytrace::Bvh_build_quality::high;   }
+        else {
+            return "malformed build";
+        }
+
+        std::span<const std::byte> node_bytes;
+        std::string view_reason = get_prepared_buffer_view(storage, nodes_view, sizeof(erhe::raytrace::Bvh_node_record) * node_count, node_bytes);
+        if (!view_reason.empty()) {
+            return "nodes " + view_reason;
+        }
+        std::span<const std::byte> primitive_id_bytes;
+        view_reason = get_prepared_buffer_view(storage, primitive_ids_view, sizeof(uint32_t) * triangle_count, primitive_id_bytes);
+        if (!view_reason.empty()) {
+            return "primitive_ids " + view_reason;
+        }
+
+        erhe::raytrace::Prebuilt_bvh bvh{};
+        bvh.backend        = std::string{backend};
+        bvh.library        = std::string{library};
+        bvh.quality        = quality;
+        bvh.triangle_hash  = stored_triangle_hash;
+        bvh.triangle_count = triangle_count;
+        bvh.nodes.resize(node_count);
+        std::memcpy(bvh.nodes.data(), node_bytes.data(), node_bytes.size());
+        bvh.primitive_ids.resize(triangle_count);
+        std::memcpy(bvh.primitive_ids.data(), primitive_id_bytes.data(), primitive_id_bytes.size());
+
+        const std::string structure_reason = erhe::raytrace::validate_prebuilt_bvh(
+            bvh, backend, library, triangle_hash, triangle_count, erhe::raytrace::bvh_v2_traversal_stack_size
+        );
+        if (!structure_reason.empty()) {
+            out_detail = structure_reason;
+            return "invalid BVH structure";
+        }
+        out_bvh = std::move(bvh);
+        return {};
+    }
+
 };
 
 // Reads one glTF primitive's triangle soup back from the source file: the
@@ -1775,8 +2228,12 @@ public:
         return description;
     }
 
-    // The reload: checks that the files are the ones the parse read, then
-    // reads the ranges with handles of its own.
+    // The prepared mesh data payload of the primitive, validated against the
+    // loaded soup (load_prepared_data()); null without prepared mesh data.
+    std::shared_ptr<const Gltf_prepared_payload> prepared;
+
+    // A deferred load's job and the reload: checks that the files are the
+    // ones the parse read, then reads the ranges with handles of its own.
     [[nodiscard]] auto load() const -> std::shared_ptr<erhe::primitive::Triangle_soup> override
     {
         ERHE_PROFILE_FUNCTION();
@@ -1784,32 +2241,26 @@ public:
         if (!check_files()) {
             return {};
         }
-        std::size_t open_file_index = std::numeric_limits<std::size_t>::max();
-        std::ifstream file;
-        return read_and_build(
-            [&](const std::size_t file_index, const std::size_t file_offset, const std::span<std::byte> out) -> bool {
-                if (file_index != open_file_index) {
-                    file = std::ifstream{origins->files[file_index].path, std::ios::binary};
-                    open_file_index = file_index;
-                }
-                file.seekg(static_cast<std::streamoff>(file_offset));
-                file.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(out.size()));
-                return static_cast<bool>(file);
-            }
-        );
+        return load_unchecked();
     }
 
-    // The first load, during the parse that stamped the files: reads through
-    // the parse's shared reader.
-    [[nodiscard]] auto load_in_parse(Gltf_range_reader& reader) const -> std::shared_ptr<erhe::primitive::Triangle_soup>
+    // The load in the parse that stamped the files moments ago: the ranges
+    // read with a handle of this call's own, no stamp check. Each parse task
+    // reads its own primitives, in parallel.
+    [[nodiscard]] auto load_unchecked() const -> std::shared_ptr<erhe::primitive::Triangle_soup>
     {
         ERHE_PROFILE_FUNCTION();
 
         return read_and_build(
-            [&reader](const std::size_t file_index, const std::size_t file_offset, const std::span<std::byte> out) -> bool {
-                return reader.read(file_index, file_offset, out);
+            [this](const std::size_t file_index, const std::size_t file_offset, const std::span<std::byte> out) -> bool {
+                return origins->source_files->read(file_index, file_offset, out);
             }
         );
+    }
+
+    [[nodiscard]] auto load_prepared_data(const erhe::primitive::Triangle_soup& soup) const -> std::shared_ptr<erhe::primitive::Prepared_primitive_data> override
+    {
+        return prepared ? prepared->validate(soup) : std::shared_ptr<erhe::primitive::Prepared_primitive_data>{};
     }
 
     // The file must be the one the parse read: same size, same modification
@@ -1906,7 +2357,7 @@ public:
     const Soup_tangents                               tangents,
     const std::shared_ptr<const Gltf_buffer_origins>& origins,
     std::string                                       description
-) -> std::shared_ptr<const Gltf_triangle_soup_source>
+) -> std::shared_ptr<Gltf_triangle_soup_source>
 {
     if (!origins || !primitive.indicesAccessor.has_value()) {
         return {};
@@ -2211,6 +2662,7 @@ public:
     fastgltf::Asset&                                       asset,
     Gltf_buffer_origins&                                   origins,
     const std::set<std::pair<std::size_t, std::size_t>>&   geometry_primitives,
+    const std::map<std::pair<std::size_t, std::size_t>, std::vector<std::uint64_t>>& payload_views,
     std::size_t&                                           out_eager_byte_count,
     std::size_t&                                           out_lazy_view_count
 ) -> bool
@@ -2263,6 +2715,8 @@ public:
             eager_accessor[accessor_index] = true;
         }
     };
+    std::vector<bool> view_payload       (asset.bufferViews.size(), false);
+    std::vector<bool> view_payload_needed(asset.bufferViews.size(), false);
     for (std::size_t mesh_index = 0, mesh_end = asset.meshes.size(); mesh_index < mesh_end; ++mesh_index) {
         const fastgltf::Mesh& mesh = asset.meshes[mesh_index];
         for (std::size_t primitive_index = 0, primitive_end = mesh.primitives.size(); primitive_index < primitive_end; ++primitive_index) {
@@ -2273,6 +2727,20 @@ public:
             }
             for (const fastgltf::Attribute& attribute : primitive.attributes) {
                 lazy = lazy && lazy_capable(attribute.accessorIndex);
+            }
+            // The raw views the primitive's prepared mesh data names are read
+            // with its payload when the primitive is read per primitive.
+            const auto payload = payload_views.find({mesh_index, primitive_index});
+            if (payload != payload_views.end()) {
+                for (const std::uint64_t view_index : payload->second) {
+                    if (view_index < view_payload.size()) {
+                        if (lazy) {
+                            view_payload[view_index] = true;
+                        } else {
+                            view_payload_needed[view_index] = true;
+                        }
+                    }
+                }
             }
             if (lazy) {
                 lazy_accessor[primitive.indicesAccessor.value()] = true;
@@ -2352,7 +2820,7 @@ public:
         if ((view.bufferIndex >= buffer_count) || is_buffer_resident(asset.buffers[view.bufferIndex])) {
             continue;
         }
-        if ((view_has_lazy[view_index] || view_has_image[view_index]) && !view_is_needed[view_index]) {
+        if ((view_has_lazy[view_index] || view_has_image[view_index] || view_payload[view_index]) && !view_is_needed[view_index] && !view_payload_needed[view_index]) {
             ++out_lazy_view_count;
             continue;
         }
@@ -3434,40 +3902,6 @@ private:
     std::vector<std::shared_ptr<Primitive_entry_slot>> m_primitive_entries;
     ERHE_PROFILE_MUTEX(std::mutex, m_primitive_entries_mutex);
 
-    // Builds the primitive's soup. A primitive whose bytes are in a file is
-    // read through its Gltf_triangle_soup_source - the byte ranges its
-    // accessors cover, read from the file now - since the parse does not
-    // load the buffers that hold only such data (load_eager_buffer_views());
-    // the triangle soup reload reads the same ranges with the same function,
-    // so the soup is the same either way. Other primitives (data URI
-    // buffers, sparse accessors, a parse from memory) build from the asset.
-    // Returns the source.
-    auto load_new_primitive_geometry(
-        const fastgltf::Primitive& primitive,
-        Primitive_entry&           primitive_entry,
-        const bool                 tangent_frame_needed,
-        const std::string&         name
-    ) -> std::shared_ptr<const Gltf_triangle_soup_source>
-    {
-        const Soup_tangents tangents = tangent_frame_needed ? Soup_tangents::generate_when_missing : Soup_tangents::as_stored;
-        std::shared_ptr<const Gltf_triangle_soup_source> source;
-        if (m_buffer_origins) {
-            source = make_gltf_triangle_soup_source(
-                m_asset.get(),
-                primitive,
-                tangents,
-                m_buffer_origins,
-                fmt::format("'{}' primitive '{}'", m_arguments.path.filename().string(), name)
-            );
-        }
-        primitive_entry.triangle_soup = source
-            ? source->load_in_parse(*m_range_reader)
-            : build_triangle_soup(m_asset.get(), primitive, tangents);
-        if (primitive_entry.triangle_soup) {
-            primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
-        }
-        return source;
-    }
     auto get_primitive_geometry(
         const fastgltf::Primitive&     primitive,
         Primitive_entry&               primitive_entry,
@@ -3525,18 +3959,55 @@ private:
         }
 
         // This task claimed the slot; build outside the lock and publish.
-        std::shared_ptr<const Gltf_triangle_soup_source> source = load_new_primitive_geometry(primitive, primitive_entry, tangent_frame_needed, name);
-        if (primitive_entry.triangle_soup && !prepared_json.optimized.empty()) {
-            std::shared_ptr<erhe::primitive::Prepared_primitive_data> prepared_data =
-                read_prepared_mesh_data(primitive, prepared_json, *primitive_entry.triangle_soup, name);
-            if (prepared_data) {
-                primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup, std::move(prepared_data));
-            }
+        //
+        // A primitive whose bytes are in a file has a Gltf_triangle_soup_source
+        // over the byte ranges its accessors cover (the parse does not load
+        // the buffers that hold only such data, load_eager_buffer_views());
+        // its prepared mesh data goes with the source. Deferred: the
+        // primitive gets the source and its counts, a build job loads the
+        // payload (Primitive::load_payload()). Otherwise the soup is read
+        // and the prepared data validated here. Primitives without a file
+        // origin (data URI buffers, sparse accessors, a parse from memory)
+        // build from the asset.
+        const Soup_tangents tangents = tangent_frame_needed ? Soup_tangents::generate_when_missing : Soup_tangents::as_stored;
+        std::shared_ptr<Gltf_triangle_soup_source> source;
+        if (m_buffer_origins) {
+            source = make_gltf_triangle_soup_source(
+                m_asset.get(),
+                primitive,
+                tangents,
+                m_buffer_origins,
+                fmt::format("'{}' primitive '{}'", m_arguments.path.filename().string(), name)
+            );
         }
-        // The reload source, before the primitive is shared: the shape may
-        // then release its soup after upload and read it back from the file.
-        if (m_record_soup_sources && source && primitive_entry.primitive && primitive_entry.primitive->render_shape) {
-            primitive_entry.primitive->render_shape->set_triangle_soup_source(std::move(source));
+        const std::shared_ptr<Gltf_prepared_payload> prepared_payload = !prepared_json.optimized.empty()
+            ? make_prepared_payload(primitive, prepared_json, name)
+            : std::shared_ptr<Gltf_prepared_payload>{};
+        if (source) {
+            source->prepared = prepared_payload;
+        }
+        if (source && (m_arguments.mesh_payload == Mesh_payload_load::deferred)) {
+            primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(
+                std::shared_ptr<const erhe::primitive::Triangle_soup_source>{source},
+                get_primitive_counts(primitive)
+            );
+        } else {
+            primitive_entry.triangle_soup = source
+                ? source->load_unchecked()
+                : build_triangle_soup(m_asset.get(), primitive, tangents);
+            if (primitive_entry.triangle_soup) {
+                std::shared_ptr<erhe::primitive::Prepared_primitive_data> prepared_data = prepared_payload
+                    ? prepared_payload->validate(*primitive_entry.triangle_soup)
+                    : std::shared_ptr<erhe::primitive::Prepared_primitive_data>{};
+                primitive_entry.primitive = prepared_data
+                    ? std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup, std::move(prepared_data))
+                    : std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
+                // The reload source, before the primitive is shared: the shape
+                // may then release its soup after upload and read it back.
+                if (m_record_soup_sources && source && primitive_entry.primitive->render_shape) {
+                    primitive_entry.primitive->render_shape->set_triangle_soup_source(std::move(source));
+                }
+            }
         }
         slot->triangle_soup = primitive_entry.triangle_soup;
         slot->primitive     = primitive_entry.primitive;
@@ -3568,12 +4039,30 @@ public:
     {
         m_buffer_origins      = std::move(buffer_origins);
         m_record_soup_sources = (record_soup_sources == Triangle_soup_reload::record);
-        m_range_reader        = std::make_unique<Gltf_range_reader>(m_buffer_origins);
     }
 private:
     std::shared_ptr<const Gltf_buffer_origins> m_buffer_origins;
     bool                                       m_record_soup_sources{false};
-    std::unique_ptr<Gltf_range_reader>         m_range_reader;
+    // The prepared mesh data counts of this parse, shared with the payloads.
+    std::shared_ptr<Gltf_prepared_statistics>  m_prepared_statistics{std::make_shared<Gltf_prepared_statistics>()};
+public:
+    [[nodiscard]] auto get_prepared_statistics() const -> const std::shared_ptr<Gltf_prepared_statistics>& { return m_prepared_statistics; }
+private:
+    // The vertex and index counts build_triangle_soup() will give the
+    // primitive: the index accessor's count and the smallest attribute count.
+    [[nodiscard]] auto get_primitive_counts(const fastgltf::Primitive& primitive) const -> erhe::primitive::Triangle_soup_counts
+    {
+        erhe::primitive::Triangle_soup_counts counts{};
+        counts.index_count  = m_asset->accessors[primitive.indicesAccessor.value()].count;
+        counts.vertex_count = std::numeric_limits<std::size_t>::max();
+        for (const fastgltf::Attribute& attribute : primitive.attributes) {
+            counts.vertex_count = std::min(counts.vertex_count, m_asset->accessors[attribute.accessorIndex].count);
+        }
+        if (primitive.attributes.empty()) {
+            counts.vertex_count = 0;
+        }
+        return counts;
+    }
 public:
 
     void set_primitive_geometry_extensions(std::map<std::pair<std::size_t, std::size_t>, std::string>&& extensions)
@@ -3634,99 +4123,18 @@ public:
 private:
     std::map<std::pair<std::size_t, std::size_t>, Prepared_extension_json> m_primitive_prepared_extensions;
     const Prepared_extension_json                                           m_no_prepared_extensions{};
-    // Guards m_data_out.prepared_mesh_statistics, written by the parallel
-    // per-mesh parse tasks.
-    ERHE_PROFILE_MUTEX(std::mutex, m_prepared_statistics_mutex);
-
-    // Raw bufferView bytes of a prepared mesh data payload: the view must
-    // exist, have no byteStride, be backed by a loaded buffer and hold
-    // exactly expected_byte_length bytes (doc/gltf_extensions/ERHE_mesh_topology.md,
-    // ERHE_raytrace_bvh.md). Returns the rejection reason, or empty with
-    // out_bytes set.
-    [[nodiscard]] auto get_prepared_buffer_view(
-        const std::uint64_t         view_index,
-        const std::size_t           expected_byte_length,
-        std::span<const std::byte>& out_bytes
-    ) const -> std::string
-    {
-        if (view_index >= m_asset->bufferViews.size()) {
-            return "bufferView out of range";
-        }
-        const fastgltf::BufferView& buffer_view = m_asset->bufferViews[view_index];
-        if (buffer_view.byteStride.has_value()) {
-            return "bufferView has byteStride";
-        }
-        if (buffer_view.byteLength != expected_byte_length) {
-            return "bufferView byteLength mismatch";
-        }
-        if (buffer_view.bufferIndex >= m_asset->buffers.size()) {
-            return "bufferView buffer out of range";
-        }
-        const fastgltf::Buffer& buffer       = m_asset->buffers[buffer_view.bufferIndex];
-        const auto*             array_source = std::get_if<fastgltf::sources::Array>(&buffer.data);
-        if (array_source == nullptr) {
-            return "buffer not loaded";
-        }
-        if ((buffer_view.byteOffset > array_source->bytes.size()) || ((array_source->bytes.size() - buffer_view.byteOffset) < buffer_view.byteLength)) {
-            return "bufferView outside its buffer";
-        }
-        out_bytes = std::span<const std::byte>{
-            reinterpret_cast<const std::byte*>(array_source->bytes.data()) + buffer_view.byteOffset,
-            buffer_view.byteLength
-        };
-        return {};
-    }
-
-    // 16 lowercase hexadecimal digits, most significant first.
-    [[nodiscard]] static auto parse_hex_hash(const std::string_view text, std::uint64_t& out_value) -> bool
-    {
-        if (text.size() != 16) {
-            return false;
-        }
-        std::uint64_t value = 0;
-        for (const char c : text) {
-            std::uint64_t digit = 0;
-            if ((c >= '0') && (c <= '9')) {
-                digit = static_cast<std::uint64_t>(c - '0');
-            } else if ((c >= 'a') && (c <= 'f')) {
-                digit = static_cast<std::uint64_t>(c - 'a') + 10;
-            } else {
-                return false;
-            }
-            value = (value << 4) | digit;
-        }
-        out_value = value;
-        return true;
-    }
-
-    // Parses one prepared mesh data extension payload: a JSON object with
-    // "version": 1.
-    [[nodiscard]] static auto parse_extension_object(
-        simdjson::dom::parser& json_parser,
-        const std::string&     json,
-        simdjson::dom::object& out_object
-    ) -> bool
-    {
-        simdjson::dom::element root;
-        if (json_parser.parse(simdjson::padded_string{json}).get(root) != simdjson::SUCCESS) {
-            return false;
-        }
-        if (root.get_object().get(out_object) != simdjson::SUCCESS) {
-            return false;
-        }
-        std::uint64_t version = 0;
-        return (out_object.at_key("version").get_uint64().get(version) == simdjson::SUCCESS) && (version == 1);
-    }
 
     // ERHE_mesh_optimized (doc/gltf_extensions/ERHE_mesh_optimized.md
-    // "Validation / fallback"). Fills the marker fields of out_data. Returns
-    // the rejection reason, empty when accepted.
-    [[nodiscard]] auto read_mesh_optimized(
+    // "Validation / fallback"), the checks the JSON and the accessors decide:
+    // fills the marker fields of out_data and the POSITION count. The checks
+    // on the payload bytes (counts, index range, content hash) are
+    // Gltf_prepared_payload::validate(). Returns the rejection reason, empty
+    // when accepted so far.
+    [[nodiscard]] auto read_mesh_optimized_metadata(
         const fastgltf::Primitive&                primitive,
         const std::string&                        json,
-        const std::span<const uint32_t>           indices,
-        const std::span<const float>              positions_xyz,
-        erhe::primitive::Prepared_primitive_data& out_data
+        erhe::primitive::Prepared_primitive_data& out_data,
+        std::size_t&                              out_position_count
     ) const -> std::string
     {
         simdjson::dom::parser json_parser;
@@ -3825,18 +4233,10 @@ private:
                 return "attribute counts differ";
             }
         }
-        if ((positions_xyz.size() / 3) != position_accessor.count) {
-            return "attribute counts differ";
-        }
         if (!position_accessor.min || !position_accessor.max || (position_accessor.min->size() < 3) || (position_accessor.max->size() < 3)) {
             return "POSITION has no min / max";
         }
-
-        // Contract items 5 and 6, index range, content hash.
-        const std::string core_reason = erhe::primitive::validate_prepared_core(indices, positions_xyz, content_hash);
-        if (!core_reason.empty()) {
-            return core_reason;
-        }
+        out_position_count = position_accessor.count;
 
         // The box comes from the POSITION accessor's required min / max.
         const auto bounds_component = [](const fastgltf::AccessorBoundsArray& bounds, const std::size_t i) -> float {
@@ -3852,250 +4252,51 @@ private:
         return {};
     }
 
-    // ERHE_mesh_topology (doc/gltf_extensions/ERHE_mesh_topology.md
-    // "Validation / fallback"); the marker is already accepted.
-    [[nodiscard]] auto read_mesh_topology(
-        const std::string&                  json,
-        const std::span<const float>        positions_xyz,
-        erhe::primitive::Vertex_colocation& out_colocation
-    ) const -> std::string
+    // The prepared mesh data payload of one soup primitive, validated later
+    // against its soup (Gltf_prepared_payload::validate()): the marker
+    // checks the JSON and the accessors decide, the extension JSON, and the
+    // raw bufferViews the extensions name - their bytes when the view's
+    // buffer is in memory, their place in the file otherwise.
+    [[nodiscard]] auto make_prepared_payload(
+        const fastgltf::Primitive&     primitive,
+        const Prepared_extension_json& json,
+        const std::string&             name
+    ) -> std::shared_ptr<Gltf_prepared_payload>
     {
-        simdjson::dom::parser json_parser;
-        simdjson::dom::object extension_object;
-        if (!parse_extension_object(json_parser, json, extension_object)) {
-            return "malformed JSON or unsupported version";
-        }
-        std::uint64_t point_count{0};
-        std::uint64_t view_index{0};
-        if (
-            (extension_object.at_key("point_count").get_uint64().get(point_count) != simdjson::SUCCESS) ||
-            (extension_object.at_key("vertex_points").get_uint64().get(view_index) != simdjson::SUCCESS) ||
-            (point_count > std::numeric_limits<uint32_t>::max())
-        ) {
-            return "malformed point_count or vertex_points";
-        }
-        const std::size_t          vertex_count = positions_xyz.size() / 3;
-        std::span<const std::byte> bytes;
-        const std::string view_reason = get_prepared_buffer_view(view_index, sizeof(uint32_t) * vertex_count, bytes);
-        if (!view_reason.empty()) {
-            return view_reason;
-        }
-        std::vector<uint32_t> vertex_points(vertex_count);
-        std::memcpy(vertex_points.data(), bytes.data(), bytes.size());
-        const std::string reason = erhe::primitive::validate_vertex_points(vertex_points, static_cast<uint32_t>(point_count), positions_xyz);
-        if (!reason.empty()) {
-            return reason;
-        }
-        out_colocation.vertex_points = std::move(vertex_points);
-        out_colocation.point_count   = static_cast<uint32_t>(point_count);
-        return {};
-    }
-
-    // ERHE_raytrace_bvh (doc/gltf_extensions/ERHE_raytrace_bvh.md
-    // "Validation / fallback"); the marker is already accepted. Runs the full
-    // check, including erhe::raytrace::validate_prebuilt_bvh(); the detailed
-    // reason of a structural rejection goes to out_detail.
-    [[nodiscard]] auto read_raytrace_bvh(
-        const std::string&              json,
-        const std::span<const uint32_t> indices,
-        const std::span<const float>    positions_xyz,
-        erhe::raytrace::Prebuilt_bvh&   out_bvh,
-        std::string&                    out_detail
-    ) const -> std::string
-    {
-        simdjson::dom::parser json_parser;
-        simdjson::dom::object extension_object;
-        if (!parse_extension_object(json_parser, json, extension_object)) {
-            return "malformed JSON or unsupported version";
-        }
-        const std::size_t triangle_count = indices.size() / 3;
-        std::uint64_t     stored_triangle_count{0};
-        if (extension_object.at_key("triangle_count").get_uint64().get(stored_triangle_count) != simdjson::SUCCESS) {
-            return "malformed triangle_count";
-        }
-        if (stored_triangle_count != triangle_count) {
-            return "triangle_count mismatch";
-        }
-        std::string_view triangle_hash_text;
-        std::uint64_t    stored_triangle_hash{0};
-        if (
-            (extension_object.at_key("triangle_hash").get_string().get(triangle_hash_text) != simdjson::SUCCESS) ||
-            !parse_hex_hash(triangle_hash_text, stored_triangle_hash)
-        ) {
-            return "malformed triangle_hash";
-        }
-        const std::uint64_t triangle_hash = erhe::raytrace::compute_triangle_hash(indices, positions_xyz);
-        if (stored_triangle_hash != triangle_hash) {
-            return "triangle_hash mismatch";
-        }
-
-        // The first entry whose backend and library match the running
-        // raytrace backend; entries of other backends are skipped.
-        const std::string_view backend = erhe::raytrace::get_prebuilt_bvh_backend();
-        const std::string_view library = erhe::raytrace::get_prebuilt_bvh_library();
-        simdjson::dom::array builds;
-        if (extension_object.at_key("builds").get_array().get(builds) != simdjson::SUCCESS) {
-            return "malformed builds";
-        }
-        simdjson::dom::object build;
-        bool                  found = false;
-        if (!backend.empty()) {
-            for (const simdjson::dom::element build_element : builds) {
-                simdjson::dom::object candidate;
-                std::string_view      candidate_backend;
-                std::string_view      candidate_library;
-                if (
-                    (build_element.get_object().get(candidate) != simdjson::SUCCESS) ||
-                    (candidate.at_key("backend").get_string().get(candidate_backend) != simdjson::SUCCESS) ||
-                    (candidate.at_key("library").get_string().get(candidate_library) != simdjson::SUCCESS)
-                ) {
-                    continue;
+        std::shared_ptr<Gltf_prepared_payload> payload = std::make_shared<Gltf_prepared_payload>();
+        payload->name          = name;
+        payload->marker_reason = read_mesh_optimized_metadata(primitive, json.optimized, payload->marker, payload->position_count);
+        payload->topology_json = json.topology;
+        payload->bvh_json      = json.bvh;
+        payload->origins       = m_buffer_origins;
+        payload->statistics    = m_prepared_statistics;
+        for (const std::uint64_t view_index : collect_prepared_view_indices(json)) {
+            if (view_index >= m_asset->bufferViews.size()) {
+                continue; // validate() rejects it
+            }
+            const fastgltf::BufferView& buffer_view = m_asset->bufferViews[view_index];
+            Gltf_prepared_view view;
+            view.has_stride  = buffer_view.byteStride.has_value();
+            view.byte_length = buffer_view.byteLength;
+            const fastgltf::Buffer& buffer = m_asset->buffers.at(buffer_view.bufferIndex);
+            if (is_buffer_resident(buffer)) {
+                const std::span<const std::byte> bytes = get_resident_buffer_bytes(buffer);
+                if ((buffer_view.byteOffset <= bytes.size()) && ((bytes.size() - buffer_view.byteOffset) >= buffer_view.byteLength)) {
+                    view.resident_bytes.assign(bytes.data() + buffer_view.byteOffset, bytes.data() + buffer_view.byteOffset + buffer_view.byteLength);
+                    view.is_resident = true;
                 }
-                if ((candidate_backend == backend) && (candidate_library == library)) {
-                    build = candidate;
-                    found = true;
-                    break;
+            } else if (m_buffer_origins && (view_index < m_buffer_origins->view_places.size())) {
+                const Gltf_view_place& place = m_buffer_origins->view_places[view_index];
+                if ((place.buffer_index < m_buffer_origins->buffers.size()) && m_buffer_origins->buffers[place.buffer_index].has_value()) {
+                    const Gltf_buffer_origin& origin = m_buffer_origins->buffers[place.buffer_index].value();
+                    view.file_index  = origin.file_index;
+                    view.file_offset = origin.file_offset + place.byte_offset;
+                    view.in_file     = true;
                 }
             }
+            payload->views.emplace(view_index, std::move(view));
         }
-        if (!found) {
-            return "no build for the running backend and library";
-        }
-
-        std::string_view quality_text;
-        std::uint64_t    node_count{0};
-        std::uint64_t    nodes_view{0};
-        std::uint64_t    primitive_ids_view{0};
-        if (
-            (build.at_key("quality").get_string().get(quality_text) != simdjson::SUCCESS) ||
-            (build.at_key("node_count").get_uint64().get(node_count) != simdjson::SUCCESS) ||
-            (build.at_key("nodes").get_uint64().get(nodes_view) != simdjson::SUCCESS) ||
-            (build.at_key("primitive_ids").get_uint64().get(primitive_ids_view) != simdjson::SUCCESS) ||
-            (node_count == 0) ||
-            (node_count > (std::numeric_limits<uint32_t>::max() / sizeof(erhe::raytrace::Bvh_node_record)))
-        ) {
-            return "malformed build";
-        }
-        erhe::raytrace::Bvh_build_quality quality{erhe::raytrace::Bvh_build_quality::high};
-        if      (quality_text == "low"   ) { quality = erhe::raytrace::Bvh_build_quality::low;    }
-        else if (quality_text == "medium") { quality = erhe::raytrace::Bvh_build_quality::medium; }
-        else if (quality_text == "high"  ) { quality = erhe::raytrace::Bvh_build_quality::high;   }
-        else {
-            return "malformed build";
-        }
-
-        std::span<const std::byte> node_bytes;
-        std::string view_reason = get_prepared_buffer_view(nodes_view, sizeof(erhe::raytrace::Bvh_node_record) * node_count, node_bytes);
-        if (!view_reason.empty()) {
-            return "nodes " + view_reason;
-        }
-        std::span<const std::byte> primitive_id_bytes;
-        view_reason = get_prepared_buffer_view(primitive_ids_view, sizeof(uint32_t) * triangle_count, primitive_id_bytes);
-        if (!view_reason.empty()) {
-            return "primitive_ids " + view_reason;
-        }
-
-        erhe::raytrace::Prebuilt_bvh bvh{};
-        bvh.backend        = std::string{backend};
-        bvh.library        = std::string{library};
-        bvh.quality        = quality;
-        bvh.triangle_hash  = stored_triangle_hash;
-        bvh.triangle_count = triangle_count;
-        bvh.nodes.resize(node_count);
-        std::memcpy(bvh.nodes.data(), node_bytes.data(), node_bytes.size());
-        bvh.primitive_ids.resize(triangle_count);
-        std::memcpy(bvh.primitive_ids.data(), primitive_id_bytes.data(), primitive_id_bytes.size());
-
-        const std::string structure_reason = erhe::raytrace::validate_prebuilt_bvh(
-            bvh, backend, library, triangle_hash, triangle_count, erhe::raytrace::bvh_v2_traversal_stack_size
-        );
-        if (!structure_reason.empty()) {
-            out_detail = structure_reason;
-            return "invalid BVH structure";
-        }
-        out_bvh = std::move(bvh);
-        return {};
-    }
-
-    // Validates the prepared mesh data of one soup primitive, all-or-nothing
-    // per extension with the dependency rule (a rejected ERHE_mesh_optimized
-    // rejects the other two as well), and counts the outcome in
-    // m_data_out.prepared_mesh_statistics. Returns the accepted payloads, or
-    // null when ERHE_mesh_optimized is rejected (the primitive then loads as
-    // a plain soup).
-    [[nodiscard]] auto read_prepared_mesh_data(
-        const fastgltf::Primitive&            primitive,
-        const Prepared_extension_json&        json,
-        const erhe::primitive::Triangle_soup& soup,
-        const std::string&                    name
-    ) -> std::shared_ptr<erhe::primitive::Prepared_primitive_data>
-    {
-        ERHE_PROFILE_FUNCTION();
-
-        std::vector<std::string> rejections; // "<extension>: <reason>"
-        const auto reject = [&rejections, &name](const char* const extension, const std::string& reason, const std::string& detail) {
-            log_gltf->warn(
-                "prepared mesh data: primitive '{}' {} rejected: {}{}{}",
-                name, extension, reason, detail.empty() ? "" : " - ", detail
-            );
-            rejections.push_back(fmt::format("{}: {}", extension, reason));
-        };
-
-        const std::vector<float>        positions_xyz = erhe::primitive::get_float_positions(soup);
-        const std::span<const uint32_t> indices{soup.index_data};
-        std::shared_ptr<erhe::primitive::Prepared_primitive_data> data = std::make_shared<erhe::primitive::Prepared_primitive_data>();
-        bool topology_used = false;
-        bool bvh_used      = false;
-
-        const std::string optimized_reason = positions_xyz.empty()
-            ? std::string{"POSITION, NORMAL or TANGENT is not float"}
-            : read_mesh_optimized(primitive, json.optimized, indices, positions_xyz, *data);
-        if (!optimized_reason.empty()) {
-            reject("ERHE_mesh_optimized", optimized_reason, {});
-            data.reset();
-        } else {
-            if (!json.topology.empty()) {
-                erhe::primitive::Vertex_colocation colocation;
-                const std::string reason = read_mesh_topology(json.topology, positions_xyz, colocation);
-                if (!reason.empty()) {
-                    reject("ERHE_mesh_topology", reason, {});
-                } else {
-                    data->colocation = std::move(colocation);
-                    topology_used = true;
-                }
-            }
-            if (!json.bvh.empty()) {
-                erhe::raytrace::Prebuilt_bvh bvh;
-                std::string                  detail;
-                const std::string reason = read_raytrace_bvh(json.bvh, indices, positions_xyz, bvh, detail);
-                if (!reason.empty()) {
-                    reject("ERHE_raytrace_bvh", reason, detail);
-                } else {
-                    data->bvh = std::move(bvh);
-                    bvh_used = true;
-                }
-            }
-        }
-
-        {
-            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_prepared_statistics_mutex};
-            Gltf_prepared_mesh_statistics& statistics = m_data_out.prepared_mesh_statistics;
-            if (rejections.empty()) {
-                ++statistics.used_count;
-            } else {
-                ++statistics.rejected_count;
-                for (const std::string& rejection : rejections) {
-                    ++statistics.rejection_reasons[rejection];
-                }
-            }
-            if (topology_used) {
-                ++statistics.topology_used_count;
-            }
-            if (bvh_used) {
-                ++statistics.bvh_used_count;
-            }
-        }
-        return data;
+        return payload;
     }
 
     // Reads a uint32 accessor referenced by an ERHE_geometry field.
@@ -5711,6 +5912,37 @@ void Gltf_image_residency::drain(
     bind_material_textures(data);
 }
 
+void close_source_files(Gltf_data& data)
+{
+    if (data.source_files) {
+        data.source_files->close();
+    }
+}
+
+void finish_prepared_mesh_statistics(Gltf_data& data, const std::filesystem::path& path)
+{
+    if (!data.prepared_statistics) {
+        return;
+    }
+    {
+        const std::lock_guard<std::mutex> lock{data.prepared_statistics->mutex};
+        data.prepared_mesh_statistics = data.prepared_statistics->statistics;
+    }
+    const Gltf_prepared_mesh_statistics& statistics = data.prepared_mesh_statistics;
+    if ((statistics.ignored_count == 0) && ((statistics.used_count + statistics.rejected_count) > 0)) {
+        std::string reasons;
+        for (const auto& [reason, count] : statistics.rejection_reasons) {
+            reasons += fmt::format("{}{}: {}", reasons.empty() ? "" : ", ", reason, count);
+        }
+        log_gltf->info(
+            "prepared mesh data: {} used, {} rejected ({}); topology {}, BVH {} in {}",
+            statistics.used_count, statistics.rejected_count, reasons,
+            statistics.topology_used_count, statistics.bvh_used_count,
+            path.string()
+        );
+    }
+}
+
 auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 {
     ERHE_PROFILE_FUNCTION();
@@ -5961,6 +6193,11 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         std::shared_ptr<const Gltf_buffer_origins> resolved = resolve_gltf_buffer_origins(arguments.path, asset.get().buffers.size());
         if (resolved) {
             buffer_origins = std::make_shared<Gltf_buffer_origins>(*resolved);
+            std::vector<std::filesystem::path> paths;
+            for (const Gltf_source_file& file : buffer_origins->files) {
+                paths.push_back(file.path);
+            }
+            buffer_origins->source_files = std::make_shared<Gltf_source_files>(std::move(paths));
         }
         std::set<std::pair<std::size_t, std::size_t>> geometry_primitives;
         for (const auto& [key, captured] : parse_extras_context.mesh_primitive_extensions) {
@@ -5974,7 +6211,24 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         no_origins.buffers.resize(asset.get().buffers.size());
         std::size_t eager_byte_count = 0;
         std::size_t lazy_view_count  = 0;
-        if (!load_eager_buffer_views(asset.get(), buffer_origins ? *buffer_origins : no_origins, geometry_primitives, eager_byte_count, lazy_view_count)) {
+        // The raw bufferViews the prepared mesh data extensions name, per
+        // primitive (read with the primitive's payload).
+        std::map<std::pair<std::size_t, std::size_t>, std::vector<std::uint64_t>> payload_views;
+        for (const auto& [key, captured] : parse_extras_context.mesh_primitive_extensions) {
+            Prepared_extension_json json;
+            for (const auto& [extension_name, extension_value] : captured.entries) {
+                if (extension_name == "ERHE_mesh_topology") {
+                    json.topology = extension_value;
+                } else if (extension_name == "ERHE_raytrace_bvh") {
+                    json.bvh = extension_value;
+                }
+            }
+            std::vector<std::uint64_t> indices = collect_prepared_view_indices(json);
+            if (!indices.empty()) {
+                payload_views[key] = std::move(indices);
+            }
+        }
+        if (!load_eager_buffer_views(asset.get(), buffer_origins ? *buffer_origins : no_origins, geometry_primitives, payload_views, eager_byte_count, lazy_view_count)) {
             log_gltf->error("glTF load error: cannot read the buffers of '{}'", arguments.path.string());
             return {};
         }
@@ -5985,6 +6239,9 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     }
 
     Gltf_data result;
+    if (buffer_origins) {
+        result.source_files = buffer_origins->source_files;
+    }
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
     erhe_parser.set_buffer_origins(std::move(buffer_origins), arguments.triangle_soup_reload);
 
@@ -6076,26 +6333,20 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 
     erhe_parser.parse_and_build();
 
+    result.prepared_statistics = erhe_parser.get_prepared_statistics();
     {
-        Gltf_prepared_mesh_statistics& statistics = result.prepared_mesh_statistics;
-        statistics.ignored_count = prepared_ignored_count;
-        if (statistics.ignored_count > 0) {
-            log_gltf->info(
-                "prepared mesh data: {} primitives ignored (use_prepared_mesh_data is off) in {}",
-                statistics.ignored_count, arguments.path.string()
-            );
-        } else if ((statistics.used_count + statistics.rejected_count) > 0) {
-            std::string reasons;
-            for (const auto& [reason, count] : statistics.rejection_reasons) {
-                reasons += fmt::format("{}{}: {}", reasons.empty() ? "" : ", ", reason, count);
-            }
-            log_gltf->info(
-                "prepared mesh data: {} used, {} rejected ({}); topology {}, BVH {} in {}",
-                statistics.used_count, statistics.rejected_count, reasons,
-                statistics.topology_used_count, statistics.bvh_used_count,
-                arguments.path.string()
-            );
-        }
+        const std::lock_guard<std::mutex> lock{result.prepared_statistics->mutex};
+        result.prepared_statistics->statistics.ignored_count = prepared_ignored_count;
+    }
+    if (prepared_ignored_count > 0) {
+        log_gltf->info(
+            "prepared mesh data: {} primitives ignored (use_prepared_mesh_data is off) in {}",
+            prepared_ignored_count, arguments.path.string()
+        );
+    }
+    if ((arguments.mesh_payload != Mesh_payload_load::deferred) || !arguments.glb_data.empty()) {
+        finish_prepared_mesh_statistics(result, arguments.path);
+        close_source_files(result);
     }
 
     // Apply serialized erhe Item flags to parsed nodes (Gltf_data::nodes is
