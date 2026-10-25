@@ -1513,7 +1513,7 @@ public:
         // is occluded instead of stalling until it comes back.
         erhe::log::set_breadcrumb("tick: asset loads");
         {
-            Frame_load_budget budget{m_app_context.editor_settings->load};
+            Frame_load_budget budget{m_app_context.editor_settings->load, m_asset_manager->get_gpu_upload_bytes_per_frame()};
             Asset_load_tick_context asset_load_tick_context{
                 .app_context                 = m_app_context,
                 .graphics_device             = *m_graphics_device,

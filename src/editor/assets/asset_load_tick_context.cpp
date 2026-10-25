@@ -15,14 +15,14 @@ namespace {
 
 } // anonymous namespace
 
-Frame_load_budget::Frame_load_budget(const Load_config& load_config)
+Frame_load_budget::Frame_load_budget(const Load_config& load_config, const std::size_t gpu_upload_bytes)
     : m_deadline{
         std::chrono::steady_clock::now() +
         std::chrono::duration_cast<std::chrono::steady_clock::duration>(
             std::chrono::duration<float, std::milli>{std::max(0.0f, load_config.load_time_slice_ms)}
         )
     }
-    , m_gpu_upload_bytes{to_size(load_config.gpu_upload_bytes_per_frame   )}
+    , m_gpu_upload_bytes{gpu_upload_bytes}
     , m_io_read_bytes   {to_size(load_config.io_read_bytes_per_frame      )}
     , m_residency_items {to_size(load_config.max_residency_items_per_frame)}
     , m_publish_items   {to_size(load_config.max_publish_items_per_frame  )}

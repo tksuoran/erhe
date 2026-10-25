@@ -366,6 +366,7 @@ auto Asset_manager::queue_load(
         std::make_unique<Gltf_load_task>(m_context, std::move(request), handle, std::move(on_done))
     );
     m_load_task_count.store(m_load_tasks.size(), std::memory_order_relaxed);
+    set_upload_phase(Upload_phase::loading);
     log_asset->info(
         "queued async {} '{}' ({} in flight)",
         is_import ? "import" : "load",
@@ -449,7 +450,49 @@ void Asset_manager::tick(Asset_load_tick_context& tick_context)
     );
     if (m_load_tasks.size() != before) {
         m_load_task_count.store(m_load_tasks.size(), std::memory_order_relaxed);
+        if (m_load_tasks.empty()) {
+            set_upload_phase(Upload_phase::idle);
+        }
     }
+}
+
+namespace {
+
+// load.gpu_upload_bytes_per_frame_while_loading = 0 resolves to half of the
+// platform's upload staging cap (config/editor: 64 MiB desktop, 32 MiB
+// OpenXR), so two frames of uploads fit the staging ring. A device config
+// written before the setting existed reads 0 and gets this default.
+constexpr std::size_t c_desktop_upload_bytes_while_loading = 32u * 1024u * 1024u;
+constexpr std::size_t c_openxr_upload_bytes_while_loading  = 16u * 1024u * 1024u;
+
+} // anonymous namespace
+
+auto Asset_manager::get_gpu_upload_bytes_per_frame() const -> std::size_t
+{
+    if (m_context.editor_settings == nullptr) {
+        return 0;
+    }
+    const Load_config& load = m_context.editor_settings->load;
+    if (m_upload_phase == Upload_phase::idle) {
+        return static_cast<std::size_t>(std::max(0, load.gpu_upload_bytes_per_frame));
+    }
+    if (load.gpu_upload_bytes_per_frame_while_loading > 0) {
+        return static_cast<std::size_t>(load.gpu_upload_bytes_per_frame_while_loading);
+    }
+    return m_context.OpenXR ? c_openxr_upload_bytes_while_loading : c_desktop_upload_bytes_while_loading;
+}
+
+void Asset_manager::set_upload_phase(const Upload_phase phase)
+{
+    if (m_upload_phase == phase) {
+        return;
+    }
+    m_upload_phase = phase;
+    log_asset->info(
+        "GPU upload budget: {} bytes per frame ({})",
+        get_gpu_upload_bytes_per_frame(),
+        (phase == Upload_phase::loading) ? "load in progress" : "no load in progress"
+    );
 }
 
 auto c_str(const Asset_acquire_state state) -> const char*

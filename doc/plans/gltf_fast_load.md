@@ -541,6 +541,24 @@ Further items (user, 2026-10-25):
 - Item 7: **raise the per-frame upload budget while a load is in
   progress** (texture upload is ~6.5 s of the 10 s Quest load at 4 MiB per
   frame); back to the normal budget once the load settles.
+  Done: `load.gpu_upload_bytes_per_frame_while_loading` (Load_config v6;
+  0 = platform default, 32 MiB desktop / 16 MiB OpenXR, half of each
+  platform's staging cap; committed configs carry the explicit values, a
+  stale device config reads 0) applies while any load task is live; the
+  phase switches when the first task is queued and the last is reaped
+  (`doc/editor/async_asset_loading.md` "Upload budget while loading").
+  Result (2026-10-25):
+
+  | | before (4 MiB) | after |
+  |---|---|---|
+  | Quest 3 release APK, off-head, `--no-scene`, `load_scene` `bistro_quest.glb`, 3 runs | listed = idle 10.1-10.3 s | listed = idle 7.1-8.0 s (16 MiB, stale device config) |
+  | Quest VmHWM | 1981-2012 MB | 1987-2021 MB |
+  | Quest frames during residency (60-frame averages) | upload term 1.2-3.5 ms, full tick 13.9-15.8 ms | upload term 3.8-12.2 ms, full tick 14.3-20.4 ms; publish frame window 38-40 ms (before 44 ms); 0 XR frame discards |
+  | desktop Release prepared Bistro, 3 interleaved runs | listed 3.07-3.14 s, idle 3.48-3.56 s | listed 2.94-3.12 s, idle 3.03-3.35 s (32 MiB) |
+  | desktop render | 89832b62... | 89832b62... (all 6 runs) |
+
+  Desktop is bound by the Basis transcode, not the upload; staging
+  high-water at 32 MiB per frame reached the 64 MiB cap (5 waits).
 - Item 8: **MCP save commands are asynchronous** (save_scene,
   save_scene_for_quest): they return at once and the save's completion and
   result are polled, so a long save is not cut off by the MCP reply time

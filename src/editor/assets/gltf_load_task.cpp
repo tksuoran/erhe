@@ -292,14 +292,16 @@ void Gltf_load_task::log_staging_statistics(Asset_load_tick_context& tick_contex
     const erhe::graphics::Upload_staging_usage staging = tick_context.graphics_device.get_upload_staging_usage();
     log_parsers->info(
         "async load '{}' resident: decoded pixels high-water {} of {} bytes budget; "
-        "upload staging high-water {} of {} bytes cap (device lifetime), {} waits, {} oversize",
+        "upload staging high-water {} of {} bytes cap (device lifetime), {} waits, {} oversize; "
+        "upload budget {} bytes per frame",
         erhe::file::to_string(m_handle->get_path().filename()),
         residency.get_pending_byte_high_water(),
         tick_context.max_decoded_bytes_in_flight,
         staging.high_water_bytes,
         staging.capacity_byte_count,
         staging.refused_count,
-        staging.oversize_count
+        staging.oversize_count,
+        (m_context.asset_manager != nullptr) ? m_context.asset_manager->get_gpu_upload_bytes_per_frame() : std::size_t{0}
     );
     const erhe::gltf::Gltf_image_decode_path_counts& paths = residency.get_decode_path_counts();
     log_parsers->info(

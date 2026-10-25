@@ -83,13 +83,39 @@ per-frame cost. The fields come from `Load_config` (v2):
 | Field | Default | Meaning |
 |---|---|---|
 | `async_gltf_load` | `true` | master switch |
-| `gpu_upload_bytes_per_frame` | 4 MiB | texture + buffer bytes recorded per frame |
+| `gpu_upload_bytes_per_frame` | 4 MiB | texture + buffer bytes recorded per frame while no load is in progress |
+| `gpu_upload_bytes_per_frame_while_loading` | 0 = platform default: 32 MiB desktop, 16 MiB OpenXR | texture + buffer bytes recorded per frame while a load is in progress (v6) |
 | `io_read_bytes_per_frame` | 64 MiB | file bytes per frame |
 | `max_decoded_bytes_in_flight` | 128 MiB | decode backpressure: image decodes start only while the decoded pixels waiting for upload plus those being decoded stay below it; a standing cap carried on the tick context, not a per-frame allowance |
 | `max_upload_staging_bytes` | 64 MiB (32 MiB in `openxr_editor_settings.json`) | hard cap on the host-visible staging of the budgeted uploads (v4); carried on the tick context |
 | `max_residency_items_per_frame` | 64 | guards against many tiny items |
 | `max_publish_items_per_frame` | 256 | publish slice |
 | `load_time_slice_ms` | 4 | hard cap, checked between items, wins over the byte budgets |
+
+### Upload budget while loading
+
+`Asset_manager::get_gpu_upload_bytes_per_frame()` hands the per-frame
+upload allowance to `Frame_load_budget`. Its phase switches where the task
+list changes: queuing the first load task enters "load in progress" and
+reaping the last one leaves it (`Asset_manager::set_upload_phase`, which
+logs the new allowance on `editor.asset`). While a load is in progress the
+allowance is `gpu_upload_bytes_per_frame_while_loading`, otherwise
+`gpu_upload_bytes_per_frame`; both are read from the settings each frame, so
+an edit applies at once. The large allowance gets a waited-for scene
+resident sooner; the small one keeps uploads after the load (deferred
+builds and other loader-queue drains) from taking frame time from an
+interactive scene. 0 selects the platform default, half of the platform's
+upload staging cap (64 MiB desktop, 32 MiB OpenXR) so two frames of uploads
+fit the staging ring; a device config written before the setting existed
+reads 0 and gets that default. `max_upload_staging_bytes`, the decode
+budget and `load_time_slice_ms` (between items) still bound the uploads.
+The "async load ... resident" log line reports the allowance in effect.
+
+On Quest 3 the 16 MiB allowance moves Bistro's 1.8 GB of ASTC blocks in
+about 4 s instead of 6.5 s; the upload term of the main-thread prepare phase
+grows from 1.2-3.5 ms to 4-12 ms per frame (60-frame averages) during
+residency, the full tick from 14-16 ms to 14-20 ms, with no XR frame
+discards (doc/plans/gltf_fast_load.md item 7).
 
 `gpu_upload_bytes_per_frame` paces the uploads; `max_upload_staging_bytes`
 bounds the memory they stage through. Texture uploads (`Image_transfer` in
