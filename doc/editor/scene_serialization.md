@@ -237,7 +237,12 @@ through it:
 - Asset Browser context menu ("Load scene" on an erhe-authored file)
 - MCP `load_scene` (queued; poll `list_scenes` to observe completion)
 - `--scene <file>` command-line option (startup, instead of the procedural
-  startup script)
+  startup script). `--no-scene` instead starts with an empty scene
+  ("Scene 1", the File > New Scene scene: a default camera and its
+  viewport, no lights, no meshes; under OpenXR no desktop viewport, as for
+  any opened scene) and loads nothing; it takes precedence
+  over `--scene`. The tools (Hud, Hotbar, OpenXR headset) home in that
+  empty scene, so a scene loaded later opens beside it.
 - `scene.load_scene` in `config/editor/commands.json`
 
 The handler scans the file (`editor::scan_gltf` -> `Gltf_scan_summary`,

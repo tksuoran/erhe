@@ -1585,6 +1585,12 @@ public:
                 std::this_thread::sleep_for(std::chrono::milliseconds{250});
             }
         }
+        if (m_app_context.OpenXR) {
+            // Every frame: the headset's Shadow_render_node runs in every
+            // frame's rendergraph and reads this frame's Render_view, also
+            // on frames update_actions() did not run or returned early.
+            m_headset_view->prepare_render_view();
+        }
 #endif
 
         // The node-writing fixed-step updates for the steps the overlap
@@ -4998,10 +5004,14 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
-        // --no-scene: start with an empty editor -- do not procedurally build the
-        // default scene and do not load any scene. Takes precedence over --scene.
+        // --no-scene: start with an empty scene -- the scene File > New Scene
+        // creates (Scene_commands::create_new_scene(): a default camera and
+        // its viewport, no lights, no meshes); no procedural default scene and
+        // no scene load. Takes precedence over --scene. Queued like the --scene
+        // load, so it runs once the main loop pumps the message bus.
         if (m_no_startup_scene) {
-            log_startup->info("Starting with no scene (--no-scene); skipping procedural startup script and scene load");
+            log_startup->info("Starting with an empty scene (--no-scene); skipping procedural startup script and scene load");
+            m_app_message_bus->create_scene.queue_message(Create_scene_message{});
             return;
         }
 
@@ -5436,7 +5446,7 @@ public:
     // "Benchmark mode"), null otherwise. Main thread only.
     std::unique_ptr<Benchmark_driver>   m_benchmark_driver;
     std::string                         m_startup_scene_path;    // startup scene bundle path (--scene); when set, loaded instead of running the commands.json scene build
-    bool                                m_no_startup_scene{false}; // --no-scene: start empty (no procedural scene, no scene load); takes precedence over --scene
+    bool                                m_no_startup_scene{false}; // --no-scene: start with an empty scene (default camera only; no procedural scene, no scene load); takes precedence over --scene
     Graphics_config                     m_graphics_config;
     Mesh_memory_config                  m_mesh_memory_config;
     Renderer_config                     m_renderer_config;

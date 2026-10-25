@@ -253,6 +253,10 @@ In order:
    transitions it applies are read by R), then, when the wait succeeded,
    `Headset_view::update_actions(timing)` (`xrSyncActions`, hand tracking,
    view pose, controller nodes and pointer); a failure sleeps 250 ms.
+   Then, every frame, `Headset_view::prepare_render_view()` copies the
+   headset's `Scene_view::Render_view` of the frame (scene root and root
+   camera; neither before the headset is attached to a scene), which the
+   headset's `Shadow_render_node` reads in R every frame.
 8. The node-writing fixed steps over the same step list
    (`Headset_view::update_fixed_step`, `Fly_camera_tool::update_fixed_step`),
    then `App_scenes::after_physics_simulation_steps` (pause / resume edge,

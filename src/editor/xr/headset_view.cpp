@@ -1765,9 +1765,13 @@ void Headset_view::update_camera_node()
     // taken about is this one.
     const glm::mat4 world_from_root = m_root_node ? m_root_node->world_from_node() : glm::mat4{1.0f};
     prepare_cull_planes(world_from_root * world_from_view);
+}
 
+void Headset_view::prepare_render_view()
+{
     // The root camera as the copy the shadow render node fits to
-    // (Scene_view::get_render_camera()).
+    // (Scene_view::get_render_camera()); null before the headset is
+    // attached to a scene (setup_root_camera()).
     snapshot_render_view(m_root_camera.get());
 }
 

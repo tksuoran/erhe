@@ -188,6 +188,15 @@ public:
     // Requires a waited frame (frame_timing.wait_ok), not a begun one:
     // xrSyncActions and the view pose use the wait's predicted display time.
     auto update_actions(const erhe::xr::Frame_timing& frame_timing) -> bool;
+    // M2, every frame under OpenXR, after update_actions() (whether or not
+    // the frame was waited, the headset is attached to a scene or the head
+    // pose located): copies this frame's Render_view (scene root and root
+    // camera, which update_actions() posed) for the headset's
+    // Shadow_render_node, which the rendergraph runs every frame and which
+    // reads Scene_view::get_render_view() for its scene root and camera.
+    // Without a scene there is no root camera; the copy then carries no
+    // scene root and no camera, and the shadow node renders nothing.
+    void prepare_render_view();
     auto render_headset(erhe::graphics::Command_buffer& command_buffer) -> bool;
     // Render phase, the rendergraph node's pre-execute hook (before the
     // frame's culling classification): adds the culling view of the
