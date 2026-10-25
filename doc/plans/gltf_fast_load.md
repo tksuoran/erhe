@@ -544,5 +544,25 @@ Further items (user, 2026-10-25):
 - Item 8: **MCP save commands are asynchronous** (save_scene,
   save_scene_for_quest): they return at once and the save's completion and
   result are polled, so a long save is not cut off by the MCP reply time
-  limit.
+  limit. Saving goes through a temporary file (user, 2026-10-25): a save
+  onto the scene's own source never reads a partially written file, and a
+  failed save keeps the old file.
+  Done: the tools queue a job that runs on the main thread at the end of
+  the MCP request pass; `get_save_status` (answered on the server thread)
+  reports pending / running / done / failed with path, file_bytes,
+  save_ms, export_ms, prepared and texture statistics
+  (`doc/agents/mcp_server_usage.md` "Saving scenes"). Every glTF write uses
+  `erhe::file::write_file_via_temp`.
+  Result (2026-10-25, Release headless desktop): foreign Bistro
+  `save_scene_for_quest` replied in 0.16 s (incl. the client process),
+  status answered while running, done after 8.5 s, 857 249 836 bytes
+  (same as item 4), 393 / 393 transcoded; `save_scene` done after 3.9 s,
+  663 773 028 bytes. Prepared Bistro loaded with `cpu_mesh_data` release
+  and saved onto its own path: done in 2.7 s, the file is byte-identical
+  to a keep-mode save to another path and to the same save by the
+  pre-change editor; it renders 001cdd5e... (356 pixels, max delta 55,
+  from 89832b62... of `logs/step9/bistro_prepared.glb`; a re-save of the
+  prepared file renders so at HEAD too). A save onto a file another
+  handle holds open fails the job (rename refused) and leaves the file
+  byte-identical, no temporary left.
 

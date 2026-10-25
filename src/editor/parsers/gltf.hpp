@@ -223,13 +223,26 @@ public:
 // (doc/plans/gltf_fast_load.md), prepared in parallel on 'executor' (serial
 // when null). Returns false when the scene has no root node or the write
 // fails.
+// What one scene save did: filled by the save_scene_gltf() overloads below
+// when the caller passes one (MCP get_save_status reports it).
+class Gltf_scene_save_report
+{
+public:
+    erhe::gltf::Gltf_export_prepared_statistics prepared;
+    erhe::gltf::Gltf_export_texture_statistics  textures;
+    double                                      export_ms {0.0};
+    std::size_t                                 file_bytes{0};
+};
+
 // texture_export selects the image form (erhe::gltf::Gltf_texture_export);
-// source unless "Save for Quest".
+// source unless "Save for Quest". 'report', when not null, receives the
+// statistics of the save.
 [[nodiscard]] auto save_scene_gltf(
     Scene_root&                         scene_root,
     const std::filesystem::path&        path,
     tf::Executor*                       executor,
-    erhe::gltf::Gltf_texture_export     texture_export = erhe::gltf::Gltf_texture_export::source
+    erhe::gltf::Gltf_texture_export     texture_export = erhe::gltf::Gltf_texture_export::source,
+    Gltf_scene_save_report*             report         = nullptr
 ) -> bool;
 
 // THE scene save entry point (File > Save Scene, MCP save_scene): writes the
@@ -240,7 +253,8 @@ public:
 [[nodiscard]] auto save_scene_gltf(
     App_context&                 context,
     Scene_root&                  scene_root,
-    const std::filesystem::path& path
+    const std::filesystem::path& path,
+    Gltf_scene_save_report*      report = nullptr
 ) -> bool;
 
 // "Save for Quest" (File > Save glTF for Quest, MCP save_scene_for_quest;
@@ -254,7 +268,8 @@ public:
 [[nodiscard]] auto save_scene_gltf_for_quest(
     App_context&                 context,
     Scene_root&                  scene_root,
-    const std::filesystem::path& path
+    const std::filesystem::path& path,
+    Gltf_scene_save_report*      report = nullptr
 ) -> bool;
 
 // Default location for saved scene files: res/editor/scenes, relative to the

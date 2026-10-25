@@ -25,3 +25,7 @@ if (ERHE_TARGET_OS_ANDROID)
 endif ()
 
 erhe_target_settings(${_target} "erhe")
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()

@@ -3595,7 +3595,9 @@ void Operations::export_callback(const char* const* filelist, int filter)
                 .excluded_item_type_bits = Editor_item_types::joint
             }
         );
-        erhe::file::write_file(path.value(), gltf);
+        if (!erhe::file::write_file_via_temp(path.value(), gltf)) {
+            log_operations->error("glTF export: writing '{}' failed", erhe::file::to_string(path.value()));
+        }
     }
 }
 

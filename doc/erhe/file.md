@@ -12,6 +12,16 @@ No classes; this library exposes free functions in `erhe::file`.
 ## Public API
 - `read(description, path)` -- Read entire file to `optional<string>`; returns empty if file missing/empty.
 - `write_file(path, text)` -- Write string to file, returns success bool.
+- `write_file_via_temp(path, text)` / `write_file_via_temp(path, write)` -- Write
+  through a temporary file in the target's directory (`<file name>.<pid>.<n>.tmp`;
+  `write` is a `bool(FILE*)` callback that fills it), flushed and closed, then
+  moved over `path` in one rename (`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING |
+  MOVEFILE_WRITE_THROUGH` on Windows, `std::filesystem::rename` elsewhere). The old
+  file stays intact and readable until the rename, so a writer can read the file it
+  replaces; on any failure (callback returns false, open / write / flush / close /
+  rename fails) the temporary file is removed, the old file is unchanged and the
+  call returns false with the failure logged. On Windows the rename fails while
+  another handle holds the target open without `FILE_SHARE_DELETE`.
 - `to_string(path)` / `from_string(str)` -- Convert between `filesystem::path` and `string`.
 - `check_is_existing_non_empty_regular_file(description, path)` -- Validate a file path.
 - `ensure_directory_exists(path)` -- Create directory tree if needed.
@@ -21,6 +31,11 @@ No classes; this library exposes free functions in `erhe::file`.
 ## Dependencies
 - **erhe libraries:** `erhe::defer` (private), `erhe::log` (private), `erhe::verify` (private)
 - **External:** Standard library (`<filesystem>`)
+
+## Tests
+`erhe_file_tests` (`src/erhe/file/test`): `write_file_via_temp` writes, replaces
+a file its writer reads, and keeps the old file byte-identical when the write, the
+open or (Windows) the rename fails.
 
 ## Notes
 - The file dialogs may be platform-specific (uses native OS dialogs).

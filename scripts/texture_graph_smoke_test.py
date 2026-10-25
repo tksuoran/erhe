@@ -28,6 +28,9 @@ import time
 import urllib.request
 import zlib
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from erhe_mcp import wait_for_save  # noqa: E402
+
 PORT = 3743
 LOG_PATH = pathlib.Path("logs/log.txt")
 TMP_DIR = pathlib.Path("logs/texgraph_smoke")
@@ -1915,7 +1918,7 @@ def section_graph_texture_asset():
     # bindings ride in the root-level ERHE_node_graphs extension), then reload.
     TMP_DIR.mkdir(parents=True, exist_ok=True)
     scene_path = TMP_DIR / "asset_roundtrip.glb"
-    mutate("save_scene", {"scene_name": scene_name, "path": str(scene_path)})
+    wait_for_save(call, mutate("save_scene", {"scene_name": scene_name, "path": str(scene_path)}))
     check(S, "save wrote the scene file", scene_path.is_file(), detail=str(scene_path))
     if scene_path.is_file():
         scene_doc = read_glb_json(scene_path)

@@ -1711,7 +1711,7 @@ def section_7(rig: Rig):
     opened = []
     try:
         path = os.path.join(scratch, "ik_persistence.glb")
-        e.call("save_scene", {"scene_name": rig.scene, "path": path})
+        e.c.save("save_scene", {"scene_name": rig.scene, "path": path})
         e.wait_idle()
 
         reopened = load_scene_file(e, path)
@@ -1741,7 +1741,7 @@ def section_7(rig: Rig):
             e.advance(4)
             usd_path = os.path.join(scratch, "ik_persistence.usda")
             offset = log_size()
-            e.call("save_scene", {"scene_name": usd_scene, "path": usd_path})
+            e.c.save("save_scene", {"scene_name": usd_scene, "path": usd_path})
             e.wait_idle()
             warned = "carry IK settings" in log_since(offset)
             check_true("7.3 saving as USD logs that IK settings are not written", warned and os.path.isfile(usd_path),

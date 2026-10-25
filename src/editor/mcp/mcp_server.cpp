@@ -390,6 +390,18 @@ auto Mcp_server::handle_tools_call(
     const json&        arguments
 ) -> std::string
 {
+    // get_save_status reads only the save job table (under its own mutex),
+    // so it is answered here on the HTTP thread: a save holds the main
+    // thread for its whole run, and polling it through the queue would
+    // time out while it runs.
+    if (tool_name == "get_save_status") {
+        json result = json::parse(query_save_status(arguments), nullptr, false);
+        if (result.is_discarded()) {
+            return make_jsonrpc_error(id, -32000, "Internal error processing: " + tool_name);
+        }
+        return make_jsonrpc_response(id, result);
+    }
+
     auto queued = std::make_unique<Queued_request>();
     queued->tool_name = tool_name;
     queued->arguments = arguments;
@@ -576,6 +588,10 @@ auto Mcp_server::process_queued_requests() -> int
         log_mcp->info("MCP server: processed '{}'", req->tool_name);
     }
 
+    // After every reply of this pass is settled: the HTTP threads answer
+    // while the saves hold the main thread.
+    run_queued_saves();
+
     return count;
 }
 
@@ -694,6 +710,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "select_variant",                 &Mcp_server::action_select_variant                },
         { "save_scene",                     &Mcp_server::action_save_scene                    },
         { "save_scene_for_quest",           &Mcp_server::action_save_scene_for_quest          },
+        { "get_save_status",                &Mcp_server::query_save_status                    },
         { "load_scene",                     &Mcp_server::action_load_scene                    },
         { "open_scene",                     &Mcp_server::action_open_scene                    },
         { "frame_scene",                    &Mcp_server::action_frame_scene                   },

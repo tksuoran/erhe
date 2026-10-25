@@ -22,7 +22,7 @@ import time
 import traceback
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from erhe_mcp import McpClient, wait_for_server  # noqa: E402
+from erhe_mcp import McpClient, wait_for_save, wait_for_server  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_EDITOR_EXE = os.path.join(REPO_ROOT, "build_vs2026_vulkan", "bin", "Release", "editor.exe")
@@ -477,7 +477,7 @@ class Creation:
         parent = os.path.dirname(path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        self.mutate("save_scene", {"scene_name": self.scene, "path": path})
+        wait_for_save(self.call, self.mutate("save_scene", {"scene_name": self.scene, "path": path}))
         print(f"saved scene to {path}")
 
     def export(self, path, binary=True):

@@ -28,6 +28,9 @@ import sys
 import time
 import urllib.request
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from erhe_mcp import wait_for_save  # noqa: E402
+
 PORT = 3743
 LOG_PATH = pathlib.Path("logs/log.txt")
 RESULTS = []
@@ -1373,7 +1376,7 @@ def section_graph_mesh_asset():
     # The baked products must NOT be double-persisted as ordinary mesh /
     # physics records on the bound node.
     scene_path = pathlib.Path("res/editor/scenes/smoke_graph_mesh.glb")
-    mutate("save_scene", {"scene_name": scene_name, "path": str(scene_path)})
+    wait_for_save(call, mutate("save_scene", {"scene_name": scene_name, "path": str(scene_path)}))
     check(S, "save wrote the scene file", scene_path.is_file(), detail=str(scene_path))
     if scene_path.is_file():
         doc = read_glb_json(scene_path)

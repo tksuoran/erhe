@@ -50,7 +50,7 @@ auto write_material_container_file(
         out_error = fmt::format("material container export produced no data for '{}'", erhe::file::to_string(path));
         return false;
     }
-    if (!erhe::file::write_file(path, gltf)) {
+    if (!erhe::file::write_file_via_temp(path, gltf)) {
         out_error = fmt::format("failed to write material container '{}'", erhe::file::to_string(path));
         return false;
     }

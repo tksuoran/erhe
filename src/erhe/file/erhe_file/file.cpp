@@ -4,9 +4,17 @@
 
 #include <fmt/std.h>
 
+#include <cstdint>
+#include <mutex>
+#include <system_error>
+
 #if defined(ERHE_OS_WINDOWS)
 #   include <Windows.h>
 #   include <shobjidl.h>
+#endif
+
+#if !defined(ERHE_OS_WINDOWS)
+#   include <unistd.h>
 #endif
 
 #if defined(ERHE_OS_ANDROID)
@@ -527,6 +535,114 @@ void ensure_working_directory_contains(const char* target)
     path_string = path.string();
     fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
 #endif
+}
+
+namespace {
+
+[[nodiscard]] auto make_temp_path(const std::filesystem::path& path) -> std::filesystem::path
+{
+    static std::mutex    s_counter_mutex;
+    static std::uint64_t s_counter{0};
+    std::uint64_t counter = 0;
+    {
+        std::lock_guard<std::mutex> lock{s_counter_mutex};
+        counter = ++s_counter;
+    }
+#if defined(ERHE_OS_WINDOWS)
+    const unsigned long process_id = static_cast<unsigned long>(GetCurrentProcessId());
+#else
+    const unsigned long process_id = static_cast<unsigned long>(getpid());
+#endif
+    std::filesystem::path temp_path = path;
+    temp_path += std::filesystem::path{fmt::format(".{}.{}.tmp", process_id, counter)};
+    return temp_path;
+}
+
+[[nodiscard]] auto open_for_write(const std::filesystem::path& path) -> std::FILE*
+{
+#if defined(ERHE_OS_WINDOWS)
+    return _wfopen(path.wstring().c_str(), L"wb");
+#else
+    return std::fopen(path.c_str(), "wb");
+#endif
+}
+
+void remove_temp(const std::filesystem::path& temp_path)
+{
+    std::error_code error_code;
+    std::filesystem::remove(temp_path, error_code);
+    if (error_code && log_file) {
+        log_file->error("write_file_via_temp(): failed to remove temporary file '{}': {}", temp_path, error_code.message());
+    }
+}
+
+} // anonymous namespace
+
+auto write_file_via_temp(const std::filesystem::path& path, const std::function<bool(std::FILE*)>& write) -> bool
+{
+    if (path.empty()) {
+        if (log_file) log_file->error("write_file_via_temp(): path is empty");
+        return false;
+    }
+    const std::filesystem::path temp_path = make_temp_path(path);
+    std::FILE* const file = open_for_write(temp_path);
+    if (file == nullptr) {
+        if (log_file) log_file->error("write_file_via_temp(): failed to open temporary file '{}' for writing; '{}' is unchanged", temp_path, path);
+        return false;
+    }
+    const bool written = write(file);
+    const bool flushed = written && (std::fflush(file) == 0);
+    const bool closed  = (std::fclose(file) == 0);
+    if (!written || !flushed || !closed) {
+        if (log_file) {
+            log_file->error(
+                "write_file_via_temp(): {} temporary file '{}' failed; '{}' is unchanged",
+                !written ? "writing" : (!flushed ? "flushing" : "closing"),
+                temp_path,
+                path
+            );
+        }
+        remove_temp(temp_path);
+        return false;
+    }
+#if defined(ERHE_OS_WINDOWS)
+    const BOOL moved = MoveFileExW(temp_path.wstring().c_str(), path.wstring().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    if (moved == 0) {
+        const DWORD error = GetLastError();
+        if (log_file) {
+            log_file->error(
+                "write_file_via_temp(): replacing '{}' with '{}' failed: {}; '{}' is unchanged",
+                path, temp_path, std::system_category().message(static_cast<int>(error)), path
+            );
+        }
+        remove_temp(temp_path);
+        return false;
+    }
+#else
+    std::error_code error_code;
+    std::filesystem::rename(temp_path, path, error_code);
+    if (error_code) {
+        if (log_file) {
+            log_file->error(
+                "write_file_via_temp(): replacing '{}' with '{}' failed: {}; '{}' is unchanged",
+                path, temp_path, error_code.message(), path
+            );
+        }
+        remove_temp(temp_path);
+        return false;
+    }
+#endif
+    return true;
+}
+
+auto write_file_via_temp(const std::filesystem::path& path, const std::string_view text) -> bool
+{
+    return write_file_via_temp(
+        path,
+        [text](std::FILE* const file) -> bool {
+            return std::fwrite(text.data(), 1, text.size(), file) == text.size();
+        }
+    );
 }
 
 auto ensure_directory_exists(std::filesystem::path path) -> bool

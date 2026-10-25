@@ -28,6 +28,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::file`: `write_file_via_temp(path, text)` and
+  `write_file_via_temp(path, write)`: write through a temporary file in the
+  target directory and replace the target with one rename only when the
+  write completed; a failed write leaves the old file unchanged.
 - `erhe::primitive`: `Triangle_soup_source`, `Triangle_soup_counts`,
   `Triangle_soup_reload_statistics` / `get_triangle_soup_reload_statistics()`;
   `Primitive_shape::set_triangle_soup_source()`, `get_triangle_soup_source()`,

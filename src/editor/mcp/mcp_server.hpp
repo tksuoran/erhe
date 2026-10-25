@@ -3,6 +3,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <deque>
+#include <filesystem>
 #include <functional>
 #include <future>
 #include <memory>
@@ -313,6 +315,10 @@ private:
     auto action_select_variant    (const nlohmann::json& args) -> std::string;
     auto action_save_scene      (const nlohmann::json& args) -> std::string;
     auto action_save_scene_for_quest(const nlohmann::json& args) -> std::string;
+    // Thread-agnostic: reads only the save job table under m_save_jobs_mutex,
+    // so handle_tools_call answers it on the HTTP thread, also while a save
+    // holds the main thread.
+    auto query_save_status      (const nlohmann::json& args) -> std::string;
     auto action_load_scene      (const nlohmann::json& args) -> std::string;
     auto action_open_scene      (const nlohmann::json& args) -> std::string;
     auto action_close_scene     (const nlohmann::json& args) -> std::string;
@@ -867,6 +873,43 @@ private:
     // outlives each capture: its result lands frames after the capture's
     // readback, and get_gpu_timers reads it.
     std::unique_ptr<erhe::graphics::Gpu_timer>       m_scene_image_forward_timer;
+
+    // Asynchronous scene saves (save_scene, save_scene_for_quest;
+    // doc/agents/mcp_server_usage.md "Saving scenes"). The tool queues a
+    // job and returns its id at once; run_queued_saves() runs the queued
+    // jobs on the main thread at the end of process_queued_requests(), after
+    // the replies of that pass are settled, so a save longer than
+    // k_request_timeout is not cut off. get_save_status reads the job table.
+    enum class Save_job_kind : unsigned int {
+        scene,          // save_scene: the scene's own format, File > Save Scene
+        scene_for_quest // save_scene_for_quest: glTF with ASTC 4x4 KTX2 textures
+    };
+    enum class Save_job_source_binding : unsigned int {
+        keep,      // an export: the scene's source file binding is left alone
+        set_source // Save As: the scene is bound to the written file
+    };
+    class Queued_save
+    {
+    public:
+        std::uint64_t             job_id        {0};
+        Save_job_kind             kind          {Save_job_kind::scene};
+        std::weak_ptr<Scene_root> scene_root;
+        std::filesystem::path     path;
+        Save_job_source_binding   source_binding{Save_job_source_binding::keep};
+    };
+    // Returns the job's status object (state "pending").
+    auto queue_save          (Save_job_kind kind, const std::shared_ptr<Scene_root>& scene_root, const std::filesystem::path& path, Save_job_source_binding source_binding) -> nlohmann::json;
+    void run_queued_saves    ();
+    void run_save            (const Queued_save& save);
+    void update_save_job     (std::uint64_t job_id, const nlohmann::json& fields);
+    // Main thread only: saves queued by this pass's handlers.
+    std::vector<Queued_save>                         m_queued_saves;
+    // Status of the most recent jobs (oldest dropped beyond
+    // k_max_save_jobs); every access holds m_save_jobs_mutex.
+    static constexpr std::size_t                     k_max_save_jobs{64};
+    std::mutex                                       m_save_jobs_mutex;
+    std::deque<nlohmann::json>                       m_save_jobs;
+    std::uint64_t                                    m_next_save_job_id{1};
 };
 
 } // namespace editor

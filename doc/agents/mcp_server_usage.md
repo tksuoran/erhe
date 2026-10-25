@@ -451,28 +451,56 @@ Returns: `{queued, active_item: {name, type, id}}`
 
 ## Action Tools
 
-### save_scene_for_quest
+### Saving scenes: save_scene, save_scene_for_quest, get_save_status
 
-"Save for Quest" (File > Save glTF for Quest): writes a glTF scene like
-`save_scene` (prepared mesh data, editor state), but every Basis Universal
-KTX2 texture is transcoded at save time to a raw ASTC 4x4 KTX2 image
-(Zstandard supercompressed) referenced through `ERHE_texture_ktx2`
-(`doc/gltf_extensions/ERHE_texture_ktx2.md`); PNG / JPEG images are written
-as they are. An export: the scene's source binding and dirty state stay. A
-USD-backed scene is refused. `path` defaults to
+Both save tools are asynchronous. The tool validates its arguments (unknown
+scene, a USD-backed scene for Save for Quest), queues the save and returns
+the job at once: `{job_id, tool, scene_name, path, format, state: "pending",
+saved: false, message}`. The save runs on the main thread at the end of the
+same request pass, after that pass's replies are sent, through the same
+save functions File > Save uses; it holds the main thread for its whole run
+(seconds on a large scene), so other tools wait for it, while
+`get_save_status` does not: the server thread answers it directly from the
+job table. Poll `get_save_status {job_id}` until `state` is `done` or
+`failed` before reading the file.
+
+`get_save_status {job_id}` returns that job: `state` is `pending`,
+`running`, `done` or `failed`. A done job adds `saved: true`, `file_bytes`,
+`save_ms` and, for a glTF save, `export_ms` and `prepared{prepared_count,
+retained_count, skipped_count, skip_reasons, bvh_reused_count,
+bvh_rebuilt_count, bvh_stored_count, bvh_none_count,
+dropped_degenerate_triangles, preparation_ms}`; Save for Quest adds
+`textures{image_count, transcoded_count, transcode_failed_count,
+raw_ktx2_count, source_byte_count, transcoded_byte_count, transcode_ms}`. A
+failed job carries `error` (a scene closed before its save ran, a write
+failure; details in `logs/log.txt`). Without `job_id` the tool returns
+`{jobs: [...]}`, the most recent 64 jobs.
+
+The file is written through a temporary file in the target directory and
+replaces the target only once complete (`erhe::file::write_file_via_temp`),
+so a save onto the scene's own source works and a failed save leaves the
+old file untouched.
+
+`save_scene` writes the scene in its own format (the scene persistence
+path, File > Save Scene); `set_as_source` binds the scene to `path` once the
+save succeeds.
+
+`save_scene_for_quest` ("Save for Quest", File > Save glTF for Quest)
+writes a glTF scene like `save_scene` (prepared mesh data, editor state),
+but every Basis Universal KTX2 texture is transcoded at save time to a raw
+ASTC 4x4 KTX2 image (Zstandard supercompressed) referenced through
+`ERHE_texture_ktx2` (`doc/gltf_extensions/ERHE_texture_ktx2.md`); PNG / JPEG
+images are written as they are. An export: the scene's source binding and
+dirty state stay. A USD-backed scene is refused. `path` defaults to
 `res/editor/scenes/<scene name>_quest.glb`; `.glb` is appended when the
-extension is neither `.glb` nor `.gltf`. The save runs on the main thread
-and can outlast the server's reply timeout on a large scene; the
-`save_scene_gltf: '<path>' textures: ...` log line reports the transcode
-counts and time.
+extension is neither `.glb` nor `.gltf`.
 
 ```bash
-curl -X POST http://127.0.0.1:3743/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"save_scene_for_quest","arguments":{"scene_name":"bistro_lights_c.gltf","path":"logs/bistro_quest.glb"}}}'
+py -3 scripts/mcp_call.py save_scene_for_quest '{"scene_name":"bistro_lights_c.gltf","path":"logs/bistro_quest.glb"}'
+# -> {"job_id": 1, "state": "pending", ...}
+py -3 scripts/mcp_call.py get_save_status '{"job_id":1}'
+# -> {"job_id": 1, "state": "done", "file_bytes": ..., "textures": {...}, ...}
 ```
-
-Returns: `{scene_name, path, save_ms, file_bytes}`.
 
 ### create_node
 
