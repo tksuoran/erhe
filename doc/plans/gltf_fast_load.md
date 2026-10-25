@@ -536,3 +536,13 @@ Decisions on the follow-up items (user, 2026-10-25):
   1.5 GB).
 - Order: item 6, then item 4, then item 3.
 
+Further items (user, 2026-10-25):
+
+- Item 7: **raise the per-frame upload budget while a load is in
+  progress** (texture upload is ~6.5 s of the 10 s Quest load at 4 MiB per
+  frame); back to the normal budget once the load settles.
+- Item 8: **MCP save commands are asynchronous** (save_scene,
+  save_scene_for_quest): they return at once and the save's completion and
+  result are polled, so a long save is not cut off by the MCP reply time
+  limit.
+
