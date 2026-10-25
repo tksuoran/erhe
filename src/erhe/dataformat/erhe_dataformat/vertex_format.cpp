@@ -366,4 +366,39 @@ auto get_vertex_joint_weights_encoding(const Vertex_format* vertex_format) -> Ve
     }
 }
 
+auto get_vertex_format_signature(const Vertex_format& vertex_format) -> std::string
+{
+    std::string signature;
+    for (std::size_t stream_index = 0, stream_end = vertex_format.streams.size(); stream_index < stream_end; ++stream_index) {
+        const Vertex_stream& stream = vertex_format.streams[stream_index];
+        if (stream_index > 0) {
+            signature += '|';
+        }
+        signature += 's';
+        signature += std::to_string(stream_index);
+        signature += '=';
+        signature += std::to_string(stream.stride);
+        signature += ':';
+        for (std::size_t attribute_index = 0, attribute_end = stream.attributes.size(); attribute_index < attribute_end; ++attribute_index) {
+            const Vertex_attribute& attribute = stream.attributes[attribute_index];
+            if (attribute_index > 0) {
+                signature += ',';
+            }
+            std::string_view format_name{c_str(attribute.format)};
+            constexpr std::string_view prefix{"format_"};
+            if (format_name.starts_with(prefix)) {
+                format_name.remove_prefix(prefix.size());
+            }
+            signature += c_str(attribute.usage_type);
+            signature += '.';
+            signature += std::to_string(attribute.usage_index);
+            signature += '=';
+            signature += format_name;
+            signature += '@';
+            signature += std::to_string(attribute.offset);
+        }
+    }
+    return signature;
+}
+
 } // namespace erhe::dataformat

@@ -242,6 +242,11 @@ existing bucket whose `accept()` returns true or starts a new bucket.
 
 ## Notes
 
+- The constructor logs the signatures of the base and optimized formats
+  (`Vertex format signatures (encoding version N): ...`,
+  `erhe::dataformat::get_vertex_format_signature()` and
+  `erhe::primitive::vertex_encoding_version`): the layouts GPU-ready vertex
+  streams of a file must match (`doc/gltf_extensions/ERHE_gpu_vertex_streams.md`).
 - Thread safety: `Buffer_pool` does not take a mutex internally. Build code
   serializes its own allocation flow.
 - `Buffer_mesh::edge_line_vertex_buffer_range` is populated by

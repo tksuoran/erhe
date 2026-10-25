@@ -274,4 +274,14 @@ enum class Vertex_joint_weights_encoding : uint32_t
 
 [[nodiscard]] auto get_vertex_joint_weights_encoding(const Vertex_format* vertex_format) -> Vertex_joint_weights_encoding;
 
+// Canonical text of a vertex format's memory layout, the `signature` of the
+// ERHE_gpu_vertex_streams glTF extension (doc/gltf_extensions/ERHE_gpu_vertex_streams.md):
+// per stream in binding order `s<i>=<stride>:` followed by its attributes in
+// declaration order, `<usage>.<index>=<format>@<offset>` separated by `,`;
+// streams separated by `|`. <usage> is c_str(Vertex_attribute_usage),
+// <format> is c_str(Format) without its `format_` prefix. Example:
+// `s0=8:position.0=16_vec3_snorm@0|s1=24:tangent.0=16_vec4_sint@0,...`.
+// Two formats with equal signatures have byte-identical vertex layouts.
+[[nodiscard]] auto get_vertex_format_signature(const Vertex_format& vertex_format) -> std::string;
+
 } // namespace erhe::dataformat

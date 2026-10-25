@@ -22,6 +22,7 @@ provides vertex format descriptions for building vertex attribute layouts.
 - `float_to_snorm16()` / `pack_unorm4x8()` / etc. -- Packing/conversion utilities.
 - `srgb_to_linear()` / `linear_rgb_to_srgb()` -- Color space conversions.
 - `Vertex_format::find_attribute(usage_type, index)` -- Look up an attribute in the format.
+- `get_vertex_format_signature(format)` -- Canonical text of a format's memory layout (per stream the stride, per attribute usage, index, format and offset), the `signature` of the `ERHE_gpu_vertex_streams` glTF extension (`doc/gltf_extensions/ERHE_gpu_vertex_streams.md` "Signature"); equal signatures mean byte-identical layouts. Tests: `src/erhe/dataformat/test/test_vertex_format_signature.cpp`.
 
 ## Dependencies
 - **erhe libraries:** `erhe::log`, `erhe::verify`

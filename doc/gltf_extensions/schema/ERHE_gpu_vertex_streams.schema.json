@@ -1,0 +1,60 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_gpu_vertex_streams.schema.json",
+    "title": "ERHE_gpu_vertex_streams glTF mesh primitive extension",
+    "type": "object",
+    "$defs": {
+        "stream": {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "bufferView": {"type": "integer", "minimum": 0, "description": "bufferView index: vertex count * stride bytes, byteStride = stride"}
+                    },
+                    "required": ["bufferView"],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "fill":       {"const": "zero"},
+                        "byteStride": {"type": "integer", "minimum": 4, "multipleOf": 4}
+                    },
+                    "required": ["fill", "byteStride"],
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "attribute": {
+            "type": "object",
+            "properties": {
+                "accessor": {"type": "integer", "minimum": 0},
+                "scale":    {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 3},
+                "offset":   {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 3}
+            },
+            "required": ["accessor"],
+            "dependentRequired": {"scale": ["offset"], "offset": ["scale"]},
+            "additionalProperties": false
+        },
+        "variant": {
+            "type": "object",
+            "properties": {
+                "role":       {"enum": ["base", "optimized"]},
+                "signature":  {"type": "string", "minLength": 1},
+                "streams":    {"type": "array", "items": {"$ref": "#/$defs/stream"}, "minItems": 1},
+                "attributes": {
+                    "type": "object",
+                    "propertyNames": {"enum": ["POSITION", "_TBN_QUATERNION", "TEXCOORD_0", "TEXCOORD_1", "TEXCOORD_2", "COLOR_0", "JOINTS_0", "_WEIGHTS_IMPLICIT"]},
+                    "additionalProperties": {"$ref": "#/$defs/attribute"}
+                }
+            },
+            "required": ["role", "signature", "streams"]
+        }
+    },
+    "properties": {
+        "version":          {"type": "integer", "const": 1},
+        "encoding_version": {"type": "integer", "minimum": 1},
+        "variants":         {"type": "array", "items": {"$ref": "#/$defs/variant"}, "minItems": 1, "maxItems": 2}
+    },
+    "required": ["version", "encoding_version", "variants"]
+}
