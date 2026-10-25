@@ -171,7 +171,12 @@ staging_capacity_bytes)` drains only the loader queue and is called only
 from `Asset_manager::tick`; its host-visible staging comes from the device's
 capped upload staging (doc/erhe/ring_buffer_memory.md "Upload staging cap"),
 and an entry that finds no staging room stays at the front of the queue for
-the next drain, so the watermark only covers what was recorded.
+the next drain, so the watermark only covers what was recorded. A producer
+that paid for its loader-queue bytes with a `erhe::utility::Memory_budget`
+lease hands the lease to `get_loader_transfer_queue().hold_until_drained()`
+after its last enqueue; the queue drops it once the watermark has passed
+every ticket issued before the call (doc/editor/async_asset_loading.md "Load
+memory budget").
 
 ### Frame-safe frees, and the loader free gate
 

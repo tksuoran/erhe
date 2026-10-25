@@ -28,6 +28,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::utility`: `Memory_budget`, `Memory_budget_lease` and
+  `Memory_budget_kind` - a thread-safe byte budget handing out move-only
+  leases (one request larger than the capacity is granted while nothing else
+  is leased), with per-kind statistics.
+- `erhe::graphics`: `Buffer_transfer_queue::hold_until_drained(Memory_budget_lease&&)`
+  keeps a lease until the watermark has passed every upload enqueued before
+  the call.
+- `erhe::gltf`: `Gltf_image_residency::set_memory_budget()` shares a
+  `Memory_budget` for the decoded image bytes; `schedule_decodes()` takes a
+  default argument.
+
 - `erhe::file`: `write_file_via_temp(path, text)` and
   `write_file_via_temp(path, write)`: write through a temporary file in the
   target directory and replace the target with one rename only when the

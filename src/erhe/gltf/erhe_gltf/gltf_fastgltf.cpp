@@ -12,6 +12,7 @@
 #include "erhe_geometry/geometry_serialization.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
+#include "erhe_utility/memory_budget.hpp"
 #include "erhe_graphics/ktx2_container.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_task/task.hpp"
@@ -4961,6 +4962,7 @@ public:
     Gltf_image_decode_state    state              {Gltf_image_decode_state::waiting};
     std::size_t                known_byte_count   {0}; // decoded size, known once an open had to give its turn back
     std::size_t                reserved_byte_count{0}; // counted in m_bytes_in_flight until the upload releases it
+    erhe::utility::Memory_budget_lease lease;           // reserved_byte_count bytes of the memory budget
     bool                       ok                 {false};
     erhe::graphics::Image_info info{};
     std::vector<std::uint8_t>  pixels;
@@ -4969,34 +4971,43 @@ public:
 class Gltf_image_decode_queue
 {
 public:
-    explicit Gltf_image_decode_queue(const std::size_t image_count)
-        : m_slots{image_count}
+    // `budget`: the shared memory budget, or null for a budget of this
+    // queue's own (sized by schedule_decodes()).
+    Gltf_image_decode_queue(const std::size_t image_count, std::shared_ptr<erhe::utility::Memory_budget> budget)
+        : m_slots      {image_count}
+        , m_own_budget {!budget}
+        , m_budget     {budget ? std::move(budget) : std::make_shared<erhe::utility::Memory_budget>(Gltf_image_residency::default_max_decoded_bytes_in_flight)}
     {
     }
 
-    void reserve_locked(Gltf_image_decode_slot& slot, const std::size_t byte_count)
+    // Takes a lease of byte_count bytes for the slot when they fit the budget
+    // now (or when the budget is empty: an image larger than the whole
+    // budget decodes alone); false otherwise.
+    [[nodiscard]] auto try_reserve_locked(Gltf_image_decode_slot& slot, const std::size_t byte_count) -> bool
     {
+        erhe::utility::Memory_budget_lease lease = m_budget->try_acquire(byte_count, erhe::utility::Memory_budget_kind::image);
+        if (lease.is_empty()) {
+            return false;
+        }
+        slot.lease               = std::move(lease);
         slot.reserved_byte_count = byte_count;
         m_bytes_in_flight += byte_count;
         m_high_water_bytes = std::max(m_high_water_bytes, m_bytes_in_flight);
+        return true;
     }
     void release_locked(Gltf_image_decode_slot& slot)
     {
         m_bytes_in_flight -= slot.reserved_byte_count;
         slot.reserved_byte_count = 0;
-    }
-    // A reservation that keeps the in-flight bytes within the limit, or the
-    // only one (an image larger than the whole budget decodes alone).
-    [[nodiscard]] auto fits_locked(const std::size_t byte_count) const -> bool
-    {
-        return (m_bytes_in_flight == 0) || ((m_bytes_in_flight + byte_count) <= m_limit_byte_count);
+        slot.lease.reset();
     }
 
     std::mutex                          m_mutex;
     std::condition_variable             m_condition;
     std::vector<Gltf_image_decode_slot> m_slots;
-    std::size_t                         m_limit_byte_count        {Gltf_image_residency::default_max_decoded_bytes_in_flight};
-    std::size_t                         m_bytes_in_flight         {0};
+    bool                                m_own_budget{false};
+    std::shared_ptr<erhe::utility::Memory_budget> m_budget;
+    std::size_t                         m_bytes_in_flight         {0}; // this residency's decoded image bytes
     std::size_t                         m_high_water_bytes        {0};
     std::size_t                         m_running_count           {0};
     std::size_t                         m_unreserved_running_count{0}; // running, size not known yet
@@ -5052,9 +5063,7 @@ void run_image_decode(
             --queue->m_unreserved_running_count;
             if (ok) {
                 queue->m_largest_byte_count = std::max(queue->m_largest_byte_count, byte_count);
-                if (queue->fits_locked(byte_count)) {
-                    queue->reserve_locked(slot, byte_count);
-                } else {
+                if (!queue->try_reserve_locked(slot, byte_count)) {
                     slot.state            = Gltf_image_decode_state::waiting;
                     slot.known_byte_count = byte_count;
                     --queue->m_running_count;
@@ -5244,9 +5253,16 @@ auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_
 auto Gltf_image_residency::get_decode_queue() -> const std::shared_ptr<Gltf_image_decode_queue>&
 {
     if (!m_decode_queue) {
-        m_decode_queue = std::make_shared<Gltf_image_decode_queue>(decoded_images.size());
+        m_decode_queue = std::make_shared<Gltf_image_decode_queue>(decoded_images.size(), m_memory_budget);
     }
     return m_decode_queue;
+}
+
+void Gltf_image_residency::set_memory_budget(std::shared_ptr<erhe::utility::Memory_budget> budget)
+{
+    // The queue takes the budget when it is made, at the first decode.
+    ERHE_VERIFY(!m_decode_queue);
+    m_memory_budget = std::move(budget);
 }
 
 auto Gltf_image_residency::get_pending_image_count() const -> std::size_t
@@ -5297,7 +5313,9 @@ void Gltf_image_residency::schedule_decodes(const std::size_t max_decoded_bytes_
     const std::shared_ptr<Gltf_image_decode_queue> queue = get_decode_queue();
     const std::size_t max_running = std::max<std::size_t>(1, decode_executor->num_workers());
     const std::lock_guard<std::mutex> lock{queue->m_mutex};
-    queue->m_limit_byte_count = std::max<std::size_t>(1, max_decoded_bytes_in_flight);
+    if (queue->m_own_budget) {
+        queue->m_budget->set_capacity(max_decoded_bytes_in_flight);
+    }
     for (std::size_t i = 0, end = decoded_images.size(); (i < end) && (queue->m_running_count < max_running); ++i) {
         const Gltf_decoded_image& decoded = decoded_images[i];
         Gltf_image_decode_slot&   slot    = queue->m_slots[i];
@@ -5306,16 +5324,15 @@ void Gltf_image_residency::schedule_decodes(const std::size_t max_decoded_bytes_
         }
         if (slot.known_byte_count > 0) {
             // Size known from an open that gave its turn back: reserve now.
-            if (!queue->fits_locked(slot.known_byte_count)) {
+            if (!queue->try_reserve_locked(slot, slot.known_byte_count)) {
                 break; // image order: later images wait behind this one
             }
-            queue->reserve_locked(slot, slot.known_byte_count);
         } else {
             // Size unknown until the task opens the header: admit while the
-            // in-flight bytes plus the running unknowns, each estimated at
-            // the largest image so far, fit the budget.
+            // running unknowns, each estimated at the largest image so far,
+            // fit the budget.
             const std::size_t estimate = queue->m_largest_byte_count * (queue->m_unreserved_running_count + 1);
-            if ((queue->m_bytes_in_flight + estimate) > queue->m_limit_byte_count) {
+            if (!queue->m_budget->would_fit(estimate)) {
                 if ((queue->m_running_count > 0) || (queue->m_bytes_in_flight > 0)) {
                     break;
                 }

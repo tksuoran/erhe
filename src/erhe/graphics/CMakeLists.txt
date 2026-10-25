@@ -153,6 +153,8 @@ target_link_libraries(${_interface_target}
         fmt::fmt
         glm::glm-header-only
         mango
+        # Buffer_transfer_queue entries carry an erhe::utility::Memory_budget_lease
+        erhe::utility
     PRIVATE
         etl::etl
         nlohmann_json::nlohmann_json
@@ -162,7 +164,6 @@ target_link_libraries(${_interface_target}
         erhe::log
         erhe::profile
         erhe::time
-        erhe::utility
         erhe::verify
         erhe::version
         erhe::window

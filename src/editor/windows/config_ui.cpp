@@ -67,7 +67,7 @@ void store_as(void* const dst, const ImGuiDataType data_type, const double value
 // possible to lift that limitation with some work but it doesn't seem to be
 // worth it for sliders"), because its position math would otherwise overflow.
 // A definition is free to ask for a wider range - Load_config's
-// max_decoded_bytes_in_flight asks for 1 GiB, one above IM_S32_MAX / 2 - and
+// max_in_flight_bytes asks for 1 GiB, one above IM_S32_MAX / 2 - and
 // that assert is a CRASH in a debug build, so the range decides slider vs drag
 // rather than being trusted blindly.
 [[nodiscard]] auto data_type_half_range(const ImGuiDataType data_type, double& out_lowest, double& out_highest) -> bool

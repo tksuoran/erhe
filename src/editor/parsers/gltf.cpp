@@ -686,27 +686,46 @@ auto make_import_build_info(
 //
 // build_info / skinned_build_info must be constructed by the CALLER on the
 // main thread: make_primitive_buffer_info can create a Vertex_input_state.
-void build_imported_buffer_meshes(
-    tf::Executor&                      executor,
-    erhe::graphics::Device&            graphics_device,
+namespace {
+
+// The bytes one shape's load build enqueues on the loader transfer queue:
+// every vertex stream of the base format, and of the optimized format when
+// the build packs one, plus the index buffer for each.
+[[nodiscard]] auto get_build_upload_byte_count(
+    const erhe::primitive::Primitive&  primitive,
+    const erhe::primitive::Build_info& build_info
+) -> std::size_t
+{
+    const erhe::primitive::Triangle_soup_counts counts = primitive.render_shape->get_triangle_soup_counts();
+    const erhe::primitive::Buffer_info& buffer_info = build_info.buffer_info;
+    std::size_t vertex_stride_sum = 0;
+    for (const erhe::dataformat::Vertex_stream& stream : buffer_info.vertex_format.streams) {
+        vertex_stride_sum += stream.stride;
+    }
+    std::size_t variant_count = 1;
+    if (buffer_info.optimize_meshes && (buffer_info.optimized_vertex_format != nullptr)) {
+        for (const erhe::dataformat::Vertex_stream& stream : buffer_info.optimized_vertex_format->streams) {
+            vertex_stride_sum += stream.stride;
+        }
+        variant_count = 2;
+    }
+    const std::size_t index_size = erhe::dataformat::get_format_size_bytes(buffer_info.index_type);
+    return (counts.vertex_count * vertex_stride_sum) + (variant_count * counts.index_count * index_size);
+}
+
+} // anonymous namespace
+
+auto collect_imported_build_jobs(
+    const erhe::gltf::Gltf_data&       gltf_data,
     const erhe::primitive::Build_info& build_info,
     const erhe::primitive::Build_info& skinned_build_info,
-    const erhe::gltf::Gltf_data&       gltf_data
-)
+    std::size_t&                       out_primitive_count
+) -> std::vector<Imported_build_job>
 {
     ERHE_PROFILE_FUNCTION();
 
-    class Build_job
-    {
-    public:
-        erhe::primitive::Primitive*        primitive;
-        const erhe::primitive::Build_info* build_info;
-        const erhe::scene::Mesh*           mesh;
-    };
-
-    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
     std::size_t                                                        primitive_count = 0;
-    std::vector<Build_job>                                             jobs;
+    std::vector<Imported_build_job>                                    jobs;
     std::unordered_set<const erhe::primitive::Primitive_render_shape*> seen_shapes;
     for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
         if (!node) {
@@ -738,69 +757,40 @@ void build_imported_buffer_meshes(
                 continue;
             }
             jobs.push_back(
-                Build_job{
-                    .primitive  = &primitive,
-                    .build_info = &mesh_build_info,
-                    .mesh       = mesh.get()
+                Imported_build_job{
+                    .primitive         = &primitive,
+                    .build_info        = &mesh_build_info,
+                    .mesh              = mesh.get(),
+                    .upload_byte_count = get_build_upload_byte_count(primitive, mesh_build_info)
                 }
             );
         }
     }
+    out_primitive_count = primitive_count;
+    return jobs;
+}
 
-    // gltf_data.nodes keeps the meshes (and through them the primitives)
-    // alive, and `jobs` outlives the wait below, so the raw pointers and the
-    // job references captured by the tasks stay valid.
-    std::size_t prepared_count = 0;
-    for (const Build_job& job : jobs) {
-        if (job.primitive->is_prepared()) {
-            ++prepared_count;
-        }
-    }
-    tf::Taskflow taskflow;
-    for (const Build_job& job : jobs) {
-        taskflow.emplace(
-            [&job, &graphics_device]()
-            {
-                ERHE_PROFILE_SCOPE("build_imported_buffer_mesh");
-                // On GL the GPU buffer allocations inside the build need a
-                // worker share context; no-op on other backends.
-                const erhe::graphics::Scoped_worker_context worker_context{graphics_device};
-                // A primitive loaded with prepared mesh data reaches its final
-                // load state here: base soup build, optimized variant packed
-                // from the core and the raytrace from the stored BVH
-                // (doc/editor/async_asset_loading.md "Prepared mesh data").
-                // Nothing draws or traces these primitives yet - the scene
-                // insert happens after this build phase - so the optimized
-                // variant and the raytrace are installed directly.
-                const bool built = job.primitive->is_prepared()
-                    ? job.primitive->make_prepared_meshes(*job.build_info)
-                    : job.primitive->make_renderable_mesh(*job.build_info, erhe::primitive::Normal_style::corner_normals);
-                if (!built) {
-                    log_parsers->error(
-                        "async glTF load: failed to build renderable mesh for '{}' (out of GPU mesh memory?)",
-                        job.mesh->get_name()
-                    );
-                }
-            }
+void run_imported_build_job(const Imported_build_job& job, erhe::graphics::Device& graphics_device)
+{
+    ERHE_PROFILE_SCOPE("build_imported_buffer_mesh");
+    // On GL the GPU buffer allocations inside the build need a worker share
+    // context; no-op on other backends.
+    const erhe::graphics::Scoped_worker_context worker_context{graphics_device};
+    // A primitive loaded with prepared mesh data reaches its final load
+    // state here: base soup build, optimized variant packed from the core and
+    // the raytrace from the stored BVH (doc/editor/async_asset_loading.md
+    // "Prepared mesh data"). Nothing draws or traces these primitives yet -
+    // the scene insert happens after the build phase - so the optimized
+    // variant and the raytrace are installed directly.
+    const bool built = job.primitive->is_prepared()
+        ? job.primitive->make_prepared_meshes(*job.build_info)
+        : job.primitive->make_renderable_mesh(*job.build_info, erhe::primitive::Normal_style::corner_normals);
+    if (!built) {
+        log_parsers->error(
+            "async glTF load: failed to build renderable mesh for '{}' (out of GPU mesh memory?)",
+            job.mesh->get_name()
         );
     }
-    // Same shape as parse_gltf, which runs its image-decode and mesh-parse
-    // taskflows from the parse worker: this worker waits, the others build.
-    // Like parse_gltf it needs more than one executor thread (with one, the
-    // waiting worker is the only one that could run the tasks).
-    // get(), not wait(): a task that throws marks the topology failed and
-    // skips the tasks not yet started, and only get() rethrows - so the
-    // caller sees the failure instead of a silently partial build.
-    tf::Future<void> future = erhe::task::run(executor, taskflow);
-    future.get();
-
-    log_parsers->info(
-        "build_imported_buffer_meshes: {} primitives, {} ms ({} unique shapes built in parallel, {} of them prepared)",
-        primitive_count,
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count(),
-        jobs.size(),
-        prepared_count
-    );
 }
 
 // Attaches the optimized mesh variant to one imported primitive, per

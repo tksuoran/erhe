@@ -89,7 +89,7 @@ Every `Scoped_worker_context` in the tree (tests excluded):
 
 | scope site | encloses |
 | --- | --- |
-| `assets/gltf_load_task.cpp` | `build_imported_buffer_meshes` |
+| `parsers/gltf.cpp` | `run_imported_build_job` (dispatched by `assets/gltf_load_task.cpp`) |
 | `geometry_graph/geometry_graph_window.cpp` | `evaluate_if_dirty` |
 | `items.cpp` | `op(parameters)` (an arbitrary mesh operation) |
 | `operations/async_raytrace_kickoff_operation.cpp` | `prepare_geometry_buffer_mesh` |

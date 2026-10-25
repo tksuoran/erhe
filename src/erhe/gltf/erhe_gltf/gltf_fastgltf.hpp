@@ -130,6 +130,11 @@ public:
 };
 
 class Gltf_image_decode_queue; // gltf_fastgltf.cpp: worker decode state shared with the tasks
+} // namespace erhe::gltf
+namespace erhe::utility {
+    class Memory_budget;
+}
+namespace erhe::gltf {
 
 // The five texture slots of erhe::primitive::Material_texture_samplers.
 // Material texture slots cannot be filled during the parse any more (the
@@ -179,12 +184,15 @@ class Gltf_data;
 // the result.
 //
 // Decoding runs on executor workers, started by schedule_decodes() (and by
-// the blocking entry points), and is bounded by a decoded-bytes budget: the
-// pixels decoded and not yet uploaded, plus those being decoded, stay within
-// max_decoded_bytes_in_flight - except a single image larger than the budget,
-// which decodes alone. Uploading an image releases its bytes. So the peak is
-// the budget, not the sum of every image (doc/editor/async_asset_loading.md
-// "Image residency").
+// the blocking entry points), and is bounded by a memory budget: each image's
+// decoded pixels hold a lease of it from the start of the decode until the
+// upload, and a decode starts only while its lease fits - except a single
+// image larger than the budget, which decodes while nothing else holds it.
+// So the peak is the budget, not the sum of every image
+// (doc/editor/async_asset_loading.md "Image residency"). The budget is the
+// one set_memory_budget() gives, shared with other users (the editor's load
+// memory budget); without one, the residency uses a budget of its own sized
+// by max_decoded_bytes_in_flight.
 class Gltf_image_residency
 {
 public:
@@ -204,6 +212,11 @@ public:
     ::tf::Executor*                            decode_executor{nullptr};
     bool                                       parallel_decode{true};
 
+    // Share `budget` (the editor's load memory budget) for the decoded
+    // pixels. Set before the first decode; without it the residency uses a
+    // budget of its own of max_decoded_bytes_in_flight bytes.
+    void set_memory_budget(std::shared_ptr<erhe::utility::Memory_budget> budget);
+
     [[nodiscard]] auto get_pending_image_count() const -> std::size_t;
     // Decoded pixel bytes held right now: decoded and waiting for upload,
     // plus reserved by decodes in progress.
@@ -213,11 +226,12 @@ public:
     // Decoded images so far, by the path that produced their pixels.
     [[nodiscard]] auto get_decode_path_counts() const -> const Gltf_image_decode_path_counts& { return m_decode_path_counts; }
 
-    // Start decode tasks for pending images, in image order, while the
-    // decoded bytes in flight stay within max_decoded_bytes_in_flight (at
-    // most one task per executor worker). Call it from the residency thread
+    // Start decode tasks for pending images, in image order, while their
+    // decoded bytes fit the memory budget (at most one task per executor
+    // worker). max_decoded_bytes_in_flight sizes the residency's own budget
+    // when set_memory_budget() gave none. Call it from the residency thread
     // whenever residency runs; a no-op without parallel decode.
-    void schedule_decodes(std::size_t max_decoded_bytes_in_flight);
+    void schedule_decodes(std::size_t max_decoded_bytes_in_flight = default_max_decoded_bytes_in_flight);
     // True when no decode task is running (a task outlives nothing it
     // references, but owners that track their workers wait for this).
     [[nodiscard]] auto is_decode_idle() const -> bool;
@@ -275,6 +289,7 @@ private:
     [[nodiscard]] auto find_next_decoded_image() const -> std::size_t;
 
     std::shared_ptr<Gltf_image_decode_queue> m_decode_queue;
+    std::shared_ptr<erhe::utility::Memory_budget> m_memory_budget; // shared; null: the queue makes its own
     Gltf_image_decode_path_counts            m_decode_path_counts;
     // The image whose frame-recording upload found no budget or staging
     // room; it is retried first, so the staging cap's size mark (which makes

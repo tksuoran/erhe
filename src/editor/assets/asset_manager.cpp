@@ -253,9 +253,10 @@ void visit_record_assets(const Asset_container_record& record, Fn&& fn)
 }
 
 Asset_manager::Asset_manager(App_context& context, App_message_bus& app_message_bus, App_scenes& app_scenes)
-    : m_context        {context}
-    , m_app_message_bus{app_message_bus}
-    , m_app_scenes     {app_scenes}
+    : m_context           {context}
+    , m_app_message_bus   {app_message_bus}
+    , m_app_scenes        {app_scenes}
+    , m_load_memory_budget{std::make_shared<erhe::utility::Memory_budget>(get_max_in_flight_bytes(0))}
 {
     m_close_scene_subscription = m_app_message_bus.close_scene.subscribe(
         [this](Close_scene_message& message) {
@@ -416,6 +417,11 @@ void Asset_manager::tick(Asset_load_tick_context& tick_context)
     // publish in the same tick rather than waiting for the next one; it is
     // what advances the loader watermark that the publish gate and the
     // pool-free gate read.
+    // The load memory budget follows load.max_in_flight_bytes (read with the
+    // other load settings each tick); leases already held stay.
+    m_load_memory_budget->set_capacity(get_max_in_flight_bytes(tick_context.max_in_flight_bytes));
+    tick_context.load_memory_budget = m_load_memory_budget;
+
     erhe::scene_renderer::Mesh_memory* const mesh_memory = m_context.mesh_memory;
     if (mesh_memory != nullptr) {
         const std::size_t granted = tick_context.budget.take_gpu_upload_bytes(
@@ -482,12 +488,27 @@ auto Asset_manager::get_gpu_upload_bytes_per_frame() const -> std::size_t
     return m_context.OpenXR ? c_openxr_upload_bytes_while_loading : c_desktop_upload_bytes_while_loading;
 }
 
+constexpr std::size_t c_desktop_max_in_flight_bytes = 128u * 1024u * 1024u;
+constexpr std::size_t c_openxr_max_in_flight_bytes  =  64u * 1024u * 1024u;
+
+auto Asset_manager::get_max_in_flight_bytes(const std::size_t configured_byte_count) const -> std::size_t
+{
+    if (configured_byte_count > 0) {
+        return configured_byte_count;
+    }
+    return m_context.OpenXR ? c_openxr_max_in_flight_bytes : c_desktop_max_in_flight_bytes;
+}
+
 void Asset_manager::set_upload_phase(const Upload_phase phase)
 {
     if (m_upload_phase == phase) {
         return;
     }
     m_upload_phase = phase;
+    if (phase == Upload_phase::loading) {
+        // The high-water marks the load's "resident" log line reports.
+        m_load_memory_budget->reset_statistics();
+    }
     log_asset->info(
         "GPU upload budget: {} bytes per frame ({})",
         get_gpu_upload_bytes_per_frame(),

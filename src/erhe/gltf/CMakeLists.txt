@@ -50,6 +50,7 @@ target_link_libraries(${_target}
         erhe::graphics
         erhe::log
         erhe::primitive
+        erhe::utility
 )
 
 erhe_target_settings(${_target} "erhe")

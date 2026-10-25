@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Load_config",
     reflect=True,
-    version=6,
+    version=7,
     short_desc="Loading",
     long_desc="glTF import/open performance options.",
     developer=False,
@@ -113,16 +113,21 @@ struct("Load_config",
             visible=True,
             developer=True
         ),
+        # max_decoded_bytes_in_flight (v2..v6) was replaced by max_in_flight_bytes
+        # in v7; an older file's key is ignored on load. (Deleted rather than
+        # marked removed_in: the [[deprecated]] member that removed_in leaves in
+        # the generated struct fails clang -Werror builds wherever the struct's
+        # implicit copy is used.)
         field(
-            "max_decoded_bytes_in_flight",
+            "max_in_flight_bytes",
             Int,
-            added_in=2,
-            default="128 * 1024 * 1024",
-            short_desc="Max Decoded Bytes In Flight",
-            long_desc="Backpressure: image decode / transcode runs on worker tasks ahead of the GPU upload, and an asynchronous load starts no further decode while the decoded pixels waiting for upload plus those being decoded reach this many bytes (a single larger image decodes alone). This is what keeps the decoded-image memory of a load bounded.",
-            ui_min="16777216",
+            added_in=7,
+            default="0",
+            short_desc="Max In-Flight Bytes",
+            long_desc="One CPU memory budget shared by every asynchronous load for data made ahead of its GPU upload: the vertex / index bytes a mesh build enqueues count until the upload staging has taken them, decoded image pixels until their upload. A build or decode starts only while its bytes fit (a single larger item runs alone). This bounds the CPU memory a load needs for uploads. 0 selects the platform default: 128 MiB on desktop, 64 MiB in OpenXR.",
+            ui_min="0",
             ui_max="1073741824",
-            hard_min="1048576",
+            hard_min="0",
             visible=True,
             developer=True
         ),

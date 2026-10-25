@@ -616,7 +616,7 @@ renders byte-identical.
 ```
 scan (worker) -> parse (worker: JSON + structure, no payload bytes)
   -> per unique primitive: mesh job   \  scheduled from Asset_manager::tick
-  -> per image:            image job  /  under one Load_memory_budget
+  -> per image:            image job  /  under one Memory_budget
        job: positional read of the byte ranges -> validate -> convert
             (portable) or nothing (GPU ready) -> enqueue on the loader
             queue / Image_transfer -> budget lease released when the bytes
@@ -667,7 +667,7 @@ scan (worker) -> parse (worker: JSON + structure, no payload bytes)
   after the decode. A raw ASTC KTX2 without supercompression is read level
   by level straight into the buffer that is staged (no decode). Nothing is
   retained for export.
-- **One budget.** `Load_memory_budget`, owned by `Asset_manager`, shared by
+- **One budget.** `erhe::utility::Memory_budget`, owned by `Asset_manager`, shared by
   every live load: `load.max_in_flight_bytes` (Load_config v7, replaces
   `max_decoded_bytes_in_flight`, migrated; default 128 MiB desktop, 64 MiB
   OpenXR). A job takes a lease of its estimated peak before it reads
@@ -941,11 +941,44 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    them into the per-primitive job). The parse is 0.1-0.4 s slower: 3852
    small range reads through one shared handle instead of one sequential
    read.
-2. **Shared load budget.** `Load_memory_budget`, `max_in_flight_bytes`
+2. **Shared load budget.** `Memory_budget`, `max_in_flight_bytes`
    (v7 migration), leases carried by loader queue entries and image
    uploads; images move onto it. Gates: budget high-water at most the
    budget (a single oversize job excepted), render identical, load time
    recorded.
+
+   Result (2026-10-25): `erhe::utility::Memory_budget` owned by
+   `Asset_manager` (doc/editor/async_asset_loading.md "Load memory budget");
+   the build phase dispatches one task per unique shape from the tick while
+   its loader-queue bytes fit, and hands the lease to the queue
+   (`hold_until_drained`); image decodes hold leases through the shared
+   budget. Load_config v7 `max_in_flight_bytes` (0: 128 MiB desktop, 64 MiB
+   OpenXR); `max_decoded_bytes_in_flight` deleted from the definition rather
+   than marked `removed_in` (the `[[deprecated]]` member codegen leaves for a
+   removed field breaks clang `-Werror` wherever the struct is copied - a
+   codegen defect to fix separately). Tests: `erhe_utility_tests` 3/3 (new
+   target), `erhe_gltf_tests` 17/17, `erhe_gltf_gpu_tests` 2/2,
+   `erhe_scene_renderer_gpu_tests` 34/34, `ctest -R Mcp_` 92/95 (the 3
+   ImGui hierarchy-row cases fail at HEAD too). `example`, `hextiles`,
+   `hello_swap` build.
+
+   | | step 1 | step 2 |
+   |---|---|---|
+   | desktop prepared Bistro, budget high-water (meshes / images) | - | 134.21 of 134.22 MB (134.21 / 128.6), 0 oversize |
+   | desktop listed / idle | 2.51-2.94 s | 2.41-2.54 / 2.49-2.95 s (4 runs) |
+   | desktop build phase | - | 368-381 ms |
+   | desktop peak working set | 1351-1360 MB | 1349-1358 MB |
+   | foreign Bistro listed / idle, render | 2.25 / 5.47 s, d488fefc | 2.18 / 5.35 s, d488fefc |
+   | Quest budget high-water (meshes / images) | - | 67.11 of 67.11 MB (67.11 / 61.5) |
+   | Quest VmHWM | 1747-1782 MB | 1724-1729 MB |
+   | Quest listed (idle) | 6.91-7.08 s | 6.83-7.09 (7.30) s |
+   | Quest build phase | 1.61 s | 1.58-1.66 s |
+
+   Renders d488fefc... for both files. The peak barely moves: on this file
+   the build backlog was not the peak; the parse-time views still read whole
+   (images 402 MB on Quest, topology, BVH) are, until steps 3 and 4. The
+   per-primitive reads also move into the step 4 jobs, which then own their
+   ranges instead of the parse's shared reader (the step 1 parse slowdown).
 3. **Image streaming.** Just-in-time read in the image job, no retained
    streams, export re-reads, changed-file error. Gates: `cpu_images` 0 at
    idle; a save of the untouched prepared Bistro has a byte-identical BIN;
