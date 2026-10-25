@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "operations/async_raytrace_kickoff_operation.hpp"
 #include "editor_item_bits.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
@@ -840,6 +841,9 @@ auto Mcp_server::action_lightmap_bake_gbuffer(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
+    // The bake reads the base variants (deferred ones get built,
+    // doc/plans/gltf_fast_load.md "Item 10").
+    request_deferred_base_builds_in_all_scenes(m_context);
     // The G-buffer targets are tile-sized and hold one spatial tile at a
     // time; raster every tile in turn so multi-tile layouts are fully
     // exercised, writing per-tile debug PNGs (suffix _tile<N> on multi-
@@ -899,6 +903,7 @@ auto Mcp_server::action_lightmap_bake_direct(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
+    request_deferred_base_builds_in_all_scenes(m_context);
     const bool baked = m_context.lightmap_baker->bake_direct(*sr);
     if (!baked) {
         json r = make_text_content("Direct bake failed (needs ray query, a packed atlas and a baked G-buffer - run lightmap_prepare_tiles + lightmap_bake_gbuffer first)");

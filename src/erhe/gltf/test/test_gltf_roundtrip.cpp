@@ -953,7 +953,7 @@ TEST(Gltf_roundtrip, stored_vertex_streams_build_like_the_soup)
     const erhe::primitive::Build_info soup_build_info   = make_build_info(soup_sink,   optimized_format);
     for (std::size_t i = 0; i < 2; ++i) {
         std::string reason;
-        EXPECT_EQ(stored_primitives[i]->make_stored_meshes(stored_build_info, reason), erhe::primitive::Primitive::Stored_build_result::built) << reason;
+        EXPECT_EQ(stored_primitives[i]->make_stored_meshes(stored_build_info, erhe::primitive::Base_mesh_build::at_load, reason), erhe::primitive::Primitive::Stored_build_result::built) << reason;
         EXPECT_FALSE(stored_primitives[i]->render_shape->is_payload_pending());
         EXPECT_TRUE (stored_primitives[i]->is_prepared());
         EXPECT_TRUE (stored_primitives[i]->render_shape->is_triangle_soup_released());
@@ -999,11 +999,119 @@ TEST(Gltf_roundtrip, stored_vertex_streams_build_like_the_soup)
     Recording_buffer_sink             other_sink;
     const erhe::primitive::Build_info other_build_info = make_build_info(other_sink, other_optimized);
     std::string reason;
-    EXPECT_EQ(other_primitives[0]->make_stored_meshes(other_build_info, reason), erhe::primitive::Primitive::Stored_build_result::declined);
+    EXPECT_EQ(other_primitives[0]->make_stored_meshes(other_build_info, erhe::primitive::Base_mesh_build::at_load, reason), erhe::primitive::Primitive::Stored_build_result::declined);
     EXPECT_EQ(reason, "optimized signature differs");
     EXPECT_TRUE(other_primitives[0]->render_shape->is_payload_pending());
     ASSERT_TRUE(other_primitives[0]->load_payload());
     EXPECT_TRUE(other_primitives[0]->make_prepared_meshes(other_build_info));
+}
+
+// A deferred base variant (Base_mesh_build::deferred, doc/plans/gltf_fast_load.md
+// "Item 10"): the stored build uploads only the optimized variant and leaves
+// a descriptor base (bounds and affines, no ranges); the base-only build
+// later uploads exactly what the at-load build uploads.
+TEST(Gltf_roundtrip, deferred_base_variant_builds_on_demand_like_at_load)
+{
+    erhe::scene::Scene          source_scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = erhe_gltf_test::parse_file(data_path("variants.gltf"), source_scene);
+    static_cast<void>(source);
+    const auto [base_format, optimized_format] = make_test_gpu_formats();
+    const erhe::gltf::Gltf_gpu_vertex_formats formats{
+        .base              = &base_format,
+        .base_skinned      = &base_format,
+        .optimized         = &optimized_format,
+        .optimized_skinned = &optimized_format,
+        .index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+        .encoding_version  = erhe::primitive::vertex_encoding_version
+    };
+    erhe::gltf::Gltf_export_arguments arguments{
+        .root_node          = *source_scene.get_root_node(),
+        .binary             = true,
+        .prepared_mesh_data = erhe::gltf::Prepared_mesh_data::write
+    };
+    arguments.gpu_vertex_formats = &formats;
+    const std::string glb = erhe::gltf::export_gltf(arguments);
+    ASSERT_FALSE(glb.empty());
+    const std::filesystem::path path = write_temporary_file("deferred_base.glb", glb);
+    const auto parse_deferred = [&](erhe::scene::Scene& scene) -> std::vector<std::shared_ptr<erhe::primitive::Primitive>> {
+        tf::Executor executor{1};
+        const erhe::gltf::Gltf_data data = erhe::gltf::parse_gltf(
+            erhe::gltf::Gltf_parse_arguments{
+                .executor     = executor,
+                .root_node    = scene.get_root_node(),
+                .path         = path,
+                .parallel     = false,
+                .mesh_payload = erhe::gltf::Mesh_payload_load::deferred
+            }
+        );
+        std::vector<std::shared_ptr<erhe::primitive::Primitive>> primitives;
+        const std::shared_ptr<erhe::scene::Node> panel = find_by_name(data.nodes, "Panel");
+        if (panel) {
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : erhe::scene::get_mesh(panel.get())->get_primitives()) {
+                primitives.push_back(mesh_primitive.primitive);
+            }
+        }
+        return primitives;
+    };
+    const auto make_build_info = [&](Recording_buffer_sink& sink) -> erhe::primitive::Build_info {
+        erhe::primitive::Build_info build_info{
+            .primitive_types = {.fill_triangles = true},
+            .buffer_info     = {
+                .normal_style       = erhe::primitive::Normal_style::corner_normals,
+                .index_type         = erhe::dataformat::Format::format_32_scalar_uint,
+                .vertex_format      = base_format,
+                .vertex_buffer_sink = sink,
+                .index_buffer_sink  = sink,
+                .vertex_input_key   = 1
+            }
+        };
+        build_info.buffer_info.optimize_meshes            = true;
+        build_info.buffer_info.optimized_vertex_format    = &optimized_format;
+        build_info.buffer_info.optimized_vertex_input_key = 2;
+        return build_info;
+    };
+
+    erhe::scene::Scene deferred_scene{"deferred", nullptr};
+    erhe::scene::Scene at_load_scene {"at_load",  nullptr};
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive>> deferred = parse_deferred(deferred_scene);
+    const std::vector<std::shared_ptr<erhe::primitive::Primitive>> at_load  = parse_deferred(at_load_scene);
+    ASSERT_EQ(deferred.size(), 2u);
+    ASSERT_EQ(at_load.size(),  2u);
+    Recording_buffer_sink             deferred_sink;
+    Recording_buffer_sink             at_load_sink;
+    const erhe::primitive::Build_info deferred_build_info = make_build_info(deferred_sink);
+    const erhe::primitive::Build_info at_load_build_info  = make_build_info(at_load_sink);
+    for (std::size_t i = 0; i < 2; ++i) {
+        std::string reason;
+        ASSERT_EQ(deferred[i]->make_stored_meshes(deferred_build_info, erhe::primitive::Base_mesh_build::deferred, reason), erhe::primitive::Primitive::Stored_build_result::built) << reason;
+        ASSERT_EQ(at_load [i]->make_stored_meshes(at_load_build_info,  erhe::primitive::Base_mesh_build::at_load,  reason), erhe::primitive::Primitive::Stored_build_result::built) << reason;
+        const erhe::primitive::Primitive_render_shape& shape = *deferred[i]->render_shape;
+        EXPECT_TRUE(shape.is_base_deferred());
+        EXPECT_FALSE(shape.has_buffer_mesh_triangles());
+        EXPECT_TRUE(shape.get_renderable_mesh().vertex_buffer_ranges.empty());
+        const erhe::primitive::Buffer_mesh& reference = at_load[i]->render_shape->get_renderable_mesh();
+        EXPECT_EQ(std::memcmp(&shape.get_renderable_mesh().position_quantization, &reference.position_quantization, sizeof(reference.position_quantization)), 0);
+        EXPECT_EQ(std::memcmp(&shape.get_renderable_mesh().bounding_box,          &reference.bounding_box,          sizeof(reference.bounding_box)), 0);
+        EXPECT_EQ(shape.get_renderable_mesh().vertex_input_key, reference.vertex_input_key);
+        // Fill draws resolve to the optimized variant, identical to the at-load one.
+        const auto resolved = deferred[i]->get_resolved_renderable_mesh(erhe::primitive::Mesh_variant::optimized, erhe::primitive::Primitive_mode::polygon_fill);
+        ASSERT_EQ(resolved.first, erhe::primitive::Mesh_variant::optimized);
+        expect_same_buffer_mesh(
+            deferred[i]->optimized_render_shape->get_renderable_mesh(), deferred_sink,
+            at_load [i]->optimized_render_shape->get_renderable_mesh(), at_load_sink
+        );
+        EXPECT_EQ(deferred[i]->has_real_raytrace(), at_load[i]->has_real_raytrace());
+
+        // The base-only build: claimed once, staged, committed.
+        erhe::primitive::Primitive_render_shape& mutable_shape = *deferred[i]->render_shape;
+        EXPECT_TRUE (mutable_shape.claim_base_build_request());
+        EXPECT_FALSE(mutable_shape.claim_base_build_request());
+        ASSERT_TRUE(mutable_shape.prepare_deferred_base_mesh(deferred_build_info.buffer_info));
+        EXPECT_TRUE(mutable_shape.is_base_deferred()); // staged, not committed
+        ASSERT_TRUE(mutable_shape.commit_deferred_base_mesh());
+        EXPECT_FALSE(mutable_shape.is_base_deferred());
+        expect_same_buffer_mesh(mutable_shape.get_renderable_mesh(), deferred_sink, reference, at_load_sink);
+    }
 }
 
 TEST(Gltf_roundtrip, prepared_mesh_data_parse_accepts_own_output)

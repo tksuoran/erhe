@@ -1143,9 +1143,8 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    Quest: build phase 2.2-2.3 s (soup path, same APK) -> 1.3-1.5 s; listed /
    idle 4.3-5.3 s / 4.7-5.3 s (step 4: 5.6 s; soup path same APK 5.0-5.6 /
    5.5-5.6 s); VmHWM 853-894 MB (step 4: 798-809; soup path same APK 825):
-   the stored path peaks 30-70 MB higher, cause not found (the JSON grew
-   9.5 -> 15.7 MB, but desktop peak working set differs by 10-15 MB only;
-   the budget high-water is the full 64 MiB in both paths). Desktop: renders
+   the runs overlap (item 10 sampled both paths: stored 847-891, soup path
+   850-885 MB), see "Item 10" "Measured". Desktop: renders
    identical with the streams used, ignored (`use_gpu_vertex_streams` off)
    and as the step 4 file (md5 74c47fa9); with `quantize_vertex_positions`
    off the optimized signature differs, all 3852 fall back and render as the
@@ -1200,9 +1199,107 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
 
 ## Item 10: lazy base variant on Quest (after item 9)
 
-Under OpenXR, do not build or upload a prepared primitive's base variant at
-load; build it on first demand (ID rendering, edge lines, solid wireframe,
-in-place GPU edits). Expected: about half the mesh upload bytes and an
-estimated 470 MB of GPU memory on Bistro, to be measured. Design to be
-written when item 9 is done.
+Under OpenXR, a prepared primitive's base variant is not built or uploaded
+at load; the features that need it build it on demand, at the sites that
+turn them on. Decision D5: a separate item after item 9.
 
+### Measured (2026-10-26, Quest 3, Bistro Save for Quest file)
+
+- Mesh pools with the base at load (`get_memory_usage` `mesh_pools`): base
+  vertex pools 0 / 1 / 2 (stride 12 / 68 / 24) use 46.9 + 265.6 + 93.8 =
+  406.3 MB, the optimized pools 9 / 10 / 11 (8 / 24 / 4) 31.2 + 93.6 + 15.6
+  = 140.4 MB, the index pool 99.6 MB (3.91 M vertices, 12.45 M indices, both
+  variants each 49.8 MB). The base variant is 406.3 + 49.8 = 456 MB of the
+  647 MB used (the plan's estimate of 470 MB corrected). Base pool 2
+  (smooth normal, aniso, valency, facet id) is 93.8 MB of zeros for Bistro.
+- VmRSS sampled every 30 ms through the load (`/proc/<pid>/status`): RssAnon
+  climbs from 300 MB to 830 MB during the mesh build and stays there; the
+  VmHWM peak sits at the end of the mesh build, 30-60 MB above the idle RSS.
+  The climb is CPU heap (`malloc_in_use` 577-581 MB at idle, of which the
+  stored raytrace data, `cpu_mesh` BVH nodes + precomputed triangles +
+  primitive ids + colocation, is 362 MB), not the mesh pools: deferring the
+  base variant leaves the RSS unchanged.
+- Item 9's stored path vs soup path VmHWM: 4 more sampled runs give stored
+  847 / 891, soup 885 / 850 MB; with item 9's runs the ranges are 847-894
+  and 825-885 MB, so run-to-run variance dominates. The one systematic
+  difference is the loader queue backlog (high-water of queued upload bytes,
+  measured with a temporary diagnostic): stored 27-42 MB, soup path
+  14-18 MB. Both paths keep the load memory budget at its 64 MiB
+  high-water; the soup path's payload lease over-estimates its soup (104
+  bytes per vertex leased for about 64 bytes of soup), so less of its budget
+  is real memory, while the stored path's budget is mostly real queued
+  bytes. Upload staging high-water is the same (34-45 MB of 64 MB). The
+  budget bounds both; no change.
+
+### Design
+
+- Policy: `load.base_variant` (`platform_default` | `at_load` |
+  `on_demand`); `platform_default` is `on_demand` under OpenXR and `at_load`
+  on desktop, like `load.cpu_mesh_data`. `get_base_variant_load()` resolves
+  it to `at_load` when a feature that reads every content mesh's base
+  variant is already on at load: an ID pass covering all meshes
+  (`id_renderer.enabled`, fixed at startup), DDGI / radiance cascades, GPU
+  ray tracing, lightmap baking.
+- Eligible primitives (`get_base_mesh_build()`): prepared (the stored or the
+  soup path), not skinned (the ID pass draws skinned meshes on every hover,
+  from the base variant), with the optimized variant built
+  (`optimize_meshes`) and the soup released.
+- At load the base `Buffer_mesh` is a descriptor
+  (`Primitive_render_shape::install_deferred_base_mesh()`, or
+  `make_stored_meshes()` with `Base_mesh_build::deferred`): bounds,
+  quantization affines, `vertex_input_key`, `has_vertex_colors`, no
+  allocations and no index ranges; `is_base_deferred()` reports it. Every
+  pass that draws fill triangles resolves to the optimized variant
+  (`get_resolved_renderable_mesh(optimized)`); the modes the optimized build
+  lacks resolve to the base, find no range and draw nothing - the state of a
+  prepared primitive before its full build.
+- Two on-demand builds, both through the deferred finalize task and its
+  commit on the scene commit queue (which re-registers the mesh with the
+  draw list and refreshes its raytrace instances):
+  - base only (`Prepared_full_build::base_only`,
+    `prepare_deferred_base_mesh()` / `commit_deferred_base_mesh()`): the soup
+    build of the base, what the load would have built; the optimized
+    variant stays. For the readers of the base buffers.
+  - full (the existing prepared full build): Geometry, edge lines and a new
+    optimized variant. For styles and edits.
+- `request_deferred_base_build(context, mesh, base_only | full)` and
+  `request_deferred_base_builds_in_all_scenes()` (base only) queue a build
+  once per primitive (`claim_base_build_request()`).
+- Consumers and their change sites:
+
+| Consumer | Needs the base for | Change site |
+|---|---|---|
+| Edge lines, points, solid wireframe | edge-line buffer, non-fill modes | existing full builds: viewport style change, selection |
+| ID pass, skinned meshes | posed picking | not eligible (built at load) |
+| ID pass covering all meshes | picking, force-id | load policy: `at_load` |
+| Region scan (box / paint selection) | the ID pass of selected meshes | the selection's full build; until it commits, the scan does not see that mesh |
+| In-place GPU edits (paint, mesh component drags) | the base vertex buffer | the paint stroke and the component drag skip a deferred primitive and request its full build (`paint_tool.cpp`, `Mesh_component_transform::gather()`); weight paint is skinned only |
+| DDGI, radiance cascades | ray queries over the base buffers | `set_indirect_diffuse_source()` requests base builds in all scenes |
+| GPU ray tracing (`Ray_trace_renderer`) | the same | the Ray Trace window's Enable |
+| Lightmap baking | the same | the Lightmap window's baking toggle and bake to disk, MCP `lightmap_bake_gbuffer` / `lightmap_bake_direct` |
+| MCP `get_mesh_buffer_info` / `get_mesh_buffer_data` (base) | base buffers | the call reports the deferred base and requests a base build |
+| Export, CPU raytrace and picking, bounds, debug boxes | soup / stored positions / descriptor | none: unaffected |
+
+### Result (2026-10-26, Release)
+
+- Quest (same APK, `base_variant` at_load vs platform_default = on_demand,
+  2 runs each, headset homed in the Bistro scene): mesh memory used
+  647.2 -> 191.9 MB (-455 MB), pool capacity 838 -> 428 MB, device-local
+  blocks 3168 -> 2656-2720 MB (-450 to -512 MB). Headset draws identical:
+  `Content fill opaque not selected` 24 drawn / 3702 culled in both, the
+  other headset passes equal; GPU timers equal within noise (XR multiview
+  2.84-2.85 ms, shadows 0.25-0.31 ms). Listed / idle 4.5-4.6 / 4.7-5.4 s
+  vs 4.9 / 4.9-6.0 s. VmHWM unchanged (832-872 vs 832-869 MB; see
+  "Measured").
+- Desktop (`on_demand` forced, `cpu_mesh_data` release): mesh memory used
+  645.8 -> 190.5 MB; renders identical to `at_load` (md5 74c47fa9), also
+  after an on-demand base build. Change sites driven over MCP: a base read
+  is refused and queues a base build, the next read returns the bytes;
+  selecting a mesh queues its full build; `set_indirect_diffuse ddgi`
+  queues 2681 base builds and mesh memory returns to the at-load 645.8 MB
+  (the full build for every mesh would be 4.3 GB).
+- Test `deferred_base_variant_builds_on_demand_like_at_load`: the deferred
+  stored build uploads the same optimized variant as the at-load build, the
+  descriptor carries the at-load bounds and affines, and the base-only build
+  uploads exactly the at-load base.
+- Not driven: the paint and component-drag refusals (interactive tools).

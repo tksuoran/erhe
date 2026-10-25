@@ -1485,7 +1485,8 @@ Primitive_render_shape::Primitive_render_shape(Buffer_mesh&& renderable_mesh, El
 auto Primitive_render_shape::install_stored_build(
     Buffer_mesh&&                            buffer_mesh,
     std::shared_ptr<Prepared_primitive_data> prepared_data,
-    std::optional<Primitive_raytrace>&&      raytrace
+    std::optional<Primitive_raytrace>&&      raytrace,
+    const Base_mesh_build                    base_mesh_build
 ) -> bool
 {
     const std::lock_guard<std::mutex> build_lock{m_build_mutex};
@@ -1494,11 +1495,81 @@ auto Primitive_render_shape::install_stored_build(
         return false;
     }
     m_renderable_mesh = std::move(buffer_mesh);
+    m_base_deferred   = (base_mesh_build == Base_mesh_build::deferred);
     m_prepared_data   = std::move(prepared_data);
     if (raytrace.has_value() && !m_raytrace.has_raytrace_triangles()) {
         m_raytrace = std::move(raytrace.value());
     }
     m_payload_pending = false;
+    return true;
+}
+
+auto Primitive_render_shape::install_deferred_base_mesh(Buffer_mesh&& descriptor) -> bool
+{
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if (m_renderable_mesh.index_range(Primitive_mode::polygon_fill).index_count > 0) {
+        return false;
+    }
+    m_renderable_mesh = std::move(descriptor);
+    m_base_deferred   = true;
+    return true;
+}
+
+auto Primitive_render_shape::is_base_deferred() const -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_base_deferred;
+}
+
+auto Primitive_render_shape::prepare_deferred_base_mesh(const Buffer_info& buffer_info) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (!m_base_deferred) {
+            return false;
+        }
+        if (m_pending_base_mesh) {
+            return true; // staged by another task, not committed yet
+        }
+    }
+    const std::shared_ptr<Triangle_soup> triangle_soup = get_triangle_soup();
+    if (!triangle_soup) {
+        return false;
+    }
+    std::optional<Buffer_mesh> buffer_mesh = build_buffer_mesh_from_triangle_soup(*triangle_soup, buffer_info);
+    if (!buffer_mesh.has_value()) {
+        return false;
+    }
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_pending_base_mesh = std::make_unique<Buffer_mesh>(std::move(buffer_mesh.value()));
+    return true;
+}
+
+auto Primitive_render_shape::commit_deferred_base_mesh() -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if (!m_pending_base_mesh) {
+        return false;
+    }
+    if (m_base_deferred) {
+        m_renderable_mesh = std::move(*m_pending_base_mesh);
+        m_base_deferred   = false;
+    }
+    m_pending_base_mesh.reset();
+    return true;
+}
+
+auto Primitive_render_shape::claim_base_build_request() -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if (!m_base_deferred || m_base_build_requested) {
+        return false;
+    }
+    m_base_build_requested = true;
     return true;
 }
 
@@ -1579,6 +1650,7 @@ auto Primitive_render_shape::commit_geometry_buffer_mesh(std::shared_ptr<Primiti
     // Mesh and mappings swap together: they describe one order, so a renderer
     // can never see one beside the other's.
     m_renderable_mesh  = std::move(m_pending_buffer_mesh->buffer_mesh);
+    m_base_deferred    = false;
     m_element_mappings = std::move(m_pending_buffer_mesh->element_mappings);
     m_normal_style     = m_pending_buffer_mesh->normal_style;
     // The variant belongs to the Primitive, not to this shape, so it rides the
@@ -1638,6 +1710,7 @@ auto Primitive_render_shape::make_buffer_mesh_build_locked(
     }
     const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     m_renderable_mesh  = std::move(buffer_mesh);
+    m_base_deferred    = false;
     m_element_mappings = std::move(element_mappings);
     return true;
 }
@@ -1654,6 +1727,7 @@ auto Primitive_render_shape::make_buffer_mesh_build_locked(const Buffer_info& bu
     }
     const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     m_renderable_mesh = std::move(buffer_mesh_opt.value());
+    m_base_deferred   = false;
     return true;
 }
 #pragma endregion Primitive_render_shape
@@ -2437,7 +2511,26 @@ namespace {
 
 } // anonymous namespace
 
-auto Primitive::make_stored_meshes(const Build_info& build_info, std::string& out_reason) -> Stored_build_result
+namespace {
+
+// The base Buffer_mesh of a deferred base variant: what the decoders and the
+// bounds readers read from it, no buffers.
+[[nodiscard]] auto make_base_descriptor(const Buffer_mesh& optimized, const std::size_t base_vertex_input_key) -> Buffer_mesh
+{
+    Buffer_mesh descriptor;
+    descriptor.bounding_box          = optimized.bounding_box;
+    descriptor.bounding_sphere       = optimized.bounding_sphere;
+    descriptor.texcoord_ranges       = optimized.texcoord_ranges;
+    descriptor.position_quantization = optimized.position_quantization;
+    descriptor.texcoord_quantization = optimized.texcoord_quantization;
+    descriptor.has_vertex_colors     = optimized.has_vertex_colors;
+    descriptor.vertex_input_key      = base_vertex_input_key;
+    return descriptor;
+}
+
+} // anonymous namespace
+
+auto Primitive::make_stored_meshes(const Build_info& build_info, const Base_mesh_build base_mesh_build, std::string& out_reason) -> Stored_build_result
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -2510,11 +2603,18 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, std::string& ou
             return Stored_build_result::failed;
         }
     }
-    std::optional<Buffer_mesh> base_mesh = build_stored_buffer_mesh(std::move(stored->base), std::move(stored->indices), *stored, bounding_box, bounding_sphere, buffer_info);
+    // A deferred base variant (only beside a built optimized one) is a
+    // descriptor: its streams are dropped unread by the GPU.
+    const Base_mesh_build base_build = (optimized_mesh.has_value() && (base_mesh_build == Base_mesh_build::deferred))
+        ? Base_mesh_build::deferred
+        : Base_mesh_build::at_load;
+    std::optional<Buffer_mesh> base_mesh = (base_build == Base_mesh_build::deferred)
+        ? std::optional<Buffer_mesh>{make_base_descriptor(optimized_mesh.value(), buffer_info.vertex_input_key)}
+        : build_stored_buffer_mesh(std::move(stored->base), std::move(stored->indices), *stored, bounding_box, bounding_sphere, buffer_info);
     if (!base_mesh.has_value()) {
         return Stored_build_result::failed;
     }
-    if (!render_shape->install_stored_build(std::move(base_mesh.value()), std::move(prepared_data), std::move(raytrace))) {
+    if (!render_shape->install_stored_build(std::move(base_mesh.value()), std::move(prepared_data), std::move(raytrace), base_build)) {
         out_reason = "payload loaded meanwhile";
         return Stored_build_result::declined;
     }
@@ -2524,7 +2624,7 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, std::string& ou
     return Stored_build_result::built;
 }
 
-auto Primitive::make_prepared_meshes(const Build_info& build_info) -> bool
+auto Primitive::make_prepared_meshes(const Build_info& build_info, const Base_mesh_build base_mesh_build) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -2533,6 +2633,35 @@ auto Primitive::make_prepared_meshes(const Build_info& build_info) -> bool
     }
     if (!render_shape->has_triangle_soup()) {
         return false;
+    }
+    // A deferred base variant: only the optimized variant is built, beside a
+    // descriptor base mesh (Base_mesh_build). A repeat call (the synchronous
+    // finalize pass) finds the descriptor and builds no base either.
+    const Buffer_info& deferred_info = build_info.buffer_info;
+    const bool can_defer_base = deferred_info.optimize_meshes && (deferred_info.optimized_vertex_format != nullptr);
+    if (render_shape->is_base_deferred() || (can_defer_base && (base_mesh_build == Base_mesh_build::deferred) && !render_shape->has_buffer_mesh_triangles())) {
+        if (!optimized_render_shape) {
+            const Buffer_info optimized_buffer_info{
+                .normal_style       = deferred_info.normal_style,
+                .index_type         = deferred_info.index_type,
+                .vertex_format      = *deferred_info.optimized_vertex_format,
+                .vertex_buffer_sink = deferred_info.vertex_buffer_sink,
+                .index_buffer_sink  = deferred_info.index_buffer_sink,
+                .vertex_input_key   = deferred_info.optimized_vertex_input_key
+            };
+            const std::shared_ptr<Triangle_soup> core = render_shape->get_triangle_soup();
+            if (!core) {
+                return false;
+            }
+            std::shared_ptr<Primitive_render_shape> optimized = std::make_shared<Primitive_render_shape>(core, Element_mappings{});
+            if (!optimized->make_buffer_mesh(optimized_buffer_info)) {
+                return false;
+            }
+            static_cast<void>(render_shape->install_deferred_base_mesh(make_base_descriptor(optimized->get_renderable_mesh(), deferred_info.vertex_input_key)));
+            publish_optimized_render_shape(std::move(optimized));
+        }
+        static_cast<void>(render_shape->make_prepared_raytrace());
+        return true;
     }
     // Base: the fill-only soup build (no Geometry is published, so this is the
     // soup path of make_buffer_mesh()). Each step reads the soup only when it

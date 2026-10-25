@@ -142,6 +142,23 @@ above (step 1), which counts the prepared data validation; with
 task logs one line per file that stores streams:
 `gpu vertex streams: N stored, M portable (reasons)`.
 
+### Deferred base variant
+
+With `load.base_variant` on_demand (the OpenXR default), a non-skinned
+prepared primitive with an optimized variant and a released soup gets only
+its optimized variant at load (`Base_mesh_build::deferred`): its base
+`Buffer_mesh` is a descriptor (bounds, affines, vertex input key, no
+buffers) and every fill pass draws the optimized variant. Features that
+need the base variant request its build where they turn on
+(`request_deferred_base_build()`, `request_deferred_base_builds_in_all_scenes()`
+in `operations/async_raytrace_kickoff_operation.hpp`): a base-only build
+(the soup build of the base, the optimized variant kept) for the readers of
+the base buffers (DDGI, radiance cascades, GPU ray tracing, lightmap bakes,
+MCP buffer reads), the prepared full build for edits and styles. Both run as
+deferred finalize tasks and commit on the scene commit queue. The design,
+the consumer table and the measurements are in doc/plans/gltf_fast_load.md
+"Item 10".
+
 ### Load memory budget
 
 One `erhe::utility::Memory_budget`, owned by `Asset_manager` and shared by

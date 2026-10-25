@@ -931,6 +931,8 @@ set(_config_out  "${CMAKE_CURRENT_BINARY_DIR}/config/generated")
 
 
 set(_config_sources
+    ${_config_out}/base_variant_load.hpp
+    ${_config_out}/base_variant_load.cpp
     ${_config_out}/camera_controls_config.hpp
     ${_config_out}/camera_controls_config_serialization.hpp
     ${_config_out}/camera_controls_config.cpp

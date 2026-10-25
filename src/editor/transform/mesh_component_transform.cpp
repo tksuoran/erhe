@@ -317,6 +317,13 @@ auto Mesh_component_transform::gather(App_context& context, const Scalar_topolog
         if (!render_shape) {
             continue;
         }
+        // A deferred base variant (load.base_variant on_demand): the edit
+        // writes the base vertex buffer, so the primitive is left out until
+        // its build (requested here) has committed.
+        if (render_shape->is_base_deferred()) {
+            request_deferred_base_build(context, mesh, Deferred_base_build::full);
+            continue;
+        }
         const std::shared_ptr<erhe::geometry::Geometry>& geometry = render_shape->get_geometry();
         if (!geometry) {
             continue;

@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "operations/async_raytrace_kickoff_operation.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
@@ -227,6 +228,7 @@ namespace {
 // The primitive comes back too: it owns the returned Buffer_mesh, and holding
 // it keeps that pointer valid for the rest of the call.
 [[nodiscard]] auto resolve_buffer_mesh(
+    App_context&                                 context,
     const std::shared_ptr<erhe::scene::Node>&    node,
     const std::size_t                            primitive_index,
     const erhe::primitive::Mesh_variant          variant,
@@ -253,6 +255,13 @@ namespace {
     const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh(variant);
     if (buffer_mesh == nullptr) {
         out_error = "Primitive has no " + variant_name + " renderable mesh";
+        return nullptr;
+    }
+    // A deferred base variant (load.base_variant on_demand) has no buffers:
+    // its build is requested here, the change site of this read.
+    if ((variant == erhe::primitive::Mesh_variant::original) && primitive->render_shape && primitive->render_shape->is_base_deferred()) {
+        request_deferred_base_build(context, mesh, Deferred_base_build::base_only);
+        out_error = "The base variant of this primitive is deferred (load.base_variant on_demand); its build is queued - retry once it has committed";
         return nullptr;
     }
     out_primitive = primitive;
@@ -669,7 +678,8 @@ auto Mcp_server::query_id_range_mapping(const json& args) -> std::string
                     // ID ranges describe the ID renderer's draw, which is always
                     // the original variant (it is the one with valid facet ids).
                     const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh(erhe::primitive::Mesh_variant::original);
-                    if (buffer_mesh != nullptr) {
+                    // A deferred base variant has no vertex ranges.
+                    if ((buffer_mesh != nullptr) && !buffer_mesh->vertex_buffer_ranges.empty()) {
                         entry["base_vertex"] = buffer_mesh->base_vertex();
                     }
                 }
@@ -2381,7 +2391,7 @@ auto Mcp_server::query_mesh_buffer_info(const json& args) -> std::string
     }
     std::shared_ptr<erhe::primitive::Primitive> primitive;
     std::string                                 error;
-    const erhe::primitive::Buffer_mesh* buffer_mesh = resolve_buffer_mesh(node, primitive_index, variant, variant_name, primitive, error);
+    const erhe::primitive::Buffer_mesh* buffer_mesh = resolve_buffer_mesh(m_context, node, primitive_index, variant, variant_name, primitive, error);
     if (buffer_mesh == nullptr) {
         return make_error_content(error);
     }
@@ -2480,7 +2490,7 @@ auto Mcp_server::query_mesh_buffer_data(const json& args) -> std::string
     }
     std::shared_ptr<erhe::primitive::Primitive> primitive;
     std::string                                 error;
-    const erhe::primitive::Buffer_mesh* buffer_mesh = resolve_buffer_mesh(node, primitive_index, variant, variant_name, primitive, error);
+    const erhe::primitive::Buffer_mesh* buffer_mesh = resolve_buffer_mesh(m_context, node, primitive_index, variant, variant_name, primitive, error);
     if (buffer_mesh == nullptr) {
         return make_error_content(error);
     }

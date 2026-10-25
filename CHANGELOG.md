@@ -33,6 +33,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Base_mesh_build` (`enums.hpp`);
+  `Primitive_render_shape::install_deferred_base_mesh()`,
+  `is_base_deferred()`, `claim_base_build_request()`,
+  `prepare_deferred_base_mesh()`, `commit_deferred_base_mesh()`;
+  `Primitive::make_prepared_meshes()` and `make_stored_meshes()` take a
+  `Base_mesh_build`, `install_stored_build()` too.
 - `erhe::primitive`: `Stored_vertex_stream_request`, `Stored_vertex_variant`,
   `Stored_vertex_streams` (`stored_vertex_streams.hpp`),
   `Triangle_soup_source::load_stored_vertex_streams()`,

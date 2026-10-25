@@ -1,4 +1,5 @@
 #include "developer/ray_trace_window.hpp"
+#include "operations/async_raytrace_kickoff_operation.hpp"
 
 #include "app_context.hpp"
 #include "config/generated/editor_settings_config.hpp"
@@ -58,6 +59,10 @@ void Ray_trace_window::imgui()
     bool enabled = renderer->is_enabled();
     if (ImGui::Checkbox("Enable", &enabled)) {
         renderer->set_enabled(enabled);
+        if (enabled) {
+            // GPU ray tracing reads the base variants (deferred ones get built).
+            request_deferred_base_builds_in_all_scenes(m_context);
+        }
     }
     if (!enabled) {
         ImGui::TextUnformatted("Enable to trace primary rays from the viewport camera.");
