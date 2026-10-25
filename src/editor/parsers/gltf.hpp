@@ -263,6 +263,14 @@ public:
     erhe::gltf::Gltf_export_texture_statistics  textures;
     double                                      export_ms {0.0};
     std::size_t                                 file_bytes{0};
+    // A save onto the file the scene's sources read from (doc/editor/
+    // scene_serialization.md "Saving onto the source file"): primitives
+    // whose soup source now reads the written file, primitives whose soup was
+    // made resident instead, and images whose source now reads the written file.
+    bool                                        overwrote_sources       {false};
+    std::size_t                                 rebound_primitive_count {0};
+    std::size_t                                 detached_primitive_count{0};
+    std::size_t                                 rebound_image_count     {0};
 };
 
 // texture_export selects the image form (erhe::gltf::Gltf_texture_export);

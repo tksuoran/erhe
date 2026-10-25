@@ -572,6 +572,73 @@ TEST(Gltf_roundtrip, deferred_mesh_payload_loads_like_the_parse)
     }
 }
 
+// A save onto the file the released soups read from: before the rebind the
+// changed file refuses the reload; rebind_sources_to_written_file() gives
+// each retained primitive a source in the new file, and the soups read back
+// bit-identical. A primitive whose source is detached before the save keeps
+// its soup resident and has no source afterwards.
+TEST(Gltf_roundtrip, save_onto_source_rebinds_released_soups)
+{
+    const std::string glb = make_prepared_glb();
+    ASSERT_FALSE(glb.empty());
+    const std::filesystem::path path = write_temporary_file("rebind_source.glb", glb);
+
+    erhe::scene::Scene scene{"rebind", nullptr};
+    tf::Executor executor{1};
+    const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+    const erhe::gltf::Gltf_data data = erhe::gltf::parse_gltf(
+        erhe::gltf::Gltf_parse_arguments{
+            .executor             = executor,
+            .root_node            = root_node,
+            .path                 = path,
+            .parallel             = false,
+            .triangle_soup_reload = erhe::gltf::Triangle_soup_reload::record
+        }
+    );
+    const std::shared_ptr<erhe::scene::Node> panel = find_by_name(data.nodes, "Panel");
+    ASSERT_TRUE(panel);
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = erhe::scene::get_mesh(panel.get())->get_primitives();
+    ASSERT_EQ(mesh_primitives.size(), 2u);
+    std::vector<erhe::primitive::Triangle_soup> originals;
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+        originals.push_back(*mesh_primitive.primitive->render_shape->get_triangle_soup());
+        EXPECT_TRUE(mesh_primitive.primitive->render_shape->get_triangle_soup_source()->references_file(path));
+    }
+    // Primitive 0 released (its soup goes back to the file), primitive 1
+    // detached (its soup made resident, no source).
+    ASSERT_TRUE(mesh_primitives[0].primitive->release_triangle_soup());
+    ASSERT_TRUE(mesh_primitives[1].primitive->detach_triangle_soup_source());
+    EXPECT_FALSE(mesh_primitives[1].primitive->render_shape->get_triangle_soup_source());
+
+    erhe::gltf::Gltf_export_written_layout layout;
+    erhe::gltf::Gltf_export_arguments arguments{
+        .root_node          = *scene.get_root_node(),
+        .binary             = true,
+        .prepared_mesh_data = erhe::gltf::Prepared_mesh_data::write
+    };
+    arguments.written_layout = &layout;
+    const std::string saved = erhe::gltf::export_gltf(arguments);
+    ASSERT_FALSE(saved.empty());
+    // The file is new: a different modification time.
+    const std::filesystem::file_time_type old_time = std::filesystem::last_write_time(path);
+    static_cast<void>(write_temporary_file("rebind_source.glb", saved));
+    std::filesystem::last_write_time(path, old_time + std::chrono::seconds{2});
+
+    EXPECT_FALSE(mesh_primitives[0].primitive->render_shape->get_triangle_soup()); // refused: file changed
+    EXPECT_GE(layout.retained_primitives.size(), 1u);
+
+    const erhe::gltf::Gltf_rebind_result result = erhe::gltf::rebind_sources_to_written_file(path, layout);
+    EXPECT_EQ(result.primitive_count, 1u); // the detached primitive has no source to rebind
+    EXPECT_EQ(result.failed_count, 0u);
+    const std::shared_ptr<erhe::primitive::Triangle_soup> reloaded = mesh_primitives[0].primitive->render_shape->get_triangle_soup();
+    ASSERT_TRUE(reloaded);
+    EXPECT_EQ(reloaded->vertex_data, originals[0].vertex_data);
+    EXPECT_EQ(reloaded->index_data,  originals[0].index_data);
+    const std::shared_ptr<erhe::primitive::Triangle_soup> resident = mesh_primitives[1].primitive->render_shape->get_triangle_soup();
+    ASSERT_TRUE(resident);
+    EXPECT_EQ(resident->vertex_data, originals[1].vertex_data);
+}
+
 TEST(Gltf_roundtrip, prepared_mesh_data_parse_accepts_own_output)
 {
     const std::string glb = make_prepared_glb();

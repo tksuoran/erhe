@@ -234,6 +234,34 @@ prefab source is Save Scene on the scene opened from that source.
   `add_gltf_editor_state` unless `editor_state: true` is passed) - use it
   for handing content to other tools, `save_scene` for full state.
 
+### Saving onto the source file
+
+A scene loaded from a file keeps reading from it: released triangle soups
+read back their byte ranges, and image sources are byte ranges of it
+(doc/erhe/gltf.md "Image source streams"). A save onto that file replaces it
+(through a temporary file), so `save_scene_gltf()` first finds the scene's
+primitives whose soup source references the target file
+(`Triangle_soup_source::references_file()`) and the content-library
+textures whose image source does (`erhe::gltf::is_same_file()`), and then:
+
+- refuses "Save for Quest" onto it (it rewrites the textures and is a
+  delivery format; decision D4 of doc/plans/gltf_fast_load.md item 9);
+- makes the soup of each such primitive that the export will not write from
+  its retained prepared core (its prepared data is stale after an edit)
+  resident and drops its source (`Primitive::detach_triangle_soup_source()`);
+- gives each such texture a resident copy of its stream for the export;
+- after the file is written, `erhe::gltf::rebind_sources_to_written_file()`
+  points the retained primitives (and their optimized variants sharing the
+  source) at their accessors in the new file and makes file-backed sources
+  for the images written unchanged, which replace the resident copies; an
+  image the export did not write keeps its resident copy.
+
+A reload that read the old source just before the rebind retries once
+through the new source (`Primitive_shape::get_triangle_soup()`). The save
+logs `'<path>' was the scene's source: ...` and `get_save_status` reports the
+counts as `sources{overwrote_sources, rebound_primitive_count,
+detached_primitive_count, rebound_image_count}`.
+
 ## Open pipeline
 
 Single load entry: the `Load_scene_file_message` handler (subscribed in the

@@ -28,6 +28,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Triangle_soup_source::references_file()` (virtual,
+  false by default), `Primitive::rebind_triangle_soup_source()`,
+  `Primitive::detach_triangle_soup_source()`,
+  `Primitive_shape::detach_triangle_soup_source()`.
+- `erhe::gltf`: `Gltf_export_arguments::written_layout`
+  (`Gltf_export_written_layout`, `Gltf_export_written_primitive`,
+  `Gltf_export_written_image`), `rebind_sources_to_written_file()`
+  (`Gltf_rebind_result`), `is_same_file()`.
+
 - `erhe::file`: `Positional_file_reader` (lock-free parallel positional reads through one handle).
 - `erhe::primitive`: `Primitive(source, counts)` / `Primitive_shape(source, counts)`
   / `Primitive_render_shape(source, counts)` make a shape whose payload is

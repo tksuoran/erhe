@@ -469,7 +469,10 @@ job table. Poll `get_save_status {job_id}` until `state` is `done` or
 `save_ms` and, for a glTF save, `export_ms` and `prepared{prepared_count,
 retained_count, skipped_count, skip_reasons, bvh_reused_count,
 bvh_rebuilt_count, bvh_stored_count, bvh_none_count,
-dropped_degenerate_triangles, preparation_ms}`; Save for Quest adds
+dropped_degenerate_triangles, preparation_ms}` and `sources{overwrote_sources,
+rebound_primitive_count, detached_primitive_count, rebound_image_count}`
+(a save onto the scene's own source file, doc/editor/scene_serialization.md
+"Saving onto the source file"); Save for Quest adds
 `textures{image_count, transcoded_count, transcode_failed_count,
 raw_ktx2_count, source_byte_count, transcoded_byte_count, transcode_ms}`. A
 failed job carries `error` (a scene closed before its save ran, a write

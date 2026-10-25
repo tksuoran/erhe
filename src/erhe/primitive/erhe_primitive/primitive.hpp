@@ -243,6 +243,11 @@ public:
     // when the shape has no soup or no source. Idempotent.
     auto release_triangle_soup() -> bool;
     [[nodiscard]] auto is_triangle_soup_released   () const -> bool;
+    // Makes the soup resident (read back when released) and drops the
+    // source, for a shape whose source file is about to be replaced by data
+    // that does not reproduce the soup. False, keeping everything, when the
+    // soup cannot be read.
+    auto detach_triangle_soup_source() -> bool;
     // The resident soups of both shapes are the same object.
     [[nodiscard]] auto shares_resident_triangle_soup(const Primitive_shape& other) const -> bool;
     // The validated prepared mesh data the shape was loaded with; null when
@@ -465,6 +470,14 @@ public:
     // Loads the render shape's pending payload (Primitive_shape::load_payload());
     // true when nothing is pending.
     auto load_payload() -> bool;
+    // A save rewrote the file the render shape's soup source reads: the soup
+    // is the new file's data at `source` (the retained prepared core). Gives
+    // the render shape that source, and the optimized variant when it
+    // shares the source (a released prepared primitive).
+    void rebind_triangle_soup_source(const std::shared_ptr<const Triangle_soup_source>& source);
+    // Primitive_shape::detach_triangle_soup_source() for the render shape and
+    // an optimized variant sharing its source.
+    auto detach_triangle_soup_source() -> bool;
     // Releases the render shape's CPU triangle soup (and the optimized
     // variant's, when it shares it) once the GPU buffers and the raytrace are
     // built; readers reload it from the soup source through

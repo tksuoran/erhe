@@ -1057,6 +1057,28 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    saved again (byte-identical); a foreign file saved onto itself pins its
    released soups (count in `get_save_status`); a unit test in
    `erhe_gltf_tests`.
+
+   Result (2026-10-25): the export reports where it wrote the retained
+   primitives and the unchanged images (`written_layout`);
+   `erhe::gltf::rebind_sources_to_written_file()` gives them sources in the
+   written file; the editor detaches (makes resident) primitives the new
+   file does not reproduce and refuses Save for Quest onto the source (D4)
+   (doc/editor/scene_serialization.md "Saving onto the source file"). Gate
+   (Release headless, prepared Bistro copy, `load.cpu_mesh_data` release,
+   config restored afterwards): load (3852 soups released); `save_scene`
+   onto the same file: `sources{overwrote_sources true,
+   rebound_primitive_count 3852, rebound_image_count 393,
+   detached_primitive_count 0}`, the file byte-identical to its source; 5
+   meshes selected: soups read back, 0 reload failures (3861 reloads: the
+   3852 the save reads plus 9 for the selection); a save to another path is
+   byte-identical to the rebound file, and saving onto the source again
+   rebinds again (byte-identical); Save for Quest onto it fails with the
+   refusal; render d488fefc... Tests: `erhe_gltf_tests` 19/19 (new
+   `save_onto_source_rebinds_released_soups`: a released soup refused
+   after the save and read back bit-identical after the rebind, a detached
+   primitive keeps its resident soup), `erhe_primitive_tests` 68/68,
+   `erhe_gltf_gpu_tests` 3/3, `ctest -R Mcp_` 92/95 (same 3); the Quest APK
+   builds (no Quest run: the load path did not change).
 6. **Explicit quantization on `Buffer_mesh`.** Gates: renders identical,
    scene renderer / editor GPU tests, BLAS path unchanged.
 7. **Spec, schema and format signature.** Finish
