@@ -377,3 +377,21 @@ byte-for-byte against the foreign Bistro at idle.
 4. `save_scene` always writes the extensions; `export_gltf` only when its
    arguments ask for it.
 5. The BVH is stored in the file; `cache/bvh` keeps serving foreign files.
+
+## Follow-up work (user, 2026-10-25)
+
+1. **`--no-scene` creates an empty scene with a default camera** and nothing
+   else; today the flag aborts on Quest (`scene_view.cpp` assert
+   `!m_render_views.empty()`).
+2. **Memory report.** Measure where CPU and GPU memory goes after a
+   prepared Bistro load on desktop and Quest (per owner: soups, raytrace
+   BVH and precomputed triangles, retained glTF buffers and image bytes,
+   Geometry, mesh memory, textures, staging), and rank the optimizations.
+3. **Drop CPU mesh memory after GPU upload.** An option, default on under
+   OpenXR / Quest, that releases a primitive's CPU-side mesh data once its
+   GPU buffers are uploaded and reloads it from the source glTF on demand
+   (raytrace, Geometry, export, edits). Scope decided by item 2.
+4. **Quest-ready glTF with ASTC textures.** A save variant that writes the
+   textures as KTX2 with a raw ASTC 4x4 vkFormat (transcoded from the
+   Basis source), so Quest uploads them without transcoding; desktop
+   loaders without ASTC support decode them on the CPU.
