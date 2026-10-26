@@ -192,10 +192,11 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_occlusion_words_block         .add_uint("words", Shader_resource::unsized_array);
     m_occlusion_previous_words_block.add_uint("words", Shader_resource::unsized_array);
     // The occlusion test (occlusion_test.vert / .frag): the view block
-    // (std140: a mat4, a vec4 and a uvec4), the bounds as the classifier reads them,
-    // and the two occlusion regions as uint words (the uvec2 layout's bytes).
-    m_occlusion_clip_from_world_offset = m_occlusion_view_block.add_mat4 ("clip_from_world")->get_offset_in_parent();
-    m_occlusion_eye_offset             = m_occlusion_view_block.add_vec4 ("eye"            )->get_offset_in_parent();
+    // (std140: per view a mat4 and a vec4, then a uvec4), the bounds as the
+    // classifier reads them, and the two occlusion regions as uint words
+    // (the uvec2 layout's bytes).
+    m_occlusion_clip_from_world_offset = m_occlusion_view_block.add_mat4 ("clip_from_world", occlusion_max_view_count)->get_offset_in_parent();
+    m_occlusion_eye_offset             = m_occlusion_view_block.add_vec4 ("eye",             occlusion_max_view_count)->get_offset_in_parent();
     m_occlusion_info_offset            = m_occlusion_view_block.add_uvec4("info"           )->get_offset_in_parent();
     m_occlusion_view_block_bytes       = m_occlusion_view_block.get_size_bytes();
     m_occlusion_bounds_block     .add_vec4("bounds", Shader_resource::unsized_array);
@@ -370,6 +371,29 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
         m_occlusion_shader_stages.reset();
         return;
     }
+    // The multiview variant (ERHE_MULTIVIEW: gl_ViewIndex picks the view),
+    // for the occlusion test inside a multiview render pass (the headset).
+    if (info.max_multiview_view_count >= occlusion_max_view_count) {
+        m_occlusion_multiview_shader_stages = std::make_unique<Reloadable_shader_stages>(
+            graphics_device,
+            Shader_stages_create_info{
+                .name              = "occlusion_test_multiview",
+                .interface_blocks  = { &m_occlusion_view_block, &m_occlusion_bounds_block, &m_occlusion_draw_test_block, &m_occlusion_draw_result_block },
+                .no_vertex_input   = true,
+                .shaders           = {
+                    { Shader_type::vertex_shader,   shader_path / std::filesystem::path{"occlusion_test.vert"} },
+                    { Shader_type::fragment_shader, shader_path / std::filesystem::path{"occlusion_test.frag"} }
+                },
+                .bind_group_layout = m_occlusion_bind_group_layout.get(),
+                .view_count        = static_cast<uint32_t>(occlusion_max_view_count)
+            }
+        );
+        graphics_device.get_shader_monitor().add(*m_occlusion_multiview_shader_stages);
+        if (!m_occlusion_multiview_shader_stages->shader_stages.is_valid()) {
+            log_startup->error("GPU occlusion culling: multiview occlusion_test.vert / .frag failed to build; no occlusion test in multiview passes");
+            m_occlusion_multiview_shader_stages.reset();
+        }
+    }
     // Depth test against the view's depth (the device's depth direction:
     // a box face at or in front of the stored depth passes), no depth
     // write, no color writes: the box only probes visibility. The vertex
@@ -426,10 +450,14 @@ auto Gpu_cull_classifier::get_occlusion_pipeline() -> erhe::graphics::Base_rende
     return *m_occlusion_pipeline;
 }
 
-auto Gpu_cull_classifier::get_occlusion_shader_stages() const -> const erhe::graphics::Shader_stages&
+auto Gpu_cull_classifier::get_occlusion_shader_stages(const std::size_t view_count) const -> const erhe::graphics::Shader_stages*
 {
     ERHE_VERIFY(m_occlusion_shader_stages);
-    return m_occlusion_shader_stages->shader_stages;
+    ERHE_VERIFY((view_count >= 1) && (view_count <= occlusion_max_view_count));
+    if (view_count == 1) {
+        return &m_occlusion_shader_stages->shader_stages;
+    }
+    return m_occlusion_multiview_shader_stages ? &m_occlusion_multiview_shader_stages->shader_stages : nullptr;
 }
 
 auto Gpu_cull_classifier::get_occlusion_view_buffer() -> erhe::graphics::Ring_buffer_client&

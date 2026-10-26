@@ -105,9 +105,8 @@ Decisions (user, 2026-10-24):
    viewport scene views' color views, four view included
    (`Composer::add_cull_views()` registers them with
    `Draw_list_renderer::add_color_occlusion_view()`); previews,
-   thumbnails, scene image captures and the id pass get none, and neither
-   does the headset: its per-eye passes draw unculled (`Cull_view::none`,
-   culling.md "Open"), so they have no view to test. The classification
+   thumbnails, scene image captures and the id pass get none; the
+   headset's multiview pass gets one ("Headset" below). The classification
    dispatch writes the frame slot's start words (test bits: a bounded entry
    in the frustum whose grown box lies beyond the near plane; result bits
    preset visible for entries without bounds, boxes reaching the near
@@ -182,6 +181,58 @@ Decisions (user, 2026-10-24):
 3. Step 5 of the sketch (the second draw of the entries that just became
    visible), only if the one-frame pop-in shows in use.
 
+### Headset
+
+The headset's multiview color pass (both eyes in one render pass) is an
+occlusion view. Done.
+
+- The headset renders its passes where it prepares them
+  (`Composition_pass::render_immediate()`), so its rendergraph node's
+  pre-execute hook (`Headset_view::add_render_cull_view()`, before the
+  frame's classification) registers per pass what `Composer::add_cull_views()`
+  registers for a viewport: `Composer::add_immediate_cull_views()` runs each
+  pass's gating (`Composition_pass::prepare()` with
+  `Composition_prepare_scope::gating_only`), gives each draw-list pass of the
+  headset's scene the union eye frustum view and a GPU command selection,
+  and makes that view an occlusion view for the "Occlusion test" pass. The
+  multiview render passes them in `Render_context::immediate_pass_views`.
+  The per-eye (non-multiview) path registers none.
+- Both eyes share the union view and so one bit. The occlusion draw
+  (`Draw_occlusion_parameters`: per view `clip_from_world` and eye,
+  `view_count`) uses the multiview variant of `occlusion_test.vert`
+  (`ERHE_MULTIVIEW`, built when the device has multiview): each eye
+  rasterizes the faces of each box toward it with its own matrix, and a
+  fragment in either eye marks the entry visible.
+- Near plane: an entry is tested only when its grown box lies wholly beyond
+  a head-space plane `-z = d`, d = the positional margin of the union view
+  (0.1 m, covers the eye offset from the head origin) + the farthest corner
+  of the eyes' near planes (z_near times the padded union sides) + 0.02 m
+  (`Headset_view::prepare_cull_planes()`, M2). Inside an eye's frustum every
+  point before that eye's near plane lies before this plane, canted eyes
+  included; a box the eye is inside reaches it.
+- A frame's words are consumed only when its occlusion pass drew them
+  (`Occlusion_view_record::drawn`): an XR frame that registered the view but
+  did not render (the multiview callback skipped) culls nothing next frame.
+- Under OpenXR the frame command buffer is submitted inside the headset node
+  (`Xr_session` submits it before the views' command buffer begins), so the
+  host-read barrier of the frame's occlusion words
+  (`Cull_frame_registry::record_frame_end()`) is recorded at the end of the
+  multiview callback, into the views' command buffer, the frame's last; the
+  editor records it only into a command buffer still recording.
+
+Gate: `scripts/quest_occlusion_wall_check.py` (Quest over adb, off-head,
+head pose from a benchmark file): the wall case occludes and culls exactly
+the 6 boxes behind the wall, the box crossing the eyes' near region stays
+untested; the inside case keeps the room box and the box beyond its far wall
+visible. `get_cull_classification_check` 0 command mismatches on Bistro.
+
+Result (2026-10-26, Quest 3 release APK, Bistro `bistro_quest.glb`,
+`config/editor/benchmark_bistro.json` pose = the desktop bench camera,
+clustered light shading, gpu classification and light binning, single runs):
+frame 122.8 -> 70.8 ms (8.1 -> 14.1 fps), XR multiview GPU pass
+121.9 -> 69.7 ms; opaque fill drawn 3609 -> 484 of 3724, 3192 of 3730
+bounded in-frustum entries culled as occluded. Repeat-3 medians not taken.
+
 ## Open
 
 - The pass's fill cost grows with the screen area of the tested boxes
@@ -190,3 +241,6 @@ Decisions (user, 2026-10-24):
   hierarchical-Z compute test instead of rasterized boxes.
 - A scene with little occlusion (heavy) pays the pass without a saving;
   the setting stays off by default until measured on more scenes.
+- Headset: the per-eye (non-multiview) path has no occlusion view; the
+  headset's images with occlusion on and off are not compared (the Quest
+  compositor screenshot shows the passthrough camera, not the app).

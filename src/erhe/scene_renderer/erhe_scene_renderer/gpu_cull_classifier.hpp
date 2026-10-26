@@ -114,6 +114,10 @@ public:
     // corners, two triangles per face (occlusion_test.vert), drawn indexed.
     static constexpr uint32_t     occlusion_vertices_per_entry       {7};
     static constexpr uint32_t     occlusion_indices_per_entry        {18};
+    // Views one occlusion draw rasterizes: one, or the views of a multiview
+    // render pass (the headset's eyes; occlusion_test.vert indexes the
+    // view block by gl_ViewIndex).
+    static constexpr std::size_t  occlusion_max_view_count           {2};
 
     // The 32-bit halves (low, high) of a 64-bit value as the shaders read
     // them (flag bits, Item_filter masks).
@@ -158,10 +162,15 @@ public:
     [[nodiscard]] auto get_job_header_offset() const -> std::size_t { return m_job_header_offset; }
     [[nodiscard]] auto get_job_filter_offset() const -> std::size_t { return m_job_filter_offset; }
     [[nodiscard]] auto get_job_data_offset  () const -> std::size_t { return m_job_data_offset; }
-    // For Draw_list_scene's occlusion test.
+    // For Draw_list_scene's occlusion test. The view block holds
+    // occlusion_max_view_count clip_from_world matrices and eyes (std140
+    // array strides: a mat4, a vec4).
     [[nodiscard]] auto get_occlusion_bind_group_layout  () const -> const erhe::graphics::Bind_group_layout*;
     [[nodiscard]] auto get_occlusion_pipeline           () -> erhe::graphics::Base_render_pipeline&;
-    [[nodiscard]] auto get_occlusion_shader_stages      () const -> const erhe::graphics::Shader_stages&;
+    // view_count 1: the single-view stages; 2 .. occlusion_max_view_count:
+    // the multiview stages (null when the device has no multiview or they
+    // failed to build).
+    [[nodiscard]] auto get_occlusion_shader_stages      (std::size_t view_count) const -> const erhe::graphics::Shader_stages*;
     [[nodiscard]] auto get_occlusion_view_buffer        () -> erhe::graphics::Ring_buffer_client&;
     [[nodiscard]] auto get_occlusion_view_block_bytes   () const -> std::size_t { return m_occlusion_view_block_bytes; }
     [[nodiscard]] auto get_occlusion_clip_from_world_offset() const -> std::size_t { return m_occlusion_clip_from_world_offset; }
@@ -215,6 +224,7 @@ private:
     std::size_t                                               m_occlusion_info_offset{0};
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_occlusion_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_occlusion_shader_stages;
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_occlusion_multiview_shader_stages;
     std::unique_ptr<erhe::graphics::Base_render_pipeline>     m_occlusion_pipeline;
     erhe::graphics::Ring_buffer_client                        m_occlusion_view_buffer;
 };

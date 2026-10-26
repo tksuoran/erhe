@@ -82,4 +82,9 @@ void Cull_frame_registry::record_frame_end(erhe::graphics::Command_buffer& comma
     m_frame_end_scenes.clear();
 }
 
+auto Cull_frame_registry::has_frame_end_scenes() const -> bool
+{
+    return !m_frame_end_scenes.empty();
+}
+
 } // namespace erhe::scene_renderer

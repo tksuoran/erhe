@@ -162,7 +162,7 @@ auto c_str(const Composition_pass_result result) -> const char*
     }
 }
 
-void Composition_pass::prepare(const Render_context& context, const int64_t host_system_time_ns, Composition_pass_prepared& out) const
+void Composition_pass::prepare(const Render_context& context, const int64_t host_system_time_ns, Composition_pass_prepared& out, const Composition_prepare_scope scope) const
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -290,7 +290,7 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
             (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only) ||
             (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::allow_all)
         );
-    if (out.use_draw_lists) {
+    if (out.use_draw_lists || (scope == Composition_prepare_scope::gating_only)) {
         s_mesh_spans.clear();
         return;
     }
@@ -345,14 +345,29 @@ auto get_color_view_parameters(const Render_context& context) -> erhe::scene_ren
     };
 }
 
-void Composition_pass::render_immediate(const Render_context& context)
+void Composition_pass::render_immediate(const Render_context& context, const Composition_pass_views* const pass_views)
 {
     prepare(context, context.app_context.render_phase_host_system_time_ns, m_immediate_prepared);
-    // A pass prepared where it renders has no prepared culling view: it
-    // takes the context's (the headset's, added in its pre-execute hook)
-    // when it draws the draw list scene that view belongs to, and draws
-    // unculled otherwise (the previews).
-    m_immediate_prepared.cull_view = erhe::scene_renderer::Cull_view::none;
+    m_immediate_prepared.cull_view         = erhe::scene_renderer::Cull_view::none;
+    m_immediate_prepared.command_selection = erhe::scene_renderer::Command_selection_id::none;
+    // The views the context's pre-execute hook registered for this pass
+    // (the headset's: its culling view and GPU command selection, or its
+    // occlusion view; Composer::add_immediate_cull_views() from the same
+    // gating, so a registered draw-list pass is a draw-list pass here).
+    if (pass_views != nullptr) {
+        if (
+            (m_immediate_prepared.result == Composition_pass_result::submitted) &&
+            (m_immediate_prepared.use_draw_lists || (data.kind == Composition_pass_kind::occlusion_test))
+        ) {
+            m_immediate_prepared.cull_view         = pass_views->cull_view;
+            m_immediate_prepared.command_selection = pass_views->command_selection;
+        }
+        render(context, m_immediate_prepared);
+        return;
+    }
+    // Otherwise a pass prepared where it renders has no prepared culling
+    // view: it takes the context's when it draws the draw list scene that
+    // view belongs to, and draws unculled otherwise (the previews).
     if (
         m_immediate_prepared.use_draw_lists &&
         (context.immediate_cull_view != erhe::scene_renderer::Cull_view::none)
@@ -365,7 +380,6 @@ void Composition_pass::render_immediate(const Render_context& context)
             m_immediate_prepared.cull_view = context.immediate_cull_view;
         }
     }
-    m_immediate_prepared.command_selection = erhe::scene_renderer::Command_selection_id::none;
     render(context, m_immediate_prepared);
 }
 
@@ -457,7 +471,10 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         // The view's occlusion test (doc/plans/occlusion_culling.md), in the
         // view's render pass after its depth-writing color passes; its view
         // was registered by the view's pre-execute hook
-        // (Composer::add_cull_views()).
+        // (Composer::add_cull_views()), or by the headset's
+        // (Composer::add_immediate_cull_views()). A multiview pass (the
+        // headset's eyes) rasterizes the boxes in every view, each view with
+        // its own matrix and camera.
         if (prepared.cull_view == erhe::scene_renderer::Cull_view::none) {
             record_result(Composition_pass_result::no_occlusion_view);
             return;
@@ -465,21 +482,27 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
         ERHE_VERIFY(draw_list_scene != nullptr);
         ERHE_VERIFY(context.render_pass != nullptr);
-        const std::optional<glm::mat4> clip_from_world = erhe::scene_renderer::Draw_list_renderer::get_color_clip_from_world(get_color_view_parameters(context));
-        ERHE_VERIFY(clip_from_world.has_value());
-        const std::optional<glm::vec4> eye = erhe::scene_renderer::Draw_list_renderer::get_color_view_eye(get_color_view_parameters(context));
-        ERHE_VERIFY(eye.has_value());
-        draw_list_scene->draw_occlusion(
-            erhe::scene_renderer::Draw_occlusion_parameters{
-                .render_encoder  = *context.encoder,
-                .render_pass     = context.render_pass,
-                .viewport        = context.viewport,
-                .clip_from_world = clip_from_world.value(),
-                .eye             = eye.value(),
-                .cull_view       = prepared.cull_view,
-                .frame_index     = context.app_context.graphics_device->get_frame_index()
-            }
-        );
+        erhe::scene_renderer::Draw_occlusion_parameters occlusion_parameters{
+            .render_encoder = *context.encoder,
+            .render_pass    = context.render_pass,
+            .viewport       = context.viewport,
+            .view_count     = context.views.size(),
+            .cull_view      = prepared.cull_view,
+            .frame_index    = context.app_context.graphics_device->get_frame_index()
+        };
+        ERHE_VERIFY((occlusion_parameters.view_count >= 1) && (occlusion_parameters.view_count <= occlusion_parameters.clip_from_world.size()));
+        const erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters view_parameters = get_color_view_parameters(context);
+        for (std::size_t view = 0; view < occlusion_parameters.view_count; ++view) {
+            erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters one_view = view_parameters;
+            one_view.views = context.views.subspan(view, 1);
+            const std::optional<glm::mat4> clip_from_world = erhe::scene_renderer::Draw_list_renderer::get_color_clip_from_world(one_view);
+            ERHE_VERIFY(clip_from_world.has_value());
+            const std::optional<glm::vec4> eye = erhe::scene_renderer::Draw_list_renderer::get_color_view_eye(one_view);
+            ERHE_VERIFY(eye.has_value());
+            occlusion_parameters.clip_from_world[view] = clip_from_world.value();
+            occlusion_parameters.eye[view]             = eye.value();
+        }
+        draw_list_scene->draw_occlusion(occlusion_parameters);
         if (stats != nullptr) {
             const std::optional<erhe::scene_renderer::Retired_occlusion_counts> counts =
                 draw_list_scene->get_retired_occlusion_counts(get_gpu_command_key(*this, context.scene_view));

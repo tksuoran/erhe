@@ -157,13 +157,17 @@ public:
     erhe::graphics::Render_command_encoder& render_encoder;
     const erhe::graphics::Render_pass*      render_pass    {nullptr};
     erhe::math::Viewport                    viewport       {0, 0, 0, 0};
-    // The view's clip_from_world, as its color passes rasterize with it
-    // (Draw_list_renderer::get_color_clip_from_world()).
-    glm::mat4                               clip_from_world{1.0f};
-    // The camera, homogeneous (Draw_list_renderer::get_color_view_eye()):
-    // (position, 1) for a perspective view, (the camera's +Z axis, 0) for an
-    // orthographic one; the faces of each box toward it are drawn.
-    glm::vec4                               eye            {0.0f, 0.0f, 0.0f, 1.0f};
+    // Per view of the render pass (view_count: 1, or the views of a
+    // multiview render pass, at most
+    // Gpu_cull_classifier::occlusion_max_view_count; all views share
+    // cull_view): its clip_from_world, as its color passes rasterize with it
+    // (Draw_list_renderer::get_color_clip_from_world()), and its camera,
+    // homogeneous (Draw_list_renderer::get_color_view_eye()): (position, 1)
+    // for a perspective view, (the camera's +Z axis, 0) for an orthographic
+    // one; each view draws the faces of each box toward its camera.
+    std::array<glm::mat4, 2>                clip_from_world{glm::mat4{1.0f}, glm::mat4{1.0f}};
+    std::array<glm::vec4, 2>                eye            {glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}, glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    std::size_t                             view_count     {1};
     // The view's culling view, registered for the frame with
     // add_occlusion_view() (verified).
     Cull_view                               cull_view      {Cull_view::none};
@@ -729,12 +733,17 @@ public:
     // color view cull_view of frame_index an occlusion view, whose
     // occlusion pass (draw_occlusion()) the caller draws in the view's
     // render pass. near_plane is the view's inward near plane (world space,
-    // n.xyz + w); key names the pass and view for the retired counts.
-    // Returns cull_view, or none when the frame was not published for the
-    // GPU classification with occlusion on (the caller draws no occlusion
-    // pass then). A view registered twice (two passes of one camera) keeps
-    // one bit; each key gets the view's counts.
-    [[nodiscard]] auto add_occlusion_view(uint64_t frame_index, Cull_view cull_view, const glm::vec4& near_plane, const Gpu_command_key& key) -> Cull_view;
+    // n.xyz + w): an entry is tested only when its grown box lies wholly
+    // beyond it, so for the views of a multiview pass it is a plane beyond
+    // every view's near plane wherever that view sees; key names the pass
+    // and view for the retired counts. view_count is the number of views
+    // the occlusion pass rasterizes (Draw_occlusion_parameters::view_count:
+    // 1, or the views of a multiview render pass). Returns cull_view, or
+    // none when the frame was not published for the GPU classification with
+    // occlusion on, or the occlusion test has no stages for view_count (the
+    // caller draws no occlusion pass then). A view registered twice (two
+    // passes of one camera) keeps one bit; each key gets the view's counts.
+    [[nodiscard]] auto add_occlusion_view(uint64_t frame_index, Cull_view cull_view, const glm::vec4& near_plane, const Gpu_command_key& key, std::size_t view_count) -> Cull_view;
     // Inside the view's render pass, after its last depth-writing color
     // pass: one indexed draw of the camera-facing faces of every entry's
     // box (Gpu_cull_classifier's occlusion pipeline, the slot's index
@@ -1506,6 +1515,11 @@ private:
         Cull_view       cull_view {Cull_view::none};
         glm::vec4       near_plane{0.0f};
         Gpu_command_key key       {};
+        // In an Occlusion_slot's views: the frame's occlusion pass of the
+        // view drew (draw_occlusion()). Only drawn views' words are consumed
+        // by the next frame: an undrawn view's tested entries have no bits
+        // and would all read as occluded.
+        bool            drawn     {false};
     };
     std::vector<Occlusion_view_record>                               m_occlusion_views;
     // Per frame slot: the occlusion words of the slot's last frame with

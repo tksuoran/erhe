@@ -59,6 +59,8 @@ public:
     // records Draw_list_scene::record_frame_end() of every scene registered
     // since the previous call into command_buffer.
     void record_frame_end(erhe::graphics::Command_buffer& command_buffer);
+    // Scenes registered since the last record_frame_end() call.
+    [[nodiscard]] auto has_frame_end_scenes() const -> bool;
 
 private:
     // Cleared (capacity kept) by classify_frame().

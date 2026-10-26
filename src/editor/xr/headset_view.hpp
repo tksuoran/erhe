@@ -63,6 +63,7 @@ class Xr_perf_metric_plot;
 class App_message_bus;
 class App_rendering;
 class App_settings;
+class Composition_pass_views;
 class Fly_camera_tool;
 class Hud;
 class Quad_view;
@@ -430,19 +431,26 @@ private:
     float                                                m_combined_eye_z_near{0.03f};
     float                                                m_combined_eye_z_far {200.0f};
     bool                                                 m_combined_eye_fov_valid{false};
+    std::size_t                                          m_combined_eye_view_count{0};
     // Reused scratch for the early per-frame view locate (cleared + refilled by
     // Headset::locate_views; persists only to keep its capacity across frames).
     std::vector<erhe::xr::Render_view>                   m_located_eye_views;
     // The headset color passes' culling planes of one frame
     // (prepare_cull_planes()): the four padded side planes of the union eye
     // frustum, inward facing, world space (n . x + w >= 0 inside). No near
-    // or far plane: the side planes are the ones that cull.
+    // or far plane: the side planes are the ones that cull. The occlusion
+    // test's near plane (same convention): beyond every eye's near plane
+    // wherever that eye sees (Draw_list_scene::add_occlusion_view()); none
+    // when a padded side is too wide to bound the eyes' near regions.
+    // view_count: the located eye views.
     class Cull_planes
     {
     public:
         uint64_t                 frame_index{std::numeric_limits<uint64_t>::max()};
         uint32_t                 plane_count{0};
         std::array<glm::vec4, 4> planes     {};
+        std::optional<glm::vec4> occlusion_near_plane{};
+        std::size_t              view_count {0};
     };
     // One per frame in flight, indexed by frame index modulo their count:
     // M2 of frame N fills slot N, R of frame N reads it
@@ -454,6 +462,12 @@ private:
     uint64_t                                             m_render_cull_frame_index{std::numeric_limits<uint64_t>::max()};
     const erhe::scene_renderer::Draw_list_scene*         m_render_cull_draw_list_scene{nullptr};
     erhe::scene_renderer::Cull_view                      m_render_cull_view{erhe::scene_renderer::Cull_view::none};
+    // Render-phase state of the same frame: the multiview color passes'
+    // per-pass culling views, GPU command selections and occlusion view
+    // (App_rendering::add_immediate_composer_cull_views(), in
+    // add_render_cull_view()), indexed like the composer's passes; empty
+    // when the frame has no culling view. Capacity kept.
+    std::vector<Composition_pass_views>                  m_render_pass_views;
     // Single-view camera positioned at the controller aim pose each frame,
     // used solely to drive the Id_renderer for skinned-mesh picking (see
     // update_id_render). Not flagged visible / show_in_ui -- it is never

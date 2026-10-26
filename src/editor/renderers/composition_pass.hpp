@@ -33,6 +33,7 @@ struct Render_style_appearance;
 namespace editor {
 
 class App_context;
+class Composition_pass_views;
 class Render_context;
 class Scene_root;
 class Scene_view;
@@ -164,6 +165,11 @@ enum class Composition_pass_result : unsigned int {
 // Composition_pass::render() in the render phase, which then reads none of
 // the pass's live gating state (is_enabled, render style, appearance) and no
 // Mesh (doc/editor/editor.md "Frame phases and the render thread").
+enum class Composition_prepare_scope : unsigned int {
+    full = 0,
+    gating_only
+};
+
 class Composition_pass_prepared
 {
 public:
@@ -274,7 +280,11 @@ public:
     // of context and, for the bucket path, buckets its meshes into
     // out.buckets. host_system_time_ns is the prepared frame's host time (the
     // selection outline pulse).
-    void prepare(const Render_context& context, int64_t host_system_time_ns, Composition_pass_prepared& out) const;
+    // scope gating_only stops after the gating (result, use_draw_lists and
+    // the other path fields) without bucketing: for the decisions a render
+    // phase pre-execute hook registers views from
+    // (Composer::add_immediate_cull_views()).
+    void prepare(const Render_context& context, int64_t host_system_time_ns, Composition_pass_prepared& out, Composition_prepare_scope scope = Composition_prepare_scope::full) const;
 
     // Render phase: draws what prepare() decided for this view and frame.
     virtual void render(const Render_context& context, const Composition_pass_prepared& prepared);
@@ -283,7 +293,9 @@ public:
     // this pass's own scratch: for the callers that render where they
     // prepare - the previews (main thread, M2) and the headset (render
     // phase; doc/editor/render_thread.md section 2.2 lists its live reads).
-    void render_immediate(const Render_context& context);
+    // pass_views: the pass's entry of Render_context::immediate_pass_views,
+    // or null.
+    void render_immediate(const Render_context& context, const Composition_pass_views* pass_views);
     void imgui();
 
     // Implements Item_base

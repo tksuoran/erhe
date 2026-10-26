@@ -35,6 +35,9 @@
 #include "erhe_scene_renderer/light_cluster_gpu_binner.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "windows/frame_pacing_window.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#include "xr/headset_view.hpp"
+#endif
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/display_refresh_resolver.hpp"
@@ -723,6 +726,13 @@ auto Mcp_server::query_occlusion_check(const json& args) -> std::string
                 }
             }
         }
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        // The headset's multiview pass (doc/plans/occlusion_culling.md
+        // "Headset"); the headset view lives as long as the editor.
+        if ((m_context.headset_view != nullptr) && (static_cast<const Scene_view*>(m_context.headset_view) == scene_view)) {
+            scene_view_name = m_context.headset_view->get_settings_key();
+        }
+#endif
         json first_occluded = json::array();
         for (const erhe::scene_renderer::Occlusion_check_entry& entry : view.first_occluded) {
             first_occluded.push_back(json{

@@ -2266,8 +2266,15 @@ public:
         if (m_cull_frame_registry) {
             // The frame's occlusion words (doc/plans/occlusion_culling.md),
             // written by its classification and its views' occlusion
-            // passes, are read by the host once the frame retired.
-            m_cull_frame_registry->record_frame_end(command_buffer);
+            // passes, are read by the host once the frame retired. Under
+            // OpenXR the headset's render submitted the frame command buffer
+            // and recorded this into its own, the frame's last
+            // (Headset_view::render_headset()); nothing is left to record.
+            if (command_buffer.is_recording()) {
+                m_cull_frame_registry->record_frame_end(command_buffer);
+            } else {
+                ERHE_VERIFY(!m_cull_frame_registry->has_frame_end_scenes());
+            }
             m_cull_frame_registry->release_frame_records();
         }
 

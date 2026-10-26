@@ -221,7 +221,7 @@ auto Draw_list_renderer::add_color_occlusion_view(
     const float                    clip_z_min = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
     const std::array<glm::vec4, 6> planes     = erhe::math::extract_frustum_planes(clip_from_world.value(), clip_z_min, 1.0f);
     const glm::vec4&               near_plane = parameters.reverse_depth ? planes[5] : planes[4];
-    return draw_list_scene.add_occlusion_view(frame_index, cull_view, near_plane, key);
+    return draw_list_scene.add_occlusion_view(frame_index, cull_view, near_plane, key, 1);
 }
 
 } // namespace erhe::scene_renderer
