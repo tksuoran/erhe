@@ -92,6 +92,28 @@ or repeat summaries side by side with the deltas and whether their
 editor at a time with nothing building on the host
 (`doc/plans/quest_performance.md` "Measurement rule").
 
+### MCP during a run
+
+`quest_bench.py run` drives the editor over MCP while it runs: with `--mcp
+TOOL[=JSON]` (repeatable), `--load-scene <device path>` or `--mcp-measure
+TOOL[=JSON]` it reads the editor's `MCP server: listening on
+127.0.0.1:<port>` line, waits for frame 12, forwards host port `--mcp-port`
+(default 3743) to it with `adb forward` (removed after the run), makes the
+`--mcp` calls and the scene load (`load_scene`, wait idle,
+`set_headset_scene`) during the warmup and the `--mcp-measure` calls in the
+measured window, storing their replies in the result's `host` block. The
+warmup must outlast the calls (the run fails when the measured window
+starts first). `--bench-to-device` pushes the benchmark file into the
+app's external files directory with plain adb, so a release APK takes a
+new benchmark file without a rebuild; `--editor-args=...` appends editor
+arguments (`--no-scene`). From Git Bash set `MSYS_NO_PATHCONV=1`, or
+device paths such as `/sdcard/...` are rewritten. Example, the Bistro
+frame with a scene file pushed to the device before:
+
+```
+py -3 scripts/quest_bench.py run --bench config/editor/benchmark_bistro.json --bench-to-device --editor-args=--no-scene --mcp "set_culling_classification={\"mode\": \"gpu\"}" --load-scene /sdcard/Android/data/org.libsdl.app.quest/files/<dir>/<scene>.glb --mcp-measure get_composition_passes
+```
+
 ### Off-head runs
 
 An automated run (Launch protocol above) wraps each launch in this
