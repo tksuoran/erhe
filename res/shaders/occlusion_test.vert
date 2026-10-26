@@ -12,10 +12,13 @@
 // and template corner index % 7, and the post-transform cache shares the
 // corners between the faces: 7 vertex invocations per entry.
 //
-// occlusion_view.clip_from_world: the view's clip_from_world, as its color
+// occlusion_view.clip_from_world[v]: view v's clip_from_world, as its color
 // passes' camera block and its culling view are built from it.
-// occlusion_view.eye: the camera, homogeneous: (position, 1) for a
-// perspective view, (the camera's +Z axis, 0) for an orthographic one. The
+// occlusion_view.eye[v]: view v's camera, homogeneous: (position, 1) for a
+// perspective view, (the camera's +Z axis, 0) for an orthographic one. v is
+// c_view_index: gl_ViewIndex in a multiview render pass (ERHE_MULTIVIEW, the
+// headset's eyes, which share one culling view and so one bit), else 0. The
+// faces are chosen per view: each eye rasterizes the faces toward it. The
 // faces toward the camera on axis k are on the side sign(eye_k - center_k *
 // eye_w) (either side when 0: the camera is in the plane, the faces of
 // that axis are edge-on). Mirroring an odd number of axes reverses the
@@ -30,6 +33,7 @@
 // such a box reaches the near plane, so the classification marks the entry
 // visible without a test.
 
+#include "erhe_camera_view.glsl"
 #include "erhe_occlusion_bounds.glsl"
 
 layout(location = 0) flat out uint v_word;
@@ -58,7 +62,7 @@ void main()
     vec4 extent_w = cull_bounds.bounds[(2u * entry) + 1u];
     vec3 center   = center_w.xyz;
     vec3 extent   = occlusion_grown_extent(center, extent_w.xyz);
-    vec4 eye      = occlusion_view.eye;
+    vec4 eye      = occlusion_view.eye[c_view_index];
     vec3 toward   = eye.xyz - (center * eye.w);
     vec3 facing   = vec3(
         (toward.x >= 0.0) ? 1.0 : -1.0,
@@ -70,5 +74,5 @@ void main()
         float((corner >> 1u) & 1u),
         float((corner >> 2u) & 1u)
     ) * 2.0 - vec3(1.0)) * facing;
-    gl_Position = occlusion_view.clip_from_world * vec4(center + (side * extent), 1.0);
+    gl_Position = occlusion_view.clip_from_world[c_view_index] * vec4(center + (side * extent), 1.0);
 }

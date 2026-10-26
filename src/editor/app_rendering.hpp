@@ -144,6 +144,17 @@ public:
     // Render phase, from a view's rendergraph node's pre-execute hook: the
     // view's color culling views of the frame (Composer::add_cull_views()).
     void add_composer_cull_views(const Render_context& context, Composer_prepared& prepared);
+    // Render phase, from the headset's rendergraph node's pre-execute hook:
+    // the per-pass views of a view that renders its passes immediately
+    // (Composer::add_immediate_cull_views()).
+    void add_immediate_composer_cull_views(
+        const Render_context&                  context,
+        erhe::scene_renderer::Draw_list_scene& draw_list_scene,
+        erhe::scene_renderer::Cull_view        cull_view,
+        const glm::vec4&                       occlusion_near_plane,
+        std::size_t                            view_count,
+        std::vector<Composition_pass_views>&   out
+    );
     // Main thread: Scene_image_view lists itself for prepare_composition()
     // for its lifetime.
     void register_scene_image_view  (Scene_image_view* scene_image_view);

@@ -5,6 +5,7 @@
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_graphics/device.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 
 #include "erhe_profile/profile.hpp"
@@ -185,6 +186,65 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
     prepared.cull_views_added = true;
 }
 
+void Composer::add_immediate_cull_views(
+    const Render_context&                  context,
+    erhe::scene_renderer::Draw_list_scene& draw_list_scene,
+    const erhe::scene_renderer::Cull_view  cull_view,
+    const glm::vec4&                       occlusion_near_plane,
+    const std::size_t                      view_count,
+    std::vector<Composition_pass_views>&   out
+)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_render_thread();
+
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mutex};
+
+    // Leaf-function scratch (AGENTS.md): the gating decisions of one pass,
+    // read right after prepare() wrote them. gating_only leaves the buckets
+    // empty.
+    static thread_local Composition_pass_prepared s_gating;
+
+    const uint64_t frame_index = context.app_context.graphics_device->get_frame_index();
+    out.resize(composition_passes.size());
+    for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
+        const Composition_pass& composition_pass = *composition_passes[i].get();
+        Composition_pass_views& pass_views = out[i];
+        pass_views = Composition_pass_views{};
+        if ((cull_view == erhe::scene_renderer::Cull_view::none) || !is_drawn_for_content(composition_pass, context.content)) {
+            continue;
+        }
+        composition_pass.prepare(context, context.app_context.render_phase_host_system_time_ns, s_gating, Composition_prepare_scope::gating_only);
+        if (s_gating.result != Composition_pass_result::submitted) {
+            continue;
+        }
+        const std::shared_ptr<Scene_root>& pass_scene_root = composition_pass.data.override_scene_root
+            ? composition_pass.data.override_scene_root
+            : context.scene_root;
+        if (!pass_scene_root || (pass_scene_root->get_draw_list_scene() != &draw_list_scene)) {
+            continue; // another draw list scene: unculled, CPU-written commands
+        }
+        const erhe::scene_renderer::Gpu_command_key key = get_gpu_command_key(composition_pass, context.scene_view);
+        if (composition_pass.data.kind == Composition_pass_kind::occlusion_test) {
+            pass_views.cull_view = draw_list_scene.add_occlusion_view(frame_index, cull_view, occlusion_near_plane, key, view_count);
+            continue;
+        }
+        if (!s_gating.use_draw_lists) {
+            continue;
+        }
+        pass_views.cull_view         = cull_view;
+        pass_views.command_selection = context.app_context.draw_list_renderer->add_color_command_selection(
+            draw_list_scene,
+            frame_index,
+            cull_view,
+            composition_pass.data.filter,
+            composition_pass.data.mesh_layers,
+            get_draw_blending_selection(composition_pass.data),
+            key
+        );
+    }
+}
+
 void Composer::prepare(const Render_context& context, const int64_t host_system_time_ns, Composer_prepared& out)
 {
     ERHE_PROFILE_FUNCTION();
@@ -233,7 +293,7 @@ void Composer::render(const Render_context& context, const bool include_content,
         if (prepared != nullptr) {
             composition_pass.render(context, prepared->passes[i]);
         } else {
-            composition_pass.render_immediate(context);
+            composition_pass.render_immediate(context, (i < context.immediate_pass_views.size()) ? &context.immediate_pass_views[i] : nullptr);
         }
     }
 }

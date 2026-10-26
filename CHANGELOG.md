@@ -33,6 +33,7 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Cull_frame_registry::has_frame_end_scenes()`.
 - `erhe::primitive`: `Base_mesh_build` (`enums.hpp`);
   `Primitive_render_shape::install_deferred_base_mesh()`,
   `is_base_deferred()`, `claim_base_build_request()`,
@@ -986,6 +987,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Draw_occlusion_parameters::clip_from_world` and
+  `eye` are arrays of `Gpu_cull_classifier::occlusion_max_view_count` (2)
+  with `view_count`: one occlusion draw serves the views of a multiview
+  render pass. `Draw_list_scene::add_occlusion_view()` takes the view count
+  and returns `Cull_view::none` when the occlusion test has no stages for
+  it. `Gpu_cull_classifier::get_occlusion_shader_stages()` takes the view
+  count and returns a pointer (null: no multiview stages). A frame's
+  occlusion words are consumed by the next frame only when its occlusion
+  pass drew them.
 - `erhe::primitive`: `Primitive_shape::get_triangle_soup()` returns the soup
   by value (`std::shared_ptr<Triangle_soup>`) and reads a released soup back
   from its source.

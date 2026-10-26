@@ -49,6 +49,17 @@ enum class Render_content : unsigned int {
     scene_surfaces
 };
 
+// One composition pass's culling view and GPU command selection of a frame,
+// registered before the frame's classification by a view that renders its
+// passes where it prepares them (the headset: Composer::
+// add_immediate_cull_views(); Render_context::immediate_pass_views).
+class Composition_pass_views
+{
+public:
+    erhe::scene_renderer::Cull_view            cull_view        {erhe::scene_renderer::Cull_view::none};
+    erhe::scene_renderer::Command_selection_id command_selection{erhe::scene_renderer::Command_selection_id::none};
+};
+
 class Render_context
 {
 public:
@@ -98,6 +109,13 @@ public:
     // the prepared passes' own views instead.
     const erhe::scene_renderer::Draw_list_scene* immediate_cull_draw_list_scene{nullptr};
     erhe::scene_renderer::Cull_view         immediate_cull_view{erhe::scene_renderer::Cull_view::none};
+    // The headset's per-pass views of the frame (Composer::
+    // add_immediate_cull_views(), from the same hook), indexed like
+    // Composer::composition_passes: render_immediate() draws a draw-list
+    // pass with its entry's culling view and GPU command selection, and an
+    // occlusion test pass with its entry's occlusion view. Empty: the
+    // immediate_cull_view rule above.
+    std::span<const Composition_pass_views> immediate_pass_views{};
 
 };
 

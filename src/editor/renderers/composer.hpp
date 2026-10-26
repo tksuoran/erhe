@@ -14,6 +14,7 @@
 
 namespace editor {
 
+class Composition_pass_views;
 class Render_context;
 class Composition_pass;
 
@@ -100,6 +101,26 @@ public:
     // Composition_pass_prepared::cull_view. context is the view's render
     // context of the frame, the one its render calls draw with.
     void add_cull_views(const Render_context& context, Composer_prepared& prepared);
+
+    // Render phase, from the headset's rendergraph node's pre-execute hook
+    // (before the frame's culling classification), for a view that renders
+    // its passes immediately (render_immediate()): per pass, from the
+    // pass's gating for context (Composition_pass::prepare() gating_only,
+    // the decisions render_immediate() then repeats), out[i] of a
+    // draw-list pass of draw_list_scene gets cull_view and the pass's GPU
+    // command selection (Draw_list_renderer::add_color_command_selection()),
+    // the occlusion test pass gets cull_view made an occlusion view
+    // (Draw_list_scene::add_occlusion_view() with occlusion_near_plane and
+    // view_count, the views the pass rasterizes), the others none. out is
+    // resized to the passes (capacity kept).
+    void add_immediate_cull_views(
+        const Render_context&                  context,
+        erhe::scene_renderer::Draw_list_scene& draw_list_scene,
+        erhe::scene_renderer::Cull_view        cull_view,
+        const glm::vec4&                       occlusion_near_plane,
+        std::size_t                            view_count,
+        std::vector<Composition_pass_views>&   out
+    );
 
     void imgui();
 

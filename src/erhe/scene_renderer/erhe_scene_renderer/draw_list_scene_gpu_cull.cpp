@@ -412,7 +412,7 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                     record[9] = glm::vec4{1.0f, 0.0f, 0.0f, 0.0f};
                     if (previous_slot != nullptr) {
                         for (const Occlusion_view_record& previous_view : previous_slot->views) {
-                            if (previous_view.key == occlusion_view.key) {
+                            if ((previous_view.key == occlusion_view.key) && previous_view.drawn) {
                                 const uint32_t previous_index = static_cast<uint32_t>(previous_view.cull_view);
                                 record[9] = glm::vec4{1.0f, 1.0f, static_cast<float>(previous_index / 64), static_cast<float>(previous_index % 64)};
                                 break;
@@ -1400,11 +1400,23 @@ auto Draw_list_scene::add_occlusion_view(
     const uint64_t         frame_index,
     const Cull_view        cull_view,
     const glm::vec4&       near_plane,
-    const Gpu_command_key& key
+    const Gpu_command_key& key,
+    const std::size_t      view_count
 ) -> Cull_view
 {
     assert_render_phase();
     if (cull_view == Cull_view::none) {
+        return Cull_view::none;
+    }
+    // A registered view's pass must draw (draw_occlusion()): the next
+    // frame's classification culls every tested entry no fragment marked.
+    if (
+        (m_gpu_cull_classifier == nullptr) ||
+        (view_count < 1) ||
+        (view_count > Gpu_cull_classifier::occlusion_max_view_count) ||
+        !m_gpu_cull_classifier->is_occlusion_supported() ||
+        (m_gpu_cull_classifier->get_occlusion_shader_stages(view_count) == nullptr)
+    ) {
         return Cull_view::none;
     }
     // Given with the frame's views, before their classification.
@@ -1535,7 +1547,7 @@ void Draw_list_scene::draw_occlusion(const Draw_occlusion_parameters& parameters
     ERHE_VERIFY(std::ranges::any_of(m_occlusion_views, [&parameters](const Occlusion_view_record& record) -> bool { return record.cull_view == parameters.cull_view; }));
     ERHE_VERIFY(parameters.render_pass != nullptr);
     const Draw_list_slot& slot           = get_published_slot(parameters.frame_index);
-    const Occlusion_slot& occlusion_slot = m_occlusion_slots[parameters.frame_index % m_occlusion_slots.size()];
+    Occlusion_slot& occlusion_slot = m_occlusion_slots[parameters.frame_index % m_occlusion_slots.size()];
     ERHE_VERIFY(occlusion_slot.pending && (occlusion_slot.frame_index == parameters.frame_index));
     ERHE_VERIFY(occlusion_slot.entry_count == slot.entry_count);
     if (slot.entry_count == 0) {
@@ -1545,10 +1557,15 @@ void Draw_list_scene::draw_occlusion(const Draw_occlusion_parameters& parameters
     Gpu_cull_classifier&    classifier = *m_gpu_cull_classifier;
     Render_command_encoder& encoder    = parameters.render_encoder;
     const Vertex_input_entry& empty_vertex_input = m_mesh_memory.get_empty_vertex_input();
+    static_assert(std::tuple_size_v<decltype(parameters.clip_from_world)> == Gpu_cull_classifier::occlusion_max_view_count);
+    ERHE_VERIFY((parameters.view_count >= 1) && (parameters.view_count <= Gpu_cull_classifier::occlusion_max_view_count));
+    // add_occlusion_view() registered the view only with stages for it.
+    const Shader_stages* const shader_stages = classifier.get_occlusion_shader_stages(parameters.view_count);
+    ERHE_VERIFY(shader_stages != nullptr);
     Render_pipeline* const pipeline = classifier.get_occlusion_pipeline().get_pipeline_for(
         parameters.render_pass->get_descriptor(),
         &Color_blend_state::color_writes_disabled,
-        &classifier.get_occlusion_shader_stages(),
+        shader_stages,
         empty_vertex_input.vertex_input.get(),
         &empty_vertex_input.vertex_format
     );
@@ -1566,8 +1583,10 @@ void Draw_list_scene::draw_occlusion(const Draw_occlusion_parameters& parameters
     Ring_buffer_range view_range = classifier.get_occlusion_view_buffer().acquire(Ring_buffer_usage::CPU_write, classifier.get_occlusion_view_block_bytes());
     {
         const std::span<std::byte> gpu_data = view_range.get_span();
-        std::memcpy(gpu_data.data() + classifier.get_occlusion_clip_from_world_offset(), &parameters.clip_from_world, sizeof(glm::mat4));
-        std::memcpy(gpu_data.data() + classifier.get_occlusion_eye_offset(),             &parameters.eye,             sizeof(glm::vec4));
+        // std140 array strides: a mat4, a vec4. Unused views are written too
+        // (the block's whole size is written).
+        std::memcpy(gpu_data.data() + classifier.get_occlusion_clip_from_world_offset(), parameters.clip_from_world.data(), sizeof(parameters.clip_from_world));
+        std::memcpy(gpu_data.data() + classifier.get_occlusion_eye_offset(),             parameters.eye.data(),             sizeof(parameters.eye));
         std::memcpy(gpu_data.data() + classifier.get_occlusion_info_offset(),            &info,                       sizeof(glm::uvec4));
         view_range.bytes_written(classifier.get_occlusion_view_block_bytes());
         view_range.close();
@@ -1591,6 +1610,13 @@ void Draw_list_scene::draw_occlusion(const Draw_occlusion_parameters& parameters
         0
     );
     view_range.release();
+    // The next frame may consume this view's words (every key of the view:
+    // they share its bit).
+    for (Occlusion_view_record& record : occlusion_slot.views) {
+        if (record.cull_view == parameters.cull_view) {
+            record.drawn = true;
+        }
+    }
 }
 
 void Draw_list_scene::record_frame_end(const uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer)

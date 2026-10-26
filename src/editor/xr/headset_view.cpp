@@ -17,6 +17,7 @@
 #include "quad_view.hpp"
 #include "rendertarget_imgui_host.hpp"
 #include "renderers/id_renderer.hpp"
+#include "erhe_scene_renderer/cull_frame_registry.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/draw_list_key.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
@@ -1458,9 +1459,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     .viewport            = viewport_xy,
                     .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
                     .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
-                    // The union eye frustum's culling view (add_render_cull_view()).
+                    // The union eye frustum's culling view and the passes'
+                    // views (add_render_cull_view()).
                     .immediate_cull_draw_list_scene = m_render_cull_draw_list_scene,
-                    .immediate_cull_view            = m_render_cull_view
+                    .immediate_cull_view            = m_render_cull_view,
+                    .immediate_pass_views           = std::span<const Composition_pass_views>{m_render_pass_views}
                 };
                 // No post-processing in VR: render content + overlay (tool /
                 // rendertarget) in one pass. Tool / rendertarget passes still
@@ -1478,6 +1481,14 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             }
             if (drive_wide_lines) {
                 content_wide_line_renderer->end_frame();
+            }
+            // views_cb is the frame's last command buffer: Xr_session ends
+            // and submits it (and submitted the frame command buffer before
+            // it began), so the frame's occlusion words are ordered for the
+            // host here, after this pass's occlusion test
+            // (doc/plans/occlusion_culling.md "Headset").
+            if (m_app_context.cull_frame_registry != nullptr) {
+                m_app_context.cull_frame_registry->record_frame_end(views_cb);
             }
             // The frame slot's buffers are released by the editor at the
             // end of the render phase (Debug_renderer::release_frames).
@@ -1892,6 +1903,7 @@ void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_v
     }
 
     m_combined_eye_fov_sides = erhe::scene::Projection::Fov_sides{fov_left, fov_right, fov_up, fov_down};
+    m_combined_eye_view_count = views.size();
     m_combined_eye_z_near    = z_near;
     m_combined_eye_z_far     = z_far;
     m_combined_eye_fov_valid = true;
@@ -1922,6 +1934,9 @@ constexpr float c_cull_position_margin = 0.1f;
 // A padded side this far or farther from the view axis bounds nothing
 // useful; it gets no plane (keeps more, never less).
 constexpr float c_cull_max_side_angle  = 1.5533430f; // 89 degrees in radians
+// The occlusion test's near plane (prepare_cull_planes()) lies this much
+// beyond the farthest point of any eye's near region it must exclude.
+constexpr float c_occlusion_near_margin = 0.02f;
 
 }
 
@@ -1964,6 +1979,28 @@ void Headset_view::prepare_cull_planes(const glm::mat4& world_from_head)
     add_plane(up,    glm::vec4{ 0.0f,           -std::cos(up),   -std::sin(up),    c_cull_position_margin});
     // y >= -z tan(down)
     add_plane(down,  glm::vec4{ 0.0f,            std::cos(down),  std::sin(down),  c_cull_position_margin});
+
+    // The occlusion test tests only entries whose grown box lies wholly
+    // beyond its near plane: a box an eye is inside, or one crossing an
+    // eye's near plane where that eye sees, has no front faces to rasterize
+    // there and must stay visible untested. Inside an eye's frustum the
+    // points before its near plane lie within near_reach of the eye (the
+    // distance to the near plane's farthest corner, bounded with the padded
+    // union sides), and every eye lies within the positional margin of the
+    // head origin, so the head-space plane -z = d with d beyond both bounds
+    // them all, canted eyes included.
+    slot.view_count = m_combined_eye_view_count;
+    slot.occlusion_near_plane.reset();
+    const float horizontal = std::max(-left, right);
+    const float vertical   = std::max(up, -down);
+    if ((horizontal < c_cull_max_side_angle) && (vertical < c_cull_max_side_angle)) {
+        const float tan_horizontal = std::tan(horizontal);
+        const float tan_vertical   = std::tan(vertical);
+        const float near_reach     = m_combined_eye_z_near * std::sqrt(1.0f + (tan_horizontal * tan_horizontal) + (tan_vertical * tan_vertical));
+        const float distance       = c_cull_position_margin + near_reach + c_occlusion_near_margin;
+        // -z - distance >= 0 beyond the plane.
+        slot.occlusion_near_plane = plane_world_from_head * glm::vec4{0.0f, 0.0f, -1.0f, -distance};
+    }
 }
 
 void Headset_view::add_render_cull_view()
@@ -1975,6 +2012,7 @@ void Headset_view::add_render_cull_view()
     m_render_cull_frame_index     = frame_index;
     m_render_cull_draw_list_scene = nullptr;
     m_render_cull_view            = erhe::scene_renderer::Cull_view::none;
+    m_render_pass_views.clear();
 
     // The gates render_headset() renders the scene under. m_frame_timing is
     // R-side state here: begin_frame() stores the timing at the start of this
@@ -2007,6 +2045,36 @@ void Headset_view::add_render_cull_view()
         std::span<const glm::vec4>{slot.planes.data(), slot.plane_count}
     );
     m_render_cull_draw_list_scene = draw_list_scene;
+
+    // The multiview pass's per-pass views: GPU command selections of its
+    // draw-list passes, and its occlusion test's view (the eyes share the
+    // union view, so one bit; doc/plans/occlusion_culling.md "Headset").
+    // The gating context matches the one render_headset() renders with in
+    // what the passes' gating reads (settings, viewport config, scene root,
+    // shader debug, the culling view).
+    if (!m_use_multiview) {
+        return;
+    }
+    const Render_context gating_context{
+        .app_context                    = m_app_context,
+        .scene_view                     = *this,
+        .viewport_config                = m_viewport_config,
+        .scene_root                     = scene_root,
+        .shader_debug                   = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
+        .immediate_cull_draw_list_scene = m_render_cull_draw_list_scene,
+        .immediate_cull_view            = m_render_cull_view
+    };
+    // Without an occlusion near plane this frame: a plane nothing lies
+    // beyond, so the occlusion test tests no entry and all stay visible.
+    const glm::vec4 no_test_near_plane{0.0f, 0.0f, 0.0f, -1.0f};
+    m_app_context.app_rendering->add_immediate_composer_cull_views(
+        gating_context,
+        *draw_list_scene,
+        m_render_cull_view,
+        slot.occlusion_near_plane.value_or(no_test_near_plane),
+        slot.view_count,
+        m_render_pass_views
+    );
 }
 
 void Headset_view::update_root_camera_projection()
