@@ -6,6 +6,9 @@ Subcommands:
     py -3 scripts/quest_bench.py run --bench config/editor/benchmark_orbit.json
             [--scene config/editor/commands_bench_heavy.json]
             [--worn] [--gpu-metrics] [--repeat N] [--push] [--timeout S]
+            [--bench-to-device] [--editor-args "..."]
+            [--mcp TOOL[=JSON]]... [--load-scene <device path>]
+            [--mcp-measure TOOL[=JSON]]...
         Launches the installed editor APK with
         `--benchmark <bench> [--commands <scene>]` (the launch intent's `args`
         extra, ErheActivity.getArguments()), N times, one launch each. Each run:
@@ -47,6 +50,31 @@ Subcommands:
                      benchmark or commands file needs a rebuild and a clean
                      reinstall (the APK's config/ files are migrated to the
                      writable directory only when missing there).
+        --bench-to-device  copies the local benchmark file with plain adb push
+                     to BENCH_DEVICE_DIR (the app's external files directory,
+                     writable without run-as, so a release APK works) and
+                     passes that absolute path to --benchmark.
+        --editor-args  extra editor arguments appended to the launch args,
+                     e.g. "--no-scene".
+
+        MCP during the run (doc/agents/quest.md "Reaching the MCP server on
+        the device"): with any of --mcp, --load-scene or --mcp-measure, the
+        run waits for the editor's `MCP server: listening on 127.0.0.1:<port>`
+        line and frame 12, forwards host port --mcp-port to that device port
+        (adb forward; removed after the run) and makes the calls during the
+        benchmark's warmup, in this order:
+        --mcp TOOL[=JSON]  (repeatable) e.g.
+                     'set_graphics_preset={"light_shading": "clustered"}'.
+        --load-scene PATH  load_scene of a file on the device (absolute
+                     path), waits until it is listed and get_async_status is
+                     idle, then set_headset_scene to it. The benchmark file's
+                     warmup_frames must outlast this (the settle that starts
+                     the measured window waits only for loads already in
+                     flight): the run fails when the settle line came first.
+        --mcp-measure TOOL[=JSON]  (repeatable) calls made once the measured
+                     window started (reset_composition_pass_stats first, then
+                     a 3 s wait); the replies are stored in the result's
+                     host.mcp_measure.
 
     py -3 scripts/quest_bench.py compare a.json b.json
         Prints two results (or repeat summaries) side by side with deltas, and
@@ -76,6 +104,10 @@ ACT = PKG + "/org.libsdl.app.ErheActivity"
 # Where the editor writes benchmark results on Android: the app's external
 # files directory (SDL_GetAndroidExternalStoragePath()) + /logs.
 RESULT_DIR = f"/sdcard/Android/data/{PKG}/files/logs"
+# Where --bench-to-device puts the benchmark file (plain adb push).
+BENCH_DEVICE_DIR = f"/sdcard/Android/data/{PKG}/files/bench"
+MCP_LISTEN_RE = re.compile(r"MCP server: listening on 127\.0\.0\.1:(\d+)")
+MCP_READY_LINE = "Main loop: completed frame 12"
 CAPTURE_APPEAR_TIMEOUT_S = 10.0
 
 # Terms of the result JSON "summary", in print order.
@@ -337,6 +369,54 @@ def launch(editor_args: str) -> None:
         raise RuntimeError(f"am start failed: {result.stdout.strip()} {result.stderr.strip()}")
 
 
+def push_bench_to_device(local_path: str) -> str:
+    """Copies the benchmark file into BENCH_DEVICE_DIR; returns the device path."""
+    source = REPO_ROOT / local_path
+    if not source.exists():
+        raise RuntimeError(f"--bench-to-device: {source} not found")
+    # The app creates its external files directory on its first run; a
+    # directory the shell made first is not readable by the app.
+    if adb_shell(f"ls -d /sdcard/Android/data/{PKG}/files").returncode != 0:
+        raise RuntimeError(f"/sdcard/Android/data/{PKG}/files missing: run any benchmark once so the app creates it")
+    adb_shell(f"mkdir -p {BENCH_DEVICE_DIR}")
+    device_path = f"{BENCH_DEVICE_DIR}/{source.name}"
+    adb("push", str(source), device_path, check=True)
+    adb_shell(f"chmod -R a+rX {BENCH_DEVICE_DIR}")
+    print(f"pushed {local_path} -> {device_path}")
+    return device_path
+
+
+def parse_mcp_call(text: str) -> tuple:
+    tool, separator, arguments = text.partition("=")
+    return tool.strip(), (json.loads(arguments) if separator else {})
+
+
+def mcp_call(port: int, tool: str, arguments: dict | None = None):
+    # The client of scripts/scene_load_profile.py (mcp_call.py, base64 args).
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import scene_load_profile
+    return scene_load_profile.mcp(port, tool, arguments)
+
+
+def uses_mcp(args) -> bool:
+    return bool(args.mcp or args.load_scene or args.mcp_measure)
+
+
+def mcp_load_scene(port: int, path: str, timeout_s: float) -> dict:
+    """load_scene, wait until listed and idle, set_headset_scene."""
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import scene_load_profile
+    reply = mcp_call(port, "load_scene", {"path": path})
+    if not (isinstance(reply, dict) and reply.get("queued")):
+        raise RuntimeError(f"load_scene {path} refused: {reply}")
+    scene_name = reply.get("scene_name", "")
+    listed_s, idle_s = scene_load_profile.wait_until_settled(port, path, timeout_s)
+    if idle_s is None:
+        raise RuntimeError(f"load_scene {path}: not idle within {timeout_s:.0f} s (listed {listed_s})")
+    headset = mcp_call(port, "set_headset_scene", {"scene_name": scene_name})
+    return {"path": path, "scene_name": scene_name, "listed_s": round(listed_s, 2), "idle_s": round(idle_s, 2), "set_headset_scene": headset}
+
+
 def fill_identity(result: dict) -> None:
     identity = result.setdefault("identity", {})
     if not identity.get("device_model"):
@@ -347,14 +427,18 @@ def fill_identity(result: dict) -> None:
 
 def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
     name = bench["name"]
-    editor_args = f"--benchmark {args.bench}"
+    editor_args = f"--benchmark {args.device_bench}"
     if args.scene:
         editor_args += f" --commands {args.scene}"
+    if args.editor_args:
+        editor_args += f" {args.editor_args}"
     refresh_hz = float(bench.get("display_refresh_rate_hz", 72.0))
     measure_seconds = int(bench.get("measure_frames", 600) / refresh_hz) + 3
 
     capture_path = None
     profiler = None
+    forwarded = False
+    mcp_host = {}
     try:
         adb_shell(f"am force-stop {PKG}")
         adb_shell(f"rm -f {RESULT_DIR}/benchmark_{name}.json")
@@ -368,8 +452,22 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
         launch(editor_args)
         deadline = time.monotonic() + args.timeout
         outcome = None
+        settled = False
+        device_port = None
+        mcp_ready = False
+        warmup_done = not uses_mcp(args)
+        measure_done = not args.mcp_measure
         while time.monotonic() < deadline:
             for line in tail.new_lines():
+                match = MCP_LISTEN_RE.search(line)
+                if match:
+                    device_port = int(match.group(1))
+                if MCP_READY_LINE in line:
+                    mcp_ready = True
+                if f"Benchmark {name}: scene settled" in line:
+                    settled = True
+                    if not warmup_done:
+                        raise RuntimeError(f"the measured window started before the warmup MCP calls finished: raise warmup_frames (capture {capture_path})")
                 if args.gpu_metrics and (profiler is None) and (f"Benchmark {name}: scene settled" in line):
                     profiler = Gpu_profiler(gpu_metric_ids(args.gpu_metric_ids), measure_seconds)
                     profiler.start()
@@ -384,6 +482,31 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
                     print(f"[{run_index}] crash marker: {line}")
             if outcome is not None:
                 break
+            if (not warmup_done) and mcp_ready and (device_port is not None):
+                adb("forward", f"tcp:{args.mcp_port}", f"tcp:{device_port}", check=True)
+                forwarded = True
+                print(f"[{run_index}] MCP: host tcp:{args.mcp_port} -> device tcp:{device_port}")
+                mcp_host["warmup"] = []
+                for call in args.mcp:
+                    tool, arguments = parse_mcp_call(call)
+                    reply = mcp_call(args.mcp_port, tool, arguments)
+                    print(f"[{run_index}] MCP {tool}: {json.dumps(reply)[:300]}")
+                    mcp_host["warmup"].append({"tool": tool, "arguments": arguments, "reply": reply})
+                if args.load_scene:
+                    mcp_host["load_scene"] = mcp_load_scene(args.mcp_port, args.load_scene, args.timeout)
+                    print(f"[{run_index}] MCP load_scene: {json.dumps(mcp_host['load_scene'])}")
+                warmup_done = True
+                continue  # lines that arrived during the calls are read next pass
+            if settled and (not measure_done):
+                mcp_call(args.mcp_port, "reset_composition_pass_stats")
+                time.sleep(3.0)
+                mcp_host["measure"] = []
+                for call in args.mcp_measure:
+                    tool, arguments = parse_mcp_call(call)
+                    mcp_host["measure"].append({"tool": tool, "arguments": arguments, "reply": mcp_call(args.mcp_port, tool, arguments)})
+                print(f"[{run_index}] MCP measure calls done ({len(args.mcp_measure)})")
+                measure_done = True
+                continue
             time.sleep(0.5)  # polling the capture file, not waiting for readiness
         if outcome is None:
             raise RuntimeError(f"no benchmark result within {args.timeout} s (capture {capture_path})")
@@ -407,6 +530,10 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
             "scene": args.scene or "",
             "capture": str(capture_path),
             "gpu_metrics": profiler.join() if profiler is not None else {},
+            "editor_args": editor_args,
+            "mcp_warmup": mcp_host.get("warmup", []),
+            "load_scene": mcp_host.get("load_scene", {}),
+            "mcp_measure": mcp_host.get("measure", []),
         }
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
         out_path = RUNS_DIR / f"{stamp}_{name}_{run_index}.json"
@@ -419,6 +546,8 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
         restore_steps = [off_head_end] if not args.worn else [lambda: adb_shell(f"am force-stop {PKG}")]
         if "display_refresh_rate_hz" in bench:
             restore_steps.append(refresh_rate_end)
+        if forwarded:
+            restore_steps.append(lambda: adb("forward", "--remove", f"tcp:{args.mcp_port}"))
         restore_steps.append(stop_logcat)
         for step in restore_steps:
             try:
@@ -491,6 +620,7 @@ def cmd_run(args) -> int:
         push_config(args.bench)
         if args.scene:
             push_config(args.scene)
+    args.device_bench = push_bench_to_device(args.bench) if args.bench_to_device else args.bench
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     results = []
     for run_index in range(args.repeat):
@@ -545,6 +675,12 @@ def main() -> int:
     run.add_argument("--repeat", type=int, default=1, help="number of runs (one launch each)")
     run.add_argument("--push", action="store_true", help="copy the local --bench / --scene files over the device's writable copies first")
     run.add_argument("--timeout", type=float, default=600.0, help="seconds to wait for the result line per run")
+    run.add_argument("--bench-to-device", action="store_true", help="adb push the benchmark file to the app's external files directory and pass that path (works on a release APK)")
+    run.add_argument("--editor-args", default="", help="extra editor arguments, e.g. --no-scene")
+    run.add_argument("--mcp", action="append", default=[], metavar="TOOL[=JSON]", help="MCP call made during the warmup (repeatable)")
+    run.add_argument("--load-scene", default="", help="device path of a scene file: load_scene, wait idle, set_headset_scene during the warmup")
+    run.add_argument("--mcp-measure", action="append", default=[], metavar="TOOL[=JSON]", help="MCP call made in the measured window, reply stored in the result (repeatable)")
+    run.add_argument("--mcp-port", type=int, default=3743, help="host port forwarded to the device's MCP port")
     run.set_defaults(func=cmd_run)
 
     compare = sub.add_parser("compare", help="compare two result files (or repeat summaries)")

@@ -1,0 +1,15 @@
+{
+    "_comment": "Bistro on Quest (doc/agents/quest.md 'Benchmark runs', MCP during a run): run with --editor-args --no-scene --bench-to-device --load-scene <device path of the Save for Quest Bistro file>. The long warmup covers the load over MCP. Pose = the desktop Bistro bench camera of scripts/bistro_frame_bench.py.",
+    "name": "bistro",
+    "warmup_frames": 1500,
+    "measure_frames": 600,
+    "frame_dt": 0.013888889,
+    "settle_timeout_frames": 3600,
+    "passthrough": false,
+    "camera_path": {
+        "type": "keyframes",
+        "frames": [
+            { "frame": 0, "position": [-29.281, 9.677, -16.337], "yaw_pitch_roll_deg": [-134.604, -11.153, 0.0] }
+        ]
+    }
+}
