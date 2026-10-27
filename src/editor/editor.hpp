@@ -46,7 +46,8 @@ void run_editor(
     bool               force_post_processing_off = false,
     bool               fix_gltf_spot_lights      = false,
     const std::string& benchmark_path            = "",
-    Headset_culling    headset_culling           = Headset_culling::enabled
+    Headset_culling    headset_culling           = Headset_culling::enabled,
+    const std::string& shader_variant_browser_directory = ""
 );
 
 }

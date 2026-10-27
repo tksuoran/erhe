@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Graphics_config",
     reflect=True,
-    version=4,
+    version=5,
     short_desc="Graphics Settings",
     long_desc="",
     developer=False,
@@ -154,6 +154,16 @@ struct("Graphics_config",
             default="false",
             short_desc="Optimize SPIR-V (profiling)",
             long_desc="Run the SPIRV-Tools optimizer's performance passes on every shader stage after glslang (the shader interface and the non-semantic debug info are kept, so GPU profilers still map samples to source lines; an optimized module that fails validation is logged and the unoptimized one is used). For profiling runs: the editor's --benchmark mode turns it on, and the environment variable ERHE_SPIRV_OPTIMIZATION=1|0 overrides the file. Optimized and unoptimized SPIR-V are cached under different keys. Change requires restart.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "shader_variant_browser_directory",
+            String,
+            added_in=5,
+            default='""',
+            short_desc="Shader Variant Browser Directory",
+            long_desc="When not empty, every shader program compiled from GLSL in this process is recorded into an HTML shader variant browser in this directory (doc/erhe/graphics.md 'Shader variant browser'): index.html lists each program's variant key with its SPIR-V size and instruction count before and after the SPIRV-Tools optimizer, and each program's page shows its sources and both SPIR-V disassemblies. Programs served from the SPIR-V cache are not compiled and so not recorded; delete spirv_cache/ to record every program. The editor's --shader-variant-browser <directory> option sets it. Change requires restart.",
             visible=True,
             developer=False
         ),

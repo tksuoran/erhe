@@ -129,6 +129,7 @@ if (ERHE_SPIRV)
         erhe_graphics/glsl_includer.cpp
         erhe_graphics/glsl_includer.hpp
         erhe_graphics/glsl_to_spirv.hpp
+        erhe_graphics/shader_variant_report.hpp
         erhe_graphics/spirv_cache.cpp
         erhe_graphics/spirv_cache.hpp
     )
@@ -379,8 +380,10 @@ if (ERHE_SPIRV)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_graphics/glsl_to_spirv.cpp
+        erhe_graphics/shader_variant_report.cpp
     )
-    # The SPIR-V optimizer (Graphics_config::spirv_optimization).
+    # The SPIR-V optimizer and disassembler (Graphics_config::spirv_optimization,
+    # shader_variant_browser_directory).
     target_link_libraries(${_target} PRIVATE SPIRV-Tools-opt SPIRV-Tools-static)
 endif()
 

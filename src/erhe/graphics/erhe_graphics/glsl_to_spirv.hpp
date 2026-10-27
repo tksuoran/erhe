@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace glslang {
     class TShader;
@@ -45,6 +46,17 @@ private:
     std::shared_ptr<glslang::TProgram>                                   m_glslang_program;
     std::string                                                          m_last_compile_log;
     std::string                                                          m_last_link_log;
+
+    // The sources of each compiled stage, kept only while the device records
+    // the shader variant browser (Device::get_shader_variant_report()).
+    class Report_source
+    {
+    public:
+        std::string main_name;
+        std::string main_source;
+        std::string preamble;
+    };
+    std::unordered_map<::EShLanguage, Report_source>                     m_report_sources;
 };
 
 } // namespace erhe::graphics

@@ -696,6 +696,29 @@ benchmark runs), and the desktop profiling scripts (`bistro_frame_bench.py`,
 CPM dependencies pinned to the commits glslang's `known_good.json` names
 (glslang is built with `ENABLE_OPT`).
 
+## Shader variant browser
+
+`Graphics_config::shader_variant_browser_directory` (empty: off; the editor
+sets it from `--shader-variant-browser <directory>`) makes `Device` own a
+`Shader_variant_report` (`shader_variant_report.hpp`) that records every
+program `Glslang_shader_stages::link_program()` compiles, at the time it is
+compiled: per stage the top-level source as parsed, the synthesized
+`erhe_preamble.glsl`, the unoptimized SPIR-V and the SPIR-V after the
+optimizer of "SPIR-V optimization" (which runs for the report whether or not
+`spirv_optimization` is on; the module the device uses follows that setting).
+Programs served from the `Spirv_cache` are not compiled and so not recorded:
+delete `spirv_cache/` to record every program.
+
+Each recorded program writes `variants/<n>.html` (defines, per stage sizes,
+and three tabs: the sources including the included files, the SPIR-V
+disassembly before optimization and after it) and the raw modules
+`variants/<n>_<stage>.spv` / `<n>_<stage>_optimized.spv`, and rewrites
+`index.html`: a sortable, filterable table of every program recorded so far
+(program name, variant key as its non-zero defines, stages, SPIR-V bytes and
+instruction counts before and after optimization) that shows the selected
+program's page beside it. Only the table rows stay in memory. Recording runs
+on whichever thread compiles; `add()` takes the report's mutex.
+
 ## Present calibration cache
 
 The present calibration (`present_calibration.hpp`; the probes are described

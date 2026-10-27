@@ -88,6 +88,7 @@ class Ring_buffer;
 class Sampler;
 class Shader_monitor;
 class Shader_source_cache;
+class Shader_variant_report;
 class Spirv_cache;
 class Surface;
 class Surface_create_info;
@@ -833,6 +834,9 @@ public:
     [[nodiscard]] auto get_impl                           () const -> const Device_impl&;
 #if defined(ERHE_SPIRV)
     [[nodiscard]] auto get_spirv_cache                    () -> Spirv_cache&;
+    // The shader variant browser recorder, or null when
+    // Graphics_config::shader_variant_browser_directory is empty.
+    [[nodiscard]] auto get_shader_variant_report          () -> Shader_variant_report*;
 #endif
     [[nodiscard]] auto get_shader_source_cache            () -> Shader_source_cache&;
     void               set_shader_error_callback          (Shader_error_callback callback);
@@ -967,6 +971,7 @@ private:
     bool                         m_frame_start_pending{false};
 #if defined(ERHE_SPIRV)
     std::unique_ptr<Spirv_cache> m_spirv_cache;
+    std::unique_ptr<Shader_variant_report> m_shader_variant_report;
 #endif
     std::unique_ptr<Shader_source_cache> m_shader_source_cache;
     Shader_error_callback        m_shader_error_callback  {};
