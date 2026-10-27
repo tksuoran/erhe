@@ -10,6 +10,7 @@
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/shader_source_cache.hpp"
 #if defined(ERHE_SPIRV)
+#   include "erhe_graphics/shader_variant_report.hpp"
 #   include "erhe_graphics/spirv_cache.hpp"
 #endif
 #include "erhe_graphics/surface.hpp"
@@ -89,6 +90,11 @@ Device::Device(
 #endif
 #if defined(ERHE_SPIRV)
     , m_spirv_cache{std::make_unique<Spirv_cache>(std::filesystem::path{"spirv_cache"})}
+    , m_shader_variant_report{
+        graphics_config.shader_variant_browser_directory.empty()
+            ? std::unique_ptr<Shader_variant_report>{}
+            : std::make_unique<Shader_variant_report>(std::filesystem::path{graphics_config.shader_variant_browser_directory})
+    }
 #endif
     , m_shader_source_cache{std::make_unique<Shader_source_cache>()}
 {
@@ -375,6 +381,10 @@ auto Device::get_impl() const -> const Device_impl&
 auto Device::get_spirv_cache() -> Spirv_cache&
 {
     return *m_spirv_cache;
+}
+auto Device::get_shader_variant_report() -> Shader_variant_report*
+{
+    return m_shader_variant_report.get();
 }
 #endif
 auto Device::get_shader_source_cache() -> Shader_source_cache&

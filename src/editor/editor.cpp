@@ -2602,7 +2602,7 @@ public:
         return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
-    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off, bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling)
+    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off, bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling, const std::string& shader_variant_browser_directory)
         : m_startup_commands_path{std::move(startup_commands_path)}
         , m_startup_scene_path   {std::move(startup_scene_path)}
         , m_no_startup_scene     {no_startup_scene}
@@ -2620,6 +2620,10 @@ public:
             m_graphics_config.spirv_optimization = true;
         }
         apply_graphics_config_environment_overrides(m_graphics_config);
+        if (!shader_variant_browser_directory.empty()) {
+            log_startup->info("--shader-variant-browser: shader_variant_browser_directory = '{}' (erhe_graphics.json not modified)", shader_variant_browser_directory);
+            m_graphics_config.shader_variant_browser_directory = shader_variant_browser_directory;
+        }
 
 #if defined(__APPLE__)
         // Must happen before the first Metal framework use - window creation
@@ -5763,7 +5767,7 @@ public:
     std::unique_ptr<Mcp_server         >                     m_mcp_server;
 };
 
-void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off, const bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling)
+void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off, const bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling, const std::string& shader_variant_browser_directory)
 {
 //#if defined(ERHE_PROFILE_LIBRARY_TRACY) && TRACY_ENABLE
 //    while (!TracyIsConnected) {
@@ -5912,7 +5916,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         //    editor.tick();
         //}
 
-        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off, fix_gltf_spot_lights, benchmark_path, headset_culling};
+        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off, fix_gltf_spot_lights, benchmark_path, headset_culling, shader_variant_browser_directory};
         editor.run();
     }
 

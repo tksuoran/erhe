@@ -749,6 +749,12 @@ rules and report are specified in `doc/plans/quest_performance.md`
 (`Graphics_config::spirv_optimization`, doc/erhe/graphics.md "SPIR-V
 optimization") unless `ERHE_SPIRV_OPTIMIZATION=0` turns it off.
 
+**Shader variant browser.** `--shader-variant-browser <directory>` records
+every shader program the session compiles into an HTML browser in that
+directory (doc/erhe/graphics.md "Shader variant browser"): open
+`<directory>/index.html`. Programs served from `spirv_cache/` are not
+compiled, so delete it first to record every variant.
+
 **Watchdog and shutdown.** The main-loop stall watchdog
 (`doc/agents/debugging.md` "Main-loop stall watchdog") watches while
 `m_in_tick` is set: from M1 start to the end of `frame()`, the kick's wait

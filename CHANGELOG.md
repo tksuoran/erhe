@@ -38,6 +38,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   performance passes (interface and debug info preserved; an optimized module
   that fails validation is not used), cached under its own `Spirv_cache` key.
   SPIRV-Tools and SPIRV-Headers are new dependencies with `ERHE_SPIRV`.
+- `erhe::graphics`: `Graphics_config::shader_variant_browser_directory`
+  (config version 5), `Shader_variant_report`, `Shader_variant_report_stage`
+  and `Device::get_shader_variant_report()`: an HTML report of every program
+  compiled from GLSL, with its sources and SPIR-V before and after
+  optimization.
 - `erhe::scene_renderer`: `Light_shading::automatic` (a `Light_count_limits`
   value: `compute_light_layer_partition()` resolves it to `clustered` when
   more than `automatic_clustered_light_count` (16) lights are active, else to

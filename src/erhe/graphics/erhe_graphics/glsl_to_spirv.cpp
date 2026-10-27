@@ -4,6 +4,7 @@
 #include "erhe_graphics/glsl_includer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
+#include "erhe_graphics/shader_variant_report.hpp"
 #include "erhe_graphics/spirv_cache.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_hash/hash.hpp"
@@ -404,6 +405,14 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
     glslang_shader.setEnvClient(c_env_client, c_env_client_version);
     glslang_shader.setEnvTarget(c_env_target, c_env_target_version);
 
+    if (device.get_shader_variant_report() != nullptr) {
+        m_report_sources[language] = Report_source{
+            .main_name   = main_name,
+            .main_source = main_with_preamble,
+            .preamble    = version_line + preamble_body
+        };
+    }
+
     Glsl_includer includer{
         primary_dir,
         create_info.extra_include_paths,
@@ -532,6 +541,13 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
 
     const Shader_stages_create_info& create_info = m_shader_stages_prototype.create_info();
 
+    // The shader variant browser records a program only when every stage was
+    // compiled here (a stage served from the cache has no sources or
+    // unoptimized SPIR-V at hand).
+    Shader_variant_report* const report = device.get_shader_variant_report();
+    bool report_complete = (report != nullptr);
+    std::unordered_map<::EShLanguage, Shader_variant_report_stage> report_stages;
+
     for (::EShLanguage stage : m_active_stages) {
         // Try cache first per-stage
         bool from_cache = false;
@@ -543,6 +559,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
                     if (!cached.empty()) {
                         m_spirv_shaders[stage] = std::move(cached);
                         from_cache = true;
+                        report_complete = false;
                     }
                     break;
                 }
@@ -559,14 +576,26 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
             if (!spv_messages.empty()) {
                 log_glsl->info("SPIR_V messages::\n{}\n", spv_messages);
             }
-            if (device.get_graphics_config().spirv_optimization) {
-                std::optional<std::vector<unsigned int>> optimized = optimize_spirv(
+            const bool optimize = device.get_graphics_config().spirv_optimization;
+            std::optional<std::vector<unsigned int>> optimized;
+            if (optimize || (report != nullptr)) {
+                optimized = optimize_spirv(
                     spirv_binary,
                     fmt::format("{} {} stage", create_info.name, glslang_stage_name(stage))
                 );
-                if (optimized.has_value()) {
-                    spirv_binary = std::move(optimized.value());
-                }
+            }
+            if (report != nullptr) {
+                // The browser shows both modules whichever one is used.
+                Report_source& source = m_report_sources[stage];
+                Shader_variant_report_stage& report_stage = report_stages[stage];
+                report_stage.main_name       = source.main_name;
+                report_stage.main_source     = source.main_source;
+                report_stage.preamble        = source.preamble;
+                report_stage.spirv           = spirv_binary;
+                report_stage.optimized_spirv = optimized.has_value() ? optimized.value() : std::vector<unsigned int>{};
+            }
+            if (optimize && optimized.has_value()) {
+                spirv_binary = std::move(optimized.value());
             }
             m_spirv_shaders[stage] = std::move(spirv_binary);
         };
@@ -628,6 +657,19 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
             );
         }
     }
+
+    if (report_complete) {
+        std::vector<Shader_variant_report_stage> stages;
+        for (const Shader_stage& shader : create_info.shaders) {
+            const auto i = report_stages.find(to_glslang(shader.type));
+            if (i != report_stages.end()) {
+                i->second.type = shader.type;
+                stages.push_back(std::move(i->second));
+            }
+        }
+        report->add(create_info, stages, m_shader_stages_prototype.get_dependency_paths());
+    }
+    m_report_sources.clear();
 
     return true;
 }
