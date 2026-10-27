@@ -33,6 +33,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Light_shading::automatic` (a `Light_count_limits`
+  value: `compute_light_layer_partition()` resolves it to `clustered` when
+  more than `automatic_clustered_light_count` (16) lights are active, else to
+  `loops`) and `c_str(Light_shading)`. A partition that is `clustered` now
+  ignores the limits' unshadowed counts itself, so a caller no longer sets
+  them to `max_light_count` for clustered shading.
 - `erhe::scene_renderer`: `Cull_frame_registry::has_frame_end_scenes()`.
 - `erhe::primitive`: `Base_mesh_build` (`enums.hpp`);
   `Primitive_render_shape::install_deferred_base_mesh()`,

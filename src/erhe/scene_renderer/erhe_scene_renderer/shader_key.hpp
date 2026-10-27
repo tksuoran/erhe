@@ -272,11 +272,18 @@ inline constexpr std::size_t light_type_count = 4;
 // shader key axes. clustered: the directional loops take the light block's
 // runtime counts and the spot / point loops take the fragment's light cluster
 // list; the LIGHT_SHADING_CLUSTERED axis is set and the six count axes stay 0.
+// automatic is a Light_count_limits value only: compute_light_layer_partition
+// resolves it to clustered when more than automatic_clustered_light_count
+// lights are active, else to loops, so a Light_layer_partition never carries
+// it.
 enum class Light_shading : unsigned int
 {
     loops     = 0,
-    clustered = 1
+    clustered = 1,
+    automatic = 2
 };
+inline constexpr std::size_t automatic_clustered_light_count = 16;
+[[nodiscard]] auto c_str(Light_shading light_shading) -> const char*;
 
 // Per light type limits on how many lights are shaded, from the active
 // graphics preset (Graphics_preset_entry::*_shadow_light_count /
@@ -295,6 +302,10 @@ enum class Light_shading : unsigned int
 // shadow light gets a cube of the cube-map array. Callers with no shadow map
 // pass zero shadow limits: every light within the unshadowed limits is then
 // shaded unshadowed. Default = no lights shaded.
+//
+// When light_shading is (or resolves to) clustered, the unshadowed limits
+// are not used: every active light is shaded up to max_light_count, and the
+// shadow limits pick the shadow-mapped ones.
 class Light_count_limits
 {
 public:
@@ -344,7 +355,8 @@ public:
 
     std::size_t   per_type_shadow   [light_type_count] {0, 0, 0, 0};
     std::size_t   per_type_nonshadow[light_type_count] {0, 0, 0, 0};
-    // From the limits the partition was computed with.
+    // From the limits the partition was computed with, automatic resolved:
+    // loops or clustered.
     Light_shading light_shading{Light_shading::loops};
 };
 

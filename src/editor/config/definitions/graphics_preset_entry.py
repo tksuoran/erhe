@@ -45,9 +45,10 @@ struct("Graphics_preset_entry",
         field("point_shadow_light_count",           Int, added_in=1, default="2", short_desc="Point Shadow Lights"),
         field("point_unshadowed_light_count",       Int, added_in=2, default="4", short_desc="Point Lights (no shadow)"),
         # Light shading (v4; doc/plans/clustered_lights.md C1): with
-        # clustered, every active light is shaded and the unshadowed counts
-        # above are not used; the shadow counts apply in both modes.
-        field("light_shading", EnumRef("Light_shading_mode"), added_in=4, default="Light_shading_mode::loops", short_desc="Light Shading"),
+        # clustered (also automatic above 16 active lights), every active
+        # light is shaded and the unshadowed counts above are not used; the
+        # shadow counts apply in all modes.
+        field("light_shading", EnumRef("Light_shading_mode"), added_in=4, default="Light_shading_mode::automatic", short_desc="Light Shading"),
         # Specular anti-aliasing of the anisotropic BRDF (v5;
         # doc/erhe/scene_renderer.md "Specular anti-aliasing"). Older presets
         # read the default.

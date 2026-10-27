@@ -224,8 +224,10 @@ GPU lists and overflow counters to host memory; once the frame retired,
 every cluster's category counts and slots are compared. A new request
 replaces an earlier one. Errors when the binning pipeline did not build,
 the `light_cluster_binning` setting is cpu (`set_light_cluster_binning`
-`mode=gpu` first) or the graphics preset's `light_shading` is `loops`
-(`set_graphics_preset` `light_shading=clustered` first); waits a few frames.
+`mode=gpu` first) or no view was shaded clustered in the last frame (the
+preset's `light_shading` is `loops`, or `automatic` with at most 16 active
+lights; `set_graphics_preset` `light_shading=clustered` first); waits a few
+frames.
 
 ```bash
 py -3 scripts/mcp_call.py get_light_cluster_check
@@ -249,7 +251,7 @@ view; [clustered_lights.md](../plans/clustered_lights.md) C4, V6) as the
 frame results of the last rendered frame carry it.
 
 Returns: `{binning_setting, gpu_supported, light_shading, views:
-[{scene_view, rendered_last_frame, frame_index, binning, tiles_x, tiles_y,
+[{scene_view, rendered_last_frame, light_shading, frame_index, binning, tiles_x, tiles_y,
 slices, cluster_count, binned_light_count, capacity, overflow_cluster_count,
 max_list_length, gpu_time_ns}]}`. With `gpu` binning `frame_index` names
 the retired frame whose counters were read back (frames in flight earlier);
@@ -625,10 +627,11 @@ light type limits `directional_shadow_light_count`,
 `directional_unshadowed_light_count`, `spot_shadow_light_count`,
 `spot_unshadowed_light_count`, `point_shadow_light_count`,
 `point_unshadowed_light_count` (integers >= 0; their total is clamped to the
-renderer's `max_light_count`), `light_shading` (`loops` | `clustered`:
-clustered shades every active light from per-fragment light cluster lists and
-ignores the unshadowed counts, [shader_variants.md](../erhe/shader_variants.md)
-"Light shading"), `specular_anti_aliasing` (`off` | `normal_kernel` |
+renderer's `max_light_count`), `light_shading` (`loops` | `clustered` |
+`automatic`: clustered shades every active light from per-fragment light
+cluster lists and ignores the unshadowed counts; automatic, the default, is
+clustered while the scene has more than 16 active lights, else loops;
+[shader_variants.md](../erhe/shader_variants.md) "Light shading"), `specular_anti_aliasing` (`off` | `normal_kernel` |
 `finite_difference`: the anisotropic BRDF's specular anti-aliasing,
 [scene_renderer.md](../erhe/scene_renderer.md) "Specular anti-aliasing"),
 `use_draw_lists`. Omitted arguments keep their values, so `{}` queries. The edited preset goes

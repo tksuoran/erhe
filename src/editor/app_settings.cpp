@@ -86,6 +86,12 @@ static_assert(static_cast<uint32_t>(Specular_anti_aliasing_mode::off)           
 static_assert(static_cast<uint32_t>(Specular_anti_aliasing_mode::normal_kernel)     == static_cast<uint32_t>(erhe::scene_renderer::Specular_anti_aliasing::normal_kernel));
 static_assert(static_cast<uint32_t>(Specular_anti_aliasing_mode::finite_difference) == static_cast<uint32_t>(erhe::scene_renderer::Specular_anti_aliasing::finite_difference));
 
+// The preset's Light_shading_mode values are the erhe::scene_renderer::
+// Light_shading values.
+static_assert(static_cast<uint32_t>(Light_shading_mode::loops)     == static_cast<uint32_t>(erhe::scene_renderer::Light_shading::loops));
+static_assert(static_cast<uint32_t>(Light_shading_mode::clustered) == static_cast<uint32_t>(erhe::scene_renderer::Light_shading::clustered));
+static_assert(static_cast<uint32_t>(Light_shading_mode::automatic) == static_cast<uint32_t>(erhe::scene_renderer::Light_shading::automatic));
+
 auto get_light_count_limits(const Graphics_preset_entry& graphics_preset, const int max_light_count) -> erhe::scene_renderer::Light_count_limits
 {
     auto count = [](const int value) -> std::size_t { return static_cast<std::size_t>(std::max(0, value)); };
@@ -104,14 +110,11 @@ auto get_light_count_limits(const Graphics_preset_entry& graphics_preset, const 
         }
     };
     limits.max_light_count = count(max_light_count);
-    if (graphics_preset.light_shading == Light_shading_mode::clustered) {
-        // Clustered: every active light is shaded, up to the light array
-        // capacity; the shadow limits still pick the shadow-mapped ones.
-        limits.light_shading = erhe::scene_renderer::Light_shading::clustered;
-        for (std::size_t t = 0; t < 3; ++t) {
-            limits.per_type_unshadowed[t] = limits.max_light_count;
-        }
-    }
+    // Clustered (and automatic, when it resolves to clustered) shades every
+    // active light up to the light array capacity; the partition then ignores
+    // the unshadowed counts, and the shadow counts still pick the
+    // shadow-mapped lights (compute_light_layer_partition).
+    limits.light_shading = static_cast<erhe::scene_renderer::Light_shading>(graphics_preset.light_shading);
     if (!graphics_preset.shadow_enable) {
         // Shadows off: no light is shadow-mapped, the unshadowed limits still
         // decide how many lights of each type are shaded.

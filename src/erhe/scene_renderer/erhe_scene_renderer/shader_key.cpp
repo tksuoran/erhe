@@ -403,6 +403,16 @@ auto get_specular_anti_aliasing(const Shader_key& key) -> Specular_anti_aliasing
     return static_cast<Specular_anti_aliasing>(key.get(Shader_int::SPECULAR_ANTI_ALIASING));
 }
 
+auto c_str(const Light_shading light_shading) -> const char*
+{
+    switch (light_shading) {
+        case Light_shading::loops:     return "loops";
+        case Light_shading::clustered: return "clustered";
+        case Light_shading::automatic: return "automatic";
+        default:                       return "?";
+    }
+}
+
 auto light_type_index(const erhe::scene::Light_type type) -> std::size_t
 {
     switch (type) {
@@ -427,7 +437,24 @@ auto compute_light_layer_partition(
     // there is room, else the light is not shaded.
     Light_layer_partition partition{};
     partition.light_shading = light_count_limits.light_shading;
+    if (partition.light_shading == Light_shading::automatic) {
+        const std::size_t active_light_count = static_cast<std::size_t>(std::count_if(
+            lights.begin(),
+            lights.end(),
+            [](const std::shared_ptr<erhe::scene::Light>& light) -> bool {
+                return light && light->is_active();
+            }
+        ));
+        partition.light_shading = (active_light_count > automatic_clustered_light_count)
+            ? Light_shading::clustered
+            : Light_shading::loops;
+    }
     const std::size_t max_shaded_count = std::min(light_count_limits.max_light_count, light_array_capacity);
+    // Clustered shades every active light: the unshadowed limits do not apply.
+    const bool clustered = (partition.light_shading == Light_shading::clustered);
+    auto unshadowed_limit = [&](const std::size_t t) -> std::size_t {
+        return clustered ? max_shaded_count : light_count_limits.per_type_unshadowed[t];
+    };
     std::size_t shaded_count = 0;
     for (const std::shared_ptr<erhe::scene::Light>& light : lights) {
         if (!light) {
@@ -447,7 +474,7 @@ auto compute_light_layer_partition(
         if (light->get_cast_shadow() && (partition.per_type_shadow[t] < light_count_limits.per_type_shadow[t])) {
             ++partition.per_type_shadow[t];
             ++shaded_count;
-        } else if (partition.per_type_nonshadow[t] < light_count_limits.per_type_unshadowed[t]) {
+        } else if (partition.per_type_nonshadow[t] < unshadowed_limit(t)) {
             ++partition.per_type_nonshadow[t];
             ++shaded_count;
         }
@@ -457,6 +484,7 @@ auto compute_light_layer_partition(
 
 void set_light_partition_axes(Shader_key& key, const Light_layer_partition& partition)
 {
+    ERHE_VERIFY(partition.light_shading != Light_shading::automatic);
     const bool clustered = (partition.light_shading == Light_shading::clustered);
     auto count = [clustered](const std::size_t value) -> uint32_t {
         return clustered ? 0u : static_cast<uint32_t>(value);
