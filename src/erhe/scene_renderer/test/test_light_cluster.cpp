@@ -621,6 +621,34 @@ TEST_F(Light_cluster_test, orthographic_lists_are_conservative)
     check_sampled_positions();
 }
 
+// Light_shading::automatic resolves to loops up to
+// automatic_clustered_light_count active lights (the unshadowed limits
+// apply) and to clustered above it (every active light shaded); inactive
+// lights do not count.
+TEST_F(Light_cluster_test, automatic_light_shading_resolves_by_active_light_count)
+{
+    Light_count_limits limits{};
+    limits.light_shading          = Light_shading::automatic;
+    limits.per_type_unshadowed[2] = 4;
+    std::vector<std::shared_ptr<erhe::scene::Light>> lights;
+    auto add_point_light = [&lights](const float range) {
+        lights.push_back(make_scene_light(erhe::scene::Light_type::point, glm::vec3{0.0f}, glm::vec3{0.0f, 0.0f, -1.0f}, range, Cast_shadow::no));
+    };
+    for (std::size_t i = 0; i < erhe::scene_renderer::automatic_clustered_light_count; ++i) {
+        add_point_light(1.0f);
+    }
+    add_point_light(0.0f); // inactive: zero range
+    constexpr std::size_t capacity = 100;
+    const Light_layer_partition at_threshold = erhe::scene_renderer::compute_light_layer_partition(lights, limits, capacity);
+    EXPECT_EQ(at_threshold.light_shading, Light_shading::loops);
+    EXPECT_EQ(at_threshold.per_type_nonshadow[2], 4u);
+
+    add_point_light(1.0f);
+    const Light_layer_partition above_threshold = erhe::scene_renderer::compute_light_layer_partition(lights, limits, capacity);
+    EXPECT_EQ(above_threshold.light_shading, Light_shading::clustered);
+    EXPECT_EQ(above_threshold.per_type_nonshadow[2], erhe::scene_renderer::automatic_clustered_light_count + 1);
+}
+
 TEST_F(Light_cluster_test, partition_and_unbounded_lights)
 {
     make_camera(erhe::scene::Projection::Type::perspective_vertical);

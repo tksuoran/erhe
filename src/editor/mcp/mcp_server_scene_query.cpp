@@ -808,6 +808,10 @@ auto Mcp_server::query_light_cluster_stats(const json& args) -> std::string
             {"scene_view",          node->get_scene_view().get_settings_key()},
             {"rendered_last_frame", result != nullptr}
         };
+        if (result != nullptr) {
+            // The light shading in effect (automatic resolved).
+            view_json["light_shading"] = erhe::scene_renderer::c_str(result->light_projections.light_partition.light_shading);
+        }
         if ((result != nullptr) && result->light_cluster_stats.valid) {
             const erhe::scene_renderer::Light_cluster_stats& stats = result->light_cluster_stats;
             view_json["frame_index"]            = stats.frame_index;
@@ -859,8 +863,21 @@ auto Mcp_server::query_light_cluster_check(const json& args) -> std::string
         if ((m_context.editor_settings == nullptr) || (m_context.editor_settings->light_cluster_binning != Light_cluster_binning::gpu)) {
             return make_error_content("get_light_cluster_check: the light cluster binning setting is cpu (set_light_cluster_binning mode=gpu first)");
         }
-        if ((m_context.app_settings == nullptr) || (m_context.app_settings->graphics.current_graphics_preset.light_shading != Light_shading_mode::clustered)) {
-            return make_error_content("get_light_cluster_check: the graphics preset's light_shading is loops (set_graphics_preset light_shading=clustered first)");
+        // The check waits for a frame that bins a clustered view: refused
+        // unless a view rendered clustered in the last frame (light_shading
+        // clustered, or automatic with more than 16 active lights).
+        bool clustered_view = false;
+        if (m_context.app_rendering != nullptr) {
+            for (const std::shared_ptr<Shadow_render_node>& node : m_context.app_rendering->get_all_shadow_nodes()) {
+                const Shadow_frame_result* const result = node ? node->get_frame_result(m_context.last_rendered_frame_index) : nullptr;
+                if ((result != nullptr) && (result->light_projections.light_partition.light_shading == erhe::scene_renderer::Light_shading::clustered)) {
+                    clustered_view = true;
+                    break;
+                }
+            }
+        }
+        if (!clustered_view) {
+            return make_error_content("get_light_cluster_check: no view was shaded clustered in the last frame (set_graphics_preset light_shading=clustered, or automatic with more than 16 active lights)");
         }
         binner->request_check();
         m_light_cluster_check_request     = m_current_request;

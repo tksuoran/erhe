@@ -144,6 +144,13 @@ the light axes of an environment key from the partition's `light_shading`
   every light layout, so a light edit compiles nothing. The lists are
   ascending, so a fragment sums the same lights in the same order as the
   loop path, minus lights whose range attenuation is zero there.
+- Automatic (`Light_shading::automatic`, the editor preset default): a
+  limits value only. `compute_light_layer_partition()` resolves it to
+  clustered when more than `automatic_clustered_light_count` (16) lights are
+  active, else to loops, so the partition carries one of the two. The
+  partition is recomputed when the light set is invalidated (a light added,
+  removed or edited) or the limits change, so crossing the threshold switches
+  the mode then.
 
 The light-count axes below (the partition, the light array layout
 invariant and its literal loop bounds) apply to the loop path only.
