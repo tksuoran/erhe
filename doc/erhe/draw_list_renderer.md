@@ -888,7 +888,8 @@ Drawing:
   the position of a perspective camera, the +Z axis with w = 0 of an
   orthographic one; `Draw_list_renderer::get_color_view_eye()`), one
   indexed draw with the slot's uint32 index buffer (the pattern of entry e
-  at 7 e, written once per capacity, grown with the slot, logged), so the
+  at 7 e, in device memory, uploaded once per capacity with
+  `Command_buffer::upload_to_buffer()`, grown with the slot, logged), so the
   vertex index names the entry and the corner and the post-transform cache
   runs 7 vertex invocations per entry. The vertex shader pushes an entry
   whose test bit is clear outside the clip volume; the pipeline tests depth
@@ -916,20 +917,24 @@ Drawing:
   commands generated from the masks and the color passes' drawn / culled
   counts (`Composition_pass_stats`) include the occlusion term; the
   CPU masks do not (`has_cull_view_survivors()` and CPU-written passes stay
-  frustum-only). The buffer is one persistent host-visible buffer per frame
-  slot (three regions at 256-byte alignment, grown to the slot's
+  frustum-only). The buffer is one persistent device-memory buffer per
+  frame slot (three regions at 256-byte alignment, grown to the slot's
   high-water size, logged), bound by every `gpu` dispatch (a frame without
   occlusion views binds it and writes nothing; a dispatch consuming nothing
-  binds a small unread buffer for the previous words);
+  binds a small unread buffer for the previous words); only the GPU reads
+  and writes it (in host memory, the pass's vertex reads and fragment
+  atomics crossed PCIe on a discrete GPU: ~350 ms per Bistro frame), and the
+  classification of the frame that reuses the slot (retired) releases it.
+  Only a frame an occlusion check recorded is read back:
   `record_frame_end()` (`Cull_frame_registry::record_frame_end()`, the
-  editor: before `release_frame_records()`) declares the frame's writes ->
-  host read, and the classification of the frame that reuses the slot
-  (retired) releases it. Only a frame an occlusion check recorded is read
-  back: that classification first decodes its words into per view tested /
-  occluded / untested / culled counts (`get_retired_occlusion_counts(key)`,
-  frames in flight late); other frames' words are never read on the CPU
-  (reading every entry's words back costs milliseconds per frame on large
-  scenes, and the GPU classification needs none of it).
+  editor: before `release_frame_records()`) copies that frame's three
+  regions into the slot's host-readable readback buffer (created by the
+  first check, regrown with the words; storage write -> transfer read,
+  transfer write -> host read), and the classification of the frame that
+  reuses the slot decodes the copy into per view tested / occluded /
+  untested / culled counts (`get_retired_occlusion_counts(key)`, frames in
+  flight late). Other frames record no copy and no frame-end barrier: the
+  next frame's classification declares its own dependency on the words.
   `request_occlusion_check()` / `poll_occlusion_check()` (MCP
   `get_occlusion_check`) add the frame's CPU side: per view the bounded
   entries in the frustum, the entries whose (not grown) box reaches the near

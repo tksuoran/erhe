@@ -1069,7 +1069,13 @@ private:
     // dispatch_gpu_cull_views(): the slot's occlusion buffer, grown to
     // hold the frame's two occlusion regions (created at the first dispatch,
     // bound by every dispatch).
-    void prepare_occlusion_slot(uint64_t frame_index, std::size_t entry_count, std::size_t group_count, Occlusion_culling occlusion);
+    void prepare_occlusion_slot(
+        uint64_t                        frame_index,
+        std::size_t                     entry_count,
+        std::size_t                     group_count,
+        Occlusion_culling               occlusion,
+        erhe::graphics::Command_buffer& command_buffer
+    );
     // dispatch_gpu_cull_views() of a frame with occlusion views, a check
     // pending: the frame's CPU side of the check.
     void capture_occlusion_check(uint64_t frame_index);
@@ -1532,7 +1538,14 @@ private:
     class Occlusion_slot
     {
     public:
+        // Device memory: only the GPU reads and writes the words.
         std::unique_ptr<erhe::graphics::Buffer> buffer;
+        // Host memory copy of the words for an occlusion check: written by
+        // record_frame_end() of the frame the check records, read once the
+        // frame retired (decode_retired_occlusion()). Created by the first
+        // check, regrown with the words.
+        std::unique_ptr<erhe::graphics::Buffer> readback;
+        std::size_t                             readback_bytes{0};
         std::size_t                             region_bytes {0};
         std::size_t                             bind_bytes   {0}; // region_bytes, at least the smallest binding
         std::size_t                             result_offset{0};

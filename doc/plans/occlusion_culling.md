@@ -215,7 +215,7 @@ occlusion view. Done.
   did not render (the multiview callback skipped) culls nothing next frame.
 - Under OpenXR the frame command buffer is submitted inside the headset node
   (`Xr_session` submits it before the views' command buffer begins), so the
-  host-read barrier of the frame's occlusion words
+  occlusion check's copy of the frame's occlusion words
   (`Cull_frame_registry::record_frame_end()`) is recorded at the end of the
   multiview callback, into the views' command buffer, the frame's last; the
   editor records it only into a command buffer still recording.
