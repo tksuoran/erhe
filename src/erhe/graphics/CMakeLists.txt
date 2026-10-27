@@ -380,6 +380,8 @@ if (ERHE_SPIRV)
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_graphics/glsl_to_spirv.cpp
     )
+    # The SPIR-V optimizer (Graphics_config::spirv_optimization).
+    target_link_libraries(${_target} PRIVATE SPIRV-Tools-opt SPIRV-Tools-static)
 endif()
 
 if (ERHE_GRAPHICS_API_OPENGL)

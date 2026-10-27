@@ -5,7 +5,7 @@
 Lang::C++20
 Build::CMake+CPM
 Graphics::Vulkan!default|OpenGL|Metal
-Deps#27{geogram+joltphysics+glm+fmt+spdlog+imgui+fastgltf+simdjson+nlohmann_json+cpptrace+tracy+glslang+harfbuzz+freetype+plutosvg+sdl+openxr-sdk+volk+vulkan-headers+VMA+bvh+wuffs+etl+cxxopts+taskflow+httplib+concurrentqueue+fpng}
+Deps#29{geogram+joltphysics+glm+fmt+spdlog+imgui+fastgltf+simdjson+nlohmann_json+cpptrace+tracy+glslang+spirv-tools+spirv-headers+harfbuzz+freetype+plutosvg+sdl+openxr-sdk+volk+vulkan-headers+VMA+bvh+wuffs+etl+cxxopts+taskflow+httplib+concurrentqueue+fpng}
 Python::"py -3"!{¬python/python3→MS-StoreStub-fails}
 
 [RUNTIME]

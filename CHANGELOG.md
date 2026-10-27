@@ -33,6 +33,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Graphics_config::spirv_optimization` (config version 4):
+  every compiled shader stage runs through the SPIRV-Tools optimizer's
+  performance passes (interface and debug info preserved; an optimized module
+  that fails validation is not used), cached under its own `Spirv_cache` key.
+  SPIRV-Tools and SPIRV-Headers are new dependencies with `ERHE_SPIRV`.
 - `erhe::scene_renderer`: `Light_shading::automatic` (a `Light_count_limits`
   value: `compute_light_layer_partition()` resolves it to `clustered` when
   more than `automatic_clustered_light_count` (16) lights are active, else to

@@ -492,6 +492,32 @@ if (${ERHE_GRAPHICS_API} STREQUAL "metal" OR ${ERHE_GRAPHICS_API} STREQUAL "meta
 endif ()
 
 if (ERHE_SPIRV)
+    # SPIRV-Tools for the optimizer (glslang ENABLE_OPT; erhe::graphics runs
+    # spirv-opt's performance passes when Graphics_config::spirv_optimization
+    # is on, doc/erhe/graphics.md "SPIR-V optimization"). Pinned to the
+    # commits glslang's known_good.json names for the glslang commit below;
+    # move them together.
+    CPMAddPackage(
+        NAME              SPIRV-Headers
+        GITHUB_REPOSITORY KhronosGroup/SPIRV-Headers
+        GIT_TAG           aaffbc59b41bf8faea671b0d1c6b34a584c45171
+        OPTIONS
+            "SPIRV_HEADERS_ENABLE_TESTS OFF"
+            "SPIRV_HEADERS_ENABLE_INSTALL OFF"
+    )
+    CPMAddPackage(
+        NAME              SPIRV-Tools
+        GITHUB_REPOSITORY KhronosGroup/SPIRV-Tools
+        GIT_TAG           c2bafae51eb16d0c71cc08e296690f4002ca7307
+        OPTIONS
+            "SPIRV-Headers_SOURCE_DIR ${SPIRV-Headers_SOURCE_DIR}"
+            "SPIRV_SKIP_TESTS ON"
+            "SPIRV_SKIP_EXECUTABLES ON"
+            "SPIRV_WERROR OFF"
+            "SKIP_SPIRV_TOOLS_INSTALL ON"
+            "SPIRV_TOOLS_BUILD_STATIC ON"
+            "ENABLE_RTTI ON"
+    )
     CPMAddPackage(
         NAME              glslang
         VERSION           16.3.0
@@ -525,7 +551,7 @@ if (ERHE_SPIRV)
                         "ENABLE_HLSL OFF"
                         "ENABLE_RTTI ON"
                   "ENABLE_EXCEPTIONS ON"
-                         "ENABLE_OPT OFF"
+                         "ENABLE_OPT ON"
                          "ENABLE_PCH ${ERHE_USE_PRECOMPILED_HEADERS}"
     )
     add_definitions(-DERHE_SPIRV)
