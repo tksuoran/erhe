@@ -286,7 +286,12 @@ auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
             break;
         }
     }
-    m_image_count = std::max(m_image_count, surface_capabilities2.surfaceCapabilities.minImageCount);
+    // The minimum for the chosen present mode (the capabilities above were
+    // queried before the mode was chosen).
+    const uint32_t min_image_count = m_device_impl.get_surface_min_image_count(
+        m_surface, m_present_mode, surface_capabilities2.surfaceCapabilities.minImageCount
+    );
+    m_image_count = std::max(m_image_count, min_image_count);
     if (surface_capabilities2.surfaceCapabilities.maxImageCount != 0) {
         m_image_count = std::min(
             m_image_count,
@@ -294,8 +299,10 @@ auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
         );
     }
     log_context->info(
-        "Swapchain image count = {} (driver min = {}, max = {})",
+        "Swapchain image count = {} (driver min = {} for {}, mode-less min = {}, max = {})",
         m_image_count,
+        min_image_count,
+        c_str(m_present_mode),
         surface_capabilities2.surfaceCapabilities.minImageCount,
         surface_capabilities2.surfaceCapabilities.maxImageCount
     );

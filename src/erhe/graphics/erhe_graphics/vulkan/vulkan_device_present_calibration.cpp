@@ -378,7 +378,10 @@ void Device_impl::run_present_calibration(Surface_impl& surface_impl)
     // this path: plain FIFO), so the probes see the queue the frames see.
     // A change to this probe swapchain configuration bumps
     // c_present_calibration_version (present_calibration_cache.hpp).
-    uint32_t image_count = std::max(surface_impl.get_image_count(), std::max(3u, surface_capabilities.minImageCount));
+    uint32_t image_count = std::max(
+        surface_impl.get_image_count(),
+        get_surface_min_image_count(surface, VK_PRESENT_MODE_FIFO_KHR, surface_capabilities.minImageCount)
+    );
     if (surface_capabilities.maxImageCount != 0) {
         image_count = std::min(image_count, surface_capabilities.maxImageCount);
     }

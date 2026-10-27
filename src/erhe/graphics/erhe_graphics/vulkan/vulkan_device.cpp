@@ -1354,6 +1354,41 @@ auto Device_impl::get_capabilities() const -> const Capabilities&
     return m_capabilities;
 }
 
+auto Device_impl::get_surface_min_image_count(
+    const VkSurfaceKHR     surface,
+    const VkPresentModeKHR present_mode,
+    const uint32_t         mode_less_min_image_count
+) const -> uint32_t
+{
+    if (!m_capabilities.m_surface_maintenance1 || !m_capabilities.m_surface_capabilities2) {
+        return mode_less_min_image_count;
+    }
+    VkSurfaceCapabilities2KHR mode_capabilities{
+        .sType               = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR,
+        .pNext               = nullptr,
+        .surfaceCapabilities = {}
+    };
+    VkSurfacePresentModeKHR surface_present_mode{
+        .sType       = VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_KHR,
+        .pNext       = nullptr,
+        .presentMode = present_mode
+    };
+    const VkPhysicalDeviceSurfaceInfo2KHR surface_info{
+        .sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,
+        .pNext   = &surface_present_mode,
+        .surface = surface
+    };
+    const VkResult result = vkGetPhysicalDeviceSurfaceCapabilities2KHR(m_vulkan_physical_device, &surface_info, &mode_capabilities);
+    if (result != VK_SUCCESS) {
+        log_context->warn(
+            "vkGetPhysicalDeviceSurfaceCapabilities2KHR({}) failed with {} {}; using the mode-less minimum image count {}",
+            c_str(present_mode), static_cast<int32_t>(result), c_str(result), mode_less_min_image_count
+        );
+        return mode_less_min_image_count;
+    }
+    return std::max(mode_less_min_image_count, mode_capabilities.surfaceCapabilities.minImageCount);
+}
+
 auto Device_impl::has_device_fault_report() const -> bool
 {
     return m_device_fault_report_khr || m_device_fault_report_ext;

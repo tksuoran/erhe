@@ -168,29 +168,9 @@ void Device_impl::run_display_refresh_calibration(Surface_impl& surface_impl)
     // (VUID-VkSwapchainCreateInfoKHR-presentMode-02839); MoltenVK requires
     // more images for some modes than its mode-less query reports.
     uint32_t image_count = std::max(2u, surface_capabilities.minImageCount);
-    if (m_capabilities.m_surface_maintenance1 && m_capabilities.m_surface_capabilities2) {
-        for (const VkPresentModeKHR mode : {free_mode, VK_PRESENT_MODE_FIFO_KHR}) {
-            if (!supported(mode)) {
-                continue;
-            }
-            VkSurfaceCapabilities2KHR mode_capabilities{
-                .sType               = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR,
-                .pNext               = nullptr,
-                .surfaceCapabilities = {}
-            };
-            VkSurfacePresentModeKHR present_mode{
-                .sType       = VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_KHR,
-                .pNext       = nullptr,
-                .presentMode = mode
-            };
-            const VkPhysicalDeviceSurfaceInfo2KHR mode_surface_info{
-                .sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,
-                .pNext   = &present_mode,
-                .surface = surface
-            };
-            if (vkGetPhysicalDeviceSurfaceCapabilities2KHR(m_vulkan_physical_device, &mode_surface_info, &mode_capabilities) == VK_SUCCESS) {
-                image_count = std::max(image_count, mode_capabilities.surfaceCapabilities.minImageCount);
-            }
+    for (const VkPresentModeKHR mode : {free_mode, VK_PRESENT_MODE_FIFO_KHR}) {
+        if (supported(mode)) {
+            image_count = std::max(image_count, get_surface_min_image_count(surface, mode, surface_capabilities.minImageCount));
         }
     }
     if (surface_capabilities.maxImageCount != 0) {

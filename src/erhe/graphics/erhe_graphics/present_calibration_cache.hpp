@@ -25,7 +25,7 @@ namespace erhe::graphics {
 // configuration of a backend (pixel format, drawable / image count, display
 // sync, queue depth): an entry measured under another version is never
 // looked up (the version is part of the key, so the file name differs).
-inline constexpr int c_present_calibration_version = 1;
+inline constexpr int c_present_calibration_version = 2;
 
 // Which presentation path the probes ran on. The display and compositor are
 // shared between them; the path is part of the key because each path
