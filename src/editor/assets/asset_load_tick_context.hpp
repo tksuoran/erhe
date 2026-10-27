@@ -99,7 +99,7 @@ public:
     // budget"), shared by every live load: a mesh build job or an image
     // decode starts only with a lease of it, held until its bytes are in
     // upload staging. Set by Asset_manager::tick before the tasks tick.
-    std::shared_ptr<erhe::utility::Memory_budget> load_memory_budget;
+    std::shared_ptr<erhe::utility::Memory_budget> load_memory_budget{};
 
     // Hard cap on the host-visible staging the budgeted uploads use
     // (Device::allocate_upload_staging): passed with every staged upload.
