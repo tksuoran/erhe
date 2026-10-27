@@ -114,6 +114,17 @@ frame with a scene file pushed to the device before:
 py -3 scripts/quest_bench.py run --bench config/editor/benchmark_bistro.json --bench-to-device --editor-args=--no-scene --mcp "set_culling_classification={\"mode\": \"gpu\"}" --load-scene /sdcard/Android/data/org.libsdl.app.quest/files/<dir>/<scene>.glb --mcp-measure get_composition_passes
 ```
 
+The app's external files directory must be created by the app itself:
+Android creates it, owned by the app's uid, the first time the editor asks
+for it, which is when a benchmark writes its result. After a clean install
+it does not exist; a directory that `adb shell mkdir` or `adb push` creates
+first is owned by the shell user, and the editor then fails with
+`Benchmark failed <path>: file not readable`. After a clean install, run
+the APK-bundled benchmark once
+(`quest_bench.py run --bench config/editor/benchmark_orbit.json`) before
+pushing anything there; if adb already created the directory,
+`adb shell rm -rf /sdcard/Android/data/org.libsdl.app.quest` first.
+
 ### Off-head runs
 
 An automated run (Launch protocol above) wraps each launch in this
