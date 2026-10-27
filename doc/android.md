@@ -174,10 +174,56 @@ The activity element names `ErheActivity`, erhe's `SDLActivity` subclass.
 
 ### Toolchain
 
-The bundled `gradlew` requires JDK 21 - Gradle 8.12 rejects JDK 25 with
-`Unsupported class file major version 69`. Android Studio's bundled `jbr`
-ships JDK 21. The wrapper scripts in `scripts/` probe for both `ANDROID_HOME`
-and `JAVA_HOME`; see `doc/quest.md` for their invocations.
+Both flavors (`mobile` and `quest`) build with the same toolchain:
+
+| Component | Version | Pinned by |
+|---|---|---|
+| Gradle (wrapper) | 8.14.5 | `android-project/gradle/wrapper/gradle-wrapper.properties` |
+| Android Gradle Plugin | 8.13.2 | `android-project/build.gradle` |
+| JDK | Android Studio's bundled JetBrains Runtime (`jbr`, JDK 25) | runs Gradle 8.14.5 + AGP 8.13.2 |
+| SDK package `ndk;28.2.13676358` | NDK r28c | `ndkVersion` in `android-project/app/build.gradle` |
+| SDK package `cmake;3.22.1` | 3.22.1 | AGP 8.13 default (no `cmake.version` in `build.gradle`) |
+| SDK package `platforms;android-35` | API 35 | `compileSdkVersion` |
+| SDK package `build-tools;35.0.0` | 35.0.0 | AGP 8.13 default |
+| SDK package `platform-tools` | any | `adb` for install / launch |
+| Python 3 | any | build-time codegen (`Python3_EXECUTABLE`, below) |
+
+AGP 8.13.2 is the newest AGP that keeps the legacy variant API that
+`app/build.gradle` uses for asset, validation-layer and HWASan staging; AGP
+9.x drops it and requires Gradle 9.x, so the Gradle / AGP pair is not
+upgraded independently.
+
+`ANDROID_HOME` names the SDK root and `JAVA_HOME` the JDK. Android Studio's
+default SDK root is `%LOCALAPPDATA%\Android\Sdk` on Windows and
+`$HOME/Android/Sdk` on Linux; its JDK is the `jbr` directory of the Android
+Studio installation.
+
+The SDK packages install from Android Studio (Settings > SDK Manager > SDK
+Tools, "Show Package Details") or from the command line with `sdkmanager`,
+which ships in the "Android SDK Command-line Tools" package. Without that
+package, download `commandlinetools-<os>-<build>_latest.zip` from
+<https://developer.android.com/studio#command-line-tools-only> and unpack its
+`cmdline-tools` directory as `$ANDROID_HOME/cmdline-tools/latest`, then:
+
+```sh
+export JAVA_HOME=<android-studio>/jbr
+export ANDROID_HOME=<sdk-root>
+SDKM=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+yes | $SDKM --licenses
+$SDKM --install "ndk;28.2.13676358" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+```
+
+With the SDK license accepted, AGP downloads a missing platform or
+build-tools package on the first build by itself; the NDK and CMake are best
+installed up front.
+
+On Windows the wrapper scripts in `scripts/` probe for `ANDROID_HOME` and
+`JAVA_HOME`; `doc/quest.md` lists their invocations. On Linux and macOS
+there is no wrapper: run `gradlew` from `android-project/` with both
+variables exported, for example
+`./gradlew assembleQuestRelease -PpythonExecutable=$(command -v python3)`.
+`build.gradle` resolves Python through `py -3`, which exists only on Windows;
+`-PpythonExecutable` names the interpreter elsewhere.
 
 ## Runtime adaptations
 

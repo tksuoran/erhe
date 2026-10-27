@@ -89,10 +89,16 @@ so LAUNCHER and VR end up on one filter.
 
 ## Build, install and launch
 
-Three wrapper scripts cover the common flows. All probe `ANDROID_HOME`
-(falling back to `%LOCALAPPDATA%\Android\Sdk`) and `JAVA_HOME` (falling back
-to Android Studio's bundled JBR JDK 21), so no environment setup is needed
-when Android Studio is installed in the default location.
+The build dependencies (JDK, NDK, CMake, SDK platform, build-tools) and how
+to install them are listed in `doc/android.md` "Toolchain"; the Quest flavor
+needs nothing beyond them.
+
+On Windows, three wrapper scripts cover the common flows. All probe
+`ANDROID_HOME` (falling back to `%LOCALAPPDATA%\Android\Sdk`) and `JAVA_HOME`
+(falling back to Android Studio's bundled JBR), so no environment setup is
+needed when Android Studio is installed in the default location. On Linux
+and macOS run `gradlew` directly (`doc/android.md` "Toolchain") and `adb` from
+`$ANDROID_HOME/platform-tools`.
 
 ### Build only (`scripts\build_android.bat`)
 
