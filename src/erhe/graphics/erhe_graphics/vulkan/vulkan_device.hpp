@@ -489,6 +489,12 @@ public:
     [[nodiscard]] auto get_tracy_vk_ctx                 () const -> TracyVkCtx { return m_tracy_vk_ctx; }
 #endif
     [[nodiscard]] auto get_capabilities                 () const -> const Capabilities&;
+    // The surface's minimum swapchain image count for presenting with
+    // present_mode. With VK_KHR_surface_maintenance1 the minimum is per
+    // present mode and can exceed the mode-less query's, so it is
+    // queried with VkSurfacePresentModeKHR; without the extension, and when
+    // that query fails, mode_less_min_image_count.
+    [[nodiscard]] auto get_surface_min_image_count      (VkSurfaceKHR surface, VkPresentModeKHR present_mode, uint32_t mode_less_min_image_count) const -> uint32_t;
     [[nodiscard]] auto get_device_extensions            () const -> const Device_extensions&;
     // VK_KHR_device_fault / VK_EXT_device_fault crash diagnostics. True only
     // when the extension was enabled AND its deviceFault feature is on, i.e.
