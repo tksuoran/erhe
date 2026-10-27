@@ -275,7 +275,9 @@ comments.
 
 **Phase 1 - lightmap UV channel and unwrap.** `tex_coord` usage_index 2 in the
 `Mesh_memory` stream-1 vertex formats and in `Primitive_builder`, the
-`USE_VERTEX_VARYING_TEXCOORD2` shader bool and `v_texcoord_2` varying, the
+scene-level `USE_LIGHTMAP` shader bool (on while a lightmap atlas is bound;
+it brings in the `v_texcoord_2` varying and the atlas sampling,
+doc/erhe/shader_variants.md), the
 `Item_flags::lightmapped` flag and its UI, and the
 `generate_mesh_atlas_texture_coordinates` unwrap into channel 2. The "TexCoord 2
 (Lightmap)" shader debug mode shows the charts.

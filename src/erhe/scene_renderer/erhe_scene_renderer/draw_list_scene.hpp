@@ -67,6 +67,9 @@ public:
     // this frame. Toggling it changes the shader variant of every color
     // draw, so it belongs in the environment the cached resolutions key on.
     bool                  ddgi_enabled     {false};
+    // Whether a lightmap atlas is bound this frame (the USE_LIGHTMAP axis):
+    // without one no draw compiles the lightmap varyings or sampling.
+    bool                  lightmap_enabled {false};
 
     // Equal when make_environment_key() is (the cached resolutions depend on
     // the key only).

@@ -993,6 +993,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: lightmapping is the scene-level shader variant axis
+  `Shader_bool::USE_LIGHTMAP`, set by `Forward_renderer` and
+  `Draw_list_renderer` while `Scene_pass_resources` has a lightmap texture
+  (`Color_environment::lightmap_enabled`). `Shader_key::derive()` no longer
+  sets `USE_VERTEX_VARYING_TEXCOORD2` because the vertex format carries
+  `tex_coord,2`; the shaders derive the lightmap varyings from the axis and
+  the attribute.
 - `erhe::scene_renderer`: `Draw_occlusion_parameters::clip_from_world` and
   `eye` are arrays of `Gpu_cull_classifier::occlusion_max_view_count` (2)
   with `view_count`: one occlusion draw serves the views of a multiview

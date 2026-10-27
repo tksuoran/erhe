@@ -68,12 +68,13 @@ layout(location = 12) in vec2     v_texcoord_1;
 const  vec2 v_texcoord_1 = vec2(0.5, 0.5);
 #endif
 
-#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2) && !defined(ERHE_VARIANT_POSITION_PASS)
+#if defined(ERHE_USE_VARYING_TEXCOORD2)
 layout(location = 21) in vec2      v_texcoord_2;            // lightmap UVs
-layout(location = 22) flat in vec4 v_lightmap_scale_offset; // atlas region; xy 0 = no lightmap
 #elif !defined(ERHE_VARIANT_POSITION_PASS)
 const  vec2 v_texcoord_2            = vec2(0.5, 0.5);
-const  vec4 v_lightmap_scale_offset = vec4(0.0);
+#endif
+#if defined(ERHE_USE_LIGHTMAP_SAMPLING)
+layout(location = 22) flat in vec4 v_lightmap_scale_offset; // atlas region; xy 0 = no lightmap
 #endif
 
 // Untransformed node-space position for the node_* texgen modes; only
@@ -224,7 +225,7 @@ layout(location = 16) flat in float v_wire_width;
 #  define ERHE_USES_ANISOTROPIC_BRDF 1
 #endif
 
-#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
+#if defined(ERHE_USE_LIGHTMAP_SAMPLING)
 // Bicubic lightmap sampling (doc/lightmap_baking_plan.md article
 // alignment): cubic B-spline reconstruction via 4 bilinear taps - hides
 // the bilinear diamond pattern texel-magnified lightmaps show. The 4x4
@@ -761,7 +762,7 @@ void main()
         // off for lightmapped draws - they would double the direct terms.
         vec3 ambient_term   = light_block.ambient_light.rgb;
         bool lightmap_valid = false;
-#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
+#if defined(ERHE_USE_LIGHTMAP_SAMPLING)
         if (v_lightmap_scale_offset.x > 0.0) {
             vec2 lightmap_uv = v_texcoord_2 * v_lightmap_scale_offset.xy + v_lightmap_scale_offset.zw;
             // lightmap_flags bit 0: bicubic B-spline reconstruction (Lightmap

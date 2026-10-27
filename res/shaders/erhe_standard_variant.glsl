@@ -39,6 +39,21 @@
 #  define ERHE_USE_VARYING_POSITION 1
 #endif
 
+// ERHE_USE_LIGHTMAP_SAMPLING is a derived gate: the scene-level
+// ERHE_USE_LIGHTMAP axis (a lightmap atlas is bound) on a lit variant whose
+// vertex format carries the lightmap UVs (channel 2). Only then are the
+// lightmap varyings and the atlas sampling compiled in; per-primitive
+// lightmap_scale_offset still decides which draws sample.
+// ERHE_USE_VARYING_TEXCOORD2 is set when v_texcoord_2 exists: for the
+// lightmap, or for the material / debug uses keyed by
+// ERHE_USE_VERTEX_VARYING_TEXCOORD2.
+#if defined(ERHE_USE_LIGHTMAP) && defined(ERHE_ATTRIBUTE_a_texcoord_2) && !defined(ERHE_VARIANT_POSITION_PASS)
+#  define ERHE_USE_LIGHTMAP_SAMPLING 1
+#endif
+#if (defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2) || defined(ERHE_USE_LIGHTMAP_SAMPLING)) && !defined(ERHE_VARIANT_POSITION_PASS)
+#  define ERHE_USE_VARYING_TEXCOORD2 1
+#endif
+
 // Texgen_mode enum values. Keep in sync with erhe::primitive::Texgen_mode
 // (ERHE_TEXGEN_MODE_* in enums.hpp). Each ERHE_*_TEXGEN_MODE variant axis
 // carries one of these; ERHE_SELECT_TEXCOORD in standard.frag maps the
