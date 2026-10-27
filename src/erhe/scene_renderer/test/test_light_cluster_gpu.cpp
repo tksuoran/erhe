@@ -300,7 +300,11 @@ TEST_F(Light_cluster_gpu_test, gpu_boundary_lights_equal_cpu)
     const glm::mat4 world_from_node = m_camera_snapshot.world_from_node();
     for (const uint32_t k : {8u, 12u, 16u}) {
         for (const glm::uvec2 tile : {glm::uvec2{7u, 6u}, glm::uvec2{12u, 10u}, glm::uvec2{15u, 4u}}) {
-            Target target{.cluster = (((k * tiles_y) + tile.y) * tiles_x) + tile.x};
+            Target target{
+                .cluster = (((k * tiles_y) + tile.y) * tiles_x) + tile.x,
+                .lo      = glm::vec3{0.0f},
+                .hi      = glm::vec3{0.0f}
+            };
             get_bounds(tile.x, tile.y, k, target.lo, target.hi);
             targets.push_back(target);
             // Beside the bounds on all three axes: the nearest point is a
