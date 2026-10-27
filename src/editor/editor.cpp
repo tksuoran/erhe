@@ -301,24 +301,29 @@ void write_ai_error_report(const char* const path, const std::string& title, con
 // Environment overrides of the loaded erhe_graphics.json, for automated runs
 // that need a different graphics configuration without rewriting the config
 // file (the verify scripts run forward-Z through this).
-// ERHE_FORCE_DISABLE_REVERSE_DEPTH=1|0 overrides force_disable_reverse_depth.
-void apply_graphics_config_environment_overrides(Graphics_config& graphics_config)
+// ERHE_FORCE_DISABLE_REVERSE_DEPTH=1|0 overrides force_disable_reverse_depth,
+// ERHE_SPIRV_OPTIMIZATION=1|0 overrides spirv_optimization (the profiling
+// scripts turn the optimizer on through it).
+void apply_graphics_config_environment_override(const char* const name, const char* const field_name, bool& field)
 {
-    const char* const value = std::getenv("ERHE_FORCE_DISABLE_REVERSE_DEPTH");
+    const char* const value = std::getenv(name);
     if (value == nullptr) {
         return;
     }
     const std::string_view text{value};
     if ((text != "1") && (text != "0")) {
-        log_startup->warn("ERHE_FORCE_DISABLE_REVERSE_DEPTH = '{}' ignored (expected 1 or 0)", text);
+        log_startup->warn("{} = '{}' ignored (expected 1 or 0)", name, text);
         return;
     }
-    const bool force_disable = (text == "1");
-    log_startup->info(
-        "ERHE_FORCE_DISABLE_REVERSE_DEPTH = {}: force_disable_reverse_depth {} -> {} (erhe_graphics.json not modified)",
-        text, graphics_config.force_disable_reverse_depth, force_disable
-    );
-    graphics_config.force_disable_reverse_depth = force_disable;
+    const bool enable = (text == "1");
+    log_startup->info("{} = {}: {} {} -> {} (erhe_graphics.json not modified)", name, text, field_name, field, enable);
+    field = enable;
+}
+
+void apply_graphics_config_environment_overrides(Graphics_config& graphics_config)
+{
+    apply_graphics_config_environment_override("ERHE_FORCE_DISABLE_REVERSE_DEPTH", "force_disable_reverse_depth", graphics_config.force_disable_reverse_depth);
+    apply_graphics_config_environment_override("ERHE_SPIRV_OPTIMIZATION",          "spirv_optimization",          graphics_config.spirv_optimization);
 }
 
 // Command buffer thread slots of the frame phases (doc/editor/render_thread.md
@@ -2607,6 +2612,13 @@ public:
         , m_text_renderer_config{erhe::codegen::load_config<Text_renderer_config>  ("config/editor/text_renderer.json")}
         , m_window_config       {erhe::codegen::load_config<Window_config>         ("config/editor/window.json")}
     {
+        // A benchmark run is a profiling run: its shaders are the optimized
+        // ones (Graphics_config::spirv_optimization). The environment
+        // overrides below still decide last.
+        if (!benchmark_path.empty() && !m_graphics_config.spirv_optimization) {
+            log_startup->info("--benchmark: spirv_optimization false -> true (erhe_graphics.json not modified)");
+            m_graphics_config.spirv_optimization = true;
+        }
         apply_graphics_config_environment_overrides(m_graphics_config);
 
 #if defined(__APPLE__)

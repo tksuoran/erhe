@@ -110,6 +110,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--runs-root", default="", help="where run directories go (default <build-dir>/render_thread_bench)")
     parser.add_argument("--readiness-timeout", type=float, default=300.0)
     parser.add_argument("--run-timeout", type=float, default=900.0, help="seconds to wait for the editor to quit by itself")
+    parser.add_argument("--spirv-optimization", choices=("on", "off"), default="on", help="ERHE_SPIRV_OPTIMIZATION for the editor: profiling runs use optimized SPIR-V (Graphics_config::spirv_optimization; default on)")
     return parser.parse_args()
 
 
@@ -238,6 +239,7 @@ def run_once(args: argparse.Namespace, runs_root: Path, config_name: str, index:
     editor = find_editor(args)
     env = dict(os.environ)
     env["ERHE_AI_DRIVER"] = "1"
+    env["ERHE_SPIRV_OPTIMIZATION"] = "1" if args.spirv_optimization == "on" else "0"
     if args.gpu:
         env["VK_DRIVER_FILES"] = find_icd(args.gpu)
     env.update(CONFIGS[config_name])

@@ -1,5 +1,5 @@
 {
-    "_version": 3,
+    "_version": 4,
     "initial_clear": true,
     "renderdoc_capture_support": false,
     "renderdoc_library_path_override_enable": false,
@@ -14,6 +14,7 @@
     "display_refresh_source": "auto",
     "display_refresh_override_hz": 0.0,
     "present_calibration_cache": true,
+    "spirv_optimization": false,
     "opengl": {
         "_version": 2,
         "force_bindless_textures_off": false,

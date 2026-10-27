@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Graphics_config",
     reflect=True,
-    version=3,
+    version=4,
     short_desc="Graphics Settings",
     long_desc="",
     developer=False,
@@ -144,6 +144,16 @@ struct("Graphics_config",
             default="true",
             short_desc="Reuse Cached Present Calibration",
             long_desc="Reuse the present calibration (the probe run at device init on a presentation path that honors target present times: Metal tier M, Vulkan VK_GOOGLE_display_timing) measured by an earlier run on the same display, display mode, OS build, GPU and present path, instead of running the probes again (doc/erhe/graphics.md 'Present calibration cache'). Entries live in cache/present_calibration/ under the working directory. false always measures and rewrites the entry; the environment variable ERHE_PRESENT_CALIBRATION_CACHE=0 does the same. Change requires restart.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "spirv_optimization",
+            Bool,
+            added_in=4,
+            default="false",
+            short_desc="Optimize SPIR-V (profiling)",
+            long_desc="Run the SPIRV-Tools optimizer's performance passes on every shader stage after glslang (the shader interface and the non-semantic debug info are kept, so GPU profilers still map samples to source lines; an optimized module that fails validation is logged and the unoptimized one is used). For profiling runs: the editor's --benchmark mode turns it on, and the environment variable ERHE_SPIRV_OPTIMIZATION=1|0 overrides the file. Optimized and unoptimized SPIR-V are cached under different keys. Change requires restart.",
             visible=True,
             developer=False
         ),

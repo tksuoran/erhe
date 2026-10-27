@@ -745,7 +745,9 @@ headset's head pose from the driver's camera path before `xrWaitFrame`;
 the 60-frame log line is unchanged. The mode, its phases, determinism
 rules and report are specified in `doc/plans/quest_performance.md`
 "Benchmark mode"; running it on the Quest is in `doc/agents/quest.md`
-"Benchmark runs".
+"Benchmark runs". A benchmark run compiles optimized SPIR-V
+(`Graphics_config::spirv_optimization`, doc/erhe/graphics.md "SPIR-V
+optimization") unless `ERHE_SPIRV_OPTIMIZATION=0` turns it off.
 
 **Watchdog and shutdown.** The main-loop stall watchdog
 (`doc/agents/debugging.md` "Main-loop stall watchdog") watches while

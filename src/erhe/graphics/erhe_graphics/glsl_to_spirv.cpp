@@ -3,6 +3,7 @@
 #include "erhe_graphics/glsl_format_source.hpp"
 #include "erhe_graphics/glsl_includer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/spirv_cache.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_hash/hash.hpp"
@@ -32,11 +33,17 @@
 #include <glslang/build_info.h>
 #include <SPIRV/GlslangToSpv.h>
 #include <SPIRV/disassemble.h>
+#include <spirv-tools/libspirv.hpp>
+#include <spirv-tools/optimizer.hpp>
 
 #include <algorithm>
 #include <cstring>
 #include <mutex>
+#include <optional>
 #include <sstream>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace erhe::graphics {
 
@@ -154,7 +161,9 @@ const glslang::SpvOptions c_spirv_options{
     .disableOptimizer                 = true,
     .optimizeSize                     = false,
     .disassemble                      = false,
-    .validate                         = true,
+    // glslang's own validation pass; the optimized modules are validated in
+    // optimize_spirv() below.
+    .validate                         = false,
     .emitNonSemanticShaderDebugInfo   = true,
     .emitNonSemanticShaderDebugSource = true,
     .compileOnly                      = false,
@@ -200,6 +209,68 @@ auto compute_compile_settings_hash() -> uint64_t
     return seed;
 }
 const uint64_t c_compile_settings_hash = compute_compile_settings_hash();
+
+// SPIR-V optimization (Graphics_config::spirv_optimization; doc/erhe/graphics.md
+// "SPIR-V optimization"): the optimized modules are cached under their own
+// key, which also folds in the SPIRV-Tools version (its performance pass
+// sequence changes between releases).
+#if defined(ERHE_GRAPHICS_API_METAL) || defined(ERHE_GRAPHICS_API_VULKAN)
+constexpr spv_target_env c_spirv_tools_target_env = SPV_ENV_VULKAN_1_3;
+#else
+constexpr spv_target_env c_spirv_tools_target_env = SPV_ENV_OPENGL_4_5;
+#endif
+auto compute_optimized_compile_settings_hash() -> uint64_t
+{
+    const char* const spirv_tools_version = spvSoftwareVersionString();
+    uint64_t seed = erhe::hash::hash(spirv_tools_version, std::strlen(spirv_tools_version), c_compile_settings_hash);
+    seed = erhe::hash::hash(static_cast<uint8_t>(1), seed); // performance passes, interface preserved
+    return seed;
+}
+const uint64_t c_optimized_compile_settings_hash = compute_optimized_compile_settings_hash();
+
+[[nodiscard]] auto get_compile_settings_hash(const Device& device) -> uint64_t
+{
+    return device.get_graphics_config().spirv_optimization ? c_optimized_compile_settings_hash : c_compile_settings_hash;
+}
+
+// spirv-opt's performance passes with the entry point interface preserved
+// (the stages of a program are optimized one at a time, so no stage may
+// drop an input or output the other side declares). Returns the optimized
+// module, or nothing when the optimizer fails or its output does not
+// validate; the caller then keeps the unoptimized module.
+[[nodiscard]] auto optimize_spirv(const std::vector<unsigned int>& spirv, std::string_view label) -> std::optional<std::vector<unsigned int>>
+{
+    std::string messages;
+    const spvtools::MessageConsumer consumer = [&messages](
+        const spv_message_level_t level,
+        const char*,
+        const spv_position_t&     position,
+        const char*               message
+    ) {
+        if (level <= SPV_MSG_WARNING) {
+            messages += fmt::format("  word {}: {}\n", position.index, message);
+        }
+    };
+
+    spvtools::Optimizer optimizer{c_spirv_tools_target_env};
+    optimizer.SetMessageConsumer(consumer);
+    optimizer.RegisterPerformancePasses(true);
+    spvtools::OptimizerOptions optimizer_options{};
+    optimizer_options.set_run_validator(false);
+    std::vector<unsigned int> optimized;
+    if (!optimizer.Run(spirv.data(), spirv.size(), &optimized, optimizer_options)) {
+        log_program->error("SPIR-V optimization of {} failed; using the unoptimized module:\n{}", label, messages);
+        return {};
+    }
+
+    spvtools::SpirvTools tools{c_spirv_tools_target_env};
+    tools.SetMessageConsumer(consumer);
+    if (!tools.Validate(optimized)) {
+        log_program->error("Optimized SPIR-V of {} does not validate; using the unoptimized module:\n{}", label, messages);
+        return {};
+    }
+    return optimized;
+}
 
 } // anonymous namespace
 
@@ -468,7 +539,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
             for (const Shader_stage& shader : create_info.shaders) {
                 if (to_glslang(shader.type) == stage) {
                     const std::string source = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
-                    std::vector<unsigned int> cached = m_cache->get(source, shader.type, c_compile_settings_hash);
+                    std::vector<unsigned int> cached = m_cache->get(source, shader.type, get_compile_settings_hash(device));
                     if (!cached.empty()) {
                         m_spirv_shaders[stage] = std::move(cached);
                         from_cache = true;
@@ -488,6 +559,15 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
             if (!spv_messages.empty()) {
                 log_glsl->info("SPIR_V messages::\n{}\n", spv_messages);
             }
+            if (device.get_graphics_config().spirv_optimization) {
+                std::optional<std::vector<unsigned int>> optimized = optimize_spirv(
+                    spirv_binary,
+                    fmt::format("{} {} stage", create_info.name, glslang_stage_name(stage))
+                );
+                if (optimized.has_value()) {
+                    spirv_binary = std::move(optimized.value());
+                }
+            }
             m_spirv_shaders[stage] = std::move(spirv_binary);
         };
         const auto store_in_cache = [&]() {
@@ -495,7 +575,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
                 for (const Shader_stage& shader : create_info.shaders) {
                     if (to_glslang(shader.type) == stage) {
                         const std::string source = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
-                        m_cache->put(source, shader.type, c_compile_settings_hash, m_spirv_shaders[stage]);
+                        m_cache->put(source, shader.type, get_compile_settings_hash(device), m_spirv_shaders[stage]);
                         break;
                     }
                 }
@@ -565,7 +645,7 @@ auto Glslang_shader_stages::try_load_all_from_cache(Device& device) -> bool
         const std::string source   = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
         const EShLanguage language = to_glslang(shader.type);
 
-        std::vector<unsigned int> spirv = m_cache->get(source, shader.type, c_compile_settings_hash);
+        std::vector<unsigned int> spirv = m_cache->get(source, shader.type, get_compile_settings_hash(device));
         if (spirv.empty()) {
             return false; // Cache miss on any stage means we must compile all
         }

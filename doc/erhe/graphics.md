@@ -668,6 +668,34 @@ before it (no render encoder open).
   through the heap's), so every render pipeline qualifies. The other
   backends ignore the field.
 
+## SPIR-V optimization
+
+`Graphics_config::spirv_optimization` (default off) runs the SPIRV-Tools
+optimizer on every shader stage that `Glslang_shader_stages` compiles
+(`glsl_to_spirv.cpp`, `optimize_spirv()`): spirv-opt's performance passes
+(`Optimizer::RegisterPerformancePasses(true)`) with the entry point interface
+preserved, because the stages of a program are optimized one at a time and
+none may drop an input, output or resource the other side declares. The
+non-semantic debug info stays in the module, so a GPU profiler still maps
+shader samples to source lines. The optimized module is validated for the
+target environment; when the optimizer fails or its output does not
+validate, an error names the stage and the unoptimized module is used.
+glslang's own `SpvOptions::validate` pass is off.
+
+Optimized modules are cached in the `Spirv_cache` under a key that also folds
+in the SPIRV-Tools version, so a process with the setting off never loads an
+optimized module and a SPIRV-Tools update recompiles them. The setting is read
+when a stage is compiled; changing it requires a restart.
+
+It is meant for profiling runs, where the measured shaders should be the
+optimized ones: the editor's `--benchmark` mode turns it on (the Quest
+benchmark runs), and the desktop profiling scripts (`bistro_frame_bench.py`,
+`render_thread_bench.py`) set the editor's
+`ERHE_SPIRV_OPTIMIZATION=1|0` environment override, on by default
+(`--spirv-optimization off` for an A/B run). SPIRV-Tools and SPIRV-Headers are
+CPM dependencies pinned to the commits glslang's `known_good.json` names
+(glslang is built with `ENABLE_OPT`).
+
 ## Present calibration cache
 
 The present calibration (`present_calibration.hpp`; the probes are described
@@ -774,7 +802,7 @@ the key and the file name (MCP `get_frame_pacing_status`
 - **erhe libraries (backend target):** `erhe::window` (public; the surface and swapchain backends), `erhe::gl` (private, OpenGL backend only)
 - **erhe libraries (both targets, private):** `erhe::defer`, `erhe::file`, `erhe::hash`, `erhe::log`, `erhe::profile`, `erhe::time`, `erhe::utility`, `erhe::verify`
 - **erhe libraries (interface target, private):** `erhe::version` and `erhe::window` (the present calibration cache)
-- **External:** glm, fmt, mango, concurrentqueue, nlohmann_json (private) and glslang (with `ERHE_SPIRV`) on the interface target; volk and VMA (Vulkan), metal-cpp and SPIRV-Cross (Metal) on the backend target, selected at CMake time
+- **External:** glm, fmt, mango, concurrentqueue, nlohmann_json (private) and glslang (with `ERHE_SPIRV`) on the interface target; SPIRV-Tools (private, with `ERHE_SPIRV`; the optimizer) on the backend target; volk and VMA (Vulkan), metal-cpp and SPIRV-Cross (Metal) on the backend target, selected at CMake time
 
 ## Notes
 - All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. Backend implementations live in `gl/` (OpenGL), `vulkan/` (Vulkan), `metal/` (Metal), `metal4/` (Metal 4, `doc/erhe/metal4_backend.md`), and `null/` (headless).
