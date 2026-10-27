@@ -2061,6 +2061,7 @@ void Headset_view::add_render_cull_view()
         .viewport_config                = m_viewport_config,
         .scene_root                     = scene_root,
         .shader_debug                   = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
+        .views                          = {},
         .immediate_cull_draw_list_scene = m_render_cull_draw_list_scene,
         .immediate_cull_view            = m_render_cull_view
     };

@@ -1833,7 +1833,8 @@ void Draw_list_scene::decode_retired_occlusion(const uint64_t frame_index)
             check.result = Occlusion_check{
                 .frame_index = check.frame_index,
                 .entry_count = check.entry_count,
-                .view_count  = check.view_count
+                .view_count  = check.view_count,
+                .views       = {}
             };
             check.first_occluded_objects.clear();
             for (const Gpu_occlusion_check::View& check_view : check.views) {
@@ -1842,7 +1843,8 @@ void Draw_list_scene::decode_retired_occlusion(const uint64_t frame_index)
                     .view               = static_cast<uint32_t>(view),
                     .key                = check_view.key,
                     .bounded_in_frustum = check_view.bounded_in_frustum,
-                    .near_plane         = static_cast<uint32_t>(check_view.near_plane_entries.size())
+                    .near_plane         = static_cast<uint32_t>(check_view.near_plane_entries.size()),
+                    .first_occluded     = {}
                 };
                 std::vector<uint32_t>& occluded_objects = check.first_occluded_objects.emplace_back();
                 for (std::size_t entry = 0; entry < entry_count; ++entry) {
