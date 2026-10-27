@@ -187,13 +187,11 @@ auto Shader_key::derive(
         key.set(Shader_bool::USE_VERTEX_VARYING_COLOR, true);
     }
 
-    // Lightmap UVs (channel 2) always pass through when the format carries
-    // them: whether a draw actually samples the lightmap is a per-primitive
-    // runtime gate (primitive.lightmap_scale_offset), not a variant axis,
-    // so the varying must exist on every lightmap-capable mesh.
-    if (has_texcoord_2) {
-        key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD2, true);
-    }
+    // Lightmap UVs (channel 2) are not a varying of the primitive key: the
+    // scene-level USE_LIGHTMAP environment axis (a lightmap atlas is bound)
+    // brings them in on every format that carries them
+    // (ERHE_USE_LIGHTMAP_SAMPLING, erhe_standard_variant.glsl), and the
+    // per-primitive lightmap_scale_offset decides which draws sample.
 
     // A primitive without a material draws with the reserved default
     // material record (Material_set::default_material_slot_index), which

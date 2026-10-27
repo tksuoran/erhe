@@ -57,8 +57,10 @@ layout(location = 1) out vec2      v_texcoord_0;
 layout(location = 12) out vec2     v_texcoord_1;
 #endif
 
-#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2) && !defined(ERHE_VARIANT_POSITION_PASS)
+#if defined(ERHE_USE_VARYING_TEXCOORD2)
 layout(location = 21) out vec2      v_texcoord_2;             // lightmap UVs
+#endif
+#if defined(ERHE_USE_LIGHTMAP_SAMPLING)
 layout(location = 22) flat out vec4 v_lightmap_scale_offset;  // atlas region; xy 0 = no lightmap
 #endif
 
@@ -414,8 +416,10 @@ void main()
     v_node_position  = node_position;
 #   endif
 
-#   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
+#   if defined(ERHE_USE_VARYING_TEXCOORD2)
     v_texcoord_2            = a_texcoord_2;
+#   endif
+#   if defined(ERHE_USE_LIGHTMAP_SAMPLING)
     v_lightmap_scale_offset = primitive.primitives[ERHE_PRIMITIVE_INDEX].lightmap_scale_offset;
 #   endif
 #   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD1)

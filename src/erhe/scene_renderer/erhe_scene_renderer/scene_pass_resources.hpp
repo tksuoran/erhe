@@ -156,8 +156,10 @@ public:
     void end_pass(Pass_state& state, erhe::graphics::Render_command_encoder& render_encoder);
 
     // Baked lightmap atlas sampled by standard.frag through s_lightmap
-    // (doc/editor/lightmap_baking.md phase 5). Null binds the black fallback;
-    // per-primitive lightmap_scale_offset gates sampling per draw.
+    // (doc/editor/lightmap_baking.md phase 5). Null binds the black fallback
+    // and turns the USE_LIGHTMAP variant axis off, so no draw compiles the
+    // lightmap path; with an atlas, per-primitive lightmap_scale_offset gates
+    // sampling per draw.
     void set_lightmap_texture(const std::shared_ptr<erhe::graphics::Texture>& texture) { m_lightmap_texture = texture; }
     // Viewport lightmap filtering: bicubic B-spline reconstruction when
     // true (the default), plain bilinear when false.

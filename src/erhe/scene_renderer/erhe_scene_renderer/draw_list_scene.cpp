@@ -241,6 +241,7 @@ auto Color_environment::make_environment_key() const -> Shader_key
     key.set(Shader_int::SHADOW_DEPTH_BITS,                        shadow_depth_bits);
     key.set(Shader_int::SPECULAR_ANTI_ALIASING,                   static_cast<uint32_t>(specular_anti_aliasing));
     key.set(Shader_bool::USE_DDGI,                                ddgi_enabled);
+    key.set(Shader_bool::USE_LIGHTMAP,                            lightmap_enabled);
     return key;
 }
 
@@ -1860,7 +1861,7 @@ auto Draw_list_scene::resolve_color_stages(
     }
 
     // Combine (plan section 0.2): primitive-derived key from registration OR
-    // environment bool bits (USE_DDGI, LIGHT_SHADING_CLUSTERED), environment int axes overwrite (the
+    // environment bool bits (USE_DDGI, LIGHT_SHADING_CLUSTERED, USE_LIGHTMAP), environment int axes overwrite (the
     // primitive key never sets those axes when SHADER_DEBUG == 0), multiview
     // axis per view configuration, blending mode from the primitive key.
     Shader_key       key = draw_list.key.primitive_key;
