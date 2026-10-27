@@ -121,7 +121,8 @@ If the dialog still appears, it is Samsung Auto Blocker rather than Play Protect
 
 The wrapper scripts probe in this order:
 - `ANDROID_HOME` env var, falling back to `%LOCALAPPDATA%\Android\Sdk`. Adb is `<ANDROID_HOME>\platform-tools\adb.exe`.
-- `JAVA_HOME` env var (only needed for direct gradle calls), falling back to `C:\Program Files\Android\Android Studio\jbr` (Android Studio's bundled JDK 21; Gradle 8.12 + AGP do not support JDK 25).
+- `JAVA_HOME` env var (only needed for direct gradle calls), falling back to `C:\Program Files\Android\Android Studio\jbr` (Android Studio's bundled JetBrains Runtime, JDK 25, runs the pinned Gradle 8.14.5 + AGP 8.13.2).
+- Required SDK packages, versions and the `sdkmanager` install recipe: `doc/android.md` "Toolchain". On Linux/macOS there is no wrapper script: run `android-project/gradlew` with `JAVA_HOME` + `ANDROID_HOME` exported and `-PpythonExecutable=$(command -v python3)`.
 
 In bash on Windows, the canonical adb path is `"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"`.
 
