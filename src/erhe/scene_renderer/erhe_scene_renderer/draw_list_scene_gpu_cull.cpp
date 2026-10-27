@@ -353,7 +353,7 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
         // occlusion views, into the frame slot's occlusion buffer (bound
         // every dispatch; the shader writes it only when the header asks).
         const bool occlusion = !m_occlusion_views.empty();
-        prepare_occlusion_slot(frame_index, entry_count, group_count, occlusion ? Occlusion_culling::on : Occlusion_culling::off);
+        prepare_occlusion_slot(frame_index, entry_count, group_count, occlusion ? Occlusion_culling::on : Occlusion_culling::off, command_buffer);
         Occlusion_slot& occlusion_slot = m_occlusion_slots[frame_index % m_occlusion_slots.size()];
         // The previous frame's occlusion words, consumed by this frame's
         // classification (one frame of lag): only those of the frame right
@@ -1437,10 +1437,11 @@ auto Draw_list_scene::add_occlusion_view(
 }
 
 void Draw_list_scene::prepare_occlusion_slot(
-    const uint64_t    frame_index,
-    const std::size_t entry_count,
-    const std::size_t       group_count,
-    const Occlusion_culling occlusion
+    const uint64_t                  frame_index,
+    const std::size_t               entry_count,
+    const std::size_t               group_count,
+    const Occlusion_culling         occlusion,
+    erhe::graphics::Command_buffer& command_buffer
 )
 {
     using namespace erhe::graphics;
@@ -1475,17 +1476,18 @@ void Draw_list_scene::prepare_occlusion_slot(
         );
     }
     if (!slot.buffer || (slot.buffer->get_capacity_byte_count() < needed)) {
-        // Rare: the slot's high-water size (lists, views) grew.
+        // Rare: the slot's high-water size (lists, views) grew. Device
+        // memory: the occlusion pass's vertex reads and fragment atomics on
+        // the words were ~350 ms per frame on a discrete GPU with the buffer
+        // in host memory. An occlusion check reads a copy (slot.readback).
         const std::size_t capacity = std::bit_ceil(needed);
         slot.buffer = std::make_unique<Buffer>(
             device,
             Buffer_create_info{
-                .capacity_byte_count                    = capacity,
-                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
-                .usage                                  = Buffer_usage::storage,
-                .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
-                .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
-                .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene occlusion words"}
+                .capacity_byte_count               = capacity,
+                .usage                             = Buffer_usage::storage | Buffer_usage::transfer_src,
+                .required_memory_property_bit_mask = Memory_property_flag_bit_mask::device_local,
+                .debug_label                       = erhe::utility::Debug_label{"Draw_list_scene occlusion words"}
             }
         );
         log_draw_list->info("Occlusion words: frame slot {} buffer {} bytes ({} entries, {} view groups)", frame_index % m_occlusion_slots.size(), capacity, entry_count, group_count);
@@ -1502,30 +1504,26 @@ void Draw_list_scene::prepare_occlusion_slot(
         };
         const std::size_t capacity   = std::bit_ceil(std::max(entry_count, std::size_t{64}));
         const std::size_t byte_count = capacity * pattern.size() * sizeof(uint32_t);
+        // Device memory, uploaded once per capacity (the upload orders the
+        // copy before the occlusion pass's index reads). The staging vector
+        // is allocated only when the capacity grows.
         slot.index_buffer = std::make_unique<Buffer>(
             device,
             Buffer_create_info{
-                .capacity_byte_count                    = byte_count,
-                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
-                .usage                                  = Buffer_usage::index,
-                .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_write,
-                .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
-                .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene occlusion box indices"}
+                .capacity_byte_count               = byte_count,
+                .usage                             = Buffer_usage::index | Buffer_usage::transfer_dst,
+                .required_memory_property_bit_mask = Memory_property_flag_bit_mask::device_local,
+                .debug_label                       = erhe::utility::Debug_label{"Draw_list_scene occlusion box indices"}
             }
         );
-        const std::span<std::byte> mapped = slot.index_buffer->map_bytes(0, byte_count);
-        std::byte* write = mapped.data();
+        std::vector<uint32_t> indices(capacity * pattern.size());
         for (std::size_t entry = 0; entry < capacity; ++entry) {
             const uint32_t base = static_cast<uint32_t>(entry * Gpu_cull_classifier::occlusion_vertices_per_entry);
-            std::array<uint32_t, Gpu_cull_classifier::occlusion_indices_per_entry> indices{};
             for (std::size_t i = 0; i < pattern.size(); ++i) {
-                indices[i] = base + pattern[i];
+                indices[(entry * pattern.size()) + i] = base + pattern[i];
             }
-            std::memcpy(write, indices.data(), sizeof(indices));
-            write += sizeof(indices);
         }
-        slot.index_buffer->flush_bytes(0, byte_count);
-        slot.index_buffer->unmap();
+        command_buffer.upload_to_buffer(*slot.index_buffer, 0, indices.data(), byte_count);
         slot.index_capacity = capacity;
         log_draw_list->info("Occlusion box indices: frame slot {} for {} entries ({} bytes)", frame_index % m_occlusion_slots.size(), capacity, byte_count);
     }
@@ -1627,15 +1625,50 @@ void Draw_list_scene::record_frame_end(const uint64_t frame_index, erhe::graphic
     if (!m_occlusion_frame_active || (m_occlusion_frame_index != frame_index)) {
         return;
     }
-    const Occlusion_slot& slot = m_occlusion_slots[frame_index % m_occlusion_slots.size()];
+    Occlusion_slot& slot = m_occlusion_slots[frame_index % m_occlusion_slots.size()];
     ERHE_VERIFY(slot.pending && (slot.frame_index == frame_index));
+    // Only an occlusion check reads the words on the CPU; the next frame's
+    // classification orders its own reads (dispatch_gpu_cull_views()).
+    {
+        const std::lock_guard<std::mutex> lock{m_occlusion_check->mutex};
+        const Gpu_occlusion_check& check = *m_occlusion_check;
+        if ((check.stage != Gpu_occlusion_check::Stage::recording) || (check.frame_index != frame_index)) {
+            return;
+        }
+    }
+    // The checked frame: its three regions -> the host copy the decode
+    // reads once the frame retired. A diagnostic path: it may allocate.
+    Device&           device     = m_gpu_cull_classifier->get_device();
+    const std::size_t byte_count = slot.culled_offset + slot.region_bytes;
+    if (!slot.readback || (slot.readback->get_capacity_byte_count() < byte_count)) {
+        // A multiple of every nonCoherentAtomSize, so the whole buffer can
+        // be invalidated at the decode.
+        constexpr std::size_t min_capacity = 256;
+        slot.readback = std::make_unique<Buffer>(
+            device,
+            Buffer_create_info{
+                .capacity_byte_count                    = std::bit_ceil(std::max(byte_count, min_capacity)),
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = Buffer_usage::transfer_dst,
+                .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read,
+                .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_cached | Memory_property_flag_bit_mask::host_persistent,
+                .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene occlusion words readback"}
+            }
+        );
+    }
     // The classification's start words and the occlusion passes' fragment
-    // atomics -> the CPU decode once the frame retired.
+    // atomics -> the copy -> the CPU decode.
     command_buffer.buffer_barrier(
         *slot.buffer,
         Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader | Buffer_usage_flag_bit_mask::fragment_shader,
-        Buffer_usage_flag_bit_mask::host_read
+        Buffer_usage_flag_bit_mask::transfer_src
     );
+    {
+        Blit_command_encoder blit = device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_buffer(slot.buffer.get(), 0, slot.readback.get(), 0, byte_count);
+    }
+    command_buffer.buffer_barrier(*slot.readback, Buffer_usage_flag_bit_mask::transfer_dst, Buffer_usage_flag_bit_mask::host_read);
+    slot.readback_bytes = byte_count;
 }
 
 auto Draw_list_scene::get_retired_occlusion_counts(const Gpu_command_key& key) const -> std::optional<Retired_occlusion_counts>
@@ -1736,9 +1769,8 @@ void Draw_list_scene::decode_retired_occlusion(const uint64_t frame_index)
     // frame retired (Device::acquire_frame_slot() waited for it).
     ERHE_VERIFY((slot.frame_index + m_occlusion_slots.size()) <= frame_index);
     // The words are read on the CPU only for a frame an occlusion check
-    // recorded: the GPU classification consumes them directly, and reading
-    // every entry's words back each frame costs milliseconds on large
-    // scenes (the buffer is host-visible, not necessarily host-cached).
+    // recorded, from the copy record_frame_end() made of them: the GPU
+    // classification consumes them directly.
     bool checked_frame = false;
     {
         const std::lock_guard<std::mutex> lock{m_occlusion_check->mutex};
@@ -1750,10 +1782,11 @@ void Draw_list_scene::decode_retired_occlusion(const uint64_t frame_index)
         return;
     }
     ERHE_PROFILE_FUNCTION();
-    const std::size_t          capacity = slot.buffer->get_capacity_byte_count();
-    const std::span<std::byte> data     = slot.buffer->map_bytes(0, capacity);
-    slot.buffer->invalidate(0, capacity);
-    ERHE_VERIFY(data.size_bytes() >= (slot.culled_offset + slot.region_bytes));
+    ERHE_VERIFY(slot.readback && (slot.readback_bytes == (slot.culled_offset + slot.region_bytes)));
+    const std::size_t          capacity = slot.readback->get_capacity_byte_count();
+    const std::span<std::byte> data     = slot.readback->map_bytes(0, capacity);
+    slot.readback->invalidate(0, capacity);
+    ERHE_VERIFY(data.size_bytes() >= slot.readback_bytes);
     const std::size_t entry_count = slot.entry_count;
     // The words of (group, entry), bit = view % 64 (cull_classify.comp).
     const auto read_bit = [&data, entry_count](const std::size_t region_offset, const std::size_t view, const std::size_t entry) -> bool {
@@ -1853,7 +1886,7 @@ void Draw_list_scene::decode_retired_occlusion(const uint64_t frame_index)
             check.stage = Gpu_occlusion_check::Stage::complete;
         }
     }
-    slot.buffer->unmap();
+    slot.readback->unmap();
     slot.pending = false;
 }
 
