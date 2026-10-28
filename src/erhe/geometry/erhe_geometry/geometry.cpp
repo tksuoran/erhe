@@ -1230,6 +1230,7 @@ void Geometry::copy_with_transform(const Geometry& source, const GEO::mat4f& tra
         m_corner_to_facet     = source.m_corner_to_facet;
         m_edge_to_facets      = source.m_edge_to_facets;
         m_vertex_to_edges     = source.m_vertex_to_edges;
+        m_corner_to_edge      = source.m_corner_to_edge;
     }
 }
 

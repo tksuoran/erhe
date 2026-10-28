@@ -147,6 +147,19 @@ TEST(Edit_mesh, LoadCopiesCounts)
     }
 }
 
+// Scaled brush instances are copy_with_transform() copies; the copy must carry
+// every edge connectivity table, or Edit_mesh::load() refuses it.
+TEST(Edit_mesh, LoadsCopyWithTransform)
+{
+    const std::unique_ptr<Geometry> cube = make_cube();
+    Geometry scaled{"scaled"};
+    scaled.copy_with_transform(*cube, GEO::create_scaling_matrix(0.25f));
+    ASSERT_TRUE(scaled.has_edge_connectivity());
+    Geometry destination{"result"};
+    Test_edit_operation operation{scaled, destination};
+    emit_and_check(operation, destination, Counts{8, 12, 6});
+}
+
 TEST(Edit_mesh, SplitEdgeCube)
 {
     const std::unique_ptr<Geometry> cube = make_cube();
