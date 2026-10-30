@@ -570,3 +570,5 @@ measured on the GPU timers.
   the moves: `flush_pending` about 440 us per frame, a list copy and a bounds
   write per frame. Pre-existing and untraced; the follow-up is which hook
   fires every frame (transform serial, bounds or material).
+- Phase 8, a baked from-region test next to the frustum and occlusion
+  tests: [pvs.md](pvs.md).
