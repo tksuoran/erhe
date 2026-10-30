@@ -237,8 +237,10 @@ bounded in-frustum entries culled as occluded. Repeat-3 medians not taken.
 
 - The pass's fill cost grows with the screen area of the tested boxes
   (Bistro bench camera +1 ms). Candidates: test only entries above a
-  screen-size threshold (small entries are cheap to draw anyway) and a
-  hierarchical-Z compute test instead of rasterized boxes.
+  screen-size threshold (small entries are cheap to draw anyway), a
+  hierarchical-Z compute test instead of rasterized boxes, and the baked
+  PVS of [pvs.md](pvs.md), which removes entries before the test bits are
+  computed.
 - A scene with little occlusion (heavy) pays the pass without a saving;
   the setting stays off by default until measured on more scenes.
 - Headset: the per-eye (non-multiview) path has no occlusion view; the

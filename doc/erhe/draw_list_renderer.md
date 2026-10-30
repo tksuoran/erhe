@@ -1280,3 +1280,5 @@ for `Shader_variant_cache miss` in the first frames with the setting on.
 - [plans/culling.md](../plans/culling.md): one classification of every entry
   against every pass of the frame, SoA bounds published with the lists, then
   the same on the GPU with indirect command generation.
+- [plans/pvs.md](../plans/pvs.md): a baked potentially visible set per grid
+  cell, read by the classification on the GPU.

@@ -17,6 +17,11 @@
 ?NEXT=fable-review-491a843f0->sync->heavy-line-compute-39ms(queue-item-1)->default-color-pass(grid-2ms;shadow-math)
 ?then=heavy-scene-run(commands_bench_heavy-via-args-extra)->rank-CPU(R-5.8ms-default)-vs-GPU(mips)->items-2-5
 
+[TASK::pvs]{started-2026-10-30;branch=render-thread;doc/plans/pvs.md;via-harness{opus-coder+opus-review}}
+✓plan{doc/plans/pvs.md;links:README+culling.md-phase-8+occlusion_culling.md-Open+draw_list_renderer.md-Future-work;check_doc_links-0}
+?user-decisions{D1-storage-ERHE_pvs-in-glb|sidecar;D2-region=scene-settings-box+cell-size;D3-static-set(translucent-never-baked);D4-strict-staleness;D5-views=occlusion-set;D6-bake-in-editor-R-one-cell/frame+MCP;D7-32-bit-atomics-dense-buffers}
+?step-1..7{DB+persistence;sampled-oracle-bake;consumer;layered-buffer;disocclusion-passes+cell-loop;headset;docs}
+
 [TASK::metal-draw-count]{2026-10-23..24;branch=render-thread;CODE-DONE;detail->memory-bank/topics/metal.md[PROGRESS_2026-10-24]}
 ✓Metal-GPU-read-draw-count(ICB)+Metal-4-separate-backend-all-rows-MTL4+barrier-API+declared-barriers+narrowing(5cf6e13d2)+ImGui-first_instance(07330bebc)+Metal-draw-id-removed(2ae347dfe;M4==M3-per-draw)+vertex-stage-sampler-remap(c9e5f8faf)+Vk-render-pass-qualifiers(1fd30277d)+shadow-qualifiers(f52f201e0)
 ?pending-user-at-Dell{pacing-live-gate-cached-vs-fresh;M4-vs-M3;fullscreen-re-gate-Dell+ProMotion}->Metal-3-keep/remove-decision(Metal-3-still-per-bind-PSO)=prompt_queue-item-2

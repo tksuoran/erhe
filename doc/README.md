@@ -477,6 +477,7 @@ flowchart TD
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
 - [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification
+- [plans/pvs.md](plans/pvs.md) (proposed): Potentially visible sets: offline disocclusion-buffer bake per grid cell, database in the scene file, GPU runtime culling in the classification
 - [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
 - [plans/radiance_cascades.md](plans/radiance_cascades.md) (in progress): Radiance cascades: design, gates and measurements, remaining work (failing gates, per-child segments, cascade 0 relocation, change-driven refit)
 - [plans/raytrace.md](plans/raytrace.md) (proposed): Ray tracing follow-ups
