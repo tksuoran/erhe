@@ -1757,7 +1757,7 @@ void convert(const void* src, const Format src_format, void* dst, const Format d
             const float fx     = f_value[0] / scale;
             const float fy     = f_value[1] / scale;
             const float fz     = f_value[2] / scale;
-            const float fw     = f_value[2] / scale;
+            const float fw     = f_value[3] / scale;
             const float srgb_x = linear_rgb_to_srgb(fx);
             const float srgb_y = linear_rgb_to_srgb(fy);
             const float srgb_z = linear_rgb_to_srgb(fz);
@@ -2092,6 +2092,23 @@ void convert(const void* src, const Format src_format, void* dst, const Format d
             ui[2] = glm::packHalf1x16(fz);
             ui[3] = glm::packHalf1x16(fw);
             memcpy(dst, &ui[0], 4 * sizeof(uint16_t));
+            break;
+        }
+
+        case Format::format_packed1010102_vec4_unorm: {
+            const uint32_t packed = glm::packUnorm3x10_1x2(
+                glm::vec4{f_value[0] / scale, f_value[1] / scale, f_value[2] / scale, f_value[3] / scale}
+            );
+            memcpy(dst, &packed, sizeof(uint32_t));
+            break;
+        }
+        case Format::format_packed111110_vec3_unorm: {
+            // R in the low 11 bits, G in the next 11, B in the high 10
+            // (VK_FORMAT_B10G11R11_UFLOAT_PACK32 / MTLPixelFormatRG11B10Float).
+            const uint32_t packed = glm::packF2x11_1x10(
+                glm::vec3{f_value[0] / scale, f_value[1] / scale, f_value[2] / scale}
+            );
+            memcpy(dst, &packed, sizeof(uint32_t));
             break;
         }
 

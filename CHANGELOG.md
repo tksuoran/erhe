@@ -33,6 +33,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::dataformat`: `convert()` writes `format_packed111110_vec3_unorm`
+  (R in the low 11 bits) and `format_packed1010102_vec4_unorm`; converting to
+  `format_8_vec4_srgb` writes the source alpha (it wrote blue).
 - `erhe::graphics`: `Graphics_config::spirv_optimization` (config version 4):
   every compiled shader stage runs through the SPIRV-Tools optimizer's
   performance passes (interface and debug info preserved; an optimized module

@@ -19,6 +19,7 @@
 #include <Metal/Metal.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -515,64 +516,31 @@ void Command_buffer_impl::clear_texture(const Texture& texture, std::array<doubl
     const NS::UInteger width  = mtl_texture->width();
     const NS::UInteger height = mtl_texture->height();
 
-    NS::UInteger bytes_per_pixel = 0;
-    switch (pixel_format) {
-        case MTL::PixelFormatR8Unorm:
-        case MTL::PixelFormatA8Unorm:
-            bytes_per_pixel = 1;
-            break;
-        case MTL::PixelFormatRG8Unorm:
-        case MTL::PixelFormatR16Float:
-            bytes_per_pixel = 2;
-            break;
-        case MTL::PixelFormatRGBA8Unorm:
-        case MTL::PixelFormatRGBA8Unorm_sRGB:
-        case MTL::PixelFormatBGRA8Unorm:
-        case MTL::PixelFormatBGRA8Unorm_sRGB:
-        case MTL::PixelFormatRGB10A2Unorm:
-        case MTL::PixelFormatRG16Float:
-        case MTL::PixelFormatR32Float:
-            bytes_per_pixel = 4;
-            break;
-        case MTL::PixelFormatRGBA16Float:
-        case MTL::PixelFormatRG32Float:
-            bytes_per_pixel = 8;
-            break;
-        case MTL::PixelFormatRGBA32Float:
-            bytes_per_pixel = 16;
-            break;
-        default:
-            bytes_per_pixel = 4;
-            break;
-    }
+    // One texel of the clear value in the texture's own format (packed,
+    // half-float, sRGB-encoded, swizzled as the format defines), repeated
+    // over the level.
+    const erhe::dataformat::Format pixelformat     = texture.get_pixelformat();
+    const NS::UInteger             bytes_per_pixel = static_cast<NS::UInteger>(erhe::dataformat::get_format_size_bytes(pixelformat));
+    ERHE_VERIFY(!erhe::dataformat::is_block_compressed(pixelformat));
+    ERHE_VERIFY((bytes_per_pixel > 0) && (bytes_per_pixel <= 16));
+    const std::array<float, 4> clear_float{
+        static_cast<float>(clear_value[0]),
+        static_cast<float>(clear_value[1]),
+        static_cast<float>(clear_value[2]),
+        static_cast<float>(clear_value[3])
+    };
+    std::array<uint8_t, 16> clear_texel{};
+    erhe::dataformat::convert(
+        clear_float.data(), erhe::dataformat::Format::format_32_vec4_float,
+        clear_texel.data(), pixelformat,
+        1.0f
+    );
     const NS::UInteger bytes_per_row = width * bytes_per_pixel;
     const NS::UInteger total_bytes   = bytes_per_row * height;
 
     std::vector<uint8_t> clear_data(total_bytes);
-    if (bytes_per_pixel == 16) {
-        float* p = reinterpret_cast<float*>(clear_data.data());
-        for (NS::UInteger i = 0; i < width * height; ++i) {
-            p[i * 4 + 0] = static_cast<float>(clear_value[0]);
-            p[i * 4 + 1] = static_cast<float>(clear_value[1]);
-            p[i * 4 + 2] = static_cast<float>(clear_value[2]);
-            p[i * 4 + 3] = static_cast<float>(clear_value[3]);
-        }
-    } else if ((bytes_per_pixel == 8) && (pixel_format == MTL::PixelFormatRGBA16Float)) {
-        // RGBA16Float lacks an inline half-float conversion here; fall
-        // back to zero-fill (matches the legacy behaviour).
-        std::fill(clear_data.begin(), clear_data.end(), static_cast<uint8_t>(0));
-    } else {
-        const uint8_t r = static_cast<uint8_t>(std::clamp(clear_value[0], 0.0, 1.0) * 255.0 + 0.5);
-        const uint8_t g = static_cast<uint8_t>(std::clamp(clear_value[1], 0.0, 1.0) * 255.0 + 0.5);
-        const uint8_t b = static_cast<uint8_t>(std::clamp(clear_value[2], 0.0, 1.0) * 255.0 + 0.5);
-        const uint8_t a = static_cast<uint8_t>(std::clamp(clear_value[3], 0.0, 1.0) * 255.0 + 0.5);
-        for (NS::UInteger i = 0; i < width * height; ++i) {
-            const NS::UInteger base = i * bytes_per_pixel;
-            if (bytes_per_pixel >= 1) clear_data[base + 0] = r;
-            if (bytes_per_pixel >= 2) clear_data[base + 1] = g;
-            if (bytes_per_pixel >= 3) clear_data[base + 2] = b;
-            if (bytes_per_pixel >= 4) clear_data[base + 3] = a;
-        }
+    for (NS::UInteger i = 0; i < width * height; ++i) {
+        std::memcpy(clear_data.data() + (i * bytes_per_pixel), clear_texel.data(), bytes_per_pixel);
     }
 
     if (mtl_texture->storageMode() == MTL::StorageModePrivate) {
