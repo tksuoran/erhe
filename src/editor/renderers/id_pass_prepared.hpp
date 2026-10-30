@@ -8,6 +8,10 @@
 #include <optional>
 #include <vector>
 
+namespace erhe::scene_renderer {
+    class Material_set;
+}
+
 namespace editor {
 
 // A region selection scan (box / paint select) of a viewport-pixel
@@ -41,6 +45,10 @@ public:
     // Deterministic per gather: the offsets start at
     // Primitive_buffer::first_id_offset and follow the record order.
     std::vector<erhe::scene_renderer::Primitive_buffer::Id_range> id_ranges;
+    // The scene's material set the records' material slots index; the
+    // render phase binds it for the alpha-tested buckets' discard (its copy
+    // of this frame, Material_set::bind()).
+    erhe::scene_renderer::Material_set*                           material_set{nullptr};
     // The frame's region scan, when this view claimed it in the prepare
     // phase (Id_renderer::take_frame_scan): the render phase rasterizes and
     // reads back its rectangle along with the pointer rect.

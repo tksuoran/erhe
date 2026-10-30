@@ -31,6 +31,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
+#include "erhe_scene_renderer/material_set.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
 #include "erhe_utility/thread_roles.hpp"
@@ -258,10 +259,12 @@ void Id_renderer::prepare(const Prepare_parameters& parameters, Id_pass_prepared
 
     using namespace erhe::scene_renderer;
 
-    out.prepared = true;
+    ERHE_VERIFY(parameters.material_set != nullptr);
+    out.prepared     = true;
     out.buckets.clear();
     out.id_ranges.clear();
-    out.scan = parameters.scan;
+    out.scan         = parameters.scan;
+    out.material_set = parameters.material_set;
 
     const erhe::Item_filter id_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::id,
@@ -308,7 +311,13 @@ void Id_renderer::prepare(const Prepare_parameters& parameters, Id_pass_prepared
                 meshes_to_render,
                 id_filter,
                 primitive_mode,
-                Blending_mode_policy::override_with_base_render_pipeline, // TODO
+                // Every blending class: the shader key keeps the material's
+                // blending mode, so an alpha-tested material gets the
+                // ID-render variant that discards where the color pass does
+                // (ERHE_VARIANT_ID_RENDER_ALPHA_TEST), and every other
+                // material the one that draws its whole surface. The id
+                // pipeline itself never blends (m_pipeline).
+                Blending_mode_policy::allow_all,
                 // The ID pass MUST stay on the original variant: it is the only one
                 // with valid per-corner facet ids.
                 erhe::primitive::Mesh_variant::original
@@ -330,12 +339,10 @@ void Id_renderer::prepare(const Prepare_parameters& parameters, Id_pass_prepared
                 prepared.first_entry          = out.buckets.draw_commands.size();
                 prepared.entry_count          = bucket.entries.size();
                 // The id range table Id_renderer::get() walks to turn the
-                // GPU-written id back into a (mesh, primitive, triangle) hit.
-                // No material set: the id shader reads only the id, and this
-                // renderer binds no material state at all. Primitive_buffer
-                // then writes a constant slot 0
-                // (doc/erhe/draw_list_material_set.md D5).
-                m_primitive_buffers.append_records(bucket, nullptr, primitive_mode, primitive_settings, id_offset, out.id_ranges, out.buckets.primitive_records);
+                // GPU-written id back into a (mesh, primitive, triangle) hit,
+                // and the material slots of the scene's set, which the
+                // alpha-tested variant reads.
+                m_primitive_buffers.append_records(bucket, parameters.material_set, primitive_mode, primitive_settings, id_offset, out.id_ranges, out.buckets.primitive_records);
                 m_draw_indirect_buffers.append_commands(bucket, primitive_mode, out.buckets.draw_commands);
                 ERHE_VERIFY(out.buckets.draw_commands.size() == prepared.first_entry + prepared.entry_count);
             }
@@ -366,6 +373,11 @@ void Id_renderer::draw_prepared(
     const std::size_t                      record_size = m_primitive_buffers.get_record_size();
     erhe::graphics::Base_render_pipeline&  pipeline    = m_pipeline;
 
+    // The material buffer and texture heap the alpha-tested buckets read
+    // (the copy update() published for this frame).
+    ERHE_VERIFY(prepared.material_set != nullptr);
+    static_cast<void>(prepared.material_set->bind(render_encoder));
+
     for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
         const Prepared_bucket&    bucket       = buckets[bucket_index];
         const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
@@ -389,16 +401,19 @@ void Id_renderer::draw_prepared(
         }
         const erhe::graphics::Shader_stages* shader_stages = &reloadable_shader_stages->shader_stages;
 
-        // The pipeline format must match the picking render pass. Mirrored
-        // (negative determinant) buckets get the front-face-flipped variant so
-        // back-face culling removes the same faces the forward pass culls.
+        // The pipeline format must match the picking render pass. Face
+        // culling as the forward pass selects it: mirrored (negative
+        // determinant) buckets get the front-face-flipped variant so back-face
+        // culling removes the same faces, and double-sided buckets (the
+        // material's or the gprim's double_sided) cull no face.
         erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
             render_pass.get_descriptor(),
             nullptr,
             shader_stages,
             vertex_input.vertex_input.get(),
             &vertex_input.vertex_format,
-            bucket.negative_determinant
+            bucket.negative_determinant,
+            bucket.double_sided
         );
         if (render_pipeline == nullptr) {
             log_draw->warn(
@@ -455,6 +470,8 @@ void Id_renderer::draw_prepared(
         primitive_range.release();
         draw_indirect_buffer_range.range.release();
     }
+
+    prepared.material_set->unbind(render_encoder.get_command_buffer());
 }
 
 void Id_renderer::ensure_scan_compute()

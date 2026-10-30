@@ -896,6 +896,7 @@ void Headset_view::update_id_render(erhe::graphics::Command_buffer& command_buff
     m_context.id_renderer->render_immediate(
         Id_renderer::Prepare_parameters{
             .mesh_spans      = mesh_spans,
+            .material_set    = &scene_root->get_material_set(),
             // Same repurposing of id_renderer.enabled as the desktop path:
             // false -> ID pass covers skinned meshes only (raytrace covers
             // static), true -> ID pass covers everything.
