@@ -2,7 +2,7 @@
 //
 // One thread per pixel of the blitted id-buffer scan region. Decodes each
 // pixel's packed id (the same encoding Id_renderer's readback uses:
-// id = (r << 16) | (g << 8) | b), applies the optional brush-disk mask, and
+// id = (r << 24) | (g << 16) | (b << 8) | a), applies the optional brush-disk mask, and
 // sets the corresponding bit in a bitmask over the id space (atomicOr). The
 // bitmask is the dedup: every distinct id ends up as exactly one set bit,
 // regardless of how many pixels carry it.
@@ -17,13 +17,14 @@ layout(local_size_x = 64) in;
 
 // rgba8-unorm pixel in memory is bytes [R, G, B, A]; copy_from_texture packs
 // them little-endian, so R is the low byte of the 32-bit word. Recombine to the
-// 24-bit id the same way Id_renderer::get()/take_scan_result() do on the CPU.
+// 32-bit id (r the top byte) the same way Id_renderer::get() does on the CPU.
 uint id_from_pixel(uint packed)
 {
     uint r = (packed >>  0u) & 0xffu;
     uint g = (packed >>  8u) & 0xffu;
     uint b = (packed >> 16u) & 0xffu;
-    return (r << 16u) | (g << 8u) | b;
+    uint a = (packed >> 24u) & 0xffu;
+    return (r << 24u) | (g << 16u) | (b << 8u) | a;
 }
 
 void main()

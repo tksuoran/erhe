@@ -707,7 +707,7 @@ itself. Its execute (R) draws the frame's prepared pass over the whole
 target through `Id_renderer::render_image` (the caller's render pass, full
 viewport and scissor, no pick readback) and records the copy of the whole
 color target with the pass's id range table, once. The main thread decodes
-the image when that frame has retired: each pixel's 24-bit id resolves
+the image when that frame has retired: each pixel's 32-bit id resolves
 through the copied range table to (mesh, primitive), counted per entry. The
 capture uses neither the viewport windows nor the pick framebuffer and
 region scan of `Id_renderer`, so the same pose returns the same set every

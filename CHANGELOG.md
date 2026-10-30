@@ -1051,6 +1051,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: id pass ids are 32 bits: `Primitive_buffer`
+  writes an id-offset record's color as `erhe::math::vec4_from_uint()` (r
+  the top byte; alpha was 0) and VERIFYs that no id range wraps 32 bits.
+  Readers of an id image decode `(r << 24) | (g << 16) | (b << 8) | a`
+  (they decoded 24 bits from RGB, which Bistro's 19.7 M ids overflowed).
+
 - `erhe::scene_renderer`: `Draw_list_scene::publish()` takes the frame's
   `Pvs_culling` after the `Occlusion_culling`; `Draw_list_scene::add_cull_view()`
   takes an optional PVS query box (`pvs_query_min`, `pvs_query_max`; the

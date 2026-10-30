@@ -242,7 +242,6 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
         render_pass_descriptor.debug_label                       = "ID";
         m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
         m_gpu_timer   = std::make_unique<erhe::graphics::Gpu_timer>(*m_render_pass.get(), "Id_renderer");
-        constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
 
         const std::size_t color_image_size = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());
         const std::size_t depth_image_size = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_depth_texture->get_pixelformat());
@@ -1202,21 +1201,18 @@ auto Id_renderer::read_pixel(const int x, const int y, uint32_t& out_id, float& 
                     const uint8_t  r      = entry.data[x_ * 4 + y_ * stride + 0];
                     const uint8_t  g      = entry.data[x_ * 4 + y_ * stride + 1];
                     const uint8_t  b      = entry.data[x_ * 4 + y_ * stride + 2];
-                    // if ((r == 255u) && (g == 255u) && (b == 255u)) { // overflow detected in standard.frag ID variant
-                    //     static int counter = 0;
-                    //     ++counter; // breakpoint placeholder
-                    // }
+                    const uint8_t  a      = entry.data[x_ * 4 + y_ * stride + 3];
                     const uint8_t* const depth_ptr = &entry.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
                     if (entry.frame_number > out_frame_number) {
-                        out_id           = (r << 16u) | (g << 8u) | b;
+                        out_id           = (uint32_t{r} << 24u) | (uint32_t{g} << 16u) | (uint32_t{b} << 8u) | uint32_t{a};
                         out_depth        = read_as<float>(depth_ptr);
                         out_frame_number = entry.frame_number;
                         used_slot = slot;
                     }
                     ERHE_VERIFY(entry.slot == slot);
                     // log_id_render->info(
-                    //     "get() candidate: slot={} rgb=({},{},{}) id={} depth={} frame={}",
-                    //     slot, r, g, b, (r << 16u) | (g << 8u) | b, read_as<float>(depth_ptr), entry.frame_number
+                    //     "get() candidate: slot={} rgba=({},{},{},{}) id={} depth={} frame={}",
+                    //     slot, r, g, b, a, out_id, read_as<float>(depth_ptr), entry.frame_number
                     // );
                 }
             }

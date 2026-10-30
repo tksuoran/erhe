@@ -585,7 +585,7 @@ Metal, OpenGL >= 4.3), `Id_renderer::submit_scan_compute()` runs two compute
 passes over the blitted id-buffer scan region:
 
 1. `res/shaders/id_scan_gather.comp` -- one thread per pixel: decodes each
-   pixel's packed id (`id = (r << 16) | (g << 8) | b`), applies the optional
+   pixel's packed id (`id = (r << 24) | (g << 16) | (b << 8) | a`), applies the optional
    brush-disk mask, and `atomicOr`s the id's bit into a bitmask over the id
    space. The bitmask is the dedup (each distinct id becomes one set bit).
 2. `res/shaders/id_scan_compact.comp` -- one thread per bitmask word: stream-
