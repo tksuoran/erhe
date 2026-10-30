@@ -414,13 +414,20 @@ step makes possible.
 
 1. Database and persistence: `Pvs_database`, `doc/gltf_extensions/
    ERHE_pvs.md` with its schema, save and open, `get_pvs_status`, unit
-   tests of the round trip (done; `doc/erhe/scene.md` "Potentially
-   visible sets"), then `get_visible_entries`. No consumer, no bake.
+   tests of the round trip, `get_visible_entries` with
+   `scripts/visible_entries_check.py` (done; `doc/erhe/scene.md`
+   "Potentially visible sets", `doc/editor/editor.md` "MCP diagnostics
+   that read R's output"). The id pass the oracle draws culls back faces
+   of double-sided materials and that is fixed in `Id_renderer` (viewport
+   picking gets the same fix) before step 2 relies on the oracle.
+   No consumer, no bake.
 2. Sampled bake (the ground-truth tool): `pvs_bake method=sampled` fills a
    database from `get_visible_entries` at M viewpoints per cell, through the
    same cell loop, progress and readback path the disocclusion bake uses.
    Not conservative; it is the oracle of `pvs_verify.py` and the first data
-   the consumer is gated with.
+   the consumer is gated with. A bake assigns a glTF uid to every mesh
+   node it bakes that has none (the save pipeline's first-export rule,
+   `doc/editor/scene_serialization.md`), since columns are keyed by uid.
 3. Consumer: column lookup, SoA column array and upload, the paged GPU
    layout with every stored page resident, query boxes, the
    classification rule on both paths, `pvs_culled` words and statistics,
