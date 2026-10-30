@@ -19,6 +19,7 @@
         "bake": {
             "type": "object",
             "properties": {
+                "method":           {"type": "string", "enum": ["sampled", "disocclusion"]},
                 "face_resolution":  {"$ref": "#/$defs/uint32"},
                 "tile_size":        {"$ref": "#/$defs/uint32"},
                 "layer_count":      {"$ref": "#/$defs/uint32"},
@@ -27,7 +28,7 @@
                 "min_entry_pixels": {"$ref": "#/$defs/hexfloat"},
                 "duration_seconds": {"$ref": "#/$defs/hexfloat"}
             },
-            "required": ["face_resolution", "tile_size", "layer_count", "face_fov", "samples_per_face", "min_entry_pixels", "duration_seconds"]
+            "required": ["method", "face_resolution", "tile_size", "layer_count", "face_fov", "samples_per_face", "min_entry_pixels", "duration_seconds"]
         },
         "column_identities": {
             "type": "array",

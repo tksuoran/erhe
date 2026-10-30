@@ -113,6 +113,29 @@ void Scene_id_capture_node::fail(const std::string& error)
     m_record.state = Scene_id_capture_state::failed;
 }
 
+void Scene_id_capture_node::rearm(const erhe::scene::Camera_snapshot& camera)
+{
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    {
+        // Under m_mutex: with frame pipelining the render phase of a frame
+        // that still names the node may execute it concurrently; it reads the
+        // camera and the record under the same lock.
+        const std::lock_guard<std::mutex> lock{m_mutex};
+        ERHE_VERIFY(
+            (m_record.state == Scene_id_capture_state::complete) ||
+            (m_record.state == Scene_id_capture_state::in_flight) ||
+            (m_record.state == Scene_id_capture_state::failed)
+        );
+        m_camera = camera;
+        m_record.state = Scene_id_capture_state::rendering;
+        m_record.error.clear();
+        m_record.frame = 0;
+        m_record.buffer.reset();
+        m_record.id_ranges.clear();
+    }
+    set_enabled(true);
+}
+
 void Scene_id_capture_node::prepare_rendergraph_node(const uint64_t frame_index)
 {
     ERHE_PROFILE_FUNCTION();
@@ -299,6 +322,18 @@ auto Scene_id_capture::poll() -> Scene_id_capture_state
         }
     );
     return m_state;
+}
+
+void Scene_id_capture::rearm(const erhe::scene::Camera_snapshot& camera)
+{
+    ERHE_VERIFY((m_state == Scene_id_capture_state::complete) || (m_state == Scene_id_capture_state::failed));
+    m_node->rearm(camera);
+    m_state             = Scene_id_capture_state::rendering;
+    m_error.clear();
+    m_frame_index       = 0;
+    m_covered_pixels    = 0;
+    m_unresolved_pixels = 0;
+    m_entries.clear();
 }
 
 void Scene_id_capture::decode(

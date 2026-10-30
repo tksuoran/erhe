@@ -97,6 +97,12 @@ public:
     auto get_type_name           () const -> std::string_view override { return "Scene_id_capture_node"; }
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
+    // Main thread, once the record is complete or failed and its frame has
+    // retired: the next capture of the same size and content from another
+    // camera. Resets the record to rendering and enables the node again; the
+    // targets, render pass and frame slots are reused.
+    void rearm(const erhe::scene::Camera_snapshot& camera);
+
     // Main thread: calls op with the record under m_mutex.
     template <typename Op>
     auto with_record(Op&& op) -> decltype(op(std::declval<Scene_id_capture_record&>()))
@@ -148,7 +154,10 @@ public:
 // constructed, the rendergraph runs it on the next frame, and the destructor
 // releases the node again, so the tool costs nothing per frame when unused.
 // Destroy it only once poll() reports complete or failed (the recorded
-// frame has retired), so no GPU work references its targets.
+// frame has retired), so no GPU work references its targets. A capture that
+// is complete or failed can be re-armed with another camera (rearm()): the
+// PVS sampled bake (Pvs_baker) keeps a few captures and re-arms them per
+// viewpoint face instead of creating a node per capture.
 class Scene_id_capture
 {
 public:
@@ -161,6 +170,9 @@ public:
     // Main thread: the capture's state; decodes the ids once the frame that
     // recorded the copy has retired.
     [[nodiscard]] auto poll                  () -> Scene_id_capture_state;
+    // Main thread, while poll() reports complete or failed: starts the next
+    // capture of the same scene, size and content from camera.
+    void rearm(const erhe::scene::Camera_snapshot& camera);
     [[nodiscard]] auto get_width             () const -> int { return m_width; }
     [[nodiscard]] auto get_height            () const -> int { return m_height; }
     [[nodiscard]] auto get_error             () const -> const std::string& { return m_error; }

@@ -33,6 +33,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene`: `Pvs_bake_method` (`sampled`, `disocclusion`) with
+  `c_str()` and `parse_pvs_bake_method()`, and
+  `Pvs_bake_parameters::method`; `ERHE_pvs` carries it as `bake.method`.
+- `erhe::gltf`: `generate_gltf_uid()` (`gltf_uid.hpp`), the generator the
+  exporter assigns uids with, for callers that assign uids ahead of an
+  export.
 - `erhe::scene`: `Pvs_database` (`pvs_database.hpp`), the plain-data
   potentially visible set database: `Pvs_header`, `Pvs_bake_parameters`,
   `Pvs_column`, `Pvs_page_entry`, `Pvs_bits_source`, `Pvs_state`,

@@ -711,7 +711,11 @@ the image when that frame has retired: each pixel's 24-bit id resolves
 through the copied range table to (mesh, primitive), counted per entry. The
 capture uses neither the viewport windows nor the pick framebuffer and
 region scan of `Id_renderer`, so the same pose returns the same set every
-time (`scripts/visible_entries_check.py` is the gate).
+time (`scripts/visible_entries_check.py` is the gate). A capture that is
+complete can be re-armed with another camera (`Scene_id_capture::rearm`):
+the record returns to rendering under the node's mutex, the node is enabled
+again and its targets and frame slots are reused; the PVS sampled bake
+(`Pvs_baker`) cycles its captures that way.
 
 **Thread ownership asserts** (`Thread_roles`, no-ops until the roles are set):
 the render thread in `r_render` for `Rendergraph::execute`,

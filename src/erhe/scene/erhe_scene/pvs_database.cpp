@@ -21,6 +21,26 @@ auto c_str(const Pvs_state state) -> const char*
     }
 }
 
+auto c_str(const Pvs_bake_method method) -> const char*
+{
+    switch (method) {
+        case Pvs_bake_method::sampled:      return "sampled";
+        case Pvs_bake_method::disocclusion: return "disocclusion";
+        default:                            return "?";
+    }
+}
+
+auto parse_pvs_bake_method(const std::string_view text) -> std::optional<Pvs_bake_method>
+{
+    if (text == "sampled") {
+        return Pvs_bake_method::sampled;
+    }
+    if (text == "disocclusion") {
+        return Pvs_bake_method::disocclusion;
+    }
+    return std::nullopt;
+}
+
 auto compute_pvs_transform_hash(const std::array<float, 12>& world_transform, const std::array<float, 6>& world_bounds) -> uint64_t
 {
     uint64_t hash = erhe::hash::c_seed;
@@ -68,6 +88,12 @@ auto Pvs_database::validate(
 {
     if (header.version != Pvs_header::current_version) {
         return fmt::format("unsupported version {}", header.version);
+    }
+    if (
+        (header.bake_parameters.method != Pvs_bake_method::sampled) &&
+        (header.bake_parameters.method != Pvs_bake_method::disocclusion)
+    ) {
+        return "unknown bake method";
     }
     if (!std::isfinite(header.cell_size) || (header.cell_size <= 0.0f)) {
         return "cell size is not positive and finite";

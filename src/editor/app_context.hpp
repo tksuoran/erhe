@@ -112,6 +112,7 @@ class Prefab_library;
 class Programs;
 class Properties;
 class Lightmap_baker;
+class Pvs_baker;
 class Lightmap_partitioner;
 class Lightmap_report;
 class Lightmap_streamer;
@@ -366,6 +367,8 @@ public:
     Ddgi_renderer*                     ddgi_renderer        {nullptr};
     Radiance_cascades_renderer*        radiance_cascades_renderer{nullptr};
     Lightmap_baker*                    lightmap_baker       {nullptr};
+    // The potentially visible set bake (doc/plans/pvs.md; MCP pvs_bake).
+    Pvs_baker*                         pvs_baker            {nullptr};
     // World-space mesh partitioner: uniquifies + tile-clips lightmapped
     // meshes into per-tile piece meshes ("Lightmap Pieces" group).
     Lightmap_partitioner*              lightmap_partitioner {nullptr};

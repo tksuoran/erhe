@@ -10,6 +10,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -34,10 +35,25 @@ enum class Pvs_state : unsigned int {
 
 [[nodiscard]] auto c_str(Pvs_state state) -> const char*;
 
+// How a database was baked (doc/plans/pvs.md "Build order"). sampled: the
+// union of the id captures from random viewpoints inside each cell, not
+// conservative, the ground truth the verification compares against.
+// disocclusion: the conservative disocclusion-buffer bake.
+enum class Pvs_bake_method : unsigned int {
+    sampled      = 0,
+    disocclusion = 1
+};
+
+// "sampled" / "disocclusion".
+[[nodiscard]] auto c_str(Pvs_bake_method method) -> const char*;
+// The method a c_str() name spells, nullopt for any other text.
+[[nodiscard]] auto parse_pvs_bake_method(std::string_view text) -> std::optional<Pvs_bake_method>;
+
 // The parameters the bake ran with (doc/plans/pvs.md "Bake").
 class Pvs_bake_parameters
 {
 public:
+    Pvs_bake_method method{Pvs_bake_method::disocclusion};
     uint32_t face_resolution {1024};
     uint32_t tile_size       {8};
     uint32_t layer_count     {64};
@@ -134,7 +150,7 @@ public:
     Pvs_database& operator=(Pvs_database&&)      = delete;
 
     // Empty when the data is consistent, else the first problem found:
-    // version, grid (positive finite cell size, non-zero counts), page size,
+    // version, bake method, grid (positive finite cell size, non-zero counts), page size,
     // column identities (non-empty uids, no duplicate identity), transform
     // hashes, page table (size, reserved words, offsets, masks naming only
     // cells of the page inside the grid), bits size, zero padding bits in

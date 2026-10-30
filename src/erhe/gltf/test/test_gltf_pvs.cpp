@@ -58,6 +58,7 @@ using erhe_gltf_test::write_temporary_file;
     header.cell_size             = 1.1f;
     header.cell_counts           = glm::uvec3{5u, 2u, 2u};
     header.page_size             = 4;
+    header.bake_parameters.method           = erhe::scene::Pvs_bake_method::sampled;
     header.bake_parameters.face_resolution  = 512;
     header.bake_parameters.tile_size        = 4;
     header.bake_parameters.layer_count      = 32;
@@ -173,6 +174,7 @@ TEST(Gltf_pvs, round_trip_is_exact)
     EXPECT_EQ(std::memcmp(&header.cell_size,   &expected_header.cell_size,   sizeof(float)), 0);
     EXPECT_EQ(header.cell_counts,           expected_header.cell_counts);
     EXPECT_EQ(header.page_size,             expected_header.page_size);
+    EXPECT_EQ(header.bake_parameters.method,           expected_header.bake_parameters.method);
     EXPECT_EQ(header.bake_parameters.face_resolution,  expected_header.bake_parameters.face_resolution);
     EXPECT_EQ(header.bake_parameters.tile_size,        expected_header.bake_parameters.tile_size);
     EXPECT_EQ(header.bake_parameters.layer_count,      expected_header.bake_parameters.layer_count);

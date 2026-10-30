@@ -43,6 +43,7 @@ A writer writes the extension only for a ready database.
     "column_count": 3,
     "bit_word_count": 64,
     "bake": {
+        "method": "disocclusion",
         "face_resolution": 1024,
         "tile_size": 8,
         "layer_count": 64,
@@ -75,9 +76,11 @@ Every float is a float32 written as a C99 hexadecimal floating-point string
 - `column_count`: number of columns.
 - `bit_word_count`: number of uint32 words in `bits`.
 - `bake`: the parameters the bake ran with (`doc/plans/pvs.md` "Bake"):
-  `face_resolution`, `tile_size`, `layer_count`, `samples_per_face`
-  (integers), `face_fov` (radians), `min_entry_pixels` and
-  `duration_seconds` (the bake's wall-clock time).
+  `method` (`"sampled"`: the union of id captures from random viewpoints in
+  each cell, not conservative, a verification oracle; `"disocclusion"`: the
+  conservative disocclusion-buffer bake), `face_resolution`, `tile_size`,
+  `layer_count`, `samples_per_face` (integers), `face_fov` (radians),
+  `min_entry_pixels` and `duration_seconds` (the bake's wall-clock time).
 - `column_identities`: `column_count` pairs `[node, primitive]`: column `c`
   is mesh primitive `primitive` of the mesh of glTF node `node` of this
   asset. A loader resolves the node index to that node's identity (its
@@ -143,7 +146,8 @@ The loader rejects the extension, and the scene opens without a database,
 when any of these fails:
 
 - `version` is 1; every member above is present with its type, every float
-  string parses as a float32 exactly;
+  string parses as a float32 exactly; `bake.method` is `"sampled"` or
+  `"disocclusion"`;
 - `cell_size` is positive and finite, `grid_origin` finite, every cell
   count at least 1, `page_size` 1 to 4;
 - `column_identities` has `column_count` entries, each naming an existing

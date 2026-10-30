@@ -275,10 +275,56 @@ page_dims, page_count, stored_pages, column_count, words_per_cell,
 cells_with_pvs, bytes {columns, pages, bits, total}, bake {...}`,
 `bits_source {path, byte_offset, byte_length}` for a database read from a
 file, and in `camera`: `cell` (`"outside"` outside the grid), `page`,
-`local_cell`, `page_stored`, `has_pvs`, `pvs_size`.
+`local_cell`, `page_stored`, `has_pvs`, `pvs_size`. `bake` includes
+`method` (`sampled` or `disocclusion`); `bits_hash` is the 64-bit FNV-1a of
+the bits as 16 hex digits, equal for two equal bakes and across a save and
+reload.
 
 ```bash
 python3 scripts/mcp_call.py get_pvs_status '{"scene_name":"Default Scene"}'
+```
+
+### pvs_bake, get_pvs_bake_status, pvs_cancel, pvs_clear
+
+The PVS bake (`Pvs_baker`, [renderers.md](../editor/renderers.md);
+[pvs.md](../plans/pvs.md) "Bake"). `pvs_bake` starts a bake and returns at
+once; the bake runs over frames and sets the database on the scene when
+its last cell is done.
+
+Arguments of `pvs_bake`: `scene_name`, `method` (`"sampled"`, the default
+and the only one built; `"disocclusion"` is refused), `cell_size`,
+`region_min` and `region_max` (both or neither; they override the scene's
+`Scene_settings` `pvs_cell_size` and `pvs_region_min` / `pvs_region_max`
+for this bake, and an unset region, both corners zero, is the union of the
+static entries' world bounds), `samples_per_cell` (9), `face_resolution`
+(512), `face_fov_degrees` (120), `captures_in_flight` (8). Mesh nodes the
+bake covers get a glTF uid when they have none.
+
+`get_pvs_bake_status` returns `{state, scene_name, method, grid_origin,
+cell_size, cell_counts, cell_count, column_count, cells_done, capture_count,
+captures_done, unmatched_entries, uids_assigned, seconds_elapsed,
+seconds_remaining, error}`; `state` is `idle`, `running`, `done`,
+`cancelled` or `failed` (`error` set). `pvs_bake` replies with the same
+object plus the parameters used. `pvs_cancel` ends a running bake
+(the scene keeps the database it had) and reports `cancelled`. `pvs_clear`
+removes the scene's database.
+
+```bash
+python3 scripts/mcp_call.py pvs_bake '{"scene_name":"Default Scene","cell_size":2,"region_min":[-6,0.2,-1.5],"region_max":[6,4.2,6.5]}'
+python3 scripts/mcp_call.py get_pvs_bake_status '{}'
+```
+
+### get_pvs_cell
+
+One cell of a scene's PVS database: `scene_name` and exactly one of `cell`
+(index) or `position` [x, y, z] (inside the grid). Returns `{scene_name,
+cell, coordinate, cell_min, cell_max, page, local_cell, page_stored,
+has_pvs, pvs_size, columns}`, `columns` the cell's PVS as `[{node_uid,
+node_name, primitive_index}]` (`node_name` of the live mesh with that uid,
+`""` when none; empty for a cell without a PVS).
+
+```bash
+python3 scripts/mcp_call.py get_pvs_cell '{"scene_name":"Default Scene","cell":0}'
 ```
 
 ### get_visible_entries

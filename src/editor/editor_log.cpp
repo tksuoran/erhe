@@ -30,6 +30,7 @@ std::shared_ptr<spdlog::logger> log_physics_frame;
 std::shared_ptr<spdlog::logger> log_pointer;
 std::shared_ptr<spdlog::logger> log_post_processing;
 std::shared_ptr<spdlog::logger> log_programs;
+std::shared_ptr<spdlog::logger> log_pvs;
 std::shared_ptr<spdlog::logger> log_raytrace;
 std::shared_ptr<spdlog::logger> log_raytrace_frame;
 std::shared_ptr<spdlog::logger> log_render;
@@ -80,6 +81,7 @@ void initialize_logging()
     log_pointer                    = make_logger      ("editor.pointer"                   );
     log_post_processing            = make_frame_logger("editor.post_processing"           );
     log_programs                   = make_logger      ("editor.programs"                  );
+    log_pvs                        = make_logger      ("editor.pvs"                       );
     log_raytrace                   = make_logger      ("editor.raytrace"                  );
     log_raytrace_frame             = make_frame_logger("editor.raytrace_frame"            );
     log_render                     = make_frame_logger("editor.render"                    );

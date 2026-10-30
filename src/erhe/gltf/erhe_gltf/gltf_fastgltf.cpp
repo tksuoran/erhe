@@ -3,6 +3,7 @@
 #include "gltf_fastgltf.hpp"
 #include "gltf_item_flags.hpp"
 #include "gltf_log.hpp"
+#include "gltf_uid.hpp"
 #include "image_transfer.hpp"
 
 #include "erhe_buffer/ibuffer.hpp"
@@ -4580,6 +4581,17 @@ public:
             std::string_view value_text;
             return (bake[key].get_string().get(value_text) == simdjson::SUCCESS) && parse_hex_float(value_text, out_value);
         };
+        {
+            std::string_view method_text;
+            if (bake["method"].get_string().get(method_text) != simdjson::SUCCESS) {
+                return "bake method missing";
+            }
+            const std::optional<erhe::scene::Pvs_bake_method> method = erhe::scene::parse_pvs_bake_method(method_text);
+            if (!method.has_value()) {
+                return "bake method is not \"sampled\" or \"disocclusion\"";
+            }
+            parameters.method = method.value();
+        }
         if (
             !read_u32  ("face_resolution",  parameters.face_resolution)  ||
             !read_u32  ("tile_size",        parameters.tile_size)        ||
@@ -8582,13 +8594,14 @@ private:
         return fmt::format(
             "{{\"version\":{},\"scene_id\":\"{}\",\"grid_origin\":[\"{:a}\",\"{:a}\",\"{:a}\"],\"cell_size\":\"{:a}\","
             "\"cell_counts\":[{},{},{}],\"page_size\":{},\"column_count\":{},\"bit_word_count\":{},"
-            "\"bake\":{{\"face_resolution\":{},\"tile_size\":{},\"layer_count\":{},\"face_fov\":\"{:a}\","
+            "\"bake\":{{\"method\":\"{}\",\"face_resolution\":{},\"tile_size\":{},\"layer_count\":{},\"face_fov\":\"{:a}\","
             "\"samples_per_face\":{},\"min_entry_pixels\":\"{:a}\",\"duration_seconds\":\"{:a}\"}},"
             "\"column_identities\":[{}]{}}}",
             header.version, json_escape(header.scene_id),
             header.grid_origin.x, header.grid_origin.y, header.grid_origin.z, header.cell_size,
             header.cell_counts.x, header.cell_counts.y, header.cell_counts.z, header.page_size,
             columns.size(), bits.size(),
+            erhe::scene::c_str(parameters.method),
             parameters.face_resolution, parameters.tile_size, parameters.layer_count, parameters.face_fov,
             parameters.samples_per_face, parameters.min_entry_pixels, header.bake_duration_seconds,
             identities, views
@@ -10930,18 +10943,13 @@ private:
         // regenerated on the astronomically unlikely collision with any
         // existing identifier.
         std::mt19937_64 rng{std::random_device{}()};
-        constexpr char alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        std::uniform_int_distribution<std::size_t> pick_char{0, sizeof(alphabet) - 2};
         for (const Uid_target& target : targets) {
             if (!target.gltf_uid->empty()) {
                 continue;
             }
             std::string uid;
             do {
-                uid.clear();
-                for (int i = 0; i < 16; ++i) {
-                    uid.push_back(alphabet[pick_char(rng)]);
-                }
+                uid = generate_gltf_uid(rng);
             } while (used_uids.contains(uid) || name_counts.contains(uid));
             *target.gltf_uid = FASTGLTF_STD_PMR_NS::string{uid};
             used_uids.insert(uid);

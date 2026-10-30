@@ -33,6 +33,7 @@ extern std::shared_ptr<spdlog::logger> log_physics_frame;
 extern std::shared_ptr<spdlog::logger> log_pointer;
 extern std::shared_ptr<spdlog::logger> log_post_processing;
 extern std::shared_ptr<spdlog::logger> log_programs;
+extern std::shared_ptr<spdlog::logger> log_pvs;
 extern std::shared_ptr<spdlog::logger> log_raytrace;
 extern std::shared_ptr<spdlog::logger> log_raytrace_frame;
 extern std::shared_ptr<spdlog::logger> log_render;
