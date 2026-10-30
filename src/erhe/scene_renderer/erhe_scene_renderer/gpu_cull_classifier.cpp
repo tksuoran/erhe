@@ -373,6 +373,9 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     }
     // The multiview variant (ERHE_MULTIVIEW: gl_ViewIndex picks the view),
     // for the occlusion test inside a multiview render pass (the headset).
+    // Multiview is a Vulkan-only capability (Device_info reflects it only
+    // there); the other backends build no multiview variant.
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     if (info.max_multiview_view_count >= occlusion_max_view_count) {
         m_occlusion_multiview_shader_stages = std::make_unique<Reloadable_shader_stages>(
             graphics_device,
@@ -394,6 +397,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             m_occlusion_multiview_shader_stages.reset();
         }
     }
+#endif
     // Depth test against the view's depth (the device's depth direction:
     // a box face at or in front of the stored depth passes), no depth
     // write, no color writes: the box only probes visibility. The vertex
