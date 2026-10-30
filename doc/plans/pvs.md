@@ -413,8 +413,9 @@ Each step is one verified commit; the gates are the ones above that the
 step makes possible.
 
 1. Database and persistence: `Pvs_database`, `doc/gltf_extensions/
-   ERHE_pvs.md` with its schema, save and open, `get_pvs_status`,
-   `get_visible_entries`, unit tests of the round trip. No consumer, no bake.
+   ERHE_pvs.md` with its schema, save and open, `get_pvs_status`, unit
+   tests of the round trip (done; `doc/erhe/scene.md` "Potentially
+   visible sets"), then `get_visible_entries`. No consumer, no bake.
 2. Sampled bake (the ground-truth tool): `pvs_bake method=sampled` fills a
    database from `get_visible_entries` at M viewpoints per cell, through the
    same cell loop, progress and readback path the disocclusion bake uses.
