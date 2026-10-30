@@ -76,9 +76,12 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
                 static_cast<NS::UInteger>(create_info.view_base_level),
                 static_cast<NS::UInteger>(std::max(1, create_info.level_count))
             );
+            // The view sees its own layer count from its base layer (cube
+            // faces count as slices in a Metal view, as layers do in erhe);
+            // array_layer_count 0 is a single-layer (non-array) view.
             NS::Range slice_range = NS::Range::Make(
                 static_cast<NS::UInteger>(create_info.view_base_array_layer),
-                1
+                static_cast<NS::UInteger>(std::max(1, create_info.array_layer_count))
             );
             // When viewing a single layer of a 2D array texture, create
             // the view as texture2d so shaders can sample it as a regular 2D texture.
