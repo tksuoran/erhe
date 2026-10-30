@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=8,
+    version=9,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -165,6 +165,32 @@ struct("Editor_settings_config",
             default="false",
             short_desc="Occlusion Culling",
             long_desc="Run the raster occlusion test in the viewports (needs the gpu culling classification, a GPU-read draw count and fragment shader storage atomics): the draw lists' entry boxes are drawn against each view's opaque depth and the visible entries are marked. The next frame skips the entries found hidden (one frame of lag).",
+            visible=True,
+            developer=True
+        ),
+        # The potentially visible set rule (doc/plans/pvs.md "Runtime
+        # consumption"): with a ready database, the culling classification
+        # (both paths) drops the entries no cell around a viewport camera's
+        # query box can see. An absent or stale database culls nothing.
+        field(
+            "pvs_culling",
+            Bool,
+            added_in=9,
+            default="true",
+            short_desc="PVS Culling",
+            long_desc="Cull the draw list entries outside the potentially visible set of the cells around each viewport camera, when the scene has a ready PVS database (a bake; a scene edit that moves a baked entry makes it stale and turns this off until the next bake).",
+            visible=True,
+            developer=True
+        ),
+        # The positional margin of a viewport camera's PVS query box: the
+        # box is the camera position +- this many meters per axis.
+        field(
+            "pvs_query_margin",
+            Float,
+            added_in=9,
+            default="0.05f",
+            short_desc="PVS Query Margin",
+            long_desc="Half the size, in meters, of the box around a viewport camera whose cells' potentially visible sets the PVS culling reads.",
             visible=True,
             developer=True
         ),

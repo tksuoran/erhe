@@ -14,6 +14,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene/projection.hpp"
+#include "erhe_scene/pvs_database.hpp"
 
 #include <glm/glm.hpp>
 
@@ -21,7 +22,9 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <random>
+#include <string>
 #include <vector>
 
 namespace {
@@ -413,6 +416,135 @@ TEST(Cull_lanes, view_tests_is_same)
     EXPECT_FALSE(planes.is_same(other_planes));
     EXPECT_FALSE(planes.is_same(face));
     EXPECT_TRUE(Cull_view_tests{}.is_same(Cull_view_tests{}));
+}
+
+
+// The potentially visible set rule (doc/plans/pvs.md "Runtime consumption";
+// cull_classify.comp applies it with the same arithmetic). A 4 x 1 x 1 grid
+// of 1 m cells at the origin, page size 2 (2 x 1 x 1 pages): page 0 (cells
+// x = 0, 1) is stored, page 1 (cells x = 2, 3) is not. Three columns: cell 0
+// sees column 0 only, cell 1 column 1 only; column 2 is seen from neither.
+[[nodiscard]] auto make_pvs_test_database() -> std::shared_ptr<const erhe::scene::Pvs_database>
+{
+    erhe::scene::Pvs_header header{};
+    header.scene_id    = "cull-lanes-test";
+    header.grid_origin = glm::vec3{0.0f, 0.0f, 0.0f};
+    header.cell_size   = 1.0f;
+    header.cell_counts = glm::uvec3{4u, 1u, 1u};
+    header.page_size   = 2;
+    std::vector<erhe::scene::Pvs_column> columns;
+    for (uint32_t i = 0; i < 3; ++i) {
+        erhe::scene::Pvs_column column{};
+        column.node_uid        = "node" + std::to_string(i);
+        column.primitive_index = 0;
+        column.world_transform = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, static_cast<float>(i), 0.5f, 0.5f};
+        column.world_bounds    = {static_cast<float>(i), 0.0f, 0.0f, static_cast<float>(i) + 0.5f, 1.0f, 1.0f};
+        column.transform_hash  = erhe::scene::compute_pvs_transform_hash(column.world_transform, column.world_bounds);
+        columns.push_back(column);
+    }
+    std::vector<erhe::scene::Pvs_page_entry> pages(2);
+    pages[0].word_offset    = 0;
+    pages[0].cells_with_pvs = 0x3u; // local cells 0 and 1 (x = 0, 1)
+    // Page 0, 8 local cells of one word: cell 0, cell 1, then the cells
+    // outside the grid (no PVS: all ones).
+    std::vector<uint32_t> bits{0x1u, 0x2u, 0xffffffffu, 0xffffffffu, 0xffffffffu, 0xffffffffu, 0xffffffffu, 0xffffffffu};
+    EXPECT_EQ(erhe::scene::Pvs_database::validate(header, columns, pages, bits), std::string{});
+    return std::make_shared<const erhe::scene::Pvs_database>(std::move(header), std::move(columns), std::move(pages), std::move(bits));
+}
+
+class Pvs_lane_result
+{
+public:
+    std::vector<uint32_t> inside;
+    std::vector<uint32_t> culled;
+    uint32_t              tested      {0};
+    uint32_t              culled_count{0};
+};
+
+// Entries: columns 0, 1, 2, untracked, column 2 without bounds, column 2
+// outside the view.
+[[nodiscard]] auto run_pvs_lanes(const erhe::scene::Pvs_database& database, const glm::vec3& query_min, const glm::vec3& query_max) -> Pvs_lane_result
+{
+    constexpr uint32_t untracked = erhe::scene::Pvs_database::untracked_column;
+    const std::vector<uint32_t> columns  {0u, 1u, 2u, untracked, 2u, 2u};
+    const std::vector<uint32_t> unbounded{0u, 0u, 0u, 0u,        1u, 0u};
+    Pvs_lane_result result{};
+    result.inside = {1u, 1u, 1u, 1u, 1u, 0u};
+    result.culled.resize(columns.size(), 7u);
+    erhe::scene_renderer::cull_lanes::Pvs_query_cells cells{};
+    erhe::scene_renderer::cull_lanes::make_pvs_query_cells(database, query_min, query_max, cells);
+    result.tested = erhe::scene_renderer::cull_lanes::pvs_lanes(
+        cells, columns.data(), unbounded.data(), columns.size(), result.inside.data(), result.culled.data(), result.culled_count
+    );
+    return result;
+}
+
+TEST(Cull_lanes, pvs_corner_cell)
+{
+    glm::uvec3 cell{0u};
+    const glm::uvec3 counts{4u, 1u, 1u};
+    EXPECT_TRUE (erhe::scene_renderer::cull_lanes::pvs_point_cell(glm::vec3{2.5f, 0.5f, 0.5f}, glm::vec3{0.0f}, 1.0f, counts, cell));
+    EXPECT_EQ(cell, glm::uvec3(2u, 0u, 0u));
+    EXPECT_TRUE (erhe::scene_renderer::cull_lanes::pvs_point_cell(glm::vec3{0.0f, 0.0f, 0.0f}, glm::vec3{0.0f}, 1.0f, counts, cell));
+    EXPECT_EQ(cell, glm::uvec3(0u, 0u, 0u));
+    EXPECT_FALSE(erhe::scene_renderer::cull_lanes::pvs_point_cell(glm::vec3{-0.01f, 0.5f, 0.5f}, glm::vec3{0.0f}, 1.0f, counts, cell));
+    EXPECT_FALSE(erhe::scene_renderer::cull_lanes::pvs_point_cell(glm::vec3{4.0f, 0.5f, 0.5f}, glm::vec3{0.0f}, 1.0f, counts, cell));
+    EXPECT_FALSE(erhe::scene_renderer::cull_lanes::pvs_point_cell(glm::vec3{0.5f, 1.5f, 0.5f}, glm::vec3{0.0f}, 1.0f, counts, cell));
+    EXPECT_FALSE(erhe::scene_renderer::cull_lanes::pvs_point_cell(glm::vec3{std::nanf(""), 0.5f, 0.5f}, glm::vec3{0.0f}, 1.0f, counts, cell));
+}
+
+TEST(Cull_lanes, pvs_box_in_one_cell)
+{
+    const std::shared_ptr<const erhe::scene::Pvs_database> database = make_pvs_test_database();
+    // Inside cell 0: column 0 is visible, columns 1 and 2 are not.
+    const Pvs_lane_result result = run_pvs_lanes(*database, glm::vec3{0.4f, 0.4f, 0.4f}, glm::vec3{0.6f, 0.6f, 0.6f});
+    EXPECT_EQ(result.inside, (std::vector<uint32_t>{1u, 0u, 0u, 1u, 1u, 0u}));
+    EXPECT_EQ(result.culled, (std::vector<uint32_t>{0u, 1u, 1u, 0u, 0u, 0u}));
+    // Tested: the tracked, bounded entries inside the view.
+    EXPECT_EQ(result.tested, 3u);
+    EXPECT_EQ(result.culled_count, 2u);
+}
+
+TEST(Cull_lanes, pvs_box_across_two_cells_keeps_either_cells_columns)
+{
+    const std::shared_ptr<const erhe::scene::Pvs_database> database = make_pvs_test_database();
+    // Corners in cells 0 and 1: a column visible in one of them is kept.
+    const Pvs_lane_result result = run_pvs_lanes(*database, glm::vec3{0.9f, 0.4f, 0.4f}, glm::vec3{1.1f, 0.6f, 0.6f});
+    EXPECT_EQ(result.inside, (std::vector<uint32_t>{1u, 1u, 0u, 1u, 1u, 0u}));
+    EXPECT_EQ(result.culled_count, 1u);
+}
+
+TEST(Cull_lanes, pvs_unstored_page_keeps_everything)
+{
+    const std::shared_ptr<const erhe::scene::Pvs_database> database = make_pvs_test_database();
+    // One corner in cell 2 of page 1, which is not stored.
+    const Pvs_lane_result result = run_pvs_lanes(*database, glm::vec3{1.9f, 0.4f, 0.4f}, glm::vec3{2.1f, 0.6f, 0.6f});
+    EXPECT_EQ(result.inside, (std::vector<uint32_t>{1u, 1u, 1u, 1u, 1u, 0u}));
+    EXPECT_EQ(result.culled, (std::vector<uint32_t>{0u, 0u, 0u, 0u, 0u, 0u}));
+    EXPECT_EQ(result.culled_count, 0u);
+}
+
+TEST(Cull_lanes, pvs_corner_outside_grid_keeps_everything)
+{
+    const std::shared_ptr<const erhe::scene::Pvs_database> database = make_pvs_test_database();
+    const Pvs_lane_result result = run_pvs_lanes(*database, glm::vec3{-0.1f, 0.4f, 0.4f}, glm::vec3{0.1f, 0.6f, 0.6f});
+    EXPECT_EQ(result.inside, (std::vector<uint32_t>{1u, 1u, 1u, 1u, 1u, 0u}));
+    EXPECT_EQ(result.culled_count, 0u);
+}
+
+TEST(Cull_lanes, pvs_query_box_is_part_of_view_identity)
+{
+    using erhe::scene_renderer::Cull_view_tests;
+    Cull_view_tests a{};
+    a.plane_count = 1;
+    a.planes[0]   = glm::vec4{0.0f, 0.0f, 1.0f, 0.0f};
+    Cull_view_tests b = a;
+    EXPECT_FALSE(a.has_pvs_query());
+    b.pvs_query_min = glm::vec3{0.0f};
+    b.pvs_query_max = glm::vec3{0.1f};
+    EXPECT_TRUE(b.has_pvs_query());
+    EXPECT_FALSE(a.is_same(b));
+    EXPECT_TRUE(b.is_same(b));
 }
 
 } // anonymous namespace

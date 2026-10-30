@@ -267,17 +267,10 @@ auto Pvs_baker::start_bake(const std::shared_ptr<Scene_root>& scene_root, const 
             }
             const std::string& uid = mesh->get_gltf_uid();
 
-            const glm::mat4& world_from_node = mesh->world_from_node();
-            std::array<float, 12> world_transform{};
-            for (glm::length_t column = 0; column < 4; ++column) {
-                for (glm::length_t row = 0; row < 3; ++row) {
-                    world_transform[static_cast<std::size_t>((column * 3) + row)] = world_from_node[column][row];
-                }
-            }
-            const std::array<float, 6> world_bounds{
-                world_aabb.min.x, world_aabb.min.y, world_aabb.min.z,
-                world_aabb.max.x, world_aabb.max.y, world_aabb.max.z
-            };
+            // The extraction the staleness rule compares with
+            // (Draw_list_scene, doc/plans/pvs.md D4).
+            const std::array<float, 12> world_transform = erhe::scene::make_pvs_world_transform(mesh->world_from_node());
+            const std::array<float, 6>  world_bounds    = erhe::scene::make_pvs_world_bounds(world_aabb);
             const uint64_t transform_hash = erhe::scene::compute_pvs_transform_hash(world_transform, world_bounds);
             for (const uint32_t column_index : primitive_columns) {
                 if (column_index == erhe::scene::Pvs_database::untracked_column) {

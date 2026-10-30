@@ -83,6 +83,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/draw_list_scene_gpu_cull.cpp
     erhe_scene_renderer/draw_list.cpp
     erhe_scene_renderer/draw_list.hpp
+    erhe_scene_renderer/pvs_gpu_database.cpp
+    erhe_scene_renderer/pvs_gpu_database.hpp
 )
 target_link_libraries(
     ${_target}

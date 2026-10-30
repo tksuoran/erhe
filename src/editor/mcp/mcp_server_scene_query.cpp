@@ -185,6 +185,10 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
             {"last_occlusion_untested_count", stats.occlusion_untested_count},
             {"last_occlusion_culled_count",   stats.occlusion_culled_count},
             {"last_occlusion_counts_frame_index", stats.occlusion_counts_frame_index},
+            // A draw-list pass: the PVS rule's counts of its view in that
+            // frame (doc/plans/pvs.md).
+            {"last_pvs_tested_count", stats.pvs_tested_count},
+            {"last_pvs_culled_count", stats.pvs_culled_count},
             {"last_cpu_time_us",     stats.cpu_time_us},
             {"total_cpu_time_us",    (frame_stats != nullptr) ? pass->get_total_cpu_time_us(*frame_stats) : 0.0},
             {"render_call_count",    (frame_stats != nullptr) ? pass->get_render_call_count(*frame_stats) : std::size_t{0}}
@@ -580,6 +584,9 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
         {"dispatch_count",          check.dispatch_count},
         {"mismatch_count",          check.mismatch_count},
         {"occlusion_culled_count",  check.occlusion_culled_count},
+        {"pvs_culled_cpu_count",    check.pvs_culled_cpu_count},
+        {"pvs_culled_gpu_count",    check.pvs_culled_gpu_count},
+        {"pvs_mismatch_count",      check.pvs_mismatch_count},
         {"gpu_time_ns",             check.gpu_time_ns},
         {"gpu_bounds_write_count",  draw_list_scene->get_gpu_bounds_write_count()},
         {"lists",                   std::move(lists)},
@@ -614,6 +621,28 @@ auto Mcp_server::action_set_occlusion_culling(const json& args) -> std::string
         {"enabled",        m_context.editor_settings->occlusion_culling},
         {"classification", std::string{to_string(m_context.editor_settings->culling_classification)}},
         {"gpu_supported",  (classifier != nullptr) && classifier->is_occlusion_supported()}
+    }).dump();
+}
+
+auto Mcp_server::action_set_pvs_culling(const json& args) -> std::string
+{
+    // The MCP counterpart of the Settings window's PVS Culling checkbox
+    // (doc/plans/pvs.md): edits the live editor setting, which the next
+    // frame's render settings snapshot carries to the draw lists' publish.
+    if (m_context.editor_settings == nullptr) {
+        return make_error_content("set_pvs_culling: editor settings not available");
+    }
+    if (args.contains("enabled")) {
+        const json& value = args["enabled"];
+        if (!value.is_boolean()) {
+            return make_error_content("set_pvs_culling: 'enabled' must be a boolean");
+        }
+        m_context.editor_settings->pvs_culling = value.get<bool>();
+    }
+    return make_json_content(json{
+        {"enabled",          m_context.editor_settings->pvs_culling},
+        {"query_margin",     m_context.editor_settings->pvs_query_margin},
+        {"classification",   std::string{to_string(m_context.editor_settings->culling_classification)}}
     }).dump();
 }
 
@@ -680,6 +709,46 @@ auto Mcp_server::query_pvs_status(const json& args) -> std::string
         {"scene_name", sr->get_name()},
         {"state",      erhe::scene::c_str(state)}
     };
+
+    // The consumer (doc/plans/pvs.md "Runtime consumption"): the setting,
+    // whether the draw lists' last publish applied the rule, and per
+    // viewport of this scene the counts of its color view in the last
+    // rendered frame (the draw-list passes' statistics; the passes of one
+    // view share its counts).
+    result["culling_enabled"] = (m_context.editor_settings != nullptr) && m_context.editor_settings->pvs_culling;
+    {
+        const erhe::scene_renderer::Draw_list_scene* draw_list_scene = sr->get_draw_list_scene();
+        result["frame_culling_active"] = (draw_list_scene != nullptr) && (draw_list_scene->get_pvs_culling() == erhe::scene_renderer::Pvs_culling::on);
+    }
+    json views = json::array();
+    if ((m_context.scene_views != nullptr) && (m_context.app_rendering != nullptr)) {
+        for (const std::shared_ptr<Viewport_scene_view>& scene_view : m_context.scene_views->get_viewport_scene_views()) {
+            if (!scene_view || (scene_view->get_scene_root().get() != sr)) {
+                continue;
+            }
+            const std::string view_name = scene_view->get_settings_key();
+            for (const auto& pass : m_context.app_rendering->composition_passes()) {
+                if (!pass || pass->data.override_scene_root) {
+                    continue;
+                }
+                const Composition_pass_stats* const stats = pass->get_frame_stats(m_context.last_rendered_frame_index);
+                if (
+                    (stats == nullptr) ||
+                    (stats->result != Composition_pass_result::submitted_draw_lists) ||
+                    (stats->scene_view_name != view_name)
+                ) {
+                    continue;
+                }
+                views.push_back(json{
+                    {"view",   view_name},
+                    {"tested", stats->pvs_tested_count},
+                    {"culled", stats->pvs_culled_count}
+                });
+                break;
+            }
+        }
+    }
+    result["views"] = std::move(views);
 
     // The camera of the first viewport showing this scene.
     std::shared_ptr<erhe::scene::Camera> camera;

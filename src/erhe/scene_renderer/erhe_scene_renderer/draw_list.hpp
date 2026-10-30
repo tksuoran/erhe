@@ -101,12 +101,19 @@ public:
     // Bitwise equal tests (the same boxes pass).
     [[nodiscard]] auto is_same(const Cull_view_tests& other) const -> bool;
 
+    // The view's potentially visible set query box (doc/plans/pvs.md
+    // "Runtime consumption"): world-space min and max, empty when max < min
+    // on any axis (the default; a view without PVS culling).
+    [[nodiscard]] auto has_pvs_query() const -> bool;
+
     Draw_purpose             purpose    {Draw_purpose::color};
     Cull_view_kind           kind       {Cull_view_kind::planes};
     uint32_t                 plane_count{0}; // planes only
     std::array<glm::vec4, 6> planes     {};  // planes only
     Cull_sphere              sphere     {};  // cube_face only
     uint32_t                 cube_face  {0}; // cube_face only: 0..5 for +X -X +Y -Y +Z -Z
+    glm::vec3                pvs_query_min{ 0.0f}; // planes only
+    glm::vec3                pvs_query_max{-1.0f}; // planes only
 };
 
 class Draw_statistics
@@ -246,6 +253,13 @@ public:
     // bounds hooks and published with the entries. The render phase
     // classifies them against the frame's culling views.
     Draw_list_bounds                                  bounds;
+    // The entries' potentially visible set columns (doc/plans/pvs.md
+    // "Runtime consumption"), parallel to entries: the column of the
+    // Draw_list_scene's database the entry's identity (mesh glTF uid,
+    // mesh_primitive_index) names, or erhe::scene::Pvs_database::
+    // untracked_column. Written at registration and when a database is set,
+    // published with the bounds.
+    std::vector<uint32_t>                             pvs_columns;
     // Unique per list creation within a Draw_list_scene (a rebuild creates
     // new lists, possibly at the same indices): what the render phase's
     // resolution cache is keyed on.

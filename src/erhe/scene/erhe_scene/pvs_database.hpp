@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_math/aabb.hpp"
+
 #include <glm/glm.hpp>
 
 #include <array>
@@ -126,6 +128,17 @@ public:
     const std::array<float, 12>& world_transform,
     const std::array<float, 6>&  world_bounds
 ) -> uint64_t;
+
+// The Pvs_column::world_transform values of a node's world_from_node: the
+// x, y, z of each of the four columns, translation last.
+[[nodiscard]] auto make_pvs_world_transform(const glm::mat4& world_from_node) -> std::array<float, 12>;
+// The Pvs_column::world_bounds values of a world AABB: min x, y, z, then
+// max x, y, z.
+[[nodiscard]] auto make_pvs_world_bounds(const erhe::math::Aabb& world_aabb) -> std::array<float, 6>;
+// compute_pvs_transform_hash() of the two above: what the bake records for
+// a baked entry and what the staleness rule (doc/plans/pvs.md D4) compares
+// a registered entry's state with.
+[[nodiscard]] auto compute_pvs_transform_hash(const glm::mat4& world_from_node, const erhe::math::Aabb& world_aabb) -> uint64_t;
 
 class Pvs_database
 {

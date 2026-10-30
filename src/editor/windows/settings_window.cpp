@@ -706,6 +706,16 @@ void Settings_window::imgui()
             // lists' publish (doc/plans/occlusion_culling.md).
             static_cast<void>(ImGui::Checkbox("##", &settings.occlusion_culling));
         }, "Run the raster occlusion test in the viewports (gpu culling classification only): the entries' boxes are drawn against each view's opaque depth and the visible entries are marked. The next frame skips the entries found hidden (one frame of lag).");
+        add_entry("PVS Culling", [&settings](){
+            // The render settings snapshot carries the value to the draw
+            // lists' publish (doc/plans/pvs.md).
+            static_cast<void>(ImGui::Checkbox("##", &settings.pvs_culling));
+        }, "Cull the entries outside the potentially visible set of the cells around each viewport camera, when the scene has a ready PVS database (both culling classification paths). A stale or absent database culls nothing.");
+        add_entry("PVS Query Margin", [&settings](){
+            // Read by the viewports' culling views through the render
+            // settings snapshot (doc/plans/pvs.md).
+            static_cast<void>(ImGui::DragFloat("##", &settings.pvs_query_margin, 0.005f, 0.0f, 10.0f, "%.3f m"));
+        }, "Half the size of the box around a viewport camera whose cells' potentially visible sets the PVS culling reads.");
         add_entry("Light Cluster Binning", [&settings](){
             // The render settings snapshot carries the value to the shadow
             // render nodes' light binning (doc/plans/clustered_lights.md C4).

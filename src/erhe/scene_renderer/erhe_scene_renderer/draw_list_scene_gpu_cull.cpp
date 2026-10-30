@@ -5,6 +5,7 @@
 #include "erhe_scene_renderer/cull_frame_registry.hpp"
 #include "erhe_scene_renderer/gpu_cull_classifier.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/pvs_gpu_database.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 
 #include "erhe_graphics/blit_command_encoder.hpp"
@@ -23,6 +24,7 @@
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/pvs_database.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
@@ -67,6 +69,11 @@ public:
     // The frame's occlusion culled region (empty: the frame consumed no
     // occlusion words): the mask bits the occlusion consumption removed.
     std::vector<std::byte>             gpu_culled;
+    // The frame's PVS culled words (empty: the frame applied no PVS rule)
+    // and the CPU lanes' PVS culled bits per list (mask layout).
+    std::vector<std::byte>             gpu_pvs_culled;
+    bool                               pvs_frame     {false};
+    std::vector<std::vector<uint64_t>> cpu_pvs_culled;
     std::size_t                        pending_reads {0};
     bool                               cpu_captured  {false};
     // The CPU half, captured at the recorded frame's classification.
@@ -228,6 +235,19 @@ void Draw_list_scene::publish_gpu_bounds(Draw_list_slot& slot)
         };
         slot.gpu_bounds          = make_buffer("Draw_list_scene GPU cull bounds");
         slot.gpu_templates       = make_buffer("Draw_list_scene GPU command templates");
+        // The PVS columns, one uint32 per entry of the same capacity.
+        static_assert((Gpu_cull_classifier::bounds_bytes_per_entry % Gpu_cull_classifier::column_bytes_per_entry) == 0);
+        slot.gpu_columns = std::make_unique<erhe::graphics::Buffer>(
+            graphics_device,
+            erhe::graphics::Buffer_create_info{
+                .capacity_byte_count                    = capacity / (Gpu_cull_classifier::bounds_bytes_per_entry / Gpu_cull_classifier::column_bytes_per_entry),
+                .memory_allocation_create_flag_bit_mask = erhe::graphics::Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = erhe::graphics::Buffer_usage::storage,
+                .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::host_coherent | erhe::graphics::Memory_property_flag_bit_mask::host_persistent,
+                .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene GPU PVS columns"}
+            }
+        );
         slot.gpu_bounds_capacity = capacity;
         slot.gpu_bounds_serials.clear();
     }
@@ -243,6 +263,8 @@ void Draw_list_scene::publish_gpu_bounds(Draw_list_slot& slot)
     std::size_t          dirty_end   = 0;
     std::span<std::byte> mapped{};
     std::span<std::byte> mapped_templates{};
+    std::span<std::byte> mapped_columns{};
+    const std::size_t    column_capacity = slot.gpu_bounds_capacity / (Gpu_cull_classifier::bounds_bytes_per_entry / Gpu_cull_classifier::column_bytes_per_entry);
     for (std::size_t list_index = 0; list_index < list_count; ++list_index) {
         const Draw_list& draw_list    = slot.lists[list_index];
         const uint32_t   entry_offset = slot.entry_offsets[list_index];
@@ -261,6 +283,7 @@ void Draw_list_scene::publish_gpu_bounds(Draw_list_slot& slot)
         if (mapped.empty()) {
             mapped           = slot.gpu_bounds   ->map_bytes(0, slot.gpu_bounds_capacity);
             mapped_templates = slot.gpu_templates->map_bytes(0, slot.gpu_bounds_capacity);
+            mapped_columns   = slot.gpu_columns  ->map_bytes(0, column_capacity);
         }
         // Per entry: center.xyz, 0 and extent.xyz, purpose
         // (cull_classify.comp); the floats the CPU lanes read. A skinned
@@ -291,6 +314,13 @@ void Draw_list_scene::publish_gpu_bounds(Draw_list_slot& slot)
             std::memcpy(mapped_templates.data() + write_offset, command_template.data(), sizeof(command_template));
             write_offset += sizeof(record);
         }
+        // The entries' PVS columns (cull_classify.comp cull_columns).
+        ERHE_VERIFY(draw_list.pvs_columns.size() == list_entry_count);
+        std::memcpy(
+            mapped_columns.data() + (static_cast<std::size_t>(entry_offset) * Gpu_cull_classifier::column_bytes_per_entry),
+            draw_list.pvs_columns.data(),
+            list_entry_count * Gpu_cull_classifier::column_bytes_per_entry
+        );
         dirty_begin = std::min(dirty_begin, range_begin);
         dirty_end   = std::max(dirty_end, write_offset);
         ++m_gpu_bounds_write_count;
@@ -301,9 +331,15 @@ void Draw_list_scene::publish_gpu_bounds(Draw_list_slot& slot)
             const std::size_t flush_end   = std::min(align_up(dirty_end, c_gpu_bounds_flush_alignment), slot.gpu_bounds_capacity);
             slot.gpu_bounds   ->flush_bytes(flush_begin, flush_end - flush_begin);
             slot.gpu_templates->flush_bytes(flush_begin, flush_end - flush_begin);
+            // The same entries in the column buffer.
+            constexpr std::size_t ratio = Gpu_cull_classifier::bounds_bytes_per_entry / Gpu_cull_classifier::column_bytes_per_entry;
+            const std::size_t column_begin = align_down(dirty_begin / ratio, c_gpu_bounds_flush_alignment);
+            const std::size_t column_end   = std::min(align_up(dirty_end / ratio, c_gpu_bounds_flush_alignment), column_capacity);
+            slot.gpu_columns->flush_bytes(column_begin, column_end - column_begin);
         }
         slot.gpu_bounds   ->unmap();
         slot.gpu_templates->unmap();
+        slot.gpu_columns  ->unmap();
     }
 }
 
@@ -374,6 +410,38 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             }
         }
 
+        // The PVS rule (doc/plans/pvs.md "Runtime consumption"): the frame's
+        // database on the GPU (made when the slot names another database
+        // than the copy, uploaded through this command buffer) and its
+        // header, when some view of the frame applies it.
+        bool pvs = false;
+        if (m_cull_pvs_frame) {
+            for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
+                const Cull_view_tests& view = m_cull_views[view_index];
+                pvs = pvs || ((view.purpose == Draw_purpose::color) && view.has_pvs_query());
+            }
+        }
+        const erhe::scene::Pvs_database* const pvs_database = pvs ? slot.pvs_database.get() : nullptr;
+        if ((pvs_database != nullptr) && (!m_pvs_gpu_database || (m_pvs_gpu_database->get_database() != pvs_database))) {
+            m_pvs_gpu_database = std::make_unique<Pvs_gpu_database>(device, command_buffer, slot.pvs_database);
+        }
+        if (!m_pvs_unused_database_buffer) {
+            // Bound for the database and the culled words in a frame
+            // without the rule (the shader reads and writes neither then).
+            const auto make_unused = [&device](const char* label) -> std::unique_ptr<Buffer> {
+                return std::make_unique<Buffer>(
+                    device,
+                    Buffer_create_info{
+                        .capacity_byte_count = c_occlusion_min_region_bytes,
+                        .usage               = Buffer_usage::storage,
+                        .debug_label         = erhe::utility::Debug_label{label}
+                    }
+                );
+            };
+            m_pvs_unused_database_buffer = make_unused("Draw_list_scene no PVS database");
+            m_pvs_unused_culled_buffer   = make_unused("Draw_list_scene no PVS culled words");
+        }
+
         Ring_buffer_range view_range = classifier.get_view_buffer().acquire(Ring_buffer_usage::CPU_write, view_bytes);
         {
             const std::span<std::byte> gpu_data = view_range.get_span();
@@ -386,6 +454,22 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 0u
             };
             std::memcpy(gpu_data.data() + classifier.get_view_occlusion_header_offset(), &occlusion_header, sizeof(occlusion_header));
+            // The PVS header (cull_classify.comp): zero without the rule.
+            glm::uvec4 pvs_header{0u};
+            glm::uvec4 pvs_cells {0u};
+            glm::uvec4 pvs_pages {0u};
+            glm::vec4  pvs_grid  {0.0f};
+            if (pvs_database != nullptr) {
+                const erhe::scene::Pvs_header& header = pvs_database->get_header();
+                pvs_header = glm::uvec4{1u, pvs_database->get_words_per_cell(), header.page_size, m_pvs_gpu_database->get_slot_base_word()};
+                pvs_cells  = glm::uvec4{header.cell_counts, 0u};
+                pvs_pages  = glm::uvec4{pvs_database->get_page_dims(), pvs_database->get_words_per_page()};
+                pvs_grid   = glm::vec4{header.grid_origin, cull_lanes::get_pvs_inverse_cell_size(*pvs_database)};
+            }
+            std::memcpy(gpu_data.data() + classifier.get_view_pvs_header_offset(), &pvs_header, sizeof(pvs_header));
+            std::memcpy(gpu_data.data() + classifier.get_view_pvs_cells_offset (), &pvs_cells,  sizeof(pvs_cells));
+            std::memcpy(gpu_data.data() + classifier.get_view_pvs_pages_offset (), &pvs_pages,  sizeof(pvs_pages));
+            std::memcpy(gpu_data.data() + classifier.get_view_pvs_grid_offset  (), &pvs_grid,   sizeof(pvs_grid));
             std::size_t write_offset = classifier.get_view_data_offset();
             for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
                 const Cull_view_tests& view = m_cull_views[view_index];
@@ -400,6 +484,11 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                     static_cast<float>(view.plane_count),
                     static_cast<float>(view.cube_face)
                 };
+                // The PVS query box of a color view applying the rule (the
+                // views classify_cull_views() made query cells for).
+                const bool pvs_view = (pvs_database != nullptr) && (view.purpose == Draw_purpose::color) && view.has_pvs_query();
+                record[10] = glm::vec4{view.pvs_query_min, pvs_view ? 1.0f : 0.0f};
+                record[11] = glm::vec4{view.pvs_query_max, 0.0f};
                 // The occlusion test of an occlusion view: its near plane,
                 // the flag and, when the previous frame's words hold the
                 // same view (matched by key: view indices differ between
@@ -437,6 +526,16 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
         mask_range.close();
         const Buffer* const mask_buffer      = mask_range.get_buffer()->get_buffer();
         const std::size_t   mask_byte_offset = mask_range.get_byte_start_offset_in_buffer();
+        // The frame's PVS culled words, laid out like the masks (only a frame
+        // with the rule writes them; read back by a check only).
+        std::optional<Ring_buffer_range> pvs_culled_range{};
+        if (pvs_database != nullptr) {
+            pvs_culled_range.emplace(classifier.get_mask_buffer().acquire(Ring_buffer_usage::GPU_access, mask_bytes));
+            pvs_culled_range->bytes_gpu_used(mask_bytes);
+            pvs_culled_range->close();
+        }
+        const std::size_t columns_bytes = entry_count * Gpu_cull_classifier::column_bytes_per_entry;
+        ERHE_VERIFY(slot.gpu_columns);
 
         if (previous_slot != nullptr) {
             // The previous frame's classification and occlusion pass
@@ -464,6 +563,14 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 encoder.set_buffer(Buffer_target::storage, previous_slot->buffer.get(), 0, previous_slot->result_offset + previous_slot->bind_bytes, Gpu_cull_classifier::occlusion_previous_words_binding_point);
             } else {
                 encoder.set_buffer(Buffer_target::storage, m_occlusion_no_previous_buffer.get(), 0, c_occlusion_min_region_bytes, Gpu_cull_classifier::occlusion_previous_words_binding_point);
+            }
+            encoder.set_buffer(Buffer_target::storage, slot.gpu_columns.get(), 0, columns_bytes, Gpu_cull_classifier::pvs_columns_binding_point);
+            if (pvs_database != nullptr) {
+                encoder.set_buffer(Buffer_target::storage, m_pvs_gpu_database->get_buffer(), 0, m_pvs_gpu_database->get_byte_count(), Gpu_cull_classifier::pvs_database_binding_point);
+                encoder.set_buffer(Buffer_target::storage, pvs_culled_range->get_buffer()->get_buffer(), pvs_culled_range->get_byte_start_offset_in_buffer(), mask_bytes, Gpu_cull_classifier::pvs_culled_binding_point);
+            } else {
+                encoder.set_buffer(Buffer_target::storage, m_pvs_unused_database_buffer.get(), 0, c_occlusion_min_region_bytes, Gpu_cull_classifier::pvs_database_binding_point);
+                encoder.set_buffer(Buffer_target::storage, m_pvs_unused_culled_buffer.get(),   0, c_occlusion_min_region_bytes, Gpu_cull_classifier::pvs_culled_binding_point);
             }
             const std::size_t group_size = Gpu_cull_classifier::workgroup_size;
             encoder.dispatch_compute(static_cast<std::uintptr_t>((entry_count + group_size - 1) / group_size), 1, 1);
@@ -554,6 +661,41 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                     }
                 );
             }
+            // The bits the PVS rule removed (doc/plans/pvs.md): the check
+            // compares them with the CPU lanes' bits.
+            if (pvs_culled_range.has_value()) {
+                std::shared_ptr<Ring_buffer_range> pvs_readback = std::make_shared<Ring_buffer_range>(
+                    classifier.get_readback_buffer().acquire(Ring_buffer_usage::CPU_read, mask_bytes)
+                );
+                {
+                    Blit_command_encoder blit = device.make_blit_command_encoder(command_buffer);
+                    blit.copy_from_buffer(
+                        pvs_culled_range->get_buffer()->get_buffer(), pvs_culled_range->get_byte_start_offset_in_buffer(),
+                        pvs_readback->get_buffer()->get_buffer(), pvs_readback->get_byte_start_offset_in_buffer(),
+                        mask_bytes
+                    );
+                }
+                {
+                    const std::lock_guard<std::mutex> lock{m_gpu_cull_check->mutex};
+                    ++m_gpu_cull_check->pending_reads;
+                }
+                device.add_completion_handler(
+                    [check = m_gpu_cull_check, pvs_readback, generation = check_generation.value()]() {
+                        const std::span<std::byte> gpu_data = pvs_readback->get_span();
+                        {
+                            const std::lock_guard<std::mutex> lock{check->mutex};
+                            if ((check->generation == generation) && (check->stage == Gpu_cull_check::Stage::recording)) {
+                                check->gpu_pvs_culled.assign(gpu_data.begin(), gpu_data.end());
+                                --check->pending_reads;
+                                check->complete_if_ready();
+                            }
+                        }
+                        pvs_readback->bytes_gpu_used(gpu_data.size_bytes());
+                        pvs_readback->close();
+                        pvs_readback->release();
+                    }
+                );
+            }
             device.add_completion_handler(
                 [check = m_gpu_cull_check, readback, generation = check_generation.value()]() {
                     const std::span<std::byte> gpu_data = readback->get_span();
@@ -574,6 +716,9 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
 
         view_range.release();
         mask_range.release();
+        if (pvs_culled_range.has_value()) {
+            pvs_culled_range->release();
+        }
     }
 
     if (!check_generation.has_value()) {
@@ -606,6 +751,19 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             std::copy_n(source.begin(), std::min(source.size(), masks.size()), masks.begin());
         }
     }
+    // The CPU lanes' PVS culled bits of the frame (the GPU's words are
+    // read back when the frame applied the rule).
+    check.pvs_frame = m_cull_pvs_frame;
+    check.cpu_pvs_culled.resize(list_count);
+    for (std::size_t list_index = 0; list_index < list_count; ++list_index) {
+        const std::size_t      list_entry_count = slot.lists[list_index].entries.size();
+        std::vector<uint64_t>& bits             = check.cpu_pvs_culled[list_index];
+        bits.assign(group_count * list_entry_count, uint64_t{0});
+        if (m_cull_pvs_frame && (list_index < m_cull_pvs_culled_masks.size())) {
+            const std::vector<uint64_t>& source = m_cull_pvs_culled_masks[list_index];
+            std::copy_n(source.begin(), std::min(source.size(), bits.size()), bits.begin());
+        }
+    }
     check.cpu_captured = true;
     check.complete_if_ready();
 }
@@ -627,6 +785,9 @@ void Draw_list_scene::request_cull_classification_check()
     check.command_jobs.clear();
     check.command_candidates.clear();
     check.gpu_culled.clear();
+    check.gpu_pvs_culled.clear();
+    check.pvs_frame = false;
+    check.cpu_pvs_culled.clear();
     check.gpu_counts.clear();
     check.gpu_commands.clear();
 }
@@ -668,11 +829,27 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
         return (bit < 32) ? ((words[0] >> bit) & 1u) : ((words[1] >> (bit - 32)) & 1u);
     };
 
+    // The bit the frame's PVS rule removed on the GPU for (view, entry of
+    // all lists), from the PVS culled words (0 without the rule).
+    const auto gpu_pvs_culled_bit = [&check](const uint32_t view, const std::size_t entry) -> uint32_t {
+        if (check.gpu_pvs_culled.empty()) {
+            return 0u;
+        }
+        const std::size_t element = ((view / 64) * check.entry_count) + entry;
+        ERHE_VERIFY(((element + 1) * Gpu_cull_classifier::mask_bytes_per_entry_group) <= check.gpu_pvs_culled.size());
+        std::array<uint32_t, 2> words{0u, 0u};
+        std::memcpy(words.data(), check.gpu_pvs_culled.data() + (element * Gpu_cull_classifier::mask_bytes_per_entry_group), sizeof(words));
+        const uint32_t bit = view % 64;
+        return (bit < 32) ? ((words[0] >> bit) & 1u) : ((words[1] >> (bit - 32)) & 1u);
+    };
+
     for (std::size_t list_index = 0, list_end = check.list_entry_counts.size(); list_index < list_end; ++list_index) {
         const uint32_t list_entry_count = check.list_entry_counts[list_index];
         if (list_entry_count == 0) {
             continue;
         }
+        ERHE_VERIFY(list_index < check.cpu_pvs_culled.size());
+        const std::vector<uint64_t>& cpu_pvs_culled = check.cpu_pvs_culled[list_index];
         Cull_classification_list_check list_check{};
         list_check.list_index  = static_cast<uint32_t>(list_index);
         list_check.purpose     = check.list_purposes[list_index];
@@ -692,6 +869,15 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
                 const uint32_t gpu_bit = (bit < 32) ? ((gpu_words[0] >> bit) & 1u) : ((gpu_words[1] >> (bit - 32)) & 1u);
                 const uint32_t culled  = culled_bit(view, check.list_entry_offsets[list_index] + entry);
                 out.occlusion_culled_count += culled;
+                // The PVS rule: both paths remove the same bits.
+                const uint32_t cpu_pvs = static_cast<uint32_t>((cpu_pvs_culled[(group * list_entry_count) + entry] >> bit) & uint64_t{1});
+                const uint32_t gpu_pvs = gpu_pvs_culled_bit(view, check.list_entry_offsets[list_index] + entry);
+                out.pvs_culled_cpu_count += cpu_pvs;
+                out.pvs_culled_gpu_count += gpu_pvs;
+                if (cpu_pvs != gpu_pvs) {
+                    ++out.pvs_mismatch_count;
+                    ++list_check.mismatch_count;
+                }
                 if ((cpu_bit != (gpu_bit | culled)) || ((culled != 0u) && (gpu_bit != 0u))) {
                     ++list_check.mismatch_count;
                     if (list_check.mismatches.size() < max_reported_mismatches) {
@@ -771,6 +957,8 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
     check.stage = Gpu_cull_check::Stage::idle;
     check.gpu_masks.clear();
     check.cpu_masks.clear();
+    check.gpu_pvs_culled.clear();
+    check.cpu_pvs_culled.clear();
     check.command_jobs.clear();
     check.command_candidates.clear();
     check.gpu_culled.clear();

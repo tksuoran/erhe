@@ -209,10 +209,14 @@ only, never wrongly.
   `Draw_list` keeps it as one more SoA array next to the bounds, `publish()`
   copies it to the frame slot with them, and the GPU bounds upload of a
   changed list carries a parallel uint32 column array.
-- Staleness, change-driven (D4): the transform and bounds hooks and the
-  unregister path of `Draw_list_scene` compare a column-bearing entry's new
-  state with the column's baked `transform_hash` and call
-  `Pvs_database::mark_stale()` on a mismatch. The mark is one message on
+- Staleness, change-driven (D4): the transform, bounds and refresh hooks
+  and the registration of `Draw_list_scene` compare a column-bearing
+  entry's new state with the column's baked `transform_hash`, and a column
+  whose last entry is unregistered without a registration taking it back in
+  the same flush (a re-registration keeps it) is a removed baked entry;
+  either calls the `Draw_list_scene` stale callback once per database,
+  which the editor wires to `Scene_root::mark_pvs_stale()`
+  (`Pvs_database::mark_stale()`). The mark is one message on
   `App_message_bus` (`Pvs_state_changed_message`) for the UI and the
   Problems list. A transform update that restores the baked state keeps
   the database stale: a rebake is the only path back to `ready`.
@@ -242,11 +246,14 @@ only, never wrongly.
   setting as `Occlusion_culling` is, Settings window and MCP
   `set_pvs_culling`. Effective on both classification paths; the GPU path
   is the production path, the CPU path keeps the check meaningful.
-- Statistics and check: per view PVS-culled count in
-  `Composition_pass_stats` (from the `pvs_culled` words, retired-frame
-  readback as the occlusion counts), MCP `get_pvs_status` (state, grid,
-  column count, bytes, the cells of the viewport camera) and
-  `get_cull_classification_check` extended with the PVS bits (0 mismatches
+- Statistics and check: per view the PVS tested and culled counts of the
+  frame in `Composition_pass_stats` (the classification's counts, the CPU
+  lanes' decision; the check shows the GPU decides the same bits), MCP
+  `get_pvs_status` (state, grid, column count, bytes, the cells of the
+  viewport camera, the setting, whether the last publish applied the rule,
+  and per viewport its counts) and `get_cull_classification_check`
+  extended with the PVS bits: the GPU's `pvs_culled` words are read back
+  and compared bit for bit with the CPU lanes' removed bits (0 mismatches
   between the CPU and GPU classification is the gate).
 
 ### Bake
@@ -407,9 +414,11 @@ pays the classification's extra reads and at most one page upload.
   with PVS bits.
 - Cost: `scripts/render_thread_bench.py --tracy` on Bistro, PVS off / on /
   on with occlusion: GPU `Main`, tick, R, the occlusion pass's time (fewer
-  boxes), classification dispatch time. Quest: the headset Bistro
-  benchmark (`doc/plans/quest_performance.md`) before and after, with the
-  database baked on the desktop and saved into `bistro_quest.glb`.
+  boxes), classification dispatch time. Quest, when a headset is attached
+  again (none is available on either machine as of 2026-10-30): the
+  headset Bistro benchmark (`doc/plans/quest_performance.md`) before and
+  after, with the database baked on the desktop and saved into
+  `bistro_quest.glb`.
 
 ## Build order
 
@@ -436,12 +445,17 @@ step makes possible.
    generator, `doc/editor/scene_serialization.md`), since columns are keyed
    by uid. The region and cell size are `Scene_settings` fields (D2) saved
    through `ERHE_scene`; `ERHE_pvs` records the bake method.
-3. Consumer: column lookup, SoA column array and upload, the paged GPU
-   layout with every stored page resident, query boxes, the
+3. Consumer (done; `doc/erhe/draw_list_renderer.md` Q6 "PVS",
+   `doc/editor/rendering.md`, MCP `set_pvs_culling` and the consumer
+   fields of `get_pvs_status` in `doc/agents/mcp_server_usage.md`): column
+   lookup, SoA column array and upload, the paged GPU layout with every
+   stored page resident (`Pvs_gpu_database`), query boxes, the
    classification rule on both paths, `pvs_culled` words and statistics,
-   the setting, the staleness rule, the check. Gates: 0 mismatches; the
-   wall scene with a sampled database (dense sampling) culls the six boxes;
-   images identical at the sampled poses.
+   the setting, the staleness rule, the check. `scripts/pvs_verify.py`
+   gates it on the wall scene with the sampled database: 0 mismatches, the
+   viewport view culls the six boxes in both classification modes, the
+   viewport image and a scene image byte-identical with the rule on and
+   off, and a moved front box turns the database stale and the rule off.
 4. Disocclusion bake, part 1: the layered buffer (the two shader variants,
    the dense buffers, the layer function) and a readback that dumps one
    face's layer 0 as an image for inspection; unit tests of the layer
@@ -451,8 +465,7 @@ step makes possible.
    the window and MCP. Gates: `pvs_verify.py` zero misses on the wall,
    heavy and Bistro scenes; the wall expectations; Bistro images identical
    on / off; cost table.
-6. Headset: the query box of the union view; Quest measurement.
-7. Streaming: the residency policy of "Residency and streaming" (requests
+6. Streaming: the residency policy of "Residency and streaming" (requests
    at the query-box change site, the worker-thread page reads by range,
    one upload per frame slot, eviction, the CPU bits release after an
    open), with `pvs.resident_pages` smaller than the database's page count
@@ -461,9 +474,15 @@ step makes possible.
    capacity, no frame culls a page that is not resident. Until this step
    the resident set is every stored page (capacity = page count), which
    the paged GPU layout of step 3 already supports.
-8. Documentation: `doc/erhe/draw_list_renderer.md` (Q6 gains the PVS rule),
+7. Documentation: `doc/erhe/draw_list_renderer.md` (Q6 gains the PVS rule),
    `doc/editor/rendering.md`, `doc/editor/windows.md`, this plan reduced to
    what is outstanding.
+8. Headset, when a Quest is available again: the query box of the union
+   view ("Headset"), built and compiled in a tree with OpenXR, the Quest
+   wall gate (`scripts/quest_occlusion_wall_check.py` extended with the
+   PVS) and the Quest measurement of "Verification". Until then the
+   headset's views register an empty query box and the desktop steps do
+   not wait for it.
 
 ## Open
 

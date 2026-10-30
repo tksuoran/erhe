@@ -33,6 +33,24 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: the potentially visible set consumer
+  (doc/plans/pvs.md "Runtime consumption"): `Pvs_culling` (`off`, `on`) with
+  `c_str()`; `Draw_list_scene::set_pvs_database()`,
+  `enqueue_set_pvs_database()`, `get_pvs_database()`,
+  `set_pvs_stale_callback()`, `detach_pvs_database()`, `get_pvs_culling()` and
+  `get_cull_view_pvs_counts()` with `Pvs_view_counts`;
+  `Draw_list::pvs_columns`; `Cull_view_tests::pvs_query_min`,
+  `pvs_query_max` and `has_pvs_query()`;
+  `Draw_list_renderer::Color_cull_view_parameters::pvs_query_min` and
+  `pvs_query_max`; `Pvs_gpu_database`; `cull_lanes::get_pvs_inverse_cell_size()`,
+  `pvs_point_cell()`, `Pvs_query_cells`, `make_pvs_query_cells()` and
+  `pvs_lanes()`; `Cull_classification_check::pvs_culled_cpu_count`,
+  `pvs_culled_gpu_count` and `pvs_mismatch_count`;
+  `Gpu_cull_classifier::pvs_database_binding_point`,
+  `pvs_culled_binding_point`, `pvs_columns_binding_point`,
+  `column_bytes_per_entry` and the `get_view_pvs_*_offset()` accessors.
+- `erhe::scene`: `make_pvs_world_transform()`, `make_pvs_world_bounds()`
+  and `compute_pvs_transform_hash(world_from_node, world_aabb)`.
 - `erhe::scene`: `Pvs_bake_method` (`sampled`, `disocclusion`) with
   `c_str()` and `parse_pvs_bake_method()`, and
   `Pvs_bake_parameters::method`; `ERHE_pvs` carries it as `bake.method`.
@@ -1022,6 +1040,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Draw_list_scene::publish()` takes the frame's
+  `Pvs_culling` after the `Occlusion_culling`; `Draw_list_scene::add_cull_view()`
+  takes an optional PVS query box (`pvs_query_min`, `pvs_query_max`; the
+  default is no box), part of the view's identity;
+  `Gpu_cull_classifier::vec4s_per_view` is 12 (the view records carry the
+  query box) and the classification pipeline binds three more storage
+  buffers (the PVS database, the PVS culled words, the entries' columns).
 - `erhe::scene_renderer`: lightmapping is the scene-level shader variant axis
   `Shader_bool::USE_LIGHTMAP`, set by `Forward_renderer` and
   `Draw_list_renderer` while `Scene_pass_resources` has a lightmap texture

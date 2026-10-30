@@ -178,7 +178,7 @@ auto Draw_list_renderer::add_color_cull_view(
     }
     const float                    clip_z_min      = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
     const std::array<glm::vec4, 6> view_frustum_planes = erhe::math::extract_frustum_planes(clip_from_world.value(), clip_z_min, 1.0f);
-    return draw_list_scene.add_cull_view(frame_index, Draw_purpose::color, std::span<const glm::vec4>{view_frustum_planes});
+    return draw_list_scene.add_cull_view(frame_index, Draw_purpose::color, std::span<const glm::vec4>{view_frustum_planes}, parameters.pvs_query_min, parameters.pvs_query_max);
 }
 
 auto Draw_list_renderer::get_color_clip_from_world(const Color_cull_view_parameters& parameters) -> std::optional<glm::mat4>

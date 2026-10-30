@@ -69,12 +69,23 @@ public:
     // classification consumes (cull_classify.comp documents them).
     static constexpr unsigned int occlusion_words_binding_point         {3};
     static constexpr unsigned int occlusion_previous_words_binding_point{4};
+    // The potentially visible set rule (doc/plans/pvs.md "Runtime
+    // consumption"): the GPU database (Pvs_gpu_database: page table, then
+    // the resident page slots), the frame's PVS culled words (mask layout)
+    // and the entries' columns (one uint32 per entry, laid out like the
+    // bounds).
+    static constexpr unsigned int pvs_database_binding_point{5};
+    static constexpr unsigned int pvs_culled_binding_point  {6};
+    static constexpr unsigned int pvs_columns_binding_point {7};
     static constexpr uint32_t     workgroup_size      {64};
     // GPU bounds: two vec4 per entry (center + 0, extent + purpose).
     static constexpr std::size_t  bounds_bytes_per_entry{2 * 4 * sizeof(float)};
-    // View set: ten vec4 per view (six planes, range sphere, info, the
-    // near plane of an occlusion view, occlusion info).
-    static constexpr std::size_t  vec4s_per_view      {10};
+    // GPU columns: one uint32 per entry.
+    static constexpr std::size_t  column_bytes_per_entry{sizeof(uint32_t)};
+    // View set: twelve vec4 per view (six planes, range sphere, info, the
+    // near plane of an occlusion view, occlusion info, the PVS query box
+    // min and max).
+    static constexpr std::size_t  vec4s_per_view      {12};
     // Mask: one uvec2 (64 view bits) per entry per group of 64 views.
     static constexpr std::size_t  mask_bytes_per_entry_group{2 * sizeof(uint32_t)};
 
@@ -150,6 +161,12 @@ public:
     [[nodiscard]] auto get_readback_buffer  () -> erhe::graphics::Ring_buffer_client&;
     [[nodiscard]] auto get_view_header_offset() const -> std::size_t { return m_view_header_offset; }
     [[nodiscard]] auto get_view_occlusion_header_offset() const -> std::size_t { return m_view_occlusion_header_offset; }
+    // The PVS header (cull_classify.comp documents it): pvs_header,
+    // pvs_cells, pvs_pages (uvec4) and pvs_grid (vec4).
+    [[nodiscard]] auto get_view_pvs_header_offset() const -> std::size_t { return m_view_pvs_header_offset; }
+    [[nodiscard]] auto get_view_pvs_cells_offset () const -> std::size_t { return m_view_pvs_cells_offset; }
+    [[nodiscard]] auto get_view_pvs_pages_offset () const -> std::size_t { return m_view_pvs_pages_offset; }
+    [[nodiscard]] auto get_view_pvs_grid_offset  () const -> std::size_t { return m_view_pvs_grid_offset; }
     [[nodiscard]] auto get_view_data_offset  () const -> std::size_t { return m_view_data_offset; }
     // For Draw_list_scene's command generation.
     [[nodiscard]] auto get_compact_bind_group_layout() const -> const erhe::graphics::Bind_group_layout*;
@@ -185,8 +202,15 @@ private:
     erhe::graphics::Shader_resource                           m_masks_block;
     erhe::graphics::Shader_resource                           m_occlusion_words_block;
     erhe::graphics::Shader_resource                           m_occlusion_previous_words_block;
+    erhe::graphics::Shader_resource                           m_pvs_database_block;
+    erhe::graphics::Shader_resource                           m_pvs_culled_block;
+    erhe::graphics::Shader_resource                           m_pvs_columns_block;
     std::size_t                                               m_view_header_offset{0};
     std::size_t                                               m_view_occlusion_header_offset{0};
+    std::size_t                                               m_view_pvs_header_offset{0};
+    std::size_t                                               m_view_pvs_cells_offset {0};
+    std::size_t                                               m_view_pvs_pages_offset {0};
+    std::size_t                                               m_view_pvs_grid_offset  {0};
     std::size_t                                               m_view_data_offset  {0};
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_shader_stages;

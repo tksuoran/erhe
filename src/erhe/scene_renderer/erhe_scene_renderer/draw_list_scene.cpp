@@ -5,6 +5,7 @@
 #include "erhe_scene_renderer/gpu_cull_classifier.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/pvs_gpu_database.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
 
@@ -26,6 +27,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/pvs_database.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_utility/thread_roles.hpp"
@@ -424,6 +426,12 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
                 }
             );
             draw_list.entries.push_back(entry);
+            // The entry's PVS column (doc/plans/pvs.md "Runtime
+            // consumption"), looked up once, at registration.
+            const uint32_t pvs_column = find_pvs_column(object, static_cast<uint32_t>(i));
+            draw_list.pvs_columns.push_back(pvs_column);
+            add_pvs_column_entry(pvs_column);
+            ERHE_VERIFY(draw_list.pvs_columns.size() == draw_list.entries.size());
             ERHE_VERIFY(draw_list.primitive_records.size() == (draw_list.entries.size() - 1) * m_primitive_record_stride);
             draw_list.primitive_records.resize(draw_list.entries.size() * m_primitive_record_stride);
             // The bounds: write_object_bounds() below, as for world_aabb.
@@ -442,6 +450,8 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
     Draw_list& draw_list = edit_draw_list(location.draw_list_index);
     ERHE_VERIFY(location.entry_index < draw_list.entries.size());
     ++m_entry_layout_serial;
+    ERHE_VERIFY(draw_list.pvs_columns.size() == draw_list.entries.size());
+    remove_pvs_column_entry(draw_list.pvs_columns[location.entry_index]);
     const uint32_t last_index = static_cast<uint32_t>(draw_list.entries.size() - 1);
     if (location.entry_index != last_index) {
         // Swap-remove: the moved entry's owner must be told its new index.
@@ -463,6 +473,7 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
         ERHE_VERIFY(patched);
         draw_list.entries[location.entry_index] = moved;
         draw_list.bounds.move(last_index, location.entry_index);
+        draw_list.pvs_columns[location.entry_index] = draw_list.pvs_columns[last_index];
         std::memcpy(
             draw_list.primitive_records.data() + static_cast<std::size_t>(location.entry_index) * m_primitive_record_stride,
             draw_list.primitive_records.data() + static_cast<std::size_t>(last_index)           * m_primitive_record_stride,
@@ -470,6 +481,7 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
         );
     }
     draw_list.entries.pop_back();
+    draw_list.pvs_columns.pop_back();
     draw_list.primitive_records.resize(draw_list.entries.size() * m_primitive_record_stride);
     draw_list.bounds.resize(draw_list.entries.size());
 }
@@ -644,6 +656,7 @@ void Draw_list_scene::write_object_bounds(const uint32_t object_index)
     }
     object.world_aabb     = world_aabb;
     object.has_world_aabb = true;
+    check_pvs_object(object, world_aabb);
     // The caster vertex shader's node-space input bound (Caster_vertex_extent).
     glm::vec3 node_abs_extent{0.0f};
     for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
@@ -658,6 +671,168 @@ void Draw_list_scene::write_object_bounds(const uint32_t object_index)
     }
     object.node_abs_extent = node_abs_extent;
     mark_shadow_bounds_changed();
+}
+
+// --- Potentially visible sets (doc/plans/pvs.md "Runtime consumption") -------
+
+auto Draw_list_scene::find_pvs_column(const Draw_list_object& object, const uint32_t mesh_primitive_index) const -> uint32_t
+{
+    if (!m_pvs_database || !object.info.mesh) {
+        return erhe::scene::Pvs_database::untracked_column;
+    }
+    const std::string& uid = object.info.mesh->get_gltf_uid();
+    if (uid.empty()) {
+        return erhe::scene::Pvs_database::untracked_column;
+    }
+    return m_pvs_database->find_column(uid, mesh_primitive_index);
+}
+
+void Draw_list_scene::check_pvs_object(const Draw_list_object& object, const erhe::math::Aabb& world_aabb)
+{
+    if (!m_pvs_database || m_pvs_stale_reported || !object.info.mesh) {
+        return;
+    }
+    // Every primitive of a node has its node's transform and bounds: the
+    // first tracked entry speaks for the object.
+    uint32_t column = erhe::scene::Pvs_database::untracked_column;
+    for (const Draw_list_entry_location& location : object.locations) {
+        const uint32_t entry_column = m_draw_lists[location.draw_list_index].pvs_columns[location.entry_index];
+        if (entry_column != erhe::scene::Pvs_database::untracked_column) {
+            column = entry_column;
+            break;
+        }
+    }
+    if (column == erhe::scene::Pvs_database::untracked_column) {
+        return;
+    }
+    const std::vector<erhe::scene::Pvs_column>& columns = m_pvs_database->get_columns();
+    ERHE_VERIFY(column < columns.size());
+    const uint64_t hash = erhe::scene::compute_pvs_transform_hash(object.info.mesh->world_from_node(), world_aabb);
+    if (hash != columns[column].transform_hash) {
+        log_draw_list->info("PVS: baked mesh '{}' moved or changed its bounds since the bake", object.info.mesh->get_name());
+        report_pvs_stale("a baked entry moved or changed its bounds");
+    }
+}
+
+void Draw_list_scene::add_pvs_column_entry(const uint32_t column)
+{
+    if (column >= m_pvs_column_entry_counts.size()) {
+        return; // untracked
+    }
+    ++m_pvs_column_entry_counts[column];
+}
+
+void Draw_list_scene::remove_pvs_column_entry(const uint32_t column)
+{
+    if (column >= m_pvs_column_entry_counts.size()) {
+        return; // untracked
+    }
+    ERHE_VERIFY(m_pvs_column_entry_counts[column] > 0);
+    --m_pvs_column_entry_counts[column];
+    if (m_pvs_column_entry_counts[column] == 0) {
+        m_pvs_dropped_columns.push_back(column);
+    }
+}
+
+void Draw_list_scene::check_pvs_dropped_columns()
+{
+    for (const uint32_t column : m_pvs_dropped_columns) {
+        if ((column < m_pvs_column_entry_counts.size()) && (m_pvs_column_entry_counts[column] == 0)) {
+            report_pvs_stale("a baked entry was removed");
+            break;
+        }
+    }
+    m_pvs_dropped_columns.clear();
+}
+
+void Draw_list_scene::report_pvs_stale(const char* const reason)
+{
+    if (m_pvs_stale_reported) {
+        return;
+    }
+    if (m_pvs_database->get_state() != erhe::scene::Pvs_state::ready) {
+        m_pvs_stale_reported = true;
+        return;
+    }
+    m_pvs_stale_reported = true;
+    log_draw_list->info("PVS database stale: {}", reason);
+    if (m_pvs_stale_callback) {
+        m_pvs_stale_callback();
+    }
+}
+
+void Draw_list_scene::set_pvs_stale_callback(std::function<void()> callback)
+{
+    assert_main_thread();
+    m_pvs_stale_callback = std::move(callback);
+}
+
+void Draw_list_scene::detach_pvs_database()
+{
+    assert_main_thread();
+    {
+        const std::lock_guard<std::mutex> lock{m_pending_mutex};
+        m_pending.erase(
+            std::remove_if(
+                m_pending.begin(),
+                m_pending.end(),
+                [](const Pending_op& op) { return op.kind == Pending_op::Kind::set_pvs_database; }
+            ),
+            m_pending.end()
+        );
+    }
+    m_pvs_stale_callback = {};
+    set_pvs_database({});
+}
+
+void Draw_list_scene::set_pvs_database(std::shared_ptr<const erhe::scene::Pvs_database> database)
+{
+    ERHE_PROFILE_FUNCTION();
+    assert_main_thread();
+    if (database == m_pvs_database) {
+        return;
+    }
+    m_pvs_database       = std::move(database);
+    m_pvs_stale_reported = false;
+    m_pvs_dropped_columns.clear();
+    m_pvs_column_entry_counts.assign(m_pvs_database ? m_pvs_database->get_column_count() : 0u, uint32_t{0});
+
+    // Every live entry's column, once; a list is changed (its serial
+    // bumped, so the next publish copies it and its GPU columns) only when
+    // one of its entries' columns changed.
+    for (uint32_t list_index = 0, list_end = static_cast<uint32_t>(m_draw_lists.size()); list_index < list_end; ++list_index) {
+        const Draw_list& draw_list = m_draw_lists[list_index];
+        ERHE_VERIFY(draw_list.pvs_columns.size() == draw_list.entries.size());
+        bool changed = false;
+        for (std::size_t i = 0, end = draw_list.entries.size(); i < end; ++i) {
+            const Draw_list_entry& entry  = draw_list.entries[i];
+            const uint32_t         column = find_pvs_column(m_objects[entry.object_index], entry.mesh_primitive_index);
+            add_pvs_column_entry(column);
+            changed = changed || (column != draw_list.pvs_columns[i]);
+        }
+        if (!changed) {
+            continue;
+        }
+        Draw_list& edited = edit_draw_list(list_index);
+        for (std::size_t i = 0, end = edited.entries.size(); i < end; ++i) {
+            const Draw_list_entry& entry = edited.entries[i];
+            edited.pvs_columns[i] = find_pvs_column(m_objects[entry.object_index], entry.mesh_primitive_index);
+        }
+    }
+    if (!m_pvs_database) {
+        return;
+    }
+    log_draw_list->info(
+        "PVS database set: {} columns, {} cells, state {}",
+        m_pvs_database->get_column_count(), m_pvs_database->get_cell_count(), erhe::scene::c_str(m_pvs_database->get_state())
+    );
+    // The staleness rule against the registered state (a database baked
+    // or saved before an edit).
+    for (const Draw_list_object& object : m_objects) {
+        if (object.alive && object.has_world_aabb && (object.mobility != Draw_mobility::skinned)) {
+            check_pvs_object(object, object.world_aabb);
+        }
+    }
 }
 
 void Draw_list_scene::write_object_transform(const uint32_t object_index)
@@ -684,6 +859,7 @@ void Draw_list_scene::write_object_transform(const uint32_t object_index)
         draw_list.entries[location.entry_index].world_aabb = world_aabb;
         draw_list.bounds.set(location.entry_index, world_aabb);
     }
+    check_pvs_object(object, world_aabb);
     object.transform_serial = node->node_data.transforms.world_from_node_serial;
     mark_shadow_bounds_changed();
 }
@@ -1154,7 +1330,9 @@ void Draw_list_scene::rebuild_all()
     m_changes_unbounded = true;
     ++m_entry_layout_serial;
     // Full rebuild is the one place lists are dropped (also compacts away
-    // lists left empty by unregistration).
+    // lists left empty by unregistration). The entries' PVS columns are
+    // counted again by add_entries() below.
+    std::fill(m_pvs_column_entry_counts.begin(), m_pvs_column_entry_counts.end(), uint32_t{0});
     m_draw_lists.clear();
     m_draw_list_index_by_key.clear();
     m_skinned_object_indices.clear();
@@ -1306,6 +1484,12 @@ void Draw_list_scene::enqueue_material_update(const std::shared_ptr<erhe::scene:
     m_pending.push_back(Pending_op{.kind = Pending_op::Kind::material_update, .mesh = mesh});
 }
 
+void Draw_list_scene::enqueue_set_pvs_database(std::shared_ptr<const erhe::scene::Pvs_database> database)
+{
+    const std::lock_guard<std::mutex> lock{m_pending_mutex};
+    m_pending.push_back(Pending_op{.kind = Pending_op::Kind::set_pvs_database, .pvs_database = std::move(database)});
+}
+
 void Draw_list_scene::enqueue_rebuild_all()
 {
     const std::lock_guard<std::mutex> lock{m_pending_mutex};
@@ -1421,6 +1605,10 @@ void Draw_list_scene::flush_pending()
                 }
                 break;
             }
+            case Pending_op::Kind::set_pvs_database: {
+                set_pvs_database(op.pvs_database);
+                break;
+            }
             default: {
                 ERHE_FATAL("bad Pending_op kind");
             }
@@ -1428,6 +1616,9 @@ void Draw_list_scene::flush_pending()
     }
     ops.clear();
 
+    // A baked entry unregistered by this flush and not registered back
+    // (a re-registration keeps its column alive) is a removed baked entry.
+    check_pvs_dropped_columns();
     check_material_changes();
 }
 
@@ -1438,6 +1629,7 @@ void Draw_list_scene::publish(
     const std::size_t                 frames_in_flight,
     const Cull_classification         classification,
     const Occlusion_culling           occlusion,
+    const Pvs_culling                 pvs,
     const std::span<const Joint_pose> joint_poses
 )
 {
@@ -1496,6 +1688,20 @@ void Draw_list_scene::publish(
     slot.occlusion                = effective_occlusion;
     m_published_occlusion_culling = effective_occlusion;
 
+    // The PVS rule needs a ready database: absent or stale culls nothing
+    // (doc/plans/pvs.md D4). Both classification paths apply it.
+    const bool pvs_on =
+        (pvs == Pvs_culling::on) &&
+        m_pvs_database &&
+        (m_pvs_database->get_state() == erhe::scene::Pvs_state::ready);
+    slot.pvs = pvs_on ? Pvs_culling::on : Pvs_culling::off;
+    if (pvs_on) {
+        slot.pvs_database = m_pvs_database;
+    } else {
+        slot.pvs_database.reset();
+    }
+    m_published_pvs_culling = slot.pvs;
+
     // A changed pose is a content change: it moves the content serial (no
     // list is copied for it).
     if (record_skinned_pose_changes(joint_poses)) {
@@ -1551,6 +1757,7 @@ void Draw_list_scene::copy_to_slot(Draw_list_slot& slot)
         destination.entries          .assign(source.entries.begin(),           source.entries.end());
         destination.primitive_records.assign(source.primitive_records.begin(), source.primitive_records.end());
         destination.bounds.assign(source.bounds);
+        destination.pvs_columns.assign(source.pvs_columns.begin(), source.pvs_columns.end());
         destination.serial = source.serial;
         ++m_published_list_copy_count;
     }
@@ -2296,6 +2503,9 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     m_cull_frame_index      = frame_index;
     m_cull_views.clear();
     m_cull_view_survivors.clear();
+    m_cull_pvs_view_cells.clear();
+    m_cull_pvs_view_counts.clear();
+    m_cull_pvs_frame = false;
     // The previous frame's GPU commands belong to that frame.
     m_gpu_command_buffer      = nullptr;
     m_gpu_command_byte_offset = 0;
@@ -2327,13 +2537,16 @@ auto Draw_list_scene::append_cull_view(const Draw_purpose purpose, const Cull_vi
     view.purpose = purpose;
     view.kind    = kind;
     m_cull_view_survivors.push_back(0);
+    m_cull_pvs_view_counts.push_back(Pvs_view_counts{});
     return view;
 }
 
 auto Draw_list_scene::add_cull_view(
     const uint64_t                   frame_index,
     const Draw_purpose               purpose,
-    const std::span<const glm::vec4> planes
+    const std::span<const glm::vec4> planes,
+    const glm::vec3&                 pvs_query_min,
+    const glm::vec3&                 pvs_query_max
 ) -> Cull_view
 {
     assert_render_phase();
@@ -2345,13 +2558,17 @@ auto Draw_list_scene::add_cull_view(
     // Every view of the frame is added before its classification.
     ERHE_VERIFY(!m_cull_frame_classified);
     // The passes of one viewport share its camera: one view for all of them.
+    // The PVS query box is part of the identity: a scene image capture
+    // from the viewport's camera (no box) is another view.
     for (std::size_t i = 0, end = m_cull_views.size(); i < end; ++i) {
         const Cull_view_tests& view = m_cull_views[i];
         if (
             (view.purpose == purpose) &&
             (view.kind == Cull_view_kind::planes) &&
             (view.plane_count == planes.size()) &&
-            (std::memcmp(view.planes.data(), planes.data(), planes.size_bytes()) == 0)
+            (std::memcmp(view.planes.data(), planes.data(), planes.size_bytes()) == 0) &&
+            (std::memcmp(&view.pvs_query_min, &pvs_query_min, sizeof(glm::vec3)) == 0) &&
+            (std::memcmp(&view.pvs_query_max, &pvs_query_max, sizeof(glm::vec3)) == 0)
         ) {
             return static_cast<Cull_view>(i);
         }
@@ -2359,6 +2576,8 @@ auto Draw_list_scene::add_cull_view(
     Cull_view_tests& view = append_cull_view(purpose, Cull_view_kind::planes);
     view.plane_count = static_cast<uint32_t>(planes.size());
     std::copy(planes.begin(), planes.end(), view.planes.begin());
+    view.pvs_query_min = pvs_query_min;
+    view.pvs_query_max = pvs_query_max;
     return static_cast<Cull_view>(m_cull_views.size() - 1);
 }
 
@@ -2515,6 +2734,15 @@ auto Draw_list_scene::get_cull_view_tests(const uint64_t frame_index, const Cull
     return m_cull_views[static_cast<std::size_t>(cull_view)];
 }
 
+auto Draw_list_scene::get_cull_view_pvs_counts(const uint64_t frame_index, const Cull_view cull_view) const -> Pvs_view_counts
+{
+    if (cull_view == Cull_view::none) {
+        return Pvs_view_counts{};
+    }
+    verify_cull_view_classified(frame_index, cull_view);
+    return m_cull_pvs_view_counts[static_cast<std::size_t>(cull_view)];
+}
+
 void Draw_list_scene::verify_cull_view_classified(const uint64_t frame_index, const Cull_view cull_view) const
 {
     if (cull_view == Cull_view::none) {
@@ -2564,6 +2792,23 @@ void Draw_list_scene::classify_cull_views()
     if (m_cull_masks.size() < draw_lists.size()) {
         m_cull_masks.resize(draw_lists.size());
     }
+
+    // The PVS rule (doc/plans/pvs.md "Runtime consumption"): per color view
+    // with a query box, the cells of the box's corners in the frame's
+    // database (the same cells cull_classify.comp computes per entry).
+    m_cull_pvs_frame = (slot.pvs == Pvs_culling::on) && slot.pvs_database;
+    m_cull_pvs_view_cells.resize(end_view);
+    for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
+        const Cull_view_tests& view = m_cull_views[view_index];
+        cull_lanes::Pvs_query_cells& cells = m_cull_pvs_view_cells[view_index];
+        cells = cull_lanes::Pvs_query_cells{};
+        if (m_cull_pvs_frame && (view.purpose == Draw_purpose::color) && view.has_pvs_query()) {
+            cull_lanes::make_pvs_query_cells(*slot.pvs_database, view.pvs_query_min, view.pvs_query_max, cells);
+        }
+    }
+    if (m_cull_pvs_frame && (m_cull_pvs_culled_masks.size() < draw_lists.size())) {
+        m_cull_pvs_culled_masks.resize(draw_lists.size());
+    }
     for (std::size_t list_index = 0, list_end = draw_lists.size(); list_index < list_end; ++list_index) {
         const Draw_list&       draw_list   = draw_lists[list_index];
         const std::size_t      entry_count = draw_list.entries.size();
@@ -2572,12 +2817,19 @@ void Draw_list_scene::classify_cull_views()
         if (masks.size() < (group_count * entry_count)) {
             masks.resize(group_count * entry_count, uint64_t{0});
         }
+        // The bits the PVS rule removes from this list (check diagnostics,
+        // mask layout), from zero.
+        std::vector<uint64_t>* const pvs_culled_masks = m_cull_pvs_frame ? &m_cull_pvs_culled_masks[list_index] : nullptr;
+        if (pvs_culled_masks != nullptr) {
+            pvs_culled_masks->assign(group_count * entry_count, uint64_t{0});
+        }
         const Draw_purpose purpose = draw_list.key.purpose;
         if ((entry_count == 0) || !batch_has_purpose[static_cast<std::size_t>(purpose)]) {
             continue;
         }
         const Draw_list_bounds& bounds = draw_list.bounds;
         ERHE_VERIFY(bounds.extent_x.size() == entry_count);
+        ERHE_VERIFY(draw_list.pvs_columns.size() == entry_count);
 
         // Skinned entries carry no bounds (they follow the joints): never
         // culled.
@@ -2649,6 +2901,28 @@ void Draw_list_scene::classify_cull_views()
                 std::fill(inside, inside + entry_count, uint32_t{1});
                 for (uint32_t plane_index = 0; plane_index < view.plane_count; ++plane_index) {
                     cull_lanes::plane_lanes(view.planes[plane_index], bounds, entry_count, inside);
+                }
+                // The PVS rule after the frustum (a view without it keeps
+                // every entry: keep_all).
+                const cull_lanes::Pvs_query_cells& pvs_cells = m_cull_pvs_view_cells[view_index];
+                if (!pvs_cells.keep_all) {
+                    ERHE_VERIFY(pvs_culled_masks != nullptr);
+                    m_cull_pvs_culled.resize(entry_count);
+                    uint32_t culled_count = 0;
+                    const uint32_t tested = cull_lanes::pvs_lanes(
+                        pvs_cells, draw_list.pvs_columns.data(), unbounded, entry_count, inside, m_cull_pvs_culled.data(), culled_count
+                    );
+                    m_cull_pvs_view_counts[view_index].tested += tested;
+                    m_cull_pvs_view_counts[view_index].culled += culled_count;
+                    if (culled_count > 0) {
+                        uint64_t* const view_masks = pvs_culled_masks->data() + ((view_index / 64) * entry_count);
+                        const uint64_t  view_bit   = uint64_t{1} << (view_index % 64);
+                        for (std::size_t i = 0; i < entry_count; ++i) {
+                            if (m_cull_pvs_culled[i] != 0u) {
+                                view_masks[i] |= view_bit;
+                            }
+                        }
+                    }
                 }
             }
             m_cull_view_survivors[view_index] += cull_lanes::write_view_bit_lanes(inside, unbounded, entry_count, masks.data() + ((view_index / 64) * entry_count), static_cast<uint32_t>(view_index % 64));
