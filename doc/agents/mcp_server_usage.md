@@ -277,7 +277,9 @@ database), `ready`, `stale`; `camera` is `{viewport, camera, position}` of
 the first viewport showing the scene. With a database also `version,
 scene_id, grid_origin, cell_size, cell_counts, cell_count, page_size,
 page_dims, page_count, stored_pages, column_count, words_per_cell,
-cells_with_pvs, bytes {columns, pages, bits, total}, bake {...}`,
+cells_with_pvs, bytes {columns, pages, bits, total}, bake {method,
+face_resolution, tile_size, layer_count, face_fov, samples_per_face,
+silhouette_tests, duration_seconds}`,
 `bits_source {path, byte_offset, byte_length}` for a database read from a
 file, and in `camera`: `cell` (`"outside"` outside the grid), `page`,
 `local_cell`, `page_stored`, `has_pvs`, `pvs_size`. `bake` includes
@@ -309,20 +311,51 @@ neither; they override the scene's `Scene_settings` `pvs_cell_size` and
 both corners zero, is the union of the static entries' world bounds),
 `face_resolution` (512 sampled, 1024 disocclusion), `face_fov_degrees`
 (120); sampled: `samples_per_cell` (9), `captures_in_flight` (8);
-disocclusion: `layer_count` (64, at most 64), `tile_size` (8, recorded for
-the disocclusion passes), `samples_per_face` (1; each further sample
-repeats the face with a sub-pixel jitter of the projection). Mesh nodes the
-bake covers get a glTF uid when they have none. The disocclusion method
-renders, per cell from its center, six faces of `samples_per_face` face
-passes each into the layered buffer (`capture_count` counts the face
-passes); the disocclusion passes that turn the layered buffer into a PVS
-are [pvs.md](../plans/pvs.md) "Build order" step 5, so every cell ends
-without a PVS (`cells_with_pvs` 0). For its duration the scene's database
-is the bake's column table (no stored page: nothing is culled); an edit
-that stales it fails the bake, and a bake that does not finish puts the
-previous database back.
+disocclusion: `layer_count` (64, at most 64), `tile_size` (8, a divisor of
+`face_resolution`), `samples_per_face` (1; each further sample repeats the
+face with a sub-pixel jitter of the projection), `silhouette_tests`
+(false; rule 3 of [pvs.md](../plans/pvs.md) "Open"), `trace_cell`,
+`trace_entries`, `trace_only` and `trace_face` (the bake trace below).
+Mesh nodes the bake covers get a glTF uid when they have none. The
+disocclusion method bakes one cell per frame (`capture_count` counts the
+cells): it picks the cell's sample point (the first free one of the center
+and the 26 points a quarter cell away; a cell without one gets no PVS),
+renders six faces of `samples_per_face` depth passes each into the layered
+buffer and runs the disocclusion passes, whose bounds vote forms the cell's
+PVS: every entry whose world bounds reach into the cube [-z_near, z_near]^3
+around the sample point or overlap a disoccluded chunk of a face's
+90-degree core. For its duration the scene's database is the bake's column table (no
+stored page: nothing is culled); an edit that stales it fails the bake,
+and a bake that does not finish puts the previous database back.
 
-`pvs_debug_face` shows the layered buffer of one face without a bake:
+The bake trace ([pvs.md](../plans/pvs.md) "Bake" 7): `pvs_bake` with
+`trace_cell` (a cell index of the grid) and `trace_entries`
+(`[[node_uid, primitive_index], ...]`); with `trace_only` true it bakes
+only that cell of the grid. Given the full bake's region, cell size and
+parameters, the traced cell gets the full bake's sample point and depth
+range and reproduces the full bake's cell bit for bit (a region of only
+that cell would not: its depth range differs). The trace
+also runs the id pass and makes `get_pvs_bake_status` return `trace
+{cell, sample_point, columns, faces}`: per traced column `in_cell_pvs`, and
+per face and column the depth-pass `fragments`, the `samples` whose
+`id_min` / `id_max` name it, `core_samples`, `disoccluded_samples`,
+`in_column_words` (the cell's column words after this face),
+`bounds_vote` (this face's vote alone), and the bounds' projection
+(`near`, `in_face`, `rectangle`, `layers`, the middle `tile` and its
+per-layer `tile_column {closed, disoccluded}`). `scripts/pvs_verify.py
+--trace` buckets the misses with it. With `trace_face` (0..5) the bake also
+copies that face's whole depth region to the host (256 MB at the
+defaults), re-runs the face on the CPU with the silhouette tests on and
+off, and returns `trace.diagnostics` (one line each): per traced entry
+the first layer bit its chunk lacks, the windows of that layer whose cones
+cover it without the tests, their rule 3 side decisions with the pixel
+pair closest to a gap, and the surface at that pixel from the sample point
+(raycast: mesh, primitive, double_sided, facing, cell corners behind its
+plane).
+
+`pvs_debug_face` shows the layered buffer of one face without a bake (from
+the cell's sample point as the bake picks it, the center when it has no
+free one; no disocclusion passes):
 `scene_name`, `cell` (index in the grid `pvs_bake` with the same arguments
 would use), `face` (0..5: +X -X +Y -Y +Z -Z), `layer`, `path` (prefix of
 the two PNGs), and the grid and disocclusion arguments of `pvs_bake`. It
@@ -341,7 +374,13 @@ the scene's database back. When done, `get_pvs_bake_status` adds
 `get_pvs_bake_status` returns `{state, scene_name, method, grid_origin,
 cell_size, cell_counts, cell_count, column_count, cells_done, capture_count,
 captures_done, unmatched_entries, uids_assigned, cells_with_pvs,
-seconds_elapsed, seconds_remaining, debug_face, error}`; `state` is `idle`,
+seconds_elapsed, seconds_remaining, debug_face, error}`, and for the
+disocclusion method `sample_point_test` (false: some static entry has no
+raytrace geometry and every cell samples from its center),
+`cells_without_sample_point` and `gpu_ms {cell, depth_pass, id_pass,
+tiles, layer_loop, map, vote}` (the latest measured cell: all its faces,
+and its first face's passes; `id_pass` 0 outside a trace; kept after the
+bake ends); `state` is `idle`,
 `running`, `done`, `cancelled` or `failed` (`error` set). `pvs_bake`
 replies with the same object plus the parameters used. `pvs_cancel` ends a
 running bake (the scene keeps the database it had) and reports
@@ -360,7 +399,10 @@ One cell of a scene's PVS database: `scene_name` and exactly one of `cell`
 cell, coordinate, cell_min, cell_max, page, local_cell, page_stored,
 has_pvs, pvs_size, columns}`, `columns` the cell's PVS as `[{node_uid,
 node_name, primitive_index}]` (`node_name` of the live mesh with that uid,
-`""` when none; empty for a cell without a PVS).
+`""` when none; empty for a cell without a PVS). With `all_columns` true
+it also returns `all_columns`, every column of the database as `[{node_uid,
+primitive_index}]` (the tracked entries; an entry without a column is
+always kept).
 
 ```bash
 python3 scripts/mcp_call.py get_pvs_cell '{"scene_name":"Default Scene","cell":0}'

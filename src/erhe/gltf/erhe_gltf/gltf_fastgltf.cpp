@@ -4598,10 +4598,18 @@ public:
             !read_u32  ("layer_count",      parameters.layer_count)      ||
             !read_float("face_fov",         parameters.face_fov)         ||
             !read_u32  ("samples_per_face", parameters.samples_per_face) ||
-            !read_float("min_entry_pixels", parameters.min_entry_pixels) ||
             !read_float("duration_seconds", header.bake_duration_seconds)
         ) {
             return "bake parameters missing or malformed";
+        }
+        {
+            // Optional (files written before it: off).
+            bool silhouette_tests = false;
+            const simdjson::error_code error = bake["silhouette_tests"].get_bool().get(silhouette_tests);
+            if ((error != simdjson::SUCCESS) && (error != simdjson::NO_SUCH_FIELD)) {
+                return "bake silhouette_tests is not a boolean";
+            }
+            parameters.silhouette_tests = silhouette_tests;
         }
 
         simdjson::dom::array identities;
@@ -8595,7 +8603,7 @@ private:
             "{{\"version\":{},\"scene_id\":\"{}\",\"grid_origin\":[\"{:a}\",\"{:a}\",\"{:a}\"],\"cell_size\":\"{:a}\","
             "\"cell_counts\":[{},{},{}],\"page_size\":{},\"column_count\":{},\"bit_word_count\":{},"
             "\"bake\":{{\"method\":\"{}\",\"face_resolution\":{},\"tile_size\":{},\"layer_count\":{},\"face_fov\":\"{:a}\","
-            "\"samples_per_face\":{},\"min_entry_pixels\":\"{:a}\",\"duration_seconds\":\"{:a}\"}},"
+            "\"samples_per_face\":{},\"silhouette_tests\":{},\"duration_seconds\":\"{:a}\"}},"
             "\"column_identities\":[{}]{}}}",
             header.version, json_escape(header.scene_id),
             header.grid_origin.x, header.grid_origin.y, header.grid_origin.z, header.cell_size,
@@ -8603,7 +8611,7 @@ private:
             columns.size(), bits.size(),
             erhe::scene::c_str(parameters.method),
             parameters.face_resolution, parameters.tile_size, parameters.layer_count, parameters.face_fov,
-            parameters.samples_per_face, parameters.min_entry_pixels, header.bake_duration_seconds,
+            parameters.samples_per_face, parameters.silhouette_tests ? "true" : "false", header.bake_duration_seconds,
             identities, views
         );
     }

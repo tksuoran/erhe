@@ -1,0 +1,68 @@
+// The classify pass of the potentially visible set bake's disocclusion
+// passes (doc/plans/pvs.md "Bake" 5; erhe_pvs_disocclusion.glsl), one
+// dispatch per layer L = pvs_disocclusion_parameters.pass.x, front to back
+// (gated spawning): an open tile at layer L < N - 1 is a window only when
+// it is itself disoccluded (erhe_pvs_is_disoccluded(): the tile masks of
+// the earlier layers' cones and the column masks are final for bits below
+// L). A window reads the closed flags of its four same-layer neighbours (a
+// screen edge counts as the tile itself, which is open); a closed neighbour
+// is a sloped side (the paper's rule); with rule 3 on (opt-in,
+// pvs_disocclusion_parameters.columns.z) only across a silhouette
+// (erhe_pvs_side_has_gap(): on some boundary row the window's edge pixel is deeper than the
+// neighbour's, or two 4-adjacent pixels inside the window differ, by more
+// than ERHE_PVS_GAP_SLOPE_TOLERANCE times the local per-pixel depth step).
+// No sloped side: bit L of the flat column mask at (x, y); else
+// the tile and its sloped sides (bit 0 -x, bit 1 +x, bit 2 -y, bit 3 +y)
+// are appended to layer L's cone list. One invocation per tile of the layer, grid-stride.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#include "erhe_pvs_disocclusion.glsl"
+
+bool erhe_pvs_is_closed(uint tiles, uint x, uint y, uint layer)
+{
+    return pvs_closure.closed[erhe_pvs_tile_index(tiles, x, y, layer)] != 0u;
+}
+
+void main()
+{
+    uint tiles           = pvs_disocclusion_parameters.sizes.w;
+    uint layer_count     = pvs_disocclusion_parameters.sizes.z;
+    uint tiles_per_layer = pvs_disocclusion_parameters.counts.x;
+    uint layer           = pvs_disocclusion_parameters.pass.x;
+    uint stride          = gl_NumWorkGroups.x * c_pvs_group_size;
+    if ((layer + 1u) >= layer_count) {
+        return;
+    }
+    for (uint column = gl_GlobalInvocationID.x; column < tiles_per_layer; column += stride) {
+        uint x = column % tiles;
+        uint y = column / tiles;
+        if (erhe_pvs_is_closed(tiles, x, y, layer) || !erhe_pvs_is_disoccluded(tiles, x, y, layer)) {
+            continue;
+        }
+        // The neighbours, clamped to the grid (an edge reads the tile
+        // itself). Written with min / max: KosmicKrisp miscompiled the
+        // equivalent (x > 0u) ? (x - 1u) : x (the GPU tests caught it).
+        uint left  = max(x, 1u) - 1u;
+        uint right = min(x + 1u, tiles - 1u);
+        uint down  = max(y, 1u) - 1u;
+        uint up    = min(y + 1u, tiles - 1u);
+        // Rule 3 is opt-in (columns.z): off, every closed neighbour slopes.
+        bool rule_3 = (pvs_disocclusion_parameters.columns.z != 0u);
+        uint sides = 0u;
+        // Rule 3: a closed neighbour is a sloped side only across a
+        // silhouette edge.
+        if (erhe_pvs_is_closed(tiles, left,  y,    layer) && (!rule_3 || erhe_pvs_side_has_gap(x, y, layer, 0u))) { sides |= 1u; }
+        if (erhe_pvs_is_closed(tiles, right, y,    layer) && (!rule_3 || erhe_pvs_side_has_gap(x, y, layer, 1u))) { sides |= 2u; }
+        if (erhe_pvs_is_closed(tiles, x,     down, layer) && (!rule_3 || erhe_pvs_side_has_gap(x, y, layer, 2u))) { sides |= 4u; }
+        if (erhe_pvs_is_closed(tiles, x,     up,   layer) && (!rule_3 || erhe_pvs_side_has_gap(x, y, layer, 3u))) { sides |= 8u; }
+        if (sides == 0u) {
+            atomicOr(pvs_column_masks.words[(column * 2u) + (layer >> 5u)], 1u << (layer & 31u));
+        } else {
+            uint index = atomicAdd(pvs_lists.words[layer], 1u);
+            uint base  = c_pvs_lists_header + (2u * ((layer * tiles_per_layer) + index));
+            pvs_lists.words[base + 0u] = erhe_pvs_tile_index(tiles, x, y, layer);
+            pvs_lists.words[base + 1u] = sides;
+        }
+    }
+}

@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::scene`: `Pvs_bake_parameters::min_entry_pixels`; `ERHE_pvs` no
+  longer writes `bake.min_entry_pixels` (readers ignore it).
+
 - `erhe::scene_renderer`: `get_position_quantization()` (read
   `erhe::primitive::Buffer_mesh::position_quantization`, or call
   `erhe::primitive::get_position_quantization()`);
@@ -33,6 +36,29 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene`: `Pvs_bake_parameters::silhouette_tests` (rule 3 of the
+  disocclusion bake, opt-in); `ERHE_pvs` writes it as
+  `bake.silhouette_tests` (optional on read). `erhe::scene_renderer`:
+  `Pvs_silhouette_tests` and `Pvs_face_geometry::silhouette_tests`,
+  `Pvs_gap_pair`, `Pvs_side_gap_details` and `pvs_side_gap_details()`
+  (trace diagnostics).
+
+- `erhe::scene_renderer`: the potentially visible set bake's disocclusion
+  passes (doc/plans/pvs.md "Bake" 5): `pvs_disocclusion.hpp` with
+  `Pvs_face_geometry`, `Pvs_disocclusion_parameters` (the std430 parameter
+  block), `make_pvs_disocclusion_parameters()`, `pvs_cone_rectangle()`,
+  `pvs_map_level_size()`, `pvs_map_level_offset()`, `pvs_map_word_count()`,
+  `pvs_bounds_vote()`, `Pvs_disocclusion_result`,
+  `run_pvs_disocclusion_reference()` (the CPU reference of the pass chain),
+  `build_pvs_disoccluded_map()`, `pvs_side_has_gap()`,
+  `pvs_gap_slope_tolerance`, `pvs_gap_depth_epsilon` and
+  `is_pvs_tile_disoccluded()`;
+  `pvs_disocclusion_pipelines.hpp` with `Pvs_disocclusion_buffers`,
+  `Pvs_disocclusion_timers` and `Pvs_disocclusion_pipelines`
+  (`res/shaders/pvs_tiles.comp`, `pvs_stencil.comp`, `pvs_cones.comp`,
+  `pvs_map.comp`, `pvs_vote.comp`, `pvs_trace.comp`,
+  `erhe_pvs_disocclusion.glsl`); and
+  `Draw_list_scene::get_published_pvs_entry_columns()`.
 - `erhe::scene_renderer`: the potentially visible set bake's layered buffer
   (doc/plans/pvs.md "Bake" 4): `Shader_bool::VARIANT_PVS_DEPTH` and
   `VARIANT_PVS_ID` (appended after `USE_LIGHTMAP`); `Pvs_sub_variant`
@@ -1056,6 +1082,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   the top byte; alpha was 0) and VERIFYs that no id range wraps 32 bits.
   Readers of an id image decode `(r << 24) | (g << 16) | (b << 8) | a`
   (they decoded 24 bits from RGB, which Bistro's 19.7 M ids overflowed).
+
+- `erhe::scene_renderer`: `Pvs_layered_interface`'s header is `info` and
+  `trace` (`get_trace_offset()`); `depth_range` and
+  `get_depth_range_offset()` are gone: `VARIANT_PVS_DEPTH` reads the face's
+  depth range from the camera block (`view_depth_near` / `view_depth_far`).
 
 - `erhe::scene_renderer`: `Draw_list_scene::publish()` takes the frame's
   `Pvs_culling` after the `Occlusion_culling`; `Draw_list_scene::add_cull_view()`

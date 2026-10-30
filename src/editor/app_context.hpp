@@ -118,6 +118,7 @@ class Lightmap_report;
 class Lightmap_streamer;
 class Lightmap_texture_window;
 class Lightmap_window;
+class Pvs_window;
 class Ray_trace_renderer;
 class Ddgi_renderer;
 class Radiance_cascades_renderer;
@@ -380,6 +381,7 @@ public:
     Lightmap_streamer*                 lightmap_streamer    {nullptr};
     Lightmap_texture_window*           lightmap_texture_window{nullptr};
     Lightmap_window*                   lightmap_window      {nullptr};
+    Pvs_window*                        pvs_window           {nullptr};
     Rendergraph_window*                rendergraph_window   {nullptr};
     Rotate_tool*                       rotate_tool          {nullptr};
     Bone_visualization*                bone_visualization   {nullptr};

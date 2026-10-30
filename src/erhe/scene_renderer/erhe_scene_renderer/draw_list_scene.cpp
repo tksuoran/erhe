@@ -3236,6 +3236,21 @@ auto Draw_list_scene::supports_pvs_faces() const -> bool
     return m_record_upload == Record_upload::shared;
 }
 
+void Draw_list_scene::get_published_pvs_entry_columns(const uint64_t frame_index, std::vector<uint32_t>& out) const
+{
+    assert_render_phase();
+    const Draw_list_slot& slot = get_published_slot(frame_index);
+    out.assign(slot.entry_count, erhe::scene::Pvs_database::untracked_column);
+    ERHE_VERIFY(slot.entry_offsets.size() == slot.lists.size());
+    for (std::size_t list_index = 0, end = slot.lists.size(); list_index < end; ++list_index) {
+        const Draw_list& draw_list = slot.lists[list_index];
+        const uint32_t   offset    = slot.entry_offsets[list_index];
+        ERHE_VERIFY(draw_list.pvs_columns.size() == draw_list.entries.size());
+        ERHE_VERIFY((static_cast<std::size_t>(offset) + draw_list.pvs_columns.size()) <= out.size());
+        std::copy(draw_list.pvs_columns.begin(), draw_list.pvs_columns.end(), out.begin() + offset);
+    }
+}
+
 auto Draw_list_scene::draw_pvs_face(const Draw_pvs_face_parameters& parameters) -> Draw_statistics
 {
     ERHE_PROFILE_FUNCTION();

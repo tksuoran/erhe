@@ -55,6 +55,10 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/scene_pass_resources.hpp
     erhe_scene_renderer/program_interface.cpp
     erhe_scene_renderer/program_interface.hpp
+    erhe_scene_renderer/pvs_disocclusion.cpp
+    erhe_scene_renderer/pvs_disocclusion.hpp
+    erhe_scene_renderer/pvs_disocclusion_pipelines.cpp
+    erhe_scene_renderer/pvs_disocclusion_pipelines.hpp
     erhe_scene_renderer/pvs_layers.cpp
     erhe_scene_renderer/pvs_layers.hpp
     erhe_scene_renderer/scene_renderer_log.cpp
@@ -142,8 +146,10 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE
 erhe_target_settings(${_target} "erhe")
 
 # The light binner's fp32 tests are the ones res/shaders/light_cluster_bin.comp
-# evaluates with every intermediate precise (doc/plans/clustered_lights.md C4):
-# no multiply-add may be fused, so the CPU and GPU lists agree bit for bit.
+# evaluates with every intermediate precise (doc/plans/clustered_lights.md C4),
+# and the PVS cone rectangles those of res/shaders/erhe_pvs_disocclusion.glsl
+# (doc/plans/pvs.md "Bake" 5): no multiply-add may be fused, so the CPU and
+# GPU results agree bit for bit.
 # Clang fuses by default (-ffp-contract=on, also clang-cl under /fp:precise)
 # and GCC too (-ffp-contract=fast); MSVC cl does not without /fp:contract.
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
@@ -154,6 +160,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     endif ()
     set_source_files_properties(
         erhe_scene_renderer/light_cluster.cpp
+        erhe_scene_renderer/pvs_disocclusion.cpp
         PROPERTIES COMPILE_OPTIONS "${_erhe_no_fp_contract}"
     )
 endif ()

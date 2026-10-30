@@ -51,11 +51,11 @@ Pvs_layered_interface::Pvs_layered_interface(erhe::graphics::Device& graphics_de
         }
     }
 {
-    // std430 (storage blocks): uvec4 at 0, vec4 at 16, the uint array at 32.
+    // std430 (storage blocks): uvec4 at 0, uvec4 at 16, the uint array at 32.
     m_info_offset        = pvs_layered_block.add_uvec4("info"       )->get_offset_in_parent();
-    m_depth_range_offset = pvs_layered_block.add_vec4 ("depth_range")->get_offset_in_parent();
+    m_trace_offset       = pvs_layered_block.add_uvec4("trace"      )->get_offset_in_parent();
     m_words_offset       = pvs_layered_block.add_uint ("words", erhe::graphics::Shader_resource::unsized_array)->get_offset_in_parent();
-    ERHE_VERIFY((m_info_offset == 0) && (m_depth_range_offset == 16) && (m_words_offset == 32));
+    ERHE_VERIFY((m_info_offset == 0) && (m_trace_offset == 16) && (m_words_offset == 32));
 }
 
 } // namespace erhe::scene_renderer

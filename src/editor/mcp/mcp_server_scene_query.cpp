@@ -815,7 +815,7 @@ auto Mcp_server::query_pvs_status(const json& args) -> std::string
         {"layer_count",      header.bake_parameters.layer_count},
         {"face_fov",         header.bake_parameters.face_fov},
         {"samples_per_face", header.bake_parameters.samples_per_face},
-        {"min_entry_pixels", header.bake_parameters.min_entry_pixels},
+        {"silhouette_tests", header.bake_parameters.silhouette_tests},
         {"duration_seconds", header.bake_duration_seconds}
     };
     const std::optional<erhe::scene::Pvs_bits_source>& bits_source = database->get_bits_source();

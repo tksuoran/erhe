@@ -64,7 +64,7 @@ using erhe_gltf_test::write_temporary_file;
     header.bake_parameters.layer_count      = 32;
     header.bake_parameters.face_fov         = 1.9f;
     header.bake_parameters.samples_per_face = 2;
-    header.bake_parameters.min_entry_pixels = 1.5f;
+    header.bake_parameters.silhouette_tests = true;
     header.bake_duration_seconds = 12.345f;
 
     std::vector<erhe::scene::Pvs_column> columns{
@@ -179,8 +179,8 @@ TEST(Gltf_pvs, round_trip_is_exact)
     EXPECT_EQ(header.bake_parameters.tile_size,        expected_header.bake_parameters.tile_size);
     EXPECT_EQ(header.bake_parameters.layer_count,      expected_header.bake_parameters.layer_count);
     EXPECT_EQ(header.bake_parameters.samples_per_face, expected_header.bake_parameters.samples_per_face);
+    EXPECT_EQ(header.bake_parameters.silhouette_tests, expected_header.bake_parameters.silhouette_tests);
     EXPECT_EQ(std::memcmp(&header.bake_parameters.face_fov,         &expected_header.bake_parameters.face_fov,         sizeof(float)), 0);
-    EXPECT_EQ(std::memcmp(&header.bake_parameters.min_entry_pixels, &expected_header.bake_parameters.min_entry_pixels, sizeof(float)), 0);
     EXPECT_EQ(std::memcmp(&header.bake_duration_seconds,            &expected_header.bake_duration_seconds,            sizeof(float)), 0);
 
     ASSERT_EQ(result.get_column_count(), 3u);
