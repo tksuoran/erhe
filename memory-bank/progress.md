@@ -20,7 +20,9 @@
 [TASK::pvs]{started-2026-10-30;branch=render-thread;doc/plans/pvs.md;via-harness{opus-coder+opus-review}}
 ✓plan{doc/plans/pvs.md;links:README+culling.md-phase-8+occlusion_culling.md-Open+draw_list_renderer.md-Future-work;check_doc_links-0}
 ?user-decisions{D1-storage-ERHE_pvs-in-glb|sidecar;D2-region=scene-settings-box+cell-size;D3-static-set(translucent-never-baked);D4-strict-staleness;D5-views=occlusion-set;D6-bake-in-editor-R-one-cell/frame+MCP;D7-32-bit-atomics-dense-buffers}
-?step-1..7{DB+persistence;sampled-oracle-bake;consumer;layered-buffer;disocclusion-passes+cell-loop;headset;docs}
+✓user-confirmed-D1/D2/D4-2026-10-30+paged-layout-for-streaming{26108c94f;page=page_size^3-cells=storage+GPU-residency+streaming-unit;resident-slot-buffer+GPU-page-table;non-resident=visible-all;step-7-streaming}
+✓step-1a{Pvs_database(erhe::scene)+ERHE_pvs(columns/pages/bits-bufferViews;hexfloat)+save/open+Scene_root-owner+Pvs_state_changed_message+get_pvs_status;tests-scene-6+gltf-4;via-harness-opus-coder}
+?step-1b{get_visible_entries(id-pass-readback-at-pose)}->2..8{sampled-oracle-bake;consumer(paged-GPU-layout-all-resident);layered-buffer;disocclusion-passes+cell-loop;headset;streaming;docs}
 
 [TASK::metal-draw-count]{2026-10-23..24;branch=render-thread;CODE-DONE;detail->memory-bank/topics/metal.md[PROGRESS_2026-10-24]}
 ✓Metal-GPU-read-draw-count(ICB)+Metal-4-separate-backend-all-rows-MTL4+barrier-API+declared-barriers+narrowing(5cf6e13d2)+ImGui-first_instance(07330bebc)+Metal-draw-id-removed(2ae347dfe;M4==M3-per-draw)+vertex-stage-sampler-remap(c9e5f8faf)+Vk-render-pass-qualifiers(1fd30277d)+shadow-qualifiers(f52f201e0)
