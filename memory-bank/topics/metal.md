@@ -153,6 +153,14 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 !per-bind-PSO-creation::Metal-3-set_render_pipeline_state/set_compute_pipeline_state-create-a-PSO-per-bind(debug-lines,wide-lines,every-frame)->Metal-4-has-Pipeline_state_cache;Metal-3-still-does-it(input-to-keep/remove-decision)
 !MTL::Device::newArchive-segfaults-on-non-archive-bytes->manifest(size+FNV)-checked-first
 
+[LANDED_2026-10-30]{mac-sync-after-70-Windows-commits}
+>76aae6a47::Xcode-SPIRV-Tools-build-version.inc-two-targets->add_dependencies(shared->static)-Xcode-only{drop-when-pin-includes-upstream-342d3e5d26d0}
+>b22f01839::gpu_cull_classifier-multiview-variant-Vulkan-only{max_multiview_view_count-is-Vulkan-only-Device_info-field}
+>dbc9634f8::Metal+Metal4-texture-views-slice-range=array_layer_count{was-1}
+>5ddd4d42e::Metal+Metal4-clear_texture-texel-via-dataformat::convert{was-rgba8-for-all}+convert-packed111110+1010102+srgb-alpha-fix
+@verified::Metal-ctest-1637/1637+Metal4-gpu-217/217+Vulkan-MoltenVK-1640/1640+KosmicKrisp-1640/1640
+!Windows-sessions-add-deps/Device_info-fields-unbuilt-on-Mac->after-sync:reconfigure-trees(stale-cache=missing-include)+build-Metal(non-Vulkan-ifdef-breaks)+run-gpu-tests(new-tests-never-ran-on-Metal)
+
 [OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4-code-COMPLETE;user-gates-pending(pacing-cached/fresh+M4-vs-M3+fullscreen-re-gate)->Metal-3-decision;doc/plans/resource_barriers.md{step-2-item-1-DONE-5cf6e13d2;step-3-Vk-qualifiers-DONE-1fd30277d;left=tracked-layout-VERIFY+step-4-cleanup+shadow-site-qualification};M4-per-draw-gap-FIXED-2ae347dfe(draw-id-push-constant-removed;ImGui-first_instance-07330bebc);c9e5f8faf-vertex-stage-dedicated-sampler-remap(both-backends)}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
 
 [PROGRESS_2026-10-24]{moved-from-progress.md-at-code-completion}
