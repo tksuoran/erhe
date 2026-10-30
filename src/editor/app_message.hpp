@@ -127,6 +127,18 @@ public:
     const Scene_root* scene_root{nullptr};
 };
 
+// The state of a scene's potentially visible set database changed
+// (doc/plans/pvs.md D4): Scene_root::set_pvs_database() installed or
+// cleared one, or Scene_root::mark_pvs_stale() turned a ready database
+// stale. Subscribers read the state from the scene root
+// (Scene_root::get_pvs_state()). Queued, because the stale mark may come
+// from any thread; delivered on the main thread by App_message_bus::update().
+class Pvs_state_changed_message
+{
+public:
+    const Scene_root* scene_root{nullptr};
+};
+
 // Published when a scene_root is first created and registered -- by the
 // scene.create startup command, or by loading a scene file. Global editor tools
 // that must live inside a scene (Hud, Hotbar, the OpenXR Headset_view) build

@@ -418,6 +418,7 @@ flowchart TD
 - [gltf_extensions/ERHE_mesh_topology.md](gltf_extensions/ERHE_mesh_topology.md) (experimental): ERHE_mesh_topology
 - [gltf_extensions/ERHE_node.md](gltf_extensions/ERHE_node.md) (mostly stable): ERHE_node
 - [gltf_extensions/ERHE_node_graphs.md](gltf_extensions/ERHE_node_graphs.md) (mostly stable): ERHE_node_graphs
+- [gltf_extensions/ERHE_pvs.md](gltf_extensions/ERHE_pvs.md) (experimental): ERHE_pvs
 - [gltf_extensions/ERHE_raytrace_bvh.md](gltf_extensions/ERHE_raytrace_bvh.md) (experimental): ERHE_raytrace_bvh
 - [gltf_extensions/ERHE_scene.md](gltf_extensions/ERHE_scene.md) (mostly stable): ERHE_scene
 - [gltf_extensions/ERHE_texture_ktx2.md](gltf_extensions/ERHE_texture_ktx2.md) (experimental): ERHE_texture_ktx2

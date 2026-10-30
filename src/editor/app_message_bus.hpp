@@ -46,6 +46,7 @@ public:
     // drop before the frame that removed the content renders again.
     erhe::message_bus::Message_bus<Items_removed_message,         sync>  items_removed;
     erhe::message_bus::Message_bus<Scene_lighting_changed_message, queue> scene_lighting_changed;
+    erhe::message_bus::Message_bus<Pvs_state_changed_message,      queue> pvs_state_changed;
 };
 
 }

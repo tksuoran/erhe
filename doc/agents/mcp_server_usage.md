@@ -261,6 +261,26 @@ also logs a warning in `editor.render`, once each time the count changes.
 `gpu_time_ns` is the view's binning dispatch (`Gpu_timer` `Light cluster
 binning <view>`, latest completed measurement).
 
+### get_pvs_status
+
+The scene's potentially visible set database
+([pvs.md](../plans/pvs.md); `erhe::scene::Pvs_database`, saved as
+[`ERHE_pvs`](../gltf_extensions/ERHE_pvs.md)).
+
+Returns: `{scene_name, state, camera}`, `state` one of `absent` (no
+database), `ready`, `stale`; `camera` is `{viewport, camera, position}` of
+the first viewport showing the scene. With a database also `version,
+scene_id, grid_origin, cell_size, cell_counts, cell_count, page_size,
+page_dims, page_count, stored_pages, column_count, words_per_cell,
+cells_with_pvs, bytes {columns, pages, bits, total}, bake {...}`,
+`bits_source {path, byte_offset, byte_length}` for a database read from a
+file, and in `camera`: `cell` (`"outside"` outside the grid), `page`,
+`local_cell`, `page_stored`, `has_pvs`, `pvs_size`.
+
+```bash
+python3 scripts/mcp_call.py get_pvs_status '{"scene_name":"Default Scene"}'
+```
+
 ### get_scene_materials
 
 List all materials in a scene's content library.

@@ -55,6 +55,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/pvs_database.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
@@ -1912,6 +1913,9 @@ auto save_scene_gltf(
     export_arguments.texture_export      = texture_export;
     export_arguments.texture_statistics  = &texture_statistics;
     export_arguments.gpu_vertex_formats  = gpu_vertex_formats;
+    // The scene's PVS database rides the file as ERHE_pvs when it is ready
+    // (doc/gltf_extensions/ERHE_pvs.md).
+    export_arguments.pvs_database        = scene_root.get_pvs_database();
     // Editor-domain ERHE_* extensions + baked graph-mesh exclusion: this is
     // what makes the file a full scene save instead of an interchange export
     // (ERHE_scene in extensionsUsed is the erhe-authored marker).
@@ -2279,6 +2283,18 @@ auto finish_open_scene_gltf(
     // where the set the file describes sits. A selection the ERHE_scene
     // settings carry is applied once the table holds the set.
     fill_gltf_variant_table(gltf_data, scene_root_node, scene_root->get_variant_table());
+
+    // The file's PVS database (ERHE_pvs; its columns name the parsed nodes'
+    // uids, which the nodes keep in the scene).
+    if (gltf_data.pvs_database) {
+        if (gltf_data.pvs_database->get_header().scene_id != scene_root->get_scene_id()) {
+            log_parsers->warn(
+                "open_scene_gltf: the PVS database of '{}' was baked for scene id '{}', the scene's id is '{}'",
+                erhe::file::to_string(path), gltf_data.pvs_database->get_header().scene_id, scene_root->get_scene_id()
+            );
+        }
+        scene_root->set_pvs_database(std::move(gltf_data.pvs_database));
+    }
     scene_root->apply_variant_selections(context);
 
     // After the nodes are in the scene: a saved library_folders path may name

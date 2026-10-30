@@ -71,6 +71,8 @@ namespace erhe::scene {
     class Mesh_primitive;
     class Mesh_raytrace;
     class Message_bus;
+    class Pvs_database;
+    enum class Pvs_state : unsigned int;
     class Xformable; using Node = Xformable;
     class Scene;
 }
@@ -591,6 +593,19 @@ public:
     // scene never adopts another scene's untitled.lightmap set.
     [[nodiscard]] auto get_scene_id() -> const std::string&;
 
+    // The scene's potentially visible set database (doc/plans/pvs.md;
+    // erhe::scene::Pvs_database), null when it has none. Saved with the
+    // scene as ERHE_pvs and read back by the open. set_pvs_database() and a
+    // mark_pvs_stale() that turns a ready database stale queue
+    // Pvs_state_changed_message. Any thread.
+    void set_pvs_database(std::shared_ptr<erhe::scene::Pvs_database> database);
+    [[nodiscard]] auto get_pvs_database() const -> std::shared_ptr<erhe::scene::Pvs_database>;
+    // absent without a database, else the database's state.
+    [[nodiscard]] auto get_pvs_state() const -> erhe::scene::Pvs_state;
+    // The stale mark of doc/plans/pvs.md D4, routed through the scene root
+    // so the state change is announced once.
+    void mark_pvs_stale();
+
     void imgui();
 
     auto camera_combo(const char* label, erhe::scene::Camera*& camera, bool nullptr_option = false) const -> bool;
@@ -670,6 +685,8 @@ private:
     // Publisher for Skin_registered_message; nullptr for scenes that do not
     // take part in editor messaging (previews, the tool scene).
     App_message_bus*                                m_app_message_bus{nullptr};
+    mutable std::mutex                              m_pvs_mutex;
+    std::shared_ptr<erhe::scene::Pvs_database>      m_pvs_database;
     App_scenes*                                     m_app_scenes{nullptr};
     // Set at registration and kept after unregistration: the destructor
     // hands the mesh payload to it (scene/scene_payload_release.hpp). It

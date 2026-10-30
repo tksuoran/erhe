@@ -7,6 +7,7 @@ add_executable(${_target}
     gltf_test_util.cpp
     gltf_test_util.hpp
     test_gltf_parse.cpp
+    test_gltf_pvs.cpp
     test_gltf_roundtrip.cpp
     test_gltf_soup_reload.cpp
 )

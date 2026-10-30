@@ -33,6 +33,7 @@
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/projection.hpp"
+#include "erhe_scene/pvs_database.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_item/scope.hpp"
 #include "erhe_item/typed.hpp"
@@ -59,6 +60,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
@@ -4495,6 +4497,243 @@ public:
         log_gltf->info("ERHE_texture_ktx2: {} textures use raw block KTX2 images, {} entries rejected", applied_count, rejected_count);
     }
 
+    // ERHE_pvs (asset root; doc/gltf_extensions/ERHE_pvs.md): the scene's
+    // potentially visible set database. Called by parse_gltf() after
+    // parse_and_build(), so every column's node index resolves to the parsed
+    // node and its glTF uid. A rejected extension leaves
+    // Gltf_data::pvs_database null.
+    void read_pvs_extension(const std::string& extension_json)
+    {
+        const std::string reason = parse_pvs_extension(extension_json);
+        if (!reason.empty()) {
+            log_gltf->warn("ERHE_pvs: {} - extension ignored", reason);
+            return;
+        }
+        const erhe::scene::Pvs_database& database = *m_data_out.pvs_database;
+        log_gltf->info(
+            "ERHE_pvs: {} columns, {} x {} x {} cells, {} with a PVS, {} of {} pages stored",
+            database.get_column_count(),
+            database.get_header().cell_counts.x, database.get_header().cell_counts.y, database.get_header().cell_counts.z,
+            database.get_cells_with_pvs(), database.get_stored_page_count(), database.get_page_count()
+        );
+    }
+
+    // Returns the rejection reason, or empty with m_data_out.pvs_database set.
+    [[nodiscard]] auto parse_pvs_extension(const std::string& extension_json) -> std::string
+    {
+        static_assert(std::endian::native == std::endian::little, "ERHE_pvs payloads are little-endian");
+
+        simdjson::dom::parser  json_parser;
+        simdjson::dom::element root;
+        if (json_parser.parse(extension_json).get(root) != simdjson::SUCCESS) {
+            return "invalid JSON";
+        }
+        erhe::scene::Pvs_header header{};
+        std::uint64_t number = 0;
+        if ((root["version"].get_uint64().get(number) != simdjson::SUCCESS) || (number != erhe::scene::Pvs_header::current_version)) {
+            return fmt::format("unsupported version {}", number);
+        }
+        std::string_view text;
+        if (root["scene_id"].get_string().get(text) != simdjson::SUCCESS) {
+            return "no scene_id";
+        }
+        header.scene_id = std::string{text};
+        float grid_origin[3] = {0.0f, 0.0f, 0.0f};
+        if (!parse_hex_float_array(root["grid_origin"], 3, &grid_origin[0])) {
+            return "grid_origin is not three hexadecimal floats";
+        }
+        header.grid_origin = glm::vec3{grid_origin[0], grid_origin[1], grid_origin[2]};
+        if ((root["cell_size"].get_string().get(text) != simdjson::SUCCESS) || !parse_hex_float(text, header.cell_size)) {
+            return "cell_size is not a hexadecimal float";
+        }
+        simdjson::dom::array cell_counts;
+        if ((root["cell_counts"].get_array().get(cell_counts) != simdjson::SUCCESS) || (cell_counts.size() != 3)) {
+            return "cell_counts is not three integers";
+        }
+        {
+            glm::length_t axis = 0;
+            for (const simdjson::dom::element count : cell_counts) {
+                if ((count.get_uint64().get(number) != simdjson::SUCCESS) || (number > 0xffffffffu)) {
+                    return "cell_counts is not three integers";
+                }
+                header.cell_counts[axis++] = static_cast<uint32_t>(number);
+            }
+        }
+        std::uint64_t column_count = 0;
+        if (root["column_count"].get_uint64().get(column_count) != simdjson::SUCCESS) {
+            return "no column_count";
+        }
+        simdjson::dom::object bake;
+        if (root["bake"].get_object().get(bake) != simdjson::SUCCESS) {
+            return "no bake object";
+        }
+        erhe::scene::Pvs_bake_parameters& parameters = header.bake_parameters;
+        const auto read_u32 = [&bake](const std::string_view key, uint32_t& out_value) -> bool {
+            std::uint64_t value = 0;
+            if ((bake[key].get_uint64().get(value) != simdjson::SUCCESS) || (value > 0xffffffffu)) {
+                return false;
+            }
+            out_value = static_cast<uint32_t>(value);
+            return true;
+        };
+        const auto read_float = [&bake](const std::string_view key, float& out_value) -> bool {
+            std::string_view value_text;
+            return (bake[key].get_string().get(value_text) == simdjson::SUCCESS) && parse_hex_float(value_text, out_value);
+        };
+        if (
+            !read_u32  ("face_resolution",  parameters.face_resolution)  ||
+            !read_u32  ("tile_size",        parameters.tile_size)        ||
+            !read_u32  ("layer_count",      parameters.layer_count)      ||
+            !read_float("face_fov",         parameters.face_fov)         ||
+            !read_u32  ("samples_per_face", parameters.samples_per_face) ||
+            !read_float("min_entry_pixels", parameters.min_entry_pixels) ||
+            !read_float("duration_seconds", header.bake_duration_seconds)
+        ) {
+            return "bake parameters missing or malformed";
+        }
+
+        simdjson::dom::array identities;
+        if ((root["column_identities"].get_array().get(identities) != simdjson::SUCCESS) || (identities.size() != column_count)) {
+            return "column_identities is not column_count entries";
+        }
+        std::vector<erhe::scene::Pvs_column> columns(static_cast<std::size_t>(column_count));
+        {
+            std::size_t column_index = 0;
+            for (const simdjson::dom::element identity : identities) {
+                simdjson::dom::array pair;
+                std::uint64_t node_index      = 0;
+                std::uint64_t primitive_index = 0;
+                if (
+                    (identity.get_array().get(pair) != simdjson::SUCCESS) || (pair.size() != 2) ||
+                    (pair.at(0).get_uint64().get(node_index) != simdjson::SUCCESS) ||
+                    (pair.at(1).get_uint64().get(primitive_index) != simdjson::SUCCESS) ||
+                    (primitive_index > 0xffffffffu)
+                ) {
+                    return fmt::format("column_identities entry {} is not [node, primitive]", column_index);
+                }
+                if (node_index >= m_data_out.prims.size()) {
+                    return fmt::format("column {} names node {}, out of range", column_index, node_index);
+                }
+                const std::shared_ptr<erhe::Typed>& prim = m_data_out.prims[static_cast<std::size_t>(node_index)];
+                if (!prim || prim->get_gltf_uid().empty()) {
+                    return fmt::format("column {} names node {}, which has no uid", column_index, node_index);
+                }
+                columns[column_index].node_uid        = prim->get_gltf_uid();
+                columns[column_index].primitive_index = static_cast<uint32_t>(primitive_index);
+                ++column_index;
+            }
+        }
+
+        const uint64_t cell_count =
+            static_cast<uint64_t>(header.cell_counts.x) *
+            static_cast<uint64_t>(header.cell_counts.y) *
+            static_cast<uint64_t>(header.cell_counts.z);
+        if ((cell_count == 0) || (cell_count >= 0xffffffffull)) {
+            return "cell count out of range";
+        }
+        if (
+            (root["page_size"].get_uint64().get(number) != simdjson::SUCCESS) ||
+            (number == 0) || (number > erhe::scene::Pvs_header::max_page_size)
+        ) {
+            return "page_size is not 1 to 4";
+        }
+        header.page_size = static_cast<uint32_t>(number);
+        // A raw bufferView of exactly `byte_length` bytes, resident.
+        const auto get_view_bytes = [this, &root](const std::string_view key, const std::size_t byte_length, std::span<const std::byte>& out_bytes) -> std::string {
+            std::uint64_t view_index = 0;
+            if (root[key].get_uint64().get(view_index) != simdjson::SUCCESS) {
+                if (byte_length == 0) {
+                    out_bytes = {};
+                    return {};
+                }
+                return fmt::format("no {} bufferView", key);
+            }
+            if (view_index >= m_asset->bufferViews.size()) {
+                return fmt::format("{} bufferView {} out of range", key, view_index);
+            }
+            const fastgltf::BufferView& view = m_asset->bufferViews[static_cast<std::size_t>(view_index)];
+            if (view.byteStride.has_value() || (view.byteLength != byte_length) || (view.bufferIndex >= m_asset->buffers.size())) {
+                return fmt::format("{} bufferView {} has a byteStride, a byteLength other than {} or no buffer", key, view_index, byte_length);
+            }
+            const std::span<const std::byte> buffer_bytes = get_resident_buffer_bytes(m_asset->buffers[view.bufferIndex]);
+            if ((view.byteOffset + view.byteLength) > buffer_bytes.size()) {
+                return fmt::format("{} bufferView {} is not loaded", key, view_index);
+            }
+            out_bytes = buffer_bytes.subspan(view.byteOffset, view.byteLength);
+            return {};
+        };
+
+        constexpr std::size_t column_record_size = (18 * sizeof(float)) + sizeof(uint64_t);
+        std::span<const std::byte> column_bytes;
+        std::string reason = get_view_bytes("columns", column_record_size * columns.size(), column_bytes);
+        if (!reason.empty()) {
+            return reason;
+        }
+        for (std::size_t i = 0, end = columns.size(); i < end; ++i) {
+            const std::byte* record = column_bytes.data() + (i * column_record_size);
+            std::memcpy(columns[i].world_transform.data(), record,                       12 * sizeof(float));
+            std::memcpy(columns[i].world_bounds.data(),    record + (12 * sizeof(float)), 6 * sizeof(float));
+            std::memcpy(&columns[i].transform_hash,        record + (18 * sizeof(float)), sizeof(uint64_t));
+        }
+
+        const glm::uvec3 page_dims  = (header.cell_counts + glm::uvec3{header.page_size - 1u}) / header.page_size;
+        const uint64_t   page_count = static_cast<uint64_t>(page_dims.x) * page_dims.y * page_dims.z;
+        std::span<const std::byte> page_bytes;
+        reason = get_view_bytes("pages", static_cast<std::size_t>(page_count) * sizeof(erhe::scene::Pvs_page_entry), page_bytes);
+        if (!reason.empty()) {
+            return reason;
+        }
+        std::vector<erhe::scene::Pvs_page_entry> pages(static_cast<std::size_t>(page_count));
+        std::memcpy(pages.data(), page_bytes.data(), page_bytes.size());
+
+        std::uint64_t bit_word_count = 0;
+        if (root["bit_word_count"].get_uint64().get(bit_word_count) != simdjson::SUCCESS) {
+            return "no bit_word_count";
+        }
+        if (bit_word_count > (std::numeric_limits<uint32_t>::max() / sizeof(uint32_t))) {
+            return "bit_word_count out of range";
+        }
+        std::span<const std::byte> bit_bytes;
+        reason = get_view_bytes("bits", static_cast<std::size_t>(bit_word_count) * sizeof(uint32_t), bit_bytes);
+        if (!reason.empty()) {
+            return reason;
+        }
+        std::vector<uint32_t> bits(static_cast<std::size_t>(bit_word_count));
+        if (!bits.empty()) {
+            std::memcpy(bits.data(), bit_bytes.data(), bit_bytes.size());
+        }
+
+        // Where the bits are in the file, so a streamer can read single
+        // pages by range: the view's place as the file has it (the eager
+        // read repointed the asset's view at a buffer of its own).
+        std::optional<erhe::scene::Pvs_bits_source> bits_source;
+        std::uint64_t bits_view_index = 0;
+        if (
+            m_buffer_origins &&
+            (root["bits"].get_uint64().get(bits_view_index) == simdjson::SUCCESS) &&
+            (bits_view_index < m_buffer_origins->view_places.size())
+        ) {
+            const Gltf_view_place& place = m_buffer_origins->view_places[static_cast<std::size_t>(bits_view_index)];
+            if ((place.buffer_index < m_buffer_origins->buffers.size()) && m_buffer_origins->buffers[place.buffer_index].has_value()) {
+                const Gltf_buffer_origin& origin = m_buffer_origins->buffers[place.buffer_index].value();
+                bits_source = erhe::scene::Pvs_bits_source{
+                    .path        = m_buffer_origins->files.at(origin.file_index).path,
+                    .byte_offset = static_cast<uint64_t>(origin.file_offset + place.byte_offset),
+                    .byte_length = static_cast<uint64_t>(bit_bytes.size())
+                };
+            }
+        }
+
+        reason = erhe::scene::Pvs_database::validate(header, columns, pages, bits);
+        if (!reason.empty()) {
+            return reason;
+        }
+        m_data_out.pvs_database = std::make_shared<erhe::scene::Pvs_database>(
+            std::move(header), std::move(columns), std::move(pages), std::move(bits), std::move(bits_source)
+        );
+        return {};
+    }
+
     // Prepared mesh data extension payloads per (mesh index, primitive
     // index), handed in by parse_gltf() before parse_and_build() when
     // Gltf_parse_arguments::prepared_mesh_data_use is use.
@@ -6863,6 +7102,13 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 
     erhe_parser.parse_and_build();
 
+    // ERHE_pvs resolves its column node indices to the parsed nodes' uids.
+    for (const auto& [extension_name, extension_value] : parse_extras_context.asset_extensions.entries) {
+        if (extension_name == "ERHE_pvs") {
+            erhe_parser.read_pvs_extension(extension_value);
+        }
+    }
+
     result.prepared_statistics = erhe_parser.get_prepared_statistics();
     {
         const std::lock_guard<std::mutex> lock{result.prepared_statistics->mutex};
@@ -7781,6 +8027,7 @@ private:
     std::map<std::pair<std::size_t, std::size_t>, std::string>                                     m_prepared_primitive_extensions;
     bool                                                                                           m_uses_raytrace_bvh{false};
     bool                                                                                           m_uses_gpu_vertex_streams{false};
+    std::string                                                                                    m_pvs_extension; // ERHE_pvs JSON value, empty for none
     Gltf_export_prepared_statistics                                                                m_prepared_statistics;
 
     void collect_soup_shapes(
@@ -8265,6 +8512,87 @@ private:
         const std::size_t accessor_index = m_gltf_asset.accessors.size();
         m_gltf_asset.accessors.emplace_back(std::move(accessor));
         return accessor_index;
+    }
+
+    // ERHE_pvs (asset root; doc/gltf_extensions/ERHE_pvs.md): the JSON value
+    // of the scene's potentially visible set database, its three raw
+    // bufferViews appended. Runs once every node has its glTF index and
+    // before combine_buffers(). Empty when there is no ready database, or
+    // when a column names a node uid that is not in the export (logged).
+    [[nodiscard]] auto write_pvs_extension() -> std::string
+    {
+        static_assert(std::endian::native == std::endian::little, "ERHE_pvs payloads are little-endian");
+
+        const std::shared_ptr<const erhe::scene::Pvs_database>& database = m_arguments.pvs_database;
+        if (!database) {
+            return {};
+        }
+        const erhe::scene::Pvs_state state = database->get_state();
+        if (state != erhe::scene::Pvs_state::ready) {
+            log_gltf->info("glTF export: the PVS database is {} - ERHE_pvs not written", erhe::scene::c_str(state));
+            return {};
+        }
+
+        std::unordered_map<std::string, std::size_t> node_index_by_uid;
+        for (const auto& [node, node_index] : m_erhe_node_to_gltf_node_index) {
+            const std::string& uid = node->get_gltf_uid();
+            if (!uid.empty()) {
+                node_index_by_uid.emplace(uid, node_index);
+            }
+        }
+
+        const std::vector<erhe::scene::Pvs_column>& columns = database->get_columns();
+        std::string identities;
+        for (std::size_t i = 0, end = columns.size(); i < end; ++i) {
+            const erhe::scene::Pvs_column& column = columns[i];
+            const auto it = node_index_by_uid.find(column.node_uid);
+            if (it == node_index_by_uid.end()) {
+                log_gltf->error(
+                    "glTF export: PVS column {} names node uid '{}', which is not in the exported asset - ERHE_pvs not written",
+                    i, column.node_uid
+                );
+                return {};
+            }
+            identities += fmt::format("{}[{},{}]", (i > 0) ? "," : "", it->second, column.primitive_index);
+        }
+
+        constexpr std::size_t column_record_size = (18 * sizeof(float)) + sizeof(uint64_t);
+        std::vector<std::byte> column_bytes(column_record_size * columns.size());
+        for (std::size_t i = 0, end = columns.size(); i < end; ++i) {
+            std::byte* record = column_bytes.data() + (i * column_record_size);
+            std::memcpy(record,                         columns[i].world_transform.data(), 12 * sizeof(float));
+            std::memcpy(record + (12 * sizeof(float)),  columns[i].world_bounds.data(),    6 * sizeof(float));
+            std::memcpy(record + (18 * sizeof(float)), &columns[i].transform_hash,         sizeof(uint64_t));
+        }
+        const std::vector<erhe::scene::Pvs_page_entry>& pages = database->get_pages();
+        const std::vector<uint32_t>&                    bits  = database->get_bits();
+
+        // An empty payload gets no bufferView (glTF requires byteLength >= 1).
+        std::string views;
+        if (!column_bytes.empty()) {
+            views += fmt::format(",\"columns\":{}", add_raw_buffer_view(std::span<const std::byte>{column_bytes}));
+        }
+        views += fmt::format(",\"pages\":{}", add_raw_buffer_view(std::as_bytes(std::span<const erhe::scene::Pvs_page_entry>{pages})));
+        if (!bits.empty()) {
+            views += fmt::format(",\"bits\":{}", add_raw_buffer_view(std::as_bytes(std::span<const uint32_t>{bits})));
+        }
+
+        const erhe::scene::Pvs_header&          header     = database->get_header();
+        const erhe::scene::Pvs_bake_parameters& parameters = header.bake_parameters;
+        return fmt::format(
+            "{{\"version\":{},\"scene_id\":\"{}\",\"grid_origin\":[\"{:a}\",\"{:a}\",\"{:a}\"],\"cell_size\":\"{:a}\","
+            "\"cell_counts\":[{},{},{}],\"page_size\":{},\"column_count\":{},\"bit_word_count\":{},"
+            "\"bake\":{{\"face_resolution\":{},\"tile_size\":{},\"layer_count\":{},\"face_fov\":\"{:a}\","
+            "\"samples_per_face\":{},\"min_entry_pixels\":\"{:a}\",\"duration_seconds\":\"{:a}\"}},"
+            "\"column_identities\":[{}]{}}}",
+            header.version, json_escape(header.scene_id),
+            header.grid_origin.x, header.grid_origin.y, header.grid_origin.z, header.cell_size,
+            header.cell_counts.x, header.cell_counts.y, header.cell_counts.z, header.page_size,
+            columns.size(), bits.size(),
+            parameters.face_resolution, parameters.tile_size, parameters.layer_count, parameters.face_fov,
+            parameters.samples_per_face, parameters.min_entry_pixels, header.bake_duration_seconds,
+            identities, views
+        );
     }
 
     // Appends a raw buffer view (no accessor) holding a geogram attribute
@@ -10820,6 +11148,10 @@ auto Gltf_exporter::export_gltf() -> std::string
         return {};
     }
 
+    // After every node pass (the columns name node indices), before
+    // combine_buffers() (the extension adds raw bufferViews).
+    m_pvs_extension = write_pvs_extension();
+
     combine_buffers();
 
     // After every pass that adds top-level objects or names (nodes, physics,
@@ -11027,6 +11359,10 @@ auto Gltf_exporter::export_gltf() -> std::string
                 fmt::format("\"ERHE_texture_ktx2\":{{\"version\":1,\"textures\":[{}]}}", entries)
             );
             declare_extension_used("ERHE_texture_ktx2");
+        }
+        if (!m_pvs_extension.empty()) {
+            merge_extension_members(export_extras_context.asset_extensions, fmt::format("\"ERHE_pvs\":{}", m_pvs_extension));
+            declare_extension_used("ERHE_pvs");
         }
     }
 

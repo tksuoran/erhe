@@ -754,6 +754,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_occlusion_culling",          &Mcp_server::action_set_occlusion_culling         },
         { "set_viewport_style",             &Mcp_server::action_set_viewport_style            },
         { "get_occlusion_check",            &Mcp_server::query_occlusion_check                },
+        { "get_pvs_status",                 &Mcp_server::query_pvs_status                     },
         { "set_light_cluster_binning",      &Mcp_server::action_set_light_cluster_binning     },
         { "get_light_cluster_stats",        &Mcp_server::query_light_cluster_stats            },
         { "get_light_cluster_check",        &Mcp_server::query_light_cluster_check            },

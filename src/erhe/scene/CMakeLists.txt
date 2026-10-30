@@ -40,6 +40,8 @@ erhe_target_sources_grouped(
     erhe_scene/physics_description.hpp
     erhe_scene/point_instancer.cpp
     erhe_scene/point_instancer.hpp
+    erhe_scene/pvs_database.cpp
+    erhe_scene/pvs_database.hpp
     erhe_scene/projection.cpp
     erhe_scene/projection.hpp
     erhe_scene/scene.cpp
@@ -73,6 +75,7 @@ target_link_libraries(
         erhe::profile
         glm::glm-header-only
     PRIVATE
+        erhe::hash
         erhe::utility
         erhe::log
         fmt::fmt

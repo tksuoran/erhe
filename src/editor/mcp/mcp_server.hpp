@@ -361,6 +361,7 @@ private:
     auto action_set_viewport_style        (const nlohmann::json& args) -> std::string;
     auto action_set_headset_scene         (const nlohmann::json& args) -> std::string;
     auto query_occlusion_check            (const nlohmann::json& args) -> std::string;
+    auto query_pvs_status                 (const nlohmann::json& args) -> std::string;
     auto action_set_light_cluster_binning (const nlohmann::json& args) -> std::string;
     auto query_light_cluster_stats        (const nlohmann::json& args) -> std::string;
     auto query_light_cluster_check        (const nlohmann::json& args) -> std::string;

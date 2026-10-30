@@ -51,6 +51,8 @@
 #include "prefabs/instance_structure.hpp"
 #include "scene/joint.hpp"
 #include "erhe_scene/layout.hpp"
+#include "erhe_scene/pvs_database.hpp"
+#include "erhe_file/file.hpp"
 #include "scene/draw_mode_properties.hpp"
 #include "scene/draw_mode_system.hpp"
 #include "scene/node_physics.hpp"
@@ -659,6 +661,112 @@ auto Mcp_server::action_set_viewport_style(const json& args) -> std::string
         {"solid_wireframe",    style.solid_wireframe},
         {"full_builds_queued", full_builds_queued}
     }).dump();
+}
+
+// The scene's potentially visible set database (doc/plans/pvs.md "Editor";
+// erhe::scene::Pvs_database): its state, grid, pages and size, and where the
+// camera of the first viewport showing the scene is in the grid.
+auto Mcp_server::query_pvs_status(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Pvs_database> database = sr->get_pvs_database();
+    const erhe::scene::Pvs_state                     state    = sr->get_pvs_state();
+    json result = {
+        {"scene_name", sr->get_name()},
+        {"state",      erhe::scene::c_str(state)}
+    };
+
+    // The camera of the first viewport showing this scene.
+    std::shared_ptr<erhe::scene::Camera> camera;
+    std::string                          viewport_title;
+    if (m_context.scene_views != nullptr) {
+        for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+            const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+            if (!scene_view || (scene_view->get_scene_root().get() != sr) || !scene_view->get_camera()) {
+                continue;
+            }
+            camera         = scene_view->get_camera();
+            viewport_title = viewport_window->get_title();
+            break;
+        }
+    }
+    json camera_json{};
+    glm::vec3 camera_position{0.0f};
+    if (camera) {
+        camera_position = glm::vec3{camera->world_from_node()[3]};
+        camera_json = {
+            {"viewport", viewport_title},
+            {"camera",   camera->get_name()},
+            {"position", {camera_position.x, camera_position.y, camera_position.z}}
+        };
+    }
+
+    if (!database) {
+        result["camera"] = camera_json;
+        return make_json_content(result).dump();
+    }
+
+    const erhe::scene::Pvs_header& header     = database->get_header();
+    const glm::uvec3               page_dims  = database->get_page_dims();
+    const std::size_t columns_bytes = static_cast<std::size_t>(database->get_column_count()) * ((18 * sizeof(float)) + sizeof(uint64_t));
+    const std::size_t pages_bytes   = database->get_pages().size() * sizeof(erhe::scene::Pvs_page_entry);
+    const std::size_t bits_bytes    = database->get_bits().size() * sizeof(uint32_t);
+    result["version"]          = header.version;
+    result["scene_id"]         = header.scene_id;
+    result["grid_origin"]      = {header.grid_origin.x, header.grid_origin.y, header.grid_origin.z};
+    result["cell_size"]        = header.cell_size;
+    result["cell_counts"]      = {header.cell_counts.x, header.cell_counts.y, header.cell_counts.z};
+    result["cell_count"]       = database->get_cell_count();
+    result["page_size"]        = header.page_size;
+    result["page_dims"]        = {page_dims.x, page_dims.y, page_dims.z};
+    result["page_count"]       = database->get_page_count();
+    result["stored_pages"]     = database->get_stored_page_count();
+    result["column_count"]     = database->get_column_count();
+    result["words_per_cell"]   = database->get_words_per_cell();
+    result["cells_with_pvs"]   = database->get_cells_with_pvs();
+    result["bytes"]            = {
+        {"columns", columns_bytes},
+        {"pages",   pages_bytes},
+        {"bits",    bits_bytes},
+        {"total",   columns_bytes + pages_bytes + bits_bytes}
+    };
+    result["bake"] = {
+        {"face_resolution",  header.bake_parameters.face_resolution},
+        {"tile_size",        header.bake_parameters.tile_size},
+        {"layer_count",      header.bake_parameters.layer_count},
+        {"face_fov",         header.bake_parameters.face_fov},
+        {"samples_per_face", header.bake_parameters.samples_per_face},
+        {"min_entry_pixels", header.bake_parameters.min_entry_pixels},
+        {"duration_seconds", header.bake_duration_seconds}
+    };
+    const std::optional<erhe::scene::Pvs_bits_source>& bits_source = database->get_bits_source();
+    if (bits_source.has_value()) {
+        result["bits_source"] = {
+            {"path",        erhe::file::to_string(bits_source->path)},
+            {"byte_offset", bits_source->byte_offset},
+            {"byte_length", bits_source->byte_length}
+        };
+    }
+    if (camera) {
+        const std::optional<uint32_t> cell = database->find_cell(camera_position);
+        if (!cell.has_value()) {
+            camera_json["cell"] = "outside";
+        } else {
+            const uint32_t page = database->page_of_cell(cell.value());
+            camera_json["cell"]        = cell.value();
+            camera_json["page"]        = page;
+            camera_json["local_cell"]  = database->local_cell(cell.value());
+            camera_json["page_stored"] = !database->get_page_words(page).empty();
+            camera_json["has_pvs"]     = database->has_cell_pvs(cell.value());
+            camera_json["pvs_size"]    = database->get_cell_pvs_size(cell.value());
+        }
+    }
+    result["camera"] = camera_json;
+    return make_json_content(result).dump();
 }
 
 auto Mcp_server::query_occlusion_check(const json& args) -> std::string

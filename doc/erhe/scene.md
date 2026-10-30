@@ -397,6 +397,58 @@ between this record and `erhe::physics` / `Node_physics`, in both directions
 readers and the editor's export builder need it and `erhe::usd` does not link
 `erhe::gltf`.
 
+## Potentially visible sets
+
+`pvs_database.hpp` owns `erhe::scene::Pvs_database`, the plain-data
+potentially visible set (PVS) database of a scene (`doc/plans/pvs.md`
+"Database"): which baked draw entries can be seen from each cell of a
+uniform grid. It holds no GPU objects and has no per-frame API; its GPU
+copy and its consumer live in `erhe::scene_renderer`. It is in
+`erhe::scene` because `erhe::gltf` persists it (the asset-root extension
+`ERHE_pvs`, `doc/gltf_extensions/ERHE_pvs.md`) and already links this
+library.
+
+- `Pvs_header`: `version`, the scene's `scene_id`, the grid (`grid_origin`,
+  `cell_size`, `cell_counts`), `page_size` (cells per page axis, 1 to 4,
+  default 4), the bake parameters (`Pvs_bake_parameters`) and the bake's
+  duration.
+- `Pvs_column`: one baked entry, the column of its bit. Its identity is the
+  mesh node's glTF uid and the mesh primitive index; it records the world
+  transform (12 floats, the 3 rows of the 4 columns of `world_from_node`)
+  and world bounds (6 floats) the bake saw, and `transform_hash`, 64-bit
+  FNV-1a over those 18 floats' bits (`compute_pvs_transform_hash()`), which
+  the staleness check compares against.
+- Cell index `x + dims.x * (y + dims.y * z)`; `find_cell(position)` gives
+  the cell of a world position or nullopt outside the grid.
+- Pages: cells are grouped into pages of `page_size`^3 cells, the storage
+  unit (and, for a later streamer, the residency unit). The page table
+  (`Pvs_page_entry`, 16 bytes: `word_offset`, reserved, `cells_with_pvs`)
+  has one entry per page; `page_of_cell()` and `local_cell()` locate a
+  cell. A page with no cell holding a PVS is not stored
+  (`page_not_stored`). The bits are the stored pages back to back, each
+  `page_size^3 * words_per_cell` words with its cells dense; a cell without
+  a PVS in a stored page holds all-ones words. So every lookup is
+  conservative without a sentinel: `is_column_visible(cell, column)` is
+  true for a cell without a PVS, in a page that is not stored, or outside
+  the grid. `has_cell_pvs()` tells a baked cell; `get_page_words()` and
+  `get_cell_words()` return spans.
+- Bits source: the bits are held in memory; a database read from a file
+  also records `Pvs_bits_source`, the absolute byte range of the `bits`
+  bufferView in the file, so single pages can be read by range later.
+- `find_column(uid, primitive_index)`: the identity-to-column lookup, a hash
+  map built once by the constructor; `untracked_column` for an identity the
+  bake did not see.
+- `validate()` checks consistency (grid, page table, bits size, hashes,
+  padding bits, all-ones cells); a parser calls it before constructing.
+- State: a database is created `ready`; `mark_stale()` turns it `stale`
+  once (any thread, mutex-guarded) and reports whether it did. `absent` is
+  the state of a scene without a database. Only a rebake returns to ready.
+
+The editor's `Scene_root` owns the scene's database
+(`set_pvs_database()` / `get_pvs_database()` / `mark_pvs_stale()`, which
+announce state changes with `Pvs_state_changed_message`) and MCP
+`get_pvs_status` reports it.
+
 ## Public API
 - Create a `Scene`, add nodes with `register_node()`, attach meshes/cameras/lights.
 - Call `scene.update_node_transforms()` each frame to propagate world transforms.
@@ -406,6 +458,7 @@ readers and the editor's export builder need it and `erhe::usd` does not link
 
 ## Dependencies
 - erhe::item (Item, Hierarchy, Unique_id)
+- erhe::hash (FNV-1a of the PVS transform hash)
 - erhe::primitive (Primitive, Material)
 - erhe::raytrace (IGeometry, IInstance, IScene -- for CPU raytrace picking)
 - erhe::math (Viewport, Aabb)

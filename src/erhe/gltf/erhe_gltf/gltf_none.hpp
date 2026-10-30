@@ -39,6 +39,7 @@ namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
+    class Pvs_database;
     class Xformable; using Node = Xformable;
     class Scene;
     class Skin;
@@ -177,6 +178,7 @@ public:
 
     // Prepared mesh data outcome of the parse (see Gltf_prepared_mesh_statistics).
     Gltf_prepared_mesh_statistics                 prepared_mesh_statistics;
+    std::shared_ptr<erhe::scene::Pvs_database>    pvs_database;
 };
 
 class Gltf_scan
@@ -396,6 +398,7 @@ public:
     Gltf_texture_export texture_export{Gltf_texture_export::source};
     // Receives the texture statistics when non-null.
     Gltf_export_texture_statistics* texture_statistics{nullptr};
+    std::shared_ptr<const erhe::scene::Pvs_database> pvs_database{};
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;
