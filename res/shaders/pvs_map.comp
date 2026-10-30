@@ -1,0 +1,49 @@
+// The disoccluded map of the potentially visible set bake's disocclusion
+// passes (doc/plans/pvs.md "Bake" 5; erhe_pvs_disocclusion.glsl), read by
+// the bounds vote (pvs_vote.comp). Per level, layer_count * size^2 words,
+// layer-major (erhe::scene_renderer::pvs_map_level_offset()).
+//
+// ERHE_PVS_MAP_LEVEL_0 defined: level 0 holds, per chunk (x, y, L),
+// erhe_pvs_is_disoccluded(). One invocation per chunk, grid-stride.
+// Not defined: level pvs_disocclusion_parameters.pass.x holds per texel
+// the "any" of its 2 x 2 texels of the level below (clamped at the edge).
+// One invocation per texel, grid-stride.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#include "erhe_pvs_disocclusion.glsl"
+
+void main()
+{
+    uint tiles       = pvs_disocclusion_parameters.sizes.w;
+    uint layer_count = pvs_disocclusion_parameters.sizes.z;
+    uint stride      = gl_NumWorkGroups.x * c_pvs_group_size;
+#if defined(ERHE_PVS_MAP_LEVEL_0)
+    uint tile_count = pvs_disocclusion_parameters.counts.y;
+    for (uint tile = gl_GlobalInvocationID.x; tile < tile_count; tile += stride) {
+        uint x     = tile % tiles;
+        uint y     = (tile / tiles) % tiles;
+        uint layer = tile / (tiles * tiles);
+        pvs_map.words[tile] = erhe_pvs_is_disoccluded(tiles, x, y, layer) ? 1u : 0u;
+    }
+#else
+    uint level        = pvs_disocclusion_parameters.pass.x;
+    uint size         = erhe_pvs_map_level_size(tiles, level);
+    uint child_size   = erhe_pvs_map_level_size(tiles, level - 1u);
+    uint offset       = erhe_pvs_map_level_offset(tiles, layer_count, level);
+    uint child_offset = erhe_pvs_map_level_offset(tiles, layer_count, level - 1u);
+    uint texel_count  = layer_count * size * size;
+    for (uint texel = gl_GlobalInvocationID.x; texel < texel_count; texel += stride) {
+        uint x     = texel % size;
+        uint y     = (texel / size) % size;
+        uint layer = texel / (size * size);
+        uint any   = 0u;
+        for (uint child = 0u; child < 4u; ++child) {
+            uint cx = min((2u * x) + (child & 1u), child_size - 1u);
+            uint cy = min((2u * y) + (child >> 1u), child_size - 1u);
+            any |= pvs_map.words[child_offset + (((layer * child_size) + cy) * child_size) + cx];
+        }
+        pvs_map.words[offset + texel] = any;
+    }
+#endif
+}

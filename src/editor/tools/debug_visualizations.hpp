@@ -149,6 +149,9 @@ private:
     // (gathering), cyan = resident (display slot, not gathering),
     // purple = not resident.
     void lightmap_tiles_visualization    (const Render_context& context);
+    // The PVS window's debug overlay (doc/plans/pvs.md "Editor"): the grid
+    // cells around the view camera and its query box.
+    void pvs_visualization               (const Render_context& context);
     void mesh_labels                     (const Render_context& context, erhe::scene::Mesh* mesh);
 
     void label(

@@ -61,7 +61,9 @@ public:
     uint32_t layer_count     {64};
     float    face_fov        {2.0943951f}; // radians (120 degrees)
     uint32_t samples_per_face{1};
-    float    min_entry_pixels{2.0f};
+    // disocclusion: rule 3 (silhouette sides of the cones, doc/plans/pvs.md
+    // "Open"), opt-in.
+    bool     silhouette_tests{false};
 };
 
 class Pvs_header

@@ -13,6 +13,7 @@
 #include "scene/shadow_fit_debug.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/render_settings.hpp"
 #include "renderers/programs.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/node_physics.hpp"
@@ -27,10 +28,12 @@
 #include "tools/mesh_component_selection.hpp"
 #include "tools/selection_tool.hpp"
 #include "transform/transform_tool.hpp"
+#include "windows/pvs_window.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_scene/pvs_database.hpp"
 #include "erhe_graphics/texture_heap.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -2273,6 +2276,68 @@ void Debug_visualizations::render(const Render_context& context)
     raytrace_nodes_visualization(context);
 
     lightmap_tiles_visualization(context);
+
+    pvs_visualization(context);
+}
+
+void Debug_visualizations::pvs_visualization(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const Pvs_window* const window = context.app_context.pvs_window;
+    if ((window == nullptr) || !window->is_overlay_enabled() || (context.camera == nullptr)) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    const std::shared_ptr<erhe::scene::Pvs_database> database = scene_root->get_pvs_database();
+    erhe::renderer::Primitive_renderer line_renderer = context.get(
+        erhe::renderer::Debug_renderer_config{
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .xray              = true
+        }
+    );
+    line_renderer.set_thickness(-2.0f);
+
+    // The camera's query box (Render_settings::pvs_query_margin around the
+    // camera position, the box the view registers).
+    const glm::vec3 position = glm::vec3{context.camera->world_from_node()[3]};
+    const float     margin   = context.app_context.render_settings->pvs_query_margin;
+    constexpr glm::vec4 query_color{1.0f, 1.0f, 0.0f, 1.0f};
+    line_renderer.add_cube(glm::mat4{1.0f}, query_color, position - glm::vec3{margin}, position + glm::vec3{margin});
+    if (!database) {
+        return;
+    }
+
+    // The cells of the grid within one cell of the camera's cell (clamped
+    // to the grid): white the camera's cell, green a cell with a PVS, gray
+    // one without (everything visible).
+    const erhe::scene::Pvs_header& header = database->get_header();
+    const glm::vec3  local  = (position - header.grid_origin) / header.cell_size;
+    const glm::ivec3 counts = glm::ivec3{header.cell_counts};
+    const glm::ivec3 center = glm::clamp(glm::ivec3{glm::floor(local)}, glm::ivec3{0}, counts - glm::ivec3{1});
+    const std::optional<uint32_t> camera_cell = database->find_cell(position);
+    constexpr glm::vec4 camera_color {1.0f, 1.0f, 1.0f, 1.0f};
+    constexpr glm::vec4 pvs_color    {0.2f, 1.0f, 0.3f, 1.0f};
+    constexpr glm::vec4 no_pvs_color {0.5f, 0.5f, 0.5f, 1.0f};
+    for (int z = std::max(0, center.z - 1); z <= std::min(counts.z - 1, center.z + 1); ++z) {
+        for (int y = std::max(0, center.y - 1); y <= std::min(counts.y - 1, center.y + 1); ++y) {
+            for (int x = std::max(0, center.x - 1); x <= std::min(counts.x - 1, center.x + 1); ++x) {
+                const uint32_t  cell     = static_cast<uint32_t>(x + (counts.x * (y + (counts.y * z))));
+                const glm::vec3 cell_min = header.grid_origin + (glm::vec3{glm::ivec3{x, y, z}} * header.cell_size);
+                const glm::vec4 color =
+                    (camera_cell.has_value() && (camera_cell.value() == cell)) ? camera_color :
+                    database->has_cell_pvs(cell)                               ? pvs_color    :
+                                                                                 no_pvs_color;
+                line_renderer.add_cube(glm::mat4{1.0f}, color, cell_min, cell_min + glm::vec3{header.cell_size});
+            }
+        }
+    }
 }
 
 void Debug_visualizations::lightmap_tiles_visualization(const Render_context& context)

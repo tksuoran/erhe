@@ -49,7 +49,7 @@ A writer writes the extension only for a ready database.
         "layer_count": 64,
         "face_fov": "0x1.0c152ap+1",
         "samples_per_face": 1,
-        "min_entry_pixels": "0x1p+1",
+        "silhouette_tests": false,
         "duration_seconds": "0x1.8b0a3ep+3"
     },
     "column_identities": [[0, 0], [1, 0], [1, 1]],
@@ -80,7 +80,10 @@ Every float is a float32 written as a C99 hexadecimal floating-point string
   each cell, not conservative, a verification oracle; `"disocclusion"`: the
   conservative disocclusion-buffer bake), `face_resolution`, `tile_size`,
   `layer_count`, `samples_per_face` (integers), `face_fov` (radians),
-  `min_entry_pixels` and `duration_seconds` (the bake's wall-clock time).
+  `silhouette_tests` (boolean, optional, false when absent: rule 3 of the
+  disocclusion bake) and `duration_seconds` (the bake's wall-clock time). A reader ignores members
+  it does not know (files written before the bounds vote carry
+  `min_entry_pixels`).
 - `column_identities`: `column_count` pairs `[node, primitive]`: column `c`
   is mesh primitive `primitive` of the mesh of glTF node `node` of this
   asset. A loader resolves the node index to that node's identity (its

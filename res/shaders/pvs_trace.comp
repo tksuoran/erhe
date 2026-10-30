@@ -1,0 +1,62 @@
+// The trace pass of the potentially visible set bake (doc/plans/pvs.md
+// "Bake" 7; Pvs_disocclusion_pipelines::record_trace()): a diagnostic, run
+// only for a traced cell. For every sample of the face's layered buffer
+// whose id_min or id_max names a traced entry (pvs_trace.words: [0] the
+// table size T, [1 .. T] per frame entry its trace slot or 0xffffffff,
+// then four counters per slot), counts per slot: [0] the samples, [1] those
+// inside the face's 90 degree core, [2] those of them in a disoccluded
+// (tile, layer) (erhe_pvs_is_disoccluded()). One invocation per sample,
+// grid-stride.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#include "erhe_pvs_disocclusion.glsl"
+
+void erhe_pvs_trace_count(uint entry, bool in_core, bool disoccluded)
+{
+    uint table_size = pvs_trace.words[0];
+    if (entry >= table_size) {
+        return;
+    }
+    uint slot = pvs_trace.words[1u + entry];
+    if (slot == c_pvs_cleared) {
+        return;
+    }
+    uint base = 1u + table_size + (4u * slot);
+    atomicAdd(pvs_trace.words[base + 0u], 1u);
+    if (in_core) {
+        atomicAdd(pvs_trace.words[base + 1u], 1u);
+        if (disoccluded) {
+            atomicAdd(pvs_trace.words[base + 2u], 1u);
+        }
+    }
+}
+
+void main()
+{
+    uint resolution      = pvs_disocclusion_parameters.sizes.x;
+    uint k               = pvs_disocclusion_parameters.sizes.y;
+    uint layer_count     = pvs_disocclusion_parameters.sizes.z;
+    uint tiles           = pvs_disocclusion_parameters.sizes.w;
+    uint words_per_layer = pvs_disocclusion_parameters.counts.w;
+    uint region_words    = words_per_layer * layer_count;
+    uvec4 core           = pvs_disocclusion_parameters.core;
+    uint stride          = gl_NumWorkGroups.x * c_pvs_group_size;
+    for (uint word = gl_GlobalInvocationID.x; word < region_words; word += stride) {
+        uint id_low = pvs_layered_samples.words[region_words + word];
+        if (id_low == c_pvs_cleared) {
+            continue;
+        }
+        uint id_high = pvs_layered_samples.words[(2u * region_words) + word];
+        uint layer   = word / words_per_layer;
+        uint pixel   = word % words_per_layer;
+        uint px      = pixel % resolution;
+        uint py      = pixel / resolution;
+        bool in_core = (px >= core.x) && (px < core.y) && (py >= core.z) && (py < core.w);
+        bool disoccluded = erhe_pvs_is_disoccluded(tiles, px / k, py / k, layer);
+        erhe_pvs_trace_count(id_low, in_core, disoccluded);
+        if (id_high != id_low) {
+            erhe_pvs_trace_count(id_high, in_core, disoccluded);
+        }
+    }
+}

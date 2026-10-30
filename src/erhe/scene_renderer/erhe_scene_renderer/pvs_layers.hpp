@@ -41,13 +41,17 @@ namespace erhe::scene_renderer {
 //     uvec4 info;        // face resolution, layer count, words per layer
 //                        // (resolution^2), words per region (words per
 //                        // layer * layer count)
-//     vec4  depth_range; // z_near, z_far, 0, 0
+//     uvec4 trace;       // the bake trace: on (1) or off (0), the trace
+//                        // entries counted after the three regions
 //     uint  words[];     // three regions of words per region each: depth,
 //                        // id_min, id_max; word (layer * words per layer +
-//                        // y * resolution + x) of a region
+//                        // y * resolution + x) of a region; then the trace's
+//                        // fragment counters
 //
-// The three arrays are dense (doc/plans/pvs.md D7): face_resolution^2 *
-// layer_count words each.
+// The header is constant for a bake: the bake writes it once, before its
+// first face; the per-face depth range is the face camera's (the camera
+// block's view_depth_near / view_depth_far). The three arrays are dense
+// (doc/plans/pvs.md D7): face_resolution^2 * layer_count words each.
 class Pvs_layered_interface
 {
 public:
@@ -55,14 +59,14 @@ public:
 
     // std430 byte offsets of the members (16, 16 and 4 byte aligned).
     [[nodiscard]] auto get_info_offset       () const -> std::size_t { return m_info_offset; }
-    [[nodiscard]] auto get_depth_range_offset() const -> std::size_t { return m_depth_range_offset; }
+    [[nodiscard]] auto get_trace_offset      () const -> std::size_t { return m_trace_offset; }
     [[nodiscard]] auto get_words_offset      () const -> std::size_t { return m_words_offset; }
 
     erhe::graphics::Shader_resource pvs_layered_block;
 
 private:
     std::size_t m_info_offset       {0};
-    std::size_t m_depth_range_offset{0};
+    std::size_t m_trace_offset      {0};
     std::size_t m_words_offset      {0};
 };
 

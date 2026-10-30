@@ -82,6 +82,22 @@ namespace {
         {"seconds_remaining", status.seconds_remaining},
         {"debug_face",        status.debug_face}
     };
+    if (status.method == erhe::scene::Pvs_bake_method::disocclusion) {
+        result["sample_point_test"]          = status.sample_point_test;
+        result["cells_without_sample_point"] = status.cells_without_sample_point;
+        // The latest measured cell: the whole cell, and its first face's
+        // passes (doc/plans/pvs.md "Bake" 4 and 5).
+        const Pvs_bake_gpu_times& times = status.gpu_times;
+        result["gpu_ms"] = json{
+            {"cell",         static_cast<double>(times.cell)         * 1.0e-6},
+            {"depth_pass",   static_cast<double>(times.depth_pass)   * 1.0e-6},
+            {"id_pass",      static_cast<double>(times.id_pass)      * 1.0e-6},
+            {"tiles",        static_cast<double>(times.tiles)        * 1.0e-6},
+            {"layer_loop",   static_cast<double>(times.layer_loop)   * 1.0e-6},
+            {"map",          static_cast<double>(times.map)          * 1.0e-6},
+            {"vote",         static_cast<double>(times.vote)         * 1.0e-6}
+        };
+    }
     if (status.debug_face) {
         result["debug_cell"]           = status.debug_cell;
         result["debug_face_index"]     = status.debug_face_index;
@@ -96,6 +112,51 @@ namespace {
         result["debug_distinct_ids"]   = status.debug_distinct_ids;
         result["debug_depth_path"]     = status.debug_depth_path;
         result["debug_id_path"]        = status.debug_id_path;
+    }
+    if (status.trace.valid) {
+        // The bake trace (doc/plans/pvs.md "Bake" 7).
+        const Pvs_bake_trace& trace = status.trace;
+        json columns = json::array();
+        for (std::size_t i = 0; i < trace.columns.size(); ++i) {
+            columns.push_back(json{
+                {"node_uid",        trace.node_uids[i]},
+                {"primitive_index", trace.primitive_indices[i]},
+                {"column",          trace.columns[i]},
+                {"in_cell_pvs",     trace.in_cell_pvs[i] != 0}
+            });
+        }
+        json faces = json::array();
+        for (const Pvs_trace_face& face : trace.faces) {
+            json entries = json::array();
+            for (const Pvs_trace_entry_face& entry : face.entries) {
+                json tile_column = json::array();
+                for (const Pvs_trace_layer& layer : entry.tile_column) {
+                    tile_column.push_back(json::array({layer.closed, layer.disoccluded}));
+                }
+                entries.push_back(json{
+                    {"fragments",           entry.fragments},
+                    {"samples",             entry.samples},
+                    {"core_samples",        entry.core_samples},
+                    {"disoccluded_samples", entry.disoccluded_samples},
+                    {"in_column_words",     entry.in_column_words},
+                    {"bounds_vote",         entry.bounds_vote},
+                    {"near",                entry.near},
+                    {"in_face",             entry.in_face},
+                    {"rectangle",           json::array({entry.rectangle.x, entry.rectangle.y, entry.rectangle.z, entry.rectangle.w})},
+                    {"layers",              json::array({entry.layer_min, entry.layer_max})},
+                    {"tile",                json::array({entry.tile.x, entry.tile.y})},
+                    {"tile_column",         std::move(tile_column)}
+                });
+            }
+            faces.push_back(json{{"face", face.face}, {"sample", face.sample}, {"entries", std::move(entries)}});
+        }
+        result["trace"] = json{
+            {"cell",         trace.cell},
+            {"sample_point", to_json(trace.sample_point)},
+            {"columns",      std::move(columns)},
+            {"faces",        std::move(faces)},
+            {"diagnostics",  trace.diagnostics}
+        };
     }
     if (!status.error.empty()) {
         result["error"] = status.error;
@@ -147,6 +208,41 @@ namespace {
         !read_uint("samples_per_face",   request.samples_per_face)
     ) {
         return "samples_per_cell, face_resolution, captures_in_flight, layer_count, tile_size and samples_per_face must be non-negative integers";
+    }
+    // Parsed with or without trace_cell, so the baker can refuse them
+    // without one.
+    if (args.contains("trace_only")) {
+        if (!args["trace_only"].is_boolean()) {
+            return "trace_only must be a boolean";
+        }
+        request.trace_scope = args["trace_only"].get<bool>() ? Pvs_trace_scope::traced_cell_only : Pvs_trace_scope::all_cells;
+    }
+    if (args.contains("trace_face")) {
+        if (!args["trace_face"].is_number_integer() || (args["trace_face"].get<int64_t>() < 0) || (args["trace_face"].get<int64_t>() > 5)) {
+            return "trace_face must be 0 .. 5";
+        }
+        request.trace_face = static_cast<uint32_t>(args["trace_face"].get<int64_t>());
+    }
+    if (args.contains("trace_cell")) {
+        if (!args["trace_cell"].is_number_integer() || (args["trace_cell"].get<int64_t>() < 0)) {
+            return "trace_cell must be a non-negative integer";
+        }
+        request.trace_cell = static_cast<uint32_t>(args["trace_cell"].get<int64_t>());
+        if (!args.contains("trace_entries") || !args["trace_entries"].is_array()) {
+            return "trace_cell needs trace_entries: [[node_uid, primitive_index], ...]";
+        }
+        for (const json& entry : args["trace_entries"]) {
+            if (!entry.is_array() || (entry.size() != 2) || !entry[0].is_string() || !entry[1].is_number_integer() || (entry[1].get<int64_t>() < 0)) {
+                return "trace_entries items must be [node_uid, primitive_index >= 0]";
+            }
+            request.trace_entries.emplace_back(entry[0].get<std::string>(), static_cast<uint32_t>(entry[1].get<int64_t>()));
+        }
+    }
+    if (args.contains("silhouette_tests")) {
+        if (!args["silhouette_tests"].is_boolean()) {
+            return "silhouette_tests must be a boolean";
+        }
+        request.silhouette_tests = args["silhouette_tests"].get<bool>() ? erhe::scene_renderer::Pvs_silhouette_tests::on : erhe::scene_renderer::Pvs_silhouette_tests::off;
     }
     if (args.contains("face_fov_degrees")) {
         if (!args["face_fov_degrees"].is_number()) {
@@ -201,6 +297,7 @@ auto Mcp_server::action_pvs_bake(const json& args) -> std::string
         result["layer_count"]      = request.layer_count;
         result["tile_size"]        = request.tile_size;
         result["samples_per_face"] = request.samples_per_face;
+        result["silhouette_tests"] = (request.silhouette_tests == erhe::scene_renderer::Pvs_silhouette_tests::on);
     }
     return make_json_content(result).dump();
 }
@@ -365,6 +462,18 @@ auto Mcp_server::query_pvs_cell(const json& args) -> std::string
         }
     }
     result["columns"] = std::move(columns);
+    if (args.value("all_columns", false)) {
+        // Every column of the database (the tracked entries; an entry with
+        // no column is always kept).
+        json all_columns = json::array();
+        for (const erhe::scene::Pvs_column& entry : database->get_columns()) {
+            all_columns.push_back(json{
+                {"node_uid",        entry.node_uid},
+                {"primitive_index", entry.primitive_index}
+            });
+        }
+        result["all_columns"] = std::move(all_columns);
+    }
     return make_json_content(result).dump();
 }
 

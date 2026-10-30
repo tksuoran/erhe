@@ -1,0 +1,114 @@
+// The bounds vote of the potentially visible set bake's disocclusion passes
+// (doc/plans/pvs.md "Bake" 5; erhe_pvs_disocclusion.glsl;
+// erhe::scene_renderer::pvs_bounds_vote() is its C++ twin, operation for
+// operation): per column (a baked entry's world bounds,
+// pvs_column_bounds.bounds[2c], [2c + 1]) the bounds in the face's view
+// space; visible when they reach into the cube [-z_near, z_near]^3 around
+// the sample point, or when their part beyond the near plane overlaps a
+// disoccluded chunk of the face's 90 degree core: the projected corners
+// give the tile rectangle (clamped to the core), the depths the layer range
+// (widened by one layer on each side), and the disoccluded map is read at
+// the level where the rectangle spans at most 2 x 2 texels. A visible
+// column sets its bit in pvs_column_words. One invocation per column,
+// grid-stride.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#include "erhe_pvs_disocclusion.glsl"
+
+bool erhe_pvs_bounds_vote(vec3 bounds_min, vec3 bounds_max)
+{
+    uvec4 axes  = pvs_disocclusion_parameters.view_axes;
+    vec4  point = pvs_disocclusion_parameters.sample_point;
+    vec3  view_min = vec3(0.0);
+    vec3  view_max = vec3(0.0);
+    for (uint i = 0u; i < 3u; ++i) {
+        uint axis = axes[i];
+        precise float low  = bounds_min[axis] - point[axis];
+        precise float high = bounds_max[axis] - point[axis];
+        if (((axes.w >> i) & 1u) != 0u) {
+            view_min[i] = -high;
+            view_max[i] = -low;
+        } else {
+            view_min[i] = low;
+            view_max[i] = high;
+        }
+    }
+    float z_near = pvs_disocclusion_parameters.layers[0].x;
+    if (
+        (view_max.x >= -z_near) && (view_min.x <= z_near) &&
+        (view_max.y >= -z_near) && (view_min.y <= z_near) &&
+        (view_max.z >= -z_near) && (view_min.z <= z_near)
+    ) {
+        return true;
+    }
+    if (view_max.z <= z_near) {
+        return false;
+    }
+    float z0    = max(view_min.z, z_near);
+    float z1    = view_max.z;
+    uint  k     = pvs_disocclusion_parameters.sizes.y;
+    uint  tiles = pvs_disocclusion_parameters.sizes.w;
+    vec4  tangents = pvs_disocclusion_parameters.tangents;
+    uint count_x_min = tiles + 1u;
+    uint count_x_max = 0u;
+    uint count_y_min = tiles + 1u;
+    uint count_y_max = 0u;
+    for (uint corner = 0u; corner < 4u; ++corner) {
+        float z  = ((corner & 1u) != 0u) ? z1 : z0;
+        float vx = ((corner & 2u) != 0u) ? view_max.x : view_min.x;
+        float vy = ((corner & 2u) != 0u) ? view_max.y : view_min.y;
+        uint count_x = erhe_pvs_boundary_count(vx, z, tangents.x, tangents.y, k, tiles);
+        uint count_y = erhe_pvs_boundary_count(vy, z, tangents.z, tangents.w, k, tiles);
+        count_x_min = min(count_x_min, count_x);
+        count_x_max = max(count_x_max, count_x);
+        count_y_min = min(count_y_min, count_y);
+        count_y_max = max(count_y_max, count_y);
+    }
+    if ((count_x_max == 0u) || (count_x_min == (tiles + 1u)) || (count_y_max == 0u) || (count_y_min == (tiles + 1u))) {
+        return false;
+    }
+    uvec4 core = pvs_disocclusion_parameters.core;
+    if ((core.y == 0u) || (core.w == 0u)) {
+        return false;
+    }
+    uint x0 = max(max(count_x_min, 1u) - 1u, core.x / k);
+    uint x1 = min(min(count_x_max, tiles) - 1u, (core.y - 1u) / k);
+    uint y0 = max(max(count_y_min, 1u) - 1u, core.z / k);
+    uint y1 = min(min(count_y_max, tiles) - 1u, (core.w - 1u) / k);
+    if ((x0 > x1) || (y0 > y1)) {
+        return false;
+    }
+    uint layer_count = pvs_disocclusion_parameters.sizes.z;
+    uint layer_0     = max(erhe_pvs_layer_of_front(z0), 1u) - 1u;
+    uint layer_1     = min(erhe_pvs_layer_of_front(z1) + 1u, layer_count - 1u);
+    uint level = 0u;
+    while ((((x1 >> level) - (x0 >> level)) > 1u) || (((y1 >> level) - (y0 >> level)) > 1u)) {
+        ++level;
+    }
+    uint size   = erhe_pvs_map_level_size(tiles, level);
+    uint offset = erhe_pvs_map_level_offset(tiles, layer_count, level);
+    for (uint layer = layer_0; layer <= layer_1; ++layer) {
+        for (uint y = (y0 >> level); y <= (y1 >> level); ++y) {
+            for (uint x = (x0 >> level); x <= (x1 >> level); ++x) {
+                if (pvs_map.words[offset + (((layer * size) + y) * size) + x] != 0u) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+void main()
+{
+    uint column_count = pvs_disocclusion_parameters.columns.x;
+    uint stride       = gl_NumWorkGroups.x * c_pvs_group_size;
+    for (uint column = gl_GlobalInvocationID.x; column < column_count; column += stride) {
+        vec3 bounds_min = pvs_column_bounds.bounds[(2u * column) + 0u].xyz;
+        vec3 bounds_max = pvs_column_bounds.bounds[(2u * column) + 1u].xyz;
+        if (erhe_pvs_bounds_vote(bounds_min, bounds_max)) {
+            atomicOr(pvs_column_words.words[column >> 5u], 1u << (column & 31u));
+        }
+    }
+}

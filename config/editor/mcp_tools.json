@@ -9056,7 +9056,7 @@
     "name": "get_occlusion_check"
   },
   {
-    "description": "The scene's potentially visible set database (doc/plans/pvs.md; erhe::scene::Pvs_database, saved with the scene as the asset-root glTF extension ERHE_pvs, doc/gltf_extensions/ERHE_pvs.md). Returns scene_name, state (absent: no database; ready; stale: a baked entry moved or was removed, PVS culling is off until the next bake) and camera {viewport, camera, position} of the first viewport showing the scene. With a database also: version, scene_id, grid_origin, cell_size, cell_counts, cell_count, page_size (cells per page axis), page_dims, page_count, stored_pages, column_count, words_per_cell, cells_with_pvs, bytes {columns, pages, bits, total}, bits_hash (64-bit FNV-1a of the bits as 16 hex digits: equal for equal bakes and across a save and reload), bake {method (sampled or disocclusion), face_resolution, tile_size, layer_count, face_fov (radians), samples_per_face, min_entry_pixels, duration_seconds}, bits_source {path, byte_offset, byte_length} (the bits' byte range in the file the database was read from) and in camera: cell (\"outside\" when the camera is outside the grid), page, local_cell, page_stored, has_pvs and pvs_size (columns in the cell's PVS, 0 without one). Also culling_enabled (the pvs_culling setting), frame_culling_active (the scene's draw lists published the last frame with the PVS rule on: the setting is on and the database ready) and views: per viewport scene view of this scene drawn in the last rendered frame, {view (its settings key), tested (entries the PVS rule tested: inside the frustum, with bounds and a baked column), culled (those it culled)}.",
+    "description": "The scene's potentially visible set database (doc/plans/pvs.md; erhe::scene::Pvs_database, saved with the scene as the asset-root glTF extension ERHE_pvs, doc/gltf_extensions/ERHE_pvs.md). Returns scene_name, state (absent: no database; ready; stale: a baked entry moved or was removed, PVS culling is off until the next bake) and camera {viewport, camera, position} of the first viewport showing the scene. With a database also: version, scene_id, grid_origin, cell_size, cell_counts, cell_count, page_size (cells per page axis), page_dims, page_count, stored_pages, column_count, words_per_cell, cells_with_pvs, bytes {columns, pages, bits, total}, bits_hash (64-bit FNV-1a of the bits as 16 hex digits: equal for equal bakes and across a save and reload), bake {method (sampled or disocclusion), face_resolution, tile_size, layer_count, face_fov (radians), samples_per_face, silhouette_tests, duration_seconds}, bits_source {path, byte_offset, byte_length} (the bits' byte range in the file the database was read from) and in camera: cell (\"outside\" when the camera is outside the grid), page, local_cell, page_stored, has_pvs and pvs_size (columns in the cell's PVS, 0 without one). Also culling_enabled (the pvs_culling setting), frame_culling_active (the scene's draw lists published the last frame with the PVS rule on: the setting is on and the database ready) and views: per viewport scene view of this scene drawn in the last rendered frame, {view (its settings key), tested (entries the PVS rule tested: inside the frustum, with bounds and a baked column), culled (those it culled)}.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -9072,7 +9072,7 @@
     "name": "get_pvs_status"
   },
   {
-    "description": "Start a potentially visible set bake of a scene (doc/plans/pvs.md \"Bake\", \"Build order\" step 2; Pvs_baker, doc/editor/renderers.md). Returns at once with the bake status (state running, method, grid_origin, cell_size, cell_counts, cell_count, column_count, capture_count, uids_assigned) and the parameters used; the bake then runs over frames (poll get_pvs_bake_status) and, when the last cell is done, sets the database on the scene (get_pvs_status). The grid covers the region with cubic cells: origin = region_min, cell counts = ceil(extent / cell_size). Columns are the scene's static entries (doc/plans/pvs.md D3: content mesh primitives visible at bake time (a hidden mesh, by itself or an ancestor, gets no column and is always kept), not skinned, opaque or alpha tested, no non-static rigid body and no animation on the node or an ancestor), keyed by the mesh node's glTF uid; a node without one gets one now. method sampled: per cell the cell center plus samples_per_cell - 1 random points (seeded by the cell index, inside the cell shrunk by 5 percent per side), six id captures per point along +X -X +Y -Y +Z -Z at face_resolution square with face_fov_degrees vertical field of view; the union of the captured entries is the cell's PVS. Not conservative: a verification oracle. method disocclusion (\"Build order\" step 4 of 5): per cell, from the cell center, six faces of samples_per_face face passes each (capture_count counts the face passes), each rendering the static set into the layered buffer (face_resolution^2 * layer_count words per array, three arrays); the disocclusion passes that turn it into the cell's PVS are step 5, so every cell ends without a PVS (cells_with_pvs 0: everything visible). For the bake the scene's database is its column table (it culls nothing); an edit that would stale a database fails the bake and a bake that does not finish puts the previous database back. Refused while a bake runs or when the scene has no static entry. Saved with the scene as ERHE_pvs.",
+    "description": "Start a potentially visible set bake of a scene (doc/plans/pvs.md \"Bake\", \"Build order\" step 2; Pvs_baker, doc/editor/renderers.md). Returns at once with the bake status (state running, method, grid_origin, cell_size, cell_counts, cell_count, column_count, capture_count, uids_assigned) and the parameters used; the bake then runs over frames (poll get_pvs_bake_status) and, when the last cell is done, sets the database on the scene (get_pvs_status). The grid covers the region with cubic cells: origin = region_min, cell counts = ceil(extent / cell_size). Columns are the scene's static entries (doc/plans/pvs.md D3: content mesh primitives visible at bake time (a hidden mesh, by itself or an ancestor, gets no column and is always kept), not skinned, opaque or alpha tested, no non-static rigid body and no animation on the node or an ancestor), keyed by the mesh node's glTF uid; a node without one gets one now. method sampled: per cell the cell center plus samples_per_cell - 1 random points (seeded by the cell index, inside the cell shrunk by 5 percent per side), six id captures per point along +X -X +Y -Y +Z -Z at face_resolution square with face_fov_degrees vertical field of view; the union of the captured entries is the cell's PVS. Not conservative: a verification oracle. method disocclusion (the conservative bake, doc/plans/pvs.md \"Bake\" 1 to 6): per cell one job in one frame (capture_count counts the cells): the sample point is the first free candidate (the cell center, then the 26 points a quarter cell away; free = no axis ray from it first hits a back face of a single-sided primitive; the center for every cell when some static entry has no raytrace geometry, sample_point_test false); a cell without one gets no PVS (cells_without_sample_point). z_near = the farthest cell face from the sample point plus 1 cm. Six faces of samples_per_face depth passes each render the static set into the layered buffer (face_resolution^2 * layer_count words per array), and the disocclusion passes (tiles with the contiguous-run closure, a front-to-back per-layer loop of classify and cones, the disoccluded map; Pvs_disocclusion_pipelines) mark the disoccluded chunks; the bounds vote puts in the cell's PVS every entry whose world bounds reach into the cube [-z_near, z_near]^3 around the sample point or overlap a disoccluded chunk of a face's 90-degree core. silhouette_tests (default false) turns on rule 3 (cone sides only across silhouettes, doc/plans/pvs.md \"Open\"). trace_cell / trace_entries / trace_only / trace_face: the bake trace (doc/agents/mcp_server_usage.md). The status reports gpu_ms of the latest measured cell (the cell, and its first face's depth_pass, id_pass, tiles, layer_loop, map, vote). For the bake the scene's database is its column table (it culls nothing); an edit that would stale a database fails the bake and a bake that does not finish puts the previous database back. Refused while a bake runs or when the scene has no static entry. Saved with the scene as ERHE_pvs.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -9080,7 +9080,7 @@
           "type": "string"
         },
         "method": {
-          "description": "\"sampled\" (default) or \"disocclusion\" (the layered buffer only; no cell gets a PVS yet)",
+          "description": "\"sampled\" (default) or \"disocclusion\"",
           "type": "string"
         },
         "cell_size": {
@@ -9122,12 +9122,33 @@
           "type": "integer"
         },
         "tile_size": {
-          "description": "disocclusion: tile size of the disocclusion passes (recorded; the passes are step 5), 1 to face_resolution; default 8",
+          "description": "disocclusion: tile size K of the disocclusion passes, a divisor of face_resolution; default 8",
           "type": "integer"
         },
         "samples_per_face": {
           "description": "disocclusion: face passes per face, each with a sub-pixel jitter of the projection (sample 0 none), 1 to 64; default 1",
           "type": "integer"
+        },
+        "trace_cell": {
+          "description": "disocclusion: bake trace (doc/plans/pvs.md \"Bake\" 7): the index of the one cell of the grid to trace; the bake then runs the id pass too and get_pvs_bake_status returns 'trace'. Needs trace_entries",
+          "type": "integer"
+        },
+        "trace_only": {
+          "description": "disocclusion, with trace_cell: bake only the traced cell of the request's grid (the full bake's region, cell size and parameters reproduce that bake's cell bit for bit); default false",
+          "type": "boolean"
+        },
+        "silhouette_tests": {
+          "description": "disocclusion: rule 3, cone sides only across silhouettes (doc/plans/pvs.md \"Open\"); default false",
+          "type": "boolean"
+        },
+        "trace_face": {
+          "description": "disocclusion, with trace_cell: also copy this face's (0 .. 5) depth region to the host and return trace.diagnostics: the CPU re-run with the silhouette tests on and off, the windows that decide each traced entry's missing layer bits, their side decisions and the surface at the deciding pixels",
+          "type": "integer"
+        },
+        "trace_entries": {
+          "description": "disocclusion: the entries the trace reports, [[node_uid, primitive_index], ...]",
+          "type": "array",
+          "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "integer", "minimum": 0}], "minItems": 2, "maxItems": 2}
         }
       },
       "required": [
@@ -9138,7 +9159,7 @@
     "name": "pvs_bake"
   },
   {
-    "description": "Inspect the potentially visible set bake's layered buffer (doc/plans/pvs.md \"Bake\" 4, \"Build order\" step 4) without a bake: runs the depth and id passes of one face of one cell of the grid pvs_bake with the same arguments would use (method disocclusion, sample point the cell center, z_near half the cell size plus 1 cm, z_far the farthest corner of the region and the static entries), reads layer back and writes two PNGs: <path>_depth.png (the layer's closest depth per pixel, black at the layer's front depth to light gray at its back, white where the layer has no sample) and <path>_id.png (id_min as a hashed color, black where empty). Returns at once with the job's status (get_pvs_bake_status: state running, debug_face true); when done the status holds debug_depth_path, debug_id_path, debug_z_near, debug_z_far, debug_layer_front, debug_layer_back, debug_depth_entries and debug_id_entries (entries drawn by the passes), debug_covered_pixels and debug_distinct_ids. The scene's database is replaced by the column table for the job and put back after it. Refused while a bake runs.",
+    "description": "Inspect the potentially visible set bake's layered buffer (doc/plans/pvs.md \"Bake\" 4, \"Build order\" step 4) without a bake: runs the depth and id passes of one face of one cell of the grid pvs_bake with the same arguments would use (method disocclusion, the cell's sample point as the bake picks it (the center when it has no free one), z_near the farthest cell face from it plus 1 cm, z_far the farthest corner of the region and the static entries), reads layer back and writes two PNGs: <path>_depth.png (the layer's closest depth per pixel, black at the layer's front depth to light gray at its back, white where the layer has no sample) and <path>_id.png (id_min as a hashed color, black where empty). Returns at once with the job's status (get_pvs_bake_status: state running, debug_face true); when done the status holds debug_depth_path, debug_id_path, debug_z_near, debug_z_far, debug_layer_front, debug_layer_back, debug_depth_entries and debug_id_entries (entries drawn by the passes), debug_covered_pixels and debug_distinct_ids. The scene's database is replaced by the column table for the job and put back after it. Refused while a bake runs.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -9204,7 +9225,7 @@
     "name": "pvs_debug_face"
   },
   {
-    "description": "Status of the potentially visible set bake (pvs_bake): state (idle: none has run; running; done: the database is set on the scene; cancelled and failed: the scene keeps the database it had), scene_name, method, grid_origin, cell_size, cell_counts, cell_count, column_count, cells_done, capture_count, captures_done (disocclusion: face passes), unmatched_entries (captured entries that name no column: outside the static set), uids_assigned, cells_with_pvs (set when done), seconds_elapsed, seconds_remaining (estimate from the capture rate, 0 when unknown), error (failed only), debug_face (the job is a pvs_debug_face) and, for a debug face, its debug_* fields (pvs_debug_face).",
+    "description": "Status of the potentially visible set bake (pvs_bake): state (idle: none has run; running; done: the database is set on the scene; cancelled and failed: the scene keeps the database it had), scene_name, method, grid_origin, cell_size, cell_counts, cell_count, column_count, cells_done, capture_count, captures_done (disocclusion: cells), unmatched_entries (captured entries that name no column: outside the static set), uids_assigned, cells_with_pvs (set when done), seconds_elapsed, seconds_remaining (estimate from the capture rate, 0 when unknown), error (failed only), debug_face (the job is a pvs_debug_face) and, for a debug face, its debug_* fields (pvs_debug_face); for the disocclusion method also sample_point_test, cells_without_sample_point and gpu_ms {cell, depth_pass, id_pass, tiles, layer_loop, map, vote} (the latest measured cell, kept after the bake ends); for a trace bake (pvs_bake trace_cell) also trace {cell, sample_point, columns [{node_uid, primitive_index, column, in_cell_pvs}], faces [{face, sample, entries [per traced column: fragments (depth pass), samples (id_min / id_max name it), core_samples, disoccluded_samples, in_column_words (after this face), bounds_vote (this face alone), near, in_face, rectangle, layers, tile, tile_column [per layer {closed, disoccluded}]]}], diagnostics (with pvs_bake trace_face: one string per line)}.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -9236,7 +9257,7 @@
     "name": "pvs_clear"
   },
   {
-    "description": "One cell of a scene's potentially visible set database, by index or by a world position inside it. Returns scene_name, cell, coordinate [x, y, z], cell_min, cell_max, page, local_cell, page_stored, has_pvs, pvs_size and columns, the columns in the cell's PVS as [{node_uid, node_name, primitive_index}] in column order (node_name is the live mesh's name, \"\" when no mesh of the scene has the uid; empty for a cell without a PVS, which reads as everything visible).",
+    "description": "One cell of a scene's potentially visible set database, by index or by a world position inside it. Returns scene_name, cell, coordinate [x, y, z], cell_min, cell_max, page, local_cell, page_stored, has_pvs, pvs_size and columns, the columns in the cell's PVS as [{node_uid, node_name, primitive_index}] in column order (node_name is the live mesh's name, \"\" when no mesh of the scene has the uid; empty for a cell without a PVS, which reads as everything visible). With all_columns true also all_columns, every column of the database as [{node_uid, primitive_index}] in column order (the tracked entries; an entry without a column is always kept).",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -9253,6 +9274,10 @@
             "type": "number"
           },
           "description": "World position [x, y, z] inside the grid"
+        },
+        "all_columns": {
+          "description": "Also list every column of the database; default false",
+          "type": "boolean"
         }
       },
       "required": [

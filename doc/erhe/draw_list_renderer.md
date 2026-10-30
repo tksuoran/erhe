@@ -1139,6 +1139,99 @@ index is that base plus `ERHE_PRIMITIVE_INDEX`; it therefore needs
 the layered buffer and the scene bindings and supplies a base pipeline with
 no color writes and no depth test; the lists' `double_sided` and
 `negative_determinant` select its cull mode as for the color passes.
+`get_published_pvs_entry_columns(frame_index, out)` (render phase) fills
+the column of every frame-local entry index of the frame's published lists
+(`untracked_column` for an entry without one), the map from the indices the
+id pass writes to the bake's columns (the bake trace reads it).
+
+**PVS disocclusion passes** (`pvs_disocclusion.hpp`,
+`pvs_disocclusion_pipelines.hpp`; `doc/plans/pvs.md` "Bake" 5) turn one
+face's layered buffer (its depth region) into the set of columns (the
+bake's static entries) visible on the face from some point of the cell.
+Tiles are K x K pixels of one layer (chunk (x, y, layer) has index `(layer
+* tiles + y) * tiles + x`); layer masks are 64 bits, two uint words.
+`Pvs_disocclusion_pipelines` owns the compute pipelines over one bind group
+layout (parameters, the layered buffer, the closed flags, the flat column
+masks, the tile masks, the lists, the column words, the trace, the column
+bounds, the disoccluded map, the runs), each with a workgroup of 64 that walks its
+items grid-stride; `Pvs_disocclusion_buffers` owns the device-local work
+buffers of one size. Every dispatch reads its own parameter block from a
+ring buffer range (the per-layer and per-level dispatches differ in
+`pass.x`), so no frame in flight reads another's values. `record_face()`
+records, with buffer barriers between them:
+
+1. `pvs_tiles.comp`, one invocation per (x, y) column: per pixel the first
+   layer its depth samples are in. Tile (x, y, L) is closed when all K * K
+   samples are covered at L. When every pixel has a first hit and the
+   first-hit layers form a gap-free run `[L_a, L_b]` and the tile's sheet
+   is continuous (no 4-adjacent pixel pair with a gap, the gap test of
+   rule 3 below),
+   the tile is one surface crossing layer boundaries: it is closed at every
+   layer of the run and bits `L_a .. L_b - 1` of the column mask at (x, y)
+   are set.
+   The last layer is never open. The column's run (`pvs_runs`, first |
+   last << 8) is kept for classify.
+2. The layer loop, `L = 0 .. N - 2` front to back, two dispatches per
+   layer:
+   - `pvs_stencil.comp` (classify): an open tile at L is a window only when
+     its chunk is disoccluded (L = 0, or bits 0 .. L - 1 all set in its tile
+     mask | the column mask at (x, y)). A window reads its four same-layer
+     neighbours' closed bits (a screen edge counts as the tile itself); a
+     closed neighbour is a sloped side (the paper's rule); with the
+     opt-in rule 3 (`Pvs_face_geometry::silhouette_tests`, parameter
+     `columns.z`) only across a silhouette (`erhe_pvs_side_has_gap()` /
+     `pvs_side_has_gap()`: on some boundary row the window's edge pixel is
+     deeper than the neighbour's, or two 4-adjacent pixels inside the
+     window differ, by more than `pvs_gap_slope_tolerance` (1.25) times
+     the local per-pixel depth step plus `pvs_gap_depth_epsilon` (1e-4)
+     of the depth, each pixel's first sample at or behind the front of
+     the neighbour's closing surface; `doc/plans/pvs.md` "Open"). No
+     sloped side sets bit L of the column mask, else the tile and its
+     sloped sides are appended to layer L's cone list.
+   - `pvs_cones.comp`: one workgroup per cone of layer L, one invocation
+     per layer J > L, computes the hit rectangle of the cone on layer J:
+     over the eight corners of the cell box (in the face's view space) and
+     the four corners of the tile's window on layer L's front plane, the
+     points where the ray from the corner through the window crosses the
+     front planes of layers J and J + 1 (the angular extent of the cone
+     grows monotonically with depth, so the two planes bound the layer), in
+     tile coordinates, clamped to the tile's own column on each side whose
+     neighbour is open and to the grid. A shared-memory inclusive scan of
+     the rectangle areas lets the 64 invocations cover every tile of every
+     rectangle, and each covered tile gets bit L in its tile mask. Layer
+     L's cones are scattered before layer L + 1 is classified.
+3. `pvs_map.comp`: level 0 holds per chunk the disoccluded flag (as in
+   classify); each further level (one dispatch each) holds per texel the
+   "any" of its 2 x 2 texels below, until a level is one texel.
+4. `pvs_vote.comp` (the bounds vote), one invocation per column: the
+   column's world bounds (`pvs_column_bounds`, written once per bake) in
+   the face's view space (`view_axes`, `sample_point`; the faces look along
+   world axes). Bounds reaching into the cube `[-z_near, z_near]^3` around
+   the sample point are visible; bounds wholly in front of the near plane
+   are not (on this face). Else the projected corners of the part beyond
+   the near plane give the tile rectangle (a binary search over the tile
+   boundaries, clamped to the face's 90 degree core: the six cores cover
+   every direction, and the rim holds the windows and cones that reach the
+   core's chunks), its depths give the layer range widened by one
+   layer on each side, and the map is read at the level where the rectangle
+   spans at most 2 x 2 texels. Any disoccluded texel sets the column's bit
+   in the column words.
+
+`record_trace()` (a bake trace only) runs `pvs_trace.comp` after the
+passes: per traced entry the face's samples naming it (`id_min` / `id_max`,
+which only a trace's id pass writes), those in the core and those of them
+in a disoccluded chunk.
+
+The parameter block (`Pvs_disocclusion_parameters`, built by
+`make_pvs_disocclusion_parameters()` from a `Pvs_face_geometry`) carries
+every quotient the passes need (the layers' front depths and their
+reciprocals, the reciprocals of the window-to-cell-corner depth gaps, the
+tile scale, the tile boundary tangents), so the shaders multiply, add,
+compare and floor only, every float intermediate `precise`;
+`run_pvs_disocclusion_reference()` is the CPU reference of the whole chain
+(`build_pvs_disoccluded_map()` and `pvs_bounds_vote()` its last two steps),
+compiled without floating-point contraction, and the GPU tests compare the
+closed flags, masks, map and column words with it bit for bit.
 
 **Record upload.** A command names its record through
 `ERHE_PRIMITIVE_INDEX` (`doc/erhe/graphics.md` "Draw records"), and how the

@@ -793,6 +793,8 @@ erhe_target_sources_grouped(
     windows/lightmap_texture_window.hpp
     windows/lightmap_window.cpp
     windows/lightmap_window.hpp
+    windows/pvs_window.cpp
+    windows/pvs_window.hpp
     windows/window_placement.cpp
     windows/window_placement.hpp
     windows/inventory_slot_payload.hpp

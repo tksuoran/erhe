@@ -274,15 +274,12 @@ result is read back.
    raytrace scene, `Ray_trace_scene`; a cell whose static entries have no
    raytrace geometry uses the center). The first free candidate is the
    sample point; a cell with none gets no PVS (cell table `0xffffffff`).
-2. Near region. Every static entry whose bounds intersect the sphere around
-   the sample point of radius `near_radius` = `z_near * sec(fov / 2) *
-   sqrt(2)` is in the cell's PVS without a test (its triangles may be
-   clipped by a face's near plane). `z_near` = the largest distance from the
-   sample point to a face of the cell box plus 1 cm: every point of the
-   cell is behind every face's near plane. Every static entry whose bounding
-   sphere subtends less than `pvs.min_entry_pixels` (default 2) at the face
-   resolution from the sample point is in the PVS without a test: such an
-   entry can fall between samples, and it is cheap to draw.
+2. Near plane. `z_near` = the largest distance from the sample point to a
+   face of the cell box plus 1 cm: every point of the cell is behind every
+   face's near plane. Entries that reach into the cube `[-z_near,
+   z_near]^3` around the sample point are visible without a test (step 5,
+   bounds vote); entries too small to cover a sample need no rule either,
+   since the vote reads their bounds, not their samples.
 3. Faces. Six perspective views from the sample point along +X, -X, +Y, -Y,
    +Z, -Z with field of view `pvs.face_fov` (default 120 degrees: the
    faces overlap, so a disocclusion cone leaving one face's 90-degree
@@ -293,79 +290,141 @@ result is read back.
    linear depths in `[z_near * r^k, z_near * r^(k+1))`, r = `(z_far /
    z_near)^(1/N)`.
 4. Layered buffer per face, dense: `depth[pixel][layer]` (uint32 of the
-   linear depth's float bits, cleared to `0xffffffff`), `id_min[pixel]
-   [layer]` (cleared to `0xffffffff`) and `id_max[pixel][layer]` (cleared
-   to 0). Two raster passes of the static set with one shader variant each,
-   sub-variants of the standard shader like the shadow casters'
-   (`VARIANT_DEPTH_ONLY`, `VARIANT_SHADOW_CUBE`; `doc/erhe/
+   linear depth's float bits, cleared to `0xffffffff`). One raster pass of
+   the static set with a sub-variant of the standard shader like the shadow
+   casters' (`VARIANT_DEPTH_ONLY`, `VARIANT_SHADOW_CUBE`; `doc/erhe/
    draw_list_renderer.md` "Environment component inventory"): no
    attachments, no depth test, `early_fragment_tests` off, the material
    alpha test kept. `VARIANT_PVS_DEPTH`: the fragment computes its layer
-   from its linear depth and `atomicMin`s the depth. `VARIANT_PVS_ID`: a
-   fragment whose depth bits equal the stored depth of its layer
-   `atomicMin`s and `atomicMax`s the entry index into the two id arrays, so
-   a two-way tie at one sample (two entries at exactly the same depth)
-   keeps both. With `pvs.samples_per_face` > 1 the two passes repeat with
-   a sub-pixel jitter of the projection per sample and the PVS unions the
-   results.
-5. Disocclusion, three compute passes per face (the paper's Algorithm 1 as
-   the DaRUS source resolves it; the digest holds the transcription):
-   - Tiles. Per (tile x, tile y, layer): the covered sample count (depth !=
-     cleared); closed = count == K*K, open otherwise, including empty
-     tiles. The last layer is never open. A partially covered tile whose
-     count plus the count of the same (x, y) tile one layer behind equals
-     K*K is a surface crossing a layer boundary and is closed. Per open tile
-     the four same-layer neighbours' closed bits (screen edges count as
-     the tile itself) give the cone's growth sides: no closed neighbour is
-     the degenerate case, bit `layer` set in the flat per-(x, y) column
-     mask; else a cone record (tile, layer, growth sides) is appended to
-     the cone array (atomic counter; capacity = tile count).
-   - Cones. One workgroup per cone, one thread per layer J > L (L the
-     cone's layer). The window is the tile's rectangle on layer L's front
-     plane; the hit rectangle on layer J's front plane is the bounding
-     rectangle, over the eight corners c of the cell box (in the face's
-     view space) and the four window corners w, of the points where the
-     ray from c through w crosses the plane (`t = (z_J - c.z) / (z_L -
-     c.z)`, `x = c.x + t * (w.x - c.x)`, likewise y), clamped on each side
-     whose neighbour is open to the tile's own column, then converted to
-     tile indices. This is the paper's cone for a box viewcell: the cell
-     box is behind every layer plane (step 2), so every t is positive. The
-     rectangle areas are prefix-summed in shared memory, the workgroup's
-     threads cover the tiles in all rectangles (binary search on the
-     scan), and each covered tile at layer J gets bit L `atomicOr`ed into
-     its tile mask (`uvec2` per tile, dense).
-   - Vote. Per (tile, layer L): disoccluded when bits 0..L-1 are all set in
-     (tile mask | column mask at (x, y)); layer 0 is disoccluded. For a
-     disoccluded tile every sample's `id_min` and `id_max` that is not the
-     cleared value sets its entry's bit in the cell's PVS words (atomicOr).
-6. Readback. The cell's PVS words (plus the step-2 entries) are read back
-   at the frame's retirement (`Render_frame_results` pattern), mapped from
-   frame entry index to column, and stored in the database; the cell table
-   gets its offset. The bake records progress (cells done / total, seconds
-   per cell) and, when the last cell is done, builds the GPU copy and sets
-   the state `ready`. A scene edit during the bake that would mark a ready
-   database stale (D4) cancels the bake.
+   from its linear depth (the face's depth range is its camera block's
+   `view_depth_near` / `view_depth_far`) and `atomicMin`s the depth. The id
+   arrays `id_min[pixel][layer]` / `id_max[pixel][layer]` and the second
+   pass `VARIANT_PVS_ID` (a fragment whose depth bits equal the stored
+   depth of its layer `atomicMin`s and `atomicMax`s its entry index) run
+   only for a bake trace and `pvs_debug_face`: the vote reads bounds. With
+   `pvs.samples_per_face` > 1 the passes repeat with a sub-pixel jitter of
+   the projection per sample and the PVS unions the results. Every frame in
+   flight shares the layered buffer: its header is constant for the bake
+   and written once, before any frame uses it; nothing per face is written
+   into it from the CPU.
+5. Disocclusion, per face (the paper's Algorithm 1 as the DaRUS source
+   resolves it, with the closure, the spawning order and the vote of this
+   plan; the digest holds the transcription):
+   - Tiles (one parallel pass). Per (tile x, tile y) column, per pixel the
+     first layer its depth samples are in (its first hit). A tile is closed
+     at layer L when all K*K samples are covered at L. When every pixel of
+     the column has a first hit, the set of first-hit layers is a
+     gap-free run `[L_a, L_b]` and the tile's sheet is continuous (no
+     4-adjacent pixel pair of first hits has a gap: two adjacent pixels a,
+     b differ by more than 1.25 times the local per-pixel step max(|a -
+     a'|, |b - b'|), a' the pixel before a and b' the one after b on the
+     same axis, plus 1e-4 of the larger depth;
+     `erhe::scene_renderer::pvs_gap_slope_tolerance`,
+     `pvs_gap_depth_epsilon`; a pixel without a sample is infinitely
+     deep),
+     the tile is one surface crossing layer boundaries at any slope (rule
+     1): closed at every layer of the run, and the column mask gets bits
+     `L_a .. L_b - 1` (the layers in front of the run's back are not
+     windows into it). A run with a silhouette inside does not close the
+     tile: a ray could pass from the free space in front of one part to
+     behind the other without crossing geometry, so the tile keeps the
+     coverage rule and its partially covered layers are windows. Otherwise
+     the tile is open at every other layer. The last layer is never open.
+     The column's run is kept for classify.
+   - Layer loop, front to back, `L = 0 .. N - 2`, two dispatches per layer:
+     - Classify. An open tile at L is a window only when its chunk is
+       disoccluded: bits `0 .. L - 1` all set in (tile mask | column mask
+       at (x, y)); layer 0 always. Of a window the four same-layer
+       neighbours' closed bits (screen edges count as the tile itself)
+       give the cone's growth sides: every closed neighbour is a growth
+       (sloped) side (the paper's rule). With the opt-in bake parameter
+       `silhouette_tests` (off by default; "Open") a closed neighbour is a
+       growth side only across a silhouette (rule 3). No growth side is
+       the degenerate case, bit L set in the column mask; else a cone
+       record (tile, growth sides) is appended to layer L's list (atomic
+       counter).
+     - Cones. One workgroup per cone (grid-stride), one thread per layer
+       J > L. The window is the tile's rectangle on layer L's front plane;
+       the hit rectangle on layer J's front plane is the bounding
+       rectangle, over the eight corners c of the cell box (in the face's
+       view space) and the four window corners w, of the points where the
+       ray from c through w crosses the front planes of layers J and J + 1
+       (`t = (z_J - c.z) / (z_L - c.z)`, `x = c.x + t * (w.x - c.x)`,
+       likewise y; the two planes bound every depth of layer J), converted
+       to tile indices, clamped on each side whose neighbour is open to the
+       tile's own column. The cell box is behind every layer plane (step
+       2), so every t is positive. The rectangle areas are prefix-summed in
+       shared memory, the threads cover the tiles of all rectangles, and
+       each covered tile at layer J gets bit L `atomicOr`ed into its tile
+       mask. Layer L's cones are scattered before layer L + 1 is
+       classified, so only chunks reachable through a window spawn cones.
+   - Map. Per chunk (tile, layer) the disoccluded bit (as in classify);
+     then a mip chain over the tile grid per layer, each texel the "any"
+     of its 2 x 2 children.
+   - Bounds vote, one thread per column (static entry). The entry's world
+     bounds in the face's view space (the faces look along world axes):
+     bounds reaching into the cube `[-z_near, z_near]^3` around the sample
+     point are visible; bounds wholly in front of the near plane are not
+     (on this face). Else the projected corners of the part beyond the
+     near plane give the tile rectangle (clamped to the face's 90-degree
+     core: the six cores cover every direction, and the rim holds the
+     windows and cones that reach the core's chunks), the depths give the
+     layer range widened by one layer on each side, and the map is read at
+     the level where the rectangle spans at most 2 x 2 texels. Any
+     disoccluded texel in that box sets the column's bit in the cell's
+     column words. A visible entry has a visible sample in a disoccluded
+     chunk inside its bounds' box, so the vote keeps it; an entry fused
+     behind another in one layer of a pixel, or too small to cover a
+     sample, is kept by its bounds. The cell ORs the faces' votes.
+     Resolution limits: a gap narrower than a pixel, or a step below the
+     gap test's tolerance, is not seen; occluders nearer than z_near are
+     not rasterized ("Open", near-plane entry). A bake is deterministic per
+     backend; Metal and Vulkan differ at the raster's ULP level (a few
+     cells of a large bake), so each backend's gate is the contract.
+   - The passes read parameter blocks (one per dispatch, from the ring
+     buffer) that carry every quotient they need (computed on the CPU), so
+     they multiply, add, compare and floor only, with precise
+     intermediates; a CPU reference of the chain
+     (`erhe::scene_renderer::run_pvs_disocclusion_reference()`) matches them
+     bit for bit (`doc/erhe/draw_list_renderer.md` Q6 "PVS disocclusion
+     passes").
+6. Readback. The cell's column words are read back at the frame's
+   retirement (`Render_frame_results` pattern) and stored in the database;
+   the cell table gets its offset. The bake records progress (cells done /
+   total, seconds per cell) and, when the last cell is done, builds the GPU
+   copy and sets the state `ready`. A scene edit during the bake that would
+   mark a ready database stale (D4) cancels the bake.
+7. Trace. `pvs_bake` with `trace_cell` and `trace_entries` bakes the one
+   cell with the id pass on and reports, per face and traced entry, the
+   depth-pass fragments, the samples naming it, those in the core and in
+   a disoccluded chunk, the bounds vote's tile rectangle and layer range,
+   the per-layer closed and disoccluded state of a column, and whether the
+   column is in the cell's PVS (`doc/agents/mcp_server_usage.md`). A
+   diagnostic path: it allocates.
 
 Bake cost estimate at the defaults, from the paper's figures scaled to the
-raster passes erhe runs: per face two raster passes of the static set and
-three compute passes over 128 x 128 x 64 tiles; per cell six faces; a
+raster passes erhe runs: per face one raster pass of the static set and
+the compute passes over 128 x 128 x 64 tiles (the layer loop's 2 * 63
+dispatches); per cell six faces; a
 Bistro-size scene at a 1 m cell over a 100 x 10 x 100 m region = 100 000
 cells, a few milliseconds per face, tens of minutes per bake. The window
 shows the running estimate; the region and cell size (D2) are the levers.
 
 ### Editor
 
-- PVS window: region box and cell size (D2), bake parameters, Bake / Cancel
-  / Clear, progress and the estimate, the database state and size, the
-  viewport camera's cell and its PVS size, and a debug overlay (the grid's
-  cells near the camera and the query box, through `Debug_renderer`,
-  recorded in M2 like the other debug visualizations).
+- PVS window (`Pvs_window`, `doc/editor/windows.md`): region box and cell
+  size (D2), bake parameters, Bake / Cancel / Clear, progress and the
+  estimate, the database state and size, the viewport camera's cell and its
+  PVS size, and a debug overlay (the grid's cells near the camera and the
+  query box, through `Debug_renderer`, recorded in M2 like the other debug
+  visualizations).
 - MCP: `pvs_bake` (starts a bake; parameters override the scene settings for
   this bake), `get_pvs_bake_status`, `pvs_cancel`, `pvs_clear`,
   `set_pvs_culling`, `get_pvs_status`, and `get_visible_entries` (see
   Verification).
 - Settings window: the `pvs_culling` setting next to `occlusion_culling`.
-- Problems list: a stale database (D4).
+- Stale database (D4): the editor has no Problems list; the PVS window shows
+  a warning line.
 
 ### Headset
 
@@ -393,6 +452,12 @@ pays the classification's extra reads and at most one page upload.
   (`Id_renderer`) from a given camera pose at the viewport's resolution,
   reads the whole id image back and returns the set of entry identities
   seen. The exact from-point visibility the PVS must contain.
+- Editor-driven runs (the gates below, `pvs_verify.py`,
+  `visible_entries_check.py`, bake traces, the Bistro images) use the
+  headless editor: on macOS `build_xcode_metal_headless` and
+  `build_xcode_metal4_headless` (`doc/erhe/metal_headless.md`); macOS has
+  no headless Vulkan tree, so MoltenVK runs the windowed
+  `build_xcode_vulkan`.
 - `scripts/pvs_verify.py`: its first version bakes the wall scene with the
   sampled method and checks every cell (wall in, the six boxes behind it
   out), that a second bake gives the same `bits_hash` and that a save and
@@ -406,9 +471,31 @@ pays the classification's extra reads and at most one page upload.
   size over the union of the samples) per scene, the paper's figure of
   merit; bake time; database bytes.
 - Wall scene expectations, as for the occlusion gate: every cell in front
-  of the wall excludes the six boxes behind it and keeps the four in
-  front; a cell inside the 6 m box keeps the box and the box beyond its far
-  wall.
+  of the wall keeps the wall and the four boxes in front of it (a
+  failure otherwise); a cell inside the 6 m box keeps the box and the box
+  beyond its far wall. The cells keeping a box behind the wall are
+  counted and printed, not a failure: 12 of 48 cells leak at this commit
+  (false positives, future work: "Open").
+- Current numbers (defaults: rule 3 off, 1024-pixel 120-degree faces,
+  K = 8, N = 64; the sampled oracle with 12 viewpoints in each of 20
+  cells, 48 for the wall; misses / false-positive ratio):
+
+  | scene  | Metal 3 windowed | MoltenVK windowed | Metal 4 windowed | Metal 3 headless | Metal 4 headless |
+  |--------|------------------|-------------------|------------------|------------------|------------------|
+  | wall   | 0 / 1.241        | 0 / 1.241         | 0 / 1.241        | 0 / 1.245        | 0 / 1.245        |
+  | heavy  | 0 / 2.208        | 0 / 2.208         | 0 / 2.208        |                  |                  |
+  | Bistro | not measured (a raycast timed out after the bake) | 0 / 7.705 | | 0 / 7.715 | |
+
+  The wall ratios differ only through the oracle's samples (the PVS sizes
+  are equal). The sampled wall bake's `bits_hash` is c80c51abedaed3c5 on
+  every backend; the disocclusion wall bake's is 4fe439f63f8d385d on Metal
+  3 headless, Metal 4 headless and MoltenVK; the headless Metal 3 Bistro
+  bake's is befefef64ac2a8e1. Images are identical with `pvs_culling` on
+  and off, and `get_cull_classification_check` reports 0 mismatches.
+  ctest `-L "gpu|editor"`: 101/101 on Metal 3 and on MoltenVK. A bake is
+  deterministic per backend; across backends Metal and Vulkan differ at
+  the raster's ULP level in a few cells of a large bake (Bistro: 25 of
+  572), so each backend's gate is the contract.
 - Images: `render_scene_image` byte-identical with `pvs_culling` on and off
   from the Bistro bench camera and along `scripts/render_thread_bench.py`'s
   camera path, on Metal 4, Metal 3 and KosmicKrisp (MoltenVK runs the CPU
@@ -472,11 +559,24 @@ step makes possible.
    contiguous range. The faces draw the static set through the draw lists'
    column arrays: the bake sets its column table as the scene's database
    for its duration.
-5. Disocclusion bake, part 2: the three compute passes, their CPU reference
-   and the GPU tests, the cell loop, the near-region and small-entry rules,
-   the window and MCP. Gates: `pvs_verify.py` zero misses on the wall,
-   heavy and Bistro scenes; the wall expectations; Bistro images identical
-   on / off; cost table.
+5. Disocclusion bake, part 2 (built; `Pvs_baker` / `Pvs_bake_node` in
+   `doc/editor/renderers.md`, the passes in `doc/erhe/draw_list_renderer.md`
+   Q6 "PVS disocclusion passes", `Pvs_window` in `doc/editor/windows.md`,
+   MCP and the bake trace in `doc/agents/mcp_server_usage.md`): the
+   compute passes ("Bake" 5: rule 1 contiguous-run closure with sheet
+   continuity, rule 2 gated front-to-back spawning, the paper's cone
+   sides, the disoccluded map and the core-clamped bounds vote; rule 3,
+   silhouette sides, opt-in and off: "Open"), their CPU reference and the
+   GPU tests (bit for bit on Metal 3, Metal 4, MoltenVK and KosmicKrisp),
+   one cell per frame, the free sample point, the bake trace (a traced
+   cell reproduces the full bake's cell bit for bit), the window and MCP.
+   `pvs_verify.py` sections `wall`, `heavy` and `bistro` run the gates
+   ("Verification"). A bake is deterministic per backend, not bit-identical
+   across backends. Gate state ("Verification"): zero misses on
+   the wall and heavy scenes on Metal 3, Metal 4 and MoltenVK and on Bistro
+   on Metal 3 (headless) and MoltenVK, images identical with the rule on
+   and off; 12 of the 48 wall cells keep boxes behind the wall (future
+   work, "Open").
 6. Streaming: the residency policy of "Residency and streaming" (requests
    at the query-box change site, the worker-thread page reads by range,
    one upload per frame slot, eviction, the CPU bits release after an
@@ -497,6 +597,64 @@ step makes possible.
    not wait for it.
 
 ## Open
+
+- Silhouette test for cone sides (rule 3, opt-in, off). The paper slopes
+  a window's cone toward every closed 4-neighbour. On a grazing surface
+  (the wall scene: a wall seen along its length from the cells next to
+  it) the neighbour of an open tile is the same surface one layer nearer,
+  each layer's window sets that layer's bit behind the surface, and the
+  surface reads as a silhouette at every layer: 12 of the 48 wall cells
+  keep the boxes behind the wall. Rule 3 slopes a side only across a
+  silhouette, found by a gap test between adjacent pixels (the shared
+  test of rule 1's continuity; `pvs_side_has_gap()`, its GLSL twin, CPU
+  and GPU tests, the bake parameter `silhouette_tests`). What was
+  learned, in order:
+  1. Gaps only along pixel rows across the shared edge, tolerance 2x the
+     local slope: wall down to 2 leaking cells (the near-plane cells
+     below), but a Bistro miss (cell 152, an entry of
+     `Paris_Building_01` seen from 0.4 m above the street, 1.8 m below
+     the sample point). At 1.25x the miss stays.
+  2. Gaps in 2D (any 4-adjacent pixel pair inside the window, either
+     axis), which also made rule 1's continuity condition: the Bistro
+     entry returns, but only through ULP noise. A sheet with zero local
+     slope (a wall's depth along a face's pixel column) differs by one
+     ULP between rows, a purely multiplicative test calls that a gap, and
+     the wall's 12 cells came back. The relative epsilon (1e-4 of the
+     depth) fixes the wall (2 cells) and loses the Bistro entry again.
+  3. Single-sided sheets were suspected (a plane cutting the cell, back
+     faces culled from part of the cell): refuted. The deciding windows'
+     surfaces are double-sided building walls below the street, seen
+     through a hole in it, opaque from both sides.
+  4. Voting each face's whole 120-degree image instead of its core (a
+     chunk in one face's rim reachable only through that face's windows)
+     put the entry in a one-cell trace, but not in the full bake, and
+     doubled the wall's leaking cells (24); reverted.
+  5. The one-cell trace then baked with a different depth range (z_far
+     from its one-cell region): not a faithful reproduction. The trace now
+     bakes only the traced cell of the full bake's grid
+     (`pvs_bake trace_only`); with `silhouette_tests` off the entry is in
+     the cell's PVS, with it on it is not (the known hole).
+  Open question: which path from the cell reaches the cell-152 entry in
+  the full bake, past the double-sided walls that rule 3 treats as one
+  continuous surface (`pvs_bake trace_face` re-runs a face on the CPU with
+  rule 3 on and off and names the deciding windows, pixel pairs and
+  surfaces). Rule 3 stays off until that path is understood.
+
+- Near-plane clipped occluders (future work, not done). With rule 3 on,
+  cells 7 and 10 of the wall scene's 48 still keep one box behind the
+  wall each (0 misses); with it off (the default) these cells are among
+  the 12 that leak through the stair-step. Cause:
+  a wall point within z_near along a face's axis is clipped by that face's
+  near plane although it lies outside the near cube and the neighbouring
+  face draws it, so the clipped ring of the face shows what is behind the
+  wall, and its windows grow cones with the cell's parallax (the trace of
+  cell 7, face +X: the box's middle tile column is closed at the wall's
+  layer; the vote finds the disoccluded chunks where the wall is clipped).
+  Candidate fix: raster each face with a near plane at z_near / 2 (every
+  point outside the near cube inside a 120-degree frustum has an axis
+  distance above z_near / sqrt(3)), discard in the fragment any sample
+  inside the near cube (max(|x|, |y|, |z|) < z_near in face view space),
+  and put samples with an axis distance below z_near into layer 0.
 
 - Adaptive cells (an octree over the region, subdividing cells with a
   non-free center or a PVS much larger than their neighbours').

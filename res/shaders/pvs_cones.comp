@@ -1,0 +1,87 @@
+// The cones pass of the potentially visible set bake's disocclusion passes
+// (doc/plans/pvs.md "Bake" 5; erhe_pvs_disocclusion.glsl), one dispatch per
+// layer L = pvs_disocclusion_parameters.pass.x after its classify: one
+// workgroup per cone of layer L (grid-stride over its list), one invocation
+// per layer J
+// (the workgroup has 64, the largest layer count). Invocation J > L computes
+// the cone's hit rectangle on layer J (erhe_pvs_cone_rectangle()); an
+// inclusive prefix scan of the rectangle areas in shared memory lets the
+// workgroup's invocations cover every tile of every rectangle (a binary
+// search over the scan names the rectangle of an item), and each covered
+// tile at layer J gets bit L in its tile mask.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#include "erhe_pvs_disocclusion.glsl"
+
+// Per layer: lo.x, lo.y, width, height of the rectangle (0 area: none).
+shared uvec4 s_rectangle[64];
+// Inclusive prefix sum of the rectangle areas.
+shared uint  s_scan[64];
+
+void main()
+{
+    uint tiles           = pvs_disocclusion_parameters.sizes.w;
+    uint layer_count     = pvs_disocclusion_parameters.sizes.z;
+    uint tiles_per_layer = pvs_disocclusion_parameters.counts.x;
+    uint tile_count      = pvs_disocclusion_parameters.counts.y;
+    uint pass_layer      = pvs_disocclusion_parameters.pass.x;
+    uint cone_count      = pvs_lists.words[pass_layer];
+    uint thread          = gl_LocalInvocationIndex;
+    for (uint cone = gl_WorkGroupID.x; cone < cone_count; cone += gl_NumWorkGroups.x) {
+        uint base  = c_pvs_lists_header + (2u * ((pass_layer * tiles_per_layer) + cone));
+        uint tile  = pvs_lists.words[base + 0u];
+        uint sides = pvs_lists.words[base + 1u];
+        uint x     = tile % tiles;
+        uint y     = (tile / tiles) % tiles;
+        uint layer = tile / tiles_per_layer;
+
+        uvec4 rectangle = uvec4(0u);
+        uint  area      = 0u;
+        if ((thread > layer) && (thread < layer_count)) {
+            uvec4 bounds = erhe_pvs_cone_rectangle(x, y, layer, sides, thread);
+            if ((bounds.z > bounds.x) && (bounds.w > bounds.y)) {
+                rectangle = uvec4(bounds.x, bounds.y, bounds.z - bounds.x, bounds.w - bounds.y);
+                area      = rectangle.z * rectangle.w;
+            }
+        }
+        s_rectangle[thread] = rectangle;
+        s_scan[thread]      = area;
+        memoryBarrierShared();
+        barrier();
+        for (uint offset = 1u; offset < c_pvs_group_size; offset <<= 1u) {
+            uint add = (thread >= offset) ? s_scan[thread - offset] : 0u;
+            memoryBarrierShared();
+            barrier();
+            s_scan[thread] += add;
+            memoryBarrierShared();
+            barrier();
+        }
+
+        uint total    = s_scan[c_pvs_group_size - 1u];
+        uint bit_word = layer >> 5u;
+        uint bit      = 1u << (layer & 31u);
+        for (uint item = thread; item < total; item += c_pvs_group_size) {
+            // The rectangle of the item: the first layer whose inclusive
+            // sum is above it.
+            uint low  = 0u;
+            uint high = c_pvs_group_size - 1u;
+            while (low < high) {
+                uint middle = (low + high) >> 1u;
+                if (s_scan[middle] > item) {
+                    high = middle;
+                } else {
+                    low = middle + 1u;
+                }
+            }
+            uvec4 target = s_rectangle[low];
+            uint  local  = item - (s_scan[low] - (target.z * target.w));
+            uint  tx     = target.x + (local % target.z);
+            uint  ty     = target.y + (local / target.z);
+            atomicOr(pvs_tile_masks.words[(erhe_pvs_tile_index(tiles, tx, ty, low) * 2u) + bit_word], bit);
+        }
+        // The next cone rewrites the shared arrays.
+        memoryBarrierShared();
+        barrier();
+    }
+}

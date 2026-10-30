@@ -712,6 +712,13 @@ public:
     // by first_instance (erhe::graphics::Record_indexing::first_instance),
     // which the chunk_entries record layout needs.
     [[nodiscard]] auto supports_pvs_faces() const -> bool;
+    // The column (Draw_list::pvs_columns) of every frame-local entry index
+    // of the lists published for frame_index (render phase), the index the
+    // faces of draw_pvs_face() write: out[i] for entry i, untracked_column
+    // for an entry without one. out is cleared and filled; the potentially
+    // visible set bake maps its read-back entry bits through it
+    // (doc/plans/pvs.md "Bake" 6).
+    void get_published_pvs_entry_columns(uint64_t frame_index, std::vector<uint32_t>& out) const;
     // Shared records (doc/erhe/draw_list_renderer.md "Record upload"): with
     // erhe::graphics::Record_indexing::first_instance, the first draw of a
     // frame that draws a chunk of a list (draw_shadow() for a shadow list,

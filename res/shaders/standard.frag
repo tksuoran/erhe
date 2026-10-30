@@ -24,6 +24,7 @@
 #endif
 
 #if defined(ERHE_VARIANT_PVS)
+#include "erhe_camera_view.glsl"
 #include "erhe_pvs_layer.glsl"
 
 // Matching the layout locations standard.vert assigns under the PVS
@@ -35,12 +36,15 @@ layout(location = 20)      in float v_pvs_depth;
 // set bake (doc/plans/pvs.md "Bake" 4; erhe::scene_renderer::
 // Pvs_layered_interface): pvs_layered.info = (face resolution, layer count,
 // words per layer = resolution^2, words per region = words per layer *
-// layer count), pvs_layered.depth_range = (z_near, z_far, 0, 0), and
+// layer count) and pvs_layered.trace = (trace on, trace entries, 0, 0),
+// both constant for a bake (written once before its first face), and
 // pvs_layered.words = three dense regions of words per region each, word
 // (layer * words per layer + y * resolution + x): depth (the closest linear
 // depth's float bits, cleared to 0xffffffff), id_min (cleared to
-// 0xffffffff) and id_max (cleared to 0). A fragment outside [z_near, z_far]
-// writes nothing. The depth pass keeps the closest depth of each (pixel,
+// 0xffffffff) and id_max (cleared to 0). z_near and z_far are the face
+// camera's (the camera block's view_depth_near / view_depth_far, written per
+// pass from the ring buffer: a frame never reads another frame's values). A
+// fragment outside [z_near, z_far] writes nothing. The depth pass keeps the closest depth of each (pixel,
 // layer) with atomicMin (positive floats order like their bits); the id
 // pass, a fragment whose depth bits equal that stored depth, folds its
 // entry into id_min and id_max, so two entries at exactly the same depth
@@ -49,9 +53,19 @@ layout(location = 20)      in float v_pvs_depth;
 // code).
 void erhe_pvs_write()
 {
+#  if defined(ERHE_VARIANT_PVS_DEPTH)
+    // The bake trace (trace.x != 0): every fragment the depth pass
+    // rasterizes counts for its entry, in the words after the three regions
+    // (trace.y entries; cleared per face by the GPU).
+    if (pvs_layered.trace.x != 0u) {
+        if (v_pvs_entry < pvs_layered.trace.y) {
+            atomicAdd(pvs_layered.words[(3u * pvs_layered.info.w) + v_pvs_entry], 1u);
+        }
+    }
+#  endif
     float z      = v_pvs_depth;
-    float z_near = pvs_layered.depth_range.x;
-    float z_far  = pvs_layered.depth_range.y;
+    float z_near = camera.cameras[c_view_index].view_depth_near;
+    float z_far  = camera.cameras[c_view_index].view_depth_far;
     if (!(z >= z_near) || (z > z_far)) {
         return;
     }

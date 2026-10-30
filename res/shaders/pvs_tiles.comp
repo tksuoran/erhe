@@ -1,0 +1,88 @@
+// The tiles pass of the potentially visible set bake's disocclusion passes
+// (doc/plans/pvs.md "Bake" 5; erhe_pvs_disocclusion.glsl): per tile column
+// (x, y), the closed flag of every layer: tile (x, y, L) is closed when all
+// its samples are covered at layer L, or when every pixel of the column has
+// a first hit (the smallest layer with a sample) and the first-hit layers
+// form a gap-free run [L_a .. L_b] containing L and the tile's sheet is
+// continuous (no 4-adjacent pixel pair with a gap; contiguous-run closure:
+// a surface crossing layer boundaries); and the run (pvs_runs). One
+// invocation per tile column, grid-stride.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#include "erhe_pvs_disocclusion.glsl"
+
+void main()
+{
+    uint tiles           = pvs_disocclusion_parameters.sizes.w;
+    uint k               = pvs_disocclusion_parameters.sizes.y;
+    uint samples         = k * k;
+    uint layer_count     = pvs_disocclusion_parameters.sizes.z;
+    uint tiles_per_layer = pvs_disocclusion_parameters.counts.x;
+    uint stride          = gl_NumWorkGroups.x * c_pvs_group_size;
+    for (uint column = gl_GlobalInvocationID.x; column < tiles_per_layer; column += stride) {
+        uint x = column % tiles;
+        uint y = column / tiles;
+        // bit L of (low, high): some pixel's first hit is layer L
+        uint first_low  = 0u;
+        uint first_high = 0u;
+        bool all_hit    = true;
+        for (uint sample_index = 0u; sample_index < samples; ++sample_index) {
+            uint first_hit = layer_count;
+            for (uint layer = 0u; layer < layer_count; ++layer) {
+                if (pvs_layered_samples.words[erhe_pvs_sample_word(x, y, layer, sample_index)] != c_pvs_cleared) {
+                    first_hit = layer;
+                    break;
+                }
+            }
+            if (first_hit == layer_count) {
+                all_hit = false;
+            } else if (first_hit < 32u) {
+                first_low |= (1u << first_hit);
+            } else {
+                first_high |= (1u << (first_hit - 32u));
+            }
+        }
+        uint run_first = layer_count;
+        uint run_last  = 0u;
+        if (all_hit && ((first_low | first_high) != 0u)) {
+            uint lowest  = (first_low  != 0u) ? uint(findLSB(first_low))         : (32u + uint(findLSB(first_high)));
+            uint highest = (first_high != 0u) ? (32u + uint(findMSB(first_high))) : uint(findMSB(first_low));
+            // Gap-free: every layer between the lowest and highest first
+            // hit is some pixel's first hit.
+            bool gap_free = true;
+            for (uint layer = lowest; layer <= highest; ++layer) {
+                uint bit = (layer < 32u) ? ((first_low >> layer) & 1u) : ((first_high >> (layer - 32u)) & 1u);
+                if (bit == 0u) {
+                    gap_free = false;
+                }
+            }
+            if (gap_free) {
+                run_first = lowest;
+                run_last  = highest;
+            }
+        }
+        // Rule 1 needs a continuous sheet: a run with a silhouette inside
+        // the tile does not close it.
+        if ((run_first < layer_count) && erhe_pvs_tile_has_inner_gap(x, y, 0u)) {
+            run_first = layer_count;
+            run_last  = 0u;
+        }
+        // The run, for classify's silhouette test.
+        pvs_runs.words[column] = run_first | (run_last << 8u);
+        // The run's surface passes its own layers in front of its last.
+        for (uint layer = run_first; layer < run_last; ++layer) {
+            atomicOr(pvs_column_masks.words[(column * 2u) + (layer >> 5u)], 1u << (layer & 31u));
+        }
+        for (uint layer = 0u; layer < layer_count; ++layer) {
+            uint count = 0u;
+            for (uint sample_index = 0u; sample_index < samples; ++sample_index) {
+                if (pvs_layered_samples.words[erhe_pvs_sample_word(x, y, layer, sample_index)] != c_pvs_cleared) {
+                    ++count;
+                }
+            }
+            bool in_run = (layer >= run_first) && (layer <= run_last);
+            pvs_closure.closed[erhe_pvs_tile_index(tiles, x, y, layer)] = ((count == samples) || in_run) ? 1u : 0u;
+        }
+    }
+}

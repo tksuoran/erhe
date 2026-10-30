@@ -25,10 +25,10 @@
                 "layer_count":      {"$ref": "#/$defs/uint32"},
                 "face_fov":         {"$ref": "#/$defs/hexfloat", "description": "radians"},
                 "samples_per_face": {"$ref": "#/$defs/uint32"},
-                "min_entry_pixels": {"$ref": "#/$defs/hexfloat"},
+                "silhouette_tests": {"type": "boolean", "description": "disocclusion: rule 3 (silhouette cone sides); absent = false"},
                 "duration_seconds": {"$ref": "#/$defs/hexfloat"}
             },
-            "required": ["method", "face_resolution", "tile_size", "layer_count", "face_fov", "samples_per_face", "min_entry_pixels", "duration_seconds"]
+            "required": ["method", "face_resolution", "tile_size", "layer_count", "face_fov", "samples_per_face", "duration_seconds"]
         },
         "column_identities": {
             "type": "array",
