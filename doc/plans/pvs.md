@@ -138,20 +138,66 @@ dependency; its GPU copy and the consumer live in `erhe::scene_renderer`.
   bits), and `transform_hash`, 64-bit FNV-1a over those 18 values' bits in
   that order (`erhe::hash::hash()`, the convention of `ERHE_raytrace_bvh`'s
   `triangle_hash`; hexfloat is the serialization of any float in JSON).
-- Cell table: per cell one uint32, the word offset of the cell's bits, or
-  `0xffffffff` for a cell without a PVS (no free sample point, or not yet
-  baked). Cell index = `x + dims.x * (y + dims.y * z)`.
-- Bits: per cell with a PVS `ceil(column_count / 32)` uint32 words; bit
-  `column % 32` of word `column / 32` set when the column is in the cell's
-  PVS.
-- GPU copy: one device-local buffer holding the cell table followed by the
-  bits, created when the database is loaded or a bake completes, replaced
-  as a whole (the retired buffer is released through `Device::defer`). The
-  classification binds it with a uvec4 header (grid dims, bits word
-  offset) in the view set header.
+- Cells and pages: cell index = `x + dims.x * (y + dims.y * z)`. Cells are
+  grouped into pages of `page_size` cells per axis (header field, default
+  4: 64 cells per page); page dims = `ceil(dims / page_size)` per axis,
+  page index = `px + pdims.x * (py + pdims.y * pz)`, local cell index
+  inside a page = `lx + page_size * (ly + page_size * lz)`. The page is
+  the unit of storage, of GPU residency and of streaming ("Residency and
+  streaming" below).
+- Page table: per page `word_offset` (uint32; `0xffffffff` = the page is
+  not stored, no cell of it has a PVS) and `cells_with_pvs` (uint64, bit =
+  the local cell has a baked PVS; a cell without one had no free sample
+  point or was not baked).
+- Bits: the stored pages back to back; a stored page holds exactly
+  `page_size^3 * words_per_cell` uint32 words, `words_per_cell =
+  ceil(column_count / 32)`, cell words at `word_offset + local_cell *
+  words_per_cell`; bit `column % 32` of word `column / 32` set when the
+  column is in the cell's PVS. A cell without a PVS inside a stored page
+  holds all-ones words (everything visible; the hot path needs no
+  sentinel).
+- Bits source: the database always holds the header, the columns and the
+  page table. Its bits are in memory after a bake, and after an open they
+  are also described by their location in the scene file (`Pvs_bits_source`:
+  path, the absolute byte offset of the `bits` bufferView in the `.glb`,
+  byte length), so a page can be read by range without the glTF parser.
 - State: `absent`, `ready`, `stale`. `Scene_root` owns the database;
   `Draw_list_scene` holds a non-owning reference and the per-entry column
   array.
+
+### Residency and streaming
+
+The GPU holds a resident set of pages, never the whole database by
+construction: a device-local buffer of `pvs.resident_pages` page slots
+(each `page_size^3 * words_per_cell` words) and a GPU page table (per
+page: its slot, or none). The classification reads cell -> page -> slot ->
+words; a page without a slot reads as everything visible, so a view whose
+pages are not resident yet is culled by the frustum and occlusion tests
+only, never wrongly.
+
+- Residency policy. The query-box registration of a view (M2) is the
+  change site: it computes the page of the box and, when that page differs
+  from the view's previous one, requests the pages within
+  `pvs.stream_radius_pages` of it (default 1: the 27 pages around the
+  view). Requests are served by a worker thread that reads the page's bytes
+  from the bits source by range (the `Lightmap_streamer` pattern:
+  worker-thread file read, staging upload, at most one page upload per
+  frame slot, written in R into a free slot), and the GPU page table is
+  rewritten for that frame slot. Eviction frees the slot of the resident
+  page farthest from every view's page beyond a hysteresis of one page,
+  and only when a request needs a slot. A freshly baked database serves
+  pages from memory through the same path. Several views (four view, a
+  headset beside a viewport) share the resident set; their page requests
+  union.
+- Capacity. `pvs.resident_pages` default 64 (Bistro-size: 3900 columns ->
+  122 words per cell, 31 KB per page, 2 MB resident); a database smaller
+  than the capacity is resident whole after its first requests and the
+  policy then does nothing. The CPU copy of the bits is released after an
+  open once the bits source is on disk (the Quest's heap is the
+  constraint, `doc/plans/gltf_fast_load.md`); the editor keeps it while a
+  bake is in progress or the database is unsaved.
+- Statistics: resident pages, slot bytes, uploads and evictions per frame,
+  and per view whether its pages are resident, in `get_pvs_status`.
 
 ### Runtime consumption
 
@@ -184,8 +230,10 @@ dependency; its GPU copy and the consumer live in `erhe::scene_renderer`.
   for an entry inside a view whose query box is non-empty and whose column
   is tracked, take the grid cells the query box overlaps (at most eight, the
   cells of the box's eight corners, clamped to the grid); the entry keeps
-  the view's bit when any of those cells has no PVS, lies outside the grid,
-  or has the column's bit set; otherwise the bit is cleared and recorded in
+  the view's bit when any of those cells lies outside the grid, is in a
+  page that is not stored or not resident, or has the column's bit set
+  (a cell without a PVS holds all-ones words); otherwise the bit is
+  cleared and recorded in
   a `pvs_culled` word region laid out like the occlusion `culled` region.
   The occlusion test bits are computed from the result, so a PVS-culled
   entry is not rasterized by the occlusion pass.
@@ -314,9 +362,10 @@ shows the running estimate; the region and cell size (D2) are the levers.
 
 The headset's draw-list passes register their query box with the union
 view (D5, "Runtime consumption"); the per-eye (non-multiview) path registers
-none, as for occlusion. On the Quest the database is loaded with the scene
-and uploaded once; per frame the headset pays the classification's extra
-reads only.
+none, as for occlusion. On the Quest the database's header, columns and
+page table are loaded with the scene and the pages around the headset
+stream from the `.glb` ("Residency and streaming"); per frame the headset
+pays the classification's extra reads and at most one page upload.
 
 ## Verification
 
@@ -371,7 +420,8 @@ step makes possible.
    same cell loop, progress and readback path the disocclusion bake uses.
    Not conservative; it is the oracle of `pvs_verify.py` and the first data
    the consumer is gated with.
-3. Consumer: column lookup, SoA column array and upload, query boxes, the
+3. Consumer: column lookup, SoA column array and upload, the paged GPU
+   layout with every stored page resident, query boxes, the
    classification rule on both paths, `pvs_culled` words and statistics,
    the setting, the staleness rule, the check. Gates: 0 mismatches; the
    wall scene with a sampled database (dense sampling) culls the six boxes;
@@ -386,7 +436,16 @@ step makes possible.
    heavy and Bistro scenes; the wall expectations; Bistro images identical
    on / off; cost table.
 6. Headset: the query box of the union view; Quest measurement.
-7. Documentation: `doc/erhe/draw_list_renderer.md` (Q6 gains the PVS rule),
+7. Streaming: the residency policy of "Residency and streaming" (requests
+   at the query-box change site, the worker-thread page reads by range,
+   one upload per frame slot, eviction, the CPU bits release after an
+   open), with `pvs.resident_pages` smaller than the database's page count
+   as the gate: images identical on / off along the Bistro camera path
+   after the pages around each pose arrive, resident pages never above the
+   capacity, no frame culls a page that is not resident. Until this step
+   the resident set is every stored page (capacity = page count), which
+   the paged GPU layout of step 3 already supports.
+8. Documentation: `doc/erhe/draw_list_renderer.md` (Q6 gains the PVS rule),
    `doc/editor/rendering.md`, `doc/editor/windows.md`, this plan reduced to
    what is outstanding.
 
@@ -394,8 +453,12 @@ step makes possible.
 
 - Adaptive cells (an octree over the region, subdividing cells with a
   non-free center or a PVS much larger than their neighbours').
-- Database compression (per-cell delta against a neighbour, or a sparse
-  column list for cells with small PVSs) when the Quest copy matters.
+- Page compression in the file (per-cell delta against the page's first
+  cell, or a sparse column list for cells with small PVSs), decoded by the
+  worker thread before the upload, when the file size matters.
+- Prefetch along the camera velocity (requesting the pages ahead of the
+  motion before the box crosses into them), if a page upload ever arrives
+  after the frame that first needs it.
 - Movable small objects: a bake flag "occludee only" for entries the bake
   draws into no layer (they never occlude) so moving them does not stale
   the database.
