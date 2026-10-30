@@ -281,6 +281,34 @@ file, and in `camera`: `cell` (`"outside"` outside the grid), `page`,
 python3 scripts/mcp_call.py get_pvs_status '{"scene_name":"Default Scene"}'
 ```
 
+### get_visible_entries
+
+The set of mesh primitives seen from an explicit camera pose, the exact
+from-point visibility a PVS must contain ([pvs.md](../plans/pvs.md)
+"Verification"; design in [editor.md](../editor/editor.md) "Whole-image id
+capture"). Renders the scene's id pass over a whole offscreen image and reads
+it back; independent of the viewport windows; spans several frames like
+`render_scene_image` and cannot run inside `batch`.
+
+Arguments: `scene_name`, `position` [x, y, z], exactly one of `target`
+[x, y, z] (with `up`, default [0, 1, 0]) and `orientation` [x, y, z, w] (the
+camera looks down its local -Z), `fov_y_degrees` (60), `width` / `height`
+(1024 x 1024, at most 8192), `near` (0.03), `far` (200), `scene_only` (true:
+content layer only; false: also the rendertarget and bone layers, as the
+viewport id pass).
+
+Returns: `{scene_name, width, height, scene_only, camera, frame_index,
+covered_pixels, unresolved_pixels, entry_count, entries}`, `entries` a list of
+`{node_uid, node_name, primitive_index, mesh_name, pixels}` sorted by
+`node_uid` then `primitive_index`; `node_uid` is the mesh node's glTF uid,
+`""` for a node without one. `covered_pixels` counts the pixels with any id;
+`unresolved_pixels` the ids that name no live mesh primitive (a mesh
+destroyed while the capture was in flight).
+
+```bash
+python3 scripts/mcp_call.py get_visible_entries '{"scene_name":"Default Scene","position":[0,1.3,8],"orientation":[0,0,0,1]}'
+```
+
 ### get_scene_materials
 
 List all materials in a scene's content library.

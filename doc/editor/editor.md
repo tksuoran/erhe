@@ -692,6 +692,27 @@ the emulated swapchain records which frame composited which image;
 windowed: an armed capture is collected only after its frame ended, and no
 capture is re-armed while one waits to be collected).
 
+**Whole-image id capture** (`get_visible_entries`; `scene/scene_id_capture.*`)
+is the exact from-point visibility oracle of [pvs.md](../plans/pvs.md): the
+set of mesh primitives with at least one pixel in the id image of an explicit
+camera pose. A request creates one `Scene_id_capture_node`, a rendergraph
+node with no links that owns its id color (`format_8_vec4_unorm`, cleared to
+id 0) and depth targets of the request's size, its render pass, the camera
+copy taken at the request, one `Id_pass_prepared` per frame in flight and the
+record. While nothing is recorded, its prepare hook (M2) fills the frame's
+slot through `Id_renderer::prepare` (all meshes of the content layer, or also
+the rendertarget and bone layers with `scene_only` false; no region scan)
+under the scene's `item_host_mutex`, and once a record exists it disables
+itself. Its execute (R) draws the frame's prepared pass over the whole
+target through `Id_renderer::render_image` (the caller's render pass, full
+viewport and scissor, no pick readback) and records the copy of the whole
+color target with the pass's id range table, once. The main thread decodes
+the image when that frame has retired: each pixel's 24-bit id resolves
+through the copied range table to (mesh, primitive), counted per entry. The
+capture uses neither the viewport windows nor the pick framebuffer and
+region scan of `Id_renderer`, so the same pose returns the same set every
+time (`scripts/visible_entries_check.py` is the gate).
+
 **Thread ownership asserts** (`Thread_roles`, no-ops until the roles are set):
 the render thread in `r_render` for `Rendergraph::execute`,
 `Draw_list_scene::draw_color` / `draw_shadow` / `get_shadow_bounds`,

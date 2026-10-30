@@ -21,6 +21,7 @@
 #include "renderers/indirect_diffuse.hpp"
 #include "renderers/radiance_cascades_renderer.hpp"
 #include "renderers/ray_trace_renderer.hpp"
+#include "scene/scene_id_capture.hpp"
 #include "scene/scene_image_capture.hpp"
 #include "scene/scene_root.hpp"
 
@@ -474,6 +475,7 @@ auto Mcp_server::process_queued_requests() -> int
     // A capture whose request was dropped on an earlier pass: release it once
     // its recorded copy has retired.
     release_abandoned_scene_image_capture();
+    release_abandoned_scene_id_capture();
 
     const auto now = std::chrono::steady_clock::now();
     int count = 0;
@@ -549,6 +551,11 @@ auto Mcp_server::process_queued_requests() -> int
                 m_scene_image_request = nullptr;
                 log_mcp->warn("MCP server: render_scene_image expired; its capture is released once its GPU copy has retired");
                 release_abandoned_scene_image_capture();
+            }
+            if (m_scene_id_capture && (m_scene_id_request == req.get())) {
+                m_scene_id_request = nullptr;
+                log_mcp->warn("MCP server: get_visible_entries expired; its capture is released once its GPU copy has retired");
+                release_abandoned_scene_id_capture();
             }
             log_mcp->warn("MCP server: dropped expired '{}' before processing", req->tool_name);
             continue;
@@ -739,6 +746,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_prefabs",                    &Mcp_server::query_prefabs                        },
         { "capture_screenshot",             &Mcp_server::action_capture_screenshot            },
         { "render_scene_image",             &Mcp_server::action_render_scene_image            },
+        { "get_visible_entries",            &Mcp_server::action_get_visible_entries           },
         { "request_renderdoc_capture",      &Mcp_server::action_request_renderdoc_capture     },
         { "push_shader_debug",              &Mcp_server::action_push_shader_debug             },
         { "pop_shader_debug",               &Mcp_server::action_pop_shader_debug              },
@@ -963,6 +971,11 @@ auto Mcp_server::action_batch(const json& args) -> std::string
         // owns rendergraph nodes meanwhile; a batch answers within one pass.
         if (tool == "render_scene_image") {
             json r = make_text_content("render_scene_image needs several rendered frames and cannot run inside a batch; call it on its own");
+            r["isError"] = true;
+            return r.dump();
+        }
+        if (tool == "get_visible_entries") {
+            json r = make_text_content("get_visible_entries needs several rendered frames and cannot run inside a batch; call it on its own");
             r["isError"] = true;
             return r.dump();
         }

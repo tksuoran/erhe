@@ -153,6 +153,30 @@ public:
     // prepared.id_ranges, which get() / take_scan_result() resolve against.
     void render(const Render_parameters& parameters, const Id_pass_prepared& prepared);
 
+    // What render_image() draws with: the caller's render pass, whose color
+    // attachment 0 is a format_8_vec4_unorm texture cleared to 0 (no id) and
+    // whose depth attachment is format_d32_sfloat cleared to the far value of
+    // reverse_depth, and the camera and viewport the pass covers.
+    class Image_render_parameters
+    {
+    public:
+        erhe::graphics::Command_buffer&                   command_buffer;
+        erhe::graphics::Render_pass&                      render_pass;
+        const erhe::math::Viewport&                       viewport;
+        const erhe::scene::Camera_snapshot&               camera;
+        bool                                              reverse_depth{true};
+        erhe::math::Depth_range                           depth_range{erhe::math::Depth_range::zero_to_one};
+        erhe::math::Coordinate_conventions                conventions;
+        erhe::scene_renderer::Joint_buffer*               joint_buffer{nullptr}; // as Render_parameters::joint_buffer
+        std::span<const erhe::scene_renderer::Joint_pose> joint_poses{};
+    };
+
+    // Render phase: draws a prepared id pass over the whole viewport into
+    // the caller's render pass. Starts no readback and touches neither the
+    // pick framebuffer nor the transfer entries: the caller owns the target
+    // and reads it back (the whole-image id capture, Scene_id_capture_node).
+    void render_image(const Image_render_parameters& parameters, const Id_pass_prepared& prepared);
+
     // prepare() and render() back to back on the calling thread, through a
     // prepared pass this renderer keeps: the headset, which renders its pick
     // pass where it prepares it (doc/editor/render_thread.md section 2.2).
@@ -256,6 +280,7 @@ private:
     [[nodiscard]] auto read_pixel(int x, int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) const -> int;
     void draw_prepared(
         erhe::graphics::Render_command_encoder& render_encoder,
+        const erhe::graphics::Render_pass&      render_pass,
         const Id_pass_prepared&                 prepared
     );
 
