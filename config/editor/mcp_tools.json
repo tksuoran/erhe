@@ -9059,6 +9059,75 @@
     "name": "get_pvs_status"
   },
   {
+    "description": "The set of mesh primitives seen from an explicit camera pose: the exact from-point visibility a potentially visible set must contain (doc/plans/pvs.md \"Verification\"). Renders the scene's id pass (Id_renderer, every mesh with the visible, active and id flags, the original mesh variant, back faces culled) over a whole offscreen width x height image owned by the request, reads the whole id image back once its frame has retired and decodes every pixel's id into (mesh node, primitive index). Independent of the viewport windows, which are not touched; spans several frames like render_scene_image and cannot run inside batch. Returns scene_name, width, height, scene_only, camera (the pose and projection used), frame_index (the frame the ids were rendered in), covered_pixels (pixels with any id), unresolved_pixels (ids naming no live mesh primitive: 0 unless a mesh was destroyed meanwhile), entry_count and entries [{node_uid, node_name, primitive_index, mesh_name, pixels}] sorted by node_uid then primitive_index (node_uid is the mesh node's glTF uid, \"\" for a node without one; entries without a uid keep a stable mesh order). The same pose returns the same set every time.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Scene to render (list_scenes names them)",
+          "type": "string"
+        },
+        "position": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Camera position [x, y, z] in world space"
+        },
+        "target": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Point [x, y, z] the camera looks at; give exactly one of target and orientation"
+        },
+        "up": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Up direction [x, y, z] with target; default [0, 1, 0]"
+        },
+        "orientation": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Camera orientation quaternion [x, y, z, w] (the camera looks down its local -Z); give exactly one of target and orientation"
+        },
+        "fov_y_degrees": {
+          "description": "Vertical field of view in degrees; default 60",
+          "type": "number"
+        },
+        "near": {
+          "description": "Near plane distance; default 0.03",
+          "type": "number"
+        },
+        "far": {
+          "description": "Far plane distance; default 200",
+          "type": "number"
+        },
+        "width": {
+          "description": "Image width in pixels, 1..8192; default 1024",
+          "type": "integer"
+        },
+        "height": {
+          "description": "Image height in pixels, 1..8192; default 1024",
+          "type": "integer"
+        },
+        "scene_only": {
+          "description": "true (default): the content layer's meshes only; false: also the rendertarget and bone layers, the set a viewport's id pass draws",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scene_name",
+        "position"
+      ],
+      "type": "object"
+    },
+    "name": "get_visible_entries"
+  },
+  {
     "description": "Set the editor's light cluster binning setting (Editor_settings_config::light_cluster_binning, doc/plans/clustered_lights.md C4; the live setting, saved only by a Settings window save): gpu (default) bins each clustered view's spot and point lights into its cluster grid with a compute pass (res/shaders/light_cluster_bin.comp) writing fixed-offset lists into device memory; cpu bins them with the CPU binner (Light_cluster_binner) on the render thread. Both produce the same lists (get_light_cluster_check). Takes effect at the next frame's render settings snapshot; a device whose binning pipeline did not build bins on the CPU (gpu_supported false). Only views whose graphics preset light_shading is clustered are binned. Omit mode to read the setting.",
     "inputSchema": {
       "properties": {

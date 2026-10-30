@@ -354,6 +354,7 @@ void Id_renderer::render_immediate(const Prepare_parameters& prepare_parameters,
 
 void Id_renderer::draw_prepared(
     erhe::graphics::Render_command_encoder& render_encoder,
+    const erhe::graphics::Render_pass&      render_pass,
     const Id_pass_prepared&                 prepared
 )
 {
@@ -363,7 +364,6 @@ void Id_renderer::draw_prepared(
 
     const std::span<const Prepared_bucket> buckets     = prepared.buckets.get_buckets();
     const std::size_t                      record_size = m_primitive_buffers.get_record_size();
-    const erhe::graphics::Render_pass&     render_pass = *m_render_pass.get();
     erhe::graphics::Base_render_pipeline&  pipeline    = m_pipeline;
 
     for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
@@ -992,7 +992,7 @@ void Id_renderer::render(const Render_parameters& parameters, const Id_pass_prep
         }
 
         //// TODO Abstraction for partial clear
-        draw_prepared(encoder, prepared);
+        draw_prepared(encoder, *m_render_pass.get(), prepared);
     }
 
     // Transfer pixel data from GPU to CPU
@@ -1082,6 +1082,58 @@ void Id_renderer::render(const Render_parameters& parameters, const Id_pass_prep
     // A scan skipped for want of a free region slot is not retried: the
     // gesture re-requests every frame it wants a scan.
 
+    camera_range.release();
+    if (bind_joint_buffer) {
+        joint_range.release();
+    }
+}
+
+void Id_renderer::render_image(const Image_render_parameters& parameters, const Id_pass_prepared& prepared)
+{
+    using namespace erhe::graphics;
+
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+
+    ERHE_VERIFY(prepared.prepared);
+    const erhe::math::Viewport& viewport = parameters.viewport;
+    ERHE_VERIFY((viewport.width > 0) && (viewport.height > 0));
+
+    Scoped_debug_group debug_group{parameters.command_buffer, "Id_renderer::render_image()"};
+
+    Ring_buffer_range camera_range = m_camera_buffers.update(
+        parameters.camera,
+        viewport,
+        1.0f,
+        erhe::scene_renderer::Grid_parameters{}, // unused by id pass shaders
+        erhe::scene_renderer::Sky_parameters{},  // unused by id pass shaders
+        0,
+        parameters.reverse_depth,
+        parameters.depth_range
+    );
+    // Joint UBO/SSBO: as render().
+    Ring_buffer_range joint_range{};
+    const bool        bind_joint_buffer = (parameters.joint_buffer != nullptr);
+    if (bind_joint_buffer) {
+        joint_range = parameters.joint_buffer->update(
+            glm::uvec4{0xffffffffu, 0u, 0u, 0u},
+            {},
+            parameters.joint_poses
+        );
+    }
+    {
+        Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
+        Scoped_render_pass     scoped_render_pass{parameters.render_pass, parameters.command_buffer};
+        encoder.set_bind_group_layout(m_bind_group_layout);
+        m_camera_buffers.bind(encoder, camera_range);
+        if (bind_joint_buffer) {
+            parameters.joint_buffer->bind(encoder, joint_range);
+        }
+        // The whole image: viewport and scissor both cover the target.
+        encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+        encoder.set_scissor_rect (viewport.x, viewport.y, viewport.width, viewport.height);
+        draw_prepared(encoder, parameters.render_pass, prepared);
+    }
     camera_range.release();
     if (bind_joint_buffer) {
         joint_range.release();

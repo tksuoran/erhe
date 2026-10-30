@@ -19,6 +19,7 @@
 #include "parsers/gltf_extensions_export.hpp"
 #include "parsers/physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
+#include "scene/scene_id_capture.hpp"
 #include "scene/scene_image_capture.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
@@ -44,6 +45,7 @@
 #include "erhe_property/property_string.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
@@ -52,6 +54,7 @@
 #endif
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -1695,6 +1698,241 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
     m_scene_image_request     = m_current_request;
     m_scene_image_enqueued_at = m_current_request->enqueued_at;
     m_defer_current_request   = true;
+    return {};
+}
+
+void Mcp_server::release_abandoned_scene_id_capture()
+{
+    if (!m_scene_id_capture || (m_scene_id_request != nullptr)) {
+        return;
+    }
+    // A copy recorded into a frame still in flight writes the readback
+    // buffer; the node's targets and buffer go only after it retires.
+    if (m_scene_id_capture->poll() == Scene_id_capture_state::in_flight) {
+        return;
+    }
+    m_scene_id_capture.reset();
+    log_mcp->info("MCP server: released the capture of an abandoned get_visible_entries request");
+}
+
+namespace {
+
+[[nodiscard]] auto parse_json_quat_xyzw(const json& value) -> std::optional<glm::quat>
+{
+    if (!value.is_array() || (value.size() != 4)) {
+        return std::nullopt;
+    }
+    float xyzw[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    for (std::size_t i = 0; i < 4; ++i) {
+        if (!value[i].is_number()) {
+            return std::nullopt;
+        }
+        xyzw[i] = value[i].get<float>();
+        if (!std::isfinite(xyzw[i])) {
+            return std::nullopt;
+        }
+    }
+    const glm::quat q{xyzw[3], xyzw[0], xyzw[1], xyzw[2]}; // glm: w first
+    const float     length = glm::length(q);
+    if (!(length > 1.0e-6f)) {
+        return std::nullopt;
+    }
+    return q / length;
+}
+
+} // anonymous namespace
+
+// The set of mesh primitives seen from an explicit camera pose: the id pass
+// of the scene rendered over a whole offscreen image and read back
+// (Scene_id_capture; doc/plans/pvs.md "Verification"). Deferred across MCP
+// passes like render_scene_image: the first pass builds the capture, the
+// rendergraph runs it on the next frame, later passes poll until the
+// recorded frame has retired, then decode the ids and release the capture.
+auto Mcp_server::action_get_visible_entries(const json& args) -> std::string
+{
+    const bool continuation =
+        m_scene_id_capture &&
+        (m_scene_id_request == m_current_request) &&
+        (m_scene_id_enqueued_at == m_current_request->enqueued_at);
+    if (continuation) {
+        const Scene_id_capture_state state = m_scene_id_capture->poll();
+        if ((state == Scene_id_capture_state::rendering) || (state == Scene_id_capture_state::in_flight)) {
+            m_defer_current_request = true;
+            return {};
+        }
+        m_scene_id_request = nullptr;
+        if (state == Scene_id_capture_state::failed) {
+            const std::string error = m_scene_id_capture->get_error();
+            m_scene_id_capture.reset();
+            return make_error_content("get_visible_entries: " + error);
+        }
+        class Visible_entry
+        {
+        public:
+            std::string node_uid;
+            std::string node_name;
+            std::string mesh_name;
+            std::size_t mesh_id        {0};
+            std::size_t primitive_index{0};
+            std::size_t pixels         {0};
+        };
+        std::vector<Visible_entry> entries;
+        entries.reserve(m_scene_id_capture->get_entries().size());
+        for (const Scene_id_capture_entry& entry : m_scene_id_capture->get_entries()) {
+            // A Mesh is its own scene node (a Gprim prim, doc/erhe/scene.md):
+            // the node identity of a PVS column is the mesh's uid.
+            entries.push_back(
+                Visible_entry{
+                    .node_uid        = entry.mesh->get_gltf_uid(),
+                    .node_name       = entry.mesh->get_name(),
+                    .mesh_name       = entry.mesh->get_name(),
+                    .mesh_id         = entry.mesh->get_id(),
+                    .primitive_index = entry.primitive_index,
+                    .pixels          = entry.pixel_count
+                }
+            );
+        }
+        // By node uid, then primitive index; entries without a uid (all "")
+        // keep the capture's order (mesh id), so the order is deterministic.
+        std::stable_sort(
+            entries.begin(),
+            entries.end(),
+            [](const Visible_entry& lhs, const Visible_entry& rhs) -> bool {
+                if (lhs.node_uid != rhs.node_uid) {
+                    return lhs.node_uid < rhs.node_uid;
+                }
+                if (lhs.node_uid.empty() && (lhs.mesh_id != rhs.mesh_id)) {
+                    return lhs.mesh_id < rhs.mesh_id;
+                }
+                return lhs.primitive_index < rhs.primitive_index;
+            }
+        );
+        json entries_json = json::array();
+        for (const Visible_entry& entry : entries) {
+            entries_json.push_back(
+                json{
+                    {"node_uid",        entry.node_uid},
+                    {"node_name",       entry.node_name},
+                    {"primitive_index", entry.primitive_index},
+                    {"mesh_name",       entry.mesh_name},
+                    {"pixels",          entry.pixels}
+                }
+            );
+        }
+        json result = m_scene_id_header;
+        result["frame_index"]       = m_scene_id_capture->get_frame_index();
+        result["covered_pixels"]    = m_scene_id_capture->get_covered_pixels();
+        result["unresolved_pixels"] = m_scene_id_capture->get_unresolved_pixels();
+        result["entry_count"]       = entries.size();
+        result["entries"]           = std::move(entries_json);
+        m_scene_id_capture.reset();
+        return make_json_content(result).dump();
+    }
+
+    // The capture of a dropped request whose copy is still in flight: one
+    // capture at a time, so wait for it to retire.
+    if (m_scene_id_capture) {
+        release_abandoned_scene_id_capture();
+        if (m_scene_id_capture) {
+            m_defer_current_request = true;
+            return {};
+        }
+    }
+
+    if ((m_context.graphics_device == nullptr) || (m_context.rendergraph == nullptr) || (m_context.app_scenes == nullptr) || (m_context.id_renderer == nullptr)) {
+        return make_error_content("get_visible_entries: rendering is not available");
+    }
+
+    const std::string scene_name = args.value("scene_name", std::string{});
+    std::shared_ptr<Scene_root> scene_root{};
+    for (const std::shared_ptr<Scene_root>& candidate : m_context.app_scenes->get_scene_roots()) {
+        if (candidate->get_name() == scene_name) {
+            scene_root = candidate;
+            break;
+        }
+    }
+    if (!scene_root) {
+        return make_error_content("get_visible_entries: scene not found: " + scene_name);
+    }
+
+    constexpr int c_max_size = 8192;
+    const int width  = args.value("width",  1024);
+    const int height = args.value("height", 1024);
+    if ((width < 1) || (height < 1) || (width > c_max_size) || (height > c_max_size)) {
+        return make_error_content(fmt::format("get_visible_entries: width and height must be in [1, {}]", c_max_size));
+    }
+
+    const std::optional<glm::vec3> position = parse_json_vec3(args.value("position", json{}));
+    if (!position.has_value()) {
+        return make_error_content("get_visible_entries: 'position' must be a finite [x, y, z]");
+    }
+    const bool has_target      = args.contains("target");
+    const bool has_orientation = args.contains("orientation");
+    if (has_target == has_orientation) {
+        return make_error_content("get_visible_entries: give exactly one of 'target' [x, y, z] and 'orientation' [x, y, z, w]");
+    }
+    glm::mat4 world_from_camera{1.0f};
+    json      pose_json{{"position", json::array({position->x, position->y, position->z})}};
+    if (has_target) {
+        const std::optional<glm::vec3> target = parse_json_vec3(args["target"]);
+        const std::optional<glm::vec3> up     = args.contains("up") ? parse_json_vec3(args["up"]) : std::optional<glm::vec3>{glm::vec3{0.0f, 1.0f, 0.0f}};
+        if (!target.has_value() || !up.has_value()) {
+            return make_error_content("get_visible_entries: 'target' (and 'up' when given) must be finite [x, y, z]");
+        }
+        if (glm::length(target.value() - position.value()) < 1.0e-6f) {
+            return make_error_content("get_visible_entries: 'position' and 'target' coincide");
+        }
+        world_from_camera = erhe::math::create_look_at(position.value(), target.value(), up.value());
+        pose_json["target"] = json::array({target->x, target->y, target->z});
+        pose_json["up"]     = json::array({up->x, up->y, up->z});
+    } else {
+        const std::optional<glm::quat> orientation = parse_json_quat_xyzw(args["orientation"]);
+        if (!orientation.has_value()) {
+            return make_error_content("get_visible_entries: 'orientation' must be a finite non-zero quaternion [x, y, z, w]");
+        }
+        // The camera looks down its -Z axis.
+        world_from_camera = glm::mat4_cast(orientation.value());
+        world_from_camera[3] = glm::vec4{position.value(), 1.0f};
+        pose_json["orientation"] = json::array({orientation->x, orientation->y, orientation->z, orientation->w});
+    }
+    const float fov_y_degrees = args.value("fov_y_degrees", 60.0f);
+    const float z_near        = args.value("near", 0.03f);
+    const float z_far         = args.value("far", 200.0f);
+    if (!(fov_y_degrees > 0.0f) || !(fov_y_degrees < 180.0f) || !(z_near > 0.0f) || !(z_far > z_near)) {
+        return make_error_content("get_visible_entries: need 0 < fov_y_degrees < 180 and 0 < near < far");
+    }
+    const bool scene_only = args.value("scene_only", true);
+
+    const std::shared_ptr<erhe::scene::Camera> camera = std::make_shared<erhe::scene::Camera>("get_visible_entries camera");
+    camera->set_projection_type   (erhe::scene::Projection::Type::perspective_vertical);
+    camera->set_fov_y             (glm::radians(fov_y_degrees));
+    camera->set_perspective_z_near(z_near);
+    camera->set_perspective_z_far (z_far);
+    camera->set_parent_from_node  (world_from_camera);
+
+    m_scene_id_capture = std::make_unique<Scene_id_capture>(
+        m_context,
+        Scene_id_capture_create_info{
+            .scene_root = scene_root,
+            .camera     = erhe::scene::Camera_snapshot{*camera},
+            .width      = width,
+            .height     = height,
+            .content    = scene_only ? Scene_id_capture_content::scene_only : Scene_id_capture_content::viewport
+        }
+    );
+    pose_json["fov_y_degrees"] = fov_y_degrees;
+    pose_json["near"]          = z_near;
+    pose_json["far"]           = z_far;
+    m_scene_id_header = json{
+        {"scene_name", scene_root->get_name()},
+        {"width",      width},
+        {"height",     height},
+        {"scene_only", scene_only},
+        {"camera",     pose_json}
+    };
+    m_scene_id_request     = m_current_request;
+    m_scene_id_enqueued_at = m_current_request->enqueued_at;
+    m_defer_current_request = true;
     return {};
 }
 

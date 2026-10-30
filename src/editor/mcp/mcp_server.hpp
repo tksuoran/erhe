@@ -60,6 +60,7 @@ namespace editor {
 class App_context;
 class Brush;
 enum class Transform_drag_kind : unsigned int;
+class Scene_id_capture;
 class Scene_image_capture;
 class Scene_root;
 class Viewport_scene_view;
@@ -384,6 +385,12 @@ private:
     // Destroys the capture of a render_scene_image request that was dropped
     // (expired), once no recorded GPU copy of it is still in flight.
     void release_abandoned_scene_image_capture();
+    // get_visible_entries: the whole-image id capture of an explicit camera
+    // pose (Scene_id_capture), deferred until its readback has retired.
+    auto action_get_visible_entries          (const nlohmann::json& args) -> std::string;
+    // Destroys the capture of a get_visible_entries request that was dropped
+    // (expired), once no recorded GPU copy of it is still in flight.
+    void release_abandoned_scene_id_capture();
     auto action_request_renderdoc_capture    (const nlohmann::json& args) -> std::string;
     auto action_push_shader_debug             (const nlohmann::json& args) -> std::string;
     auto action_pop_shader_debug              (const nlohmann::json& args) -> std::string;
@@ -877,6 +884,14 @@ private:
     // outlives each capture: its result lands frames after the capture's
     // readback, and get_gpu_timers reads it.
     std::unique_ptr<erhe::graphics::Gpu_timer>       m_scene_image_forward_timer;
+
+    // get_visible_entries: the id capture of the pending request, identified
+    // and released like the render_scene_image capture above (main thread
+    // only); the header holds the reply fields decided on the first pass.
+    std::unique_ptr<Scene_id_capture>                m_scene_id_capture;
+    const Queued_request*                            m_scene_id_request{nullptr};
+    std::chrono::steady_clock::time_point            m_scene_id_enqueued_at{};
+    nlohmann::json                                   m_scene_id_header;
 
     // Asynchronous scene saves (save_scene, save_scene_for_quest;
     // doc/agents/mcp_server_usage.md "Saving scenes"). The tool queues a
