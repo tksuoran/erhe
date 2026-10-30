@@ -165,16 +165,21 @@ void Primitive_buffer::write_primitive(
 
     const erhe::primitive::Material* material = mesh_primitive.material.get();
 
+    // The id the pass writes is the record's id offset plus the facet id,
+    // added channel by channel (four 8-bit channels, r the top byte;
+    // erhe::math::vec4_from_uint()): the offset is aligned to a power of two
+    // at least count, so no channel sum carries.
     const uint32_t power_of_two = erhe::utility::next_power_of_two(count);
     const uint32_t mask         = power_of_two - 1;
     const uint32_t current_bits = io_id_offset & mask;
-    if (current_bits != 0) {
-        const uint32_t add = power_of_two - current_bits;
-        io_id_offset += add;
+    const uint32_t add          = (current_bits != 0) ? (power_of_two - current_bits) : 0u;
+    if (id_ranges != nullptr) {
+        // The ids are 32 bits: the aligned range must not wrap.
+        ERHE_VERIFY((uint64_t{io_id_offset} + uint64_t{add} + uint64_t{count}) <= uint64_t{0xffffffffu});
     }
+    io_id_offset += add;
 
-    const glm::vec3 id_offset_vec3   = erhe::math::vec3_from_uint(io_id_offset);
-    const glm::vec4 id_offset_vec4   = glm::vec4{id_offset_vec3, 0.0f};
+    const glm::vec4 id_offset_vec4   = erhe::math::vec4_from_uint(io_id_offset);
     // Slot 0 on a miss, as this path effectively did before slots left the
     // Material object. It is the one writer that can legitimately be handed a
     // material its set has yet to see: the forward set's object references are

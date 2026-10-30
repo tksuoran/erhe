@@ -82,27 +82,29 @@ layout(location = 20) flat in int v_primitive_id;
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)
-vec3 vec3_from_uint(uint i)
+// erhe::math::vec4_from_uint(): r the top byte, a the low byte.
+vec4 vec4_from_uint(uint i)
 {
-    uint r = (i >> 16u) & 0xffu;
-    uint g = (i >>  8u) & 0xffu;
-    uint b = (i >>  0u) & 0xffu;
-    return vec3(float(r) / 255.0, float(g) / 255.0, float(b) / 255.0);
+    uint r = (i >> 24u) & 0xffu;
+    uint g = (i >> 16u) & 0xffu;
+    uint b = (i >>  8u) & 0xffu;
+    uint a = (i >>  0u) & 0xffu;
+    return vec4(float(r) / 255.0, float(g) / 255.0, float(b) / 255.0, float(a) / 255.0);
 }
 
-// Pack draw_id + per-vertex facet id into RGB. The draw_id contribution
-// comes from a per-primitive color offset assigned by
-// erhe::scene_renderer::Primitive_buffer when color_source = id_offset; the
-// facet id is the flat output from standard.vert (the GEO facet index,
-// decoded from a_custom_0). Id_renderer::get() unpacks
-// (r << 16) | (g << 8) | b and walks the range table to recover
-// (mesh, primitive_index, facet_id).
+// Pack draw_id + per-vertex facet id into RGBA (32 bits, r the top byte).
+// The draw_id contribution comes from a per-primitive color offset assigned
+// by erhe::scene_renderer::Primitive_buffer when color_source = id_offset;
+// the facet id is the flat output from standard.vert (the GEO facet index,
+// decoded from a_custom_0). The offset is aligned so no channel sum
+// carries. Id_renderer::get() unpacks (r << 24) | (g << 16) | (b << 8) | a
+// and walks the range table to recover (mesh, primitive_index, facet_id).
+// The id pipelines never blend, so alpha lands as written.
 vec4 erhe_id_color()
 {
     uint facet_id = uint(v_primitive_id);
-    vec3 id_rgb   = vec3_from_uint(facet_id);
-    vec3 id       = id_rgb + primitive.primitives[v_primitive_index].color.xyz;
-    return vec4(id, 1.0);
+    vec4 id_rgba  = vec4_from_uint(facet_id);
+    return id_rgba + primitive.primitives[v_primitive_index].color;
 }
 #endif
 

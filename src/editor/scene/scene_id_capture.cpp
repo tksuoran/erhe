@@ -365,9 +365,10 @@ void Scene_id_capture::decode(
     for (std::size_t i = 0; i < pixel_count; ++i) {
         const std::byte* pixel = mapped.data() + (i * bytes_per_pixel);
         const uint32_t   id    =
-            (static_cast<uint32_t>(pixel[0]) << 16u) |
-            (static_cast<uint32_t>(pixel[1]) <<  8u) |
-             static_cast<uint32_t>(pixel[2]);
+            (static_cast<uint32_t>(pixel[0]) << 24u) |
+            (static_cast<uint32_t>(pixel[1]) << 16u) |
+            (static_cast<uint32_t>(pixel[2]) <<  8u) |
+             static_cast<uint32_t>(pixel[3]);
         if (id == 0) {
             continue;
         }
