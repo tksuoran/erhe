@@ -944,6 +944,63 @@ Drawing:
   masks plus the culled bits (the CPU lanes have no occlusion term), and
   the GPU commands with the CPU writer's after dropping the culled entries;
   a culled bit the CPU did not set is a mismatch.
+  **PVS** (doc/plans/pvs.md "Runtime consumption"): a potentially visible
+  set database (`erhe::scene::Pvs_database`, `doc/erhe/scene.md`) set with
+  `set_pvs_database()` (main thread, prepare phase; the editor queues it
+  with `enqueue_set_pvs_database()`, applied by `flush_pending()` in order)
+  gives every entry its column: `Pvs_database::find_column()` of the mesh's
+  glTF uid and `mesh_primitive_index`, looked up once when the database is
+  set and at each registration after it, kept in `Draw_list::pvs_columns`
+  (parallel to the entries and the bounds, swap-removed with them,
+  published with them, uploaded with the GPU bounds as one uint32 per entry;
+  a list whose columns change is edited, so its serial moves).
+  `publish(..., Pvs_culling, ...)` records the rule on in the slot, with the
+  database, only while the database is `ready`. A color view registered
+  with a query box (`add_cull_view(..., pvs_query_min, pvs_query_max)`,
+  world space, empty when max < min; the box is part of the view's identity,
+  so a scene image capture from a viewport's camera is another view; the
+  editor: `Draw_list_renderer::Color_cull_view_parameters`) applies the
+  rule on both paths after the frustum test: an entry inside the view, with
+  bounds and a tracked column, keeps the view's bit only when the cell of
+  some corner of the box has the column's bit set, or some corner is
+  outside the grid or in a page without a resident slot (a cell without a
+  PVS holds all-ones words); otherwise the bit is cleared. The corner's cell
+  per axis is `floor((p - origin) * inverse_cell_size)` with the reciprocal
+  computed once on the CPU (`cull_lanes::get_pvs_inverse_cell_size()`), so
+  `cull_lanes::pvs_lanes()` (the CPU lanes, per view with the box's cells
+  resolved once, `cull_lanes::make_pvs_query_cells()`) and
+  `cull_classify.comp` (per entry, view records 10 and 11: the box and its
+  flag; the `pvs_header`, `pvs_cells`, `pvs_pages` and `pvs_grid` header
+  words) decide the same bits. A PVS-culled entry is not inside its view
+  for the occlusion terms: it is neither tested nor consumed. The GPU reads
+  `Pvs_gpu_database`, one device-local buffer per database (the GPU page
+  table, a slot index per page or `0xffffffff`, then the resident pages'
+  words), made and uploaded with `Command_buffer::upload_to_buffer()` by
+  the first dispatch of a frame whose slot names another database; every
+  stored page is resident (capacity = the stored page count; the streaming
+  step only changes which pages have slots). The GPU writes the bits it
+  removed into a PVS culled region in the mask layout (a mask ring buffer
+  range, frames with the rule only); `get_cull_classification_check` reads
+  it back and compares it bit for bit with the CPU lanes' removed bits
+  (`pvs_culled_cpu_count`, `pvs_culled_gpu_count`, `pvs_mismatch_count`,
+  a disagreement also in `mismatch_count`). `get_cull_view_pvs_counts()`
+  returns a view's tested and culled counts of the frame (the CPU lanes'
+  decision, which the check shows equal to the GPU's). Staleness
+  (doc/plans/pvs.md D4): the transform, bounds and refresh hooks and a
+  registration compare a tracked object's `compute_pvs_transform_hash()` of
+  its world transform and world AABB with its column's `transform_hash`,
+  and a column whose last entry is unregistered without a registration
+  taking it back in the same flush (a re-registration keeps it) is a
+  removed baked entry; either calls the callback of
+  `set_pvs_stale_callback()` once per database (the editor:
+  `Scene_root::mark_pvs_stale()`), and the next publish records the rule
+  off. An entry added after the bake is untracked and never culled by PVS.
+  `detach_pvs_database()` (main thread) drops the database, the callback
+  and any queued `set_pvs_database()` for an owner going away: the editor
+  calls it first in a scene close (`Scene_root::detach_pvs_consumer()` from
+  `Editor::on_close_scene()`), so the entries leaving with the scene mark
+  nothing stale. Queued `set_pvs_database()` operations apply in order: the
+  last one queued wins.
   The view set, the masks and the per-entry flag scratch are render-phase
   state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.

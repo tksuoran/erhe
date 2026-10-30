@@ -257,6 +257,12 @@ public:
     // the frame before it found them occluded.
     std::size_t             occlusion_culled_count  {0};
     uint64_t                occlusion_counts_frame_index{0};
+    // A draw-list pass: the potentially visible set rule's counts of its
+    // culling view in this frame (doc/plans/pvs.md "Runtime consumption";
+    // Draw_list_scene::get_cull_view_pvs_counts()): the entries it tested
+    // and those it culled. Shared by the passes of one view.
+    std::size_t             pvs_tested_count        {0};
+    std::size_t             pvs_culled_count        {0};
     double                  cpu_time_us            {0.0};
     double                  total_cpu_time_us      {0.0};
     std::size_t             render_call_count      {0};

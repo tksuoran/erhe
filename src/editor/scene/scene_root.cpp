@@ -198,6 +198,15 @@ Scene_root::Scene_root(
                 .cull_frame_registry        = draw_list_dependencies->cull_frame_registry
             }
         );
+        // The staleness rule of the PVS database (doc/plans/pvs.md D4): the
+        // draw lists detect a moved or removed baked entry, the scene root
+        // owns the database's state. The draw list scene is owned by this
+        // scene root, so the callback never outlives it.
+        m_draw_list_scene->set_pvs_stale_callback(
+            [this]() {
+                mark_pvs_stale();
+            }
+        );
     }
 
     // The ray-query consumers' view of the content layer (doc/editor/raytrace.md
@@ -1916,7 +1925,12 @@ void Scene_root::set_pvs_database(std::shared_ptr<erhe::scene::Pvs_database> dat
 {
     {
         const std::lock_guard<std::mutex> lock{m_pvs_mutex};
-        m_pvs_database = std::move(database);
+        m_pvs_database = database;
+    }
+    // The draw lists' consumer side (column lookup, staleness, the
+    // classification's database), at their next flush.
+    if (m_draw_list_scene) {
+        m_draw_list_scene->enqueue_set_pvs_database(std::move(database));
     }
     if (m_app_message_bus != nullptr) {
         m_app_message_bus->pvs_state_changed.queue_message(Pvs_state_changed_message{.scene_root = this});
@@ -1944,6 +1958,13 @@ void Scene_root::mark_pvs_stale()
     log_scene->warn("Scene '{}': the PVS database is stale - PVS culling is off until the next bake", get_name());
     if (m_app_message_bus != nullptr) {
         m_app_message_bus->pvs_state_changed.queue_message(Pvs_state_changed_message{.scene_root = this});
+    }
+}
+
+void Scene_root::detach_pvs_consumer()
+{
+    if (m_draw_list_scene) {
+        m_draw_list_scene->detach_pvs_database();
     }
 }
 
@@ -2179,7 +2200,8 @@ void Scene_root::publish_draw_lists(
     const uint64_t                                frame_index,
     const std::size_t                             frames_in_flight,
     const erhe::scene_renderer::Cull_classification classification,
-    const erhe::scene_renderer::Occlusion_culling   occlusion
+    const erhe::scene_renderer::Occlusion_culling   occlusion,
+    const erhe::scene_renderer::Pvs_culling         pvs
 )
 {
     if (!m_draw_list_scene) {
@@ -2191,7 +2213,7 @@ void Scene_root::publish_draw_lists(
     // The poses snapshot_render_settings() captured for this frame: the
     // shadow cache compares them with the last publish's
     // (doc/erhe/shadows.md "Shadow map cache").
-    m_draw_list_scene->publish(frame_index, frames_in_flight, classification, occlusion, get_render_joint_poses(frame_index));
+    m_draw_list_scene->publish(frame_index, frames_in_flight, classification, occlusion, pvs, get_render_joint_poses(frame_index));
 }
 
 auto Scene_root::is_content_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh) const -> bool

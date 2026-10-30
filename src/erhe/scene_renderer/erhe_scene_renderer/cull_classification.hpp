@@ -37,4 +37,19 @@ enum class Occlusion_culling : uint8_t
 
 [[nodiscard]] auto c_str(Occlusion_culling occlusion_culling) -> const char*;
 
+// Whether the frame's classification applies the potentially visible set
+// rule (doc/plans/pvs.md "Runtime consumption"): on, for a frame published
+// while the Draw_list_scene's database is ready, the classification (both
+// paths) clears a color view's mask bit of a tracked entry that no cell
+// around the view's query box (Cull_view_tests::pvs_query_min / max) can
+// see. An absent or stale database culls nothing.
+enum class Pvs_culling : uint8_t
+{
+    off   = 0,
+    on    = 1,
+    count = 2
+};
+
+[[nodiscard]] auto c_str(Pvs_culling pvs_culling) -> const char*;
+
 } // namespace erhe::scene_renderer

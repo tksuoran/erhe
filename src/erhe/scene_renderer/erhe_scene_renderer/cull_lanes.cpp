@@ -1,5 +1,7 @@
 #include "erhe_scene_renderer/cull_lanes.hpp"
 
+#include "erhe_scene/pvs_database.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -123,6 +125,112 @@ void set_view_bit_lanes(uint64_t* const masks, const std::size_t count, const ui
     for (std::size_t i = 0; i < count; ++i) {
         masks[i] |= bit;
     }
+}
+
+auto get_pvs_inverse_cell_size(const erhe::scene::Pvs_database& database) -> float
+{
+    return 1.0f / database.get_header().cell_size;
+}
+
+auto pvs_point_cell(
+    const glm::vec3&  point,
+    const glm::vec3&  grid_origin,
+    const float       inverse_cell_size,
+    const glm::uvec3& cell_counts,
+    glm::uvec3&       out_cell
+) -> bool
+{
+    for (glm::length_t axis = 0; axis < 3; ++axis) {
+        // cull_classify.comp pvs_point_cell(): the same precise operations.
+        const float offset = point[axis] - grid_origin[axis];
+        const float scaled = offset * inverse_cell_size;
+        const float cell   = std::floor(scaled);
+        if (!(cell >= 0.0f) || !(cell < static_cast<float>(cell_counts[axis]))) {
+            return false;
+        }
+        out_cell[axis] = static_cast<uint32_t>(cell);
+    }
+    return true;
+}
+
+void make_pvs_query_cells(
+    const erhe::scene::Pvs_database& database,
+    const glm::vec3&                 query_min,
+    const glm::vec3&                 query_max,
+    Pvs_query_cells&                 out
+)
+{
+    out = Pvs_query_cells{};
+    const erhe::scene::Pvs_header& header            = database.get_header();
+    const float                    inverse_cell_size = get_pvs_inverse_cell_size(database);
+    const uint32_t                 words_per_cell    = database.get_words_per_cell();
+    std::array<uint32_t, 8> cells{};
+    uint32_t                cell_count = 0;
+    for (uint32_t corner = 0; corner < 8; ++corner) {
+        const glm::vec3 point{
+            ((corner & 1u) != 0u) ? query_max.x : query_min.x,
+            ((corner & 2u) != 0u) ? query_max.y : query_min.y,
+            ((corner & 4u) != 0u) ? query_max.z : query_min.z
+        };
+        glm::uvec3 cell{0u};
+        if (!pvs_point_cell(point, header.grid_origin, inverse_cell_size, header.cell_counts, cell)) {
+            return; // keep_all
+        }
+        const uint32_t cell_index = database.cell_index(cell);
+        bool seen = false;
+        for (uint32_t i = 0; i < cell_count; ++i) {
+            seen = seen || (cells[i] == cell_index);
+        }
+        if (!seen) {
+            cells[cell_count++] = cell_index;
+        }
+    }
+    for (uint32_t i = 0; i < cell_count; ++i) {
+        const std::span<const uint32_t> page_words = database.get_page_words(database.page_of_cell(cells[i]));
+        if (page_words.empty()) {
+            out.cell_count = 0;
+            return; // keep_all: a page without a PVS (not stored, or not resident)
+        }
+        out.words[i] = page_words.data() + (static_cast<std::size_t>(database.local_cell(cells[i])) * words_per_cell);
+    }
+    out.cell_count = cell_count;
+    out.keep_all   = false;
+}
+
+auto pvs_lanes(
+    const Pvs_query_cells& cells,
+    const uint32_t* const  columns,
+    const uint32_t* const  unbounded,
+    const std::size_t      count,
+    uint32_t* const        inside,
+    uint32_t* const        culled,
+    uint32_t&              culled_count
+) -> uint32_t
+{
+    std::fill(culled, culled + count, uint32_t{0});
+    if (cells.keep_all) {
+        return 0;
+    }
+    uint32_t tested = 0;
+    for (std::size_t i = 0; i < count; ++i) {
+        const uint32_t column = columns[i];
+        if ((inside[i] == 0u) || (unbounded[i] != 0u) || (column == erhe::scene::Pvs_database::untracked_column)) {
+            continue;
+        }
+        ++tested;
+        const uint32_t word = column / 32u;
+        const uint32_t bit  = uint32_t{1} << (column % 32u);
+        bool visible = false;
+        for (uint32_t cell = 0; cell < cells.cell_count; ++cell) {
+            visible = visible || ((cells.words[cell][word] & bit) != 0u);
+        }
+        if (!visible) {
+            inside[i] = 0u;
+            culled[i] = 1u;
+            ++culled_count;
+        }
+    }
+    return tested;
 }
 
 auto reaches_view(const Cull_view_tests& view, const Draw_list_bounds& bounds, View_reach_scratch& scratch) -> bool

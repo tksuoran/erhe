@@ -3,9 +3,11 @@
 #include "editor_log.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/render_settings.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 
 #include "erhe_profile/profile.hpp"
@@ -129,7 +131,23 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
     ERHE_VERIFY(prepared.prepared);
     ERHE_VERIFY(!prepared.cull_views_added);
     ERHE_VERIFY(prepared.passes.size() == composition_passes.size());
-    const erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters view_parameters = get_color_view_parameters(context);
+    erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters view_parameters = get_color_view_parameters(context);
+    // The PVS query box (doc/plans/pvs.md D5, "Runtime consumption"): a
+    // viewport's perspective camera position +- the query margin. A scene
+    // image capture, an orthographic camera (no single position) and a
+    // multiview pass get none.
+    if (
+        (context.viewport_scene_view != nullptr) &&
+        (context.content == Render_content::scene_and_editor_aids) &&
+        (view_parameters.views.size() == 1) &&
+        (view_parameters.views.front().camera != nullptr) &&
+        !view_parameters.views.front().camera->projection().is_orthographic()
+    ) {
+        const glm::vec3 position = glm::vec3{view_parameters.views.front().camera->position_in_world()};
+        const float     margin   = context.app_context.render_settings->pvs_query_margin;
+        view_parameters.pvs_query_min = position - glm::vec3{margin};
+        view_parameters.pvs_query_max = position + glm::vec3{margin};
+    }
     for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
         const Composition_pass&    composition_pass = *composition_passes[i].get();
         Composition_pass_prepared& pass_prepared    = prepared.passes[i];

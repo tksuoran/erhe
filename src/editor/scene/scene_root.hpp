@@ -365,7 +365,7 @@ public:
     // the frame's slot (Draw_list_scene::publish), under item_host_mutex,
     // with the frame's culling classification and occlusion culling
     // settings. No-op without a Draw_list_scene.
-    void publish_draw_lists(uint64_t frame_index, std::size_t frames_in_flight, erhe::scene_renderer::Cull_classification classification, erhe::scene_renderer::Occlusion_culling occlusion);
+    void publish_draw_lists(uint64_t frame_index, std::size_t frames_in_flight, erhe::scene_renderer::Cull_classification classification, erhe::scene_renderer::Occlusion_culling occlusion, erhe::scene_renderer::Pvs_culling pvs);
     // The content layer as the ray-query consumers (Ray_trace_renderer, DDGI,
     // radiance cascades) see it (doc/editor/raytrace.md "Ray_trace_scene"):
     // null for a root built without device dependencies or on a device
@@ -605,6 +605,12 @@ public:
     // The stale mark of doc/plans/pvs.md D4, routed through the scene root
     // so the state change is announced once.
     void mark_pvs_stale();
+    // The scene is closing (Editor::on_close_scene(), before its content is
+    // unregistered): the draw lists drop the database and the stale
+    // callback, so the teardown's unregistrations mark nothing stale
+    // (doc/plans/pvs.md D4 is about edits, not the scene going away). The
+    // scene root keeps its database.
+    void detach_pvs_consumer();
 
     void imgui();
 

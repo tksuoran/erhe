@@ -23,14 +23,37 @@
 // cull_views.occlusion_header = the word offsets of the result and culled
 //   regions in cull_occlusion.words (the test region at 0), the word offset
 //   of the result region in cull_occlusion_previous.words, 0
-// cull_views.views[10 * view + k]:
+// cull_views.pvs_header = active (1: the frame applies the PVS rule, the
+//   cull_pvs_culled words below are written), words per cell, page size
+//   (cells per page axis), the first slot word in cull_pvs.words (the page
+//   count: the page table comes first)
+// cull_views.pvs_cells  = the grid's cell counts per axis, 0
+// cull_views.pvs_pages  = the page grid's page counts per axis, words per
+//   page
+// cull_views.pvs_grid   = the grid origin, 1 / cell size (computed on the
+//   CPU: cull_lanes::get_pvs_inverse_cell_size())
+// cull_views.views[12 * view + k]:
 //   k = 0..5 planes (inward, n.xyz + w), 6 range sphere (center.xyz,
 //   radius), 7 = purpose, kind (0 planes, 1 cube face), plane count, cube
 //   face (0..5 = +X -X +Y -Y +Z -Z), as exact small floats, 8 the near
 //   plane of an occlusion view (inward), 9 = occlusion view (1.0) or not
 //   (0.0), previous result (1.0: the same view, matched by key, has words in
 //   the previous occlusion frame; 0.0: none, the view is not culled by
-//   occlusion), the previous frame's view group and view bit.
+//   occlusion), the previous frame's view group and view bit, 10 = the
+//   view's PVS query box min, 1.0 when the view applies the PVS rule (0.0
+//   otherwise), 11 = its max, 0.
+//
+// The potentially visible set rule (doc/plans/pvs.md "Runtime
+// consumption"; cull_lanes::pvs_lanes() is the CPU reference, with the same
+// arithmetic): an entry inside a PVS view, with bounds and a tracked column
+// (cull_columns.columns[entry] != 0xffffffff), stays inside only when the
+// cell of some corner of the view's query box has the column's bit set, or
+// some corner lies outside the grid or in a page without a slot (the page
+// table entry cull_pvs.words[page] is 0xffffffff). Otherwise it loses the
+// view's bit before the occlusion terms (a PVS-culled entry is neither
+// tested nor consumed by the occlusion test), and the bit is recorded in the
+// cull_pvs_culled words (mask layout as uint words, like the occlusion
+// regions).
 //
 // The raster occlusion test (doc/plans/occlusion_culling.md, occlusion_test
 // .vert/.frag) of the frame's occlusion views (the viewports' color views)
@@ -105,6 +128,68 @@ float sphere_axis_gap(float c, float e, float s)
 
 #include "erhe_occlusion_bounds.glsl"
 
+// cull_lanes::pvs_point_cell(): the cell of a point, false outside the grid.
+bool pvs_point_cell(vec3 point, out uvec3 cell)
+{
+    vec4  grid   = cull_views.pvs_grid;
+    uvec3 counts = cull_views.pvs_cells.xyz;
+    cell = uvec3(0u);
+    for (uint axis = 0u; axis < 3u; ++axis) {
+        precise float offset = point[axis] - grid[axis];
+        precise float scaled = offset * grid.w;
+        float         c      = floor(scaled);
+        if (!(c >= 0.0) || !(c < float(counts[axis]))) {
+            return false;
+        }
+        cell[axis] = uint(c);
+    }
+    return true;
+}
+
+// True when the column may be visible from the query box [query_min,
+// query_max] (some corner cell keeps it).
+bool pvs_keeps(uint column, vec3 query_min, vec3 query_max)
+{
+    uint  words_per_cell = cull_views.pvs_header.y;
+    uint  page_size      = cull_views.pvs_header.z;
+    uint  slot_base      = cull_views.pvs_header.w;
+    uvec3 page_dims      = cull_views.pvs_pages.xyz;
+    uint  words_per_page = cull_views.pvs_pages.w;
+    uint  word_in_cell   = column / 32u;
+    uint  bit            = 1u << (column % 32u);
+    for (uint corner = 0u; corner < 8u; ++corner) {
+        vec3 point = vec3(
+            ((corner & 1u) != 0u) ? query_max.x : query_min.x,
+            ((corner & 2u) != 0u) ? query_max.y : query_min.y,
+            ((corner & 4u) != 0u) ? query_max.z : query_min.z
+        );
+        uvec3 cell;
+        if (!pvs_point_cell(point, cell)) {
+            return true;
+        }
+        uvec3 page_cell  = cell / page_size;
+        uvec3 local_cell = cell % page_size;
+        uint  page       = page_cell.x + (page_dims.x * (page_cell.y + (page_dims.y * page_cell.z)));
+        uint  slot       = cull_pvs.words[page];
+        if (slot == 0xffffffffu) {
+            return true;
+        }
+        uint local = local_cell.x + (page_size * (local_cell.y + (page_size * local_cell.z)));
+        uint word  = cull_pvs.words[slot_base + (slot * words_per_page) + (local * words_per_cell) + word_in_cell];
+        if ((word & bit) != 0u) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void write_pvs_culled_words(uint group, uint entry_count, uint entry, uvec2 culled)
+{
+    uint base = 2u * ((group * entry_count) + entry);
+    cull_pvs_culled.words[base + 0u] = culled.x;
+    cull_pvs_culled.words[base + 1u] = culled.y;
+}
+
 void main()
 {
     uint entry       = gl_GlobalInvocationID.x;
@@ -123,6 +208,9 @@ void main()
 
     bool  occlusion        = (cull_views.header.z != 0u);
     bool  previous         = (cull_views.header.w != 0u);
+    bool  pvs              = (cull_views.pvs_header.x != 0u);
+    uint  column           = cull_columns.columns[entry];
+    uvec2 pvs_culled       = uvec2(0u, 0u);
     vec3  occlusion_e      = unbounded ? vec3(0.0) : occlusion_grown_extent(c, e);
     uint  group            = 0u;
     uvec2 bits             = uvec2(0u, 0u);
@@ -136,13 +224,17 @@ void main()
             if (occlusion) {
                 write_occlusion_words(group, entry_count, entry, occlusion_tests, occlusion_bits, occlusion_culled);
             }
+            if (pvs) {
+                write_pvs_culled_words(group, entry_count, entry, pvs_culled);
+            }
+            pvs_culled       = uvec2(0u, 0u);
             bits             = uvec2(0u, 0u);
             occlusion_tests  = uvec2(0u, 0u);
             occlusion_bits   = uvec2(0u, 0u);
             occlusion_culled = uvec2(0u, 0u);
             group            = view_group;
         }
-        uint base = 10u * view;
+        uint base = 12u * view;
         vec4 info = cull_views.views[base + 7u];
         if (uint(info.x) != purpose) {
             continue;
@@ -179,6 +271,15 @@ void main()
         }
         uint  bit      = view % 64u;
         uvec2 view_bit = (bit < 32u) ? uvec2(1u << bit, 0u) : uvec2(0u, 1u << (bit - 32u));
+        // The PVS rule, before the occlusion terms.
+        vec4 pvs_min = cull_views.views[base + 10u];
+        if (pvs && inside && !unbounded && (pvs_min.w > 0.5) && (column != 0xffffffffu)) {
+            vec4 pvs_max = cull_views.views[base + 11u];
+            if (!pvs_keeps(column, pvs_min.xyz, pvs_max.xyz)) {
+                inside      = false;
+                pvs_culled |= view_bit;
+            }
+        }
         vec4  occlusion_info = cull_views.views[base + 9u];
         bool  occlusion_view = occlusion && (occlusion_info.x > 0.5);
         // The previous occlusion frame's verdict on this entry in this view:
@@ -214,5 +315,8 @@ void main()
     cull_masks.masks[(group * entry_count) + entry] = bits;
     if (occlusion) {
         write_occlusion_words(group, entry_count, entry, occlusion_tests, occlusion_bits, occlusion_culled);
+    }
+    if (pvs) {
+        write_pvs_culled_words(group, entry_count, entry, pvs_culled);
     }
 }

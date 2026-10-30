@@ -34,6 +34,15 @@ auto c_str(const Occlusion_culling occlusion_culling) -> const char*
     }
 }
 
+auto c_str(const Pvs_culling pvs_culling) -> const char*
+{
+    switch (pvs_culling) {
+        case Pvs_culling::off: return "off";
+        case Pvs_culling::on:  return "on";
+        default:               return "?";
+    }
+}
+
 Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device, const std::filesystem::path& shader_path)
     : m_graphics_device{graphics_device}
     , m_device_capable {is_device_capable(graphics_device)}
@@ -78,6 +87,33 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
         erhe::graphics::Shader_resource::Block_create_info{
             .name          = "cull_occlusion_previous",
             .binding_point = static_cast<int>(occlusion_previous_words_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , m_pvs_database_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_pvs",
+            .binding_point = static_cast<int>(pvs_database_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , m_pvs_culled_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_pvs_culled",
+            .binding_point = static_cast<int>(pvs_culled_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .writeonly     = true
+        }
+    }
+    , m_pvs_columns_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_columns",
+            .binding_point = static_cast<int>(pvs_columns_binding_point),
             .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
             .readonly      = true
         }
@@ -187,10 +223,17 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_bounds_block.add_vec4("bounds", Shader_resource::unsized_array);
     m_view_header_offset           = m_views_block.add_uvec4("header"          )->get_offset_in_parent();
     m_view_occlusion_header_offset = m_views_block.add_uvec4("occlusion_header")->get_offset_in_parent();
+    m_view_pvs_header_offset       = m_views_block.add_uvec4("pvs_header"      )->get_offset_in_parent();
+    m_view_pvs_cells_offset        = m_views_block.add_uvec4("pvs_cells"       )->get_offset_in_parent();
+    m_view_pvs_pages_offset        = m_views_block.add_uvec4("pvs_pages"       )->get_offset_in_parent();
+    m_view_pvs_grid_offset         = m_views_block.add_vec4 ("pvs_grid"        )->get_offset_in_parent();
     m_view_data_offset   = m_views_block.add_vec4 ("views", Shader_resource::unsized_array)->get_offset_in_parent();
     m_masks_block.add_uvec2("masks", Shader_resource::unsized_array);
     m_occlusion_words_block         .add_uint("words", Shader_resource::unsized_array);
     m_occlusion_previous_words_block.add_uint("words", Shader_resource::unsized_array);
+    m_pvs_database_block            .add_uint("words",   Shader_resource::unsized_array);
+    m_pvs_culled_block              .add_uint("words",   Shader_resource::unsized_array);
+    m_pvs_columns_block             .add_uint("columns", Shader_resource::unsized_array);
     // The occlusion test (occlusion_test.vert / .frag): the view block
     // (std140: per view a mat4 and a vec4, then a uvec4), the bounds as the
     // classifier reads them, and the two occlusion regions as uint words
@@ -226,7 +269,10 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
                 { .binding_point = views_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
                 { .binding_point = masks_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
                 { .binding_point = occlusion_words_binding_point,          .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = occlusion_previous_words_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
+                { .binding_point = occlusion_previous_words_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
+                { .binding_point = pvs_database_binding_point,             .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
+                { .binding_point = pvs_culled_binding_point,               .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
+                { .binding_point = pvs_columns_binding_point,              .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
             },
             .debug_label       = "Gpu_cull_classifier",
             .uses_texture_heap = false
@@ -238,7 +284,10 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
         Shader_stages_create_info{
             .name              = "cull_classify",
             .defines           = { { "ERHE_CULL_CLASSIFY_GROUP_SIZE", fmt::format("{}", workgroup_size) } },
-            .interface_blocks  = { &m_bounds_block, &m_views_block, &m_masks_block, &m_occlusion_words_block, &m_occlusion_previous_words_block },
+            .interface_blocks  = {
+                &m_bounds_block, &m_views_block, &m_masks_block, &m_occlusion_words_block, &m_occlusion_previous_words_block,
+                &m_pvs_database_block, &m_pvs_culled_block, &m_pvs_columns_block
+            },
             .shaders           = { { Shader_type::compute_shader, shader_path / std::filesystem::path{"cull_classify.comp"} } },
             .bind_group_layout = m_bind_group_layout.get()
         }

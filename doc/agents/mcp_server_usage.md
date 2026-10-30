@@ -197,6 +197,11 @@ compute dispatches of the frame (1, or 0 for a scene without entries).
 `gpu_time_ns` is the dispatch's `Gpu_timer` result, the latest completed
 measurement; a dispatch that overlaps the previous work on the GPU measures
 close to 0 (the timer counts work where it finishes).
+With the PVS rule ([pvs.md](../plans/pvs.md) "Runtime consumption") both
+mask sets carry it; `pvs_culled_cpu_count` and `pvs_culled_gpu_count` count
+the bits it removed on each path (the CPU lanes' bits, the GPU's PVS culled
+words) and `pvs_mismatch_count` the bits they disagree on (also in
+`mismatch_count`).
 The command generation adds `command_job_count` (one job per shadow view and
 chunk of each drawn shadow list, and per color pass selection and chunk of
 each color list the pass draws; 0 for a frame without either),
@@ -278,7 +283,13 @@ file, and in `camera`: `cell` (`"outside"` outside the grid), `page`,
 `local_cell`, `page_stored`, `has_pvs`, `pvs_size`. `bake` includes
 `method` (`sampled` or `disocclusion`); `bits_hash` is the 64-bit FNV-1a of
 the bits as 16 hex digits, equal for two equal bakes and across a save and
-reload.
+reload. The consumer ([pvs.md](../plans/pvs.md) "Runtime consumption"):
+`culling_enabled` (the `pvs_culling` setting), `frame_culling_active` (the
+scene's draw lists published the last frame with the rule on: the setting on
+and the database ready) and `views: [{view, tested, culled}]`, per viewport
+of the scene drawn in the last rendered frame (`view` its settings key):
+the entries the rule tested (inside the frustum, with bounds and a baked
+column) and those it culled.
 
 ```bash
 python3 scripts/mcp_call.py get_pvs_status '{"scene_name":"Default Scene"}'
@@ -776,6 +787,23 @@ color commands (one frame of lag; a static view renders the same image).
 Omit `enabled` to query.
 
 Returns: `{enabled, classification, gpu_supported}`.
+
+### set_pvs_culling
+
+Set `Editor_settings_config::pvs_culling` (the live setting, as the Settings
+window's PVS Culling checkbox edits it; saved only by a Settings window
+save): `enabled` true or false ([pvs.md](../plans/pvs.md) "Runtime
+consumption"). With a ready database, both culling classification paths
+cull from each viewport's color view the baked entries whose bit is clear
+in every grid cell holding a corner of the view's query box (the camera
+position plus and minus `pvs_query_margin`, default 0.05 m; an orthographic
+camera has none). An absent or stale database culls nothing; previews,
+thumbnails, `render_scene_image`, the id pass, the shadow passes and the
+headset get no PVS culling. Takes effect at the next frame's render settings
+snapshot. Omit `enabled` to query. Counts: `get_pvs_status` `views`,
+`get_composition_passes` `last_pvs_tested_count` / `last_pvs_culled_count`.
+
+Returns: `{enabled, query_margin, classification}`.
 
 ### set_viewport_style
 

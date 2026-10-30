@@ -418,7 +418,10 @@ library.
   transform (12 floats, the 3 rows of the 4 columns of `world_from_node`)
   and world bounds (6 floats) the bake saw, and `transform_hash`, 64-bit
   FNV-1a over those 18 floats' bits (`compute_pvs_transform_hash()`), which
-  the staleness check compares against.
+  the staleness check compares against. `make_pvs_world_transform()`,
+  `make_pvs_world_bounds()` and `compute_pvs_transform_hash(world_from_node,
+  world_aabb)` are the one extraction the bake and the draw lists'
+  staleness rule both use.
 - Cell index `x + dims.x * (y + dims.y * z)`; `find_cell(position)` gives
   the cell of a world position or nullopt outside the grid.
 - Pages: cells are grouped into pages of `page_size`^3 cells, the storage

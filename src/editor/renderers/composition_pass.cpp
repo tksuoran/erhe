@@ -443,6 +443,8 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         stats->occlusion_untested_count     = 0;
         stats->occlusion_culled_count       = 0;
         stats->occlusion_counts_frame_index = 0;
+        stats->pvs_tested_count             = 0;
+        stats->pvs_culled_count             = 0;
     }
 
     // The gating ran in the prepare phase (prepare()); a pass that did not
@@ -656,6 +658,14 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 stats->draw_list_entry_count  = statistics.entry_count;
                 stats->draw_list_culled_count = statistics.culled_count;
             }
+            // The PVS rule's counts of the pass's view in this frame
+            // (doc/plans/pvs.md; the classification's, so the frame's own).
+            const erhe::scene_renderer::Pvs_view_counts pvs_counts = draw_list_scene->get_cull_view_pvs_counts(
+                context.app_context.graphics_device->get_frame_index(),
+                prepared.cull_view
+            );
+            stats->pvs_tested_count = pvs_counts.tested;
+            stats->pvs_culled_count = pvs_counts.culled;
         }
         record_result(Composition_pass_result::submitted_draw_lists);
         return;

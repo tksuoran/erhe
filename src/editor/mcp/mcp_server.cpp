@@ -760,6 +760,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_shadow_fit_cache_enabled",   &Mcp_server::action_set_shadow_fit_cache_enabled  },
         { "get_cull_classification_check",  &Mcp_server::query_cull_classification_check      },
         { "set_occlusion_culling",          &Mcp_server::action_set_occlusion_culling         },
+        { "set_pvs_culling",                &Mcp_server::action_set_pvs_culling               },
         { "set_viewport_style",             &Mcp_server::action_set_viewport_style            },
         { "get_occlusion_check",            &Mcp_server::query_occlusion_check                },
         { "get_pvs_status",                 &Mcp_server::query_pvs_status                     },

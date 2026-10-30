@@ -26,7 +26,22 @@ auto Cull_view_tests::is_same(const Cull_view_tests& other) const -> bool
     }
     return
         (plane_count == other.plane_count) &&
-        (std::memcmp(planes.data(), other.planes.data(), plane_count * sizeof(glm::vec4)) == 0);
+        (std::memcmp(planes.data(), other.planes.data(), plane_count * sizeof(glm::vec4)) == 0) &&
+        same_bits(pvs_query_min.x, other.pvs_query_min.x) &&
+        same_bits(pvs_query_min.y, other.pvs_query_min.y) &&
+        same_bits(pvs_query_min.z, other.pvs_query_min.z) &&
+        same_bits(pvs_query_max.x, other.pvs_query_max.x) &&
+        same_bits(pvs_query_max.y, other.pvs_query_max.y) &&
+        same_bits(pvs_query_max.z, other.pvs_query_max.z);
+}
+
+auto Cull_view_tests::has_pvs_query() const -> bool
+{
+    return
+        (kind == Cull_view_kind::planes) &&
+        (pvs_query_max.x >= pvs_query_min.x) &&
+        (pvs_query_max.y >= pvs_query_min.y) &&
+        (pvs_query_max.z >= pvs_query_min.z);
 }
 
 auto is_blending_class_selected(const Draw_blending_selection selection, const erhe::primitive::Blending_class blending_class) -> bool

@@ -53,6 +53,30 @@ auto compute_pvs_transform_hash(const std::array<float, 12>& world_transform, co
     return hash;
 }
 
+auto make_pvs_world_transform(const glm::mat4& world_from_node) -> std::array<float, 12>
+{
+    std::array<float, 12> world_transform{};
+    for (glm::length_t column = 0; column < 4; ++column) {
+        for (glm::length_t row = 0; row < 3; ++row) {
+            world_transform[static_cast<std::size_t>((column * 3) + row)] = world_from_node[column][row];
+        }
+    }
+    return world_transform;
+}
+
+auto make_pvs_world_bounds(const erhe::math::Aabb& world_aabb) -> std::array<float, 6>
+{
+    return std::array<float, 6>{
+        world_aabb.min.x, world_aabb.min.y, world_aabb.min.z,
+        world_aabb.max.x, world_aabb.max.y, world_aabb.max.z
+    };
+}
+
+auto compute_pvs_transform_hash(const glm::mat4& world_from_node, const erhe::math::Aabb& world_aabb) -> uint64_t
+{
+    return compute_pvs_transform_hash(make_pvs_world_transform(world_from_node), make_pvs_world_bounds(world_aabb));
+}
+
 namespace {
 
 [[nodiscard]] auto get_words_per_cell_for(const std::size_t column_count) -> std::size_t

@@ -120,6 +120,11 @@ public:
         bool                               reverse_depth{true};
         erhe::math::Depth_range            depth_range  {erhe::math::Depth_range::zero_to_one};
         erhe::math::Coordinate_conventions conventions  {};
+        // The view's potentially visible set query box (world space;
+        // doc/plans/pvs.md "Runtime consumption"), empty (max < min, the
+        // default) for a view without the PVS rule.
+        glm::vec3                          pvs_query_min{ 0.0f};
+        glm::vec3                          pvs_query_max{-1.0f};
     };
     // Render phase, before the frame's culling classification
     // (doc/erhe/draw_list_renderer.md Q6, doc/plans/culling.md phase 6a):

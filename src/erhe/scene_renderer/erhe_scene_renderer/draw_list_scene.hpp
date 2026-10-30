@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/caster_extents_identity.hpp"
+#include "erhe_scene_renderer/cull_lanes.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/draw_list_object.hpp"
 #include "erhe_scene_renderer/joint_poses.hpp"
@@ -18,6 +19,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -38,6 +40,10 @@ namespace erhe::graphics {
     class Render_pipeline;
 }
 
+namespace erhe::scene {
+    class Pvs_database;
+}
+
 namespace erhe::scene_renderer {
 
 class Caster_vertex_extent;
@@ -48,6 +54,7 @@ class Gpu_occlusion_check;
 class Gpu_cull_classifier;
 class Mesh_memory;
 class Primitive_buffer;
+class Pvs_gpu_database;
 class Shader_variant_cache;
 
 // Environment configuration of the color purpose (R18): the pass-derived
@@ -192,6 +199,19 @@ public:
     // Entries the classification of that frame removed from the view
     // because the frame before it found them occluded (one frame of lag).
     uint32_t culled     {0};
+};
+
+// The potentially visible set rule's counts of one culling view of the
+// frame being rendered (Draw_list_scene::get_cull_view_pvs_counts(),
+// doc/plans/pvs.md "Runtime consumption"): the entries the rule tested
+// (inside the frustum, with bounds and a tracked column) and those it
+// culled. Both classification paths decide the same bits (the
+// classification check compares them), so the counts are the CPU lanes'.
+class Pvs_view_counts
+{
+public:
+    uint32_t tested{0};
+    uint32_t culled{0};
 };
 
 // One occluded entry of an occlusion check view.
@@ -439,6 +459,13 @@ public:
     // GPU masks (the CPU lanes have no occlusion term); a removed bit the CPU
     // did not set is a mismatch.
     std::size_t                                 occlusion_culled_count {0};
+    // The (entry, view) bits the frame's PVS rule removed (doc/plans/pvs.md
+    // "Runtime consumption"), counted on both paths: the CPU lanes' bits and
+    // the GPU's culled words; a bit the two disagree on is a mismatch (in
+    // the list's mismatch_count, and pvs_mismatch_count).
+    std::size_t                                 pvs_culled_cpu_count   {0};
+    std::size_t                                 pvs_culled_gpu_count   {0};
+    std::size_t                                 pvs_mismatch_count     {0};
     // Gpu_timer last result of the frame's dispatch, nanoseconds: the
     // latest completed measurement, not necessarily that of the checked
     // frame.
@@ -584,11 +611,44 @@ public:
     // only with the effective classification gpu and a Gpu_cull_classifier
     // that supports the occlusion test (refused, logged once: the slot
     // records off).
-    void publish           (uint64_t frame_index, std::size_t frames_in_flight, Cull_classification classification, Occlusion_culling occlusion, std::span<const Joint_pose> joint_poses);
+    // pvs: the frame's PVS culling setting (doc/plans/pvs.md "Runtime
+    // consumption"), recorded in the slot with the database set by
+    // set_pvs_database(); on takes effect only while that database is
+    // ready (absent or stale: the slot records off).
+    void publish           (uint64_t frame_index, std::size_t frames_in_flight, Cull_classification classification, Occlusion_culling occlusion, Pvs_culling pvs, std::span<const Joint_pose> joint_poses);
     // The classification the last publish() recorded (main thread).
     [[nodiscard]] auto get_cull_classification() const -> Cull_classification { return m_published_cull_classification; }
     // The occlusion culling the last publish() recorded (main thread).
     [[nodiscard]] auto get_occlusion_culling() const -> Occlusion_culling { return m_published_occlusion_culling; }
+    // The PVS culling the last publish() recorded (main thread).
+    [[nodiscard]] auto get_pvs_culling() const -> Pvs_culling { return m_published_pvs_culling; }
+
+    // --- Potentially visible sets (doc/plans/pvs.md "Runtime consumption") ---
+    // The database the classification reads (null: none). Main thread,
+    // prepare phase: looks up the column of every registered entry once
+    // (Pvs_database::find_column() of the mesh's glTF uid and the entry's
+    // mesh_primitive_index; later registrations look theirs up at
+    // registration), changes the lists that hold an entry whose column
+    // changed (the next publish copies them and their GPU columns) and
+    // applies the staleness rule to every tracked entry.
+    void set_pvs_database(std::shared_ptr<const erhe::scene::Pvs_database> database);
+    // Any thread: set_pvs_database() at the next flush_pending(), in the
+    // order of the other queued operations.
+    void enqueue_set_pvs_database(std::shared_ptr<const erhe::scene::Pvs_database> database);
+    [[nodiscard]] auto get_pvs_database() const -> const std::shared_ptr<const erhe::scene::Pvs_database>& { return m_pvs_database; }
+    // The staleness rule (doc/plans/pvs.md D4): called (main thread,
+    // prepare phase) when a tracked entry's world transform and bounds no
+    // longer hash to its column's transform_hash (the transform, bounds and
+    // refresh hooks, a registration), or when the last entry of a column is
+    // unregistered and the flush registers none back. The owner marks the
+    // database stale (the Draw_list_scene holds it const); the next publish
+    // then records Pvs_culling::off. Called once per database.
+    void set_pvs_stale_callback(std::function<void()> callback);
+    // Main thread: the owner is going away (a scene close). Drops the
+    // database, the stale callback and any queued set_pvs_database(), so the
+    // unregistrations of the teardown see no database: entries leaving with
+    // their scene are not removed baked entries.
+    void detach_pvs_database();
     // Diagnostics: list bounds ranges publish() wrote to the slots' GPU
     // bounds buffers (a frame in which no list changed adds none).
     [[nodiscard]] auto get_gpu_bounds_write_count() const -> std::size_t { return m_gpu_bounds_write_count; }
@@ -633,7 +693,22 @@ public:
     // classifies them all at once; adding a view after it is a defect
     // (verified). The editor adds them from the rendergraph nodes'
     // pre-execute hooks (doc/plans/culling.md phase 6a).
-    [[nodiscard]] auto add_cull_view(uint64_t frame_index, Draw_purpose purpose, std::span<const glm::vec4> planes) -> Cull_view;
+    // pvs_query_min / pvs_query_max: a color view's potentially visible set
+    // query box (world space; doc/plans/pvs.md "Runtime consumption"), part
+    // of the view's identity: two views share a view only with the same
+    // box. The default (max < min) is a view without the PVS rule.
+    [[nodiscard]] auto add_cull_view(
+        uint64_t                   frame_index,
+        Draw_purpose               purpose,
+        std::span<const glm::vec4> planes,
+        const glm::vec3&           pvs_query_min = glm::vec3{0.0f},
+        const glm::vec3&           pvs_query_max = glm::vec3{-1.0f}
+    ) -> Cull_view;
+    // The PVS rule's counts of a view of frame_index's set (render phase,
+    // after the frame's classification): zero for a view without a query
+    // box, in a frame published with Pvs_culling::off, and for
+    // Cull_view::none.
+    [[nodiscard]] auto get_cull_view_pvs_counts(uint64_t frame_index, Cull_view cull_view) const -> Pvs_view_counts;
     // The six views of one point light's shadow cube (doc/plans/culling.md
     // phases 2 and 3), element f for face f in the order +X -X +Y -Y +Z -Z
     // of a world-axis-aligned cube centered on range_sphere.center. An
@@ -868,11 +943,12 @@ private:
     class Pending_op
     {
     public:
-        enum class Kind : uint8_t { rebuild_all, register_, unregister, reregister, material_update, set_flags, transform, refresh, bounds };
-        Kind                               kind      {Kind::register_};
-        std::shared_ptr<erhe::scene::Mesh> mesh      {};
-        Draw_mobility                      mobility  {Draw_mobility::dynamic};
-        uint64_t                           flag_bits {0};
+        enum class Kind : uint8_t { rebuild_all, register_, unregister, reregister, material_update, set_flags, transform, refresh, bounds, set_pvs_database };
+        Kind                                             kind        {Kind::register_};
+        std::shared_ptr<erhe::scene::Mesh>               mesh        {};
+        Draw_mobility                                    mobility    {Draw_mobility::dynamic};
+        uint64_t                                         flag_bits   {0};
+        std::shared_ptr<const erhe::scene::Pvs_database> pvs_database{};
     };
 
     // One watched material's shader-variant identity and the change serial it
@@ -1109,6 +1185,20 @@ private:
     // world AABB alone (write_object_transform): the node extent does not
     // move with the node.
     void write_object_bounds(uint32_t object_index);
+    // --- Potentially visible sets (prepare phase) ---
+    // The column of an entry of the object (untracked without a database).
+    [[nodiscard]] auto find_pvs_column(const Draw_list_object& object, uint32_t mesh_primitive_index) const -> uint32_t;
+    // The staleness rule for one object (doc/plans/pvs.md D4): when any of
+    // its entries is tracked, compares the hash of the node's world
+    // transform and world_aabb with the column's transform_hash.
+    void check_pvs_object(const Draw_list_object& object, const erhe::math::Aabb& world_aabb);
+    // A tracked entry was added or removed (the column's live entry count).
+    void add_pvs_column_entry   (uint32_t column);
+    void remove_pvs_column_entry(uint32_t column);
+    // flush_pending(): a column whose last entry was removed and that no
+    // entry took back is a removed baked entry.
+    void check_pvs_dropped_columns();
+    void report_pvs_stale(const char* reason);
 
     // A skinned object in a shadow bounds slot: where its posed bounds sit
     // in the slot's vectors, rewritten by every prepare_shadow_bounds().
@@ -1176,6 +1266,11 @@ private:
         Cull_classification    classification{Cull_classification::cpu};
         // The occlusion culling publish() recorded (on only with gpu).
         Occlusion_culling      occlusion     {Occlusion_culling::off};
+        // The PVS culling publish() recorded (on only with a ready
+        // database) and that database (null when off), which the frame's
+        // classification reads (doc/plans/pvs.md "Runtime consumption").
+        Pvs_culling                                      pvs{Pvs_culling::off};
+        std::shared_ptr<const erhe::scene::Pvs_database> pvs_database;
         // m_entry_layout_serial at the publish: equal for two frames whose
         // lists hold the same entries at the same positions (the occlusion
         // bits of one describe the entries of the other).
@@ -1207,6 +1302,10 @@ private:
         // (Gpu_cull_classifier::template_bytes_per_entry per entry, at the
         // bounds' entry offsets), written with the bounds.
         std::unique_ptr<erhe::graphics::Buffer> gpu_templates;
+        // The entries' PVS columns (Gpu_cull_classifier::
+        // column_bytes_per_entry per entry, at the bounds' entry offsets),
+        // written with the bounds.
+        std::unique_ptr<erhe::graphics::Buffer> gpu_columns;
         std::size_t                             gpu_bounds_capacity{0};
         std::vector<uint64_t>                   gpu_bounds_serials;  // per list: serial written, 0 none
         std::vector<uint32_t>                   gpu_bounds_offsets;  // per list: entry offset written
@@ -1346,6 +1445,17 @@ private:
     // [(v / 64) * entry_count + i], bit v % 64). Cleared when a frame
     // starts and grown with zeros at classification (capacity kept).
     std::vector<std::vector<uint64_t>>                               m_cull_masks;
+    // The PVS rule of the frame being rendered (doc/plans/pvs.md "Runtime
+    // consumption"): per view its query cells (keep_all for a view without
+    // the rule) and counts; per published list the bits the rule removed,
+    // in the m_cull_masks layout (written only in a frame with the rule; the
+    // classification check compares them with the GPU's culled words); the
+    // per-entry culled flags of the list being classified. Capacity kept.
+    std::vector<cull_lanes::Pvs_query_cells>                  m_cull_pvs_view_cells;
+    std::vector<Pvs_view_counts>                                     m_cull_pvs_view_counts;
+    std::vector<std::vector<uint64_t>>                               m_cull_pvs_culled_masks;
+    std::vector<uint32_t>                                            m_cull_pvs_culled;
+    bool                                                             m_cull_pvs_frame{false};
     std::size_t                                                      m_color_environment_change_count{0};
     std::size_t                                                      m_lazy_resolution_count{0};
 
@@ -1369,6 +1479,23 @@ private:
     Cull_frame_registry&                                             m_cull_frame_registry;
     Cull_classification                                              m_published_cull_classification{Cull_classification::cpu};
     Occlusion_culling                                                m_published_occlusion_culling{Occlusion_culling::off};
+    Pvs_culling                                                      m_published_pvs_culling{Pvs_culling::off};
+    // Potentially visible sets (doc/plans/pvs.md), prepare phase: the
+    // database set_pvs_database() set, per column the number of live entries
+    // naming it, the columns whose count dropped to 0 in the current flush,
+    // the staleness callback and whether it was called for this database.
+    std::shared_ptr<const erhe::scene::Pvs_database>                 m_pvs_database;
+    std::vector<uint32_t>                                            m_pvs_column_entry_counts;
+    std::vector<uint32_t>                                            m_pvs_dropped_columns;
+    std::function<void()>                                            m_pvs_stale_callback;
+    bool                                                             m_pvs_stale_reported{false};
+    // Render phase: the GPU copy of the database the frame's slot names
+    // (made at the first GPU dispatch that needs it), and the small buffers
+    // bound for the database and the culled words in a frame without the
+    // rule.
+    std::unique_ptr<Pvs_gpu_database>                                m_pvs_gpu_database;
+    std::unique_ptr<erhe::graphics::Buffer>                          m_pvs_unused_database_buffer;
+    std::unique_ptr<erhe::graphics::Buffer>                          m_pvs_unused_culled_buffer;
     // Bumped whenever an entry is added to, removed from or moved within a
     // list (registration, unregistration, swap-remove, rebuild_all()).
     uint64_t                                                         m_entry_layout_serial{1};

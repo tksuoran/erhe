@@ -29,6 +29,8 @@ void Render_settings::snapshot(const Editor_settings_config& editor_settings, co
     indirect_diffuse_source          = editor_settings.indirect_diffuse_source;
     culling_classification           = editor_settings.culling_classification;
     occlusion_culling                = editor_settings.occlusion_culling;
+    pvs_culling                      = editor_settings.pvs_culling;
+    pvs_query_margin                 = editor_settings.pvs_query_margin;
     light_cluster_binning            = editor_settings.light_cluster_binning;
     lightmap_bicubic_sampling        = editor_settings.lightmap.bicubic_sampling;
 

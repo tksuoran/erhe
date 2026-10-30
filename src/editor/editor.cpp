@@ -4719,6 +4719,11 @@ public:
 
         const bool is_tools_scene = m_tools_attached_to_scene && (m_tools_scene_root.lock() == scene_root);
 
+        // First, before anything unregisters the scene's content: the draw
+        // lists drop the PVS database, so entries leaving with the scene do
+        // not mark it stale (doc/plans/pvs.md D4).
+        scene_root->detach_pvs_consumer();
+
         // Drop selected items hosted by this scene (including the Scene item,
         // whose host is also this scene_root) so the selection does not keep
         // dead-scene items alive or feed them to tools. Other scenes'

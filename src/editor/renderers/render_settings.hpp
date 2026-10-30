@@ -61,6 +61,8 @@ public:
     Indirect_diffuse_source    indirect_diffuse_source        {Indirect_diffuse_source::ambient};
     Culling_classification     culling_classification         {Culling_classification::cpu};
     bool                       occlusion_culling              {false}; // doc/plans/occlusion_culling.md
+    bool                       pvs_culling                    {true};  // doc/plans/pvs.md
+    float                      pvs_query_margin               {0.05f}; // doc/plans/pvs.md
     Light_cluster_binning      light_cluster_binning          {Light_cluster_binning::gpu};
     bool                       lightmap_bicubic_sampling      {true}; // Lightmap_config::bicubic_sampling
 
