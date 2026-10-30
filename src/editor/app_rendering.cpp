@@ -1851,6 +1851,7 @@ void App_rendering::prepare_id(const Render_context& context, Id_pass_prepared& 
     m_context.id_renderer->prepare(
         Id_renderer::Prepare_parameters{
             .mesh_spans      = mesh_spans,
+            .material_set    = &scene_root->get_material_set(),
             .skinning_filter = skinning_filter,
             .scan            = scan
         },

@@ -749,7 +749,7 @@ look slots up. Which set it gets follows the path its caller already chose:
 | `Forward_renderer::render` / `draw_primitives` | bucket | the root's **forward** set, from `Composition_pass`'s bucket branch (`composition_pass.cpp:354,365`; `:324` is the draw-list branch) and every other bucket caller; the shared empty set when null (D8) |
 | `Shadow_renderer::render` | both | whichever matches the path that light takes, filled by `Shadow_render_node` (`shadow_render_node.cpp:601`) |
 | `Ddgi_renderer`, `Ray_trace_renderer` | compute | the root's forward set (phase 5) |
-| `Id_renderer` | bucket | none, and it binds none: its shader reads only the id, and it is not a `Base_render_parameters` caller at all - it owns its `Primitive_buffer` and drives its own encoder. Its only material contact is the null `const Material_set*` it hands `Primitive_buffer::append_records` when it prepares the pass, which then writes a constant slot 0 (D1c) |
+| `Id_renderer` | bucket | the root's **forward** set, handed in `Id_renderer::Prepare_parameters::material_set` by each caller (`App_rendering::prepare_id`, the headset pick pass, `Scene_id_capture_node`): `Primitive_buffer::append_records` writes its slots into the id records, and the render phase binds it around the pass, for the alpha-tested buckets' material reads (`doc/editor/renderers.md` `Id_renderer`). It is not a `Base_render_parameters` caller - it owns its `Primitive_buffer` and drives its own encoder |
 
 A frame over one root therefore binds *both* of that root's sets, in different
 passes (D0); every comparison of slots stays within one set.

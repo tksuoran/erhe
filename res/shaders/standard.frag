@@ -26,8 +26,8 @@
 #if defined(ERHE_VARIANT_ID_RENDER)
 // Matching the layout locations standard.vert assigns under the
 // ID-render variant.
-layout(location = 0) flat in int v_primitive_index;
-layout(location = 1) flat in int v_primitive_id;
+layout(location = 19) flat in int v_primitive_index;
+layout(location = 20) flat in int v_primitive_id;
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)
@@ -37,6 +37,21 @@ vec3 vec3_from_uint(uint i)
     uint g = (i >>  8u) & 0xffu;
     uint b = (i >>  0u) & 0xffu;
     return vec3(float(r) / 255.0, float(g) / 255.0, float(b) / 255.0);
+}
+
+// Pack draw_id + per-vertex facet id into RGB. The draw_id contribution
+// comes from a per-primitive color offset assigned by
+// erhe::scene_renderer::Primitive_buffer when color_source = id_offset; the
+// facet id is the flat output from standard.vert (the GEO facet index,
+// decoded from a_custom_0). Id_renderer::get() unpacks
+// (r << 16) | (g << 8) | b and walks the range table to recover
+// (mesh, primitive_index, facet_id).
+vec4 erhe_id_color()
+{
+    uint facet_id = uint(v_primitive_id);
+    vec3 id_rgb   = vec3_from_uint(facet_id);
+    vec3 id       = id_rgb + primitive.primitives[v_primitive_index].color.xyz;
+    return vec4(id, 1.0);
 }
 #endif
 
@@ -269,19 +284,11 @@ void main()
     return;
 #endif
 
-#if defined(ERHE_VARIANT_ID_RENDER)
-    // Pack draw_id + per-vertex facet id into RGB. The draw_id contribution
-    // comes from a per-primitive color offset assigned by
-    // erhe::scene_renderer::Primitive_buffer when color_source =
-    // id_offset; the facet id is the flat output from standard.vert (the GEO
-    // facet index, decoded from a_custom_0). Id_renderer::get() unpacks
-    // (r << 16) | (g << 8) | b and walks the range table to recover
-    // (mesh, primitive_index, facet_id). No lighting, no varyings, no UBO
-    // reads beyond the shared primitive block.
-    uint facet_id = uint(v_primitive_id);
-    vec3 id_rgb   = vec3_from_uint(facet_id);
-    vec3 id       = id_rgb + primitive.primitives[v_primitive_index].color.xyz;
-    out_color     = vec4(id, 1.0);
+#if defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_ID_RENDER_ALPHA_TEST)
+    // The whole surface: no lighting, no varyings, no reads beyond the
+    // shared primitive block. The alpha-tested ID-render variant writes the
+    // id after the material's discard below instead.
+    out_color = erhe_id_color();
     return;
 #endif
 
@@ -729,6 +736,13 @@ void main()
         }
     }
 #endif
+
+#if defined(ERHE_VARIANT_ID_RENDER)
+    // ERHE_VARIANT_ID_RENDER_ALPHA_TEST: the fragment survived the discard
+    // the color pass applies; it carries the id, and the lit color below is
+    // not compiled.
+    out_color = erhe_id_color();
+#else
 
     vec3 color;
 #if ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_UNLIT
@@ -1312,5 +1326,6 @@ void main()
     }
 #endif
 
+#endif // !ERHE_VARIANT_ID_RENDER
 #endif
 }

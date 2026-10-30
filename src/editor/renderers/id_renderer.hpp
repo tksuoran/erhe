@@ -50,6 +50,7 @@ namespace erhe::scene {
 }
 namespace erhe::scene_renderer {
     class Joint_buffer;
+    class Material_set;
     class Mesh_memory;
     class Program_interface;
     class Shader_variant_cache;
@@ -132,11 +133,15 @@ public:
     };
 
     // What the id pass draws: the meshes of these spans that carry
-    // visible | active | id, all of them or only the skinned ones.
+    // visible | active | id, all of them or only the skinned ones, with the
+    // scene's material set (Scene_root::get_material_set(), updated for the
+    // frame): the records name its slots, and the alpha-tested buckets read
+    // their material through it.
     class Prepare_parameters
     {
     public:
         std::span<const std::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans;
+        erhe::scene_renderer::Material_set*                                material_set{nullptr};
         Skinning_filter                                                    skinning_filter{Skinning_filter::all};
         std::optional<Id_scan_request>                                     scan{}; // the frame's region scan this pass carries (take_frame_scan())
     };

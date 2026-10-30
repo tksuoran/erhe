@@ -289,7 +289,14 @@ The legacy stand-alone shaders are folded in as variant axes:
   replaces the lit colour.
 - ID rendering, brush preview, and rendertarget paths are
   `VARIANT_ID_RENDER`, `VARIANT_BRUSH_PREVIEW`, and
-  `VARIANT_RENDERTARGET` boolean axes.
+  `VARIANT_RENDERTARGET` boolean axes. An ID-render key whose
+  `MATERIAL_BLENDING_MODE` is `alpha_test` or `screen_door` derives
+  `ERHE_VARIANT_ID_RENDER_ALPHA_TEST` (`erhe_standard_variant.glsl`):
+  that variant is not a position pass, so it carries the lit varyings
+  and runs the material inputs up to the color pass's discard, then
+  writes the packed id instead of the lit color. Every other ID-render
+  key is a position pass that writes the id for the whole surface. The
+  id outputs use locations 19 and 20, which no lit varying uses.
 - Solid wireframe (real polygon edges blended over the lit fill,
   see `doc/editor/rendering.md`) is the `SOLID_WIREFRAME` boolean
   axis, gated on `Device_info::use_solid_wireframe`.

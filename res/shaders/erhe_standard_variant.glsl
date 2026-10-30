@@ -18,14 +18,49 @@
 // compiling them without going through Shader_variant_cache -- fix the
 // call site, do not reintroduce fallback macros.
 
+// Material_blending_mode enum values. Keep in sync with
+// erhe::primitive::Material_blending_mode. The fragment shader branches
+// on ERHE_MATERIAL_BLENDING_MODE to pick the per-fragment output policy:
+//   OPAQUE      -> straight color, alpha = 1.
+//   ALPHA_BLEND -> premultiplied color + opacity in alpha (blend state
+//                  must enable premultiplied alpha).
+//   MULTIPLY    -> lit color (clamped); blend state does dst * src.
+//   ADD         -> lit color; blend state adds onto framebuffer.
+//   SUBTRACT    -> lit color; blend state does reverse subtract.
+//   SCREEN_DOOR -> Bayer 4x4 dithered discard against sampled alpha;
+//                  blend stays disabled.
+//   ALPHA_TEST  -> hard discard when sampled alpha < material.alpha_cutoff;
+//                  blend stays disabled.
+#define ERHE_MATERIAL_BLENDING_MODE_OPAQUE       0
+#define ERHE_MATERIAL_BLENDING_MODE_ALPHA_BLEND  1
+#define ERHE_MATERIAL_BLENDING_MODE_MULTIPLY     2
+#define ERHE_MATERIAL_BLENDING_MODE_ADD          3
+#define ERHE_MATERIAL_BLENDING_MODE_SUBTRACT     4
+#define ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR  5
+#define ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST   6
+
+// ERHE_VARIANT_ID_RENDER_ALPHA_TEST is a derived gate: the ID-render variant
+// of a material whose fragments the color pass discards (alpha_test,
+// screen_door). The id pass then discards exactly where the color pass does:
+// this variant is not a position pass, so it carries the lit varyings and the
+// material inputs up to the discard in standard.frag, and writes the packed id
+// there instead of the lit color. Every other ID-render variant draws the
+// primitive's whole surface (opaque and translucent materials alike).
+#if defined(ERHE_VARIANT_ID_RENDER) && \
+    ((ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST) || \
+     (ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR))
+#  define ERHE_VARIANT_ID_RENDER_ALPHA_TEST 1
+#endif
+
 // ERHE_VARIANT_POSITION_PASS is a derived gate. ERHE_VARIANT_DEPTH_ONLY,
-// ERHE_VARIANT_ID_RENDER and ERHE_VARIANT_POINTS all skip the lit / debug
+// ERHE_VARIANT_ID_RENDER (but for ERHE_VARIANT_ID_RENDER_ALPHA_TEST above)
+// and ERHE_VARIANT_POINTS all skip the lit / debug
 // varyings -- the vertex shader only needs gl_Position plus, per variant, a
 // couple of tiny outputs (ID render: two flat ints; points: gl_PointSize +
 // a flat color); the fragment shader either has no body (depth-only) or
 // emits a packed ID color / flat point color directly. Use this gate at
 // every "skip lit machinery" #if so the variants stay in lock-step.
-#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
+#if defined(ERHE_VARIANT_DEPTH_ONLY) || (defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_ID_RENDER_ALPHA_TEST)) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
 #  define ERHE_VARIANT_POSITION_PASS 1
 #endif
 
@@ -123,26 +158,5 @@
 #define ERHE_BXDF_MODEL_ANISOTROPIC_BRDF         2
 #define ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE        3
 #define ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY 4
-
-// Material_blending_mode enum values. Keep in sync with
-// erhe::primitive::Material_blending_mode. The fragment shader branches
-// on ERHE_MATERIAL_BLENDING_MODE to pick the per-fragment output policy:
-//   OPAQUE      -> straight color, alpha = 1.
-//   ALPHA_BLEND -> premultiplied color + opacity in alpha (blend state
-//                  must enable premultiplied alpha).
-//   MULTIPLY    -> lit color (clamped); blend state does dst * src.
-//   ADD         -> lit color; blend state adds onto framebuffer.
-//   SUBTRACT    -> lit color; blend state does reverse subtract.
-//   SCREEN_DOOR -> Bayer 4x4 dithered discard against sampled alpha;
-//                  blend stays disabled.
-//   ALPHA_TEST  -> hard discard when sampled alpha < material.alpha_cutoff;
-//                  blend stays disabled.
-#define ERHE_MATERIAL_BLENDING_MODE_OPAQUE       0
-#define ERHE_MATERIAL_BLENDING_MODE_ALPHA_BLEND  1
-#define ERHE_MATERIAL_BLENDING_MODE_MULTIPLY     2
-#define ERHE_MATERIAL_BLENDING_MODE_ADD          3
-#define ERHE_MATERIAL_BLENDING_MODE_SUBTRACT     4
-#define ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR  5
-#define ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST   6
 
 #endif // ERHE_STANDARD_VARIANT_GLSL

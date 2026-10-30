@@ -10,8 +10,14 @@ looking down -Z and calls get_visible_entries from that camera's pose ten
 times. Passes when the ten replies list the same entries with the same pixel
 counts, the wall and the four front boxes are in the set and the six boxes
 behind the wall are not, and, from a pose behind the wall looking back at it,
-the six boxes are in the set. Prints the counts. Quits the editor at the end
-and restores the editor config files a run may write.
+the six boxes are in the set. Material cases (the id pass draws what the
+color pass draws): from the front pose an alpha-tested box whose opacity is
+under its cutoff everywhere is not in the set and one whose opacity is above
+it is; from the back pose two one-sided rectangles (front face only, facing
++Z, away from the camera) show their back faces: the double-sided one (its
+material's double_sided property) is in the set, the single-sided one is not.
+Prints the counts. Quits the editor at the end and restores the editor config
+files a run may write.
 
 This is the first piece of the plan's scripts/pvs_verify.py.
 
@@ -50,6 +56,13 @@ FRONT_NAMES  = [f"occlusion_front_{i}" for i in range(len(FRONT))]
 # Behind the wall, looking back at it (+Z) over the six boxes.
 BACK_EYE     = [0.0, 1.3, -12.0]
 BACK_TARGET  = [0.0, 1.3, 0.0]
+# Alpha-tested boxes seen from the front pose, clear of the front boxes.
+ALPHA_HIDDEN  = "visible_alpha_test_discarded"
+ALPHA_SHOWN   = "visible_alpha_test_kept"
+# One-sided rectangles facing +Z between the back pose and the boxes behind
+# the wall, above the boxes' silhouettes: the back pose sees their back faces.
+DOUBLE_SIDED  = "visible_double_sided_rectangle"
+SINGLE_SIDED  = "visible_single_sided_rectangle"
 
 
 class Config_backup:
@@ -140,6 +153,23 @@ def run(port, scene, repeats):
     for name, p in zip(FRONT_NAMES, FRONT):
         box(port, scene, name, p, [0.4, 0.4, 0.4])
 
+    # Alpha test: opacity 0 with cutoff 0.5 discards every fragment in the
+    # color pass, opacity 1 none.
+    mcp(port, "create_material", {"scene_name": scene, "name": "visible_alpha_discard", "blending_mode": "alpha_test", "opacity": 0.0, "alpha_cutoff": 0.5})
+    mcp(port, "create_material", {"scene_name": scene, "name": "visible_alpha_keep",    "blending_mode": "alpha_test", "opacity": 1.0, "alpha_cutoff": 0.5})
+    mcp(port, "create_shape", {"scene_name": scene, "shape": "box", "name": ALPHA_HIDDEN, "size": [0.4, 0.4, 0.4], "position": [-1.2, 2.0, 5.0], "motion_mode": "none", "material_name": "visible_alpha_discard"})
+    mcp(port, "create_shape", {"scene_name": scene, "shape": "box", "name": ALPHA_SHOWN,  "size": [0.4, 0.4, 0.4], "position": [ 1.2, 2.0, 5.0], "motion_mode": "none", "material_name": "visible_alpha_keep"})
+    # Double-sided: the material's double_sided property.
+    mcp(port, "create_material", {"scene_name": scene, "name": "visible_double_sided"})
+    mcp(port, "set_item_property", {"scene_name": scene, "item_name": "visible_double_sided", "property": "double_sided", "value": True})
+    mcp(port, "create_material", {"scene_name": scene, "name": "visible_single_sided"})
+    for name, x, material in ((DOUBLE_SIDED, 1.5, "visible_double_sided"), (SINGLE_SIDED, -1.5, "visible_single_sided")):
+        mcp(port, "create_shape", {
+            "scene_name": scene, "shape": "rectangle", "name": name, "width": 0.8, "height": 0.6,
+            "front_face": True, "back_face": False, "position": [x, 2.5, -9.0], "motion_mode": "none", "material_name": material
+        })
+    time.sleep(1.0) # the property write is applied on the next frame
+
     # The viewport camera's pose, as set above.
     front_pose = {"position": EYE, "orientation": [0.0, 0.0, 0.0, 1.0]}
     replies = [visible(port, scene, front_pose) for _ in range(repeats)]
@@ -159,6 +189,10 @@ def run(port, scene, repeats):
         failures.append(f"front: missing {sorted(expected_in - names)}")
     if names & expected_out:
         failures.append(f"front: behind the wall but seen {sorted(names & expected_out)}")
+    if ALPHA_SHOWN not in names:
+        failures.append(f"front: alpha-tested {ALPHA_SHOWN} (opacity above the cutoff) missing")
+    if ALPHA_HIDDEN in names:
+        failures.append(f"front: alpha-tested {ALPHA_HIDDEN} (opacity under the cutoff) seen")
     print(
         f"front: {repeats} calls, frames {frames[0]}..{frames[-1]}, {first['width']} x {first['height']}, "
         f"entries {first['entry_count']}, covered_pixels {first['covered_pixels']}, unresolved_pixels {first['unresolved_pixels']}"
@@ -170,9 +204,17 @@ def run(port, scene, repeats):
     back_names = {e["node_name"] for e in back["entries"]}
     if not expected_out <= back_names:
         failures.append(f"back: missing {sorted(expected_out - back_names)}")
+    if DOUBLE_SIDED not in back_names:
+        failures.append(f"back: {DOUBLE_SIDED} (back face of a double-sided material) missing")
+    if SINGLE_SIDED in back_names:
+        failures.append(f"back: {SINGLE_SIDED} (back face of a single-sided material) seen")
     print(
         f"back: entries {back['entry_count']}, covered_pixels {back['covered_pixels']}, "
         f"unresolved_pixels {back['unresolved_pixels']}, behind boxes seen {len(expected_out & back_names)}/{len(expected_out)}"
+    )
+    print(
+        f"materials: {ALPHA_SHOWN} {'in' if ALPHA_SHOWN in names else 'OUT'}, {ALPHA_HIDDEN} {'IN' if ALPHA_HIDDEN in names else 'out'}, "
+        f"{DOUBLE_SIDED} {'in' if DOUBLE_SIDED in back_names else 'OUT'}, {SINGLE_SIDED} {'IN' if SINGLE_SIDED in back_names else 'out'}"
     )
     for e in back["entries"]:
         print(f"  {e['node_name']!r} uid {e['node_uid']!r} primitive {e['primitive_index']} pixels {e['pixels']}")

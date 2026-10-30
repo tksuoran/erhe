@@ -164,6 +164,7 @@ void Scene_id_capture_node::prepare_rendergraph_node(const uint64_t frame_index)
     m_context.id_renderer->prepare(
         Id_renderer::Prepare_parameters{
             .mesh_spans      = std::span<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>{all_spans, span_count},
+            .material_set    = &scene_root->get_material_set(),
             .skinning_filter = Id_renderer::Skinning_filter::all,
             .scan            = std::nullopt
         },

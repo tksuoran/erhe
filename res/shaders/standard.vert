@@ -10,12 +10,11 @@
 #define a_valency_edge_count a_custom_2
 
 #if defined(ERHE_VARIANT_ID_RENDER)
-// Locations 0 and 1 are reused under the ID-render variant for the two
-// flat outputs the fragment packs into an RGB id. The lit varyings below
-// are skipped via ERHE_VARIANT_POSITION_PASS, so there is no link
-// conflict.
-layout(location = 0) flat out int v_primitive_index;
-layout(location = 1) flat out int v_primitive_id;
+// The two flat outputs the fragment packs into an RGB id. Locations 19 and
+// 20 are used by no lit varying: the alpha-tested ID-render variant
+// (ERHE_VARIANT_ID_RENDER_ALPHA_TEST) carries the lit varyings as well.
+layout(location = 19) flat out int v_primitive_index;
+layout(location = 20) flat out int v_primitive_id;
 #endif
 
 #if defined(ERHE_VARIANT_POINTS)
@@ -23,9 +22,7 @@ layout(location = 1) flat out int v_primitive_id;
 // as a GL point. Redeclaring gl_PerVertex is required to write gl_PointSize;
 // each variant compiles separately and multiview does not redeclare the
 // block, so there is no conflict. Location 0 carries the flat point color --
-// free here because v_position is gated out under ERHE_VARIANT_POSITION_PASS
-// and the ID-render variant (the only other user of location 0) is mutually
-// exclusive with points.
+// free here because v_position is gated out under ERHE_VARIANT_POSITION_PASS.
 out gl_PerVertex {
     vec4  gl_Position;
     float gl_PointSize;
