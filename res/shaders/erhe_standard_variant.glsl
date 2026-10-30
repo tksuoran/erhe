@@ -52,15 +52,35 @@
 #  define ERHE_VARIANT_ID_RENDER_ALPHA_TEST 1
 #endif
 
+// ERHE_VARIANT_PVS is a derived gate: either raster pass of the potentially
+// visible set bake's layered buffer (doc/plans/pvs.md "Bake" 4),
+// ERHE_VARIANT_PVS_DEPTH (the closest linear depth per pixel and depth layer)
+// or ERHE_VARIANT_PVS_ID (the entries at that depth). Neither has a color or
+// depth attachment: the fragment writes the pvs_layered storage block with
+// atomics (erhe_pvs_write() in standard.frag). ERHE_VARIANT_PVS_ALPHA_TEST is
+// the PVS variant of a material whose fragments the color pass discards
+// (alpha_test, screen_door), built like ERHE_VARIANT_ID_RENDER_ALPHA_TEST:
+// not a position pass, it runs the material inputs up to the color pass's
+// discard and writes the layered buffer where a fragment survives. Every
+// other PVS variant is a position pass over the primitive's whole surface.
+#if defined(ERHE_VARIANT_PVS_DEPTH) || defined(ERHE_VARIANT_PVS_ID)
+#  define ERHE_VARIANT_PVS 1
+#  if (ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST) || \
+      (ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR)
+#    define ERHE_VARIANT_PVS_ALPHA_TEST 1
+#  endif
+#endif
+
 // ERHE_VARIANT_POSITION_PASS is a derived gate. ERHE_VARIANT_DEPTH_ONLY,
-// ERHE_VARIANT_ID_RENDER (but for ERHE_VARIANT_ID_RENDER_ALPHA_TEST above)
+// ERHE_VARIANT_ID_RENDER (but for ERHE_VARIANT_ID_RENDER_ALPHA_TEST above),
+// ERHE_VARIANT_PVS (but for ERHE_VARIANT_PVS_ALPHA_TEST above)
 // and ERHE_VARIANT_POINTS all skip the lit / debug
 // varyings -- the vertex shader only needs gl_Position plus, per variant, a
 // couple of tiny outputs (ID render: two flat ints; points: gl_PointSize +
 // a flat color); the fragment shader either has no body (depth-only) or
 // emits a packed ID color / flat point color directly. Use this gate at
 // every "skip lit machinery" #if so the variants stay in lock-step.
-#if defined(ERHE_VARIANT_DEPTH_ONLY) || (defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_ID_RENDER_ALPHA_TEST)) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
+#if defined(ERHE_VARIANT_DEPTH_ONLY) || (defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_ID_RENDER_ALPHA_TEST)) || (defined(ERHE_VARIANT_PVS) && !defined(ERHE_VARIANT_PVS_ALPHA_TEST)) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
 #  define ERHE_VARIANT_POSITION_PASS 1
 #endif
 

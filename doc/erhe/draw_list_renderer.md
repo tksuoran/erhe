@@ -1122,6 +1122,24 @@ decision per entry, the flag filter and the culling view bit, which both
 writers consume), and issues the multi-draw. Chunking (P3a) is applied
 jointly at the `Draw_list_scene` level.
 
+`draw_pvs_face()` is the potentially visible set bake's raster pass
+(`doc/plans/pvs.md` "Bake" 4; `Draw_pvs_face_parameters`): over the
+published opaque and alpha-tested color lists it draws the entries that
+pass the filter, carry a tracked PVS column (`Draw_list::pvs_columns`; the
+bake sets its column table as the scene's database) and lie in the face's
+culling view, with the PVS sub-variant (`Pvs_sub_variant` {depth, id}, the
+`VARIANT_PVS_DEPTH` / `VARIANT_PVS_ID` axes, resolved lazily per color list
+like a shadow sub-variant and cached in `Draw_list_resolutions::pvs`). Each
+chunk binds its own records (`Primitive_buffer::update_records()` of the
+whole chunk, CPU-written `chunk_entries` commands) whose pass color is the
+chunk's first frame-local entry index (the list's offset in the published
+lists back to back plus the chunk's first entry), so the shader's entry
+index is that base plus `ERHE_PRIMITIVE_INDEX`; it therefore needs
+`first_instance` record naming (`supports_pvs_faces()`). The caller binds
+the layered buffer and the scene bindings and supplies a base pipeline with
+no color writes and no depth test; the lists' `double_sided` and
+`negative_determinant` select its cull mode as for the color passes.
+
 **Record upload.** A command names its record through
 `ERHE_PRIMITIVE_INDEX` (`doc/erhe/graphics.md` "Draw records"), and how the
 records reach the GPU depends on the device's `Record_indexing`, read once

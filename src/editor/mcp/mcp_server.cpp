@@ -765,6 +765,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_occlusion_check",            &Mcp_server::query_occlusion_check                },
         { "get_pvs_status",                 &Mcp_server::query_pvs_status                     },
         { "pvs_bake",                       &Mcp_server::action_pvs_bake                      },
+        { "pvs_debug_face",                 &Mcp_server::action_pvs_debug_face                },
         { "get_pvs_bake_status",            &Mcp_server::query_pvs_bake_status                },
         { "pvs_cancel",                     &Mcp_server::action_pvs_cancel                    },
         { "pvs_clear",                      &Mcp_server::action_pvs_clear                     },

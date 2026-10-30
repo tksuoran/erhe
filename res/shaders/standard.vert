@@ -17,6 +17,17 @@ layout(location = 19) flat out int v_primitive_index;
 layout(location = 20) flat out int v_primitive_id;
 #endif
 
+#if defined(ERHE_VARIANT_PVS)
+// The potentially visible set bake passes (erhe_standard_variant.glsl): the
+// fragment's entry, the frame-local entry index of its draw-list entry
+// (Draw_list_scene::draw_pvs_face() writes the first entry index of the
+// draw's chunk into the records' color.x; ERHE_PRIMITIVE_INDEX is the
+// entry's record in the chunk), and its linear view depth. The locations of
+// the ID-render outputs: the two variants never combine.
+layout(location = 19) flat out uint v_pvs_entry;
+layout(location = 20)      out float v_pvs_depth;
+#endif
+
 #if defined(ERHE_VARIANT_POINTS)
 // The points variant (corner points / polygon centroids) draws each vertex
 // as a GL point. Redeclaring gl_PerVertex is required to write gl_PointSize;
@@ -258,6 +269,22 @@ void main()
     v_position               = position;
     v_view_relative_position = view_relative_position.xyz;
     v_position_rounding      = position_rounding;
+#endif
+
+#if defined(ERHE_VARIANT_PVS)
+    // Linear view depth: the distance of the vertex in front of the camera
+    // along its view axis (the camera looks down its -Z axis; its world
+    // matrix is rigid, so column 2 is the unit Z axis). An affine function
+    // of the position, so the rasterizer's perspective-correct
+    // interpolation gives every fragment its own exact view depth. The
+    // depth pass and the id pass compile this same expression, and the id
+    // pass compares the bits it interpolates with the bits the depth pass
+    // stored: precise keeps the compiler from reassociating it.
+    ERHE_VIEW_RELATIVE_PRECISE float pvs_depth = -dot(view_relative_position.xyz, camera.cameras[c_view_index].world_from_node[2].xyz);
+    v_pvs_depth = pvs_depth;
+    // color.x holds the chunk's first frame-local entry index as an exact
+    // float (below 2^24, verified by draw_pvs_face()).
+    v_pvs_entry = uint(primitive.primitives[ERHE_PRIMITIVE_INDEX].color.x) + uint(ERHE_PRIMITIVE_INDEX);
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)

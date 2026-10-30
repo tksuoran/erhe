@@ -139,7 +139,9 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(SOLID_WIREFRAME)                  \
     X(USE_DDGI)                         \
     X(LIGHT_SHADING_CLUSTERED)          \
-    X(USE_LIGHTMAP)
+    X(USE_LIGHTMAP)                     \
+    X(VARIANT_PVS_DEPTH)                \
+    X(VARIANT_PVS_ID)
 
 #define ERHE_SHADER_INT(X) \
     X(LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)     \

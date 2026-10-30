@@ -297,6 +297,25 @@ The legacy stand-alone shaders are folded in as variant axes:
   writes the packed id instead of the lit color. Every other ID-render
   key is a position pass that writes the id for the whole surface. The
   id outputs use locations 19 and 20, which no lit varying uses.
+- The potentially visible set bake's layered buffer (`doc/plans/pvs.md`
+  "Bake" 4) is drawn with the `VARIANT_PVS_DEPTH` and `VARIANT_PVS_ID`
+  boolean axes (either derives `ERHE_VARIANT_PVS`), resolved from a color
+  list's primitive key by `Draw_list_scene::draw_pvs_face()`. The vertex
+  shader outputs the fragment's entry (the record's `color.x`, the chunk's
+  first frame-local entry index, plus `ERHE_PRIMITIVE_INDEX`) and its
+  linear view depth (`precise`), at locations 19 and 20 (the variants never
+  combine with ID render). The fragment shader writes no color: it computes
+  the depth layer (`erhe_pvs_layer.glsl`, whose C++ twin is
+  `erhe::scene_renderer::pvs_layer_of_depth()`) and writes the
+  `pvs_layered` storage block (`Pvs_layered_interface`) with atomics -
+  `atomicMin` of the depth bits for `VARIANT_PVS_DEPTH`, and for
+  `VARIANT_PVS_ID` `atomicMin` / `atomicMax` of the entry where its depth
+  bits equal the stored ones; a fragment outside `[z_near, z_far]` writes
+  nothing. A PVS key whose `MATERIAL_BLENDING_MODE` is `alpha_test` or
+  `screen_door` derives `ERHE_VARIANT_PVS_ALPHA_TEST`, built like the
+  alpha-tested ID-render variant: it runs the material inputs up to the
+  color pass's discard and writes where a fragment survives. Every other
+  PVS key is a position pass.
 - Solid wireframe (real polygon edges blended over the lit fill,
   see `doc/editor/rendering.md`) is the `SOLID_WIREFRAME` boolean
   axis, gated on `Device_info::use_solid_wireframe`.

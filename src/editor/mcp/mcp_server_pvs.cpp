@@ -1,5 +1,6 @@
 // Mcp_server potentially visible set bake tools (doc/plans/pvs.md "Editor"):
-// pvs_bake, get_pvs_bake_status, pvs_cancel, pvs_clear, get_pvs_cell.
+// pvs_bake, pvs_debug_face, get_pvs_bake_status, pvs_cancel, pvs_clear,
+// get_pvs_cell.
 // get_pvs_status is in mcp_server_scene_query.cpp.
 
 #include "mcp/mcp_server.hpp"
@@ -76,13 +77,84 @@ namespace {
         {"captures_done",     status.captures_done},
         {"unmatched_entries", status.unmatched_entries},
         {"uids_assigned",     status.uids_assigned},
+        {"cells_with_pvs",    status.cells_with_pvs},
         {"seconds_elapsed",   status.seconds_elapsed},
-        {"seconds_remaining", status.seconds_remaining}
+        {"seconds_remaining", status.seconds_remaining},
+        {"debug_face",        status.debug_face}
     };
+    if (status.debug_face) {
+        result["debug_cell"]           = status.debug_cell;
+        result["debug_face_index"]     = status.debug_face_index;
+        result["debug_layer"]          = status.debug_layer;
+        result["debug_z_near"]         = status.debug_z_near;
+        result["debug_z_far"]          = status.debug_z_far;
+        result["debug_layer_front"]    = status.debug_layer_front;
+        result["debug_layer_back"]     = status.debug_layer_back;
+        result["debug_depth_entries"]  = status.debug_depth_entries;
+        result["debug_id_entries"]     = status.debug_id_entries;
+        result["debug_covered_pixels"] = status.debug_covered_pixels;
+        result["debug_distinct_ids"]   = status.debug_distinct_ids;
+        result["debug_depth_path"]     = status.debug_depth_path;
+        result["debug_id_path"]        = status.debug_id_path;
+    }
     if (!status.error.empty()) {
         result["error"] = status.error;
     }
     return result;
+}
+
+// The arguments pvs_bake and pvs_debug_face share: the grid and the face
+// parameters. Empty on success, else the problem.
+[[nodiscard]] auto parse_bake_request(const json& args, Pvs_bake_request& request) -> std::string
+{
+    if (args.contains("cell_size")) {
+        if (!args["cell_size"].is_number()) {
+            return "cell_size must be a number";
+        }
+        request.cell_size = args["cell_size"].get<float>();
+    }
+    if (args.contains("region_min") != args.contains("region_max")) {
+        return "give both region_min and region_max, or neither";
+    }
+    if (args.contains("region_min")) {
+        request.region_min = parse_vec3(args["region_min"]);
+        request.region_max = parse_vec3(args["region_max"]);
+        if (!request.region_min.has_value() || !request.region_max.has_value()) {
+            return "region_min and region_max must be finite [x, y, z]";
+        }
+    }
+    const auto read_uint = [&args](const char* key, uint32_t& out_value) -> bool {
+        if (!args.contains(key)) {
+            return true;
+        }
+        if (!args[key].is_number_integer() || (args[key].get<int64_t>() < 0) || (args[key].get<int64_t>() > 0xffffffffll)) {
+            return false;
+        }
+        out_value = static_cast<uint32_t>(args[key].get<int64_t>());
+        return true;
+    };
+    // The disocclusion faces default to 1024 pixels (doc/plans/pvs.md
+    // "Bake" 3), the sampled captures to Pvs_bake_request's 512.
+    if (request.method == erhe::scene::Pvs_bake_method::disocclusion) {
+        request.face_resolution = 1024;
+    }
+    if (
+        !read_uint("samples_per_cell",   request.samples_per_cell)   ||
+        !read_uint("face_resolution",    request.face_resolution)    ||
+        !read_uint("captures_in_flight", request.captures_in_flight) ||
+        !read_uint("layer_count",        request.layer_count)        ||
+        !read_uint("tile_size",          request.tile_size)          ||
+        !read_uint("samples_per_face",   request.samples_per_face)
+    ) {
+        return "samples_per_cell, face_resolution, captures_in_flight, layer_count, tile_size and samples_per_face must be non-negative integers";
+    }
+    if (args.contains("face_fov_degrees")) {
+        if (!args["face_fov_degrees"].is_number()) {
+            return "face_fov_degrees must be a number";
+        }
+        request.face_fov = glm::radians(args["face_fov_degrees"].get<float>());
+    }
+    return {};
 }
 
 } // anonymous namespace
@@ -111,44 +183,9 @@ auto Mcp_server::action_pvs_bake(const json& args) -> std::string
         return make_error_content("pvs_bake: method must be \"sampled\" or \"disocclusion\"");
     }
     request.method = method.value();
-    if (args.contains("cell_size")) {
-        if (!args["cell_size"].is_number()) {
-            return make_error_content("pvs_bake: cell_size must be a number");
-        }
-        request.cell_size = args["cell_size"].get<float>();
-    }
-    if (args.contains("region_min") != args.contains("region_max")) {
-        return make_error_content("pvs_bake: give both region_min and region_max, or neither");
-    }
-    if (args.contains("region_min")) {
-        request.region_min = parse_vec3(args["region_min"]);
-        request.region_max = parse_vec3(args["region_max"]);
-        if (!request.region_min.has_value() || !request.region_max.has_value()) {
-            return make_error_content("pvs_bake: region_min and region_max must be finite [x, y, z]");
-        }
-    }
-    const auto read_uint = [&args](const char* key, uint32_t& out_value) -> bool {
-        if (!args.contains(key)) {
-            return true;
-        }
-        if (!args[key].is_number_integer() || (args[key].get<int64_t>() < 0) || (args[key].get<int64_t>() > 0xffffffffll)) {
-            return false;
-        }
-        out_value = static_cast<uint32_t>(args[key].get<int64_t>());
-        return true;
-    };
-    if (
-        !read_uint("samples_per_cell",   request.samples_per_cell) ||
-        !read_uint("face_resolution",    request.face_resolution)  ||
-        !read_uint("captures_in_flight", request.captures_in_flight)
-    ) {
-        return make_error_content("pvs_bake: samples_per_cell, face_resolution and captures_in_flight must be non-negative integers");
-    }
-    if (args.contains("face_fov_degrees")) {
-        if (!args["face_fov_degrees"].is_number()) {
-            return make_error_content("pvs_bake: face_fov_degrees must be a number");
-        }
-        request.face_fov = glm::radians(args["face_fov_degrees"].get<float>());
+    const std::string parse_error = parse_bake_request(args, request);
+    if (!parse_error.empty()) {
+        return make_error_content("pvs_bake: " + parse_error);
     }
 
     const std::string error = m_context.pvs_baker->start_bake(scene_root, request);
@@ -160,6 +197,56 @@ auto Mcp_server::action_pvs_bake(const json& args) -> std::string
     result["face_resolution"]    = request.face_resolution;
     result["face_fov_degrees"]   = glm::degrees(request.face_fov);
     result["captures_in_flight"] = request.captures_in_flight;
+    if (request.method == erhe::scene::Pvs_bake_method::disocclusion) {
+        result["layer_count"]      = request.layer_count;
+        result["tile_size"]        = request.tile_size;
+        result["samples_per_face"] = request.samples_per_face;
+    }
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_pvs_debug_face(const json& args) -> std::string
+{
+    if ((m_context.pvs_baker == nullptr) || (m_context.app_scenes == nullptr)) {
+        return make_error_content("pvs_debug_face: the PVS baker is not available");
+    }
+    const std::string scene_name = args.value("scene_name", std::string{});
+    std::shared_ptr<Scene_root> scene_root{};
+    for (const std::shared_ptr<Scene_root>& candidate : m_context.app_scenes->get_scene_roots()) {
+        if (candidate->get_name() == scene_name) {
+            scene_root = candidate;
+            break;
+        }
+    }
+    if (!scene_root) {
+        return make_error_content("pvs_debug_face: scene not found: " + scene_name);
+    }
+    Pvs_bake_request request{};
+    request.method = erhe::scene::Pvs_bake_method::disocclusion;
+    const std::string parse_error = parse_bake_request(args, request);
+    if (!parse_error.empty()) {
+        return make_error_content("pvs_debug_face: " + parse_error);
+    }
+    Pvs_debug_face_request debug{};
+    const auto read_index = [&args](const char* key, uint32_t& out_value) -> bool {
+        if (!args.contains(key) || !args[key].is_number_integer() || (args[key].get<int64_t>() < 0) || (args[key].get<int64_t>() > 0xffffffffll)) {
+            return false;
+        }
+        out_value = static_cast<uint32_t>(args[key].get<int64_t>());
+        return true;
+    };
+    if (!read_index("cell", debug.cell) || !read_index("face", debug.face) || !read_index("layer", debug.layer)) {
+        return make_error_content("pvs_debug_face: cell, face and layer must be non-negative integers");
+    }
+    debug.path = args.value("path", std::string{});
+    const std::string error = m_context.pvs_baker->start_debug_face(scene_root, request, debug);
+    if (!error.empty()) {
+        return make_error_content("pvs_debug_face: " + error);
+    }
+    json result = to_json(m_context.pvs_baker->get_status());
+    result["face_resolution"]  = request.face_resolution;
+    result["face_fov_degrees"] = glm::degrees(request.face_fov);
+    result["layer_count"]      = request.layer_count;
     return make_json_content(result).dump();
 }
 

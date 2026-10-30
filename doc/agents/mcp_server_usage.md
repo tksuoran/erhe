@@ -295,33 +295,61 @@ column) and those it culled.
 python3 scripts/mcp_call.py get_pvs_status '{"scene_name":"Default Scene"}'
 ```
 
-### pvs_bake, get_pvs_bake_status, pvs_cancel, pvs_clear
+### pvs_bake, pvs_debug_face, get_pvs_bake_status, pvs_cancel, pvs_clear
 
 The PVS bake (`Pvs_baker`, [renderers.md](../editor/renderers.md);
 [pvs.md](../plans/pvs.md) "Bake"). `pvs_bake` starts a bake and returns at
 once; the bake runs over frames and sets the database on the scene when
 its last cell is done.
 
-Arguments of `pvs_bake`: `scene_name`, `method` (`"sampled"`, the default
-and the only one built; `"disocclusion"` is refused), `cell_size`,
-`region_min` and `region_max` (both or neither; they override the scene's
-`Scene_settings` `pvs_cell_size` and `pvs_region_min` / `pvs_region_max`
-for this bake, and an unset region, both corners zero, is the union of the
-static entries' world bounds), `samples_per_cell` (9), `face_resolution`
-(512), `face_fov_degrees` (120), `captures_in_flight` (8). Mesh nodes the
-bake covers get a glTF uid when they have none.
+Arguments of `pvs_bake`: `scene_name`, `method` (`"sampled"`, the default,
+or `"disocclusion"`), `cell_size`, `region_min` and `region_max` (both or
+neither; they override the scene's `Scene_settings` `pvs_cell_size` and
+`pvs_region_min` / `pvs_region_max` for this bake, and an unset region,
+both corners zero, is the union of the static entries' world bounds),
+`face_resolution` (512 sampled, 1024 disocclusion), `face_fov_degrees`
+(120); sampled: `samples_per_cell` (9), `captures_in_flight` (8);
+disocclusion: `layer_count` (64, at most 64), `tile_size` (8, recorded for
+the disocclusion passes), `samples_per_face` (1; each further sample
+repeats the face with a sub-pixel jitter of the projection). Mesh nodes the
+bake covers get a glTF uid when they have none. The disocclusion method
+renders, per cell from its center, six faces of `samples_per_face` face
+passes each into the layered buffer (`capture_count` counts the face
+passes); the disocclusion passes that turn the layered buffer into a PVS
+are [pvs.md](../plans/pvs.md) "Build order" step 5, so every cell ends
+without a PVS (`cells_with_pvs` 0). For its duration the scene's database
+is the bake's column table (no stored page: nothing is culled); an edit
+that stales it fails the bake, and a bake that does not finish puts the
+previous database back.
+
+`pvs_debug_face` shows the layered buffer of one face without a bake:
+`scene_name`, `cell` (index in the grid `pvs_bake` with the same arguments
+would use), `face` (0..5: +X -X +Y -Y +Z -Z), `layer`, `path` (prefix of
+the two PNGs), and the grid and disocclusion arguments of `pvs_bake`. It
+returns at once (status `running`, `debug_face` true); the job runs the
+depth and id passes of that face once, reads `layer` back and writes
+`<path>_depth.png` (the closest depth per pixel, black at the layer's front
+depth to light gray at its back, white where the layer has no sample) and
+`<path>_id.png` (`id_min` as a hashed color, black where empty), then puts
+the scene's database back. When done, `get_pvs_bake_status` adds
+`debug_cell`, `debug_face_index`, `debug_layer`, `debug_z_near`,
+`debug_z_far`, `debug_layer_front`, `debug_layer_back`,
+`debug_depth_entries` and `debug_id_entries` (entries the passes drew),
+`debug_covered_pixels`, `debug_distinct_ids`, `debug_depth_path` and
+`debug_id_path`.
 
 `get_pvs_bake_status` returns `{state, scene_name, method, grid_origin,
 cell_size, cell_counts, cell_count, column_count, cells_done, capture_count,
-captures_done, unmatched_entries, uids_assigned, seconds_elapsed,
-seconds_remaining, error}`; `state` is `idle`, `running`, `done`,
-`cancelled` or `failed` (`error` set). `pvs_bake` replies with the same
-object plus the parameters used. `pvs_cancel` ends a running bake
-(the scene keeps the database it had) and reports `cancelled`. `pvs_clear`
-removes the scene's database.
+captures_done, unmatched_entries, uids_assigned, cells_with_pvs,
+seconds_elapsed, seconds_remaining, debug_face, error}`; `state` is `idle`,
+`running`, `done`, `cancelled` or `failed` (`error` set). `pvs_bake`
+replies with the same object plus the parameters used. `pvs_cancel` ends a
+running bake (the scene keeps the database it had) and reports
+`cancelled`. `pvs_clear` removes the scene's database.
 
 ```bash
 python3 scripts/mcp_call.py pvs_bake '{"scene_name":"Default Scene","cell_size":2,"region_min":[-6,0.2,-1.5],"region_max":[6,4.2,6.5]}'
+python3 scripts/mcp_call.py pvs_debug_face '{"scene_name":"Default Scene","cell_size":2,"region_min":[-6,0.2,-1.5],"region_max":[6,4.2,6.5],"cell":39,"face":5,"layer":41,"path":"logs/pvs_face"}'
 python3 scripts/mcp_call.py get_pvs_bake_status '{}'
 ```
 

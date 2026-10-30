@@ -11,6 +11,7 @@
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/material_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
+#include "erhe_scene_renderer/pvs_layers.hpp"
 
 #include <memory>
 
@@ -68,6 +69,7 @@ public:
     Light_interface                                    light_interface;
     Material_interface                                 material_interface;
     Primitive_interface                                primitive_interface;
+    Pvs_layered_interface                              pvs_layered_interface;
     std::unique_ptr<erhe::graphics::Bind_group_layout> bind_group_layout;
 };
 

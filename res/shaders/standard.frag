@@ -23,6 +23,57 @@
 #endif
 #endif
 
+#if defined(ERHE_VARIANT_PVS)
+#include "erhe_pvs_layer.glsl"
+
+// Matching the layout locations standard.vert assigns under the PVS
+// variants.
+layout(location = 19) flat in uint  v_pvs_entry;
+layout(location = 20)      in float v_pvs_depth;
+
+// The fragment's write into the layered buffer of the potentially visible
+// set bake (doc/plans/pvs.md "Bake" 4; erhe::scene_renderer::
+// Pvs_layered_interface): pvs_layered.info = (face resolution, layer count,
+// words per layer = resolution^2, words per region = words per layer *
+// layer count), pvs_layered.depth_range = (z_near, z_far, 0, 0), and
+// pvs_layered.words = three dense regions of words per region each, word
+// (layer * words per layer + y * resolution + x): depth (the closest linear
+// depth's float bits, cleared to 0xffffffff), id_min (cleared to
+// 0xffffffff) and id_max (cleared to 0). A fragment outside [z_near, z_far]
+// writes nothing. The depth pass keeps the closest depth of each (pixel,
+// layer) with atomicMin (positive floats order like their bits); the id
+// pass, a fragment whose depth bits equal that stored depth, folds its
+// entry into id_min and id_max, so two entries at exactly the same depth
+// are both kept. Many fragments of many draws meet at one word: GPU atomics
+// are the idiom (AGENTS.md's rule on lock-free techniques is about CPU
+// code).
+void erhe_pvs_write()
+{
+    float z      = v_pvs_depth;
+    float z_near = pvs_layered.depth_range.x;
+    float z_far  = pvs_layered.depth_range.y;
+    if (!(z >= z_near) || (z > z_far)) {
+        return;
+    }
+    uint  resolution      = pvs_layered.info.x;
+    uint  layer_count     = pvs_layered.info.y;
+    uint  words_per_layer = pvs_layered.info.z;
+    uint  layer           = erhe_pvs_layer_of_depth(z, z_near, z_far, layer_count);
+    uvec2 pixel           = min(uvec2(gl_FragCoord.xy), uvec2(resolution - 1u));
+    uint  index           = (layer * words_per_layer) + (pixel.y * resolution) + pixel.x;
+    uint  depth_bits      = floatBitsToUint(z);
+#  if defined(ERHE_VARIANT_PVS_DEPTH)
+    atomicMin(pvs_layered.words[index], depth_bits);
+#  else
+    uint words_per_region = pvs_layered.info.w;
+    if (pvs_layered.words[index] == depth_bits) {
+        atomicMin(pvs_layered.words[words_per_region + index],        v_pvs_entry);
+        atomicMax(pvs_layered.words[(2u * words_per_region) + index], v_pvs_entry);
+    }
+#  endif
+}
+#endif
+
 #if defined(ERHE_VARIANT_ID_RENDER)
 // Matching the layout locations standard.vert assigns under the
 // ID-render variant.
@@ -289,6 +340,13 @@ void main()
     // shared primitive block. The alpha-tested ID-render variant writes the
     // id after the material's discard below instead.
     out_color = erhe_id_color();
+    return;
+#endif
+
+#if defined(ERHE_VARIANT_PVS) && !defined(ERHE_VARIANT_PVS_ALPHA_TEST)
+    // The whole surface; the alpha-tested PVS variant writes after the
+    // material's discard below instead.
+    erhe_pvs_write();
     return;
 #endif
 
@@ -742,6 +800,11 @@ void main()
     // the color pass applies; it carries the id, and the lit color below is
     // not compiled.
     out_color = erhe_id_color();
+#elif defined(ERHE_VARIANT_PVS)
+    // ERHE_VARIANT_PVS_ALPHA_TEST: the fragment survived the color pass's
+    // discard; it writes the layered buffer, and the lit color below is not
+    // compiled.
+    erhe_pvs_write();
 #else
 
     vec3 color;
@@ -1326,6 +1389,6 @@ void main()
     }
 #endif
 
-#endif // !ERHE_VARIANT_ID_RENDER
+#endif // !ERHE_VARIANT_ID_RENDER && !ERHE_VARIANT_PVS
 #endif
 }

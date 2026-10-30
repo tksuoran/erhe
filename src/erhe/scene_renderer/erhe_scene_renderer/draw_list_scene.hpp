@@ -157,6 +157,37 @@ public:
     uint64_t                                frame_index         {0};
 };
 
+// One raster pass of one face of the potentially visible set bake
+// (Draw_list_scene::draw_pvs_face(), doc/plans/pvs.md "Bake" 4): the
+// frame's published opaque and alpha-tested color lists, drawn with the
+// sub-variant's VARIANT_PVS_* shader into the caller's layered buffer
+// (bound at pvs_layered_buffer_binding_point with the rest of the pass's
+// scene bindings: camera, materials). Only the entries of the static set
+// are drawn: those passing filter whose published PVS column is tracked
+// (Draw_list::pvs_columns; the bake sets its column table as the scene's
+// database for its duration). GPU buffers are the caller's.
+class Draw_pvs_face_parameters
+{
+public:
+    erhe::graphics::Render_command_encoder& render_encoder;
+    // A render pass with no color attachment, sized to the face.
+    const erhe::graphics::Render_pass*      render_pass         {nullptr};
+    // No color writes, no depth test or write; its cull mode is that of a
+    // single-sided primitive, which the lists' double_sided /
+    // negative_determinant adjust per list (as the color passes do).
+    erhe::graphics::Base_render_pipeline&   base_render_pipeline;
+    Primitive_buffer&                       primitive_buffer;
+    Draw_indirect_buffer&                   draw_indirect_buffer;
+    erhe::Item_filter                       filter              {};
+    std::span<const erhe::scene::Layer_id>  layers              {};
+    Pvs_sub_variant                         sub_variant         {Pvs_sub_variant::depth};
+    // The face's frustum, registered with add_cull_view() before the
+    // frame's classification (Draw_color_parameters::cull_view).
+    Cull_view                               cull_view           {Cull_view::none};
+    // The frame being drawn (Draw_color_parameters::frame_index).
+    uint64_t                                frame_index         {0};
+};
+
 // One view's raster occlusion test inside the view's render pass
 // (Draw_list_scene::draw_occlusion(), doc/plans/occlusion_culling.md): drawn
 // after the view's opaque and alpha-tested color passes, so the depth
@@ -667,6 +698,20 @@ public:
     // verify that slot was published for that frame.
     auto draw_color (const Draw_color_parameters&  parameters) -> Draw_statistics;
     auto draw_shadow(const Draw_shadow_parameters& parameters) -> Draw_statistics;
+    // One raster pass of a potentially visible set bake face (doc/plans/
+    // pvs.md "Bake" 4; Draw_pvs_face_parameters). The entry index each
+    // fragment writes is the frame-local entry index: the list's first entry
+    // in the published lists back to back (the classifier's entry order)
+    // plus the entry's index in its list; each chunk's records carry the
+    // chunk's first entry index in their color.x (an exact float), and the
+    // shader adds the record index (ERHE_PRIMITIVE_INDEX). Draws with the
+    // CPU-written commands of the chunk_entries record layout
+    // (supports_pvs_faces()).
+    auto draw_pvs_face(const Draw_pvs_face_parameters& parameters) -> Draw_statistics;
+    // Whether draw_pvs_face() can draw on this device: the records are named
+    // by first_instance (erhe::graphics::Record_indexing::first_instance),
+    // which the chunk_entries record layout needs.
+    [[nodiscard]] auto supports_pvs_faces() const -> bool;
     // Shared records (doc/erhe/draw_list_renderer.md "Record upload"): with
     // erhe::graphics::Record_indexing::first_instance, the first draw of a
     // frame that draws a chunk of a list (draw_shadow() for a shadow list,
@@ -1035,6 +1080,7 @@ private:
     void resolve_color_list   (Draw_list_resolutions& resolutions, const Draw_list& draw_list); // all enumerated view configs
     auto resolve_color_stages (Draw_list_resolutions& resolutions, const Draw_list& draw_list, uint16_t multiview_count) -> const erhe::graphics::Reloadable_shader_stages*;
     auto resolve_shadow_stages(Draw_list_resolutions& resolutions, const Draw_list& draw_list, Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
+    auto resolve_pvs_stages   (Draw_list_resolutions& resolutions, const Draw_list& draw_list, Pvs_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
     void set_color_environment(const Color_environment& environment);
     // Where a pass's draw commands come from (draw_list_chunks()).
     enum class Draw_command_source : uint8_t

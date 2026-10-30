@@ -221,6 +221,15 @@ auto c_str(const Shadow_sub_variant sub_variant) -> const char*
     }
 }
 
+auto c_str(const Pvs_sub_variant sub_variant) -> const char*
+{
+    switch (sub_variant) {
+        case Pvs_sub_variant::depth: return "pvs_depth";
+        case Pvs_sub_variant::id:    return "pvs_id";
+        default:                     return "?";
+    }
+}
+
 auto Color_environment::operator==(const Color_environment& other) const -> bool
 {
     // Equal when the keys are: the resolutions depend on the key only, and
@@ -2155,6 +2164,49 @@ auto Draw_list_scene::resolve_shadow_stages(
     return stages;
 }
 
+auto Draw_list_scene::resolve_pvs_stages(
+    Draw_list_resolutions& resolutions,
+    const Draw_list&       draw_list,
+    const Pvs_sub_variant  sub_variant
+) -> const erhe::graphics::Reloadable_shader_stages*
+{
+    const std::size_t slot = static_cast<std::size_t>(sub_variant);
+    ERHE_VERIFY(slot < resolutions.pvs.size());
+    if (resolutions.pvs[slot] != nullptr) {
+        return resolutions.pvs[slot];
+    }
+    // PVS key: the color list's primitive key (its material axes: the
+    // alpha-tested materials' discard needs them) plus the sub-variant's
+    // forced bit, empty environment (no lights, no debug view), as the
+    // shadow keys.
+    Shader_key key = draw_list.key.primitive_key;
+    switch (sub_variant) {
+        case Pvs_sub_variant::depth: {
+            key.set(Shader_bool::VARIANT_PVS_DEPTH, true);
+            break;
+        }
+        case Pvs_sub_variant::id: {
+            key.set(Shader_bool::VARIANT_PVS_ID, true);
+            break;
+        }
+        default: {
+            ERHE_FATAL("bad Pvs_sub_variant");
+        }
+    }
+    const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);
+    const erhe::graphics::Reloadable_shader_stages* stages = m_shader_variant_cache.get(key, &vertex_input.vertex_format);
+    if (stages == nullptr) {
+        if (!resolutions.pvs_failed) {
+            log_draw_list->warn("No PVS shader variant ({}) for draw list: {}", c_str(sub_variant), draw_list.key.describe());
+            resolutions.pvs_failed = true;
+        }
+        return nullptr;
+    }
+    ++m_lazy_resolution_count;
+    resolutions.pvs[slot] = stages;
+    return stages;
+}
+
 // --- Drawing -------------------------------------------------------------------
 
 auto Draw_list_scene::is_layer_selected(const std::span<const erhe::scene::Layer_id> layers, const erhe::scene::Layer_id layer_id) -> bool
@@ -3175,6 +3227,157 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
             parameters.frame_index,
             statistics
         );
+    }
+    return statistics;
+}
+
+auto Draw_list_scene::supports_pvs_faces() const -> bool
+{
+    return m_record_upload == Record_upload::shared;
+}
+
+auto Draw_list_scene::draw_pvs_face(const Draw_pvs_face_parameters& parameters) -> Draw_statistics
+{
+    ERHE_PROFILE_FUNCTION();
+    assert_render_phase();
+
+    Draw_statistics statistics{};
+    ERHE_VERIFY(parameters.render_pass != nullptr);
+    // The chunk_entries layout: a command names its record by first_instance
+    // (the entry's index in the chunk), which the shader adds to the chunk's
+    // first entry index.
+    ERHE_VERIFY(supports_pvs_faces());
+    const Draw_list_slot&         slot       = get_published_slot(parameters.frame_index);
+    const std::vector<Draw_list>& draw_lists = slot.lists;
+    verify_cull_view_classified(parameters.frame_index, parameters.cull_view);
+    // The entry indices travel as exact floats (the records' color.x).
+    ERHE_VERIFY(slot.entry_count < (uint32_t{1} << 24));
+
+    const std::size_t max_per_chunk = get_records_per_chunk(parameters.primitive_buffer);
+    // Every opaque list, then every alpha-tested one (the color passes'
+    // erhe::primitive::blending_class_draw_order); translucent entries are
+    // never in the static set (doc/plans/pvs.md D3).
+    for (const erhe::primitive::Blending_class blending : erhe::primitive::blending_class_draw_order) {
+        if (blending == erhe::primitive::Blending_class::translucent) {
+            continue;
+        }
+        for (std::size_t list_index = 0, list_end = draw_lists.size(); list_index < list_end; ++list_index) {
+            const Draw_list&     draw_list = draw_lists[list_index];
+            const Draw_list_key& key       = draw_list.key;
+            if ((key.purpose != Draw_purpose::color) || (key.blending != blending) || draw_list.entries.empty()) {
+                continue;
+            }
+            if (!is_layer_selected(parameters.layers, key.layer_id)) {
+                continue;
+            }
+            const std::size_t entry_count = draw_list.entries.size();
+            ERHE_VERIFY(draw_list.pvs_columns.size() == entry_count);
+
+            // The pass decision per entry: the filter, a tracked column (the
+            // static set), and the face's view bit (classify_cull_views()).
+            const uint64_t* view_masks = nullptr;
+            uint64_t        view_bit   = 0;
+            if (parameters.cull_view != Cull_view::none) {
+                const std::size_t view_index = static_cast<std::size_t>(parameters.cull_view);
+                ERHE_VERIFY(list_index < m_cull_masks.size());
+                const std::vector<uint64_t>& masks = m_cull_masks[list_index];
+                ERHE_VERIFY(masks.size() >= (((view_index / 64) + 1) * entry_count));
+                view_masks = masks.data() + ((view_index / 64) * entry_count);
+                view_bit   = uint64_t{1} << (view_index % 64);
+            }
+            m_entry_passes.resize(entry_count);
+            bool any_passing = false;
+            for (std::size_t i = 0; i < entry_count; ++i) {
+                bool passes =
+                    parameters.filter(draw_list.entries[i].flag_bits) &&
+                    (draw_list.pvs_columns[i] != erhe::scene::Pvs_database::untracked_column);
+                if (passes && (view_masks != nullptr) && ((view_masks[i] & view_bit) == 0)) {
+                    passes = false;
+                    ++statistics.culled_count;
+                }
+                m_entry_passes[i] = passes ? 1 : 0;
+                any_passing = any_passing || passes;
+            }
+            if (!any_passing) {
+                continue;
+            }
+
+            Draw_list_resolutions& resolutions = get_resolutions(list_index, draw_list);
+            const erhe::graphics::Reloadable_shader_stages* stages = resolve_pvs_stages(resolutions, draw_list, parameters.sub_variant);
+            if (stages == nullptr) {
+                continue;
+            }
+            const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(key.buffer_set.vertex_input_key);
+            erhe::graphics::Render_pipeline* render_pipeline = parameters.base_render_pipeline.get_pipeline_for(
+                parameters.render_pass->get_descriptor(),
+                &erhe::graphics::Color_blend_state::color_writes_disabled,
+                &stages->shader_stages,
+                vertex_input.vertex_input.get(),
+                &vertex_input.vertex_format,
+                key.negative_determinant,
+                key.double_sided
+            );
+            if (render_pipeline == nullptr) {
+                log_draw_list->warn("No PVS render pipeline for draw list {}: {}", list_index, key.describe());
+                continue;
+            }
+            m_list_label.clear();
+            fmt::format_to(std::back_inserter(m_list_label), "PVS draw list {} {} {} layer={} entries={}", list_index, c_str(parameters.sub_variant), c_str(key.blending), key.layer_id, entry_count);
+            erhe::graphics::Scoped_debug_group list_scope{parameters.render_encoder.get_command_buffer(), std::string_view{m_list_label}};
+
+            erhe::graphics::Render_command_encoder& render_encoder = parameters.render_encoder;
+            render_encoder.set_render_pipeline(*render_pipeline);
+            render_encoder.set_index_buffer(m_mesh_memory.get_index_buffer(key.buffer_set.index_buffer));
+            for (std::size_t stream_index = 0, stream_end = key.buffer_set.vertex_buffers.size(); stream_index < stream_end; ++stream_index) {
+                render_encoder.set_vertex_buffer(m_mesh_memory.get_vertex_buffer(key.buffer_set.vertex_buffers[stream_index]), 0, static_cast<uint32_t>(stream_index));
+            }
+            const erhe::dataformat::Format index_format = m_mesh_memory.get_index_format(key.buffer_set.index_buffer);
+            bool list_drew = false;
+            for (std::size_t begin = 0; begin < entry_count; begin += max_per_chunk) {
+                const std::size_t end = std::min(entry_count, begin + max_per_chunk);
+                bool chunk_passing = false;
+                for (std::size_t i = begin; i < end; ++i) {
+                    if (m_entry_passes[i] != 0) {
+                        chunk_passing = true;
+                        break;
+                    }
+                }
+                if (!chunk_passing) {
+                    continue;
+                }
+                // Every record of the chunk, entry i at record i - begin, with
+                // the pass color set to the chunk's first frame-local entry
+                // index (the color the shader reads as its entry base).
+                const float chunk_base = static_cast<float>(slot.entry_offsets[list_index] + static_cast<uint32_t>(begin));
+                Primitive_interface_settings settings{};
+                settings.color_source    = Primitive_color_source::constant_color;
+                settings.constant_color0 = glm::vec4{chunk_base, 0.0f, 0.0f, 0.0f};
+                settings.constant_color1 = settings.constant_color0;
+                erhe::graphics::Ring_buffer_range primitive_range = parameters.primitive_buffer.update_records(draw_list, begin, end, settings);
+                Draw_indirect_buffer_range draw_indirect_range = parameters.draw_indirect_buffer.update(
+                    draw_list, begin, end, std::span<const std::uint8_t>{m_entry_passes}, Draw_record_layout::chunk_entries
+                );
+                const std::size_t command_count = draw_indirect_range.draw_indirect_count;
+                ERHE_VERIFY(command_count > 0);
+                parameters.primitive_buffer.bind(render_encoder, primitive_range);
+                parameters.draw_indirect_buffer.bind(render_encoder, draw_indirect_range.range);
+                render_encoder.multi_draw_indexed_primitives_indirect(
+                    render_pipeline->get_create_info().base.input_assembly.primitive_topology,
+                    index_format,
+                    draw_indirect_range.range.get_byte_start_offset_in_buffer(),
+                    command_count,
+                    sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+                );
+                primitive_range.release();
+                draw_indirect_range.range.release();
+                statistics.entry_count     += command_count;
+                statistics.draw_call_count += 1;
+                list_drew = true;
+            }
+            if (list_drew) {
+                statistics.draw_list_count += 1;
+            }
+        }
     }
     return statistics;
 }
