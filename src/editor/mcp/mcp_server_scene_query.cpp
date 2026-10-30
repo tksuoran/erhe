@@ -76,6 +76,7 @@
 
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_hash/hash.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_math/aabb.hpp"
@@ -734,7 +735,12 @@ auto Mcp_server::query_pvs_status(const json& args) -> std::string
         {"bits",    bits_bytes},
         {"total",   columns_bytes + pages_bytes + bits_bytes}
     };
+    // 64-bit FNV-1a over the bits' bytes, so two bakes (or a bake and its
+    // reload) can be compared.
+    const std::vector<uint32_t>& bits = database->get_bits();
+    result["bits_hash"] = fmt::format("{:016x}", erhe::hash::hash(bits.data(), bits.size() * sizeof(uint32_t)));
     result["bake"] = {
+        {"method",           erhe::scene::c_str(header.bake_parameters.method)},
         {"face_resolution",  header.bake_parameters.face_resolution},
         {"tile_size",        header.bake_parameters.tile_size},
         {"layer_count",      header.bake_parameters.layer_count},

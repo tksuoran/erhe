@@ -212,6 +212,19 @@ TEST(Pvs_database, validate_rejects_inconsistent_data)
     bad_header = header;
     bad_header.page_size = 5;
     EXPECT_NE(erhe::scene::Pvs_database::validate(bad_header, columns, pages, bits), std::string{});
+    bad_header = header;
+    bad_header.bake_parameters.method = static_cast<erhe::scene::Pvs_bake_method>(2);
+    EXPECT_NE(erhe::scene::Pvs_database::validate(bad_header, columns, pages, bits), std::string{});
+}
+
+TEST(Pvs_database, bake_method_names_round_trip)
+{
+    using erhe::scene::Pvs_bake_method;
+    for (const Pvs_bake_method method : {Pvs_bake_method::sampled, Pvs_bake_method::disocclusion}) {
+        EXPECT_EQ(erhe::scene::parse_pvs_bake_method(erhe::scene::c_str(method)), method);
+    }
+    EXPECT_FALSE(erhe::scene::parse_pvs_bake_method("Sampled").has_value());
+    EXPECT_FALSE(erhe::scene::parse_pvs_bake_method("").has_value());
 }
 
 TEST(Pvs_database, mark_stale_transitions_once)

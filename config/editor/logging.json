@@ -28,6 +28,7 @@
     "editor.pointer": "info",
     "editor.post_processing": "info",
     "editor.programs": "info",
+    "editor.pvs": "info",
     "editor.raytrace": "info",
     "editor.raytrace_frame": "info",
     "editor.render": "info",

@@ -384,7 +384,11 @@ pays the classification's extra reads and at most one page upload.
   (`Id_renderer`) from a given camera pose at the viewport's resolution,
   reads the whole id image back and returns the set of entry identities
   seen. The exact from-point visibility the PVS must contain.
-- `scripts/pvs_verify.py`: bakes the scene the script opens (the wall
+- `scripts/pvs_verify.py`: its first version bakes the wall scene with the
+  sampled method and checks every cell (wall in, the six boxes behind it
+  out), that a second bake gives the same `bits_hash` and that a save and
+  `load_scene` reload the same database; the full gate below needs the
+  disocclusion bake. It bakes the scene the script opens (the wall
   scene of `scripts/occlusion_wall_check.py`, the heavy bench scene,
   Bistro), then for a sample of cells (all, when fewer than 200) draws M
   random viewpoints in the cell and random orientations, calls
@@ -420,13 +424,18 @@ step makes possible.
    that read R's output"; the id pass draws double-sided back faces and
    alpha-tests as the color pass does, `doc/editor/renderers.md`).
    No consumer, no bake.
-2. Sampled bake (the ground-truth tool): `pvs_bake method=sampled` fills a
-   database from `get_visible_entries` at M viewpoints per cell, through the
-   same cell loop, progress and readback path the disocclusion bake uses.
-   Not conservative; it is the oracle of `pvs_verify.py` and the first data
-   the consumer is gated with. A bake assigns a glTF uid to every mesh
-   node it bakes that has none (the save pipeline's first-export rule,
-   `doc/editor/scene_serialization.md`), since columns are keyed by uid.
+2. Sampled bake (the ground-truth tool; done, `Pvs_baker` in
+   `doc/editor/renderers.md`, MCP in `doc/agents/mcp_server_usage.md`):
+   `pvs_bake method=sampled` fills a database from whole-image id captures
+   (`Scene_id_capture`, re-armed per capture) at M viewpoints per cell, six
+   faces each, through the cell loop, progress and finish path the
+   disocclusion bake reuses. Not conservative; it is the oracle of
+   `pvs_verify.py` and the first data the consumer is gated with. A bake
+   assigns a glTF uid to every mesh node it bakes that has none
+   (`erhe::gltf::generate_gltf_uid()`, the save pipeline's first-export
+   generator, `doc/editor/scene_serialization.md`), since columns are keyed
+   by uid. The region and cell size are `Scene_settings` fields (D2) saved
+   through `ERHE_scene`; `ERHE_pvs` records the bake method.
 3. Consumer: column lookup, SoA column array and upload, the paged GPU
    layout with every stored page resident, query boxes, the
    classification rule on both paths, `pvs_culled` words and statistics,

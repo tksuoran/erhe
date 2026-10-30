@@ -30,10 +30,15 @@ plain interchange exports never do.
   created every style of the file. Omitted when the scene uses none.
 - `enable_physics`: whether the scene owns a physics world.
 - `settings` (optional): per-scene overrides of editor-global settings
-  (erhe #239) as a `Scene_settings` JSON object (the erhe_codegen schema in
+  (erhe #239) and per-scene editor data as a `Scene_settings` JSON object
+  (the erhe_codegen schema in
   `src/editor/scene/definitions/scene_settings.py`; each absent / null
-  field means "use the editor-global default"). Omitted entirely when no
-  override is engaged.
+  override means "use the editor-global default"). The data fields are the
+  scene id, the lightmap tile overrides, the variant selections and the
+  potentially visible set bake grid: `pvs_region_min` and `pvs_region_max`
+  (world-space corners of the bake region, both zero for unset) and
+  `pvs_cell_size` (`doc/plans/pvs.md` D2). Omitted entirely when every
+  field has its default.
 - `styles` (optional): the content library's style items
   (`doc/editor/style_library.md` D4): `name` and `properties` (the style's local
   values as a name to text map, the form of `ERHE_node` `properties`,

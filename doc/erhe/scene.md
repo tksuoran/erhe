@@ -410,8 +410,9 @@ library.
 
 - `Pvs_header`: `version`, the scene's `scene_id`, the grid (`grid_origin`,
   `cell_size`, `cell_counts`), `page_size` (cells per page axis, 1 to 4,
-  default 4), the bake parameters (`Pvs_bake_parameters`) and the bake's
-  duration.
+  default 4), the bake parameters (`Pvs_bake_parameters`, among them the
+  `Pvs_bake_method`: `sampled`, the union of id captures from points in
+  each cell, not conservative, or `disocclusion`) and the bake's duration.
 - `Pvs_column`: one baked entry, the column of its bit. Its identity is the
   mesh node's glTF uid and the mesh primitive index; it records the world
   transform (12 floats, the 3 rows of the 4 columns of `world_from_node`)
@@ -438,7 +439,7 @@ library.
 - `find_column(uid, primitive_index)`: the identity-to-column lookup, a hash
   map built once by the constructor; `untracked_column` for an identity the
   bake did not see.
-- `validate()` checks consistency (grid, page table, bits size, hashes,
+- `validate()` checks consistency (bake method, grid, page table, bits size, hashes,
   padding bits, all-ones cells); a parser calls it before constructing.
 - State: a database is created `ready`; `mark_stale()` turns it `stale`
   once (any thread, mutex-guarded) and reports whether it did. `absent` is
@@ -446,8 +447,8 @@ library.
 
 The editor's `Scene_root` owns the scene's database
 (`set_pvs_database()` / `get_pvs_database()` / `mark_pvs_stale()`, which
-announce state changes with `Pvs_state_changed_message`) and MCP
-`get_pvs_status` reports it.
+announce state changes with `Pvs_state_changed_message`), `Pvs_baker`
+bakes it (`doc/editor/renderers.md`) and MCP `get_pvs_status` reports it.
 
 ## Public API
 - Create a `Scene`, add nodes with `register_node()`, attach meshes/cameras/lights.

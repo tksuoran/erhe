@@ -9043,7 +9043,7 @@
     "name": "get_occlusion_check"
   },
   {
-    "description": "The scene's potentially visible set database (doc/plans/pvs.md; erhe::scene::Pvs_database, saved with the scene as the asset-root glTF extension ERHE_pvs, doc/gltf_extensions/ERHE_pvs.md). Returns scene_name, state (absent: no database; ready; stale: a baked entry moved or was removed, PVS culling is off until the next bake) and camera {viewport, camera, position} of the first viewport showing the scene. With a database also: version, scene_id, grid_origin, cell_size, cell_counts, cell_count, page_size (cells per page axis), page_dims, page_count, stored_pages, column_count, words_per_cell, cells_with_pvs, bytes {columns, pages, bits, total}, bake {face_resolution, tile_size, layer_count, face_fov (radians), samples_per_face, min_entry_pixels, duration_seconds}, bits_source {path, byte_offset, byte_length} (the bits' byte range in the file the database was read from) and in camera: cell (\"outside\" when the camera is outside the grid), page, local_cell, page_stored, has_pvs and pvs_size (columns in the cell's PVS, 0 without one).",
+    "description": "The scene's potentially visible set database (doc/plans/pvs.md; erhe::scene::Pvs_database, saved with the scene as the asset-root glTF extension ERHE_pvs, doc/gltf_extensions/ERHE_pvs.md). Returns scene_name, state (absent: no database; ready; stale: a baked entry moved or was removed, PVS culling is off until the next bake) and camera {viewport, camera, position} of the first viewport showing the scene. With a database also: version, scene_id, grid_origin, cell_size, cell_counts, cell_count, page_size (cells per page axis), page_dims, page_count, stored_pages, column_count, words_per_cell, cells_with_pvs, bytes {columns, pages, bits, total}, bits_hash (64-bit FNV-1a of the bits as 16 hex digits: equal for equal bakes and across a save and reload), bake {method (sampled or disocclusion), face_resolution, tile_size, layer_count, face_fov (radians), samples_per_face, min_entry_pixels, duration_seconds}, bits_source {path, byte_offset, byte_length} (the bits' byte range in the file the database was read from) and in camera: cell (\"outside\" when the camera is outside the grid), page, local_cell, page_stored, has_pvs and pvs_size (columns in the cell's PVS, 0 without one).",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -9057,6 +9057,119 @@
       "type": "object"
     },
     "name": "get_pvs_status"
+  },
+  {
+    "description": "Start a potentially visible set bake of a scene (doc/plans/pvs.md \"Bake\", \"Build order\" step 2; Pvs_baker, doc/editor/renderers.md). Returns at once with the bake status (state running, method, grid_origin, cell_size, cell_counts, cell_count, column_count, capture_count, uids_assigned) and the parameters used; the bake then runs over frames (poll get_pvs_bake_status) and, when the last cell is done, sets the database on the scene (get_pvs_status). The grid covers the region with cubic cells: origin = region_min, cell counts = ceil(extent / cell_size). Columns are the scene's static entries (doc/plans/pvs.md D3: content mesh primitives, not skinned, opaque or alpha tested, no non-static rigid body and no animation on the node or an ancestor), keyed by the mesh node's glTF uid; a node without one gets one now. method sampled (the only one built): per cell the cell center plus samples_per_cell - 1 random points (seeded by the cell index, inside the cell shrunk by 5 percent per side), six id captures per point along +X -X +Y -Y +Z -Z at face_resolution square with face_fov_degrees vertical field of view; the union of the captured entries is the cell's PVS. Not conservative: a verification oracle. Refused while a bake runs, for method disocclusion (not built yet), or when the scene has no static entry. Saved with the scene as ERHE_pvs.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Scene (list_scenes names them)",
+          "type": "string"
+        },
+        "method": {
+          "description": "\"sampled\" (default) or \"disocclusion\" (not built yet)",
+          "type": "string"
+        },
+        "cell_size": {
+          "description": "Cell edge length in meters; default the scene's Scene_settings pvs_cell_size (1.0)",
+          "type": "number"
+        },
+        "region_min": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Region minimum corner [x, y, z] (give with region_max); default the scene's pvs_region_min / pvs_region_max, or when those are both zero the union of the static entries' world bounds"
+        },
+        "region_max": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Region maximum corner [x, y, z] (give with region_min)"
+        },
+        "samples_per_cell": {
+          "description": "Viewpoints per cell, 1 to 1024; default 9",
+          "type": "integer"
+        },
+        "face_resolution": {
+          "description": "Square size of each capture in pixels, 1 to 8192; default 512",
+          "type": "integer"
+        },
+        "face_fov_degrees": {
+          "description": "Vertical field of view of each capture; default 120 (the six faces overlap)",
+          "type": "number"
+        },
+        "captures_in_flight": {
+          "description": "Id captures kept busy at once, 1 to 64; default 8",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "pvs_bake"
+  },
+  {
+    "description": "Status of the potentially visible set bake (pvs_bake): state (idle: none has run; running; done: the database is set on the scene; cancelled and failed: the scene keeps the database it had), scene_name, method, grid_origin, cell_size, cell_counts, cell_count, column_count, cells_done, capture_count, captures_done, unmatched_entries (captured entries that name no column: outside the static set), uids_assigned, seconds_elapsed, seconds_remaining (estimate from the capture rate, 0 when unknown) and error (failed only).",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_pvs_bake_status"
+  },
+  {
+    "description": "Cancel the running potentially visible set bake: it ends cancelled and the scene keeps the database it had. Returns the bake status and cancelled (false when no bake was running).",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "pvs_cancel"
+  },
+  {
+    "description": "Remove a scene's potentially visible set database (get_pvs_status state absent afterwards). Returns scene_name, had_database and state.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Scene (list_scenes names them)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "pvs_clear"
+  },
+  {
+    "description": "One cell of a scene's potentially visible set database, by index or by a world position inside it. Returns scene_name, cell, coordinate [x, y, z], cell_min, cell_max, page, local_cell, page_stored, has_pvs, pvs_size and columns, the columns in the cell's PVS as [{node_uid, node_name, primitive_index}] in column order (node_name is the live mesh's name, \"\" when no mesh of the scene has the uid; empty for a cell without a PVS, which reads as everything visible).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Scene (list_scenes names them)",
+          "type": "string"
+        },
+        "cell": {
+          "description": "Cell index x + cell_counts[0] * (y + cell_counts[1] * z); give exactly one of cell and position",
+          "type": "integer"
+        },
+        "position": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "World position [x, y, z] inside the grid"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_pvs_cell"
   },
   {
     "description": "The set of mesh primitives seen from an explicit camera pose: the exact from-point visibility a potentially visible set must contain (doc/plans/pvs.md \"Verification\"). Renders the scene's id pass (Id_renderer, every mesh with the visible, active and id flags, the original mesh variant, back faces culled) over a whole offscreen width x height image owned by the request, reads the whole id image back once its frame has retired and decodes every pixel's id into (mesh node, primitive index). Independent of the viewport windows, which are not touched; spans several frames like render_scene_image and cannot run inside batch. Returns scene_name, width, height, scene_only, camera (the pose and projection used), frame_index (the frame the ids were rendered in), covered_pixels (pixels with any id), unresolved_pixels (ids naming no live mesh primitive: 0 unless a mesh was destroyed meanwhile), entry_count and entries [{node_uid, node_name, primitive_index, mesh_name, pixels}] sorted by node_uid then primitive_index (node_uid is the mesh node's glTF uid, \"\" for a node without one; entries without a uid keep a stable mesh order). The same pose returns the same set every time.",

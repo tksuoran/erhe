@@ -362,6 +362,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server_input_bindings.cpp
     mcp/mcp_server_material.cpp
     mcp/mcp_server_properties.cpp
+    mcp/mcp_server_pvs.cpp
     mcp/mcp_server_mesh_components.cpp
     mcp/mcp_process_memory.cpp
     mcp/mcp_process_memory.hpp
@@ -508,6 +509,8 @@ erhe_target_sources_grouped(
     renderers/prewarm.hpp
     renderers/programs.cpp
     renderers/programs.hpp
+    renderers/pvs_baker.cpp
+    renderers/pvs_baker.hpp
     renderers/render_context.cpp
     renderers/render_context.hpp
     renderers/render_frame_results.hpp
@@ -1234,6 +1237,7 @@ target_link_libraries(
         erhe::gltf
         erhe::graph
         erhe::graphics
+        erhe::hash
         erhe::imgui
         erhe::log
         erhe::math

@@ -101,6 +101,7 @@
 #include "renderers/material_set_factory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/lightmap_baker.hpp"
+#include "renderers/pvs_baker.hpp"
 #include "renderers/lightmap_report.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "renderers/lightmap_streamer.hpp"
@@ -1714,6 +1715,14 @@ public:
         m_fly_camera_tool->on_frame_end();
 
         lightmap_commit_phase();
+
+        // The running PVS bake's step (doc/plans/pvs.md D6): collects the id
+        // captures that retired and re-arms them for the next viewpoints,
+        // before the rendergraph prepares this frame's nodes. Returns at once
+        // when no bake runs.
+        if (m_pvs_baker) {
+            m_pvs_baker->tick();
+        }
         take_m2_term(m_phase_timing.m2_update_us);
 
         // Unconditional: uploads enqueued during a hidden tick (deferred
@@ -3414,6 +3423,7 @@ public:
                     *m_shader_variant_cache.get(),
                     *m_programs.get()
                 );
+                m_pvs_baker = std::make_unique<Pvs_baker>(m_app_context);
             }
             ERHE_INIT_STEP_END
 
@@ -4426,6 +4436,7 @@ public:
             m_app_rendering->add(m_radiance_cascades_renderer.get());
         }
         m_app_context.lightmap_baker           = m_lightmap_baker        .get();
+        m_app_context.pvs_baker                = m_pvs_baker             .get();
         m_app_context.lightmap_partitioner     = m_lightmap_partitioner  .get();
         m_app_context.lightmap_report          = m_lightmap_report       .get();
         m_app_context.lightmap_streamer        = m_lightmap_streamer     .get();
@@ -4721,6 +4732,12 @@ public:
         // and piece nodes; drop them so the closed scene's content is released.
         if (m_lightmap_partitioner) {
             m_lightmap_partitioner->on_scene_closed(scene_root.get());
+        }
+
+        // A PVS bake of this scene fails; its captures hold the scene root
+        // until their frames retire.
+        if (m_pvs_baker) {
+            m_pvs_baker->on_scene_closed(scene_root.get());
         }
 
         // Stop tracking this scene as the active scene; consumers fall back
@@ -5667,6 +5684,8 @@ public:
     // off to the streamer re-pushes the streamer's region mappings.
     bool                                                     m_lightmap_baker_owned_binding{false};
     std::unique_ptr<Id_renderer                     >        m_id_renderer;
+    // After m_rendergraph: its captures release their rendergraph nodes.
+    std::unique_ptr<Pvs_baker                       >        m_pvs_baker;
     std::unique_ptr<Composer_window                 >        m_composer_window;
     std::unique_ptr<Selection_window                >        m_selection_window;
     std::unique_ptr<Settings_window                 >        m_settings_window;
