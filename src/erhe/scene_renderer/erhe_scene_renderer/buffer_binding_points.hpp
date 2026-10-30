@@ -28,5 +28,10 @@ namespace erhe::scene_renderer {
 // their cold world-space shadow transforms (Light_shadow_world_struct).
 #define light_shadowed_array_buffer_binding_point     11
 #define light_shadow_world_array_buffer_binding_point 12
+// The potentially visible set bake's layered buffer (Pvs_layered_interface,
+// doc/plans/pvs.md "Bake" 4): read and written by the standard shader's PVS
+// variants only. Metal reserves 13 for the acceleration structure of a ray
+// query shader, which no program of this layout is.
+#define pvs_layered_buffer_binding_point 13
 
 } // namespace erhe::scene_renderer

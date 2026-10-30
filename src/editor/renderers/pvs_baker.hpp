@@ -20,6 +20,8 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
+class Pvs_bake_node;
+class Pvs_face_record;
 class Scene_id_capture;
 class Scene_root;
 
@@ -39,6 +41,26 @@ public:
     float                        face_fov          {2.0943951f}; // radians (120 degrees)
     // sampled: id captures kept busy at once.
     uint32_t                     captures_in_flight{8};
+    // disocclusion: the layered buffer's depth layers (doc/plans/pvs.md
+    // "Bake" 3; at most 64, the layer masks of the disocclusion passes are
+    // 64 bits), its tile size, and the samples per face (the passes repeat
+    // with a sub-pixel jitter of the projection per sample).
+    uint32_t                     layer_count       {64};
+    uint32_t                     tile_size         {8};
+    uint32_t                     samples_per_face  {1};
+};
+
+// pvs_debug_face (MCP): the layered buffer of one face of one cell of the
+// grid a bake with the same request would use, without a bake: the two
+// passes run once and the layer is written as two PNGs, <path>_depth.png
+// and <path>_id.png (doc/agents/mcp_server_usage.md).
+class Pvs_debug_face_request
+{
+public:
+    uint32_t    cell {0};
+    uint32_t    face {0}; // 0..5: +X -X +Y -Y +Z -Z
+    uint32_t    layer{0};
+    std::string path;     // the PNGs' path prefix
 };
 
 enum class Pvs_bake_state : unsigned int {
@@ -73,20 +95,50 @@ public:
     uint32_t                     uids_assigned     {0};
     float                        seconds_elapsed   {0.0f};
     float                        seconds_remaining {0.0f}; // estimate, 0 when unknown
+    // disocclusion: the cells the bake gave a PVS (none until the
+    // disocclusion passes exist, doc/plans/pvs.md "Build order" step 5).
+    uint32_t                     cells_with_pvs    {0};
+    // pvs_debug_face: the job ran instead of a bake (the scene's database is
+    // unchanged), and what it wrote.
+    bool                         debug_face        {false};
+    uint32_t                     debug_cell        {0};
+    uint32_t                     debug_face_index  {0};
+    uint32_t                     debug_layer       {0};
+    float                        debug_z_near      {0.0f};
+    float                        debug_z_far       {0.0f};
+    float                        debug_layer_front {0.0f};
+    float                        debug_layer_back  {0.0f};
+    uint64_t                     debug_depth_entries{0}; // entries the depth pass drew
+    uint64_t                     debug_id_entries  {0};  // entries the id pass drew
+    uint64_t                     debug_covered_pixels{0}; // pixels of the layer with a sample
+    uint64_t                     debug_distinct_ids{0};   // distinct id_min values in the layer
+    std::string                  debug_depth_path;
+    std::string                  debug_id_path;
 };
 
 // The potentially visible set bake (doc/plans/pvs.md "Bake", "Build order"
-// steps 2 and 5; doc/editor/renderers.md "Pvs_baker"): the cell loop shared
-// by the bake methods. start_bake() computes the grid, enumerates the static
-// set (D3) as columns and allocates the per-cell words; tick() advances the
-// bake once per frame from the editor's prepare phase (M2); the last cell
-// builds the erhe::scene::Pvs_database and sets it on the scene. Main
-// thread only; the GPU work of a capture is recorded by its
-// Scene_id_capture_node in the render phase.
+// steps 2, 4 and 5; doc/editor/renderers.md "Pvs_baker"): the cell loop
+// shared by the bake methods. start_bake() computes the grid, enumerates the
+// static set (D3, which includes visible at bake time: an entry whose mesh
+// is hidden, by itself or by an ancestor, gets no column and stays
+// untracked, always kept) as columns and allocates the per-cell words; tick()
+// advances the bake once per frame from the editor's prepare phase (M2);
+// the last cell builds the erhe::scene::Pvs_database and sets it on the
+// scene. Main thread only; the GPU work of a sampled capture is recorded by
+// its Scene_id_capture_node, that of a disocclusion face by the bake's
+// Pvs_bake_node, in the render phase.
+//
+// The disocclusion method sets its column table as the scene's database
+// for the bake (no stored page: it culls nothing), so the draw lists
+// publish the static set's columns that its faces draw (Draw_list_scene::
+// draw_pvs_face()), and the D4 staleness rule reports a scene edit during
+// the bake, which fails it; a bake that does not finish puts the scene's
+// previous database back.
 //
 // The bake is an offline job: while it runs it allocates freely (captures,
-// decoded entry lists). With no bake running tick() returns at once and
-// nothing is allocated.
+// decoded entry lists, the layered buffer). With no bake running tick()
+// returns at once (once a finished bake's GPU work has retired) and nothing
+// is allocated.
 class Pvs_baker
 {
 public:
@@ -100,6 +152,14 @@ public:
     // bake is running or still releasing its captures, the method is not
     // built, a parameter is out of range, or the scene has no static entry.
     [[nodiscard]] auto start_bake(const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request) -> std::string;
+    // Main thread (M2): the pvs_debug_face job (Pvs_debug_face_request) with
+    // the grid and parameters of request (method disocclusion); reported by
+    // get_status() like a bake. Empty on success, else why it was refused.
+    [[nodiscard]] auto start_debug_face(
+        const std::shared_ptr<Scene_root>& scene_root,
+        const Pvs_bake_request&            request,
+        const Pvs_debug_face_request&      debug
+    ) -> std::string;
     // Main thread (M2), once per frame: the running bake's own step.
     void tick();
     // Main thread: a running bake ends cancelled; the scene keeps the
@@ -129,13 +189,34 @@ private:
         bool                              busy{false};
     };
 
+    enum class Bake_mode : unsigned int {
+        bake = 0,  // start_bake()
+        debug_face // start_debug_face()
+    };
+
+    // start_bake() / start_debug_face(): the checks, the grid, the static
+    // set's columns and the state both methods start from.
+    [[nodiscard]] auto begin            (const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request, Bake_mode mode) -> std::string;
     void stop             (Pvs_bake_state state, const std::string& error);
     void release_captures ();
+    // The previous bake's Pvs_bake_node, once its recorded faces retired.
+    void release_bake_node();
+    // The scene's database before a disocclusion bake set its column table,
+    // back on the scene (when the column table is still the scene's).
+    void restore_database ();
     void issue_captures   (const std::shared_ptr<Scene_root>& scene_root);
     void collect_capture  (Capture_slot& slot);
     void finish           (Scene_root& scene_root);
     // Places m_camera at viewpoint `sample` of `cell`, looking along `face`.
     void aim_camera       (uint32_t cell, uint32_t sample, uint32_t face);
+    // disocclusion: the step of tick().
+    void tick_disocclusion(const std::shared_ptr<Scene_root>& scene_root);
+    // The face job of face pass `index` (cell, sample, face as the sampled
+    // captures are numbered).
+    void submit_face      (const std::shared_ptr<Scene_root>& scene_root, uint64_t index);
+    void collect_face     (const Pvs_face_record& record);
+    // pvs_debug_face: the read-back layer as the two PNGs.
+    void write_debug_images(const Pvs_face_record& record);
 
     App_context&                              m_context;
     Pvs_bake_status                           m_status;
@@ -165,6 +246,21 @@ private:
     std::vector<glm::vec3>                    m_viewpoints;
     std::shared_ptr<erhe::scene::Camera>      m_camera;
     std::vector<Capture_slot>                 m_captures;
+
+    Bake_mode                                 m_mode{Bake_mode::bake};
+    Pvs_debug_face_request                    m_debug;
+    // Per cell: 1 when the bake gave it a PVS.
+    std::vector<uint8_t>                      m_cell_has_pvs;
+    // disocclusion: the bake's node, and a stopped bake's node until its
+    // recorded faces retire.
+    std::shared_ptr<Pvs_bake_node>            m_bake_node;
+    std::shared_ptr<Pvs_bake_node>            m_retiring_node;
+    std::vector<Pvs_face_record>              m_face_records;
+    uint64_t                                  m_faces_submitted{0};
+    // disocclusion: the column table set as the scene's database for the
+    // bake, and the database it replaced.
+    std::shared_ptr<erhe::scene::Pvs_database> m_columns_database;
+    std::shared_ptr<erhe::scene::Pvs_database> m_restore_database;
 };
 
 } // namespace editor

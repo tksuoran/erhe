@@ -366,6 +366,7 @@ private:
     auto query_pvs_status                 (const nlohmann::json& args) -> std::string;
     // The PVS bake tools (mcp_server_pvs.cpp; doc/plans/pvs.md "Editor").
     auto action_pvs_bake                  (const nlohmann::json& args) -> std::string;
+    auto action_pvs_debug_face            (const nlohmann::json& args) -> std::string;
     auto query_pvs_bake_status            (const nlohmann::json& args) -> std::string;
     auto action_pvs_cancel                (const nlohmann::json& args) -> std::string;
     auto action_pvs_clear                 (const nlohmann::json& args) -> std::string;

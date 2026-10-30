@@ -91,7 +91,9 @@ named there; the others are the standing defaults of this plan.
   as the starting value. Cells are a uniform grid over the box. (Adaptive
   cells are a follow-up.)
 - D3 Static set: an entry is baked when it is content (`Item_flags::
-  content`), has bounds (not skinned), is opaque or alpha tested, and its
+  content`), visible at bake time (its mesh's `Item_flags::visible`, which
+  an ancestor's hide clears; a hidden entry is untracked, always kept), has
+  bounds (not skinned), is opaque or alpha tested, and its
   node carries no rigid body of a motion mode other than static and is the
   target of no animation. Translucent entries are never baked: they are
   always visible (the frustum and occlusion tests still apply) and never
@@ -456,10 +458,20 @@ step makes possible.
    viewport view culls the six boxes in both classification modes, the
    viewport image and a scene image byte-identical with the rule on and
    off, and a moved front box turns the database stale and the rule off.
-4. Disocclusion bake, part 1: the layered buffer (the two shader variants,
-   the dense buffers, the layer function) and a readback that dumps one
-   face's layer 0 as an image for inspection; unit tests of the layer
-   function.
+4. Disocclusion bake, part 1 (done; `Pvs_baker` and `Pvs_bake_node` in
+   `doc/editor/renderers.md`, `draw_pvs_face()` in
+   `doc/erhe/draw_list_renderer.md`, the variants in
+   `doc/erhe/shader_variants.md`, MCP `pvs_debug_face` in
+   `doc/agents/mcp_server_usage.md`): the layered buffer (the two shader
+   variants, the dense buffers, the layer function `pvs_layers.hpp` with
+   its unit tests) drawn per face from the cell center, the bake's cell
+   loop running every face of every cell with each cell ending without a
+   PVS, and `pvs_debug_face`, which writes one layer of one face as a depth
+   and an id image. The arrays are laid out layer-major (word `layer *
+   resolution^2 + y * resolution + x` of each array), so one layer is one
+   contiguous range. The faces draw the static set through the draw lists'
+   column arrays: the bake sets its column table as the scene's database
+   for its duration.
 5. Disocclusion bake, part 2: the three compute passes, their CPU reference
    and the GPU tests, the cell loop, the near-region and small-entry rules,
    the window and MCP. Gates: `pvs_verify.py` zero misses on the wall,

@@ -30,6 +30,18 @@ enum class Shadow_sub_variant : uint8_t
 
 [[nodiscard]] auto c_str(Shadow_sub_variant sub_variant) -> const char*;
 
+// The potentially visible set bake's raster pass (doc/plans/pvs.md "Bake"
+// 4; Draw_list_scene::draw_pvs_face()): which forced VARIANT bit the color
+// lists draw with into the layered buffer.
+enum class Pvs_sub_variant : uint8_t
+{
+    depth = 0, // VARIANT_PVS_DEPTH: the closest depth per (pixel, layer)
+    id    = 1, // VARIANT_PVS_ID: the entries at that depth
+    count = 2
+};
+
+[[nodiscard]] auto c_str(Pvs_sub_variant sub_variant) -> const char*;
+
 // Which erhe::primitive::Blending_class lists a color draw takes (R7).
 enum class Draw_blending_selection : uint8_t
 {
@@ -140,7 +152,8 @@ public:
 // Resolved shader stages of one draw list (R17): color per view
 // configuration (invalidated wholesale by an environment configuration
 // change, R18), shadow per sub-variant (never invalidated - the shadow key
-// has no environment). Owned by the render phase (Draw_list_scene keeps one
+// has no environment), and for a color list the PVS bake's sub-variants
+// (never invalidated either: the PVS key has no environment). Owned by the render phase (Draw_list_scene keeps one
 // per list index, render thread only) and filled lazily on the first draw of
 // each (view configuration, sub-variant).
 class Draw_list_resolutions
@@ -154,10 +167,15 @@ public:
         const erhe::graphics::Reloadable_shader_stages*,
         static_cast<std::size_t>(Shadow_sub_variant::count)
     >                                                 shadow{nullptr, nullptr, nullptr};
+    std::array<
+        const erhe::graphics::Reloadable_shader_stages*,
+        static_cast<std::size_t>(Pvs_sub_variant::count)
+    >                                                 pvs{nullptr, nullptr};
     // Set when a resolution attempt failed (no variant); avoids re-logging
     // and re-trying every frame.
     bool                                              color_failed {false};
     bool                                              shadow_failed{false};
+    bool                                              pvs_failed   {false};
 };
 
 // The world AABBs of a list's entries in SoA form, parallel to

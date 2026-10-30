@@ -1,4 +1,5 @@
 #include "renderers/pvs_baker.hpp"
+#include "renderers/pvs_bake_node.hpp"
 
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
@@ -8,6 +9,9 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_gltf/gltf_uid.hpp"
+#include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/image_writer.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/math_util.hpp"
@@ -18,13 +22,18 @@
 #include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
+#include "erhe_scene_renderer/pvs_layers.hpp"
 #include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <cstring>
+#include <filesystem>
 #include <random>
 #include <unordered_set>
 
@@ -144,20 +153,44 @@ auto Pvs_baker::get_status() const -> Pvs_bake_status
 
 auto Pvs_baker::start_bake(const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request) -> std::string
 {
+    return begin(scene_root, request, Bake_mode::bake);
+}
+
+auto Pvs_baker::start_debug_face(
+    const std::shared_ptr<Scene_root>& scene_root,
+    const Pvs_bake_request&            request,
+    const Pvs_debug_face_request&      debug
+) -> std::string
+{
+    if (request.method != erhe::scene::Pvs_bake_method::disocclusion) {
+        return "the debug face is a disocclusion face";
+    }
+    if (debug.face >= c_face_count) {
+        return "face must be in [0, 5] (+X -X +Y -Y +Z -Z)";
+    }
+    if (debug.layer >= request.layer_count) {
+        return fmt::format("layer must be in [0, {})", request.layer_count);
+    }
+    if (debug.path.empty()) {
+        return "no path";
+    }
+    m_debug = debug;
+    return begin(scene_root, request, Bake_mode::debug_face);
+}
+
+auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request, const Bake_mode mode) -> std::string
+{
     ERHE_PROFILE_FUNCTION();
     erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
 
     if (m_status.state == Pvs_bake_state::running) {
         return fmt::format("a bake of scene '{}' is running", m_status.scene_name);
     }
-    if (!m_captures.empty()) {
-        return "the previous bake is still releasing its captures; try again in a few frames";
+    if (!m_captures.empty() || m_retiring_node) {
+        return "the previous bake is still releasing its GPU work; try again in a few frames";
     }
     if (!scene_root) {
         return "no scene";
-    }
-    if (request.method == erhe::scene::Pvs_bake_method::disocclusion) {
-        return "method 'disocclusion' is not built yet (doc/plans/pvs.md \"Build order\" step 5)";
     }
     if ((m_context.graphics_device == nullptr) || (m_context.rendergraph == nullptr) || (m_context.id_renderer == nullptr)) {
         return "rendering is not available";
@@ -173,6 +206,35 @@ auto Pvs_baker::start_bake(const std::shared_ptr<Scene_root>& scene_root, const 
     }
     if ((request.captures_in_flight < 1) || (request.captures_in_flight > 64)) {
         return "captures_in_flight must be in [1, 64]";
+    }
+    const bool disocclusion = (request.method == erhe::scene::Pvs_bake_method::disocclusion);
+    if (disocclusion) {
+        if ((request.layer_count < 1) || (request.layer_count > 64)) {
+            return "layer_count must be in [1, 64]";
+        }
+        if ((request.tile_size < 1) || (request.tile_size > request.face_resolution)) {
+            return "tile_size must be in [1, face_resolution]";
+        }
+        if ((request.samples_per_face < 1) || (request.samples_per_face > 64)) {
+            return "samples_per_face must be in [1, 64]";
+        }
+        // The layered buffer's words are indexed with 32 bits.
+        const uint64_t region_words = uint64_t{request.face_resolution} * uint64_t{request.face_resolution} * uint64_t{request.layer_count};
+        if ((3 * region_words) >= (uint64_t{1} << 32)) {
+            return "face_resolution^2 * layer_count is too large for the layered buffer";
+        }
+        if ((m_context.forward_renderer == nullptr) || (m_context.program_interface == nullptr)) {
+            return "rendering is not available";
+        }
+        if (!m_context.graphics_device->get_info().fragment_stores_and_atomics) {
+            return "the device has no fragment shader storage writes and atomics, which the layered buffer needs";
+        }
+        const erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
+        if ((draw_list_scene == nullptr) || !draw_list_scene->supports_pvs_faces()) {
+            return "the scene's draw lists cannot draw PVS faces on this device (they need first_instance record indexing)";
+        }
+    } else if (mode != Bake_mode::bake) {
+        return "the debug face is a disocclusion face";
     }
 
     const Scene_settings& settings  = scene_root->get_scene_settings();
@@ -222,6 +284,17 @@ auto Pvs_baker::start_bake(const std::shared_ptr<Scene_root>& scene_root, const 
 
         for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root->layers().content()->meshes) {
             if ((mesh->get_flag_bits() & erhe::Item_flags::content) == 0) {
+                continue;
+            }
+            // Visible at bake time: the mesh's visible flag bit is its
+            // effective visibility (an ancestor's hide reaches it through
+            // the inherited visible property), the bit the color passes'
+            // filters test on the draw-list entries. A hidden entry is
+            // drawn by neither method, so a column for it would be set in no
+            // cell and showing it later would cull it everywhere; without a
+            // column it is untracked (always kept), and it occluded nothing
+            // at bake, which is conservative.
+            if ((mesh->get_flag_bits() & erhe::Item_flags::visible) == 0) {
                 continue;
             }
             if (mesh->skin) {
@@ -320,6 +393,12 @@ auto Pvs_baker::start_bake(const std::shared_ptr<Scene_root>& scene_root, const 
         return fmt::format("{} x {} x {} cells is more than {}; use a larger cell size or a smaller region", cell_counts.x, cell_counts.y, cell_counts.z, c_max_cell_count);
     }
 
+    if ((mode == Bake_mode::debug_face) && (m_debug.cell >= cell_count)) {
+        return fmt::format("cell must be in [0, {})", cell_count);
+    }
+    // Captures (sampled) or face passes (disocclusion) per cell.
+    const uint32_t passes_per_cell = (disocclusion ? request.samples_per_face : request.samples_per_cell) * c_face_count;
+
     // Start.
     m_request        = request;
     m_scene_root     = scene_root;
@@ -333,10 +412,10 @@ auto Pvs_baker::start_bake(const std::shared_ptr<Scene_root>& scene_root, const 
     m_header.bake_parameters = erhe::scene::Pvs_bake_parameters{
         .method           = request.method,
         .face_resolution  = request.face_resolution,
-        .tile_size        = 0,
-        .layer_count      = 0,
+        .tile_size        = disocclusion ? request.tile_size : 0,
+        .layer_count      = disocclusion ? request.layer_count : 0,
         .face_fov         = request.face_fov,
-        .samples_per_face = 1,
+        .samples_per_face = disocclusion ? request.samples_per_face : 1,
         .min_entry_pixels = 0.0f
     };
     m_columns        = std::move(columns);
@@ -344,11 +423,14 @@ auto Pvs_baker::start_bake(const std::shared_ptr<Scene_root>& scene_root, const 
     m_columns_by_uid = std::move(columns_by_uid);
     m_words_per_cell = static_cast<uint32_t>((m_columns.size() + 31) / 32);
     m_cell_words.assign(static_cast<std::size_t>(cell_count) * m_words_per_cell, 0u);
-    m_cell_captures_left.assign(static_cast<std::size_t>(cell_count), request.samples_per_cell * c_face_count);
+    m_cell_captures_left.assign(static_cast<std::size_t>(cell_count), passes_per_cell);
+    m_cell_has_pvs.assign(static_cast<std::size_t>(cell_count), uint8_t{0});
+    m_mode = mode;
     m_scene_min = glm::min(region_min, static_bounds.min);
     m_scene_max = glm::max(region_max, static_bounds.max);
-    m_next_capture   = 0;
-    m_viewpoint_cell = 0xffffffffu;
+    m_next_capture    = 0;
+    m_faces_submitted = 0;
+    m_viewpoint_cell  = 0xffffffffu;
     m_viewpoints.clear();
     m_camera = std::make_shared<erhe::scene::Camera>("PVS bake camera");
     m_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
@@ -365,13 +447,51 @@ auto Pvs_baker::start_bake(const std::shared_ptr<Scene_root>& scene_root, const 
         .cell_counts   = cell_counts,
         .cell_count    = static_cast<uint32_t>(cell_count),
         .column_count  = static_cast<uint32_t>(m_columns.size()),
-        .capture_count = cell_count * uint64_t{request.samples_per_cell} * c_face_count,
+        .capture_count = (mode == Bake_mode::debug_face) ? uint64_t{1} : (cell_count * uint64_t{passes_per_cell}),
         .uids_assigned = uids_assigned
     };
+    if (mode == Bake_mode::debug_face) {
+        m_status.debug_face       = true;
+        m_status.debug_cell       = m_debug.cell;
+        m_status.debug_face_index = m_debug.face;
+        m_status.debug_layer      = m_debug.layer;
+    }
+
+    if (disocclusion) {
+        // The column table as the scene's database for the bake: no page is
+        // stored (every cell reads as everything visible, nothing is culled),
+        // the draw lists publish the static set's columns at the next flush,
+        // and an edit that stales it fails the bake.
+        const glm::uvec3 page_dims = (cell_counts + glm::uvec3{m_header.page_size - 1}) / m_header.page_size;
+        std::vector<erhe::scene::Pvs_page_entry> no_pages(static_cast<std::size_t>(page_dims.x) * page_dims.y * page_dims.z);
+        std::vector<erhe::scene::Pvs_column>     columns_copy = m_columns;
+        const std::string validation = erhe::scene::Pvs_database::validate(m_header, columns_copy, no_pages, {});
+        if (!validation.empty()) {
+            const std::string error = "the column table is inconsistent: " + validation;
+            stop(Pvs_bake_state::failed, error);
+            return error;
+        }
+        m_columns_database = std::make_shared<erhe::scene::Pvs_database>(m_header, std::move(columns_copy), std::move(no_pages), std::vector<uint32_t>{});
+        m_restore_database = scene_root->get_pvs_database();
+        scene_root->set_pvs_database(m_columns_database);
+        m_bake_node = erhe::rendergraph::make_rendergraph_node<Pvs_bake_node>(
+            *m_context.rendergraph,
+            m_context,
+            request.face_resolution,
+            request.layer_count
+        );
+        if (mode == Bake_mode::debug_face) {
+            // The one face pass: the cell's first sample of the face.
+            m_next_capture = (uint64_t{m_debug.cell} * passes_per_cell) + m_debug.face;
+        }
+    }
+
     log_pvs->info(
-        "PVS bake of '{}' started: method {}, {} x {} x {} cells of {} m from ({}, {}, {}), {} columns, {} captures, {} uids assigned",
+        "PVS {} of '{}' started: method {}, {} x {} x {} cells of {} m from ({}, {}, {}), {} columns, {} {}, {} uids assigned",
+        (mode == Bake_mode::debug_face) ? "debug face" : "bake",
         m_status.scene_name, erhe::scene::c_str(request.method), cell_counts.x, cell_counts.y, cell_counts.z, cell_size,
-        region_min.x, region_min.y, region_min.z, m_columns.size(), m_status.capture_count, uids_assigned
+        region_min.x, region_min.y, region_min.z, m_columns.size(), m_status.capture_count,
+        disocclusion ? "face passes" : "captures", uids_assigned
     );
     return {};
 }
@@ -404,7 +524,16 @@ void Pvs_baker::stop(const Pvs_bake_state state, const std::string& error)
     } else if (state == Pvs_bake_state::cancelled) {
         log_pvs->info("PVS bake of '{}' cancelled", m_status.scene_name);
     }
-    // Everything the bake built goes; the scene keeps its database.
+    // Everything the bake built goes; the scene keeps (or gets back) its
+    // database.
+    restore_database();
+    if (m_bake_node) {
+        // Its faces still in flight retire first (release_bake_node()).
+        m_retiring_node = std::move(m_bake_node);
+        release_bake_node();
+    }
+    m_face_records.clear();
+    m_cell_has_pvs.clear();
     m_scene_root.reset();
     m_columns.clear();
     m_column_sources.clear();
@@ -434,11 +563,47 @@ void Pvs_baker::release_captures()
     );
 }
 
+void Pvs_baker::restore_database()
+{
+    if (!m_columns_database) {
+        return;
+    }
+    // A database set on the scene since (pvs_clear, a finished bake) stays.
+    std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
+    if (scene_root && (scene_root->get_pvs_database() == m_columns_database)) {
+        scene_root->set_pvs_database(m_restore_database);
+    }
+    m_columns_database.reset();
+    m_restore_database.reset();
+}
+
+void Pvs_baker::release_bake_node()
+{
+    if (!m_retiring_node) {
+        return;
+    }
+    // A face submitted but not taken by a prepare phase is dropped; a face
+    // prepared for a frame still to be recorded is recorded (and retired)
+    // first.
+    m_retiring_node->cancel_pending_job();
+    m_face_records.clear();
+    m_retiring_node->take_completed(m_face_records);
+    m_face_records.clear();
+    if (!m_retiring_node->has_frames_in_flight()) {
+        // The deleter unregisters the node; a frame still to be rendered
+        // keeps it retired until then.
+        m_retiring_node.reset();
+    }
+}
+
 void Pvs_baker::tick()
 {
     if (m_status.state != Pvs_bake_state::running) {
         if (!m_captures.empty()) {
             release_captures();
+        }
+        if (m_retiring_node) {
+            release_bake_node();
         }
         return;
     }
@@ -448,6 +613,11 @@ void Pvs_baker::tick()
     std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
     if (!scene_root) {
         stop(Pvs_bake_state::failed, "the scene was closed");
+        return;
+    }
+
+    if (m_status.method == erhe::scene::Pvs_bake_method::disocclusion) {
+        tick_disocclusion(scene_root);
         return;
     }
 
@@ -497,7 +667,232 @@ void Pvs_baker::collect_capture(Capture_slot& slot)
     --m_cell_captures_left[cell];
     if (m_cell_captures_left[cell] == 0) {
         ++m_status.cells_done;
+        m_cell_has_pvs[cell] = 1;
     }
+}
+
+void Pvs_baker::tick_disocclusion(const std::shared_ptr<Scene_root>& scene_root)
+{
+    ERHE_VERIFY(m_bake_node && m_columns_database);
+    // The column table must stay the scene's database, unchanged, for the
+    // whole bake (doc/plans/pvs.md "Bake" 6).
+    if (scene_root->get_pvs_database() != m_columns_database) {
+        stop(Pvs_bake_state::failed, "the scene's PVS database was replaced during the bake");
+        return;
+    }
+    if (m_columns_database->get_state() == erhe::scene::Pvs_state::stale) {
+        stop(Pvs_bake_state::failed, "a static entry was moved, re-registered or removed during the bake (doc/plans/pvs.md D4)");
+        return;
+    }
+
+    m_face_records.clear();
+    m_bake_node->take_completed(m_face_records);
+    for (const Pvs_face_record& record : m_face_records) {
+        collect_face(record);
+        if (m_status.state != Pvs_bake_state::running) {
+            return;
+        }
+    }
+    m_face_records.clear();
+
+    // One face pass per frame: the node's prepare phase of this frame takes
+    // it (tick() runs before the rendergraph prepares the frame).
+    if (!m_bake_node->has_pending_job() && (m_faces_submitted < m_status.capture_count)) {
+        submit_face(scene_root, m_next_capture);
+        ++m_next_capture;
+        ++m_faces_submitted;
+    }
+
+    if (m_status.captures_done == m_status.capture_count) {
+        if (m_mode == Bake_mode::debug_face) {
+            stop(Pvs_bake_state::done, {});
+        } else {
+            finish(*scene_root);
+        }
+    }
+}
+
+void Pvs_baker::submit_face(const std::shared_ptr<Scene_root>& scene_root, const uint64_t index)
+{
+    const uint32_t samples_per_face = m_header.bake_parameters.samples_per_face;
+    const uint64_t passes_per_cell  = uint64_t{samples_per_face} * c_face_count;
+    const uint32_t cell   = static_cast<uint32_t>(index / passes_per_cell);
+    const uint32_t sample = static_cast<uint32_t>((index / c_face_count) % samples_per_face);
+    const uint32_t face   = static_cast<uint32_t>(index % c_face_count);
+
+    // The sample point: the cell center (the free point search of
+    // doc/plans/pvs.md "Bake" 1 is step 5). z_near: the largest distance
+    // from it to a face of the cell box plus 1 cm ("Bake" 2), so every point
+    // of the cell lies behind every face's near plane.
+    const glm::uvec3 counts     = m_header.cell_counts;
+    const glm::uvec3 coordinate{cell % counts.x, (cell / counts.x) % counts.y, cell / (counts.x * counts.y)};
+    const float      cell_size  = m_header.cell_size;
+    const glm::vec3  position   = m_header.grid_origin + ((glm::vec3{coordinate} + glm::vec3{0.5f}) * cell_size);
+    const float      z_near     = (0.5f * cell_size) + 0.01f;
+    // z_far: the farthest corner of the region and the static entries.
+    float far_distance = 0.0f;
+    for (uint32_t corner = 0; corner < 8; ++corner) {
+        const glm::vec3 point{
+            ((corner & 1u) != 0) ? m_scene_max.x : m_scene_min.x,
+            ((corner & 2u) != 0) ? m_scene_max.y : m_scene_min.y,
+            ((corner & 4u) != 0) ? m_scene_max.z : m_scene_min.z
+        };
+        far_distance = std::max(far_distance, glm::length(point - position));
+    }
+    const float z_far = std::max(far_distance, 2.0f * z_near);
+
+    // Sample 0 is the pixel-centered projection; sample s > 0 shifts it by
+    // a sub-pixel offset of the R2 sequence ("Bake" 4), as a projection
+    // with asymmetric field of view sides.
+    glm::vec2 jitter{0.0f};
+    if (sample > 0) {
+        const float s = static_cast<float>(sample);
+        jitter = glm::vec2{
+            (0.5f + (s * 0.7548776662f)) - std::floor(0.5f + (s * 0.7548776662f)) - 0.5f,
+            (0.5f + (s * 0.5698402910f)) - std::floor(0.5f + (s * 0.5698402910f)) - 0.5f
+        };
+    }
+    const float half_tangent = std::tan(0.5f * m_request.face_fov);
+    const float pixel_tangent = (2.0f * half_tangent) / static_cast<float>(m_request.face_resolution);
+    m_camera->set_projection_type(erhe::scene::Projection::Type::perspective_xr);
+    m_camera->set_fov_left (std::atan(-half_tangent + (jitter.x * pixel_tangent)));
+    m_camera->set_fov_right(std::atan( half_tangent + (jitter.x * pixel_tangent)));
+    m_camera->set_fov_down (std::atan(-half_tangent + (jitter.y * pixel_tangent)));
+    m_camera->set_fov_up   (std::atan( half_tangent + (jitter.y * pixel_tangent)));
+    m_camera->set_perspective_z_near(z_near);
+    m_camera->set_perspective_z_far (z_far);
+    m_camera->set_parent_from_node(erhe::math::create_look_at(position, position + c_face_directions[face], c_face_ups[face]));
+
+    std::optional<uint32_t> readback_layer{};
+    if (m_mode == Bake_mode::debug_face) {
+        readback_layer = m_debug.layer;
+    }
+    m_bake_node->submit(
+        Pvs_face_job{
+            .scene_root     = scene_root,
+            .columns        = m_columns_database.get(),
+            .camera         = erhe::scene::Camera_snapshot{*m_camera},
+            .z_near         = z_near,
+            .z_far          = z_far,
+            .cell           = cell,
+            .face           = face,
+            .sample         = sample,
+            .readback_layer = readback_layer
+        }
+    );
+}
+
+void Pvs_baker::collect_face(const Pvs_face_record& record)
+{
+    ++m_status.captures_done;
+    if (record.readback) {
+        m_status.debug_depth_entries = record.depth_entries;
+        m_status.debug_id_entries    = record.id_entries;
+        write_debug_images(record);
+    }
+    const uint32_t cell = record.cell;
+    ERHE_VERIFY(cell < m_cell_captures_left.size());
+    if (m_mode == Bake_mode::debug_face) {
+        return;
+    }
+    ERHE_VERIFY(m_cell_captures_left[cell] > 0);
+    --m_cell_captures_left[cell];
+    if (m_cell_captures_left[cell] == 0) {
+        // The disocclusion passes that turn the layered buffers into the
+        // cell's PVS are doc/plans/pvs.md "Build order" step 5: until then
+        // a cell ends without a PVS (everything visible).
+        ++m_status.cells_done;
+        m_cell_has_pvs[cell] = 0;
+    }
+}
+
+void Pvs_baker::write_debug_images(const Pvs_face_record& record)
+{
+    ERHE_VERIFY(record.readback && record.readback_layer.has_value());
+    const uint32_t    resolution  = m_request.face_resolution;
+    const uint32_t    layer_count = m_request.layer_count;
+    const uint32_t    layer       = record.readback_layer.value();
+    const std::size_t pixel_count = static_cast<std::size_t>(resolution) * resolution;
+    const std::size_t byte_count  = 2 * pixel_count * sizeof(uint32_t);
+    erhe::graphics::Buffer& buffer = *record.readback;
+    const std::span<std::byte> mapped = buffer.map_bytes(0, byte_count);
+    buffer.invalidate(0, byte_count);
+    if (mapped.size() < byte_count) {
+        buffer.unmap();
+        stop(Pvs_bake_state::failed, "the debug face readback could not be mapped");
+        return;
+    }
+    std::vector<uint32_t> words(2 * pixel_count);
+    std::memcpy(words.data(), mapped.data(), byte_count);
+    buffer.unmap();
+
+    const float front = erhe::scene_renderer::pvs_layer_front_depth(layer,      record.z_near, record.z_far, layer_count);
+    const float back  = erhe::scene_renderer::pvs_layer_front_depth(layer + 1u, record.z_near, record.z_far, layer_count);
+    m_status.debug_z_near      = record.z_near;
+    m_status.debug_z_far       = record.z_far;
+    m_status.debug_layer       = layer;
+    m_status.debug_layer_front = front;
+    m_status.debug_layer_back  = back;
+
+    // Row 0 of the buffer is gl_FragCoord.y 0: the top row where the
+    // framebuffer origin is the top left, the bottom row elsewhere (OpenGL).
+    const bool flip_rows = (m_context.graphics_device->get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::bottom_left);
+    std::vector<uint8_t> depth_pixels(pixel_count * 4);
+    std::vector<uint8_t> id_pixels   (pixel_count * 4);
+    std::unordered_set<uint32_t> distinct_ids;
+    uint64_t covered = 0;
+    for (uint32_t y = 0; y < resolution; ++y) {
+        const uint32_t source_row = flip_rows ? (resolution - 1u - y) : y;
+        for (uint32_t x = 0; x < resolution; ++x) {
+            const std::size_t source = (static_cast<std::size_t>(source_row) * resolution) + x;
+            const std::size_t target = ((static_cast<std::size_t>(y) * resolution) + x) * 4;
+            const uint32_t depth_bits = words[source];
+            const uint32_t id_min     = words[pixel_count + source];
+            // depth: the layer's front black to its back light gray; an
+            // empty sample white.
+            uint8_t gray = 255;
+            if (depth_bits != 0xffffffffu) {
+                ++covered;
+                const float z = std::bit_cast<float>(depth_bits);
+                const float t = std::clamp((z - front) / (back - front), 0.0f, 1.0f);
+                gray = static_cast<uint8_t>(std::lround(t * 200.0f));
+            }
+            depth_pixels[target + 0] = gray;
+            depth_pixels[target + 1] = gray;
+            depth_pixels[target + 2] = gray;
+            depth_pixels[target + 3] = 255;
+            // id: id_min as a hashed color; empty black.
+            uint32_t color = 0;
+            if (id_min != 0xffffffffu) {
+                distinct_ids.insert(id_min);
+                color = ((id_min + 1u) * 0x9e3779b1u) | 0x00404040u;
+            }
+            id_pixels[target + 0] = static_cast<uint8_t>((color >> 16u) & 0xffu);
+            id_pixels[target + 1] = static_cast<uint8_t>((color >>  8u) & 0xffu);
+            id_pixels[target + 2] = static_cast<uint8_t>( color         & 0xffu);
+            id_pixels[target + 3] = 255;
+        }
+    }
+    m_status.debug_covered_pixels = covered;
+    m_status.debug_distinct_ids   = distinct_ids.size();
+
+    const std::string depth_path = m_debug.path + "_depth.png";
+    const std::string id_path    = m_debug.path + "_id.png";
+    std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
+    const int size = static_cast<int>(resolution);
+    const bool written =
+        writer->write_png(std::filesystem::path{depth_path}, size, size, size * 4, erhe::dataformat::Format::format_8_vec4_unorm, std::span<const std::byte>{reinterpret_cast<const std::byte*>(depth_pixels.data()), depth_pixels.size()}) &&
+        writer->write_png(std::filesystem::path{id_path},    size, size, size * 4, erhe::dataformat::Format::format_8_vec4_unorm, std::span<const std::byte>{reinterpret_cast<const std::byte*>(id_pixels.data()),    id_pixels.size()});
+    if (!written) {
+        stop(Pvs_bake_state::failed, "the debug face PNGs could not be written to '" + m_debug.path + "_*.png'");
+        return;
+    }
+    m_status.debug_depth_path = depth_path;
+    m_status.debug_id_path    = id_path;
+    log_pvs->info(
+        "PVS debug face: cell {} face {} layer {} ([{}, {}) of z {} .. {}): {} covered pixels, {} distinct ids; {} and {}",
+        record.cell, record.face, layer, front, back, record.z_near, record.z_far, covered, distinct_ids.size(), depth_path, id_path
+    );
 }
 
 void Pvs_baker::aim_camera(const uint32_t cell, const uint32_t sample, const uint32_t face)
@@ -600,7 +995,7 @@ void Pvs_baker::finish(Scene_root& scene_root)
     const uint32_t   page_count     = page_dims.x * page_dims.y * page_dims.z;
     std::vector<erhe::scene::Pvs_page_entry> pages(page_count);
     std::vector<uint32_t>                    bits;
-    const auto cell_has_pvs = [this](const uint32_t cell) -> bool { return m_cell_captures_left[cell] == 0; };
+    const auto cell_has_pvs = [this](const uint32_t cell) -> bool { return m_cell_has_pvs[cell] != 0; };
     for (uint32_t pz = 0; pz < page_dims.z; ++pz) {
         for (uint32_t py = 0; py < page_dims.y; ++py) {
             for (uint32_t px = 0; px < page_dims.x; ++px) {
@@ -658,7 +1053,12 @@ void Pvs_baker::finish(Scene_root& scene_root)
         std::move(pages),
         std::move(bits)
     );
+    // The bake's database replaces its column table (disocclusion), which
+    // is not put back.
+    m_columns_database.reset();
+    m_restore_database.reset();
     scene_root.set_pvs_database(database);
+    m_status.cells_with_pvs = database->get_cells_with_pvs();
     log_pvs->info(
         "PVS bake of '{}' done in {} s: {} cells, {} with a PVS, {} columns, {} stored pages, {} captures, {} unmatched entries",
         m_status.scene_name, m_header.bake_duration_seconds, database->get_cell_count(), database->get_cells_with_pvs(),

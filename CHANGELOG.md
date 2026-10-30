@@ -33,6 +33,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: the potentially visible set bake's layered buffer
+  (doc/plans/pvs.md "Bake" 4): `Shader_bool::VARIANT_PVS_DEPTH` and
+  `VARIANT_PVS_ID` (appended after `USE_LIGHTMAP`); `Pvs_sub_variant`
+  (`depth`, `id`) with `c_str()`; `Draw_list_resolutions::pvs` and
+  `pvs_failed`; `Draw_pvs_face_parameters`, `Draw_list_scene::draw_pvs_face()`
+  and `Draw_list_scene::supports_pvs_faces()`; `pvs_layers.hpp` with
+  `pvs_layer_of_depth()`, `pvs_layer_front_depth()` and
+  `Pvs_layered_interface`; `Program_interface::pvs_layered_interface` and
+  the `pvs_layered` storage block at the new
+  `pvs_layered_buffer_binding_point` (13) of the scene layout, which every
+  program built through `Program_interface` declares.
 - `erhe::scene_renderer`: the potentially visible set consumer
   (doc/plans/pvs.md "Runtime consumption"): `Pvs_culling` (`off`, `on`) with
   `c_str()`; `Draw_list_scene::set_pvs_database()`,

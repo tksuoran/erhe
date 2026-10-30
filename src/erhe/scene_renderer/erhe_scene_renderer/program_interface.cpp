@@ -40,6 +40,7 @@ Program_interface::Program_interface(
     , light_interface    {graphics_device, config.max_light_count, config.light_cluster}
     , material_interface {graphics_device, config.max_material_count}
     , primitive_interface{graphics_device, config.max_primitive_count}
+    , pvs_layered_interface{graphics_device}
 {
     // Every shader source is in memory before the first program is built.
     for (const std::filesystem::path& shader_path : config.shader_paths) {
@@ -96,6 +97,9 @@ Program_interface::Program_interface(
             {.binding_point = joint_buffer_binding_point,         .type = to_binding_type(joint_interface.joint_block),          .stage_flags = Stage::vertex},
             // glyph: grid axis-label coverage in grid.frag only.
             {.binding_point = glyph_buffer_binding_point,         .type = to_binding_type(glyph_interface.glyph_block),          .stage_flags = Stage::fragment},
+            // pvs_layered: the PVS bake's layered buffer, standard.frag's PVS
+            // variants only (bound by the bake's passes, by no other pass).
+            {.binding_point = pvs_layered_buffer_binding_point,   .type = to_binding_type(pvs_layered_interface.pvs_layered_block), .stage_flags = Stage::fragment},
             // The shadow samplers are wired in as immutable samplers in the
             // descriptor set layout. The Vulkan portability subset on
             // MoltenVK rejects comparison samplers via push descriptors
@@ -264,6 +268,7 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&primitive_interface.primitive_block);
     create_info.add_interface_block(&joint_interface.joint_block);
     create_info.add_interface_block(&glyph_interface.glyph_block);
+    create_info.add_interface_block(&pvs_layered_interface.pvs_layered_block);
     create_info.bind_group_layout = bind_group_layout.get();
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
     create_info.defines.emplace_back("ERHE_GRID_LABELS", "1");

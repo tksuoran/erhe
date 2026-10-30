@@ -509,6 +509,8 @@ erhe_target_sources_grouped(
     renderers/prewarm.hpp
     renderers/programs.cpp
     renderers/programs.hpp
+    renderers/pvs_bake_node.cpp
+    renderers/pvs_bake_node.hpp
     renderers/pvs_baker.cpp
     renderers/pvs_baker.hpp
     renderers/render_context.cpp
