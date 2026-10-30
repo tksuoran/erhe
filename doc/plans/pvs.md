@@ -74,7 +74,8 @@ the cell can see through any opening between depth layers is kept.
 
 ## Decisions
 
-Proposed defaults; the user confirms each before step 1 starts.
+D1, D2 and D4 are the user's choices (2026-10-30) among the alternatives
+named there; the others are the standing defaults of this plan.
 
 - D1 Storage: the database is an asset-root glTF extension `ERHE_pvs` of
   the scene file (JSON parameters plus three `bufferView`s: columns, cell
@@ -121,7 +122,12 @@ Proposed defaults; the user confirms each before step 1 starts.
 
 ## Design
 
-### Database (`Pvs_database`, `erhe::scene_renderer`)
+### Database (`Pvs_database`, `erhe::scene`)
+
+The plain-data database (header, columns, cell table, bits, state, the
+identity-to-column lookup) lives in `erhe::scene`, which `erhe::gltf`
+already links, so the glTF writer and parser carry it without a new
+dependency; its GPU copy and the consumer live in `erhe::scene_renderer`.
 
 - Header: `version`, the scene's `scene_id`, grid origin (vec3), cell size
   (float), cell counts per axis (uvec3), column count, bake parameters
