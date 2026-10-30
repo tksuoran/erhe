@@ -23,7 +23,9 @@
 ✓user-confirmed-D1/D2/D4-2026-10-30+paged-layout-for-streaming{26108c94f;page=page_size^3-cells=storage+GPU-residency+streaming-unit;resident-slot-buffer+GPU-page-table;non-resident=visible-all;step-7-streaming}
 ✓step-1a{Pvs_database(erhe::scene)+ERHE_pvs(columns/pages/bits-bufferViews;hexfloat)+save/open+Scene_root-owner+Pvs_state_changed_message+get_pvs_status;tests-scene-6+gltf-4;via-harness-opus-coder}
 ✓step-1b{Scene_id_capture+Scene_id_capture_node(link-less;own-id-targets;Id_pass_prepared-per-slot;Id_renderer::render_image)+MCP-get_visible_entries+scripts/visible_entries_check.py(10-identical-sets;wall-gate)-PASS-M3+M4+orchestrator-rerun;found:id-pass-culls-back-faces-of-double-sided-materials(fix-next)+MCP-made-nodes-have-no-uid(step-2-assigns)}
-?step-1c{Id_renderer-double-sided+alpha-test-parity-with-color-pass}->2..8{sampled-oracle-bake;consumer(paged-GPU-layout-all-resident);layered-buffer;disocclusion-passes+cell-loop;headset;streaming;docs}
+✓step-1c{id-pass:double_sided-cull-mode+ERHE_VARIANT_ID_RENDER_ALPHA_TEST(discard-where-color-pass-does)+material-set-bound;id-varyings->locations-19/20;gate-extended(alpha-test-kept/discarded+double/single-sided-rectangle);PASS-M3+M4+MoltenVK;ctest-gpu|editor-Metal+MoltenVK-101/101;TRAP:Xcode-trees-need-reconfigure-after-new-source-files(Vulkan-tree-was-stale->erhe_gltf_gpu_tests-link-fail)}
+✓STEP-1-COMPLETE-2026-10-30
+?step-2{sampled-oracle-bake:pvs_bake-method=sampled;cell-loop+progress+readback-path-shared-with-disocclusion-bake;assign-uids-to-baked-mesh-nodes}->3..8{sampled-oracle-bake;consumer(paged-GPU-layout-all-resident);layered-buffer;disocclusion-passes+cell-loop;headset;streaming;docs}
 
 [TASK::metal-draw-count]{2026-10-23..24;branch=render-thread;CODE-DONE;detail->memory-bank/topics/metal.md[PROGRESS_2026-10-24]}
 ✓Metal-GPU-read-draw-count(ICB)+Metal-4-separate-backend-all-rows-MTL4+barrier-API+declared-barriers+narrowing(5cf6e13d2)+ImGui-first_instance(07330bebc)+Metal-draw-id-removed(2ae347dfe;M4==M3-per-draw)+vertex-stage-sampler-remap(c9e5f8faf)+Vk-render-pass-qualifiers(1fd30277d)+shadow-qualifiers(f52f201e0)
