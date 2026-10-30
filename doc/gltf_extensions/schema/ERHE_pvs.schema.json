@@ -1,0 +1,42 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_pvs.schema.json",
+    "title": "ERHE_pvs glTF asset-root extension",
+    "type": "object",
+    "$defs": {
+        "hexfloat": {"type": "string", "pattern": "^-?0x[0-9a-f](\\.[0-9a-f]+)?p[+-][0-9]+$", "description": "float32 as a C99 hexadecimal floating-point string"},
+        "uint32":   {"type": "integer", "minimum": 0, "maximum": 4294967295}
+    },
+    "properties": {
+        "version":        {"type": "integer", "const": 1},
+        "scene_id":       {"type": "string"},
+        "grid_origin":    {"type": "array", "items": {"$ref": "#/$defs/hexfloat"}, "minItems": 3, "maxItems": 3},
+        "cell_size":      {"$ref": "#/$defs/hexfloat"},
+        "cell_counts":    {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 4294967295}, "minItems": 3, "maxItems": 3},
+        "page_size":      {"type": "integer", "minimum": 1, "maximum": 4},
+        "column_count":   {"$ref": "#/$defs/uint32"},
+        "bit_word_count": {"$ref": "#/$defs/uint32"},
+        "bake": {
+            "type": "object",
+            "properties": {
+                "face_resolution":  {"$ref": "#/$defs/uint32"},
+                "tile_size":        {"$ref": "#/$defs/uint32"},
+                "layer_count":      {"$ref": "#/$defs/uint32"},
+                "face_fov":         {"$ref": "#/$defs/hexfloat", "description": "radians"},
+                "samples_per_face": {"$ref": "#/$defs/uint32"},
+                "min_entry_pixels": {"$ref": "#/$defs/hexfloat"},
+                "duration_seconds": {"$ref": "#/$defs/hexfloat"}
+            },
+            "required": ["face_resolution", "tile_size", "layer_count", "face_fov", "samples_per_face", "min_entry_pixels", "duration_seconds"]
+        },
+        "column_identities": {
+            "type": "array",
+            "description": "per column [glTF node index, mesh primitive index]",
+            "items": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 2, "maxItems": 2}
+        },
+        "columns": {"type": "integer", "minimum": 0, "description": "bufferView index: 80-byte column records (12 + 6 float32, uint64 transform_hash); absent when column_count is 0"},
+        "pages":   {"type": "integer", "minimum": 0, "description": "bufferView index: 16-byte page entries (uint32 word_offset, uint32 reserved, uint64 cells_with_pvs)"},
+        "bits":    {"type": "integer", "minimum": 0, "description": "bufferView index: uint32 words of the stored pages; absent when bit_word_count is 0"}
+    },
+    "required": ["version", "scene_id", "grid_origin", "cell_size", "cell_counts", "page_size", "column_count", "bit_word_count", "bake", "column_identities", "pages"]
+}

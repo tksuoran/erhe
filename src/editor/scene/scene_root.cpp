@@ -68,6 +68,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/pvs_database.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
@@ -1909,6 +1910,41 @@ void Scene_root::on_light_changed(const std::shared_ptr<erhe::scene::Light>& lig
 {
     static_cast<void>(light);
     invalidate_light_sets();
+}
+
+void Scene_root::set_pvs_database(std::shared_ptr<erhe::scene::Pvs_database> database)
+{
+    {
+        const std::lock_guard<std::mutex> lock{m_pvs_mutex};
+        m_pvs_database = std::move(database);
+    }
+    if (m_app_message_bus != nullptr) {
+        m_app_message_bus->pvs_state_changed.queue_message(Pvs_state_changed_message{.scene_root = this});
+    }
+}
+
+auto Scene_root::get_pvs_database() const -> std::shared_ptr<erhe::scene::Pvs_database>
+{
+    const std::lock_guard<std::mutex> lock{m_pvs_mutex};
+    return m_pvs_database;
+}
+
+auto Scene_root::get_pvs_state() const -> erhe::scene::Pvs_state
+{
+    const std::shared_ptr<erhe::scene::Pvs_database> database = get_pvs_database();
+    return database ? database->get_state() : erhe::scene::Pvs_state::absent;
+}
+
+void Scene_root::mark_pvs_stale()
+{
+    const std::shared_ptr<erhe::scene::Pvs_database> database = get_pvs_database();
+    if (!database || !database->mark_stale()) {
+        return;
+    }
+    log_scene->warn("Scene '{}': the PVS database is stale - PVS culling is off until the next bake", get_name());
+    if (m_app_message_bus != nullptr) {
+        m_app_message_bus->pvs_state_changed.queue_message(Pvs_state_changed_message{.scene_root = this});
+    }
 }
 
 void Scene_root::notify_lighting_changed()

@@ -48,6 +48,7 @@ namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
+    class Pvs_database;
     class Xformable; using Node = Xformable;
     class Scene;
     class Skin;
@@ -437,6 +438,11 @@ public:
     // reads while the load reads the primitives' payloads; closed by
     // close_source_files() (doc/erhe/gltf.md "Reading buffers by range").
     std::shared_ptr<Gltf_source_files>            source_files;
+    // The asset-root ERHE_pvs extension (doc/gltf_extensions/ERHE_pvs.md):
+    // the scene's potentially visible set database, ready, its columns
+    // naming the parsed nodes' glTF uids; null when the file has none or
+    // the extension was rejected.
+    std::shared_ptr<erhe::scene::Pvs_database>    pvs_database;
 };
 
 class Gltf_scan
@@ -900,6 +906,11 @@ public:
     // Receives where the retained primitives and the unchanged images were
     // written when non-null (rebind_sources_to_written_file()).
     Gltf_export_written_layout*     written_layout{nullptr};
+    // The scene's potentially visible set database, written as the
+    // asset-root ERHE_pvs extension (doc/gltf_extensions/ERHE_pvs.md) when
+    // non-null and ready. A column whose node uid names no exported node
+    // skips the extension (logged once).
+    std::shared_ptr<const erhe::scene::Pvs_database> pvs_database{};
 };
 
 // The file's bytes, or an empty string when the export failed: a texture

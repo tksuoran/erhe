@@ -9043,6 +9043,22 @@
     "name": "get_occlusion_check"
   },
   {
+    "description": "The scene's potentially visible set database (doc/plans/pvs.md; erhe::scene::Pvs_database, saved with the scene as the asset-root glTF extension ERHE_pvs, doc/gltf_extensions/ERHE_pvs.md). Returns scene_name, state (absent: no database; ready; stale: a baked entry moved or was removed, PVS culling is off until the next bake) and camera {viewport, camera, position} of the first viewport showing the scene. With a database also: version, scene_id, grid_origin, cell_size, cell_counts, cell_count, page_size (cells per page axis), page_dims, page_count, stored_pages, column_count, words_per_cell, cells_with_pvs, bytes {columns, pages, bits, total}, bake {face_resolution, tile_size, layer_count, face_fov (radians), samples_per_face, min_entry_pixels, duration_seconds}, bits_source {path, byte_offset, byte_length} (the bits' byte range in the file the database was read from) and in camera: cell (\"outside\" when the camera is outside the grid), page, local_cell, page_stored, has_pvs and pvs_size (columns in the cell's PVS, 0 without one).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Scene to query (list_scenes names them)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_pvs_status"
+  },
+  {
     "description": "Set the editor's light cluster binning setting (Editor_settings_config::light_cluster_binning, doc/plans/clustered_lights.md C4; the live setting, saved only by a Settings window save): gpu (default) bins each clustered view's spot and point lights into its cluster grid with a compute pass (res/shaders/light_cluster_bin.comp) writing fixed-offset lists into device memory; cpu bins them with the CPU binner (Light_cluster_binner) on the render thread. Both produce the same lists (get_light_cluster_check). Takes effect at the next frame's render settings snapshot; a device whose binning pipeline did not build bins on the CPU (gpu_supported false). Only views whose graphics preset light_shading is clustered are binned. Omit mode to read the setting.",
     "inputSchema": {
       "properties": {

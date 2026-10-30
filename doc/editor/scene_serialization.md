@@ -37,7 +37,7 @@ JSON, erhe state attaches at three levels:
 |---|---|
 | per object (node / camera / material / mesh primitive) | `ERHE_node`, `ERHE_camera`, `ERHE_light`, `ERHE_material`, `ERHE_geometry` |
 | the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, the scene item's local property values and style, enable_physics) |
-| asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, plus the Khronos physics extensions' shape/material/filter tables |
+| asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, `ERHE_pvs` (the scene's potentially visible set database), plus the Khronos physics extensions' shape/material/filter tables |
 
 A glTF node with a `mesh`, a `camera` or a `KHR_lights_punctual` light IS
 that prim - an `erhe::scene::Mesh`, `Camera` or `Light`
@@ -202,7 +202,13 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    The library-domain extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,
    `ERHE_material`, `ERHE_geometry`) are written by the exporter itself in
    `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp`.
-7. `erhe::gltf::export_gltf()` produces the GLB/JSON string;
+7. **PVS database** - `Scene_root::get_pvs_database()` goes into
+   `Gltf_export_arguments::pvs_database`; the exporter writes it as the
+   asset-root `ERHE_pvs` ([spec](../gltf_extensions/ERHE_pvs.md)) when it is
+   ready, mapping each column's node uid to the written node index, and
+   writes none for a stale database or one naming a node outside the
+   export. "Save for Quest" carries it the same way.
+8. `erhe::gltf::export_gltf()` produces the GLB/JSON string;
    `erhe::file::write_file()` writes it.
 
 Save entry points. There is ONE save shape: full editor state. Saving a
@@ -329,6 +335,11 @@ JSON-only, no buffer decode) and branches on
   8. Fill the scene's `Variant_table` from the asset's
      `KHR_materials_variants` list (one set named `materials`, carried by
      the scene's root prim) and apply the `ERHE_scene` selection.
+     The parse's `ERHE_pvs` database (`Gltf_data::pvs_database`, ready,
+     its columns resolved to the parsed nodes' uids and its bits' byte
+     range in the file recorded) becomes the scene's through
+     `Scene_root::set_pvs_database()`; a file without one opens with the
+     state `absent`.
   9. Kick off `Async_raytrace_kickoff_operation` (BVH builds on worker
      threads, synchronized via the scene's `Item_host` mutex).
 - The handler then wires UI for the returned scene root: a browser window,

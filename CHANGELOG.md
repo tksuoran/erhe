@@ -33,6 +33,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene`: `Pvs_database` (`pvs_database.hpp`), the plain-data
+  potentially visible set database: `Pvs_header`, `Pvs_bake_parameters`,
+  `Pvs_column`, `Pvs_page_entry`, `Pvs_bits_source`, `Pvs_state`,
+  `compute_pvs_transform_hash()`; cell and page indexing, the
+  identity-to-column lookup, `validate()` and `mark_stale()`
+  (doc/erhe/scene.md "Potentially visible sets").
+- `erhe::gltf`: `Gltf_export_arguments::pvs_database` and
+  `Gltf_data::pvs_database`: the exporter writes a ready database as the
+  asset-root extension `ERHE_pvs` and the parser reads it back
+  (doc/gltf_extensions/ERHE_pvs.md).
 - `erhe::dataformat`: `convert()` writes `format_packed111110_vec3_unorm`
   (R in the low 11 bits) and `format_packed1010102_vec4_unorm`; converting to
   `format_8_vec4_srgb` writes the source alpha (it wrote blue).

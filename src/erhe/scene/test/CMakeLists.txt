@@ -23,6 +23,7 @@ add_executable(${_target}
     test_optimized_variant_invalidation.cpp
     test_prim_inheritance.cpp
     test_prim_levels.cpp
+    test_pvs_database.cpp
     test_resource_prim_tokens.cpp
     test_scene_properties.cpp
     test_scope_prims.cpp

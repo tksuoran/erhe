@@ -42,6 +42,7 @@ importing it as an asset).
 | [`ERHE_node_graphs`](ERHE_node_graphs.md) | asset root | procedural texture / mesh node graphs + bindings |
 | [`ERHE_collections`](ERHE_collections.md) | asset root | named node collections (item tags) |
 | [`ERHE_texture_ktx2`](ERHE_texture_ktx2.md) | asset root | per-texture raw block KTX2 image (ASTC 4x4, "Save for Quest") |
+| [`ERHE_pvs`](ERHE_pvs.md) | asset root | draft: the scene's potentially visible set database (paged cell grid, one bit per baked entry) |
 | [`ERHE_asset_reference`](ERHE_asset_reference.md) | top-level object (materials first) | proxy for a definition in another glTF file ({file, uid}) |
 
 JSON schemas live in [`schema/`](schema/); each `*.schema.json` validates
@@ -49,7 +50,8 @@ the extension's JSON value (the object stored under the extension name in
 `"extensions"`).
 
 Writer / reader: `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp` (library-domain
-extensions: geometry, node, camera, light, material) and
+extensions: geometry, node, camera, light, material, the prepared mesh data,
+texture_ktx2, pvs) and
 `src/editor/parsers/gltf_extensions_export.cpp` /
 `gltf_extensions_import.cpp` (editor-domain extensions: physics, scene,
 layout, rig, brushes, node_graphs, collections). Legacy carriers (`erhe_flags`

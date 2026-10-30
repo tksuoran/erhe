@@ -21,6 +21,7 @@ void App_message_bus::update()
     bone_changed.update();
     mesh_component_selection_changed.update();
     scene_lighting_changed.update();
+    pvs_state_changed.update();
 }
 
 }
