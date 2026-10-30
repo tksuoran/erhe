@@ -518,6 +518,14 @@ if (ERHE_SPIRV)
             "SPIRV_TOOLS_BUILD_STATIC ON"
             "ENABLE_RTTI ON"
     )
+    # At this pin SPIRV-Tools-shared and SPIRV-Tools-static both carry the
+    # build-version.inc custom command with no dependency between them, which
+    # the Xcode "new build system" refuses at generate time. Upstream fixed it
+    # in KhronosGroup/SPIRV-Tools 342d3e5d26d0 (spirv-tools-build-version
+    # target, after vulkan-sdk-1.4.363.0); drop this once the pin includes it.
+    if (CMAKE_GENERATOR STREQUAL "Xcode")
+        add_dependencies(SPIRV-Tools-shared SPIRV-Tools-static)
+    endif ()
     CPMAddPackage(
         NAME              glslang
         VERSION           16.3.0
