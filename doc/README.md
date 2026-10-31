@@ -469,6 +469,7 @@ flowchart TD
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
 - [plans/lod.md](plans/lod.md) (proposed): Mesh level of detail: generation, editor LOD window, Lod properties, runtime selection
+- [plans/lod_gpu_selection.md](plans/lod_gpu_selection.md) (proposed): Automatic LOD selection in the culling classification (CPU lanes and cull_classify.comp, bit-identical), shadows (D3), hysteresis, CPU consumers
 - [plans/metal_backend.md](plans/metal_backend.md) (in progress): Metal backend: parity work
 - [plans/mcp_image_resolution.md](plans/mcp_image_resolution.md) (proposed): MCP image tools: requested resolution
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
