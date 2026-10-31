@@ -72,6 +72,9 @@ public:
         Specular_anti_aliasing                                 specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
         // FLAT_DRAW_COLOR variant axis (Color_environment::flat_draw_color).
         bool                                                   flat_draw_color{false};
+        // ERHE_FP16_PATHS variant axis of the lit color variants
+        // (set_fp16_paths_axis(); Fp16_path bits).
+        uint32_t                                               fp16_paths{0};
         // .x: 0xffffffffu = no active joint for the joint_weight_ramp debug
         // mode ("missing data" magenta), anything else = one is active and
         // marked per-slot in the joint buffer (see debug_target_joint).

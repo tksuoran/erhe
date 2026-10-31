@@ -6,6 +6,7 @@
 #include "erhe_texture.glsl"
 #include "erhe_point_shadow.glsl"
 #include "erhe_shadow_distance.glsl"
+#include "erhe_fp16_paths.glsl" // att_float
 
 #if __VERSION__ >= 450
 #   define ERHE_DFDX dFdxFine
@@ -45,26 +46,42 @@
 // removes the derivative discontinuity at d = range that the previous
 // glTF-recommended curve had, and the +1 keeps the response finite as d -> 0.
 // range <= 0 means unlimited (window = 1).
-float get_range_attenuation(float range, float distance) {
+// The attenuation terms return the attenuation path's precision
+// (att_float of erhe_fp16_paths.glsl, ERHE_FP16_PATH_ATTENUATION; float
+// when the path is off, in which case this is the original fp32 code).
+// On the fp16 path (doc/plans/shader_fp16.md P4) the inverse square and
+// the ratio distance / range stay fp32 - squared distances overflow fp16
+// past 255 m - and only the window polynomial of the ratio in [0, 1] runs
+// in fp16.
+att_float get_range_attenuation(float range, float distance) {
     float inverse_square = 1.0 / (distance * distance + 1.0);
     if (range <= 0.0) {
-        return inverse_square;
+        return att_float(inverse_square);
     }
-    float k      = distance / range;
-    float k2     = k * k;
-    float window = clamp(1.0 - k2 * k2, 0.0, 1.0);
-    return window * window * inverse_square;
+    att_float k      = att_float(distance / range);
+    att_float k2     = k * k;
+    att_float window = clamp(att_float(1.0) - k2 * k2, att_float(0.0), att_float(1.0));
+    return window * window * att_float(inverse_square);
 }
 
-float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer_cone_coss, float inner_cone_cos) {
+// On the fp16 path the cone edge parameter (actual - outer) / (inner -
+// outer) is formed in fp32 - the cosines of a narrow cone differ by less
+// than one fp16 ulp near 1 - and only the smoothstep polynomial of it runs
+// in fp16; the fp32 path keeps the smoothstep builtin.
+att_float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer_cone_coss, float inner_cone_cos) {
     float actual_cos = dot(normalize(spot_direction), normalize(-point_to_light));
     if (actual_cos > outer_cone_coss) {
         if (actual_cos < inner_cone_cos) {
+#if defined(ERHE_FP16_ATTENUATION)
+            att_float t = clamp(att_float((actual_cos - outer_cone_coss) / (inner_cone_cos - outer_cone_coss)), att_float(0.0), att_float(1.0));
+            return t * t * (att_float(3.0) - att_float(2.0) * t);
+#else
             return smoothstep(outer_cone_coss, inner_cone_cos, actual_cos);
+#endif
         }
-        return 1.0;
+        return att_float(1.0);
     }
-    return 0.0;
+    return att_float(0.0);
 }
 
 // Positions in the shadow code are view-relative (doc/erhe/shadows.md

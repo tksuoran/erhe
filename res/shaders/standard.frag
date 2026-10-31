@@ -546,16 +546,21 @@ void main()
     // material's factor, its base color texture and the vertex color (where
     // the mesh carries one) multiply together, which is what every glTF
     // material and every UsdPreviewSurface with a plain diffuseColor wants.
-    vec3 base_color;
+    // The material inputs after the texture fetches (base color, metallic,
+    // roughness, occlusion) are held in the material path's precision
+    // (mat_* of erhe_fp16_paths.glsl, ERHE_FP16_PATH_MATERIAL; doc/plans/
+    // shader_fp16.md P1): unorm texture and vertex color values are exact
+    // in fp16. Emissive is HDR and stays fp32.
+    mat_vec3 base_color;
     if (material.input_sources.x == ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR) {
-        base_color = v_color.rgb;
+        base_color = mat_vec3(v_color.rgb);
     } else {
-        base_color = material.base_color.rgb;
+        base_color = mat_vec3(material.base_color.rgb);
 #ifdef ERHE_USE_VERTEX_VARYING_COLOR
-        base_color *= v_color.rgb;
+        base_color *= mat_vec3(v_color.rgb);
 #endif
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
-        base_color *= base_color_sample.rgb;
+        base_color *= mat_vec3(base_color_sample.rgb);
 #endif
     }
 
@@ -667,7 +672,13 @@ void main()
     // metals; ship a relaxed roughness floor (1e-7) so the
     // anisotropic GGX denominators do not blow up. All other
     // BxDFs use the standard 1e-4 floor.
-#  if ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY
+#  if defined(ERHE_FP16_MATERIAL)
+    // The fp16 material path (doc/plans/shader_fp16.md P1): the BRDF uses
+    // roughness^4, which must stay a normal fp16 number (>= 6.1e-5), so the
+    // floor is 0.09; highlights sharper than that are not resolved by the
+    // fp16 BRDF anyway (its N.H resolution is 2^-11).
+    const float c_roughness_floor = 0.09;
+#  elif ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY
     const float c_roughness_floor = 1e-7;
 #  else
     const float c_roughness_floor = 1e-4;
@@ -689,22 +700,22 @@ void main()
     // multiplied by one and keeps its factor.
     float mr_metallic  = texture_channel_value(metallic_roughness, material.texture_channels.x);
     float mr_roughness = texture_channel_value(metallic_roughness, material.texture_channels.y);
-    float metallic    = material.metallic * mr_metallic;
-    float roughness_x = max(material.roughness.x * mr_roughness, c_roughness_floor);
-    float roughness_y = max(material.roughness.y * mr_roughness, c_roughness_floor);
+    mat_float metallic    = mat_float(material.metallic * mr_metallic);
+    mat_float roughness_x = max(mat_float(material.roughness.x * mr_roughness), mat_float(c_roughness_floor));
+    mat_float roughness_y = max(mat_float(material.roughness.y * mr_roughness), mat_float(c_roughness_floor));
 #  else
-    float metallic    = material.metallic;
+    mat_float metallic    = mat_float(material.metallic);
     // Apply the same floor on the no-texture path so the BRDF
     // math (which divides by roughness terms) does not explode
     // at 0.
-    float roughness_x = max(material.roughness.x, c_roughness_floor);
-    float roughness_y = max(material.roughness.y, c_roughness_floor);
+    mat_float roughness_x = max(mat_float(material.roughness.x), mat_float(c_roughness_floor));
+    mat_float roughness_y = max(mat_float(material.roughness.y), mat_float(c_roughness_floor));
 #  endif
     // B6: collapse roughness_y to roughness_x when anisotropy_strength
     // drops to 0 (the circular-brush singularity falls back to
     // isotropic). When anisotropy_strength == 1 the material's own
     // roughness.y is used unchanged.
-    roughness_y = mix(roughness_x, roughness_y, anisotropy_strength);
+    roughness_y = mix(roughness_x, roughness_y, mat_float(anisotropy_strength));
 
 #  ifdef ERHE_USE_NORMAL_TEXTURE
     {
@@ -781,7 +792,7 @@ void main()
 #  endif
 
 #  ifdef ERHE_USE_OCCLUSION_TEXTURE
-    float occlusion = texture_channel_value(
+    mat_float occlusion = mat_float(texture_channel_value(
         sample_texture(
             material.occlusion_texture,
             ERHE_SELECT_TEXCOORD(ERHE_OCCLUSION_TEXGEN_MODE),
@@ -789,9 +800,9 @@ void main()
             material.occlusion_offset
         ),
         material.texture_channels.z
-    );
+    ));
 #  else
-    const float occlusion = 1.0;
+    const mat_float occlusion = mat_float(1.0);
 #  endif
 
     float N_dot_V = clamped_dot(N, V);
@@ -879,9 +890,20 @@ void main()
     erhe_pvs_write();
 #else
 
-    vec3 color;
+    // Exposure is read here, before the light loops: the fp16 accumulation
+    // path (ERHE_FP16_PATH_ACCUMULATE, doc/plans/shader_fp16.md P3) folds
+    // it into every term it adds, so the sum stays in fp16 range at both
+    // ends; the fp32 path multiplies the finished sum by it, as before.
+    float exposure = camera.cameras[c_view_index].exposure;
+#if defined(ERHE_FP16_ACCUMULATE)
+#  define ERHE_ACCUMULATE_TERM(term) ((term) * exposure)
+#else
+#  define ERHE_ACCUMULATE_TERM(term) (term)
+#endif
+
+    acc_vec3 color;
 #if ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_UNLIT
-    color = base_color;
+    color = acc_vec3(ERHE_ACCUMULATE_TERM(vec3(base_color)));
 #else
     {
         // Compile-time BxDF dispatch. The Anisotropic branches need T
@@ -893,13 +915,21 @@ void main()
         // spot and point lights (point_to_light changes with the fragment
         // position) and 0.0 for directional lights; the anisotropic BRDF's
         // finite difference specular anti-aliasing reads them.
+        // The material path's values cross into the BRDF path here
+        // (erhe_fp16_paths.glsl): the anisotropic and slope BRDFs are fp32,
+        // the isotropic BRDF runs its lobe math in brdf_* precision on the
+        // fp32 vectors' dot products (erhe_bxdf.glsl).
 #  if (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
         mat3 TBN_t = transpose(mat3(T, B, N));
-#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) slope_brdf(base_color, roughness_x, roughness_y, metallic, material.reflectance, TBN_t, L_arg, V, T, B, N)
+#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) slope_brdf(vec3(base_color), float(roughness_x), float(roughness_y), float(metallic), material.reflectance, TBN_t, L_arg, V, T, B, N)
 #  elif defined(ERHE_USES_ANISOTROPIC_BRDF)
-#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, material.reflectance, L_arg, V, T, B, N, ERHE_SPECULAR_AA_KERNEL(L_arg, P2L_arg, POSITIONAL_arg))
+#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) anisotropic_brdf(vec3(base_color), float(roughness_x), float(roughness_y), float(metallic), material.reflectance, L_arg, V, T, B, N, ERHE_SPECULAR_AA_KERNEL(L_arg, P2L_arg, POSITIONAL_arg))
 #  else
-#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) isotropic_brdf(base_color, roughness_x, metallic, material.reflectance, L_arg, V, N)
+        brdf_vec3  brdf_base_color  = brdf_vec3(base_color);
+        brdf_float brdf_roughness   = brdf_float(roughness_x);
+        brdf_float brdf_metallic    = brdf_float(metallic);
+        brdf_float brdf_reflectance = brdf_float(material.reflectance);
+#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) isotropic_brdf(brdf_base_color, brdf_roughness, brdf_metallic, brdf_reflectance, L_arg, V, N)
 #  endif
 
         //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
@@ -942,8 +972,8 @@ void main()
         }
 #endif
 
-        color  = ambient_term * base_color * occlusion;
-        color += emissive;
+        color  = acc_vec3(ERHE_ACCUMULATE_TERM(ambient_term)) * acc_vec3(base_color) * acc_float(occlusion);
+        color += acc_vec3(ERHE_ACCUMULATE_TERM(emissive));
 
         if (!lightmap_valid) {
 
@@ -955,6 +985,14 @@ void main()
         // lookup reads) at its shadow record index, the unshadowed ones the
         // shading record at the slot (doc/erhe/scene_renderer.md "Light
         // records").
+        // Precision of the terms (erhe_fp16_paths.glsl): the attenuations
+        // are att_float, the visibility factor after the shadow compare is
+        // vis_float (the lookup, bias and compare themselves stay fp32,
+        // doc/erhe/shadows.md), the BRDF result brdf_vec3, and the product
+        // is formed in the accumulation precision acc_* with the radiance
+        // (exposure folded in on the fp16 accumulation path). With every
+        // path off this is the original fp32 expression in the original
+        // order: ((attenuation * radiance) * visibility) * brdf.
 #  define ERHE_SHADE_DIRECTIONAL_SHADOWMAPPED(LIGHT_INDEX, SHADOW_RECORD) { \
             uint  light_index    = (LIGHT_INDEX); \
             uint  shadow_record  = (SHADOW_RECORD); \
@@ -963,8 +1001,9 @@ void main()
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
             if (N_dot_L > 0.0) { \
-                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_record, shadow_receiver_plane); \
-                color += intensity * BXDF_CALL(L, point_to_light, 0.0); \
+                vis_float light_visibility = vis_float(sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_record, shadow_receiver_plane)); \
+                acc_vec3  intensity        = acc_vec3(ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)) * acc_float(light_visibility); \
+                color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 0.0)); \
             } \
         }
 #  define ERHE_SHADE_DIRECTIONAL_NOT_SHADOWMAPPED(LIGHT_INDEX) { \
@@ -974,8 +1013,8 @@ void main()
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
             if (N_dot_L > 0.0) { \
-                vec3 intensity = light.radiance_and_range.rgb; \
-                color += intensity * BXDF_CALL(L, point_to_light, 0.0); \
+                acc_vec3 intensity = acc_vec3(ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)); \
+                color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 0.0)); \
             } \
         }
 #  define ERHE_SHADE_SPOT_SHADOWMAPPED(LIGHT_INDEX, SHADOW_RECORD) { \
@@ -985,12 +1024,12 @@ void main()
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz; \
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
-            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
-                float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
-                float light_visibility  = sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_record, shadow_receiver_plane); \
-                vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility; \
-                color += intensity * BXDF_CALL(L, point_to_light, 1.0); \
+            att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
+            if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
+                att_float spot_attenuation = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
+                vis_float light_visibility = vis_float(sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_record, shadow_receiver_plane)); \
+                acc_vec3  intensity        = acc_vec3(float(range_attenuation * spot_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)) * acc_float(light_visibility); \
+                color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 1.0)); \
             } \
         }
 #  define ERHE_SHADE_SPOT_NOT_SHADOWMAPPED(LIGHT_INDEX) { \
@@ -999,11 +1038,11 @@ void main()
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz; \
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
-            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
-                float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
-                vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb; \
-                color += intensity * BXDF_CALL(L, point_to_light, 1.0); \
+            att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
+            if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
+                att_float spot_attenuation = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
+                acc_vec3  intensity        = acc_vec3(float(range_attenuation * spot_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)); \
+                color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 1.0)); \
             } \
         }
         // Point shadow-mapped: sample the omnidirectional shadow cube by the
@@ -1014,11 +1053,11 @@ void main()
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz; \
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
-            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
-                float light_visibility  = sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, light.shadow_params.z, light.shadow_params.x, shadow_receiver_plane); \
-                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility; \
-                color += intensity * BXDF_CALL(L, point_to_light, 1.0); \
+            att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
+            if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
+                vis_float light_visibility = vis_float(sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, light.shadow_params.z, light.shadow_params.x, shadow_receiver_plane)); \
+                acc_vec3  intensity        = acc_vec3(float(range_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)) * acc_float(light_visibility); \
+                color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 1.0)); \
             } \
         }
 #  define ERHE_SHADE_POINT_NOT_SHADOWMAPPED(LIGHT_INDEX) { \
@@ -1027,10 +1066,10 @@ void main()
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz; \
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
-            if ((N_dot_L > 0.0) && (range_attenuation > 0.0)) { \
-                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb; \
-                color += intensity * BXDF_CALL(L, point_to_light, 1.0); \
+            att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
+            if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
+                acc_vec3  intensity        = acc_vec3(float(range_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)); \
+                color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 1.0)); \
             } \
         }
 
@@ -1120,7 +1159,15 @@ void main()
     }
 #endif
 
-    float exposure = camera.cameras[c_view_index].exposure;
+    // The accumulated color in fp32 with the exposure applied: the fp16
+    // accumulation path folded it into every term, the fp32 path multiplies
+    // the sum here.
+#if defined(ERHE_FP16_ACCUMULATE)
+    vec3 exposed_color = vec3(color);
+#else
+    vec3 exposed_color = color * exposure;
+#endif
+#undef ERHE_ACCUMULATE_TERM
 
     // Upper bound for the lit colour this shader emits.
     //
@@ -1156,7 +1203,7 @@ void main()
     // material that carries its opacity in the texture (glTF BLEND with an
     // alpha channel, UsdPreviewSurface with inputs:opacity connected to a
     // texture's outputs:a) has its per-fragment coverage.
-    out_color.rgb = to_render_target_range(color * exposure * sampled_alpha, c_output_max);
+    out_color.rgb = to_render_target_range(exposed_color * sampled_alpha, c_output_max);
     out_color.a   = sampled_alpha;
 #else
     // opaque / alpha_test / screen_door / multiply / add / subtract:
@@ -1164,7 +1211,7 @@ void main()
     // the multiply / add / subtract pipelines combines this with the
     // framebuffer using src.rgb only; the opaque / discard modes write
     // alpha = 1 with blending disabled.
-    out_color.rgb = to_render_target_range(color * exposure, c_output_max);
+    out_color.rgb = to_render_target_range(exposed_color, c_output_max);
     out_color.a   = 1.0;
 #endif
 

@@ -3,6 +3,7 @@
 
 #include "erhe_math.glsl" // clamped_dot(), heaviside()
 #include "erhe_ggx.glsl"
+#include "erhe_fp16_paths.glsl" // brdf_float / brdf_vec3
 
 // NOTE: Caller *must* ensure cos_theta is >= 0.0 and <= 1.0
 vec3 fresnel_schlick(float cos_theta, vec3 f0) {
@@ -181,40 +182,92 @@ vec2 specular_aa_light_kernel(
 #endif
 
 // Based on https://www.shadertoy.com/view/flsyWX by Arthur Cavalier
-vec3 isotropic_brdf(
-    vec3  base_color,
-    float roughness,
-    float metalness,
-    float reflectance,
-    vec3  L,
-    vec3  V,
-    vec3  N
+//
+// Written in the BRDF path's precision (brdf_float / brdf_vec3 of
+// erhe_fp16_paths.glsl, the ERHE_FP16_PATH_BRDF bit; float16_t when the
+// path is live, float otherwise, in which case this is the original fp32
+// code operation for operation). The fp16 path (doc/plans/shader_fp16.md
+// P2) differs in three places, all under ERHE_FP16_BRDF:
+//   - the vectors L, V, N and H stay fp32 and only their dot products cross
+//     into fp16: a unit vector quantized to fp16 carries an angular error of
+//     2^-11 radians, which at the flank of a sharp highlight (alpha ~ 0.01)
+//     is a 10 - 70% error of the distribution (measured, the all-fp16 first
+//     form); the dot products themselves carry one fp16 rounding;
+//   - the GGX distribution takes sin^2 of the half angle as |cross(N, H)|^2
+//     (in fp32) instead of 1 - N.H^2, and its denominator normalized by
+//     alpha^2 so that every fp16 term is a normal number: near the peak
+//     N.H is within one fp16 ulp of 1 and 1 - N.H^2 would collapse to a
+//     few bands, and sin^2 itself is below the fp16 normal range there.
+//     The bound is the peak value 1 / (pi alpha^2) <= 65504, roughness
+//     >= 0.064; the P1 roughness floor 0.09 keeps a margin;
+//   - the visibility denominator floor is the smallest normal fp16 number
+//     instead of 1e-8 (a denormal fp16 that flushes to zero on some drivers
+//     and would divide by zero).
+brdf_vec3 isotropic_brdf(
+    brdf_vec3  base_color,
+    brdf_float roughness,
+    brdf_float metalness,
+    brdf_float reflectance,
+    vec3       L,
+    vec3       V,
+    vec3       N
 ) {
-    vec3  H       = normalize(L + V);
-    float N_dot_L = clamped_dot(N, L);
-    float N_dot_V = clamped_dot(N, V);
-    float N_dot_H = dot(N, H);
-    float V_dot_H = dot(V, H); // Note: H.L == L.H == H.V == V.H
-    float alpha   = roughness * roughness;
+    vec3       H       = normalize(L + V);
+    brdf_float N_dot_L = brdf_float(clamped_dot(N, L));
+    brdf_float N_dot_V = brdf_float(clamped_dot(N, V));
+    brdf_float N_dot_H = brdf_float(dot(N, H));
+    brdf_float V_dot_H = brdf_float(dot(V, H)); // Note: H.L == L.H == H.V == V.H
+    brdf_float alpha   = roughness * roughness;
 
     // Computing Normal Distribution Term
-    float D   = ggx_isotropic_ndf(N_dot_H, alpha);
+    brdf_float D;
+    {
+#if defined(ERHE_FP16_BRDF)
+        // The denominator sin^2 + (N.H alpha)^2 normalized by alpha^2:
+        // sin^2 / alpha^2 + N.H^2, at least N.H^2 ~ 1, so both terms are
+        // normal fp16 numbers (unnormalized, sin^2 below 2^-14 flushed to
+        // zero at the peak of a sharp highlight and raised it by up to 75%,
+        // measured). The ratio is formed in fp32 (sin^2 is fp32 above).
+        // k = alpha / denominator = 1 / (alpha (sin^2 / alpha^2 + N.H^2)).
+        vec3       N_x_H   = cross(N, H);
+        float      alpha_f = float(alpha);
+        brdf_float denom_n = brdf_float(dot(N_x_H, N_x_H) / (alpha_f * alpha_f)) + N_dot_H * N_dot_H;
+        brdf_float k       = brdf_float(1.0) / (alpha * denom_n);
+#else
+        brdf_float a     = N_dot_H * alpha;
+        brdf_float denom = max(brdf_float(1.0) - N_dot_H * N_dot_H + a * a, brdf_float(1e-7));
+        brdf_float k     = alpha / denom;
+#endif
+        D = k * k * brdf_float(m_i_pi);
+    }
 
     // Computing Visibility Term
-    float Vis = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha); 
+    brdf_float Vis;
+    {
+        brdf_float a2    = alpha * alpha;
+        brdf_float GV    = N_dot_L * sqrt(N_dot_V * N_dot_V * (brdf_float(1.0) - a2) + a2);
+        brdf_float GL    = N_dot_V * sqrt(N_dot_L * N_dot_L * (brdf_float(1.0) - a2) + a2);
+#if defined(ERHE_FP16_BRDF)
+        brdf_float denom = max(GV + GL, brdf_float(6.1e-5));
+#else
+        brdf_float denom = max(GV + GL, brdf_float(1e-8));
+#endif
+        brdf_float v     = brdf_float(0.5) / denom;
+        Vis = max(v, brdf_float(0.0));
+    }
 
     // Computing Fresnel Term
     // Using reflectance mapping as in Filament PBR Pipeline
-    vec3  F0  = 0.16 * reflectance * reflectance * (1.0 - metalness) + base_color * metalness;
-    vec3  F   = fresnel_schlick(clamp(V_dot_H, 0.0, 1.0), F0);
+    brdf_vec3  F0  = brdf_float(0.16) * reflectance * reflectance * (brdf_float(1.0) - metalness) + base_color * metalness;
+    brdf_vec3  F   = F0 + (brdf_float(1.0) - F0) * pow(brdf_float(1.0) - clamp(V_dot_H, brdf_float(0.0), brdf_float(1.0)), brdf_float(5.0));
 
     // Lighting
-    vec3 specular_microfacet = D * Vis * F;
-    vec3 diffuse_lambert     = m_i_pi * (1.0 - metalness) * base_color;
-    vec3 diffuse_factor      = vec3(1.0) - F; 
+    brdf_vec3 specular_microfacet = D * Vis * F;
+    brdf_vec3 diffuse_lambert     = brdf_float(m_i_pi) * (brdf_float(1.0) - metalness) * base_color;
+    brdf_vec3 diffuse_factor      = brdf_vec3(1.0) - F;
 
     // Final color
-    return max(N_dot_L, 0.0) * (diffuse_factor * diffuse_lambert + specular_microfacet);
+    return max(N_dot_L, brdf_float(0.0)) * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
 
 vec3 anisotropic_brdf(

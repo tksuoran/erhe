@@ -293,6 +293,36 @@ What each gate checks and the current results are in
   after `sampled` in the same run; `--trace` buckets the misses with the
   bake trace). They launch their own editor and restore the editor config
   files a run may write.
+## Shader fp16 verification
+
+What is measured (paths, boundaries, gates G-display / G-finite / G-dark /
+G-shadow / G-cost, the matrix) is defined in
+[`plans/shader_fp16.md`](plans/shader_fp16.md); the commands:
+
+- **Gates**: `py -3 scripts/shader_fp16_verify.py` (usage in its docstring)
+  launches its own headless Vulkan editor, builds each station of
+  `scripts/creations/creation_26_fp16_test_rooms.py`, sets the low-end
+  configuration through `set_graphics_preset` (session-only) and renders the
+  fp32 chain and every mask of the matrix per case with `render_scene_image`
+  (linear, rgba32f, msaa 0). `--matrix alone|chains|full` or `--mask`
+  choose the masks, `--station` / `--case` narrow the stations,
+  `--save-images failing` (the default) keeps the reference and error image
+  of each failing row, `--enforce` exits non-zero on a FAIL. Results go to
+  `logs/shader_fp16/<timestamp>/summary.json`. The device must report
+  `shaderFloat16`; on Linux with several ICDs set `VK_DRIVER_FILES`.
+- **G-shadow**: the shadow stations are not part of the test
+  rooms; the visibility path (mask 16) is checked on the lit image of
+  `creation_25` stations by `scripts/shadow_verify.py --set
+  shader_fp16_paths=16` against a mask 0 run (identical G1 - G5 results with
+  the hard filter, whose visibility factor is exact in fp16).
+- **G-cost**: launch the gates with `--shader-variant-browser <dir>` so the
+  lit variants of every mask are recorded, then `py -3
+  scripts/shader_analytics.py <dir>` (`erhe/graphics.md` "Mali analytics");
+  the browser's `H` key slot separates the masks, and the registers, spill
+  and 16-bit arithmetic share columns are the gate.
+- **Unit tests**: `erhe_scene_renderer_tests --gtest_filter=Shader_key_fp16_paths*`
+  checks the axis scoping (lit variants keep the mask; unlit, position-pass
+  and debug keys get 0).
 
 ## Future work
 

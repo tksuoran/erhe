@@ -86,6 +86,7 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
     environment.shadow_technique  = parameters.shadow_technique;
     environment.shadow_depth_bits = parameters.shadow_depth_bits;
     environment.specular_anti_aliasing = parameters.specular_anti_aliasing;
+    environment.fp16_paths        = parameters.fp16_paths;
     environment.ddgi_enabled      = m_pass_resources.get_ddgi().is_valid();
     environment.lightmap_enabled  = (m_pass_resources.get_lightmap_texture() != nullptr);
     environment.flat_draw_color   = parameters.flat_draw_color;

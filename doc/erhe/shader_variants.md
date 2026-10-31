@@ -188,6 +188,36 @@ anisotropic variants of the new mode once (the default scene: one variant
 per switch, `Shader_variant_cache miss` in the log) and switching back
 compiles none.
 
+### fp16 paths (`FP16_PATHS`)
+
+The integer axis `ERHE_FP16_PATHS` is a bit mask of
+`erhe::scene_renderer::Fp16_path` (1 material inputs, 2 isotropic BRDF, 4
+light accumulation, 8 attenuation, 16 shadow visibility factor; the
+`ERHE_FP16_PATH_*` constants of `res/shaders/erhe_fp16_paths.glsl`), from
+the editor's graphics preset field `shader_fp16_paths` (the Settings window
+checkboxes, `set_graphics_preset shader_fp16_paths`). A set bit computes
+that part of `standard.frag`'s shading chain in `float16_t`
+(doc/plans/shader_fp16.md states each path's boundary and gates). The
+header defines one type macro set per path (`mat_float` / `mat_vec3`,
+`brdf_float` / `brdf_vec3`, `acc_float` / `acc_vec3`, `att_float`,
+`vis_float`): the half type when the path is live, the float type
+otherwise, so each path's code is written once and a value crossing into
+another path is converted with the receiving path's constructor (the
+identity in fp32). A path is live only when the device enables
+`shaderFloat16` (`ERHE_HAS_SHADER_FLOAT16`); without it every variant
+compiles the fp32 chain whatever the mask, and the mask 0 variant is the
+fp32 chain operation for operation as before the axis existed.
+
+The environment key carries the preset's mask (`Forward_renderer` and
+`Draw_list_renderer` parameters `fp16_paths`, `Color_environment`,
+`Prewarm_parameters`); `set_fp16_paths_axis()` keeps it only on lit color
+keys (`BXDF_MODEL` not unlit, `SHADER_DEBUG` 0, none of the position-pass
+variant bits) and sets 0 on every other key, applied at the same sites as
+`set_specular_anti_aliasing_axis()`. The unlit, depth, shadow, ID, points
+and debug variants therefore never multiply; switching the mask compiles
+the lit variants of the new mask once. The variant browser codes the axis
+`H`.
+
 ### Overdraw (`OVERDRAW`)
 
 The integer axis `ERHE_OVERDRAW` is the `erhe::scene_renderer::Overdraw_count`
@@ -391,3 +421,8 @@ the first shader variant to draw under a given Base_render_pipeline +
 format would lock its pipeline into the cache and every later variant
 that hashed to the same format would render with the wrong shader --
 which made material edits appear to do nothing.
+
+## Future work
+
+- [plans/shader_fp16.md](../plans/shader_fp16.md): switchable fp16 paths
+  through the standard shader, each with a boundary statement and a gate.

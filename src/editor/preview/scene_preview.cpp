@@ -379,7 +379,8 @@ void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& for
         .shadow_bias            = static_cast<uint32_t>(preset.shadow_bias),
         .shadow_technique       = static_cast<uint32_t>(preset.shadow_technique),
         .shadow_depth_bits      = m_shadow_texture ? erhe::scene_renderer::get_shadow_depth_bits_axis(m_shadow_texture->get_pixelformat()) : 0u,
-        .specular_anti_aliasing = static_cast<erhe::scene_renderer::Specular_anti_aliasing>(preset.specular_anti_aliasing)
+        .specular_anti_aliasing = static_cast<erhe::scene_renderer::Specular_anti_aliasing>(preset.specular_anti_aliasing),
+        .fp16_paths             = static_cast<uint32_t>(preset.shader_fp16_paths)
     };
     forward_renderer.prewarm_standard_variants(params);
 }

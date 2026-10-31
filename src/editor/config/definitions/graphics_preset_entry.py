@@ -58,5 +58,10 @@ struct("Graphics_preset_entry",
         # or shadow map reads: a fragment cost measurement mode. Lights and
         # shadow maps are still prepared unless their counts are 0.
         field("flat_draw_color", Bool, added_in=6, default="false", short_desc="Flat Draw Color"),
+        # fp16 paths of the standard shader (v6; doc/plans/shader_fp16.md): a
+        # bit mask of erhe::scene_renderer::Fp16_path, the ERHE_FP16_PATHS
+        # variant axis of the lit color variants. 0 = the fp32 chain
+        # everywhere. Older presets read the default.
+        field("shader_fp16_paths", Int, added_in=6, default="0", short_desc="Shader fp16 Paths"),
     ],
 )

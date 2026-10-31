@@ -243,6 +243,24 @@ creations up beyond single showcase scenes.
 
 ## The creations
 
+### 26 - fp16 Test Rooms
+
+A test asset for the standard shader's fp16 paths, specified in
+[../plans/shader_fp16.md](../plans/shader_fp16.md). Five stations are built
+as their own scenes, each with one light and no textures:
+`roughness_metallic` (spheres over roughness 0.02 to 1.0 and metallic 0 / 1
+in gray and red, lit from 15, 45 and 85 degrees off the view; the columns
+below the fp16 roughness floor are a separate ungated case), `grazing` (one
+large sphere lit from the side and from behind the view), `hdr_ramp` (a
+white floor under radiance 2^-12 to 2^14 at exposures 2^-8, 1 and 2^4, with
+emissive strips 2^-12 to 2^10), `dark_room` (ambient 2^-10 on base colors
+2^-6 to 2^-2) and `attenuation` (a point light 0.1 to 500 m above a floor
+and a spot light with 1 to 89 degree cones). The script's `STATIONS` table
+carries each station's builder and cases (light, `render_scene_image`
+camera, gated or not); `apply_light()` switches the light.
+`scripts/shader_fp16_verify.py` imports all of it. The stations are built
+per run (no saved assets).
+
 ### 25 - Shadow Test Rooms
 
 A test asset for the directional, spot and point shadow paths, specified in

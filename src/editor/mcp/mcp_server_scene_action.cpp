@@ -255,6 +255,7 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         check(read_int_argument  (args, "shadow_resolution",       1, preset.shadow_resolution))          &&
         check(read_int_argument  (args, "shadow_depth_bits",       1, preset.shadow_depth_bits))          &&
         check(read_int_argument  (args, "point_shadow_resolution", 1, preset.point_shadow_resolution))    &&
+        check(read_int_argument  (args, "shader_fp16_paths",       0, preset.shader_fp16_paths))           &&
         check(read_float_argument(args, "shadow_depth_bias_constant", preset.shadow_depth_bias_constant)) &&
         check(read_float_argument(args, "shadow_depth_bias_slope",    preset.shadow_depth_bias_slope))    &&
         check(read_non_negative_float_argument(args, "shadow_bias_texel_scale",  preset.shadow_bias_texel_scale))  &&
@@ -335,6 +336,8 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"light_shading",              std::string{to_string(in_effect.light_shading)}},
         {"specular_anti_aliasing",     std::string{to_string(in_effect.specular_anti_aliasing)}},
         {"flat_draw_color",            in_effect.flat_draw_color},
+        {"shader_fp16_paths",          in_effect.shader_fp16_paths},
+        {"shader_float16",             (m_context.graphics_device != nullptr) && m_context.graphics_device->get_info().shader_float16},
         {"use_draw_lists",             m_context.app_settings->get_use_draw_lists()}
     }).dump();
 }

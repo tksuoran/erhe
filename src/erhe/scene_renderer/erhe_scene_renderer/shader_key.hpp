@@ -171,7 +171,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(VERTEX_TBN_ENCODING)                      \
     X(VERTEX_JOINT_WEIGHTS_ENCODING)            \
     X(SPECULAR_ANTI_ALIASING)                   \
-    X(OVERDRAW)
+    X(OVERDRAW)                                 \
+    X(FP16_PATHS)
 
 enum class Shader_bool : uint32_t {
 #define ERHE_X(PARAM) PARAM,
@@ -417,6 +418,37 @@ enum class Overdraw_count : uint32_t
 
 // The SPECULAR_ANTI_ALIASING axis value of a key.
 [[nodiscard]] auto get_specular_anti_aliasing(const Shader_key& key) -> Specular_anti_aliasing;
+
+// The fp16 paths of standard.frag (doc/plans/shader_fp16.md), the
+// FP16_PATHS variant axis: a bit mask, one bit per path, matching the
+// ERHE_FP16_PATH_* bits of res/shaders/erhe_fp16_paths.glsl. A set bit
+// computes that path in float16_t on a device with shaderFloat16; the
+// shader compiles the fp32 chain for every bit on a device without it.
+enum class Fp16_path : uint32_t
+{
+    material    = 1u << 0, // P1 material inputs after the texture fetches
+    brdf        = 1u << 1, // P2 isotropic BRDF
+    accumulate  = 1u << 2, // P3 light accumulation (exposure folded in)
+    attenuation = 1u << 3, // P4 range and spot attenuation polynomials
+    visibility  = 1u << 4, // P5 shadow visibility factor after the compare
+    frame       = 1u << 5, // P6 normal and tangent frame (not built)
+    anisotropic = 1u << 6, // P7 anisotropic BRDF (not built)
+    vertex      = 1u << 7  // P8 vertex stage (not built)
+};
+// The paths of the low-end configuration (P1 - P5).
+inline constexpr uint32_t fp16_paths_low_end_set = 0x1fu;
+// Every bit a mask may carry; set_fp16_paths_axis() masks the rest off.
+inline constexpr uint32_t fp16_paths_all = 0xffu;
+
+// Sets the FP16_PATHS axis of a key whose material and variant bits are
+// already set: mask on the lit color variants (BXDF_MODEL not unlit, no
+// position-pass variant bit, SHADER_DEBUG 0), 0 on every other key, so the
+// depth, shadow, ID, unlit and debug variants never multiply. Applied where
+// set_specular_anti_aliasing_axis() is applied.
+void set_fp16_paths_axis(Shader_key& key, uint32_t mask);
+
+// The FP16_PATHS axis value of a key.
+[[nodiscard]] auto get_fp16_paths(const Shader_key& key) -> uint32_t;
 
 // ERHE_SHADOW_DEPTH_BITS variant axis value of a shadow map depth format:
 // the depth bit count of a fixed-point (UNORM) format (16 or 24), 32 for a

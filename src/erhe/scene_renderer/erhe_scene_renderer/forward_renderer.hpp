@@ -141,6 +141,9 @@ public:
         // ERHE_SPECULAR_ANTI_ALIASING variant axis of the variants that call
         // anisotropic_brdf() (set_specular_anti_aliasing_axis()).
         Specular_anti_aliasing                                 specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
+        // ERHE_FP16_PATHS variant axis of the lit color variants
+        // (set_fp16_paths_axis(); Fp16_path bits).
+        uint32_t                                               fp16_paths{0};
         // .x: 0xffffffffu = no active joint for the joint_weight_ramp debug
         // mode ("missing data" magenta), anything else = one is active and
         // marked per-slot in the joint buffer (see debug_target_joint).
@@ -214,6 +217,7 @@ public:
         Specular_anti_aliasing                   specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
         // FLAT_DRAW_COLOR variant axis (Color_environment::flat_draw_color).
         bool                                     flat_draw_color{false};
+        uint32_t                                 fp16_paths{0};
         glm::uvec4                               debug_joint_indices{0xffffffffu, 0, 0, 0};
         std::span<const glm::vec4>               debug_joint_colors{};
         const erhe::scene::Node*                 debug_target_joint{nullptr};
@@ -289,6 +293,8 @@ public:
         // Specular anti-aliasing mode to prewarm (ERHE_SPECULAR_ANTI_ALIASING
         // axis). Same single-valued, warm-the-active-mode policy.
         Specular_anti_aliasing                                      specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
+        // fp16 paths to prewarm (ERHE_FP16_PATHS axis). Same policy.
+        uint32_t                                                    fp16_paths{0};
     };
 
     // Returns the number of Device::warmup_render_pipeline calls issued

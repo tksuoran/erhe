@@ -194,6 +194,17 @@ public:
     bool     shader_float16     {false};
     bool     shader_int8        {false};
 
+    // Reflect VkPhysicalDeviceFloatControlsProperties (VK_KHR_shader_float_
+    // controls, core in Vulkan 1.2) for float16: whether the device can
+    // flush fp16 denormals to zero, preserve them, and round to nearest
+    // even / toward zero. The shaders set no execution mode, so the
+    // driver's default applies; the fp16 path gates (doc/plans/
+    // shader_fp16.md G-dark) read these to know what to expect.
+    bool     shader_denorm_flush_to_zero_float16  {false};
+    bool     shader_denorm_preserve_float16       {false};
+    bool     shader_rounding_mode_rte_float16     {false};
+    bool     shader_rounding_mode_rtz_float16     {false};
+
     // Reflect VkPhysicalDevice16BitStorageFeatures (VK_KHR_16bit_storage,
     // promoted to Vulkan 1.1). Each bit gates 16-bit types in a particular
     // SPIR-V storage class.

@@ -109,6 +109,7 @@ void apply_render_environment(Shader_key& key, const Shader_key& environment, co
     // Scoped to the keys whose shader calls anisotropic_brdf(), as derive()
     // scopes it.
     set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(environment));
+    set_fp16_paths_axis(key, get_fp16_paths(environment));
     // derive() ORs the environment bits in before the pass's forced bits are
     // applied, so a pass that forces USE_DDGI, USE_LIGHTMAP or FLAT_DRAW_COLOR
     // off keeps it off.
@@ -217,6 +218,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             .shadow_technique       = parameters.shadow_technique,
             .shadow_depth_bits      = parameters.shadow_depth_bits,
             .specular_anti_aliasing = parameters.specular_anti_aliasing,
+            .fp16_paths             = parameters.fp16_paths,
             .debug_joint_indices    = parameters.debug_joint_indices,
             .debug_joint_colors     = parameters.debug_joint_colors,
             .debug_target_joint     = parameters.debug_target_joint,
@@ -253,6 +255,7 @@ void Forward_renderer::render(const Draw_parameters& parameters, const Render_bu
     environment_key.set(Shader_int::SHADOW_TECHNIQUE,                         parameters.shadow_technique);
     environment_key.set(Shader_int::SHADOW_DEPTH_BITS,                        parameters.shadow_depth_bits);
     environment_key.set(Shader_int::SPECULAR_ANTI_ALIASING,                   static_cast<uint32_t>(parameters.specular_anti_aliasing));
+    environment_key.set(Shader_int::FP16_PATHS,                               parameters.fp16_paths);
     // SHADER_MULTIVIEW_COUNT: 0 for single-view (views.size() == 1),
     // N for multiview (views.size() >= 2). This matches the prewarm
     // convention (multiview_view_counts uses 0u for the single-view
@@ -538,6 +541,7 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
             environment_key.set(Shader_int::SHADOW_TECHNIQUE,                         parameters.shadow_technique);
             environment_key.set(Shader_int::SHADOW_DEPTH_BITS,                        parameters.shadow_depth_bits);
             environment_key.set(Shader_int::SPECULAR_ANTI_ALIASING,                   static_cast<uint32_t>(parameters.specular_anti_aliasing));
+            environment_key.set(Shader_int::FP16_PATHS,                               parameters.fp16_paths);
             environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   view_count);
 
             Render_bucket_list buckets;
@@ -638,6 +642,7 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                         derived.bool_mask &= ~parameters.shader_key_force_disable_mask;
                         // After the force masks, as the draw path applies it.
                         set_specular_anti_aliasing_axis(derived, get_specular_anti_aliasing(environment_key));
+                        set_fp16_paths_axis(derived, get_fp16_paths(environment_key));
 
                         static_cast<void>(m_shader_variant_cache.get(derived, vertex_format));
                     }
