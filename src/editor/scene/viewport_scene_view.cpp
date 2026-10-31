@@ -292,83 +292,6 @@ void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_
     m_context.app_rendering->render_viewport_renderables(context);
 }
 
-void Viewport_scene_view::prepare_wide_line_feed(
-    const Render_context&                         context,
-    const int64_t                                 host_system_time_ns,
-    erhe::scene_renderer::Content_wide_line_feed& out
-)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    out.clear();
-    if ((m_context.content_wide_line_renderer == nullptr) || !m_context.content_wide_line_renderer->is_enabled()) {
-        return;
-    }
-    const std::shared_ptr<Scene_root>& content_scene_root = context.scene_root;
-    if (!content_scene_root) {
-        return;
-    }
-    erhe::scene::Scene* scene = content_scene_root->get_hosted_scene();
-    if (scene == nullptr) {
-        return;
-    }
-
-    // Feeds the meshes of one composition pass.
-    auto feed_pass = [&](const Composition_pass* pass) {
-        if (pass == nullptr) {
-            return;
-        }
-        const Composition_pass_data& data = pass->data;
-        if ((data.primitive_mode != erhe::primitive::Primitive_mode::edge_lines) || !data.enabled) {
-            return;
-        }
-        // Mirror Composition_pass::prepare's per-view Visual Style gate
-        // (get_render_style + is_primitive_mode_enabled): when this view's
-        // style disables the pass's edge lines, do not feed its meshes - the
-        // ribbons would be expanded by the compute pass and then never drawn.
-        // Passes without a render style (selection / translucent outline,
-        // ghost edge lines) stay ungated, matching the draw side.
-        if (data.get_render_style && !is_primitive_mode_enabled(data.get_render_style(context), data.primitive_mode)) {
-            return;
-        }
-        const erhe::scene_renderer::Primitive_interface_settings settings = get_pass_primitive_settings(data, context, host_system_time_ns);
-        const float     line_width = settings.constant_size;
-        const auto&     filter     = data.filter;
-        const uint32_t  group      = data.content_wide_line_group;
-
-        for (const auto layer_id : data.mesh_layers) {
-            const auto mesh_layer = scene->get_mesh_layer_by_id(layer_id);
-            if (!mesh_layer) {
-                continue;
-            }
-            for (const auto& mesh : mesh_layer->meshes) {
-                if (filter(mesh->get_flag_bits())) {
-                    // The active item of the selection gets its own outline
-                    // color when the pass supplies one (doc/editor/active_item.md D5).
-                    erhe::scene_renderer::Content_wide_line_renderer::prepare_mesh(
-                        *m_context.mesh_memory,
-                        *mesh,
-                        settings.get_selected_color(mesh->get_flag_bits()),
-                        line_width,
-                        group,
-                        out
-                    );
-                }
-            }
-        }
-    };
-
-    // The selection outline (its animated color / width come from
-    // get_pass_primitive_settings, the pass's selection_outline_pulse), the
-    // regular edge line passes, the translucent outline and the ghost edge
-    // lines, in the order their dispatches were always queued.
-    feed_pass(m_context.app_rendering->selection_outline.get());
-    feed_pass(m_context.app_rendering->edge_lines_not_selected.get());
-    feed_pass(m_context.app_rendering->edge_lines_selected.get());
-    feed_pass(m_context.app_rendering->translucent_outline.get());
-    feed_pass(m_context.app_rendering->ghost_edge_lines.get());
-}
-
 void Viewport_scene_view::prepare_composition(const uint64_t frame_index, const std::size_t frames_in_flight, const int64_t host_system_time_ns)
 {
     ERHE_PROFILE_FUNCTION();
@@ -422,7 +345,7 @@ void Viewport_scene_view::prepare_composition(const uint64_t frame_index, const 
 
     // The edge-line feed of the wide-line passes (the render phase queues
     // it, runs the compute pre-pass and draws it).
-    prepare_wide_line_feed(context, host_system_time_ns, slot.wide_line_feed);
+    m_context.app_rendering->prepare_wide_line_feed(context, host_system_time_ns, slot.wide_line_feed);
 
     // The id pass, under the condition execute_rendergraph_node() renders it
     // with (Id_renderer::begin_frame handed this frame its region scan in
@@ -596,7 +519,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
             ERHE_PROFILE_SCOPE("Edge line compute");
             // The feed the prepare phase built for this view and frame
-            // (prepare_wide_line_feed()); the render phase reads no mesh.
+            // (App_rendering::prepare_wide_line_feed()); the render phase reads no mesh.
             ERHE_VERIFY(context.composer_prepared != nullptr);
             const erhe::scene_renderer::Content_wide_line_feed& wide_line_feed = context.composer_prepared->wide_line_feed;
             {

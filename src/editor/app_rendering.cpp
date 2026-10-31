@@ -16,12 +16,14 @@
 #include "renderers/id_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/render_style.hpp"
 #include "renderers/sky_renderer.hpp"
 #include "renderers/viewport_config.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -550,6 +552,15 @@ App_rendering::App_rendering(
     // (MCP render_scene_image) leaves these passes out.
     selection_outline->data.kind = Composition_pass_kind::editor_aid;
     selection_outline->data.selection_outline_pulse = true;
+
+    // The fill passes that draw each edge pass's meshes, for the LOD level
+    // the edge lines are fed at (get_wide_line_lod_routing()). Selected and
+    // hovered meshes: the selected fill, or the stencil mask while the
+    // selection fill is off (exactly one of the two is active). The ghost
+    // meshes have no fill: level 0.
+    selection_outline      ->data.lod_level_source_passes = {content_fill_selected_or_hovered.get(), selection_stencil_mask.get()};
+    edge_lines_selected    ->data.lod_level_source_passes = {content_fill_selected_or_hovered.get(), selection_stencil_mask.get()};
+    edge_lines_not_selected->data.lod_level_source_passes = {content_fill_not_selected.get()};
     ghost_edge_lines ->data.kind = Composition_pass_kind::editor_aid;
 
     {
@@ -1037,6 +1048,96 @@ auto App_rendering::make_composition_pass(
     renderpass->data = base_pass->data;
     renderpass->data.blending_mode_policy = blending_mode_policy;
     return renderpass;
+}
+
+void App_rendering::prepare_wide_line_feed(
+    const Render_context&                         context,
+    const int64_t                                 host_system_time_ns,
+    erhe::scene_renderer::Content_wide_line_feed& out
+) const
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+
+    out.clear();
+    if ((m_context.content_wide_line_renderer == nullptr) || !m_context.content_wide_line_renderer->is_enabled()) {
+        return;
+    }
+    const std::shared_ptr<Scene_root>& content_scene_root = context.scene_root;
+    if (!content_scene_root) {
+        return;
+    }
+    erhe::scene::Scene* scene = content_scene_root->get_hosted_scene();
+    if (scene == nullptr) {
+        return;
+    }
+    // The forced levels as the draw lists registered them (flushed earlier
+    // in this M2).
+    const erhe::scene_renderer::Draw_list_scene* draw_list_scene = content_scene_root->get_draw_list_scene();
+
+    // Feeds the meshes of one composition pass.
+    const auto feed_pass = [&](const Composition_pass* pass) {
+        if (pass == nullptr) {
+            return;
+        }
+        const Composition_pass_data& data = pass->data;
+        if ((data.primitive_mode != erhe::primitive::Primitive_mode::edge_lines) || !data.enabled) {
+            return;
+        }
+        // Mirror Composition_pass::prepare's per-view Visual Style gate
+        // (get_render_style + is_primitive_mode_enabled): when this view's
+        // style disables the pass's edge lines, do not feed its meshes - the
+        // ribbons would be expanded by the compute pass and then never drawn.
+        // Passes without a render style (selection / translucent outline,
+        // ghost edge lines) stay ungated, matching the draw side.
+        if (data.get_render_style && !is_primitive_mode_enabled(data.get_render_style(context), data.primitive_mode)) {
+            return;
+        }
+        const erhe::scene_renderer::Primitive_interface_settings settings = get_pass_primitive_settings(data, context, host_system_time_ns);
+        const float     line_width = settings.constant_size;
+        const auto&     filter     = data.filter;
+        const uint32_t  group      = data.content_wide_line_group;
+        // The level of the fill these meshes are drawn with: the draw lists
+        // draw a mesh's forced level, the bucket path level 0.
+        const bool lod_from_draw_lists =
+            (draw_list_scene != nullptr) &&
+            (get_wide_line_lod_routing(data, context, host_system_time_ns) == Wide_line_lod_routing::draw_lists);
+
+        for (const auto layer_id : data.mesh_layers) {
+            const auto mesh_layer = scene->get_mesh_layer_by_id(layer_id);
+            if (!mesh_layer) {
+                continue;
+            }
+            for (const auto& mesh : mesh_layer->meshes) {
+                if (filter(mesh->get_flag_bits())) {
+                    const std::size_t lod_level = lod_from_draw_lists
+                        ? erhe::scene::get_forced_lod_level(draw_list_scene->get_mesh_lod(mesh.get()))
+                        : std::size_t{0};
+                    // The active item of the selection gets its own outline
+                    // color when the pass supplies one (doc/editor/active_item.md D5).
+                    erhe::scene_renderer::Content_wide_line_renderer::prepare_mesh(
+                        *m_context.mesh_memory,
+                        *mesh,
+                        lod_level,
+                        settings.get_selected_color(mesh->get_flag_bits()),
+                        line_width,
+                        group,
+                        out
+                    );
+                }
+            }
+        }
+    };
+
+    // The selection outline (its animated color / width come from
+    // get_pass_primitive_settings, the pass's selection_outline_pulse), the
+    // regular edge line passes, the translucent outline and the ghost edge
+    // lines, in the order their dispatches were always queued.
+    feed_pass(selection_outline.get());
+    feed_pass(edge_lines_not_selected.get());
+    feed_pass(edge_lines_selected.get());
+    feed_pass(translucent_outline.get());
+    feed_pass(ghost_edge_lines.get());
 }
 
 auto App_rendering::composition_passes() const -> const std::vector<std::shared_ptr<Composition_pass>>&

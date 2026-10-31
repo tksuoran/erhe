@@ -1228,12 +1228,10 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             );
             m_app_context.text_renderer->set_frame_slot(debug_frame_slot);
 
-            // Render_context shared by the wide-line feed (below) and the
-            // tool / renderable submission that follows. Encoder is
-            // nullptr at this point; the wide-line feed only needs
-            // viewport_config to resolve per-pass render styles, and the
-            // tool / renderable submission stage does not need the encoder
-            // for line accumulation. multiview_views is set so renderables
+            // Render_context of the tool / renderable submission that
+            // follows the wide-line feed. Encoder is nullptr at this point;
+            // the tool / renderable submission stage does not need the
+            // encoder for line accumulation. multiview_views is set so renderables
             // that are multiview-aware (Forward_renderer's compositor
             // path, Debug_renderer) pick the multiview shader stages.
             Render_context cpu_render_context {
@@ -1264,51 +1262,18 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 // the renderer as the frame's Render_settings copy (set_view_params()).
                 content_wide_line_renderer->begin_frame();
 
-                erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();
-                if (hosted_scene != nullptr) {
-                    erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{
-                        views_cb,
-                        "content_wide_line_renderer (multiview)"
-                    };
-                    auto feed_pass = [&](const Composition_pass* pass) {
-                        if (pass == nullptr) {
-                            return;
-                        }
-                        auto& data = pass->data;
-                        if ((data.primitive_mode != erhe::primitive::Primitive_mode::edge_lines) || !data.enabled) {
-                            return;
-                        }
-                        // Same resolution as Composition_pass and the viewport
-                        // feed: the selection outline pulse, explicit settings,
-                        // or the pass's render style.
-                        const erhe::scene_renderer::Primitive_interface_settings settings = get_pass_primitive_settings(data, cpu_render_context, cpu_render_context.app_context.render_phase_host_system_time_ns);
-                        const float     line_width = settings.constant_size;
-                        const auto&     filter     = data.filter;
-                        const uint32_t  group      = data.content_wide_line_group;
-                        for (const auto layer_id : data.mesh_layers) {
-                            const auto mesh_layer = hosted_scene->get_mesh_layer_by_id(layer_id);
-                            if (mesh_layer) {
-                                for (const auto& mesh : mesh_layer->meshes) {
-                                    if (filter(mesh->get_flag_bits())) {
-                                        // The active item of the selection gets its own
-                                        // outline color (doc/editor/active_item.md D5).
-                                        content_wide_line_renderer->add_mesh(
-                                            *m_context.mesh_memory,
-                                            *mesh,
-                                            settings.get_selected_color(mesh->get_flag_bits()),
-                                            line_width,
-                                            group
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    };
-                    feed_pass(m_app_context.app_rendering->selection_outline.get());
-                    feed_pass(m_app_context.app_rendering->edge_lines_not_selected.get());
-                    feed_pass(m_app_context.app_rendering->edge_lines_selected.get());
-                    feed_pass(m_app_context.app_rendering->translucent_outline.get());
-                    feed_pass(m_app_context.app_rendering->ghost_edge_lines.get());
+                // The frame's feed, prepared in M2 (prepare_wide_line_feed()):
+                // the render phase reads no mesh.
+                const uint64_t frame_index = m_app_context.graphics_device->get_frame_index();
+                if (!m_wide_line_feed_slots.empty()) {
+                    const Wide_line_feed_slot& slot = m_wide_line_feed_slots[frame_index % m_wide_line_feed_slots.size()];
+                    if (slot.frame_index == frame_index) {
+                        erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{
+                            views_cb,
+                            "content_wide_line_renderer (multiview)"
+                        };
+                        content_wide_line_renderer->add_feed(slot.feed);
+                    }
                 }
             }
 
@@ -1851,6 +1816,46 @@ void Headset_view::prepare_render_view()
     // phase renders (get_render_scene_root()); no camera while the headset
     // is not homed in a scene.
     snapshot_render_view(m_root_node ? m_root_camera.get() : nullptr);
+}
+
+void Headset_view::prepare_wide_line_feed(const uint64_t frame_index, const std::size_t frames_in_flight, const int64_t host_system_time_ns)
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    ERHE_VERIFY(frames_in_flight > 0);
+
+    if (m_wide_line_feed_slots.empty()) {
+        m_wide_line_feed_slots.resize(frames_in_flight);
+    }
+    ERHE_VERIFY(m_wide_line_feed_slots.size() == frames_in_flight);
+    Wide_line_feed_slot& slot = m_wide_line_feed_slots[frame_index % frames_in_flight];
+    slot.frame_index = frame_index;
+    slot.feed.clear();
+
+    // The scene the render phase renders this frame (prepare_render_view()).
+    const std::shared_ptr<Scene_root> scene_root = get_render_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    // A prepare-phase context: what the passes' gating and primitive
+    // settings read (the view's config, scene and shader debug - a shader
+    // debug view routes the fills to the bucket path, as in the render
+    // phase's contexts); nothing is recorded.
+    const Render_context context{
+        .command_buffer      = nullptr,
+        .encoder             = nullptr,
+        .render_pass         = nullptr,
+        .app_context         = m_app_context,
+        .scene_view          = *this,
+        .viewport_config     = m_viewport_config,
+        .camera              = nullptr,
+        .camera_snapshot     = get_render_camera(),
+        .viewport_scene_view = nullptr,
+        .scene_root          = scene_root,
+        .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug)
+    };
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{scene_root->item_host_mutex};
+    m_app_context.app_rendering->prepare_wide_line_feed(context, host_system_time_ns, slot.feed);
 }
 
 void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views, const glm::quat& head_orientation)

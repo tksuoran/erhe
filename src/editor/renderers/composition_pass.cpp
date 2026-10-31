@@ -138,6 +138,20 @@ auto make_selection_outline_settings(const App_context& context, const int64_t h
     };
 }
 
+auto get_wide_line_lod_routing(const Composition_pass_data& data, const Render_context& context, const int64_t host_system_time_ns) -> Wide_line_lod_routing
+{
+    // Leaf-function scratch (AGENTS.md): one pass's gating, read right after
+    // prepare() wrote it. gating_only leaves the buckets empty.
+    static thread_local Composition_pass_prepared s_gating;
+    for (const Composition_pass* source : data.lod_level_source_passes) {
+        source->prepare(context, host_system_time_ns, s_gating, Composition_prepare_scope::gating_only);
+        if (s_gating.result == Composition_pass_result::submitted) {
+            return s_gating.use_draw_lists ? Wide_line_lod_routing::draw_lists : Wide_line_lod_routing::bucket_path;
+        }
+    }
+    return Wide_line_lod_routing::bucket_path;
+}
+
 auto get_pass_primitive_settings(const Composition_pass_data& data, const Render_context& context, const int64_t host_system_time_ns) -> erhe::scene_renderer::Primitive_interface_settings
 {
     if (data.selection_outline_pulse) {
@@ -258,8 +272,9 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
 
     // Edge-line composition passes go through Content_wide_line_renderer
     // (both the compute backend on devices with compute shaders and the
-    // geometry-shader backend without). Meshes are added and any compute
-    // pre-pass dispatched in viewport_scene_view.cpp / headset_view.cpp
+    // geometry-shader backend without). The meshes are fed in the prepare
+    // phase (App_rendering::prepare_wide_line_feed()) and the compute
+    // pre-pass is dispatched by viewport_scene_view.cpp / headset_view.cpp
     // before the render pass begins.
     const erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = context.app_context.content_wide_line_renderer;
     if (

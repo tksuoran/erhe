@@ -46,6 +46,7 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   key carries a debug mode). `SHADER_DEBUG != 0` no longer counts as reading
   the per-pass record fields: `standard.vert` / `standard.frag` drop the
   unread `v_line_width` varying.
+- `erhe::primitive`: `Lod_chain::get_clamped_level()`.
 - `erhe::primitive`: per-level LOD edge lines. `Lod_level::edge_line_vertex_range`
   and `edge_line_joint_range`; `Lod_chain_indices::edge_line_vertex_data`,
   `edge_line_joint_data`, `Level::first_edge_line_vertex`,
@@ -1181,6 +1182,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Content_wide_line_renderer::prepare_mesh()` and
+  `add_mesh()` take the `lod_level` the mesh's fill draws (after `mesh`);
+  `add_mesh()`'s `group` has no default. A level above 0 feeds that LOD
+  level's edge lines.
 - `erhe::graphics`: `Device_info::shader_float16`, `shader_int8`, the fp16
   float controls (`shader_denorm_flush_to_zero_float16`,
   `shader_denorm_preserve_float16`, `shader_rounding_mode_rte_float16`,

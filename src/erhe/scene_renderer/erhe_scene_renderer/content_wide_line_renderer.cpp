@@ -122,6 +122,7 @@ void Content_wide_line_renderer::set_joint_buffer(
 void Content_wide_line_renderer::prepare_mesh(
     Mesh_memory&             mesh_memory,
     const erhe::scene::Mesh& mesh,
+    const std::size_t        lod_level,
     const glm::vec4&         color,
     const float              line_width,
     const uint32_t           group,
@@ -139,16 +140,36 @@ void Content_wide_line_renderer::prepare_mesh(
         if (!mesh_primitive.primitive) {
             continue;
         }
-        // Edge lines come from the dedicated edge-line vertex buffer, which is
-        // written from GEO mesh data and is independent of the main buffer's
-        // vertex order - so the always-present variant is the right source, and
-        // stays right even while an optimized variant is what gets drawn.
-        const erhe::primitive::Buffer_mesh* buffer_mesh =
-            mesh_primitive.primitive->get_renderable_mesh(erhe::primitive::Mesh_variant::original);
-        if (buffer_mesh == nullptr) {
-            continue;
+        // Level 0 edge lines come from the dedicated edge-line vertex buffer,
+        // which is written from GEO mesh data and is independent of the main
+        // buffer's vertex order - so the always-present variant is the right
+        // source, and stays right even while an optimized variant is what gets
+        // drawn. A level above 0 has its own edge lines on the variant the
+        // draw lists draw it from (lod.hpp).
+        const erhe::primitive::Buffer_range* edge_range_pointer  = nullptr;
+        const erhe::primitive::Buffer_range* joint_range_pointer = nullptr;
+        if (lod_level > 0) {
+            const std::pair<erhe::primitive::Mesh_variant, const erhe::primitive::Buffer_mesh*> drawn =
+                mesh_primitive.primitive->get_resolved_renderable_mesh(erhe::primitive::Mesh_variant::optimized, erhe::primitive::Primitive_mode::polygon_fill);
+            if ((drawn.first == erhe::primitive::Mesh_variant::optimized) && (drawn.second != nullptr)) {
+                const erhe::primitive::Lod_chain& chain = drawn.second->lod_chain;
+                const std::size_t                 level = chain.get_clamped_level(lod_level);
+                if ((level > 0) && (chain.levels[level].edge_line_vertex_range.count > 0)) {
+                    edge_range_pointer  = &chain.levels[level].edge_line_vertex_range;
+                    joint_range_pointer = &chain.levels[level].edge_line_joint_range;
+                }
+            }
         }
-        const erhe::primitive::Buffer_range& edge_range = buffer_mesh->edge_line_vertex_buffer_range;
+        if (edge_range_pointer == nullptr) {
+            const erhe::primitive::Buffer_mesh* buffer_mesh =
+                mesh_primitive.primitive->get_renderable_mesh(erhe::primitive::Mesh_variant::original);
+            if (buffer_mesh == nullptr) {
+                continue;
+            }
+            edge_range_pointer  = &buffer_mesh->edge_line_vertex_buffer_range;
+            joint_range_pointer = &buffer_mesh->edge_line_joint_buffer_range;
+        }
+        const erhe::primitive::Buffer_range& edge_range = *edge_range_pointer;
         if (edge_range.count == 0) {
             continue;
         }
@@ -167,7 +188,7 @@ void Content_wide_line_renderer::prepare_mesh(
             .mesh_is_skinned         = mesh_is_skinned,
             .base_joint_index        = base_joint_index
         };
-        const erhe::primitive::Buffer_range& joint_range = buffer_mesh->edge_line_joint_buffer_range;
+        const erhe::primitive::Buffer_range& joint_range = *joint_range_pointer;
         if (mesh_is_skinned && (joint_range.count > 0)) {
             erhe::graphics::Buffer* joint_buffer = mesh_memory.get_vertex_buffer(joint_range);
             if (joint_buffer != nullptr) {
@@ -190,6 +211,7 @@ void Content_wide_line_renderer::add_feed(const Content_wide_line_feed& feed)
 void Content_wide_line_renderer::add_mesh(
     Mesh_memory&             mesh_memory,
     const erhe::scene::Mesh& mesh,
+    const std::size_t        lod_level,
     const glm::vec4&         color,
     const float              line_width,
     const uint32_t           group
@@ -198,7 +220,7 @@ void Content_wide_line_renderer::add_mesh(
     // Leaf scratch (AGENTS.md): add_feed() does not re-enter add_mesh().
     static thread_local Content_wide_line_feed s_feed;
     s_feed.clear();
-    prepare_mesh(mesh_memory, mesh, color, line_width, group, s_feed);
+    prepare_mesh(mesh_memory, mesh, lod_level, color, line_width, group, s_feed);
     add_feed(s_feed);
     s_feed.clear();
 }

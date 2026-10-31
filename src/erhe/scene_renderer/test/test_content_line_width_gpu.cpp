@@ -245,7 +245,7 @@ protected:
                     graphics_device.get_info().coordinate_conventions.native_depth_range,
                     graphics_device.get_info().coordinate_conventions
                 );
-                m_renderer->add_mesh(*m_mesh_memory, *m_mesh, glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, edge_case.line_width, 0);
+                m_renderer->add_mesh(*m_mesh_memory, *m_mesh, 0, glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, edge_case.line_width, 0);
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
                     m_renderer->compute(compute_encoder);

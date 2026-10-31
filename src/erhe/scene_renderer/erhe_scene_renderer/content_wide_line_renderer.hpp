@@ -107,13 +107,20 @@ public:
     );
 
     // Prepare phase (main thread, or wherever the mesh is owned): appends
-    // the records of this mesh's edge-line primitives to out - the
-    // original-variant edge-line ranges, world_from_node, the skin's joint
-    // slot - and counts the mesh. group partitions dispatches across
-    // composition passes (selection outline, selected, not_selected, ...).
+    // the records of this mesh's edge-line primitives to out - the edge-line
+    // ranges of the level the mesh's fill draws, world_from_node, the skin's
+    // joint slot - and counts the mesh. lod_level is the level the caller's
+    // fill draws the mesh with (doc/plans/selection_outline_lod.md): for a
+    // level above 0, a primitive whose drawn variant (the one the draw lists
+    // resolve, Primitive::get_resolved_renderable_mesh() for the optimized
+    // variant) has that LOD level, clamped to its chain like the draw list
+    // entries, with edge lines, feeds that level's edge lines; otherwise the
+    // original variant's. group partitions dispatches across composition
+    // passes (selection outline, selected, not_selected, ...).
     static void prepare_mesh(
         Mesh_memory&             mesh_memory,
         const erhe::scene::Mesh& mesh,
+        std::size_t              lod_level,
         const glm::vec4&         color,
         float                    line_width,
         uint32_t                 group,
@@ -128,9 +135,10 @@ public:
     void add_mesh(
         Mesh_memory&             mesh_memory,
         const erhe::scene::Mesh& mesh,
+        std::size_t              lod_level,
         const glm::vec4&         color,
         float                    line_width,
-        uint32_t                 group = 0
+        uint32_t                 group
     );
 
     // Run the compute pre-pass that pre-transforms edge endpoints into

@@ -242,15 +242,6 @@ public:
 private:
     void update_hover_with_id_render();
 
-    // M2 (prepare_composition): the edge-line feed of the wide-line passes,
-    // gated as the passes draw (enabled, the view's render style), with each
-    // pass's primitive settings at the prepared frame's host time.
-    void prepare_wide_line_feed(
-        const Render_context&                         context,
-        int64_t                                       host_system_time_ns,
-        erhe::scene_renderer::Content_wide_line_feed& out
-    );
-
     // (Re)builds the overlay render target (color matching the content sample
     // count + single-sample resolved output) and its render pass, which loads
     // the content render target's depth/stencil attachment. See issue #230.
