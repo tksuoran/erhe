@@ -111,7 +111,7 @@ public:
     // the records of this mesh's edge-line primitives to out - the edge-line
     // ranges of the level the mesh's fill draws, world_from_node, the skin's
     // joint slot - and counts the mesh. lod_level is the level the caller's
-    // fill draws the mesh with (doc/plans/selection_outline_lod.md): for a
+    // fill draws the mesh with (doc/editor/lod.md, edge lines): for a
     // level above 0, a primitive whose drawn variant (the one the draw lists
     // resolve, Primitive::get_resolved_renderable_mesh() for the optimized
     // variant) has that LOD level, clamped to its chain like the draw list

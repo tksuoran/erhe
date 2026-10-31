@@ -251,7 +251,7 @@ public:
     // one view, gated as the passes draw (enabled, the view's render style),
     // with each pass's primitive settings at the prepared frame's host time
     // and each mesh fed at its forced LOD level, read from the scene's
-    // Draw_list_scene (doc/plans/selection_outline_lod.md); edge lines are
+    // Draw_list_scene (doc/editor/lod.md "Edge lines and the selection outline"); edge lines are
     // not content, so the view's shader debug mode and fill path do not
     // change them. The caller holds the scene root's item_host_mutex (the
     // feed reads the meshes' Buffer_mesh variants, which a worker may be

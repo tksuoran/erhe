@@ -87,7 +87,7 @@ degrees. Values not present in `editor_settings.json` take these defaults.
 
 The edge-line passes (the selection outline, "Content edge lines" selected /
 not selected, the ghost edge lines) draw the edges of the mesh's LOD level
-(`doc/plans/selection_outline_lod.md`), so the outline traces the drawn
+(level edge lines: `doc/erhe/meshoptimizer_integration.md` "Level of detail"), so the outline traces the drawn
 silhouette. `App_rendering::prepare_wide_line_feed()` feeds each mesh at
 `get_forced_lod_level()` of its `Draw_list_scene` record. Edge lines are not
 content: the view's shader debug mode and the path its fill takes do not

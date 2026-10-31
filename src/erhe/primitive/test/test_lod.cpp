@@ -642,8 +642,8 @@ TEST(Lod, soup_path_stores_levels_after_level_0)
     );
 }
 
-// Per-level edge lines (build_lod_edge_lines(), doc/plans/selection_outline_lod.md
-// step 1): every edge of a level's triangles once, packed like the base edge
+// Per-level edge lines (build_lod_edge_lines(),
+// doc/erhe/meshoptimizer_integration.md "Level of detail"): every edge of a level's triangles once, packed like the base edge
 // lines, stored per level in the optimized variant's edge-line allocations.
 
 namespace {

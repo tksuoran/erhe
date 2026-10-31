@@ -14,7 +14,7 @@ Builds on the culling classification and GPU command generation of
 `doc/erhe/draw_list_renderer.md` Q6 (`doc/plans/culling.md` phases 5 and 6),
 the occlusion test's cross-frame view matching
 (`doc/plans/occlusion_culling.md` step 3b), the forced level of R1c, and
-the per-level edge lines of `doc/plans/selection_outline_lod.md`.
+the per-level edge lines (`doc/erhe/meshoptimizer_integration.md` "Level of detail").
 
 ## 1. Where selection runs: the classification
 
@@ -247,8 +247,7 @@ cached pass.
 All read the CPU levels of the frame, which the classification computed in
 R; none waits for the GPU.
 
-- **Edge lines and the selection outline** (`doc/plans/selection_outline_lod.md`
-  section 4). `App_rendering::prepare_wide_line_feed()` (M2) keeps writing one
+- **Edge lines and the selection outline** (`doc/editor/lod.md` "Edge lines and the selection outline"). `App_rendering::prepare_wide_line_feed()` (M2) keeps writing one
   record per mesh primitive, now with the edge ranges of every level of the
   chain (level 0 from the original variant, as today) and the position of
   the mesh primitive's color entry in the frame's published slot (new

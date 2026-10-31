@@ -100,7 +100,7 @@ chain): the bucket / `Forward_renderer` / `Shadow_renderer` fallback path
 (previews, tool and brush roots, thumbnails, `use_draw_lists = false`), the
 PVS bake, the ID pass, and BLAS and raytrace sources. Edge lines and the
 selection outline follow the drawn level
-(`doc/plans/selection_outline_lod.md`). The step 4 gates
+(`doc/editor/lod.md` "Edge lines and the selection outline"). The step 4 gates
 cover both `use_draw_lists` settings.
 
 ### 2.2 Generation
@@ -276,16 +276,16 @@ The edge-line passes draw per-level edge lines built from the simplified
 triangles (D2), so a mesh drawn at level `i` shows the edges of level `i`.
 Because edge-line vertices are per edge endpoint (with the adjacent faces'
 normals and winding), each `Lod_level` owns edge-line vertex (and joint)
-ranges rather than line indices. Built and fed by
-`doc/plans/selection_outline_lod.md`; the generation and storage are in
-`doc/erhe/meshoptimizer_integration.md` "Level of detail".
+ranges rather than line indices. Built: the generation and storage are in
+`doc/erhe/meshoptimizer_integration.md` "Level of detail", the feed and the
+selection outline in `doc/editor/lod.md` "Edge lines and the selection outline".
 
 ## 3. Decisions (user, 2026-10-31)
 
 - D1: LODs are generated only on request from the editor; import never
   generates them.
 - D2: per-level edge lines built from the simplified triangles, every edge
-  of the level's triangles (section 2.7; `doc/plans/selection_outline_lod.md`).
+  of the level's triangles (section 2.7; built).
 - D3: a caster drawn as a receiver selects the same level in the shadow pass
   as in the color view; other casters select from the shadow view (section
   2.4; step 4, `doc/plans/lod_gpu_selection.md` section 4).

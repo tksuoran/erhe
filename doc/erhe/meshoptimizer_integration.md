@@ -304,7 +304,7 @@ implicit level, its fill range. The base variant never has a chain.
 
 **Level edge lines.** Each level after level 0 has edge lines built from its
 own triangles (`build_lod_edge_lines()`), so a mesh drawn at level `i` can
-show the edges of level `i` (`doc/plans/selection_outline_lod.md`). Every edge
+show the edges of level `i` (`doc/editor/lod.md` "Edge lines and the selection outline"). Every edge
 of the level's triangles is written once, keyed by the positions of its
 endpoints (vertices split by attribute seams share an edge), as two
 edge-line endpoints in the layout `Content_wide_line_renderer` reads:
