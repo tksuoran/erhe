@@ -308,6 +308,13 @@ pages, all stored, 7616 words each), and the other sections pass with the
 default capacity (64 slots: nothing is evicted). The reference hashes of
 these bakes are in `doc/plans/pvs.md` "Verification".
 
+Runtime cost on Bistro (Release, headless Metal 3, Apple M4 Pro; the table
+is in `doc/plans/pvs.md` "Verification"): with the camera outside the grid
+the rule costs nothing measurable, and the classification dispatch grows
+by 2 to 6 us with it on. At a street-level pose that culls 203 of 601
+tested entries, PVS alone lowers GPU `Main` by 144 us (1956 -> 1812 us),
+more than occlusion culling there (+22 us) or the two together (+30 us).
+
 ## Future work
 
 - [plans/pvs.md](../plans/pvs.md): the headset query box and the Quest
