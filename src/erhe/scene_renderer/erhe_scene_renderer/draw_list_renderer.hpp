@@ -95,6 +95,9 @@ public:
         // Draw_color_parameters::overdraw; the overdraw variants count into
         // base.overdraw_count_buffer.
         Overdraw_count                                         overdraw{Overdraw_count::off};
+        // Draw_color_parameters::shader_debug and shader_debug_layers.
+        Shader_debug                                           shader_debug{Shader_debug::none};
+        std::span<const erhe::scene::Layer_id>                 shader_debug_layers{};
     };
 
     auto render(const Render_parameters& parameters) -> Draw_statistics;

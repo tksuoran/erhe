@@ -406,6 +406,14 @@ enum class Specular_anti_aliasing : uint32_t
 // value, so the axis always follows the key's final bits.
 void set_specular_anti_aliasing_axis(Shader_key& key, Specular_anti_aliasing mode);
 
+// The varyings a shader debug variant shows (SHADER_DEBUG != none): every
+// one the vertex format can supply, whatever the material consumes.
+// Shader_key::derive() applies it when the environment carries a debug
+// mode; a caller that sets SHADER_DEBUG on a derived key (the draw-list
+// color resolution) applies it with the primitive's vertex format, before
+// set_specular_anti_aliasing_axis() and set_fp16_paths_axis().
+void apply_shader_debug_varyings(Shader_key& key, const erhe::dataformat::Vertex_format* vertex_format);
+
 // Overdraw counting of a variant (doc/erhe/shader_variants.md "Overdraw"),
 // the OVERDRAW variant axis; the values match the ERHE_OVERDRAW_* constants
 // of res/shaders/erhe_standard_variant.glsl.

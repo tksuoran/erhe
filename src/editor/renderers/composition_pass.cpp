@@ -42,6 +42,13 @@
 
 namespace editor {
 
+namespace {
+
+// The layers whose draw lists show the view's shader debug mode.
+constexpr erhe::scene::Layer_id shader_debug_content_layers[] = { Mesh_layer_id::content };
+
+} // anonymous namespace
+
 Composition_pass::Composition_pass(const Composition_pass&)            = default;
 Composition_pass& Composition_pass::operator=(const Composition_pass&) = default;
 Composition_pass::~Composition_pass() noexcept                         = default;
@@ -171,6 +178,7 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
     out.use_wide_lines     = false;
     out.use_draw_lists     = false;
     out.overdraw           = erhe::scene_renderer::Overdraw_count::off;
+    out.shader_debug       = erhe::scene_renderer::Shader_debug::none;
     out.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{};
     // The grid pass takes this view's grid (Viewport_render_state::grid).
     const bool view_grid = data.grid_from_view && (context.render_state != nullptr);
@@ -269,10 +277,12 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
 
     // Draw-list path (doc/erhe/draw_list_renderer.md section 9.4): route to
     // the scene's persistent draw lists when the gate is on and this pass is
-    // fully expressible with them - polygon fill, no shader debug, no shader
-    // / blend overrides, no forced shader bits, and a plain opaque / alpha
-    // tested / translucent / allow_all blending policy. Everything else takes the
-    // bucket path, prepared here.
+    // fully expressible with them - polygon fill, no per-pass shader debug
+    // override (the view's shader debug mode is a draw-list resolution axis,
+    // Draw_color_parameters::shader_debug), no shader / blend overrides, no
+    // forced shader bits, and a plain opaque / alpha tested / translucent /
+    // allow_all blending policy. Everything else takes the bucket path,
+    // prepared here.
     const erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
     const erhe::scene_renderer::Shader_debug effective_shader_debug = data.shader_debug_override.has_value()
         ? data.shader_debug_override.value()
@@ -281,7 +291,7 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
         context.app_context.render_settings->use_draw_lists &&
         (draw_list_scene != nullptr) &&
         (data.primitive_mode == erhe::primitive::Primitive_mode::polygon_fill) &&
-        (effective_shader_debug == erhe::scene_renderer::Shader_debug::none) &&
+        !data.shader_debug_override.has_value() &&
         (data.shader_stages == nullptr) &&
         (data.color_blend_override == nullptr) &&
         (data.shader_key_force_enable_mask == 0u) &&
@@ -292,6 +302,9 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
             (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only) ||
             (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::allow_all)
         );
+    if (out.use_draw_lists) {
+        out.shader_debug = effective_shader_debug;
+    }
     if (out.use_draw_lists || (scope == Composition_prepare_scope::gating_only)) {
         s_mesh_spans.clear();
         return;
@@ -661,7 +674,12 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 .color_blend_override  = nullptr,
                 .cull_view             = prepared.cull_view,
                 .command_selection     = prepared.command_selection,
-                .overdraw              = prepared.overdraw
+                .overdraw              = prepared.overdraw,
+                .shader_debug          = prepared.shader_debug,
+                // The bucket path's default shader_debug_filter (content
+                // meshes only): tool, brush and controller meshes keep
+                // their normal variant.
+                .shader_debug_layers   = shader_debug_content_layers
             }
         );
         if (stats != nullptr) {

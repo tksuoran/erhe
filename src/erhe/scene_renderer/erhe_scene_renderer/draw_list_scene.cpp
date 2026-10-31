@@ -241,8 +241,9 @@ auto Color_environment::operator==(const Color_environment& other) const -> bool
 auto Color_environment::make_environment_key() const -> Shader_key
 {
     // Mirrors the environment key built in Forward_renderer::render():
-    // light counts per type, shadow axes, SHADER_DEBUG = 0 (draw lists never
-    // carry the debug axis; those passes use the fallback).
+    // light counts per type, shadow axes, SHADER_DEBUG = 0 (the debug mode
+    // is a view property, Draw_color_parameters::shader_debug, applied per
+    // resolution in resolve_color_stages()).
     Shader_key key{};
     set_light_partition_axes(key, light_partition);
     key.set(Shader_int::SHADER_DEBUG,                             0u);
@@ -2056,18 +2057,18 @@ namespace {
 
 // Whether the shader variant of key reads the pass-dependent fields of its
 // primitive record (color and size, Primitive_buffer's per-pass patch):
-// standard.vert under ERHE_VARIANT_POINTS, under ERHE_SOLID_WIREFRAME and
-// under ERHE_SHADER_DEBUG != 0, standard.frag under ERHE_VARIANT_ID_RENDER.
+// standard.vert under ERHE_VARIANT_POINTS and under ERHE_SOLID_WIREFRAME,
+// standard.frag under ERHE_VARIANT_ID_RENDER (the shader debug variants
+// read only per-primitive fields: skinning_factor, base_joint_index).
 // No draw-list pass may (doc/erhe/draw_list_renderer.md "Record upload"):
-// the draw-list path takes polygon fill passes without shader debug only,
-// and every pass of a frame over a list shares one record patch.
+// the draw-list path takes polygon fill passes only, and every pass of a
+// frame over a list shares one record patch.
 [[nodiscard]] auto reads_record_pass_fields(const Shader_key& key) -> bool
 {
     return
         key.get(Shader_bool::VARIANT_POINTS)   ||
         key.get(Shader_bool::SOLID_WIREFRAME)  ||
-        key.get(Shader_bool::VARIANT_ID_RENDER) ||
-        (key.get(Shader_int::SHADER_DEBUG) != 0u);
+        key.get(Shader_bool::VARIANT_ID_RENDER);
 }
 
 } // anonymous namespace
@@ -2076,11 +2077,16 @@ auto Draw_list_scene::resolve_color_stages(
     Draw_list_resolutions& resolutions,
     const Draw_list&       draw_list,
     const uint16_t         multiview_count,
-    const Overdraw_count   overdraw
+    const Overdraw_count   overdraw,
+    const Shader_debug     shader_debug
 ) -> const erhe::graphics::Reloadable_shader_stages*
 {
     for (const Draw_list_color_resolution& resolution : resolutions.color) {
-        if ((resolution.multiview_count == multiview_count) && (resolution.overdraw == overdraw)) {
+        if (
+            (resolution.multiview_count == multiview_count) &&
+            (resolution.overdraw        == overdraw) &&
+            (resolution.shader_debug    == shader_debug)
+        ) {
             return resolution.stages;
         }
     }
@@ -2100,6 +2106,14 @@ auto Draw_list_scene::resolve_color_stages(
             key.int_values[i] = env.int_values[i];
         }
     }
+    const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);
+    // The view's shader debug mode, with the varyings it shows, as
+    // Shader_key::derive() applies an environment's mode on the bucket path;
+    // before the two axes below, which follow the key's final bits.
+    key.set(Shader_int::SHADER_DEBUG, static_cast<uint32_t>(shader_debug));
+    if (shader_debug != Shader_debug::none) {
+        apply_shader_debug_varyings(key, &vertex_input.vertex_format);
+    }
     // The specular anti-aliasing axis reaches only the keys whose shader
     // calls anisotropic_brdf().
     set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(env));
@@ -2111,7 +2125,6 @@ auto Draw_list_scene::resolve_color_stages(
     // upload): exact only while the variant reads no pass-dependent field.
     ERHE_VERIFY(!reads_record_pass_fields(key));
 
-    const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);
     const erhe::graphics::Reloadable_shader_stages* stages = m_shader_variant_cache.get(key, &vertex_input.vertex_format);
     if (stages == nullptr) {
         if (!resolutions.color_failed) {
@@ -2119,14 +2132,14 @@ auto Draw_list_scene::resolve_color_stages(
             resolutions.color_failed = true;
         }
     }
-    resolutions.color.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .overdraw = overdraw, .stages = stages});
+    resolutions.color.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .overdraw = overdraw, .shader_debug = shader_debug, .stages = stages});
     return stages;
 }
 
 void Draw_list_scene::resolve_color_list(Draw_list_resolutions& resolutions, const Draw_list& draw_list)
 {
     for (const uint32_t view_count : m_multiview_view_counts) {
-        static_cast<void>(resolve_color_stages(resolutions, draw_list, static_cast<uint16_t>(view_count), Overdraw_count::off));
+        static_cast<void>(resolve_color_stages(resolutions, draw_list, static_cast<uint16_t>(view_count), Overdraw_count::off, Shader_debug::none));
     }
 }
 
@@ -3146,7 +3159,13 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 resolve_color_list(resolutions, draw_list);
             }
             const std::size_t resolution_count_before = resolutions.color.size();
-            const erhe::graphics::Reloadable_shader_stages* stages = resolve_color_stages(resolutions, draw_list, parameters.multiview_count, parameters.overdraw);
+            const erhe::graphics::Reloadable_shader_stages* stages = resolve_color_stages(
+                resolutions,
+                draw_list,
+                parameters.multiview_count,
+                parameters.overdraw,
+                is_layer_selected(parameters.shader_debug_layers, key.layer_id) ? parameters.shader_debug : Shader_debug::none
+            );
             if (resolutions.color.size() != resolution_count_before) {
                 ++m_lazy_resolution_count;
             }

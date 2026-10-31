@@ -129,7 +129,6 @@ layout(location = 7) flat out uint v_material_index;
 #  ifdef ERHE_ATTRIBUTE_a_tangent
 layout(location =  8) out float      v_tangent_scale;
 #  endif
-layout(location =  9) out float      v_line_width;
 #  ifdef ERHE_USE_SKINNING
 layout(location = 10) out vec4       v_bone_color;
 #  endif
@@ -478,7 +477,6 @@ void main()
 #       ifdef ERHE_ATTRIBUTE_a_tangent
     v_tangent_scale       = node_handedness;
 #       endif
-    v_line_width          = primitive.primitives[ERHE_PRIMITIVE_INDEX].size;
 #       if defined(ERHE_ATTRIBUTE_a_custom_2)
     v_valency_edge_count  = a_valency_edge_count;
 #       endif

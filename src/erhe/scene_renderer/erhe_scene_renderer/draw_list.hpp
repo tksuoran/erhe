@@ -141,13 +141,15 @@ public:
     bool        gpu_generated  {false};
 };
 
-// Resolved shader stages for one color view configuration (R19) and
-// overdraw counting (the OVERDRAW axis, Draw_color_parameters::overdraw).
+// Resolved shader stages for one color view configuration (R19), overdraw
+// counting (the OVERDRAW axis, Draw_color_parameters::overdraw) and shader
+// debug mode (the SHADER_DEBUG axis, Draw_color_parameters::shader_debug).
 class Draw_list_color_resolution
 {
 public:
     uint16_t                                        multiview_count{0}; // key value: 0 single view, N >= 2 multiview
     Overdraw_count                                  overdraw       {Overdraw_count::off};
+    Shader_debug                                    shader_debug   {Shader_debug::none};
     const erhe::graphics::Reloadable_shader_stages* stages         {nullptr};
 };
 

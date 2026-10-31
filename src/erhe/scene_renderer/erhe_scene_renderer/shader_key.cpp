@@ -335,8 +335,21 @@ auto Shader_key::derive(
         }
     }
 
-    // When any debug visualization is active, expose every varying the
-    // mesh can supply, regardless of what the bound material consumes.
+    if (key.get(Shader_int::SHADER_DEBUG) != static_cast<uint32_t>(Shader_debug::none)) {
+        apply_shader_debug_varyings(key, vertex_format);
+    }
+
+    // The environment's specular anti-aliasing mode reaches only the keys
+    // whose shader calls anisotropic_brdf().
+    set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(key));
+    // The environment's fp16 paths reach only the lit color variants.
+    set_fp16_paths_axis(key, get_fp16_paths(key));
+
+    return key;
+}
+
+void apply_shader_debug_varyings(Shader_key& key, const erhe::dataformat::Vertex_format* vertex_format)
+{
     // Debug modes visualize raw mesh attributes (normal, tangent,
     // bitangent, texcoords, vertex color, aniso control), so the
     // varyings must reach the fragment shader even when the material
@@ -348,40 +361,35 @@ auto Shader_key::derive(
     // BITANGENT => TANGENT && NORMAL link-time invariant (bitangent is
     // computed from normal x tangent in standard.vert) is preserved by
     // requiring has_normal_0 for the tangent frame and setting NORMAL
-    // alongside it.
-    const bool shader_debug_active = key.get(Shader_int::SHADER_DEBUG) != static_cast<uint32_t>(Shader_debug::none);
-    if (shader_debug_active) {
-        if (has_normal_0) {
-            key.set(Shader_bool::USE_VERTEX_VARYING_NORMAL, true);
-        }
-        if (has_tangent && has_normal_0) {
-            key.set(Shader_bool::USE_VERTEX_VARYING_NORMAL,    true);
-            key.set(Shader_bool::USE_VERTEX_VARYING_TANGENT,   true);
-            key.set(Shader_bool::USE_VERTEX_VARYING_BITANGENT, true);
-        }
-        if (has_texcoord_0) {
-            key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD0, true);
-        }
-        if (has_texcoord_1) {
-            key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD1, true);
-        }
-        if (has_texcoord_2) {
-            key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD2, true);
-        }
-        if (has_aniso_control) {
-            key.set(Shader_bool::USE_VERTEX_VARYING_ANISO_CONTROL, true);
-        }
-        // USE_VERTEX_VARYING_COLOR is already set unconditionally above
-        // when has_color_0, so vertex-color debug modes are covered.
+    // alongside it. USE_VERTEX_VARYING_COLOR is set by derive() whenever
+    // the format has a color, so vertex-color debug modes are covered.
+    using usage = erhe::dataformat::Vertex_attribute_usage;
+    const bool has_tbn_quaternion = (erhe::dataformat::get_vertex_tbn_encoding(vertex_format) == erhe::dataformat::Vertex_tbn_encoding::quaternion16);
+    const bool has_normal_0       = has_tbn_quaternion || ((vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::normal,  erhe::dataformat::normal_attribute));
+    const bool has_tangent        = has_tbn_quaternion || ((vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tangent, 0));
+    const bool has_texcoord_0     = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tex_coord, 0);
+    const bool has_texcoord_1     = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tex_coord, 1);
+    const bool has_texcoord_2     = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tex_coord, 2);
+    const bool has_aniso_control  = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::custom,    erhe::dataformat::custom_attribute_aniso_control);
+    if (has_normal_0) {
+        key.set(Shader_bool::USE_VERTEX_VARYING_NORMAL, true);
     }
-
-    // The environment's specular anti-aliasing mode reaches only the keys
-    // whose shader calls anisotropic_brdf().
-    set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(key));
-    // The environment's fp16 paths reach only the lit color variants.
-    set_fp16_paths_axis(key, get_fp16_paths(key));
-
-    return key;
+    if (has_tangent && has_normal_0) {
+        key.set(Shader_bool::USE_VERTEX_VARYING_TANGENT,   true);
+        key.set(Shader_bool::USE_VERTEX_VARYING_BITANGENT, true);
+    }
+    if (has_texcoord_0) {
+        key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD0, true);
+    }
+    if (has_texcoord_1) {
+        key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD1, true);
+    }
+    if (has_texcoord_2) {
+        key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD2, true);
+    }
+    if (has_aniso_control) {
+        key.set(Shader_bool::USE_VERTEX_VARYING_ANISO_CONTROL, true);
+    }
 }
 
 void set_fp16_paths_axis(Shader_key& key, const uint32_t mask)
