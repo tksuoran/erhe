@@ -320,3 +320,15 @@ drawable is taken (`doc/erhe/metal4_backend.md` "Present") the median frame
 is at Metal 3's (1.46 - 1.54 ms against 1.54 - 1.64 ms), the mean is not
 (2.0 - 2.4 ms against 1.6 - 1.8 ms: a tail of one-refresh drawable waits,
 open in that document's "Future work").
+
+## 8. Heavy-scene crash in Texture_heap_impl::encode_argument_buffer
+
+Found 2026-10-31 (LOD selection step 1 gates, also with the unchanged
+binary): the heavy bench scene on the headless Metal Debug editor sometimes
+crashes with SIGSEGV, garbage in `Device_impl` inside
+`Ring_buffer::make_sync_entry`, called from Metal
+`Texture_heap_impl::encode_argument_buffer` via `Shadow_renderer::draw`. It
+showed at the transition to `culling_classification = gpu` with
+`use_draw_lists` off: 1 of 2 runs of the HEAD binary, 2 of 3 runs that
+changed the graphics preset at runtime. Not investigated; start with lldb
+(`erhe-cpp-debugging`) on that transition.
