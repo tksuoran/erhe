@@ -36,6 +36,7 @@ namespace erhe::scene_renderer {
 
 class Content_wide_line_interface;
 class Mesh_memory;
+class Primitive_interface_settings;
 
 // Tent wide-line method controls, passed per frame to
 // Content_wide_line_renderer::set_view_params(). use_tent selects between the
@@ -115,16 +116,22 @@ public:
     // resolve, Primitive::get_resolved_renderable_mesh() for the optimized
     // variant) has that LOD level, clamped to its chain like the draw list
     // entries, with edge lines, feeds that level's edge lines; otherwise the
-    // original variant's. group partitions dispatches across composition
-    // passes (selection outline, selected, not_selected, ...).
+    // original variant's. The record color is resolved from the pass's
+    // primitive settings and the mesh's item flag bits by the rule of the
+    // primitive record writers (Primitive_interface_settings::get_pass_color():
+    // the color source, the selected / hovered / active item colors); the
+    // id_offset source, whose id the edge lines carry only in the id pass,
+    // writes the zero color the bucket path's edge-line records carry. group
+    // partitions dispatches across composition passes (selection outline,
+    // selected, not_selected, ...).
     static void prepare_mesh(
-        Mesh_memory&             mesh_memory,
-        const erhe::scene::Mesh& mesh,
-        std::size_t              lod_level,
-        const glm::vec4&         color,
-        float                    line_width,
-        uint32_t                 group,
-        Content_wide_line_feed&  out
+        Mesh_memory&                        mesh_memory,
+        const erhe::scene::Mesh&            mesh,
+        std::size_t                         lod_level,
+        const Primitive_interface_settings& settings,
+        float                               line_width,
+        uint32_t                            group,
+        Content_wide_line_feed&             out
     );
 
     // Render phase: queue the dispatches of a prepared feed. Reads no Mesh.
@@ -133,12 +140,12 @@ public:
     // prepare_mesh() and add_feed() of one mesh on the calling thread: the
     // headset, which feeds where it renders.
     void add_mesh(
-        Mesh_memory&             mesh_memory,
-        const erhe::scene::Mesh& mesh,
-        std::size_t              lod_level,
-        const glm::vec4&         color,
-        float                    line_width,
-        uint32_t                 group
+        Mesh_memory&                        mesh_memory,
+        const erhe::scene::Mesh&            mesh,
+        std::size_t                         lod_level,
+        const Primitive_interface_settings& settings,
+        float                               line_width,
+        uint32_t                            group
     );
 
     // Run the compute pre-pass that pre-transforms edge endpoints into

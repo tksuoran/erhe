@@ -156,6 +156,24 @@ public:
             ? constant_color_active.value()
             : constant_color0;
     }
+
+    // The color of an object with these item flag bits in a pass whose color
+    // source is not id_offset, the one rule of every record writer (the
+    // bucket and draw-list primitive records, the wide-line edge records):
+    // white for mesh_wireframe_color; else the selected color
+    // (get_selected_color()) for a selected or not hovered object, and
+    // constant_color1 for a hovered one that is not selected.
+    [[nodiscard]] auto get_pass_color(const uint64_t item_flag_bits) const -> glm::vec4
+    {
+        if (color_source == Primitive_color_source::mesh_wireframe_color) {
+            return glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
+        }
+        const bool selected = (item_flag_bits & erhe::Item_flags::selected) != 0u;
+        const bool hovered  = (item_flag_bits & hovered_flag_bits) != 0u;
+        return (selected || !hovered)
+            ? get_selected_color(item_flag_bits)
+            : constant_color1;
+    }
 };
 
 class Primitive_buffer : public erhe::graphics::Ring_buffer_client

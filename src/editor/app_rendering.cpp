@@ -472,6 +472,7 @@ App_rendering::App_rendering(
                 erhe::scene_renderer::Primitive_interface_settings{
                     .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
                     .constant_color0 = glm::vec4{0.55f, 0.45f, 0.7f, 1.0f},
+                    .constant_color1 = glm::vec4{0.55f, 0.45f, 0.7f, 1.0f},
                     .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
                     .constant_size   = 1.5f,
                     .hovered_flag_bits = editor::Editor_item_flags::hovered,
@@ -1101,13 +1102,15 @@ void App_rendering::prepare_wide_line_feed(
                     const std::size_t lod_level = (draw_list_scene != nullptr)
                         ? erhe::scene::get_forced_lod_level(draw_list_scene->get_mesh_lod(mesh.get()))
                         : std::size_t{0};
-                    // The active item of the selection gets its own outline
-                    // color when the pass supplies one (doc/editor/active_item.md D5).
+                    // The record color follows the pass's color source and
+                    // the mesh's selected / hovered / active item flags like
+                    // the fill records (Primitive_interface_settings::get_pass_color();
+                    // the active item's outline color, doc/editor/active_item.md D5).
                     erhe::scene_renderer::Content_wide_line_renderer::prepare_mesh(
                         *m_context.mesh_memory,
                         *mesh,
                         lod_level,
-                        settings.get_selected_color(mesh->get_flag_bits()),
+                        settings,
                         line_width,
                         group,
                         out

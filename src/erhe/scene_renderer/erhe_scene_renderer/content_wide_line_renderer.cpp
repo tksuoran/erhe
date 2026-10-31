@@ -1,6 +1,7 @@
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_interface.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/primitive_buffer.hpp"
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
@@ -120,16 +121,25 @@ void Content_wide_line_renderer::set_joint_buffer(
 }
 
 void Content_wide_line_renderer::prepare_mesh(
-    Mesh_memory&             mesh_memory,
-    const erhe::scene::Mesh& mesh,
-    const std::size_t        lod_level,
-    const glm::vec4&         color,
-    const float              line_width,
-    const uint32_t           group,
-    Content_wide_line_feed&  out
+    Mesh_memory&                        mesh_memory,
+    const erhe::scene::Mesh&            mesh,
+    const std::size_t                   lod_level,
+    const Primitive_interface_settings& settings,
+    const float                         line_width,
+    const uint32_t                      group,
+    Content_wide_line_feed&             out
 )
 {
     ++out.mesh_count;
+
+    // The item flag bits are the mesh's, so every primitive of the mesh
+    // takes the same color. Outside the id pass the bucket path's records
+    // carry id offset 0 (the bucket Primitive_buffer::update() overload writes
+    // id_offset_unused = 0 with no id ranges), so
+    // id_offset resolves to the zero color here as there.
+    const glm::vec4 color = (settings.color_source == Primitive_color_source::id_offset)
+        ? glm::vec4{0.0f}
+        : settings.get_pass_color(mesh.get_flag_bits());
 
     const glm::mat4                           world_from_node  = mesh.world_from_node();
     const std::shared_ptr<erhe::scene::Skin>& skin             = mesh.skin;
@@ -209,18 +219,18 @@ void Content_wide_line_renderer::add_feed(const Content_wide_line_feed& feed)
 }
 
 void Content_wide_line_renderer::add_mesh(
-    Mesh_memory&             mesh_memory,
-    const erhe::scene::Mesh& mesh,
-    const std::size_t        lod_level,
-    const glm::vec4&         color,
-    const float              line_width,
-    const uint32_t           group
+    Mesh_memory&                        mesh_memory,
+    const erhe::scene::Mesh&            mesh,
+    const std::size_t                   lod_level,
+    const Primitive_interface_settings& settings,
+    const float                         line_width,
+    const uint32_t                      group
 )
 {
     // Leaf scratch (AGENTS.md): add_feed() does not re-enter add_mesh().
     static thread_local Content_wide_line_feed s_feed;
     s_feed.clear();
-    prepare_mesh(mesh_memory, mesh, lod_level, color, line_width, group, s_feed);
+    prepare_mesh(mesh_memory, mesh, lod_level, settings, line_width, group, s_feed);
     add_feed(s_feed);
     s_feed.clear();
 }

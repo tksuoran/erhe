@@ -19,6 +19,7 @@
 #include "erhe_scene_renderer/content_wide_line_interface.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 
 #include "erhe_graphics/command_buffer.hpp"
@@ -245,7 +246,13 @@ protected:
                     graphics_device.get_info().coordinate_conventions.native_depth_range,
                     graphics_device.get_info().coordinate_conventions
                 );
-                m_renderer->add_mesh(*m_mesh_memory, *m_mesh, 0, glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, edge_case.line_width, 0);
+                // Constant color source, constant_color0 white: the mesh is
+                // neither selected nor hovered.
+                const Primitive_interface_settings line_settings{
+                    .color_source    = Primitive_color_source::constant_color,
+                    .constant_color0 = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
+                };
+                m_renderer->add_mesh(*m_mesh_memory, *m_mesh, 0, line_settings, edge_case.line_width, 0);
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
                     m_renderer->compute(compute_encoder);

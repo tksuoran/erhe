@@ -59,25 +59,9 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
 
 namespace {
 
-// The record color of an object with these item flag bits in a pass whose
-// color source is not id_offset, the one rule of every record writer: white
-// for mesh_wireframe_color; else the selected color (the active item's own,
-// doc/editor/active_item.md D5) for a selected or not hovered object, and
-// constant_color1 for a hovered one that is not selected.
-[[nodiscard]] auto get_pass_color(const uint64_t flag_bits, const Primitive_interface_settings& settings) -> glm::vec4
-{
-    if (settings.color_source == Primitive_color_source::mesh_wireframe_color) {
-        return glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
-    }
-    const bool selected = (flag_bits & erhe::Item_flags::selected) != 0u;
-    const bool hovered  = (flag_bits & settings.hovered_flag_bits) != 0u;
-    return (selected || !hovered)
-        ? settings.get_selected_color(flag_bits)
-        : settings.constant_color1;
-}
-
-// The pass-dependent fields of a draw-list record: color (get_pass_color()
-// of the entry's mirrored flag bits) and the constant size.
+// The pass-dependent fields of a draw-list record: color
+// (Primitive_interface_settings::get_pass_color() of the entry's mirrored
+// flag bits) and the constant size.
 void patch_pass_fields(
     std::byte* const                    record,
     const Draw_list_entry&              entry,
@@ -85,7 +69,7 @@ void patch_pass_fields(
     const Primitive_struct&             offsets
 )
 {
-    const glm::vec4 color = get_pass_color(entry.flag_bits, settings);
+    const glm::vec4 color = settings.get_pass_color(entry.flag_bits);
     const float     size  = settings.constant_size;
     std::memcpy(record + offsets.color, &color, sizeof(glm::vec4));
     std::memcpy(record + offsets.size,  &size,  sizeof(float));
@@ -203,7 +187,7 @@ void Primitive_buffer::write_primitive(
     using erhe::graphics::as_span;
     const glm::vec4 color = (settings.color_source == Primitive_color_source::id_offset)
         ? id_offset_vec4
-        : get_pass_color(mesh->get_flag_bits(), settings);
+        : settings.get_pass_color(mesh->get_flag_bits());
     const auto color_span = as_span(color);
     const auto size_span =
         (settings.size_source == Primitive_size_source::mesh_point_size) ? as_span(mesh->point_size      ) :
