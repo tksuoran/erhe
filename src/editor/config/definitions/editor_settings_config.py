@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=9,
+    version=10,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -191,6 +191,29 @@ struct("Editor_settings_config",
             default="0.05f",
             short_desc="PVS Query Margin",
             long_desc="Half the size, in meters, of the box around a viewport camera whose cells' potentially visible sets the PVS culling reads.",
+            visible=True,
+            developer=True
+        ),
+        # The PVS page streaming (doc/plans/pvs.md "Residency and
+        # streaming"): the page slots the GPU holds and the radius, in pages,
+        # around a view's page that its query box registration requests.
+        field(
+            "pvs_resident_pages",
+            Int,
+            added_in=10,
+            default="64",
+            short_desc="PVS Resident Pages",
+            long_desc="Number of PVS database pages (page_size^3 cells each) resident on the GPU at once. Pages without a slot read as everything visible; the pages around each viewport camera stream in from the scene file, one page per frame.",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "pvs_stream_radius_pages",
+            Int,
+            added_in=10,
+            default="1",
+            short_desc="PVS Stream Radius",
+            long_desc="The radius, in pages, around a viewport camera's PVS page that is requested when the camera enters another page (1: the 27 pages around it).",
             visible=True,
             developer=True
         ),

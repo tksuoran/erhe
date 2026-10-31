@@ -6,8 +6,10 @@
 # and no draw list (doc/erhe/draw_list_material_set.md R16); the shader key
 # axes (test_shader_key.cpp) are derived from a Material and a Vertex_format;
 # the PVS bake's depth layer function (test_pvs_layers.cpp) is float
-# arithmetic, and the CPU reference of its disocclusion passes
-# (test_pvs_disocclusion.cpp) runs over synthetic layered buffers.
+# arithmetic, the CPU reference of its disocclusion passes
+# (test_pvs_disocclusion.cpp) runs over synthetic layered buffers, and the
+# PVS page residency policy (test_pvs_residency.cpp) and the streaming's
+# queues (test_pvs_streaming.cpp) are plain bookkeeping.
 set(_target "erhe_scene_renderer_tests")
 add_executable(${_target}
     main.cpp
@@ -20,6 +22,8 @@ add_executable(${_target}
     test_pvs_disocclusion_cases.cpp
     test_pvs_disocclusion_cases.hpp
     test_pvs_layers.cpp
+    test_pvs_residency.cpp
+    test_pvs_streaming.cpp
     test_shader_key.cpp
 )
 

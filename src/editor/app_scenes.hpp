@@ -3,6 +3,7 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene_renderer/pvs_residency.hpp"
 
 #include <glm/glm.hpp>
 
@@ -110,6 +111,16 @@ public:
     // pushes the current setting to a (re-)registered root; a new root gets
     // it at creation (Draw_list_scene_dependencies).
     void set_exclude_unlit_from_shadows(bool value);
+
+    // Main thread, from the change sites of the editor settings
+    // pvs_resident_pages and pvs_stream_radius_pages (Settings window, MCP
+    // set_pvs_streaming): pushes them to the Draw_list_scene of every
+    // registered scene root (doc/plans/pvs.md "Residency and streaming");
+    // register_scene_root() pushes the current settings to a
+    // (re-)registered root.
+    void set_pvs_streaming_settings(const erhe::scene_renderer::Pvs_streaming_settings& settings);
+    // The editor settings' values as Pvs_streaming_settings.
+    [[nodiscard]] auto get_pvs_streaming_settings() const -> erhe::scene_renderer::Pvs_streaming_settings;
 
     // True when the Item_host is one of the registered scene roots. Parts
     // that cache scene-hosted items across frames (window targets, tool

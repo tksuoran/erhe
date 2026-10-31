@@ -5,6 +5,9 @@
 #include <cstdint>
 #include <vector>
 
+namespace tf {
+    class Executor;
+}
 namespace erhe::graphics {
     class Device;
 }
@@ -50,6 +53,8 @@ public:
     // null: the scene's draw lists classify on the CPU only.
     erhe::scene_renderer::Gpu_cull_classifier*  gpu_cull_classifier{nullptr};
     erhe::scene_renderer::Cull_frame_registry*  cull_frame_registry{nullptr};
+    // The task executor the PVS page reads run on (null: inline).
+    tf::Executor*                               executor           {nullptr};
 
     [[nodiscard]] auto is_valid() const -> bool
     {

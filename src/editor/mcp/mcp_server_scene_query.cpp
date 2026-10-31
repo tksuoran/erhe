@@ -10,6 +10,7 @@
 #include "app_rendering.hpp"
 #include "app_settings.hpp"
 #include "app_scenes.hpp"
+#include "renderers/composer.hpp"
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
@@ -784,7 +785,7 @@ auto Mcp_server::query_pvs_status(const json& args) -> std::string
     const glm::uvec3               page_dims  = database->get_page_dims();
     const std::size_t columns_bytes = static_cast<std::size_t>(database->get_column_count()) * ((18 * sizeof(float)) + sizeof(uint64_t));
     const std::size_t pages_bytes   = database->get_pages().size() * sizeof(erhe::scene::Pvs_page_entry);
-    const std::size_t bits_bytes    = database->get_bits().size() * sizeof(uint32_t);
+    const std::size_t bits_bytes    = static_cast<std::size_t>(database->get_stored_page_count()) * database->get_words_per_page() * sizeof(uint32_t);
     result["version"]          = header.version;
     result["scene_id"]         = header.scene_id;
     result["grid_origin"]      = {header.grid_origin.x, header.grid_origin.y, header.grid_origin.z};
@@ -806,8 +807,9 @@ auto Mcp_server::query_pvs_status(const json& args) -> std::string
     };
     // 64-bit FNV-1a over the bits' bytes, so two bakes (or a bake and its
     // reload) can be compared.
-    const std::vector<uint32_t>& bits = database->get_bits();
-    result["bits_hash"] = fmt::format("{:016x}", erhe::hash::hash(bits.data(), bits.size() * sizeof(uint32_t)));
+    // Cached by the database (computed when the bits were in memory).
+    result["bits_hash"] = fmt::format("{:016x}", database->get_bits_hash());
+    result["bits_in_memory"] = database->has_resident_bits();
     result["bake"] = {
         {"method",           erhe::scene::c_str(header.bake_parameters.method)},
         {"face_resolution",  header.bake_parameters.face_resolution},
@@ -835,13 +837,115 @@ auto Mcp_server::query_pvs_status(const json& args) -> std::string
             camera_json["cell"]        = cell.value();
             camera_json["page"]        = page;
             camera_json["local_cell"]  = database->local_cell(cell.value());
-            camera_json["page_stored"] = !database->get_page_words(page).empty();
+            camera_json["page_stored"] = database->is_page_stored(page);
             camera_json["has_pvs"]     = database->has_cell_pvs(cell.value());
-            camera_json["pvs_size"]    = database->get_cell_pvs_size(cell.value());
+            std::vector<uint32_t> cell_words;
+            camera_json["pvs_size"]    = (database->has_cell_pvs(cell.value()) && database->read_cell_words(cell.value(), cell_words))
+                ? erhe::scene::Pvs_database::count_pvs_words(cell_words)
+                : 0u;
         }
     }
     result["camera"] = camera_json;
+    result["streaming"] = make_pvs_streaming_json(*sr);
     return make_json_content(result).dump();
+}
+
+// The PVS page streaming of a scene (doc/plans/pvs.md "Residency and
+// streaming"; Draw_list_scene::get_pvs_streaming_status()), with the
+// streaming views named by their viewport scene view.
+auto Mcp_server::make_pvs_streaming_json(Scene_root& scene_root) -> json
+{
+    const erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root.get_draw_list_scene();
+    if (draw_list_scene == nullptr) {
+        return json{{"active", false}};
+    }
+    erhe::scene_renderer::Pvs_streaming_status status{};
+    draw_list_scene->get_pvs_streaming_status(status);
+    const auto to_array = [](const glm::uvec3& v) -> json { return json::array({v.x, v.y, v.z}); };
+    json views = json::array();
+    for (const erhe::scene_renderer::Pvs_streaming_view_status& view : status.views) {
+        std::string view_name;
+        if (m_context.scene_views != nullptr) {
+            for (const std::shared_ptr<Viewport_scene_view>& scene_view : m_context.scene_views->get_viewport_scene_views()) {
+                if (scene_view && (get_pvs_view_key(*scene_view) == view.view_key)) {
+                    view_name = scene_view->get_settings_key();
+                    break;
+                }
+            }
+        }
+        views.push_back(json{
+            {"view",           view_name},
+            {"active",         view.active},
+            {"last_frame",     view.last_frame},
+            {"page_min",       to_array(view.pages.min)},
+            {"page_max",       to_array(view.pages.max)},
+            {"wanted_pages",   view.wanted_pages},
+            {"resident_pages", view.resident_pages},
+            {"box_resident",   view.box_resident}
+        });
+    }
+    return json{
+        {"active",                status.active},
+        {"resident_pages_setting", status.settings.resident_pages},
+        {"stream_radius_pages",   status.settings.stream_radius_pages},
+        {"generation",            status.generation},
+        {"page_count",            status.page_count},
+        {"stored_pages",          status.stored_pages},
+        {"words_per_page",        status.words_per_page},
+        {"capacity",              status.capacity},
+        {"resident_pages",        status.resident_pages},
+        {"max_resident_pages",    status.max_resident_pages},
+        {"slot_bytes",            status.slot_bytes},
+        {"uploads",               status.uploads},
+        {"evictions",             status.evictions},
+        {"last_frame_index",      status.last_frame_index},
+        {"last_frame_uploads",    status.last_frame_uploads},
+        {"last_frame_evictions",  status.last_frame_evictions},
+        {"max_uploads_per_frame", status.max_uploads_per_frame},
+        {"pending_requests",      status.pending_requests},
+        {"read_in_flight",        status.read_in_flight},
+        {"queued_uploads",        status.queued_uploads},
+        {"placement_pending",     status.placement_pending},
+        {"failed_pages",          status.failed_pages},
+        {"applied_uploads",       status.applied_uploads},
+        {"nonresident_views",     status.nonresident_views},
+        {"nonresident_culled",    status.nonresident_culled},
+        {"bits_in_memory",        status.bits_in_memory},
+        {"views",                 std::move(views)}
+    };
+}
+
+auto Mcp_server::action_set_pvs_streaming(const json& args) -> std::string
+{
+    // The MCP counterpart of the Settings window's PVS Resident Pages and
+    // PVS Stream Radius entries (doc/plans/pvs.md "Residency and
+    // streaming"): edits the live editor settings and, like the window,
+    // pushes them to every scene's draw lists at once.
+    if ((m_context.editor_settings == nullptr) || (m_context.app_scenes == nullptr)) {
+        return make_error_content("set_pvs_streaming: editor settings not available");
+    }
+    if (args.contains("resident_pages")) {
+        const json& value = args["resident_pages"];
+        using Settings = erhe::scene_renderer::Pvs_streaming_settings;
+        if (!value.is_number_integer() || (value.get<int64_t>() < Settings::min_resident_pages) || (value.get<int64_t>() > Settings::max_resident_pages)) {
+            return make_error_content(fmt::format("set_pvs_streaming: 'resident_pages' must be an integer in [{}, {}]", Settings::min_resident_pages, Settings::max_resident_pages));
+        }
+        m_context.editor_settings->pvs_resident_pages = static_cast<int>(value.get<int64_t>());
+    }
+    if (args.contains("stream_radius_pages")) {
+        const json& value = args["stream_radius_pages"];
+        using Settings = erhe::scene_renderer::Pvs_streaming_settings;
+        if (!value.is_number_integer() || (value.get<int64_t>() < 0) || (value.get<int64_t>() > Settings::max_stream_radius_pages)) {
+            return make_error_content(fmt::format("set_pvs_streaming: 'stream_radius_pages' must be an integer in [0, {}]", Settings::max_stream_radius_pages));
+        }
+        m_context.editor_settings->pvs_stream_radius_pages = static_cast<int>(value.get<int64_t>());
+    }
+    const erhe::scene_renderer::Pvs_streaming_settings settings = m_context.app_scenes->get_pvs_streaming_settings();
+    m_context.app_scenes->set_pvs_streaming_settings(settings);
+    return make_json_content(json{
+        {"resident_pages",      settings.resident_pages},
+        {"stream_radius_pages", settings.stream_radius_pages}
+    }).dump();
 }
 
 auto Mcp_server::query_occlusion_check(const json& args) -> std::string

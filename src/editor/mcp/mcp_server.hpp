@@ -359,6 +359,8 @@ private:
     auto action_set_shadow_fit_cache_enabled(const nlohmann::json& args) -> std::string;
     auto query_cull_classification_check  (const nlohmann::json& args) -> std::string;
     auto action_set_occlusion_culling     (const nlohmann::json& args) -> std::string;
+    auto action_set_pvs_streaming         (const nlohmann::json& args) -> std::string;
+    auto make_pvs_streaming_json          (Scene_root& scene_root) -> nlohmann::json;
     auto action_set_pvs_culling           (const nlohmann::json& args) -> std::string;
     auto action_set_viewport_style        (const nlohmann::json& args) -> std::string;
     auto action_set_headset_scene         (const nlohmann::json& args) -> std::string;

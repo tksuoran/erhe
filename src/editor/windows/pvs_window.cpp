@@ -15,6 +15,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/pvs_database.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 
 #include <fmt/format.h>
 #include <imgui/imgui.h>
@@ -256,16 +257,33 @@ void Pvs_window::database_imgui(Scene_root& scene_root)
     }
     const erhe::scene::Pvs_header& header = database->get_header();
     ImGui::Text("Grid %u x %u x %u of %.2f m, %u cells, %u with a PVS", header.cell_counts.x, header.cell_counts.y, header.cell_counts.z, header.cell_size, database->get_cell_count(), database->get_cells_with_pvs());
-    ImGui::Text("Columns %u, stored pages %u, bits %.1f KB", database->get_column_count(), database->get_stored_page_count(), static_cast<double>(database->get_bits().size() * sizeof(uint32_t)) / 1024.0);
+    ImGui::Text("Columns %u, stored pages %u, bits %.1f KB", database->get_column_count(), database->get_stored_page_count(), static_cast<double>(static_cast<std::size_t>(database->get_stored_page_count()) * database->get_words_per_page() * sizeof(uint32_t)) / 1024.0);
     ImGui::Text("Method %s, baked in %.1f s", erhe::scene::c_str(header.bake_parameters.method), header.bake_duration_seconds);
+    // The page streaming (doc/plans/pvs.md "Residency and streaming").
+    const erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root.get_draw_list_scene();
+    if (draw_list_scene != nullptr) {
+        draw_list_scene->get_pvs_streaming_status(m_streaming_status);
+        ImGui::Text(
+            "Resident pages %u of %u slots (%.1f KB), uploads %llu, evictions %llu%s",
+            m_streaming_status.resident_pages, m_streaming_status.capacity,
+            static_cast<double>(m_streaming_status.slot_bytes) / 1024.0,
+            static_cast<unsigned long long>(m_streaming_status.uploads),
+            static_cast<unsigned long long>(m_streaming_status.evictions),
+            m_streaming_status.bits_in_memory ? ", bits in memory" : ", bits stream from the scene file"
+        );
+    }
 
     const std::shared_ptr<erhe::scene::Camera> camera = find_pvs_viewport_camera(m_context, scene_root);
     if (camera) {
         const glm::vec3 position = glm::vec3{camera->world_from_node()[3]};
         const std::optional<uint32_t> cell = database->find_cell(position);
         if (cell.has_value()) {
-            if (database->has_cell_pvs(cell.value())) {
+            if (database->has_cell_pvs(cell.value()) && database->has_resident_bits()) {
                 ImGui::Text("Camera cell %u: PVS %u of %u columns", cell.value(), database->get_cell_pvs_size(cell.value()), database->get_column_count());
+            } else if (database->has_cell_pvs(cell.value())) {
+                // The bits stream from the scene file (doc/plans/pvs.md
+                // "Residency and streaming"); get_pvs_cell reads a cell's.
+                ImGui::Text("Camera cell %u: has a PVS (the bits stream from the scene file)", cell.value());
             } else {
                 ImGui::Text("Camera cell %u: no PVS (everything visible)", cell.value());
             }

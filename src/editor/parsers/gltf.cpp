@@ -1975,6 +1975,16 @@ auto save_scene_gltf(
         export_arguments.image_source_provider = make_gltf_image_source_provider(content_library);
         export_arguments.written_layout        = &written_layout;
     }
+    // The PVS bits stream from their file (doc/plans/pvs.md "Residency and
+    // streaming"): saving onto it (not refused above) makes them resident first, and the
+    // database keeps them in memory afterwards.
+    if (export_arguments.pvs_database) {
+        const std::shared_ptr<erhe::scene::Pvs_database> pvs_database = scene_root.get_pvs_database();
+        if (pvs_database && pvs_database->bits_source_references(path) && !pvs_database->make_bits_resident()) {
+            log_parsers->error("save_scene_gltf: the PVS bits cannot be read from '{}' - nothing written", erhe::file::to_string(path));
+            return false;
+        }
+    }
 
     const std::chrono::steady_clock::time_point export_start = std::chrono::steady_clock::now();
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
@@ -2293,7 +2303,17 @@ auto finish_open_scene_gltf(
                 erhe::file::to_string(path), gltf_data.pvs_database->get_header().scene_id, scene_root->get_scene_id()
             );
         }
-        scene_root->set_pvs_database(std::move(gltf_data.pvs_database));
+        // The bits stream from the file by page (doc/plans/pvs.md
+        // "Residency and streaming"): the parsed copy is released once the
+        // file is known to hold them.
+        const std::shared_ptr<erhe::scene::Pvs_database> database = std::move(gltf_data.pvs_database);
+        if (database->release_bits()) {
+            log_parsers->info(
+                "open_scene_gltf: the PVS bits of '{}' stream from the file ({} stored pages)",
+                erhe::file::to_string(path), database->get_stored_page_count()
+            );
+        }
+        scene_root->set_pvs_database(database);
     }
     scene_root->apply_variant_selections(context);
 

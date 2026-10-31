@@ -171,35 +171,76 @@ dependency; its GPU copy and the consumer live in `erhe::scene_renderer`.
 
 The GPU holds a resident set of pages, never the whole database by
 construction: a device-local buffer of `pvs.resident_pages` page slots
-(each `page_size^3 * words_per_cell` words) and a GPU page table (per
-page: its slot, or none). The classification reads cell -> page -> slot ->
-words; a page without a slot reads as everything visible, so a view whose
-pages are not resident yet is culled by the frustum and occlusion tests
-only, never wrongly.
+(each `page_size^3 * words_per_cell` words; `Pvs_gpu_database`, which also
+keeps the CPU copy the CPU lanes read) and, per frame slot, a page table
+(per page: its slot, or none). The classification reads cell -> page ->
+slot -> words; a page without a slot reads as everything visible, so a view
+whose pages are not resident yet is culled by the frustum and occlusion
+tests only, never wrongly. Mechanics: `doc/erhe/draw_list_renderer.md` Q6
+"PVS resident set and page table".
 
-- Residency policy. The query-box registration of a view (M2) is the
-  change site: it computes the page of the box and, when that page differs
-  from the view's previous one, requests the pages within
-  `pvs.stream_radius_pages` of it (default 1: the 27 pages around the
-  view). Requests are served by a worker thread that reads the page's bytes
-  from the bits source by range (the `Lightmap_streamer` pattern:
-  worker-thread file read, staging upload, at most one page upload per
-  frame slot, written in R into a free slot), and the GPU page table is
-  rewritten for that frame slot. Eviction frees the slot of the resident
-  page farthest from every view's page beyond a hysteresis of one page,
-  and only when a request needs a slot. A freshly baked database serves
-  pages from memory through the same path. Several views (four view, a
-  headset beside a viewport) share the resident set; their page requests
-  union.
-- Capacity. `pvs.resident_pages` default 64 (Bistro-size: 3900 columns ->
-  122 words per cell, 31 KB per page, 2 MB resident); a database smaller
-  than the capacity is resident whole after its first requests and the
-  policy then does nothing. The CPU copy of the bits is released after an
-  open once the bits source is on disk (the Quest's heap is the
-  constraint, `doc/plans/gltf_fast_load.md`); the editor keeps it while a
-  bake is in progress or the database is unsaved.
-- Statistics: resident pages, slot bytes, uploads and evictions per frame,
-  and per view whether its pages are resident, in `get_pvs_status`.
+- Residency policy (`erhe::scene_renderer::Pvs_residency`). The query-box
+  registration of a view (M2, `Composer::prepare()` ->
+  `Draw_list_scene::register_pvs_view()`) is the change site: it computes
+  the pages of the box (the corner cells clamped to the grid; one page
+  unless the box straddles a page boundary) and, when they differ from the
+  view's previous ones (or the view was inactive: a view is active while it
+  registers every frame), requests the stored pages within
+  `pvs.stream_radius_pages` (Chebyshev distance in pages; default 1: the 27
+  pages around the view) of them, nearest first. Several views (four view,
+  a headset beside a viewport) share the resident set; their requests
+  union. Requests are served by a read task on the task executor
+  (`Pvs_page_streamer`, the `Lightmap_streamer` pattern: one task at a time,
+  `erhe::task::spawn()`) that reads one page's bytes at a time from
+  the bits source by range (`Pvs_database::read_page_words()`; a freshly
+  baked database serves its pages from memory through the same path) and
+  hands them back through a mutex-protected queue; the prepare phase places
+  at most one page per frame (one upload per frame slot), the render phase
+  of that frame (or of the next frame that classifies the scene) writes it
+  into its slot, and the page table of every frame from that one on names
+  the slot. Eviction, only when an arriving page needs a slot and none is
+  free, frees the slot of the resident page farthest from every active
+  view's pages, and only when that page is more than one page (the
+  hysteresis) farther away than the arriving page: a view moving back and
+  forth across a page boundary evicts nothing, and a view's own page
+  replaces pages two or more pages away. The evicted page leaves the page
+  table at once; its slot is written again only when every frame whose
+  table named it has retired (frames in flight later), so no write races a
+  frame in flight. A page that finds no slot when its read arrives is
+  dropped, and it and every later request wait for the next view change. A
+  page whose read fails is marked failed (a warning in the log), is not
+  requested again for that database and those settings, and stays without
+  a slot (everything visible). Streaming runs whether or not `pvs_culling`
+  is on (only a ready database registers views), so the pages are resident
+  when the rule is turned on. A view is inactive once a frame passes
+  without its registration (a hidden viewport, a closed one): its pages no
+  longer count for eviction, and its next registration is a change. A
+  capacity below the request set
+  ((2r + 1)^3 pages for a view) keeps the nearest pages; when a view moves
+  by one page, its new pages within one page of the pages it left can find
+  no evictable slot, so a small capacity serves views that move by two or
+  more pages (the streaming gate's camera path).
+- Capacity. `pvs.resident_pages` default 64 (Bistro-size: 3791 columns ->
+  119 words per cell, 30 KB per page, 1.9 MB resident). A database whose
+  stored pages all fit the capacity never evicts: the pages the views
+  request (those within the radius of their pages) stay resident, so the
+  resident set grows to the pages the views have come near, not the whole
+  database. The CPU copy of the bits is released after an
+  open once the bits source is on disk (`Pvs_database::release_bits()`; the
+  Quest's heap is the constraint, `doc/plans/gltf_fast_load.md`); a bake's
+  database keeps its bits in memory (it has no source), and a save onto the
+  database's own file reads them back first (`make_bits_resident()`), so
+  the database keeps them until the next open.
+- Settings `pvs_resident_pages` and `pvs_stream_radius_pages` (editor
+  settings v10; Settings window, MCP `set_pvs_streaming`), pushed to the
+  scenes' draw lists from their change sites; a change remakes the resident
+  set.
+- Statistics: resident pages (and the most at once), slot bytes, uploads
+  and evictions (total, per frame, the most in one frame), and per view its
+  pages, wanted and resident pages and whether its box's pages are
+  resident, in `get_pvs_status` `streaming`, with the residency check
+  (no view culls through a cell whose page table slot does not hold that
+  page).
 
 ### Runtime consumption
 
@@ -501,6 +542,14 @@ pays the classification's extra reads and at most one page upload.
   camera path, on Metal 4, Metal 3 and KosmicKrisp (MoltenVK runs the CPU
   path: identical there too). `get_cull_classification_check` 0 mismatches
   with PVS bits.
+- Streaming (`pvs_verify.py` section `streaming`): the baked Bistro saved
+  with its PVS to a scratch file and loaded in a fresh editor (the bits
+  stream from the file), `pvs_resident_pages` below the page count (4), a
+  camera path of poses two pages apart; after the pages around each pose
+  arrived: images identical with the rule on and off, 0 classification
+  mismatches, resident pages never above the capacity, at most one upload
+  per frame, no view culling through a page not resident in its slot, and
+  evictions over the path.
 - Cost: `scripts/render_thread_bench.py --tracy` on Bistro, PVS off / on /
   on with occlusion: GPU `Main`, tick, R, the occlusion pass's time (fewer
   boxes), classification dispatch time. Quest, when a headset is attached
@@ -577,15 +626,30 @@ step makes possible.
    on Metal 3 (headless) and MoltenVK, images identical with the rule on
    and off; 12 of the 48 wall cells keep boxes behind the wall (future
    work, "Open").
-6. Streaming: the residency policy of "Residency and streaming" (requests
-   at the query-box change site, the worker-thread page reads by range,
-   one upload per frame slot, eviction, the CPU bits release after an
-   open), with `pvs.resident_pages` smaller than the database's page count
-   as the gate: images identical on / off along the Bistro camera path
-   after the pages around each pose arrive, resident pages never above the
-   capacity, no frame culls a page that is not resident. Until this step
-   the resident set is every stored page (capacity = page count), which
-   the paged GPU layout of step 3 already supports.
+6. Streaming (done; "Residency and streaming", `doc/erhe/draw_list_renderer.md`
+   Q6 "PVS resident set and page table", `doc/editor/rendering.md`, MCP
+   `set_pvs_streaming` and `get_pvs_status` `streaming` in
+   `doc/agents/mcp_server_usage.md`): the residency policy
+   (`Pvs_residency`, unit tests for the page selection, the union of views,
+   the eviction order, the hysteresis and the delayed reuse of an evicted
+   slot), requests at the query-box registration in M2, the worker-thread
+   page reads by range (`Pvs_page_streamer`), one upload per frame slot,
+   eviction, the per-frame-slot page tables, the CPU bits release after an
+   open. Gate (`pvs_verify.py` section `streaming`, headless Metal 3): the
+   baked Bistro saved with its PVS (44 pages, all stored, 7616 words each)
+   and loaded again (bits released, `bits_hash` befefef64ac2a8e1 read back
+   from the file), `pvs_resident_pages` 4, radius 1, a camera path of 12
+   poses two pages apart: every pose settled (its box pages resident),
+   uploads per pose 4, 1, 3, 2, 2, 2, 1, 1, 2, 2, 2, 2 (24) and evictions
+   per pose 4, 1, 3, 2, 2, 2, 1, 1, 2, 2, 2, 2 (24); the run's totals are 28
+   uploads and 24 evictions, because 4 uploads (no evictions) happen before
+   pose 0, around the `frame_scene` camera's first position, resident pages never above 4,
+   at most one upload per frame, residency check 0, classification check 0
+   mismatches at every pose (PVS culled 22, 14 and 203 entries at three
+   poses), viewport and `render_scene_image` images identical with the rule
+   on and off at every pose. The existing sections pass with the default
+   capacity (64 slots for Bistro's 44 pages: nothing is evicted; the pages
+   within the radius of the poses stream in).
 7. Documentation: `doc/erhe/draw_list_renderer.md` (Q6 gains the PVS rule),
    `doc/editor/rendering.md`, `doc/editor/windows.md`, this plan reduced to
    what is outstanding.
@@ -658,6 +722,15 @@ step makes possible.
 
 - Adaptive cells (an octree over the region, subdividing cells with a
   non-free center or a PVS much larger than their neighbours').
+- Peak memory at open: the parser still copies the whole bit array out of
+  the file before the open releases it (`Pvs_database::release_bits()`), so
+  the peak includes the bits once. Making the parser record only the bits
+  source, without the copy, is future work.
+- Hysteresis alternative: evict only pages farther than radius + 1 from
+  every active view. It keeps a view's whole neighbourhood when it moves by
+  one page, at a capacity of (2r + 3)^3 pages; worth it if a capacity below
+  (2r + 1)^3 ever needs the full neighbourhood (today's rule serves small
+  capacities with views that move by two or more pages).
 - Page compression in the file (per-cell delta against the page's first
   cell, or a sparse column list for cells with small PVSs), decoded by the
   worker thread before the upload, when the file size matters.

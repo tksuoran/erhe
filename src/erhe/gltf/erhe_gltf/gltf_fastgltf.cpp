@@ -8585,7 +8585,14 @@ private:
             std::memcpy(record + (18 * sizeof(float)), &columns[i].transform_hash,         sizeof(uint64_t));
         }
         const std::vector<erhe::scene::Pvs_page_entry>& pages = database->get_pages();
-        const std::vector<uint32_t>&                    bits  = database->get_bits();
+        // From memory, or read back from the bits source when an open
+        // released the in-memory copy (doc/plans/pvs.md "Residency and
+        // streaming").
+        std::vector<uint32_t> bits;
+        if (!database->read_bits(bits)) {
+            log_gltf->error("glTF export: the PVS database's bits cannot be read - ERHE_pvs not written");
+            return {};
+        }
 
         // An empty payload gets no bufferView (glTF requires byteLength >= 1).
         std::string views;

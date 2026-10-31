@@ -25,8 +25,12 @@
 //   of the result region in cull_occlusion_previous.words, 0
 // cull_views.pvs_header = active (1: the frame applies the PVS rule, the
 //   cull_pvs_culled words below are written), words per cell, page size
-//   (cells per page axis), the first slot word in cull_pvs.words (the page
-//   count: the page table comes first)
+//   (cells per page axis), 0
+// cull_pvs_pages.slots[page] = the frame's page table (doc/plans/pvs.md
+//   "Residency and streaming"): the resident slot of the page, 0xffffffff
+//   for a page without one (not stored, or not resident in this frame)
+// cull_pvs.words = the resident page slots, words per page each (the
+//   page's cells in local cell order)
 // cull_views.pvs_cells  = the grid's cell counts per axis, 0
 // cull_views.pvs_pages  = the page grid's page counts per axis, words per
 //   page
@@ -49,7 +53,7 @@
 // (cull_columns.columns[entry] != 0xffffffff), stays inside only when the
 // cell of some corner of the view's query box has the column's bit set, or
 // some corner lies outside the grid or in a page without a slot (the page
-// table entry cull_pvs.words[page] is 0xffffffff). Otherwise it loses the
+// table entry cull_pvs_pages.slots[page] is 0xffffffff). Otherwise it loses the
 // view's bit before the occlusion terms (a PVS-culled entry is neither
 // tested nor consumed by the occlusion test), and the bit is recorded in the
 // cull_pvs_culled words (mask layout as uint words, like the occlusion
@@ -152,7 +156,6 @@ bool pvs_keeps(uint column, vec3 query_min, vec3 query_max)
 {
     uint  words_per_cell = cull_views.pvs_header.y;
     uint  page_size      = cull_views.pvs_header.z;
-    uint  slot_base      = cull_views.pvs_header.w;
     uvec3 page_dims      = cull_views.pvs_pages.xyz;
     uint  words_per_page = cull_views.pvs_pages.w;
     uint  word_in_cell   = column / 32u;
@@ -170,12 +173,12 @@ bool pvs_keeps(uint column, vec3 query_min, vec3 query_max)
         uvec3 page_cell  = cell / page_size;
         uvec3 local_cell = cell % page_size;
         uint  page       = page_cell.x + (page_dims.x * (page_cell.y + (page_dims.y * page_cell.z)));
-        uint  slot       = cull_pvs.words[page];
+        uint  slot       = cull_pvs_pages.slots[page];
         if (slot == 0xffffffffu) {
             return true;
         }
         uint local = local_cell.x + (page_size * (local_cell.y + (page_size * local_cell.z)));
-        uint word  = cull_pvs.words[slot_base + (slot * words_per_page) + (local * words_per_cell) + word_in_cell];
+        uint word  = cull_pvs.words[(slot * words_per_page) + (local * words_per_cell) + word_in_cell];
         if ((word & bit) != 0u) {
             return true;
         }

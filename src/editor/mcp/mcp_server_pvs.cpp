@@ -431,10 +431,16 @@ auto Mcp_server::query_pvs_cell(const json& args) -> std::string
         {"cell_max",    to_json(cell_min + glm::vec3{size})},
         {"page",        page},
         {"local_cell",  database->local_cell(cell)},
-        {"page_stored", !database->get_page_words(page).empty()},
-        {"has_pvs",     database->has_cell_pvs(cell)},
-        {"pvs_size",    database->get_cell_pvs_size(cell)}
+        {"page_stored", database->is_page_stored(page)},
+        {"has_pvs",     database->has_cell_pvs(cell)}
     };
+    // The cell's words, from memory or read from the scene file when an
+    // open released the bits (doc/plans/pvs.md "Residency and streaming").
+    std::vector<uint32_t> cell_words;
+    if (database->has_cell_pvs(cell) && !database->read_cell_words(cell, cell_words)) {
+        return make_error_content(fmt::format("get_pvs_cell: the words of cell {} cannot be read", cell));
+    }
+    result["pvs_size"] = erhe::scene::Pvs_database::count_pvs_words(cell_words);
     json columns = json::array();
     if (database->has_cell_pvs(cell)) {
         // The live mesh names by uid.
@@ -449,7 +455,7 @@ auto Mcp_server::query_pvs_cell(const json& args) -> std::string
         }
         const std::vector<erhe::scene::Pvs_column>& database_columns = database->get_columns();
         for (uint32_t column = 0, end = database->get_column_count(); column < end; ++column) {
-            if (!database->is_column_visible(cell, column)) {
+            if ((cell_words[column / 32] & (uint32_t{1} << (column % 32))) == 0u) {
                 continue;
             }
             const erhe::scene::Pvs_column& entry = database_columns[column];
