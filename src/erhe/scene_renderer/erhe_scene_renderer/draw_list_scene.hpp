@@ -755,13 +755,52 @@ public:
     // consumption"), recorded in the slot with the database set by
     // set_pvs_database(); on takes effect only while that database is
     // ready (absent or stale: the slot records off).
-    void publish           (uint64_t frame_index, std::size_t frames_in_flight, Cull_classification classification, Occlusion_culling occlusion, Pvs_culling pvs, std::span<const Joint_pose> joint_poses);
+    // lod: the frame's level of detail settings
+    // (doc/plans/lod_gpu_selection.md), recorded in the slot; the frame's
+    // lod_header is active when the selection is on and some registered
+    // entry has a chain. The slot copies the level table when it changed
+    // since the slot's copy (and, gpu, its GPU copy).
+    void publish(
+        uint64_t                    frame_index,
+        std::size_t                 frames_in_flight,
+        Cull_classification         classification,
+        Occlusion_culling           occlusion,
+        Pvs_culling                 pvs,
+        const Lod_frame_settings&   lod,
+        std::span<const Joint_pose> joint_poses
+    );
     // The classification the last publish() recorded (main thread).
     [[nodiscard]] auto get_cull_classification() const -> Cull_classification { return m_published_cull_classification; }
     // The occlusion culling the last publish() recorded (main thread).
     [[nodiscard]] auto get_occlusion_culling() const -> Occlusion_culling { return m_published_occlusion_culling; }
     // The PVS culling the last publish() recorded (main thread).
     [[nodiscard]] auto get_pvs_culling() const -> Pvs_culling { return m_published_pvs_culling; }
+
+    // --- Level of detail (doc/plans/lod_gpu_selection.md section 3) ---
+    // The level table (main thread, working copy): per chain of the
+    // registered entries, level_count rows of uvec4 (index_count,
+    // first_index, floatBitsToUint(error), 0), level 0 first;
+    // Draw_list_entry::lod_table_index names a chain's first row. A chain is
+    // shared by every entry that draws the same index ranges (one row block
+    // per distinct block of rows, reference counted by the entries); the
+    // rows of a released block stay until a block of the same length reuses
+    // them.
+    [[nodiscard]] auto get_lod_table() const -> std::span<const glm::uvec4> { return m_lod_table_rows; }
+    // Moves whenever a row block is written (the slots copy the table then).
+    [[nodiscard]] auto get_lod_table_serial() const -> uint64_t { return m_lod_table_serial; }
+    // Registered entries with a chain (lod_table_index != none).
+    [[nodiscard]] auto get_lod_chain_entry_count() const -> std::size_t { return m_lod_chain_entry_count; }
+    // The Lod_frame_settings the last publish() recorded and whether its
+    // lod_header was active (main thread).
+    [[nodiscard]] auto get_lod_frame_settings() const -> const Lod_frame_settings& { return m_published_lod_settings; }
+    [[nodiscard]] auto is_lod_active() const -> bool { return m_published_lod_active; }
+    // Diagnostics: level table copies publish() wrote to the slots' GPU
+    // level table buffers (a frame in which the table did not change adds
+    // none).
+    [[nodiscard]] auto get_gpu_lod_table_write_count() const -> std::size_t { return m_gpu_lod_table_write_count; }
+    // The scene's change serial (a list's serial is the value at its last
+    // change).
+    [[nodiscard]] auto get_draw_list_serial() const -> uint64_t { return m_draw_list_serial; }
 
     // --- Potentially visible sets (doc/plans/pvs.md "Runtime consumption") ---
     // The database the classification reads (null: none). Main thread,
@@ -876,12 +915,20 @@ public:
     // query box (world space; doc/plans/pvs.md "Runtime consumption"), part
     // of the view's identity: two views share a view only with the same
     // box. The default (max < min) is a view without the PVS rule.
+    // lod_view: the view's level of detail selection inputs
+    // (doc/plans/lod_gpu_selection.md section 3), part of the identity as
+    // well (bitwise: origin, projection scale, projection and key): equal
+    // planes with another projection scale (a scene image capture or a
+    // second viewport of another height from the same camera) select
+    // other levels, so they are another view. None: a view without
+    // selection, which draws the template range.
     [[nodiscard]] auto add_cull_view(
-        uint64_t                   frame_index,
-        Draw_purpose               purpose,
-        std::span<const glm::vec4> planes,
-        const glm::vec3&           pvs_query_min = glm::vec3{0.0f},
-        const glm::vec3&           pvs_query_max = glm::vec3{-1.0f}
+        uint64_t                       frame_index,
+        Draw_purpose                   purpose,
+        std::span<const glm::vec4>     planes,
+        const glm::vec3&               pvs_query_min = glm::vec3{0.0f},
+        const glm::vec3&               pvs_query_max = glm::vec3{-1.0f},
+        const std::optional<Lod_view>& lod_view      = std::nullopt
     ) -> Cull_view;
     // The PVS rule's counts of a view of frame_index's set (render phase,
     // after the frame's classification): zero for a view without a query
@@ -1146,8 +1193,21 @@ private:
     // flush's queued ops (D1d).
     void enqueue_rebuild_all();
     // Pending_op::Kind::set_lod: stores the record and re-registers the
-    // object when its forced level moved.
+    // object when its forced level moved; any other change of the effective
+    // record rewrites the entries' lod_word (rewrite_lod_words()).
     void apply_lod(const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::scene::Lod_data& lod);
+    // The object's entries take lod_word from the mesh's current record
+    // (each entry keeps its chain's level count): edits the lists (their
+    // serial moves, so the next publish copies them and rewrites their GPU
+    // bounds and templates) and records the object's bounds as a change
+    // for the shadow passes it reaches.
+    void rewrite_lod_words(uint32_t object_index);
+    // The level table (get_lod_table()): the row block holding rows (an
+    // existing block with the same rows gains a reference; else a released
+    // block of the same length is reused or the table grows), and the
+    // release of one reference of the block starting at first_row.
+    [[nodiscard]] auto acquire_lod_table_block(std::span<const glm::uvec4> rows) -> uint32_t;
+    void release_lod_table_block(uint32_t first_row);
 
     void assert_main_thread() const;
     static void assert_render_phase();
@@ -1298,6 +1358,10 @@ private:
     void copy_to_slot(Draw_list_slot& slot);
     // publish(): the GPU half of the slot (main thread, prepare phase).
     void publish_gpu_bounds(Draw_list_slot& slot);
+    // publish(): the slot's GPU level table (doc/plans/lod_gpu_selection.md
+    // section 3), written when the slot's copy changed since (gpu
+    // publishes only).
+    void publish_gpu_lod_table(Draw_list_slot& slot);
     // classify_frame_cull_views() of a frame whose slot asks for the GPU
     // path, after the CPU classification: records the frame's one dispatch
     // over every view of the set into one mask region (timed by
@@ -1519,6 +1583,17 @@ private:
         // column_bytes_per_entry per entry, at the bounds' entry offsets),
         // written with the bounds.
         std::unique_ptr<erhe::graphics::Buffer> gpu_columns;
+        // The level of detail settings publish() recorded, whether the
+        // frame's lod_header is active, and the level table copied when the
+        // working table's serial moved since the slot's copy; its GPU copy
+        // (gpu publishes only), written when its serial differs.
+        Lod_frame_settings                      lod_settings{};
+        bool                                    lod_active{false};
+        std::vector<glm::uvec4>                 lod_table;
+        uint64_t                                lod_table_serial{0};
+        std::unique_ptr<erhe::graphics::Buffer> gpu_lod_table;
+        std::size_t                             gpu_lod_table_capacity{0};
+        uint64_t                                gpu_lod_table_serial{0};
         std::size_t                             gpu_bounds_capacity{0};
         std::vector<uint64_t>                   gpu_bounds_serials;  // per list: serial written, 0 none
         std::vector<uint32_t>                   gpu_bounds_offsets;  // per list: entry offset written
@@ -1698,6 +1773,25 @@ private:
     Cull_classification                                              m_published_cull_classification{Cull_classification::cpu};
     Occlusion_culling                                                m_published_occlusion_culling{Occlusion_culling::off};
     Pvs_culling                                                      m_published_pvs_culling{Pvs_culling::off};
+    Lod_frame_settings                                               m_published_lod_settings{};
+    bool                                                             m_published_lod_active{false};
+    // Level of detail (doc/plans/lod_gpu_selection.md section 3), prepare
+    // phase: the level table rows (get_lod_table()), its serial, the row
+    // blocks by first row and by content, the released blocks, and the
+    // registered entries with a chain.
+    class Lod_table_block
+    {
+    public:
+        uint32_t    row_count{0};
+        std::size_t references{0};
+    };
+    std::vector<glm::uvec4>                                          m_lod_table_rows;
+    uint64_t                                                         m_lod_table_serial{0};
+    std::unordered_map<uint32_t, Lod_table_block>                    m_lod_table_blocks;
+    std::unordered_map<uint64_t, std::vector<uint32_t>>              m_lod_table_blocks_by_hash;
+    std::vector<uint32_t>                                            m_lod_table_free_blocks;
+    std::size_t                                                      m_lod_chain_entry_count{0};
+    std::size_t                                                      m_gpu_lod_table_write_count{0};
     // Potentially visible sets (doc/plans/pvs.md), prepare phase: the
     // database set_pvs_database() set, per column the number of live entries
     // naming it, the columns whose count dropped to 0 in the current flush,

@@ -260,6 +260,8 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         check(read_float_argument(args, "shadow_depth_bias_slope",    preset.shadow_depth_bias_slope))    &&
         check(read_non_negative_float_argument(args, "shadow_bias_texel_scale",  preset.shadow_bias_texel_scale))  &&
         check(read_non_negative_float_argument(args, "shadow_bias_origin_scale", preset.shadow_bias_origin_scale)) &&
+        check(read_non_negative_float_argument(args, "lod_threshold_pixels",     preset.lod_threshold_pixels))     &&
+        check(read_int_argument  (args, "lod_bias",                         -7, preset.lod_bias))                         &&
         check(read_int_argument  (args, "directional_shadow_light_count",     0, preset.directional_shadow_light_count))     &&
         check(read_int_argument  (args, "directional_unshadowed_light_count", 0, preset.directional_unshadowed_light_count)) &&
         check(read_int_argument  (args, "spot_shadow_light_count",            0, preset.spot_shadow_light_count))            &&
@@ -277,6 +279,12 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
             return make_error_content("flat_draw_color must be a boolean");
         }
         preset.flat_draw_color = args["flat_draw_color"].get<bool>();
+    }
+    if (args.contains("lod_enabled")) {
+        if (!args["lod_enabled"].is_boolean()) {
+            return make_error_content("lod_enabled must be a boolean");
+        }
+        preset.lod_enabled = args["lod_enabled"].get<bool>();
     }
     if (!args_ok) {
         return make_error_content(error);
@@ -337,6 +345,9 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"specular_anti_aliasing",     std::string{to_string(in_effect.specular_anti_aliasing)}},
         {"flat_draw_color",            in_effect.flat_draw_color},
         {"shader_fp16_paths",          in_effect.shader_fp16_paths},
+        {"lod_enabled",                in_effect.lod_enabled},
+        {"lod_threshold_pixels",       in_effect.lod_threshold_pixels},
+        {"lod_bias",                   in_effect.lod_bias},
         {"shader_float16",             (m_context.graphics_device != nullptr) && m_context.graphics_device->get_info().shader_float16},
         {"use_draw_lists",             m_context.app_settings->get_use_draw_lists()}
     }).dump();

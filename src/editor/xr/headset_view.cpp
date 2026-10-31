@@ -1878,6 +1878,7 @@ void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_v
     float fov_down  =  std::numeric_limits<float>::max();
     float z_near    =  std::numeric_limits<float>::max();
     float z_far     = -std::numeric_limits<float>::max();
+    float projection_scale = 0.0f;
     for (const erhe::xr::Render_view& view : views) {
         const glm::quat head_from_eye = head_from_world * view.view_pose.orientation;
         const float     tan_left      = std::tan(view.fov_left );
@@ -1901,6 +1902,16 @@ void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_v
         }
         z_near = std::min(z_near, view.near_depth);
         z_far  = std::max(z_far,  view.far_depth );
+        // The eye's level of detail projection scale (doc/plans/
+        // lod_gpu_selection.md section 7): its viewport height over the
+        // tangent span of its vertical fov sides.
+        const float tan_span = tan_up - tan_down;
+        if ((view.height > 0) && (tan_span > 0.0f)) {
+            projection_scale = std::max(projection_scale, static_cast<float>(view.height) / tan_span);
+        }
+    }
+    if (projection_scale > 0.0f) {
+        m_combined_eye_projection_scale = projection_scale;
     }
 
     // locate_views leaves near/far at 0 (only the fovs are meaningful there);
@@ -1962,6 +1973,17 @@ void Headset_view::prepare_cull_planes(const glm::mat4& world_from_head)
     slot.plane_count   = 0;
     slot.pvs_query_min = glm::vec3{ 0.0f}; // empty until prepare_pvs_query()
     slot.pvs_query_max = glm::vec3{-1.0f};
+    // The level of detail selection origin is the head (the centre eye),
+    // so the multiview pass and both eyes select the same level.
+    slot.lod_view.reset();
+    if (m_combined_eye_projection_scale > 0.0f) {
+        slot.lod_view = erhe::scene_renderer::Lod_view{
+            .origin           = glm::vec3{world_from_head[3]},
+            .projection_scale = m_combined_eye_projection_scale,
+            .projection       = erhe::scene_renderer::Lod_projection::perspective,
+            .lod_key          = static_cast<const Scene_view*>(this) // the scene view, as Composer::add_cull_views() keys a viewport
+        };
+    }
 
     // Head space: -Z forward, +X right, +Y up. fov_left / fov_down are
     // negative angles, fov_right / fov_up positive. Each side plane passes
@@ -2100,7 +2122,8 @@ void Headset_view::add_render_cull_view()
         erhe::scene_renderer::Draw_purpose::color,
         std::span<const glm::vec4>{slot.planes.data(), slot.plane_count},
         slot.pvs_query_min,
-        slot.pvs_query_max
+        slot.pvs_query_max,
+        slot.lod_view
     );
     m_render_cull_draw_list_scene = draw_list_scene;
 

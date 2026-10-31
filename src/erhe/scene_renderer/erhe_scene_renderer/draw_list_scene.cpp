@@ -202,6 +202,41 @@ public:
     return chain.levels[chain.get_clamped_level(level)].index_range;
 }
 
+// The level count of the chain an entry of this classification draws from:
+// the optimized variant's chain, 0 for a variant without one and for the
+// base variant (doc/plans/lod_gpu_selection.md section 3).
+[[nodiscard]] auto get_lod_level_count(const Primitive_classification& classification) -> std::size_t
+{
+    if ((classification.variant != erhe::primitive::Mesh_variant::optimized) || (classification.buffer_mesh == nullptr)) {
+        return 0;
+    }
+    return classification.buffer_mesh->lod_chain.level_count;
+}
+
+// The largest axis scale of a node's world_from_node: what an object space
+// error is scaled by in world space (doc/plans/lod.md section 2.3).
+[[nodiscard]] auto get_max_axis_scale(const erhe::scene::Node& node) -> float
+{
+    const glm::mat4 world_from_node = node.world_from_node();
+    return std::max(
+        std::max(glm::length(glm::vec3{world_from_node[0]}), glm::length(glm::vec3{world_from_node[1]})),
+        glm::length(glm::vec3{world_from_node[2]})
+    );
+}
+
+// FNV-1a over the words of a level table row block (the content key of
+// Draw_list_scene::acquire_lod_table_block()).
+[[nodiscard]] auto hash_lod_rows(const std::span<const glm::uvec4> rows) -> uint64_t
+{
+    uint64_t hash = 0xcbf29ce484222325ull;
+    for (const glm::uvec4& row : rows) {
+        for (int i = 0; i < 4; ++i) {
+            hash = (hash ^ static_cast<uint64_t>(row[i])) * 0x100000001b3ull;
+        }
+    }
+    return hash;
+}
+
 [[nodiscard]] auto material_identity_hash(const erhe::primitive::Material* material) -> uint64_t
 {
     // Material-derived Shader_key components only (no vertex format, no
@@ -428,7 +463,11 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
     // exists: the forced level of its Lod record, 0 otherwise (doc/plans/lod.md
     // step 2). Read here, at registration, so the draw path reads only the
     // index range copied into the entry.
-    const std::size_t forced_lod_level = erhe::scene::get_forced_lod_level(get_mesh_lod(mesh));
+    const erhe::scene::Lod_data lod              = get_mesh_lod(mesh);
+    const std::size_t           forced_lod_level = erhe::scene::get_forced_lod_level(lod);
+    // The level table rows of one chain (doc/plans/lod_gpu_selection.md
+    // section 3), the ranges select_lod_index_range() copies for each level.
+    std::array<glm::uvec4, erhe::primitive::max_lod_levels> lod_rows{};
     for (std::size_t i = 0, count = primitives.size(); i < count; ++i) {
         for (const Draw_purpose purpose : purposes) {
             const Primitive_classification classification = classify_primitive(
@@ -465,6 +504,24 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
                 ? buffer_mesh.expanded_base_vertex()
                 : buffer_mesh.base_vertex();
             // world_aabb: write_object_bounds() below, once per object.
+            // The entry's chain in the level table and its packed Lod record
+            // (doc/plans/lod_gpu_selection.md section 3).
+            const std::size_t lod_level_count = get_lod_level_count(classification);
+            if (lod_level_count > 0) {
+                ERHE_VERIFY(lod_level_count <= lod_rows.size());
+                for (std::size_t level = 0; level < lod_level_count; ++level) {
+                    const erhe::primitive::Index_range level_range = select_lod_index_range(classification, level);
+                    lod_rows[level] = glm::uvec4{
+                        static_cast<uint32_t>(level_range.index_count),
+                        static_cast<uint32_t>(level_range.first_index) + buffer_mesh.base_index(),
+                        std::bit_cast<uint32_t>(classification.buffer_mesh->lod_chain.levels[level].error),
+                        0u
+                    };
+                }
+                entry.lod_table_index = acquire_lod_table_block(std::span<const glm::uvec4>{lod_rows.data(), lod_level_count});
+                ++m_lod_chain_entry_count;
+            }
+            entry.lod_word = make_lod_word(lod, lod_level_count);
 
             object.locations.push_back(
                 Draw_list_entry_location{
@@ -499,6 +556,12 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
     ++m_entry_layout_serial;
     ERHE_VERIFY(draw_list.pvs_columns.size() == draw_list.entries.size());
     remove_pvs_column_entry(draw_list.pvs_columns[location.entry_index]);
+    const uint32_t lod_table_index = draw_list.entries[location.entry_index].lod_table_index;
+    if (lod_table_index != lod_table_index_none) {
+        release_lod_table_block(lod_table_index);
+        ERHE_VERIFY(m_lod_chain_entry_count > 0);
+        --m_lod_chain_entry_count;
+    }
     const uint32_t last_index = static_cast<uint32_t>(draw_list.entries.size() - 1);
     if (location.entry_index != last_index) {
         // Swap-remove: the moved entry's owner must be told its new index.
@@ -696,10 +759,12 @@ void Draw_list_scene::write_object_bounds(const uint32_t object_index)
     if (object.mobility == Draw_mobility::skinned) {
         object.has_published_pose = false;
     }
+    const float max_axis_scale = get_max_axis_scale(*mesh);
     for (const Draw_list_entry_location& location : object.locations) {
         Draw_list& draw_list = edit_draw_list(location.draw_list_index);
         draw_list.entries[location.entry_index].world_aabb = world_aabb;
         draw_list.bounds.set(location.entry_index, world_aabb);
+        draw_list.bounds.set_max_axis_scale(location.entry_index, max_axis_scale);
     }
     object.world_aabb     = world_aabb;
     object.has_world_aabb = true;
@@ -904,11 +969,13 @@ void Draw_list_scene::write_object_transform(const uint32_t object_index)
     }
     object.world_aabb     = world_aabb;
     object.has_world_aabb = true;
+    const float max_axis_scale = get_max_axis_scale(*node);
     for (const Draw_list_entry_location& location : object.locations) {
         write_transform_fields(get_record(location), offsets, *node);
         Draw_list& draw_list = edit_draw_list(location.draw_list_index);
         draw_list.entries[location.entry_index].world_aabb = world_aabb;
         draw_list.bounds.set(location.entry_index, world_aabb);
+        draw_list.bounds.set_max_axis_scale(location.entry_index, max_axis_scale);
     }
     check_pvs_object(object, world_aabb);
     object.transform_serial = node->node_data.transforms.world_from_node_serial;
@@ -1384,6 +1451,13 @@ void Draw_list_scene::rebuild_all()
     // lists left empty by unregistration). The entries' PVS columns are
     // counted again by add_entries() below.
     std::fill(m_pvs_column_entry_counts.begin(), m_pvs_column_entry_counts.end(), uint32_t{0});
+    // The level table is rebuilt by add_entries() below as well.
+    m_lod_table_rows.clear();
+    m_lod_table_blocks.clear();
+    m_lod_table_blocks_by_hash.clear();
+    m_lod_table_free_blocks.clear();
+    m_lod_chain_entry_count = 0;
+    ++m_lod_table_serial;
     m_draw_lists.clear();
     m_draw_list_index_by_key.clear();
     m_skinned_object_indices.clear();
@@ -1551,7 +1625,14 @@ void Draw_list_scene::apply_lod(const std::shared_ptr<erhe::scene::Mesh>& mesh, 
         m_lod_by_mesh.insert_or_assign(mesh.get(), lod);
     }
     if (old_level == new_level) {
-        return; // the entries already draw this level (a bias or min / max edit)
+        // The entries already draw this level (a bias, mode or min / max
+        // edit): the selection inputs in lod_word change
+        // (doc/plans/lod_gpu_selection.md section 3).
+        const Draw_list_object_id id = find_object(mesh.get());
+        if (id.is_valid()) {
+            rewrite_lod_words(id.index);
+        }
+        return;
     }
     // A property edit, so the full re-register is the right cost: the list
     // serial moves (a list copy, a GPU bounds rewrite, a shadow cache content
@@ -1561,6 +1642,88 @@ void Draw_list_scene::apply_lod(const std::shared_ptr<erhe::scene::Mesh>& mesh, 
     if (id.is_valid()) {
         reregister_object(id);
     }
+}
+
+void Draw_list_scene::rewrite_lod_words(const uint32_t object_index)
+{
+    Draw_list_object& object = m_objects[object_index];
+    ERHE_VERIFY(object.alive);
+    const erhe::scene::Lod_data lod = get_mesh_lod(object.info.mesh.get());
+    bool changed = false;
+    for (const Draw_list_entry_location& location : object.locations) {
+        const Draw_list_entry& entry    = m_draw_lists[location.draw_list_index].entries[location.entry_index];
+        const uint32_t         lod_word = make_lod_word(lod, decode_lod_word(entry.lod_word).level_count);
+        if (lod_word == entry.lod_word) {
+            continue;
+        }
+        edit_draw_list(location.draw_list_index).entries[location.entry_index].lod_word = lod_word;
+        changed = true;
+    }
+    // A shadow pass the object reaches may draw other levels of it.
+    if (changed && has_shadow_entries(object) && object.has_world_aabb) {
+        record_changed_object_bounds(object);
+    }
+}
+
+auto Draw_list_scene::acquire_lod_table_block(const std::span<const glm::uvec4> rows) -> uint32_t
+{
+    ERHE_VERIFY(!rows.empty());
+    const uint64_t hash = hash_lod_rows(rows);
+    std::vector<uint32_t>& same_hash = m_lod_table_blocks_by_hash[hash];
+    for (const uint32_t first_row : same_hash) {
+        Lod_table_block& block = m_lod_table_blocks.at(first_row);
+        if (
+            (block.row_count == rows.size()) &&
+            std::equal(rows.begin(), rows.end(), m_lod_table_rows.begin() + first_row)
+        ) {
+            ++block.references;
+            return first_row;
+        }
+    }
+    uint32_t first_row = static_cast<uint32_t>(m_lod_table_rows.size());
+    const std::vector<uint32_t>::iterator free_block = std::find_if(
+        m_lod_table_free_blocks.begin(),
+        m_lod_table_free_blocks.end(),
+        [this, &rows](const uint32_t free_first_row) -> bool {
+            return m_lod_table_blocks.at(free_first_row).row_count == rows.size();
+        }
+    );
+    if (free_block != m_lod_table_free_blocks.end()) {
+        first_row = *free_block;
+        m_lod_table_free_blocks.erase(free_block);
+    } else {
+        m_lod_table_rows.resize(m_lod_table_rows.size() + rows.size());
+        m_lod_table_blocks.emplace(first_row, Lod_table_block{.row_count = static_cast<uint32_t>(rows.size()), .references = 0});
+    }
+    std::copy(rows.begin(), rows.end(), m_lod_table_rows.begin() + first_row);
+    Lod_table_block& block = m_lod_table_blocks.at(first_row);
+    block.references = 1;
+    same_hash.push_back(first_row);
+    ++m_lod_table_serial;
+    return first_row;
+}
+
+void Draw_list_scene::release_lod_table_block(const uint32_t first_row)
+{
+    Lod_table_block& block = m_lod_table_blocks.at(first_row);
+    ERHE_VERIFY(block.references > 0);
+    --block.references;
+    if (block.references > 0) {
+        return;
+    }
+    // The rows stay (nothing names them); the block is reused by the next
+    // block of the same length.
+    const std::span<const glm::uvec4> rows{m_lod_table_rows.data() + first_row, block.row_count};
+    const std::unordered_map<uint64_t, std::vector<uint32_t>>::iterator same_hash = m_lod_table_blocks_by_hash.find(hash_lod_rows(rows));
+    ERHE_VERIFY(same_hash != m_lod_table_blocks_by_hash.end());
+    std::vector<uint32_t>& first_rows = same_hash->second;
+    const std::vector<uint32_t>::iterator i = std::find(first_rows.begin(), first_rows.end(), first_row);
+    ERHE_VERIFY(i != first_rows.end());
+    first_rows.erase(i);
+    if (first_rows.empty()) {
+        m_lod_table_blocks_by_hash.erase(same_hash);
+    }
+    m_lod_table_free_blocks.push_back(first_row);
 }
 
 void Draw_list_scene::enqueue_material_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
@@ -1722,6 +1885,7 @@ void Draw_list_scene::publish(
     const Cull_classification         classification,
     const Occlusion_culling           occlusion,
     const Pvs_culling                 pvs,
+    const Lod_frame_settings&         lod,
     const std::span<const Joint_pose> joint_poses
 )
 {
@@ -1824,9 +1988,23 @@ void Draw_list_scene::publish(
         copy_to_slot(slot);
     }
     slot.entry_layout_serial = m_entry_layout_serial;
+
+    // Level of detail (doc/plans/lod_gpu_selection.md section 3): the
+    // frame's settings, whether its lod_header is active, and the level
+    // table when it changed since the slot's copy.
+    slot.lod_settings = lod;
+    slot.lod_active   = (lod.selection == Lod_selection::on) && (m_lod_chain_entry_count > 0);
+    if (slot.lod_table_serial != m_lod_table_serial) {
+        slot.lod_table.assign(m_lod_table_rows.begin(), m_lod_table_rows.end());
+        slot.lod_table_serial = m_lod_table_serial;
+    }
+    m_published_lod_settings = slot.lod_settings;
+    m_published_lod_active   = slot.lod_active;
+
     if (effective_classification == Cull_classification::gpu) {
         publish_gpu_bounds(slot);
         publish_gpu_pvs_page_table(slot);
+        publish_gpu_lod_table(slot);
     }
 }
 
@@ -2714,7 +2892,8 @@ auto Draw_list_scene::add_cull_view(
     const Draw_purpose               purpose,
     const std::span<const glm::vec4> planes,
     const glm::vec3&                 pvs_query_min,
-    const glm::vec3&                 pvs_query_max
+    const glm::vec3&                 pvs_query_max,
+    const std::optional<Lod_view>&   lod_view
 ) -> Cull_view
 {
     assert_render_phase();
@@ -2736,7 +2915,9 @@ auto Draw_list_scene::add_cull_view(
             (view.plane_count == planes.size()) &&
             (std::memcmp(view.planes.data(), planes.data(), planes.size_bytes()) == 0) &&
             (std::memcmp(&view.pvs_query_min, &pvs_query_min, sizeof(glm::vec3)) == 0) &&
-            (std::memcmp(&view.pvs_query_max, &pvs_query_max, sizeof(glm::vec3)) == 0)
+            (std::memcmp(&view.pvs_query_max, &pvs_query_max, sizeof(glm::vec3)) == 0) &&
+            (view.lod_view.has_value() == lod_view.has_value()) &&
+            (!lod_view.has_value() || view.lod_view.value().is_same(lod_view.value()))
         ) {
             return static_cast<Cull_view>(i);
         }
@@ -2746,6 +2927,7 @@ auto Draw_list_scene::add_cull_view(
     std::copy(planes.begin(), planes.end(), view.planes.begin());
     view.pvs_query_min = pvs_query_min;
     view.pvs_query_max = pvs_query_max;
+    view.lod_view      = lod_view;
     return static_cast<Cull_view>(m_cull_views.size() - 1);
 }
 

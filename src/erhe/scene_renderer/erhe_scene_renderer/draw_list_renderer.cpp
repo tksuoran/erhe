@@ -15,6 +15,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <cmath>
+
 namespace erhe::scene_renderer {
 
 namespace {
@@ -183,7 +185,50 @@ auto Draw_list_renderer::add_color_cull_view(
     }
     const float                    clip_z_min      = (parameters.depth_range == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
     const std::array<glm::vec4, 6> view_frustum_planes = erhe::math::extract_frustum_planes(clip_from_world.value(), clip_z_min, 1.0f);
-    return draw_list_scene.add_cull_view(frame_index, Draw_purpose::color, std::span<const glm::vec4>{view_frustum_planes}, parameters.pvs_query_min, parameters.pvs_query_max);
+    return draw_list_scene.add_cull_view(
+        frame_index,
+        Draw_purpose::color,
+        std::span<const glm::vec4>{view_frustum_planes},
+        parameters.pvs_query_min,
+        parameters.pvs_query_max,
+        get_color_lod_view(parameters)
+    );
+}
+
+auto Draw_list_renderer::get_color_lod_view(const Color_cull_view_parameters& parameters) -> std::optional<Lod_view>
+{
+    if ((parameters.lod_key == nullptr) || (parameters.views.size() != 1) || (parameters.views.front().camera == nullptr)) {
+        return {};
+    }
+    const Camera_view_input&            view     = parameters.views.front();
+    const erhe::scene::Camera_snapshot& camera   = *view.camera;
+    if (view.viewport.height <= 0) {
+        return {};
+    }
+    const erhe::scene::Projection&           projection = camera.projection();
+    const erhe::scene::Projection::Fov_sides sides      = projection.get_fov_sides(view.viewport);
+    const float                              height     = static_cast<float>(view.viewport.height);
+    Lod_view lod_view{
+        .origin  = glm::vec3{camera.position_in_world()},
+        .lod_key = parameters.lod_key
+    };
+    if (projection.is_orthographic()) {
+        // Fov_sides of an orthographic projection are the view extents.
+        const float view_height = sides.up - sides.down;
+        if (!(view_height > 0.0f)) {
+            return {};
+        }
+        lod_view.projection       = Lod_projection::orthographic;
+        lod_view.projection_scale = height / view_height;
+    } else {
+        const float tan_span = std::tan(sides.up) - std::tan(sides.down);
+        if (!(tan_span > 0.0f)) {
+            return {};
+        }
+        lod_view.projection       = Lod_projection::perspective;
+        lod_view.projection_scale = height / tan_span;
+    }
+    return lod_view;
 }
 
 auto Draw_list_renderer::get_color_clip_from_world(const Color_cull_view_parameters& parameters) -> std::optional<glm::mat4>

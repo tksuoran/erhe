@@ -1842,12 +1842,19 @@ auto Xr_session::locate_views(std::vector<Render_view>& out_views) -> bool
     }
 
     out_views.reserve(view_count_output);
+    const std::vector<XrViewConfigurationView>& view_configuration_views = m_instance.get_xr_view_configuration_views();
     for (uint32_t i = 0; i < view_count_output; ++i) {
         // Value-initialize so the unused texture / format / near-far fields are
         // zeroed; the shadow fit consumes only the fov sides (and falls back to
-        // a default near/far range when they are zero).
+        // a default near/far range when they are zero). width / height are the
+        // view's swapchain extent (the level of detail selection's projection
+        // scale reads them).
         Render_view view{};
         view.slot      = i;
+        if (i < view_configuration_views.size()) {
+            view.width  = view_configuration_views[i].recommendedImageRectWidth;
+            view.height = view_configuration_views[i].recommendedImageRectHeight;
+        }
         view.view_pose = erhe::xr::Pose{
             .orientation = to_glm(m_xr_views[i].pose.orientation),
             .position    = to_glm(m_xr_views[i].pose.position)

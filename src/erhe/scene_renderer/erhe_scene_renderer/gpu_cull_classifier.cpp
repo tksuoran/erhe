@@ -43,6 +43,15 @@ auto c_str(const Pvs_culling pvs_culling) -> const char*
     }
 }
 
+auto c_str(const Lod_selection lod_selection) -> const char*
+{
+    switch (lod_selection) {
+        case Lod_selection::off: return "off";
+        case Lod_selection::on:  return "on";
+        default:                 return "?";
+    }
+}
+
 Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device, const std::filesystem::path& shader_path)
     : m_graphics_device{graphics_device}
     , m_device_capable {is_device_capable(graphics_device)}
@@ -236,6 +245,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_view_pvs_cells_offset        = m_views_block.add_uvec4("pvs_cells"       )->get_offset_in_parent();
     m_view_pvs_pages_offset        = m_views_block.add_uvec4("pvs_pages"       )->get_offset_in_parent();
     m_view_pvs_grid_offset         = m_views_block.add_vec4 ("pvs_grid"        )->get_offset_in_parent();
+    m_view_lod_header_offset       = m_views_block.add_uvec4("lod_header"      )->get_offset_in_parent();
     m_view_data_offset   = m_views_block.add_vec4 ("views", Shader_resource::unsized_array)->get_offset_in_parent();
     m_masks_block.add_uvec2("masks", Shader_resource::unsized_array);
     m_occlusion_words_block         .add_uint("words", Shader_resource::unsized_array);

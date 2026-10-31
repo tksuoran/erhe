@@ -35,6 +35,30 @@ auto Cull_view_tests::is_same(const Cull_view_tests& other) const -> bool
         same_bits(pvs_query_max.z, other.pvs_query_max.z);
 }
 
+auto c_str(const Lod_projection projection) -> const char*
+{
+    switch (projection) {
+        case Lod_projection::perspective:  return "perspective";
+        case Lod_projection::orthographic: return "orthographic";
+        default:                           return "?";
+    }
+}
+
+auto Lod_view::is_same(const Lod_view& other) const -> bool
+{
+    // Bitwise per float, never the objects' bytes (padding).
+    const auto same_bits = [](const float a, const float b) -> bool {
+        return std::bit_cast<uint32_t>(a) == std::bit_cast<uint32_t>(b);
+    };
+    return
+        (projection == other.projection) &&
+        (lod_key == other.lod_key) &&
+        same_bits(origin.x,         other.origin.x) &&
+        same_bits(origin.y,         other.origin.y) &&
+        same_bits(origin.z,         other.origin.z) &&
+        same_bits(projection_scale, other.projection_scale);
+}
+
 auto Cull_view_tests::has_pvs_query() const -> bool
 {
     return
@@ -65,6 +89,7 @@ void Draw_list_bounds::resize(const std::size_t count)
     extent_x.resize(count, -1.0f);
     extent_y.resize(count, -1.0f);
     extent_z.resize(count, -1.0f);
+    max_axis_scale.resize(count, 0.0f);
 }
 
 void Draw_list_bounds::set(const std::size_t index, const erhe::math::Aabb& aabb)
@@ -90,6 +115,11 @@ void Draw_list_bounds::set(const std::size_t index, const erhe::math::Aabb& aabb
     extent_z[index] = extent.z;
 }
 
+void Draw_list_bounds::set_max_axis_scale(const std::size_t index, const float value)
+{
+    max_axis_scale[index] = value;
+}
+
 void Draw_list_bounds::move(const std::size_t from, const std::size_t to)
 {
     center_x[to] = center_x[from];
@@ -98,6 +128,7 @@ void Draw_list_bounds::move(const std::size_t from, const std::size_t to)
     extent_x[to] = extent_x[from];
     extent_y[to] = extent_y[from];
     extent_z[to] = extent_z[from];
+    max_axis_scale[to] = max_axis_scale[from];
 }
 
 void Draw_list_bounds::assign(const Draw_list_bounds& source)
@@ -108,6 +139,7 @@ void Draw_list_bounds::assign(const Draw_list_bounds& source)
     extent_x.assign(source.extent_x.begin(), source.extent_x.end());
     extent_y.assign(source.extent_y.begin(), source.extent_y.end());
     extent_z.assign(source.extent_z.begin(), source.extent_z.end());
+    max_axis_scale.assign(source.max_axis_scale.begin(), source.max_axis_scale.end());
 }
 
 } // namespace erhe::scene_renderer

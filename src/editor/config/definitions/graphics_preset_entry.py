@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_preset_entry",
-    version=6,
+    version=7,
     short_desc="Graphics quality preset",
     long_desc="",
     developer=False,
@@ -63,5 +63,13 @@ struct("Graphics_preset_entry",
         # variant axis of the lit color variants. 0 = the fp32 chain
         # everywhere. Older presets read the default.
         field("shader_fp16_paths", Int, added_in=6, default="0", short_desc="Shader fp16 Paths"),
+        # Automatic level of detail selection (v7; doc/plans/lod_gpu_selection.md,
+        # doc/editor/lod.md "Graphics preset settings"): the switch (off: every
+        # draw reads the forced level, or level 0), the pixel error threshold
+        # a level must stay within and the global bias added to every
+        # selected level. Older presets read the defaults.
+        field("lod_enabled",          Bool,  added_in=7, default="false", short_desc="LOD Selection"),
+        field("lod_threshold_pixels", Float, added_in=7, default="1.0f",  short_desc="LOD Threshold (pixels)"),
+        field("lod_bias",             Int,   added_in=7, default="0",     short_desc="LOD Bias"),
     ],
 )

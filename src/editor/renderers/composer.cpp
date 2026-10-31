@@ -136,6 +136,9 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
     // The PVS query box the prepare phase computed and registered.
     view_parameters.pvs_query_min = prepared.pvs_query_min;
     view_parameters.pvs_query_max = prepared.pvs_query_max;
+    // The view's level of detail selection is keyed by the scene view
+    // (doc/plans/lod_gpu_selection.md section 7).
+    view_parameters.lod_key       = &context.scene_view;
     for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
         const Composition_pass&    composition_pass = *composition_passes[i].get();
         Composition_pass_prepared& pass_prepared    = prepared.passes[i];

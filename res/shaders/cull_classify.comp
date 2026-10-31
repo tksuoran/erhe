@@ -13,7 +13,9 @@
 // intermediate declared precise so no multiply-add is contracted: the bit
 // decisions are the CPU's decisions.
 //
-// cull_bounds.bounds[2 * entry + 0] = center.xyz, 0
+// cull_bounds.bounds[2 * entry + 0] = center.xyz, max_axis_scale (the
+//   largest axis scale of the entry's world_from_node, for level of detail
+//   selection, doc/plans/lod_gpu_selection.md section 3)
 // cull_bounds.bounds[2 * entry + 1] = extent.xyz, purpose (0 color, 1 shadow)
 //   extent.x < 0: no bounds (or a skinned list): inside every view of the
 //   entry's purpose.
@@ -36,7 +38,12 @@
 //   page
 // cull_views.pvs_grid   = the grid origin, 1 / cell size (computed on the
 //   CPU: cull_lanes::get_pvs_inverse_cell_size())
-// cull_views.views[12 * view + k]:
+// cull_views.lod_header = the frame's level of detail selection
+//   (doc/plans/lod_gpu_selection.md section 3): active (1: levels are
+//   selected; 0: every draw reads its template range), threshold^2 and the
+//   coarsening threshold^2 (float bits), the global bias (int bits). No
+//   level selection is computed yet.
+// cull_views.views[14 * view + k]:
 //   k = 0..5 planes (inward, n.xyz + w), 6 range sphere (center.xyz,
 //   radius), 7 = purpose, kind (0 planes, 1 cube face), plane count, cube
 //   face (0..5 = +X -X +Y -Y +Z -Z), as exact small floats, 8 the near
@@ -45,7 +52,11 @@
 //   the previous occlusion frame; 0.0: none, the view is not culled by
 //   occlusion), the previous frame's view group and view bit, 10 = the
 //   view's PVS query box min, 1.0 when the view applies the PVS rule (0.0
-//   otherwise), 11 = its max, 0.
+//   otherwise), 11 = its max, 0, 12 = the level of detail selection origin
+//   (xyz) and projection scale, 13 = the view's LOD column (-1: none, the
+//   view draws the template range), projection kind (0 perspective, 1
+//   orthographic), the previous frame's column for the same view (-1:
+//   none) and shadow mode, as exact small floats.
 //
 // The potentially visible set rule (doc/plans/pvs.md "Runtime
 // consumption"; cull_lanes::pvs_lanes() is the CPU reference, with the same
@@ -237,7 +248,7 @@ void main()
             occlusion_culled = uvec2(0u, 0u);
             group            = view_group;
         }
-        uint base = 12u * view;
+        uint base = 14u * view;
         vec4 info = cull_views.views[base + 7u];
         if (uint(info.x) != purpose) {
             continue;

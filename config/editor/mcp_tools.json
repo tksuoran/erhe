@@ -8975,7 +8975,7 @@
   },
   {
     "name": "get_draw_lists",
-    "description": "Inspect the scene's persistent draw lists (Draw_list_scene, doc/draw_list_renderer_requirements.md): registered object count, draw list / entry counts, pending (unflushed) change count and runtime negative-determinant flip count. verbose=true also lists every non-empty draw list with its identity key. has_draw_lists=false when the scene root has no Draw_list_scene (preview / tool scenes). Also reports resolution diagnostics: color_environment_change_count (each change re-resolves every color list), lazy_resolution_count (one-off first-use resolutions), material_change_count (material identity changes that re-registered objects). Supplying mesh_name or mesh_id adds an entries array for that one mesh: per entry its draw list / entry index, mesh_primitive_index, identity key, the material_index its CACHED primitive record was written with (what the draw actually resolves the material through), and the live Mesh_primitive's material_id / material_name / material_buffer_index, and world_aabb, the cached culling bounds the entry is tested against (doc/erhe/draw_list_renderer.md Q6; absent for a skinned entry). A material_index that disagrees with the material the mesh names is a stale cached record. cull_classification is the culling classification the last publish recorded (cpu or gpu, doc/plans/culling.md phase 5) and gpu_bounds_write_count the list bounds ranges the publishes wrote to the GPU bounds buffers (unchanged on an idle scene).",
+    "description": "Inspect the scene's persistent draw lists (Draw_list_scene, doc/draw_list_renderer_requirements.md): registered object count, draw list / entry counts, pending (unflushed) change count and runtime negative-determinant flip count. verbose=true also lists every non-empty draw list with its identity key. has_draw_lists=false when the scene root has no Draw_list_scene (preview / tool scenes). Also reports resolution diagnostics: color_environment_change_count (each change re-resolves every color list), lazy_resolution_count (one-off first-use resolutions), material_change_count (material identity changes that re-registered objects). Supplying mesh_name or mesh_id adds an entries array for that one mesh: per entry its draw list / entry index, mesh_primitive_index, identity key, the material_index its CACHED primitive record was written with (what the draw actually resolves the material through), and the live Mesh_primitive's material_id / material_name / material_buffer_index, and world_aabb, the cached culling bounds the entry is tested against (doc/erhe/draw_list_renderer.md Q6; absent for a skinned entry). A material_index that disagrees with the material the mesh names is a stale cached record. cull_classification is the culling classification the last publish recorded (cpu or gpu, doc/plans/culling.md phase 5) and gpu_bounds_write_count the list bounds ranges the publishes wrote to the GPU bounds buffers (unchanged on an idle scene). draw_list_serial is the scene's change serial; verbose lists and each entry carry their list's serial (its value at the list's last change). lod (doc/plans/lod_gpu_selection.md): the level of detail settings the last publish recorded (selection on / off, threshold_pixels, bias), active (the frame's lod_header: selection on and some entry has a chain), chain_entry_count, table_row_count and table_serial of the level table, gpu_table_write_count (level table copies written to the slots' GPU buffers; unchanged on an idle scene). Each entry also carries lod_table_index (its chain's first level table row, null without a chain), lod_word (the packed effective Lod record: value, mode, forced_level, bias, min_level, max_level, level_count of its chain) and max_axis_scale.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -10668,6 +10668,18 @@
         "light_shading": {
           "description": "Light_shading_mode: loops (per light type loops, the preset's light limits decide which lights are shaded), clustered (every active light shaded from per-fragment light cluster lists, doc/plans/clustered_lights.md) or automatic (the default: clustered while the scene has more than 16 active lights, else loops)",
           "type": "string"
+        },
+        "lod_enabled": {
+          "description": "Automatic level of detail selection on / off (doc/plans/lod_gpu_selection.md; default off). Levels are not selected yet: every draw reads its entry's forced level, or level 0",
+          "type": "boolean"
+        },
+        "lod_threshold_pixels": {
+          "description": "Pixel error a selected level must stay within (>= 0, default 1.0)",
+          "type": "number"
+        },
+        "lod_bias": {
+          "description": "Global bias added to every selected level (>= -7, default 0)",
+          "type": "integer"
         },
         "flat_draw_color": {
           "description": "true: every color draw writes an unlit palette color picked by its draw (primitive record index; the FLAT_DRAW_COLOR variant axis), with no texture, light or shadow map reads; alpha-tested materials draw solid. Lights and shadow maps are still prepared unless their light counts are 0. A fragment cost measurement mode",

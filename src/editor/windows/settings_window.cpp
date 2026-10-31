@@ -621,6 +621,27 @@ void Settings_window::imgui()
                 on_graphics_preset_edited();
             }
         });
+        // Automatic level of detail selection (doc/editor/lod.md "Graphics
+        // preset settings"): the switch, the pixel error threshold and the
+        // global bias, read by the next frame's render settings snapshot.
+        add_entry("LOD Selection", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            if (ImGui::Checkbox("##", &graphics_preset.lod_enabled)) {
+                on_graphics_preset_edited();
+            }
+        });
+        add_entry("LOD Threshold (pixels)", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            if (ImGui::SliderFloat("##", &graphics_preset.lod_threshold_pixels, 0.125f, 16.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+                on_graphics_preset_edited();
+            }
+        });
+        add_entry("LOD Bias", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            if (ImGui::SliderInt("##", &graphics_preset.lod_bias, -7, 7)) {
+                on_graphics_preset_edited();
+            }
+        });
     }
 
     add_entry("", [this, button_size](){
