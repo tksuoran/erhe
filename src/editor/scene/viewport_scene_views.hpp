@@ -3,6 +3,7 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_commands/command.hpp"
 #include "app_message.hpp"
+#include "scene/viewport_render_state.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
@@ -33,6 +34,7 @@ class App_rendering;
 class Four_view;
 class App_settings;
 class Post_processing;
+class Overdraw_node;
 class Post_processing_node;
 class Viewport_overlay_node;
 class Scene_root;
@@ -192,6 +194,17 @@ public:
     // keeps tracking the cursor even after it leaves the viewport rect.
     [[nodiscard]] auto owns_pointer_capture(const Viewport_scene_view* scene_view) const -> bool;
     [[nodiscard]] auto get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&;
+    // Main thread, outside the ImGui iteration (the UI queues it,
+    // Imgui_windows::queue): the viewport's overdraw visualization
+    // (doc/plans/overdraw_visualization.md O4). Not off, the view counts its
+    // content passes' fragments (Overdraw_mode) and an Overdraw_node
+    // takes the post-processing node's place in its chain (between the view
+    // and the window host without post-processing, where it also becomes
+    // the window's output node); off restores the chain and drops the node.
+    // The post-processing node stays alive, disconnected, meanwhile. A view
+    // that is no longer one of the tracked views (closed before a queued
+    // call ran) is left alone.
+    void set_overdraw_mode(const Viewport_scene_view* viewport_scene_view, Overdraw_mode mode);
     [[nodiscard]] auto get_viewport_windows() const -> const std::vector<std::shared_ptr<Viewport_window>>&;
     // All live viewport scene views. Used by the Visual Style shadow-mode <->
     // Lightmap window render-with-lightmaps mirror (Viewport_config_window).
@@ -230,6 +243,16 @@ private:
     // that has post-processing enabled; owns the after-post-processing overlay
     // rendergraph node.
     std::vector<std::shared_ptr<Viewport_overlay_node>> m_overlay_nodes;
+    // The overdraw visualization nodes of the viewports whose mode is on,
+    // with the node each one bypasses (the post-processing node, owned by
+    // m_post_processing_nodes; null without post-processing).
+    class Overdraw_chain
+    {
+    public:
+        std::shared_ptr<Overdraw_node>        overdraw_node;
+        erhe::rendergraph::Rendergraph_node*  bypassed_node{nullptr};
+    };
+    std::vector<Overdraw_chain>                         m_overdraw_chains;
     std::vector<std::weak_ptr<Viewport_scene_view>>     m_hover_stack;
     std::shared_ptr<Viewport_scene_view>                m_hover_scene_view;
     std::weak_ptr<Viewport_scene_view>                  m_last_scene_view;

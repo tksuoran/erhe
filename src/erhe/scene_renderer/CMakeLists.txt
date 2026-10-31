@@ -44,6 +44,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/material_set.hpp
     erhe_scene_renderer/mesh_memory.cpp
     erhe_scene_renderer/mesh_memory.hpp
+    erhe_scene_renderer/overdraw_counter.cpp
+    erhe_scene_renderer/overdraw_counter.hpp
     erhe_scene_renderer/buffer_pool.hpp
     erhe_scene_renderer/buffer_pool.cpp
     erhe_scene_renderer/published_vector.hpp

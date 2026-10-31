@@ -222,6 +222,7 @@
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/cull_frame_registry.hpp"
 #include "erhe_scene_renderer/gpu_cull_classifier.hpp"
+#include "erhe_scene_renderer/overdraw_counter.hpp"
 #include "erhe_scene_renderer/light_cluster_gpu_binner.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
@@ -3156,6 +3157,12 @@ public:
                     *m_graphics_device.get(),
                     std::filesystem::path{"res"} / std::filesystem::path{"shaders"}
                 );
+                // The viewports' overdraw statistics (doc/plans/
+                // overdraw_visualization.md O5).
+                m_overdraw_counter = std::make_unique<erhe::scene_renderer::Overdraw_counter>(
+                    *m_graphics_device.get(),
+                    std::filesystem::path{"res"} / std::filesystem::path{"shaders"}
+                );
                 // The frame's culling classification (doc/plans/culling.md
                 // phase 6a): after every rendergraph node's pre-execute hook
                 // added its passes' culling views, before the first node
@@ -4356,6 +4363,7 @@ public:
         m_app_context.forward_renderer         = m_forward_renderer      .get();
         m_app_context.shadow_renderer          = m_shadow_renderer       .get();
         m_app_context.gpu_cull_classifier      = m_gpu_cull_classifier   .get();
+        m_app_context.overdraw_counter         = m_overdraw_counter      .get();
         m_app_context.light_cluster_gpu_binner = m_light_cluster_gpu_binner.get();
         m_app_context.cull_frame_registry      = m_cull_frame_registry   .get();
         m_app_context.texel_renderer           = m_texel_renderer        .get();
@@ -5661,6 +5669,7 @@ public:
     std::unique_ptr<erhe::scene_renderer::Draw_list_renderer>         m_draw_list_renderer;
     std::unique_ptr<erhe::scene_renderer::Shadow_renderer >           m_shadow_renderer;
     std::unique_ptr<erhe::scene_renderer::Gpu_cull_classifier>        m_gpu_cull_classifier;
+    std::unique_ptr<erhe::scene_renderer::Overdraw_counter>           m_overdraw_counter;
     std::unique_ptr<erhe::scene_renderer::Light_cluster_gpu_binner>   m_light_cluster_gpu_binner;
     std::unique_ptr<erhe::scene_renderer::Cull_frame_registry>        m_cull_frame_registry;
     std::unique_ptr<erhe::scene_renderer::Texel_renderer >            m_texel_renderer;

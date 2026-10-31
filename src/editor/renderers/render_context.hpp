@@ -11,6 +11,7 @@
 #include <span>
 
 namespace erhe::graphics {
+    class Buffer;
     class Command_buffer;
     class Render_pass;
     class Shader_stages;
@@ -95,6 +96,12 @@ public:
     // (Base_render_parameters::shadow_debug_light_index).
     uint32_t                                shadow_debug_light_index{0};
     std::span<const erhe::scene_renderer::Camera_view_input> views; // multiview
+    // The view's overdraw counting (Viewport_render_state::overdraw): not
+    // off, the passes counts_overdraw() accepts draw with those overdraw
+    // variants. The render phase context carries the view's count buffer of
+    // the frame (Overdraw_view_state::begin_frame()), which those passes bind.
+    erhe::scene_renderer::Overdraw_count    overdraw           {erhe::scene_renderer::Overdraw_count::off};
+    const erhe::graphics::Buffer*           overdraw_count_buffer{nullptr};
     Render_content                          content            {Render_content::scene_and_editor_aids};
     // The view's composition prepared for this frame in the prepare phase
     // (Composer_frame_slots); null makes Composer::render() prepare each

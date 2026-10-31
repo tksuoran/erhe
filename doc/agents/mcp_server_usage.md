@@ -570,6 +570,66 @@ only by position, which is every glTF primitive), and `unsupported_opinion_count
 material bindings the file's variants authored, which this slice neither
 applies nor writes back.
 
+### get_viewports
+
+Lists every viewport: each viewport window (the four view's four panes are
+four windows) with `kind` `window`, and, when the OpenXR session runs, the
+headset view with `kind` `headset` and `title` `headset`. The `title` is the
+name the `viewport` argument of other tools takes.
+
+Returns: `{viewports: [{kind, title, scene, camera, render_width,
+render_height, msaa_sample_count, camera_path, camera_world_from_camera,
+camera_projection_type, camera_fov_y, camera_fov_x, camera_z_near,
+camera_z_far, ...}]}`. `render_width` / `render_height` are the size of the
+image the viewport renders (a window's content render target; the headset's
+per-view swapchain image). A window entry adds `x, y, width, height`, the
+rectangle the image occupies in the editor window (top-left origin, the
+pixel space of a `capture_screenshot` PNG and of the UI-driving tools). A
+headset entry adds `active, view_count, multiview, views [{width, height}],
+color_format`.
+
+### get_viewport_size
+
+The size of one viewport's image: `viewport` is a window title or
+`headset` (default: the first viewport window).
+
+Returns: `{viewport, kind, render_width, render_height, msaa_sample_count}`
+plus `window_rect {x, y, width, height}` for a window, or `view_count,
+multiview, views, color_format, active` for the headset. A build without
+OpenXR refuses `headset` with that reason.
+
+### set_overdraw_visualization
+
+A viewport's overdraw visualization (`doc/plans/overdraw_visualization.md`):
+`mode` (required: `off`, `shaded` or `rasterized`), `viewport` (window
+title; default: the first viewport window with a scene view), `max_count`
+(the count shown white, default 8, kept per viewport). Not off, the
+viewport's content passes count per pixel with the viewport's real
+pipelines, draw order and draw-list / culling paths, and the viewport shows
+the counts as a heat map with a legend. `shaded` counts the fragment shader
+invocations the frame runs (after the early depth test); `rasterized` counts
+every rasterized fragment, ignoring the depth test - the mode that shows what
+occlusion and frustum culling remove. Refused with the reason on a device
+without fragment stage buffer atomics.
+
+Returns: `{viewport, mode, max_count}`.
+
+### get_overdraw_stats
+
+The counts of the newest retired frame of a viewport whose overdraw
+visualization is not off (`viewport` as above), a few frames behind the
+current one: `{viewport, mode, counted_mode, valid, frame_index, width, height,
+invocations_total, covered_pixels, mean_per_covered_pixel, mean_per_pixel,
+max_count, histogram, histogram_last_bin}`. `histogram[n]` is the pixel
+count with n invocations for n < `histogram_last_bin` (64); the last entry
+holds every larger count. `valid` is false (with a `message`) until a counted
+frame retired, and after the mode turned off. `counted_mode` is the mode
+the reported frame counted with; after a mode change, wait until it equals
+`mode`. With MSAA, the pixels a
+triangle edge splits count once per covering triangle.
+`scripts/overdraw_verify.py` checks the counts against stacked full-screen
+rectangles.
+
 ### pick_at
 
 Headless pick probe: arm the pointer at viewport pixel coordinates and run
@@ -917,6 +977,21 @@ as everything visible. Omit both to query. Progress: `get_pvs_status`
 `streaming`.
 
 Returns: `{resident_pages, stream_radius_pages}`.
+### set_content_draws
+
+Set which content draws the composition passes make, by the blending class
+of the primitive's material (`src/editor/renderers/content_draws.hpp`;
+session only, never saved; the Settings window's Content Draws combo):
+`mode` `all` or `opaque_only`. `opaque_only` leaves out the alpha-tested
+content passes (`alpha_test` and `screen_door` materials, the draws whose
+fragment shader discards) and the translucent content passes (`alpha_blend`
+and the other blended modes) in every view, viewports and the headset, to
+measure what those draws cost. Shadow passes draw opaque casters only in
+both modes. Takes effect at the next frame's render settings snapshot. Omit
+`mode` to query. `scripts/content_draws_verify.py` checks it with the
+rasterized overdraw count.
+
+Returns: `{mode}`.
 
 ### set_viewport_style
 

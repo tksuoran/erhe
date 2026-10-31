@@ -21,6 +21,26 @@ namespace editor {
 
 class Scene_root;
 
+// A viewport's overdraw visualization (doc/plans/overdraw_visualization.md):
+// not off, the view's content passes count per pixel (Overdraw_view_state)
+// and the view shows and reports the counts. shaded counts the fragment
+// shader invocations the frame runs (after the early depth test);
+// rasterized counts every rasterized fragment (ignoring the depth test).
+// The values are erhe::scene_renderer::Overdraw_count's.
+enum class Overdraw_mode : unsigned int
+{
+    off        = 0,
+    shaded     = 1,
+    rasterized = 2
+};
+static_assert(static_cast<unsigned int>(Overdraw_mode::shaded)     == static_cast<unsigned int>(erhe::scene_renderer::Overdraw_count::shaded));
+static_assert(static_cast<unsigned int>(Overdraw_mode::rasterized) == static_cast<unsigned int>(erhe::scene_renderer::Overdraw_count::rasterized));
+inline constexpr const char* c_overdraw_mode_strings[] = { "Off", "Shaded", "Rasterized" };
+[[nodiscard]] inline auto to_overdraw_count(const Overdraw_mode mode) -> erhe::scene_renderer::Overdraw_count
+{
+    return static_cast<erhe::scene_renderer::Overdraw_count>(static_cast<unsigned int>(mode));
+}
+
 // The grid composition pass inputs of one view: whether the grid draws and
 // its camera UBO parameters (grid.frag). Written by Grid::render() when the
 // grid tool records the view.
@@ -55,6 +75,8 @@ public:
     erhe::math::Viewport                 projection_viewport  {0, 0, 0, 0};
     int                                  msaa_sample_count    {0};
     erhe::scene_renderer::Shader_debug   shader_debug         {erhe::scene_renderer::Shader_debug::none};
+    Overdraw_mode                        overdraw             {Overdraw_mode::off};
+    uint32_t                             overdraw_max_count   {8};
     // The hover flag and pointer position (the ID pass), and whether the
     // pick probe fires this frame.
     bool                                 is_scene_view_hovered{false};

@@ -746,6 +746,16 @@ void Settings_window::imgui()
                 m_context.app_scenes->set_pvs_streaming_settings(m_context.app_scenes->get_pvs_streaming_settings());
             }
         }, "The radius, in pages, around a viewport camera's PVS page that is requested when the camera enters another page (1: the 27 pages around it).");
+        add_entry("Content Draws", [this](){
+            // Session only; the render settings snapshot carries it to the
+            // alpha-tested and translucent composition passes
+            // (renderers/content_draws.hpp).
+            Content_draws& content_draws = m_context.app_settings->content_draws_session;
+            int            index         = static_cast<int>(content_draws);
+            if (ImGui::Combo("##", &index, c_content_draws_strings, IM_ARRAYSIZE(c_content_draws_strings))) {
+                content_draws = static_cast<Content_draws>(index);
+            }
+        }, "Which content draws the views make: all, or opaque only, which leaves out the alpha-tested (discarding) and translucent materials, to measure what they cost. Session only, not saved.");
         add_entry("Light Cluster Binning", [&settings](){
             // The render settings snapshot carries the value to the shadow
             // render nodes' light binning (doc/plans/clustered_lights.md C4).

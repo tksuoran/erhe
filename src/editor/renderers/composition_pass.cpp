@@ -170,6 +170,7 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
     out.mesh_count         = 0;
     out.use_wide_lines     = false;
     out.use_draw_lists     = false;
+    out.overdraw           = erhe::scene_renderer::Overdraw_count::off;
     out.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{};
     // The grid pass takes this view's grid (Viewport_render_state::grid).
     const bool view_grid = data.grid_from_view && (context.render_state != nullptr);
@@ -264,6 +265,7 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
     }
 
     out.primitive_settings = get_pass_primitive_settings(data, context, host_system_time_ns);
+    out.overdraw           = counts_overdraw(data) ? context.overdraw : erhe::scene_renderer::Overdraw_count::off;
 
     // Draw-list path (doc/erhe/draw_list_renderer.md section 9.4): route to
     // the scene's persistent draw lists when the gate is on and this pass is
@@ -313,11 +315,21 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
             // A pass that forces its own variant supplies its own filter instead.
             .shader_debug_filter                   = data.shader_debug_override.has_value()
                 ? data.shader_debug_override_filter
-                : erhe::Item_filter{ .require_all_bits_set = erhe::Item_flags::content }
+                : erhe::Item_filter{ .require_all_bits_set = erhe::Item_flags::content },
+            .overdraw                              = out.overdraw
         },
         out.buckets
     );
     s_mesh_spans.clear();
+}
+
+auto counts_overdraw(const Composition_pass_data& data) -> bool
+{
+    return
+        (data.kind == Composition_pass_kind::scene_content) &&
+        (data.shader_stages == nullptr) &&
+        !data.shader_debug_override.has_value() &&
+        (std::find(data.mesh_layers.begin(), data.mesh_layers.end(), Mesh_layer_id::content) != data.mesh_layers.end());
 }
 
 auto get_draw_blending_selection(const Composition_pass_data& data) -> erhe::scene_renderer::Draw_blending_selection
@@ -597,6 +609,11 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         ? erhe::scene_renderer::get_shadow_depth_bits_axis(shadow_texture->get_pixelformat())
         : 0u;
 
+    // A counting pass draws with the overdraw variants, whose count buffer
+    // the view's render phase bound into the context.
+    const bool counting = (prepared.overdraw != erhe::scene_renderer::Overdraw_count::off);
+    ERHE_VERIFY(!counting || (context.overdraw_count_buffer != nullptr));
+
     if (prepared.use_draw_lists) {
         erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
         ERHE_VERIFY(draw_list_scene != nullptr);
@@ -622,6 +639,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                     .reverse_depth     = view_parameters.reverse_depth,
                     .depth_range       = view_parameters.depth_range,
                     .conventions       = view_parameters.conventions,
+                    .overdraw_count_buffer = counting ? context.overdraw_count_buffer : nullptr,
                     .debug_label       = get_name(),
                 },
                 .draw_list_scene       = *draw_list_scene,
@@ -641,7 +659,8 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 .debug_target_joint    = debug_target_joint.get(),
                 .color_blend_override  = nullptr,
                 .cull_view             = prepared.cull_view,
-                .command_selection     = prepared.command_selection
+                .command_selection     = prepared.command_selection,
+                .overdraw              = prepared.overdraw
             }
         );
         if (stats != nullptr) {
@@ -691,6 +710,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 .reverse_depth     = context.scene_view.get_reverse_depth(),
                 .depth_range       = context.scene_view.get_depth_range(),
                 .conventions       = context.scene_view.get_conventions(),
+                .overdraw_count_buffer = counting ? context.overdraw_count_buffer : nullptr,
                 .debug_label       = get_name(),
             },
             .base_render_pipelines  = data.base_render_pipelines,

@@ -1,6 +1,8 @@
 #include "erhe_scene_renderer/scene_pass_resources.hpp"
 
+#include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_graphics/buffer.hpp"
 
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -114,6 +116,16 @@ auto Scene_pass_resources::begin_pass(
     // After the light buffer's set_sampled_image() calls, as the heap bind
     // has always been.
     state.material_source->bind(render_encoder);
+
+    if (base.overdraw_count_buffer != nullptr) {
+        render_encoder.set_buffer(
+            erhe::graphics::Buffer_target::storage,
+            base.overdraw_count_buffer,
+            0,
+            base.overdraw_count_buffer->get_capacity_byte_count(),
+            overdraw_count_buffer_binding_point
+        );
+    }
 
     render_encoder.set_viewport_rect(base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
     render_encoder.set_scissor_rect (base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);

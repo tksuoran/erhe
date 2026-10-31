@@ -43,6 +43,25 @@ the method reads any `Operations` member that the window's widgets mutate; if
 so, add an overload taking the value explicitly and call that from the MCP
 handler.
 
+## Image tools: rendering requests state the resolution, captures do not
+
+An MCP tool that renders an image (`render_scene_image`, the texture graph
+exports) takes the image's `width` and `height` as required arguments,
+renders at exactly that size and echoes both in the reply. It renders into
+resources it owns for the request (reused across requests of the same
+size), never by resizing a viewport, a window, a swapchain or another
+texture the editor shows, so repeated requests cost no resizes and leave
+the user's views untouched.
+
+A tool that captures an image the editor already has (`capture_screenshot`
+the frame, `set_ray_trace` `save_path` the ray trace output, the lightmap
+debug PNGs the atlas) takes no size: it writes the image at its own size,
+pixel for pixel, and reports that size in the reply. No image tool scales
+or resamples an image, and none lays out the UI again for a capture.
+
+The tools that do not follow this yet and their changes are in
+[../plans/mcp_image_resolution.md](../plans/mcp_image_resolution.md).
+
 ## UI-driving tools and scene-scripting tools are separate
 
 The server carries two families of tools and each has its own job.

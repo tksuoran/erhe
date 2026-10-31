@@ -137,11 +137,12 @@ void Forward_renderer::prepare(const Prepare_parameters& parameters, Render_buck
         return;
     }
 
-    // Only SHADER_DEBUG of the environment changes what derive() produces
-    // beyond copying the axes; the render-phase axes are applied when the
-    // snapshot is drawn (apply_render_environment()).
+    // Only SHADER_DEBUG and OVERDRAW of the environment change what
+    // derive() produces beyond copying the axes; the render-phase axes are
+    // applied when the snapshot is drawn (apply_render_environment()).
     Shader_key environment_key{};
     environment_key.set(Shader_int::SHADER_DEBUG, static_cast<uint32_t>(parameters.shader_debug)); // TODO proper conversion
+    environment_key.set(Shader_int::OVERDRAW, static_cast<uint32_t>(parameters.overdraw));
 
     // Leaf-function scratch (AGENTS.md: function-local thread_local buffers):
     // nothing below re-enters prepare(). The entries hold raw Mesh pointers
@@ -202,7 +203,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             .primitive_settings                    = parameters.primitive_settings,
             .filter                                = parameters.filter,
             .shader_debug                          = parameters.shader_debug,
-            .shader_debug_filter                   = parameters.shader_debug_filter
+            .shader_debug_filter                   = parameters.shader_debug_filter,
+            .overdraw                              = parameters.overdraw
         },
         m_immediate_snapshot
     );

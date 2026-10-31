@@ -116,6 +116,11 @@ public:
     Draw_blending_selection                 blending            {Draw_blending_selection::opaque_only};
     // 0 for single view passes, N >= 2 for multiview (R19).
     uint16_t                                multiview_count     {0};
+    // Not off: the lists draw with their OVERDRAW variants, which count into
+    // the bound overdraw count buffer. A view property, not part of the
+    // environment: the views of a scene count or not independently, without
+    // invalidating each other's resolutions.
+    Overdraw_count                          overdraw            {Overdraw_count::off};
     Color_environment                       environment         {};
     // nullptr: pick color_blend_disabled / color_blend_premultiplied by the
     // list's blending class, as Forward_renderer::render() does.
@@ -1183,7 +1188,7 @@ private:
     // list at that index is a different list (identity) than last time.
     [[nodiscard]] auto get_resolutions(std::size_t draw_list_index, const Draw_list& draw_list) -> Draw_list_resolutions&;
     void resolve_color_list   (Draw_list_resolutions& resolutions, const Draw_list& draw_list); // all enumerated view configs
-    auto resolve_color_stages (Draw_list_resolutions& resolutions, const Draw_list& draw_list, uint16_t multiview_count) -> const erhe::graphics::Reloadable_shader_stages*;
+    auto resolve_color_stages (Draw_list_resolutions& resolutions, const Draw_list& draw_list, uint16_t multiview_count, Overdraw_count overdraw) -> const erhe::graphics::Reloadable_shader_stages*;
     auto resolve_shadow_stages(Draw_list_resolutions& resolutions, const Draw_list& draw_list, Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
     auto resolve_pvs_stages   (Draw_list_resolutions& resolutions, const Draw_list& draw_list, Pvs_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
     void set_color_environment(const Color_environment& environment);

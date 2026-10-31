@@ -38,6 +38,9 @@
 #include "erhe_scene/node.hpp"
 
 #include <imgui/imgui.h>
+
+#include <array>
+#include <cstdio>
 #include <imgui/imgui_internal.h>
 
 namespace editor {
@@ -65,6 +68,60 @@ Viewport_window::Viewport_window(
 }
 
 Viewport_window::~Viewport_window() noexcept = default;
+
+void Viewport_window::draw_overdraw_legend(const Viewport_scene_view& viewport_scene_view, const ImVec2 rect_min, const ImVec2 rect_max)
+{
+    // The color ramp of res/editor/shaders/overdraw_visualize.frag (sRGB)
+    // and the newest retired frame's mean count over the covered pixels
+    // (doc/plans/overdraw_visualization.md O4).
+    static constexpr std::array<ImU32, 6> c_ramp{
+        IM_COL32(  0,   0,   0, 255),
+        IM_COL32( 13,  26, 140, 255),
+        IM_COL32( 26, 179,  38, 255),
+        IM_COL32(242, 230,  26, 255),
+        IM_COL32(255, 140,  13, 255),
+        IM_COL32(230,  20,  13, 255)
+    };
+    const uint32_t max_count = viewport_scene_view.get_overdraw_max_count();
+    const erhe::scene_renderer::Overdraw_statistics statistics = viewport_scene_view.get_overdraw_statistics();
+
+    ImDrawList* const draw_list = ImGui::GetWindowDrawList();
+    const float  font_size = ImGui::GetFontSize();
+    const float  swatch    = font_size;
+    const float  padding   = 0.5f * font_size;
+    const float  cell      = swatch + (1.5f * font_size);
+    const float  width     = (padding * 2.0f) + (cell * 7.0f);
+    const float  height    = (padding * 3.0f) + swatch + font_size;
+    const ImVec2 origin{rect_min.x + padding, rect_max.y - padding - height};
+    draw_list->AddRectFilled(origin, ImVec2{origin.x + width, origin.y + height}, IM_COL32(0, 0, 0, 160), 0.25f * font_size);
+
+    char label[32];
+    for (std::size_t i = 0; i < 7; ++i) {
+        const ImVec2 swatch_min{origin.x + padding + (static_cast<float>(i) * cell), origin.y + padding};
+        const ImU32  color = (i < c_ramp.size()) ? c_ramp[i] : IM_COL32(255, 255, 255, 255);
+        draw_list->AddRectFilled(swatch_min, ImVec2{swatch_min.x + swatch, swatch_min.y + swatch}, color);
+        draw_list->AddRect(swatch_min, ImVec2{swatch_min.x + swatch, swatch_min.y + swatch}, IM_COL32(128, 128, 128, 255));
+        if (i < c_ramp.size()) {
+            std::snprintf(label, sizeof(label), "%zu", i);
+        } else {
+            std::snprintf(label, sizeof(label), "%u+", static_cast<unsigned int>(max_count));
+        }
+        draw_list->AddText(ImVec2{swatch_min.x + swatch + (0.2f * font_size), swatch_min.y}, IM_COL32(255, 255, 255, 255), label);
+    }
+    char summary[96];
+    if (statistics.valid && (statistics.covered_pixel_count > 0)) {
+        const double mean = static_cast<double>(statistics.invocation_total) / static_cast<double>(statistics.covered_pixel_count);
+        std::snprintf(summary, sizeof(summary), "mean %.2f per covered pixel, max %u", mean, static_cast<unsigned int>(statistics.max_count));
+    } else {
+        std::snprintf(summary, sizeof(summary), "no counts yet");
+    }
+    draw_list->AddText(ImVec2{origin.x + padding, origin.y + (padding * 2.0f) + swatch}, IM_COL32(255, 255, 255, 255), summary);
+}
+
+void Viewport_window::set_rendergraph_output_node(const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node)
+{
+    m_rendergraph_output_node = rendergraph_output_node;
+}
 
 auto Viewport_window::viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>
 {
@@ -551,6 +608,9 @@ void Viewport_window::imgui_viewport()
 
         const ImVec2 rect_min = ImGui::GetItemRectMin();
         const ImVec2 rect_max = ImGui::GetItemRectMax();
+        if (viewport_scene_view->get_overdraw_mode() != Overdraw_mode::off) {
+            draw_overdraw_legend(*viewport_scene_view, rect_min, rect_max);
+        }
         viewport_scene_view->set_window_viewport(
             erhe::math::Viewport{
                 static_cast<int>(rect_min.x),

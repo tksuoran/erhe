@@ -101,9 +101,10 @@ Subcommands:
         result's host.config_state: the warmup replies of set_graphics_preset
         (the last one the calls made, else one without arguments, which
         re-applies the preset in effect), set_culling_classification,
-        set_occlusion_culling and set_light_cluster_binning without
-        arguments (pure queries), and, in the measured window,
-        get_light_cluster_stats and get_scene_lights of the loaded scene
+        set_occlusion_culling, set_light_cluster_binning and
+        set_content_draws without arguments (pure queries), and, in the
+        measured window, get_light_cluster_stats and get_scene_lights of the
+        loaded scene
         (the light shading in effect and the shaded / shadow-mapped lights).
 
         Quest state (host.device_state): adb snapshots before the launch, at
@@ -766,6 +767,7 @@ def warmup_config_state(port: int, warmup_replies: list) -> dict:
         "culling_classification": mcp_call(port, "set_culling_classification", {}),
         "occlusion_culling":      mcp_call(port, "set_occlusion_culling", {}),
         "light_cluster_binning":  mcp_call(port, "set_light_cluster_binning", {}),
+        "content_draws":          mcp_call(port, "set_content_draws", {}),
     }
 
 
@@ -1190,6 +1192,7 @@ def record_markdown(results: list) -> str:
     culling = state.get("culling_classification", {})
     occlusion = state.get("occlusion_culling", {})
     binning = state.get("light_cluster_binning", {})
+    content_draws = state.get("content_draws", {})
     rows = [
         ("Light shading (setting / in effect)", f"{preset.get('light_shading', '-')} / {light_shading_in_effect(state.get('light_cluster_stats'))}"),
         ("Lights", lights_text(state.get("scene_lights"))),
@@ -1206,6 +1209,7 @@ def record_markdown(results: list) -> str:
         ("Light cluster binning", binning.get("mode", "-") if isinstance(binning, dict) else "-"),
         ("Culling classification", (culling.get("mode", "-") + supported_text(culling)) if isinstance(culling, dict) else "-"),
         ("Occlusion culling", (("on" if occlusion.get("enabled") else "off") + supported_text(occlusion)) if isinstance(occlusion, dict) and ("enabled" in occlusion) else "-"),
+        ("Content draws", content_draws.get("mode", "-") if isinstance(content_draws, dict) else "-"),
         ("Draw lists", ("on" if preset.get("use_draw_lists") else "off") if "use_draw_lists" in preset else "-"),
         ("Specular anti-aliasing", preset.get("specular_anti_aliasing", "-")),
         ("Preset", preset.get("preset_name", "-")),

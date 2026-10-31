@@ -188,4 +188,41 @@
 #define ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE        3
 #define ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY 4
 
+// Material_blending_mode enum values. Keep in sync with
+// erhe::primitive::Material_blending_mode. The fragment shader branches
+// on ERHE_MATERIAL_BLENDING_MODE to pick the per-fragment output policy:
+//   OPAQUE      -> straight color, alpha = 1.
+//   ALPHA_BLEND -> premultiplied color + opacity in alpha (blend state
+//                  must enable premultiplied alpha).
+//   MULTIPLY    -> lit color (clamped); blend state does dst * src.
+//   ADD         -> lit color; blend state adds onto framebuffer.
+//   SUBTRACT    -> lit color; blend state does reverse subtract.
+//   SCREEN_DOOR -> Bayer 4x4 dithered discard against sampled alpha;
+//                  blend stays disabled.
+//   ALPHA_TEST  -> hard discard when sampled alpha < material.alpha_cutoff;
+//                  blend stays disabled.
+#define ERHE_MATERIAL_BLENDING_MODE_OPAQUE       0
+#define ERHE_MATERIAL_BLENDING_MODE_ALPHA_BLEND  1
+#define ERHE_MATERIAL_BLENDING_MODE_MULTIPLY     2
+#define ERHE_MATERIAL_BLENDING_MODE_ADD          3
+#define ERHE_MATERIAL_BLENDING_MODE_SUBTRACT     4
+#define ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR  5
+#define ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST   6
+
+// Overdraw_count enum values. Keep in sync with
+// erhe::scene_renderer::Overdraw_count. The ERHE_OVERDRAW axis selects the
+// counting of erhe_overdraw.glsl (0: none).
+#define ERHE_OVERDRAW_SHADED     1
+#define ERHE_OVERDRAW_RASTERIZED 2
+
+// ERHE_FRAGMENT_MAY_DISCARD is a derived gate: standard.frag of this key can
+// discard (the alpha-test / screen-door discard of the lit path). The
+// overdraw variants key their early fragment tests on it
+// (erhe_overdraw.glsl).
+#if !defined(ERHE_VARIANT_POSITION_PASS) && \
+    ((ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST) || \
+     (ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR))
+#  define ERHE_FRAGMENT_MAY_DISCARD 1
+#endif
+
 #endif // ERHE_STANDARD_VARIANT_GLSL

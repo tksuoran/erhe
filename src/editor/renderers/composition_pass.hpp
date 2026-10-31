@@ -180,6 +180,10 @@ public:
     std::size_t                                        mesh_count        {0};
     bool                                               use_wide_lines    {false};
     bool                                               use_draw_lists    {false};
+    // Not off: the pass's meshes draw with these overdraw variants, which
+    // count into the view's overdraw count buffer (Render_context::overdraw,
+    // counts_overdraw()).
+    erhe::scene_renderer::Overdraw_count               overdraw          {erhe::scene_renderer::Overdraw_count::off};
     erhe::scene_renderer::Primitive_interface_settings primitive_settings{};
     // The fullscreen passes' camera UBO inputs: the grid's from the view's
     // render state (Grid::render(), per view), the sky's from the pass data
@@ -203,6 +207,12 @@ public:
     // set with cull_view by the same hook); none: CPU-written commands.
     erhe::scene_renderer::Command_selection_id         command_selection {erhe::scene_renderer::Command_selection_id::none};
 };
+
+// Whether a pass counts overdraw in a view with the overdraw mode on
+// (doc/plans/overdraw_visualization.md O2): the content layer passes that
+// draw with the standard shaders. The depth-only and ID variants of such a
+// pass are not counted (bucket_primitives()).
+[[nodiscard]] auto counts_overdraw(const Composition_pass_data& data) -> bool;
 
 // The draw-list path's blending selection of a pass's
 // Blending_mode_policy (Composition_pass::prepare() routes only the

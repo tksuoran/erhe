@@ -258,7 +258,7 @@ Each phase lands on its own, verified, before the next starts.
    Done: `Gpu_cull_classifier` (device-wide: the pipeline of
    `res/shaders/cull_classify.comp`, ring buffer clients) and the
    `Draw_list_scene` GPU half (`draw_list_scene_gpu_cull.cpp`), gated by the
-   editor setting `culling_classification` (`cpu` default, `gpu`; Settings
+   editor setting `culling_classification` (`gpu` default, `cpu`; Settings
    window, MCP `set_culling_classification`), which reaches `publish()`
    through the frame's `Render_settings` snapshot and is recorded in the
    published slot; the device capability is native multi-draw indirect plus

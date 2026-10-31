@@ -42,7 +42,7 @@ the task's state; `prompt_queue.txt` only points here.
   (`Device_info::use_draw_indirect_count`); check the device's startup log
   lines "Record indexing" and the classifier capability message before
   assuming either path. The `culling_classification` setting defaults to
-  cpu.
+  gpu (a device without the GPU path classifies on the CPU).
 - `Shadow_renderer::fit` is the largest render-phase CPU item on the desktop
   after culling (Release heavy about 1 ms; Debug 27 ms); on the Quest CPU it
   will weigh more. The phase-timing log shows it inside R.
@@ -237,8 +237,11 @@ Rules of the sweep:
   frame); the XR counter's app GPU frame time leaves them out.
 - The Bench sun's shadow map is cached in the measured window (static
   scene and light), so these runs measure shading, not shadow drawing.
-- The APK on the device is the 2026-10-27 build (296a0a3fd); the record
-  names the build of each entry, and entries compare only at the same build
+- The runs up to 09:16 used the 2026-10-27 build (stamped
+  296a0a3fd-dirty), the 13:54 and 13:55 runs a build with the content
+  draws switch (stamped e47cfd98c-dirty, a hash from before a history
+  rewrite; that code is in the commit that added `set_content_draws`). The
+  record names the build of each entry, and entries compare only at the same build
   and `input_hash`.
 
 Measured so far (XR multiview, single directional light unless named): 43
@@ -289,6 +292,25 @@ What the render stages and counters show about the eye pass:
 - The single light run drew the 1024 px shadow map twice in 4 s (D16
   surface) although the record reports it cached.
 
+Cost of the alpha-tested (discarding) and translucent draws: the single
+light with gpu culling classification and occlusion culling, content draws
+`all` against `opaque_only` (`set_content_draws`; the alpha-tested and
+translucent content passes draw nothing), one run each at the same build
+and `input_hash` (2026-10-29 13:54 and 13:55 in the run record):
+
+| Content draws | Binning | Bin rendering | XR multiview | App GPU, XR counter | fps | Fragments / frame | Vertices / frame | ALU / fragment |
+|---|---|---|---|---|---|---|---|---|
+| all | 10.6 | 30.3 | 45.7 | 42.3 | 21.3 | 30.3 M | 4.24 M | 97 |
+| opaque_only | 8.7 | 21.2 | 34.1 | 31.4 | 28.4 | 28.4 M | 3.01 M | 80 |
+
+The alpha-tested and translucent draws cost about 11.6 ms of the 45.7 ms
+eye pass (25 %): 1.9 ms of binning (29 % of the shaded vertices) and 9.1 ms
+of bin rendering, although they add only 6 % of the shaded fragments. Their
+fragments cost more each (ALU / fragment 97 against 80 without them), and a
+discarding draw is shaded without early depth rejection. The fragment and
+vertex counts per frame are the device-wide Perfetto rates divided by the
+frame rate.
+
 Next configurations, in order:
 
 1. The shadow pass: the single light with the shadow map cache off
@@ -296,7 +318,8 @@ Next configurations, in order:
 2. The ~41 ms single-light app work: the specular anti-aliasing mode and
    `use_draw_lists` off, one at a time; then the binning half (geometry:
    vertex fetch, vertex shader storage reads) and the fragment count
-   (depth prepass or front-to-back order).
+   (depth prepass or front-to-back order), measured on the desktop with
+   the overdraw view ([overdraw_visualization.md](overdraw_visualization.md)).
 3. CPU / GPU performance levels raised (the 456 MHz cap): whether the frame
    scales with the GPU clock.
 

@@ -1,0 +1,72 @@
+// Overdraw statistics (doc/plans/overdraw_visualization.md O5): reduces a
+// view's per-pixel fragment shader invocation counts (overdraw_count, written
+// by the ERHE_OVERDRAW variants, erhe_overdraw.glsl) into a histogram
+// and totals.
+//
+// overdraw_reduce_input.header = pixel count, 0, 0, 0
+// overdraw_reduce_counts.counts[pixel] = invocations at the pixel
+// overdraw_reduce_result.values (zeroed by the host, accumulated here):
+//   [0] = sum of the counts (invocations total)
+//   [1] = largest count
+//   [2] = pixels with a count > 0
+//   [3] = 0
+//   [4 + n] = pixels with count n for n < ERHE_OVERDRAW_HISTOGRAM_LAST_BIN,
+//   [4 + ERHE_OVERDRAW_HISTOGRAM_LAST_BIN] = pixels with a larger count
+//
+// Each workgroup walks a grid-strided share of the pixels into a shared
+// histogram and adds it to the result once, so the global atomics are per
+// workgroup, not per pixel.
+
+layout(local_size_x = ERHE_OVERDRAW_REDUCE_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+const uint c_bin_count = ERHE_OVERDRAW_HISTOGRAM_LAST_BIN + 1u;
+
+shared uint s_histogram[c_bin_count];
+shared uint s_total;
+shared uint s_max;
+shared uint s_covered;
+
+void main()
+{
+    const uint local_index = gl_LocalInvocationID.x;
+    for (uint bin = local_index; bin < c_bin_count; bin += gl_WorkGroupSize.x) {
+        s_histogram[bin] = 0u;
+    }
+    if (local_index == 0u) {
+        s_total   = 0u;
+        s_max     = 0u;
+        s_covered = 0u;
+    }
+    barrier();
+
+    const uint pixel_count  = overdraw_reduce_input.header.x;
+    const uint stride       = gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+    uint       local_total  = 0u;
+    uint       local_max    = 0u;
+    uint       local_covered = 0u;
+    for (uint pixel = gl_GlobalInvocationID.x; pixel < pixel_count; pixel += stride) {
+        const uint count = overdraw_reduce_counts.counts[pixel];
+        local_total += count;
+        local_max    = max(local_max, count);
+        if (count > 0u) {
+            ++local_covered;
+        }
+        atomicAdd(s_histogram[min(count, ERHE_OVERDRAW_HISTOGRAM_LAST_BIN)], 1u);
+    }
+    atomicAdd(s_total,   local_total);
+    atomicMax(s_max,     local_max);
+    atomicAdd(s_covered, local_covered);
+    barrier();
+
+    for (uint bin = local_index; bin < c_bin_count; bin += gl_WorkGroupSize.x) {
+        const uint value = s_histogram[bin];
+        if (value != 0u) {
+            atomicAdd(overdraw_reduce_result.values[4u + bin], value);
+        }
+    }
+    if (local_index == 0u) {
+        atomicAdd(overdraw_reduce_result.values[0], s_total);
+        atomicMax(overdraw_reduce_result.values[1], s_max);
+        atomicAdd(overdraw_reduce_result.values[2], s_covered);
+    }
+}

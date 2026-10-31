@@ -491,17 +491,27 @@ App_rendering::App_rendering(
     // one, so the outline below masks against these meshes too. The edge
     // line passes above keep their place: content drawn after them covers
     // their pixels, as the translucent passes do.
+    //
+    // The alpha-tested and translucent content passes draw only while the
+    // session's content draws are all (renderers/content_draws.hpp);
+    // opaque_only leaves them out in every view to measure their cost.
+    const auto all_content_draws = [](const Render_context& context) -> bool {
+        return context.app_context.render_settings->content_draws == Content_draws::all;
+    };
+
     const std::shared_ptr<Composition_pass> alpha_tested_content_fill_not_selected = make_composition_pass(
         "Content fill alpha tested not selected",
         content_fill_not_selected,
         erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only
     );
+    alpha_tested_content_fill_not_selected->data.is_enabled = all_content_draws;
 
     const std::shared_ptr<Composition_pass> alpha_tested_content_fill_selected_or_hovered = make_composition_pass(
         "Content fill alpha tested selected",
         content_fill_selected_or_hovered,
         erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only
     );
+    alpha_tested_content_fill_selected_or_hovered->data.is_enabled = all_content_draws;
 
     // The raster occlusion test (doc/plans/occlusion_culling.md): right
     // after the last passes that write depth (the opaque and alpha-tested
@@ -590,12 +600,14 @@ App_rendering::App_rendering(
         content_fill_not_selected,
         erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only
     );
+    translucent_content_fill_not_selected->data.is_enabled = all_content_draws;
 
     auto translucent_content_fill_selected_or_hovered = make_composition_pass(
         "Content fill translucent selected",
         content_fill_selected_or_hovered,
         erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only
     );
+    translucent_content_fill_selected_or_hovered->data.is_enabled = all_content_draws;
 
     auto brush = make_composition_pass(
         "Brush",

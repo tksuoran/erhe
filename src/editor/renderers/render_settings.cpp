@@ -43,6 +43,7 @@ void Render_settings::snapshot(const Editor_settings_config& editor_settings, co
     shadow_map_cache                 = app_settings.shadow_map_cache_session;
     shadow_fit_cache                 = app_settings.shadow_fit_cache_session;
     headset_culling                  = app_settings.headset_culling_session;
+    content_draws                    = app_settings.content_draws_session;
 }
 
 void Render_settings_frames::initialize(erhe::graphics::Device& device)

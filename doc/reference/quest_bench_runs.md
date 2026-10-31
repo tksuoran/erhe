@@ -349,3 +349,147 @@ Quest state per run (temperatures: thermal HAL maximum per type at the start of 
 |---|---|---|---|---|---|---|---|---|---|---|
 | 0 | 13.69 | 0 -> 0; 0 -> 0, step-downs 0 | 57.6 -> 58.2 | 57.5 -> 57.6 | 57.0 -> 57.1 | 40.0, 94 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1651 cap 1651/2362 | 456 cap 456 | 99 | 18.4 |
 
+
+## 2026-10-29 13:54 - bistro, single_directional_loops_gpu_occlusion
+
+As single_directional_loops, with culling classification gpu and occlusion culling on.
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 72.0 Hz, input_hash c4294da4554d34d5; results `20261029_135401_bistro_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (e47cfd98c-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro.json --no-scene`; scene `bistro_quest.glb` (listed 4.17 s, idle 4.56 s).
+- Configuration calls: set_culling_classification, set_occlusion_culling, set_graphics_preset, create_light, set_node_transform (arguments in the result files' `host` block).
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | loops / loops (Headset) |
+| Lights | directional 1/1 shaded, 1 shadow-mapped (1 cached); point 0/33 shaded, 0 shadow-mapped (0 cached); spot 0/10 shaded, 0 shadow-mapped (0 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+0, spot 0+0, point 0+0 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 21.33 |
+| Frame wall time (ms) | 46.81 |
+| M2 / R / M3 (ms) | 0.69 / 4.85 / 0.60 |
+| App GPU frame time, XR counter (ms) | 42.33 |
+| GPU utilization, XR counter (%) | 99.0 |
+| CPU utilization average / worst, XR counter (%) | 9.9 / 12.0 |
+| GPU pass Cull classification (ms) | 0.024 |
+| GPU pass Cull command generation (ms) | 0.069 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Shadow 0 (ms) | 0.000 |
+| GPU pass XR multiview (ms) | 45.703 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 45.888 |
+
+Perfetto capture (metavr perf capture, GPU render stages + Adreno counters, in the measured window); the surface with the most GPU time, medians per surface (ms):
+
+| Run | Surface | Surfaces | Duration | Binning | Bin rendering | Preempted | Rendered bins | Trace |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 1680x1760 color 64 bpp depth 24 bpp MSAA 1 HwVizBinning bins 24 | 83 | 46.12 | 10.62 | 30.26 | 3.74 | 17 | `20261029_135401_bistro_0` |
+
+| Counter (mean over the capture) | Run 0 |
+|---|---|
+| % Time Shading Fragments | 79.13 |
+| % Time Shading Vertices | 20.7 |
+| % Shaders Busy | 63.11 |
+| % Shader ALU Capacity Utilized | 20.69 |
+| % Vertex Fetch Stall | 52.47 |
+| % Texture Fetch Stall | 3.739 |
+| % Stalled on System Memory | 0.436 |
+| ALU / Fragment | 96.93 |
+| ALU / Vertex | 145.1 |
+| Fragments Shaded / Second | 6.454e+08 |
+| Vertices Shaded / Second | 9.053e+07 |
+| Pre-clipped Polygons/Second | 1.087e+08 |
+| Average Polygon Area | 18.25 |
+| % Prims Trivially Rejected | 13.2 |
+| Textures / Fragment | 2.799 |
+| Textures / Vertex | 9.288 |
+| GPU Frequency | 4.56e+08 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 21.33 | 0 -> 0; 0 -> 0, step-downs 0 | 57.4 -> 59.3 | 56.9 -> 58.7 | 55.1 -> 57.8 | 31.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1651 cap 1651/2362 | 456 cap 456 | 98 | 21.7 |
+
+
+## 2026-10-29 13:55 - bistro, single_directional_loops_gpu_occlusion_opaque_only
+
+As single_directional_loops_gpu_occlusion, with content draws opaque_only (the alpha-tested and translucent passes draw nothing).
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 72.0 Hz, input_hash c4294da4554d34d5; results `20261029_135553_bistro_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (e47cfd98c-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro.json --no-scene`; scene `bistro_quest.glb` (listed 4.69 s, idle 4.69 s).
+- Configuration calls: set_culling_classification, set_occlusion_culling, set_content_draws, set_graphics_preset, create_light, set_node_transform (arguments in the result files' `host` block).
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | loops / loops (Headset) |
+| Lights | directional 1/1 shaded, 1 shadow-mapped (1 cached); point 0/33 shaded, 0 shadow-mapped (0 cached); spot 0/10 shaded, 0 shadow-mapped (0 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+0, spot 0+0, point 0+0 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | opaque_only |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 28.36 |
+| Frame wall time (ms) | 35.08 |
+| M2 / R / M3 (ms) | 0.69 / 4.64 / 0.60 |
+| App GPU frame time, XR counter (ms) | 31.36 |
+| GPU utilization, XR counter (%) | 98.8 |
+| CPU utilization average / worst, XR counter (%) | 13.0 / 14.7 |
+| GPU pass Cull classification (ms) | 0.024 |
+| GPU pass Cull command generation (ms) | 0.065 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Shadow 0 (ms) | 0.000 |
+| GPU pass XR multiview (ms) | 34.121 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 34.267 |
+
+Perfetto capture (metavr perf capture, GPU render stages + Adreno counters, in the measured window); the surface with the most GPU time, medians per surface (ms):
+
+| Run | Surface | Surfaces | Duration | Binning | Bin rendering | Preempted | Rendered bins | Trace |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 1680x1760 color 64 bpp depth 24 bpp MSAA 1 HwVizBinning bins 24 | 110 | 34.52 | 8.72 | 21.22 | 3.03 | 17 | `20261029_135553_bistro_0` |
+
+| Counter (mean over the capture) | Run 0 |
+|---|---|
+| % Time Shading Fragments | 79.47 |
+| % Time Shading Vertices | 20.3 |
+| % Shaders Busy | 59.31 |
+| % Shader ALU Capacity Utilized | 21.53 |
+| % Vertex Fetch Stall | 45.73 |
+| % Texture Fetch Stall | 3.784 |
+| % Stalled on System Memory | 0.5378 |
+| ALU / Fragment | 80.3 |
+| ALU / Vertex | 137.5 |
+| Fragments Shaded / Second | 8.065e+08 |
+| Vertices Shaded / Second | 8.546e+07 |
+| Pre-clipped Polygons/Second | 1.157e+08 |
+| Average Polygon Area | 24.61 |
+| % Prims Trivially Rejected | 14.53 |
+| Textures / Fragment | 2.089 |
+| Textures / Vertex | 8.959 |
+| GPU Frequency | 4.56e+08 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 28.36 | 0 -> 0; 0 -> 0, step-downs 0 | 55.3 -> 55.7 | 54.8 -> 54.6 | 54.1 -> 53.9 | 33.0, 100 % | cpu 0 1: 1920 [1382..1920] cap 1382/2054; cpu 2 3 4 5: 1651 [1651..2362] cap 1651/2362 | 456 [456..492] cap 456 | 98 | 23.3 |
+
