@@ -194,6 +194,19 @@ Release APKs are signed with the auto-generated debug keystore so they can be
 `android-project/app/build.gradle` and is **not** suitable for store
 submission - replace it with a real `signingConfig` before publishing.
 
+The debug keystore is per machine (`~/.android/debug.keystore`, created by
+the first build), so APKs from two build machines carry different
+signatures. Installing over a copy that another machine built fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package org.libsdl.app.quest
+signatures do not match`. Either `adb uninstall org.libsdl.app.quest` first,
+which deletes the app's data including the external files directory with
+pushed scenes and benchmark results (`adb pull` it first when it holds
+anything needed), or copy one machine's `debug.keystore` to the others so
+every machine signs alike. `apksigner verify --print-certs <apk>` (in
+`$ANDROID_HOME/build-tools/<version>/`) prints a signer's SHA-256 digest
+for comparing an installed APK (`adb shell pm path org.libsdl.app.quest`,
+then `adb pull`) with a local build.
+
 When both a phone and a Quest are attached, pass `-s <serial>` so adb knows
 which device to talk to.
 
