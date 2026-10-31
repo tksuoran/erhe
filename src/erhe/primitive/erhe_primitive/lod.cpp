@@ -38,6 +38,8 @@ constexpr float       error_growth        = 1.5f;
 constexpr float       min_relative_error  = 1.0e-6f;
 
 constexpr uint32_t    no_vertex           = 0xffffffffu;
+// Texcoord channel 2 holds the lightmap UVs (erhe::geometry c_texcoord_2).
+constexpr std::size_t lightmap_texcoord_channel = 2;
 
 [[nodiscard]] auto read_as_vec4(
     std::span<const std::span<const uint8_t>> streams,
@@ -185,7 +187,12 @@ auto extract_lod_vertex_data(
             if (
                 ((usage == Vertex_attribute_usage::position) && (key_attribute.usage_index == 0)) ||
                 (usage == Vertex_attribute_usage::normal)    ||
-                (usage == Vertex_attribute_usage::bitangent)
+                (usage == Vertex_attribute_usage::bitangent) ||
+                // Lightmap UVs are charted per facet (a seam at every
+                // vertex): as a seam attribute they would weld nothing and
+                // lock every edge. LOD levels do not keep them consistent;
+                // lightmapped LODs are handled separately.
+                ((usage == Vertex_attribute_usage::tex_coord) && (key_attribute.usage_index == lightmap_texcoord_channel))
             ) {
                 continue;
             }
@@ -333,13 +340,20 @@ auto generate_lod_chain(
         (!vertices.colors.empty()  && (vertices.colors.size()  != 4 * vertex_count)) ||
         (vertices.seam_attributes.size() != vertices.seam_attribute_stride * vertex_count) ||
         (!vertices.joint_indices.empty() && (vertices.joint_indices.size() != 4 * vertex_count)) ||
-        (!vertices.joint_weights.empty() && (vertices.joint_weights.size() != 4 * vertex_count)) ||
-        (level_count < 2)
+        (!vertices.joint_weights.empty() && (vertices.joint_weights.size() != 4 * vertex_count))
     ) {
+        log_primitive->warn(
+            "LOD chain: no levels generated: invalid input ({} vertices, {} indices, attribute sizes do not match the vertex count)",
+            vertex_count, indices.size()
+        );
         return result;
+    }
+    if (level_count < 2) {
+        return result; // only level 0 was asked for
     }
     for (const uint32_t index : indices) {
         if (index >= vertex_count) {
+            log_primitive->warn("LOD chain: no levels generated: index {} out of range ({} vertices)", index, vertex_count);
             return result;
         }
     }
@@ -503,6 +517,9 @@ auto generate_lod_chain(
     // 5. The chain, each level from the previous one.
     std::vector<uint32_t> destination;
     float previous_relative_error = 0.0f;
+    // Why level 1 was not generated, for the warning below.
+    std::size_t first_step_target_index_count = 0;
+    std::size_t first_step_result_index_count = 0;
     for (std::size_t level = 1; level < level_count; ++level) {
         const std::size_t input_index_count = current.size();
         if (input_index_count <= min_index_count) {
@@ -549,6 +566,10 @@ auto generate_lod_chain(
                 result_index_count = sloppy_index_count;
                 step_error         = sloppy_error;
             }
+        }
+        if (level == 1) {
+            first_step_target_index_count = target_index_count;
+            first_step_result_index_count = result_index_count;
         }
         if (
             (result_index_count == 0) ||
@@ -597,6 +618,67 @@ auto generate_lod_chain(
         );
         previous_relative_error = relative_error;
         std::swap(current, destination);
+    }
+
+    if (result.levels.empty()) {
+        // Distinct positions: when far fewer than the simplification vertices,
+        // seam attributes split coincident vertices apart (each split is a
+        // seam the simplifier keeps).
+        std::unordered_map<std::vector<float>, uint32_t, Float_run_hash, Float_run_equal> distinct_positions;
+        std::vector<float> key;
+        for (std::size_t weld = 0; weld < weld_count; ++weld) {
+            key.assign(weld_positions.begin() + static_cast<std::ptrdiff_t>(3 * weld), weld_positions.begin() + static_cast<std::ptrdiff_t>(3 * (weld + 1)));
+            distinct_positions.emplace(key, 0u);
+        }
+        // What splits coincident vertices: per seam float, how many vertices
+        // differ from the first vertex at their position; and how many differ
+        // by more than normal_merge_angle in their normal.
+        std::unordered_map<std::vector<float>, uint32_t, Float_run_hash, Float_run_equal> first_at_position;
+        const std::size_t seam_stride = vertices.seam_attribute_stride;
+        std::vector<std::size_t> seam_differs(seam_stride, 0);
+        std::size_t normal_differs = 0;
+        for (std::size_t vertex = 0; vertex < vertex_count; ++vertex) {
+            if (!referenced[vertex]) {
+                continue;
+            }
+            key.assign(vertices.positions.begin() + static_cast<std::ptrdiff_t>(3 * vertex), vertices.positions.begin() + static_cast<std::ptrdiff_t>(3 * (vertex + 1)));
+            const auto [it, inserted] = first_at_position.emplace(key, static_cast<uint32_t>(vertex));
+            if (inserted) {
+                continue;
+            }
+            const std::size_t first = it->second;
+            for (std::size_t c = 0; c < seam_stride; ++c) {
+                if (vertices.seam_attributes[(seam_stride * vertex) + c] != vertices.seam_attributes[(seam_stride * first) + c]) {
+                    ++seam_differs[c];
+                }
+            }
+            if (!vertices.normals.empty()) {
+                const glm::vec3 a = safe_normalize(get_vec3(vertices.normals, vertex));
+                const glm::vec3 b = safe_normalize(get_vec3(vertices.normals, first));
+                if (glm::dot(a, b) < cos_merge_angle) {
+                    ++normal_differs;
+                }
+            }
+        }
+        std::string seam_report;
+        for (std::size_t c = 0; c < seam_stride; ++c) {
+            seam_report += fmt::format("{}{}", (c > 0) ? " " : "", seam_differs[c]);
+        }
+        log_primitive->warn(
+            "LOD chain: coincident vertices differing per seam float (in format order) [{}], by normal beyond {} degrees: {}",
+            seam_report, settings.normal_merge_angle, normal_differs
+        );
+        log_primitive->warn(
+            "LOD chain: no levels generated: {} triangles, {} vertices -> {} simplification vertices at {} distinct positions "
+            "({} seam floats per vertex); first step reached {} of target {} indices (stop at >= {:.0f}% of the input or <= {} indices); "
+            "border {}, seams {}, fallback {}",
+            indices.size() / 3, vertex_count, weld_count, distinct_positions.size(),
+            vertices.seam_attribute_stride,
+            first_step_result_index_count, first_step_target_index_count, 100.0f * min_reduction_ratio, min_index_count,
+            (settings.border   == Lod_border::locked)     ? "locked"     : "free",
+            (settings.seams    == Lod_seams::permissive)  ? "permissive" : "keep",
+            (settings.fallback == Lod_fallback::sloppy)   ? "sloppy"     : "none"
+        );
     }
 
     const std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();

@@ -311,7 +311,7 @@ void deferred_finalize_mesh_items(
         // 2000-instance stage: 4.1 million queued draw list operations and
         // 99 s in one flush).
         context.scene_commit_queue->enqueue(
-            [scene_mesh, mesh_primitives = std::move(mesh_primitives), lod_shapes = std::move(lod_shapes)]()
+            [scene_mesh, mesh_primitives = std::move(mesh_primitives), lod_shapes = std::move(lod_shapes), lod_rebuild = std::move(lod_rebuild)]()
             {
                 ERHE_PROFILE_SCOPE("deferred finalize commit");
                 Scene_root* const scene_root = static_cast<Scene_root*>(scene_mesh->get_item_host());
@@ -374,6 +374,16 @@ void deferred_finalize_mesh_items(
                         // re-register below; the hold rule applies as above.
                         primitive.publish_optimized_render_shape(lod_shapes[primitive_index]);
                         swapped_a_shape = true;
+                    }
+                    // A LOD request that ends without levels is reported; the
+                    // erhe.primitive warning before this says why.
+                    if (lod_rebuild[primitive_index] != Lod_rebuild::none) {
+                        const std::shared_ptr<erhe::primitive::Primitive_render_shape>& variant = primitive.optimized_render_shape;
+                        if (!variant) {
+                            log_operations->warn("LOD generation: '{}' primitive {} has no optimized variant after the rebuild", scene_mesh->get_name(), primitive_index);
+                        } else if (variant->get_renderable_mesh().lod_chain.is_empty()) {
+                            log_operations->warn("LOD generation: '{}' primitive {} got no LOD levels", scene_mesh->get_name(), primitive_index);
+                        }
                     }
                 }
                 if (scene_root == nullptr) {
