@@ -57,3 +57,14 @@ the view's pixels per world unit (constant across an orthographic view, already
 available as `fwidth(uv)`), and the label spacing steps through the grid LOD
 levels so neighbouring labels keep a minimum screen distance. Perspective
 views keep the world-space size.
+
+## Selection stencil masks hide the sky
+
+With the selection polygon fill off, or for a selected `proxy_hidden`
+source, the selection stencil masks (`doc/editor/rendering.md` passes 5-8,
+18-19) write depth as well as stencil bit 7, so the sky pass does not draw
+behind the masked silhouette and those pixels stay black; a proxy shows
+black slivers where the mask's LOD level differs from the full-detail proxy.
+The masks need stencil only: a depth test without depth writes (or a mask
+drawn after the sky) keeps the sky. Found 2026-10-31 (selection outline
+step 3); the bucket-path masks before it behaved the same.
