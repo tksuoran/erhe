@@ -15,6 +15,8 @@ erhe_target_sources_grouped(
     erhe_primitive/buffer_writer.hpp
     erhe_primitive/build_info.cpp
     erhe_primitive/build_info.hpp
+    erhe_primitive/edge_line_vertex.cpp
+    erhe_primitive/edge_line_vertex.hpp
     erhe_primitive/enums.hpp
     erhe_primitive/format_info.cpp
     erhe_primitive/format_info.hpp

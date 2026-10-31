@@ -283,6 +283,8 @@ auto Mcp_server::query_lod_info(const json& args) -> std::string
                         {"first_index",    lod_level.index_range.first_index},
                         {"index_count",    lod_level.index_range.index_count},
                         {"triangle_count", lod_level.index_range.get_triangle_count()},
+                        // Levels > 0; level 0 draws the original variant's edge lines.
+                        {"edge_count",     lod_level.edge_line_vertex_range.count / 2},
                         {"error",          lod_level.error}
                     });
                 }

@@ -46,6 +46,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   key carries a debug mode). `SHADER_DEBUG != 0` no longer counts as reading
   the per-pass record fields: `standard.vert` / `standard.frag` drop the
   unread `v_line_width` varying.
+- `erhe::primitive`: per-level LOD edge lines. `Lod_level::edge_line_vertex_range`
+  and `edge_line_joint_range`; `Lod_chain_indices::edge_line_vertex_data`,
+  `edge_line_joint_data`, `Level::first_edge_line_vertex`,
+  `Level::edge_line_vertex_count` and `get_edge_line_vertex_count()`;
+  `build_lod_edge_lines()`, `allocate_lod_edge_lines()`,
+  `enqueue_lod_edge_lines()`; `edge_line_vertex.hpp`
+  (`write_edge_line_endpoints()`, `Edge_line_face`, the edge-line endpoint
+  and joint layout sizes). `make_lod_chain()` takes the edge-line
+  allocations' ranges.
 - `erhe::scene`: mesh level of detail control (`lod.hpp`): the attached value
   group `Lod` (`Lod.apply_lod` key; `mode`, `forced_level`, `bias`,
   `min_level`, `max_level`), `Lod_mode`, `c_lod_mode_enum_info`, `Lod_data`,

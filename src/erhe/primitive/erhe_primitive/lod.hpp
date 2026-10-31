@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_primitive/buffer_range.hpp"
 #include "erhe_primitive/index_range.hpp"
 
 #include <array>
@@ -13,11 +14,17 @@ namespace erhe::dataformat { class Vertex_format; }
 
 namespace erhe::primitive {
 
+class Buffer_info;
+class Buffer_mesh;
+
 // Mesh level of detail (doc/erhe/meshoptimizer_integration.md "Level of
 // detail"). A LOD chain is a list of index ranges into the optimized
 // variant's vertex buffer: level 0 is the optimized fill range, level i > 0 a
 // simplification of level i - 1 over the same vertices, stored in the same
-// index allocation. No level has vertices of its own.
+// index allocation. A level i > 0 also owns its edge lines: edge-line
+// vertices (and joint side data when skinned) built from its triangles, in
+// the optimized variant's edge-line allocations. Level 0's edge lines are the
+// original variant's.
 
 // Level 0 included.
 static constexpr std::size_t max_lod_levels = 8;
@@ -81,10 +88,16 @@ public:
 class Lod_level
 {
 public:
-    Index_range index_range{};
+    Index_range  index_range{};
     // Object space error of this level (meshoptimizer's relative error times
     // meshopt_simplifyScale()). 0 for level 0; strictly increasing.
-    float       error{0.0f};
+    float        error{0.0f};
+    // The level's edge lines (levels > 0; build_lod_edge_lines()): two
+    // edge-line vertices per edge, and the matching joint side data when the
+    // mesh is skinned. Empty for level 0, whose edge lines are the original
+    // variant's, and when the build had no edge-line stream.
+    Buffer_range edge_line_vertex_range{};
+    Buffer_range edge_line_joint_range {};
 };
 
 // The levels of one optimized Buffer_mesh. Empty (level_count == 0) when no
@@ -169,6 +182,10 @@ public:
         std::size_t first_index{0}; // into `indices`
         std::size_t index_count{0};
         float       error      {0.0f};
+        // Into edge_line_vertex_data / edge_line_joint_data, in endpoints
+        // (two per edge); set by build_lod_edge_lines().
+        std::size_t first_edge_line_vertex{0};
+        std::size_t edge_line_vertex_count{0};
     };
 
     [[nodiscard]] auto is_empty() const -> bool { return levels.empty(); }
@@ -176,6 +193,14 @@ public:
     std::vector<uint32_t> indices; // levels 1.., back to back, into the input vertices
     std::vector<Level>    levels;  // at most max_lod_levels - 1
     float                 elapsed_seconds{0.0f};
+
+    // The levels' edge lines, back to back (build_lod_edge_lines()):
+    // edge_line_vertex_byte_size bytes per endpoint, and
+    // edge_line_joint_byte_size bytes per endpoint when the input is skinned
+    // (empty otherwise).
+    std::vector<uint8_t>  edge_line_vertex_data;
+    std::vector<uint8_t>  edge_line_joint_data;
+    [[nodiscard]] auto get_edge_line_vertex_count() const -> std::size_t;
 };
 
 // Generates levels 1.. of a LOD chain for the triangles `indices` over
@@ -198,9 +223,55 @@ public:
     const Lod_settings&       settings
 ) -> Lod_chain_indices;
 
+// Builds the edge lines of every level of `lod_indices` from the level's
+// triangles over `vertices`, appending them to its edge_line_vertex_data
+// (and edge_line_joint_data when `vertices` has joints). Every edge of the
+// level's triangles is written once, with the edges keyed by the positions
+// of their endpoints, so vertices split by attribute seams do not duplicate
+// an edge; each endpoint pair is packed by write_edge_line_endpoints() from
+// the edge's first two triangles (a boundary edge mirrors its one triangle).
+// An endpoint's joints are those of the first corner at its position over
+// the whole chain (vertices sharing a position share their joints). A
+// zero-area triangle is not a face: its edges are carried by its neighbours.
+void build_lod_edge_lines(const Lod_vertex_input& vertices, Lod_chain_indices& lod_indices);
+
+// The edge-line allocations of an optimized variant built with a chain, made
+// inside the variant's allocation transaction (the caller holds
+// buffer_mesh_allocation_mutex()): `lod_indices`' edge-line vertices from
+// buffer_info.edge_line_vertex_stream and, when it has joint data, its joint
+// side data from buffer_info.edge_line_joint_stream, held by
+// buffer_mesh.edge_line_vertex_allocation / edge_line_joint_allocation (an
+// optimized variant has no edge lines of its own, so these fields are free;
+// its edge_line_*_buffer_range stay empty). The whole allocations are
+// returned in `out_vertices` / `out_joints` for make_lod_chain(); empty when
+// there is nothing to allocate or no stream. False when an allocation fails.
+[[nodiscard]] auto allocate_lod_edge_lines(
+    Buffer_mesh&             buffer_mesh,
+    const Buffer_info&       buffer_info,
+    const Lod_chain_indices& lod_indices,
+    Buffer_range&            out_vertices,
+    Buffer_range&            out_joints
+) -> bool;
+
+// Moves `lod_indices`' edge-line data into the ranges allocate_lod_edge_lines()
+// returned (empty ranges enqueue nothing).
+void enqueue_lod_edge_lines(
+    const Buffer_info&  buffer_info,
+    Lod_chain_indices&  lod_indices,
+    const Buffer_range& vertices,
+    const Buffer_range& joints
+);
+
 // The chain of a Buffer_mesh whose index allocation holds level 0
-// (`level_0`) followed directly by `lod_indices.indices`.
-[[nodiscard]] auto make_lod_chain(const Index_range& level_0, const Lod_chain_indices& lod_indices) -> Lod_chain;
+// (`level_0`) followed directly by `lod_indices.indices`, and whose
+// edge-line allocations `edge_line_vertices` / `edge_line_joints` (empty when
+// not allocated) hold `lod_indices`' edge-line data back to back.
+[[nodiscard]] auto make_lod_chain(
+    const Index_range&       level_0,
+    const Lod_chain_indices& lod_indices,
+    const Buffer_range&      edge_line_vertices,
+    const Buffer_range&      edge_line_joints
+) -> Lod_chain;
 
 // Running totals over every chain log_lod_chain() has been called for.
 class Lod_totals

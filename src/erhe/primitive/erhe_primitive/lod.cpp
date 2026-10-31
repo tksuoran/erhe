@@ -1,5 +1,10 @@
 #include "erhe_primitive/lod.hpp"
 
+#include "erhe_primitive/buffer_info.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/buffer_sink.hpp"
+#include "erhe_primitive/edge_line_vertex.hpp"
+
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
@@ -686,12 +691,239 @@ auto generate_lod_chain(
     return result;
 }
 
-auto make_lod_chain(const Index_range& level_0, const Lod_chain_indices& lod_indices) -> Lod_chain
+auto Lod_chain_indices::get_edge_line_vertex_count() const -> std::size_t
+{
+    return edge_line_vertex_data.size() / edge_line_vertex_byte_size;
+}
+
+void build_lod_edge_lines(const Lod_vertex_input& vertices, Lod_chain_indices& lod_indices)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    lod_indices.edge_line_vertex_data.clear();
+    lod_indices.edge_line_joint_data.clear();
+    const std::size_t vertex_count = vertices.vertex_count;
+    if ((vertex_count == 0) || (vertices.positions.size() != 3 * vertex_count)) {
+        return;
+    }
+    const bool skinned = !vertices.joint_indices.empty() && (vertices.joint_indices.size() == 4 * vertex_count);
+
+    // Position id of every vertex a level references, shared by all levels:
+    // vertices that share their position bitwise share the id. The first
+    // vertex seen at a position represents it (its position and joints).
+    std::vector<uint32_t> position_of_vertex(vertex_count, no_vertex);
+    std::vector<uint32_t> position_vertex; // position id -> representative vertex
+    std::unordered_map<std::vector<float>, uint32_t, Float_run_hash, Float_run_equal> position_ids;
+    std::vector<float> key;
+    const auto get_position_id = [&](const uint32_t vertex) -> uint32_t {
+        uint32_t& id = position_of_vertex[vertex];
+        if (id == no_vertex) {
+            key.assign(vertices.positions.begin() + static_cast<std::ptrdiff_t>(3 * vertex), vertices.positions.begin() + static_cast<std::ptrdiff_t>(3 * (vertex + 1)));
+            const auto [it, inserted] = position_ids.emplace(key, static_cast<uint32_t>(position_vertex.size()));
+            if (inserted) {
+                position_vertex.push_back(vertex);
+            }
+            id = it->second;
+        }
+        return id;
+    };
+
+    class Edge
+    {
+    public:
+        uint32_t position_lo{0};
+        uint32_t position_hi{0};
+        uint32_t triangle[2]{no_vertex, no_vertex};
+        bool     walks_lo_to_hi[2]{false, false};
+    };
+    std::vector<Edge>                      edges;
+    std::unordered_map<uint64_t, uint32_t> edge_of_key;
+    std::vector<Edge_line_face>            faces;
+
+    const auto write_joints = [&](const uint32_t vertex) {
+        uint32_t joint_indices[4]{0u, 0u, 0u, 0u};
+        float    joint_weights[4]{1.0f, 0.0f, 0.0f, 0.0f};
+        for (std::size_t i = 0; i < 4; ++i) {
+            joint_indices[i] = static_cast<uint32_t>(std::lround(vertices.joint_indices[(4 * vertex) + i]));
+        }
+        if (vertices.joint_weights.size() == 4 * vertex_count) {
+            for (std::size_t i = 0; i < 4; ++i) {
+                joint_weights[i] = vertices.joint_weights[(4 * vertex) + i];
+            }
+        }
+        const std::size_t offset = lod_indices.edge_line_joint_data.size();
+        lod_indices.edge_line_joint_data.resize(offset + edge_line_joint_byte_size);
+        std::memcpy(lod_indices.edge_line_joint_data.data() + offset,                         joint_indices, sizeof(joint_indices));
+        std::memcpy(lod_indices.edge_line_joint_data.data() + offset + sizeof(joint_indices), joint_weights, sizeof(joint_weights));
+    };
+
+    for (Lod_chain_indices::Level& level : lod_indices.levels) {
+        level.first_edge_line_vertex = lod_indices.get_edge_line_vertex_count();
+        level.edge_line_vertex_count = 0;
+        edges.clear();
+        edge_of_key.clear();
+        faces.clear();
+        const std::span<const uint32_t> triangles{lod_indices.indices.data() + level.first_index, level.index_count};
+        for (std::size_t triangle = 0, end = triangles.size() / 3; triangle < end; ++triangle) {
+            const uint32_t corner_vertex[3] = {
+                triangles[(3 * triangle) + 0],
+                triangles[(3 * triangle) + 1],
+                triangles[(3 * triangle) + 2]
+            };
+            if ((corner_vertex[0] >= vertex_count) || (corner_vertex[1] >= vertex_count) || (corner_vertex[2] >= vertex_count)) {
+                continue;
+            }
+            const glm::vec3 p0 = get_vec3(vertices.positions, corner_vertex[0]);
+            const glm::vec3 p1 = get_vec3(vertices.positions, corner_vertex[1]);
+            const glm::vec3 p2 = get_vec3(vertices.positions, corner_vertex[2]);
+            // A zero-area triangle covers nothing and has no normal: its
+            // edges coincide with its neighbours', which carry the faces. As
+            // a face it would pack a zero normal with a non-zero sign, which
+            // the wide-line shader turns into a NaN ribbon.
+            const glm::vec3 area_normal = glm::cross(p1 - p0, p2 - p0);
+            if (glm::dot(area_normal, area_normal) == 0.0f) {
+                continue;
+            }
+            const uint32_t  face_index = static_cast<uint32_t>(faces.size());
+            faces.push_back(
+                Edge_line_face{
+                    .normal = glm::normalize(area_normal),
+                    .center = (p0 + p1 + p2) / 3.0f
+                }
+            );
+            for (std::size_t corner = 0; corner < 3; ++corner) {
+                const uint32_t from = get_position_id(corner_vertex[corner]);
+                const uint32_t to   = get_position_id(corner_vertex[(corner + 1) % 3]);
+                if (from == to) {
+                    continue; // a degenerate triangle's zero-length edge
+                }
+                const uint32_t lo       = std::min(from, to);
+                const uint32_t hi       = std::max(from, to);
+                const uint64_t edge_key = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+                const auto [it, inserted] = edge_of_key.emplace(edge_key, static_cast<uint32_t>(edges.size()));
+                if (inserted) {
+                    edges.push_back(Edge{.position_lo = lo, .position_hi = hi});
+                }
+                Edge& edge = edges[it->second];
+                const bool walks_lo_to_hi = (from == lo);
+                if (edge.triangle[0] == no_vertex) {
+                    edge.triangle[0]       = face_index;
+                    edge.walks_lo_to_hi[0] = walks_lo_to_hi;
+                } else if ((edge.triangle[1] == no_vertex) && (edge.triangle[0] != face_index)) {
+                    // (a triangle with two corners at one position walks an
+                    // edge twice; it is still one face)
+                    edge.triangle[1]       = face_index;
+                    edge.walks_lo_to_hi[1] = walks_lo_to_hi;
+                }
+            }
+        }
+
+        // Endpoint a is the edge's lower position id, so a face walks a -> b
+        // when it walks lo -> hi.
+        float endpoints[2 * edge_line_vertex_float_count];
+        for (const Edge& edge : edges) {
+            const uint32_t vertex_a   = position_vertex[edge.position_lo];
+            const uint32_t vertex_b   = position_vertex[edge.position_hi];
+            Edge_line_face face_a     = faces[edge.triangle[0]];
+            face_a.walks_a_to_b       = edge.walks_lo_to_hi[0];
+            Edge_line_face face_b{};
+            const bool     has_face_b = (edge.triangle[1] != no_vertex);
+            if (has_face_b) {
+                face_b              = faces[edge.triangle[1]];
+                face_b.walks_a_to_b = edge.walks_lo_to_hi[1];
+            }
+            write_edge_line_endpoints(
+                get_vec3(vertices.positions, vertex_a),
+                get_vec3(vertices.positions, vertex_b),
+                &face_a,
+                has_face_b ? &face_b : nullptr,
+                face_a.normal,
+                face_a.normal,
+                endpoints
+            );
+            const std::size_t offset = lod_indices.edge_line_vertex_data.size();
+            lod_indices.edge_line_vertex_data.resize(offset + (2 * edge_line_vertex_byte_size));
+            std::memcpy(lod_indices.edge_line_vertex_data.data() + offset, endpoints, 2 * edge_line_vertex_byte_size);
+            if (skinned) {
+                write_joints(vertex_a);
+                write_joints(vertex_b);
+            }
+        }
+        level.edge_line_vertex_count = 2 * edges.size();
+    }
+}
+
+auto allocate_lod_edge_lines(
+    Buffer_mesh&             buffer_mesh,
+    const Buffer_info&       buffer_info,
+    const Lod_chain_indices& lod_indices,
+    Buffer_range&            out_vertices,
+    Buffer_range&            out_joints
+) -> bool
+{
+    out_vertices = Buffer_range{};
+    out_joints   = Buffer_range{};
+    const std::size_t vertex_count = lod_indices.get_edge_line_vertex_count();
+    if ((vertex_count == 0) || (buffer_info.edge_line_vertex_stream == nullptr)) {
+        return true;
+    }
+    ERHE_VERIFY(buffer_info.edge_line_vertex_stream->stride == edge_line_vertex_byte_size);
+    Buffer_sink_allocation vertex_allocation = buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(*buffer_info.edge_line_vertex_stream, vertex_count);
+    if (vertex_allocation.range.count == 0) {
+        return false;
+    }
+    if (!lod_indices.edge_line_joint_data.empty() && (buffer_info.edge_line_joint_stream != nullptr)) {
+        ERHE_VERIFY(buffer_info.edge_line_joint_stream->stride == edge_line_joint_byte_size);
+        ERHE_VERIFY(lod_indices.edge_line_joint_data.size() == vertex_count * edge_line_joint_byte_size);
+        Buffer_sink_allocation joint_allocation = buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(*buffer_info.edge_line_joint_stream, vertex_count);
+        if (joint_allocation.range.count == 0) {
+            return false;
+        }
+        out_joints                             = joint_allocation.range;
+        buffer_mesh.edge_line_joint_allocation = std::move(joint_allocation.allocation);
+    }
+    out_vertices                            = vertex_allocation.range;
+    buffer_mesh.edge_line_vertex_allocation = std::move(vertex_allocation.allocation);
+    return true;
+}
+
+void enqueue_lod_edge_lines(
+    const Buffer_info&  buffer_info,
+    Lod_chain_indices&  lod_indices,
+    const Buffer_range& vertices,
+    const Buffer_range& joints
+)
+{
+    if (vertices.count > 0) {
+        buffer_info.vertex_buffer_sink.enqueue_vertex_data(vertices, std::move(lod_indices.edge_line_vertex_data));
+    }
+    if (joints.count > 0) {
+        buffer_info.vertex_buffer_sink.enqueue_vertex_data(joints, std::move(lod_indices.edge_line_joint_data));
+    }
+}
+
+auto make_lod_chain(
+    const Index_range&       level_0,
+    const Lod_chain_indices& lod_indices,
+    const Buffer_range&      edge_line_vertices,
+    const Buffer_range&      edge_line_joints
+) -> Lod_chain
 {
     Lod_chain chain{};
     if (lod_indices.is_empty()) {
         return chain;
     }
+    // A sub-range of an edge-line allocation, in endpoints.
+    const auto get_sub_range = [](const Buffer_range& allocation, const std::size_t first, const std::size_t count) -> Buffer_range {
+        if ((allocation.count == 0) || (count == 0)) {
+            return Buffer_range{};
+        }
+        ERHE_VERIFY((first + count) <= allocation.count);
+        Buffer_range range = allocation;
+        range.byte_offset += first * allocation.element_size;
+        range.count        = count;
+        return range;
+    };
     ERHE_VERIFY(lod_indices.levels.size() < max_lod_levels);
     chain.levels[0]          = Lod_level{.index_range = level_0, .error = 0.0f};
     chain.level_count        = 1;
@@ -704,7 +936,9 @@ auto make_lod_chain(const Index_range& level_0, const Lod_chain_indices& lod_ind
                 .first_index    = lod_first_index + level.first_index,
                 .index_count    = level.index_count
             },
-            .error = level.error
+            .error                  = level.error,
+            .edge_line_vertex_range = get_sub_range(edge_line_vertices, level.first_edge_line_vertex, level.edge_line_vertex_count),
+            .edge_line_joint_range  = get_sub_range(edge_line_joints,   level.first_edge_line_vertex, level.edge_line_vertex_count)
         };
         ++chain.level_count;
     }
@@ -736,7 +970,11 @@ void log_lod_chain(const std::string_view name, const Lod_chain& chain)
             levels += ", ";
             lod_index_count += lod_level.index_range.index_count;
         }
-        levels += fmt::format("{}: {} tris err {:.3g}", level, lod_level.index_range.get_triangle_count(), lod_level.error);
+        levels += fmt::format("{}: {} tris", level, lod_level.index_range.get_triangle_count());
+        if (lod_level.edge_line_vertex_range.count > 0) {
+            levels += fmt::format(" {} edges", lod_level.edge_line_vertex_range.count / 2);
+        }
+        levels += fmt::format(" err {:.3g}", lod_level.error);
     }
     log_primitive->info(
         "mesh lod {}: {} levels [{}] in {:.1f} ms",
