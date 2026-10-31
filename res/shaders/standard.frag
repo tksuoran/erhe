@@ -88,7 +88,7 @@ void erhe_pvs_write()
 }
 #endif
 
-#if defined(ERHE_FLAT_DRAW_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS) && !defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_PVS)
+#if defined(ERHE_VARIANT_FLAT_DRAW_COLOR)
 // Matching the location standard.vert assigns under the flat draw color
 // variant: the draw's primitive record index.
 layout(location = 19) flat in uint v_flat_draw_index;
@@ -385,9 +385,10 @@ void main()
     return;
 #endif
 
-#if defined(ERHE_FLAT_DRAW_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS) && !defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_PVS)
-    // The whole surface, no material, texture, light or shadow reads (an
-    // alpha-tested material draws solid: its discard needs the texture).
+#if defined(ERHE_VARIANT_FLAT_DRAW_COLOR)
+    // The whole surface, no material, texture, light or shadow reads, and
+    // no lit varyings (a position pass; an alpha-tested material draws
+    // solid: its discard needs the texture).
     out_color = erhe_flat_draw_color();
     return;
 #endif

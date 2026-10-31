@@ -71,16 +71,25 @@
 #  endif
 #endif
 
+// ERHE_VARIANT_FLAT_DRAW_COLOR is a derived gate: the FLAT_DRAW_COLOR
+// environment axis on a color variant (none of the pass variants below).
+// The fragment shader writes a palette color picked by the draw's record
+// index and consumes nothing else, so it is a position pass.
+#if defined(ERHE_FLAT_DRAW_COLOR) && !defined(ERHE_VARIANT_DEPTH_ONLY) && !defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_PVS) && !defined(ERHE_VARIANT_SHADOW_DISTANCE) && !defined(ERHE_VARIANT_SHADOW_CUBE) && !defined(ERHE_VARIANT_POINTS)
+#  define ERHE_VARIANT_FLAT_DRAW_COLOR 1
+#endif
+
 // ERHE_VARIANT_POSITION_PASS is a derived gate. ERHE_VARIANT_DEPTH_ONLY,
 // ERHE_VARIANT_ID_RENDER (but for ERHE_VARIANT_ID_RENDER_ALPHA_TEST above),
-// ERHE_VARIANT_PVS (but for ERHE_VARIANT_PVS_ALPHA_TEST above)
-// and ERHE_VARIANT_POINTS all skip the lit / debug
-// varyings -- the vertex shader only needs gl_Position plus, per variant, a
-// couple of tiny outputs (ID render: two flat ints; points: gl_PointSize +
-// a flat color); the fragment shader either has no body (depth-only) or
-// emits a packed ID color / flat point color directly. Use this gate at
-// every "skip lit machinery" #if so the variants stay in lock-step.
-#if defined(ERHE_VARIANT_DEPTH_ONLY) || (defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_ID_RENDER_ALPHA_TEST)) || (defined(ERHE_VARIANT_PVS) && !defined(ERHE_VARIANT_PVS_ALPHA_TEST)) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
+// ERHE_VARIANT_PVS (but for ERHE_VARIANT_PVS_ALPHA_TEST above),
+// ERHE_VARIANT_FLAT_DRAW_COLOR and ERHE_VARIANT_POINTS all skip the lit /
+// debug varyings -- the vertex shader only needs gl_Position plus, per
+// variant, a couple of tiny outputs (ID render: two flat ints; flat draw
+// color: one flat uint; points: gl_PointSize + a flat color); the fragment
+// shader either has no body (depth-only) or emits a packed ID color / flat
+// color directly. Use this gate at every "skip lit machinery" #if so the
+// variants stay in lock-step.
+#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_FLAT_DRAW_COLOR) || (defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_ID_RENDER_ALPHA_TEST)) || (defined(ERHE_VARIANT_PVS) && !defined(ERHE_VARIANT_PVS_ALPHA_TEST)) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
 #  define ERHE_VARIANT_POSITION_PASS 1
 #endif
 

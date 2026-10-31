@@ -172,8 +172,14 @@ device); every needed page was resident before the measured window.
   lighting, shadow and texture work is about 3 ms of the frame with
   occlusion on and within the noise without it: the headset frame is bound
   by the drawn geometry (vertex work and binning of the drawn entries),
-  not by fragment shading. Results in `memory-bank/local/quest_runs/`
-  20261031_121424 and 20261031_121603.
+  not by fragment shading. With the flat variant made a position pass (no
+  lit varyings, the draw index its only one) the runs repeat within the
+  noise: occlusion on 57.7 / 57.4 fps (XR multiview 16.1 ms), off 21.4 /
+  21.4 fps (45.3 ms), so the lit varyings cost nothing measurable either;
+  what remains is the position transform, rasterization and binning of
+  the drawn entries. Results in `memory-bank/local/quest_runs/`
+  20261031_121424 and 20261031_121603 (with varyings), 20261031_122521
+  and 20261031_122642 (position pass).
 - 3 of the 56 runs had an intermittent compositor slowdown (compositor
   GPU time above 3 ms against 1.6 ms, the multiview pass 30 to 65 ms
   longer on the same frames); those configurations were rerun and the
