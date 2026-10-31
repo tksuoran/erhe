@@ -691,7 +691,7 @@ auto Mcp_server::action_set_viewport_style(const json& args) -> std::string
     if ((style_name != "not_selected") && (style_name != "selected")) {
         return make_error_content("set_viewport_style: 'style' must be \"not_selected\" or \"selected\"");
     }
-    for (const char* const key : {"edge_lines", "corner_points", "polygon_centroids", "solid_wireframe"}) {
+    for (const char* const key : {"polygon_fill", "edge_lines", "corner_points", "polygon_centroids", "solid_wireframe"}) {
         if (args.contains(key) && !args[key].is_boolean()) {
             return make_error_content(fmt::format("set_viewport_style: '{}' must be a boolean", key));
         }
@@ -703,6 +703,7 @@ auto Mcp_server::action_set_viewport_style(const json& args) -> std::string
         }
         Viewport_config&   config = scene_view->get_config();
         Render_style_data& style  = (style_name == "selected") ? config.render_style_selected : config.render_style_not_selected;
+        if (args.contains("polygon_fill"))      { style.polygon_fill      = args["polygon_fill"].get<bool>(); }
         if (args.contains("edge_lines"))        { style.edge_lines        = args["edge_lines"].get<bool>(); }
         if (args.contains("corner_points"))     { style.corner_points     = args["corner_points"].get<bool>(); }
         if (args.contains("polygon_centroids")) { style.polygon_centroids = args["polygon_centroids"].get<bool>(); }
@@ -717,6 +718,7 @@ auto Mcp_server::action_set_viewport_style(const json& args) -> std::string
     const Render_style_data& style = (style_name == "selected") ? first.render_style_selected : first.render_style_not_selected;
     return make_json_content(json{
         {"style",              style_name},
+        {"polygon_fill",       style.polygon_fill},
         {"edge_lines",         style.edge_lines},
         {"corner_points",      style.corner_points},
         {"polygon_centroids",  style.polygon_centroids},

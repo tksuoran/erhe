@@ -30,6 +30,22 @@ enum class Shadow_sub_variant : uint8_t
 
 [[nodiscard]] auto c_str(Shadow_sub_variant sub_variant) -> const char*;
 
+// Color draw sub-variant (doc/erhe/draw_list_renderer.md "Depth-only color
+// sub-variant"): what the color lists draw with. standard: the lit variant
+// (with the view's shader debug mode and overdraw counting). depth_only:
+// VARIANT_DEPTH_ONLY, for passes that write only depth and stencil (the
+// editor's selection stencil masks); an alpha-tested list keeps its
+// material's discard (ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST in
+// erhe_standard_variant.glsl), every other list is a position pass. Selected
+// by the caller per color pass, resolved per list like the view axes.
+enum class Color_sub_variant : uint8_t
+{
+    standard   = 0,
+    depth_only = 1
+};
+
+[[nodiscard]] auto c_str(Color_sub_variant sub_variant) -> const char*;
+
 // The potentially visible set bake's raster pass (doc/plans/pvs.md "Bake"
 // 4; Draw_list_scene::draw_pvs_face()): which forced VARIANT bit the color
 // lists draw with into the layered buffer.
@@ -142,14 +158,16 @@ public:
 };
 
 // Resolved shader stages for one color view configuration (R19), overdraw
-// counting (the OVERDRAW axis, Draw_color_parameters::overdraw) and shader
-// debug mode (the SHADER_DEBUG axis, Draw_color_parameters::shader_debug).
+// counting (the OVERDRAW axis, Draw_color_parameters::overdraw), shader
+// debug mode (the SHADER_DEBUG axis, Draw_color_parameters::shader_debug)
+// and sub-variant (Draw_color_parameters::sub_variant).
 class Draw_list_color_resolution
 {
 public:
     uint16_t                                        multiview_count{0}; // key value: 0 single view, N >= 2 multiview
     Overdraw_count                                  overdraw       {Overdraw_count::off};
     Shader_debug                                    shader_debug   {Shader_debug::none};
+    Color_sub_variant                               sub_variant    {Color_sub_variant::standard};
     const erhe::graphics::Reloadable_shader_stages* stages         {nullptr};
 };
 

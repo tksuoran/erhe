@@ -131,10 +131,14 @@ public:
     // path's shader_debug_filter applies it per mesh (the editor: content).
     Shader_debug                            shader_debug        {Shader_debug::none};
     std::span<const erhe::scene::Layer_id>  shader_debug_layers {}; // empty: every layer
+    // depth_only: every list draws its VARIANT_DEPTH_ONLY variant
+    // (Color_sub_variant); overdraw and shader_debug must then be off / none.
+    // The color blend state follows the list's blending class as always; a
+    // depth-only pass's base pipeline carries its own (color writes
+    // disabled), which takes precedence
+    // (erhe::graphics::Base_render_pipeline::get_pipeline_for()).
+    Color_sub_variant                       sub_variant         {Color_sub_variant::standard};
     Color_environment                       environment         {};
-    // nullptr: pick color_blend_disabled / color_blend_premultiplied by the
-    // list's blending class, as Forward_renderer::render() does.
-    const erhe::graphics::Color_blend_state* color_blend_override{nullptr};
     // The culling view of this pass (Draw_list_scene::add_cull_view() of
     // the view frustum's inward-facing world-space planes,
     // erhe::math::extract_frustum_planes()): entries whose world AABB lies
@@ -1212,7 +1216,7 @@ private:
     // list at that index is a different list (identity) than last time.
     [[nodiscard]] auto get_resolutions(std::size_t draw_list_index, const Draw_list& draw_list) -> Draw_list_resolutions&;
     void resolve_color_list   (Draw_list_resolutions& resolutions, const Draw_list& draw_list); // all enumerated view configs
-    auto resolve_color_stages (Draw_list_resolutions& resolutions, const Draw_list& draw_list, uint16_t multiview_count, Overdraw_count overdraw, Shader_debug shader_debug) -> const erhe::graphics::Reloadable_shader_stages*;
+    auto resolve_color_stages (Draw_list_resolutions& resolutions, const Draw_list& draw_list, uint16_t multiview_count, Overdraw_count overdraw, Shader_debug shader_debug, Color_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
     auto resolve_shadow_stages(Draw_list_resolutions& resolutions, const Draw_list& draw_list, Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
     auto resolve_pvs_stages   (Draw_list_resolutions& resolutions, const Draw_list& draw_list, Pvs_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
     void set_color_environment(const Color_environment& environment);

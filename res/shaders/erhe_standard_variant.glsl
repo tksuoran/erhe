@@ -71,6 +71,26 @@
 #  endif
 #endif
 
+// ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST is a derived gate: the depth-only
+// color variant (no SHADER_DISTANCE: a shadow caster is never one) of a
+// material whose fragments the color pass discards (alpha_test,
+// screen_door) - the selection stencil masks over alpha-tested meshes
+// (Color_sub_variant::depth_only in erhe::scene_renderer). Built like
+// ERHE_VARIANT_ID_RENDER_ALPHA_TEST: not a position pass, it runs the
+// material inputs up to the color pass's discard and then writes nothing,
+// so depth and stencil follow the cutout instead of the whole surface.
+// Every other depth-only variant is a position pass. The plain depth-only
+// shadow sub-variant would also take this gate for an alpha_test /
+// screen_door material; it does not today because the shadow passes draw
+// opaque primitives only (shadow_renderer.cpp opaque_primitives_only) and
+// the draw-list shadow key carries no material blending bits. Revisit this
+// gate when alpha-tested casters cast shadows.
+#if defined(ERHE_VARIANT_DEPTH_ONLY) && !defined(ERHE_VARIANT_SHADOW_DISTANCE) && \
+    ((ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST) || \
+     (ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR))
+#  define ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST 1
+#endif
+
 // ERHE_VARIANT_FLAT_DRAW_COLOR is a derived gate: the FLAT_DRAW_COLOR
 // environment axis on a color variant (none of the pass variants below).
 // The fragment shader writes a palette color picked by the draw's record
@@ -79,7 +99,8 @@
 #  define ERHE_VARIANT_FLAT_DRAW_COLOR 1
 #endif
 
-// ERHE_VARIANT_POSITION_PASS is a derived gate. ERHE_VARIANT_DEPTH_ONLY,
+// ERHE_VARIANT_POSITION_PASS is a derived gate. ERHE_VARIANT_DEPTH_ONLY (but
+// for ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST above),
 // ERHE_VARIANT_ID_RENDER (but for ERHE_VARIANT_ID_RENDER_ALPHA_TEST above),
 // ERHE_VARIANT_PVS (but for ERHE_VARIANT_PVS_ALPHA_TEST above),
 // ERHE_VARIANT_FLAT_DRAW_COLOR and ERHE_VARIANT_POINTS all skip the lit /
@@ -89,7 +110,7 @@
 // shader either has no body (depth-only) or emits a packed ID color / flat
 // color directly. Use this gate at every "skip lit machinery" #if so the
 // variants stay in lock-step.
-#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_FLAT_DRAW_COLOR) || (defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_ID_RENDER_ALPHA_TEST)) || (defined(ERHE_VARIANT_PVS) && !defined(ERHE_VARIANT_PVS_ALPHA_TEST)) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
+#if (defined(ERHE_VARIANT_DEPTH_ONLY) && !defined(ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST)) || defined(ERHE_VARIANT_FLAT_DRAW_COLOR) || (defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_ID_RENDER_ALPHA_TEST)) || (defined(ERHE_VARIANT_PVS) && !defined(ERHE_VARIANT_PVS_ALPHA_TEST)) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
 #  define ERHE_VARIANT_POSITION_PASS 1
 #endif
 

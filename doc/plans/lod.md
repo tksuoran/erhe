@@ -97,9 +97,10 @@ converts it to pixels.
 
 Paths that always draw level 0 (they read the variant's fill range, not the
 chain): the bucket / `Forward_renderer` / `Shadow_renderer` fallback path
-(previews, tool and brush roots, thumbnails, `use_draw_lists = false`,
-`SHADER_DEBUG != 0`, the `EDGE_LINES_FROM_ID` passes), the PVS bake, the ID
-pass, BLAS and raytrace sources, and the edge-line passes. The step 4 gates
+(previews, tool and brush roots, thumbnails, `use_draw_lists = false`), the
+PVS bake, the ID pass, and BLAS and raytrace sources. Edge lines and the
+selection outline follow the drawn level
+(`doc/plans/selection_outline_lod.md`). The step 4 gates
 cover both `use_draw_lists` settings.
 
 ### 2.2 Generation

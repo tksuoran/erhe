@@ -91,11 +91,12 @@ not selected, the ghost edge lines) draw the edges of the mesh's LOD level
 silhouette. `App_rendering::prepare_wide_line_feed()` feeds each mesh at
 `get_forced_lod_level()` of its `Draw_list_scene` record. Edge lines are not
 content: the view's shader debug mode and the path its fill takes do not
-change them. A fill on the bucket path (a view with shader debug on, the
-selection stencil masks until `doc/plans/selection_outline_lod.md` step 3)
-draws level 0, so a shader debug view shows the outline at the mesh's level
-over a level-0 fill; the bucket path is being retired in favour of the
-draw lists, which draw the level. The viewports feed in
+change them. The selection silhouette the outline is masked by is drawn at
+the same level: the selected fills and, with the selection fill off or for
+proxy-hidden sources, the selection stencil masks
+(`doc/editor/rendering.md` "Selection stencil mask") all draw through the
+draw lists. A fill on the bucket path (`use_draw_lists` off) draws level 0,
+so the outline then shows the mesh's level over a level-0 fill. The viewports feed in
 their composition prepare and the headset in `Headset_view::
 prepare_wide_line_feed()`, both in the prepare phase; the render phase only
 queues the frame's feed. The draw list entries take their variant at the

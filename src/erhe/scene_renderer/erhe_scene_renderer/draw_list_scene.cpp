@@ -240,6 +240,15 @@ auto c_str(const Shadow_sub_variant sub_variant) -> const char*
     }
 }
 
+auto c_str(const Color_sub_variant sub_variant) -> const char*
+{
+    switch (sub_variant) {
+        case Color_sub_variant::standard:   return "standard";
+        case Color_sub_variant::depth_only: return "depth_only";
+        default:                            return "?";
+    }
+}
+
 auto c_str(const Pvs_sub_variant sub_variant) -> const char*
 {
     switch (sub_variant) {
@@ -2143,15 +2152,17 @@ auto Draw_list_scene::resolve_color_stages(
     Draw_list_resolutions& resolutions,
     const Draw_list&       draw_list,
     const uint16_t         multiview_count,
-    const Overdraw_count   overdraw,
-    const Shader_debug     shader_debug
+    const Overdraw_count    overdraw,
+    const Shader_debug      shader_debug,
+    const Color_sub_variant sub_variant
 ) -> const erhe::graphics::Reloadable_shader_stages*
 {
     for (const Draw_list_color_resolution& resolution : resolutions.color) {
         if (
             (resolution.multiview_count == multiview_count) &&
             (resolution.overdraw        == overdraw) &&
-            (resolution.shader_debug    == shader_debug)
+            (resolution.shader_debug    == shader_debug) &&
+            (resolution.sub_variant     == sub_variant)
         ) {
             return resolution.stages;
         }
@@ -2180,6 +2191,17 @@ auto Draw_list_scene::resolve_color_stages(
     if (shader_debug != Shader_debug::none) {
         apply_shader_debug_varyings(key, &vertex_input.vertex_format);
     }
+    // The depth-only sub-variant: the bit the bucket path forces with
+    // shader_key_boolean_mask_force_enable, set before the two axes below as
+    // there (bucket_primitives()). No material sets it, so the material's
+    // blending mode stays in the key and an alpha-tested list keeps its
+    // discard (erhe_standard_variant.glsl). No shader debug mode and no
+    // overdraw counting reach it (the bucket path drops overdraw for it too).
+    if (sub_variant == Color_sub_variant::depth_only) {
+        ERHE_VERIFY(shader_debug == Shader_debug::none);
+        ERHE_VERIFY(overdraw == Overdraw_count::off);
+        key.set(Shader_bool::VARIANT_DEPTH_ONLY, true);
+    }
     // The specular anti-aliasing axis reaches only the keys whose shader
     // calls anisotropic_brdf().
     set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(env));
@@ -2198,14 +2220,14 @@ auto Draw_list_scene::resolve_color_stages(
             resolutions.color_failed = true;
         }
     }
-    resolutions.color.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .overdraw = overdraw, .shader_debug = shader_debug, .stages = stages});
+    resolutions.color.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .overdraw = overdraw, .shader_debug = shader_debug, .sub_variant = sub_variant, .stages = stages});
     return stages;
 }
 
 void Draw_list_scene::resolve_color_list(Draw_list_resolutions& resolutions, const Draw_list& draw_list)
 {
     for (const uint32_t view_count : m_multiview_view_counts) {
-        static_cast<void>(resolve_color_stages(resolutions, draw_list, static_cast<uint16_t>(view_count), Overdraw_count::off, Shader_debug::none));
+        static_cast<void>(resolve_color_stages(resolutions, draw_list, static_cast<uint16_t>(view_count), Overdraw_count::off, Shader_debug::none, Color_sub_variant::standard));
     }
 }
 
@@ -3230,7 +3252,8 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 draw_list,
                 parameters.multiview_count,
                 parameters.overdraw,
-                is_layer_selected(parameters.shader_debug_layers, key.layer_id) ? parameters.shader_debug : Shader_debug::none
+                is_layer_selected(parameters.shader_debug_layers, key.layer_id) ? parameters.shader_debug : Shader_debug::none,
+                parameters.sub_variant
             );
             if (resolutions.color.size() != resolution_count_before) {
                 ++m_lazy_resolution_count;
@@ -3238,11 +3261,9 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
             if (stages == nullptr) {
                 continue;
             }
-            const erhe::graphics::Color_blend_state* color_blend = (parameters.color_blend_override != nullptr)
-                ? parameters.color_blend_override
-                : (blending == erhe::primitive::Blending_class::translucent)
-                    ? &erhe::graphics::Color_blend_state::color_blend_premultiplied
-                    : &erhe::graphics::Color_blend_state::color_blend_disabled;
+            const erhe::graphics::Color_blend_state* color_blend = (blending == erhe::primitive::Blending_class::translucent)
+                ? &erhe::graphics::Color_blend_state::color_blend_premultiplied
+                : &erhe::graphics::Color_blend_state::color_blend_disabled;
             const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(key.buffer_set.vertex_input_key);
             erhe::graphics::Render_pipeline* render_pipeline = parameters.base_render_pipeline.get_pipeline_for(
                 parameters.render_pass->get_descriptor(),

@@ -72,6 +72,9 @@ public:
     // base pipeline per selection state suffices.
     erhe::graphics::Base_render_pipeline polygon_fill_standard;
     erhe::graphics::Base_render_pipeline polygon_fill_standard_selected;
+    // Depth-only selection stencil masks: polygon_fill_standard_selected's
+    // depth / stencil state with color writes disabled.
+    erhe::graphics::Base_render_pipeline selection_stencil_mask;
     // Solid-wireframe overlay: triangle fill, depth less-or-equal, no depth
     // write, no stencil -- draws the expanded fill (with the wireframe variant)
     // at equal depth over the normal polygon fill.
