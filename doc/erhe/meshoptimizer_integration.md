@@ -17,8 +17,8 @@ User-confirmed; the first is a hard requirement.
    always use source data at full precision.
 2. Optimize **all renderable meshes** -- imported and procedural: vertex
    weld/remap, vertex-cache order, overdraw order, vertex-fetch order, with
-   before/after `meshopt_analyze*` statistics. LOD and meshlets are
-   explicitly future work -- seams left, nothing implemented.
+   before/after `meshopt_analyze*` statistics. LOD chains are generated on
+   request ("Level of detail" below); meshlets are future work.
 3. Config: `optimize_meshes` and `mesh_optimize_cache` in the code-generated
    `Mesh_memory_config`. Both are on in the editor config. The filesystem
    cache must work on Android/Quest.
@@ -286,6 +286,91 @@ ACMR/overdraw/fetch (they never ran `meshopt_analyze*`; the log says
 isolating what the passes did; the 4 bytes/vertex the format change saves
 is a separate, known figure.
 
+### Level of detail
+
+`erhe_primitive/lod.hpp`. A LOD chain is a list of index ranges into the
+optimized variant's vertex buffer: no level has vertices of its own, so
+switching level changes only `(first_index, index_count)` and never
+`base_vertex`, the vertex format or the quantization affines.
+
+**Storage.** `Buffer_mesh::lod_chain` (`Lod_chain`: up to `max_lod_levels` =
+8 `Lod_level {Index_range, error}` entries, level 0 included). Only an
+optimized variant built with `Lod_settings` has one. Level 0 equals
+`triangle_fill_indices` with error 0; the levels after it follow level 0
+directly in the same `index_allocation`, and `index_buffer_range.count`
+covers all of them. A mesh without a chain (`lod_chain.is_empty()`) has one
+implicit level, its fill range. The base variant never has a chain. Each
+`Lod_level` is one record, so per-level data (for example per-level
+edge-line ranges) sits beside its range.
+
+**Request.** `Primitive::lod_settings` (`std::optional<Lod_settings>`, unset
+by default) is the request; unset means no generation and builds that are
+byte-identical to builds without LOD. `Primitive::make_renderable_mesh()`
+passes it to the build as `Build_info::lod_settings`, and the editor's
+deferred finalize snapshots it under the scene lock with the re-optimize
+decision, so the re-optimization after an edit regenerates the chain of the
+`Primitive` it rebuilds. Import does not generate (no caller sets the
+settings at import); generation is an editor request.
+
+**Paths.**
+
+- Geometry path: `take_optimizable_snapshot()` also extracts the LOD inputs
+  of the corner prefix (`extract_lod_vertex_data()`: float positions,
+  normals, colors, joints, and the seam attributes -- every attribute of the
+  optimized format other than positions, normals, tangents and bitangents,
+  with the tangent contributing its sign; the facet id is not in that format,
+  so it is not a seam attribute). `make_optimized_render_shape_from_staged_build()`
+  carries them to the welded output vertices through the forward remap
+  (`remap_lod_vertex_data()`), generates the chain over the optimized fill
+  indices and sizes the index allocation for level 0 plus the levels.
+- Soup path: `build_buffer_mesh_from_triangle_soup(soup, buffer_info,
+  lod_settings)` generates over the soup's own vertices and sizes its
+  allocation the same way; `make_optimized_render_shape()` passes its
+  `lod_settings` there (the import call site passes the `Primitive`'s,
+  which is unset).
+- Prepared / stored path: no chain (`doc/plans/lod.md` steps 3 and 6).
+
+**Generation** (`generate_lod_chain(Lod_vertex_input, indices,
+Lod_settings)`). Before simplifying, vertices that share position, every seam
+attribute and joints bitwise, and whose normals lie within
+`normal_merge_angle` (default 20 degrees), are welded into one
+simplification-only vertex; unreferenced vertices take no part. Each level is
+simplified from the previous one with `meshopt_simplifyWithAttributes()`
+(target `ratio` x the previous index count, no error limit; the metric weighs
+normals and colors with `normal_weight` / `color_weight` under
+`Lod_attributes::normals_and_colors`; `meshopt_SimplifyLockBorder` under
+`Lod_border::locked`, `meshopt_SimplifyPermissive` under
+`Lod_seams::permissive`). `Lod_fallback::sloppy` takes a
+`meshopt_simplifySloppy()` result when the regular step misses its target and
+the sloppy one is smaller. Each result triangle corner maps back to the
+welded member whose normal is closest to the triangle's face normal, so the
+weld removes only near-smooth normal splits for the simplifier and the drawn
+triangles keep the real vertices. A level's error is
+`max(previous * 1.5, step error, 1e-6) * meshopt_simplifyScale()` (relative
+errors; the floor keeps a zero-error step over coplanar triangles from tying
+with level 0), so errors grow strictly. Generation stops when a step keeps
+75% or more of its input indices, or once 24 or fewer indices remain, so a
+mesh that cannot simplify gets a short chain or none, never a repeated level.
+With joints present, every simplification vertex with an edge neighbour of a
+different joint set (the joints with non-zero weight) is locked
+(`meshopt_SimplifyVertex_Lock`; meshoptimizer locks every wedge of a locked
+vertex), so a collapse never moves a vertex onto one with other influences.
+`level_count` (default 6) counts level 0.
+
+Texture seams are kept by meshoptimizer: a vertex on a seam collapses only
+along the seam, both sides together, each side keeping its own texcoords;
+vertices on complex seam junctions are locked. The weld never merges across a
+seam because texcoords are part of its key. `Lod_fallback::sloppy`,
+`Lod_seams::permissive` and a `normal_merge_angle` large enough to merge real
+hard edges drop this guarantee; all three are off by default.
+
+**Statistics.** One `erhe.primitive.primitive` info line per generated chain
+(`mesh lod <name>: N levels [level: triangles, error ...] in T ms`,
+`log_lod_chain()`), process-wide `get_lod_totals()`, and the MCP
+`get_memory_usage` `lod` section: per level over the distinct scene
+primitives with a chain (primitive count, triangle count, mean error), the
+index bytes of the levels after level 0, and the session generation totals.
+
 ### Position quantization (optimized variant only)
 
 Quantization applies **only to the optimized variant** (requirements 9-10):
@@ -385,6 +470,14 @@ the optimized variant is selected and rendered.
 - **Unit tests**: the multi-stream optimizer core, the geometry-path
   encoded-and-welded optimized build (box round-trip through CPU sinks),
   live-edit variant invalidation, the edit bracket and the publish gate.
+  `test_lod.cpp` (`Lod.*`): chain invariants on a UV sphere, textured and
+  welded boxes (triangle counts strictly decreasing, errors strictly
+  increasing, indices in range), the early stop on a plain cube, texture
+  seams (UV sphere seam columns and per-face box atlas cells never mixed in
+  a triangle), joint locking on a skinned box, the normal weld, bad input,
+  and both build paths: the chain follows level 0 in one allocation, and
+  level 0 indices and the vertex bytes equal the build without settings,
+  which has no chain and an allocation of the fill range only.
   Note: `ctest` at the build_tests root aborts on the
   erhe_graphics_gpu_tests discovery include when that target has not been
   built (it is not in the default target) -- build it explicitly or run

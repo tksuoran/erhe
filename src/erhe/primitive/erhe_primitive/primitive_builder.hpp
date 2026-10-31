@@ -117,9 +117,15 @@ public:
     // Must be called BEFORE allocate_and_bind_writers(), which hands the staged
     // bytes to the sink. Returns false - having touched neither output - when
     // there is nothing to optimize.
+    //
+    // `out_lod_vertices`, when non-null, also receives the LOD generation
+    // inputs of the same corner prefix (extract_lod_vertex_data(), float data
+    // read from the staged source-format bytes, seam attributes as the
+    // optimized format carries them).
     auto take_optimizable_snapshot(
         std::vector<Mesh_optimize_stream>& out_streams,
-        std::vector<uint32_t>&             out_fill_indices
+        std::vector<uint32_t>&             out_fill_indices,
+        Lod_vertex_data*                   out_lod_vertices
     ) -> bool;
 
     // Runs root.allocate_buffers() and hands every writer its destination.

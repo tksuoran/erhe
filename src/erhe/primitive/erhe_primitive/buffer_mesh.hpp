@@ -3,6 +3,7 @@
 #include "erhe_buffer/buffer_allocation.hpp"
 #include "erhe_primitive/buffer_range.hpp"
 #include "erhe_primitive/index_range.hpp"
+#include "erhe_primitive/lod.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/sphere.hpp"
@@ -154,6 +155,12 @@ public:
     // Sequential index range (values 0..3N-1) into expanded_vertex_buffer_ranges
     // for the solid-wireframe fill draw. Empty when the expanded fill was not built.
     Index_range               expanded_triangle_fill_indices{};
+
+    // Level of detail chain (lod.hpp). Only an optimized variant built with
+    // Lod_settings carries one: level 0 equals triangle_fill_indices, and the
+    // levels after it follow level 0 directly in index_allocation. Empty
+    // otherwise - one implicit level, the fill range.
+    Lod_chain                 lod_chain{};
 
     std::vector<Buffer_range> vertex_buffer_ranges{}; // per stream
     Buffer_range              index_buffer_range  {};

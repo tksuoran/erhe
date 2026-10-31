@@ -1,10 +1,12 @@
 #pragma once
 
 #include "erhe_primitive/buffer_info.hpp"
+#include "erhe_primitive/lod.hpp"
 
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace erhe::primitive {
@@ -34,6 +36,11 @@ public:
     Normal_style    normal_style  {Normal_style::corner_normals};
     bool            vertex_id_vec3{false};
     bool            autocolor     {false};
+    // When set, the geometry-path optimized variant is built with a LOD chain
+    // (Buffer_mesh::lod_chain) generated with these settings. The base variant
+    // never has one. Primitive::make_renderable_mesh() sets it from
+    // Primitive::lod_settings.
+    std::optional<Lod_settings> lod_settings{};
 };
 
 class Element_mappings

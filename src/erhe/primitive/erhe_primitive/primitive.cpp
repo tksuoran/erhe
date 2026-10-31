@@ -1675,10 +1675,10 @@ auto Primitive_render_shape::make_buffer_mesh(
     return make_buffer_mesh_build_locked(build_info, normal_style, out_optimized_shape);
 }
 
-auto Primitive_render_shape::make_buffer_mesh(const Buffer_info& buffer_info) -> bool
+auto Primitive_render_shape::make_buffer_mesh(const Buffer_info& buffer_info, const Lod_settings* const lod_settings) -> bool
 {
     const std::lock_guard<std::mutex> build_lock{m_build_mutex};
-    return make_buffer_mesh_build_locked(buffer_info);
+    return make_buffer_mesh_build_locked(buffer_info, lod_settings);
 }
 
 auto Primitive_render_shape::make_buffer_mesh_build_locked(
@@ -1690,7 +1690,7 @@ auto Primitive_render_shape::make_buffer_mesh_build_locked(
     if (!m_geometry_published.load(std::memory_order_acquire)) {
         // The overload below takes the same build lock via its own entry
         // point, so it must be called through the *_build_locked() helper.
-        return make_buffer_mesh_build_locked(build_info.buffer_info);
+        return make_buffer_mesh_build_locked(build_info.buffer_info, nullptr);
     }
     // Build into locals and publish under the state lock: m_renderable_mesh
     // and m_element_mappings are state-protected slots.
@@ -1715,13 +1715,13 @@ auto Primitive_render_shape::make_buffer_mesh_build_locked(
     return true;
 }
 
-auto Primitive_render_shape::make_buffer_mesh_build_locked(const Buffer_info& buffer_info) -> bool
+auto Primitive_render_shape::make_buffer_mesh_build_locked(const Buffer_info& buffer_info, const Lod_settings* const lod_settings) -> bool
 {
     const std::shared_ptr<Triangle_soup> triangle_soup = get_triangle_soup();
     if (!triangle_soup) {
         return false;
     }
-    std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(*triangle_soup.get(), buffer_info);
+    std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(*triangle_soup.get(), buffer_info, lod_settings);
     if (!buffer_mesh_opt.has_value()) {
         return false;
     }
@@ -1819,13 +1819,16 @@ namespace {
 
 // The index and vertex range allocations of a fill-only build of
 // vertex_count / index_count, one atomic multi-pool transaction, and the
-// lockstep check of the vertex streams (see below). False when an
-// allocation fails or the streams are out of lockstep.
+// lockstep check of the vertex streams (see below). The index allocation
+// holds lod_index_count more indices after the fill range (the LOD levels
+// after level 0). False when an allocation fails or the streams are out of
+// lockstep.
 [[nodiscard]] auto allocate_fill_buffer_mesh(
     Buffer_mesh&       buffer_mesh,
     const Buffer_info& buffer_info,
     const std::size_t  vertex_count,
     const std::size_t  index_count,
+    const std::size_t  lod_index_count,
     const char* const  caller
 ) -> bool
 {
@@ -1834,7 +1837,7 @@ namespace {
         // buffer_mesh_allocation_mutex() (primitive_builder.hpp).
         const std::lock_guard<std::mutex> allocation_lock{buffer_mesh_allocation_mutex()};
 
-        Buffer_sink_allocation index_sink_allocation = buffer_info.index_buffer_sink.allocate_index_buffer_range(buffer_info.index_type, index_count);
+        Buffer_sink_allocation index_sink_allocation = buffer_info.index_buffer_sink.allocate_index_buffer_range(buffer_info.index_type, index_count + lod_index_count);
         if (index_sink_allocation.range.count == 0) {
             return false;
         }
@@ -1893,7 +1896,11 @@ namespace {
 
 } // anonymous namespace
 
-auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>
+auto build_buffer_mesh_from_triangle_soup(
+    const Triangle_soup& triangle_soup,
+    const Buffer_info&   buffer_info,
+    const Lod_settings*  lod_settings
+) -> std::optional<Buffer_mesh>
 {
     // TODO Use index_type from buffer_info
     //const std::size_t  sink_vertex_stride   = buffer_info.vertex_format.stride();
@@ -1901,19 +1908,63 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     const std::size_t      vertex_count          = triangle_soup.vertex_data.size() / source_vertex_stride;
     const std::size_t      index_count           = triangle_soup.index_data.size();
 
+    // The LOD levels, over the soup's own vertices (a soup is one stream);
+    // their indices follow level 0 in the same index allocation.
+    Lod_chain_indices lod_indices{};
+    if (lod_settings != nullptr) {
+        const std::span<const uint8_t> soup_stream{triangle_soup.vertex_data.data(), triangle_soup.vertex_data.size()};
+        const Lod_vertex_data lod_vertices = extract_lod_vertex_data(
+            std::span<const std::span<const uint8_t>>{&soup_stream, 1},
+            triangle_soup.vertex_format,
+            triangle_soup.vertex_format,
+            vertex_count
+        );
+        lod_indices = generate_lod_chain(lod_vertices.get_input(), triangle_soup.index_data, *lod_settings);
+    }
+
     Buffer_mesh buffer_mesh;
-    if (!allocate_fill_buffer_mesh(buffer_mesh, buffer_info, vertex_count, index_count, "build_buffer_mesh_from_triangle_soup()")) {
+    if (!allocate_fill_buffer_mesh(buffer_mesh, buffer_info, vertex_count, index_count, lod_indices.indices.size(), "build_buffer_mesh_from_triangle_soup()")) {
         return std::optional<Buffer_mesh>{};
     }
+    buffer_mesh.lod_chain = make_lod_chain(buffer_mesh.triangle_fill_indices, lod_indices);
     buffer_mesh.has_vertex_colors =
         triangle_soup.vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::color, 0).attribute != nullptr;
 
     const Buffer_range& index_range = buffer_mesh.index_buffer_range;
 
     // Copy indices to buffer
-    {
+    if (lod_indices.is_empty()) {
         std::vector<uint8_t> sink_index_data(index_count * index_range.element_size);
         memcpy(sink_index_data.data(), triangle_soup.index_data.data(), index_count * index_range.element_size);
+        buffer_info.index_buffer_sink.enqueue_index_data(index_range, std::move(sink_index_data));
+    } else {
+        // Level 0 is the soup's indices, the levels after it follow, packed
+        // into the sink's index format.
+        const std::size_t    element_size = index_range.element_size;
+        const std::size_t    total_count  = index_count + lod_indices.indices.size();
+        std::vector<uint8_t> sink_index_data(total_count * element_size, uint8_t{0});
+        for (std::size_t i = 0; i < total_count; ++i) {
+            const uint32_t value       = (i < index_count) ? triangle_soup.index_data[i] : lod_indices.indices[i - index_count];
+            uint8_t* const destination = sink_index_data.data() + (i * element_size);
+            switch (element_size) {
+                case 1: {
+                    *destination = static_cast<uint8_t>(value);
+                    break;
+                }
+                case 2: {
+                    const uint16_t value_16 = static_cast<uint16_t>(value);
+                    memcpy(destination, &value_16, sizeof(value_16));
+                    break;
+                }
+                case 4: {
+                    memcpy(destination, &value, sizeof(value));
+                    break;
+                }
+                default: {
+                    ERHE_FATAL("bad index element size");
+                }
+            }
+        }
         buffer_info.index_buffer_sink.enqueue_index_data(index_range, std::move(sink_index_data));
     }
 
@@ -2444,7 +2495,15 @@ auto Primitive::make_renderable_mesh(const Build_info& build_info, const Normal_
     // it falls back to the triangle-soup build), and an unconditional assign
     // would let that path silently drop a variant somebody else attached -
     // outside the publish/retire discipline the rest of this file protects.
-    if (!render_shape->make_buffer_mesh(build_info, normal_style, &optimized)) {
+    // The primitive's own LOD request decides whether the optimized variant
+    // gets a chain; the caller's build info is shared between primitives.
+    const bool lod_differs = (build_info.lod_settings != lod_settings);
+    std::optional<Build_info> lod_build_info{};
+    if (lod_differs) {
+        lod_build_info.emplace(build_info);
+        lod_build_info->lod_settings = lod_settings;
+    }
+    if (!render_shape->make_buffer_mesh(lod_differs ? lod_build_info.value() : build_info, normal_style, &optimized)) {
         return false;
     }
     if (optimized) {
@@ -2494,7 +2553,7 @@ namespace {
         return std::optional<Buffer_mesh>{};
     }
     Buffer_mesh buffer_mesh;
-    if (!allocate_fill_buffer_mesh(buffer_mesh, buffer_info, stored.vertex_count, stored.index_count, "stored vertex streams build")) {
+    if (!allocate_fill_buffer_mesh(buffer_mesh, buffer_info, stored.vertex_count, stored.index_count, 0, "stored vertex streams build")) {
         return std::optional<Buffer_mesh>{};
     }
     buffer_mesh.has_vertex_colors     = stored.has_vertex_colors;

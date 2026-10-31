@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_primitive/lod.hpp"
+
 #include <glm/glm.hpp>
 
 #include <array>
@@ -235,13 +237,17 @@ public:
 // bypasses the cache.
 //
 // `source_shape` is only read from. `name` appears in the statistics log line.
+//
+// A non-null `lod_settings` also builds the variant's LOD chain
+// (build_buffer_mesh_from_triangle_soup() with Lod_settings).
 [[nodiscard]] auto make_optimized_render_shape(
     const Primitive_render_shape& source_shape,
     const Element_mappings&       source_mappings,
     const Mesh_optimize_options&  options,
     const Buffer_info&            buffer_info,
     const std::filesystem::path&  cache_directory,
-    std::string_view              name
+    std::string_view              name,
+    const Lod_settings*           lod_settings = nullptr
 ) -> std::shared_ptr<Primitive_render_shape>;
 
 // The geometry path's counterpart to make_optimized_render_shape(): builds the
@@ -272,6 +278,14 @@ public:
 // The passes go through optimize_indexed_mesh_cached() with
 // buffer_info.mesh_optimize_cache_directory (empty: uncached).
 //
+// With a non-null `lod_settings` the variant also gets a LOD chain
+// (Buffer_mesh::lod_chain): generate_lod_chain() runs on the optimized
+// vertices and fill indices, with `lod_vertices` (the LOD inputs of the same
+// corner prefix as `streams`, see Build_context::take_optimizable_snapshot())
+// carried to the output vertices through the forward remap, and the index
+// allocation holds the levels after level 0. Null builds exactly what it
+// builds without LOD.
+//
 // Returns null when there is nothing to attach: an input optimize_indexed_mesh()
 // refuses, or an allocation that failed. There is no half-built state to unwind
 // - a variant that could not be finished is simply never returned.
@@ -281,7 +295,9 @@ public:
     const Element_mappings&             source_mappings,
     const Buffer_mesh&                  source_buffer_mesh,
     const Buffer_info&                  buffer_info,
-    std::string_view                    name
+    std::string_view                    name,
+    const Lod_settings*                 lod_settings = nullptr,
+    Lod_vertex_data&&                   lod_vertices = Lod_vertex_data{}
 ) -> std::shared_ptr<Primitive_render_shape>;
 
 // Encodes one object-space tangent frame into the optimized variant's 8-byte

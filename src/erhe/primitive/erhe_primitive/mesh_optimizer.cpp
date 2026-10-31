@@ -475,7 +475,8 @@ auto make_optimized_render_shape(
     const Mesh_optimize_options&  options,
     const Buffer_info&            buffer_info,
     const std::filesystem::path&  cache_directory,
-    const std::string_view        name
+    const std::string_view        name,
+    const Lod_settings* const     lod_settings
 ) -> std::shared_ptr<Primitive_render_shape>
 {
     ERHE_PROFILE_FUNCTION();
@@ -522,9 +523,12 @@ auto make_optimized_render_shape(
         optimization.triangle_soup,
         std::move(composed)
     );
-    if (!shape->make_buffer_mesh(optimized_buffer_info)) {
+    if (!shape->make_buffer_mesh(optimized_buffer_info, lod_settings)) {
         log_primitive->warn("mesh optimize {}: the optimized buffer mesh did not build; rendering the source build", name);
         return {};
+    }
+    if (lod_settings != nullptr) {
+        log_lod_chain(name, shape->get_renderable_mesh().lod_chain);
     }
     return shape;
 }
@@ -568,13 +572,16 @@ auto make_optimized_render_shape_from_staged_build(
     const Element_mappings&             source_mappings,
     const Buffer_mesh&                  source_buffer_mesh,
     const Buffer_info&                  buffer_info,
-    const std::string_view              name
+    const std::string_view              name,
+    const Lod_settings* const           lod_settings,
+    Lod_vertex_data&&                   lod_vertices_in
 ) -> std::shared_ptr<Primitive_render_shape>
 {
     ERHE_PROFILE_FUNCTION();
 
     std::vector<Mesh_optimize_stream> streams      = std::move(streams_in);
     std::vector<uint32_t>             fill_indices = std::move(fill_indices_in);
+    const Lod_vertex_data             lod_vertices = std::move(lod_vertices_in);
 
     // Everything below is in the OPTIMIZED format: the caller gathered the
     // staged bytes into it, the weld compares its strides, and the allocation
@@ -610,6 +617,15 @@ auto make_optimized_render_shape_from_staged_build(
     // order directly.
     Element_mappings composed = compose_element_mappings(source_mappings, optimization);
 
+    // The LOD levels, over the optimized vertices: their indices follow level 0
+    // in the same index allocation.
+    Lod_chain_indices lod_indices{};
+    if (lod_settings != nullptr) {
+        const Lod_vertex_data output_lod_vertices = remap_lod_vertex_data(lod_vertices, optimization.vertex_remap, vertex_count);
+        lod_indices = generate_lod_chain(output_lod_vertices.get_input(), fill_indices, *lod_settings);
+    }
+    const std::size_t total_index_count = index_count + lod_indices.indices.size();
+
     Buffer_mesh buffer_mesh;
     {
         // One atomic multi-pool allocation transaction per mesh - see
@@ -618,7 +634,7 @@ auto make_optimized_render_shape_from_staged_build(
         // build_buffer_mesh_from_triangle_soup().
         const std::lock_guard<std::mutex> allocation_lock{buffer_mesh_allocation_mutex()};
 
-        Buffer_sink_allocation index_allocation = buffer_info.index_buffer_sink.allocate_index_buffer_range(buffer_info.index_type, index_count);
+        Buffer_sink_allocation index_allocation = buffer_info.index_buffer_sink.allocate_index_buffer_range(buffer_info.index_type, total_index_count);
         if (index_allocation.range.count == 0) {
             log_primitive->warn("mesh optimize {}: out of index memory for the optimized variant; rendering the source build", name);
             return {};
@@ -661,6 +677,9 @@ auto make_optimized_render_shape_from_staged_build(
         }
     }
 
+    if (!lod_indices.is_empty()) {
+        fill_indices.insert(fill_indices.end(), lod_indices.indices.begin(), lod_indices.indices.end());
+    }
     buffer_info.index_buffer_sink.enqueue_index_data(buffer_mesh.index_buffer_range, pack_indices(fill_indices, buffer_info.index_type));
     for (std::size_t stream = 0, stream_end = streams.size(); stream < stream_end; ++stream) {
         buffer_info.vertex_buffer_sink.enqueue_vertex_data(buffer_mesh.vertex_buffer_ranges[stream], std::move(streams[stream].data));
@@ -671,6 +690,8 @@ auto make_optimized_render_shape_from_staged_build(
         .first_index    = 0,
         .index_count    = index_count
     };
+    buffer_mesh.lod_chain = make_lod_chain(buffer_mesh.triangle_fill_indices, lod_indices);
+    log_lod_chain(name, buffer_mesh.lod_chain);
     buffer_mesh.vertex_input_key = buffer_info.optimized_vertex_input_key;
     // Welding and reordering move no vertex, so the source build's volumes
     // describe this one exactly.
