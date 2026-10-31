@@ -8,7 +8,12 @@
 ✓step-2a{8f850bb84;request_lod_generation+generate_lods/get_lod_info;geometry+prepared+stored-paths;edit-ops-carry-lod_settings}
 ✓step-2{2ebc93832;Lod-group+Lod_system-in-erhe::scene;Scene_host::on_mesh_lod_changed;forced-range-at-registration;cpu==gpu}
 ✓step-3{8c8bab105;LOD-window+config-lod(editor_settings-v11)+slider-undoable;scene-close-safe}
-?NEXT=user-interactive-pass->feedback-sec-6->step-4a
+✓selection-outline-plan{d6b0d9c29+7046e0b13+6c4891b16+8a1108c02+a1944a9a9+d472e803d;DONE+plan-deleted}
+✓gpu-selection-plan{49caa2fd1;doc/plans/lod_gpu_selection.md;Fable-reviewed}
+✓gpu-sel-step-1{e2fdd1e7a;plumbing;images-identical}
+✓gpu-sel-step-2a{7d63a97be;CPU-lod_lanes;dolly-31/31;Bistro-76us}
+✓gpu-sel-step-2b{ab9ce6176;cull_classify.comp;0-mismatches-M3/M4/KK;ctest-101/101-x4}
+?NEXT=gpu-sel-step-3-CPU-consumers->4-hysteresis->5-shadows->6-Quest(user);LOD-window-interactive-pass(user)
 ?found{no-weld-after-in-place-edit;per-facet-texcoords-no-chain-with-seams-keep;reparent-carrier-only-change-not-re-resolved;scene_roundtrip_verify-pre-existing-failures(Graph_texture-destroyed-on-render-thread-asset_manager.cpp:343);fp16-first-render-outlier}
 
 [TASK::quest-performance]{started-2026-10-24;branch=render-thread;via-harness{opus-coder+fable-review};doc/plans/quest_performance.md;memory-bank/topics/quest.md}
