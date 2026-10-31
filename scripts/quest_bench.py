@@ -547,7 +547,8 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
         }
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
         out_path = RUNS_DIR / f"{stamp}_{name}_{run_index}.json"
-        out_path.write_text(json.dumps(result, indent=2), encoding="utf-8", newline="")
+        with open(out_path, "w", encoding="utf-8", newline="") as f:  # write_text(newline=) needs Python 3.10
+            f.write(json.dumps(result, indent=2))
         print(f"[{run_index}] stored {out_path}")
         return result
     finally:
@@ -638,7 +639,8 @@ def cmd_run(args) -> int:
     if args.repeat > 1:
         summary = repeat_summary(results)
         out_path = RUNS_DIR / f"{stamp}_{bench['name']}_repeat.json"
-        out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8", newline="")
+        with open(out_path, "w", encoding="utf-8", newline="") as f:  # write_text(newline=) needs Python 3.10
+            f.write(json.dumps(summary, indent=2))
         print_repeat(summary)
         print(f"stored {out_path}")
     else:

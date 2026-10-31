@@ -118,8 +118,12 @@ viewpoints is not conservative; it stays the verification oracle (the
   included) get PVS culling, the same set as the occlusion views; previews,
   thumbnails, scene image captures, the id pass and the shadow passes get
   none. Which render contexts register a query box:
-  `doc/editor/rendering.md`. The headset registers none until
-  `doc/plans/pvs.md` step 8.
+  `doc/editor/rendering.md`. The headset's multiview pass registers the
+  box around its located eye positions grown by `pvs_query_margin`, built
+  in the prepare phase with the union culling view
+  (`Headset_view::prepare_pvs_query()`), and streams pages for it like a
+  viewport; the per-eye (non-multiview) path registers none, as for
+  occlusion.
 - D6 Where the bake runs. In the editor: GPU work recorded in the render
   phase, one cell per frame, the way the lightmap offline bake runs
   (`doc/editor/lightmap_baking.md`), driven from the PVS window and from
@@ -317,6 +321,5 @@ more than occlusion culling there (+22 us) or the two together (+30 us).
 
 ## Future work
 
-- [plans/pvs.md](../plans/pvs.md): the headset query box and the Quest
-  gates, rule 3, the near-plane clipped occluders, adaptive cells, page
+- [plans/pvs.md](../plans/pvs.md): the Quest wall gate, rule 3, the near-plane clipped occluders, adaptive cells, page
   compression and the other open items.

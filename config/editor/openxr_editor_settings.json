@@ -494,7 +494,7 @@
         "hotbar_icon_size": 80
     },
     "threading": { "_version": 2, "thread_count": 8, "render_thread": "dedicated_thread" },
-    "post_processing": true,
+    "post_processing": false,
     "use_draw_lists": true,
     "exclude_unlit_primitives": true,
     "geometry_edit_mode": "fork",

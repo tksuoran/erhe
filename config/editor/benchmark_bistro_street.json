@@ -1,0 +1,16 @@
+{
+    "_comment": "Bistro street walk on Quest, inside the PVS grid of the street-slab bakes (doc/plans/pvs.md step 8 and 'Verification'). The head moves on a 2 m straight line through the streaming section's pose 9 (cell 458 of the 4 m bake): from 1 m behind it to 1 m ahead of it along the view direction, at 2.2 m height looking 45 degrees left of -Z, over the 600 measured frames (the path is indexed by measured frame, a timedemo: the same frames every run; frame 600 is never reached, so the walk does not wrap inside the window). Run like benchmark_bistro.json: --editor-args --no-scene --bench-to-device --load-scene <device path of a Save for Quest Bistro file>.",
+    "name": "bistro_street",
+    "warmup_frames": 1500,
+    "measure_frames": 600,
+    "frame_dt": 0.013888889,
+    "settle_timeout_frames": 3600,
+    "passthrough": false,
+    "camera_path": {
+        "type": "keyframes",
+        "frames": [
+            { "frame": 0,   "position": [12.2489, 2.2, 35.1512], "yaw_pitch_roll_deg": [45.0, 0.0, 0.0] },
+            { "frame": 600, "position": [10.8346, 2.2, 33.7370], "yaw_pitch_roll_deg": [45.0, 0.0, 0.0] }
+        ]
+    }
+}

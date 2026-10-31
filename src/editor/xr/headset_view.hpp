@@ -365,6 +365,12 @@ private:
     // before the first combined frustum; add_render_cull_view() then adds
     // no view for the frame.
     void prepare_cull_planes(const glm::mat4& world_from_head);
+    // Prepare phase, after prepare_cull_planes() in a frame whose eye views
+    // were located: the culling view's PVS query box (the located eye
+    // positions, world_from_root placing them, grown by the query margin)
+    // into the frame's planes slot, registered with the headset scene's
+    // draw lists for page streaming. Multiview path only.
+    void prepare_pvs_query(const glm::mat4& world_from_root);
 
     // VR skinned-mesh picking. The raytrace BVH used by
     // update_hover_with_raytrace() is rest-pose only, so it cannot pick the
@@ -451,6 +457,9 @@ private:
         std::array<glm::vec4, 4> planes     {};
         std::optional<glm::vec4> occlusion_near_plane{};
         std::size_t              view_count {0};
+        // PVS query box (prepare_pvs_query()); min > max is no query.
+        glm::vec3                pvs_query_min{ 0.0f};
+        glm::vec3                pvs_query_max{-1.0f};
     };
     // One per frame in flight, indexed by frame index modulo their count:
     // M2 of frame N fills slot N, R of frame N reads it

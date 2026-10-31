@@ -3,7 +3,7 @@
         {
             "_version": 2,
             "name": "OpenXR",
-            "msaa_sample_count": 4,
+            "msaa_sample_count": 1,
             "bindless_textures": false,
             "shadow_enable": true,
             "shadow_resolution": 1024,
