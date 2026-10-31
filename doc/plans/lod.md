@@ -164,6 +164,22 @@ already, so selection adds work inside an existing loop and no new per-frame
 walk. Entries keep a LOD table index. The command template becomes a per-level
 table, written by `publish()` under the same serial check as today.
 
+Both writers get selection in the same step. `culling_classification`
+defaults to `gpu` (28dc7349a), so on devices with
+`Device_info::use_draw_indirect_count` (native Vulkan with `drawIndirectCount`, Metal 3
+and 4) `cull_compact.comp` writes the default path's color and shadow
+commands, and the CPU writer serves the other devices (MoltenVK, OpenGL
+without the count draw) and the `cpu` setting. A selection that only one
+writer has would be invisible on half the devices, and the existing
+CPU / GPU check (`get_cull_classification_check`) is the gate that keeps the
+two equal. The selection function is written once in GLSL-compatible form
+(`precise`, no contraction, the same rule the cull lanes follow) so both
+writers pick the same level bit for bit.
+
+A forced level (step 2) needs no selection at all: the forced range is
+written into the entry's single command template at registration, which both
+writers already copy, so step 2 works unchanged on both paths.
+
 Shadow views select with the main camera's position and projection scale,
 as Godot does, so a caster's shadow matches the level the viewer sees. This
 is the proposed default for D3.
@@ -256,10 +272,16 @@ it is verified before the next step starts.
 - The LOD window's slider becomes a writer of these properties; the
   session-only override is removed.
 
-### Step 4: automatic selection (CPU command path)
+### Step 4: automatic selection (CPU and GPU command paths)
 
 - Per-level command templates, LOD table index per entry, selection in the
-  CPU command writer for color and shadow passes (D3).
+  CPU command writer and in `cull_compact.comp` for color and shadow passes
+  (D3). Per view, the job table carries the selection inputs (view origin,
+  projection scale, threshold) for its view and for the main camera that
+  shadow jobs select with.
+- `get_cull_classification_check` extended to the selected level per
+  command: 0 mismatches on default, heavy, Bistro, four view, both
+  culling-classification settings.
 - `Render_settings` globals plus Settings / graphics-preset UI.
 - Debug view: color by selected level through the existing
   `FLAT_DRAW_COLOR` variant (dbb087c9e). Stats per pass: entries per level
@@ -268,12 +290,9 @@ it is verified before the next step starts.
   `forced 0` byte-identical; a scripted camera dolly shows levels switching
   at the expected distances (`get_lod_stats`).
 
-### Step 5: GPU command path and transitions
+### Step 5: transitions
 
-- Selection in `cull_compact.comp` from the per-level table; the CPU / GPU
-  check (`get_cull_classification_check`) extended to the selected level with
-  0 mismatches.
-- D4's transition choice.
+- D4's transition choice, from the user's feedback on step 4's popping.
 
 ### Step 6: persistence and import
 
@@ -282,8 +301,16 @@ it is verified before the next step starts.
   them.
 - `generate_lods_on_import` per D1.
 - Measure on Bistro: Release desktop (GPU-bound viewport) and Quest, where
-  Bistro is geometry-bound (memory-bank/topics/quest.md), so the triangle
-  reduction should show in frame time.
+  Bistro is geometry-bound (memory-bank/topics/quest.md). The Quest sweep in
+  `doc/reference/quest_bench_runs.md` measures 10.6 ms of binning in every
+  Bistro configuration; binning scales with the submitted triangles, so it
+  is the first number LOD should move. Run `scripts/quest_bench.py
+  --perfetto` with a configuration from `scripts/quest_bench_configs/` before
+  and after, and record both runs (`--record`).
+- The overdraw view (`set_overdraw_visualization`, `get_overdraw_stats`;
+  `doc/plans/overdraw_visualization.md`) in `shaded` mode shows the
+  fragment-side effect: far small triangles at level 0 cost quad overdraw
+  that a coarser level removes.
 
 ### Later, from feedback
 
