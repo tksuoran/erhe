@@ -498,6 +498,7 @@ flowchart TD
 - [plans/uv_editor.md](plans/uv_editor.md) (proposed): UV editor modeled on Blender's
 - [plans/virtualcity_vanishing_meshes.md](plans/virtualcity_vanishing_meshes.md) (proposed): Open defect: overlapping meshes vanish on first hover
 - [plans/vulkan_backend.md](plans/vulkan_backend.md) (proposed): Vulkan backend: known issues
+- [plans/vulkan_texture_heap_sampler_array.md](plans/vulkan_texture_heap_sampler_array.md) (proposed): Vulkan texture heap without descriptor indexing and the other Bifrost (Mali-G52) driver gaps
 - [plans/wasm_webgpu_port.md](plans/wasm_webgpu_port.md) (proposed): WebAssembly + WebGPU port of the editor
 - [plans/weight_paint.md](plans/weight_paint.md) (proposed): Weight painting: outstanding work
 - [plans/xr.md](plans/xr.md) (proposed): XR: outstanding work
