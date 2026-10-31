@@ -944,7 +944,7 @@ Drawing:
   masks plus the culled bits (the CPU lanes have no occlusion term), and
   the GPU commands with the CPU writer's after dropping the culled entries;
   a culled bit the CPU did not set is a mismatch.
-  **PVS** (doc/plans/pvs.md "Runtime consumption"): a potentially visible
+  **PVS** (doc/editor/pvs.md): a potentially visible
   set database (`erhe::scene::Pvs_database`, `doc/erhe/scene.md`) set with
   `set_pvs_database()` (main thread, prepare phase; the editor queues it
   with `enqueue_set_pvs_database()`, applied by `flush_pending()` in order)
@@ -985,7 +985,7 @@ Drawing:
   a disagreement also in `mismatch_count`). `get_cull_view_pvs_counts()`
   returns a view's tested and culled counts of the frame (the CPU lanes'
   decision, which the check shows equal to the GPU's). Staleness
-  (doc/plans/pvs.md D4): the transform, bounds and refresh hooks and a
+  (doc/editor/pvs.md D4): the transform, bounds and refresh hooks and a
   registration compare a tracked object's `compute_pvs_transform_hash()` of
   its world transform and world AABB with its column's `transform_hash`,
   and a column whose last entry is unregistered without a registration
@@ -1000,9 +1000,10 @@ Drawing:
   `Editor::on_close_scene()`), so the entries leaving with the scene mark
   nothing stale. Queued `set_pvs_database()` operations apply in order: the
   last one queued wins.
-  **PVS resident set and page table** (doc/plans/pvs.md "Residency and
-  streaming"): the classification reads a resident set of pages, never the
-  whole database. `set_pvs_database()` and `set_pvs_streaming_settings()`
+  **PVS resident set and page table**: the classification reads a resident
+  set of pages, never the whole database, so a view whose pages are not
+  resident yet is culled by the frustum and occlusion tests only, never
+  wrongly. `set_pvs_database()` and `set_pvs_streaming_settings()`
   (`Pvs_streaming_settings`: `resident_pages`, default 64, and
   `stream_radius_pages`, default 1; the editor pushes them from the settings'
   change sites and at a scene registration) make a `Pvs_residency`, the
@@ -1068,6 +1069,18 @@ Drawing:
   whether the database holds its bits in memory, and per view
   (`Pvs_streaming_view_status`) its page box, activity, wanted and resident
   pages and whether every stored page its box touches is resident.
+  A page whose read fails is logged as a warning, is never requested again
+  by that residency (`Pvs_residency::fail()`) and stays without a slot
+  (everything visible). Streaming runs whether or not the rule is on (only
+  a ready database registers views), so the pages are resident when it is
+  turned on. A database whose stored pages all fit the capacity never
+  evicts: the resident set grows to the pages the views have come near. A
+  capacity below a view's request set ((2r + 1)^3 pages for radius r) keeps
+  the nearest pages; when a view moves by one page, its new pages within
+  one page of the pages it left find no evictable slot (the hysteresis), so
+  a small capacity serves views that move by two or more pages. Sizing: a
+  page is `page_size^3 * words_per_cell` words; Bistro's 3791 columns give
+  119 words per cell, 30 KB per page and 1.9 MB for the default 64 slots.
   The view set, the masks and the per-entry flag scratch are render-phase
   state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.
@@ -1190,7 +1203,7 @@ writers consume), and issues the multi-draw. Chunking (P3a) is applied
 jointly at the `Draw_list_scene` level.
 
 `draw_pvs_face()` is the potentially visible set bake's raster pass
-(`doc/plans/pvs.md` "Bake" 4; `Draw_pvs_face_parameters`): over the
+(`doc/editor/pvs.md` "Bake" 4; `Draw_pvs_face_parameters`): over the
 published opaque and alpha-tested color lists it draws the entries that
 pass the filter, carry a tracked PVS column (`Draw_list::pvs_columns`; the
 bake sets its column table as the scene's database) and lie in the face's
@@ -1212,7 +1225,7 @@ the column of every frame-local entry index of the frame's published lists
 id pass writes to the bake's columns (the bake trace reads it).
 
 **PVS disocclusion passes** (`pvs_disocclusion.hpp`,
-`pvs_disocclusion_pipelines.hpp`; `doc/plans/pvs.md` "Bake" 5) turn one
+`pvs_disocclusion_pipelines.hpp`; `doc/editor/pvs.md` "Bake" 5) turn one
 face's layered buffer (its depth region) into the set of columns (the
 bake's static entries) visible on the face from some point of the cell.
 Tiles are K x K pixels of one layer (chunk (x, y, layer) has index `(layer
@@ -1515,5 +1528,5 @@ for `Shader_variant_cache miss` in the first frames with the setting on.
 - [plans/culling.md](../plans/culling.md): one classification of every entry
   against every pass of the frame, SoA bounds published with the lists, then
   the same on the GPU with indirect command generation.
-- [plans/pvs.md](../plans/pvs.md): a baked potentially visible set per grid
-  cell, read by the classification on the GPU.
+- [plans/pvs.md](../plans/pvs.md): the potentially visible set on the
+  headset and the open items of its bake.

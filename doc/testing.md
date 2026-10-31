@@ -276,6 +276,24 @@ verification"; the commands:
   alternately with the current editor; compare the medians of the same
   view and light.
 
+## Potentially visible set verification
+
+What each gate checks and the current results are in
+[`editor/pvs.md`](editor/pvs.md) "Verification"; the commands:
+
+- **Unit tests** (deviceless): `erhe_scene_tests --gtest_filter=Pvs_database.*`,
+  `erhe_gltf_tests --gtest_filter=Gltf_pvs.*` and
+  `erhe_scene_renderer_tests --gtest_filter=Pvs_*:Cull_lanes.pvs_*`.
+- **Library GPU tests** (label `gpu`): `erhe_scene_renderer_gpu_tests
+  --gtest_filter=Pvs_disocclusion_gpu_test.*`.
+- **Gates** (headless editor; usage in each docstring):
+  `scripts/visible_entries_check.py --editor <editor>` and
+  `scripts/pvs_verify.py --editor <editor> --sections
+  sampled,wall,heavy,bistro,streaming` (each section can run alone, `wall`
+  after `sampled` in the same run; `--trace` buckets the misses with the
+  bake trace). They launch their own editor and restore the editor config
+  files a run may write.
+
 ## Future work
 
 - [plans/graphics_tests.md](plans/graphics_tests.md)

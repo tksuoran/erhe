@@ -400,8 +400,7 @@ readers and the editor's export builder need it and `erhe::usd` does not link
 ## Potentially visible sets
 
 `pvs_database.hpp` owns `erhe::scene::Pvs_database`, the plain-data
-potentially visible set (PVS) database of a scene (`doc/plans/pvs.md`
-"Database"): which baked draw entries can be seen from each cell of a
+potentially visible set (PVS) database of a scene (`doc/editor/pvs.md`): which baked draw entries can be seen from each cell of a
 uniform grid. It holds no GPU objects and has no per-frame API; its GPU
 copy and its consumer live in `erhe::scene_renderer`. It is in
 `erhe::scene` because `erhe::gltf` persists it (the asset-root extension
@@ -426,7 +425,8 @@ library.
   the cell of a world position or nullopt outside the grid.
 - Pages: cells are grouped into pages of `page_size`^3 cells, the storage
   unit and the unit of GPU residency and streaming
-  (`doc/erhe/draw_list_renderer.md` Q6 "PVS"). The page table
+  (`doc/erhe/draw_list_renderer.md` Q6 "PVS resident set and page
+  table"). The page table
   (`Pvs_page_entry`, 16 bytes: `word_offset`, reserved, `cells_with_pvs`)
   has one entry per page; `page_of_cell()` and `local_cell()` locate a
   cell. A page with no cell holding a PVS is not stored

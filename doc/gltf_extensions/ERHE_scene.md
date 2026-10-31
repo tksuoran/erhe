@@ -37,7 +37,7 @@ plain interchange exports never do.
   scene id, the lightmap tile overrides, the variant selections and the
   potentially visible set bake grid: `pvs_region_min` and `pvs_region_max`
   (world-space corners of the bake region, both zero for unset) and
-  `pvs_cell_size` (`doc/plans/pvs.md` D2). Omitted entirely when every
+  `pvs_cell_size` (`doc/editor/pvs.md` D2). Omitted entirely when every
   field has its default.
 - `styles` (optional): the content library's style items
   (`doc/editor/style_library.md` D4): `name` and `properties` (the style's local

@@ -297,7 +297,7 @@ The legacy stand-alone shaders are folded in as variant axes:
   writes the packed id instead of the lit color. Every other ID-render
   key is a position pass that writes the id for the whole surface. The
   id outputs use locations 19 and 20, which no lit varying uses.
-- The potentially visible set bake's layered buffer (`doc/plans/pvs.md`
+- The potentially visible set bake's layered buffer (`doc/editor/pvs.md`
   "Bake" 4) is drawn with the `VARIANT_PVS_DEPTH` and `VARIANT_PVS_ID`
   boolean axes (either derives `ERHE_VARIANT_PVS`), resolved from a color
   list's primitive key by `Draw_list_scene::draw_pvs_face()`. The vertex

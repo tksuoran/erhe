@@ -4,8 +4,8 @@ Stability: experimental
 
 ## Contributors / status
 
-erhe project. Draft vendor extension. The plan that introduces it is
-[`../plans/pvs.md`](../plans/pvs.md).
+erhe project. Draft vendor extension. The subsystem that writes and reads
+it is described in [`../editor/pvs.md`](../editor/pvs.md).
 
 ## Dependencies
 
@@ -75,15 +75,15 @@ Every float is a float32 written as a C99 hexadecimal floating-point string
   `lx + page_size * (ly + page_size * lz)` with `l = cell % page_size`.
 - `column_count`: number of columns.
 - `bit_word_count`: number of uint32 words in `bits`.
-- `bake`: the parameters the bake ran with (`doc/plans/pvs.md` "Bake"):
+- `bake`: the parameters the bake ran with (`doc/editor/pvs.md` "Bake"):
   `method` (`"sampled"`: the union of id captures from random viewpoints in
   each cell, not conservative, a verification oracle; `"disocclusion"`: the
   conservative disocclusion-buffer bake), `face_resolution`, `tile_size`,
   `layer_count`, `samples_per_face` (integers), `face_fov` (radians),
   `silhouette_tests` (boolean, optional, false when absent: rule 3 of the
   disocclusion bake) and `duration_seconds` (the bake's wall-clock time). A reader ignores members
-  it does not know (files written before the bounds vote carry
-  `min_entry_pixels`).
+  it does not know (some files carry `min_entry_pixels`, which no reader
+  uses).
 - `column_identities`: `column_count` pairs `[node, primitive]`: column `c`
   is mesh primitive `primitive` of the mesh of glTF node `node` of this
   asset. A loader resolves the node index to that node's identity (its

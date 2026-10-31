@@ -693,7 +693,7 @@ windowed: an armed capture is collected only after its frame ended, and no
 capture is re-armed while one waits to be collected).
 
 **Whole-image id capture** (`get_visible_entries`; `scene/scene_id_capture.*`)
-is the exact from-point visibility oracle of [pvs.md](../plans/pvs.md): the
+is the exact from-point visibility oracle of [pvs.md](pvs.md): the
 set of mesh primitives with at least one pixel in the id image of an explicit
 camera pose. A request creates one `Scene_id_capture_node`, a rendergraph
 node with no links that owns its id color (`format_8_vec4_unorm`, cleared to
@@ -883,6 +883,7 @@ Per-library configuration structs are loaded from individual JSON files in `conf
 - `developer/` -- Developer-only windows (clipboard, commands, composer, rendergraph, etc.)
 - `experiments/` -- Experimental features (gradient editor, network, sheet)
 - Mesh modeling (experimental; `tools/mesh_component_selection_tool.*`, `transform/mesh_component_transform.*`) -- the modal topology tools in a mesh component mode (loop cut): preview, topology step, chained slide, one undo entry. Described in `doc/editor/mesh_modeling.md`; component selection in `doc/editor/mesh_component_selection.md`
+- Potentially visible sets (experimental; `renderers/pvs_*`, `windows/pvs_window.*`, `mcp/mcp_server_pvs.cpp`) -- offline per-cell visibility bake with the disocclusion buffer method, stored in the scene file as `ERHE_pvs` and read by the culling classification of the viewports, with the pages streamed from the file. Described in `doc/editor/pvs.md`
 - Lightmap baking (experimental; `renderers/lightmap_*`) -- progressive GPU lightmap baker built on Vulkan ray query: automatic lightmap UV unwrap, world-space tile partitioning with per-tile atlases, denoise and seam handling, tiles streamed from disk. Described in `doc/editor/lightmap_baking.md`; the atlas viewer in `doc/editor/lightmap_texture_viewer.md`
 
 ## Component Construction Rules
