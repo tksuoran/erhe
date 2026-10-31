@@ -342,9 +342,16 @@ settings and is not queued: the edit's end queues the re-optimization,
 which builds the chain. A primitive whose settings are unchanged and whose
 variant is live is skipped, and with mesh optimization off only the settings
 are set. A mesh that cannot simplify (generation stops at the first step)
-gets a variant without chain; meshes whose texcoords are per facet (the
-geometry operations generate facet texture coordinates) have seams at every
-vertex and simplify only with `Lod_seams::permissive`. The MCP tools
+gets a variant without chain, and the request is reported:
+`generate_lod_chain()` warns with the reason (invalid input, or the first
+step's result against its target, the simplification vertex count against
+the distinct positions, and per seam float how many position-coincident
+vertices differ in it), and the commit warns naming the mesh. Meshes whose
+texcoord 0 is per facet have seams at every vertex and simplify only with
+`Lod_seams::permissive`. The generated facet texture coordinates in
+texcoord 1 do not block it: the primitive builder writes texcoord 1 as zero
+wherever aniso control Y is 0, since only brushed metal (through aniso
+control Y, `standard.frag`) reads it there. The MCP tools
 `generate_lods` and `get_lod_info` drive and inspect it
 (`doc/agents/mcp_server_usage.md`), and so does the editor's LOD window
 (`doc/editor/lod.md`); completion is `get_async_status` idle.
@@ -357,9 +364,11 @@ Drawing reads level 0 unless the mesh's `Lod` properties force a level
 - Geometry path: `take_optimizable_snapshot()` also extracts the LOD inputs
   of the corner prefix (`extract_lod_vertex_data()`: float positions,
   normals, colors, joints, and the seam attributes -- every attribute of the
-  optimized format other than positions, normals, tangents and bitangents,
-  with the tangent contributing its sign; the facet id is not in that format,
-  so it is not a seam attribute). `make_optimized_render_shape_from_staged_build()`
+  optimized format other than positions, normals, tangents, bitangents and
+  the lightmap UVs (texcoord 2, charted per facet; LOD levels do not keep
+  them consistent, lightmapped LODs are a separate matter), with the tangent
+  contributing its sign; the facet id is not in that format, so it is not a
+  seam attribute). `make_optimized_render_shape_from_staged_build()`
   carries them to the welded output vertices through the forward remap
   (`remap_lod_vertex_data()`), generates the chain over the optimized fill
   indices and sizes the index allocation for level 0 plus the levels.

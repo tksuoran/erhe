@@ -1007,9 +1007,18 @@ void Build_context::build_vertex_texcoord(size_t usage_index)
     std::optional<GEO::vec2f> corner_texcoord = mesh_attributes.corner_texcoord(usage_index).try_get(mesh_corner);
     std::optional<GEO::vec2f> vertex_texcoord = mesh_attributes.vertex_texcoord(usage_index).try_get(mesh_vertex);
 
-    GEO::vec2f texcoord = 
+    GEO::vec2f texcoord =
         corner_texcoord.has_value() ? corner_texcoord.value() :
         vertex_texcoord.has_value() ? vertex_texcoord.value() : GEO::vec2f{0.0f, 0.0f};
+
+    // Texcoord 1 feeds the brushed metal tangent space only where aniso
+    // control Y is non-zero (standard.frag). Elsewhere its value has no
+    // effect, and the per-facet values generate_facet_texture_coordinates
+    // writes there would split every corner from its neighbours - in the
+    // optimizer weld and as a LOD seam - so it is written as zero.
+    if ((usage_index == 1) && (get_aniso_control().y == 0.0f)) {
+        texcoord = GEO::vec2f{0.0f, 0.0f};
+    }
 
     attribute_writers.texcoord_0->write(root.vertex_attributes.texcoord[usage_index], texcoord);
 }
@@ -1057,7 +1066,7 @@ void Build_context::build_vertex_color(size_t usage_index)
     attribute_writers.color_0->write(root.vertex_attributes.color[usage_index], color);
 }
 
-void Build_context::build_vertex_aniso_control()
+auto Build_context::get_aniso_control() const -> GEO::vec2f
 {
     // X is used to modulate anisotropy level:
     //   0.0 -- Anisotropic
@@ -1068,12 +1077,15 @@ void Build_context::build_vertex_aniso_control()
     std::optional<GEO::vec2f> corner_aniso_control = mesh_attributes.corner_aniso_control.try_get(mesh_corner);
     std::optional<GEO::vec2f> facet_aniso_control  = mesh_attributes.facet_aniso_control .try_get(mesh_facet);
     std::optional<GEO::vec2f> vertex_aniso_control = mesh_attributes.vertex_aniso_control.try_get(mesh_vertex);
-    GEO::vec2f aniso_control = 
+    return
         corner_aniso_control.has_value() ? corner_aniso_control.value() :
         facet_aniso_control .has_value() ? facet_aniso_control .value() :
         vertex_aniso_control.has_value() ? vertex_aniso_control.value() : GEO::vec2f{1.0f, 1.0f};
+}
 
-    attribute_writers.aniso_control->write(root.vertex_attributes.aniso_control, aniso_control);
+void Build_context::build_vertex_aniso_control()
+{
+    attribute_writers.aniso_control->write(root.vertex_attributes.aniso_control, get_aniso_control());
 }
 
 void Build_context::build_centroid_position()

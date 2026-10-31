@@ -158,6 +158,7 @@ private:
     void build_vertex_texcoord     (size_t usage_index);
     void build_vertex_color        (size_t usage_index);
     void build_vertex_aniso_control();
+    [[nodiscard]] auto get_aniso_control() const -> GEO::vec2f;
     void build_vertex_joint_indices(size_t usage_index);
     void build_vertex_joint_weights(size_t usage_index);
 
