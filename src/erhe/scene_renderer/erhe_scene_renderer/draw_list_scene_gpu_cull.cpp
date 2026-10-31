@@ -487,11 +487,11 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             glm::uvec4 pvs_pages {0u};
             glm::vec4  pvs_grid  {0.0f};
             if (pvs_database != nullptr) {
-                const erhe::scene::Pvs_header& header = pvs_database->get_header();
-                pvs_header = glm::uvec4{1u, pvs_database->get_words_per_cell(), header.page_size, 0u};
-                pvs_cells  = glm::uvec4{header.cell_counts, 0u};
+                const erhe::scene::Pvs_header& pvs_db_header = pvs_database->get_header();
+                pvs_header = glm::uvec4{1u, pvs_database->get_words_per_cell(), pvs_db_header.page_size, 0u};
+                pvs_cells  = glm::uvec4{pvs_db_header.cell_counts, 0u};
                 pvs_pages  = glm::uvec4{pvs_database->get_page_dims(), pvs_database->get_words_per_page()};
-                pvs_grid   = glm::vec4{header.grid_origin, cull_lanes::get_pvs_inverse_cell_size(*pvs_database)};
+                pvs_grid   = glm::vec4{pvs_db_header.grid_origin, cull_lanes::get_pvs_inverse_cell_size(*pvs_database)};
             }
             std::memcpy(gpu_data.data() + classifier.get_view_pvs_header_offset(), &pvs_header, sizeof(pvs_header));
             std::memcpy(gpu_data.data() + classifier.get_view_pvs_cells_offset (), &pvs_cells,  sizeof(pvs_cells));
