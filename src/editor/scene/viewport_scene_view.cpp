@@ -212,10 +212,16 @@ void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_
     // Weight_display's joint weight ramp inputs; the colors are assigned
     // into the slot's vector, which keeps its capacity.
     const App_rendering& app_rendering = *m_context.app_rendering;
-    state.debug_joint_indices = app_rendering.debug_joint_indices;
-    state.debug_target_joint  = app_rendering.debug_target_joint.lock();
-    state.debug_joint_colors  = app_rendering.debug_joint_colors;
-    snapshot_render_view(state.camera.get());
+    {
+        ERHE_PROFILE_SCOPE("prepare_render debug joints");
+        state.debug_joint_indices = app_rendering.debug_joint_indices;
+        state.debug_target_joint  = app_rendering.debug_target_joint.lock();
+        state.debug_joint_colors  = app_rendering.debug_joint_colors;
+    }
+    {
+        ERHE_PROFILE_SCOPE("prepare_render snapshot_render_view");
+        snapshot_render_view(state.camera.get());
+    }
 
     // The same gates as execute_rendergraph_node(): a disabled node is not
     // executed, and the node renders nothing without a size, scene or camera.
@@ -259,21 +265,28 @@ void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_
     const erhe::renderer::View debug_view = erhe::renderer::Debug_renderer::view_from_camera(
         *context.camera, context.viewport, m_context.context_window->get_scale_factor(), get_conventions()
     );
-    const std::size_t frame_slot = m_context.debug_renderer->begin_frame(
-        context.viewport,
-        std::span<const erhe::renderer::View>(&debug_view, 1)
-    );
+    std::size_t frame_slot = 0;
+    {
+        ERHE_PROFILE_SCOPE("prepare_render debug_renderer begin_frame");
+        frame_slot = m_context.debug_renderer->begin_frame(
+            context.viewport,
+            std::span<const erhe::renderer::View>(&debug_view, 1)
+        );
+    }
     state.tools_frame_slot = frame_slot;
     m_context.text_renderer->set_frame_slot(frame_slot);
 
     // Sent before the tools record their geometry: subscribers refresh
     // per-view state (the transform gizmo's view scale) that
     // render_viewport_tools() reads.
-    m_context.app_message_bus->render_scene_view.send_message(
-        Render_scene_view_message{
-            .scene_view = this
-        }
-    );
+    {
+        ERHE_PROFILE_SCOPE("prepare_render render_scene_view message");
+        m_context.app_message_bus->render_scene_view.send_message(
+            Render_scene_view_message{
+                .scene_view = this
+            }
+        );
+    }
 
     m_context.tools        ->render_viewport_tools(context);
     m_context.app_rendering->render_viewport_renderables(context);
