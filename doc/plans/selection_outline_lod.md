@@ -26,7 +26,10 @@ editor, stop it afterwards).
 - Shader debug fills draw through the draw lists since 6d2a0cc37 (from
   `render-thread`), so a shader debug view draws the forced level too.
   User verified.
-- NEXT: step 2b, then step 3, then step 4.
+- Step 2b DONE: the edge feed resolves each mesh's color from the pass's
+  primitive settings (`Primitive_interface_settings::get_pass_color()`), so
+  the color source and the hovered color reach the wide-line edges.
+- NEXT: step 3, then step 4.
 
 Verification recipe (windowed editor, MCP on 127.0.0.1:3743, read the port
 from `logs/log.txt`): `create_shape` torus `{"position":[0,0.8,-4],
@@ -174,18 +177,14 @@ levels - the root cause.
 
 ### Step 2b: edge lines honor the color source
 
-`Render_style_appearance::edge_lines_color_source` (constant color or a
-per-primitive source) does not reach the wide-line edges:
-`App_rendering::prepare_wide_line_feed()` passes one flat color per mesh
-(`settings.get_selected_color()`), `Content_wide_line_record` holds one
-`color`, and the compute pass emits it per record. A hovered, not selected
-mesh in the selection outline pass gets `constant_color0` rather than
-`constant_color1`. The feed resolves the color per mesh / primitive from the
-pass's `Primitive_interface_settings` the way the primitive buffer writers
-do for the bucket and draw-list records (the color source, hovered / active
-flags), so edge lines show the configured source in the viewports and the
-headset. User requirement (2026-10-31): edge lines respect the color source
-setting.
+Done. `Content_wide_line_renderer::prepare_mesh()` takes the pass's
+`Primitive_interface_settings` and resolves each mesh's edge-line color with
+`Primitive_interface_settings::get_pass_color()`, the rule the bucket and
+draw-list record writers use (the color source, the hovered and active-item
+colors), so `Render_style_appearance::edge_lines_color_source` reaches the
+wide-line edges in the viewports and the headset, and a hovered, not
+selected mesh in the selection outline pass takes `constant_color1`
+(`doc/erhe/scene_renderer.md`). User requirement (2026-10-31).
 
 ### Step 3: stencil mask passes on the draw lists
 

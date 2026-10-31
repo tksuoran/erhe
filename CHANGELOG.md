@@ -36,6 +36,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Primitive_interface_settings::get_pass_color()`,
+  the record color rule of the primitive record writers.
 - `erhe::scene_renderer`: shader debug modes on the draw-list path:
   `Draw_color_parameters::shader_debug` and `shader_debug_layers` (the
   lists of those layers draw with that `SHADER_DEBUG` variant; empty: every
@@ -1181,6 +1183,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::scene_renderer`: `Content_wide_line_renderer::prepare_mesh()` and
+  `add_mesh()` take the pass's `Primitive_interface_settings` in place of a
+  color and resolve each mesh's edge-line color with it (the color source,
+  the hovered color).
 
 - `erhe::scene_renderer`: `Content_wide_line_renderer::prepare_mesh()` and
   `add_mesh()` take the `lod_level` the mesh's fill draws (after `mesh`);

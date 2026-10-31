@@ -253,6 +253,7 @@ alpha tested, premultiplied for translucent).
 - Blend: premultiplied alpha, alpha-to-coverage
 - Draws outline only where bit 7 is NOT set (outside the selected mesh silhouette), then sets bit 7 to prevent double-drawing
 - The edge lines are those of the LOD level the mesh's fill draws (`doc/editor/lod.md` "Edge lines and the selection outline")
+- Color: the pulsing selection color for a selected mesh (the active item's own pulsing color for the active item, `doc/editor/active_item.md` D5) and `constant_color1` for a hovered mesh that is not selected; the feed resolves it per mesh from the pass's primitive settings by the rule of the fill records (`Primitive_interface_settings::get_pass_color()`). The edge-line passes (11-13) resolve theirs the same way, so a render style's `edge_lines_color_source` (constant color or mesh wireframe color) reaches the wide-line edges
 
 ### Sky
 
