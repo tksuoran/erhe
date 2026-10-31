@@ -5,7 +5,8 @@
 
 [STATE_2026-10-31]
 @complete-on-desktop::steps-1-7-landed{a1eb7cf57..5eace01e3;commits-per-step-in-doc/plans/pvs.md-"Build order"}
-@left::step-8-headset{needs-Quest:union-view-query-box+quest_occlusion_wall_check.py-extended+Quest-measurement}+Open-list-in-plan
+@left::step-8-Quest-wall-gate{quest_occlusion_wall_check.py-extended-with-PVS}+Open-list-in-plan
+@headset-2026-10-31::Headset_view::prepare_pvs_query{M2;located-eye-positions+-pvs_query_margin;register_pvs_view;multiview-only}+Quest-3-measured{6-bakes-6..1m-Save-for-Quest-headless;benchmark_bistro_street.json-2m-walk-timedemo;clustered-43-lights+1-dir-light;table->doc/plans/pvs.md-Verification;occlusion>>PVS;PVS+occlusion==occlusion-all-cells;PVS-alone-1m-best-2m-worst-unexplained(no-per-frame-cull-counts);bits_hash-on-device==desktop}
 @cost-measured-2026-10-31::Release-headless-M3-Bistro{framed+bench-cameras-OUTSIDE-street-slab-grid->PVS-tests-nothing,cost~0(classify-+2-6us);street-pose-cell-458:PVS-culls-203/601,GPU-Main-1956->1812us(-144),occlusion-alone-+22us-there,both-+30us;occlusion-pass-time-not-separable-on-Metal(inside-view-render-pass);table->doc/plans/pvs.md-Verification;driver=memory-bank/local/pvs_cost_2026_10_31/pvs_cost_bench.py(render_thread_bench.py-cannot-load-Bistro/toggle-settings)}
 @user-decisions::D1-storage-in-glb+D2-region-Scene_settings+D4-strict-staleness+paged-layout(2026-10-30);wall-leaks-12/48-accepted(small-leaks-ok,tighten-later);rule-3-opt-in-off;all-editor-runs-headless
 @harness::opus-coder+opus-review-per-step;Fable-advisor-for-stuck-pieces;orchestrator-reruns-riskiest-gate-on-build_xcode_metal_headless-before-each-commit

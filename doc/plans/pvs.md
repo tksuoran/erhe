@@ -65,18 +65,10 @@ they cite the documents directly ("Open" below), the sections are:
    resident set and page table", `doc/erhe/scene.md`.
 7. Documentation: `doc/editor/pvs.md` and the documents it lists; this
    plan reduced to what is outstanding.
-8. Headset, when a Quest is available again. The headset's draw-list passes
-   register a query box with the union view (both eye positions plus
-   `pvs_query_margin`, computed in M2 with the union view,
-   `Headset_view::prepare_cull_planes()`); the per-eye (non-multiview) path
-   registers none, as for occlusion. On the Quest the database's header,
-   columns and page table load with the scene and the pages around the
-   headset stream from the `.glb`; per frame the headset pays the
-   classification's extra reads and at most one page upload. Built and
-   compiled in a tree with OpenXR; gated by the Quest wall gate
-   (`scripts/quest_occlusion_wall_check.py` extended with the PVS) and the
-   Quest measurement under "Verification". Until then the headset's views
-   register an empty query box.
+8. Headset. The query box and its registration are built
+   (`Headset_view::prepare_pvs_query()`, `doc/editor/pvs.md` D5) and
+   measured on a Quest 3 ("Verification"). Left: the Quest wall gate
+   (`scripts/quest_occlusion_wall_check.py` extended with the PVS).
 
 ## Verification
 
@@ -134,11 +126,45 @@ by up to 120 us; GPU `Main` / tick / R in us):
   Metal 3; the 2026-10-24 numbers of `doc/plans/occlusion_culling.md` are
   Metal 4 from an earlier tree, so not directly comparable).
 
-Still to measure:
+Quest 3 (2026-10-31; release APK, 72 Hz, multiview, GPU
+classification, no MSAA, the six street-slab bakes of 6 to 1 m written
+with Save for Quest by the headless editor; `benchmark_bistro_street.json`:
+a 2 m walk at 2.2 m height through the street pose over 600 measured
+frames, a timedemo with the same frames every run; two runs per
+configuration; fps per run, "-" = cell size not applicable). The results
+are bit-identical to the desktop bakes (`bits_hash` read back on the
+device); every needed page was resident before the measured window.
 
-- Quest (step 8): the headset Bistro benchmark
-  (`doc/plans/quest_performance.md`) before and after, with the database
-  baked on the desktop and saved into `bistro_quest.glb`.
+| PVS cell | occlusion | clustered (43 lights) fps | one directional light fps |
+|---|---|---|---|
+| off | off | 10.0 / 10.0 | 20.3 / 20.5 |
+| off | on | 13.1 / 13.0 | 49.4 / 49.7 |
+| 6 m | off | 12.0 / 12.5 | 38.4 / 38.8 |
+| 5 m | off | 12.0 / 12.0 | 38.2 / 38.1 |
+| 4 m | off | 12.1 / 12.2 | 39.7 / 39.7 |
+| 3 m | off | 12.0 / 12.1 | 39.4 / 39.5 |
+| 2 m | off | 12.9 / 11.9 | 38.0 / 37.8 |
+| 1 m | off | 12.6 / 12.2 | 40.9 / 40.9 |
+| 6 m | on | 14.0 / 13.1 | 49.6 / 49.9 |
+| 5 m | on | 13.0 / 13.0 | 49.8 / 49.7 |
+| 4 m | on | 13.1 / 13.1 | 49.6 / 49.9 |
+| 3 m | on | 13.1 / 13.0 | 49.6 / 50.0 |
+| 2 m | on | 13.0 / 13.1 | 49.5 / 49.6 |
+| 1 m | on | 13.1 / 13.1 | 49.6 / 50.0 |
+
+- Occlusion is the larger win; PVS on top of occlusion adds nothing
+  measurable at any cell size (both leave the same opaque set, 327 of
+  3304 entries at the walk's last frame).
+- PVS alone: smaller cells help only without occlusion, and not in cell
+  size order (1 m best, 2 m worst, about 3 fps apart with one light);
+  per-frame culled counts are not recorded, so the 2 m result is
+  unexplained.
+- Clustered shading dominates the frame (the multiview pass stays near
+  75 ms with every culling on).
+- 3 of the 56 runs had an intermittent compositor slowdown (compositor
+  GPU time above 3 ms against 1.6 ms, the multiview pass 30 to 65 ms
+  longer on the same frames); those configurations were rerun and the
+  slowed runs are excluded.
 
 ## Open
 

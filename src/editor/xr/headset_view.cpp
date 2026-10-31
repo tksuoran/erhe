@@ -24,6 +24,7 @@
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "renderers/composer.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/render_style.hpp"
@@ -1826,7 +1827,8 @@ void Headset_view::update_camera_node()
     // placeholder 35-degree projection from setup_root_camera(). The eye views
     // are located here (before the rendergraph) via Headset::locate_views; on
     // failure the previous frustum is kept.
-    if ((m_headset != nullptr) && m_headset->locate_views(m_located_eye_views)) {
+    const bool eye_views_located = (m_headset != nullptr) && m_headset->locate_views(m_located_eye_views);
+    if (eye_views_located) {
         cache_combined_eye_frustum(m_located_eye_views, orientation);
     }
     update_root_camera_projection();
@@ -1837,6 +1839,9 @@ void Headset_view::update_camera_node()
     // taken about is this one.
     const glm::mat4 world_from_root = m_root_node ? m_root_node->world_from_node() : glm::mat4{1.0f};
     prepare_cull_planes(world_from_root * world_from_view);
+    if (eye_views_located) {
+        prepare_pvs_query(world_from_root);
+    }
 }
 
 void Headset_view::prepare_render_view()
@@ -1951,8 +1956,10 @@ void Headset_view::prepare_cull_planes(const glm::mat4& world_from_head)
     ERHE_VERIFY(!m_cull_planes_slots.empty()); // sized at construction
     const uint64_t frame_index = m_app_context.graphics_device->get_frame_index();
     Cull_planes&   slot        = m_cull_planes_slots[frame_index % m_cull_planes_slots.size()];
-    slot.frame_index = frame_index;
-    slot.plane_count = 0;
+    slot.frame_index   = frame_index;
+    slot.plane_count   = 0;
+    slot.pvs_query_min = glm::vec3{ 0.0f}; // empty until prepare_pvs_query()
+    slot.pvs_query_max = glm::vec3{-1.0f};
 
     // Head space: -Z forward, +X right, +Y up. fov_left / fov_down are
     // negative angles, fov_right / fov_up positive. Each side plane passes
@@ -2004,6 +2011,50 @@ void Headset_view::prepare_cull_planes(const glm::mat4& world_from_head)
     }
 }
 
+void Headset_view::prepare_pvs_query(const glm::mat4& world_from_root)
+{
+    // The PVS query box of the headset color passes' culling view
+    // (doc/plans/pvs.md step 8): the box around the eye positions located
+    // in this prepare phase, grown by Render_settings::pvs_query_margin,
+    // registered with the headset scene's draw lists as the residency
+    // policy's change site (as Composer::prepare_pvs_query() does for a
+    // viewport). Only the multiview pass consumes it; the per-eye path
+    // registers none, as for occlusion. Written into this frame's slot,
+    // which prepare_cull_planes() stamped; without planes this frame there
+    // is no culling view to carry the box.
+    if (!m_use_multiview || m_located_eye_views.empty()) {
+        return;
+    }
+    ERHE_VERIFY(!m_cull_planes_slots.empty()); // sized at construction
+    const uint64_t frame_index = m_app_context.graphics_device->get_frame_index();
+    Cull_planes&   slot        = m_cull_planes_slots[frame_index % m_cull_planes_slots.size()];
+    if ((slot.frame_index != frame_index) || (slot.plane_count == 0)) {
+        return;
+    }
+    // The eye cameras are posed at the located eye positions plus the
+    // camera offset, under the scene root node (update_camera_node()).
+    glm::vec3 eye_min{ std::numeric_limits<float>::max()};
+    glm::vec3 eye_max{-std::numeric_limits<float>::max()};
+    for (const erhe::xr::Render_view& view : m_located_eye_views) {
+        const glm::vec3 eye_in_world = glm::vec3{world_from_root * glm::vec4{view.view_pose.position + get_camera_offset(), 1.0f}};
+        eye_min = glm::min(eye_min, eye_in_world);
+        eye_max = glm::max(eye_max, eye_in_world);
+    }
+    const float margin = m_app_context.render_settings->pvs_query_margin;
+    slot.pvs_query_min = eye_min - glm::vec3{margin};
+    slot.pvs_query_max = eye_max + glm::vec3{margin};
+
+    const std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root->get_draw_list_scene();
+    if (draw_list_scene == nullptr) {
+        return;
+    }
+    draw_list_scene->register_pvs_view(get_pvs_view_key(*this), frame_index, slot.pvs_query_min, slot.pvs_query_max);
+}
+
 void Headset_view::add_render_cull_view()
 {
     erhe::utility::Thread_roles::assert_render_thread();
@@ -2040,10 +2091,14 @@ void Headset_view::add_render_cull_view()
     if (draw_list_scene == nullptr) {
         return;
     }
+    // The PVS query box M2 wrote (prepare_pvs_query()); empty (min > max)
+    // on the per-eye path and while no eye views were located.
     m_render_cull_view = draw_list_scene->add_cull_view(
         frame_index,
         erhe::scene_renderer::Draw_purpose::color,
-        std::span<const glm::vec4>{slot.planes.data(), slot.plane_count}
+        std::span<const glm::vec4>{slot.planes.data(), slot.plane_count},
+        slot.pvs_query_min,
+        slot.pvs_query_max
     );
     m_render_cull_draw_list_scene = draw_list_scene;
 

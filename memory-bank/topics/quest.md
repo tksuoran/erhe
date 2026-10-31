@@ -29,7 +29,7 @@
 default::XR-multiview-7.09ms(=app-frame;grid-2.0;shadow-math~1/light);compositor-1.75ms-passthrough-off(2.42-on);ImGui-hotbar-0.04
 heavy::line-compute-39.3ms(!)+XR-multiview-21.3+shadow-1.41=61.7(app_gpu-52.7;timer-spans-include-compositor-preemption)
 !next::edge/wide-line-compute-runs-for-every-mesh-in-headset-pass->make-it-cost-only-what-is-shown
-?open::collapse-1-in-4-runs-unconfirmed-fixed;compositor-time-bimodal-1.35|2.1ms-after-passthrough-off(unknown-cause);passthrough-pause-not-verified-compositor-side;glTF-default-sampler-nearest;worn-visual-check-draw-lists+one-shadow-light
+?open::compositor-slowdown-still-occurs-2026-10-31(3/56-Bistro-street-runs;compositor-GPU>3ms-vs-1.6;multiview+30-65ms;passthrough-off;flag-and-rerun);compositor-time-bimodal-1.35|2.1ms-after-passthrough-off(unknown-cause);passthrough-pause-not-verified-compositor-side;glTF-default-sampler-nearest;worn-visual-check-draw-lists+one-shadow-light
 
 [OFF_HEAD_RUNS]{VERIFIED-2026-10-24}
 ✓recipe::force-stop+KEYCODE_WAKEUP+am-broadcast-com.oculus.vrpowermanager.prox_close+setprop-debug.oculus.guardian_pause-1->normal-VR-launch->FOCUSED-in-4s;72Hz-full-tick-13.88ms==worn;GPU-43%;compositor-shows-layer;no-Controllers-Required-dialog;restore=force-stop+automation_disable+guardian_pause-0
