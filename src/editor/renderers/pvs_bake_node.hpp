@@ -81,7 +81,7 @@ public:
     std::optional<uint32_t>          readback_layer{};
     // The bake trace (doc/plans/pvs.md "Bake" 7): the columns to trace;
     // empty for an untraced cell.
-    std::vector<uint32_t>            trace_columns;
+    std::vector<uint32_t>            trace_columns{};
     // The bake trace's depth dump: the face (0 .. 5, sample 0) whose whole
     // depth region is copied to the host for the CPU diagnostics.
     std::optional<uint32_t>          trace_depth_face{};
@@ -103,8 +103,8 @@ public:
     uint32_t                                tile_count      {0};
     uint32_t                                tiles           {0};
     std::size_t                             word_count      {0};
-    std::unique_ptr<erhe::graphics::Buffer> readback;
-    std::unique_ptr<erhe::graphics::Buffer> trace_buffer;
+    std::unique_ptr<erhe::graphics::Buffer> readback{};
+    std::unique_ptr<erhe::graphics::Buffer> trace_buffer{};
 };
 
 // What the render phase recorded for a cell (Pvs_bake_node::take_completed()).
@@ -123,20 +123,20 @@ public:
     // readback_layer: the layer's depth words, then its id_min words
     // (face_resolution^2 each, the layered buffer's row order).
     std::optional<uint32_t>                 readback_layer{};
-    std::unique_ptr<erhe::graphics::Buffer> readback;
+    std::unique_ptr<erhe::graphics::Buffer> readback{};
     // A bake cell: the cell's visible columns (bit c = column c,
     // column_word_count words), the bounds vote over its faces; a traced
     // cell also the column of every frame-local entry
     // (Draw_list_scene::get_published_pvs_entry_columns()).
-    std::unique_ptr<erhe::graphics::Buffer> column_words;
+    std::unique_ptr<erhe::graphics::Buffer> column_words{};
     uint32_t                                column_word_count{0};
-    std::vector<uint32_t>                   entry_columns;
+    std::vector<uint32_t>                   entry_columns{};
     // A traced cell: per face pass.
-    std::vector<Pvs_face_trace>             traces;
+    std::vector<Pvs_face_trace>             traces{};
     // The trace's depth dump (Pvs_cell_job::trace_depth_face): the face's
     // depth region, face_resolution^2 * layer_count words.
     std::optional<uint32_t>                 trace_depth_face{};
-    std::unique_ptr<erhe::graphics::Buffer> trace_depth;
+    std::unique_ptr<erhe::graphics::Buffer> trace_depth{};
 };
 
 // The rendergraph node of a potentially visible set bake (Pvs_baker,
