@@ -366,7 +366,7 @@ public:
     // the frame's slot (Draw_list_scene::publish), under item_host_mutex,
     // with the frame's culling classification and occlusion culling
     // settings. No-op without a Draw_list_scene.
-    void publish_draw_lists(uint64_t frame_index, std::size_t frames_in_flight, erhe::scene_renderer::Cull_classification classification, erhe::scene_renderer::Occlusion_culling occlusion, erhe::scene_renderer::Pvs_culling pvs);
+    void publish_draw_lists(uint64_t frame_index, std::size_t frames_in_flight, erhe::scene_renderer::Cull_classification classification, erhe::scene_renderer::Occlusion_culling occlusion, erhe::scene_renderer::Pvs_culling pvs, const erhe::scene_renderer::Lod_frame_settings& lod);
     // The content layer as the ray-query consumers (Ray_trace_renderer, DDGI,
     // radiance cascades) see it (doc/editor/raytrace.md "Ray_trace_scene"):
     // null for a root built without device dependencies or on a device

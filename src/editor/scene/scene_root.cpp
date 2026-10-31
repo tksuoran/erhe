@@ -2212,7 +2212,8 @@ void Scene_root::publish_draw_lists(
     const std::size_t                             frames_in_flight,
     const erhe::scene_renderer::Cull_classification classification,
     const erhe::scene_renderer::Occlusion_culling   occlusion,
-    const erhe::scene_renderer::Pvs_culling         pvs
+    const erhe::scene_renderer::Pvs_culling         pvs,
+    const erhe::scene_renderer::Lod_frame_settings& lod
 )
 {
     if (!m_draw_list_scene) {
@@ -2224,7 +2225,7 @@ void Scene_root::publish_draw_lists(
     // The poses snapshot_render_settings() captured for this frame: the
     // shadow cache compares them with the last publish's
     // (doc/erhe/shadows.md "Shadow map cache").
-    m_draw_list_scene->publish(frame_index, frames_in_flight, classification, occlusion, pvs, get_render_joint_poses(frame_index));
+    m_draw_list_scene->publish(frame_index, frames_in_flight, classification, occlusion, pvs, lod, get_render_joint_poses(frame_index));
 }
 
 auto Scene_root::is_content_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh) const -> bool

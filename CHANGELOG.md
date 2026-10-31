@@ -42,6 +42,21 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: level of detail selection data
+  (doc/plans/lod_gpu_selection.md step 1): `Draw_list_entry::lod_table_index`
+  and `lod_word` with `lod_table_index_none`, `make_lod_word()`,
+  `decode_lod_word()` and `Lod_word_fields`; `Draw_list_bounds::max_axis_scale`
+  and `set_max_axis_scale()`; `Lod_projection`, `Lod_view` and
+  `Cull_view_tests::lod_view`; `Lod_selection` and `Lod_frame_settings`;
+  `Draw_list_scene::get_lod_table()`, `get_lod_table_serial()`,
+  `get_lod_chain_entry_count()`, `get_lod_frame_settings()`,
+  `is_lod_active()`, `get_gpu_lod_table_write_count()` and
+  `get_draw_list_serial()`; `Draw_list_renderer::get_color_lod_view()` and
+  `Color_cull_view_parameters::lod_key`;
+  `Gpu_cull_classifier::lod_table_bytes_per_row` and
+  `get_view_lod_header_offset()`.
+- `erhe::xr`: `Xr_session::locate_views()` fills each view's `width` and
+  `height` (the view's swapchain extent).
 - `erhe::scene_renderer`: the depth-only color sub-variant:
   `Color_sub_variant` (`standard`, `depth_only`), `Draw_color_parameters::sub_variant`,
   `Draw_list_renderer::Render_parameters::sub_variant` and
@@ -1196,6 +1211,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Draw_list_scene::publish()` takes the frame's
+  `Lod_frame_settings` (after `pvs`), and `add_cull_view()` an optional
+  `Lod_view` (after the PVS query box), which joins the view's identity.
+  `Gpu_cull_classifier::vec4s_per_view` is 14 (was 12).
 - `erhe::scene_renderer`: `Content_wide_line_renderer::prepare_mesh()` and
   `add_mesh()` take the pass's `Primitive_interface_settings` in place of a
   color and resolve each mesh's edge-line color with it (the color source,

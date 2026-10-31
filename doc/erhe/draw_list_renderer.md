@@ -345,6 +345,47 @@ Registration:
   (R12), which applies the stored level then. Color and shadow entries take
   the same level. The bucket fallback path draws level 0 (it reads the
   variant's fill range).
+
+  The selection data (doc/plans/lod_gpu_selection.md, built through its
+  step 1; no level is selected yet, so every draw reads the range above):
+  - Per entry, `Draw_list_entry::lod_table_index` (the first row of the
+    entry's chain in the level table, `lod_table_index_none` for a variant
+    without chain) and `lod_word` (`make_lod_word()`: the effective `Lod`
+    record packed as mode 2 bits, forced level 3, bias 4 signed, min 3, max
+    3, and the chain's level count 4; `decode_lod_word()` unpacks it). A
+    record change that keeps the forced level (bias, mode, min / max) runs
+    `rewrite_lod_words()`: the entries' `lod_word` changes in place, the
+    lists' serials move (a list copy, a GPU bounds and template rewrite)
+    and the object's bounds are recorded as a change for the shadow passes
+    it reaches. `Draw_list_bounds::max_axis_scale` (the largest axis scale
+    of the mesh's `world_from_node`) is written with the box by the
+    registration and transform hooks.
+  - The level table (`get_lod_table()`): per chain, `level_count` rows of
+    `uvec4 (index_count, first_index, floatBitsToUint(error), 0)`, level 0
+    first, the ranges the entry would copy for each forced level. A block
+    of rows is shared by every entry that draws the same rows and reference
+    counted by them; a released block is reused by the next block of the
+    same length (`get_lod_table_serial()` moves on every block write). The
+    publish copies the table into the slot when its serial moved and, under
+    `gpu`, into the slot's GPU level table buffer
+    (`get_gpu_lod_table_write_count()` counts those writes).
+  - `publish()` takes the frame's `Lod_frame_settings` (`Lod_selection`,
+    threshold in pixels, global bias) and records them in the slot; the
+    frame's selection is active when it is on and some entry has a chain
+    (`get_lod_chain_entry_count()`). The GPU classification's view block
+    carries them as `lod_header` (active, threshold squared, the coarsening
+    threshold squared, the bias).
+  - `add_cull_view()` takes an optional `Lod_view` (selection origin,
+    projection scale, `Lod_projection`, a key stable across frames), part
+    of the view's identity: two views with equal planes and different
+    `Lod_view`s are two views. `Draw_list_renderer::get_color_lod_view()`
+    builds a color pass's `Lod_view` from its camera and viewport (the editor keys it
+    by the scene view: viewports, four view cells and scene image captures
+    through `Composer::add_cull_views()`; the headset's union view from the
+    head origin and the largest per-eye projection scale). Shadow, PVS bake
+    and lightmap views have none. The GPU view record is 14 `vec4`; `[12]`
+    holds the origin and the projection scale, `[13]` the LOD column (none:
+    -1), the projection kind, the previous column (-1) and the shadow mode.
 - R2: `unregister` function that removes all entries belonging to an object.
   Removal does not invalidate the draw lists' suitability for hot-path
   iteration (compaction is an implementation choice; stale entries are never
@@ -743,9 +784,9 @@ Drawing:
   built without `Draw_list_scene_create_info::gpu_cull_classifier`, records
   `cpu`, logged once) and, under `gpu`, keeps the slot's GPU bounds buffer
   current: the published lists back to back (each list's first entry in
-  `entry_offsets`), two `vec4` per entry, `(center, 0)` and `(extent,
-  purpose)`, the floats the CPU lanes read, a skinned list's entries without
-  bounds (negative extent). Each frame slot owns one host-visible buffer
+  `entry_offsets`), two `vec4` per entry, `(center, max_axis_scale)` and
+  `(extent, purpose)`, the floats the CPU lanes read, a skinned list's
+  entries without bounds (negative extent). Each frame slot owns one host-visible buffer
   (the slot's previous frame retired before its prepare phase, which
   `Device::acquire_frame_slot()` waits for), and a publish writes only the
   lists whose serial or offset differs from what that buffer holds (the
@@ -833,8 +874,9 @@ Drawing:
   sequence as on the CPU path); the job's
   draw count goes to its count slot. `publish()` writes, with the GPU bounds and under the same per-list
   serial check, the slot's command templates (two `uvec4` per entry at the
-  bounds' offsets: `index_count, first_index, base_vertex, 0` and the
-  entry's flag bits), the fields the CPU writer reads from the entry. The
+  bounds' offsets: `index_count, first_index, base_vertex, lod_word` and
+  the entry's flag bits, `lod_table_index, 0`), the fields the CPU writer
+  reads from the entry and the entry's level of detail words (R1c). The
   job table is a CPU-write ring range per frame, the pass bits, commands
   and counts are device ring ranges per frame (released at the dispatch, kept by the
   ring until the frame retired); the job vector, its CPU side (view,

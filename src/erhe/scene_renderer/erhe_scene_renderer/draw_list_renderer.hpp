@@ -137,6 +137,11 @@ public:
         // default) for a view without the PVS rule.
         glm::vec3                          pvs_query_min{ 0.0f};
         glm::vec3                          pvs_query_max{-1.0f};
+        // The caller's identity of the view, stable across frames (the
+        // editor: the scene view): the key of the view's level of detail
+        // selection inputs (Lod_view::lod_key). Null: the view gets no
+        // Lod_view and draws the template range.
+        const void*                        lod_key{nullptr};
     };
     // Render phase, before the frame's culling classification
     // (doc/erhe/draw_list_renderer.md Q6, doc/plans/culling.md phase 6a):
@@ -150,6 +155,14 @@ public:
         uint64_t                          frame_index,
         const Color_cull_view_parameters& parameters
     ) -> Cull_view;
+
+    // The level of detail selection inputs of a single-view color pass
+    // (doc/plans/lod_gpu_selection.md section 7): the camera position, the
+    // projection scale of its projection in the view's viewport (viewport
+    // height / (tan(up) - tan(down)); orthographic: viewport height / view
+    // height) and parameters.lod_key; empty for multiview passes, a view
+    // without a camera or a key, and a degenerate projection.
+    [[nodiscard]] static auto get_color_lod_view(const Color_cull_view_parameters& parameters) -> std::optional<Lod_view>;
 
     // The clip_from_world of a single-view color pass, built the way
     // Camera_buffer builds it (add_color_cull_view()'s frustum and the

@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -118,6 +119,39 @@ enum class Cull_view_kind : uint8_t
     cube_face  // the range sphere first, then the face's octant
 };
 
+// How a view's level of detail selection measures distance
+// (doc/plans/lod_gpu_selection.md section 2): perspective from the view
+// origin to the closest point of the entry's box; orthographic with
+// distance 1.
+enum class Lod_projection : uint8_t
+{
+    perspective  = 0,
+    orthographic = 1
+};
+
+[[nodiscard]] auto c_str(Lod_projection projection) -> const char*;
+
+// The level of detail selection inputs of one culling view
+// (Draw_list_scene::add_cull_view(), doc/plans/lod_gpu_selection.md section
+// 3 "Per view and per frame"): the selection origin (a camera position in
+// world space), the projection scale in pixels per unit of tangent
+// (viewport height / (tan(up) - tan(down)); orthographic: viewport height /
+// view height), the projection kind and the caller's identity of the view,
+// stable across frames (the editor: the scene view), which matches the
+// view's selection between frames. A view without one draws the template
+// range of its entries (the forced level, or level 0).
+class Lod_view
+{
+public:
+    // Bitwise equal (the same selection inputs).
+    [[nodiscard]] auto is_same(const Lod_view& other) const -> bool;
+
+    glm::vec3      origin          {0.0f};
+    float          projection_scale{0.0f};
+    Lod_projection projection      {Lod_projection::perspective};
+    const void*    lod_key         {nullptr};
+};
+
 // The tests of one culling view (Draw_list_scene::add_cull_view(),
 // add_point_light_cull_views()): what the classification lanes
 // (cull_lanes.hpp) test the entries' bounds against. A planes view with no
@@ -142,6 +176,9 @@ public:
     uint32_t                 cube_face  {0}; // cube_face only: 0..5 for +X -X +Y -Y +Z -Z
     glm::vec3                pvs_query_min{ 0.0f}; // planes only
     glm::vec3                pvs_query_max{-1.0f}; // planes only
+    // The view's level of detail selection inputs (planes only; not part
+    // of is_same(), which compares the tests), none for a view without.
+    std::optional<Lod_view>  lod_view   {};
 };
 
 class Draw_statistics
@@ -208,13 +245,18 @@ public:
 // over, doc/plans/culling.md phase 2). center and extent are computed
 // exactly as erhe::math::aabb_in_convex_volume() computes them from the box.
 // An entry without bounds (an invalid AABB: skinned objects carry none)
-// stores a negative extent_x and passes every view.
+// stores a negative extent_x and passes every view. max_axis_scale is the
+// largest axis scale of the entry's world_from_node (level of detail
+// selection, doc/plans/lod_gpu_selection.md section 3), written with the
+// box by the same registration and transform hooks (set_max_axis_scale());
+// 0 for an entry appended by a resize and for the change boxes.
 class Draw_list_bounds
 {
 public:
     // Entries appended by a resize have no bounds (negative extent).
     void resize(std::size_t count);
     void set   (std::size_t index, const erhe::math::Aabb& aabb);
+    void set_max_axis_scale(std::size_t index, float max_axis_scale);
     // Swap-remove support: copies entry from over entry to.
     void move  (std::size_t from, std::size_t to);
     // assign() of every array, reusing the capacity this copy already has.
@@ -230,6 +272,7 @@ public:
     std::vector<float> extent_x;
     std::vector<float> extent_y;
     std::vector<float> extent_z;
+    std::vector<float> max_axis_scale;
 };
 
 // What changed in the draw lists of one publish since the publish before it

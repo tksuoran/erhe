@@ -8,11 +8,13 @@
 
 #include "erhe_scene_renderer/cull_lanes.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
+#include "erhe_scene_renderer/draw_list_entry.hpp"
 
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/coordinate_conventions.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
+#include "erhe_scene/lod.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/pvs_database.hpp"
 
@@ -597,6 +599,67 @@ TEST(Cull_lanes, pvs_query_box_is_part_of_view_identity)
     EXPECT_TRUE(b.has_pvs_query());
     EXPECT_FALSE(a.is_same(b));
     EXPECT_TRUE(b.is_same(b));
+}
+
+// The packed Lod record of an entry (doc/plans/lod_gpu_selection.md section
+// 3): every field round-trips, and out-of-field values clamp.
+TEST(Lod_word, fields_round_trip_and_clamp)
+{
+    using erhe::scene_renderer::Lod_word_fields;
+    using erhe::scene_renderer::decode_lod_word;
+    using erhe::scene_renderer::make_lod_word;
+    const erhe::scene::Lod_data lod{
+        .mode         = erhe::scene::Lod_mode::forced,
+        .forced_level = 5,
+        .bias         = -3,
+        .min_level    = 1,
+        .max_level    = 6
+    };
+    const Lod_word_fields fields = decode_lod_word(make_lod_word(lod, 6));
+    EXPECT_EQ(fields.mode,         1u);
+    EXPECT_EQ(fields.forced_level, 5u);
+    EXPECT_EQ(fields.bias,         -3);
+    EXPECT_EQ(fields.min_level,    1u);
+    EXPECT_EQ(fields.max_level,    6u);
+    EXPECT_EQ(fields.level_count,  6u);
+
+    const erhe::scene::Lod_data wide{
+        .mode         = erhe::scene::Lod_mode::off,
+        .forced_level = 12,
+        .bias         = 20,
+        .min_level    = -4,
+        .max_level    = -9
+    };
+    const Lod_word_fields clamped = decode_lod_word(make_lod_word(wide, 0));
+    EXPECT_EQ(clamped.mode,         2u);
+    EXPECT_EQ(clamped.forced_level, 7u);
+    EXPECT_EQ(clamped.bias,         7);
+    EXPECT_EQ(clamped.min_level,    0u);
+    EXPECT_EQ(clamped.max_level,    0u);
+    EXPECT_EQ(clamped.level_count,  0u);
+    EXPECT_EQ(decode_lod_word(make_lod_word(erhe::scene::Lod_data{.bias = -8}, 1)).bias, -8);
+}
+
+// The Lod_view is part of a culling view's identity: bitwise per input.
+TEST(Lod_view, is_same_compares_every_input)
+{
+    using erhe::scene_renderer::Lod_view;
+    int key_a = 0;
+    int key_b = 0;
+    const Lod_view a{.origin = glm::vec3{1.0f, 2.0f, 3.0f}, .projection_scale = 500.0f, .lod_key = &key_a};
+    Lod_view b = a;
+    EXPECT_TRUE(a.is_same(b));
+    b.projection_scale = 400.0f;
+    EXPECT_FALSE(a.is_same(b));
+    b = a;
+    b.lod_key = &key_b;
+    EXPECT_FALSE(a.is_same(b));
+    b = a;
+    b.projection = erhe::scene_renderer::Lod_projection::orthographic;
+    EXPECT_FALSE(a.is_same(b));
+    b = a;
+    b.origin.y = std::nextafter(a.origin.y, 3.0f);
+    EXPECT_FALSE(a.is_same(b));
 }
 
 } // anonymous namespace

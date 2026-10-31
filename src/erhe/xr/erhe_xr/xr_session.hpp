@@ -121,7 +121,8 @@ public:
     // per frame, so this is safe to call before the render-frame locate; it is
     // used by the headset shadow fit to build a combined culling frustum before
     // the rendergraph runs. out_views is cleared then filled (capacity kept)
-    // with pose + fov only (texture / format fields left zero). Returns false
+    // with pose, fov and the view's swapchain extent (width / height; texture
+    // / format fields left zero). Returns false
     // when the session is not ready or the locate fails, leaving out_views
     // empty so the caller keeps its previous frustum.
     [[nodiscard]] auto locate_views(std::vector<Render_view>& out_views) -> bool;

@@ -452,6 +452,10 @@ private:
     // setup_root_camera() default.
     erhe::scene::Projection::Fov_sides                   m_combined_eye_fov_sides{-0.6f, 0.6f, 0.6f, -0.6f};
     float                                                m_combined_eye_z_near{0.03f};
+    // The largest per-eye projection scale of the located eye views (eye
+    // height / (tan(up) - tan(down))), 0 before one is known
+    // (cache_combined_eye_frustum()); the culling view's Lod_view scale.
+    float                                                m_combined_eye_projection_scale{0.0f};
     float                                                m_combined_eye_z_far {200.0f};
     bool                                                 m_combined_eye_fov_valid{false};
     std::size_t                                          m_combined_eye_view_count{0};
@@ -477,6 +481,11 @@ private:
         // PVS query box (prepare_pvs_query()); min > max is no query.
         glm::vec3                pvs_query_min{ 0.0f};
         glm::vec3                pvs_query_max{-1.0f};
+        // The level of detail selection inputs of the culling view
+        // (doc/plans/lod_gpu_selection.md section 7): the head origin and
+        // the per-eye projection scale, so both eyes select the same level;
+        // none before an eye projection scale is known.
+        std::optional<erhe::scene_renderer::Lod_view> lod_view{};
     };
     // One per frame in flight, indexed by frame index modulo their count:
     // M2 of frame N fills slot N, R of frame N reads it

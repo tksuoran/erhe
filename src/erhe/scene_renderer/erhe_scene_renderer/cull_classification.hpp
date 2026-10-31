@@ -52,4 +52,30 @@ enum class Pvs_culling : uint8_t
 
 [[nodiscard]] auto c_str(Pvs_culling pvs_culling) -> const char*;
 
+// Whether the frame's classification selects levels of detail
+// (doc/plans/lod_gpu_selection.md): on, the frame's lod_header is active
+// when the Draw_list_scene has entries with a chain. Off (and on in a scene
+// without chains): every draw reads its entry's template range (the forced
+// level, or level 0).
+enum class Lod_selection : uint8_t
+{
+    off   = 0,
+    on    = 1,
+    count = 2
+};
+
+[[nodiscard]] auto c_str(Lod_selection lod_selection) -> const char*;
+
+// The frame's level of detail settings (Draw_list_scene::publish(), from the
+// editor's graphics preset): the selection switch, the pixel error
+// threshold and the global bias added to every selected level
+// (doc/plans/lod.md sections 2.3 and 2.5).
+class Lod_frame_settings
+{
+public:
+    Lod_selection selection       {Lod_selection::off};
+    float         threshold_pixels{1.0f};
+    int           bias            {0};
+};
+
 } // namespace erhe::scene_renderer

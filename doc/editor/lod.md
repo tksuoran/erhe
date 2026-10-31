@@ -83,6 +83,20 @@ generation defaults the window starts from: `level_count` 6, `ratio` 0.5,
 `border` locked, `seams` keep, `fallback` none, `normal_merge_angle` 20
 degrees. Values not present in `editor_settings.json` take these defaults.
 
+## Graphics preset settings
+
+The graphics preset (`Graphics_preset_entry`, version 7) holds the automatic
+selection's settings: `lod_enabled` (default off), `lod_threshold_pixels`
+(the pixel error a selected level stays within, default 1.0) and `lod_bias`
+(added to every selected level, default 0). The Settings window shows them
+as "LOD Selection", "LOD Threshold (pixels)" and "LOD Bias"; the MCP
+`set_graphics_preset` takes `lod_enabled`, `lod_threshold_pixels` and
+`lod_bias` (session only). Each frame's render settings snapshot carries
+them to `Draw_list_scene::publish()` (`Lod_frame_settings`), and
+`get_draw_lists` reports what the last publish recorded (`lod`). Levels are
+not selected yet (`doc/plans/lod_gpu_selection.md`): with the selection on,
+every draw still reads its entry's forced level, or level 0.
+
 ## Edge lines and the selection outline
 
 The edge-line passes (the selection outline, "Content edge lines" selected /

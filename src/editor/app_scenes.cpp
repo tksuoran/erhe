@@ -687,13 +687,22 @@ void App_scenes::snapshot_render_settings()
     const erhe::scene_renderer::Pvs_culling pvs_culling = m_context.render_settings->pvs_culling
         ? erhe::scene_renderer::Pvs_culling::on
         : erhe::scene_renderer::Pvs_culling::off;
+    // The frame's level of detail settings (graphics preset;
+    // doc/plans/lod_gpu_selection.md), recorded in the slot for the
+    // frame's lod_header.
+    const Graphics_preset_entry& graphics_preset = m_context.render_settings->graphics_preset;
+    const erhe::scene_renderer::Lod_frame_settings lod_settings{
+        .selection        = graphics_preset.lod_enabled ? erhe::scene_renderer::Lod_selection::on : erhe::scene_renderer::Lod_selection::off,
+        .threshold_pixels = graphics_preset.lod_threshold_pixels,
+        .bias             = graphics_preset.lod_bias
+    };
     for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
         // Order: the joint pose capture assigns the skins' joint slots, the
         // publish bakes them into the draw list records and copies the
         // changed lists (doc/editor/editor.md "Frame phases").
         scene_root->snapshot_render_settings(*m_context.editor_settings, *m_context.render_settings, frame_index, frames_in_flight);
         scene_root->prepare_shadow_bounds(frame_index, frames_in_flight);
-        scene_root->publish_draw_lists(frame_index, frames_in_flight, cull_classification, occlusion_culling, pvs_culling);
+        scene_root->publish_draw_lists(frame_index, frames_in_flight, cull_classification, occlusion_culling, pvs_culling, lod_settings);
     }
 }
 

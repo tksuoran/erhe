@@ -33,8 +33,12 @@
 //   output (the filter total is an order-independent shared sum).
 //
 // cull_templates.templates[2 * entry + 0] = index_count, first_index,
-//   base_vertex (int bits), 0
-// cull_templates.templates[2 * entry + 1] = flag bits low, flag bits high, 0, 0
+//   base_vertex (int bits), lod_word (the entry's packed Lod record,
+//   erhe::scene_renderer::make_lod_word())
+// cull_templates.templates[2 * entry + 1] = flag bits low, flag bits high,
+//   lod_table_index (the entry's first level table row, 0xffffffff: no
+//   chain), 0 (doc/plans/lod_gpu_selection.md section 3; no level is read
+//   yet)
 //   (entry: the published lists back to back, Draw_list_scene's GPU bounds
 //   layout)
 // cull_jobs.header = job_count, mask entry count (all published lists),

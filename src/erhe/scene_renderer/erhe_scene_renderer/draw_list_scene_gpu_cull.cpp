@@ -285,7 +285,7 @@ void Draw_list_scene::publish_gpu_bounds(Draw_list_slot& slot)
             mapped_templates = slot.gpu_templates->map_bytes(0, slot.gpu_bounds_capacity);
             mapped_columns   = slot.gpu_columns  ->map_bytes(0, column_capacity);
         }
-        // Per entry: center.xyz, 0 and extent.xyz, purpose
+        // Per entry: center.xyz, max_axis_scale and extent.xyz, purpose
         // (cull_classify.comp); the floats the CPU lanes read. A skinned
         // list's entries are written without bounds (negative extent), the
         // GPU form of the CPU rule that skinned lists keep every view of
@@ -298,17 +298,18 @@ void Draw_list_scene::publish_gpu_bounds(Draw_list_slot& slot)
         std::size_t       write_offset = range_begin;
         for (std::size_t i = 0; i < list_entry_count; ++i) {
             const std::array<float, 8> record{
-                bounds.center_x[i], bounds.center_y[i], bounds.center_z[i], 0.0f,
+                bounds.center_x[i], bounds.center_y[i], bounds.center_z[i], bounds.max_axis_scale[i],
                 skinned ? -1.0f : bounds.extent_x[i], bounds.extent_y[i], bounds.extent_z[i], purpose
             };
             // The command template and the flag bits the shadow passes'
             // filter reads (cull_compact.comp): the fields the CPU command
-            // writer reads from the entry.
+            // writer reads from the entry; and the entry's packed Lod record
+            // and level table row (doc/plans/lod_gpu_selection.md section 3).
             const Draw_list_entry& entry = draw_list.entries[i];
             const std::array<uint32_t, 2> flag_words = Gpu_cull_classifier::split_uint64(entry.flag_bits);
             const std::array<uint32_t, 8> command_template{
-                entry.index_count, entry.first_index, entry.base_vertex, 0u,
-                flag_words[0], flag_words[1], 0u, 0u
+                entry.index_count, entry.first_index, entry.base_vertex, entry.lod_word,
+                flag_words[0], flag_words[1], entry.lod_table_index, 0u
             };
             std::memcpy(mapped.data()           + write_offset, record.data(),           sizeof(record));
             std::memcpy(mapped_templates.data() + write_offset, command_template.data(), sizeof(command_template));
@@ -341,6 +342,43 @@ void Draw_list_scene::publish_gpu_bounds(Draw_list_slot& slot)
         slot.gpu_templates->unmap();
         slot.gpu_columns  ->unmap();
     }
+}
+
+void Draw_list_scene::publish_gpu_lod_table(Draw_list_slot& slot)
+{
+    ERHE_PROFILE_FUNCTION();
+    if (slot.gpu_lod_table && (slot.gpu_lod_table_serial == slot.lod_table_serial)) {
+        return;
+    }
+    ERHE_VERIFY(m_gpu_cull_classifier != nullptr);
+    erhe::graphics::Device& graphics_device = m_gpu_cull_classifier->get_device();
+    const std::size_t byte_count = std::max(slot.lod_table.size(), std::size_t{1}) * Gpu_cull_classifier::lod_table_bytes_per_row;
+    // The slot's previous frame retired before its prepare phase (as for
+    // gpu_bounds): the write never races the GPU.
+    if (!slot.gpu_lod_table || (slot.gpu_lod_table_capacity < byte_count)) {
+        const std::size_t capacity = align_up(byte_count + (byte_count / 2), c_gpu_bounds_flush_alignment);
+        slot.gpu_lod_table = std::make_unique<erhe::graphics::Buffer>(
+            graphics_device,
+            erhe::graphics::Buffer_create_info{
+                .capacity_byte_count                    = capacity,
+                .memory_allocation_create_flag_bit_mask = erhe::graphics::Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = erhe::graphics::Buffer_usage::storage,
+                .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::host_coherent | erhe::graphics::Memory_property_flag_bit_mask::host_persistent,
+                .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene GPU LOD level table"}
+            }
+        );
+        slot.gpu_lod_table_capacity = capacity;
+    }
+    const std::size_t          write_bytes = slot.lod_table.size() * Gpu_cull_classifier::lod_table_bytes_per_row;
+    const std::span<std::byte> mapped      = slot.gpu_lod_table->map_bytes(0, slot.gpu_lod_table_capacity);
+    if (write_bytes > 0) {
+        std::memcpy(mapped.data(), slot.lod_table.data(), write_bytes);
+        slot.gpu_lod_table->flush_bytes(0, std::min(align_up(write_bytes, c_gpu_bounds_flush_alignment), slot.gpu_lod_table_capacity));
+    }
+    slot.gpu_lod_table->unmap();
+    slot.gpu_lod_table_serial = slot.lod_table_serial;
+    ++m_gpu_lod_table_write_count;
 }
 
 void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer)
@@ -497,6 +535,18 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             std::memcpy(gpu_data.data() + classifier.get_view_pvs_cells_offset (), &pvs_cells,  sizeof(pvs_cells));
             std::memcpy(gpu_data.data() + classifier.get_view_pvs_pages_offset (), &pvs_pages,  sizeof(pvs_pages));
             std::memcpy(gpu_data.data() + classifier.get_view_pvs_grid_offset  (), &pvs_grid,   sizeof(pvs_grid));
+            // The level of detail header (doc/plans/lod_gpu_selection.md
+            // section 3): active, threshold^2, the coarsening threshold^2
+            // (the threshold itself until a hysteresis band exists) and the
+            // global bias, as uint bits.
+            const float threshold2 = slot.lod_settings.threshold_pixels * slot.lod_settings.threshold_pixels;
+            const glm::uvec4 lod_header{
+                slot.lod_active ? 1u : 0u,
+                std::bit_cast<uint32_t>(threshold2),
+                std::bit_cast<uint32_t>(threshold2),
+                std::bit_cast<uint32_t>(static_cast<int32_t>(slot.lod_settings.bias))
+            };
+            std::memcpy(gpu_data.data() + classifier.get_view_lod_header_offset(), &lod_header, sizeof(lod_header));
             std::size_t write_offset = classifier.get_view_data_offset();
             for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
                 const Cull_view_tests& view = m_cull_views[view_index];
@@ -518,6 +568,19 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 const bool pvs_view = pvs_resident && (view.purpose == Draw_purpose::color) && view.has_pvs_query();
                 record[10] = glm::vec4{view.pvs_query_min, pvs_view ? 1.0f : 0.0f};
                 record[11] = glm::vec4{view.pvs_query_max, 0.0f};
+                // Level of detail selection (doc/plans/lod_gpu_selection.md
+                // section 3): the selection origin and projection scale,
+                // then the LOD column, projection kind, previous column and
+                // shadow mode. No view has a column yet (-1: the view draws
+                // the template range).
+                if (view.lod_view.has_value()) {
+                    const Lod_view& lod_view = view.lod_view.value();
+                    record[12] = glm::vec4{lod_view.origin, lod_view.projection_scale};
+                    record[13] = glm::vec4{-1.0f, static_cast<float>(static_cast<uint32_t>(lod_view.projection)), -1.0f, 0.0f};
+                } else {
+                    record[12] = glm::vec4{0.0f};
+                    record[13] = glm::vec4{-1.0f, 0.0f, -1.0f, 0.0f};
+                }
                 // The occlusion test of an occlusion view: its near plane,
                 // the flag and, when the previous frame's words hold the
                 // same view (matched by key: view indices differ between

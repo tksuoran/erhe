@@ -292,7 +292,10 @@ frame's level region (section 3, "Level regions"):
 - Columns are matched across frames by `lod_key`, node-free so a rebuilt
   rendergraph keeps it: color, the scene view; 2D shadow, (light id, kind,
   pass index); point light, (light id, kind); a directional pass fitted to
-  a camera adds the scene view. The view record names the previous frame's
+  a camera adds the scene view. The scene view in a key is a raw pointer
+  today (step 1); a scene view destroyed and another allocated at the same
+  address between two frames would alias, so step 4 keys it by a
+  scene-view serial id instead. The view record names the previous frame's
   column for the same key, or none, as the occlusion record names the
   previous frame's view group and bit (`doc/plans/occlusion_culling.md` 3b).
 - No previous column, a changed entry layout (`entry_layout_serial`), a
@@ -364,6 +367,10 @@ KosmicKrisp is the Vulkan GPU path. Common gates, for every step:
 - `ctest -L "gpu|editor"` on Metal, MoltenVK and KosmicKrisp.
 
 ### Step 1: data plumbing, no behaviour change
+
+State: done; the data is described in `doc/erhe/draw_list_renderer.md` R1c
+and the settings in `doc/editor/lod.md` "Graphics preset settings". No view
+has a LOD column yet (`[13].x = -1`); columns come with step 2a.
 
 `Draw_list_entry::lod_table_index` / `lod_word`, the `max_axis_scale` bounds
 array and GPU word, the level tables, the template words, the `Lod_view`

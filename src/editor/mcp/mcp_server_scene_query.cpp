@@ -281,6 +281,7 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
                 {"layer_id",             static_cast<uint64_t>(key.layer_id)},
                 {"negative_determinant", key.negative_determinant},
                 {"entry_count",          draw_list.entries.size()},
+                {"serial",               draw_list.serial},
                 {"key",                  key.describe()}
             });
         }
@@ -316,9 +317,29 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
                 {"entry_index",          location.entry_index},
                 {"mesh_primitive_index", entry.mesh_primitive_index},
                 {"key",                  draw_list.key.describe()},
+                {"draw_list_serial",     draw_list.serial},
                 // The cached record's material GPU slot - what the draw uses.
                 {"material_index",       draw_list_scene->get_entry_material_index(location)}
             };
+            // Level of detail selection data (doc/plans/lod_gpu_selection.md
+            // section 3): the entry's level table row (null without a chain),
+            // its packed Lod record and the bounds' max axis scale.
+            const erhe::scene_renderer::Lod_word_fields lod_fields = erhe::scene_renderer::decode_lod_word(entry.lod_word);
+            if (entry.lod_table_index != erhe::scene_renderer::lod_table_index_none) {
+                e["lod_table_index"] = entry.lod_table_index;
+            } else {
+                e["lod_table_index"] = nullptr;
+            }
+            e["lod_word"] = {
+                {"value",        entry.lod_word},
+                {"mode",         lod_fields.mode},
+                {"forced_level", lod_fields.forced_level},
+                {"bias",         lod_fields.bias},
+                {"min_level",    lod_fields.min_level},
+                {"max_level",    lod_fields.max_level},
+                {"level_count",  lod_fields.level_count}
+            };
+            e["max_axis_scale"] = draw_list.bounds.max_axis_scale[location.entry_index];
             // The cached culling bounds (doc/erhe/draw_list_renderer.md Q6);
             // absent for a skinned entry, which carries none.
             if (entry.world_aabb.is_valid_3d()) {
@@ -379,6 +400,23 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
         // an idle scene).
         {"cull_classification",            erhe::scene_renderer::c_str(draw_list_scene->get_cull_classification())},
         {"gpu_bounds_write_count",         draw_list_scene->get_gpu_bounds_write_count()},
+        // The scene's change serial (each list's serial in verbose output is
+        // its value at the list's last change).
+        {"draw_list_serial",               draw_list_scene->get_draw_list_serial()},
+        // Level of detail selection (doc/plans/lod_gpu_selection.md): the
+        // settings the last publish recorded, whether its lod_header is
+        // active, the level table and its GPU writes (unchanged on an idle
+        // scene).
+        {"lod", {
+            {"selection",             erhe::scene_renderer::c_str(draw_list_scene->get_lod_frame_settings().selection)},
+            {"threshold_pixels",      draw_list_scene->get_lod_frame_settings().threshold_pixels},
+            {"bias",                  draw_list_scene->get_lod_frame_settings().bias},
+            {"active",                draw_list_scene->is_lod_active()},
+            {"chain_entry_count",     draw_list_scene->get_lod_chain_entry_count()},
+            {"table_row_count",       draw_list_scene->get_lod_table().size()},
+            {"table_serial",          draw_list_scene->get_lod_table_serial()},
+            {"gpu_table_write_count", draw_list_scene->get_gpu_lod_table_write_count()}
+        }},
         // Material persistence (doc/erhe/draw_list_material_set.md R10, R11):
         // how many copies each of this root's two material sets has written,
         // and how many record bytes. Sampling these N frames apart on a

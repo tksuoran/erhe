@@ -79,14 +79,19 @@ public:
     static constexpr unsigned int pvs_columns_binding_point {7};
     static constexpr unsigned int pvs_pages_binding_point   {8};
     static constexpr uint32_t     workgroup_size      {64};
-    // GPU bounds: two vec4 per entry (center + 0, extent + purpose).
+    // GPU bounds: two vec4 per entry (center + max_axis_scale, extent +
+    // purpose).
     static constexpr std::size_t  bounds_bytes_per_entry{2 * 4 * sizeof(float)};
     // GPU columns: one uint32 per entry.
     static constexpr std::size_t  column_bytes_per_entry{sizeof(uint32_t)};
-    // View set: twelve vec4 per view (six planes, range sphere, info, the
+    // View set: fourteen vec4 per view (six planes, range sphere, info, the
     // near plane of an occlusion view, occlusion info, the PVS query box
-    // min and max).
-    static constexpr std::size_t  vec4s_per_view      {12};
+    // min and max, the level of detail origin and projection scale, the
+    // level of detail column info; doc/plans/lod_gpu_selection.md section
+    // 3).
+    static constexpr std::size_t  vec4s_per_view      {14};
+    // Level table (Draw_list_scene::get_lod_table()): one uvec4 per row.
+    static constexpr std::size_t  lod_table_bytes_per_row{4 * sizeof(uint32_t)};
     // Mask: one uvec2 (64 view bits) per entry per group of 64 views.
     static constexpr std::size_t  mask_bytes_per_entry_group{2 * sizeof(uint32_t)};
 
@@ -100,7 +105,8 @@ public:
     // A multiple of 32 (one pass bit word per 32 entries).
     static constexpr uint32_t     compact_workgroup_size         {64};
     // Command templates: two uvec4 per entry (index_count, first_index,
-    // base_vertex, 0 and the entry's flag bits), laid out like the bounds.
+    // base_vertex, lod_word and the entry's flag bits, lod_table_index, 0),
+    // laid out like the bounds.
     static constexpr std::size_t  template_bytes_per_entry{2 * 4 * sizeof(uint32_t)};
     // Job table: one uvec4 per job (view in bits 0..15 and filter index in
     // bits 16..31, first entry, entry count, command offset) after the
@@ -168,6 +174,8 @@ public:
     [[nodiscard]] auto get_view_pvs_cells_offset () const -> std::size_t { return m_view_pvs_cells_offset; }
     [[nodiscard]] auto get_view_pvs_pages_offset () const -> std::size_t { return m_view_pvs_pages_offset; }
     [[nodiscard]] auto get_view_pvs_grid_offset  () const -> std::size_t { return m_view_pvs_grid_offset; }
+    // The level of detail header (cull_classify.comp documents it).
+    [[nodiscard]] auto get_view_lod_header_offset() const -> std::size_t { return m_view_lod_header_offset; }
     [[nodiscard]] auto get_view_data_offset  () const -> std::size_t { return m_view_data_offset; }
     // For Draw_list_scene's command generation.
     [[nodiscard]] auto get_compact_bind_group_layout() const -> const erhe::graphics::Bind_group_layout*;
@@ -213,6 +221,7 @@ private:
     std::size_t                                               m_view_pvs_cells_offset {0};
     std::size_t                                               m_view_pvs_pages_offset {0};
     std::size_t                                               m_view_pvs_grid_offset  {0};
+    std::size_t                                               m_view_lod_header_offset{0};
     std::size_t                                               m_view_data_offset  {0};
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_shader_stages;
