@@ -1,0 +1,10 @@
+{
+    "_comment": "Bench configuration for scripts/quest_bench.py run --config (doc/agents/quest.md 'Bench configurations'). One shadow-mapped directional light, the scene's 33 point and 10 spot lights left unshaded (preset limits 0), per type light loops (no clustering, no cluster binning pass).",
+    "name": "single_directional_loops",
+    "description": "One shadow-mapped directional light (added over MCP); Bistro's point and spot lights unshaded; light_shading loops (clustering off)",
+    "mcp_after_load": [
+        "set_graphics_preset={\"light_shading\": \"loops\", \"shadow_enable\": true, \"directional_shadow_light_count\": 1, \"directional_unshadowed_light_count\": 0, \"spot_shadow_light_count\": 0, \"spot_unshadowed_light_count\": 0, \"point_shadow_light_count\": 0, \"point_unshadowed_light_count\": 0}",
+        "create_light={\"scene_name\": \"$SCENE\", \"type\": \"directional\", \"name\": \"Bench sun\", \"intensity\": 4.0, \"color\": [1.0, 0.95, 0.85], \"cast_shadow\": true}",
+        "set_node_transform={\"scene_name\": \"$SCENE\", \"node_name\": \"Bench sun\", \"space\": \"world\", \"translation\": [0.0, 30.0, 0.0], \"rotation_xyzw\": [-0.40822, 0.23457, 0.10938, 0.87543]}"
+    ]
+}

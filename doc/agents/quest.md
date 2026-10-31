@@ -114,6 +114,65 @@ frame with a scene file pushed to the device before:
 py -3 scripts/quest_bench.py run --bench config/editor/benchmark_bistro.json --bench-to-device --editor-args=--no-scene --mcp "set_culling_classification={\"mode\": \"gpu\"}" --load-scene /sdcard/Android/data/org.libsdl.app.quest/files/<dir>/<scene>.glb --mcp-measure get_composition_passes
 ```
 
+`--mcp-after-load TOOL[=JSON]` (repeatable) calls are made after the scene
+load; `$SCENE` in their arguments is replaced by the loaded scene's name
+(`create_light` and `set_node_transform` need it).
+
+### Bench configurations and the run record
+
+A configuration under test (lighting, culling, draw lists) is a file in
+`scripts/quest_bench_configs/` passed with `--config`: `name`,
+`description` and the lists `mcp`, `mcp_after_load` and `mcp_measure` of
+`TOOL[=JSON]` strings, made before the command line's calls of the same
+kind. `bistro_single_directional.json` adds one shadow-mapped directional
+light to the Bistro, sets the preset's spot and point limits to 0 and
+`light_shading` to `loops` (no clustering). A new light configuration is a
+new file; `set_graphics_preset` (light limits, `light_shading`, shadows,
+`use_draw_lists`), `set_culling_classification`, `set_occlusion_culling`,
+`set_light_cluster_binning`, `create_light` and `edit_light` cover the
+variations.
+
+Every run that uses MCP stores the configuration in effect in the result's
+`host.config_state` (the preset, the culling, occlusion and binning
+settings during the warmup; the light shading in effect and the shaded /
+shadow-mapped lights from `get_light_cluster_stats` and `get_scene_lights`
+in the measured window), and every run stores the Quest's state in
+`host.device_state`: adb snapshots before the launch, at the start of the
+measured window and at the result line (cpufreq clocks and caps per
+policy, the kgsl GPU clock, cap and busy %, thermal zones, the thermal
+service's status and HAL temperatures, battery) and samples every
+`--sample-interval` seconds (default 2) through the measured window.
+
+`--record` appends the invocation's entry to
+`doc/reference/quest_bench_runs.md`, the record of past runs; record every
+Bistro run there and commit it. `quest_bench.py record <run.json>...`
+appends the entry of stored per-run results. The Bistro, single
+directional light, clustering off:
+
+```
+py -3 scripts/quest_bench.py run --bench config/editor/benchmark_bistro.json --bench-to-device --editor-args=--no-scene --load-scene /sdcard/Android/data/org.libsdl.app.quest/files/bistro/<scene>.glb --config scripts/quest_bench_configs/bistro_single_directional.json --record
+```
+
+`--perfetto` adds a Perfetto trace of the measured window, taken with the
+Meta VR CLI (`metavr`, installed with the Meta VR Claude Code plugin or
+from npm; the script finds it on PATH or in `~/.metavr/bin/`): GPU render
+stages and the Adreno counters, 4 s starting 3 s after the "scene settled"
+line. The result's `host.perfetto` holds the trace path (under
+`~/.config/odh/traces/`) and its summary, and the record adds the eye
+surface's line and a counter table. The render stages split the eye pass
+(the 1680x1760 two-view surface) into binning, per-bin rendering and
+preemption: the compositor preempts a long app pass at every display
+refresh, and its time is inside the `XR multiview` timer but not in the XR
+counter's app GPU frame time. Binning plus bin rendering is the app's own
+GPU work. The counters are device-wide and count the compositor's work as
+well, which dominates when preemption is large. A trace opens in
+ui.perfetto.dev; the metavr MCP tools (`perf_trace_query_sql`,
+`perf_trace_gpu_counters`) and `metavr perf query <session> "<SQL>"` query
+it. `--perfetto` and `--gpu-metrics` are exclusive; a 4 s capture did not
+change the `XR multiview` timer (45.6 ms with, 45.8 ms without, Bistro
+single light with occlusion culling; a hand-taken capture before
+`--perfetto` existed, runs not in the record).
+
 The app's external files directory must be created by the app itself:
 Android creates it, owned by the app's uid, the first time the editor asks
 for it, which is when a benchmark writes its result. After a clean install

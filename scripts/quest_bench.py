@@ -44,6 +44,18 @@ Subcommands:
                      memory-bank/local/quest.md, else the ids whose names match
                      DEFAULT_GPU_METRIC_NAMES in `ovrgpuprofiler -m`. The GPU
                      frequency metrics are always included.
+        --perfetto   takes a Perfetto trace with the metavr CLI (`metavr perf
+                     capture --mode custom --gpu-render-stage --gpu-metrics`;
+                     `metavr` on PATH, else ~/.metavr/bin/metavr) of
+                     --perfetto-seconds (default 4), starting --perfetto-delay
+                     seconds (default 3) after the "scene settled" line, and
+                     stores in host.perfetto the trace path and its summary
+                     (queried with `metavr perf query`): the GPU surfaces
+                     (render passes as the Adreno driver reports them) grouped
+                     by configuration with per-surface medians of duration,
+                     binning, per-bin rendering and compositor preemption, and
+                     the mean / min / max of every Adreno counter. Refused
+                     together with --gpu-metrics (both read the counters).
         --push       copies the local benchmark (and --scene) file over the
                      device's writable copy first. Needs a debuggable APK
                      (run-as); on a release APK it fails: there a changed
@@ -71,10 +83,43 @@ Subcommands:
                      warmup_frames must outlast this (the settle that starts
                      the measured window waits only for loads already in
                      flight): the run fails when the settle line came first.
+        --mcp-after-load TOOL[=JSON]  (repeatable) calls made after the
+                     scene load (right after the --mcp calls without
+                     --load-scene). In every JSON argument the string $SCENE
+                     is replaced by the loaded scene's name.
         --mcp-measure TOOL[=JSON]  (repeatable) calls made once the measured
                      window started (reset_composition_pass_stats first, then
                      a 3 s wait); the replies are stored in the result's
                      host.mcp_measure.
+        --config FILE  a bench configuration (scripts/quest_bench_configs/):
+                     name, description and the lists mcp, mcp_after_load and
+                     mcp_measure (strings of the TOOL[=JSON] form above), made
+                     before the command line's calls of the same kind. The
+                     name and description are stored in host.config.
+
+        Whenever MCP is used, the configuration in effect is stored in the
+        result's host.config_state: the warmup replies of set_graphics_preset
+        (the last one the calls made, else one without arguments, which
+        re-applies the preset in effect), set_culling_classification,
+        set_occlusion_culling and set_light_cluster_binning without
+        arguments (pure queries), and, in the measured window,
+        get_light_cluster_stats and get_scene_lights of the loaded scene
+        (the light shading in effect and the shaded / shadow-mapped lights).
+
+        Quest state (host.device_state): adb snapshots before the launch, at
+        the start of the measured window and at the result line (CPU clocks
+        and limits per cpufreq policy, GPU clock and busy %, thermal zone
+        temperatures, the thermal service's status and HAL temperatures,
+        battery), and a sampler every --sample-interval seconds through the
+        measured window (clocks, GPU busy %, thermal zones, /proc/stat CPU
+        usage), summarized per value (median / min / max).
+
+        --record [DOC]  appends a run record (doc/reference/quest_bench_runs.md
+                     by default) for the runs of this invocation.
+
+    py -3 scripts/quest_bench.py record [--doc DOC] run.json [run.json ...]
+        Appends the run record of stored per-run results (one invocation's
+        repeats) to the record document.
 
     py -3 scripts/quest_bench.py compare a.json b.json
         Prints two results (or repeat summaries) side by side with deltas, and
@@ -90,6 +135,7 @@ import datetime
 import json
 import os
 import re
+import shutil
 import statistics
 import subprocess
 import sys
@@ -311,6 +357,279 @@ class Gpu_profiler:
         return parse_gpu_metrics(self.output)
 
 
+# --- Perfetto capture (metavr) ----------------------------------------------
+
+# Per GPU surface (render pass as the Adreno driver reports it): its
+# configuration and, summed over its children, the binning pass, the per-bin
+# rendering and the compositor's preemptions.
+PERFETTO_SURFACE_SQL = (
+    "SELECT s.dur, "
+    "EXTRACT_ARG(s.arg_set_id, 'width') AS width, EXTRACT_ARG(s.arg_set_id, 'height') AS height, "
+    "EXTRACT_ARG(s.arg_set_id, 'colorBPP') AS color_bpp, EXTRACT_ARG(s.arg_set_id, 'depthBPP') AS depth_bpp, "
+    "EXTRACT_ARG(s.arg_set_id, 'MSAA') AS msaa, EXTRACT_ARG(s.arg_set_id, 'renderMode') AS render_mode, "
+    "EXTRACT_ARG(s.arg_set_id, 'numberOfBins') AS bins, EXTRACT_ARG(s.arg_set_id, 'numRenderedBins') AS rendered_bins, "
+    "(SELECT COALESCE(SUM(c.dur), 0) FROM slice c WHERE c.parent_id = s.id AND c.name = 'Binning') AS binning, "
+    "(SELECT COALESCE(SUM(r.dur), 0) FROM slice c JOIN slice r ON r.parent_id = c.id WHERE c.parent_id = s.id AND r.name = 'Render') AS render, "
+    "(SELECT COALESCE(SUM(c.dur), 0) FROM slice c WHERE c.parent_id = s.id AND c.name = 'Preempt') + "
+    "(SELECT COALESCE(SUM(r.dur), 0) FROM slice c JOIN slice r ON r.parent_id = c.id WHERE c.parent_id = s.id AND r.name = 'Preempt') AS preempt "
+    "FROM slice s JOIN track t ON s.track_id = t.id WHERE t.type = 'gpu_track' AND s.depth = 0"
+)
+PERFETTO_COUNTER_SQL = (
+    "SELECT t.name AS name, AVG(c.value) AS mean, MIN(c.value) AS min, MAX(c.value) AS max, COUNT(*) AS samples "
+    "FROM counter c JOIN counter_track t ON c.track_id = t.id GROUP BY t.name ORDER BY t.name"
+)
+
+
+def metavr_path() -> str:
+    found = shutil.which("metavr")
+    if found:
+        return found
+    return str(Path.home() / ".metavr" / "bin" / "metavr")
+
+
+def metavr(*args: str, timeout: float) -> subprocess.CompletedProcess:
+    return subprocess.run([metavr_path(), *args], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", timeout=timeout)
+
+
+def summarize_perfetto(session: str) -> dict:
+    """Surfaces grouped by configuration (medians per surface, ms) and the
+    GPU counters (mean / min / max over the capture)."""
+    surfaces = metavr("--json", "perf", "query", session, PERFETTO_SURFACE_SQL, timeout=300)
+    counters = metavr("--json", "perf", "query", session, PERFETTO_COUNTER_SQL, timeout=300)
+    if (surfaces.returncode != 0) or (counters.returncode != 0):
+        raise RuntimeError(f"metavr perf query {session} failed: {surfaces.stderr.strip()} {counters.stderr.strip()}")
+    groups = {}
+    for row in json.loads(surfaces.stdout):
+        key = (f"{row['width']}x{row['height']} color {row['color_bpp']} bpp depth {row['depth_bpp']} bpp "
+               f"MSAA {row['msaa']} {row['render_mode']} bins {row['bins']}")
+        groups.setdefault(key, []).append(row)
+    surface_summary = []
+    for key, rows in groups.items():
+        def median_ms(field: str) -> float:
+            return round(statistics.median(float(r[field] or 0) for r in rows) / 1e6, 3)
+        surface_summary.append({
+            "surface":       key,
+            "count":         len(rows),
+            "total_ms":      round(sum(float(r["dur"]) for r in rows) / 1e6, 3),
+            "duration_ms":   median_ms("dur"),
+            "binning_ms":    median_ms("binning"),
+            "render_ms":     median_ms("render"),
+            "preempt_ms":    median_ms("preempt"),
+            "rendered_bins": statistics.median(float(r["rendered_bins"] or 0) for r in rows),
+        })
+    surface_summary.sort(key=lambda s: s["total_ms"], reverse=True)
+    counter_summary = {
+        row["name"]: {"mean": row["mean"], "min": row["min"], "max": row["max"], "samples": row["samples"]}
+        for row in json.loads(counters.stdout)
+    }
+    return {"surfaces": surface_summary, "counters": counter_summary}
+
+
+class Perfetto_capture:
+    """metavr perf capture (custom mode: GPU render stages + GPU counters)
+    of seconds, started delay seconds into the measured window."""
+
+    def __init__(self, session: str, seconds: float, delay: float):
+        self.session = session
+        self.seconds = seconds
+        self.delay = delay
+        self.result = {}
+        self.thread = None
+
+    def start(self) -> None:
+        def body():
+            time.sleep(self.delay)
+            capture = metavr("perf", "capture", "--mode", "custom", "--gpu-render-stage", "--gpu-metrics",
+                             "--app", PKG, "--duration", str(int(self.seconds * 1000)), "-o", self.session,
+                             timeout=self.seconds + 180)
+            if capture.returncode != 0:
+                self.result = {"session": self.session, "error": (capture.stdout + capture.stderr).strip()[-2000:]}
+                return
+            path = re.search(r"Path:\s*(\S+)", capture.stdout)
+            self.result = {"session": self.session, "trace_path": path.group(1) if path else "",
+                           "delay_s": self.delay, "seconds": self.seconds}
+            try:
+                self.result.update(summarize_perfetto(self.session))
+            except (RuntimeError, ValueError, KeyError) as error:
+                self.result["error"] = str(error)
+        self.thread = threading.Thread(target=body, daemon=True)
+        self.thread.start()
+
+    def join(self) -> dict:
+        if self.thread is None:
+            return {}
+        self.thread.join(timeout=self.delay + self.seconds + 600)
+        return self.result
+
+
+# --- Quest state (clocks, thermals, usage) ---------------------------------
+
+# One device shell command line printing key=value lines; a value the shell
+# user cannot read prints empty and is dropped.
+DEVICE_SYSFS_SCRIPT = "; ".join([
+    "for p in /sys/devices/system/cpu/cpufreq/policy*; do n=${p##*policy}; "
+    "echo \"cpufreq.$n.cpus=$(cat $p/related_cpus 2>/dev/null)\"; "
+    "echo \"cpufreq.$n.cur_khz=$(cat $p/scaling_cur_freq 2>/dev/null)\"; "
+    "echo \"cpufreq.$n.max_khz=$(cat $p/scaling_max_freq 2>/dev/null)\"; "
+    "echo \"cpufreq.$n.hw_max_khz=$(cat $p/cpuinfo_max_freq 2>/dev/null)\"; done",
+    "for f in gpuclk max_gpuclk gpu_busy_percentage thermal_pwrlevel devfreq/cur_freq devfreq/max_freq; do "
+    "echo \"kgsl.$f=$(cat /sys/class/kgsl/kgsl-3d0/$f 2>/dev/null)\"; done",
+    "for z in /sys/class/thermal/thermal_zone*; do "
+    "echo \"tz.$(cat $z/type 2>/dev/null)=$(cat $z/temp 2>/dev/null)\"; done",
+    "grep '^cpu' /proc/stat | while read l; do echo \"stat.${l%% *}=${l#* }\"; done",
+])
+
+# android.os.Temperature types (dumpsys thermalservice mType).
+THERMAL_TYPES = {
+    0: "cpu", 1: "gpu", 2: "battery", 3: "skin", 4: "usb_port", 5: "power_amplifier",
+    6: "bcl_voltage", 7: "bcl_current", 8: "bcl_percentage", 9: "npu",
+}
+HAL_TEMPERATURE_RE = re.compile(r"Temperature\{mValue=([-0-9.eE]+), mType=(-?\d+), mName=([^,]*), mStatus=(-?\d+)\}")
+
+
+def read_device_sysfs() -> dict:
+    """Clocks, GPU busy, thermal zones and /proc/stat counters as a flat dict."""
+    text = adb_shell(DEVICE_SYSFS_SCRIPT, timeout=30).stdout
+    values = {}
+    for line in text.splitlines():
+        key, separator, value = line.partition("=")
+        value = value.strip()
+        if (not separator) or (not value):
+            continue
+        key = key.strip()
+        if key.startswith("stat."):
+            values[key] = [int(v) for v in value.split()]
+            continue
+        # Thermal zone types repeat on some devices: keep each reading.
+        base, index = key, 1
+        while key in values:
+            index += 1
+            key = f"{base}#{index}"
+        values[key] = value
+    return values
+
+
+def read_thermal_service() -> dict:
+    text = adb_shell("dumpsys thermalservice", timeout=30).stdout
+    status = re.search(r"Thermal Status:\s*(-?\d+)", text)
+    # The HAL section lists the current temperatures ("Current temperatures
+    # from HAL:"); the cached section above it repeats older values.
+    hal_text = text.split("Current temperatures from HAL:", 1)[-1]
+    hal_text = hal_text.split("Current cooling devices from HAL:", 1)[0]
+    temperatures = []
+    for match in HAL_TEMPERATURE_RE.finditer(hal_text):
+        temperatures.append({
+            "value_c": float(match.group(1)),
+            "type":    THERMAL_TYPES.get(int(match.group(2)), match.group(2)),
+            "name":    match.group(3),
+            "status":  int(match.group(4)),
+        })
+    max_by_type = {}
+    for temperature in temperatures:
+        kind = temperature["type"]
+        max_by_type[kind] = max(max_by_type.get(kind, -1000.0), temperature["value_c"])
+    return {
+        "thermal_status": int(status.group(1)) if status else None,
+        "hal_max_c_by_type": max_by_type,
+        "hal_temperatures": temperatures,
+    }
+
+
+def read_battery() -> dict:
+    text = adb_shell("dumpsys battery", timeout=30).stdout
+    values = {}
+    for key in ("level", "temperature", "status", "AC powered", "USB powered"):
+        match = re.search(rf"^\s*{re.escape(key)}:\s*(\S+)", text, re.MULTILINE)
+        if match:
+            values[key.replace(" ", "_").lower()] = match.group(1)
+    if "temperature" in values:
+        values["temperature_c"] = int(values.pop("temperature")) / 10.0  # tenths of a degree
+    return values
+
+
+def device_snapshot() -> dict:
+    """Full Quest state: sysfs values, thermal service, battery."""
+    snapshot = {"time": datetime.datetime.now().isoformat(timespec="seconds")}
+    for key, reader in (("sysfs", read_device_sysfs), ("thermal", read_thermal_service), ("battery", read_battery)):
+        try:
+            snapshot[key] = reader()
+        except Exception as error:  # a missing reading is recorded, not fatal
+            snapshot[key] = {"error": str(error)}
+    return snapshot
+
+
+def cpu_usage_percent(a: list, b: list) -> float | None:
+    """Busy % between two /proc/stat rows (user nice system idle iowait ...)."""
+    if (not a) or (not b) or (len(a) < 5) or (len(b) < 5):
+        return None
+    total = sum(b) - sum(a)
+    idle = (b[3] + b[4]) - (a[3] + a[4])
+    return (100.0 * (total - idle) / total) if total > 0 else None
+
+
+def stats_of(values: list) -> dict:
+    return {"median": statistics.median(values), "min": min(values), "max": max(values), "samples": len(values)}
+
+
+def summarize_device_samples(samples: list) -> dict:
+    """Per value median / min / max over the measured window's samples."""
+    series = {}
+    for sample in samples:
+        for key, value in sample.items():
+            if key.startswith("stat.") or key.endswith(".cpus"):
+                continue
+            try:
+                number = float(str(value).split()[0])  # "97 %" -> 97
+            except (TypeError, ValueError, IndexError):
+                continue
+            series.setdefault(key, []).append(number)
+    summary = {key: stats_of(values) for key, values in series.items()}
+    # CPU usage from consecutive /proc/stat samples, and over the whole window.
+    for key in sorted({k for sample in samples for k in sample if k.startswith("stat.")}):
+        rows = [sample.get(key) for sample in samples if sample.get(key)]
+        usages = [u for u in (cpu_usage_percent(rows[i], rows[i + 1]) for i in range(len(rows) - 1)) if u is not None]
+        if usages:
+            summary[f"usage.{key[len('stat.'):]}"] = stats_of(usages)
+        if len(rows) >= 2:
+            whole = cpu_usage_percent(rows[0], rows[-1])
+            if whole is not None:
+                summary.setdefault(f"usage.{key[len('stat.'):]}", {})["window"] = whole
+    if samples:
+        summary["cpufreq_policies"] = {
+            key.split(".")[1]: value for key, value in samples[0].items() if key.startswith("cpufreq.") and key.endswith(".cpus")
+        }
+    return summary
+
+
+class Device_sampler:
+    """Samples the Quest's sysfs values every interval until stopped."""
+
+    def __init__(self, interval_s: float):
+        self.interval_s = interval_s
+        self.samples = []
+        self.stop_event = threading.Event()
+        self.thread = None
+
+    def start(self) -> None:
+        def body():
+            while not self.stop_event.is_set():
+                try:
+                    self.samples.append(read_device_sysfs())
+                except Exception as error:
+                    print(f"device sample failed: {error}", file=sys.stderr)
+                self.stop_event.wait(self.interval_s)
+        self.thread = threading.Thread(target=body, daemon=True)
+        self.thread.start()
+
+    def stop(self) -> dict:
+        if self.thread is None:
+            return {}
+        self.stop_event.set()
+        self.thread.join(timeout=60)
+        return summarize_device_samples(self.samples)
+
+
 # --- one run ---------------------------------------------------------------
 
 def push_config(local_path: str) -> None:
@@ -409,7 +728,53 @@ def mcp_call(port: int, tool: str, arguments: dict | None = None):
 
 
 def uses_mcp(args) -> bool:
-    return bool(args.mcp or args.load_scene or args.mcp_measure)
+    return bool(args.mcp or args.load_scene or args.mcp_after_load or args.mcp_measure)
+
+
+def substitute_scene(value, scene_name: str):
+    """Replaces $SCENE in every string of an MCP argument value."""
+    if isinstance(value, str):
+        if ("$SCENE" in value) and (not scene_name):
+            raise RuntimeError(f"MCP argument '{value}' names $SCENE but no scene was loaded (--load-scene)")
+        return value.replace("$SCENE", scene_name)
+    if isinstance(value, list):
+        return [substitute_scene(v, scene_name) for v in value]
+    if isinstance(value, dict):
+        return {k: substitute_scene(v, scene_name) for k, v in value.items()}
+    return value
+
+
+def make_mcp_calls(port: int, calls: list, scene_name: str, run_index: int) -> list:
+    replies = []
+    for call in calls:
+        tool, arguments = parse_mcp_call(call)
+        arguments = substitute_scene(arguments, scene_name)
+        reply = mcp_call(port, tool, arguments)
+        print(f"[{run_index}] MCP {tool}: {json.dumps(reply)[:300]}")
+        if isinstance(reply, dict) and reply.get("isError"):
+            raise RuntimeError(f"MCP {tool} failed: {json.dumps(reply)[:500]}")
+        replies.append({"tool": tool, "arguments": arguments, "reply": reply})
+    return replies
+
+
+def warmup_config_state(port: int, warmup_replies: list) -> dict:
+    """The configuration in effect after the warmup calls (pure queries,
+    except a set_graphics_preset without arguments when no call made one)."""
+    presets = [r["reply"] for r in warmup_replies if r["tool"] == "set_graphics_preset"]
+    return {
+        "graphics_preset":        presets[-1] if presets else mcp_call(port, "set_graphics_preset", {}),
+        "culling_classification": mcp_call(port, "set_culling_classification", {}),
+        "occlusion_culling":      mcp_call(port, "set_occlusion_culling", {}),
+        "light_cluster_binning":  mcp_call(port, "set_light_cluster_binning", {}),
+    }
+
+
+def measure_config_state(port: int, scene_name: str) -> dict:
+    """The light shading and lights of the frames being measured."""
+    state = {"light_cluster_stats": mcp_call(port, "get_light_cluster_stats", {})}
+    if scene_name:
+        state["scene_lights"] = mcp_call(port, "get_scene_lights", {"scene_name": scene_name})
+    return state
 
 
 def mcp_load_scene(port: int, path: str, timeout_s: float) -> dict:
@@ -447,11 +812,17 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
 
     capture_path = None
     profiler = None
+    perfetto = None
+    sampler = None
     forwarded = False
     mcp_host = {}
+    device_state = {}
+    scene_name = ""
+    started_at = datetime.datetime.now().isoformat(timespec="seconds")
     try:
         adb_shell(f"am force-stop {PKG}")
         adb_shell(f"rm -f {RESULT_DIR}/benchmark_{name}.json")
+        device_state["before_launch"] = device_snapshot()
         capture_path = start_logcat()
         tail = Capture_tail(capture_path)
         if not args.worn:
@@ -466,7 +837,7 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
         device_port = None
         mcp_ready = False
         warmup_done = not uses_mcp(args)
-        measure_done = not args.mcp_measure
+        measure_done = not uses_mcp(args)
         while time.monotonic() < deadline:
             for line in tail.new_lines():
                 match = MCP_LISTEN_RE.search(line)
@@ -478,12 +849,23 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
                     settled = True
                     if not warmup_done:
                         raise RuntimeError(f"the measured window started before the warmup MCP calls finished: raise warmup_frames (capture {capture_path})")
+                    if sampler is None:
+                        sampler = Device_sampler(args.sample_interval)
+                        sampler.start()
+                        device_state["measure_start"] = device_snapshot()
                 if args.gpu_metrics and (profiler is None) and (f"Benchmark {name}: scene settled" in line):
                     profiler = Gpu_profiler(gpu_metric_ids(args.gpu_metric_ids), measure_seconds)
                     profiler.start()
+                if args.perfetto and (perfetto is None) and (f"Benchmark {name}: scene settled" in line):
+                    perfetto = Perfetto_capture(f"{stamp}_{name}_{run_index}", args.perfetto_seconds, args.perfetto_delay)
+                    perfetto.start()
                 if f"Benchmark result {name}:" in line:
                     outcome = "result"
                     print(f"[{run_index}] {line[line.index('Benchmark result'):]}")
+                    if sampler is not None:
+                        device_state["measure_window"] = sampler.stop()
+                        sampler = None
+                    device_state["at_result"] = device_snapshot()
                 elif f"Benchmark failed {name}:" in line:
                     outcome = "failed"
                     print(f"[{run_index}] {line[line.index('Benchmark failed'):]}")
@@ -496,25 +878,21 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
                 adb("forward", f"tcp:{args.mcp_port}", f"tcp:{device_port}", check=True)
                 forwarded = True
                 print(f"[{run_index}] MCP: host tcp:{args.mcp_port} -> device tcp:{device_port}")
-                mcp_host["warmup"] = []
-                for call in args.mcp:
-                    tool, arguments = parse_mcp_call(call)
-                    reply = mcp_call(args.mcp_port, tool, arguments)
-                    print(f"[{run_index}] MCP {tool}: {json.dumps(reply)[:300]}")
-                    mcp_host["warmup"].append({"tool": tool, "arguments": arguments, "reply": reply})
+                mcp_host["warmup"] = make_mcp_calls(args.mcp_port, args.mcp, scene_name, run_index)
                 if args.load_scene:
                     mcp_host["load_scene"] = mcp_load_scene(args.mcp_port, args.load_scene, args.timeout)
+                    scene_name = mcp_host["load_scene"]["scene_name"]
                     print(f"[{run_index}] MCP load_scene: {json.dumps(mcp_host['load_scene'])}")
+                mcp_host["after_load"] = make_mcp_calls(args.mcp_port, args.mcp_after_load, scene_name, run_index)
+                mcp_host["config_state"] = warmup_config_state(args.mcp_port, mcp_host["warmup"] + mcp_host["after_load"])
                 warmup_done = True
                 continue  # lines that arrived during the calls are read next pass
             if settled and (not measure_done):
                 mcp_call(args.mcp_port, "reset_composition_pass_stats")
                 time.sleep(3.0)
-                mcp_host["measure"] = []
-                for call in args.mcp_measure:
-                    tool, arguments = parse_mcp_call(call)
-                    mcp_host["measure"].append({"tool": tool, "arguments": arguments, "reply": mcp_call(args.mcp_port, tool, arguments)})
-                print(f"[{run_index}] MCP measure calls done ({len(args.mcp_measure)})")
+                mcp_host["measure"] = make_mcp_calls(args.mcp_port, args.mcp_measure, scene_name, run_index)
+                mcp_host["config_state"].update(measure_config_state(args.mcp_port, scene_name))
+                print(f"[{run_index}] MCP measure calls done ({len(args.mcp_measure)} + configuration state)")
                 measure_done = True
                 continue
             time.sleep(0.5)  # polling the capture file, not waiting for readiness
@@ -536,14 +914,21 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
         fill_identity(result)
         result["host"] = {
             "run_index": run_index,
+            "started_at": started_at,
+            "stored_as": f"{stamp}_{name}_{run_index}.json",
+            "config": args.config_info,
             "worn": bool(args.worn),
             "scene": args.scene or "",
             "capture": str(capture_path),
             "gpu_metrics": profiler.join() if profiler is not None else {},
+            "perfetto": perfetto.join() if perfetto is not None else {},
             "editor_args": editor_args,
             "mcp_warmup": mcp_host.get("warmup", []),
             "load_scene": mcp_host.get("load_scene", {}),
+            "mcp_after_load": mcp_host.get("after_load", []),
             "mcp_measure": mcp_host.get("measure", []),
+            "config_state": mcp_host.get("config_state", {}),
+            "device_state": device_state,
         }
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
         out_path = RUNS_DIR / f"{stamp}_{name}_{run_index}.json"
@@ -552,6 +937,8 @@ def run_once(args, bench: dict, run_index: int, stamp: str) -> dict:
         print(f"[{run_index}] stored {out_path}")
         return result
     finally:
+        if sampler is not None:
+            sampler.stop()
         # Restore even when a step above raised (each step on its own, so one
         # failing adb call does not skip the rest).
         restore_steps = [off_head_end] if not args.worn else [lambda: adb_shell(f"am force-stop {PKG}")]
@@ -624,9 +1011,284 @@ def print_repeat(summary: dict) -> None:
         print(f"{key:<44} {stats['median']:>14.3f} {stats['min']:>14.3f} {stats['max']:>14.3f} {spread:>9.2f}")
 
 
+# --- run record (doc/reference/quest_bench_runs.md) ---------------------------
+
+RECORD_DOC = REPO_ROOT / "doc" / "reference" / "quest_bench_runs.md"
+
+
+def fmt_range(values: list, digits: int = 1, scale: float = 1.0) -> str:
+    """median [min..max] of values (one value: just it); '-' when empty."""
+    values = [v * scale for v in values if v is not None]
+    if not values:
+        return "-"
+    median = statistics.median(values)
+    if len(values) == 1 or (min(values) == max(values)):
+        return f"{median:.{digits}f}"
+    return f"{median:.{digits}f} [{min(values):.{digits}f}..{max(values):.{digits}f}]"
+
+
+def window_stat(device_state: dict, key: str) -> dict:
+    return device_state.get("measure_window", {}).get(key, {})
+
+
+def hal_max(snapshot: dict, kind: str):
+    return snapshot.get("thermal", {}).get("hal_max_c_by_type", {}).get(kind)
+
+
+def cpufreq_text(device_state: dict) -> str:
+    """Per cpufreq policy: cores, median current clock [min..max] and the
+    scaling cap, in MHz, over the measured window."""
+    window = device_state.get("measure_window", {})
+    parts = []
+    for policy, cpus in sorted(window.get("cpufreq_policies", {}).items(), key=lambda item: int(item[0])):
+        current = window.get(f"cpufreq.{policy}.cur_khz", {})
+        cap = window.get(f"cpufreq.{policy}.max_khz", {})
+        hw_max = window.get(f"cpufreq.{policy}.hw_max_khz", {})
+        if not current:
+            continue
+        text = f"cpu {cpus}: {current['median'] / 1000:.0f}"
+        if current["min"] != current["max"]:
+            text += f" [{current['min'] / 1000:.0f}..{current['max'] / 1000:.0f}]"
+        if cap:
+            text += f" cap {cap['min'] / 1000:.0f}"
+        if hw_max:
+            text += f"/{hw_max['median'] / 1000:.0f}"
+        parts.append(text)
+    return "; ".join(parts) if parts else "-"
+
+
+def gpu_clock_text(device_state: dict) -> str:
+    for key in ("kgsl.gpuclk", "kgsl.devfreq/cur_freq"):
+        stats = window_stat(device_state, key)
+        if stats:
+            text = f"{stats['median'] / 1e6:.0f}"
+            if stats["min"] != stats["max"]:
+                text += f" [{stats['min'] / 1e6:.0f}..{stats['max'] / 1e6:.0f}]"
+            cap = window_stat(device_state, "kgsl.max_gpuclk") or window_stat(device_state, "kgsl.devfreq/max_freq")
+            if cap:
+                text += f" cap {cap['min'] / 1e6:.0f}"
+            return text
+    return "-"
+
+
+def temperature_text(device_state: dict, kind: str) -> str:
+    begin = hal_max(device_state.get("measure_start", {}), kind)
+    end = hal_max(device_state.get("at_result", {}), kind)
+    if (begin is None) and (end is None):
+        return "-"
+    return f"{f'{begin:.1f}' if begin is not None else '-'} -> {f'{end:.1f}' if end is not None else '-'}"
+
+
+def lights_text(scene_lights) -> str:
+    lights = scene_lights.get("lights", []) if isinstance(scene_lights, dict) else (scene_lights if isinstance(scene_lights, list) else [])
+    if not lights:
+        return "-"
+    counts = {}
+    for light in lights:
+        entry = counts.setdefault(light.get("type", "?"), [0, 0, 0, 0])
+        entry[0] += 1
+        entry[1] += 1 if light.get("shaded") else 0
+        entry[2] += 1 if light.get("shadow_mapped") else 0
+        # shadow_cached: the shadow map cache kept the light's map (a 2D
+        # layer, or the cube faces bit mask) from an earlier frame.
+        entry[3] += 1 if (light.get("shadow_mapped") and light.get("shadow_cached")) else 0
+    return "; ".join(
+        f"{kind} {shaded}/{total} shaded, {mapped} shadow-mapped ({cached} cached)"
+        for kind, (total, shaded, mapped, cached) in sorted(counts.items())
+    ) + " (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn)"
+
+
+def supported_text(reply: dict) -> str:
+    """The device support flag of a culling setting's reply (a gpu mode
+    falls back to the CPU path where the device lacks it)."""
+    if "gpu_supported" not in reply:
+        return ""
+    return " (gpu supported)" if reply["gpu_supported"] else " (gpu NOT supported: CPU path)"
+
+
+def light_shading_in_effect(cluster_stats) -> str:
+    if not isinstance(cluster_stats, dict):
+        return "-"
+    views = [v for v in cluster_stats.get("views", []) if v.get("rendered_last_frame")]
+    shading = sorted({f"{v.get('light_shading', '?')} ({v.get('scene_view', '?')})" for v in views})
+    return ", ".join(shading) if shading else "-"
+
+
+# Adreno counters shown in the run record (all are stored in host.perfetto).
+PERFETTO_RECORD_COUNTERS = (
+    "% Time Shading Fragments", "% Time Shading Vertices", "% Shaders Busy", "% Shader ALU Capacity Utilized",
+    "% Vertex Fetch Stall", "% Texture Fetch Stall", "% Stalled on System Memory", "ALU / Fragment", "ALU / Vertex",
+    "Fragments Shaded / Second", "Vertices Shaded / Second", "Pre-clipped Polygons/Second", "Average Polygon Area",
+    "% Prims Trivially Rejected", "Textures / Fragment", "Textures / Vertex", "GPU Frequency",
+)
+
+
+def perfetto_markdown(results: list) -> list:
+    """Per run: the surface with the most GPU time (the eye pass) and the
+    selected counters of its --perfetto capture."""
+    captured = [(index, r["host"]["perfetto"]) for index, r in enumerate(results)
+                if r.get("host", {}).get("perfetto", {}).get("surfaces")]
+    if not captured:
+        return []
+    lines = ["Perfetto capture (metavr perf capture, GPU render stages + Adreno counters, in the measured window); "
+             "the surface with the most GPU time, medians per surface (ms):", "",
+             "| Run | Surface | Surfaces | Duration | Binning | Bin rendering | Preempted | Rendered bins | Trace |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    for index, perfetto in captured:
+        top = perfetto["surfaces"][0]
+        lines.append(f"| {index} | {top['surface']} | {top['count']} | {top['duration_ms']:.2f} | {top['binning_ms']:.2f} | "
+                     f"{top['render_ms']:.2f} | {top['preempt_ms']:.2f} | {top['rendered_bins']:g} | `{perfetto.get('session', '')}` |")
+    lines.append("")
+    lines.append("| Counter (mean over the capture) | " + " | ".join(f"Run {index}" for index, _ in captured) + " |")
+    lines.append("|---|" + "---|" * len(captured))
+    for counter in PERFETTO_RECORD_COUNTERS:
+        cells = []
+        for _, perfetto in captured:
+            stats = perfetto.get("counters", {}).get(counter)
+            cells.append("-" if stats is None else f"{stats['mean']:.4g}")
+        lines.append(f"| {counter} | " + " | ".join(cells) + " |")
+    lines.append("")
+    return lines
+
+
+def record_markdown(results: list) -> str:
+    first = results[0]
+    host = first.get("host", {})
+    identity = first.get("identity", {})
+    config = host.get("config", {})
+    state = host.get("config_state", {})
+    preset = state.get("graphics_preset", {}) if isinstance(state.get("graphics_preset"), dict) else {}
+    started = host.get("started_at", "").replace("T", " ")[:16]
+    hashes = sorted({r.get("input_hash", "") for r in results})
+    stored = [r.get("host", {}).get("stored_as", "") for r in results]
+    values = [headline(r) for r in results]
+
+    def column(key):
+        return [v.get(key) for v in values if key in v]
+
+    lines = []
+    lines.append(f"## {started} - {first.get('name', '?')}, {config.get('name', 'no configuration file')}")
+    lines.append("")
+    if config.get("description"):
+        lines.append(config["description"] + ".")
+        lines.append("")
+    load = host.get("load_scene", {})
+    lines.append(f"- Runs: {len(results)} x {first.get('measure_frames', '?')} measured frames "
+                 f"(warmup {first.get('warmup_frames', '?')}), display {first.get('refresh', {}).get('display_refresh_hz', '?')} Hz, "
+                 f"input_hash {', '.join(hashes)}; results {', '.join(f'`{name}`' for name in stored if name)} "
+                 "(`memory-bank/local/quest_runs/`, per machine).")
+    lines.append(f"- Build: {identity.get('version', '?')}; {identity.get('device_model', '?')}, OS {identity.get('os_build', '?')}; "
+                 f"performance levels CPU {identity.get('cpu_performance_level', '?')} / GPU {identity.get('gpu_performance_level', '?')}.")
+    lines.append(f"- Launch: `{host.get('editor_args', '')}`" + (
+        f"; scene `{os.path.basename(load.get('path', ''))}` (listed {load.get('listed_s', '?')} s, idle {load.get('idle_s', '?')} s)" if load else "") + ".")
+    calls = [c["tool"] for c in host.get("mcp_warmup", []) + host.get("mcp_after_load", [])]
+    if calls:
+        lines.append(f"- Configuration calls: {', '.join(calls)} (arguments in the result files' `host` block).")
+    lines.append("")
+    lines.append("| Configuration | |")
+    lines.append("|---|---|")
+    culling = state.get("culling_classification", {})
+    occlusion = state.get("occlusion_culling", {})
+    binning = state.get("light_cluster_binning", {})
+    rows = [
+        ("Light shading (setting / in effect)", f"{preset.get('light_shading', '-')} / {light_shading_in_effect(state.get('light_cluster_stats'))}"),
+        ("Lights", lights_text(state.get("scene_lights"))),
+        ("Light limits shadow+unshadowed", "directional {}+{}, spot {}+{}, point {}+{}".format(
+            preset.get("directional_shadow_light_count", "-"), preset.get("directional_unshadowed_light_count", "-"),
+            preset.get("spot_shadow_light_count", "-"), preset.get("spot_unshadowed_light_count", "-"),
+            preset.get("point_shadow_light_count", "-"), preset.get("point_unshadowed_light_count", "-"))),
+        ("Shadows", "{}; {} px, point {} px, {} ({} bits), {}, {}, {}, {}".format(
+            "on" if preset.get("shadow_enable") else ("off" if preset else "-"),
+            preset.get("shadow_resolution", "-"), preset.get("point_shadow_resolution", "-"),
+            preset.get("shadow_map_format", "-"), preset.get("shadow_depth_bits", "-"),
+            preset.get("shadow_technique", "-"), preset.get("shadow_filter", "-"),
+            preset.get("shadow_bias", "-"), preset.get("shadow_cull_mode", "-"))),
+        ("Light cluster binning", binning.get("mode", "-") if isinstance(binning, dict) else "-"),
+        ("Culling classification", (culling.get("mode", "-") + supported_text(culling)) if isinstance(culling, dict) else "-"),
+        ("Occlusion culling", (("on" if occlusion.get("enabled") else "off") + supported_text(occlusion)) if isinstance(occlusion, dict) and ("enabled" in occlusion) else "-"),
+        ("Draw lists", ("on" if preset.get("use_draw_lists") else "off") if "use_draw_lists" in preset else "-"),
+        ("Specular anti-aliasing", preset.get("specular_anti_aliasing", "-")),
+        ("Preset", preset.get("preset_name", "-")),
+    ]
+    for label, text in rows:
+        lines.append(f"| {label} | {text} |")
+    lines.append("")
+    lines.append("| Result (median [min..max] of the runs' medians) | |")
+    lines.append("|---|---|")
+    result_rows = [
+        ("Frames per second", fmt_range(column("frames_per_second"), 2)),
+        ("Frame wall time (ms)", fmt_range(column("wall_us"), 2, 0.001)),
+        ("M2 / R / M3 (ms)", " / ".join(fmt_range(column(t), 2, 0.001) for t in ("m2_us", "r_us", "m3_us"))),
+        ("App GPU frame time, XR counter (ms)", fmt_range(column("xr:app/gpu_frametime"), 2)),
+        ("GPU utilization, XR counter (%)", fmt_range(column("xr:device/gpu_utilization"), 1)),
+        ("CPU utilization average / worst, XR counter (%)", fmt_range(column("xr:device/cpu_utilization_average"), 1) + " / " + fmt_range(column("xr:device/cpu_utilization_worst"), 1)),
+    ]
+    gpu_pass_keys = [k for k in dict.fromkeys(k for v in values for k in v) if k.startswith("gpu_pass:")]
+    for key in gpu_pass_keys:
+        result_rows.append((f"GPU pass {key[len('gpu_pass:'):]} (ms)", fmt_range(column(key), 3, 0.001)))
+    for label, text in result_rows:
+        lines.append(f"| {label} | {text} |")
+    lines.append("")
+    lines.extend(perfetto_markdown(results))
+    lines.append("Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; "
+                 "clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).")
+    lines.append("")
+    lines.append("| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
+    for index, result in enumerate(results):
+        device = result.get("host", {}).get("device_state", {})
+        ident = result.get("identity", {})
+        start = device.get("measure_start", {}).get("thermal", {}).get("thermal_status")
+        end = device.get("at_result", {}).get("thermal", {}).get("thermal_status")
+        editor_status = f"{ident.get('thermal_status_begin', '-')} -> {ident.get('thermal_status_end', '-')}, step-downs {ident.get('thermal_step_downs_in_window', '-')}"
+        battery = device.get("at_result", {}).get("battery", {})
+        battery_text = f"{battery.get('temperature_c', '-')}, {battery.get('level', '-')} %" if battery else "-"
+        busy = window_stat(device, "kgsl.gpu_busy_percentage")
+        usage = window_stat(device, "usage.cpu")
+        lines.append("| {} | {:.2f} | {} -> {}; {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
+            index, result.get("frames_per_second", 0.0),
+            start if start is not None else "-", end if end is not None else "-", editor_status,
+            temperature_text(device, "cpu"), temperature_text(device, "gpu"), temperature_text(device, "skin"),
+            battery_text, cpufreq_text(device), gpu_clock_text(device),
+            fmt_range([busy["median"]], 0) if busy else "-",
+            f"{usage['window']:.1f}" if usage and ("window" in usage) else "-"))
+    lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def append_record(results: list, doc_path: Path) -> None:
+    if not doc_path.exists():
+        raise RuntimeError(f"record document {doc_path} missing")
+    text = doc_path.read_text(encoding="utf-8")
+    if not text.endswith("\n"):
+        text += "\n"
+    doc_path.write_text(text + "\n" + record_markdown(results), encoding="utf-8", newline="")
+    print(f"recorded in {doc_path}")
+
+
+def load_bench_config(args) -> None:
+    """Merges a --config file's calls in front of the command line's."""
+    args.config_info = {}
+    if not args.config:
+        return
+    path = REPO_ROOT / args.config
+    config = json.loads(path.read_text(encoding="utf-8"))
+    for key, attribute in (("mcp", "mcp"), ("mcp_after_load", "mcp_after_load"), ("mcp_measure", "mcp_measure")):
+        setattr(args, attribute, list(config.get(key, [])) + getattr(args, attribute))
+    args.config_info = {
+        "path": args.config.replace("\\", "/"),
+        "name": config.get("name", path.stem),
+        "description": config.get("description", ""),
+    }
+
+
 def cmd_run(args) -> int:
     bench_path = REPO_ROOT / args.bench
     bench = json.loads(bench_path.read_text(encoding="utf-8"))
+    load_bench_config(args)
+    if args.perfetto and args.gpu_metrics:
+        print("--perfetto and --gpu-metrics both read the Adreno counters: pass one of them")
+        return 2
     if args.push:
         push_config(args.bench)
         if args.scene:
@@ -647,6 +1309,24 @@ def cmd_run(args) -> int:
         values = headline(results[0])
         for key, value in values.items():
             print(f"{key:<44} {value:>14.3f}")
+    if args.record:
+        append_record(results, Path(args.record))
+    return 0
+
+
+def cmd_record(args) -> int:
+    results = []
+    for path in map(Path, args.results):
+        result = json.loads(path.read_text(encoding="utf-8"))
+        # Results stored before the host block named them: the file name
+        # (<YYYYmmdd_HHMMSS>_<name>_<run>.json) gives both.
+        host = result.setdefault("host", {})
+        host.setdefault("stored_as", path.name)
+        stamp = re.match(r"^(\d{8}_\d{6})_", path.name)
+        if stamp and not host.get("started_at"):
+            host["started_at"] = datetime.datetime.strptime(stamp.group(1), "%Y%m%d_%H%M%S").isoformat(timespec="seconds")
+        results.append(result)
+    append_record(results, Path(args.doc))
     return 0
 
 
@@ -684,6 +1364,9 @@ def main() -> int:
     run.add_argument("--worn", action="store_true", help="headset worn, launch confirmed by the user: skip the proximity bypass and its restore")
     run.add_argument("--gpu-metrics", action="store_true", help="run ovrgpuprofiler for the measured window")
     run.add_argument("--gpu-metric-ids", default="", help="ovrgpuprofiler metric ids (comma separated); overrides memory-bank/local/quest.md")
+    run.add_argument("--perfetto", action="store_true", help="metavr perf capture (GPU render stages + GPU counters) in the measured window")
+    run.add_argument("--perfetto-seconds", type=float, default=4.0, help="length of the --perfetto capture")
+    run.add_argument("--perfetto-delay", type=float, default=3.0, help="seconds into the measured window the --perfetto capture starts")
     run.add_argument("--repeat", type=int, default=1, help="number of runs (one launch each)")
     run.add_argument("--push", action="store_true", help="copy the local --bench / --scene files over the device's writable copies first")
     run.add_argument("--timeout", type=float, default=600.0, help="seconds to wait for the result line per run")
@@ -691,9 +1374,18 @@ def main() -> int:
     run.add_argument("--editor-args", default="", help="extra editor arguments, e.g. --no-scene")
     run.add_argument("--mcp", action="append", default=[], metavar="TOOL[=JSON]", help="MCP call made during the warmup (repeatable)")
     run.add_argument("--load-scene", default="", help="device path of a scene file: load_scene, wait idle, set_headset_scene during the warmup")
+    run.add_argument("--mcp-after-load", action="append", default=[], metavar="TOOL[=JSON]", help="MCP call made after the scene load; $SCENE is replaced by the scene name (repeatable)")
     run.add_argument("--mcp-measure", action="append", default=[], metavar="TOOL[=JSON]", help="MCP call made in the measured window, reply stored in the result (repeatable)")
+    run.add_argument("--config", default="", help="bench configuration file (scripts/quest_bench_configs/), repo-relative")
+    run.add_argument("--sample-interval", type=float, default=2.0, help="seconds between Quest state samples in the measured window")
+    run.add_argument("--record", nargs="?", const=str(RECORD_DOC), default="", metavar="DOC", help="append the run record to DOC (default doc/reference/quest_bench_runs.md)")
     run.add_argument("--mcp-port", type=int, default=3743, help="host port forwarded to the device's MCP port")
     run.set_defaults(func=cmd_run)
+
+    record = sub.add_parser("record", help="append the run record of stored per-run results to the record document")
+    record.add_argument("results", nargs="+", help="per-run result files of one invocation")
+    record.add_argument("--doc", default=str(RECORD_DOC), help="record document (default doc/reference/quest_bench_runs.md)")
+    record.set_defaults(func=cmd_record)
 
     compare = sub.add_parser("compare", help="compare two result files (or repeat summaries)")
     compare.add_argument("a")

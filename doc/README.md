@@ -519,6 +519,7 @@ flowchart TD
 - [reference/nvidia_present_timing_driver_report.md](reference/nvidia_present_timing_driver_report.md): NVIDIA VK_EXT_present_timing driver issue report
 - [reference/nvidia_texel_fetch_3d_driver_report.md](reference/nvidia_texel_fetch_3d_driver_report.md): NVIDIA OpenGL texelFetch sampler3D zeros driver report, with standalone reproduction
 - [reference/property_system_wpf_comparison.md](reference/property_system_wpf_comparison.md): erhe::property vs WPF dependency properties
+- [reference/quest_bench_runs.md](reference/quest_bench_runs.md): Record of Quest 3 benchmark runs (the Bistro frame): configuration in effect, results and Quest thermal / clock / usage state per run
 - [reference/quest_profiling_2026_05_01.md](reference/quest_profiling_2026_05_01.md): Quest 3 GPU profiling report (2026-05-01)
 - [reference/render_thread_audit_2026_10_09.md](reference/render_thread_audit_2026_10_09.md): Render phase audit at commit c06738609 (2026-10-09): what R read and wrote outside its own state before the ImGui overlap and frame pipelining; every site since resolved
 - [reference/render_thread_measurements_2026_10.md](reference/render_thread_measurements_2026_10.md): Render thread frame-time measurements (2026-10): display-paced, unpaced serial and pipelined runs on an Intel iGPU, an NVIDIA dGPU and an Apple M4 Pro (Metal, MoltenVK, KosmicKrisp; CPU-bound Debug runs confirming R3), Tracy phase picture
