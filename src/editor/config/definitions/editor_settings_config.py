@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=10,
+    version=11,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -52,6 +52,8 @@ struct("Editor_settings_config",
         field("ddgi",                 StructRef("Ddgi_config"),            added_in=1),
         field("radiance_cascades",    StructRef("Radiance_cascades_config"), added_in=5),
         field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
+        # Generation defaults of the LOD window (doc/editor/lod.md).
+        field("lod",                  StructRef("Lod_config"),             added_in=11),
         # glTF import/open performance options (doc/editor/async_asset_loading.md).
         field("load",                 StructRef("Load_config"),            added_in=1),
         field("network",              StructRef("Network_config"),         added_in=1),

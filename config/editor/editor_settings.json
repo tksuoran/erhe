@@ -1,5 +1,5 @@
 {
-    "_version": 5,
+    "_version": 11,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -304,6 +304,17 @@
         "seam_blend": true,
         "bicubic_sampling": true
     },
+    "lod": {
+        "level_count": 6,
+        "ratio": 0.5,
+        "attributes": "normals_and_colors",
+        "normal_weight": 1,
+        "color_weight": 1,
+        "border": "locked",
+        "seams": "keep",
+        "fallback": "none",
+        "normal_merge_angle": 20
+    },
     "load": {
         "_version": 9,
         "deferred_raytrace": true,
@@ -493,12 +504,25 @@
         "large_icon_size": 32,
         "hotbar_icon_size": 80
     },
-    "threading": { "_version": 2, "thread_count": 0, "render_thread": "dedicated_thread" },
+    "threading": {
+        "_version": 4,
+        "thread_count": 0,
+        "render_thread": "dedicated_thread",
+        "imgui_overlap": true,
+        "frame_pipelining": true
+    },
     "post_processing": true,
     "use_draw_lists": true,
     "exclude_unlit_primitives": true,
     "geometry_edit_mode": "fork",
     "transform_mode": "extrude_group_normal",
     "indirect_diffuse_source": "ambient",
+    "culling_classification": "gpu",
+    "occlusion_culling": false,
+    "pvs_culling": true,
+    "pvs_query_margin": 0.05,
+    "pvs_resident_pages": 64,
+    "pvs_stream_radius_pages": 1,
+    "light_cluster_binning": "gpu",
     "quit_after_frames": 0
 }

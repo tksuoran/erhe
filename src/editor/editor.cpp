@@ -145,6 +145,7 @@
 #include "windows/frame_pacing_window.hpp"
 #include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
+#include "windows/lod_window.hpp"
 #include "windows/pvs_window.hpp"
 #include "windows/inventory_window.hpp"
 #include "windows/properties.hpp"
@@ -3485,6 +3486,7 @@ public:
                 m_lightmap_texture_window = std::make_unique<Lightmap_texture_window        >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_app_context.lightmap_texture_window = m_lightmap_texture_window.get();
                 m_app_context.lightmap_window         = m_lightmap_window.get();
+                m_lod_window             = std::make_unique<Lod_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), m_editor_settings.lod);
                 m_pvs_window             = std::make_unique<Pvs_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_app_context.pvs_window              = m_pvs_window.get();
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
@@ -5742,6 +5744,7 @@ public:
     std::unique_ptr<Frame_pacing_window             >        m_frame_pacing_window;
     std::unique_ptr<Controller_inputs_window        >        m_controller_inputs_window;
     std::unique_ptr<Lightmap_window                 >        m_lightmap_window;
+    std::unique_ptr<Lod_window                      >        m_lod_window;
     std::unique_ptr<Pvs_window                      >        m_pvs_window;
     std::unique_ptr<Lightmap_texture_window         >        m_lightmap_texture_window;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
