@@ -109,12 +109,15 @@ point of the mesh's world box (`error * max_axis_scale * projection_scale /
 distance <= threshold`), plus the mesh's `Lod.bias` and "LOD Bias", clamped
 to `Lod.min_level` / `Lod.max_level` and to the chain; a mesh under
 `Lod.mode` forced or off draws its forced level or level 0 as before
-(`doc/erhe/draw_list_renderer.md` R1c). The selection runs on the CPU
-(`doc/plans/lod_gpu_selection.md` step 2a); the color passes whose commands
-the CPU writes draw it. Not yet selected: the color passes with
-GPU-generated commands (`culling_classification` gpu on a device with the
-count draw), the shadow passes and skinned meshes draw the template range
-(the forced level, or level 0); there is no hysteresis, and
+(`doc/erhe/draw_list_renderer.md` R1c). The selection runs in the culling
+classification on the CPU and, with `culling_classification` gpu on a
+device with the count draw, also in its compute pass with the same
+arithmetic, bit for bit (`doc/plans/lod_gpu_selection.md` steps 2a and
+2b), so every color draw-list pass draws it, whether the CPU writes its
+commands or the GPU generates them; `get_cull_classification_check`
+compares the two (`lod_mismatch_count`). Not yet selected: the shadow
+passes and skinned meshes draw the template range (the forced level, or
+level 0); there is no hysteresis, and
 the edge lines and the LOD window's "Drawn" column still show the forced
 level. MCP `get_lod_selection` reports the levels of one frame for a mesh,
 per column, with each column's origin and projection scale.

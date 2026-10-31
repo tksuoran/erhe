@@ -78,6 +78,15 @@ public:
     static constexpr unsigned int pvs_culled_binding_point  {6};
     static constexpr unsigned int pvs_columns_binding_point {7};
     static constexpr unsigned int pvs_pages_binding_point   {8};
+    // Level of detail selection (doc/plans/lod_gpu_selection.md sections 2
+    // and 3): the command templates (lod_word, lod_table_index; the
+    // compaction's templates buffer), the level table (one uvec4 row per
+    // level) and the frame's level region (persistent per frame slot), one
+    // uint32 per entry per group of lod_columns_per_word LOD columns,
+    // written by the classification.
+    static constexpr unsigned int lod_templates_binding_point{9};
+    static constexpr unsigned int lod_table_binding_point    {10};
+    static constexpr unsigned int lod_levels_binding_point   {11};
     static constexpr uint32_t     workgroup_size      {64};
     // GPU bounds: two vec4 per entry (center + max_axis_scale, extent +
     // purpose).
@@ -92,6 +101,10 @@ public:
     static constexpr std::size_t  vec4s_per_view      {14};
     // Level table (Draw_list_scene::get_lod_table()): one uvec4 per row.
     static constexpr std::size_t  lod_table_bytes_per_row{4 * sizeof(uint32_t)};
+    // Level region: one uint32 per entry per group of 8 LOD columns, the
+    // level of column c in the nibble c % 8 (the CPU level words' layout).
+    static constexpr std::size_t  lod_level_bytes_per_entry_group{sizeof(uint32_t)};
+    static constexpr uint32_t     lod_columns_per_word           {8};
     // Mask: one uvec2 (64 view bits) per entry per group of 64 views.
     static constexpr std::size_t  mask_bytes_per_entry_group{2 * sizeof(uint32_t)};
 
@@ -102,20 +115,61 @@ public:
     static constexpr unsigned int compact_commands_binding_point {3};
     static constexpr unsigned int compact_counts_binding_point   {4};
     static constexpr unsigned int compact_bits_binding_point     {5};
+    // The frame's level region and the level table (pass 1 reads the
+    // index range of an entry's selected level).
+    static constexpr unsigned int compact_lod_levels_binding_point{6};
+    static constexpr unsigned int compact_lod_table_binding_point {7};
+
+    // The storage blocks each compute bind group layout lists (all of its
+    // bindings); is_device_capable() requires the larger count of compute
+    // storage blocks.
+    static constexpr std::array<unsigned int, 12> classify_storage_binding_points{
+        bounds_binding_point, views_binding_point, masks_binding_point,
+        occlusion_words_binding_point, occlusion_previous_words_binding_point,
+        pvs_database_binding_point, pvs_culled_binding_point, pvs_columns_binding_point, pvs_pages_binding_point,
+        lod_templates_binding_point, lod_table_binding_point, lod_levels_binding_point
+    };
+    static constexpr std::array<unsigned int, 8> compact_storage_binding_points{
+        compact_templates_binding_point, compact_jobs_binding_point, compact_masks_binding_point,
+        compact_commands_binding_point, compact_counts_binding_point, compact_bits_binding_point,
+        compact_lod_levels_binding_point, compact_lod_table_binding_point
+    };
+    // Each list is its layout's binding points 0 .. count - 1 in order, so
+    // the counts are the pipelines' storage block counts.
+    template <std::size_t N>
+    [[nodiscard]] static constexpr auto is_dense_binding_list(const std::array<unsigned int, N>& binding_points) -> bool
+    {
+        for (std::size_t i = 0; i < N; ++i) {
+            if (binding_points[i] != i) {
+                return false;
+            }
+        }
+        return true;
+    }
+    static constexpr std::size_t  classify_storage_block_count{classify_storage_binding_points.size()};
+    static constexpr std::size_t  compact_storage_block_count {compact_storage_binding_points.size()};
+    static constexpr std::size_t  required_compute_storage_blocks{
+        (classify_storage_block_count > compact_storage_block_count) ? classify_storage_block_count : compact_storage_block_count
+    };
     // A multiple of 32 (one pass bit word per 32 entries).
     static constexpr uint32_t     compact_workgroup_size         {64};
     // Command templates: two uvec4 per entry (index_count, first_index,
     // base_vertex, lod_word and the entry's flag bits, lod_table_index, 0),
     // laid out like the bounds.
     static constexpr std::size_t  template_bytes_per_entry{2 * 4 * sizeof(uint32_t)};
-    // Job table: one uvec4 per job (view in bits 0..15 and filter index in
-    // bits 16..31, first entry, entry count, command offset) after the
-    // header uvec4 and the filter table (two uvec4 per filter, up to
-    // max_job_filters).
+    // Job table: one uvec4 per job (view in bits 0..15, filter index in
+    // bits 16..20 and LOD column in bits 21..31, job_lod_column_none for a
+    // job without one; first entry, entry count, command offset) after the
+    // header uvec4, the LOD header uvec4 and the filter table (two uvec4
+    // per filter, up to max_job_filters).
     static constexpr std::size_t  job_bytes               {4 * sizeof(uint32_t)};
     // The frame's distinct Item_filters of the job table: the shadow
     // selection's and the color selections' (a few per view; verified).
     static constexpr std::size_t  max_job_filters         {32};
+    static constexpr uint32_t     job_filter_shift        {16};
+    static constexpr uint32_t     job_lod_column_shift    {21};
+    static constexpr uint32_t     job_lod_column_none     {0x7ffu};
+    static_assert(max_job_filters <= (1u << (job_lod_column_shift - job_filter_shift)));
     // A job's command offset is a multiple of this: its pass bit words start
     // at command offset / 32.
     static constexpr uint32_t     job_command_alignment   {32};
@@ -174,8 +228,10 @@ public:
     [[nodiscard]] auto get_view_pvs_cells_offset () const -> std::size_t { return m_view_pvs_cells_offset; }
     [[nodiscard]] auto get_view_pvs_pages_offset () const -> std::size_t { return m_view_pvs_pages_offset; }
     [[nodiscard]] auto get_view_pvs_grid_offset  () const -> std::size_t { return m_view_pvs_grid_offset; }
-    // The level of detail header (cull_classify.comp documents it).
-    [[nodiscard]] auto get_view_lod_header_offset() const -> std::size_t { return m_view_lod_header_offset; }
+    // The level of detail header and column counts (cull_classify.comp
+    // documents them).
+    [[nodiscard]] auto get_view_lod_header_offset () const -> std::size_t { return m_view_lod_header_offset; }
+    [[nodiscard]] auto get_view_lod_columns_offset() const -> std::size_t { return m_view_lod_columns_offset; }
     [[nodiscard]] auto get_view_data_offset  () const -> std::size_t { return m_view_data_offset; }
     // For Draw_list_scene's command generation.
     [[nodiscard]] auto get_compact_bind_group_layout() const -> const erhe::graphics::Bind_group_layout*;
@@ -186,6 +242,7 @@ public:
     [[nodiscard]] auto get_command_buffer           () -> erhe::graphics::Ring_buffer_client&;
     [[nodiscard]] auto get_count_buffer             () -> erhe::graphics::Ring_buffer_client&;
     [[nodiscard]] auto get_job_header_offset() const -> std::size_t { return m_job_header_offset; }
+    [[nodiscard]] auto get_job_lod_header_offset() const -> std::size_t { return m_job_lod_header_offset; }
     [[nodiscard]] auto get_job_filter_offset() const -> std::size_t { return m_job_filter_offset; }
     [[nodiscard]] auto get_job_data_offset  () const -> std::size_t { return m_job_data_offset; }
     // For Draw_list_scene's occlusion test. The view block holds
@@ -215,6 +272,9 @@ private:
     erhe::graphics::Shader_resource                           m_pvs_culled_block;
     erhe::graphics::Shader_resource                           m_pvs_columns_block;
     erhe::graphics::Shader_resource                           m_pvs_pages_block;
+    erhe::graphics::Shader_resource                           m_lod_templates_block;
+    erhe::graphics::Shader_resource                           m_lod_table_block;
+    erhe::graphics::Shader_resource                           m_lod_levels_block;
     std::size_t                                               m_view_header_offset{0};
     std::size_t                                               m_view_occlusion_header_offset{0};
     std::size_t                                               m_view_pvs_header_offset{0};
@@ -222,6 +282,7 @@ private:
     std::size_t                                               m_view_pvs_pages_offset {0};
     std::size_t                                               m_view_pvs_grid_offset  {0};
     std::size_t                                               m_view_lod_header_offset{0};
+    std::size_t                                               m_view_lod_columns_offset{0};
     std::size_t                                               m_view_data_offset  {0};
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_shader_stages;
@@ -236,7 +297,10 @@ private:
     erhe::graphics::Shader_resource                           m_compact_commands_block;
     erhe::graphics::Shader_resource                           m_compact_counts_block;
     erhe::graphics::Shader_resource                           m_compact_bits_block;
+    erhe::graphics::Shader_resource                           m_compact_lod_levels_block;
+    erhe::graphics::Shader_resource                           m_compact_lod_table_block;
     std::size_t                                               m_job_header_offset{0};
+    std::size_t                                               m_job_lod_header_offset{0};
     std::size_t                                               m_job_filter_offset{0};
     std::size_t                                               m_job_data_offset  {0};
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_compact_bind_group_layout;
@@ -263,5 +327,8 @@ private:
     std::unique_ptr<erhe::graphics::Base_render_pipeline>     m_occlusion_pipeline;
     erhe::graphics::Ring_buffer_client                        m_occlusion_view_buffer;
 };
+
+static_assert(Gpu_cull_classifier::is_dense_binding_list(Gpu_cull_classifier::classify_storage_binding_points));
+static_assert(Gpu_cull_classifier::is_dense_binding_list(Gpu_cull_classifier::compact_storage_binding_points));
 
 } // namespace erhe::scene_renderer

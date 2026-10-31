@@ -573,6 +573,18 @@ public:
     uint32_t gpu_drawn{0};
 };
 
+// One (LOD column, entry) whose level in the GPU level region differs from
+// the CPU's (Cull_classification_check).
+class Cull_lod_level_mismatch
+{
+public:
+    uint32_t list_index {0};
+    uint32_t entry_index{0}; // in the list
+    uint32_t column     {0};
+    uint32_t cpu_level  {0};
+    uint32_t gpu_level  {0};
+};
+
 // The comparison of the GPU masks against the CPU masks of one frame, and of
 // the frame's GPU-generated shadow commands (doc/plans/culling.md phase 6)
 // against the commands the CPU writer produces from the CPU masks.
@@ -611,6 +623,18 @@ public:
     std::vector<Cull_command_job_mismatch>      command_mismatches;
     std::vector<Cull_command_view_check>        command_views;
     uint64_t                                    command_gpu_time_ns    {0};
+    // Level of detail selection (doc/plans/lod_gpu_selection.md section 3):
+    // the frame's LOD columns, the (column, entry) levels compared between
+    // the CPU level words and the GPU level region (every column, every
+    // entry; an entry of a list without CPU words expects 0), those that
+    // differ (also counted in their list's mismatch_count), the first few
+    // of them, and the GPU region's size in bytes.
+    uint32_t                                    lod_column_count       {0};
+    std::size_t                                 lod_level_count        {0};
+    std::size_t                                 lod_coarse_count       {0}; // of lod_level_count, GPU levels above 0
+    std::size_t                                 lod_mismatch_count     {0};
+    std::vector<Cull_lod_level_mismatch>        lod_mismatches;
+    std::size_t                                 lod_region_bytes       {0};
 };
 
 enum class Cull_classification_check_state : uint8_t
@@ -1971,7 +1995,9 @@ private:
     static_assert(sizeof(Gpu_cull_job) == (4 * sizeof(uint32_t)));
     // What the CPU knows of each job beside the GPU table: the culling view,
     // the filter's index, the published list, the chunk's first entry in it
-    // and the color selection (Command_selection_id::none for a shadow job).
+    // and the color selection (Command_selection_id::none for a shadow job)
+    // and the view's LOD column (lod_column_none: the job draws the template
+    // ranges).
     class Gpu_job_info
     {
     public:
@@ -1980,6 +2006,7 @@ private:
         uint32_t             list_index {0};
         uint32_t             chunk_begin{0};
         Command_selection_id selection  {Command_selection_id::none};
+        uint32_t             lod_column {lod_column_none};
     };
     static constexpr uint32_t                                        c_no_gpu_job{UINT32_MAX};
     // The frame's selection (set_shadow_command_selection()); the layers
@@ -2142,6 +2169,31 @@ private:
         std::vector<Occlusion_view_record>      views;
     };
     std::vector<Occlusion_slot>                                      m_occlusion_slots;
+    // The GPU level region (doc/plans/lod_gpu_selection.md section 3
+    // "Level regions"), one per frame slot (sized like m_draw_list_slots):
+    // written by the slot's frame's classification (cull_classify.comp,
+    // group_count * entry_count uint32 words, the CPU level words' layout
+    // over all published lists back to back), read by its compaction
+    // (cull_compact.comp). Device memory outside the ring buffers, so a
+    // later frame can read it (hysteresis); grown to the slot's high-water
+    // size (logged). The slot's previous frame retired before its prepare
+    // phase, so the rewrite never races the GPU.
+    class Lod_region_slot
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Buffer> buffer;
+        std::size_t                             region_bytes       {0};
+        std::size_t                             bind_bytes         {0}; // region_bytes, at least the smallest binding
+        uint64_t                                frame_index        {0};
+        uint32_t                                entry_count        {0};
+        uint32_t                                group_count        {0};
+        uint64_t                                entry_layout_serial{0};
+    };
+    std::vector<Lod_region_slot>                                     m_lod_region_slots;
+    // dispatch_gpu_cull_views(): the frame slot's region sized for the
+    // frame and stamped with it.
+    void prepare_lod_region_slot(uint64_t frame_index, std::size_t entry_count, std::size_t group_count, uint64_t entry_layout_serial);
+    [[nodiscard]] auto get_lod_region_slot(uint64_t frame_index) const -> const Lod_region_slot&;
     // The frame being rendered dispatched its occlusion words (draw_occlusion()
     // may draw, record_frame_end() orders them for the host).
     uint64_t                                                         m_occlusion_frame_index{0};

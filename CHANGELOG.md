@@ -42,6 +42,20 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: level of detail selection on the GPU
+  (doc/plans/lod_gpu_selection.md step 2b): `Gpu_cull_classifier`
+  `lod_templates_binding_point`, `lod_table_binding_point`,
+  `lod_levels_binding_point`, `compact_lod_levels_binding_point`,
+  `compact_lod_table_binding_point`, `lod_level_bytes_per_entry_group`,
+  `lod_columns_per_word`, `job_filter_shift`, `job_lod_column_shift`,
+  `job_lod_column_none`, `classify_storage_binding_points`,
+  `compact_storage_binding_points`, `classify_storage_block_count`,
+  `compact_storage_block_count`, `required_compute_storage_blocks`,
+  `is_dense_binding_list()`, `get_view_lod_columns_offset()` and
+  `get_job_lod_header_offset()`; `Cull_lod_level_mismatch` and the
+  `Cull_classification_check` fields `lod_column_count`,
+  `lod_level_count`, `lod_coarse_count`, `lod_mismatch_count`,
+  `lod_mismatches` and `lod_region_bytes`.
 - `erhe::scene_renderer`: automatic level of detail selection on the CPU
   (doc/plans/lod_gpu_selection.md step 2a): `cull_lanes::Lod_lane_view`,
   `cull_lanes::lod_lanes()`, `cull_lanes::select_lod_level()` and
@@ -1227,6 +1241,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Lod_frame_settings` (after `pvs`), and `add_cull_view()` an optional
   `Lod_view` (after the PVS query box), which joins the view's identity.
   `Gpu_cull_classifier::vec4s_per_view` is 14 (was 12).
+- `erhe::scene_renderer`: the GPU command generation's job word packs the
+  filter index in bits 16..20 (was 16..31) and the LOD column in bits
+  21..31; `Gpu_cull_classifier::is_device_capable()` requires
+  `required_compute_storage_blocks` (12) compute storage blocks (was six).
 - `erhe::scene_renderer`: `Content_wide_line_renderer::prepare_mesh()` and
   `add_mesh()` take the pass's `Primitive_interface_settings` in place of a
   color and resolve each mesh's edge-line color with it (the color source,

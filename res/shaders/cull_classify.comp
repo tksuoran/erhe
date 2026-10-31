@@ -41,8 +41,21 @@
 // cull_views.lod_header = the frame's level of detail selection
 //   (doc/plans/lod_gpu_selection.md section 3): active (1: levels are
 //   selected; 0: every draw reads its template range), threshold^2 and the
-//   coarsening threshold^2 (float bits), the global bias (int bits). No
-//   level selection is computed yet.
+//   coarsening threshold^2 (float bits), the global bias (int bits).
+// cull_views.lod_columns = the frame's LOD column count, the level region's
+//   word groups (column count / 8, rounded up), 0, 0. No level region is
+//   written when lod_header.x (active) is 0 or the group count is 0 (a
+//   frame whose active selection gave no view a column).
+// cull_templates.templates[2 * entry + 0].w = the entry's lod_word
+//   (erhe::scene_renderer::make_lod_word()), [2 * entry + 1].z = its
+//   lod_table_index (the first level table row of its chain, 0xffffffff:
+//   no chain); the compaction's command templates
+// cull_lod_table.rows[row] = index_count, first_index, error (float bits),
+//   0 of one level of one chain, level 0 first
+// cull_lod_levels.words[group * entry_count + entry] = the level region:
+//   the entry's selected level in LOD column 8 group + n at nibble n (bits
+//   4 n .. 4 n + 3), for every column of the frame; 0 for the entries of
+//   another purpose than color (only color views have columns)
 // cull_views.views[14 * view + k]:
 //   k = 0..5 planes (inward, n.xyz + w), 6 range sphere (center.xyz,
 //   radius), 7 = purpose, kind (0 planes, 1 cube face), plane count, cube
@@ -57,6 +70,21 @@
 //   view draws the template range), projection kind (0 perspective, 1
 //   orthographic), the previous frame's column for the same view (-1:
 //   none) and shadow mode, as exact small floats.
+//
+// Level of detail selection (doc/plans/lod_gpu_selection.md section 2;
+// cull_lanes::select_lod_level() and cull_lanes::lod_lanes() are the CPU
+// reference, the same expressions in the same order, every intermediate
+// precise): per color entry and LOD column, the squared distance d2 from
+// the view's selection origin to the entry's box (the per-axis gaps of the
+// range sphere test, summed x, y, z), k = max_axis_scale * projection
+// scale, and level L passes when (error_L * k) * (error_L * k) <= threshold^2
+// * d2 (d2 = 1 for an orthographic view). The selected level is the last of
+// the passing prefix of the chain, plus the entry's and the global bias,
+// clamped to the entry's min / max and to the chain. An entry that is not
+// under Lod_mode::automatic, or has no bounds, takes its template level (the
+// forced level under Lod_mode::forced, else 0); an entry without chain
+// level 0. Levels do not depend on visibility: every color entry gets one
+// in every column.
 //
 // The potentially visible set rule (doc/plans/pvs.md "Runtime
 // consumption"; cull_lanes::pvs_lanes() is the CPU reference, with the same
@@ -197,6 +225,91 @@ bool pvs_keeps(uint column, vec3 query_min, vec3 query_max)
     return false;
 }
 
+// cull_lanes::get_lod_template_level(): the forced level clamped to the
+// record's min / max and to the chain under Lod_mode::forced, else 0.
+uint lod_template_level(uint lod_word)
+{
+    uint mode        = lod_word & 0x3u;
+    uint level_count = (lod_word >> 15u) & 0xfu;
+    if ((level_count == 0u) || (mode != 1u)) {
+        return 0u;
+    }
+    uint forced_level = (lod_word >>  2u) & 0x7u;
+    uint min_level    = (lod_word >>  9u) & 0x7u;
+    uint max_level    = (lod_word >> 12u) & 0x7u; // make_lod_word() stored max_level >= min_level
+    uint level        = min(max(forced_level, min_level), max_level);
+    return min(level, level_count - 1u);
+}
+
+// cull_lanes::select_lod_level() of one entry in one LOD column.
+uint select_lod_level(uint lod_word, uint table_index, float max_axis_scale, float distance2, bool unbounded, vec4 lod_view, bool orthographic)
+{
+    uint level_count = (lod_word >> 15u) & 0xfu;
+    if (level_count == 0u) {
+        return 0u;
+    }
+    uint mode = lod_word & 0x3u;
+    if ((mode != 0u) || unbounded) {
+        return lod_template_level(lod_word);
+    }
+    float         threshold2 = uintBitsToFloat(cull_views.lod_header.y);
+    int           global_bias = int(cull_views.lod_header.w);
+    precise float k   = max_axis_scale * lod_view.w;
+    precise float d2  = orthographic ? 1.0 : distance2;
+    precise float rhs = threshold2 * d2;
+    uint selected = 0u;
+    for (uint level = 1u; level < level_count; ++level) {
+        float         error = uintBitsToFloat(cull_lod_table.rows[table_index + level].z);
+        precise float ek    = error * k;
+        precise float lhs   = ek * ek;
+        if ((lhs <= rhs) && (selected == (level - 1u))) {
+            selected = level;
+        }
+    }
+    uint bias_bits = (lod_word >> 5u) & 0xfu;
+    int  bias      = ((bias_bits & 0x8u) != 0u) ? (int(bias_bits) - 16) : int(bias_bits);
+    int  min_level = int((lod_word >>  9u) & 0x7u);
+    int  max_level = int((lod_word >> 12u) & 0x7u);
+    int  level     = int(selected) + bias + global_bias;
+    level = max(level, min_level);
+    level = min(level, max_level);
+    level = clamp(level, 0, int(level_count) - 1);
+    return uint(level);
+}
+
+// The entry's level region words: for a color entry its level in every
+// LOD column of the frame, 0 for an entry of another purpose.
+void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e, bool unbounded, float max_axis_scale)
+{
+    uint group_count = cull_views.lod_columns.y;
+    if ((cull_views.lod_header.x == 0u) || (group_count == 0u)) {
+        return;
+    }
+    uint words[8] = uint[8](0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+    uint table_index = cull_templates.templates[(2u * entry) + 1u].z;
+    if ((purpose == 0u) && (table_index != 0xffffffffu)) {
+        uint lod_word   = cull_templates.templates[(2u * entry) + 0u].w;
+        uint view_count = cull_views.header.x;
+        for (uint view = 0u; view < view_count; ++view) {
+            vec4  lod_info = cull_views.views[(14u * view) + 13u];
+            if (!(lod_info.x >= 0.0)) {
+                continue;
+            }
+            uint  column   = uint(lod_info.x);
+            vec4  lod_view = cull_views.views[(14u * view) + 12u];
+            precise float gap_x     = sphere_axis_gap(c.x, e.x, lod_view.x);
+            precise float gap_y     = sphere_axis_gap(c.y, e.y, lod_view.y);
+            precise float gap_z     = sphere_axis_gap(c.z, e.z, lod_view.z);
+            precise float distance2 = ((gap_x * gap_x) + (gap_y * gap_y)) + (gap_z * gap_z);
+            uint level = select_lod_level(lod_word, table_index, max_axis_scale, distance2, unbounded, lod_view, (lod_info.y > 0.5));
+            words[column / 8u] |= (level & 0xfu) << (4u * (column % 8u));
+        }
+    }
+    for (uint group = 0u; group < group_count; ++group) {
+        cull_lod_levels.words[(group * entry_count) + entry] = words[group];
+    }
+}
+
 void write_pvs_culled_words(uint group, uint entry_count, uint entry, uvec2 culled)
 {
     uint base = 2u * ((group * entry_count) + entry);
@@ -219,6 +332,8 @@ void main()
     vec3 e         = extent_w.xyz;
     uint purpose   = uint(extent_w.w);
     bool unbounded = !(e.x >= 0.0);
+
+    write_lod_levels(entry, entry_count, purpose, c, e, unbounded, center_w.w);
 
     bool  occlusion        = (cull_views.header.z != 0u);
     bool  previous         = (cull_views.header.w != 0u);

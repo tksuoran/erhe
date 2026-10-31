@@ -618,6 +618,18 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
             {"command_mismatch_count", mismatch.command_mismatch_count}
         });
     }
+    // Level of detail selection (doc/plans/lod_gpu_selection.md section 3):
+    // the GPU level region against the CPU level words.
+    json lod_mismatches = json::array();
+    for (const erhe::scene_renderer::Cull_lod_level_mismatch& mismatch : check.lod_mismatches) {
+        lod_mismatches.push_back(json{
+            {"list_index", mismatch.list_index},
+            {"entry",      mismatch.entry_index},
+            {"column",     mismatch.column},
+            {"cpu",        mismatch.cpu_level},
+            {"gpu",        mismatch.gpu_level}
+        });
+    }
     return make_json_content(json{
         {"scene",                   sr->get_name()},
         {"frame_index",             check.frame_index},
@@ -638,7 +650,13 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
         {"command_mismatch_count",  check.command_mismatch_count},
         {"command_gpu_time_ns",     check.command_gpu_time_ns},
         {"command_views",           std::move(command_views)},
-        {"command_mismatches",      std::move(command_mismatches)}
+        {"command_mismatches",      std::move(command_mismatches)},
+        {"lod_column_count",        check.lod_column_count},
+        {"lod_level_count",         check.lod_level_count},
+        {"lod_coarse_count",        check.lod_coarse_count},
+        {"lod_mismatch_count",      check.lod_mismatch_count},
+        {"lod_region_bytes",        check.lod_region_bytes},
+        {"lod_mismatches",          std::move(lod_mismatches)}
     }).dump();
 }
 
