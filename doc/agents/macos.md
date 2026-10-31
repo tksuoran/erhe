@@ -28,6 +28,14 @@ Executables land in `<build>/bin/<Config>/`. The headless Metal build is
 described in `doc/erhe/metal_headless.md`; the Metal 4 backend (in progress,
 built beside Metal 3) in `doc/erhe/metal4_backend.md`.
 
+## Android and Quest builds
+
+The Quest and phone APKs build on macOS through Gradle, not through the
+`scripts/` wrappers (those are Windows `.bat` files). The SDK packages a
+fresh Android Studio install lacks and the macOS install recipe are in
+`doc/android.md` "Toolchain"; the build, install and launch commands in
+`doc/quest.md` "macOS and Linux"; device work in `doc/agents/quest.md`.
+
 ## Vulkan drivers
 
 The Vulkan build runs on MoltenVK or on Mesa's KosmicKrisp, whichever ICD the

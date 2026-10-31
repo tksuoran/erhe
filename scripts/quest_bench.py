@@ -83,6 +83,8 @@ Subcommands:
 Run from the repo root on Windows with `py -3` (AGENTS.md).
 """
 
+from __future__ import annotations
+
 import argparse
 import datetime
 import json
@@ -138,13 +140,21 @@ CRASH_RE = re.compile(r"Fatal signal|libc: Fatal|FATAL EXCEPTION|beginning of cr
 
 
 def find_adb() -> str:
+    # ANDROID_HOME, else Android Studio's default SDK root for the host OS.
     android_home = os.environ.get("ANDROID_HOME", "")
     if not android_home:
         local = os.environ.get("LOCALAPPDATA", "")
-        if local and (Path(local) / "Android" / "Sdk").is_dir():
-            android_home = str(Path(local) / "Android" / "Sdk")
+        defaults = [
+            Path(local) / "Android" / "Sdk" if local else None,  # Windows
+            Path.home() / "Library" / "Android" / "sdk",           # macOS
+            Path.home() / "Android" / "Sdk",                       # Linux
+        ]
+        for candidate in defaults:
+            if candidate is not None and candidate.is_dir():
+                android_home = str(candidate)
+                break
     if not android_home:
-        sys.exit("ERROR: ANDROID_HOME unset and %LOCALAPPDATA%/Android/Sdk missing")
+        sys.exit("ERROR: ANDROID_HOME unset and no Android Studio default SDK root exists")
     for name in ("adb.exe", "adb"):
         candidate = Path(android_home) / "platform-tools" / name
         if candidate.exists():

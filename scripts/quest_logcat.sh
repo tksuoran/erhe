@@ -34,11 +34,20 @@ set -u
 
 # Resolve adb path -- mirrors install_android.bat's probe order so this
 # script works without ANDROID_HOME exported.
-if [ -z "${ANDROID_HOME:-}" ] && [ -d "${LOCALAPPDATA:-}/Android/Sdk" ]; then
-    ANDROID_HOME="${LOCALAPPDATA}/Android/Sdk"
+# Without ANDROID_HOME, take Android Studio's default SDK root for the host
+# OS: Windows, then macOS, then Linux.
+if [ -z "${ANDROID_HOME:-}" ]; then
+    for candidate in "${LOCALAPPDATA:+${LOCALAPPDATA}/Android/Sdk}" \
+                     "$HOME/Library/Android/sdk" \
+                     "$HOME/Android/Sdk"; do
+        if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+            ANDROID_HOME="$candidate"
+            break
+        fi
+    done
 fi
 if [ -z "${ANDROID_HOME:-}" ]; then
-    echo "ERROR: ANDROID_HOME is not set and \$LOCALAPPDATA/Android/Sdk does not exist." >&2
+    echo "ERROR: ANDROID_HOME is not set and no Android Studio default SDK root exists." >&2
     exit 1
 fi
 ADB="$ANDROID_HOME/platform-tools/adb.exe"
