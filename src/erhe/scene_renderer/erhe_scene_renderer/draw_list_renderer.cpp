@@ -117,6 +117,8 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
                 .blending             = parameters.blending,
                 .multiview_count      = multiview_count,
                 .overdraw             = parameters.overdraw,
+                .shader_debug         = parameters.shader_debug,
+                .shader_debug_layers  = parameters.shader_debug_layers,
                 .environment          = environment,
                 .color_blend_override = parameters.color_blend_override,
                 .cull_view            = cull_view,

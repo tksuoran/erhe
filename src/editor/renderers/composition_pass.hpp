@@ -184,6 +184,10 @@ public:
     // count into the view's overdraw count buffer (Render_context::overdraw,
     // counts_overdraw()).
     erhe::scene_renderer::Overdraw_count               overdraw          {erhe::scene_renderer::Overdraw_count::off};
+    // The draw-list path's shader debug mode: the view's
+    // (Render_context::shader_debug); the bucket path carries it in the
+    // prepared bucket keys instead.
+    erhe::scene_renderer::Shader_debug                 shader_debug      {erhe::scene_renderer::Shader_debug::none};
     erhe::scene_renderer::Primitive_interface_settings primitive_settings{};
     // The fullscreen passes' camera UBO inputs: the grid's from the view's
     // render state (Grid::render(), per view), the sky's from the pass data

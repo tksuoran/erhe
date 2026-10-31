@@ -88,8 +88,10 @@ visualization is active (`ERHE_SHADER_DEBUG != 0`). The debug modes
 visualize raw mesh attributes, so a material that does not consume the
 tangent frame (or texcoords, or aniso control) would otherwise force
 those varyings off and the debug mode would only ever show its neutral
-fallback color. When `SHADER_DEBUG != none`, `derive()` instead turns
-on every `ERHE_USE_VERTEX_VARYING_*` axis whose underlying attribute is
+fallback color. When `SHADER_DEBUG != none`, `derive()` instead calls
+`apply_shader_debug_varyings()` (which the draw-list color resolution also
+applies to the key of a list drawn with the view's shader debug mode); it
+turns on every `ERHE_USE_VERTEX_VARYING_*` axis whose underlying attribute is
 present in the `Vertex_format`:
 
 - `NORMAL` when the format has `normal` (ignoring the `unlit` gate),

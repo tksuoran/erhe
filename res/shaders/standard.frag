@@ -281,7 +281,6 @@ layout(location =  8) in float      v_tangent_scale;
 #  else
 const float v_tangent_scale = 1.0;
 #  endif
-layout(location =  9) in float      v_line_width;
 #  ifdef ERHE_USE_SKINNING
 layout(location = 10) in vec4       v_bone_color;
 #  else

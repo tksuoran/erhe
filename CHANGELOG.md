@@ -36,6 +36,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: shader debug modes on the draw-list path:
+  `Draw_color_parameters::shader_debug` and `shader_debug_layers` (the
+  lists of those layers draw with that `SHADER_DEBUG` variant; empty: every
+  layer), the same pair on `Draw_list_renderer::Render_parameters`,
+  `Draw_list_color_resolution::shader_debug` (a resolution axis beside
+  multiview and overdraw), and `apply_shader_debug_varyings()` (the debug
+  varyings of a vertex format, which `Shader_key::derive()` applies when the
+  key carries a debug mode). `SHADER_DEBUG != 0` no longer counts as reading
+  the per-pass record fields: `standard.vert` / `standard.frag` drop the
+  unread `v_line_width` varying.
 - `erhe::scene_renderer`: `Shader_bool::FLAT_DRAW_COLOR` (the
   `ERHE_FLAT_DRAW_COLOR` variant axis: an unlit palette color per draw),
   `Color_environment::flat_draw_color`,
