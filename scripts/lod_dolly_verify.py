@@ -1,11 +1,12 @@
 """Automatic level of detail selection dolly check
-(doc/plans/lod_gpu_selection.md step 2a, doc/editor/lod.md "Automatic
-selection").
+(doc/plans/lod_gpu_selection.md steps 2a and 2b, doc/editor/lod.md
+"Automatic selection").
 
 Launches the headless editor (doc/agents/editor_runs.md), creates a torus
 with a 6-level LOD chain in the default scene, turns the automatic selection
-on with the CPU culling classification, and dollies the viewport camera away
-from the torus along +Z, looking at it. At every dolly step it reads the
+on, and per culling classification (--classification: cpu, gpu or both, in
+that order in one session) dollies the viewport camera away from the torus
+along +Z, looking at it. At every dolly step it reads the
 level the CPU classification selected for the torus's color entry in the
 viewport's LOD column (get_lod_selection) and the distance from the column's
 selection origin to the entry's box, and checks it against the selection
@@ -20,8 +21,14 @@ range (for the image's own projection scale) with the automatic selection,
 and again with Lod.mode = forced, Lod.forced_level = L, and requires the two
 PNGs to be byte-identical. Shadows are off for the image pairs (shadow
 passes draw the template range until doc/plans/lod_gpu_selection.md step 5).
+Under gpu the levels read are still the CPU classification's (the GPU's
+are compared by get_cull_classification_check, which the gpu pass runs at
+every image pose), and the images come from the GPU-generated commands;
+with both, the automatic image of each level must also be byte-identical
+between cpu and gpu.
 
 Usage: python3 scripts/lod_dolly_verify.py [--editor PATH] [--threshold PIXELS]
+                                           [--classification cpu|gpu|both]
 Exit code 0 = pass.
 """
 
@@ -94,15 +101,20 @@ def predicted_level(distance, switch_distances):
 
 class Dolly:
     def __init__(self, client, scene, threshold):
-        self.c         = client
-        self.scene     = scene
-        self.threshold = threshold
+        self.c              = client
+        self.scene          = scene
+        self.threshold      = threshold
+        self.classification = "cpu"
 
     def call(self, tool, args=None):
         return self.c.call(tool, args or {})
 
+    def set_classification(self, classification):
+        self.classification = classification
+        reply = self.call("set_culling_classification", {"mode": classification})
+        print(f"culling classification {classification}: {reply}")
+
     def setup(self):
-        self.call("set_culling_classification", {"mode": "cpu"})
         self.call("set_graphics_preset", {"lod_enabled": True, "lod_threshold_pixels": self.threshold, "lod_bias": 0})
         reply = self.call("create_shape", {
             "scene_name": self.scene, "shape": "torus", "name": "lod_dolly_torus",
@@ -191,7 +203,17 @@ class Dolly:
         check_true("every level of the chain was selected", sorted(observed.keys()) == list(range(LEVEL_COUNT)), f"first distance per level {observed}")
         self.switch = switch
 
+    def classification_check(self, label):
+        reply = self.call("get_cull_classification_check", {"scene_name": self.scene})
+        check_true(
+            f"{label}: classification check 0 mismatches (masks, levels, commands)",
+            (reply["mismatch_count"] == 0) and (reply["lod_mismatch_count"] == 0) and (reply["command_mismatch_count"] == 0) and (reply["lod_level_count"] > 0),
+            f"mismatch {reply['mismatch_count']} lod {reply['lod_mismatch_count']}/{reply['lod_level_count']} command {reply['command_mismatch_count']} color jobs {reply['command_color_job_count']}"
+        )
+
     def images(self, out_dir):
+        """The automatic image hash per level (image poses)."""
+        automatic = {}
         width, height, fov_y_degrees = 640, 400, 50.0
         image_projection_scale = height / (2.0 * math.tan(math.radians(fov_y_degrees) * 0.5))
         self.call("set_graphics_preset", {"shadow_enable": False})
@@ -212,14 +234,18 @@ class Dolly:
                 if forced_level is not None:
                     for prop, value in (("Lod.apply_lod", "true"), ("Lod.mode", "Forced"), ("Lod.forced_level", str(forced_level))):
                         self.call("set_item_property", {"item_id": self.torus, "property": prop, "value": value})
-                path = os.path.join(out_dir, f"lod_dolly_level{level}_{mode}.png")
+                path = os.path.join(out_dir, f"lod_dolly_{self.classification}_level{level}_{mode}.png")
                 self.call("render_scene_image", {"scene": self.scene, "camera": camera, "width": width, "height": height, "output": "png", "path": path})
                 with open(path, "rb") as handle:
                     hashes.append(hashlib.md5(handle.read()).hexdigest())
+                if (mode == "automatic") and (self.classification == "gpu"):
+                    self.classification_check(f"gpu level {level} pose")
             self.call("set_item_property", {"item_id": self.torus, "property": "Lod.apply_lod", "value": "false"})
             check_true(f"image at automatic level {level} (d={distance:.3f}) equals forced level {level}", hashes[0] == hashes[1], f"{hashes[:2]}")
             check_true(f"image at forced level {other} differs from level {level} at that pose", hashes[2] != hashes[1])
+            automatic[level] = hashes[0]
         self.call("set_graphics_preset", {"shadow_enable": True})
+        return automatic
 
     def measure_box(self):
         reply = self.selection(0)
@@ -235,6 +261,8 @@ def main():
     parser.add_argument("--editor", default=DEFAULT_EDITOR)
     parser.add_argument("--threshold", type=float, default=4.0, help="lod_threshold_pixels")
     parser.add_argument("--out", default=os.path.join(REPO_ROOT, "logs", "lod_dolly"))
+    parser.add_argument("--classification", choices=("cpu", "gpu", "both"), default="both",
+                        help="culling_classification setting(s) to run (both: cpu, then gpu, and the images compared)")
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -243,10 +271,20 @@ def main():
         client = McpClient(port)
         scene  = client.call("list_scenes")["scenes"][0]["name"]
         dolly  = Dolly(client, scene, args.threshold)
+        classifications = ["cpu", "gpu"] if (args.classification == "both") else [args.classification]
+        dolly.set_classification(classifications[0])
         dolly.setup()
         dolly.measure_box()
-        dolly.dolly()
-        dolly.images(args.out)
+        images = {}
+        for classification in classifications:
+            dolly.set_classification(classification)
+            print(f"--- culling classification {classification}")
+            dolly.dolly()
+            images[classification] = dolly.images(args.out)
+        if len(classifications) == 2:
+            for level, cpu_hash in images["cpu"].items():
+                gpu_hash = images["gpu"][level]
+                check_true(f"automatic image at level {level}: cpu == gpu", cpu_hash == gpu_hash, f"cpu {cpu_hash} gpu {gpu_hash}")
     finally:
         process.send_signal(signal.SIGTERM)
         try:

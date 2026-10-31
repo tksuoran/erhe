@@ -31,24 +31,37 @@
 //   base_vertex, first_instance = entry - chunk begin (the entry's record in
 //   the chunk's shared records). Deterministic: no atomics on the
 //   output (the filter total is an order-independent shared sum).
+//   index_count and first_index are the template's, or, when the frame's
+//   level of detail selection is active (cull_jobs.lod_header.x), the job
+//   has a LOD column and the entry a chain, those of the entry's selected
+//   level in the column (cull_lod_levels, written by cull_classify.comp)
+//   from the level table (doc/plans/lod_gpu_selection.md section 3
+//   "Compaction"); base_vertex is always the template's.
 //
 // cull_templates.templates[2 * entry + 0] = index_count, first_index,
 //   base_vertex (int bits), lod_word (the entry's packed Lod record,
 //   erhe::scene_renderer::make_lod_word())
 // cull_templates.templates[2 * entry + 1] = flag bits low, flag bits high,
 //   lod_table_index (the entry's first level table row, 0xffffffff: no
-//   chain), 0 (doc/plans/lod_gpu_selection.md section 3; no level is read
-//   yet)
+//   chain), 0 (doc/plans/lod_gpu_selection.md section 3)
 //   (entry: the published lists back to back, Draw_list_scene's GPU bounds
 //   layout)
 // cull_jobs.header = job_count, mask entry count (all published lists),
 //   pass word count (the filter words follow), pass 0 workgroups per job
+// cull_jobs.lod_header = active (1: the frame selects levels), 0, 0, 0
 // cull_jobs.filter_masks[2 * f + 0] = filter f's require_all_bits_set
 //                             (lo, hi), require_at_least_one_bit_set (lo, hi)
 // cull_jobs.filter_masks[2 * f + 1] = filter f's require_all_bits_clear
 //                             (lo, hi), require_at_least_one_bit_clear (lo, hi)
-// cull_jobs.jobs[job] = view (bits 0..15) and filter index (bits 16..31),
-//   first entry, entry count, command offset (in commands, a multiple of 32)
+// cull_jobs.jobs[job] = view (bits 0..15), filter index (bits 16..20) and
+//   LOD column (bits 21..31, 0x7ff: none, the job draws the template
+//   ranges; the shifts, the filter mask and the none value come as the
+//   ERHE_CULL_COMPACT_* defines from Gpu_cull_classifier), first entry, entry count, command offset (in commands, a
+//   multiple of 32)
+// cull_lod_levels.words[(column / 8) * mask entry count + entry]: the
+//   entry's level in column at nibble column % 8 (cull_classify.comp)
+// cull_lod_table.rows[lod_table_index + level] = index_count, first_index,
+//   error (float bits), 0
 // cull_masks.masks[group * mask entry count + entry]: cull_classify.comp's
 //   output (uvec2: x = view bits 0..31, y = bits 32..63)
 // cull_bits.words[command offset / 32 + i]: the job's pass bits, entry
@@ -129,7 +142,7 @@ void main()
     uint local_index      = workgroup_begin + lane;
     uint mask_entry_count = cull_jobs.header.y;
     uint view             = job.x & 0xffffu;
-    uint filter_index     = job.x >> 16u;
+    uint filter_index     = (job.x >> ERHE_CULL_COMPACT_FILTER_SHIFT) & ERHE_CULL_COMPACT_FILTER_MASK;
     uint chunk_begin      = job.y;
     uint word_base        = job.w / 32u;
     uint group            = view / 64u;
@@ -185,6 +198,9 @@ void main()
     uint  word_base         = command_offset / 32u;
     uint  filter_word_base  = cull_jobs.header.z + word_base;
     uint  word_count        = (chunk_entry_count + 31u) / 32u;
+    uint  mask_entry_count  = cull_jobs.header.y;
+    uint  lod_column        = job.x >> ERHE_CULL_COMPACT_LOD_COLUMN_SHIFT;
+    bool  lod_job           = (cull_jobs.lod_header.x != 0u) && (lod_column != ERHE_CULL_COMPACT_LOD_COLUMN_NONE);
 
     if (lane == 0u) {
         s_filtered = 0u;
@@ -220,11 +236,24 @@ void main()
         while (bits != 0u) {
             uint  bit_index   = uint(findLSB(bits));
             uint  local_index = (32u * word) + bit_index;
-            uvec4 command     = cull_templates.templates[2u * (chunk_begin + local_index)];
+            uint  entry       = chunk_begin + local_index;
+            uvec4 command     = cull_templates.templates[2u * entry];
+            uint  index_count = command.x;
+            uint  first_index = command.y;
+            if (lod_job) {
+                uint table_index = cull_templates.templates[(2u * entry) + 1u].z;
+                if (table_index != 0xffffffffu) {
+                    uint  word  = cull_lod_levels.words[((lod_column / 8u) * mask_entry_count) + entry];
+                    uint  level = (word >> (4u * (lod_column % 8u))) & 0xfu;
+                    uvec4 row   = cull_lod_table.rows[table_index + level];
+                    index_count = row.x;
+                    first_index = row.y;
+                }
+            }
             uint  base        = 5u * position;
-            cull_commands.commands[base + 0u] = command.x;   // index_count
+            cull_commands.commands[base + 0u] = index_count; // index_count
             cull_commands.commands[base + 1u] = 1u;          // instance_count
-            cull_commands.commands[base + 2u] = command.y;   // first_index
+            cull_commands.commands[base + 2u] = first_index; // first_index
             cull_commands.commands[base + 3u] = command.z;   // base_vertex
             cull_commands.commands[base + 4u] = local_index; // first_instance
             ++position;

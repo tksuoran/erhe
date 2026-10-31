@@ -14,7 +14,32 @@
 
 #include <fmt/format.h>
 
+#include <array>
+#include <vector>
+
 namespace erhe::scene_renderer {
+
+namespace {
+
+// One compute storage buffer binding per binding point.
+template <std::size_t N>
+[[nodiscard]] auto make_compute_storage_bindings(const std::array<unsigned int, N>& binding_points) -> std::vector<erhe::graphics::Bind_group_layout_binding>
+{
+    std::vector<erhe::graphics::Bind_group_layout_binding> bindings;
+    bindings.reserve(N);
+    for (const unsigned int binding_point : binding_points) {
+        bindings.push_back(
+            erhe::graphics::Bind_group_layout_binding{
+                .binding_point = binding_point,
+                .type          = erhe::graphics::Binding_type::storage_buffer,
+                .stage_flags   = erhe::graphics::Shader_stage_flags::compute
+            }
+        );
+    }
+    return bindings;
+}
+
+} // anonymous namespace
 
 auto c_str(const Cull_classification classification) -> const char*
 {
@@ -136,6 +161,33 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             .readonly      = true
         }
     }
+    , m_lod_templates_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_templates",
+            .binding_point = static_cast<int>(lod_templates_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , m_lod_table_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_lod_table",
+            .binding_point = static_cast<int>(lod_table_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , m_lod_levels_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_lod_levels",
+            .binding_point = static_cast<int>(lod_levels_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .writeonly     = true
+        }
+    }
     , m_view_buffer    {graphics_device, erhe::graphics::Buffer_target::storage,      "Gpu_cull_classifier views",         views_binding_point}
     , m_mask_buffer    {graphics_device, erhe::graphics::Buffer_target::storage,      "Gpu_cull_classifier masks"}
     , m_readback_buffer{graphics_device, erhe::graphics::Buffer_target::transfer_dst, "Gpu_cull_classifier mask readback"}
@@ -192,6 +244,24 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             .type          = erhe::graphics::Shader_resource::Type::shader_storage_block
         }
     }
+    , m_compact_lod_levels_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_lod_levels",
+            .binding_point = static_cast<int>(compact_lod_levels_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
+    , m_compact_lod_table_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_lod_table",
+            .binding_point = static_cast<int>(compact_lod_table_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
     , m_job_buffer     {graphics_device, erhe::graphics::Buffer_target::storage, "Gpu_cull_classifier jobs", compact_jobs_binding_point}
     , m_bits_buffer    {graphics_device, erhe::graphics::Buffer_target::storage, "Gpu_cull_classifier pass bits"}
     , m_command_buffer {graphics_device, erhe::graphics::Buffer_target::storage, "Gpu_cull_classifier commands"}
@@ -246,6 +316,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_view_pvs_pages_offset        = m_views_block.add_uvec4("pvs_pages"       )->get_offset_in_parent();
     m_view_pvs_grid_offset         = m_views_block.add_vec4 ("pvs_grid"        )->get_offset_in_parent();
     m_view_lod_header_offset       = m_views_block.add_uvec4("lod_header"      )->get_offset_in_parent();
+    m_view_lod_columns_offset      = m_views_block.add_uvec4("lod_columns"     )->get_offset_in_parent();
     m_view_data_offset   = m_views_block.add_vec4 ("views", Shader_resource::unsized_array)->get_offset_in_parent();
     m_masks_block.add_uvec2("masks", Shader_resource::unsized_array);
     m_occlusion_words_block         .add_uint("words", Shader_resource::unsized_array);
@@ -254,6 +325,9 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_pvs_culled_block              .add_uint("words",   Shader_resource::unsized_array);
     m_pvs_columns_block             .add_uint("columns", Shader_resource::unsized_array);
     m_pvs_pages_block               .add_uint("slots",   Shader_resource::unsized_array);
+    m_lod_templates_block           .add_uvec4("templates", Shader_resource::unsized_array);
+    m_lod_table_block               .add_uvec4("rows",      Shader_resource::unsized_array);
+    m_lod_levels_block              .add_uint ("words",     Shader_resource::unsized_array);
     // The occlusion test (occlusion_test.vert / .frag): the view block
     // (std140: per view a mat4 and a vec4, then a uvec4), the bounds as the
     // classifier reads them, and the two occlusion regions as uint words
@@ -268,33 +342,36 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     // cull_compact.comp documents these; std430 again (uvec4 and uint
     // arrays, 16 and 4 byte strides).
     m_compact_templates_block.add_uvec4("templates", Shader_resource::unsized_array);
-    m_job_header_offset = m_compact_jobs_block.add_uvec4("header"                                )->get_offset_in_parent();
+    m_job_header_offset     = m_compact_jobs_block.add_uvec4("header"    )->get_offset_in_parent();
+    m_job_lod_header_offset = m_compact_jobs_block.add_uvec4("lod_header")->get_offset_in_parent();
     m_job_filter_offset = m_compact_jobs_block.add_uvec4("filter_masks", 2 * max_job_filters          )->get_offset_in_parent();
     m_job_data_offset   = m_compact_jobs_block.add_uvec4("jobs",   Shader_resource::unsized_array)->get_offset_in_parent();
     m_compact_masks_block.add_uvec2("masks", Shader_resource::unsized_array);
     m_compact_commands_block.add_uint("commands", Shader_resource::unsized_array);
     m_compact_counts_block.add_uint("counts", Shader_resource::unsized_array);
     m_compact_bits_block.add_uint("words", Shader_resource::unsized_array);
+    m_compact_lod_levels_block.add_uint ("words", Shader_resource::unsized_array);
+    m_compact_lod_table_block .add_uvec4("rows",  Shader_resource::unsized_array);
 
     if (!m_device_capable) {
-        log_startup->info("GPU culling: not supported on this device (needs native multi-draw indirect with a GPU-read draw count and Record_indexing::first_instance); the CPU path classifies and writes the draw commands");
+        const Device_info& device_info = graphics_device.get_info();
+        log_startup->info(
+            "GPU culling: not supported on this device (needs native multi-draw indirect with a GPU-read draw count, Record_indexing::first_instance "
+            "and {} compute storage blocks; device: emulate_multi_draw_indirect {}, use_draw_indirect_count {}, first_instance record indexing {}, "
+            "max_compute_shader_storage_blocks {}); the CPU path classifies and writes the draw commands",
+            required_compute_storage_blocks,
+            device_info.emulate_multi_draw_indirect,
+            device_info.use_draw_indirect_count,
+            device_info.record_indexing == Record_indexing::first_instance,
+            device_info.max_compute_shader_storage_blocks
+        );
         return;
     }
 
     m_bind_group_layout = std::make_unique<Bind_group_layout>(
         graphics_device,
         Bind_group_layout_create_info{
-            .bindings = {
-                { .binding_point = bounds_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = views_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = masks_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = occlusion_words_binding_point,          .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = occlusion_previous_words_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = pvs_database_binding_point,             .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = pvs_culled_binding_point,               .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = pvs_columns_binding_point,              .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = pvs_pages_binding_point,                .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
-            },
+            .bindings          = make_compute_storage_bindings(classify_storage_binding_points),
             .debug_label       = "Gpu_cull_classifier",
             .uses_texture_heap = false
         }
@@ -307,7 +384,8 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             .defines           = { { "ERHE_CULL_CLASSIFY_GROUP_SIZE", fmt::format("{}", workgroup_size) } },
             .interface_blocks  = {
                 &m_bounds_block, &m_views_block, &m_masks_block, &m_occlusion_words_block, &m_occlusion_previous_words_block,
-                &m_pvs_database_block, &m_pvs_culled_block, &m_pvs_columns_block, &m_pvs_pages_block
+                &m_pvs_database_block, &m_pvs_culled_block, &m_pvs_columns_block, &m_pvs_pages_block,
+                &m_lod_templates_block, &m_lod_table_block, &m_lod_levels_block
             },
             .shaders           = { { Shader_type::compute_shader, shader_path / std::filesystem::path{"cull_classify.comp"} } },
             .bind_group_layout = m_bind_group_layout.get()
@@ -336,14 +414,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_compact_bind_group_layout = std::make_unique<Bind_group_layout>(
         graphics_device,
         Bind_group_layout_create_info{
-            .bindings = {
-                { .binding_point = compact_templates_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = compact_jobs_binding_point,      .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = compact_masks_binding_point,     .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = compact_commands_binding_point,  .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = compact_counts_binding_point,    .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = compact_bits_binding_point,      .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
-            },
+            .bindings          = make_compute_storage_bindings(compact_storage_binding_points),
             .debug_label       = "Gpu_cull_classifier compaction",
             .uses_texture_heap = false
         }
@@ -361,9 +432,16 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
                 .name              = pass_name,
                 .defines           = {
                     { "ERHE_CULL_COMPACT_GROUP_SIZE", fmt::format("{}", compact_workgroup_size) },
-                    { "ERHE_CULL_COMPACT_PASS",       pass_define }
+                    { "ERHE_CULL_COMPACT_PASS",       pass_define },
+                    { "ERHE_CULL_COMPACT_FILTER_SHIFT",     fmt::format("{}u", job_filter_shift) },
+                    { "ERHE_CULL_COMPACT_FILTER_MASK",      fmt::format("{}u", (1u << (job_lod_column_shift - job_filter_shift)) - 1u) },
+                    { "ERHE_CULL_COMPACT_LOD_COLUMN_SHIFT", fmt::format("{}u", job_lod_column_shift) },
+                    { "ERHE_CULL_COMPACT_LOD_COLUMN_NONE",  fmt::format("{}u", job_lod_column_none) }
                 },
-                .interface_blocks  = { &m_compact_templates_block, &m_compact_jobs_block, &m_compact_masks_block, &m_compact_commands_block, &m_compact_counts_block, &m_compact_bits_block },
+                .interface_blocks  = {
+                    &m_compact_templates_block, &m_compact_jobs_block, &m_compact_masks_block, &m_compact_commands_block, &m_compact_counts_block, &m_compact_bits_block,
+                    &m_compact_lod_levels_block, &m_compact_lod_table_block
+                },
                 .shaders           = { { Shader_type::compute_shader, shader_path / std::filesystem::path{"cull_compact.comp"} } },
                 .bind_group_layout = m_compact_bind_group_layout.get()
             }
@@ -500,7 +578,7 @@ auto Gpu_cull_classifier::is_device_capable(const erhe::graphics::Device& graphi
         !info.emulate_multi_draw_indirect &&
         info.use_draw_indirect_count &&
         (info.record_indexing == erhe::graphics::Record_indexing::first_instance) &&
-        (info.max_compute_shader_storage_blocks >= 6);
+        (static_cast<std::size_t>(info.max_compute_shader_storage_blocks) >= required_compute_storage_blocks);
 }
 
 auto Gpu_cull_classifier::is_supported() const -> bool

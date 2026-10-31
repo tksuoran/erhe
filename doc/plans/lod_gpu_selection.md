@@ -5,7 +5,7 @@ Status: in progress
 The build order for automatic LOD level selection (`doc/plans/lod.md`
 section 2.3, decisions D3 and D4). It replaces that plan's step 4 ordering
 (4a CPU writer, 4b GPU writer, 4c shadows) and its step 5 (hysteresis). The
-design is accepted by the user (section 9); steps 1 and 2a are built.
+design is accepted by the user (section 9); steps 1, 2a and 2b are built.
 Selection runs in the culling classification, on the CPU lanes and in
 `res/shaders/cull_classify.comp`, with the same arithmetic, so both produce
 the same level bit for bit; the command writers only read the result.
@@ -202,11 +202,13 @@ two bindings, the level region and the level table. Pass 1 takes
 when `lod_header.active` and the entry has a table and the job has a column;
 otherwise from the template as today.
 
-Memory: one 4-bit level per (column, entry) over all published entries.
-Bistro, one viewport (estimate, measured at step 2b): about 20000 entries x
-(1 color + about 20 shadow columns) / 2 bytes, about 210 kB per frame slot.
-If measured too large, the region splits per purpose (color entries need
-only color columns); not built first.
+Memory: one 4-bit level per (column, entry) over all published entries,
+stored as one `uint32_t` per entry per group of 8 columns. Bistro, one
+viewport, measured at step 2b (one color column): 7576 entries x 4 bytes =
+30304 bytes per frame slot. Step 5's shadow columns (about 20 for Bistro)
+raise it to 3 groups, about 91 kB per frame slot. If measured too large,
+the region splits per purpose (color entries need only color columns); not
+built first.
 
 ## 4. Shadows (D3)
 
@@ -406,6 +408,17 @@ Bistro and heavy (Tracy, Release), recorded in the step's commit.
 
 ### Step 2b: color selection on the GPU
 
+State: done; described in `doc/erhe/draw_list_renderer.md` R1c and Q6
+"GPU command generation" and `doc/editor/lod.md` "Automatic selection".
+`get_cull_classification_check` reported 0 level mismatches on default,
+heavy, heavy four view and Bistro (chains on every mesh) on Metal 3, Metal
+4 and KosmicKrisp. Cost (M4 Pro, Release, headless Metal, the
+classification's GPU timer, median of 30): heavy 22.5 us before, 19 - 24 us
+after with the selection on (within noise); Bistro 25.0 us before, 29.6 us
+after with the selection on (25.3 us off). The Bistro level region (one
+viewport, one column) is 30304 bytes per frame slot (7576 entries x 4
+bytes).
+
 `cull_classify.comp` writes the level region into the persistent per-slot
 buffers; `cull_compact.comp` reads the column from the job word and the
 level table (section 3, "Compaction"); `get_cull_classification_check`
@@ -435,6 +448,11 @@ change (add a mesh) and a `culling_classification` switch restart selection
 without a mismatch.
 
 ### Step 5: shadows
+
+`write_lod_levels()` in `cull_classify.comp` scans every view of the frame
+per entry to find the views with a column (about 45 views for one column on
+Bistro at step 2b); this step adds a column -> view index table to the view
+block, so the loop is O(columns).
 
 Shadow `Lod_view`s from `Shadow_renderer::fit()` (spot, point, directional)
 with the sampling viewports, the color-column evaluation in the shadow

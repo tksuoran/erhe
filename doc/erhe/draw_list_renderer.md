@@ -347,11 +347,13 @@ Registration:
   variant's fill range).
 
   The automatic selection (doc/plans/lod_gpu_selection.md, built through
-  its step 2a): the CPU classification selects a level per (LOD column,
-  entry), and the CPU command writer draws it; GPU-generated commands
-  (Q6 "GPU command generation") and every shadow pass still draw the range
-  above (the template range), and so does every pass of a frame whose
-  selection is not active. Its data:
+  its step 2b): the CPU classification selects a level per (LOD column,
+  entry), and under `Cull_classification::gpu` the GPU classification
+  selects the same level with the same arithmetic; the CPU command writer
+  and the GPU command generation (Q6 "GPU command generation") both draw
+  it. Every shadow pass still draws the range above (the template range),
+  and so does every pass of a frame whose selection is not active. Its
+  data:
   - Per entry, `Draw_list_entry::lod_table_index` (the first row of the
     entry's chain in the level table, `lod_table_index_none` for a variant
     without chain) and `lod_word` (`make_lod_word()`: the effective `Lod`
@@ -388,9 +390,9 @@ Registration:
     through `Composer::add_cull_views()`; the headset's union view from the
     head origin and the largest per-eye projection scale). Shadow, PVS bake
     and lightmap views have none. The GPU view record is 14 `vec4`; `[12]`
-    holds the origin and the projection scale, `[13]` the LOD column (none:
-    -1, the value every view carries until the GPU selects levels), the
-    projection kind, the previous column (-1) and the shadow mode.
+    holds the origin and the projection scale, `[13]` the view's LOD column
+    (-1: none), the projection kind, the previous column (-1) and the
+    shadow mode.
   - Columns: in a frame whose selection is active,
     `classify_cull_views()` gives every color planes view with a `Lod_view`
     a LOD column, in view order, up to `max_lod_color_columns` (8) color
@@ -430,6 +432,37 @@ Registration:
     list, entry)` reads one level. A forced level is written as itself, so
     with the selection on and every entry forced, the commands equal the
     template's.
+  - The GPU selection: `cull_classify.comp` evaluates, per color entry and
+    LOD column, the same expressions as `lod_lanes()` / `select_lod_level()`
+    in the same order with every intermediate `precise` (the gaps of the
+    range sphere test, summed x, y, z; `k` once; `error_L * k` squared;
+    no division or square root), reading the entry's `lod_word` and
+    `lod_table_index` from the command templates (bound to the
+    classification too) and the errors from the slot's GPU level table.
+    It writes the frame's GPU level region: the CPU region's layout over
+    all published lists back to back (`group * entry_count + entry`, one
+    `uint32_t` per entry per group of 8 columns; 0 for every entry of a
+    non-color list), into a persistent device-local buffer per frame slot
+    (`Lod_region_slot`, sized to the slot's high-water mark, logged when it
+    grows, stamped with the frame index, entry count, group count and
+    `entry_layout_serial`), not a ring range, so a later frame can read it.
+    The view block carries the column count and the region's group count
+    (`lod_columns`) beside `lod_header`; a frame without columns writes no
+    region. A subnormal intermediate the GPU flushes to zero where the CPU
+    keeps it would differ; the classification check reports it.
+  - The GPU compaction: a job's word packs its view (bits 0..15), filter
+    index (16..20) and LOD column (21..31, `job_lod_column_none` = 0x7ff for
+    a shadow job and a color job whose view has no column);
+    `cull_jobs.lod_header.x` is the frame's active flag. Pass 1 writes an
+    entry with a chain in a job with a column at `(index_count,
+    first_index)` of its level's table row (its level read from the level
+    region), `base_vertex` from the template, as the CPU writer does.
+  - `get_cull_classification_check` (MCP) reads the GPU level region back
+    and compares every (column, entry) level with the CPU level words
+    (`lod_level_count`, `lod_coarse_count`, `lod_mismatch_count`, also
+    counted in the lists' and the total `mismatch_count`), and its command
+    comparison takes the CPU writer's level ranges for a color job with a
+    column, so it covers the compaction's level read.
   - Diagnostics: `request_lod_level_capture(object)` /
     `poll_lod_level_capture()` copy the next classified frame's columns
     (their `Lod_view`s) and, per entry of the object, its box,
@@ -887,10 +920,11 @@ Drawing:
   shadow layers select, then per color selection, per published non-empty
   color list its blending classes (in `blending_class_draw_order`, the
   order `draw_color()` draws) and layers select, per chunk. A job holds its
-  view and the index of its `Item_filter` in the frame's filter table (16
-  bits each in one word; at most `Gpu_cull_classifier::max_job_filters`
-  distinct filters, verified), first entry, entry count and its own dense
-  command range, at a multiple of 32 commands. It
+  view, the index of its `Item_filter` in the frame's filter table and the
+  view's LOD column (16, 5 and 11 bits in one word; at most
+  `Gpu_cull_classifier::max_job_filters` (32) distinct filters, verified;
+  R1c), first entry, entry count and its own dense command range, at a
+  multiple of 32 commands. It
   records the two passes of `cull_compact.comp` after a storage barrier
   (classification writes -> compaction reads), one storage barrier between
   them, and a command and storage barrier after them (compaction writes ->
@@ -916,7 +950,8 @@ Drawing:
   workgroup per job: each lane counts the set bits of a consecutive run of
   the job's words, one prefix sum over the lanes gives each lane its first
   command, and the lane writes the commands of its set bits in entry order
-  (the entry's `index_count`, `first_index`, `base_vertex`, instance count
+  (the entry's `index_count`, `first_index` - those of its selected level
+  of detail in a job with a LOD column, R1c - `base_vertex`, instance count
   1, `first_instance = entry - chunk begin`), so a job's commands are
   exactly those the CPU writer produces, in the same order (deterministic:
   no atomics on the output, and every pass rasterizes the same primitive

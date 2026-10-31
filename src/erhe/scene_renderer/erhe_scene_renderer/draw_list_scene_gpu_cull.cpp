@@ -83,6 +83,15 @@ public:
     std::vector<uint32_t>              list_entry_counts;
     std::vector<Draw_purpose>          list_purposes;
     std::vector<std::vector<uint64_t>> cpu_masks;
+    // Level of detail selection (doc/plans/lod_gpu_selection.md section 3):
+    // the frame's LOD columns, the level region's word groups (0: the frame
+    // wrote none) and size, the GPU region (read back) and the CPU level
+    // words per list (empty for a list without them).
+    uint32_t                           lod_column_count{0};
+    uint32_t                           lod_group_count {0};
+    std::size_t                        lod_region_bytes{0};
+    std::vector<std::byte>             gpu_lod_levels;
+    std::vector<std::vector<uint32_t>> cpu_lod_levels;
 
     // The frame's GPU command generation (doc/plans/culling.md phase 6):
     // the jobs with what the CPU command writer produces for each from the
@@ -180,11 +189,14 @@ namespace {
 // Host flush granularity: a multiple of every nonCoherentAtomSize.
 constexpr std::size_t c_gpu_bounds_flush_alignment = 256;
 
-// The occlusion buffer's smallest region (a dispatch without occlusion
-// views binds the two regions of an otherwise unused buffer) and the
-// alignment of the result region (a storage binding offset; a multiple of
-// every device's minStorageBufferOffsetAlignment and nonCoherentAtomSize).
-constexpr std::size_t c_occlusion_min_region_bytes = 256;
+// The smallest storage binding of the classification's buffers: the
+// occlusion buffer's smallest region (a dispatch without occlusion views
+// binds the two regions of an otherwise unused buffer), the level region of
+// a frame without LOD columns and the unused PVS buffers. Then the
+// alignment of the occlusion result region (a storage binding offset; a
+// multiple of every device's minStorageBufferOffsetAlignment and
+// nonCoherentAtomSize).
+constexpr std::size_t c_min_storage_bind_bytes     = 256;
 constexpr std::size_t c_occlusion_region_alignment = 256;
 
 [[nodiscard]] auto align_down(const std::size_t value, const std::size_t alignment) -> std::size_t
@@ -429,6 +441,13 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
         const bool occlusion = !m_occlusion_views.empty();
         prepare_occlusion_slot(frame_index, entry_count, group_count, occlusion ? Occlusion_culling::on : Occlusion_culling::off, command_buffer);
         Occlusion_slot& occlusion_slot = m_occlusion_slots[frame_index % m_occlusion_slots.size()];
+        // The level region (doc/plans/lod_gpu_selection.md section 3): one
+        // word group per 8 LOD columns of the frame (none when the frame's
+        // selection is not active: assign_lod_columns() gave no column).
+        const std::size_t lod_group_count = (static_cast<std::size_t>(m_lod_column_count) + (Gpu_cull_classifier::lod_columns_per_word - 1)) / Gpu_cull_classifier::lod_columns_per_word;
+        ERHE_VERIFY(slot.lod_active || (lod_group_count == 0));
+        prepare_lod_region_slot(frame_index, entry_count, lod_group_count, slot.entry_layout_serial);
+        const Lod_region_slot& lod_region_slot = get_lod_region_slot(frame_index);
         // The previous frame's occlusion words, consumed by this frame's
         // classification (one frame of lag): only those of the frame right
         // before this one, describing the same entries at the same
@@ -478,7 +497,7 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 return std::make_unique<Buffer>(
                     device,
                     Buffer_create_info{
-                        .capacity_byte_count = c_occlusion_min_region_bytes,
+                        .capacity_byte_count = c_min_storage_bind_bytes,
                         .usage               = Buffer_usage::storage,
                         .debug_label         = erhe::utility::Debug_label{label}
                     }
@@ -493,7 +512,7 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             m_pvs_unused_pages_buffer = std::make_unique<Buffer>(
                 device,
                 Buffer_create_info{
-                    .capacity_byte_count                    = c_occlusion_min_region_bytes,
+                    .capacity_byte_count                    = c_min_storage_bind_bytes,
                     .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
                     .usage                                  = Buffer_usage::storage,
                     .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_write,
@@ -501,9 +520,9 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                     .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene no PVS page table"}
                 }
             );
-            const std::span<std::byte> mapped = m_pvs_unused_pages_buffer->map_bytes(0, c_occlusion_min_region_bytes);
+            const std::span<std::byte> mapped = m_pvs_unused_pages_buffer->map_bytes(0, c_min_storage_bind_bytes);
             std::memset(mapped.data(), 0xff, mapped.size());
-            m_pvs_unused_pages_buffer->flush_bytes(0, c_occlusion_min_region_bytes);
+            m_pvs_unused_pages_buffer->flush_bytes(0, c_min_storage_bind_bytes);
             m_pvs_unused_pages_buffer->unmap();
         }
 
@@ -547,6 +566,8 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 std::bit_cast<uint32_t>(static_cast<int32_t>(slot.lod_settings.bias))
             };
             std::memcpy(gpu_data.data() + classifier.get_view_lod_header_offset(), &lod_header, sizeof(lod_header));
+            const glm::uvec4 lod_columns{m_lod_column_count, static_cast<uint32_t>(lod_group_count), 0u, 0u};
+            std::memcpy(gpu_data.data() + classifier.get_view_lod_columns_offset(), &lod_columns, sizeof(lod_columns));
             std::size_t write_offset = classifier.get_view_data_offset();
             for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
                 const Cull_view_tests& view = m_cull_views[view_index];
@@ -570,13 +591,19 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 record[11] = glm::vec4{view.pvs_query_max, 0.0f};
                 // Level of detail selection (doc/plans/lod_gpu_selection.md
                 // section 3): the selection origin and projection scale,
-                // then the LOD column, projection kind, previous column and
-                // shadow mode. No view has a column yet (-1: the view draws
-                // the template range).
+                // then the LOD column (assign_lod_columns(); -1: none, the
+                // view draws the template range), projection kind, previous
+                // column (no hysteresis yet: -1) and shadow mode.
                 if (view.lod_view.has_value()) {
                     const Lod_view& lod_view = view.lod_view.value();
+                    const uint32_t  column   = m_cull_view_lod_columns[view_index];
                     record[12] = glm::vec4{lod_view.origin, lod_view.projection_scale};
-                    record[13] = glm::vec4{-1.0f, static_cast<float>(static_cast<uint32_t>(lod_view.projection)), -1.0f, 0.0f};
+                    record[13] = glm::vec4{
+                        (column != lod_column_none) ? static_cast<float>(column) : -1.0f,
+                        static_cast<float>(static_cast<uint32_t>(lod_view.projection)),
+                        -1.0f,
+                        0.0f
+                    };
                 } else {
                     record[12] = glm::vec4{0.0f};
                     record[13] = glm::vec4{-1.0f, 0.0f, -1.0f, 0.0f};
@@ -654,21 +681,28 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             if (previous_slot != nullptr) {
                 encoder.set_buffer(Buffer_target::storage, previous_slot->buffer.get(), 0, previous_slot->result_offset + previous_slot->bind_bytes, Gpu_cull_classifier::occlusion_previous_words_binding_point);
             } else {
-                encoder.set_buffer(Buffer_target::storage, m_occlusion_no_previous_buffer.get(), 0, c_occlusion_min_region_bytes, Gpu_cull_classifier::occlusion_previous_words_binding_point);
+                encoder.set_buffer(Buffer_target::storage, m_occlusion_no_previous_buffer.get(), 0, c_min_storage_bind_bytes, Gpu_cull_classifier::occlusion_previous_words_binding_point);
             }
             encoder.set_buffer(Buffer_target::storage, slot.gpu_columns.get(), 0, columns_bytes, Gpu_cull_classifier::pvs_columns_binding_point);
             if (pvs_resident) {
                 encoder.set_buffer(Buffer_target::storage, m_pvs_gpu_database->get_buffer(), 0, m_pvs_gpu_database->get_byte_count(), Gpu_cull_classifier::pvs_database_binding_point);
                 encoder.set_buffer(Buffer_target::storage, slot.gpu_pvs_page_table.get(), 0, slot.pvs_page_table.size() * sizeof(uint32_t), Gpu_cull_classifier::pvs_pages_binding_point);
             } else {
-                encoder.set_buffer(Buffer_target::storage, m_pvs_unused_database_buffer.get(), 0, c_occlusion_min_region_bytes, Gpu_cull_classifier::pvs_database_binding_point);
-                encoder.set_buffer(Buffer_target::storage, m_pvs_unused_pages_buffer.get(),    0, c_occlusion_min_region_bytes, Gpu_cull_classifier::pvs_pages_binding_point);
+                encoder.set_buffer(Buffer_target::storage, m_pvs_unused_database_buffer.get(), 0, c_min_storage_bind_bytes, Gpu_cull_classifier::pvs_database_binding_point);
+                encoder.set_buffer(Buffer_target::storage, m_pvs_unused_pages_buffer.get(),    0, c_min_storage_bind_bytes, Gpu_cull_classifier::pvs_pages_binding_point);
             }
             if (pvs_database != nullptr) {
                 encoder.set_buffer(Buffer_target::storage, pvs_culled_range->get_buffer()->get_buffer(), pvs_culled_range->get_byte_start_offset_in_buffer(), mask_bytes, Gpu_cull_classifier::pvs_culled_binding_point);
             } else {
-                encoder.set_buffer(Buffer_target::storage, m_pvs_unused_culled_buffer.get(),   0, c_occlusion_min_region_bytes, Gpu_cull_classifier::pvs_culled_binding_point);
+                encoder.set_buffer(Buffer_target::storage, m_pvs_unused_culled_buffer.get(),   0, c_min_storage_bind_bytes, Gpu_cull_classifier::pvs_culled_binding_point);
             }
+            // Level of detail: the entries' lod_word and table row (the
+            // command templates), the level table and the frame slot's
+            // level region.
+            ERHE_VERIFY(slot.gpu_templates && slot.gpu_lod_table && lod_region_slot.buffer);
+            encoder.set_buffer(Buffer_target::storage, slot.gpu_templates.get(), 0, entry_count * Gpu_cull_classifier::template_bytes_per_entry, Gpu_cull_classifier::lod_templates_binding_point);
+            encoder.set_buffer(Buffer_target::storage, slot.gpu_lod_table.get(), 0, slot.gpu_lod_table_capacity, Gpu_cull_classifier::lod_table_binding_point);
+            encoder.set_buffer(Buffer_target::storage, lod_region_slot.buffer.get(), 0, lod_region_slot.bind_bytes, Gpu_cull_classifier::lod_levels_binding_point);
             const std::size_t group_size = Gpu_cull_classifier::workgroup_size;
             encoder.dispatch_compute(static_cast<std::uintptr_t>((entry_count + group_size - 1) / group_size), 1, 1);
         }
@@ -755,6 +789,41 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                         culled_readback->bytes_gpu_used(gpu_data.size_bytes());
                         culled_readback->close();
                         culled_readback->release();
+                    }
+                );
+            }
+            // The level region (doc/plans/lod_gpu_selection.md section 3):
+            // the check compares it with the CPU level words.
+            if (lod_region_slot.region_bytes > 0) {
+                std::shared_ptr<Ring_buffer_range> lod_readback = std::make_shared<Ring_buffer_range>(
+                    classifier.get_readback_buffer().acquire(Ring_buffer_usage::CPU_read, lod_region_slot.region_bytes)
+                );
+                {
+                    Blit_command_encoder blit = device.make_blit_command_encoder(command_buffer);
+                    blit.copy_from_buffer(
+                        lod_region_slot.buffer.get(), 0,
+                        lod_readback->get_buffer()->get_buffer(), lod_readback->get_byte_start_offset_in_buffer(),
+                        lod_region_slot.region_bytes
+                    );
+                }
+                {
+                    const std::lock_guard<std::mutex> lock{m_gpu_cull_check->mutex};
+                    ++m_gpu_cull_check->pending_reads;
+                }
+                device.add_completion_handler(
+                    [check = m_gpu_cull_check, lod_readback, generation = check_generation.value()]() {
+                        const std::span<std::byte> gpu_data = lod_readback->get_span();
+                        {
+                            const std::lock_guard<std::mutex> lock{check->mutex};
+                            if ((check->generation == generation) && (check->stage == Gpu_cull_check::Stage::recording)) {
+                                check->gpu_lod_levels.assign(gpu_data.begin(), gpu_data.end());
+                                --check->pending_reads;
+                                check->complete_if_ready();
+                            }
+                        }
+                        lod_readback->bytes_gpu_used(gpu_data.size_bytes());
+                        lod_readback->close();
+                        lod_readback->release();
                     }
                 );
             }
@@ -861,6 +930,20 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             std::copy_n(source.begin(), std::min(source.size(), bits.size()), bits.begin());
         }
     }
+    // The CPU level words of the frame (the classification's level slot).
+    check.lod_column_count = m_lod_column_count;
+    check.lod_group_count  = static_cast<uint32_t>((m_lod_column_count + (Gpu_cull_classifier::lod_columns_per_word - 1)) / Gpu_cull_classifier::lod_columns_per_word);
+    check.lod_region_bytes = static_cast<std::size_t>(check.lod_group_count) * entry_count * Gpu_cull_classifier::lod_level_bytes_per_entry_group;
+    check.cpu_lod_levels.resize(list_count);
+    const Lod_level_slot& level_slot = get_lod_level_slot(frame_index);
+    for (std::size_t list_index = 0; list_index < list_count; ++list_index) {
+        std::vector<uint32_t>& words = check.cpu_lod_levels[list_index];
+        words.clear();
+        if ((check.lod_group_count > 0) && (list_index < level_slot.lists.size())) {
+            const std::vector<uint32_t>& source = level_slot.lists[list_index];
+            words.assign(source.begin(), source.end());
+        }
+    }
     check.cpu_captured = true;
     check.complete_if_ready();
 }
@@ -887,6 +970,11 @@ void Draw_list_scene::request_cull_classification_check()
     check.cpu_pvs_culled.clear();
     check.gpu_counts.clear();
     check.gpu_commands.clear();
+    check.lod_column_count = 0;
+    check.lod_group_count  = 0;
+    check.lod_region_bytes = 0;
+    check.gpu_lod_levels.clear();
+    check.cpu_lod_levels.clear();
 }
 
 auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& out) -> Cull_classification_check_state
@@ -909,6 +997,8 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
     out.view_count     = check.view_count;
     out.dispatch_count = check.dispatch_count;
     out.gpu_time_ns    = m_gpu_cull_timer ? m_gpu_cull_timer->last_result() : 0;
+    out.lod_column_count = check.lod_column_count;
+    out.lod_region_bytes = check.lod_region_bytes;
 
     // The bit the frame's occlusion consumption removed for (view, entry of
     // all lists), from the culled region (0 when none was consumed). The
@@ -988,6 +1078,42 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
                 }
             }
         }
+        // The list's levels in every LOD column (doc/plans/lod_gpu_selection.md
+        // section 3): the GPU region against the CPU level words; a list
+        // without CPU words (another purpose) expects 0.
+        if (check.lod_group_count > 0) {
+            ERHE_VERIFY(check.gpu_lod_levels.size() >= check.lod_region_bytes);
+            const std::vector<uint32_t>& cpu_words = check.cpu_lod_levels[list_index];
+            ERHE_VERIFY(cpu_words.empty() || (cpu_words.size() >= (static_cast<std::size_t>(check.lod_group_count) * list_entry_count)));
+            for (uint32_t column = 0; column < check.lod_column_count; ++column) {
+                const uint32_t group = column / Gpu_cull_classifier::lod_columns_per_word;
+                const uint32_t shift = 4u * (column % Gpu_cull_classifier::lod_columns_per_word);
+                for (uint32_t entry = 0; entry < list_entry_count; ++entry) {
+                    const uint32_t cpu_level = cpu_words.empty() ? 0u : ((cpu_words[(static_cast<std::size_t>(group) * list_entry_count) + entry] >> shift) & 0xfu);
+                    const std::size_t element = (static_cast<std::size_t>(group) * check.entry_count) + check.list_entry_offsets[list_index] + entry;
+                    uint32_t gpu_word = 0;
+                    std::memcpy(&gpu_word, check.gpu_lod_levels.data() + (element * Gpu_cull_classifier::lod_level_bytes_per_entry_group), sizeof(gpu_word));
+                    const uint32_t gpu_level = (gpu_word >> shift) & 0xfu;
+                    ++out.lod_level_count;
+                    if (gpu_level > 0) {
+                        ++out.lod_coarse_count;
+                    }
+                    if (cpu_level != gpu_level) {
+                        ++out.lod_mismatch_count;
+                        ++list_check.mismatch_count;
+                        if (out.lod_mismatches.size() < max_reported_mismatches) {
+                            out.lod_mismatches.push_back(Cull_lod_level_mismatch{
+                                .list_index  = static_cast<uint32_t>(list_index),
+                                .entry_index = entry,
+                                .column      = column,
+                                .cpu_level   = cpu_level,
+                                .gpu_level   = gpu_level
+                            });
+                        }
+                    }
+                }
+            }
+        }
         out.mismatch_count += list_check.mismatch_count;
         out.lists.push_back(std::move(list_check));
     }
@@ -1061,6 +1187,8 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
     check.gpu_culled.clear();
     check.gpu_counts.clear();
     check.gpu_commands.clear();
+    check.gpu_lod_levels.clear();
+    check.cpu_lod_levels.clear();
     return Cull_classification_check_state::complete;
 }
 
@@ -1110,7 +1238,8 @@ void Draw_list_scene::generate_gpu_commands(
         const std::size_t          view_index,
         const uint32_t             filter_index,
         const std::size_t          max_per_chunk,
-        const Command_selection_id selection
+        const Command_selection_id selection,
+        const uint32_t             lod_column
     ) {
         const Draw_list&  draw_list        = slot.lists[list_index];
         const std::size_t list_entry_count = draw_list.entries.size();
@@ -1133,9 +1262,16 @@ void Draw_list_scene::generate_gpu_commands(
                 }
             );
         }
-        // The packed view (Cull_view is 16 bits wide) and filter index.
+        // The packed view (Cull_view is 16 bits wide), filter index and LOD
+        // column (cull_compact.comp).
         ERHE_VERIFY(view_index < 0x10000u);
-        const uint32_t view_and_filter = static_cast<uint32_t>(view_index) | (filter_index << 16u);
+        ERHE_VERIFY(filter_index < Gpu_cull_classifier::max_job_filters);
+        ERHE_VERIFY((lod_column == lod_column_none) || (lod_column < Gpu_cull_classifier::job_lod_column_none));
+        const uint32_t job_lod_column  = (lod_column == lod_column_none) ? Gpu_cull_classifier::job_lod_column_none : lod_column;
+        const uint32_t view_and_filter =
+            static_cast<uint32_t>(view_index) |
+            (filter_index   << Gpu_cull_classifier::job_filter_shift) |
+            (job_lod_column << Gpu_cull_classifier::job_lod_column_shift);
         for (std::size_t begin = 0; begin < list_entry_count; begin += max_per_chunk) {
             const std::size_t end             = std::min(list_entry_count, begin + max_per_chunk);
             const uint32_t    job_entry_count = static_cast<uint32_t>(end - begin);
@@ -1150,7 +1286,8 @@ void Draw_list_scene::generate_gpu_commands(
                 .filter      = filter_index,
                 .list_index  = static_cast<uint32_t>(list_index),
                 .chunk_begin = static_cast<uint32_t>(begin),
-                .selection   = selection
+                .selection   = selection,
+                .lod_column  = lod_column
             });
             m_gpu_indirect_count_jobs.push_back(Indirect_count_draw_job{
                 .command_offset = command_count,
@@ -1182,7 +1319,8 @@ void Draw_list_scene::generate_gpu_commands(
                     continue;
                 }
                 m_gpu_shadow_job_lookup[(view_index * list_count) + list_index] = static_cast<uint32_t>(m_gpu_jobs.size());
-                add_list_jobs(list_index, view_index, filter_index, max_per_chunk, Command_selection_id::none);
+                // Shadow views have no LOD column yet (step 5).
+                add_list_jobs(list_index, view_index, filter_index, max_per_chunk, Command_selection_id::none, lod_column_none);
             }
             m_gpu_shadow_view_jobs[view_index].job_count = static_cast<uint32_t>(m_gpu_jobs.size()) - m_gpu_shadow_view_jobs[view_index].first_job;
         }
@@ -1212,7 +1350,7 @@ void Draw_list_scene::generate_gpu_commands(
                     continue;
                 }
                 m_gpu_color_job_lookup[(selection_index * list_count) + list_index] = static_cast<uint32_t>(m_gpu_jobs.size());
-                add_list_jobs(list_index, view_index, filter_index, max_per_chunk, static_cast<Command_selection_id>(selection_index));
+                add_list_jobs(list_index, view_index, filter_index, max_per_chunk, static_cast<Command_selection_id>(selection_index), m_cull_view_lod_columns[view_index]);
             }
         }
     }
@@ -1251,6 +1389,10 @@ void Draw_list_scene::generate_gpu_commands(
     };
     const std::size_t     template_bytes = static_cast<std::size_t>(slot.entry_count) * Gpu_cull_classifier::template_bytes_per_entry;
     ERHE_VERIFY(slot.gpu_templates && (slot.gpu_bounds_capacity >= template_bytes));
+    // The level region the frame's classification wrote (it dispatched
+    // right before) and the level table.
+    const Lod_region_slot& lod_region_slot = get_lod_region_slot(frame_index);
+    ERHE_VERIFY(lod_region_slot.buffer && slot.gpu_lod_table);
 
     // The job table, the header and the filter table (cull_compact.comp
     // layout; each filter an erhe::Item_filter as 32-bit halves).
@@ -1264,6 +1406,9 @@ void Draw_list_scene::generate_gpu_commands(
             bits_workgroups_per_job
         };
         std::memcpy(gpu_data.data() + classifier.get_job_header_offset(), &header, sizeof(header));
+        // The level of detail header: whether the frame selects levels.
+        const glm::uvec4 lod_header{slot.lod_active ? 1u : 0u, 0u, 0u, 0u};
+        std::memcpy(gpu_data.data() + classifier.get_job_lod_header_offset(), &lod_header, sizeof(lod_header));
         for (std::size_t filter_index = 0, filter_end = m_gpu_job_filters.size(); filter_index < filter_end; ++filter_index) {
             const erhe::Item_filter&        filter    = m_gpu_job_filters[filter_index];
             const std::array<uint32_t, 2>   all_set   = Gpu_cull_classifier::split_uint64(filter.require_all_bits_set);
@@ -1311,6 +1456,8 @@ void Draw_list_scene::generate_gpu_commands(
             encoder.set_buffer(Buffer_target::storage, command_buffer_object, m_gpu_command_byte_offset, command_bytes, Gpu_cull_classifier::compact_commands_binding_point);
             encoder.set_buffer(Buffer_target::storage, count_buffer_object, m_gpu_count_byte_offset, count_bytes, Gpu_cull_classifier::compact_counts_binding_point);
             encoder.set_buffer(Buffer_target::storage, bits_range.get_buffer()->get_buffer(), bits_range.get_byte_start_offset_in_buffer(), bits_bytes, Gpu_cull_classifier::compact_bits_binding_point);
+            encoder.set_buffer(Buffer_target::storage, lod_region_slot.buffer.get(), 0, lod_region_slot.bind_bytes, Gpu_cull_classifier::compact_lod_levels_binding_point);
+            encoder.set_buffer(Buffer_target::storage, slot.gpu_lod_table.get(), 0, slot.gpu_lod_table_capacity, Gpu_cull_classifier::compact_lod_table_binding_point);
         };
         {
             // Pass bits: one invocation per (job, entry).
@@ -1543,6 +1690,7 @@ void Draw_list_scene::record_gpu_command_check(
 
     const Draw_list_slot& slot       = get_published_slot(frame_index);
     const std::size_t     list_count = slot.lists.size();
+    const Lod_level_slot& level_slot = get_lod_level_slot(frame_index);
 
     const std::lock_guard<std::mutex> lock{m_gpu_cull_check->mutex};
     Gpu_cull_check& check = *m_gpu_cull_check;
@@ -1582,12 +1730,27 @@ void Draw_list_scene::record_gpu_command_check(
             if (!in_view || !filter(entry.flag_bits)) {
                 continue;
             }
+            // The CPU writer's index range: the selected level's in a job
+            // with a LOD column (Draw_indirect_buffer::update()).
+            uint32_t index_count = entry.index_count;
+            uint32_t first_index = entry.first_index;
+            if ((info.lod_column != lod_column_none) && (entry.lod_table_index != lod_table_index_none)) {
+                ERHE_VERIFY(info.list_index < level_slot.lists.size());
+                const std::vector<uint32_t>& words      = level_slot.lists[info.list_index];
+                const std::size_t            word_index = ((info.lod_column / Gpu_cull_classifier::lod_columns_per_word) * list_entry_count) + entry_index;
+                ERHE_VERIFY(word_index < words.size());
+                const uint32_t    level = (words[word_index] >> (4u * (info.lod_column % Gpu_cull_classifier::lod_columns_per_word))) & 0xfu;
+                const std::size_t row   = static_cast<std::size_t>(entry.lod_table_index) + level;
+                ERHE_VERIFY(row < slot.lod_table.size());
+                index_count = slot.lod_table[row].x;
+                first_index = slot.lod_table[row].y;
+            }
             check.command_candidates.push_back(Gpu_cull_check::Command_candidate{
                 .entry   = job.entry_begin + local,
                 .command = Draw_indexed_primitives_indirect_command{
-                    entry.index_count,
+                    index_count,
                     1u,
-                    entry.first_index,
+                    first_index,
                     entry.base_vertex,
                     local
                 }
@@ -1743,7 +1906,7 @@ void Draw_list_scene::prepare_occlusion_slot(
     Device&           device       = m_gpu_cull_classifier->get_device();
     const std::size_t alignment    = std::max(c_occlusion_region_alignment, static_cast<std::size_t>(device.get_info().shader_storage_buffer_offset_alignment));
     const std::size_t region_bytes = (occlusion == Occlusion_culling::on) ? (group_count * entry_count * Gpu_cull_classifier::mask_bytes_per_entry_group) : 0;
-    const std::size_t bind_bytes   = std::max(region_bytes, c_occlusion_min_region_bytes);
+    const std::size_t bind_bytes   = std::max(region_bytes, c_min_storage_bind_bytes);
     // Three regions (test, result, culled), each at a multiple of the
     // storage binding alignment.
     const std::size_t stride       = align_up(bind_bytes, alignment);
@@ -1754,7 +1917,7 @@ void Draw_list_scene::prepare_occlusion_slot(
         m_occlusion_no_previous_buffer = std::make_unique<Buffer>(
             device,
             Buffer_create_info{
-                .capacity_byte_count = c_occlusion_min_region_bytes,
+                .capacity_byte_count = c_min_storage_bind_bytes,
                 .usage               = Buffer_usage::storage,
                 .debug_label         = erhe::utility::Debug_label{"Draw_list_scene no previous occlusion words"}
             }
@@ -1816,6 +1979,55 @@ void Draw_list_scene::prepare_occlusion_slot(
     slot.bind_bytes    = bind_bytes;
     slot.result_offset = stride;
     slot.culled_offset = 2 * stride;
+}
+
+void Draw_list_scene::prepare_lod_region_slot(
+    const uint64_t    frame_index,
+    const std::size_t entry_count,
+    const std::size_t group_count,
+    const uint64_t    entry_layout_serial
+)
+{
+    using namespace erhe::graphics;
+
+    if (m_lod_region_slots.size() != m_draw_list_slots.size()) {
+        // Sized once: the device's frames in flight (publish()).
+        ERHE_VERIFY(m_lod_region_slots.empty());
+        m_lod_region_slots.resize(m_draw_list_slots.size());
+    }
+    Lod_region_slot&  slot         = m_lod_region_slots[frame_index % m_lod_region_slots.size()];
+    const std::size_t region_bytes = group_count * entry_count * Gpu_cull_classifier::lod_level_bytes_per_entry_group;
+    const std::size_t bind_bytes   = std::max(region_bytes, c_min_storage_bind_bytes);
+    if (!slot.buffer || (slot.buffer->get_capacity_byte_count() < bind_bytes)) {
+        // Rare: the slot's high-water size (entries, LOD columns) grew. The
+        // slot's previous frame retired, so the old buffer is free.
+        Device&           device   = m_gpu_cull_classifier->get_device();
+        const std::size_t capacity = std::bit_ceil(bind_bytes);
+        slot.buffer = std::make_unique<Buffer>(
+            device,
+            Buffer_create_info{
+                .capacity_byte_count               = capacity,
+                .usage                             = Buffer_usage::storage | Buffer_usage::transfer_src,
+                .required_memory_property_bit_mask = Memory_property_flag_bit_mask::device_local,
+                .debug_label                       = erhe::utility::Debug_label{"Draw_list_scene LOD level region"}
+            }
+        );
+        log_draw_list->info("LOD level region: frame slot {} buffer {} bytes ({} entries, {} column groups)", frame_index % m_lod_region_slots.size(), capacity, entry_count, group_count);
+    }
+    slot.region_bytes        = region_bytes;
+    slot.bind_bytes          = bind_bytes;
+    slot.frame_index         = frame_index;
+    slot.entry_count         = static_cast<uint32_t>(entry_count);
+    slot.group_count         = static_cast<uint32_t>(group_count);
+    slot.entry_layout_serial = entry_layout_serial;
+}
+
+auto Draw_list_scene::get_lod_region_slot(const uint64_t frame_index) const -> const Lod_region_slot&
+{
+    ERHE_VERIFY(!m_lod_region_slots.empty());
+    const Lod_region_slot& slot = m_lod_region_slots[frame_index % m_lod_region_slots.size()];
+    ERHE_VERIFY(slot.buffer && (slot.frame_index == frame_index));
+    return slot;
 }
 
 void Draw_list_scene::draw_occlusion(const Draw_occlusion_parameters& parameters)
