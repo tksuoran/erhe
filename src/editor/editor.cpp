@@ -1850,6 +1850,17 @@ public:
                 m_graphics_device->get_number_of_frames_in_flight(),
                 packet.frame_host_system_time_ns
             );
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+            // The headset's edge-line feed, prepared like the viewports'
+            // (above) for the render phase to queue.
+            if (m_app_context.OpenXR && m_headset_view) {
+                m_headset_view->prepare_wide_line_feed(
+                    m_graphics_device->get_frame_index(),
+                    m_graphics_device->get_number_of_frames_in_flight(),
+                    packet.frame_host_system_time_ns
+                );
+            }
+#endif
 
             // The rendergraph nodes copy what their execute of this frame
             // reads (the post-processing parameters, the BRDF slice angles)

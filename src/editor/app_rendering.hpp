@@ -243,6 +243,21 @@ public:
     // the render thread.
     [[nodiscard]] auto composition_passes() const -> const std::vector<std::shared_ptr<Composition_pass>>&;
 
+    // M2 (the viewports' prepare_composition, the headset's
+    // prepare_wide_line_feed): the edge-line feed of the wide-line passes for
+    // one view, gated as the passes draw (enabled, the view's render style),
+    // with each pass's primitive settings at the prepared frame's host time
+    // and each mesh fed at the LOD level its fill draws in the view
+    // (get_wide_line_lod_routing(), the mesh's forced level from the scene's
+    // Draw_list_scene; doc/plans/selection_outline_lod.md). The caller holds
+    // the scene root's item_host_mutex (the feed reads the meshes' Buffer_mesh
+    // variants, which a worker may be replacing).
+    void prepare_wide_line_feed(
+        const Render_context&                         context,
+        int64_t                                       host_system_time_ns,
+        erhe::scene_renderer::Content_wide_line_feed& out
+    ) const;
+
     void imgui();
     void request_renderdoc_capture();
 

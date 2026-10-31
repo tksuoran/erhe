@@ -3,6 +3,7 @@
 #include "erhe_primitive/buffer_range.hpp"
 #include "erhe_primitive/index_range.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -107,6 +108,12 @@ class Lod_chain
 public:
     [[nodiscard]] auto is_empty  () const -> bool { return level_count == 0; }
     [[nodiscard]] auto get_levels() const -> std::span<const Lod_level> { return std::span<const Lod_level>{levels.data(), level_count}; }
+    // The level a draw asking for `level` uses: clamped to the chain's last
+    // level; 0 for an empty chain.
+    [[nodiscard]] auto get_clamped_level(const std::size_t level) const -> std::size_t
+    {
+        return (level_count == 0) ? 0 : std::min(level, level_count - 1);
+    }
 
     std::array<Lod_level, max_lod_levels> levels{};
     std::size_t                           level_count{0};

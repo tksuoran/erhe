@@ -83,6 +83,28 @@ generation defaults the window starts from: `level_count` 6, `ratio` 0.5,
 `border` locked, `seams` keep, `fallback` none, `normal_merge_angle` 20
 degrees. Values not present in `editor_settings.json` take these defaults.
 
+## Edge lines and the selection outline
+
+The edge-line passes (the selection outline, "Content edge lines" selected /
+not selected) draw the edges of the level the mesh's fill draws
+(`doc/plans/selection_outline_lod.md`), so the outline traces the drawn
+silhouette. `App_rendering::prepare_wide_line_feed()` feeds each mesh at
+`get_forced_lod_level()` of its `Draw_list_scene` record when the pass's
+fill draws through the draw lists, and at level 0 when it takes the bucket
+path; which of the two is the first of the pass's
+`Composition_pass_data::lod_level_source_passes` that submits for the view,
+decided by that pass's own gating (`get_wide_line_lod_routing()`). The
+selected / hovered edges follow the selected fill, or the selection stencil
+mask while the selection fill is off; the other edges the unselected fill;
+the ghost edge lines have no fill and stay at level 0. The viewports feed in
+their composition prepare and the headset in `Headset_view::
+prepare_wide_line_feed()`, both in the prepare phase; the render phase only
+queues the frame's feed. The draw list entries take their variant at the
+draw-list flush and the feed resolves the live variant later in the same
+prepare phase, so a variant a worker commits in between shows the old
+variant's fill under the new variant's edges for one frame (both stay
+allocated until the frame retires).
+
 ## Verification
 
 `render_scene_image` renders through the same composition passes as a

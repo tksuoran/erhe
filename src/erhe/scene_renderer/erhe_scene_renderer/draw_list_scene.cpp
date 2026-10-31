@@ -199,8 +199,7 @@ public:
     if (chain.is_empty()) {
         return classification.index_range;
     }
-    const std::size_t clamped = std::min(level, chain.level_count - 1);
-    return chain.levels[clamped].index_range;
+    return chain.levels[chain.get_clamped_level(level)].index_range;
 }
 
 [[nodiscard]] auto material_identity_hash(const erhe::primitive::Material* material) -> uint64_t

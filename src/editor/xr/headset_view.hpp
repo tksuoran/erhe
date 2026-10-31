@@ -17,6 +17,7 @@
 #include "erhe_renderer/view.hpp"
 #include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/content_wide_line_feed.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_xr/headset.hpp"
@@ -211,6 +212,14 @@ public:
     // is no root camera; the copy then carries no scene root and no camera,
     // and the shadow node renders nothing.
     void prepare_render_view();
+    // Prepare phase, after the frame's composition was prepared (the last M2
+    // step: transforms, hover and selection final, draw lists flushed): the
+    // frame's edge-line feed of the wide-line passes
+    // (App_rendering::prepare_wide_line_feed()) into the frame's slot, which
+    // render_headset() queues. The feed reads the meshes, the main thread's
+    // state (their LOD variants and levels), so it is made here rather than
+    // in the render phase.
+    void prepare_wide_line_feed(uint64_t frame_index, std::size_t frames_in_flight, int64_t host_system_time_ns);
     auto render_headset(erhe::graphics::Command_buffer& command_buffer) -> bool;
     // Render phase, the rendergraph node's pre-execute hook (before the
     // frame's culling classification): adds the culling view of the
@@ -389,6 +398,14 @@ private:
     std::vector<erhe::scene::Camera_snapshot>            m_view_camera_snapshots; // per eye, captured in the render phase (the headset owns its eye cameras)
     std::vector<erhe::scene_renderer::Camera_view_input> m_view_inputs;
     std::vector<erhe::renderer::View>                    m_debug_views;
+    // prepare_wide_line_feed(): one per frame in flight, sized once.
+    class Wide_line_feed_slot
+    {
+    public:
+        uint64_t                                     frame_index{0};
+        erhe::scene_renderer::Content_wide_line_feed feed;
+    };
+    std::vector<Wide_line_feed_slot>                     m_wide_line_feed_slots;
     erhe::math::Input_axis                               m_translate_x;
     erhe::math::Input_axis                               m_translate_y;
     erhe::math::Input_axis                               m_translate_z;

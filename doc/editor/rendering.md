@@ -252,6 +252,7 @@ alpha tested, premultiplied for translucent).
 - Stencil: function=not_equal 0x80, test_mask=0x80, write_mask=0x80, z_pass_op=replace
 - Blend: premultiplied alpha, alpha-to-coverage
 - Draws outline only where bit 7 is NOT set (outside the selected mesh silhouette), then sets bit 7 to prevent double-drawing
+- The edge lines are those of the LOD level the mesh's fill draws (`doc/editor/lod.md` "Edge lines and the selection outline")
 
 ### Sky
 
