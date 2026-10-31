@@ -231,23 +231,33 @@ handling.
 
 ### 2.4 Shadows
 
-Each shadow view selects with its own origin and projection, as O3DE does.
-This is the proposed default for D3, because it keeps two existing mechanisms
-valid:
+The rule (D3): a caster that is also drawn as a receiver in a color view that
+samples the shadow map draws the same level in the shadow pass as in that
+color view. Otherwise self-shadowing breaks: the receiver surface and the
+caster surface differ, and the shadow test compares one against the other.
+Casters that are not drawn in such a color view (outside the camera frustum,
+occluded, PVS-rejected) select from the shadow view's own origin and
+projection, as O3DE does. Directional cascades are orthographic and pick by
+shadow texel size, which matches what the shadow map can resolve.
+
+Consequences for two existing mechanisms:
 
 - The shadow map cache keeps a pass when its light, `clip_from_world`, cull
   view and draw-list content are unchanged (`shadow_renderer.hpp`
-  `is_kept()` / `store()`). The viewer camera is in none of these keys.
+  `is_kept()` / `store()`). The viewer camera is in none of these keys. With
+  the rule above, the levels the color views selected for the pass's casters
+  join the key: a pass is invalidated when one of those levels changes, not on
+  every camera move. The hysteresis of section 2.6 keeps level changes rare.
 - Shadow passes of several viewports with bitwise-equal planes share one
   `Cull_view` and one GPU job per chunk (`draw_list_scene.cpp`,
-  `doc/erhe/draw_list_renderer.md` Q6).
+  `doc/erhe/draw_list_renderer.md` Q6). Proposed: the passes stay shared while
+  every viewport sampling the map selects the same levels for its visible
+  casters, and split per viewport for a frame where they differ. Directional
+  cascades are fitted per camera already and are not affected.
 
-Selecting caster levels from the viewer camera (Godot's rule) would need the
-camera in both keys: the cache would be invalidated on every camera move and
-the sharing would be lost. The cost of per-view selection is that a caster's
-shadow can use a different level than the caster itself. Directional cascades
-are orthographic and pick by shadow texel size, which matches what the shadow
-map can resolve.
+The shadow pass therefore runs its level selection after the color views'
+selection of the same frame, and reads it per entry. On the GPU path that is
+an ordering constraint between the color and shadow compaction jobs.
 
 ### 2.5 Control properties
 
@@ -273,35 +283,39 @@ objects through a new `Scene_host` virtual, because `erhe::scene` cannot see
 `Draw_list_scene` (R0a). The draw path never walks the hierarchy.
 
 Global settings go in `Render_settings` (graphics preset): `lod_enabled`,
-`lod_threshold_pixels` (default 1.0) and `lod_bias` (int). Generation defaults
-go in an editor config section (`Lod_settings`), used by the import path when
-`generate_lods_on_import` is on (off by default, D1).
+`lod_threshold_pixels` (default 1.0), `lod_bias` (int) and the hysteresis band
+(section 2.6). Generation defaults go in an editor config section
+(`Lod_settings`), used by the editor's LOD window. Import never generates
+levels (D1).
 
-## 3. Decisions for the user
+### 2.6 Transitions
 
-Ask before the step that needs each one.
+Levels pop (D4), with hysteresis: a view moves an entry to a coarser level only
+when the coarser level's `pixels` is below the threshold by a band, and back
+to a finer level only when the current level's `pixels` exceeds the threshold.
+This needs the previously selected level per view and per entry, kept beside
+the culling state in both command writers and reset when the view's key
+(`Gpu_command_key`) changes, as the occlusion bits are. The state is written
+in the loop that already runs per entry, so no new per-frame walk is added.
 
-- D1 (step 1): generate LODs at import automatically, or only on request
-  from the editor? The plan starts with on request only.
-- D2 (step 3): the edge-line passes draw the `original` variant, so while a
-  level is forced the edge lines show the full-resolution mesh over the
-  simplified fill. Options: hide edge lines on meshes drawn at level > 0,
-  build per-level line indices from the simplified triangles, or accept the
-  mismatch in the first version.
-- D3 (step 4c): shadow LOD. Proposed: each shadow view selects from its own
-  projection (section 2.4; the shadow map cache and cull-view sharing stay
-  valid). Alternative: the viewer camera's level, as Godot does. A caster
-  then always matches its shadow, but every camera move invalidates the
-  shadow cache and shared shadow views split per viewport.
-- D4 (step 5): transitions. Both reference engines pop and rely on the 1 px
-  threshold. Options: pop (the default), a small hysteresis band (needs
-  per-view per-entry state), or a screen-door dithered cross-fade in the
-  opaque pass (a second draw during the fade plus a shader variant).
-- D5 (step 6): the prepared / stored path. Proposed: store the levels in
-  `ERHE_gpu_vertex_streams` / `ERHE_mesh_optimized`, written by the exporter,
-  with no work at load. Alternative: generate them at load from the stored
-  core (no format change, but simplification time on every load, which is
-  too slow for Quest).
+### 2.7 Edge lines
+
+The edge-line passes draw per-level line indices built from the simplified
+triangles (D2), so a mesh drawn at level `i` shows the edges of level `i`.
+Each `Lod_level` gains an edge-line `Index_range` beside its fill range.
+
+## 3. Decisions (user, 2026-10-31)
+
+- D1: LODs are generated only on request from the editor; import never
+  generates them.
+- D2: per-level edge-line indices built from the simplified triangles
+  (section 2.7; step 3).
+- D3: a caster drawn as a receiver selects the same level in the shadow pass
+  as in the color view; other casters select from the shadow view (section
+  2.4; step 4c).
+- D4: pop with hysteresis (section 2.6; step 5).
+- D5: levels stored in the prepared glTF (`ERHE_gpu_vertex_streams` /
+  `ERHE_mesh_optimized`), written by the exporter, no work at load (step 6).
 
 ## 4. Build order
 
@@ -317,7 +331,12 @@ doc/editor (window, properties).
 Done; described in `doc/erhe/meshoptimizer_integration.md` "Level of
 detail". Carried to step 3: the edit operations build a new `Primitive` for
 the edited mesh, and that `Primitive` takes over the old one's
-`lod_settings` once generation is reachable from the editor.
+`lod_settings` once generation is reachable from the editor. Carried to
+step 2: `Buffer_mesh::index_buffer_range.count` of an optimized mesh with a
+chain covers every level; check that no consumer reads it as the fill count
+(the draw paths read `triangle_fill_indices`). The MCP `get_memory_usage`
+`lod` section has not been exercised at runtime yet (no caller sets
+`lod_settings` before step 3).
 
 ### Step 2: Lod properties and forced level
 
@@ -364,21 +383,25 @@ the edited mesh, and that `Primitive` takes over the old one's
   selected level per command: 0 mismatches on default, heavy, Bistro and four
   view, in both culling-classification settings.
 - 4c, shadows: selection in the shadow jobs and the CPU shadow writer per
-  D3. Gate: the shadow map cache check (`scripts/shadow_map_cache_check.py`)
-  still keeps passes while only the camera moves.
+  section 2.4 (visible casters reuse the color view's level). Gates: no
+  self-shadow difference between level 0 and a forced level on a scene with
+  self-shadowing casters; the shadow map cache check
+  (`scripts/shadow_map_cache_check.py`) keeps passes while the camera moves
+  without changing any selected level.
 
 ### Step 5: transitions
 
-- D4's transition choice, from the user's feedback on step 4's popping.
+- Hysteresis (section 2.6) in both command writers. Gate: a camera dolly that
+  stops inside the band does not flip levels from frame to frame.
 
 ### Step 6: persistence and import
 
 - The meshoptimizer cache stores remaps, not indices
   (`mesh_optimizer_cache.cpp`), so LOD levels need a new payload section and
   a format version bump. `Lod_settings` goes in the key.
-- The prepared / stored format carries the levels per D5. The exporter writes
-  them.
-- `generate_lods_on_import` per D1.
+- The prepared glTF (`ERHE_gpu_vertex_streams` / `ERHE_mesh_optimized`)
+  carries the levels and their edge-line indices; the exporter writes them and
+  loading does no simplification work.
 - Measure on Bistro: Release desktop (GPU-bound viewport) and Quest, where
   Bistro is geometry-bound (memory-bank/topics/quest.md). The Quest sweep in
   `doc/reference/quest_bench_runs.md` measures 10.6 ms of binning in every
