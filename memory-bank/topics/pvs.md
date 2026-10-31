@@ -5,7 +5,8 @@
 
 [STATE_2026-10-31]
 @complete-on-desktop::steps-1-7-landed{a1eb7cf57..5eace01e3;commits-per-step-in-doc/plans/pvs.md-"Build order"}
-@left::step-8-headset{needs-Quest:union-view-query-box+quest_occlusion_wall_check.py-extended+Quest-measurement}+cost-measurement(render_thread_bench.py---tracy-Bistro-off/on/on+occlusion;not-done)+Open-list-in-plan
+@left::step-8-headset{needs-Quest:union-view-query-box+quest_occlusion_wall_check.py-extended+Quest-measurement}+Open-list-in-plan
+@cost-measured-2026-10-31::Release-headless-M3-Bistro{framed+bench-cameras-OUTSIDE-street-slab-grid->PVS-tests-nothing,cost~0(classify-+2-6us);street-pose-cell-458:PVS-culls-203/601,GPU-Main-1956->1812us(-144),occlusion-alone-+22us-there,both-+30us;occlusion-pass-time-not-separable-on-Metal(inside-view-render-pass);table->doc/plans/pvs.md-Verification;driver=memory-bank/local/pvs_cost_2026_10_31/pvs_cost_bench.py(render_thread_bench.py-cannot-load-Bistro/toggle-settings)}
 @user-decisions::D1-storage-in-glb+D2-region-Scene_settings+D4-strict-staleness+paged-layout(2026-10-30);wall-leaks-12/48-accepted(small-leaks-ok,tighten-later);rule-3-opt-in-off;all-editor-runs-headless
 @harness::opus-coder+opus-review-per-step;Fable-advisor-for-stuck-pieces;orchestrator-reruns-riskiest-gate-on-build_xcode_metal_headless-before-each-commit
 
@@ -48,4 +49,4 @@ python3 scripts/pvs_verify.py --editor build_xcode_metal_headless/bin/Debug/edit
 ?step-7-docs{draw_list_renderer.md-Q6+rendering.md+windows.md-final-pass;plan-reduced-to-outstanding}->8-headset-when-Quest
 ✓step-7{5eace01e3;doc/editor/pvs.md-new(method+D1-D7+Bake-1-7+verification);plan-747->199-lines(outstanding-only+section-map);README-index-in-progress;testing.md-PVS-section;mcp_tools.json-get_visible_entries-fixed(no-back-face-culling-claim)}
 ?step-8-headset{when-Quest-attached}
-?cost-measurement{render_thread_bench.py---tracy;Bistro-off/on/on+occlusion}
+✓cost-measurement{commit-doc:PVS-cost-on-Bistro;see-[STATE]}
