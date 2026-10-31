@@ -9,6 +9,8 @@
 #include "erhe_scene_renderer/cull_classification.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
+#include "erhe_scene_renderer/pvs_page_streamer.hpp"
+#include "erhe_scene_renderer/pvs_residency.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include "erhe_graphics/indirect_count_draws.hpp"
@@ -29,6 +31,9 @@
 #include <unordered_map>
 #include <vector>
 
+namespace tf {
+    class Executor;
+}
 namespace erhe::graphics {
     class Base_render_pipeline;
     class Buffer;
@@ -245,6 +250,73 @@ public:
     uint32_t culled{0};
 };
 
+// One view of the PVS page streaming (Pvs_streaming_status::views): its key
+// (Draw_list_scene::register_pvs_view()), the frame it last registered in,
+// its page box, whether it is active (registered in the last two frames),
+// the stored pages within the stream radius of its box and how many of them
+// are resident, and whether every stored page its box touches is resident
+// (the PVS rule can cull for the view).
+class Pvs_streaming_view_status
+{
+public:
+    uint64_t     view_key      {0};
+    uint64_t     last_frame    {0};
+    Pvs_page_box pages         {};
+    bool         active        {false};
+    uint32_t     wanted_pages  {0};
+    uint32_t     resident_pages{0};
+    bool         box_resident  {false};
+};
+
+// The PVS page streaming of a Draw_list_scene (doc/plans/pvs.md "Residency
+// and streaming"; Draw_list_scene::get_pvs_streaming_status(), main thread).
+class Pvs_streaming_status
+{
+public:
+    // A residency exists (a database is set).
+    bool                                   active               {false};
+    Pvs_streaming_settings                 settings             {};
+    uint64_t                               generation           {0};
+    uint32_t                               page_count           {0};
+    uint32_t                               stored_pages         {0};
+    uint32_t                               words_per_page       {0};
+    uint32_t                               capacity             {0};
+    uint32_t                               resident_pages       {0};
+    // The most pages resident at once since the residency was made.
+    uint32_t                               max_resident_pages   {0};
+    // capacity * words_per_page * 4: the resident slots' bytes (GPU and the
+    // CPU lanes' copy each).
+    std::size_t                            slot_bytes           {0};
+    // Since the residency was made: pages placed (each one upload) and
+    // pages evicted; and those of the last publish (frame last_frame_index).
+    uint64_t                               uploads              {0};
+    uint64_t                               evictions            {0};
+    uint64_t                               last_frame_index     {0};
+    uint32_t                               last_frame_uploads   {0};
+    uint32_t                               last_frame_evictions {0};
+    uint32_t                               max_uploads_per_frame{0};
+    // Requests not yet handed to the worker, whether a read is in flight
+    // (requested, or read and waiting for its slot: placement_pending, the
+    // frames in flight after an eviction), uploads queued for the render
+    // phase, pages whose read failed.
+    std::size_t                            pending_requests     {0};
+    bool                                   read_in_flight       {false};
+    bool                                   placement_pending    {false};
+    std::size_t                            queued_uploads       {0};
+    uint32_t                               failed_pages         {0};
+    // Render phase counters (since the residency was made): uploads
+    // written into slots; the check of every PVS view's query cells (each
+    // cell's page table slot must hold that page): view-frames that failed
+    // it and the entries they culled (both 0 is the gate).
+    uint64_t                               applied_uploads      {0};
+    uint64_t                               nonresident_views    {0};
+    uint64_t                               nonresident_culled   {0};
+    // The database holds its bits in memory (Pvs_database::
+    // has_resident_bits()); false after an open released them.
+    bool                                   bits_in_memory       {false};
+    std::vector<Pvs_streaming_view_status> views;
+};
+
 // One occluded entry of an occlusion check view.
 class Occlusion_check_entry
 {
@@ -424,6 +496,10 @@ public:
     // phase 6a). The scene registers with it at its first add_cull_view()
     // of each frame; Cull_frame_registry::classify_frame() classifies it.
     Cull_frame_registry*       cull_frame_registry{nullptr};
+    // The executor the PVS page streamer's reads run on, one task at a
+    // time (doc/plans/pvs.md "Residency and streaming"); null: the reads
+    // run inline at the request.
+    tf::Executor*              executor           {nullptr};
 };
 
 // One (entry, view) whose GPU classification bit differs from the CPU bit
@@ -680,6 +756,24 @@ public:
     // unregistrations of the teardown see no database: entries leaving with
     // their scene are not removed baked entries.
     void detach_pvs_database();
+    // --- PVS page streaming (doc/plans/pvs.md "Residency and streaming") ---
+    // Main thread: the resident page capacity and the stream radius. A
+    // change remakes the residency of the database (every page leaves the
+    // resident set and streams in again). The editor calls it from the
+    // settings' change sites and at a scene registration.
+    void set_pvs_streaming_settings(const Pvs_streaming_settings& settings);
+    [[nodiscard]] auto get_pvs_streaming_settings() const -> const Pvs_streaming_settings& { return m_pvs_streaming_settings; }
+    // Main thread, prepare phase of frame_index: the residency policy's
+    // change site, a color view's PVS query box registration (the box the
+    // render phase gives add_cull_view() for the view). view_key names the
+    // view across frames. The box's corner cells, clamped to the grid, give
+    // the view's page box; when it differs from the view's previous one the
+    // pages within the stream radius of it are requested (the views' requests
+    // union). A no-op without a ready database.
+    void register_pvs_view(uint64_t view_key, uint64_t frame_index, const glm::vec3& query_min, const glm::vec3& query_max);
+    // Main thread: the streaming's state and statistics (out's views keep
+    // their capacity).
+    void get_pvs_streaming_status(Pvs_streaming_status& out) const;
     // Diagnostics: list bounds ranges publish() wrote to the slots' GPU
     // bounds buffers (a frame in which no list changed adds none).
     [[nodiscard]] auto get_gpu_bounds_write_count() const -> std::size_t { return m_gpu_bounds_write_count; }
@@ -1252,6 +1346,21 @@ private:
     // entry took back is a removed baked entry.
     void check_pvs_dropped_columns();
     void report_pvs_stale(const char* reason);
+    // PVS page streaming (draw_list_scene_pvs_streaming.cpp). Main thread:
+    // remakes the residency (new generation) for m_pvs_database and the
+    // settings; publish(): places a finished read, hands the worker the
+    // next request and copies the page table into the slot; the GPU copy of
+    // the slot's table (gpu publishes). Render phase: applies the uploads of
+    // the frame and the frames before it into the resident slots.
+    void rebuild_pvs_residency();
+    void publish_pvs_residency(Draw_list_slot& slot, uint64_t frame_index, std::size_t frames_in_flight);
+    void publish_gpu_pvs_page_table(Draw_list_slot& slot);
+    void apply_pvs_uploads(uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer);
+    // The frame's resident pages for the CPU lanes (empty without slots).
+    [[nodiscard]] auto get_pvs_resident_pages(const Draw_list_slot& slot) const -> cull_lanes::Pvs_resident_pages;
+    // The residency check of one view's query cells (render phase): true
+    // when every cell's page table slot holds that page.
+    [[nodiscard]] auto check_pvs_query_cells(const cull_lanes::Pvs_query_cells& cells) const -> bool;
 
     // A skinned object in a shadow bounds slot: where its posed bounds sit
     // in the slot's vectors, rewritten by every prepare_shadow_bounds().
@@ -1324,6 +1433,20 @@ private:
         // classification reads (doc/plans/pvs.md "Runtime consumption").
         Pvs_culling                                      pvs{Pvs_culling::off};
         std::shared_ptr<const erhe::scene::Pvs_database> pvs_database;
+        // The frame's PVS residency (doc/plans/pvs.md "Residency and
+        // streaming"): its generation (0: none) with its database and
+        // capacity, and the frame's page table (per page its slot),
+        // copied from the residency when its serial moved; and the GPU copy
+        // of the table (gpu publishes only, written like gpu_bounds).
+        uint64_t                                         pvs_generation      {0};
+        std::shared_ptr<const erhe::scene::Pvs_database> pvs_residency_database;
+        uint32_t                                         pvs_capacity        {0};
+        uint64_t                                         pvs_table_serial    {0};
+        std::vector<uint32_t>                            pvs_page_table;
+        std::unique_ptr<erhe::graphics::Buffer>          gpu_pvs_page_table;
+        std::size_t                                      gpu_pvs_page_table_capacity{0};
+        uint64_t                                         gpu_pvs_table_generation{0};
+        uint64_t                                         gpu_pvs_table_serial{0};
         // m_entry_layout_serial at the publish: equal for two frames whose
         // lists hold the same entries at the same positions (the occlusion
         // bits of one describe the entries of the other).
@@ -1542,13 +1665,45 @@ private:
     std::vector<uint32_t>                                            m_pvs_dropped_columns;
     std::function<void()>                                            m_pvs_stale_callback;
     bool                                                             m_pvs_stale_reported{false};
-    // Render phase: the GPU copy of the database the frame's slot names
-    // (made at the first GPU dispatch that needs it), and the small buffers
-    // bound for the database and the culled words in a frame without the
-    // rule.
+    // PVS page streaming (doc/plans/pvs.md "Residency and streaming"),
+    // prepare phase: the settings, the residency of the database (made by
+    // set_pvs_database() and set_pvs_streaming_settings(), with a new
+    // generation each time), the worker that reads pages, the page in
+    // flight, the read being placed, and the statistics.
+    Pvs_streaming_settings                                           m_pvs_streaming_settings{};
+    std::unique_ptr<Pvs_residency>                                   m_pvs_residency;
+    uint64_t                                                         m_pvs_residency_generation{0};
+    tf::Executor*                                                    m_executor{nullptr};
+    std::unique_ptr<Pvs_page_streamer>                               m_pvs_page_streamer;
+    uint32_t                                                         m_pvs_read_page{Pvs_residency::no_page};
+    Pvs_page_read                                                    m_pvs_read{};
+    // The read's placement, waiting for the frame that may write its slot.
+    Pvs_placement                                                    m_pvs_placement{};
+    bool                                                             m_pvs_placement_pending{false};
+    uint64_t                                                         m_pvs_uploads{0};
+    uint64_t                                                         m_pvs_evictions{0};
+    uint64_t                                                         m_pvs_last_frame_index{0};
+    uint32_t                                                         m_pvs_last_frame_uploads{0};
+    uint32_t                                                         m_pvs_last_frame_evictions{0};
+    uint32_t                                                         m_pvs_max_uploads_per_frame{0};
+    uint32_t                                                         m_pvs_max_resident_pages{0};
+    // Prepare phase -> render phase: the placed pages' words.
+    Pvs_page_upload_queue                                            m_pvs_upload_queue;
+    // Render phase: the resident slots of the frame's residency generation
+    // (made when the frame's slot names another generation), and the small
+    // buffers bound for the slots, the page table and the culled words in a
+    // frame without the rule. The render phase's streaming counters are
+    // read by the main thread (get_pvs_streaming_status()) under the mutex.
     std::unique_ptr<Pvs_gpu_database>                                m_pvs_gpu_database;
     std::unique_ptr<erhe::graphics::Buffer>                          m_pvs_unused_database_buffer;
     std::unique_ptr<erhe::graphics::Buffer>                          m_pvs_unused_culled_buffer;
+    std::unique_ptr<erhe::graphics::Buffer>                          m_pvs_unused_pages_buffer;
+    mutable std::mutex                                               m_pvs_render_counters_mutex;
+    uint64_t                                                         m_pvs_render_generation{0};
+    uint64_t                                                         m_pvs_applied_uploads{0};
+    uint64_t                                                         m_pvs_nonresident_views{0};
+    uint64_t                                                         m_pvs_nonresident_culled{0};
+    bool                                                             m_pvs_nonresident_logged{false};
     // Bumped whenever an entry is added to, removed from or moved within a
     // list (registration, unregistration, swap-remove, rebuild_all()).
     uint64_t                                                         m_entry_layout_serial{1};

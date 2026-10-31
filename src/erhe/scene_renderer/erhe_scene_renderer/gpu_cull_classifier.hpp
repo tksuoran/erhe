@@ -70,13 +70,14 @@ public:
     static constexpr unsigned int occlusion_words_binding_point         {3};
     static constexpr unsigned int occlusion_previous_words_binding_point{4};
     // The potentially visible set rule (doc/plans/pvs.md "Runtime
-    // consumption"): the GPU database (Pvs_gpu_database: page table, then
-    // the resident page slots), the frame's PVS culled words (mask layout)
-    // and the entries' columns (one uint32 per entry, laid out like the
-    // bounds).
+    // consumption", "Residency and streaming"): the resident page slots
+    // (Pvs_gpu_database), the frame's PVS culled words (mask layout), the
+    // entries' columns (one uint32 per entry, laid out like the bounds) and
+    // the frame's page table (per page its slot, the frame slot's buffer).
     static constexpr unsigned int pvs_database_binding_point{5};
     static constexpr unsigned int pvs_culled_binding_point  {6};
     static constexpr unsigned int pvs_columns_binding_point {7};
+    static constexpr unsigned int pvs_pages_binding_point   {8};
     static constexpr uint32_t     workgroup_size      {64};
     // GPU bounds: two vec4 per entry (center + 0, extent + purpose).
     static constexpr std::size_t  bounds_bytes_per_entry{2 * 4 * sizeof(float)};
@@ -205,6 +206,7 @@ private:
     erhe::graphics::Shader_resource                           m_pvs_database_block;
     erhe::graphics::Shader_resource                           m_pvs_culled_block;
     erhe::graphics::Shader_resource                           m_pvs_columns_block;
+    erhe::graphics::Shader_resource                           m_pvs_pages_block;
     std::size_t                                               m_view_header_offset{0};
     std::size_t                                               m_view_occlusion_header_offset{0};
     std::size_t                                               m_view_pvs_header_offset{0};

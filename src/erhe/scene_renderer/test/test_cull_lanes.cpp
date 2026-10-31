@@ -461,9 +461,48 @@ public:
     uint32_t              culled_count{0};
 };
 
+// The resident pages with every stored page in a slot, in page order (or,
+// with page 0 not resident, no slot for it).
+class Pvs_test_resident
+{
+public:
+    std::vector<uint32_t> page_table;
+    std::vector<uint32_t> slot_words;
+    uint32_t              words_per_page{0};
+
+    [[nodiscard]] auto get() const -> erhe::scene_renderer::cull_lanes::Pvs_resident_pages
+    {
+        return erhe::scene_renderer::cull_lanes::Pvs_resident_pages{
+            .page_table = page_table, .slot_words = slot_words, .words_per_page = words_per_page
+        };
+    }
+};
+
+enum class Pvs_test_page_0 : unsigned int
+{
+    resident     = 0,
+    not_resident = 1
+};
+
+[[nodiscard]] auto make_pvs_test_resident(const erhe::scene::Pvs_database& database, const Pvs_test_page_0 page_0) -> Pvs_test_resident
+{
+    Pvs_test_resident resident{};
+    resident.words_per_page = database.get_words_per_page();
+    resident.page_table.assign(database.get_page_count(), 0xffffffffu);
+    for (uint32_t page = 0, end = database.get_page_count(); page < end; ++page) {
+        const std::span<const uint32_t> words = database.get_page_words(page);
+        if (words.empty() || ((page == 0) && (page_0 == Pvs_test_page_0::not_resident))) {
+            continue;
+        }
+        resident.page_table[page] = static_cast<uint32_t>(resident.slot_words.size() / resident.words_per_page);
+        resident.slot_words.insert(resident.slot_words.end(), words.begin(), words.end());
+    }
+    return resident;
+}
+
 // Entries: columns 0, 1, 2, untracked, column 2 without bounds, column 2
 // outside the view.
-[[nodiscard]] auto run_pvs_lanes(const erhe::scene::Pvs_database& database, const glm::vec3& query_min, const glm::vec3& query_max) -> Pvs_lane_result
+[[nodiscard]] auto run_pvs_lanes(const erhe::scene::Pvs_database& database, const glm::vec3& query_min, const glm::vec3& query_max, const Pvs_test_page_0 page_0 = Pvs_test_page_0::resident) -> Pvs_lane_result
 {
     constexpr uint32_t untracked = erhe::scene::Pvs_database::untracked_column;
     const std::vector<uint32_t> columns  {0u, 1u, 2u, untracked, 2u, 2u};
@@ -472,7 +511,8 @@ public:
     result.inside = {1u, 1u, 1u, 1u, 1u, 0u};
     result.culled.resize(columns.size(), 7u);
     erhe::scene_renderer::cull_lanes::Pvs_query_cells cells{};
-    erhe::scene_renderer::cull_lanes::make_pvs_query_cells(database, query_min, query_max, cells);
+    const Pvs_test_resident resident = make_pvs_test_resident(database, page_0);
+    erhe::scene_renderer::cull_lanes::make_pvs_query_cells(database, resident.get(), query_min, query_max, cells);
     result.tested = erhe::scene_renderer::cull_lanes::pvs_lanes(
         cells, columns.data(), unbounded.data(), columns.size(), result.inside.data(), result.culled.data(), result.culled_count
     );
@@ -522,6 +562,18 @@ TEST(Cull_lanes, pvs_unstored_page_keeps_everything)
     EXPECT_EQ(result.inside, (std::vector<uint32_t>{1u, 1u, 1u, 1u, 1u, 0u}));
     EXPECT_EQ(result.culled, (std::vector<uint32_t>{0u, 0u, 0u, 0u, 0u, 0u}));
     EXPECT_EQ(result.culled_count, 0u);
+}
+
+TEST(Cull_lanes, pvs_page_without_slot_keeps_everything)
+{
+    const std::shared_ptr<const erhe::scene::Pvs_database> database = make_pvs_test_database();
+    // Cell 0's page is stored but holds no slot in this frame (not resident
+    // yet, or evicted): nothing is culled (doc/plans/pvs.md "Residency and
+    // streaming").
+    const Pvs_lane_result result = run_pvs_lanes(*database, glm::vec3{0.4f, 0.4f, 0.4f}, glm::vec3{0.6f, 0.6f, 0.6f}, Pvs_test_page_0::not_resident);
+    EXPECT_EQ(result.inside, (std::vector<uint32_t>{1u, 1u, 1u, 1u, 1u, 0u}));
+    EXPECT_EQ(result.culled_count, 0u);
+    EXPECT_EQ(result.tested, 0u);
 }
 
 TEST(Cull_lanes, pvs_corner_outside_grid_keeps_everything)

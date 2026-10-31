@@ -291,7 +291,34 @@ scene's draw lists published the last frame with the rule on: the setting on
 and the database ready) and `views: [{view, tested, culled}]`, per viewport
 of the scene drawn in the last rendered frame (`view` its settings key):
 the entries the rule tested (inside the frustum, with bounds and a baked
-column) and those it culled.
+column) and those it culled. `bits_hash` is computed once when the
+database is made (`Pvs_database::get_bits_hash()`), the camera's `pvs_size`
+reads the one cell (from the scene file when an open released the bits);
+`bits_in_memory` tells whether the database holds them in memory (after a
+bake, or a save onto its own file).
+
+`streaming` is the PVS page streaming ([pvs.md](../plans/pvs.md)
+"Residency and streaming"; `Draw_list_scene::get_pvs_streaming_status()`):
+`active` (a residency exists), `resident_pages_setting` and
+`stream_radius_pages` (the settings, `set_pvs_streaming`), `generation` (a
+new one per database or settings change), `page_count`, `stored_pages`,
+`words_per_page`, `capacity` (the resident page slots), `resident_pages`,
+`max_resident_pages` (the most at once, never above `capacity`),
+`slot_bytes`, `uploads` and `evictions` (since the residency was made),
+`last_frame_index` with `last_frame_uploads` and `last_frame_evictions`,
+`max_uploads_per_frame` (at most 1), `pending_requests`, `read_in_flight`,
+`queued_uploads` (placed pages the render phase has not written yet),
+`failed_pages`, `applied_uploads` (pages the render phase wrote into their
+slots), the residency check `nonresident_views` and `nonresident_culled`
+(views of a frame whose PVS rule read a cell whose page table slot did not
+hold that page, and the entries they culled: 0 is the gate),
+`bits_in_memory`, and `views: [{view, active, last_frame, page_min,
+page_max, wanted_pages, resident_pages, box_resident}]`, per view
+registering a query box: its page box, the stored pages within the stream
+radius of it and how many are resident, and whether every stored page the
+box touches is resident (the rule can cull for the view). Settled after a
+camera move: `box_resident`, `pending_requests` 0, no read in flight, no
+queued uploads and `applied_uploads == uploads`.
 
 ```bash
 python3 scripts/mcp_call.py get_pvs_status '{"scene_name":"Default Scene"}'
@@ -874,6 +901,23 @@ snapshot. Omit `enabled` to query. Counts: `get_pvs_status` `views`,
 `get_composition_passes` `last_pvs_tested_count` / `last_pvs_culled_count`.
 
 Returns: `{enabled, query_margin, classification}`.
+
+### set_pvs_streaming
+
+Set `Editor_settings_config::pvs_resident_pages` and
+`pvs_stream_radius_pages` (the live settings, as the Settings window's PVS
+Resident Pages and PVS Stream Radius entries edit them; saved only by a
+Settings window save) and push them to every scene's draw lists at once
+([pvs.md](../plans/pvs.md) "Residency and streaming"): `resident_pages`
+(1 to 65536, default 64) page slots hold PVS pages on the GPU and in the CPU
+lanes' copy; `stream_radius_pages` (0 to 64, default 1) is the radius, in
+pages, around a viewport camera's page that its query box registration
+requests when the camera enters another page. A change remakes the resident
+set (the pages stream in again, one per frame); a page without a slot reads
+as everything visible. Omit both to query. Progress: `get_pvs_status`
+`streaming`.
+
+Returns: `{resident_pages, stream_radius_pages}`.
 
 ### set_viewport_style
 

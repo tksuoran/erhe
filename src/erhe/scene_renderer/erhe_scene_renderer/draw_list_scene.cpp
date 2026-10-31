@@ -267,6 +267,7 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
     , m_exclude_unlit_from_shadows{create_info.exclude_unlit_from_shadows}
     , m_gpu_cull_classifier    {create_info.gpu_cull_classifier}
     , m_cull_frame_registry    {*create_info.cull_frame_registry}
+    , m_executor               {create_info.executor}
 {
     ERHE_VERIFY(create_info.cull_frame_registry  != nullptr);
     ERHE_VERIFY(create_info.mesh_memory          != nullptr);
@@ -805,6 +806,10 @@ void Draw_list_scene::set_pvs_database(std::shared_ptr<const erhe::scene::Pvs_da
     m_pvs_stale_reported = false;
     m_pvs_dropped_columns.clear();
     m_pvs_column_entry_counts.assign(m_pvs_database ? m_pvs_database->get_column_count() : 0u, uint32_t{0});
+    // The resident set starts empty for the new database (doc/plans/pvs.md
+    // "Residency and streaming"): the views' next registrations request
+    // their pages.
+    rebuild_pvs_residency();
 
     // Every live entry's column, once; a list is changed (its serial
     // bumped, so the next publish copies it and its GPU columns) only when
@@ -1710,6 +1715,9 @@ void Draw_list_scene::publish(
         slot.pvs_database.reset();
     }
     m_published_pvs_culling = slot.pvs;
+    // The PVS page streaming: a finished read placed (at most one upload),
+    // the next read requested, the frame's page table.
+    publish_pvs_residency(slot, frame_index, frames_in_flight);
 
     // A changed pose is a content change: it moves the content serial (no
     // list is copied for it).
@@ -1740,6 +1748,7 @@ void Draw_list_scene::publish(
     slot.entry_layout_serial = m_entry_layout_serial;
     if (effective_classification == Cull_classification::gpu) {
         publish_gpu_bounds(slot);
+        publish_gpu_pvs_page_table(slot);
     }
 }
 
@@ -2815,6 +2824,9 @@ void Draw_list_scene::classify_frame_cull_views(const uint64_t frame_index, erhe
     }
     ERHE_VERIFY(!m_cull_frame_classified);
     m_cull_frame_classified = true;
+    // The PVS pages placed for this frame and the frames before it, into
+    // the resident slots the classification reads.
+    apply_pvs_uploads(frame_index, command_buffer);
     decode_retired_gpu_counts(frame_index);
     decode_retired_occlusion(frame_index);
     classify_cull_views();
@@ -2850,12 +2862,17 @@ void Draw_list_scene::classify_cull_views()
     // database (the same cells cull_classify.comp computes per entry).
     m_cull_pvs_frame = (slot.pvs == Pvs_culling::on) && slot.pvs_database;
     m_cull_pvs_view_cells.resize(end_view);
+    // The frame's resident pages (doc/plans/pvs.md "Residency and
+    // streaming"): a cell in a page without a slot keeps every entry.
+    const cull_lanes::Pvs_resident_pages resident_pages = (m_cull_pvs_frame && (slot.pvs_residency_database == slot.pvs_database))
+        ? get_pvs_resident_pages(slot)
+        : cull_lanes::Pvs_resident_pages{};
     for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
         const Cull_view_tests& view = m_cull_views[view_index];
         cull_lanes::Pvs_query_cells& cells = m_cull_pvs_view_cells[view_index];
         cells = cull_lanes::Pvs_query_cells{};
         if (m_cull_pvs_frame && (view.purpose == Draw_purpose::color) && view.has_pvs_query()) {
-            cull_lanes::make_pvs_query_cells(*slot.pvs_database, view.pvs_query_min, view.pvs_query_max, cells);
+            cull_lanes::make_pvs_query_cells(*slot.pvs_database, resident_pages, view.pvs_query_min, view.pvs_query_max, cells);
         }
     }
     if (m_cull_pvs_frame && (m_cull_pvs_culled_masks.size() < draw_lists.size())) {
@@ -2978,6 +2995,30 @@ void Draw_list_scene::classify_cull_views()
                 }
             }
             m_cull_view_survivors[view_index] += cull_lanes::write_view_bit_lanes(inside, unbounded, entry_count, masks.data() + ((view_index / 64) * entry_count), static_cast<uint32_t>(view_index % 64));
+        }
+    }
+
+    // The residency check (doc/plans/pvs.md "Residency and streaming"): a
+    // view that culled by PVS read cells whose page table slot must hold
+    // that very page (written by apply_pvs_uploads() of this frame or an
+    // earlier one). A failure is a defect, counted for get_pvs_status.
+    if (m_cull_pvs_frame) {
+        uint64_t failed_views  = 0;
+        uint64_t failed_culled = 0;
+        for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
+            if (!check_pvs_query_cells(m_cull_pvs_view_cells[view_index])) {
+                ++failed_views;
+                failed_culled += m_cull_pvs_view_counts[view_index].culled;
+            }
+        }
+        if (failed_views > 0) {
+            const std::lock_guard<std::mutex> lock{m_pvs_render_counters_mutex};
+            m_pvs_nonresident_views  += failed_views;
+            m_pvs_nonresident_culled += failed_culled;
+            if (!m_pvs_nonresident_logged) {
+                m_pvs_nonresident_logged = true;
+                log_draw_list->error("PVS: frame {} culled through {} view(s) whose cells' pages are not resident in their slots", frame_index, failed_views);
+            }
         }
     }
 }

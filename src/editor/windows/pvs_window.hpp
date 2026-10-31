@@ -3,6 +3,7 @@
 #include "renderers/pvs_baker.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 
 #include <memory>
 
@@ -50,6 +51,8 @@ private:
     App_context&      m_context;
     Pvs_bake_request  m_request{};
     bool              m_show_overlay{false};
+    // database_imgui()'s scratch (capacity kept).
+    erhe::scene_renderer::Pvs_streaming_status m_streaming_status{};
     std::string       m_last_error;
     // The progress bar's overlay, formatted when the counts change.
     std::string       m_overlay;

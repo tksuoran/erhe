@@ -410,10 +410,11 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             }
         }
 
-        // The PVS rule (doc/plans/pvs.md "Runtime consumption"): the frame's
-        // database on the GPU (made when the slot names another database
-        // than the copy, uploaded through this command buffer) and its
-        // header, when some view of the frame applies it.
+        // The PVS rule (doc/plans/pvs.md "Runtime consumption"): the
+        // frame's resident page slots (apply_pvs_uploads() of this frame
+        // made them for the slot's residency generation), its page table
+        // (the slot's buffer) and the header, when some view of the frame
+        // applies it.
         bool pvs = false;
         if (m_cull_pvs_frame) {
             for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
@@ -422,9 +423,16 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             }
         }
         const erhe::scene::Pvs_database* const pvs_database = pvs ? slot.pvs_database.get() : nullptr;
-        if ((pvs_database != nullptr) && (!m_pvs_gpu_database || (m_pvs_gpu_database->get_database() != pvs_database))) {
-            m_pvs_gpu_database = std::make_unique<Pvs_gpu_database>(device, command_buffer, slot.pvs_database);
-        }
+        // The slots and the page table exist once the frame has a residency
+        // (some page may still be without a slot: it reads as visible).
+        const bool pvs_resident =
+            (pvs_database != nullptr) &&
+            (slot.pvs_residency_database.get() == pvs_database) &&
+            m_pvs_gpu_database && (m_pvs_gpu_database->get_generation() == slot.pvs_generation) &&
+            (m_pvs_gpu_database->get_buffer() != nullptr) &&
+            slot.gpu_pvs_page_table &&
+            (slot.gpu_pvs_table_generation == slot.pvs_generation) &&
+            (slot.gpu_pvs_table_serial == slot.pvs_table_serial);
         if (!m_pvs_unused_database_buffer) {
             // Bound for the database and the culled words in a frame
             // without the rule (the shader reads and writes neither then).
@@ -440,6 +448,25 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             };
             m_pvs_unused_database_buffer = make_unused("Draw_list_scene no PVS database");
             m_pvs_unused_culled_buffer   = make_unused("Draw_list_scene no PVS culled words");
+        }
+        if (!m_pvs_unused_pages_buffer) {
+            // The page table of a frame with the rule but without slots yet:
+            // every page without a slot (all ones), so every view keeps all.
+            m_pvs_unused_pages_buffer = std::make_unique<Buffer>(
+                device,
+                Buffer_create_info{
+                    .capacity_byte_count                    = c_occlusion_min_region_bytes,
+                    .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                    .usage                                  = Buffer_usage::storage,
+                    .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_write,
+                    .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+                    .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene no PVS page table"}
+                }
+            );
+            const std::span<std::byte> mapped = m_pvs_unused_pages_buffer->map_bytes(0, c_occlusion_min_region_bytes);
+            std::memset(mapped.data(), 0xff, mapped.size());
+            m_pvs_unused_pages_buffer->flush_bytes(0, c_occlusion_min_region_bytes);
+            m_pvs_unused_pages_buffer->unmap();
         }
 
         Ring_buffer_range view_range = classifier.get_view_buffer().acquire(Ring_buffer_usage::CPU_write, view_bytes);
@@ -461,7 +488,7 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             glm::vec4  pvs_grid  {0.0f};
             if (pvs_database != nullptr) {
                 const erhe::scene::Pvs_header& header = pvs_database->get_header();
-                pvs_header = glm::uvec4{1u, pvs_database->get_words_per_cell(), header.page_size, m_pvs_gpu_database->get_slot_base_word()};
+                pvs_header = glm::uvec4{1u, pvs_database->get_words_per_cell(), header.page_size, 0u};
                 pvs_cells  = glm::uvec4{header.cell_counts, 0u};
                 pvs_pages  = glm::uvec4{pvs_database->get_page_dims(), pvs_database->get_words_per_page()};
                 pvs_grid   = glm::vec4{header.grid_origin, cull_lanes::get_pvs_inverse_cell_size(*pvs_database)};
@@ -486,7 +513,9 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 };
                 // The PVS query box of a color view applying the rule (the
                 // views classify_cull_views() made query cells for).
-                const bool pvs_view = (pvs_database != nullptr) && (view.purpose == Draw_purpose::color) && view.has_pvs_query();
+                // Without resident slots (no residency for the frame) the
+                // CPU lanes keep every entry too: no view reads the table.
+                const bool pvs_view = pvs_resident && (view.purpose == Draw_purpose::color) && view.has_pvs_query();
                 record[10] = glm::vec4{view.pvs_query_min, pvs_view ? 1.0f : 0.0f};
                 record[11] = glm::vec4{view.pvs_query_max, 0.0f};
                 // The occlusion test of an occlusion view: its near plane,
@@ -565,11 +594,16 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 encoder.set_buffer(Buffer_target::storage, m_occlusion_no_previous_buffer.get(), 0, c_occlusion_min_region_bytes, Gpu_cull_classifier::occlusion_previous_words_binding_point);
             }
             encoder.set_buffer(Buffer_target::storage, slot.gpu_columns.get(), 0, columns_bytes, Gpu_cull_classifier::pvs_columns_binding_point);
-            if (pvs_database != nullptr) {
+            if (pvs_resident) {
                 encoder.set_buffer(Buffer_target::storage, m_pvs_gpu_database->get_buffer(), 0, m_pvs_gpu_database->get_byte_count(), Gpu_cull_classifier::pvs_database_binding_point);
-                encoder.set_buffer(Buffer_target::storage, pvs_culled_range->get_buffer()->get_buffer(), pvs_culled_range->get_byte_start_offset_in_buffer(), mask_bytes, Gpu_cull_classifier::pvs_culled_binding_point);
+                encoder.set_buffer(Buffer_target::storage, slot.gpu_pvs_page_table.get(), 0, slot.pvs_page_table.size() * sizeof(uint32_t), Gpu_cull_classifier::pvs_pages_binding_point);
             } else {
                 encoder.set_buffer(Buffer_target::storage, m_pvs_unused_database_buffer.get(), 0, c_occlusion_min_region_bytes, Gpu_cull_classifier::pvs_database_binding_point);
+                encoder.set_buffer(Buffer_target::storage, m_pvs_unused_pages_buffer.get(),    0, c_occlusion_min_region_bytes, Gpu_cull_classifier::pvs_pages_binding_point);
+            }
+            if (pvs_database != nullptr) {
+                encoder.set_buffer(Buffer_target::storage, pvs_culled_range->get_buffer()->get_buffer(), pvs_culled_range->get_byte_start_offset_in_buffer(), mask_bytes, Gpu_cull_classifier::pvs_culled_binding_point);
+            } else {
                 encoder.set_buffer(Buffer_target::storage, m_pvs_unused_culled_buffer.get(),   0, c_occlusion_min_region_bytes, Gpu_cull_classifier::pvs_culled_binding_point);
             }
             const std::size_t group_size = Gpu_cull_classifier::workgroup_size;

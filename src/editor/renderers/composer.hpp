@@ -7,6 +7,8 @@
 #include "renderers/id_pass_prepared.hpp"
 #include "erhe_scene_renderer/content_wide_line_feed.hpp"
 
+#include <glm/glm.hpp>
+
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -16,6 +18,7 @@ namespace editor {
 
 class Composition_pass_views;
 class Render_context;
+class Scene_view;
 class Composition_pass;
 
 // One scene view's prepared rendering for one frame: what
@@ -32,6 +35,12 @@ public:
     // The render phase's pre-execute hook added the frame's culling views
     // into passes (Composer::add_cull_views()); Composer::render() verifies.
     bool                                   cull_views_added{false};
+    // The view's PVS query box (doc/plans/pvs.md "Runtime consumption"),
+    // computed and registered with the scene's draw lists in the prepare
+    // phase (Composer::prepare(): the residency policy's change site,
+    // "Residency and streaming"); empty (max < min) for a view without one.
+    glm::vec3                              pvs_query_min{ 0.0f};
+    glm::vec3                              pvs_query_max{-1.0f};
     std::vector<Composition_pass_prepared> passes;
     Id_pass_prepared                       id_pass;
     erhe::scene_renderer::Content_wide_line_feed wide_line_feed;
@@ -127,6 +136,16 @@ public:
     // TODO Move to children
     ERHE_PROFILE_MUTEX(std::mutex,                 mutex);
     std::vector<std::shared_ptr<Composition_pass>> composition_passes;
+
+private:
+    // Prepare phase: the view's PVS query box into out, registered with the
+    // scene's draw lists (Draw_list_scene::register_pvs_view()).
+    void prepare_pvs_query(const Render_context& context, Composer_prepared& out);
 };
+
+// The key a scene view's PVS query box is registered under
+// (Draw_list_scene::register_pvs_view(); get_pvs_status reports it): the
+// view's address, stable for its lifetime.
+[[nodiscard]] auto get_pvs_view_key(const Scene_view& scene_view) -> uint64_t;
 
 }

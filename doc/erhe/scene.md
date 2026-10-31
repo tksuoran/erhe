@@ -425,7 +425,8 @@ library.
 - Cell index `x + dims.x * (y + dims.y * z)`; `find_cell(position)` gives
   the cell of a world position or nullopt outside the grid.
 - Pages: cells are grouped into pages of `page_size`^3 cells, the storage
-  unit (and, for a later streamer, the residency unit). The page table
+  unit and the unit of GPU residency and streaming
+  (`doc/erhe/draw_list_renderer.md` Q6 "PVS"). The page table
   (`Pvs_page_entry`, 16 bytes: `word_offset`, reserved, `cells_with_pvs`)
   has one entry per page; `page_of_cell()` and `local_cell()` locate a
   cell. A page with no cell holding a PVS is not stored
@@ -434,11 +435,28 @@ library.
   a PVS in a stored page holds all-ones words. So every lookup is
   conservative without a sentinel: `is_column_visible(cell, column)` is
   true for a cell without a PVS, in a page that is not stored, or outside
-  the grid. `has_cell_pvs()` tells a baked cell; `get_page_words()` and
-  `get_cell_words()` return spans.
-- Bits source: the bits are held in memory; a database read from a file
-  also records `Pvs_bits_source`, the absolute byte range of the `bits`
-  bufferView in the file, so single pages can be read by range later.
+  the grid. `has_cell_pvs()` and `is_page_stored()` read the page table;
+  `get_page_words()`, `get_cell_words()`, `is_column_visible()` and
+  `get_cell_pvs_size()` read the in-memory copy of the bits (main thread;
+  empty or meaningless after `release_bits()`), `count_pvs_words()` counts
+  a cell's words.
+- Bits in memory and on disk: a bake's database holds its bits in memory
+  only. A database read from a file also records `Pvs_bits_source`, the
+  absolute byte range of the `bits` bufferView in the file;
+  `release_bits()` drops the in-memory copy when that source exists (the
+  editor does it after an open: the pages stream from the file, so the
+  heap holds no bits), `has_resident_bits()` tells which, and
+  `make_bits_resident()` reads them back and forgets the source (the editor
+  does it before a save replaces that file, `bits_source_references()`).
+  `read_page_words()`, `read_cell_words()` and `read_bits()` read from the
+  in-memory copy or else by range from the source (an
+  `erhe::file::Positional_file_reader` opened per read); they are callable
+  from any thread (the PVS page streamer's worker) and hold the bits mutex
+  across the read, so a read never straddles a release or a
+  `make_bits_resident()`; `has_resident_bits()` takes only a state mutex
+  and never waits for a read. `get_bits_hash()` is the bits' FNV-1a, computed
+  once by the constructor (the bits are in memory then). The glTF writer and
+  the MCP cell diagnostics read through them.
 - `find_column(uid, primitive_index)`: the identity-to-column lookup, a hash
   map built once by the constructor; `untracked_column` for an identity the
   bake did not see.
@@ -463,6 +481,7 @@ bakes it (`doc/editor/renderers.md`) and MCP `get_pvs_status` reports it.
 ## Dependencies
 - erhe::item (Item, Hierarchy, Unique_id)
 - erhe::hash (FNV-1a of the PVS transform hash)
+- erhe::file (`Positional_file_reader`: PVS page reads by range)
 - erhe::primitive (Primitive, Material)
 - erhe::raytrace (IGeometry, IInstance, IScene -- for CPU raytrace picking)
 - erhe::math (Viewport, Aabb)

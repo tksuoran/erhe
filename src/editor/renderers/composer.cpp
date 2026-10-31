@@ -5,6 +5,7 @@
 #include "renderers/render_context.hpp"
 #include "renderers/render_settings.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_view.hpp"
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_scene/camera_snapshot.hpp"
@@ -132,22 +133,9 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
     ERHE_VERIFY(!prepared.cull_views_added);
     ERHE_VERIFY(prepared.passes.size() == composition_passes.size());
     erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters view_parameters = get_color_view_parameters(context);
-    // The PVS query box (doc/plans/pvs.md D5, "Runtime consumption"): a
-    // viewport's perspective camera position +- the query margin. A scene
-    // image capture, an orthographic camera (no single position) and a
-    // multiview pass get none.
-    if (
-        (context.viewport_scene_view != nullptr) &&
-        (context.content == Render_content::scene_and_editor_aids) &&
-        (view_parameters.views.size() == 1) &&
-        (view_parameters.views.front().camera != nullptr) &&
-        !view_parameters.views.front().camera->projection().is_orthographic()
-    ) {
-        const glm::vec3 position = glm::vec3{view_parameters.views.front().camera->position_in_world()};
-        const float     margin   = context.app_context.render_settings->pvs_query_margin;
-        view_parameters.pvs_query_min = position - glm::vec3{margin};
-        view_parameters.pvs_query_max = position + glm::vec3{margin};
-    }
+    // The PVS query box the prepare phase computed and registered.
+    view_parameters.pvs_query_min = prepared.pvs_query_min;
+    view_parameters.pvs_query_max = prepared.pvs_query_max;
     for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
         const Composition_pass&    composition_pass = *composition_passes[i].get();
         Composition_pass_prepared& pass_prepared    = prepared.passes[i];
@@ -284,7 +272,47 @@ void Composer::prepare(const Render_context& context, const int64_t host_system_
         }
         composition_pass.prepare(context, host_system_time_ns, prepared);
     }
+    prepare_pvs_query(context, out);
     out.prepared = true;
+}
+
+auto get_pvs_view_key(const Scene_view& scene_view) -> uint64_t
+{
+    return static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(&scene_view));
+}
+
+void Composer::prepare_pvs_query(const Render_context& context, Composer_prepared& out)
+{
+    // The PVS query box (doc/plans/pvs.md D5, "Runtime consumption"): a
+    // viewport's perspective camera position +- the query margin. A scene
+    // image capture, an orthographic camera (no single position) and a
+    // multiview pass get none.
+    out.pvs_query_min = glm::vec3{ 0.0f};
+    out.pvs_query_max = glm::vec3{-1.0f};
+    if (
+        (context.viewport_scene_view == nullptr) ||
+        (context.content != Render_content::scene_and_editor_aids) ||
+        (context.views.size() != 1) ||
+        (context.views.front().camera == nullptr) ||
+        context.views.front().camera->projection().is_orthographic()
+    ) {
+        return;
+    }
+    const glm::vec3 position = glm::vec3{context.views.front().camera->position_in_world()};
+    const float     margin   = context.app_context.render_settings->pvs_query_margin;
+    out.pvs_query_min = position - glm::vec3{margin};
+    out.pvs_query_max = position + glm::vec3{margin};
+    // The residency policy's change site ("Residency and streaming"): the
+    // view's box, registered with the scene's draw lists in the prepare
+    // phase; the view is named by its Scene_view across frames.
+    if (!context.scene_root) {
+        return;
+    }
+    erhe::scene_renderer::Draw_list_scene* draw_list_scene = context.scene_root->get_draw_list_scene();
+    if (draw_list_scene == nullptr) {
+        return;
+    }
+    draw_list_scene->register_pvs_view(get_pvs_view_key(context.scene_view), out.frame_index, out.pvs_query_min, out.pvs_query_max);
 }
 
 void Composer::render(const Render_context& context, const bool include_content, const bool include_overlay)

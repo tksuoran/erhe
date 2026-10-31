@@ -1,6 +1,7 @@
 #include "erhe_scene_renderer/cull_lanes.hpp"
 
 #include "erhe_scene/pvs_database.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -155,6 +156,7 @@ auto pvs_point_cell(
 
 void make_pvs_query_cells(
     const erhe::scene::Pvs_database& database,
+    const Pvs_resident_pages&        resident,
     const glm::vec3&                 query_min,
     const glm::vec3&                 query_max,
     Pvs_query_cells&                 out
@@ -186,12 +188,17 @@ void make_pvs_query_cells(
         }
     }
     for (uint32_t i = 0; i < cell_count; ++i) {
-        const std::span<const uint32_t> page_words = database.get_page_words(database.page_of_cell(cells[i]));
-        if (page_words.empty()) {
+        const uint32_t page = database.page_of_cell(cells[i]);
+        const uint32_t slot = (page < resident.page_table.size()) ? resident.page_table[page] : 0xffffffffu;
+        if (slot == 0xffffffffu) {
             out.cell_count = 0;
-            return; // keep_all: a page without a PVS (not stored, or not resident)
+            return; // keep_all: a page without a slot (not stored, or not resident)
         }
-        out.words[i] = page_words.data() + (static_cast<std::size_t>(database.local_cell(cells[i])) * words_per_cell);
+        const std::size_t first_word = (static_cast<std::size_t>(slot) * resident.words_per_page) + (static_cast<std::size_t>(database.local_cell(cells[i])) * words_per_cell);
+        ERHE_VERIFY((first_word + words_per_cell) <= resident.slot_words.size());
+        out.words[i] = resident.slot_words.data() + first_word;
+        out.pages[i] = page;
+        out.slots[i] = slot;
     }
     out.cell_count = cell_count;
     out.keep_all   = false;

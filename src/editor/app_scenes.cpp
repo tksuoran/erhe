@@ -86,6 +86,7 @@ void App_scenes::register_scene_root(const std::shared_ptr<Scene_root>& scene_ro
     erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
     if ((draw_list_scene != nullptr) && (m_context.editor_settings != nullptr)) {
         draw_list_scene->set_exclude_unlit_from_shadows(m_context.editor_settings->exclude_unlit_primitives);
+        draw_list_scene->set_pvs_streaming_settings(get_pvs_streaming_settings());
     }
 
     // R5.3: every registered scene gets an identity container record. The
@@ -615,6 +616,34 @@ void App_scenes::set_exclude_unlit_from_shadows(const bool value)
         erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
         if (draw_list_scene != nullptr) {
             draw_list_scene->set_exclude_unlit_from_shadows(value);
+        }
+    }
+}
+
+auto App_scenes::get_pvs_streaming_settings() const -> erhe::scene_renderer::Pvs_streaming_settings
+{
+    // Clamped here, at the one place the editor settings (loaded from JSON
+    // or edited) become streaming settings.
+    erhe::scene_renderer::Pvs_streaming_settings settings{};
+    if (m_context.editor_settings != nullptr) {
+        settings.resident_pages      = static_cast<uint32_t>(std::max(m_context.editor_settings->pvs_resident_pages, 0));
+        settings.stream_radius_pages = static_cast<uint32_t>(std::max(m_context.editor_settings->pvs_stream_radius_pages, 0));
+    }
+    return settings.clamped();
+}
+
+void App_scenes::set_pvs_streaming_settings(const erhe::scene_renderer::Pvs_streaming_settings& settings)
+{
+    // Draw_list_scene::set_pvs_streaming_settings takes no item-host lock,
+    // so iterating under m_mutex is safe here.
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
+        if (!scene_root) {
+            continue;
+        }
+        erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
+        if (draw_list_scene != nullptr) {
+            draw_list_scene->set_pvs_streaming_settings(settings);
         }
     }
 }

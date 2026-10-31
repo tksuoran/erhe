@@ -46,6 +46,28 @@ content bounds, then the zero-misses check over 20 random cells; bistro also
 compares viewport and render_scene_image images with pvs_culling on and off
 from street-level poses inside the grid.
 
+Section "streaming" (doc/plans/pvs.md "Residency and streaming", Build
+order 6): the baked Bistro saved with its PVS to a scratch file under logs/
+(by the bistro section when both run, else by bake_streaming_scene() with
+the bistro section's region and bake; or --streaming-scene reused with
+--keep-streaming-scene) loaded in a fresh
+editor (load_scene: the bits are released, the pages stream from the file),
+framed (frame_scene: the saved scene has no camera), with pvs_resident_pages
+--resident-pages (default 4, below the page count; MCP set_pvs_streaming)
+and the GPU classification; along a camera path of cells with a PVS two
+pages apart (a serpentine over the page grid), after the pages around each
+pose arrived (get_pvs_status streaming: the view's box pages resident,
+nothing pending, read, queued or unapplied; while waiting, with the GPU
+classification, get_cull_classification_check runs on every poll, so a
+frame whose GPU page table or slots disagree with the CPU lanes' while the
+pages are moving is a mismatch), asserts: the viewport image
+and a render_scene_image are identical with pvs_culling on and off, the
+classification check has 0 mismatches, resident pages never above the
+capacity, at most one upload per frame, no culling through a page that is
+not resident in its slot (nonresident_views / nonresident_culled 0), no
+failed reads; over the path some pose culls by PVS and some page is
+evicted. Prints the uploads, evictions and resident pages per pose.
+
 The zero-misses check: per cell, M random viewpoints inside the cell (a
 viewpoint inside a solid, from which an axis ray first hits a back face, is
 redrawn: the bake's free point rule) with random orientations; every tracked
@@ -60,8 +82,10 @@ saved scene file and restores the editor config files a run may write.
 
 Usage: python3 scripts/pvs_verify.py [--editor build_xcode_metal/bin/Debug/editor]
                                      [--scene "Default Scene"] [--samples-per-cell 9]
-                                     [--modes gpu,cpu] [--sections sampled,wall,heavy,bistro]
+                                     [--modes gpu,cpu] [--sections sampled,wall,heavy,bistro,streaming]
                                      [--viewpoints 12] [--face-resolution 1024]
+                                     [--resident-pages 4] [--stream-radius 1]
+                                     [--streaming-scene logs/pvs_verify_bistro_streaming.glb] [--keep-streaming-scene]
 """
 
 import argparse
@@ -765,6 +789,11 @@ def run_heavy(args, failures):
         node_list = nodes.get("nodes", []) if isinstance(nodes, dict) else []
         made_static = 0
         for node in node_list:
+            # get_scene_nodes lists every prim, the content library's
+            # (materials, brushes, styles, scopes) too: those are no nodes
+            # and carry no body.
+            if not node.get("content", False):
+                continue
             try:
                 call(port, "edit_physics_body", {"scene_name": scene, "node_id": node["id"], "motion_mode": "static"})
                 made_static += 1
@@ -836,7 +865,7 @@ def bistro_images(port, scene, cells, failures):
     mcp(port, "set_pvs_culling", {"enabled": True})
 
 
-def run_bistro(args, failures):
+def run_bistro(args, failures, save_for_streaming):
     process, port = launch_with(args.editor, [])
     try:
         # One open, then wait until the scene is listed.
@@ -846,9 +875,9 @@ def run_bistro(args, failures):
             if time.monotonic() > deadline:
                 raise RuntimeError(f"open_scene: {BISTRO_SCENE} did not appear")
             time.sleep(1.0)
-        # The open is listed before its content is: wait until a bake sees
-        # the static set settle.
-        time.sleep(60.0)
+        # The open is listed before its content is: wait until the loads
+        # settled, so a bake sees the whole static set.
+        wait_async_idle(port, "bistro", 600.0)
         bounds_min, bounds_max = content_bounds(port, BISTRO_SCENE, 4.0)
         print(f"[bistro] content bounds {bounds_min} .. {bounds_max}")
         region_min = [bounds_min[0], BISTRO_Y[0], bounds_min[2]]
@@ -857,10 +886,311 @@ def run_bistro(args, failures):
         started, missed = run_large(port, BISTRO_SCENE, "bistro", region_min, region_max, args, failures, rng)
         cells = sorted(rng.sample(range(started["cell_count"]), min(4, started["cell_count"])))
         bistro_images(port, BISTRO_SCENE, cells, failures)
+        if save_for_streaming:
+            # The streaming section loads this bake (no second Bistro bake).
+            save_scene_to(port, BISTRO_SCENE, args.streaming_scene)
+            print(f"[bistro] saved the bake with its PVS to {args.streaming_scene} for the streaming section")
         if args.trace and missed:
             trace_misses(port, BISTRO_SCENE, "bistro", missed, {"cell_size": 4.0, "region_min": region_min, "region_max": region_max, "face_resolution": args.face_resolution, "face_fov_degrees": args.face_fov}, 20)
     finally:
         stop_editor(port, process)
+
+
+STREAMING_SAVE_PATH = os.path.join("logs", "pvs_verify_bistro_streaming.glb")
+
+
+def wait_async_idle(port, label, timeout_s):
+    """Polls get_async_status until the editor reports idle (no workers,
+    queued operations, scene commits or asset loads) on three polls in a
+    row: an opened or loaded scene's content has settled."""
+    deadline = time.monotonic() + timeout_s
+    idle_polls = 0
+    while idle_polls < 3:
+        status = call(port, "get_async_status", {})
+        idle_polls = (idle_polls + 1) if (isinstance(status, dict) and status.get("idle")) else 0
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"[{label}] the editor did not settle in {timeout_s} s: {status}")
+        time.sleep(0.5)
+
+
+def save_scene_to(port, scene, path):
+    if os.path.isfile(os.path.join(REPO, path)):
+        os.remove(os.path.join(REPO, path))
+    wait_save(port, call(port, "save_scene", {"scene_name": scene, "path": path}), 1800.0)
+
+
+def wait_save(port, job, timeout_s):
+    if not isinstance(job, dict) or "job_id" not in job:
+        raise RuntimeError(f"save_scene: {str(job)[:500]}")
+    deadline = time.monotonic() + timeout_s
+    while True:
+        save = call(port, "get_save_status", {"job_id": job["job_id"]})
+        if isinstance(save, dict) and save.get("state") in ("done", "failed"):
+            break
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"save did not finish: {save}")
+        time.sleep(0.5)
+    if save.get("state") != "done":
+        raise RuntimeError(f"save failed: {save.get('error', save)}")
+
+
+def bake_streaming_scene(args, save_path):
+    """Opens Bistro, bakes it (disocclusion, the region of the bistro
+    section) and saves it with its PVS to save_path, a scratch file under
+    logs/ (the asset in the repository is never written)."""
+    process, port = launch_with(args.editor, [])
+    try:
+        call(port, "open_scene", {"path": BISTRO_PATH})
+        deadline = time.monotonic() + 300.0
+        while BISTRO_SCENE not in scene_names(port):
+            if time.monotonic() > deadline:
+                raise RuntimeError(f"open_scene: {BISTRO_SCENE} did not appear")
+            time.sleep(1.0)
+        wait_async_idle(port, "streaming", 600.0)
+        bounds_min, bounds_max = content_bounds(port, BISTRO_SCENE, 4.0)
+        region_min = [bounds_min[0], BISTRO_Y[0], bounds_min[2]]
+        region_max = [bounds_max[0], BISTRO_Y[1], bounds_max[2]]
+        parameters = {"cell_size": 4.0, "region_min": region_min, "region_max": region_max, "face_resolution": args.face_resolution, "face_fov_degrees": args.face_fov}
+        started, done = bake_disocclusion(port, BISTRO_SCENE, parameters, timeout_s=4 * 3600.0)
+        status = pvs_status(port, BISTRO_SCENE)
+        report_bake("streaming", started, done, status)
+        if status.get("state") != "ready":
+            raise RuntimeError(f"state {status.get('state')} after the bake")
+        save_scene_to(port, BISTRO_SCENE, save_path)
+        print(f"[streaming] saved the baked Bistro to {save_path}, bits_hash {status.get('bits_hash')}")
+        return status.get("bits_hash")
+    finally:
+        stop_editor(port, process)
+
+
+def streaming_view(status):
+    """The active streaming view of the status (one viewport is isolated)."""
+    views = [v for v in status.get("streaming", {}).get("views", []) if v.get("active")]
+    return views[0] if views else None
+
+
+def wait_streaming_settled(port, scene, timeout_s, check_classification, checks):
+    """Polls get_pvs_status until the viewport's view has its box pages
+    resident and nothing is requested, read or queued; returns the status
+    (and whether it settled). With check_classification, every poll while
+    the pages are still moving also runs get_cull_classification_check and
+    appends its reply to checks: a frame whose GPU page table or slots
+    disagree with the CPU lanes' shows as a mismatch."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        if check_classification:
+            try:
+                checks.append(mcp(port, "get_cull_classification_check", {"scene_name": scene}))
+            except RuntimeError as error:
+                checks.append(str(error))
+        status = pvs_status(port, scene)
+        streaming = status.get("streaming", {})
+        view = streaming_view(status)
+        settled = (
+            (view is not None) and view.get("box_resident") and
+            (streaming.get("pending_requests") == 0) and (not streaming.get("read_in_flight")) and
+            (streaming.get("queued_uploads") == 0) and (streaming.get("applied_uploads") == streaming.get("uploads"))
+        )
+        if settled or (time.monotonic() > deadline):
+            return status, settled
+        time.sleep(0.25)
+
+
+def streaming_path_cells(port, scene, status):
+    """The camera path: one cell with a PVS in every second page of a
+    serpentine over the page grid (consecutive poses two pages apart, so a
+    small resident set has pages far enough away to evict)."""
+    counts    = status["cell_counts"]
+    page_size = status["page_size"]
+    page_dims = status["page_dims"]
+    cells = []
+    rows = list(range(0, page_dims[2], 2))
+    for row_index, pz in enumerate(rows):
+        columns = list(range(0, page_dims[0], 2))
+        if (row_index % 2) == 1:
+            columns.reverse()
+        for px in columns:
+            # The cell nearest the page's center with a PVS (y: the lowest
+            # page row, the street slab).
+            center = [px * page_size + page_size // 2, 0, pz * page_size + page_size // 2]
+            candidates = []
+            for z in range(pz * page_size, min((pz + 1) * page_size, counts[2])):
+                for y in range(0, min(page_size, counts[1])):
+                    for x in range(px * page_size, min((px + 1) * page_size, counts[0])):
+                        distance = abs(x - center[0]) + abs(y - center[1]) + abs(z - center[2])
+                        candidates.append((distance, x + counts[0] * (y + counts[1] * z)))
+            for _, cell in sorted(candidates):
+                reply = cell_reply(port, scene, cell)
+                if reply["has_pvs"]:
+                    cells.append(reply)
+                    break
+    return cells
+
+
+def run_streaming(args, failures):
+    """Section "streaming" (doc/plans/pvs.md Build order 6): the baked Bistro
+    saved with its PVS (bake_streaming_scene(), or --streaming-scene reused)
+    opened in a fresh editor, the bits streaming from the file; with
+    pvs_resident_pages below the database's page count, along a camera path
+    of poses two pages apart: after the pages around each pose arrived, the
+    viewport image and a render_scene_image are identical with pvs_culling
+    on and off, the GPU classification check has 0 mismatches, resident
+    pages never exceed the capacity, at most one upload per frame, and no
+    view culls through a page that is not resident in its slot (the
+    residency check: nonresident_views / nonresident_culled 0). Prints the
+    uploads, evictions and resident pages per pose."""
+    save_path = args.streaming_scene
+    if not os.path.isfile(os.path.join(REPO, save_path)):
+        bake_streaming_scene(args, save_path)
+    process, port = launch_with(args.editor, [])
+    try:
+        before = set(scene_names(port))
+        # load_scene: the erhe scene open that attaches the file's PVS
+        # database (open_scene imports the file as a foreign glTF).
+        call(port, "load_scene", {"path": save_path})
+        scene = None
+        deadline = time.monotonic() + 600.0
+        while scene is None:
+            added = sorted(set(scene_names(port)) - before)
+            if added:
+                scene = added[0]
+            elif time.monotonic() > deadline:
+                raise RuntimeError(f"open_scene {save_path}: no scene appeared")
+            else:
+                time.sleep(1.0)
+        wait_async_idle(port, "streaming", 600.0)
+        status = pvs_status(port, scene)
+        streaming = status.get("streaming", {})
+        print(
+            f"[streaming] opened {save_path} as {scene!r}: state {status.get('state')}, pages {status.get('page_count')} "
+            f"({status.get('stored_pages')} stored, dims {status.get('page_dims')}), bits_in_memory {status.get('bits_in_memory')}, "
+            f"bits_source {status.get('bits_source')}, bits_hash {status.get('bits_hash')}"
+        )
+        if status.get("state") != "ready":
+            failures.append(f"[streaming] state {status.get('state')} after the load")
+            return
+        if status.get("bits_in_memory"):
+            failures.append("[streaming] the opened database kept its bits in memory (expected released: they stream from the file)")
+        capacity = args.resident_pages
+        if capacity >= status.get("stored_pages", 0):
+            failures.append(f"[streaming] resident_pages {capacity} is not below the stored page count {status.get('stored_pages')}")
+        print(call(port, "set_pvs_streaming", {"resident_pages": capacity, "stream_radius_pages": args.stream_radius}))
+        mode = "gpu" if "gpu" in args.modes.split(",") else "cpu"
+        print(call(port, "set_culling_classification", {"mode": mode}))
+        call(port, "set_pvs_culling", {"enabled": True})
+
+        # The saved scene authors no camera: frame_scene binds it to a
+        # viewport with an 'MCP frame camera' the poses then move.
+        print(f"[streaming] frame_scene: {call(port, 'frame_scene', {'scene_name': scene})}")
+        time.sleep(3.0)
+        viewport = isolate_viewport(lambda tool, arguments: mcp(port, tool, arguments), scene_name=scene)
+        if not viewport.get("camera"):
+            raise RuntimeError(f"the viewport of {scene!r} has no camera: {viewport}")
+        hide_pvs_window(port)
+        os.makedirs(os.path.join(REPO, SHOT_DIR), exist_ok=True)
+        cells = streaming_path_cells(port, scene, status)
+        print(f"[streaming] camera path: {len(cells)} poses, cells {[c['cell'] for c in cells]}, pages {[c['page'] for c in cells]}")
+        if len(cells) < 3:
+            failures.append(f"[streaming] the camera path has {len(cells)} poses")
+        previous = pvs_status(port, scene).get("streaming", {})
+        culled_poses = 0
+        total_moving_checks = 0
+        for index, reply in enumerate(cells):
+            center = [0.5 * (reply["cell_min"][i] + reply["cell_max"][i]) for i in range(3)]
+            yaw = 0.25 * math.pi * index
+            rotation = [0.0, math.sin(0.5 * yaw), 0.0, math.cos(0.5 * yaw)]
+            mcp(port, "set_node_transform", {"scene_name": scene, "node_name": viewport["camera"], "translation": center, "rotation_xyzw": rotation, "space": "world"})
+            moving_checks = []
+            settled_status, settled = wait_streaming_settled(port, scene, 60.0, mode == "gpu", moving_checks)
+            moving_bad = [c for c in moving_checks if (not isinstance(c, dict)) or (c.get("mismatch_count") != 0) or (c.get("command_mismatch_count") != 0) or (c.get("pvs_culled_cpu_count") != c.get("pvs_culled_gpu_count"))]
+            total_moving_checks += len(moving_checks)
+            if moving_bad:
+                failures.append(f"[streaming] pose {index}: classification check while the pages moved: {str(moving_bad[0])[:300]}")
+            streaming = settled_status.get("streaming", {})
+            view = streaming_view(settled_status)
+            uploads   = streaming.get("uploads", 0) - previous.get("uploads", 0)
+            evictions = streaming.get("evictions", 0) - previous.get("evictions", 0)
+            if streaming.get("generation") != previous.get("generation"):
+                uploads   = streaming.get("uploads", 0)
+                evictions = streaming.get("evictions", 0)
+            previous = streaming
+            print(
+                f"[streaming] pose {index} (cell {reply['cell']}, page {reply['page']}): settled {settled}, uploads {uploads}, evictions {evictions}, "
+                f"resident {streaming.get('resident_pages')}/{streaming.get('capacity')} (max {streaming.get('max_resident_pages')}), "
+                f"view pages {view.get('page_min') if view else None}..{view.get('page_max') if view else None} wanted {view.get('wanted_pages') if view else None} "
+                f"resident {view.get('resident_pages') if view else None} box_resident {view.get('box_resident') if view else None}"
+            )
+            if not settled:
+                failures.append(f"[streaming] pose {index}: the pages around the pose did not arrive: {streaming}")
+            if streaming.get("max_resident_pages", 0) > streaming.get("capacity", 0):
+                failures.append(f"[streaming] pose {index}: max_resident_pages {streaming.get('max_resident_pages')} above the capacity {streaming.get('capacity')}")
+            if streaming.get("max_uploads_per_frame", 0) > 1:
+                failures.append(f"[streaming] pose {index}: max_uploads_per_frame {streaming.get('max_uploads_per_frame')}")
+            if (streaming.get("nonresident_views", 0) != 0) or (streaming.get("nonresident_culled", 0) != 0):
+                failures.append(f"[streaming] pose {index}: culled through non-resident pages: views {streaming.get('nonresident_views')} entries {streaming.get('nonresident_culled')}")
+            if streaming.get("failed_pages", 0) != 0:
+                failures.append(f"[streaming] pose {index}: {streaming.get('failed_pages')} page reads failed")
+
+            if mode == "gpu":
+                try:
+                    check = mcp(port, "get_cull_classification_check", {"scene_name": scene})
+                except RuntimeError as error:
+                    check = str(error)
+                if isinstance(check, dict):
+                    print(
+                        f"[streaming] pose {index} classification check: mismatch_count {check.get('mismatch_count')}, pvs_mismatch_count {check.get('pvs_mismatch_count')}, "
+                        f"pvs_culled cpu {check.get('pvs_culled_cpu_count')} gpu {check.get('pvs_culled_gpu_count')}, command_mismatch_count {check.get('command_mismatch_count')}"
+                    )
+                    if (check.get("mismatch_count") != 0) or (check.get("command_mismatch_count") != 0) or (check.get("pvs_culled_cpu_count") != check.get("pvs_culled_gpu_count")):
+                        failures.append(f"[streaming] pose {index}: classification check {check}")
+                else:
+                    failures.append(f"[streaming] pose {index}: classification check not available: {str(check)[:200]}")
+
+            forward = [-math.sin(yaw), 0.0, -math.cos(yaw)]
+            target = [center[i] + 10.0 * forward[i] for i in range(3)]
+            hashes = {}
+            render_hashes = {}
+            culled = None
+            for enabled in (True, False):
+                mcp(port, "set_pvs_culling", {"enabled": enabled})
+                time.sleep(1.5)
+                tag  = "on" if enabled else "off"
+                shot = os.path.join(SHOT_DIR, f"streaming_{index}_{tag}_viewport.png")
+                mcp(port, "capture_screenshot", {"path": shot})
+                entry = viewport_entry(port, viewport["title"])
+                hashes[tag], _ = viewport_crop_hash(os.path.join(REPO, shot), entry)
+                render = os.path.join(SHOT_DIR, f"streaming_{index}_{tag}_render.png")
+                mcp(port, "render_scene_image", {
+                    "scene": scene, "camera": {"eye": center, "target": target, "up": [0, 1, 0], "fov_y_degrees": 60, "near": 0.1, "far": 500},
+                    "width": 960, "height": 540, "output": "png", "path": render
+                })
+                render_hashes[tag] = file_hash(os.path.join(REPO, render))
+                if enabled:
+                    views = pvs_status(port, scene).get("views", [])
+                    culled = views[0] if views else None
+            mcp(port, "set_pvs_culling", {"enabled": True})
+            if culled and culled.get("culled", 0) > 0:
+                culled_poses += 1
+            print(f"[streaming] pose {index}: PVS rule {culled}; viewport md5 on {hashes['on']} off {hashes['off']}; render_scene_image md5 on {render_hashes['on']} off {render_hashes['off']}")
+            if hashes["on"] != hashes["off"]:
+                failures.append(f"[streaming] pose {index}: viewport image differs with pvs_culling on / off")
+            if render_hashes["on"] != render_hashes["off"]:
+                failures.append(f"[streaming] pose {index}: render_scene_image differs with pvs_culling on / off")
+        final = pvs_status(port, scene).get("streaming", {})
+        print(
+            f"[streaming] totals: uploads {final.get('uploads')}, evictions {final.get('evictions')}, applied {final.get('applied_uploads')}, "
+            f"max resident {final.get('max_resident_pages')}/{final.get('capacity')}, max uploads per frame {final.get('max_uploads_per_frame')}, "
+            f"slot bytes {final.get('slot_bytes')}, poses culling by PVS {culled_poses}/{len(cells)}, "
+            f"classification checks while the pages moved {total_moving_checks}"
+        )
+        if culled_poses == 0:
+            failures.append("[streaming] no pose culled anything by PVS (the resident pages were never used)")
+        if final.get("evictions", 0) == 0:
+            failures.append(f"[streaming] no evictions with resident_pages {capacity}")
+    finally:
+        stop_editor(port, process)
+        if not args.keep_streaming_scene and os.path.isfile(os.path.join(REPO, save_path)):
+            os.remove(os.path.join(REPO, save_path))
 
 
 def main():
@@ -869,7 +1199,11 @@ def main():
     parser.add_argument("--scene", default="Default Scene")
     parser.add_argument("--samples-per-cell", type=int, default=9)
     parser.add_argument("--modes", default="gpu,cpu", help="culling classification modes of the consumer section")
-    parser.add_argument("--sections", default="sampled,wall,heavy,bistro", help="sampled, wall (needs sampled's scene), heavy, bistro")
+    parser.add_argument("--sections", default="sampled,wall,heavy,bistro,streaming", help="sampled, wall (needs sampled's scene), heavy, bistro, streaming")
+    parser.add_argument("--streaming-scene", default=STREAMING_SAVE_PATH, help="streaming: the baked Bistro saved with its PVS (baked and saved there when absent)")
+    parser.add_argument("--keep-streaming-scene", action="store_true", help="streaming: keep the saved scene file for a later run")
+    parser.add_argument("--resident-pages", type=int, default=4, help="streaming: pvs_resident_pages (below the page count)")
+    parser.add_argument("--stream-radius", type=int, default=1, help="streaming: pvs_stream_radius_pages")
     parser.add_argument("--viewpoints", type=int, default=12, help="random viewpoints per cell of the zero-misses check")
     parser.add_argument("--face-resolution", type=int, default=1024, help="disocclusion bake face resolution")
     parser.add_argument("--face-fov", type=float, default=120.0, help="disocclusion bake face field of view, degrees")
@@ -902,7 +1236,9 @@ def main():
         if "heavy" in sections:
             run_heavy(args, failures)
         if "bistro" in sections:
-            run_bistro(args, failures)
+            run_bistro(args, failures, ("streaming" in sections) and not os.path.isfile(os.path.join(REPO, args.streaming_scene)))
+        if "streaming" in sections:
+            run_streaming(args, failures)
     except Exception as error:  # noqa: BLE001 - report and fail
         failures.append(f"exception: {error}")
     finally:

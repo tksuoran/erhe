@@ -87,10 +87,15 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/draw_list_scene.cpp
     erhe_scene_renderer/draw_list_scene.hpp
     erhe_scene_renderer/draw_list_scene_gpu_cull.cpp
+    erhe_scene_renderer/draw_list_scene_pvs_streaming.cpp
     erhe_scene_renderer/draw_list.cpp
     erhe_scene_renderer/draw_list.hpp
     erhe_scene_renderer/pvs_gpu_database.cpp
     erhe_scene_renderer/pvs_gpu_database.hpp
+    erhe_scene_renderer/pvs_page_streamer.cpp
+    erhe_scene_renderer/pvs_page_streamer.hpp
+    erhe_scene_renderer/pvs_residency.cpp
+    erhe_scene_renderer/pvs_residency.hpp
 )
 target_link_libraries(
     ${_target}
@@ -108,6 +113,7 @@ target_link_libraries(
         erhe::log
         erhe::message_bus
         erhe::profile
+        erhe::task
         erhe::utility
 )
 

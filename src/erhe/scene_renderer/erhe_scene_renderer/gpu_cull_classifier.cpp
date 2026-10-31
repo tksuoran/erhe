@@ -118,6 +118,15 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             .readonly      = true
         }
     }
+    , m_pvs_pages_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_pvs_pages",
+            .binding_point = static_cast<int>(pvs_pages_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
     , m_view_buffer    {graphics_device, erhe::graphics::Buffer_target::storage,      "Gpu_cull_classifier views",         views_binding_point}
     , m_mask_buffer    {graphics_device, erhe::graphics::Buffer_target::storage,      "Gpu_cull_classifier masks"}
     , m_readback_buffer{graphics_device, erhe::graphics::Buffer_target::transfer_dst, "Gpu_cull_classifier mask readback"}
@@ -234,6 +243,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_pvs_database_block            .add_uint("words",   Shader_resource::unsized_array);
     m_pvs_culled_block              .add_uint("words",   Shader_resource::unsized_array);
     m_pvs_columns_block             .add_uint("columns", Shader_resource::unsized_array);
+    m_pvs_pages_block               .add_uint("slots",   Shader_resource::unsized_array);
     // The occlusion test (occlusion_test.vert / .frag): the view block
     // (std140: per view a mat4 and a vec4, then a uvec4), the bounds as the
     // classifier reads them, and the two occlusion regions as uint words
@@ -272,7 +282,8 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
                 { .binding_point = occlusion_previous_words_binding_point, .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
                 { .binding_point = pvs_database_binding_point,             .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
                 { .binding_point = pvs_culled_binding_point,               .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
-                { .binding_point = pvs_columns_binding_point,              .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
+                { .binding_point = pvs_columns_binding_point,              .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute },
+                { .binding_point = pvs_pages_binding_point,                .type = Binding_type::storage_buffer, .stage_flags = Shader_stage_flags::compute }
             },
             .debug_label       = "Gpu_cull_classifier",
             .uses_texture_heap = false
@@ -286,7 +297,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             .defines           = { { "ERHE_CULL_CLASSIFY_GROUP_SIZE", fmt::format("{}", workgroup_size) } },
             .interface_blocks  = {
                 &m_bounds_block, &m_views_block, &m_masks_block, &m_occlusion_words_block, &m_occlusion_previous_words_block,
-                &m_pvs_database_block, &m_pvs_culled_block, &m_pvs_columns_block
+                &m_pvs_database_block, &m_pvs_culled_block, &m_pvs_columns_block, &m_pvs_pages_block
             },
             .shaders           = { { Shader_type::compute_shader, shader_path / std::filesystem::path{"cull_classify.comp"} } },
             .bind_group_layout = m_bind_group_layout.get()

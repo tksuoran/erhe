@@ -180,8 +180,46 @@ public:
     [[nodiscard]] auto get_header     () const -> const Pvs_header&                  { return m_header; }
     [[nodiscard]] auto get_columns    () const -> const std::vector<Pvs_column>&     { return m_columns; }
     [[nodiscard]] auto get_pages      () const -> const std::vector<Pvs_page_entry>& { return m_pages; }
+    // The in-memory copy of the bits (empty after release_bits()). Main
+    // thread, like release_bits() and make_bits_resident(); other threads
+    // read pages with read_page_words().
     [[nodiscard]] auto get_bits       () const -> const std::vector<uint32_t>&       { return m_bits; }
+    // Where the bits are in a file (nullopt: the bits are in memory only).
+    // Main thread.
     [[nodiscard]] auto get_bits_source() const -> const std::optional<Pvs_bits_source>& { return m_bits_source; }
+
+    // --- The bits in memory and on disk (doc/plans/pvs.md "Residency and
+    // streaming") ---
+    // True while the in-memory copy of the bits is held (a bake, or an open
+    // until release_bits()). Any thread; never waits for a file read.
+    [[nodiscard]] auto has_resident_bits() const -> bool;
+    // 64-bit FNV-1a (erhe::hash::hash()) of the bits' bytes, computed once
+    // by the constructor (the bits are in memory then): equal for equal
+    // bakes and across a save and reload, whether or not the bits are in
+    // memory now.
+    [[nodiscard]] auto get_bits_hash() const -> uint64_t { return m_bits_hash; }
+    // Drops the in-memory copy of the bits when they can be read from the
+    // bits source on disk; returns true when it did. Main thread.
+    auto release_bits() -> bool;
+    // Reads the bits back from the bits source into memory and forgets the
+    // source (a save is about to replace that file); true when the bits are
+    // in memory afterwards. Main thread.
+    auto make_bits_resident() -> bool;
+    // True when the bits source is the file at path.
+    [[nodiscard]] auto bits_source_references(const std::filesystem::path& path) const -> bool;
+    // Reads one stored page's words (get_words_per_page()) into out, from
+    // the in-memory copy or else by range from the bits source; false when
+    // the page is not stored, out has another size or the read fails. Any
+    // thread (the page streamer's worker): the reads are serialized with
+    // release_bits() and make_bits_resident().
+    [[nodiscard]] auto read_page_words(uint32_t page, std::span<uint32_t> out) const -> bool;
+    // Reads the cell's words (get_words_per_cell()) into out (resized), as
+    // read_page_words() does; false when the cell's page is not stored or
+    // the read fails. Any thread.
+    [[nodiscard]] auto read_cell_words(uint32_t cell, std::vector<uint32_t>& out) const -> bool;
+    // Reads every stored page's words, in storage order (the layout of
+    // get_bits()), into out; false when a read fails. Any thread.
+    [[nodiscard]] auto read_bits(std::vector<uint32_t>& out) const -> bool;
 
     [[nodiscard]] auto get_column_count     () const -> uint32_t;
     [[nodiscard]] auto get_cell_count       () const -> uint32_t;
@@ -193,6 +231,9 @@ public:
     [[nodiscard]] auto get_page_dims        () const -> glm::uvec3;
     [[nodiscard]] auto get_page_count       () const -> uint32_t;
     [[nodiscard]] auto get_stored_page_count() const -> uint32_t;
+    // True when the page has a stored range of bits (some cell of it has a
+    // PVS); false for a page out of range.
+    [[nodiscard]] auto is_page_stored       (uint32_t page) const -> bool;
     [[nodiscard]] auto get_cells_with_pvs   () const -> uint32_t;
 
     // x + dims.x * (y + dims.y * z); the cell must be inside the grid.
@@ -204,18 +245,25 @@ public:
     // lx + page_size * (ly + page_size * lz) of the cell inside its page.
     [[nodiscard]] auto local_cell  (uint32_t cell) const -> uint32_t;
 
-    // The page's words (get_words_per_page()), empty when not stored.
+    // The page's words (get_words_per_page()) in the in-memory copy, empty
+    // when the page is not stored or the bits are not in memory
+    // (release_bits()). Main thread.
     [[nodiscard]] auto get_page_words(uint32_t page) const -> std::span<const uint32_t>;
     // The cell's words inside its stored page (all ones for a cell without
-    // a PVS), empty when the page is not stored.
+    // a PVS) in the in-memory copy, empty when the page is not stored or the
+    // bits are not in memory. Main thread.
     [[nodiscard]] auto get_cell_words(uint32_t cell) const -> std::span<const uint32_t>;
-    // True when the cell has a baked PVS.
+    // True when the cell has a baked PVS (the page table; no bits read).
     [[nodiscard]] auto has_cell_pvs  (uint32_t cell) const -> bool;
     // Conservative: true when the cell has no PVS (or is outside the grid),
     // else the cell's bit of the column. False for a column out of range.
+    // Reads the in-memory copy: needs has_resident_bits(). Main thread.
     [[nodiscard]] auto is_column_visible(uint32_t cell, uint32_t column) const -> bool;
-    // Number of columns in the cell's PVS, 0 for a cell without one.
+    // Number of columns in the cell's PVS, 0 for a cell without one. Reads
+    // the in-memory copy: needs has_resident_bits(). Main thread.
     [[nodiscard]] auto get_cell_pvs_size(uint32_t cell) const -> uint32_t;
+    // Number of set bits of a cell's words (read_cell_words()).
+    [[nodiscard]] static auto count_pvs_words(std::span<const uint32_t> words) -> uint32_t;
 
     // The column of an identity, untracked_column when it has none. The
     // lookup map is built once, by the constructor.
@@ -227,6 +275,10 @@ public:
     auto mark_stale() -> bool;
 
 private:
+    // Reads out.size() words of the bits source from first_word; caller
+    // holds m_bits_mutex.
+    [[nodiscard]] auto read_source_words(std::size_t first_word, std::span<uint32_t> out) const -> bool;
+
     class Column_key
     {
     public:
@@ -244,8 +296,19 @@ private:
     Pvs_header                                                m_header;
     std::vector<Pvs_column>                                   m_columns;
     std::vector<Pvs_page_entry>                               m_pages;
+    // m_bits and m_bits_source; held across a file read, so a read never
+    // straddles release_bits() or make_bits_resident(). m_bits_state_mutex
+    // (taken inside it, or alone) guards m_bits_in_memory, so a query never
+    // waits for a read.
+    mutable std::mutex                                        m_bits_mutex;
+    mutable std::mutex                                        m_bits_state_mutex;
+    bool                                                      m_bits_in_memory{true};
+    uint64_t                                                  m_bits_hash{0};
     std::vector<uint32_t>                                     m_bits;
     std::optional<Pvs_bits_source>                            m_bits_source;
+    // The first word of each stored page in storage order is its
+    // Pvs_page_entry::word_offset; the bits' word count.
+    std::size_t                                               m_bit_word_count{0};
     std::unordered_map<Column_key, uint32_t, Column_key_hash> m_column_lookup;
     mutable std::mutex                                        m_state_mutex;
     Pvs_state                                                 m_state{Pvs_state::ready};

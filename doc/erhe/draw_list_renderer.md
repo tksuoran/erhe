@@ -972,13 +972,12 @@ Drawing:
   `cull_classify.comp` (per entry, view records 10 and 11: the box and its
   flag; the `pvs_header`, `pvs_cells`, `pvs_pages` and `pvs_grid` header
   words) decide the same bits. A PVS-culled entry is not inside its view
-  for the occlusion terms: it is neither tested nor consumed. The GPU reads
-  `Pvs_gpu_database`, one device-local buffer per database (the GPU page
-  table, a slot index per page or `0xffffffff`, then the resident pages'
-  words), made and uploaded with `Command_buffer::upload_to_buffer()` by
-  the first dispatch of a frame whose slot names another database; every
-  stored page is resident (capacity = the stored page count; the streaming
-  step only changes which pages have slots). The GPU writes the bits it
+  for the occlusion terms: it is neither tested nor consumed. Both paths
+  read the frame's resident pages (below): the CPU lanes take
+  `cull_lanes::Pvs_resident_pages` (the frame's page table and the CPU
+  copy of the slots), `cull_classify.comp` the frame slot's page table
+  (`cull_pvs_pages`, binding 8) and the slots (`cull_pvs`, binding 5). The
+  GPU writes the bits it
   removed into a PVS culled region in the mask layout (a mask ring buffer
   range, frames with the rule only); `get_cull_classification_check` reads
   it back and compares it bit for bit with the CPU lanes' removed bits
@@ -1001,6 +1000,74 @@ Drawing:
   `Editor::on_close_scene()`), so the entries leaving with the scene mark
   nothing stale. Queued `set_pvs_database()` operations apply in order: the
   last one queued wins.
+  **PVS resident set and page table** (doc/plans/pvs.md "Residency and
+  streaming"): the classification reads a resident set of pages, never the
+  whole database. `set_pvs_database()` and `set_pvs_streaming_settings()`
+  (`Pvs_streaming_settings`: `resident_pages`, default 64, and
+  `stream_radius_pages`, default 1; the editor pushes them from the settings'
+  change sites and at a scene registration) make a `Pvs_residency`, the
+  policy, with a new generation. The views' registrations are its change
+  site: `register_pvs_view(view_key, frame_index, query_min, query_max)`
+  (main thread, prepare phase; the editor's `Composer::prepare()` registers
+  the viewport camera's query box, the one the render phase then gives
+  `add_cull_view()`) clamps the box's corner cells to the grid and gives
+  the view its page box; when that differs from the view's previous one, or
+  the view was inactive (a view is active when it registered in the frame
+  or the one before), the request list is rebuilt: the stored pages within
+  the stream radius (Chebyshev distance in pages from the box) of any active
+  view, neither resident, in flight nor failed, nearest first. A
+  `Pvs_page_streamer` read task on the task executor
+  (`Draw_list_scene_create_info::executor`, `erhe::task::spawn()`; one task
+  at a time, which drains the queued requests; it touches no scene or GPU
+  state and holds the queue state and the databases by `shared_ptr`, so it
+  may outlive the streamer; without an executor the reads run inline)
+  reads one requested page at a time with `Pvs_database::read_page_words()` (from the scene
+  file by range after an open released the bits, from memory after a bake)
+  into pooled word buffers and hands it back through a mutex-protected
+  queue. Each `publish()` takes at most one finished read and reserves its
+  slot (`Pvs_residency::place()`): a free slot, else the slot of the
+  resident page farthest from every active view, only when that page is
+  more than one page (the hysteresis) farther away than the arriving page
+  (so a view moving back and forth across a page boundary evicts nothing,
+  and a view's own page can always replace pages two or more pages away); a
+  page that finds no slot is dropped until a view moves. An evicted page
+  leaves the page table in the frame of the eviction, and its slot is
+  written again only frames-in-flight frames later, when every frame whose
+  table named it has retired (`Pvs_placement::usable_frame`; then
+  `Pvs_residency::commit(page, frame_index)` enters the new page and
+  verifies the frame is that late): no write into a slot,
+  whether a host write into a host-visible buffer or a recorded copy, races
+  a frame that reads it. `take_request()` hands the worker the next request
+  only when a slot can be had for it. At most one placed page per publish
+  is committed and goes into `Pvs_page_upload_queue` (a fixed ring of four entries,
+  mutex-protected, words copied into buffers that keep their capacity), the
+  frame slot copies the residency's page table when its serial moved
+  (`Draw_list_slot::pvs_page_table`, and for a gpu publish a host-visible
+  per-slot buffer written like the GPU bounds: only that frame slot's
+  buffer, after its previous frame retired). In the render phase,
+  `classify_frame_cull_views()` first applies every queued upload of its
+  frame and the frames before it (`apply_pvs_uploads()`; an upload of a
+  frame that classified nothing is applied by the next frame that does,
+  since the later frames' tables name its slot) into `Pvs_gpu_database`,
+  the resident slots of the frame's generation (made when the frame slot
+  names another generation; one device-local buffer of `resident_pages *
+  words_per_page` words when the device runs the GPU classification, and
+  the CPU copy the lanes read): `write_page()` copies the words into the
+  CPU copy and records `upload_to_buffer()` into the slot (which orders its
+  output for the classification that reads it). Nothing else writes the
+  slots, and only at a placement; a steady frame with every
+  wanted page resident copies, uploads and allocates nothing. The residency
+  check: every PVS view's query cells must name, through the frame's page
+  table, a slot holding that very page (`check_pvs_query_cells()`); a view
+  that fails is counted with the entries it culled (0 is the gate).
+  `get_pvs_streaming_status()` (main thread) reports `Pvs_streaming_status`:
+  the settings and generation, capacity, resident and most-resident pages,
+  slot bytes, uploads and evictions (total, of the last publish, the most in
+  one frame), pending requests, the read in flight, queued uploads, failed
+  reads, the render phase's applied uploads and residency check counters,
+  whether the database holds its bits in memory, and per view
+  (`Pvs_streaming_view_status`) its page box, activity, wanted and resident
+  pages and whether every stored page its box touches is resident.
   The view set, the masks and the per-entry flag scratch are render-phase
   state of the `Draw_list_scene` (render thread), started over by the first
   `add_cull_view()` of each frame and kept with their capacity.

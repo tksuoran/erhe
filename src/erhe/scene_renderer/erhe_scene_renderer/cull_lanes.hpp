@@ -7,6 +7,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 // The culling classification lanes of Draw_list_scene::classify_cull_views()
@@ -71,21 +72,37 @@ void set_view_bit_lanes(uint64_t* masks, std::size_t count, uint64_t bit);
     glm::uvec3&       out_cell
 ) -> bool;
 
+// The resident pages of a frame (doc/plans/pvs.md "Residency and
+// streaming"): per page of the database its slot (0xffffffff: not
+// resident), and the slots' words (words_per_page each), the CPU copy of
+// what the GPU classification reads (Pvs_gpu_database).
+class Pvs_resident_pages
+{
+public:
+    std::span<const uint32_t> page_table    {};
+    std::span<const uint32_t> slot_words    {};
+    uint32_t                  words_per_page{0};
+};
+
 // The cells of one view's query box: per corner cell (deduplicated) the
-// first word of the cell's PVS in the database's resident pages. keep_all:
-// some corner is outside the grid or in a page that is not resident (every
-// stored page is resident on the CPU), and the view culls nothing by PVS.
+// first word of the cell's PVS in the resident page slots, its page and
+// slot. keep_all: some corner is outside the grid or in a page without a
+// resident slot, and the view culls nothing by PVS.
 class Pvs_query_cells
 {
 public:
     bool                           keep_all  {true};
     uint32_t                       cell_count{0};
     std::array<const uint32_t*, 8> words     {};
+    std::array<uint32_t, 8>        pages     {};
+    std::array<uint32_t, 8>        slots     {};
 };
 
-// The query cells of the box [query_min, query_max] (non-empty) in database.
+// The query cells of the box [query_min, query_max] (non-empty) in database
+// with the frame's resident pages.
 void make_pvs_query_cells(
     const erhe::scene::Pvs_database& database,
+    const Pvs_resident_pages&        resident,
     const glm::vec3&                 query_min,
     const glm::vec3&                 query_max,
     Pvs_query_cells&                 out

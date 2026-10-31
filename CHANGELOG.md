@@ -36,6 +36,31 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: the PVS page streaming (doc/plans/pvs.md
+  "Residency and streaming"): `pvs_residency.hpp` with
+  `Pvs_streaming_settings` (`resident_pages`, `stream_radius_pages`),
+  `Pvs_page_box`, `Pvs_placement`, `Pvs_residency_view` and `Pvs_residency`
+  (the residency policy: `set_view()`, `take_request()`, `place()` and
+  `commit(page, frame_index)`, an evicted slot usable only after the frames
+  in flight); `Pvs_streaming_settings::clamped()` and its range constants;
+  `pvs_page_streamer.hpp` with `Pvs_page_read`, `Pvs_page_streamer` (page
+  reads on a task executor, one task at a time), `Pvs_page_upload`
+  and `Pvs_page_upload_queue`; `Draw_list_scene::set_pvs_streaming_settings()`,
+  `get_pvs_streaming_settings()`, `register_pvs_view()` and
+  `get_pvs_streaming_status()` with `Pvs_streaming_status` and
+  `Pvs_streaming_view_status`; `cull_lanes::Pvs_resident_pages`;
+  `Pvs_query_cells::pages` and `slots`;
+  `Gpu_cull_classifier::pvs_pages_binding_point` (8, the frame's page
+  table, `cull_pvs_pages` in `cull_classify.comp`);
+  `Draw_list_scene_create_info::executor` (`erhe::scene_renderer` links
+  `erhe::task`).
+- `erhe::scene`: `Pvs_database::is_page_stored()`, `has_resident_bits()`,
+  `release_bits()`, `make_bits_resident()`, `bits_source_references()`,
+  `read_page_words()`, `read_cell_words()`, `read_bits()`,
+  `get_bits_hash()` (computed once by the constructor) and
+  `count_pvs_words()` (the bits in memory or read by range from the bits
+  source; `erhe::scene` links `erhe::file`).
+
 - `erhe::scene`: `Pvs_bake_parameters::silhouette_tests` (rule 3 of the
   disocclusion bake, opt-in); `ERHE_pvs` writes it as
   `bake.silhouette_tests` (optional on read). `erhe::scene_renderer`:
@@ -1076,6 +1101,21 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::scene_renderer`: `cull_lanes::make_pvs_query_cells()` takes the
+  frame's `Pvs_resident_pages` (a cell in a page without a slot keeps every
+  entry) instead of reading the database's bits. `Pvs_gpu_database` is the
+  resident page slots of one residency generation: constructed from a
+  `Device*` (null: the CPU copy only), the database, the generation and the
+  capacity, written by `write_page()`, with `get_generation()`,
+  `get_capacity()`, `get_words_per_page()`, `get_slot_words()`,
+  `get_slot_page()` and `get_write_count()`; `get_slot_base_word()` and
+  `get_resident_page_count()` are gone. `cull_classify.comp` reads the page
+  table from `cull_pvs_pages` and the slots from `cull_pvs` (the
+  `pvs_header.w` slot base word is 0).
+- `erhe::scene`: `Pvs_database::get_page_words()`, `get_cell_words()`,
+  `is_column_visible()` and `get_cell_pvs_size()` read the in-memory copy of
+  the bits (empty after `release_bits()`; main thread).
 
 - `erhe::scene_renderer`: id pass ids are 32 bits: `Primitive_buffer`
   writes an id-offset record's color as `erhe::math::vec4_from_uint()` (r

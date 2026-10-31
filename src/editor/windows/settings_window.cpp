@@ -716,6 +716,28 @@ void Settings_window::imgui()
             // settings snapshot (doc/plans/pvs.md).
             static_cast<void>(ImGui::DragFloat("##", &settings.pvs_query_margin, 0.005f, 0.0f, 10.0f, "%.3f m"));
         }, "Half the size of the box around a viewport camera whose cells' potentially visible sets the PVS culling reads.");
+        add_entry("PVS Resident Pages", [this, &settings](){
+            // The change site (doc/plans/pvs.md "Residency and streaming"):
+            // pushed to every scene's draw lists once the edit is done; a
+            // change remakes the resident set.
+            static_cast<void>(ImGui::DragInt(
+                "##", &settings.pvs_resident_pages, 1.0f,
+                static_cast<int>(erhe::scene_renderer::Pvs_streaming_settings::min_resident_pages),
+                static_cast<int>(erhe::scene_renderer::Pvs_streaming_settings::max_resident_pages)
+            ));
+            if (ImGui::IsItemDeactivatedAfterEdit() && (m_context.app_scenes != nullptr)) {
+                m_context.app_scenes->set_pvs_streaming_settings(m_context.app_scenes->get_pvs_streaming_settings());
+            }
+        }, "Number of PVS database pages resident on the GPU at once. Pages without a slot read as everything visible; the pages around each viewport camera stream in from the scene file, one page per frame.");
+        add_entry("PVS Stream Radius", [this, &settings](){
+            static_cast<void>(ImGui::DragInt(
+                "##", &settings.pvs_stream_radius_pages, 0.05f, 0,
+                static_cast<int>(erhe::scene_renderer::Pvs_streaming_settings::max_stream_radius_pages)
+            ));
+            if (ImGui::IsItemDeactivatedAfterEdit() && (m_context.app_scenes != nullptr)) {
+                m_context.app_scenes->set_pvs_streaming_settings(m_context.app_scenes->get_pvs_streaming_settings());
+            }
+        }, "The radius, in pages, around a viewport camera's PVS page that is requested when the camera enters another page (1: the 27 pages around it).");
         add_entry("Light Cluster Binning", [&settings](){
             // The render settings snapshot carries the value to the shadow
             // render nodes' light binning (doc/plans/clustered_lights.md C4).

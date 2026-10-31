@@ -195,7 +195,8 @@ Scene_root::Scene_root(
                 .material_set_create_info   = draw_list_dependencies->material_set_create_info,
                 .exclude_unlit_from_shadows = draw_list_dependencies->exclude_unlit_from_shadows,
                 .gpu_cull_classifier        = draw_list_dependencies->gpu_cull_classifier,
-                .cull_frame_registry        = draw_list_dependencies->cull_frame_registry
+                .cull_frame_registry        = draw_list_dependencies->cull_frame_registry,
+                .executor                   = draw_list_dependencies->executor
             }
         );
         // The staleness rule of the PVS database (doc/plans/pvs.md D4): the
