@@ -195,35 +195,9 @@ The headset's multiview passes select with the union view's centre eye (the
 `immediate_cull_view` union in `headset_view.cpp`), so both eyes draw the
 same level.
 
-This is camera-dependent derived state. It is computed where each view's
-commands are already written per entry: the CPU command writer, and
-`cull_compact.comp` on the GPU path. That loop already runs per entry and per
-frame, so selection adds work inside an existing loop and no new per-frame
-walk.
-
-Both writers get selection, because `culling_classification` defaults to
-`gpu` (28dc7349a). On devices with `Device_info::use_draw_indirect_count`
-(native Vulkan with `drawIndirectCount`, Metal 3 and 4) `cull_compact.comp`
-writes the default path's color and shadow commands. The CPU writer serves
-the other devices (MoltenVK, OpenGL without the count draw) and the `cpu`
-setting. The CPU / GPU check (`get_cull_classification_check`) keeps the two
-equal. The selection arithmetic follows the cull lanes' rule (`precise`, no
-contraction) so both writers pick the same level bit for bit.
-
-GPU data layout (step 4b):
-
-- The job record (`cull_compact.comp`, one `uvec4`: view / filter, first
-  entry, count, command offset) has no free word. The selection inputs (view
-  origin, `projection_scale`, threshold) go in the per-view record of the
-  view set that `cull_classify.comp` reads (12 `vec4` today; one more), so
-  every job of a view reads them.
-- The per-entry templates (`cull_templates.templates[2 * entry]`) keep their
-  stride, which bounds, templates and columns share. The levels go in a
-  separate per-level template buffer. The entry's index into it goes in a
-  free word of the entry's second template `uvec4`, if one is free (checked at
-  step 4b); otherwise it gets a column of its own.
-- `Draw_list_entry` (static_assert at most 64 bytes) gains a 32-bit
-  `lod_table_index`; there is room within the 64 bytes.
+Where and how selection runs (the culling classification, on the CPU lanes
+and in `cull_classify.comp`, bit for bit equal), its data layout and its
+consumers are planned in `doc/plans/lod_gpu_selection.md`.
 
 `Render_settings` is snapshotted per frame slot, so toggling `lod_enabled`
 while frames are in flight takes effect at a frame boundary with no extra
@@ -255,9 +229,8 @@ Consequences for two existing mechanisms:
   casters, and split per viewport for a frame where they differ. Directional
   cascades are fitted per camera already and are not affected.
 
-The shadow pass therefore runs its level selection after the color views'
-selection of the same frame, and reads it per entry. On the GPU path that is
-an ordering constraint between the color and shadow compaction jobs.
+How the shadow selection reads the color views' levels without an ordering
+between passes is `doc/plans/lod_gpu_selection.md` section 4.
 
 ### 2.5 Control properties
 
@@ -293,10 +266,8 @@ levels (D1).
 Levels pop (D4), with hysteresis: a view moves an entry to a coarser level only
 when the coarser level's `pixels` is below the threshold by a band, and back
 to a finer level only when the current level's `pixels` exceeds the threshold.
-This needs the previously selected level per view and per entry, kept beside
-the culling state in both command writers and reset when the view's key
-(`Gpu_command_key`) changes, as the occlusion bits are. The state is written
-in the loop that already runs per entry, so no new per-frame walk is added.
+The previous level per view and entry, its matching across frames and its
+restarts are `doc/plans/lod_gpu_selection.md` section 6.
 
 ### 2.7 Edge lines
 
@@ -316,7 +287,7 @@ ranges rather than line indices. Built and fed by
   of the level's triangles (section 2.7; `doc/plans/selection_outline_lod.md`).
 - D3: a caster drawn as a receiver selects the same level in the shadow pass
   as in the color view; other casters select from the shadow view (section
-  2.4; step 4c).
+  2.4; step 4, `doc/plans/lod_gpu_selection.md` section 4).
 - D4: pop with hysteresis (section 2.6; step 5).
 - D5: levels stored in the prepared glTF (`ERHE_gpu_vertex_streams` /
   `ERHE_mesh_optimized`), written by the exporter, no work at load (step 6).
@@ -404,29 +375,14 @@ the feedback in section 6.
 
 ### Step 4: automatic selection
 
-- 4a, CPU writer: per-level command templates, the entry's
-  `lod_table_index`, selection for color passes, `Render_settings` globals
-  plus Settings / graphics-preset UI. Debug view: color by selected level
-  through the `FLAT_DRAW_COLOR` variant (dbb087c9e). Stats per pass: entries
-  per level and triangles drawn (`get_lod_stats`). Gates: with
-  `lod_enabled = false` and with every entry forced to level 0, images are
-  byte-identical to HEAD, for both `use_draw_lists` settings. A scripted
-  camera dolly switches levels at the distances the formula predicts.
-- 4b, GPU writer: the layout of section 2.3 and selection in
-  `cull_compact.comp`. `get_cull_classification_check` is extended to the
-  selected level per command: 0 mismatches on default, heavy, Bistro and four
-  view, in both culling-classification settings.
-- 4c, shadows: selection in the shadow jobs and the CPU shadow writer per
-  section 2.4 (visible casters reuse the color view's level). Gates: no
-  self-shadow difference between level 0 and a forced level on a scene with
-  self-shadowing casters; the shadow map cache check
-  (`scripts/shadow_map_cache_check.py`) keeps passes while the camera moves
-  without changing any selected level.
+Planned in `doc/plans/lod_gpu_selection.md`: selection in the culling
+classification (CPU lanes and `cull_classify.comp`, bit-identical), shadows
+per D3, the CPU consumers (edge-line feed, `get_lod_info`, stats, shadow map
+cache) and the gates.
 
 ### Step 5: transitions
 
-- Hysteresis (section 2.6) in both command writers. Gate: a camera dolly that
-  stops inside the band does not flip levels from frame to frame.
+Hysteresis is step 4 of `doc/plans/lod_gpu_selection.md`.
 
 ### Step 6: persistence and import
 
@@ -462,7 +418,7 @@ for edge lines and the ID pass.
 Headless Vulkan editor (`erhe-headless-verify`): generate LODs on a creation
 scene through MCP, `render_scene_image` per forced level, and compare the
 triangle counts `get_lod_info` reports with the drawn counts from the pass
-stats. Byte-identity gates for the off states as in step 4a. Interactive
+stats. Byte-identity gates for the off states as in step 4. Interactive
 checks (window feel, popping visibility) go to the user.
 
 ## 6. Feedback log
