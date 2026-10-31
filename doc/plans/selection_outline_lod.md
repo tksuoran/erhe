@@ -1,6 +1,6 @@
 # Selection outline at the drawn LOD level
 
-Status: proposed
+Status: in progress
 
 Makes the selection outline trace the LOD level a mesh is drawn with
 (`doc/plans/lod.md`). Found while testing LOD step 3: with a forced level,
@@ -9,6 +9,32 @@ full-detail mesh. The outline keeps its current method (wide-line edge
 ribbons masked by the selection silhouette); what changes is that every
 generated LOD level gets its own edge lines (`doc/plans/lod.md` D2), and the
 silhouette mask is drawn at the same level as the fill.
+
+## State (2026-10-31)
+
+Branch `lod` (worktree `.claude/worktrees/lod`), rebased onto the local
+`render-thread` and force-pushed to `origin/lod` (6c4891b16). Each step is
+reviewed by an independent Fable agent (medium effort) before its commit and
+before the next step starts (user rule); the user tests interactively when
+the editor is ready (launch the windowed `build_vs2026_vulkan` Debug
+editor, stop it afterwards).
+
+- Step 1 DONE (d6b0d9c29): per-level edge lines.
+- Step 2 DONE (7046e0b13, revised 6c4891b16): the feed uses the mesh's
+  forced level; shader debug never changes edge lines or the outline (user
+  decision). User verified.
+- Shader debug fills draw through the draw lists since 6d2a0cc37 (from
+  `render-thread`), so a shader debug view draws the forced level too.
+  User verified.
+- NEXT: step 2b, then step 3, then step 4.
+
+Verification recipe (windowed editor, MCP on 127.0.0.1:3743, read the port
+from `logs/log.txt`): `create_shape` torus `{"position":[0,0.8,-4],
+"scale":2.0,"motion_mode":"none"}` (in front of Camera A at (0, 1.3, 4)),
+`generate_lods`, `select_items`, `set_item_property` `Lod.apply_lod` true /
+`Lod.mode` Forced / `Lod.forced_level` 4, `capture_screenshot`;
+`push_shader_debug {"shader_debug":7}` / `pop_shader_debug {}` for the
+debug case. `get_lod_info` reports `edge_count` per level.
 
 ## 1. How the outline is drawn now
 
@@ -164,14 +190,35 @@ setting.
 ### Step 3: stencil mask passes on the draw lists
 
 - Both mask passes, "Selection stencil mask (fill disabled)" and "Selection
-  stencil mask (proxy hidden)" (`app_rendering.cpp`), take no shader debug
-  (`shader_debug_override` none): the selection silhouette is not content,
-  and a debug mode must not change the outline. Today they take the view's
-  shader debug, fail the draw-list gate and draw a level-0 silhouette (with
-  `SHADER_DEBUG` in a depth-only variant's key), so with selection fill off
-  and shader debug on the level-N outline is masked by a level-0 silhouette:
-  that is the verification case. This also keeps them routable to the draw
-  lists.
+  stencil mask (proxy hidden)" (`app_rendering.cpp`), take no shader debug:
+  the selection silhouette is not content, and a debug mode must not change
+  the outline. With selection fill off and shader debug on, the outline
+  must still be masked by the forced level's silhouette: that is the
+  verification case. NOT via `shader_debug_override`: since 6d2a0cc37 any
+  pass with a `shader_debug_override` stays on the bucket path
+  (`composition_pass.cpp` routing gate, `!data.shader_debug_override`), so
+  the override would block step 3. A pass-data property that keeps the
+  view's shader debug out of the pass (its prepared `shader_debug` none, and
+  no `shader_debug_layers`) is needed instead; design it with the routing
+  gate's current form in front of you.
+- Findings for the design (2026-10-31): `Draw_list_renderer::Render_parameters`
+  already carries `color_blend_override`, honored by `draw_color`
+  (`draw_list_scene.cpp`, the color blend selection), so a pass-supplied
+  base pipeline or that override both work. The color variant comes from
+  `Color_environment::make_environment_key()` (`draw_list_scene.cpp`), the
+  uniform environment of every color list; `flat_draw_color` is the
+  precedent of a position-pass axis there, so a `depth_only` environment
+  flag setting `Shader_bool::VARIANT_DEPTH_ONLY` fits the "environment
+  affects resolution, not partitioning" rule (that bit is only ever set by
+  force masks). The alpha-tested cutout needs a derived shader gate in
+  `res/shaders/erhe_standard_variant.glsl`, built like
+  `ERHE_VARIANT_ID_RENDER_ALPHA_TEST` / `ERHE_VARIANT_PVS_ALPHA_TEST`:
+  `ERHE_VARIANT_DEPTH_ONLY` on an alpha_test / screen_door material is not a
+  position pass, so `standard.frag` runs the material inputs up to the
+  discard and then writes nothing (a branch beside the ID / PVS writes after
+  the discard). The material blending mode stays in the key under
+  `VARIANT_DEPTH_ONLY` (`Shader_key::derive`), and the gate also fixes the
+  bucket path's full-quad mask for alpha-tested meshes.
 - A dedicated base pipeline for the mask (color writes disabled, the
   selected fill's depth / stencil state) replaces `color_blend_override`;
   the pass supplies it like any other base pipeline.
