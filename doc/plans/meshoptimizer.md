@@ -64,8 +64,7 @@ confirmation.
 
 Recorded so the shape is known, not scheduled:
 
-- LOD chains (`meshopt_simplify`), a natural fit on the deferred-allocation
-  staging seam, and meshlets.
+- Meshlets. LOD chains are planned in `doc/plans/lod.md`.
 - A cache size cap / LRU for `cache/mesh_optimizer/`; unbounded growth is
   accepted today.
 - A dedicated minimal `id_renderer` variant (position + facet id +
