@@ -798,6 +798,8 @@ erhe_target_sources_grouped(
     windows/lightmap_texture_window.hpp
     windows/lightmap_window.cpp
     windows/lightmap_window.hpp
+    windows/lod_window.cpp
+    windows/lod_window.hpp
     windows/pvs_window.cpp
     windows/pvs_window.hpp
     windows/window_placement.cpp
@@ -1007,6 +1009,17 @@ set(_config_sources
     ${_config_out}/lightmap_config.hpp
     ${_config_out}/lightmap_config_serialization.hpp
     ${_config_out}/lightmap_config.cpp
+    ${_config_out}/lod_attribute_set.hpp
+    ${_config_out}/lod_attribute_set.cpp
+    ${_config_out}/lod_border_mode.hpp
+    ${_config_out}/lod_border_mode.cpp
+    ${_config_out}/lod_seam_mode.hpp
+    ${_config_out}/lod_seam_mode.cpp
+    ${_config_out}/lod_fallback_mode.hpp
+    ${_config_out}/lod_fallback_mode.cpp
+    ${_config_out}/lod_config.hpp
+    ${_config_out}/lod_config_serialization.hpp
+    ${_config_out}/lod_config.cpp
     ${_config_out}/load_config.hpp
     ${_config_out}/load_config_serialization.hpp
     ${_config_out}/load_config.cpp

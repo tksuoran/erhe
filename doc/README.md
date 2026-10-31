@@ -333,6 +333,7 @@ flowchart TD
 - [editor/lattice_deform_geometry_node.md](editor/lattice_deform_geometry_node.md) (mostly stable): Lattice free-form deformation geometry-graph node
 - [editor/lightmap_baking.md](editor/lightmap_baking.md) (experimental): Interactive lightmap baker: architecture, texel density, bake and sampling features
 - [editor/lightmap_texture_viewer.md](editor/lightmap_texture_viewer.md) (stable): Lightmap Texture viewer window: atlas display, edge and hover overlays
+- [editor/lod.md](editor/lod.md) (experimental): Mesh level of detail in the editor: LOD window (generation for the selection, chain table with pixel errors, forced level slider) and the `lod` config section
 - [editor/mesh_component_selection.md](editor/mesh_component_selection.md) (mostly stable): Face / edge / vertex selection and viewport overlay
 - [editor/mesh_modeling.md](editor/mesh_modeling.md) (experimental): Modal mesh modeling tools (loop cut, inset, bevel, knife): gesture lifecycle, keys, MCP tools
 - [editor/operations.md](editor/operations.md) (stable): Implements the undo/redo operation system and all concrete editor operations

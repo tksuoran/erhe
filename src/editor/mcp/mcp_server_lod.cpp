@@ -9,6 +9,7 @@
 #include "app_context.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "scene/scene_root.hpp"
+#include "windows/lod_window.hpp"
 
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/lod.hpp"
@@ -159,31 +160,6 @@ template <std::size_t N>
         {"max_level",    data.max_level},
         {"level",        erhe::scene::get_forced_lod_level(data)}
     };
-}
-
-// The level of `buffer_mesh`'s chain whose index range an entry draws:
-// matched by its range, since the entry holds the copy registration made.
-// -1 when no level matches (the entry was registered from another variant or
-// from a buffer mesh published since).
-[[nodiscard]] auto find_entry_level(
-    const erhe::scene_renderer::Draw_list_entry& entry,
-    const erhe::primitive::Buffer_mesh&          buffer_mesh
-) -> int
-{
-    const erhe::primitive::Lod_chain& chain = buffer_mesh.lod_chain;
-    const std::size_t level_count = chain.is_empty() ? std::size_t{1} : chain.level_count;
-    for (std::size_t level = 0; level < level_count; ++level) {
-        const erhe::primitive::Index_range range = chain.is_empty()
-            ? buffer_mesh.triangle_fill_indices
-            : chain.levels[level].index_range;
-        if (
-            (entry.index_count == static_cast<uint32_t>(range.index_count)) &&
-            (entry.first_index == (static_cast<uint32_t>(range.first_index) + buffer_mesh.base_index()))
-        ) {
-            return static_cast<int>(level);
-        }
-    }
-    return -1;
 }
 
 } // anonymous namespace
@@ -339,7 +315,7 @@ auto Mcp_server::query_lod_info(const json& args) -> std::string
                                 erhe::primitive::Primitive_mode::polygon_fill
                             ).second;
                             if (buffer_mesh != nullptr) {
-                                level = find_entry_level(list_entry, *buffer_mesh);
+                                level = find_draw_list_entry_lod_level(list_entry, *buffer_mesh);
                             }
                         }
                     }

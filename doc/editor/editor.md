@@ -887,6 +887,7 @@ Per-library configuration structs are loaded from individual JSON files in `conf
 - `experiments/` -- Experimental features (gradient editor, network, sheet)
 - Mesh modeling (experimental; `tools/mesh_component_selection_tool.*`, `transform/mesh_component_transform.*`) -- the modal topology tools in a mesh component mode (loop cut): preview, topology step, chained slide, one undo entry. Described in `doc/editor/mesh_modeling.md`; component selection in `doc/editor/mesh_component_selection.md`
 - Potentially visible sets (experimental; `renderers/pvs_*`, `windows/pvs_window.*`, `mcp/mcp_server_pvs.cpp`) -- offline per-cell visibility bake with the disocclusion buffer method, stored in the scene file as `ERHE_pvs` and read by the culling classification of the viewports, with the pages streamed from the file. Described in `doc/editor/pvs.md`
+- Mesh level of detail (experimental; `windows/lod_window.*`, `mcp/mcp_server_lod.cpp`) -- the LOD window: LOD chain generation for the selected meshes, the chain table with object space and pixel errors, and a forced level slider writing the `Lod` properties. Described in `doc/editor/lod.md`
 - Lightmap baking (experimental; `renderers/lightmap_*`) -- progressive GPU lightmap baker built on Vulkan ray query: automatic lightmap UV unwrap, world-space tile partitioning with per-tile atlases, denoise and seam handling, tiles streamed from disk. Described in `doc/editor/lightmap_baking.md`; the atlas viewer in `doc/editor/lightmap_texture_viewer.md`
 
 ## Component Construction Rules

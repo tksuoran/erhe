@@ -361,14 +361,27 @@ survive a glTF save and reload, and `scene_roundtrip_verify.py` checks them.
 
 ### Step 3: editor LOD window (generation for the selection)
 
-The generation core is built ahead of step 2 as step 2a; the window and the
-level slider remain. Built (described in
-`doc/erhe/meshoptimizer_integration.md` "Level of detail"):
-`request_lod_generation()` (one deferred finalize task per mesh, each
-distinct `Primitive` once; geometry path re-optimized, prepared and stored
-paths repacked from the core soup), the MCP tools `generate_lods` and
-`get_lod_info`, and the edit operations handing `lod_settings` to the
-`Primitive` they build.
+Built; described in `doc/editor/lod.md` (the LOD window, its forced level
+slider and the `lod` config section) and
+`doc/erhe/meshoptimizer_integration.md` "Level of detail"
+(`request_lod_generation()`, the MCP tools `generate_lods` and
+`get_lod_info`).
+
+Verified on the headless Metal editor (default scene plus a static torus,
+64 x 32 steps): `render_scene_image` renders through the composition passes'
+draw-list path (`Scene_image_view::prepare_composition()` ->
+`Composition_pass::prepare()`, `use_draw_lists` on, no shader debug), so the
+forced level reaches it. "Generate for selection" clicked in the window
+(`imgui_click`) builds 6 levels (4096, 2048, 1024, 512, 256, 128 triangles);
+level 0 is byte-identical to the image before generation. A slider drag to
+level 4 reports level 4 for the color and shadow entries in `get_lod_info`
+and a different image, recorded as one compound undo entry; a second drag to
+level 2, then undo, restores level 4 and its image; undo of the first drag
+restores the image without `Lod`, and redo level 4. "Release" restores the
+image without `Lod` (undo restores level 4); "Clear for selection" removes the
+chain and restores that image too. Doubling the camera distance (3.75 m to
+7.5 m) halves every level's pixel error in the table (level 1 2.676 to 1.338,
+level 5 66.039 to 33.019).
 
 Found while verifying step 2a, not yet investigated:
 - After an in-place edit (vertex move, recalculate normals) the
@@ -382,20 +395,8 @@ Found while verifying step 2a, not yet investigated:
   a geometry-path rebuild swap in the base built before the edit (the edit
   re-optimization has the same exposure; the variant publish is refused).
 
-- New ImGui window `LOD` (`src/editor/windows/lod_window.*`): `Lod_settings`
-  widgets, a `Generate for selection` button (a worker task per unique
-  `Primitive` of the selected meshes), and a table per primitive: level,
-  triangles, ratio, error (object space, and pixels for the active viewport).
-- A level slider for the selection that writes `Lod.apply_lod`,
-  `Lod.mode = forced` and `Lod.forced_level` through the property system
-  (undoable like every property edit).
-- MCP tools: `generate_lods(node_ids, settings)` and `get_lod_info(node_id)`;
-  the forced level is set with the existing property tools.
-- Verification: `render_scene_image` per forced level. First confirm that its
-  capture chain draws through the draw-list path; the fallback path draws
-  level 0.
-- Hand to the user for the first interactive pass, and record the feedback in
-  section 6.
+Open: hand the window to the user for the first interactive pass, and record
+the feedback in section 6.
 
 ### Step 4: automatic selection
 
