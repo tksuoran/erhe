@@ -2,6 +2,15 @@
 
 @rule::active-tasks-only;DONE-task-sections-move-to-memory-bank/topics/<topic>.md[PROGRESS]
 
+[TASK::lod]{started-2026-10-31;branch=lod;worktree-../erhe-lod;via-harness{opus-coder;orchestrator-reviews};doc/plans/lod.md}
+✓step-1{592a1b9cd;clang-built-Mac;erhe_primitive_tests-78/78}
+✓fp16-on-Metal{70a9daaec;Device_info-fp16-fields-backend-neutral;chains-533/546(13=first-render-outlier-incl-self-row);ctest-gpu|editor-101/101}
+✓step-2a{8f850bb84;request_lod_generation+generate_lods/get_lod_info;geometry+prepared+stored-paths;edit-ops-carry-lod_settings}
+✓step-2{2ebc93832;Lod-group+Lod_system-in-erhe::scene;Scene_host::on_mesh_lod_changed;forced-range-at-registration;cpu==gpu}
+✓step-3{8c8bab105;LOD-window+config-lod(editor_settings-v11)+slider-undoable;scene-close-safe}
+?NEXT=user-interactive-pass->feedback-sec-6->step-4a
+?found{no-weld-after-in-place-edit;per-facet-texcoords-no-chain-with-seams-keep;reparent-carrier-only-change-not-re-resolved;scene_roundtrip_verify-pre-existing-failures(Graph_texture-destroyed-on-render-thread-asset_manager.cpp:343);fp16-first-render-outlier}
+
 [TASK::quest-performance]{started-2026-10-24;branch=render-thread;via-harness{opus-coder+fable-review};doc/plans/quest_performance.md;memory-bank/topics/quest.md}
 ✓quest-topic+queue{42c05810b;Quest-items-1-5-at-queue-front}
 ✓build-fix{5460e0c3b;NDK-libc++-lacks-float-from_chars->strtod-hexfloat;graphics-tests-15/15}
