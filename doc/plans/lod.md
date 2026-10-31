@@ -20,7 +20,7 @@ Summarized from the O3DE (Atom) and Godot 4 source trees, 2026-10-31.
 | Topic | O3DE | Godot 4 |
 |---|---|---|
 | Generation | Build time, scene pipeline (`ModelAssetBuilderComponent.cpp` `GenerateNextLod`). Chained from the previous LOD, 50% each, up to 5 LODs. `meshopt_simplify` (positions only) when "preserve topology" is set, `meshopt_simplifySloppy` otherwise. Hand-authored LODs are supported by node selection or name convention | Import time (`ImporterMesh::generate_lods`). Chained from the previous result, half the triangles each step. `meshopt_simplifyWithAttributes` (normals weight 1, colors when present), flags `SPARSE`, `LOCK_BORDER`, `PRUNE` (`REGULARIZE` when deformable). Stops when a step keeps >= 75% of the triangles or at <= 24 indices |
-| Seams | No special handling: split vertices block collapses | Before simplifying, vertices at the same position are welded when UVs / colors match and the normals are within `normal_merge_angle` (20 degrees). A remap carries the result back to the real vertices |
+| Seams | Texture seams are kept by meshoptimizer itself (`meshopt_simplify` keeps seams, see section 2.2). Sloppy mode does not keep them | Texture seams are kept as well. Before simplifying, vertices at the same position are welded only when their UV, UV2 and color match, the tangent sign matches and the normals are within `normal_merge_angle` (20 degrees). The weld removes splits that come only from slightly different normals and never merges across a UV seam (`importer_mesh.cpp` 643-720). A remap carries the result back to the real vertices |
 | Error | Relative meshoptimizer error, used only to cap a level | Absolute object-space error per level: `max(prev * 1.5, step_error) * meshopt_simplifyScale`. Error is forced to grow at every level |
 | Storage | Per-LOD buffers. Generated LODs reuse the vertex data as a copy, with no compaction | Index buffers only, all sharing the surface's vertex buffer, plus one error value per level |
 | Selection metric | Screen fraction `cot(fov_y / 2) * R / distance` (ortho: no distance), compared with precomputed per-level ranges from one decay factor (0.5). A minimum coverage culls tiny objects | `error * max_axis_scale * lod_bias / (distance * 2 tan(fov_x / 2))` against `threshold_pixels / viewport_width` (default 1 px). Distance is to the closest point of the world AABB, 0 inside it. The coarsest level that passes is chosen |
@@ -38,8 +38,9 @@ Taken into erhe's design:
   fill-only vertex buffer this needs.
 - Godot's generation: `meshopt_simplifyWithAttributes`, a chain built from the
   previous level, `LOCK_BORDER`, error forced to grow (`* 1.5`), and the early
-  stop at 75%. The seam weld with a normal merge angle is included as well,
-  because without it UV seams block most collapses.
+  stop at 75%. The normal-only weld with a merge angle is included as well:
+  it lets collapses through splits that exist only because of normals, and
+  it keeps every UV and color seam.
 - Godot's screen-space error metric with the closest-point-on-AABB distance
   and the instance's max axis scale. It needs no per-mesh tuning, where
   O3DE's coverage ranges need a decay factor per mesh.
@@ -105,10 +106,26 @@ plain data:
   target reduction, run `meshopt_simplifySloppy`. Off by default.
 
 - `normal_merge_angle` (default 20 degrees): before simplifying, vertices at
-  the same position whose UVs and colors match and whose normals lie within
-  the angle are welded into a simplification-only vertex set. The result is
-  mapped back to the real vertices through the inverse remap (Godot's seam
-  weld).
+  the same position are welded into a simplification-only vertex set when
+  all their other attributes match (texcoords, color, tangent sign) and
+  their normals lie within the angle. The result is mapped back to the real
+  vertices through the inverse remap (Godot's weld). Vertices with
+  different texcoords are never welded, so the weld keeps texture seams. It
+  removes only normal splits that are almost smooth.
+
+Texture seams are kept by meshoptimizer. It classifies a vertex that shares
+its position with another vertex, along exactly two seam edges, as a seam
+vertex (`Kind_Seam` in `simplifier.cpp`). Such a vertex collapses only along
+the seam, onto a neighbour on the same seam, and both sides of the seam
+collapse together, so the seam line stays closed and each side keeps its own
+UVs. Vertices on more complex seam junctions are locked. Seams therefore
+limit how far a mesh simplifies, never what it looks like along the seam.
+Three settings would drop this guarantee, and erhe exposes each one as an
+explicit setting that is off by default: `meshopt_simplifySloppy`
+(`sloppy_fallback`), `meshopt_SimplifyPermissive` (`permissive`, which lets
+collapses cross seams) and a `normal_merge_angle` large enough to merge real
+hard edges. The step 1 tests include a textured box and a UV sphere with a
+seam, and check that the level 1 seam vertices keep their source texcoords.
 
 Each level is simplified from the previous level, not from level 0. A level's
 error is `max(previous_error * 1.5, step_error)` times `meshopt_simplifyScale`,
