@@ -70,6 +70,11 @@ public:
     Material_interface                                 material_interface;
     Primitive_interface                                primitive_interface;
     Pvs_layered_interface                              pvs_layered_interface;
+    // The per-pixel fragment shader invocation counts the overdraw variants
+    // add to (ERHE_OVERDRAW, res/shaders/erhe_overdraw.glsl): a
+    // uint per pixel of the view, row by row. Declared only in the programs
+    // whose ERHE_OVERDRAW define is not 0 (make_prototype()).
+    erhe::graphics::Shader_resource                    overdraw_count_block;
     std::unique_ptr<erhe::graphics::Bind_group_layout> bind_group_layout;
 };
 

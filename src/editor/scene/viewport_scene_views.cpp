@@ -11,6 +11,7 @@
 #include "graphics/icon_set.hpp"
 #include "renderers/id_renderer.hpp"
 #include "rendergraph/shadow_render_node.hpp"
+#include "rendergraph/overdraw_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendergraph/viewport_overlay_node.hpp"
 #include "scene/four_view.hpp"
@@ -206,6 +207,7 @@ Scene_views::~Scene_views() noexcept
         std::vector<std::shared_ptr<Viewport_window>> windows;
         windows.swap(m_viewport_windows);
     }
+    m_overdraw_chains.clear();
     m_post_processing_nodes.clear();
     m_overlay_nodes.clear();
 }
@@ -283,6 +285,16 @@ void Scene_views::destroy_viewport_scene_view(
         }
     );
     m_overlay_nodes.erase(overlay_end, m_overlay_nodes.end());
+
+    // And its overdraw visualization node, when the mode was on.
+    const auto overdraw_end = std::remove_if(
+        m_overdraw_chains.begin(),
+        m_overdraw_chains.end(),
+        [&viewport_scene_view](const Overdraw_chain& entry) {
+            return !entry.overdraw_node || (entry.overdraw_node->get_viewport_scene_view() == viewport_scene_view);
+        }
+    );
+    m_overdraw_chains.erase(overdraw_end, m_overdraw_chains.end());
 
     // Erase from m_viewport_scene_views explicitly so the only remaining
     // strong reference is the caller's. When the caller releases it, the
@@ -437,6 +449,106 @@ auto Scene_views::create_viewport_scene_view(
     );
 
     return new_viewport;
+}
+
+void Scene_views::set_overdraw_mode(const Viewport_scene_view* const viewport_scene_view, const Overdraw_mode mode)
+{
+    using erhe::rendergraph::Rendergraph_node_key;
+
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
+    const auto view_entry = std::find_if(
+        m_viewport_scene_views.begin(),
+        m_viewport_scene_views.end(),
+        [viewport_scene_view](const std::shared_ptr<Viewport_scene_view>& entry) { return entry.get() == viewport_scene_view; }
+    );
+    if (view_entry == m_viewport_scene_views.end()) {
+        return;
+    }
+    const std::shared_ptr<Viewport_scene_view> view = *view_entry;
+    view->set_overdraw_mode(mode);
+
+    // The window showing the view, and the overlay node that follows the
+    // post-processing node (none without post-processing).
+    std::shared_ptr<Viewport_window> viewport_window{};
+    for (const std::shared_ptr<Viewport_window>& window : m_viewport_windows) {
+        if (window->viewport_scene_view() == view) {
+            viewport_window = window;
+            break;
+        }
+    }
+    std::shared_ptr<Viewport_overlay_node> overlay_node{};
+    for (const std::shared_ptr<Viewport_overlay_node>& entry : m_overlay_nodes) {
+        if (entry && (entry->get_viewport_scene_view() == view)) {
+            overlay_node = entry;
+            break;
+        }
+    }
+    erhe::rendergraph::Rendergraph&      rendergraph = *m_app_context.rendergraph;
+    erhe::rendergraph::Rendergraph_node* window_host = m_app_context.imgui_windows->get_window_imgui_host().get();
+
+    const auto chain = std::find_if(
+        m_overdraw_chains.begin(),
+        m_overdraw_chains.end(),
+        [&view](const Overdraw_chain& entry) { return entry.overdraw_node->get_viewport_scene_view() == view; }
+    );
+
+    if (mode != Overdraw_mode::off) {
+        if (chain != m_overdraw_chains.end()) {
+            return; // already in the chain (a change between the counting modes)
+        }
+        Overdraw_chain new_chain{
+            .overdraw_node = erhe::rendergraph::make_rendergraph_node<Overdraw_node>(
+                rendergraph,
+                m_app_context,
+                view,
+                erhe::utility::Debug_label{fmt::format("Overdraw for {}", view->get_name())}
+            )
+        };
+        Overdraw_node* const overdraw_node = new_chain.overdraw_node.get();
+        if (overlay_node) {
+            // view -> post-processing -> overlay  =>  view -> overdraw -> overlay
+            erhe::rendergraph::Rendergraph_node* post_processing_node = overlay_node->get_consumer_input_node(Rendergraph_node_key::viewport_texture);
+            ERHE_VERIFY(post_processing_node != nullptr);
+            ERHE_VERIFY(rendergraph.disconnect(Rendergraph_node_key::viewport_texture, view.get(),           post_processing_node));
+            ERHE_VERIFY(rendergraph.disconnect(Rendergraph_node_key::viewport_texture, post_processing_node, overlay_node.get()));
+            ERHE_VERIFY(rendergraph.connect   (Rendergraph_node_key::viewport_texture, view.get(),           overdraw_node));
+            ERHE_VERIFY(rendergraph.connect   (Rendergraph_node_key::viewport_texture, overdraw_node,        overlay_node.get()));
+            new_chain.bypassed_node = post_processing_node;
+        } else {
+            // view -> window host  =>  view -> overdraw -> window host
+            ERHE_VERIFY(rendergraph.disconnect(Rendergraph_node_key::viewport_texture, view.get(),    window_host));
+            ERHE_VERIFY(rendergraph.connect   (Rendergraph_node_key::viewport_texture, view.get(),    overdraw_node));
+            ERHE_VERIFY(rendergraph.connect   (Rendergraph_node_key::viewport_texture, overdraw_node, window_host));
+            if (viewport_window) {
+                viewport_window->set_rendergraph_output_node(new_chain.overdraw_node);
+            }
+        }
+        m_overdraw_chains.push_back(std::move(new_chain));
+        return;
+    }
+
+    if (chain == m_overdraw_chains.end()) {
+        return; // not in the chain
+    }
+    Overdraw_node* const overdraw_node = chain->overdraw_node.get();
+    if (overlay_node) {
+        ERHE_VERIFY(chain->bypassed_node != nullptr);
+        ERHE_VERIFY(rendergraph.disconnect(Rendergraph_node_key::viewport_texture, view.get(),           overdraw_node));
+        ERHE_VERIFY(rendergraph.disconnect(Rendergraph_node_key::viewport_texture, overdraw_node,        overlay_node.get()));
+        ERHE_VERIFY(rendergraph.connect   (Rendergraph_node_key::viewport_texture, view.get(),           chain->bypassed_node));
+        ERHE_VERIFY(rendergraph.connect   (Rendergraph_node_key::viewport_texture, chain->bypassed_node, overlay_node.get()));
+    } else {
+        ERHE_VERIFY(rendergraph.disconnect(Rendergraph_node_key::viewport_texture, view.get(),    overdraw_node));
+        ERHE_VERIFY(rendergraph.disconnect(Rendergraph_node_key::viewport_texture, overdraw_node, window_host));
+        ERHE_VERIFY(rendergraph.connect   (Rendergraph_node_key::viewport_texture, view.get(),    window_host));
+        if (viewport_window) {
+            viewport_window->set_rendergraph_output_node(view);
+        }
+    }
+    // The node leaves the rendergraph at once; it is destroyed when no frame
+    // in flight names it.
+    m_overdraw_chains.erase(chain);
 }
 
 auto Scene_views::create_viewport_window(

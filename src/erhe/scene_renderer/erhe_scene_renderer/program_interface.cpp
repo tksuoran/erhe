@@ -41,7 +41,17 @@ Program_interface::Program_interface(
     , material_interface {graphics_device, config.max_material_count}
     , primitive_interface{graphics_device, config.max_primitive_count}
     , pvs_layered_interface{graphics_device}
+    , overdraw_count_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "overdraw_count",
+            .binding_point = overdraw_count_buffer_binding_point,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block
+        }
+    }
 {
+    overdraw_count_block.add_uint("counts", erhe::graphics::Shader_resource::unsized_array);
+
     // Every shader source is in memory before the first program is built.
     for (const std::filesystem::path& shader_path : config.shader_paths) {
         graphics_device.get_shader_source_cache().preload(shader_path);
@@ -97,8 +107,11 @@ Program_interface::Program_interface(
             {.binding_point = joint_buffer_binding_point,         .type = to_binding_type(joint_interface.joint_block),          .stage_flags = Stage::vertex},
             // glyph: grid axis-label coverage in grid.frag only.
             {.binding_point = glyph_buffer_binding_point,         .type = to_binding_type(glyph_interface.glyph_block),          .stage_flags = Stage::fragment},
-            // pvs_layered: the PVS bake's layered buffer, standard.frag's PVS
-            // variants only (bound by the bake's passes, by no other pass).
+            // Binding 13 (buffer_binding_points.hpp) is shared: pvs_layered, the PVS
+            // bake's layered buffer (standard.frag's PVS variants, bound by the bake's
+            // passes only), or overdraw_count, the overdraw variants' per-pixel counts
+            // (ERHE_OVERDRAW != 0, bound only for the passes that count). A program
+            // declares at most one of them; both are fragment storage blocks.
             {.binding_point = pvs_layered_buffer_binding_point,   .type = to_binding_type(pvs_layered_interface.pvs_layered_block), .stage_flags = Stage::fragment},
             // The shadow samplers are wired in as immutable samplers in the
             // descriptor set layout. The Vulkan portability subset on
@@ -268,7 +281,26 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&primitive_interface.primitive_block);
     create_info.add_interface_block(&joint_interface.joint_block);
     create_info.add_interface_block(&glyph_interface.glyph_block);
-    create_info.add_interface_block(&pvs_layered_interface.pvs_layered_block);
+    // pvs_layered and overdraw_count share binding 13 (buffer_binding_points.hpp):
+    // only the PVS variants declare the layered block and only the overdraw
+    // variants declare the count block; every other program keeps its source
+    // and bindings as without them, and no key carries both.
+    bool declares_pvs_layered    = false;
+    bool declares_overdraw_count = false;
+    for (const std::pair<std::string, std::string>& define : create_info.defines) {
+        if ((define.first == "ERHE_VARIANT_PVS_DEPTH") || (define.first == "ERHE_VARIANT_PVS_ID")) {
+            declares_pvs_layered = true;
+        } else if ((define.first == "ERHE_OVERDRAW") && (define.second != "0")) {
+            declares_overdraw_count = true;
+        }
+    }
+    ERHE_VERIFY(!(declares_pvs_layered && declares_overdraw_count));
+    if (declares_pvs_layered) {
+        create_info.add_interface_block(&pvs_layered_interface.pvs_layered_block);
+    }
+    if (declares_overdraw_count) {
+        create_info.add_interface_block(&overdraw_count_block);
+    }
     create_info.bind_group_layout = bind_group_layout.get();
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
     create_info.defines.emplace_back("ERHE_GRID_LABELS", "1");

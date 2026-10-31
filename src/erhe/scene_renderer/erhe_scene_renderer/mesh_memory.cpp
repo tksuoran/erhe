@@ -1282,6 +1282,11 @@ void bucket_primitives(
             }
             shader_key.bool_mask |=  boolean_mask_force_enable;
             shader_key.bool_mask &= ~boolean_mask_force_disable;
+            // The depth-only (selection stencil mask) and ID variants are not
+            // counted (doc/plans/overdraw_visualization.md O2).
+            if (shader_key.get(Shader_bool::VARIANT_DEPTH_ONLY) || shader_key.get(Shader_bool::VARIANT_ID_RENDER)) {
+                shader_key.set(Shader_int::OVERDRAW, static_cast<uint32_t>(Overdraw_count::off));
+            }
             // The specular anti-aliasing axis follows the key's final varying
             // bits (after the force masks), as apply_render_environment() and
             // the draw-list resolution apply it.

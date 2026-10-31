@@ -89,6 +89,9 @@ public:
         // The pass's selection in the frame's GPU command generation
         // (add_color_command_selection()); none: CPU-written commands.
         Command_selection_id                                   command_selection{Command_selection_id::none};
+        // Draw_color_parameters::overdraw; the overdraw variants count into
+        // base.overdraw_count_buffer.
+        Overdraw_count                                         overdraw{Overdraw_count::off};
     };
 
     auto render(const Render_parameters& parameters) -> Draw_statistics;

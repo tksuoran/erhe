@@ -426,3 +426,10 @@ GPU readback uses a ring buffer of 4 transfer entries to handle pipeline latency
 | `src/erhe/scene_renderer/erhe_scene_renderer/forward_renderer.cpp` | Core forward rendering |
 | `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.cpp` | Shadow depth rendering |
 | `src/erhe/graphics/erhe_graphics/state/depth_stencil_state.hpp` | Stencil state types |
+
+## Overdraw visualization
+
+A viewport's Overdraw combo (Off, Shaded, Rasterized) shows per-pixel
+fragment counts in place of the post-processed image (`Overdraw_node`),
+with statistics over MCP; plan and remaining steps:
+[../plans/overdraw_visualization.md](../plans/overdraw_visualization.md).

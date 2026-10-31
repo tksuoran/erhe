@@ -99,8 +99,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `pvs_layer_of_depth()`, `pvs_layer_front_depth()` and
   `Pvs_layered_interface`; `Program_interface::pvs_layered_interface` and
   the `pvs_layered` storage block at the new
-  `pvs_layered_buffer_binding_point` (13) of the scene layout, which every
-  program built through `Program_interface` declares.
+  `pvs_layered_buffer_binding_point` (13) of the scene layout, declared by
+  the PVS variants only (binding 13 is shared with `overdraw_count`).
 - `erhe::scene_renderer`: the potentially visible set consumer
   (doc/plans/pvs.md "Runtime consumption"): `Pvs_culling` (`off`, `on`) with
   `c_str()`; `Draw_list_scene::set_pvs_database()`,
@@ -138,6 +138,19 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::dataformat`: `convert()` writes `format_packed111110_vec3_unorm`
   (R in the low 11 bits) and `format_packed1010102_vec4_unorm`; converting to
   `format_8_vec4_srgb` writes the source alpha (it wrote blue).
+- `erhe::scene_renderer`: overdraw counting
+  (doc/plans/overdraw_visualization.md): the `Shader_int::OVERDRAW` axis with
+  `Overdraw_count` (off, shaded, rasterized; `res/shaders/erhe_overdraw.glsl`),
+  `Program_interface::overdraw_count_block`
+  at `overdraw_count_buffer_binding_point` (13),
+  `Base_render_parameters::overdraw_count_buffer`,
+  `Forward_renderer::Prepare_parameters::overdraw` /
+  `Render_parameters::overdraw`, `Draw_color_parameters::overdraw` and
+  `Draw_list_renderer::Render_parameters::overdraw`
+  (`Draw_list_color_resolution::overdraw`), and `Overdraw_counter`,
+  `Overdraw_view_state` and `Overdraw_statistics` (`overdraw_counter.hpp`;
+  the statistics carry the mode they were counted with).
+
 - `erhe::graphics`: `Graphics_config::spirv_optimization` (config version 4):
   every compiled shader stage runs through the SPIRV-Tools optimizer's
   performance passes (interface and debug info preserved; an optimized module

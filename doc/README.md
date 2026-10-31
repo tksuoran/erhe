@@ -468,6 +468,7 @@ flowchart TD
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
 - [plans/metal_backend.md](plans/metal_backend.md) (in progress): Metal backend: parity work
+- [plans/mcp_image_resolution.md](plans/mcp_image_resolution.md) (proposed): MCP image tools: requested resolution
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
 - [plans/mesh_memory.md](plans/mesh_memory.md) (proposed): Mesh memory and primitive shapes: outstanding work
 - [plans/mesh_modeling.md](plans/mesh_modeling.md) (in progress): Blender-style mesh modeling operations: remaining work
@@ -475,6 +476,7 @@ flowchart TD
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
 - [plans/quest_performance.md](plans/quest_performance.md) (proposed): Quest 3 performance: baseline, ranking, items
+- [plans/overdraw_visualization.md](plans/overdraw_visualization.md) (in progress): Overdraw visualization
 - [plans/parallel_editor_init.md](plans/parallel_editor_init.md) (proposed): Parallel editor initialization: a Taskflow graph over the init steps
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups

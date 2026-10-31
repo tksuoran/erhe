@@ -170,7 +170,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(VERTEX_TEXCOORD_ENCODING)                 \
     X(VERTEX_TBN_ENCODING)                      \
     X(VERTEX_JOINT_WEIGHTS_ENCODING)            \
-    X(SPECULAR_ANTI_ALIASING)
+    X(SPECULAR_ANTI_ALIASING)                   \
+    X(OVERDRAW)
 
 enum class Shader_bool : uint32_t {
 #define ERHE_X(PARAM) PARAM,
@@ -403,6 +404,16 @@ enum class Specular_anti_aliasing : uint32_t
 // (the force masks), calls it again afterwards with the environment's
 // value, so the axis always follows the key's final bits.
 void set_specular_anti_aliasing_axis(Shader_key& key, Specular_anti_aliasing mode);
+
+// Overdraw counting of a variant (doc/erhe/shader_variants.md "Overdraw"),
+// the OVERDRAW variant axis; the values match the ERHE_OVERDRAW_* constants
+// of res/shaders/erhe_standard_variant.glsl.
+enum class Overdraw_count : uint32_t
+{
+    off        = 0, // no counting
+    shaded     = 1, // the invocations that pass the early depth and stencil tests (the shader work)
+    rasterized = 2  // every rasterized fragment, before the depth test
+};
 
 // The SPECULAR_ANTI_ALIASING axis value of a key.
 [[nodiscard]] auto get_specular_anti_aliasing(const Shader_key& key) -> Specular_anti_aliasing;

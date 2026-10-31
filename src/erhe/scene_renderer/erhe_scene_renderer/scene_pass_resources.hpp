@@ -17,6 +17,7 @@
 #include <string_view>
 
 namespace erhe::graphics {
+    class Buffer;
     class Command_buffer;
     class Device;
     class Render_command_encoder;
@@ -89,6 +90,10 @@ public:
     // checker pattern) written to the camera UBO; ignored by passes
     // that do not draw the sky.
     const Sky_parameters                                               sky_parameters   {};
+    // The per-pixel counts of the overdraw variants (Program_interface::
+    // overdraw_count_block), bound for a pass whose draws count overdraw;
+    // null otherwise (nothing is bound at the binding).
+    const erhe::graphics::Buffer*                                      overdraw_count_buffer{nullptr};
     const std::string_view                                             debug_label{};
 };
 

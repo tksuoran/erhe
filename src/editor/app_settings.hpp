@@ -4,6 +4,7 @@
 
 #include "config/generated/graphics_preset_entry.hpp"
 #include "config/generated/icon_settings_config.hpp"
+#include "renderers/content_draws.hpp"
 #include "windows/property_group_states.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -176,6 +177,13 @@ public:
     // session by --no-headset-culling; the Settings window toggles it.
     // Never persisted.
     bool headset_culling_session{true};
+
+    // Session-only switch of the content draws the composition passes make
+    // (renderers/content_draws.hpp): opaque_only leaves out the alpha-tested
+    // and translucent content passes, set by the MCP set_content_draws tool
+    // or the Settings window, to measure what those draws cost. Never
+    // persisted.
+    Content_draws content_draws_session{Content_draws::all};
 
     // Node tree (ephemeral UI state, not persisted)
     bool node_tree_show_all          {false};

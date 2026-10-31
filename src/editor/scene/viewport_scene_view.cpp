@@ -41,6 +41,7 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_hash/xxhash.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -190,6 +191,8 @@ void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_
     state.projection_viewport   = m_projection_viewport;
     state.msaa_sample_count     = m_msaa_sample_count;
     state.shader_debug          = m_shader_debug;
+    state.overdraw              = is_overdraw_supported() ? m_overdraw_mode : Overdraw_mode::off;
+    state.overdraw_max_count    = m_overdraw_max_count;
     state.is_scene_view_hovered = m_is_scene_view_hovered;
     state.position_in_viewport  = m_position_in_viewport;
     // pick_probe: an armed MCP pick_at probe (see arm_pick_probe) - the ID
@@ -395,7 +398,8 @@ void Viewport_scene_view::prepare_composition(const uint64_t frame_index, const 
         .render_state        = &state,
         .viewport            = state.projection_viewport,
         .shader_debug        = state.shader_debug,
-        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
+        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
+        .overdraw            = to_overdraw_count(state.overdraw)
     };
 
     // Bucketing reads the meshes' Buffer_mesh variants, which a worker may
@@ -463,7 +467,8 @@ void Viewport_scene_view::pre_execute_rendergraph_node(erhe::graphics::Command_b
             .shader_debug        = state.shader_debug,
             .views               = state.camera
                 ? std::span<const erhe::scene_renderer::Camera_view_input>(&m_frame_view_input, 1)
-                : std::span<const erhe::scene_renderer::Camera_view_input>{}
+                : std::span<const erhe::scene_renderer::Camera_view_input>{},
+            .overdraw            = to_overdraw_count(state.overdraw)
         }
     );
     // What the prepare phase decided for this view and frame (the
@@ -675,6 +680,44 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     ERHE_VERIFY(m_render_target.get_color_texture());
     ERHE_VERIFY(m_render_target.get_color_texture()->get_width()  == projection_viewport.width);
     ERHE_VERIFY(m_render_target.get_color_texture()->get_height() == projection_viewport.height);
+
+    // The overdraw counting of the frame (doc/plans/overdraw_visualization.md):
+    // the count buffer is cleared before the render pass, the counting
+    // passes bind it, and its reduction follows the render pass.
+    erhe::scene_renderer::Overdraw_counter* const overdraw_counter = m_context.overdraw_counter;
+    const bool count_overdraw =
+        do_render &&
+        (state.overdraw != Overdraw_mode::off) &&
+        (overdraw_counter != nullptr) &&
+        overdraw_counter->is_supported();
+    if (count_overdraw) {
+        m_overdraw_view_state.begin_frame(
+            graphics_device,
+            command_buffer,
+            frame_index,
+            to_overdraw_count(state.overdraw),
+            static_cast<uint32_t>(projection_viewport.width),
+            static_cast<uint32_t>(projection_viewport.height)
+        );
+        context.overdraw_count_buffer = m_overdraw_view_state.get_count_buffer(frame_index);
+    } else if (state.overdraw == Overdraw_mode::off) {
+        m_overdraw_view_state.release();
+    }
+
+    record_content_render_pass(context, state);
+
+    if (count_overdraw) {
+        overdraw_counter->reduce(command_buffer, m_overdraw_view_state, frame_index);
+    }
+}
+
+void Viewport_scene_view::record_content_render_pass(Render_context& context, const Viewport_render_state& state)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    erhe::graphics::Device&         graphics_device = m_rendergraph.get_graphics_device();
+    erhe::graphics::Command_buffer& command_buffer  = *context.command_buffer;
+    const bool                      do_render       = state.do_render;
 
     erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
     erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_target.get_render_pass(), command_buffer};
@@ -960,6 +1003,11 @@ auto Viewport_scene_view::get_window_viewport() const -> const erhe::math::Viewp
 auto Viewport_scene_view::get_projection_viewport() const -> const erhe::math::Viewport&
 {
     return m_projection_viewport;
+}
+
+auto Viewport_scene_view::get_msaa_sample_count() const -> int
+{
+    return m_msaa_sample_count;
 }
 
 auto Viewport_scene_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
@@ -1355,6 +1403,42 @@ void Viewport_scene_view::viewport_toolbar()
         ImGui::SetItemTooltip("Shader Debug");
     }
 
+    // Overdraw visualization (doc/plans/overdraw_visualization.md O4). The
+    // chain rewiring is deferred out of the ImGui iteration
+    // (doc/editor/coding_rules.md "ImGui-time work").
+    {
+        const bool supported = is_overdraw_supported();
+        int        mode_int  = static_cast<int>(m_overdraw_mode);
+        ImGui::BeginDisabled(!supported);
+        if (erhe::imgui::combo_fit_width("##ViewportOverdraw", &mode_int, c_overdraw_mode_strings, IM_ARRAYSIZE(c_overdraw_mode_strings))) {
+            const Overdraw_mode mode = static_cast<Overdraw_mode>(mode_int);
+            Scene_views* const  scene_views = m_context.scene_views;
+            const Viewport_scene_view* const view = this;
+            m_context.imgui_windows->queue(
+                [scene_views, view, mode]() {
+                    if (scene_views != nullptr) {
+                        scene_views->set_overdraw_mode(view, mode);
+                    }
+                }
+            );
+        }
+        ImGui::EndDisabled();
+        ImGui::SetItemTooltip(
+            supported
+                ? "Overdraw: Shaded counts the fragment shader invocations per pixel of the content passes (after the early depth test); Rasterized counts every rasterized fragment (ignoring the depth test)"
+                : "Overdraw: not supported on this device (needs fragment stage buffer atomics)"
+        );
+        if (m_overdraw_mode != Overdraw_mode::off) {
+            int max_count = static_cast<int>(m_overdraw_max_count);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 4.0f);
+            if (ImGui::DragInt("##ViewportOverdrawMaxCount", &max_count, 0.1f, 1, 255)) {
+                set_overdraw_max_count(static_cast<uint32_t>(max_count));
+            }
+            ImGui::SetItemTooltip("Overdraw count shown white");
+        }
+    }
+
     m_context.selection_tool->viewport_toolbar();
     m_context.transform_tool->viewport_toolbar();
     if (m_context.mesh_component_selection_tool != nullptr) {
@@ -1373,6 +1457,42 @@ void Viewport_scene_view::set_shader_debug(erhe::scene_renderer::Shader_debug sh
 auto Viewport_scene_view::get_shader_debug() const -> erhe::scene_renderer::Shader_debug
 {
     return m_shader_debug;
+}
+
+void Viewport_scene_view::set_overdraw_mode(const Overdraw_mode mode)
+{
+    m_overdraw_mode = mode;
+}
+
+auto Viewport_scene_view::get_overdraw_mode() const -> Overdraw_mode
+{
+    return m_overdraw_mode;
+}
+
+auto Viewport_scene_view::is_overdraw_supported() const -> bool
+{
+    return (m_context.overdraw_counter != nullptr) && m_context.overdraw_counter->is_supported();
+}
+
+auto Viewport_scene_view::get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics
+{
+    return m_overdraw_view_state.get_statistics();
+}
+
+void Viewport_scene_view::set_overdraw_max_count(const uint32_t max_count)
+{
+    m_overdraw_max_count = std::max(max_count, uint32_t{1});
+}
+
+auto Viewport_scene_view::get_overdraw_max_count() const -> uint32_t
+{
+    return m_overdraw_max_count;
+}
+
+auto Viewport_scene_view::get_overdraw_count_buffer(const uint64_t frame_index) const -> const erhe::graphics::Buffer*
+{
+    erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    return m_overdraw_view_state.get_count_buffer(frame_index);
 }
 
 void Viewport_scene_view::set_renderer_choice(Renderer_choice choice)

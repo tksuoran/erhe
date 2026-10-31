@@ -38,6 +38,9 @@
 #include "windows/frame_pacing_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #include "xr/headset_view.hpp"
+#include "erhe_xr/headset.hpp"
+#include "erhe_xr/xr_instance.hpp"
+#include "erhe_xr/xr_session.hpp"
 #endif
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -644,6 +647,34 @@ auto Mcp_server::action_set_pvs_culling(const json& args) -> std::string
         {"enabled",          m_context.editor_settings->pvs_culling},
         {"query_margin",     m_context.editor_settings->pvs_query_margin},
         {"classification",   std::string{to_string(m_context.editor_settings->culling_classification)}}
+    }).dump();
+}
+
+auto Mcp_server::action_set_content_draws(const json& args) -> std::string
+{
+    // The MCP counterpart of the Settings window's Content Draws combo
+    // (renderers/content_draws.hpp): session only; the next frame's render
+    // settings snapshot carries it to the composition passes.
+    if (m_context.app_settings == nullptr) {
+        return make_error_content("set_content_draws: editor settings not available");
+    }
+    if (args.contains("mode")) {
+        const json& value = args["mode"];
+        if (!value.is_string()) {
+            return make_error_content("set_content_draws: 'mode' must be a string (all or opaque_only)");
+        }
+        const std::string mode = value.get<std::string>();
+        if (mode == "all") {
+            m_context.app_settings->content_draws_session = Content_draws::all;
+        } else if (mode == "opaque_only") {
+            m_context.app_settings->content_draws_session = Content_draws::opaque_only;
+        } else {
+            return make_error_content("set_content_draws: 'mode' must be all or opaque_only");
+        }
+    }
+    const bool all = (m_context.app_settings->content_draws_session == Content_draws::all);
+    return make_json_content(json{
+        {"mode", all ? "all" : "opaque_only"}
     }).dump();
 }
 
@@ -1792,6 +1823,109 @@ auto Mcp_server::query_scene_cameras(const json& args) -> std::string
     return make_json_content({{"cameras", cameras}}).dump();
 }
 
+namespace {
+
+void add_camera_frame(json& entry, const std::shared_ptr<erhe::scene::Camera>& camera)
+{
+    const glm::mat4 world_from_camera = camera->world_from_node();
+    json matrix = json::array();
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            matrix.push_back(world_from_camera[column][row]);
+        }
+    }
+    entry["camera_path"]              = camera->get_path();
+    entry["camera_world_from_camera"] = matrix;   // column-major, 16 floats
+    const erhe::scene::Projection* projection = camera->projection();
+    if (projection != nullptr) {
+        entry["camera_projection_type"] = erhe::scene::Projection::c_type_strings[static_cast<int>(projection->projection_type)];
+        entry["camera_fov_y"]           = projection->fov_y;
+        entry["camera_fov_x"]           = projection->fov_x;
+        entry["camera_z_near"]          = projection->get_z_near();
+        entry["camera_z_far"]           = projection->get_z_far();
+    }
+}
+
+// A viewport window: the rectangle its image occupies in the editor window,
+// in window pixels with the origin at the top left (the pixel space a
+// capture_screenshot PNG is in), and the size of the image it renders (its
+// content render target, the projection viewport).
+auto make_window_viewport_entry(Viewport_window& viewport_window) -> json
+{
+    const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window.viewport_scene_view();
+    const std::shared_ptr<Scene_root>          scene_root = scene_view ? scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
+    const std::shared_ptr<erhe::scene::Camera> camera     = scene_view ? scene_view->get_camera() : std::shared_ptr<erhe::scene::Camera>{};
+    const erhe::math::Viewport window_rect = scene_view ? scene_view->get_window_viewport()     : erhe::math::Viewport{};
+    const erhe::math::Viewport render_rect = scene_view ? scene_view->get_projection_viewport() : erhe::math::Viewport{};
+    json entry = {
+        {"kind",              "window"},
+        {"title",             viewport_window.get_title()},
+        {"scene",             scene_root ? scene_root->get_name() : ""},
+        {"camera",            camera ? camera->get_name() : ""},
+        {"x",                 window_rect.x},
+        {"y",                 window_rect.y},
+        {"width",             window_rect.width},
+        {"height",            window_rect.height},
+        {"render_width",      render_rect.width},
+        {"render_height",     render_rect.height},
+        {"msaa_sample_count", scene_view ? scene_view->get_msaa_sample_count() : 0}
+    };
+    if (camera) {
+        add_camera_frame(entry, camera);
+    }
+    return entry;
+}
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+// The viewport name the MCP tools take for the OpenXR headset view
+// (get_viewports, get_viewport_size); viewport windows go by their title.
+constexpr const char* c_headset_viewport_name = "headset";
+
+// The OpenXR headset view: the per-view image size the session renders (the
+// runtime's recommended image rect, which the swapchains are created with),
+// the view count, multiview, the swapchain sample count and color format.
+auto make_headset_viewport_entry(Headset_view& headset_view) -> json
+{
+    const std::shared_ptr<Scene_root>          scene_root = headset_view.get_scene_root();
+    const std::shared_ptr<erhe::scene::Camera> camera     = headset_view.get_camera();
+    json entry = {
+        {"kind",   "headset"},
+        {"title",  c_headset_viewport_name},
+        {"active", headset_view.is_active()},
+        {"scene",  scene_root ? scene_root->get_name() : ""},
+        {"camera", camera ? camera->get_name() : ""}
+    };
+    erhe::xr::Headset*      headset  = headset_view.get_headset();
+    erhe::xr::Xr_instance*  instance = (headset != nullptr) ? headset->get_xr_instance() : nullptr;
+    erhe::xr::Xr_session*   session  = (headset != nullptr) ? headset->get_xr_session()  : nullptr;
+    if ((instance != nullptr) && (session != nullptr)) {
+        const std::vector<XrViewConfigurationView>& views = instance->get_xr_view_configuration_views();
+        json view_sizes = json::array();
+        for (const XrViewConfigurationView& view : views) {
+            view_sizes.push_back({
+                {"width",  view.recommendedImageRectWidth},
+                {"height", view.recommendedImageRectHeight}
+            });
+        }
+        entry["views"]             = view_sizes;
+        entry["view_count"]        = session->get_view_count();
+        entry["multiview"]         = session->is_multiview_enabled();
+        entry["msaa_sample_count"] = session->get_swapchain_sample_count();
+        entry["color_format"]      = erhe::dataformat::c_str(session->get_swapchain_color_format());
+        if (!views.empty()) {
+            entry["render_width"]  = views.front().recommendedImageRectWidth;
+            entry["render_height"] = views.front().recommendedImageRectHeight;
+        }
+    }
+    if (camera) {
+        add_camera_frame(entry, camera);
+    }
+    return entry;
+}
+#endif
+
+} // anonymous namespace
+
 auto Mcp_server::query_viewports(const json& args) -> std::string
 {
     static_cast<void>(args);
@@ -1802,47 +1936,71 @@ auto Mcp_server::query_viewports(const json& args) -> std::string
 
     json viewports = json::array();
     for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
-        const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
-        const std::shared_ptr<Scene_root> scene_root = scene_view ? scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
-        const std::shared_ptr<erhe::scene::Camera> camera = scene_view ? scene_view->get_camera() : std::shared_ptr<erhe::scene::Camera>{};
-        // The rectangle the viewport's image occupies in the editor window, in
-        // window pixels with the origin at the top left (the pixel space a
-        // capture_screenshot PNG is in), and the camera's frame: enough for a
-        // caller to crop the capture to the 3D view and to reproduce the same
-        // view in another renderer.
-        const erhe::math::Viewport& rect = scene_view ? scene_view->get_window_viewport() : erhe::math::Viewport{};
-        json entry = {
-            {"title",  viewport_window->get_title()},
-            {"scene",  scene_root ? scene_root->get_name() : ""},
-            {"camera", camera ? camera->get_name() : ""},
-            {"x",      rect.x},
-            {"y",      rect.y},
-            {"width",  rect.width},
-            {"height", rect.height}
-        };
-        if (camera) {
-            const glm::mat4 world_from_camera = camera->world_from_node();
-            json matrix = json::array();
-            for (int column = 0; column < 4; ++column) {
-                for (int row = 0; row < 4; ++row) {
-                    matrix.push_back(world_from_camera[column][row]);
-                }
-            }
-            entry["camera_path"]              = camera->get_path();
-            entry["camera_world_from_camera"] = matrix;   // column-major, 16 floats
-            const erhe::scene::Projection* projection = camera->projection();
-            if (projection != nullptr) {
-                entry["camera_projection_type"] = erhe::scene::Projection::c_type_strings[static_cast<int>(projection->projection_type)];
-                entry["camera_fov_y"]           = projection->fov_y;
-                entry["camera_fov_x"]           = projection->fov_x;
-                entry["camera_z_near"]          = projection->get_z_near();
-                entry["camera_z_far"]           = projection->get_z_far();
-            }
-        }
-        viewports.push_back(entry);
+        viewports.push_back(make_window_viewport_entry(*viewport_window));
     }
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (m_context.headset_view != nullptr) {
+        viewports.push_back(make_headset_viewport_entry(*m_context.headset_view));
+    }
+#endif
 
     return make_json_content({{"viewports", viewports}}).dump();
+}
+
+auto Mcp_server::query_viewport_size(const json& args) -> std::string
+{
+    const std::string viewport_name = args.value("viewport", "");
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (viewport_name == c_headset_viewport_name) {
+        if (m_context.headset_view == nullptr) {
+            json r = make_text_content("No headset view (the OpenXR session did not start)");
+            r["isError"] = true;
+            return r.dump();
+        }
+        const json entry = make_headset_viewport_entry(*m_context.headset_view);
+        json result = {{"viewport", c_headset_viewport_name}, {"kind", "headset"}};
+        for (const char* key : {"render_width", "render_height", "msaa_sample_count", "view_count", "multiview", "views", "color_format", "active"}) {
+            if (entry.contains(key)) {
+                result[key] = entry[key];
+            }
+        }
+        return make_json_content(result).dump();
+    }
+#else
+    if (viewport_name == "headset") {
+        json r = make_text_content("No headset view (this build has no OpenXR)");
+        r["isError"] = true;
+        return r.dump();
+    }
+#endif
+
+    if (m_context.scene_views == nullptr) {
+        json r = make_text_content("No scene views available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+        if (!viewport_name.empty() && (viewport_window->get_title() != viewport_name)) {
+            continue;
+        }
+        const json entry = make_window_viewport_entry(*viewport_window);
+        return make_json_content({
+            {"viewport",          entry["title"]},
+            {"kind",              "window"},
+            {"render_width",      entry["render_width"]},
+            {"render_height",     entry["render_height"]},
+            {"msaa_sample_count", entry["msaa_sample_count"]},
+            {"window_rect",       {{"x", entry["x"]}, {"y", entry["y"]}, {"width", entry["width"]}, {"height", entry["height"]}}}
+        }).dump();
+    }
+    json r = make_text_content(
+        viewport_name.empty()
+            ? "No viewport window"
+            : "Viewport not found: " + viewport_name + " (see get_viewports)"
+    );
+    r["isError"] = true;
+    return r.dump();
 }
 
 // Headless pick probe: arm the pointer on a viewport, run the same hover

@@ -368,6 +368,7 @@ erhe_target_sources_grouped(
     mcp/mcp_process_memory.hpp
     mcp/mcp_server_references.cpp
     mcp/mcp_server_rig.cpp
+    mcp/mcp_server_overdraw.cpp
     mcp/mcp_server_physics.cpp
     mcp/mcp_server_scene_action.cpp
     mcp/mcp_server_scene_query.cpp
@@ -516,6 +517,7 @@ erhe_target_sources_grouped(
     renderers/render_context.cpp
     renderers/render_context.hpp
     renderers/render_frame_results.hpp
+    renderers/content_draws.hpp
     renderers/render_settings.cpp
     renderers/render_settings.hpp
     renderers/render_settings_access.hpp
@@ -581,6 +583,8 @@ erhe_target_sources_grouped(
     rig/rig_system.hpp
     rig/rigid_skin.cpp
     rig/rigid_skin.hpp
+    rendergraph/overdraw_node.cpp
+    rendergraph/overdraw_node.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp

@@ -129,11 +129,12 @@ light to the Bistro, sets the preset's spot and point limits to 0 and
 `light_shading` to `loops` (no clustering). A new light configuration is a
 new file; `set_graphics_preset` (light limits, `light_shading`, shadows,
 `use_draw_lists`), `set_culling_classification`, `set_occlusion_culling`,
-`set_light_cluster_binning`, `create_light` and `edit_light` cover the
-variations.
+`set_light_cluster_binning`, `set_content_draws` (`opaque_only` leaves out
+the alpha-tested and translucent draws), `create_light` and `edit_light`
+cover the variations.
 
 Every run that uses MCP stores the configuration in effect in the result's
-`host.config_state` (the preset, the culling, occlusion and binning
+`host.config_state` (the preset, the culling, occlusion, binning and content draws
 settings during the warmup; the light shading in effect and the shaded /
 shadow-mapped lights from `get_light_cluster_stats` and `get_scene_lights`
 in the measured window), and every run stores the Quest's state in

@@ -119,6 +119,10 @@ public:
         // pass this filter; meshes it rejects render with SHADER_DEBUG = none.
         // Default (match-all) preserves the prior "applies to everything" behavior.
         const erhe::Item_filter                                shader_debug_filter{};
+        // The OVERDRAW axis (res/shaders/erhe_overdraw.glsl): every mesh of
+        // the pass draws with this overdraw variant (the depth-only and ID
+        // variants excepted), which counts into base.overdraw_count_buffer.
+        Overdraw_count                                         overdraw{Overdraw_count::off};
         // Shadow map filtering method, plumbed to the shader as the
         // ERHE_SHADOW_FILTER compile-time variant axis. The value is the PCF
         // kernel width in texels (0 = hard, 2 = 2x2, 4 = 4x4, 6 = 6x6).
@@ -190,6 +194,8 @@ public:
         Shader_debug                             shader_debug{Shader_debug::none};
         // See Render_parameters::shader_debug_filter.
         erhe::Item_filter                        shader_debug_filter{};
+        // See Render_parameters::overdraw.
+        Overdraw_count                           overdraw{Overdraw_count::off};
     };
 
     // The inputs of drawing a prepared snapshot: the render-phase half of

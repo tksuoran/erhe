@@ -14,6 +14,8 @@
 #include "config/generated/shadow_frustum_fit_config.hpp"
 #include "config/generated/sky_config.hpp"
 
+#include "renderers/content_draws.hpp"
+
 #include "erhe_scene/camera_snapshot.hpp"
 
 #include <glm/glm.hpp>
@@ -76,6 +78,7 @@ public:
     bool                       shadow_map_cache               {true};  // App_settings::shadow_map_cache_session
     bool                       shadow_fit_cache               {true};  // App_settings::shadow_fit_cache_session
     bool                       headset_culling                {true};  // App_settings::headset_culling_session
+    Content_draws              content_draws                  {Content_draws::all}; // App_settings::content_draws_session
 };
 
 // One Render_settings copy per frame in flight, owned by Editor. M2's

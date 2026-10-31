@@ -251,12 +251,38 @@
     "name": "get_scene_node_graphs"
   },
   {
-    "description": "List viewport windows: window title, bound scene name, camera name, the pixel rectangle (x, y, width, height; top-left origin, the space of a capture_screenshot PNG) the 3D view occupies in the editor window, and the camera frame (camera_path, camera_world_from_camera as 16 column-major floats, camera_projection_type, camera_fov_y / fov_x in radians, camera_z_near / z_far). Use to verify which scene/camera each viewport shows, to crop a capture to the 3D view, or to reproduce the view in another renderer.",
+    "description": "List every viewport: the viewport windows (four view panes included; kind 'window') and, when the OpenXR session runs, the headset view (kind 'headset', title 'headset'). Every entry: kind, title (the name the viewport arguments of other tools take), bound scene name, camera name, render_width / render_height (the size in pixels of the image the viewport renders: a window's content render target, the headset's per-view swapchain image) and msaa_sample_count, plus the camera frame (camera_path, camera_world_from_camera as 16 column-major floats, camera_projection_type, camera_fov_y / fov_x in radians, camera_z_near / z_far). A window entry also carries the pixel rectangle (x, y, width, height; top-left origin, the space of a capture_screenshot PNG) the 3D view occupies in the editor window. A headset entry also carries active, view_count, multiview, views (width / height per view) and color_format. Use to verify which scene/camera each viewport shows, to crop a capture to the 3D view, or to reproduce the view in another renderer; get_viewport_size reports the size of one viewport.",
     "inputSchema": {
       "properties": {},
       "type": "object"
     },
     "name": "get_viewports"
+  },
+  {
+    "description": "Report the size of the image one viewport renders: render_width / render_height in pixels and msaa_sample_count. For a viewport window (kind 'window') also window_rect {x, y, width, height}, the rectangle its image occupies in the editor window (top-left origin, the space of a capture_screenshot PNG). For the OpenXR headset view (viewport 'headset', kind 'headset') the size is per view: view_count, multiview, views (width / height per view; render_width / render_height are view 0's), color_format and active. Read-only; answers at once.",
+    "inputSchema": {
+      "properties": {
+        "viewport": {
+          "description": "Viewport window title, or 'headset' for the OpenXR headset view (see get_viewports); default: the first viewport window",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "get_viewport_size"
+  },
+  {
+    "description": "Overdraw statistics of a viewport whose overdraw visualization is not off (set_overdraw_visualization): the counts of the newest frame that retired, a few frames behind the current one. Reports mode (the viewport's mode now), counted_mode (the mode the reported frame counted with; after a mode change wait until it matches), width / height (the viewport's render size), frame_index, invocations_total (the counted fragments of the counted passes), covered_pixels (pixels with a count above 0), mean_per_covered_pixel, mean_per_pixel, max_count and histogram (pixels per count 0 .. histogram_last_bin - 1, the last entry every larger count). valid is false until a counted frame retired; call again after a few frames.",
+    "inputSchema": {
+      "properties": {
+        "viewport": {
+          "description": "Viewport window title (see get_viewports); default: the first viewport window with a scene view",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "get_overdraw_stats"
   },
   {
     "description": "Headless pick probe: arm the pointer at viewport pixel (x, y) and run the same hover update a real pointer runs, reporting every hover slot (content/tool/brush/rendertarget/grid/bone) plus 'nearest' - the hit resolved by the same slot-ownership rule a viewport click uses (bone slot replaces content in bone selection mode; a bone hit reports the joint a click would select). The id-render readback is ASYNC: the first call at a position returns raytrace hits only; the armed position keeps the id pass rendering there, so call again after a few frames for the merged result that includes id-picked (e.g. skinned) meshes.",
@@ -4174,6 +4200,35 @@
       "type": "object"
     },
     "name": "pop_shader_debug"
+  },
+  {
+    "description": "Set a viewport's overdraw visualization mode (doc/plans/overdraw_visualization.md): off, shaded or rasterized. Not off, the viewport's content composition passes (opaque, selected, alpha-tested and translucent fills, solid wireframe, corner points, centroids) draw with overdraw shader variants that count per pixel into a buffer of the viewport's render size, with the viewport's real pipelines, draw order, draw-list path, culling and occlusion culling, and the viewport shows the counts as a heat map in place of its post-processed image (0 black - over count 0 the scene at 25 % luminance -, 1 dark blue, 2 green, 3 yellow, 4 orange, 5 red, from max_count up white; gizmos stay on top with post-processing on). shaded counts the fragment shader invocations the frame runs: an opaque variant counts the fragments that pass the early depth and stencil tests, a discarding (alpha-test / screen-door) variant every rasterized fragment it does not discard. rasterized counts every rasterized fragment of every counted draw, ignoring the depth test (what occlusion and frustum culling save before depth testing). get_overdraw_stats reads the counts; capture_screenshot shows the heat map. Refused with the reason on a device without fragment stage buffer stores and atomics.",
+    "inputSchema": {
+      "properties": {
+        "max_count": {
+          "description": "The count from which the heat map is white (integer >= 1; default 8, kept per viewport)",
+          "type": "integer"
+        },
+        "mode": {
+          "description": "\"off\", \"shaded\" (fragment shader invocations after the early depth test) or \"rasterized\" (every rasterized fragment, ignoring the depth test)",
+          "enum": [
+            "off",
+            "shaded",
+            "rasterized"
+          ],
+          "type": "string"
+        },
+        "viewport": {
+          "description": "Viewport window title (see get_viewports); default: the first viewport window with a scene view",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "name": "set_overdraw_visualization"
   },
   {
     "description": "Enable/disable the GPU ray tracing renderer (issue #233: material-aware ray query compute shader with lights, traced shadows and glass, rendered into the texture shown in the Ray Trace window) and optionally show that window / adjust its settings. Returns supported/enabled state and the instance count gathered on the last traced frame. Requires a Vulkan device with ray query + position fetch support.",
@@ -9033,6 +9088,19 @@
       "type": "object"
     },
     "name": "set_pvs_streaming"
+  },
+  {
+    "description": "Set which content draws the composition passes make, by the material's blending class (session only, never saved; the Settings window's Content Draws combo): all, or opaque_only, which leaves out the alpha-tested content passes (alpha_test and screen_door materials, the draws whose fragment shader discards) and the translucent content passes (alpha_blend and the other blended modes) in every view, viewports and the headset, so a benchmark measures what those draws cost. Shadow passes draw opaque casters only in both modes. Takes effect at the next frame's render settings snapshot. Omit mode to read the setting. Returns mode.",
+    "inputSchema": {
+      "properties": {
+        "mode": {
+          "description": "all or opaque_only",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_content_draws"
   },
   {
     "description": "Set the Visual Style toggles of every viewport scene view (the toolbar Visual Style popup's Default Style checkboxes; style = not selected, or selected for the Selection checkboxes): edge_lines, corner_points, polygon_centroids, solid_wireframe, each true or false, omitted keeps the value. Turning on a mode only a full mesh build provides queues the on-demand full build of every prepared primitive (meshes loaded with prepared mesh data, doc/editor/async_asset_loading.md 'Prepared mesh data') in every scene, exactly as the checkbox does; wait for get_async_status idle before rendering. Returns the resulting style of the first viewport and full_builds_queued.",

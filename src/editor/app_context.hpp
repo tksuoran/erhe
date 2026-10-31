@@ -33,6 +33,7 @@ namespace erhe::scene_renderer {
     class Program_interface;
     class Cull_frame_registry;
     class Gpu_cull_classifier;
+    class Overdraw_counter;
     class Light_cluster_gpu_binner;
     class Shadow_renderer;
     class Shader_variant_cache;
@@ -304,6 +305,7 @@ public:
     erhe::scene_renderer::Draw_list_renderer*         draw_list_renderer        {nullptr};
     erhe::scene_renderer::Shadow_renderer*            shadow_renderer           {nullptr};
     erhe::scene_renderer::Gpu_cull_classifier*        gpu_cull_classifier       {nullptr};
+    erhe::scene_renderer::Overdraw_counter*           overdraw_counter          {nullptr};
     erhe::scene_renderer::Light_cluster_gpu_binner*   light_cluster_gpu_binner  {nullptr};
     erhe::scene_renderer::Cull_frame_registry*        cull_frame_registry       {nullptr};
     erhe::scene_renderer::Texel_renderer*             texel_renderer            {nullptr};

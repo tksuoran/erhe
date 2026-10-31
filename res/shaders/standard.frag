@@ -3,6 +3,9 @@
 // must come before the BxDF / light includes below (the ID-render variant
 // skips them entirely).
 #include "erhe_standard_variant.glsl"
+#if ERHE_OVERDRAW != 0
+#include "erhe_overdraw.glsl"
+#endif
 #if defined(ERHE_VARIANT_SHADOW_CUBE)
 #include "erhe_point_shadow.glsl"
 #endif
@@ -362,10 +365,19 @@ vec3 sample_lightmap_bicubic(vec2 uv)
 
 void main()
 {
+#if ERHE_OVERDRAW == ERHE_OVERDRAW_RASTERIZED
+    // Every rasterized fragment counts, before any discard
+    // (erhe_overdraw.glsl).
+    erhe_count_overdraw();
+#endif
+
 #if defined(ERHE_VARIANT_POINTS)
     // Points (corner points / polygon centroids) are flat-shaded with the
     // per-draw-primitive color; no lighting. The lit machinery and its
     // includes are skipped via ERHE_VARIANT_POSITION_PASS.
+#  if ERHE_OVERDRAW == ERHE_OVERDRAW_SHADED
+    erhe_count_overdraw();
+#  endif
     out_color = v_point_color;
     return;
 #endif
@@ -836,6 +848,23 @@ void main()
             discard;
         }
     }
+#endif
+
+    // The overdraw variants (erhe_overdraw.glsl) run the material inputs
+    // and the discard above exactly as the real variant, count the
+    // invocation (shaded: here, after the discard; rasterized: at the top of
+    // main()) and skip the lighting: the visualization node replaces the
+    // image.
+#if ERHE_OVERDRAW != 0
+#  if ERHE_OVERDRAW == ERHE_OVERDRAW_SHADED
+    erhe_count_overdraw();
+#  endif
+#  if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_BLEND
+    out_color = vec4(0.0);
+#  else
+    out_color = vec4(0.0, 0.0, 0.0, 1.0);
+#  endif
+    return;
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)

@@ -42,6 +42,6 @@ heavy::line-compute-39.3ms(!)+XR-multiview-21.3+shadow-1.41=61.7(app_gpu-52.7;ti
 !capture_screenshot-cannot-work-in-XR->RenderDoc-Meta-fork=only-pixel-level-path{scripts/quest_renderdoc.py}
 !config-is-APK-bundled{config-edits->rebuild+uninstall+install}
 !Quest-runtime-hides-extensions-without-manifest-gate{logcat-tag-OpenXR_Properties}
-!culling-GPU-path-needs-drawIndirectFirstInstance+VK_KHR_draw_indirect_count->check-startup-log-"Record indexing"+classifier-capability-line;culling_classification-defaults-cpu
+!culling-GPU-path-needs-drawIndirectFirstInstance+VK_KHR_draw_indirect_count->check-startup-log-"Record indexing"+classifier-capability-line;culling_classification-defaults-gpu(CPU-fallback-without-capability)
 !measurement-rule::one-editor-at-a-time;nothing-building-on-host-during-timed-device-run
 !build=scripts\build_android.bat quest assembleQuestRelease;install=scripts\install_android.bat quest release{uninstall-first}

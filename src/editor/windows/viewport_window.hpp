@@ -3,6 +3,8 @@
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <imgui/imgui.h>
+
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -55,6 +57,10 @@ public:
 
     // Public API
     [[nodiscard]] auto viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>;
+    // Main thread: the rendergraph node whose output the window shows (the
+    // last node of the viewport's chain; Scene_views::set_overdraw_mode()
+    // changes it for a viewport without post-processing).
+    void set_rendergraph_output_node(const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node);
     // Stable per-window slot (1, 2, ...) carried in the "###Viewport_window N"
     // ImGui ID and the "Viewport_window N" ini label. The lowest free slot is
     // reused after a viewport window is destroyed, so window layout and open
@@ -70,6 +76,9 @@ public:
 
 private:
     void imgui_viewport            ();
+    // Over the viewport image while its overdraw visualization is on: the
+    // color ramp and the newest counted frame's mean count.
+    void draw_overdraw_legend      (const Viewport_scene_view& viewport_scene_view, ImVec2 rect_min, ImVec2 rect_max);
     void update_title_from_scene   ();
     void drag_and_drop_target      (float min_x, float min_y, float max_x, float max_y);
     void cancel_brush_drag_and_drop();

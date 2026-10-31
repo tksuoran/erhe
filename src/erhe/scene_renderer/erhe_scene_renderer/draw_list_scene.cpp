@@ -1677,7 +1677,7 @@ void Draw_list_scene::publish(
         ((m_gpu_cull_classifier == nullptr) || !m_gpu_cull_classifier->is_supported())
     ) {
         if (!m_gpu_cull_refusal_logged) {
-            log_draw_list->warn("GPU culling classification is not available on this device; the CPU path classifies");
+            log_draw_list->info("GPU culling classification is not available on this device; the CPU path classifies");
             m_gpu_cull_refusal_logged = true;
         }
         effective_classification = Cull_classification::cpu;
@@ -2074,11 +2074,12 @@ namespace {
 auto Draw_list_scene::resolve_color_stages(
     Draw_list_resolutions& resolutions,
     const Draw_list&       draw_list,
-    const uint16_t         multiview_count
+    const uint16_t         multiview_count,
+    const Overdraw_count   overdraw
 ) -> const erhe::graphics::Reloadable_shader_stages*
 {
     for (const Draw_list_color_resolution& resolution : resolutions.color) {
-        if (resolution.multiview_count == multiview_count) {
+        if ((resolution.multiview_count == multiview_count) && (resolution.overdraw == overdraw)) {
             return resolution.stages;
         }
     }
@@ -2102,6 +2103,7 @@ auto Draw_list_scene::resolve_color_stages(
     // calls anisotropic_brdf().
     set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(env));
     key.set(Shader_int::SHADER_MULTIVIEW_COUNT, static_cast<uint32_t>(multiview_count));
+    key.set(Shader_int::OVERDRAW, static_cast<uint32_t>(overdraw));
     // The color passes share the frame's records of the list (Record
     // upload): exact only while the variant reads no pass-dependent field.
     ERHE_VERIFY(!reads_record_pass_fields(key));
@@ -2114,14 +2116,14 @@ auto Draw_list_scene::resolve_color_stages(
             resolutions.color_failed = true;
         }
     }
-    resolutions.color.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .stages = stages});
+    resolutions.color.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .overdraw = overdraw, .stages = stages});
     return stages;
 }
 
 void Draw_list_scene::resolve_color_list(Draw_list_resolutions& resolutions, const Draw_list& draw_list)
 {
     for (const uint32_t view_count : m_multiview_view_counts) {
-        static_cast<void>(resolve_color_stages(resolutions, draw_list, static_cast<uint16_t>(view_count)));
+        static_cast<void>(resolve_color_stages(resolutions, draw_list, static_cast<uint16_t>(view_count), Overdraw_count::off));
     }
 }
 
@@ -3141,7 +3143,7 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 resolve_color_list(resolutions, draw_list);
             }
             const std::size_t resolution_count_before = resolutions.color.size();
-            const erhe::graphics::Reloadable_shader_stages* stages = resolve_color_stages(resolutions, draw_list, parameters.multiview_count);
+            const erhe::graphics::Reloadable_shader_stages* stages = resolve_color_stages(resolutions, draw_list, parameters.multiview_count, parameters.overdraw);
             if (resolutions.color.size() != resolution_count_before) {
                 ++m_lazy_resolution_count;
             }

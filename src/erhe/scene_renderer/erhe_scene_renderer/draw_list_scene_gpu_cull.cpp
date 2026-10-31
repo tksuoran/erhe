@@ -1762,17 +1762,19 @@ void Draw_list_scene::draw_occlusion(const Draw_occlusion_parameters& parameters
     ERHE_PROFILE_FUNCTION();
     assert_render_phase();
     verify_cull_view_classified(parameters.frame_index, parameters.cull_view);
-    // The frame's classification wrote the start words for the view.
-    ERHE_VERIFY(m_occlusion_frame_active && (m_occlusion_frame_index == parameters.frame_index));
     ERHE_VERIFY(std::ranges::any_of(m_occlusion_views, [&parameters](const Occlusion_view_record& record) -> bool { return record.cull_view == parameters.cull_view; }));
     ERHE_VERIFY(parameters.render_pass != nullptr);
-    const Draw_list_slot& slot           = get_published_slot(parameters.frame_index);
-    Occlusion_slot& occlusion_slot = m_occlusion_slots[parameters.frame_index % m_occlusion_slots.size()];
-    ERHE_VERIFY(occlusion_slot.pending && (occlusion_slot.frame_index == parameters.frame_index));
-    ERHE_VERIFY(occlusion_slot.entry_count == slot.entry_count);
+    const Draw_list_slot& slot = get_published_slot(parameters.frame_index);
+    // A frame without entries dispatches no classification
+    // (dispatch_gpu_cull_views()) and has nothing to test.
     if (slot.entry_count == 0) {
         return;
     }
+    // The frame's classification wrote the start words for the view.
+    ERHE_VERIFY(m_occlusion_frame_active && (m_occlusion_frame_index == parameters.frame_index));
+    Occlusion_slot& occlusion_slot = m_occlusion_slots[parameters.frame_index % m_occlusion_slots.size()];
+    ERHE_VERIFY(occlusion_slot.pending && (occlusion_slot.frame_index == parameters.frame_index));
+    ERHE_VERIFY(occlusion_slot.entry_count == slot.entry_count);
 
     Gpu_cull_classifier&    classifier = *m_gpu_cull_classifier;
     Render_command_encoder& encoder    = parameters.render_encoder;

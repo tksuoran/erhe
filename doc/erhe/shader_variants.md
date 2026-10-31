@@ -188,6 +188,46 @@ anisotropic variants of the new mode once (the default scene: one variant
 per switch, `Shader_variant_cache miss` in the log) and switching back
 compiles none.
 
+### Overdraw (`OVERDRAW`)
+
+The integer axis `ERHE_OVERDRAW` is the `erhe::scene_renderer::Overdraw_count`
+value (0 off, 1 shaded, 2 rasterized; the `ERHE_OVERDRAW_*` constants of
+`erhe_standard_variant.glsl`). A variant with a non-zero value counts:
+`erhe_count_overdraw()` (`res/shaders/erhe_overdraw.glsl`) adds 1 with
+`atomicAdd` to the pixel's uint in the storage block `overdraw_count`
+(binding 13, `overdraw_count_buffer_binding_point`; only the programs whose
+`ERHE_OVERDRAW` is not 0 declare it, `Program_interface::make_prototype()`;
+the PVS variants' `pvs_layered` block shares the binding, which Metal leaves
+as the only free render pipeline buffer index, and no key carries both),
+indexed row by row over `camera.cameras[0].viewport`. `standard.frag` under
+the axis runs the material inputs and the alpha-test / screen-door discard as
+the real variant, writes a constant color and skips the lighting; the points
+variant writes its point color.
+
+- shaded counts the invocations the real shader runs, after the discard. A
+  variant that cannot discard declares `layout(early_fragment_tests) in;`
+  (storage writes would otherwise turn the implicit early depth test off);
+  one that can (`ERHE_FRAGMENT_MAY_DISCARD`, derived in
+  `erhe_standard_variant.glsl` from the blending mode axis) keeps the late
+  tests: the shader runs for every rasterized fragment, as the GPU runs the
+  real discarding shader, and counts the ones that survive the discard.
+- rasterized counts at the top of `main()`, before any discard, and never
+  declares early fragment tests: the shader runs before the depth test, so
+  every rasterized fragment counts, whatever the depth buffer holds.
+
+Helper invocations store nothing and never count.
+
+The axis is per pass, not part of the color environment: the bucket path
+sets it in `Forward_renderer::prepare()` (`Prepare_parameters::overdraw`)
+and `bucket_primitives()` clears it on depth-only and ID keys; the draw-list
+path resolves it per list (`Draw_color_parameters::overdraw`, cached beside
+the off resolution in `Draw_list_color_resolution::overdraw`), so views that
+count and views that do not share a scene's draw lists without invalidating
+each other. The pass binds the count buffer through
+`Base_render_parameters::overdraw_count_buffer`. The editor's use is
+`doc/plans/overdraw_visualization.md`; with the axis 0 no binding or buffer
+differs.
+
 The four light-count axes per type are populated from
 `compute_light_layer_partition(lights)`, which returns a
 `Light_layer_partition { per_type_shadow[4], per_type_nonshadow[4] }`.
@@ -308,7 +348,9 @@ The legacy stand-alone shaders are folded in as variant axes:
   combine with ID render). The fragment shader writes no color: it computes
   the depth layer (`erhe_pvs_layer.glsl`, whose C++ twin is
   `erhe::scene_renderer::pvs_layer_of_depth()`) and writes the
-  `pvs_layered` storage block (`Pvs_layered_interface`) with atomics -
+  `pvs_layered` storage block (`Pvs_layered_interface`; binding 13, declared
+  by the PVS variants only and shared with the overdraw count block) with
+  atomics -
   `atomicMin` of the depth bits for `VARIANT_PVS_DEPTH`, and for
   `VARIANT_PVS_ID` `atomicMin` / `atomicMax` of the entry where its depth
   bits equal the stored ones; a fragment outside `[z_near, z_far]` writes

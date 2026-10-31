@@ -8,6 +8,7 @@
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene_renderer/overdraw_counter.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_math/viewport.hpp"
 
@@ -192,6 +193,25 @@ public:
     void set_shader_debug            (erhe::scene_renderer::Shader_debug shader_debug);
     auto get_shader_debug            () const -> erhe::scene_renderer::Shader_debug;
 
+    // Main thread: the overdraw visualization of the view, applied from the
+    // next prepared frame (Viewport_render_state::overdraw). Only on devices
+    // with is_overdraw_supported().
+    void set_overdraw_mode           (Overdraw_mode mode);
+    [[nodiscard]] auto get_overdraw_mode() const -> Overdraw_mode;
+    [[nodiscard]] auto is_overdraw_supported() const -> bool;
+    // Any thread: the overdraw statistics of the newest retired frame the
+    // view counted (not valid before one retired, nor after the mode turned
+    // off).
+    [[nodiscard]] auto get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics;
+    // Main thread: the visualization's color ramp reaches white at this
+    // count (Viewport_render_state::overdraw_max_count).
+    void set_overdraw_max_count(uint32_t max_count);
+    [[nodiscard]] auto get_overdraw_max_count() const -> uint32_t;
+    // Render phase: the view's count buffer of frame_index, which its
+    // execute filled in that frame; null when it did not count (Overdraw_node
+    // reads it).
+    [[nodiscard]] auto get_overdraw_count_buffer(uint64_t frame_index) const -> const erhe::graphics::Buffer*;
+
     void set_renderer_choice(Renderer_choice choice);
     auto get_renderer_choice() const -> Renderer_choice;
 
@@ -202,6 +222,7 @@ public:
     [[nodiscard]] auto is_scene_view_hovered               () const -> bool;
     [[nodiscard]] auto get_window_viewport                 () const -> const erhe::math::Viewport&;
     [[nodiscard]] auto get_projection_viewport             () const -> const erhe::math::Viewport&;
+    [[nodiscard]] auto get_msaa_sample_count               () const -> int;
     [[nodiscard]] auto get_position_in_viewport            () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto get_position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto get_show_navigation_gizmo           () const -> bool;
@@ -235,6 +256,12 @@ private:
     // the content render target's depth/stencil attachment. See issue #230.
     void update_overlay_render_target(int width, int height);
 
+    // Render phase (execute_rendergraph_node()): the content render pass of
+    // the frame - begins it (clearing the render target) and, when the
+    // frame renders, draws the composition, renderables and (without
+    // post-processing) the tools.
+    void record_content_render_pass(Render_context& context, const Viewport_render_state& state);
+
     // Implements Scene_view per-view "Scene and Camera" persistence: adds the
     // camera, shader_debug and renderer_choice that live on this derived view.
     void write_scene_and_camera_settings(Scene_and_camera_settings& out) const override;
@@ -258,6 +285,8 @@ private:
     int                                m_msaa_sample_count    {0};
 
     erhe::scene_renderer::Shader_debug m_shader_debug                   {erhe::scene_renderer::Shader_debug::none};
+    Overdraw_mode                      m_overdraw_mode                  {Overdraw_mode::off};
+    uint32_t                           m_overdraw_max_count             {8};
     Renderer_choice                    m_renderer_choice                {Renderer_choice::forward};
     bool                               m_is_scene_view_hovered          {false};
     int                                m_pick_probe_frames              {0}; // see arm_pick_probe()
@@ -288,6 +317,9 @@ private:
     erhe::scene_renderer::Camera_view_input      m_frame_view_input{};
     std::optional<Render_context>                m_frame_context;
     uint64_t                                     m_frame_context_frame_index{std::numeric_limits<uint64_t>::max()};
+    // The overdraw counting of the view: render phase owned, except
+    // get_statistics(), which any thread may call.
+    erhe::scene_renderer::Overdraw_view_state    m_overdraw_view_state;
 };
 
 }
