@@ -23,6 +23,8 @@
 
 #include <fmt/format.h>
 
+#include <optional>
+
 namespace editor {
 
 Async_raytrace_kickoff_operation::Async_raytrace_kickoff_operation(
@@ -113,17 +115,22 @@ void deferred_finalize_mesh_items(
 
         // Snapshot the primitive list under the scene lock; the prepare
         // phase below runs without it. The re-optimize decision is made here
-        // too: optimized_render_shape and the optimization hold count are
-        // main-thread state with no lock of their own, so a worker must not
-        // read them.
-        std::vector<erhe::scene::Mesh_primitive> mesh_primitives;
-        std::vector<bool>                        force_optimized_rebuild;
+        // too: optimized_render_shape, the optimization hold count and the
+        // LOD request are main-thread state with no lock of their own, so a
+        // worker must not read them.
+        std::vector<erhe::scene::Mesh_primitive>                    mesh_primitives;
+        std::vector<bool>                                           force_optimized_rebuild;
+        std::vector<std::optional<erhe::primitive::Lod_settings>>   lod_settings;
         {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
             mesh_primitives = scene_mesh->get_primitives();
             force_optimized_rebuild.assign(mesh_primitives.size(), false);
+            lod_settings.assign(mesh_primitives.size(), std::optional<erhe::primitive::Lod_settings>{});
             for (std::size_t i = 0, end = mesh_primitives.size(); i < end; ++i) {
                 const erhe::primitive::Primitive* const primitive = mesh_primitives[i].primitive.get();
+                if (primitive != nullptr) {
+                    lod_settings[i] = primitive->lod_settings;
+                }
                 // A complete base mesh missing its (requested) optimized
                 // variant: an edit commit's synchronous base-only rebuild, or
                 // a live-edit invalidation whose edit has ended. Skip under an
@@ -191,7 +198,15 @@ void deferred_finalize_mesh_items(
                 const erhe::primitive::Normal_style normal_style = needs_reoptimize
                     ? render_shape->get_normal_style()
                     : erhe::primitive::Normal_style::corner_normals;
-                if (!render_shape->prepare_geometry_buffer_mesh(mesh_build_info, normal_style, scene_mesh->get_name(), needs_reoptimize)) {
+                // A primitive with a LOD request rebuilds its optimized variant
+                // with its chain (Primitive::lod_settings).
+                std::optional<erhe::primitive::Build_info> lod_build_info{};
+                if (lod_settings[primitive_index].has_value()) {
+                    lod_build_info.emplace(mesh_build_info);
+                    lod_build_info->lod_settings = lod_settings[primitive_index];
+                }
+                const erhe::primitive::Build_info& primitive_build_info = lod_build_info.has_value() ? lod_build_info.value() : mesh_build_info;
+                if (!render_shape->prepare_geometry_buffer_mesh(primitive_build_info, normal_style, scene_mesh->get_name(), needs_reoptimize)) {
                     log_operations->warn(
                         "Deferred finalize: could not build full buffer mesh for '{}' (out of GPU mesh memory?)",
                         scene_mesh->get_name()

@@ -1,6 +1,6 @@
 # Mesh level of detail
 
-Status: proposed
+Status: in progress
 
 Adds mesh level of detail (LOD) to erhe, in small steps that each ship a
 usable, verifiable piece. The first steps are an editor feature: the user
@@ -314,15 +314,10 @@ doc/editor (window, properties).
 
 ### Step 1: LOD chain generation in erhe::primitive
 
-- `Lod_settings`, `Lod_chain`, `generate_lod_chain()` in `erhe_primitive`.
-- The chain on the optimized `Buffer_mesh`, levels in its index allocation:
-  the geometry path and the soup path both size the allocation for them.
-- Statistics: per-level triangle count and error in the per-primitive log
-  line, and a `lod` section in MCP `get_memory_usage`.
-- Unit tests: sphere / box / skinned box chains (monotonic counts, monotonic
-  errors, indices in range, early stop on a cube, locked joints, seam
-  texcoords kept).
-- No rendering change: nothing selects a level above 0 yet.
+Done; described in `doc/erhe/meshoptimizer_integration.md` "Level of
+detail". Carried to step 3: the edit operations build a new `Primitive` for
+the edited mesh, and that `Primitive` takes over the old one's
+`lod_settings` once generation is reachable from the editor.
 
 ### Step 2: Lod properties and forced level
 

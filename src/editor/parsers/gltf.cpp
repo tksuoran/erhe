@@ -974,7 +974,8 @@ void attach_optimized_render_shape(
             erhe::primitive::Mesh_optimize_options{},
             build_info.buffer_info,
             cache_directory,
-            label
+            label,
+            primitive.lod_settings.has_value() ? &primitive.lod_settings.value() : nullptr
         );
     if (!optimized) {
         return;

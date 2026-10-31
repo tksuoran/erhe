@@ -100,6 +100,7 @@ Buffer_mesh& Buffer_mesh::operator=(Buffer_mesh&& other)
         corner_point_indices           = other.corner_point_indices;
         polygon_centroid_indices       = other.polygon_centroid_indices;
         expanded_triangle_fill_indices = other.expanded_triangle_fill_indices;
+        lod_chain                      = other.lod_chain;
         vertex_buffer_ranges           = std::move(other.vertex_buffer_ranges);
         index_buffer_range             = other.index_buffer_range;
         expanded_vertex_buffer_ranges  = std::move(other.expanded_vertex_buffer_ranges);

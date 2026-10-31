@@ -64,6 +64,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_primitive/lod.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/mesh_optimizer.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -72,6 +73,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -400,6 +402,77 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
             {"count",         shapes.size()},
             {"with_geometry", with_geometry},
             {"prepared",      prepared}
+        };
+    }
+
+    // Level of detail: the LOD chains of the scene meshes' optimized variants
+    // (doc/erhe/meshoptimizer_integration.md "Level of detail"), per level
+    // over the distinct primitives that have one, plus the session-wide
+    // generation totals. Shared primitives count once.
+    {
+        const erhe::primitive::Lod_totals lod_totals = erhe::primitive::get_lod_totals();
+        std::array<std::size_t, erhe::primitive::max_lod_levels> level_primitive_counts{};
+        std::array<std::size_t, erhe::primitive::max_lod_levels> level_triangle_counts{};
+        std::array<double,      erhe::primitive::max_lod_levels> level_error_sums{};
+        std::size_t primitives_with_chain = 0;
+        std::size_t lod_index_bytes       = 0;
+        if (m_context.app_scenes != nullptr) {
+            std::unordered_set<const erhe::primitive::Primitive*> primitives;
+            for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+                if (!scene_root) {
+                    continue;
+                }
+                std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+                for (const std::shared_ptr<erhe::scene::Mesh_layer>& mesh_layer : scene_root->get_scene().get_mesh_layers()) {
+                    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : mesh_layer->meshes) {
+                        if (!mesh) {
+                            continue;
+                        }
+                        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                            const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+                            if ((primitive == nullptr) || !primitive->optimized_render_shape || !primitives.insert(primitive).second) {
+                                continue;
+                            }
+                            const erhe::primitive::Buffer_mesh& optimized_mesh = primitive->optimized_render_shape->get_renderable_mesh();
+                            const erhe::primitive::Lod_chain&   chain          = optimized_mesh.lod_chain;
+                            if (chain.is_empty()) {
+                                continue;
+                            }
+                            ++primitives_with_chain;
+                            for (std::size_t level = 0; level < chain.level_count; ++level) {
+                                const erhe::primitive::Lod_level& lod_level = chain.levels[level];
+                                ++level_primitive_counts[level];
+                                level_triangle_counts[level] += lod_level.index_range.get_triangle_count();
+                                level_error_sums[level]      += static_cast<double>(lod_level.error);
+                                if (level > 0) {
+                                    lod_index_bytes += lod_level.index_range.index_count * optimized_mesh.index_buffer_range.element_size;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        json levels = json::array();
+        for (std::size_t level = 0; level < erhe::primitive::max_lod_levels; ++level) {
+            if (level_primitive_counts[level] == 0) {
+                break;
+            }
+            levels.push_back({
+                {"level",           level},
+                {"primitive_count", level_primitive_counts[level]},
+                {"triangle_count",  level_triangle_counts[level]},
+                {"mean_error",      level_error_sums[level] / static_cast<double>(level_primitive_counts[level])}
+            });
+        }
+        result["lod"] = {
+            {"primitive_count",            primitives_with_chain},
+            {"level_index_bytes",          lod_index_bytes},
+            {"levels",                     levels},
+            {"generated_primitive_count",  lod_totals.primitive_count},
+            {"generated_level_count",      lod_totals.level_count},
+            {"generated_index_count",      lod_totals.index_count},
+            {"generation_seconds",         lod_totals.elapsed_seconds}
         };
     }
 

@@ -367,7 +367,9 @@ public:
     // variant slot belongs to the owning Primitive, which is what chooses
     // between builds.
     auto make_buffer_mesh(const Build_info& build_info, Normal_style normal_style, std::shared_ptr<Primitive_render_shape>* out_optimized_shape = nullptr) -> bool;
-    auto make_buffer_mesh(const Buffer_info& build_info) -> bool;
+    // The soup build. A non-null `lod_settings` also builds the mesh's LOD chain
+    // (build_buffer_mesh_from_triangle_soup()); used for optimized variants only.
+    auto make_buffer_mesh(const Buffer_info& build_info, const Lod_settings* lod_settings = nullptr) -> bool;
     [[nodiscard]] auto has_buffer_mesh_triangles  () const -> bool;
     [[nodiscard]] auto has_edge_lines             () const -> bool;
     // This shape's one Buffer_mesh, paired with the one Element_mappings that
@@ -433,7 +435,7 @@ public:
 private:
     // Caller holds m_build_mutex; see the locking note on Primitive_shape.
     auto make_buffer_mesh_build_locked(const Build_info& build_info, Normal_style normal_style, std::shared_ptr<Primitive_render_shape>* out_optimized_shape) -> bool;
-    auto make_buffer_mesh_build_locked(const Buffer_info& buffer_info) -> bool;
+    auto make_buffer_mesh_build_locked(const Buffer_info& buffer_info, const Lod_settings* lod_settings) -> bool;
     [[nodiscard]] auto has_edge_lines_state_locked() const -> bool;
 
     class Pending_buffer_mesh
@@ -644,6 +646,15 @@ public:
     // discipline as optimized_render_shape: main-thread writers only, no lock.
     int optimization_hold_count{0};
 
+    // LOD generation request (doc/erhe/meshoptimizer_integration.md "Level of
+    // detail"). Unset - the default - means no chain: no level is generated and
+    // every build is exactly what it is without LOD. When set,
+    // make_renderable_mesh() builds the optimized variant with a chain made
+    // with these settings, and keeping them here is what lets the rebuild
+    // after an edit regenerate the chain. Same threading discipline as
+    // optimized_render_shape.
+    std::optional<Lod_settings> lod_settings;
+
     // The single publication point of optimized_render_shape after first
     // construction: assigns (null allowed - a geometry-path commit clears a
     // stale soup-path variant this way) unless an optimization hold is active,
@@ -660,7 +671,14 @@ public:
     void release_optimization_hold();
 };
 
-auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>;
+// A non-null `lod_settings` generates a LOD chain over the soup's vertices
+// (generate_lod_chain()) and sizes the index allocation for level 0 plus the
+// levels after it (Buffer_mesh::lod_chain). Null builds no chain.
+auto build_buffer_mesh_from_triangle_soup(
+    const Triangle_soup& triangle_soup,
+    const Buffer_info&   buffer_info,
+    const Lod_settings*  lod_settings = nullptr
+) -> std::optional<Buffer_mesh>;
 
 // The GPU vertex streams and index buffer build_buffer_mesh_from_triangle_soup()
 // writes for `triangle_soup` in `vertex_format` / `index_type`, captured on

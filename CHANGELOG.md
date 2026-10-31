@@ -46,6 +46,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   key carries a debug mode). `SHADER_DEBUG != 0` no longer counts as reading
   the per-pass record fields: `standard.vert` / `standard.frag` drop the
   unread `v_line_width` varying.
+- `erhe::primitive`: mesh level of detail (`lod.hpp`): `Lod_settings` with
+  `Lod_attributes`, `Lod_border`, `Lod_seams`, `Lod_fallback`; `Lod_level`,
+  `Lod_chain` and `max_lod_levels`; `Lod_vertex_input`, `Lod_vertex_data`,
+  `extract_lod_vertex_data()`, `remap_lod_vertex_data()`,
+  `generate_lod_chain()`, `Lod_chain_indices`, `make_lod_chain()`;
+  `Lod_totals`, `get_lod_totals()`, `reset_lod_totals()`, `log_lod_chain()`.
+  `Buffer_mesh::lod_chain`, `Build_info::lod_settings` and
+  `Primitive::lod_settings`. `build_buffer_mesh_from_triangle_soup()`,
+  `Primitive_render_shape::make_buffer_mesh(const Buffer_info&)`,
+  `make_optimized_render_shape()` and
+  `make_optimized_render_shape_from_staged_build()` take an optional
+  `const Lod_settings*` (null: no chain, unchanged behavior).
 - `erhe::scene_renderer`: `Shader_bool::FLAT_DRAW_COLOR` (the
   `ERHE_FLAT_DRAW_COLOR` variant axis: an unlit palette color per draw),
   `Color_environment::flat_draw_color`,

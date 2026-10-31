@@ -579,6 +579,9 @@ auto Primitive_builder::build() -> bool
     // same pools, so the two transactions are kept apart.
     std::vector<Mesh_optimize_stream> optimize_streams;
     std::vector<uint32_t>             optimize_fill_indices;
+    // LOD generation inputs of the same corners; only with Lod_settings.
+    Lod_vertex_data                   lod_vertices;
+    const bool                        generate_lods = m_build_info.lod_settings.has_value();
 
     {
     Build_context build_context{
@@ -643,7 +646,13 @@ auto Primitive_builder::build() -> bool
     // at which the staged bytes are still here to be read.
     if (m_build_optimized_variant && m_build_info.buffer_info.optimize_meshes) {
         erhe::log::set_breadcrumb("primitive: take_optimizable_snapshot");
-        static_cast<void>(build_context.take_optimizable_snapshot(optimize_streams, optimize_fill_indices));
+        static_cast<void>(
+            build_context.take_optimizable_snapshot(
+                optimize_streams,
+                optimize_fill_indices,
+                generate_lods ? &lod_vertices : nullptr
+            )
+        );
     }
 
     // Allocate now that the final vertex and index counts are known, and hand
@@ -665,7 +674,9 @@ auto Primitive_builder::build() -> bool
             m_element_mappings,
             m_buffer_mesh,
             m_build_info.buffer_info,
-            m_name
+            m_name,
+            generate_lods ? &m_build_info.lod_settings.value() : nullptr,
+            std::move(lod_vertices)
         );
     }
     return true;
@@ -1126,7 +1137,8 @@ void Build_context::build_triangle_fill_index()
 
 auto Build_context::take_optimizable_snapshot(
     std::vector<Mesh_optimize_stream>& out_streams,
-    std::vector<uint32_t>&             out_fill_indices
+    std::vector<uint32_t>&             out_fill_indices,
+    Lod_vertex_data*                   out_lod_vertices
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION();
@@ -1474,6 +1486,15 @@ auto Build_context::take_optimizable_snapshot(
                 return false;
             }
         }
+    }
+
+    if (out_lod_vertices != nullptr) {
+        std::vector<std::span<const uint8_t>> source_streams;
+        source_streams.reserve(vertex_writers.size());
+        for (const std::unique_ptr<Vertex_buffer_writer>& writer : vertex_writers) {
+            source_streams.emplace_back(writer->vertex_data.data(), writer->vertex_data.size());
+        }
+        *out_lod_vertices = extract_lod_vertex_data(source_streams, root.vertex_format, optimized_format, corner_count);
     }
 
     out_streams      = std::move(streams);
