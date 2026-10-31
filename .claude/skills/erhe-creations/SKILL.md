@@ -21,7 +21,7 @@ and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` ... `creation_25_shadow_test_rooms` (henge,
+`creation_1_conway_cathedral` ... `creation_26_fp16_test_rooms` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
 physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,

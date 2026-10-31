@@ -103,6 +103,10 @@
 #  define ERHE_USE_VARYING_POSITION 1
 #endif
 
+// The fp16 paths (ERHE_FP16_PATHS axis) and their type macros; after the
+// position-pass gate above, which they read.
+#include "erhe_fp16_paths.glsl"
+
 // ERHE_USE_LIGHTMAP_SAMPLING is a derived gate: the scene-level
 // ERHE_USE_LIGHTMAP axis (a lightmap atlas is bound) on a lit variant whose
 // vertex format carries the lightmap UVs (channel 2). Only then are the

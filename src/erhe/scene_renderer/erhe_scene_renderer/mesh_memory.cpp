@@ -1291,6 +1291,7 @@ void bucket_primitives(
             // bits (after the force masks), as apply_render_environment() and
             // the draw-list resolution apply it.
             set_specular_anti_aliasing_axis(shader_key, get_specular_anti_aliasing(environment_shader_key));
+            set_fp16_paths_axis(shader_key, get_fp16_paths(environment_shader_key));
             switch (blending_mode_policy) {
                 case Blending_mode_policy::not_set: {
                     ERHE_FATAL("Blending_mode_policy::not_set");

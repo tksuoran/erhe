@@ -251,6 +251,7 @@ auto Color_environment::make_environment_key() const -> Shader_key
     key.set(Shader_int::SHADOW_TECHNIQUE,                         shadow_technique);
     key.set(Shader_int::SHADOW_DEPTH_BITS,                        shadow_depth_bits);
     key.set(Shader_int::SPECULAR_ANTI_ALIASING,                   static_cast<uint32_t>(specular_anti_aliasing));
+    key.set(Shader_int::FP16_PATHS,                               fp16_paths);
     key.set(Shader_bool::USE_DDGI,                                ddgi_enabled);
     key.set(Shader_bool::USE_LIGHTMAP,                            lightmap_enabled);
     key.set(Shader_bool::FLAT_DRAW_COLOR,                         flat_draw_color);
@@ -2102,6 +2103,8 @@ auto Draw_list_scene::resolve_color_stages(
     // The specular anti-aliasing axis reaches only the keys whose shader
     // calls anisotropic_brdf().
     set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(env));
+    // The fp16 paths reach only the lit color variants.
+    set_fp16_paths_axis(key, get_fp16_paths(env));
     key.set(Shader_int::SHADER_MULTIVIEW_COUNT, static_cast<uint32_t>(multiview_count));
     key.set(Shader_int::OVERDRAW, static_cast<uint32_t>(overdraw));
     // The color passes share the frame's records of the list (Record

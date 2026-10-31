@@ -75,6 +75,7 @@
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_xr/generated/headset_config_serialization.hpp"
 
 #include <fmt/format.h>
@@ -589,6 +590,34 @@ void Settings_window::imgui()
         add_entry("Flat Draw Color", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::Checkbox("##", &graphics_preset.flat_draw_color)) {
+                on_graphics_preset_edited();
+            }
+        });
+        // fp16 paths of the standard shader (doc/plans/shader_fp16.md), the
+        // FP16_PATHS variant axis of the lit color variants: one checkbox per
+        // erhe::scene_renderer::Fp16_path bit of the preset's mask.
+        add_entry("Shader fp16 Paths", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            class Path_entry { public: const char* label; erhe::scene_renderer::Fp16_path path; };
+            static constexpr Path_entry c_paths[] = {
+                {"Material",    erhe::scene_renderer::Fp16_path::material   },
+                {"BRDF",        erhe::scene_renderer::Fp16_path::brdf       },
+                {"Accumulate",  erhe::scene_renderer::Fp16_path::accumulate },
+                {"Attenuation", erhe::scene_renderer::Fp16_path::attenuation},
+                {"Visibility",  erhe::scene_renderer::Fp16_path::visibility }
+            };
+            uint32_t mask = static_cast<uint32_t>(graphics_preset.shader_fp16_paths);
+            bool     edited = false;
+            for (const Path_entry& entry : c_paths) {
+                const uint32_t bit = static_cast<uint32_t>(entry.path);
+                bool           on  = (mask & bit) != 0u;
+                if (ImGui::Checkbox(entry.label, &on)) {
+                    mask   = on ? (mask | bit) : (mask & ~bit);
+                    edited = true;
+                }
+            }
+            if (edited) {
+                graphics_preset.shader_fp16_paths = static_cast<int>(mask);
                 on_graphics_preset_edited();
             }
         });

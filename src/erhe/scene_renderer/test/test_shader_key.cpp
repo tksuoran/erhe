@@ -134,3 +134,86 @@ TEST(Shader_key_specular_anti_aliasing, derive_equals_prepare_then_environment)
         }
     }
 }
+
+// The FP16_PATHS axis (doc/plans/shader_fp16.md): set_fp16_paths_axis()
+// keeps the environment's mask only on lit color variants and sets 0 on
+// the unlit, position-pass and debug keys, and derive() applies it the way
+// a later set_fp16_paths_axis() with the environment's mask does.
+namespace {
+
+using erhe::scene_renderer::fp16_paths_all;
+using erhe::scene_renderer::fp16_paths_low_end_set;
+using erhe::scene_renderer::get_fp16_paths;
+using erhe::scene_renderer::set_fp16_paths_axis;
+
+[[nodiscard]] auto make_fp16_environment(const uint32_t mask) -> Shader_key
+{
+    Shader_key environment{};
+    environment.set(Shader_int::FP16_PATHS, mask);
+    return environment;
+}
+
+constexpr uint32_t c_fp16_masks[] = {0u, 1u, 2u, 3u, fp16_paths_low_end_set, fp16_paths_all};
+
+} // namespace
+
+TEST(Shader_key_fp16_paths, lit_variants_keep_the_mask)
+{
+    const Vertex_format format = make_format(true);
+    for (const Bxdf_model bxdf_model : {Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_brdf, Bxdf_model::anisotropic_slope, Bxdf_model::anisotropic_engine_ready}) {
+        const std::shared_ptr<Material> material = make_material(bxdf_model);
+        for (const uint32_t mask : c_fp16_masks) {
+            const Shader_key key = make_fp16_environment(mask).derive(material.get(), &format, false);
+            EXPECT_EQ(get_fp16_paths(key), mask);
+        }
+    }
+}
+
+TEST(Shader_key_fp16_paths, unlit_position_pass_and_debug_variants_are_zero)
+{
+    const Vertex_format format = make_format(true);
+    {
+        const std::shared_ptr<Material> material = make_material(Bxdf_model::unlit);
+        const Shader_key key = make_fp16_environment(fp16_paths_all).derive(material.get(), &format, false);
+        EXPECT_EQ(get_fp16_paths(key), 0u);
+    }
+    const std::shared_ptr<Material> material = make_material(Bxdf_model::isotropic_brdf);
+    for (const Shader_bool variant : {Shader_bool::VARIANT_DEPTH_ONLY, Shader_bool::VARIANT_ID_RENDER, Shader_bool::VARIANT_SHADOW_DISTANCE, Shader_bool::VARIANT_SHADOW_CUBE, Shader_bool::VARIANT_POINTS}) {
+        Shader_key key = make_fp16_environment(fp16_paths_all).derive(material.get(), &format, false);
+        EXPECT_EQ(get_fp16_paths(key), fp16_paths_all);
+        key.set(variant, true);
+        set_fp16_paths_axis(key, fp16_paths_all);
+        EXPECT_EQ(get_fp16_paths(key), 0u);
+    }
+    {
+        Shader_key environment = make_fp16_environment(fp16_paths_all);
+        environment.set(Shader_int::SHADER_DEBUG, 1u);
+        const Shader_key key = environment.derive(material.get(), &format, false);
+        EXPECT_EQ(get_fp16_paths(key), 0u);
+    }
+}
+
+TEST(Shader_key_fp16_paths, unknown_bits_are_dropped)
+{
+    const Vertex_format format = make_format(false);
+    Shader_key key = make_fp16_environment(0u).derive(make_material(Bxdf_model::isotropic_brdf).get(), &format, false);
+    set_fp16_paths_axis(key, 0xffffffffu);
+    EXPECT_EQ(get_fp16_paths(key), fp16_paths_all);
+}
+
+TEST(Shader_key_fp16_paths, derive_equals_prepare_then_environment)
+{
+    for (const bool with_tangent : {false, true}) {
+        const Vertex_format format = make_format(with_tangent);
+        for (const Bxdf_model bxdf_model : {Bxdf_model::unlit, Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_brdf}) {
+            const std::shared_ptr<Material> material = make_material(bxdf_model);
+            for (const uint32_t mask : c_fp16_masks) {
+                const Shader_key full     = make_fp16_environment(mask).derive(material.get(), &format, false);
+                Shader_key       prepared = Shader_key{}.derive(material.get(), &format, false);
+                EXPECT_EQ(get_fp16_paths(prepared), 0u);
+                set_fp16_paths_axis(prepared, mask);
+                EXPECT_EQ(prepared, full);
+            }
+        }
+    }
+}

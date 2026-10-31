@@ -378,8 +378,28 @@ auto Shader_key::derive(
     // The environment's specular anti-aliasing mode reaches only the keys
     // whose shader calls anisotropic_brdf().
     set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(key));
+    // The environment's fp16 paths reach only the lit color variants.
+    set_fp16_paths_axis(key, get_fp16_paths(key));
 
     return key;
+}
+
+void set_fp16_paths_axis(Shader_key& key, const uint32_t mask)
+{
+    const bool lit_color_variant =
+        (key.get(Shader_int::BXDF_MODEL) != static_cast<uint32_t>(erhe::primitive::Bxdf_model::unlit)) &&
+        (key.get(Shader_int::SHADER_DEBUG) == static_cast<uint32_t>(Shader_debug::none)) &&
+        !key.get(Shader_bool::VARIANT_DEPTH_ONLY) &&
+        !key.get(Shader_bool::VARIANT_ID_RENDER) &&
+        !key.get(Shader_bool::VARIANT_SHADOW_DISTANCE) &&
+        !key.get(Shader_bool::VARIANT_SHADOW_CUBE) &&
+        !key.get(Shader_bool::VARIANT_POINTS);
+    key.set(Shader_int::FP16_PATHS, lit_color_variant ? (mask & fp16_paths_all) : 0u);
+}
+
+auto get_fp16_paths(const Shader_key& key) -> uint32_t
+{
+    return key.get(Shader_int::FP16_PATHS);
 }
 
 void set_specular_anti_aliasing_axis(Shader_key& key, const Specular_anti_aliasing mode)

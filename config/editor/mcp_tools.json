@@ -10563,6 +10563,10 @@
           "description": "Specular_anti_aliasing_mode of the anisotropic BRDF: off, normal_kernel (default; per fragment kernel from the shading normal's derivatives) or finite_difference (per light kernel from the half vector at the fragment and its x / y neighbours), doc/erhe/scene_renderer.md",
           "type": "string"
         },
+        "shader_fp16_paths": {
+          "description": "Bit mask of the standard shader's fp16 paths (erhe::scene_renderer::Fp16_path; doc/plans/shader_fp16.md): 1 material inputs, 2 isotropic BRDF, 4 light accumulation, 8 attenuation, 16 shadow visibility factor; 0 = the fp32 chain (default). Takes effect on the lit color variants of a device with shaderFloat16 (the reply's shader_float16); other devices compile fp32 whatever the mask.",
+          "type": "integer"
+        },
         "shadow_cull_mode": {
           "description": "Shadow_cull_mode: cull_front, cull_back, cull_none",
           "type": "string"

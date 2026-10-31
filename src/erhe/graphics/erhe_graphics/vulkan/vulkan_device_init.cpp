@@ -784,9 +784,14 @@ Device_impl::Device_impl(
     VkPhysicalDeviceDescriptorIndexingProperties query_descriptor_indexing_properties{};
     query_descriptor_indexing_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
     query_descriptor_indexing_properties.pNext = &query_maintenance3_properties;
+    // VK_KHR_shader_float_controls, core in Vulkan 1.2 (as descriptor
+    // indexing above): the fp16 denormal and rounding behaviour.
+    VkPhysicalDeviceFloatControlsProperties query_float_controls_properties{};
+    query_float_controls_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES;
+    query_float_controls_properties.pNext = &query_descriptor_indexing_properties;
     VkPhysicalDeviceMultiviewProperties query_multiview_properties{
         .sType                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES,
-        .pNext                     = &query_descriptor_indexing_properties,
+        .pNext                     = &query_float_controls_properties,
         .maxMultiviewViewCount     = 0,
         .maxMultiviewInstanceIndex = 0,
     };
@@ -2278,6 +2283,17 @@ Device_impl::Device_impl(
     m_info.use_constant_alpha_color_blend_factors = (m_portability_subset_features.constantAlphaColorBlendFactors == VK_TRUE);
     m_info.shader_float16              = (set_shader_float16_int8_features.shaderFloat16 == VK_TRUE);
     m_info.shader_int8                 = (set_shader_float16_int8_features.shaderInt8    == VK_TRUE);
+    m_info.shader_denorm_flush_to_zero_float16 = (query_float_controls_properties.shaderDenormFlushToZeroFloat16 == VK_TRUE);
+    m_info.shader_denorm_preserve_float16      = (query_float_controls_properties.shaderDenormPreserveFloat16    == VK_TRUE);
+    m_info.shader_rounding_mode_rte_float16    = (query_float_controls_properties.shaderRoundingModeRTEFloat16   == VK_TRUE);
+    m_info.shader_rounding_mode_rtz_float16    = (query_float_controls_properties.shaderRoundingModeRTZFloat16   == VK_TRUE);
+    log_startup->info(
+        "  float16 controls: denorm flush-to-zero = {}, denorm preserve = {}, RTE = {}, RTZ = {}",
+        m_info.shader_denorm_flush_to_zero_float16,
+        m_info.shader_denorm_preserve_float16,
+        m_info.shader_rounding_mode_rte_float16,
+        m_info.shader_rounding_mode_rtz_float16
+    );
     m_info.shader_relaxed_extended_instruction =
         m_device_extensions.m_VK_KHR_shader_relaxed_extended_instruction &&
         (set_shader_relaxed_extended_instruction_features.shaderRelaxedExtendedInstruction == VK_TRUE);

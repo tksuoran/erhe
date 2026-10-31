@@ -138,6 +138,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::dataformat`: `convert()` writes `format_packed111110_vec3_unorm`
   (R in the low 11 bits) and `format_packed1010102_vec4_unorm`; converting to
   `format_8_vec4_srgb` writes the source alpha (it wrote blue).
+- `erhe::scene_renderer`: the `FP16_PATHS` shader key axis
+  (`Shader_int::FP16_PATHS`), `Fp16_path`, `fp16_paths_low_end_set`,
+  `fp16_paths_all`, `set_fp16_paths_axis()`, `get_fp16_paths()`, and the
+  `fp16_paths` field of `Forward_renderer::Render_parameters`,
+  `Draw_parameters`, `Prewarm_parameters`, `Draw_list_renderer::Render_parameters`
+  and `Color_environment` (doc/erhe/shader_variants.md "fp16 paths").
+- `erhe::graphics`: `Device_info::shader_denorm_flush_to_zero_float16`,
+  `shader_denorm_preserve_float16`, `shader_rounding_mode_rte_float16`,
+  `shader_rounding_mode_rtz_float16` (Vulkan float controls properties).
 - `erhe::graphics`: `Shader_variant_report_tools` and a `tools` parameter of
   `Shader_variant_report::add()`; the shader variant browser writes
   `variants/manifest.json` for `scripts/shader_analytics.py` and its pages
