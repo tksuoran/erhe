@@ -88,7 +88,7 @@ public:
 class Pvs_column
 {
 public:
-    std::string           node_uid;
+    std::string           node_uid{};
     uint32_t              primitive_index{0};
     // world_from_node as 4 columns of 3 rows (the x, y, z of each glm::mat4
     // column, translation last).

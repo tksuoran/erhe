@@ -222,8 +222,8 @@ public:
     uint64_t                     debug_id_entries  {0};  // entries the id pass drew
     uint64_t                     debug_covered_pixels{0}; // pixels of the layer with a sample
     uint64_t                     debug_distinct_ids{0};   // distinct id_min values in the layer
-    std::string                  debug_depth_path;
-    std::string                  debug_id_path;
+    std::string                  debug_depth_path{};
+    std::string                  debug_id_path{};
 };
 
 // The potentially visible set bake (doc/plans/pvs.md "Bake", "Build order"
