@@ -96,11 +96,46 @@ Reference values for a re-run:
   happen before pose 0, at the `frame_scene` camera's first position); PVS
   culled 22, 14 and 203 entries at three poses.
 
+Cost on Bistro (Apple M4 Pro, Release, headless Metal 3, the baked
+Bistro loaded with `load_scene`, `gpu` classification, the occlusion
+measurement's recipe: pipelined render thread, `force_disable_vsync`,
+frame pacing off, Tracy GPU zones, one editor run of 12 s per
+configuration, two runs each; medians over 2700 to 4000 frames per run,
+the two runs' means; the runs differ by at most 30 us, at the bench camera
+by up to 120 us; GPU `Main` / tick / R in us):
+
+| Pose | off | PVS | PVS + occlusion | occlusion |
+|---|---|---|---|---|
+| framed (`frame_scene`) | 3365 / 4517 / 1476 | 3359 / 4518 / 1488 | 2304 / 3474 / 1354 | 2295 / 3466 / 1336 |
+| bench camera | 3250 / 4441 / 1495 | 3280 / 4471 / 1485 | 2048 / 3229 / 1268 | 2037 / 3220 / 1300 |
+| street, cell 458 | 1956 / 3132 / 1297 | 1812 / 2993 / 1294 | 1986 / 3172 / 1289 | 1978 / 3161 / 1294 |
+
+- The grid covers the street slab (y 0.2 to 4.2 m), so the framed camera
+  and the bench camera (y 9.7 m) lie outside it: the rule tests nothing
+  there, and PVS on costs nothing measurable (within the run-to-run
+  spread). The street pose (the `streaming` section's pose 9, the cell
+  center at 2.2 m) culls 203 of 601 tested entries.
+- Street pose: PVS alone is the fastest configuration, GPU `Main` -144 us
+  against off (opaque fill drawn 609 -> 410, tick -139 us). Occlusion
+  alone costs +22 us there (its pass costs more than removing 460 of the
+  opaque fill's entries saves), and occlusion with PVS +174 us against
+  PVS alone.
+- With occlusion on, PVS shrinks the occlusion pass's boxes (street: 630
+  -> 427 tested; the PVS-culled entries are not tested) but the opaque
+  fill draws the same 149 entries and GPU `Main` stays within 10 us of
+  occlusion alone: the box count saving is below the noise at that pose.
+  The pass runs inside the view's render pass and Metal times only stage
+  boundaries, so its own time is not separable from `Main`.
+- The classification dispatch (`Cull classification` timer) takes about
+  20 us with PVS off and 22 to 26 us with it on; `Cull command
+  generation` 25 to 36 us in every configuration. R does not change with
+  PVS.
+- Occlusion against off: framed -1070 us, bench camera -1213 us (on
+  Metal 3; the 2026-10-24 numbers of `doc/plans/occlusion_culling.md` are
+  Metal 4 from an earlier tree, so not directly comparable).
+
 Still to measure:
 
-- Cost: `scripts/render_thread_bench.py --tracy` on Bistro with PVS off,
-  on, and on with occlusion: GPU `Main`, tick, R, the occlusion pass's
-  time (fewer boxes) and the classification dispatch time.
 - Quest (step 8): the headset Bistro benchmark
   (`doc/plans/quest_performance.md`) before and after, with the database
   baked on the desktop and saved into `bistro_quest.glb`.
