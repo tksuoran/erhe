@@ -28,6 +28,14 @@ layout(location = 19) flat out uint v_pvs_entry;
 layout(location = 20)      out float v_pvs_depth;
 #endif
 
+#if defined(ERHE_FLAT_DRAW_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS) && !defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_PVS)
+// The flat draw color variant (Shader_bool::FLAT_DRAW_COLOR): the draw's
+// primitive record index, which standard.frag maps to a palette color.
+// Location 19 is the ID-render / PVS location; those variants never carry
+// this axis.
+layout(location = 19) flat out uint v_flat_draw_index;
+#endif
+
 #if defined(ERHE_VARIANT_POINTS)
 // The points variant (corner points / polygon centroids) draws each vertex
 // as a GL point. Redeclaring gl_PerVertex is required to write gl_PointSize;
@@ -285,6 +293,10 @@ void main()
     // color.x holds the chunk's first frame-local entry index as an exact
     // float (below 2^24, verified by draw_pvs_face()).
     v_pvs_entry = uint(primitive.primitives[ERHE_PRIMITIVE_INDEX].color.x) + uint(ERHE_PRIMITIVE_INDEX);
+#endif
+
+#if defined(ERHE_FLAT_DRAW_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS) && !defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_PVS)
+    v_flat_draw_index = uint(ERHE_PRIMITIVE_INDEX);
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)

@@ -584,6 +584,14 @@ void Settings_window::imgui()
                 ImGui::EndCombo();
             }
         });
+        // Flat draw color (the FLAT_DRAW_COLOR variant axis): unlit palette
+        // color per draw, a fragment cost measurement mode.
+        add_entry("Flat Draw Color", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            if (ImGui::Checkbox("##", &graphics_preset.flat_draw_color)) {
+                on_graphics_preset_edited();
+            }
+        });
     }
 
     add_entry("", [this, button_size](){

@@ -110,8 +110,9 @@ void apply_render_environment(Shader_key& key, const Shader_key& environment, co
     // scopes it.
     set_specular_anti_aliasing_axis(key, get_specular_anti_aliasing(environment));
     // derive() ORs the environment bits in before the pass's forced bits are
-    // applied, so a pass that forces USE_DDGI or USE_LIGHTMAP off keeps it off.
-    for (const Shader_bool axis : {Shader_bool::USE_DDGI, Shader_bool::USE_LIGHTMAP}) {
+    // applied, so a pass that forces USE_DDGI, USE_LIGHTMAP or FLAT_DRAW_COLOR
+    // off keeps it off.
+    for (const Shader_bool axis : {Shader_bool::USE_DDGI, Shader_bool::USE_LIGHTMAP, Shader_bool::FLAT_DRAW_COLOR}) {
         if (environment.get(axis) && ((force_disable_mask & make_shader_bool_mask(axis)) == 0u)) {
             key.set(axis, true);
         }
@@ -258,6 +259,7 @@ void Forward_renderer::render(const Draw_parameters& parameters, const Render_bu
     environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   shader_multiview_count);
     environment_key.set(Shader_bool::USE_DDGI,                                m_pass_resources.get_ddgi().is_valid());
     environment_key.set(Shader_bool::USE_LIGHTMAP,                            m_pass_resources.get_lightmap_texture() != nullptr);
+    environment_key.set(Shader_bool::FLAT_DRAW_COLOR,                         parameters.flat_draw_color);
 
     const std::size_t                           record_size = m_program_interface.primitive_interface.primitive_struct.get_size_bytes();
     const std::span<const Prepared_bucket> buckets     = snapshot.get_buckets();

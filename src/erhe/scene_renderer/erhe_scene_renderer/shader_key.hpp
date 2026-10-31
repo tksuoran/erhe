@@ -141,7 +141,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(LIGHT_SHADING_CLUSTERED)          \
     X(USE_LIGHTMAP)                     \
     X(VARIANT_PVS_DEPTH)                \
-    X(VARIANT_PVS_ID)
+    X(VARIANT_PVS_ID)                   \
+    X(FLAT_DRAW_COLOR)
 
 #define ERHE_SHADER_INT(X) \
     X(LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)     \

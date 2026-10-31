@@ -82,6 +82,10 @@ public:
     // Whether a lightmap atlas is bound this frame (the USE_LIGHTMAP axis):
     // without one no draw compiles the lightmap varyings or sampling.
     bool                  lightmap_enabled {false};
+    // The FLAT_DRAW_COLOR axis: every color draw writes an unlit palette
+    // color picked by its primitive record index (standard.frag), no
+    // texture, light or shadow map reads. A measurement mode.
+    bool                  flat_draw_color  {false};
 
     // Equal when make_environment_key() is (the cached resolutions depend on
     // the key only).

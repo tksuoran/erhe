@@ -88,6 +88,7 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
     environment.specular_anti_aliasing = parameters.specular_anti_aliasing;
     environment.ddgi_enabled      = m_pass_resources.get_ddgi().is_valid();
     environment.lightmap_enabled  = (m_pass_resources.get_lightmap_texture() != nullptr);
+    environment.flat_draw_color   = parameters.flat_draw_color;
     // Same convention as the bucket path: 0 for single view, N for multiview.
     const uint16_t multiview_count = (base.views.size() >= 2) ? static_cast<uint16_t>(base.views.size()) : uint16_t{0};
 

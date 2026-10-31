@@ -10487,6 +10487,10 @@
           "description": "Light_shading_mode: loops (per light type loops, the preset's light limits decide which lights are shaded), clustered (every active light shaded from per-fragment light cluster lists, doc/plans/clustered_lights.md) or automatic (the default: clustered while the scene has more than 16 active lights, else loops)",
           "type": "string"
         },
+        "flat_draw_color": {
+          "description": "true: every color draw writes an unlit palette color picked by its draw (primitive record index; the FLAT_DRAW_COLOR variant axis), with no texture, light or shadow map reads; alpha-tested materials draw solid. Lights and shadow maps are still prepared unless their light counts are 0. A fragment cost measurement mode",
+          "type": "boolean"
+        },
         "specular_anti_aliasing": {
           "description": "Specular_anti_aliasing_mode of the anisotropic BRDF: off, normal_kernel (default; per fragment kernel from the shading normal's derivatives) or finite_difference (per light kernel from the half vector at the fragment and its x / y neighbours), doc/erhe/scene_renderer.md",
           "type": "string"

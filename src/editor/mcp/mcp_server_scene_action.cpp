@@ -271,6 +271,12 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         }
         preset.shadow_enable = args["shadow_enable"].get<bool>();
     }
+    if (args.contains("flat_draw_color")) {
+        if (!args["flat_draw_color"].is_boolean()) {
+            return make_error_content("flat_draw_color must be a boolean");
+        }
+        preset.flat_draw_color = args["flat_draw_color"].get<bool>();
+    }
     if (!args_ok) {
         return make_error_content(error);
     }
@@ -328,6 +334,7 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"point_unshadowed_light_count",       in_effect.point_unshadowed_light_count},
         {"light_shading",              std::string{to_string(in_effect.light_shading)}},
         {"specular_anti_aliasing",     std::string{to_string(in_effect.specular_anti_aliasing)}},
+        {"flat_draw_color",            in_effect.flat_draw_color},
         {"use_draw_lists",             m_context.app_settings->get_use_draw_lists()}
     }).dump();
 }

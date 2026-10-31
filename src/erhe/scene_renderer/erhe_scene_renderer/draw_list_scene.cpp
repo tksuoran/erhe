@@ -253,6 +253,7 @@ auto Color_environment::make_environment_key() const -> Shader_key
     key.set(Shader_int::SPECULAR_ANTI_ALIASING,                   static_cast<uint32_t>(specular_anti_aliasing));
     key.set(Shader_bool::USE_DDGI,                                ddgi_enabled);
     key.set(Shader_bool::USE_LIGHTMAP,                            lightmap_enabled);
+    key.set(Shader_bool::FLAT_DRAW_COLOR,                         flat_draw_color);
     return key;
 }
 

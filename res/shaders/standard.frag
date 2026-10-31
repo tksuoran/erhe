@@ -88,6 +88,25 @@ void erhe_pvs_write()
 }
 #endif
 
+#if defined(ERHE_FLAT_DRAW_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS) && !defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_PVS)
+// Matching the location standard.vert assigns under the flat draw color
+// variant: the draw's primitive record index.
+layout(location = 19) flat in uint v_flat_draw_index;
+
+// Sixteen visually distinct colors, cycled by the draw's record index, so
+// neighbouring draws differ.
+vec4 erhe_flat_draw_color()
+{
+    const vec3 palette[16] = vec3[16](
+        vec3(0.90, 0.10, 0.10), vec3(0.10, 0.70, 0.10), vec3(0.15, 0.25, 0.95), vec3(0.95, 0.85, 0.10),
+        vec3(0.10, 0.85, 0.85), vec3(0.85, 0.15, 0.85), vec3(0.95, 0.50, 0.05), vec3(0.50, 0.95, 0.20),
+        vec3(0.55, 0.20, 0.95), vec3(0.95, 0.40, 0.60), vec3(0.05, 0.45, 0.45), vec3(0.60, 0.40, 0.10),
+        vec3(0.85, 0.85, 0.85), vec3(0.35, 0.35, 0.35), vec3(0.45, 0.65, 1.00), vec3(0.50, 0.00, 0.10)
+    );
+    return vec4(palette[v_flat_draw_index % 16u], 1.0);
+}
+#endif
+
 #if defined(ERHE_VARIANT_ID_RENDER)
 // Matching the layout locations standard.vert assigns under the
 // ID-render variant.
@@ -363,6 +382,13 @@ void main()
     // The whole surface; the alpha-tested PVS variant writes after the
     // material's discard below instead.
     erhe_pvs_write();
+    return;
+#endif
+
+#if defined(ERHE_FLAT_DRAW_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS) && !defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_PVS)
+    // The whole surface, no material, texture, light or shadow reads (an
+    // alpha-tested material draws solid: its discard needs the texture).
+    out_color = erhe_flat_draw_color();
     return;
 #endif
 
