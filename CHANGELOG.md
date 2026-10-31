@@ -36,6 +36,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Shader_bool::FLAT_DRAW_COLOR` (the
+  `ERHE_FLAT_DRAW_COLOR` variant axis: an unlit palette color per draw),
+  `Color_environment::flat_draw_color`,
+  `Draw_list_renderer::Render_parameters::flat_draw_color` and
+  `Forward_renderer::Draw_parameters::flat_draw_color`.
+
 - `erhe::scene_renderer`: the PVS page streaming (doc/plans/pvs.md
   "Residency and streaming"): `pvs_residency.hpp` with
   `Pvs_streaming_settings` (`resident_pages`, `stream_radius_pages`),

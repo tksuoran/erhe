@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_preset_entry",
-    version=5,
+    version=6,
     short_desc="Graphics quality preset",
     long_desc="",
     developer=False,
@@ -53,5 +53,10 @@ struct("Graphics_preset_entry",
         # doc/erhe/scene_renderer.md "Specular anti-aliasing"). Older presets
         # read the default.
         field("specular_anti_aliasing", EnumRef("Specular_anti_aliasing_mode"), added_in=5, default="Specular_anti_aliasing_mode::normal_kernel", short_desc="Specular Anti-aliasing"),
+        # Flat draw color (v6): every color draw writes an unlit palette color
+        # picked by its draw (primitive record index), with no texture, light
+        # or shadow map reads: a fragment cost measurement mode. Lights and
+        # shadow maps are still prepared unless their counts are 0.
+        field("flat_draw_color", Bool, added_in=6, default="false", short_desc="Flat Draw Color"),
     ],
 )

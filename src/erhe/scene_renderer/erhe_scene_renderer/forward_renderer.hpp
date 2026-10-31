@@ -206,6 +206,8 @@ public:
         uint32_t                                 shadow_technique{0};
         uint32_t                                 shadow_depth_bits{0};
         Specular_anti_aliasing                   specular_anti_aliasing{Specular_anti_aliasing::normal_kernel};
+        // FLAT_DRAW_COLOR variant axis (Color_environment::flat_draw_color).
+        bool                                     flat_draw_color{false};
         glm::uvec4                               debug_joint_indices{0xffffffffu, 0, 0, 0};
         std::span<const glm::vec4>               debug_joint_colors{};
         const erhe::scene::Node*                 debug_target_joint{nullptr};

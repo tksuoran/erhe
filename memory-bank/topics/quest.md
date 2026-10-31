@@ -28,6 +28,7 @@
 [GPU_BREAKDOWN_2026-10-24]{491a843f0;per-pass-timers-in-benchmark-result}
 default::XR-multiview-7.09ms(=app-frame;grid-2.0;shadow-math~1/light);compositor-1.75ms-passthrough-off(2.42-on);ImGui-hotbar-0.04
 heavy::line-compute-39.3ms(!)+XR-multiview-21.3+shadow-1.41=61.7(app_gpu-52.7;timer-spans-include-compositor-preemption)
+@flat-draw-color-2026-10-31::Bistro-street-PVS-off-0-lights-ERHE_FLAT_DRAW_COLOR{occlusion-on-58.6fps-multiview-15.9ms-340-drawn|off-21.4fps-45.3ms-3395-drawn;vs-1-dir-light-49.6|20.4}->headset-frame=geometry-bound(vertex+binning)¬fragment-shading;doc/plans/pvs.md-Verification
 !next::edge/wide-line-compute-runs-for-every-mesh-in-headset-pass->make-it-cost-only-what-is-shown
 ?open::compositor-slowdown-still-occurs-2026-10-31(3/56-Bistro-street-runs;compositor-GPU>3ms-vs-1.6;multiview+30-65ms;passthrough-off;flag-and-rerun);compositor-time-bimodal-1.35|2.1ms-after-passthrough-off(unknown-cause);passthrough-pause-not-verified-compositor-side;glTF-default-sampler-nearest;worn-visual-check-draw-lists+one-shadow-light
 

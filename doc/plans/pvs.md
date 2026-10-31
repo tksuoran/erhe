@@ -161,6 +161,19 @@ device); every needed page was resident before the measured window.
   unexplained.
 - Clustered shading dominates the frame (the multiview pass stays near
   75 ms with every culling on).
+- Flat draw color (graphics preset `flat_draw_color`, the
+  `ERHE_FLAT_DRAW_COLOR` variant: an unlit palette color per draw, no
+  texture, light or shadow map reads; zero lights, `light_shading` loops,
+  `shadow_enable` false, so no shadow pass), PVS off, 2026-10-31, two runs
+  each: occlusion on 59.2 / 58.0 fps (XR multiview 15.8 to 16.0 ms, app
+  GPU 14.3 ms, GPU utilization 98 %, 326 opaque + 14 alpha-tested entries
+  drawn); occlusion off 21.5 / 21.4 fps (XR multiview 45.3 ms, 3304 + 91
+  drawn). Against one directional light (49.6 and 20.4 fps above) the
+  lighting, shadow and texture work is about 3 ms of the frame with
+  occlusion on and within the noise without it: the headset frame is bound
+  by the drawn geometry (vertex work and binning of the drawn entries),
+  not by fragment shading. Results in `memory-bank/local/quest_runs/`
+  20261031_121424 and 20261031_121603.
 - 3 of the 56 runs had an intermittent compositor slowdown (compositor
   GPU time above 3 ms against 1.6 ms, the multiview pass 30 to 65 ms
   longer on the same frames); those configurations were rerun and the
