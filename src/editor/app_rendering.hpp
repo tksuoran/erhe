@@ -247,11 +247,12 @@ public:
     // prepare_wide_line_feed): the edge-line feed of the wide-line passes for
     // one view, gated as the passes draw (enabled, the view's render style),
     // with each pass's primitive settings at the prepared frame's host time
-    // and each mesh fed at the LOD level its fill draws in the view
-    // (get_wide_line_lod_routing(), the mesh's forced level from the scene's
-    // Draw_list_scene; doc/plans/selection_outline_lod.md). The caller holds
-    // the scene root's item_host_mutex (the feed reads the meshes' Buffer_mesh
-    // variants, which a worker may be replacing).
+    // and each mesh fed at its forced LOD level, read from the scene's
+    // Draw_list_scene (doc/plans/selection_outline_lod.md); edge lines are
+    // not content, so the view's shader debug mode and fill path do not
+    // change them. The caller holds the scene root's item_host_mutex (the
+    // feed reads the meshes' Buffer_mesh variants, which a worker may be
+    // replacing).
     void prepare_wide_line_feed(
         const Render_context&                         context,
         int64_t                                       host_system_time_ns,
