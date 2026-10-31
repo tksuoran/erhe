@@ -210,6 +210,20 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     // Base vertex and base instance in (indirect) draws: every Metal 3 GPU
     // (Apple3+ and Mac2 families) supports them.
     m_info.use_base_instance                        = true;
+    // Shader half and 8-bit integer types (Device_info: what each flag means
+    // on Metal and why storage_push_constant_16 stays false): every Apple
+    // GPU runs MSL half natively, and SPIRV-Cross emits half / char for the
+    // SPIR-V Float16 / Int8 types, in buffers and in stage inputs and outputs.
+    m_info.shader_float16                           = true;
+    m_info.shader_int8                              = true;
+    m_info.storage_buffer_16bit_access              = true;
+    m_info.uniform_and_storage_buffer_16bit_access  = true;
+    m_info.storage_input_output_16                  = true;
+    m_info.storage_push_constant_16                 = false;
+    m_info.shader_denorm_flush_to_zero_float16      = false;
+    m_info.shader_denorm_preserve_float16           = true;
+    m_info.shader_rounding_mode_rte_float16         = true;
+    m_info.shader_rounding_mode_rtz_float16         = false;
     m_info.max_samples                              = max_samples;
     m_info.max_color_texture_samples                = max_samples;
     m_info.max_depth_texture_samples                = max_samples;

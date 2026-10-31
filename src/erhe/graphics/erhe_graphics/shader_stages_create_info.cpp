@@ -98,6 +98,54 @@ void write_vertex_joint_weights_encoding_define(std::stringstream& sb, const erh
        << "\n";
 }
 
+#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_METAL)
+// Optional shader arithmetic and storage types (Device_info::shader_float16,
+// shader_int8 and the 16-bit storage flags; doc/plans/shader_fp16.md), shared
+// by the Vulkan and the Metal preamble: both compile GLSL to SPIR-V with
+// glslang, and on Metal SPIRV-Cross lowers the SPIR-V Float16 / Int8 / 16-bit
+// storage types to MSL half and char. Each flag that is set emits the GLSL
+// extension directive with ": require", so shader source can use the types
+// directly without its own #extension line, and an ERHE_HAS_* define, so
+// #ifdef guards pick code paths by which features are live. With ": require",
+// a mismatch between the device flag and glslang language support fails
+// loudly at the #extension directive instead of silently at first use.
+void write_shader_type_extensions(std::stringstream& sb, const Device_info& info)
+{
+    if (info.shader_float16) {
+        sb << "#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require\n";
+        sb << "#define ERHE_HAS_SHADER_FLOAT16 1\n";
+    }
+    if (info.shader_int8) {
+        sb << "#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require\n";
+        sb << "#define ERHE_HAS_SHADER_INT8 1\n";
+    }
+    // GL_EXT_shader_16bit_storage covers all four 16-bit storage classes;
+    // emit the directive once if any of the four flags is set. The SPIR-V
+    // backend only emits the specific Storage*16* capability for storage
+    // classes the shader actually references, so the unused ones cost nothing.
+    if (
+        info.storage_buffer_16bit_access ||
+        info.uniform_and_storage_buffer_16bit_access ||
+        info.storage_push_constant_16 ||
+        info.storage_input_output_16
+    ) {
+        sb << "#extension GL_EXT_shader_16bit_storage : require\n";
+    }
+    if (info.storage_buffer_16bit_access) {
+        sb << "#define ERHE_HAS_STORAGE_BUFFER_16BIT_ACCESS 1\n";
+    }
+    if (info.uniform_and_storage_buffer_16bit_access) {
+        sb << "#define ERHE_HAS_UNIFORM_AND_STORAGE_BUFFER_16BIT_ACCESS 1\n";
+    }
+    if (info.storage_push_constant_16) {
+        sb << "#define ERHE_HAS_STORAGE_PUSH_CONSTANT_16 1\n";
+    }
+    if (info.storage_input_output_16) {
+        sb << "#define ERHE_HAS_STORAGE_INPUT_OUTPUT_16 1\n";
+    }
+}
+#endif
+
 } // anonymous namespace
 
 auto Shader_stages_create_info::attributes_source() const -> std::string
@@ -406,47 +454,7 @@ auto Shader_stages_create_info::final_source(
     sb << "#define gl_VertexID gl_VertexIndex\n";
     sb << "#define gl_InstanceID gl_InstanceIndex\n";
 
-    // Optional shader-arithmetic / storage features. Each block mirrors a
-    // VkPhysicalDevice feature flag we enabled at device creation. We emit
-    // the corresponding GLSL extension directive with ": require" so shader
-    // source can use the types directly without its own #extension line,
-    // and an ERHE_HAS_* define so #ifdef-guards still let shaders pick code
-    // paths based on which features are actually live. With ": require",
-    // mismatch between the device feature flag and glslang language
-    // support fails loudly at the #extension directive instead of silently
-    // at first use.
-    const Device_info& vulkan_device_info = graphics_device.get_info();
-    if (vulkan_device_info.shader_float16) {
-        sb << "#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require\n";
-        sb << "#define ERHE_HAS_SHADER_FLOAT16 1\n";
-    }
-    if (vulkan_device_info.shader_int8) {
-        sb << "#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require\n";
-        sb << "#define ERHE_HAS_SHADER_INT8 1\n";
-    }
-    // GL_EXT_shader_16bit_storage covers all four 16-bit storage classes;
-    // emit the directive once if any of the four feature bits is enabled.
-    // The SPIR-V backend only emits the specific Storage*16* capability
-    // for storage classes the shader actually references, so the unused
-    // ones cost nothing.
-    if (vulkan_device_info.storage_buffer_16bit_access ||
-        vulkan_device_info.uniform_and_storage_buffer_16bit_access ||
-        vulkan_device_info.storage_push_constant_16 ||
-        vulkan_device_info.storage_input_output_16) {
-        sb << "#extension GL_EXT_shader_16bit_storage : require\n";
-    }
-    if (vulkan_device_info.storage_buffer_16bit_access) {
-        sb << "#define ERHE_HAS_STORAGE_BUFFER_16BIT_ACCESS 1\n";
-    }
-    if (vulkan_device_info.uniform_and_storage_buffer_16bit_access) {
-        sb << "#define ERHE_HAS_UNIFORM_AND_STORAGE_BUFFER_16BIT_ACCESS 1\n";
-    }
-    if (vulkan_device_info.storage_push_constant_16) {
-        sb << "#define ERHE_HAS_STORAGE_PUSH_CONSTANT_16 1\n";
-    }
-    if (vulkan_device_info.storage_input_output_16) {
-        sb << "#define ERHE_HAS_STORAGE_INPUT_OUTPUT_16 1\n";
-    }
+    write_shader_type_extensions(sb, graphics_device.get_info());
 #endif
 #if defined(ERHE_GRAPHICS_API_METAL)
     // ERHE_PRIMITIVE_INDEX (doc/erhe/graphics.md "Draw records"): both Metal
@@ -471,6 +479,7 @@ auto Shader_stages_create_info::final_source(
     // Vulkan SPIR-V uses gl_VertexIndex / gl_InstanceIndex instead of gl_VertexID / gl_InstanceID
     sb << "#define gl_VertexID gl_VertexIndex\n";
     sb << "#define gl_InstanceID gl_InstanceIndex\n";
+    write_shader_type_extensions(sb, graphics_device.get_info());
 #endif
 
     if (shader.type == Shader_type::vertex_shader) {

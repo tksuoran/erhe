@@ -309,7 +309,9 @@ G-shadow / G-cost, the matrix) is defined in
   `--save-images failing` (the default) keeps the reference and error image
   of each failing row, `--enforce` exits non-zero on a FAIL. Results go to
   `logs/shader_fp16/<timestamp>/summary.json`. The device must report
-  `shaderFloat16`; on Linux with several ICDs set `VK_DRIVER_FILES`.
+  `Device_info::shader_float16` (Vulkan `shaderFloat16`; every Metal
+  device); on Linux with several ICDs set `VK_DRIVER_FILES`; on macOS pass
+  `--editor build_xcode_metal_headless/bin/Debug/editor`.
 - **G-shadow**: the shadow stations are not part of the test
   rooms; the visibility path (mask 16) is checked on the lit image of
   `creation_25` stations by `scripts/shadow_verify.py --set

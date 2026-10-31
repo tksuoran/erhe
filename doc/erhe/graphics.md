@@ -591,6 +591,42 @@ different subsets of the same records can share one upload
 (`doc/erhe/draw_list_renderer.md` "Record upload"). The device logs its choice
 at startup (`Record indexing (ERHE_PRIMITIVE_INDEX): ...`).
 
+## Shader half and 8-bit types
+
+`Device_info::shader_float16`, `shader_int8` and the 16-bit storage flags
+(`storage_buffer_16bit_access`, `uniform_and_storage_buffer_16bit_access`,
+`storage_push_constant_16`, `storage_input_output_16`) are backend-neutral
+fields; the Vulkan and Metal preambles emit, for each flag that is set, the
+GLSL extension directive with `: require`
+(`GL_EXT_shader_explicit_arithmetic_types_float16`,
+`..._int8`, `GL_EXT_shader_16bit_storage`) and the define
+`ERHE_HAS_SHADER_FLOAT16`, `ERHE_HAS_SHADER_INT8`,
+`ERHE_HAS_STORAGE_BUFFER_16BIT_ACCESS`,
+`ERHE_HAS_UNIFORM_AND_STORAGE_BUFFER_16BIT_ACCESS`,
+`ERHE_HAS_STORAGE_PUSH_CONSTANT_16` or `ERHE_HAS_STORAGE_INPUT_OUTPUT_16`
+(one emitter, `write_shader_type_extensions()` in
+`shader_stages_create_info.cpp`). `res/shaders/erhe_half.glsl` maps `half`
+and `half_vec*` to the fp16 types under `ERHE_HAS_SHADER_FLOAT16` and to
+`float` otherwise.
+
+- **Vulkan** sets each flag from the device feature it enabled
+  (`VkPhysicalDeviceShaderFloat16Int8Features`, the Vulkan 1.1 16-bit
+  storage features).
+- **Metal** (both backends) sets `shader_float16`, `shader_int8` and the
+  buffer and stage input / output 16-bit flags: SPIRV-Cross lowers the
+  SPIR-V Float16 and Int8 types to MSL `half` and `char` in arithmetic,
+  device and constant buffers and `[[stage_in]]` / outputs, which every
+  Apple GPU runs natively. `storage_push_constant_16` stays false: the Metal
+  backends bind no push constants.
+- **OpenGL** and the null device leave them false.
+
+The fp16 float controls (`shader_denorm_flush_to_zero_float16`,
+`shader_denorm_preserve_float16`, `shader_rounding_mode_rte_float16`,
+`shader_rounding_mode_rtz_float16`) are backend-neutral too: Vulkan reports
+`VkPhysicalDeviceFloatControlsProperties` (what may be selected; the
+driver default can still flush), Metal reports its fixed behavior (fp16
+denormals preserved, round to nearest even, under both MSL math modes).
+
 ## Draw count from the GPU
 
 `Render_command_encoder::multi_draw_indexed_primitives_indirect_count(

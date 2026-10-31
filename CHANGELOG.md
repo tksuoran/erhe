@@ -1157,6 +1157,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: `Device_info::shader_float16`, `shader_int8`, the fp16
+  float controls (`shader_denorm_flush_to_zero_float16`,
+  `shader_denorm_preserve_float16`, `shader_rounding_mode_rte_float16`,
+  `shader_rounding_mode_rtz_float16`) and the 16-bit storage flags
+  (`storage_buffer_16bit_access`, `uniform_and_storage_buffer_16bit_access`,
+  `storage_push_constant_16`, `storage_input_output_16`) moved out of the
+  Vulkan-only block and exist on every backend; the Metal backends set
+  them (fp16 and int8 arithmetic, 16-bit buffer and stage I/O storage, fixed
+  denormal-preserve and round-to-nearest-even behavior) and the Metal
+  shader preamble emits the same extension directives and `ERHE_HAS_*`
+  defines as the Vulkan one.
+
 - `erhe::scene_renderer`: `cull_lanes::make_pvs_query_cells()` takes the
   frame's `Pvs_resident_pages` (a cell in a page without a slot keeps every
   entry) instead of reading the database's bits. `Pvs_gpu_database` is the

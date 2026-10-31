@@ -205,8 +205,10 @@ header defines one type macro set per path (`mat_float` / `mat_vec3`,
 `vis_float`): the half type when the path is live, the float type
 otherwise, so each path's code is written once and a value crossing into
 another path is converted with the receiving path's constructor (the
-identity in fp32). A path is live only when the device enables
-`shaderFloat16` (`ERHE_HAS_SHADER_FLOAT16`); without it every variant
+identity in fp32). A path is live only when the device reports
+`Device_info::shader_float16` (`ERHE_HAS_SHADER_FLOAT16`; Vulkan
+`shaderFloat16`, every Metal device, `doc/erhe/graphics.md` "Shader half
+and 8-bit types"); without it every variant
 compiles the fp32 chain whatever the mask, and the mask 0 variant is the
 fp32 chain operation for operation as before the axis existed.
 

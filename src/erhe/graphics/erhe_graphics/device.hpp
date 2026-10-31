@@ -188,31 +188,6 @@ public:
     uint32_t vulkan_api_version {0};
     uint32_t vulkan_driver_id   {0};
 
-    // Reflect VkPhysicalDeviceShaderFloat16Int8Features. Set when
-    // the corresponding feature was advertised by the physical
-    // device and enabled on VkDevice creation.
-    bool     shader_float16     {false};
-    bool     shader_int8        {false};
-
-    // Reflect VkPhysicalDeviceFloatControlsProperties (VK_KHR_shader_float_
-    // controls, core in Vulkan 1.2) for float16: whether the device can
-    // flush fp16 denormals to zero, preserve them, and round to nearest
-    // even / toward zero. The shaders set no execution mode, so the
-    // driver's default applies; the fp16 path gates (doc/plans/
-    // shader_fp16.md G-dark) read these to know what to expect.
-    bool     shader_denorm_flush_to_zero_float16  {false};
-    bool     shader_denorm_preserve_float16       {false};
-    bool     shader_rounding_mode_rte_float16     {false};
-    bool     shader_rounding_mode_rtz_float16     {false};
-
-    // Reflect VkPhysicalDevice16BitStorageFeatures (VK_KHR_16bit_storage,
-    // promoted to Vulkan 1.1). Each bit gates 16-bit types in a particular
-    // SPIR-V storage class.
-    bool     storage_buffer_16bit_access            {false};
-    bool     uniform_and_storage_buffer_16bit_access{false};
-    bool     storage_push_constant_16               {false};
-    bool     storage_input_output_16                {false};
-
     // Reflect VkPhysicalDeviceMultiviewFeatures (VK_KHR_multiview, promoted
     // to Vulkan 1.1 core). Set when the corresponding feature was advertised
     // by the physical device and enabled on VkDevice creation.
@@ -233,6 +208,45 @@ public:
     // which requires the non-subsampled feature.
     bool     fragment_density_map                   {false};
 #endif
+
+    // Shader arithmetic and storage types (doc/plans/shader_fp16.md). The
+    // GLSL preamble emits the matching #extension directive and ERHE_HAS_*
+    // define for each flag that is set (shader_stages_create_info.cpp).
+    // Vulkan: VkPhysicalDeviceShaderFloat16Int8Features, set when the feature
+    // was advertised and enabled on VkDevice creation. Metal: both true; MSL
+    // has native half and char, which SPIRV-Cross emits for SPIR-V Float16
+    // and Int8 types. OpenGL: false.
+    bool shader_float16{false};
+    bool shader_int8   {false};
+
+    // fp16 float controls: whether the device can flush fp16 denormals to
+    // zero, preserve them, and round to nearest even / toward zero. The
+    // shaders set no execution mode, so the device default applies; the fp16
+    // path gates (doc/plans/shader_fp16.md G-dark) read these to know what to
+    // expect. Vulkan: VkPhysicalDeviceFloatControlsProperties
+    // (VK_KHR_shader_float_controls, core in Vulkan 1.2); a driver may report
+    // both denormal modes and still default to flushing. Metal: the modes are
+    // fixed, not selectable; Apple GPUs preserve fp16 denormals and round to
+    // nearest even (measured on Apple M4 Pro under both MSL math modes), so
+    // denorm_preserve and rounding_mode_rte are true and the other two
+    // false. OpenGL: false.
+    bool shader_denorm_flush_to_zero_float16{false};
+    bool shader_denorm_preserve_float16     {false};
+    bool shader_rounding_mode_rte_float16   {false};
+    bool shader_rounding_mode_rtz_float16   {false};
+
+    // 16-bit types in each SPIR-V storage class. Vulkan:
+    // VkPhysicalDevice16BitStorageFeatures (VK_KHR_16bit_storage, promoted
+    // to Vulkan 1.1). Metal: half is a native MSL type in device and constant
+    // buffers and in stage inputs and outputs, which SPIRV-Cross emits for
+    // those storage classes, so the three are true; storage_push_constant_16
+    // is false because the Metal backends bind no push constants
+    // (SPIRV-Cross would lower a push constant block to a buffer nothing
+    // binds). OpenGL: false.
+    bool storage_buffer_16bit_access            {false};
+    bool uniform_and_storage_buffer_16bit_access{false};
+    bool storage_push_constant_16               {false};
+    bool storage_input_output_16                {false};
 
     bool use_clip_control            {false};
     bool use_clip_distance           {true};  // shaderClipDistance / gl_ClipDistance

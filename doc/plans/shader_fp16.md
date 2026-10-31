@@ -95,6 +95,21 @@ below):
 - **P4 kept** (decided 2026-10-29) with its boundary as a content
   constraint: receivers within 128 m of a point or spot light (the fp16
   inverse square underflow); the test rooms mark farther cases ungated.
+- **Metal** (2026-10-31): both Metal backends report
+  `Device_info::shader_float16` (MSL `half`, which SPIRV-Cross emits for
+  the SPIR-V Float16 types; `doc/erhe/graphics.md` "Shader half and 8-bit
+  types"), so the paths are live there. Apple GPUs preserve fp16 denormals
+  and round to nearest even, so nothing between 2^-24 and 2^-14 flushes.
+  `--matrix chains` on headless Metal (Apple M4 Pro, Debug): 533 of 546
+  rows pass, every mask passes 37 of 38 gated cases, and the dark-flank,
+  silhouette and cone-edge G-dark failures of the Vulkan run do not occur.
+  The 13 failures are one case, `roughness_metallic` `light_15deg`, in
+  every row including `self` (mask 0 against mask 0): the first render of
+  a session differs from the later ones (4 silhouette pixels black, 72/255;
+  with `light_45deg` first, its self row is 2/255), so the reference is the
+  outlier and no fp16 path is involved. With fp16 off the Metal shaders are
+  unchanged (the default scene renders byte-identically to the build
+  before Metal reported fp16).
 - **Texture coordinates** (for P8, decided 2026-10-29): the acceptance
   there is that an fp16 texcoord selects a texel in the immediate
   neighbourhood of the fp32 one, which bounds fp16 texcoords to textures
@@ -216,7 +231,9 @@ light, hard filter) is exactly the case the two changes cover.
 - **Vulkan fp16 arithmetic needs `shaderFloat16`** (Mali and Adreno report
   it; Intel here does). Denormal handling differs per driver:
   `VK_KHR_shader_float_controls` reports whether fp16 denormals flush to
-  zero or are preserved; erhe queries it (section 5).
+  zero or are preserved; erhe queries it (section 5). **Metal** has fp16
+  arithmetic on every Apple GPU; its denormal behavior is fixed (preserved)
+  and `Device_info` reports it.
 - **Verification tools that exist**: `render_scene_image` with
   `output: "linear"` and `color_format: "rgba32f"` captures the scene color
   before post-processing as fp32 `.pfm` (`doc/editor/rendergraph.md`); the
@@ -424,11 +441,13 @@ the gates of section 2 measure the distance to it.
 
 ### 5. Device facts and the 4-light live range
 
-- Device init queries `VK_KHR_shader_float_controls` (core 1.2) and logs
-  `shaderDenormFlushToZeroFloat16`, `shaderDenormPreserveFloat16` and the
-  rounding modes, and publishes them in `Device_info` so G-dark's expected
-  behaviour is known per device; the shader sets nothing (the defaults are
-  the driver's) until a test shows a need.
+- Vulkan device init queries `VK_KHR_shader_float_controls` (core 1.2)
+  and logs `shaderDenormFlushToZeroFloat16`, `shaderDenormPreserveFloat16`
+  and the rounding modes, and publishes them in `Device_info` so G-dark's
+  expected behaviour is known per device; the Metal devices publish the
+  fixed Apple behaviour (denormals preserved, round to nearest even); the
+  shader sets nothing (the defaults are the driver's) until a test shows a
+  need.
 - The 4-light and anisotropic variants stay at 64 registers even in the
   all-half experiment, so their pressure is live state across the light
   loop and the anisotropic frame. Before P7, the variant with 4 shadowed
@@ -476,7 +495,7 @@ Next, in order:
    the offline recipe below. Separate investigation; the low-end
    configuration does not need it.
 4. **Default**: `shader_fp16_paths`
-   defaults to the low-end set on devices with `shaderFloat16` once the
+   defaults to the low-end set on devices with `Device_info::shader_float16` once the
    user decides the open items; the desktop image gates rerun with it.
 5. **Station F, P6, P7, P8** as planned above, each with its station and
    chain gates.
@@ -514,6 +533,9 @@ before the run, restored after): cached modules are not recorded.
   although the float controls report both behaviours available; the
   capabilities say what can be set, not the default, so G-dark is the
   only reliable source of a device's behaviour.
+- The first `render_scene_image` of a headless Metal session differs from
+  the later ones (the `self` row of the first case fails); the cause is
+  not fp16 and is not investigated.
 - Whether Adreno (Quest) flushes fp16 denormals; G-dark's expectation on
   that device is read from the float controls log at the first run.
 - Whether `half` varyings (P8) need `storageInputOutput16` on every target
