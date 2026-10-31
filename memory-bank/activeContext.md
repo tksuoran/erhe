@@ -60,7 +60,7 @@ metal::Metal backend on macOS: autorelease pools, render-thread threading, frame
 pvs::Potentially visible sets (complete on desktop 2026-10-31): verify recipe + reference hashes, traps, step 8 headset + open items
 
 [STATE]
-@branch::render-thread{both-machines;Mac-local-ahead-of-origin-by-4-mac-sync-commits+this-mb-commit(2026-10-30;not-pushed);git-push-only-on-explicit-instruction;main-not-merged}
+@branch::render-thread{both-machines;Mac-local-ahead-of-origin-by-30-commits(4-mac-sync+PVS-steps-1-7+cost+memory-bank;2026-10-31;NOT-PUSHED);git-push-only-on-explicit-instruction;main-not-merged}
 
 [BLOCKERS]
 none
