@@ -491,6 +491,7 @@ flowchart TD
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (in progress): FABRIK inverse kinematics requirements
 - [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (in progress): Rigging tools roadmap (IK, constraints, skinning, drivers)
 - [plans/rigging/skeleton_editing.md](plans/rigging/skeleton_editing.md) (in progress): Rigging Phase 3 - skeleton editing and posing basics requirements
+- [plans/selection_outline_draw_lists.md](plans/selection_outline_draw_lists.md) (proposed): Selection outline from the draw lists, so it follows the drawn LOD level: stencil masks on the draw lists, outline from the silhouette (screen-space or dilated shell)
 - [plans/shader_fp16.md](plans/shader_fp16.md) (in progress): Standard shader fp16 paths: switchable half-precision chains with boundary statements, test stations, gates and first results
 - [plans/shadow_robustness.md](plans/shadow_robustness.md) (proposed): Shadow robustness future work (Metal verification, forward pass cost profiling and optimization)
 - [plans/shadows.md](plans/shadows.md) (proposed): Shadow follow-ups
