@@ -2644,6 +2644,26 @@ void Draw_list_scene::draw_list_chunks(
         view_masks = masks.data() + ((view_index / 64) * entry_count);
         view_bit   = uint64_t{1} << (view_index % 64);
     }
+    // The levels of detail the classification selected for the view's LOD
+    // column (doc/plans/lod_gpu_selection.md section 3); a view without a
+    // column draws every entry's own range (the template).
+    Draw_list_lod_levels        lod_levels{};
+    const Draw_list_lod_levels* lod_levels_used = nullptr;
+    const uint32_t              lod_column      = get_cull_view_lod_column(frame_index, cull_view);
+    if (lod_column != lod_column_none) {
+        const Lod_level_slot& level_slot = get_lod_level_slot(frame_index);
+        ERHE_VERIFY(draw_list_index < level_slot.lists.size());
+        const std::vector<uint32_t>& words      = level_slot.lists[draw_list_index];
+        const std::size_t            first_word = (lod_column / 8) * entry_count;
+        ERHE_VERIFY((first_word + entry_count) <= words.size());
+        lod_levels = Draw_list_lod_levels{
+            .level_words  = std::span<const uint32_t>{words.data() + first_word, entry_count},
+            .nibble_shift = 4u * (lod_column % 8),
+            .lod_table    = get_published_slot(frame_index).lod_table
+        };
+        lod_levels_used = &lod_levels;
+    }
+
     m_entry_passes.resize(entry_count);
     for (std::size_t i = 0; i < entry_count; ++i) {
         const Draw_list_entry& entry = draw_list.entries[i];
@@ -2705,7 +2725,7 @@ void Draw_list_scene::draw_list_chunks(
         } else {
             primitive_range = &shared_records(draw_list, draw_list_index, begin, end, max_per_chunk, primitive_buffer, frame_index);
         }
-        Draw_indirect_buffer_range draw_indirect_range = draw_indirect_buffer.update(draw_list, begin, end, entry_passes, record_layout);
+        Draw_indirect_buffer_range draw_indirect_range = draw_indirect_buffer.update(draw_list, begin, end, entry_passes, record_layout, lod_levels_used);
         if (record_layout == Draw_record_layout::packed) {
             ERHE_VERIFY(draw_indirect_range.draw_indirect_count == primitive_count);
         } else {
@@ -2849,6 +2869,9 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     m_cull_frame_index      = frame_index;
     m_cull_views.clear();
     m_cull_view_survivors.clear();
+    m_cull_view_lod_columns.clear();
+    m_lod_column_count          = 0;
+    m_lod_column_overflow_count = 0;
     m_cull_pvs_view_cells.clear();
     m_cull_pvs_view_counts.clear();
     m_cull_pvs_frame = false;
@@ -2883,6 +2906,7 @@ auto Draw_list_scene::append_cull_view(const Draw_purpose purpose, const Cull_vi
     view.purpose = purpose;
     view.kind    = kind;
     m_cull_view_survivors.push_back(0);
+    m_cull_view_lod_columns.push_back(lod_column_none);
     m_cull_pvs_view_counts.push_back(Pvs_view_counts{});
     return view;
 }
@@ -3146,6 +3170,23 @@ void Draw_list_scene::classify_cull_views()
         m_cull_masks.resize(draw_lists.size());
     }
 
+    // Level of detail selection (doc/plans/lod_gpu_selection.md sections 1
+    // and 3): the frame's LOD columns and the frame slot's level region,
+    // whose words the CPU command writer reads (draw_list_chunks()).
+    assign_lod_columns(slot);
+    if (m_lod_level_slots.size() != m_draw_list_slots.size()) {
+        m_lod_level_slots.resize(m_draw_list_slots.size());
+    }
+    Lod_level_slot& level_slot = m_lod_level_slots[frame_index % m_lod_level_slots.size()];
+    level_slot.frame_index  = frame_index;
+    level_slot.classified   = true;
+    if (level_slot.lists.size() < draw_lists.size()) {
+        level_slot.lists.resize(draw_lists.size());
+    }
+    const std::size_t lod_group_count = (static_cast<std::size_t>(m_lod_column_count) + 7) / 8;
+    // The frame's threshold squared, the value the GPU's lod_header carries.
+    const float       lod_threshold2  = slot.lod_settings.threshold_pixels * slot.lod_settings.threshold_pixels;
+
     // The PVS rule (doc/plans/pvs.md "Runtime consumption"): per color view
     // with a query box, the cells of the box's corners in the frame's
     // database (the same cells cull_classify.comp computes per entry).
@@ -3182,12 +3223,54 @@ void Draw_list_scene::classify_cull_views()
             pvs_culled_masks->assign(group_count * entry_count, uint64_t{0});
         }
         const Draw_purpose purpose = draw_list.key.purpose;
+        // The list's level words: every color list of a frame with columns
+        // (only color views have columns), from zero.
+        std::vector<uint32_t>& level_words = level_slot.lists[list_index];
+        if ((m_lod_column_count > 0) && (purpose == Draw_purpose::color)) {
+            level_words.assign(lod_group_count * entry_count, 0u);
+        } else {
+            level_words.clear();
+        }
         if ((entry_count == 0) || !batch_has_purpose[static_cast<std::size_t>(purpose)]) {
             continue;
         }
         const Draw_list_bounds& bounds = draw_list.bounds;
         ERHE_VERIFY(bounds.extent_x.size() == entry_count);
         ERHE_VERIFY(draw_list.pvs_columns.size() == entry_count);
+
+        // Levels do not depend on visibility (section 1): every entry of the
+        // list gets a level in every column, skinned entries and entries
+        // without bounds their template level (section 8).
+        if (!level_words.empty()) {
+            ERHE_PROFILE_SCOPE("lod_lanes");
+            m_lod_gap.resize(entry_count);
+            m_lod_distance2.resize(entry_count);
+            for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
+                const uint32_t column = m_cull_view_lod_columns[view_index];
+                if (column == lod_column_none) {
+                    continue;
+                }
+                const Lod_view& lod_view = m_cull_views[view_index].lod_view.value();
+                const cull_lanes::Lod_lane_view lane_view{
+                    .origin           = lod_view.origin,
+                    .projection_scale = lod_view.projection_scale,
+                    .projection       = lod_view.projection,
+                    .threshold2       = lod_threshold2,
+                    .global_bias      = slot.lod_settings.bias
+                };
+                cull_lanes::lod_lanes(
+                    lane_view,
+                    bounds,
+                    draw_list.entries,
+                    slot.lod_table,
+                    entry_count,
+                    m_lod_gap.data(),
+                    m_lod_distance2.data(),
+                    level_words.data() + ((column / 8) * entry_count),
+                    4u * (column % 8)
+                );
+            }
+        }
 
         // Skinned entries carry no bounds (they follow the joints): never
         // culled.
@@ -3310,6 +3393,163 @@ void Draw_list_scene::classify_cull_views()
             }
         }
     }
+
+    capture_lod_levels(slot, level_slot);
+}
+
+void Draw_list_scene::assign_lod_columns(const Draw_list_slot& slot)
+{
+    // One column per color view with a Lod_view, in view order, while the
+    // limits allow (doc/plans/lod_gpu_selection.md section 3 "Columns");
+    // a view past them draws the template range.
+    m_lod_column_count          = 0;
+    m_lod_column_overflow_count = 0;
+    std::fill(m_cull_view_lod_columns.begin(), m_cull_view_lod_columns.end(), lod_column_none);
+    if (!slot.lod_active) {
+        return;
+    }
+    uint32_t color_column_count = 0;
+    for (std::size_t view_index = 0, end = m_cull_views.size(); view_index < end; ++view_index) {
+        const Cull_view_tests& view = m_cull_views[view_index];
+        if ((view.purpose != Draw_purpose::color) || (view.kind != Cull_view_kind::planes) || !view.lod_view.has_value()) {
+            continue;
+        }
+        if ((color_column_count >= max_lod_color_columns) || (m_lod_column_count >= max_lod_columns)) {
+            ++m_lod_column_overflow_count;
+            continue;
+        }
+        m_cull_view_lod_columns[view_index] = m_lod_column_count;
+        ++m_lod_column_count;
+        ++color_column_count;
+    }
+    if ((m_lod_column_overflow_count > 0) && !m_lod_column_overflow_logged) {
+        m_lod_column_overflow_logged = true;
+        log_draw_list->warn(
+            "LOD selection: frame {} has {} view(s) past the column limits ({} color columns, {} columns); they draw the template range",
+            slot.frame_index, m_lod_column_overflow_count, max_lod_color_columns, max_lod_columns
+        );
+    }
+}
+
+auto Draw_list_scene::get_lod_level_slot(const uint64_t frame_index) const -> const Lod_level_slot&
+{
+    ERHE_VERIFY(!m_lod_level_slots.empty());
+    const Lod_level_slot& level_slot = m_lod_level_slots[frame_index % m_lod_level_slots.size()];
+    ERHE_VERIFY(level_slot.classified && (level_slot.frame_index == frame_index));
+    return level_slot;
+}
+
+auto Draw_list_scene::get_cull_view_lod_column(const uint64_t frame_index, const Cull_view cull_view) const -> uint32_t
+{
+    if (cull_view == Cull_view::none) {
+        return lod_column_none;
+    }
+    verify_cull_view_classified(frame_index, cull_view);
+    return m_cull_view_lod_columns[static_cast<std::size_t>(cull_view)];
+}
+
+auto Draw_list_scene::get_lod_level(
+    const uint64_t    frame_index,
+    const Cull_view   cull_view,
+    const std::size_t list_index,
+    const std::size_t entry_index
+) const -> std::optional<uint32_t>
+{
+    const uint32_t column = get_cull_view_lod_column(frame_index, cull_view);
+    if (column == lod_column_none) {
+        return std::nullopt;
+    }
+    const Lod_level_slot&         level_slot  = get_lod_level_slot(frame_index);
+    const std::vector<Draw_list>& draw_lists  = get_published_draw_lists(frame_index);
+    ERHE_VERIFY(list_index < draw_lists.size());
+    const std::size_t             entry_count = draw_lists[list_index].entries.size();
+    ERHE_VERIFY(entry_index < entry_count);
+    const std::vector<uint32_t>&  words       = level_slot.lists[list_index];
+    const std::size_t             word_index  = ((column / 8) * entry_count) + entry_index;
+    ERHE_VERIFY(word_index < words.size());
+    return (words[word_index] >> (4u * (column % 8))) & 0xfu;
+}
+
+void Draw_list_scene::request_lod_level_capture(const Draw_list_object_id object)
+{
+    assert_main_thread();
+    const std::lock_guard<std::mutex> lock{m_lod_capture_mutex};
+    m_lod_capture_requested = true;
+    m_lod_capture_complete  = false;
+    m_lod_capture_object    = object;
+}
+
+auto Draw_list_scene::poll_lod_level_capture(Lod_level_capture& out) -> Cull_classification_check_state
+{
+    assert_main_thread();
+    const std::lock_guard<std::mutex> lock{m_lod_capture_mutex};
+    if (m_lod_capture_complete) {
+        m_lod_capture_complete = false;
+        out = std::move(m_lod_capture);
+        m_lod_capture = Lod_level_capture{};
+        return Cull_classification_check_state::complete;
+    }
+    return m_lod_capture_requested ? Cull_classification_check_state::pending : Cull_classification_check_state::idle;
+}
+
+void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_level_slot& level_slot)
+{
+    const std::lock_guard<std::mutex> lock{m_lod_capture_mutex};
+    if (!m_lod_capture_requested) {
+        return;
+    }
+    // A diagnostic path: it may allocate.
+    Lod_level_capture& capture = m_lod_capture;
+    capture = Lod_level_capture{};
+    capture.frame_index           = level_slot.frame_index;
+    capture.active                = slot.lod_active;
+    capture.settings              = slot.lod_settings;
+    capture.column_overflow_count = m_lod_column_overflow_count;
+    for (std::size_t view_index = 0, end = m_cull_views.size(); view_index < end; ++view_index) {
+        const uint32_t column = m_cull_view_lod_columns[view_index];
+        if (column != lod_column_none) {
+            capture.columns.push_back(
+                Lod_level_capture_column{
+                    .column   = column,
+                    .view     = static_cast<uint32_t>(view_index),
+                    .lod_view = m_cull_views[view_index].lod_view.value()
+                }
+            );
+        }
+    }
+    for (std::size_t list_index = 0, list_end = slot.lists.size(); list_index < list_end; ++list_index) {
+        const Draw_list&             draw_list   = slot.lists[list_index];
+        const std::size_t            entry_count = draw_list.entries.size();
+        const std::vector<uint32_t>& words       = level_slot.lists[list_index];
+        for (std::size_t i = 0; i < entry_count; ++i) {
+            const Draw_list_entry& entry = draw_list.entries[i];
+            if (entry.object_index != m_lod_capture_object.index) {
+                continue;
+            }
+            Lod_level_capture_entry& out = capture.entries.emplace_back();
+            out.list_index           = static_cast<uint32_t>(list_index);
+            out.entry_index          = static_cast<uint32_t>(i);
+            out.purpose              = draw_list.key.purpose;
+            out.mesh_primitive_index = entry.mesh_primitive_index;
+            out.center               = glm::vec3{draw_list.bounds.center_x[i], draw_list.bounds.center_y[i], draw_list.bounds.center_z[i]};
+            out.extent               = glm::vec3{draw_list.bounds.extent_x[i], draw_list.bounds.extent_y[i], draw_list.bounds.extent_z[i]};
+            out.max_axis_scale       = draw_list.bounds.max_axis_scale[i];
+            out.lod_table_index      = entry.lod_table_index;
+            out.lod_word             = entry.lod_word;
+            // A list without level words (shadow lists: no shadow columns
+            // yet) has no levels.
+            if (words.empty()) {
+                continue;
+            }
+            for (const Lod_level_capture_column& column : capture.columns) {
+                const std::size_t word_index = ((column.column / 8) * entry_count) + i;
+                ERHE_VERIFY(word_index < words.size());
+                out.levels.push_back((words[word_index] >> (4u * (column.column % 8))) & 0xfu);
+            }
+        }
+    }
+    m_lod_capture_requested = false;
+    m_lod_capture_complete  = true;
 }
 
 auto Draw_list_scene::has_drawable_entries(

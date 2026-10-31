@@ -9236,7 +9236,20 @@
         "trace_entries": {
           "description": "disocclusion: the entries the trace reports, [[node_uid, primitive_index], ...]",
           "type": "array",
-          "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "integer", "minimum": 0}], "minItems": 2, "maxItems": 2}
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer",
+                "minimum": 0
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
         }
       },
       "required": [
@@ -10456,6 +10469,30 @@
     "name": "get_lod_info"
   },
   {
+    "description": "CPU level of detail selection of a mesh in one classified frame (doc/plans/lod_gpu_selection.md, doc/editor/lod.md 'Automatic selection'): requests that the render phase of the next frame copy the CPU level region (Draw_list_scene::request_lod_level_capture) for the mesh's draw-list entries; the call waits for that frame. Returns frame_index, active (the frame's selection: lod_enabled on and some entry has a chain), selection, threshold_pixels and bias of the frame, column_overflow_count (views past the column limits), columns [{column, view, origin [x, y, z] (the selection origin), projection_scale (pixels per unit of tangent), projection (perspective / orthographic)}] - one per color culling view with a LOD view (viewports, four view cells, scene image captures) - and per entry {list_index, entry_index, purpose, mesh_primitive_index, center, extent (the box the distance is measured to), max_axis_scale, lod_table_index (null without chain), mode (0 automatic, 1 forced, 2 off), level_count, levels} with levels[i] the level the CPU classification selected in columns[i] (empty for shadow entries: no shadow columns yet). These are the levels the CPU-written color commands draw; GPU-generated color commands still draw the template range (the forced level, or level 0).",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Mesh node id",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Mesh node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene of the node (required)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_lod_selection"
+  },
+  {
     "description": "Give back the memory of undone glTF loads that the automatic drop declined. Releases the payload of the load that would be redone first, and DISCARDS every redo entry recorded after it - those entries hold references to the released content, so they cannot survive it. Redo entries recorded before the load are untouched. Redoing the released load re-reads the file. Reports released_count and discarded_count. See doc/reloadable-asset-loads.md.",
     "inputSchema": {
       "properties": {},
@@ -10670,7 +10707,7 @@
           "type": "string"
         },
         "lod_enabled": {
-          "description": "Automatic level of detail selection on / off (doc/plans/lod_gpu_selection.md; default off). Levels are not selected yet: every draw reads its entry's forced level, or level 0",
+          "description": "Automatic level of detail selection on / off (doc/plans/lod_gpu_selection.md; default off). The CPU classification selects a level per entry and color view (get_lod_selection); CPU-written color commands draw it, GPU-generated commands and shadow passes still draw the forced level, or level 0",
           "type": "boolean"
         },
         "lod_threshold_pixels": {

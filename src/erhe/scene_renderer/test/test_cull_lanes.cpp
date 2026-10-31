@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -660,6 +661,186 @@ TEST(Lod_view, is_same_compares_every_input)
     b = a;
     b.origin.y = std::nextafter(a.origin.y, 3.0f);
     EXPECT_FALSE(a.is_same(b));
+}
+
+// Level of detail selection lanes (doc/plans/lod_gpu_selection.md section
+// 2): one list of entries sharing one chain, each entry a unit cube on the
+// -Z axis whose nearest face is at a chosen distance from the origin.
+class Lod_lane_fixture
+{
+public:
+    // errors: the chain's object space errors, level 0 (0) first.
+    explicit Lod_lane_fixture(const std::vector<float>& errors)
+        : m_level_count{errors.size()}
+    {
+        for (std::size_t level = 0; level < errors.size(); ++level) {
+            m_table.push_back(glm::uvec4{static_cast<uint32_t>(100 - level), static_cast<uint32_t>(level * 1000), std::bit_cast<uint32_t>(errors[level]), 0u});
+        }
+    }
+
+    // A unit cube whose nearest point to the origin is at distance d on
+    // -Z (inside the box for d < 0), with max axis scale s.
+    void add(const float d, const float s, const erhe::scene::Lod_data& lod = erhe::scene::Lod_data{})
+    {
+        const std::size_t index = m_entries.size();
+        erhe::scene_renderer::Draw_list_entry entry{};
+        entry.lod_table_index = (m_level_count > 0) ? 0u : erhe::scene_renderer::lod_table_index_none;
+        entry.lod_word        = erhe::scene_renderer::make_lod_word(lod, m_level_count);
+        m_entries.push_back(entry);
+        m_bounds.resize(index + 1);
+        m_bounds.set(index, erhe::math::Aabb{glm::vec3{-0.5f, -0.5f, -d - 1.0f}, glm::vec3{0.5f, 0.5f, -d}});
+        m_bounds.set_max_axis_scale(index, s);
+    }
+
+    void add_unbounded(const erhe::scene::Lod_data& lod)
+    {
+        const std::size_t index = m_entries.size();
+        erhe::scene_renderer::Draw_list_entry entry{};
+        entry.lod_table_index = 0u;
+        entry.lod_word        = erhe::scene_renderer::make_lod_word(lod, m_level_count);
+        m_entries.push_back(entry);
+        m_bounds.resize(index + 1); // no bounds: negative extent
+        m_bounds.set_max_axis_scale(index, 1.0f);
+    }
+
+    // The levels of every entry in column nibble (0..7), all other nibbles
+    // holding junk the lanes must leave alone.
+    [[nodiscard]] auto levels(const cull_lanes::Lod_lane_view& view, const uint32_t nibble = 0) -> std::vector<uint32_t>
+    {
+        const std::size_t count = m_entries.size();
+        std::vector<float>    gap(count);
+        std::vector<float>    distance2(count);
+        std::vector<uint32_t> words(count, 0xffffffffu & ~(0xfu << (4u * nibble)));
+        cull_lanes::lod_lanes(view, m_bounds, m_entries, m_table, count, gap.data(), distance2.data(), words.data(), 4u * nibble);
+        std::vector<uint32_t> out;
+        for (const uint32_t word : words) {
+            EXPECT_EQ(word | (0xfu << (4u * nibble)), 0xffffffffu); // other nibbles untouched
+            out.push_back((word >> (4u * nibble)) & 0xfu);
+        }
+        return out;
+    }
+
+private:
+    std::size_t                                        m_level_count{0};
+    std::vector<glm::uvec4>                            m_table;
+    std::vector<erhe::scene_renderer::Draw_list_entry> m_entries;
+    Draw_list_bounds                                   m_bounds;
+};
+
+const std::vector<float> c_lod_errors{0.0f, 0.001f, 0.0025f, 0.006f, 0.0125f, 0.03f};
+
+[[nodiscard]] auto make_lod_lane_view(const float projection_scale, const float threshold_pixels) -> cull_lanes::Lod_lane_view
+{
+    return cull_lanes::Lod_lane_view{
+        .origin           = glm::vec3{0.0f},
+        .projection_scale = projection_scale,
+        .projection       = erhe::scene_renderer::Lod_projection::perspective,
+        .threshold2       = threshold_pixels * threshold_pixels,
+        .global_bias      = 0
+    };
+}
+
+// Level L is selected from d = error_L * k / threshold (k = max axis scale
+// * projection scale) on: just before each switch distance the level is
+// L - 1, just after it L; past the last switch the chain's last level.
+TEST(Lod_lanes, predicted_switch_distances)
+{
+    for (const float scale : {1.0f, 2.0f, 0.5f}) {
+        for (const float threshold : {1.0f, 2.5f}) {
+            const float projection_scale = 900.0f;
+            Lod_lane_fixture fixture{c_lod_errors};
+            std::vector<uint32_t> expected;
+            for (std::size_t level = 1; level < c_lod_errors.size(); ++level) {
+                const double d = (static_cast<double>(c_lod_errors[level]) * scale * projection_scale) / threshold;
+                fixture.add(static_cast<float>(d * 0.999), scale);
+                expected.push_back(static_cast<uint32_t>(level - 1));
+                fixture.add(static_cast<float>(d * 1.001), scale);
+                expected.push_back(static_cast<uint32_t>(level));
+            }
+            fixture.add(1.0e6f, scale);
+            expected.push_back(static_cast<uint32_t>(c_lod_errors.size() - 1));
+            EXPECT_EQ(fixture.levels(make_lod_lane_view(projection_scale, threshold), 3), expected) << "scale " << scale << " threshold " << threshold;
+        }
+    }
+}
+
+// Inside the box the distance is 0 and only level 0 (error 0) passes.
+TEST(Lod_lanes, inside_box_is_level_zero)
+{
+    Lod_lane_fixture fixture{c_lod_errors};
+    fixture.add(-0.5f, 1.0f); // the origin inside the box
+    fixture.add(0.0f, 1.0f);  // the origin on the box's face
+    const std::vector<uint32_t> levels = fixture.levels(make_lod_lane_view(900.0f, 1.0f));
+    EXPECT_EQ(levels, (std::vector<uint32_t>{0u, 0u}));
+}
+
+// Orthographic: distance 1 everywhere, the level depends on the projection
+// scale (pixels per unit) only.
+TEST(Lod_lanes, orthographic_ignores_distance)
+{
+    Lod_lane_fixture fixture{c_lod_errors};
+    fixture.add(-0.5f, 1.0f);
+    fixture.add(3.0f, 1.0f);
+    fixture.add(5000.0f, 1.0f);
+    cull_lanes::Lod_lane_view view = make_lod_lane_view(0.0f, 1.0f);
+    view.projection = erhe::scene_renderer::Lod_projection::orthographic;
+    // error_L * scale <= 1 pixel: levels 1 (0.001 * 500 = 0.5) and 2 (1.25 > 1)
+    view.projection_scale = 500.0f;
+    EXPECT_EQ(fixture.levels(view), (std::vector<uint32_t>{1u, 1u, 1u}));
+    view.projection_scale = 50.0f; // 0.03 * 50 = 1.5 > 1, 0.0125 * 50 = 0.625
+    EXPECT_EQ(fixture.levels(view), (std::vector<uint32_t>{4u, 4u, 4u}));
+}
+
+// The entry's bias and the global bias add to the selected level, which is
+// then clamped to the entry's min / max and to the chain.
+TEST(Lod_lanes, bias_and_clamps)
+{
+    const float projection_scale = 900.0f;
+    // A distance that selects level 2 (between the level 2 and 3 switches).
+    const float d2 = static_cast<float>((0.5 * (static_cast<double>(c_lod_errors[2]) + static_cast<double>(c_lod_errors[3]))) * projection_scale);
+    Lod_lane_fixture fixture{c_lod_errors};
+    fixture.add(d2, 1.0f);                                                       // 2
+    fixture.add(d2, 1.0f, erhe::scene::Lod_data{.bias = 1});                     // 3
+    fixture.add(d2, 1.0f, erhe::scene::Lod_data{.bias = -5});                    // 0 (clamped to the chain)
+    fixture.add(d2, 1.0f, erhe::scene::Lod_data{.bias = 7});                     // 5 (chain end)
+    fixture.add(d2, 1.0f, erhe::scene::Lod_data{.min_level = 4});                // 4
+    fixture.add(d2, 1.0f, erhe::scene::Lod_data{.max_level = 1});                // 1
+    fixture.add(d2, 1.0f, erhe::scene::Lod_data{.min_level = 7, .max_level = 7}); // 5 (chain end)
+    cull_lanes::Lod_lane_view view = make_lod_lane_view(projection_scale, 1.0f);
+    EXPECT_EQ(fixture.levels(view, 7), (std::vector<uint32_t>{2u, 3u, 0u, 5u, 4u, 1u, 5u}));
+    view.global_bias = -1;
+    EXPECT_EQ(fixture.levels(view, 7), (std::vector<uint32_t>{1u, 2u, 0u, 5u, 4u, 1u, 5u}));
+    view.global_bias = 2;
+    EXPECT_EQ(fixture.levels(view, 7), (std::vector<uint32_t>{4u, 5u, 0u, 5u, 4u, 1u, 5u}));
+}
+
+// The ends of a chain: a single-level chain and an entry without chain
+// draw level 0; far away the last level; forced and off records and
+// entries without bounds take the template level (the forced level clamped
+// to min / max and to the chain, else 0).
+TEST(Lod_lanes, chain_end_and_template_levels)
+{
+    {
+        Lod_lane_fixture single{std::vector<float>{0.0f}};
+        single.add(1.0e6f, 1.0f);
+        EXPECT_EQ(single.levels(make_lod_lane_view(900.0f, 1.0f)), (std::vector<uint32_t>{0u}));
+    }
+    {
+        Lod_lane_fixture no_chain{std::vector<float>{}};
+        no_chain.add(1.0e6f, 1.0f);
+        EXPECT_EQ(no_chain.levels(make_lod_lane_view(900.0f, 1.0f)), (std::vector<uint32_t>{0u}));
+    }
+    Lod_lane_fixture fixture{c_lod_errors};
+    fixture.add(1.0e6f, 1.0f);                                                                                    // 5
+    fixture.add(1.0e6f, 1.0f, erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::off});                         // 0
+    fixture.add(1.0e6f, 1.0f, erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::forced, .forced_level = 2});   // 2
+    fixture.add(0.0f,   1.0f, erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::forced, .forced_level = 7});   // 5 (chain)
+    fixture.add(0.0f,   1.0f, erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::forced, .forced_level = 1, .min_level = 3}); // 3
+    fixture.add_unbounded(erhe::scene::Lod_data{});                                                               // 0
+    fixture.add_unbounded(erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::forced, .forced_level = 4});       // 4
+    EXPECT_EQ(fixture.levels(make_lod_lane_view(900.0f, 1.0f), 5), (std::vector<uint32_t>{5u, 0u, 2u, 5u, 3u, 0u, 4u}));
+    EXPECT_EQ(cull_lanes::get_lod_template_level(erhe::scene_renderer::make_lod_word(erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::forced, .forced_level = 4}, 3)), 2u);
+    EXPECT_EQ(cull_lanes::get_lod_template_level(erhe::scene_renderer::make_lod_word(erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::forced, .forced_level = 4}, 0)), 0u);
 }
 
 } // anonymous namespace

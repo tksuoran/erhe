@@ -1210,6 +1210,27 @@ is forced with the property
 tools: `set_item_property` `Lod.apply_lod` true, `Lod.mode` `Forced` and
 `Lod.forced_level` on the mesh node or on a node above it.
 
+### get_lod_selection
+
+The automatic level of detail selection of one classified frame
+(`doc/editor/lod.md` "Automatic selection"; turn it on with
+`set_graphics_preset` `lod_enabled` true). Takes `scene_name` and `node_id` /
+`node_name` of a mesh node; the call waits until the render phase of the
+next classified frame copied the CPU level region for the mesh's draw-list
+entries. Returns `{scene, frame_index, active, selection, threshold_pixels,
+bias, column_overflow_count, columns, entries}`: `active` is the frame's
+selection (on, and some entry has a chain); `columns` one per color culling
+view with a LOD view `{column, view, origin, projection_scale,
+projection}`; per entry `{list_index, entry_index, purpose,
+mesh_primitive_index, center, extent, max_axis_scale, lod_table_index,
+mode, level_count, levels}`, `levels[i]` the level selected in
+`columns[i]` (empty for shadow entries). `scripts/lod_dolly_verify.py`
+dollies a camera with it.
+
+```bash
+python3 scripts/mcp_call.py get_lod_selection '{"scene_name":"Default Scene","node_name":"torus"}'
+```
+
 ## Physics Tools
 
 Create and edit KHR_physics_rigid_bodies features: the rigid body values of a node, the `Joint` prims and the shared content-library items (physics materials, collision filters, joint settings). Creation tools queue undoable operations ("queued": true in the response - the object exists on the next editor frame). Edit tools apply immediately. Nodes are addressed by `node_id` (preferred) or `node_name`.

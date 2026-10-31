@@ -6,6 +6,8 @@
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_primitive/enums.hpp"
 
+#include <glm/glm.hpp>
+
 #include <memory>
 #include <span>
 #include <vector>
@@ -32,6 +34,19 @@ enum class Draw_record_layout : unsigned int
     // not: a command names its entry's record, entry index - begin, through
     // its first_instance. Needs erhe::graphics::Record_indexing::first_instance.
     chunk_entries = 1
+};
+
+// The selected levels of detail of one draw-list pass
+// (Draw_indirect_buffer::update(Draw_list, ...), doc/plans/lod_gpu_selection.md
+// section 3): the pass's column of the list's level words (one per entry,
+// the level in the nibble at nibble_shift) and the level table whose row
+// lod_table_index + level holds (index_count, first_index) of the level.
+class Draw_list_lod_levels
+{
+public:
+    std::span<const uint32_t>   level_words {};
+    uint32_t                    nibble_shift{0};
+    std::span<const glm::uvec4> lod_table   {};
 };
 
 class Draw_indirect_buffer_range
@@ -85,13 +100,17 @@ public:
     // chunk_entries the commands name the records of
     // Primitive_buffer::update_records(Draw_list, begin, end, ...). Uses the
     // index_count / first_index / base_vertex baked into the entries at
-    // registration; touches no Mesh.
+    // registration; touches no Mesh. With lod_levels, an entry with a chain
+    // (Draw_list_entry::lod_table_index) draws the index range of its
+    // selected level from the level table instead (base_vertex stays the
+    // entry's); without, every entry draws its own range (the template).
     auto update(
         const Draw_list&               draw_list,
         std::size_t                    begin,
         std::size_t                    end,
         std::span<const std::uint8_t>  entry_passes,
-        Draw_record_layout             record_layout
+        Draw_record_layout             record_layout,
+        const Draw_list_lod_levels*    lod_levels = nullptr
     ) -> Draw_indirect_buffer_range;
 
     // The debug index count clamp (m_max_index_count) applies to the

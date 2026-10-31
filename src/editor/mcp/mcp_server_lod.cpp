@@ -348,4 +348,101 @@ auto Mcp_server::query_lod_info(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::query_lod_selection(const json& args) -> std::string
+{
+    // The CPU level region of one classified frame for one mesh
+    // (doc/plans/lod_gpu_selection.md step 2a): the first pass requests the
+    // capture and defers; the re-runs poll until a frame copied it.
+    const bool continuation =
+        (m_lod_selection_request != nullptr) &&
+        (m_lod_selection_request == m_current_request) &&
+        (m_lod_selection_enqueued_at == m_current_request->enqueued_at);
+    const std::string scene_name = continuation ? m_lod_selection_scene_name : args.value("scene_name", "");
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        m_lod_selection_request = nullptr;
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root->get_draw_list_scene();
+    if (draw_list_scene == nullptr) {
+        m_lod_selection_request = nullptr;
+        return make_error_content("get_lod_selection: the scene has no draw lists");
+    }
+
+    if (!continuation) {
+        const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*scene_root, args, "node_id", "node_name");
+        if (!node) {
+            return make_error_content("Node not found (give node_id or node_name)");
+        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node);
+        if (!mesh) {
+            return make_error_content(fmt::format("Node '{}' has no mesh", node->get_name()));
+        }
+        erhe::scene_renderer::Draw_list_object_id object{};
+        {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+            object = draw_list_scene->find_object(mesh.get());
+        }
+        if (!object.is_valid()) {
+            return make_error_content(fmt::format("get_lod_selection: mesh '{}' is not registered in the draw lists", mesh->get_name()));
+        }
+        draw_list_scene->request_lod_level_capture(object);
+        m_lod_selection_request     = m_current_request;
+        m_lod_selection_enqueued_at = m_current_request->enqueued_at;
+        m_lod_selection_scene_name  = scene_name;
+        m_defer_current_request     = true;
+        return {};
+    }
+
+    erhe::scene_renderer::Lod_level_capture capture{};
+    const erhe::scene_renderer::Cull_classification_check_state state = draw_list_scene->poll_lod_level_capture(capture);
+    if (state == erhe::scene_renderer::Cull_classification_check_state::pending) {
+        m_defer_current_request = true;
+        return {};
+    }
+    m_lod_selection_request = nullptr;
+    if (state != erhe::scene_renderer::Cull_classification_check_state::complete) {
+        return make_error_content("get_lod_selection: the capture was dropped");
+    }
+
+    json columns = json::array();
+    for (const erhe::scene_renderer::Lod_level_capture_column& column : capture.columns) {
+        columns.push_back(json{
+            {"column",           column.column},
+            {"view",             column.view},
+            {"origin",           json::array({column.lod_view.origin.x, column.lod_view.origin.y, column.lod_view.origin.z})},
+            {"projection_scale", column.lod_view.projection_scale},
+            {"projection",       erhe::scene_renderer::c_str(column.lod_view.projection)}
+        });
+    }
+    json entries = json::array();
+    for (const erhe::scene_renderer::Lod_level_capture_entry& entry : capture.entries) {
+        const erhe::scene_renderer::Lod_word_fields lod_fields = erhe::scene_renderer::decode_lod_word(entry.lod_word);
+        entries.push_back(json{
+            {"list_index",           entry.list_index},
+            {"entry_index",          entry.entry_index},
+            {"purpose",              erhe::scene_renderer::c_str(entry.purpose)},
+            {"mesh_primitive_index", entry.mesh_primitive_index},
+            {"center",               json::array({entry.center.x, entry.center.y, entry.center.z})},
+            {"extent",               json::array({entry.extent.x, entry.extent.y, entry.extent.z})},
+            {"max_axis_scale",       entry.max_axis_scale},
+            {"lod_table_index",      (entry.lod_table_index == erhe::scene_renderer::lod_table_index_none) ? json(nullptr) : json(entry.lod_table_index)},
+            {"mode",                 lod_fields.mode},
+            {"level_count",          lod_fields.level_count},
+            {"levels",               entry.levels}
+        });
+    }
+    return make_json_content(json{
+        {"scene",                 scene_root->get_name()},
+        {"frame_index",           capture.frame_index},
+        {"active",                capture.active},
+        {"selection",             erhe::scene_renderer::c_str(capture.settings.selection)},
+        {"threshold_pixels",      capture.settings.threshold_pixels},
+        {"bias",                  capture.settings.bias},
+        {"column_overflow_count", capture.column_overflow_count},
+        {"columns",               std::move(columns)},
+        {"entries",               std::move(entries)}
+    }).dump();
+}
+
 } // namespace editor

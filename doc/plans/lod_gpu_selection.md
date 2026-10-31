@@ -1,11 +1,11 @@
 # LOD selection on the GPU, inside the culling classification
 
-Status: proposed
+Status: in progress
 
 The build order for automatic LOD level selection (`doc/plans/lod.md`
 section 2.3, decisions D3 and D4). It replaces that plan's step 4 ordering
 (4a CPU writer, 4b GPU writer, 4c shadows) and its step 5 (hysteresis). The
-design is accepted by the user (section 9) and not started.
+design is accepted by the user (section 9); steps 1 and 2a are built.
 Selection runs in the culling classification, on the CPU lanes and in
 `res/shaders/cull_classify.comp`, with the same arithmetic, so both produce
 the same level bit for bit; the command writers only read the result.
@@ -384,6 +384,14 @@ serial (MCP `get_draw_lists`); idle frames write no GPU bounds
 (`get_gpu_bounds_write_count()` 0).
 
 ### Step 2a: color selection on the CPU
+
+State: done; described in `doc/erhe/draw_list_renderer.md` R1c and
+`doc/editor/lod.md` "Automatic selection". Cost (M4 Pro, Release, headless
+Metal, pipelined, Tracy zones per frame, median / mean): Bistro with chains
+on every mesh (5781 of 7576 entries), `lod_lanes` 75.7 / 76.7 us inside
+`classify_cull_views` 248 / 244 us (184 / 185 us with the selection off);
+heavy (560 of 2514 entries with chains), 11.0 / 11.1 us inside 47 / 48 us
+(42 / 42 us off).
 
 `lod_lanes()` with deviceless tests in `test_cull_lanes.cpp` (predicted
 switch distances, inside-box level 0, ortho, bias and clamps, chain end);

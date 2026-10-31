@@ -123,6 +123,66 @@ void make_pvs_query_cells(
     uint32_t&              culled_count
 ) -> uint32_t;
 
+// Level of detail selection (doc/plans/lod_gpu_selection.md section 2): the
+// inputs of one LOD column. threshold2 is the frame's pixel threshold
+// squared (computed once per frame, the value the GPU reads as float bits),
+// global_bias the frame's bias added to every selected level.
+class Lod_lane_view
+{
+public:
+    glm::vec3      origin          {0.0f};
+    float          projection_scale{0.0f};
+    Lod_projection projection      {Lod_projection::perspective};
+    float          threshold2      {1.0f};
+    int32_t        global_bias     {0};
+};
+
+// The level an entry draws without selection (the template range of its
+// command, R1c): the forced level clamped to the record's min / max and to
+// the chain under Lod_mode::forced, else 0; 0 for an entry without chain.
+[[nodiscard]] auto get_lod_template_level(uint32_t lod_word) -> uint32_t;
+
+// The selected level of one entry (section 2): k = max_axis_scale *
+// projection_scale; level L passes when (error_L * k) * (error_L * k) <=
+// threshold2 * distance2, with distance2 the squared distance from the
+// view origin to the entry's box (1 for an orthographic view); the selected
+// level is the last of the passing prefix of the chain, plus the entry's
+// and the global bias, clamped to the entry's min / max and to the chain.
+// Multiplies, adds and compares only, in this order, with no contraction
+// (the translation unit is built with -ffp-contract=off), so a precise port
+// in res/shaders/cull_classify.comp can match it bit for bit. An entry that
+// is not under Lod_mode::automatic, or has no bounds (unbounded != 0),
+// takes get_lod_template_level(); an entry without chain level 0.
+// lod_errors are the chain's errors, level 0 first (lod_errors[0] unread).
+[[nodiscard]] auto select_lod_level(
+    const Lod_lane_view& view,
+    uint32_t             lod_word,
+    const float*         lod_errors,
+    float                max_axis_scale,
+    float                distance2,
+    uint32_t             unbounded
+) -> uint32_t;
+
+// The LOD column's level of every entry of a list into the column's nibble
+// of the level words (words[i] |= level << nibble_shift; the caller clears
+// the words): select_lod_level() with the entries' lod_word and chain rows
+// (lod_table, Draw_list_scene::get_lod_table(): row lod_table_index + L
+// holds level L's error in z as float bits) and the boxes' squared distance
+// from the view origin, written to distance2 with the per-axis gaps of
+// sphere_axis_lanes() in gap (count floats each, owned by the caller).
+// Levels do not depend on visibility: every entry gets one.
+void lod_lanes(
+    const Lod_lane_view&             view,
+    const Draw_list_bounds&          bounds,
+    std::span<const Draw_list_entry> entries,
+    std::span<const glm::uvec4>      lod_table,
+    std::size_t                      count,
+    float*                           gap,
+    float*                           distance2,
+    uint32_t*                        words,
+    uint32_t                         nibble_shift
+);
+
 // The lanes' per-box arrays of reaches_view(), owned by the caller (capacity
 // kept across calls).
 class View_reach_scratch
