@@ -79,4 +79,17 @@ void share_rebuilt_primitive(
     }
 }
 
+auto get_geometry_lod_settings(
+    const erhe::scene::Mesh&        mesh,
+    const erhe::geometry::Geometry* geometry
+) -> std::optional<erhe::primitive::Lod_settings>
+{
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+        if (references_geometry(mesh_primitive, geometry)) {
+            return mesh_primitive.primitive->lod_settings;
+        }
+    }
+    return std::nullopt;
+}
+
 } // namespace editor

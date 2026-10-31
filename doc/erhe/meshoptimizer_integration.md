@@ -310,7 +310,45 @@ passes it to the build as `Build_info::lod_settings`, and the editor's
 deferred finalize snapshots it under the scene lock with the re-optimize
 decision, so the re-optimization after an edit regenerates the chain of the
 `Primitive` it rebuilds. Import does not generate (no caller sets the
-settings at import); generation is an editor request.
+settings at import); generation is an editor request (below). An edit
+operation that replaces a primitive with a new `Primitive` (the geometry
+operations of `Mesh_operation`, the in-place vertex / color / weight /
+attribute edits, the mesh component tools' loop cut, knife, inset and bevel,
+and the component transform's extrude commit, extrude build and geometry fork) copies the
+old primitive's `lod_settings` to the new one before building it, so the
+edited mesh gets its chain back from that build or from the
+re-optimization after it.
+
+**On-request generation.** `request_lod_generation(context, items,
+settings)` (`src/editor/operations/async_raytrace_kickoff_operation.hpp`)
+sets `lod_settings` (nullopt clears it) on every distinct primitive of the
+meshes among the items, on the main thread under the item host lock, and
+queues the deferred finalize task of one mesh per primitive; a primitive
+shared by several meshes is rebuilt once. The task rebuilds the optimized
+variant on a worker and its main-thread commit publishes it through
+`publish_optimized_render_shape()` before re-registering every mesh that
+shares the primitive. Geometry-path primitives (and prepared primitives
+that had their full build) re-optimize from the `Geometry` as the edit
+re-optimization does (`prepare_geometry_buffer_mesh()` with
+`force_rebuild`, uncached), which rebuilds the identical base beside the
+variant. Prepared primitives (`make_prepared_meshes()` and the stored
+streams of `make_stored_meshes()`) repack their core soup with
+`Primitive::make_prepared_optimized_render_shape()`: both load paths build
+the variant as the core soup packed into the optimized format, so the repack
+reproduces level 0 byte for byte; a released soup is read back from its
+source for the build and released again on the new variant. The base is not
+touched. A primitive with an active optimization hold keeps the new
+settings and is not queued: the edit's end queues the re-optimization,
+which builds the chain. A primitive whose settings are unchanged and whose
+variant is live is skipped, and with mesh optimization off only the settings
+are set. A mesh that cannot simplify (generation stops at the first step)
+gets a variant without chain; meshes whose texcoords are per facet (the
+geometry operations generate facet texture coordinates) have seams at every
+vertex and simplify only with `Lod_seams::permissive`. The MCP tools
+`generate_lods` and `get_lod_info` drive and inspect it
+(`doc/agents/mcp_server_usage.md`); completion is `get_async_status` idle.
+Drawing reads level 0 only until the forced and automatic selection steps
+(`doc/plans/lod.md` steps 2 and 4).
 
 **Paths.**
 
@@ -328,7 +366,9 @@ settings at import); generation is an editor request.
   allocation the same way; `make_optimized_render_shape()` passes its
   `lod_settings` there (the import call site passes the `Primitive`'s,
   which is unset).
-- Prepared / stored path: no chain (`doc/plans/lod.md` steps 3 and 6).
+- Prepared / stored path: no chain at load (levels in the file are
+  `doc/plans/lod.md` step 6); on-request generation repacks the core soup
+  (above).
 
 **Generation** (`generate_lod_chain(Lod_vertex_input, indices,
 Lod_settings)`). Before simplifying, vertices that share position, every seam

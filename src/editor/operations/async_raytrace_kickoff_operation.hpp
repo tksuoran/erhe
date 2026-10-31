@@ -2,7 +2,11 @@
 
 #include "operations/operation.hpp"
 
+#include "erhe_primitive/lod.hpp"
+
+#include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace erhe {
@@ -57,6 +61,36 @@ enum class Deferred_base_build : unsigned int {
 [[nodiscard]] auto has_deferred_base(const erhe::scene::Mesh& mesh) -> bool;
 void request_deferred_base_build(App_context& context, const std::shared_ptr<erhe::scene::Mesh>& mesh, Deferred_base_build build);
 void request_deferred_base_builds_in_all_scenes(App_context& context);
+
+// On-request LOD generation (doc/erhe/meshoptimizer_integration.md "Level of
+// detail", doc/plans/lod.md step 3). Sets Primitive::lod_settings of every
+// distinct primitive of the meshes among `items` (one scene) to `settings`
+// (nullopt clears it) on the calling main thread, then queues the deferred
+// finalize task of one mesh per primitive, which builds a new optimized
+// variant with the chain (or without one, when cleared) on a worker and
+// publishes it in its main-thread commit through
+// Primitive::publish_optimized_render_shape(), refreshing every mesh that
+// shares the primitive. Geometry-path primitives re-optimize from the
+// Geometry (as the edit re-optimization does); prepared primitives repack
+// their core soup (Primitive::make_prepared_optimized_render_shape()). A
+// primitive under an edit hold keeps the new settings and gets its chain from
+// the finalize after the edit. Completion: get_async_status idle.
+class Lod_generation_result
+{
+public:
+    std::size_t mesh_count     {0}; // meshes among the items
+    std::size_t primitive_count{0}; // distinct primitives of those meshes
+    std::size_t queued_count   {0}; // primitives a queued task rebuilds
+    std::size_t unchanged_count{0}; // settings already set and the variant live
+    std::size_t held_count     {0}; // under an edit hold: settings set, chain after the edit
+    std::size_t not_optimized_count{0}; // no optimized variant (mesh optimization off): settings set only
+    std::size_t task_count     {0}; // deferred finalize tasks queued
+};
+[[nodiscard]] auto request_lod_generation(
+    App_context&                                         context,
+    const std::vector<std::shared_ptr<erhe::Item_base>>& items,
+    const std::optional<erhe::primitive::Lod_settings>&  settings
+) -> Lod_generation_result;
 
 // Some viewport style draws a primitive mode only the full build provides
 // (edge lines, corner points, polygon centroids, solid wireframe). A load

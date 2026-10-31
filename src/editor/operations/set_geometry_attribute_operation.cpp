@@ -306,6 +306,8 @@ void Set_geometry_attribute_operation::apply(App_context& context, const std::ve
         build_info.buffer_info.optimize_meshes = false;
     }
     std::shared_ptr<erhe::primitive::Primitive> new_primitive = std::make_shared<erhe::primitive::Primitive>(m_parameters.geometry);
+    // The rebuilt primitive keeps the LOD request of the one it replaces.
+    new_primitive->lod_settings = get_geometry_lod_settings(*m_parameters.mesh, m_parameters.geometry.get());
     const bool renderable_ok = new_primitive->make_renderable_mesh(build_info, m_parameters.normal_style);
     const bool raytrace_ok   = new_primitive->make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);

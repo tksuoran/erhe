@@ -2536,6 +2536,44 @@ auto Primitive::is_prepared() const -> bool
     return render_shape && (render_shape->get_prepared_data() != nullptr);
 }
 
+auto Primitive::make_prepared_optimized_render_shape(const Buffer_info& buffer_info, const Lod_settings* const lod_settings) const -> std::shared_ptr<Primitive_render_shape>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!is_prepared() || !buffer_info.optimize_meshes || (buffer_info.optimized_vertex_format == nullptr)) {
+        return {};
+    }
+    // The same Buffer_info make_prepared_meshes() builds the variant with.
+    const Buffer_info optimized_buffer_info{
+        .normal_style       = buffer_info.normal_style,
+        .index_type         = buffer_info.index_type,
+        .vertex_format      = *buffer_info.optimized_vertex_format,
+        .vertex_buffer_sink = buffer_info.vertex_buffer_sink,
+        .index_buffer_sink  = buffer_info.index_buffer_sink,
+        .vertex_input_key   = buffer_info.optimized_vertex_input_key
+    };
+    const bool                                        released = render_shape->is_triangle_soup_released();
+    const std::shared_ptr<const Triangle_soup_source> source   = render_shape->get_triangle_soup_source();
+    const std::shared_ptr<Triangle_soup>              core     = render_shape->get_triangle_soup();
+    if (!core) {
+        return {};
+    }
+    std::shared_ptr<Primitive_render_shape> optimized = std::make_shared<Primitive_render_shape>(core, Element_mappings{});
+    if (!optimized->make_buffer_mesh(optimized_buffer_info, lod_settings)) {
+        return {};
+    }
+    if (lod_settings != nullptr) {
+        log_lod_chain(get_name(), optimized->get_renderable_mesh().lod_chain);
+    }
+    if (released && source) {
+        // As release_triangle_soup(): the variant reads back from the same
+        // source instead of keeping the read-back soup resident.
+        optimized->set_triangle_soup_source(source);
+        static_cast<void>(optimized->release_triangle_soup());
+    }
+    return optimized;
+}
+
 namespace {
 
 // One stored variant enqueued as it is: the ranges allocated as the soup

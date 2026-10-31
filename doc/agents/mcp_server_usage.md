@@ -1179,6 +1179,26 @@ curl -X POST http://127.0.0.1:3743/mcp \
 
 Returns: `{pending, running, queued_operations, pending_scene_commits, asset_loads, lightmap_prepare?}`
 
+### generate_lods / get_lod_info
+
+Mesh level of detail on request (`doc/erhe/meshoptimizer_integration.md`
+"Level of detail"). `generate_lods` takes `scene_name` and `node_ids`, or
+`node_id` / `node_name`, of mesh nodes, plus either `settings` (the
+`Lod_settings` fields: `level_count`, `ratio`, `attributes`
+`positions_only` / `normals_and_colors`, `normal_weight`, `color_weight`,
+`border` `free` / `locked`, `seams` `keep` / `permissive`, `fallback` `none`
+/ `sloppy`, `normal_merge_angle`; omitted fields take the defaults) or
+`clear: true`. It sets the request on every distinct primitive of the meshes
+and queues the rebuild of their optimized variants. Returns `{mode, settings,
+mesh_count, primitive_count, queued_count, task_count, unchanged_count,
+held_count, not_optimized_count}`; poll `get_async_status` until `idle`.
+
+`get_lod_info` takes `scene_name` and `node_id` / `node_name`. Returns
+`{node, node_id, primitives}`, per primitive `{primitive_index, name,
+prepared, has_optimized_variant, optimization_hold, lod_settings (null when
+unset), has_chain, generation_seconds, levels}`, each level `{level,
+first_index, index_count, triangle_count, error}`.
+
 ## Physics Tools
 
 Create and edit KHR_physics_rigid_bodies features: the rigid body values of a node, the `Joint` prims and the shared content-library items (physics materials, collision filters, joint settings). Creation tools queue undoable operations ("queued": true in the response - the object exists on the next editor frame). Edit tools apply immediately. Nodes are addressed by `node_id` (preferred) or `node_name`.

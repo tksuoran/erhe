@@ -225,6 +225,7 @@ private:
     auto query_viewports        (const nlohmann::json& args) -> std::string;
     auto query_viewport_size    (const nlohmann::json& args) -> std::string;
     auto query_overdraw_stats   (const nlohmann::json& args) -> std::string;
+    auto query_lod_info         (const nlohmann::json& args) -> std::string;
     auto query_pick_at          (const nlohmann::json& args) -> std::string;
     auto query_server_info      (const nlohmann::json& args) -> std::string;
     auto action_set_window_visibility(const nlohmann::json& args) -> std::string;
@@ -408,6 +409,7 @@ private:
     auto action_push_shader_debug             (const nlohmann::json& args) -> std::string;
     auto action_pop_shader_debug              (const nlohmann::json& args) -> std::string;
     auto action_set_overdraw_visualization    (const nlohmann::json& args) -> std::string;
+    auto action_generate_lods                 (const nlohmann::json& args) -> std::string;
     auto action_set_mesh_component_mode       (const nlohmann::json& args) -> std::string;
     auto action_select_mesh_components        (const nlohmann::json& args) -> std::string;
     auto action_grow_mesh_selection           (const nlohmann::json& args) -> std::string;

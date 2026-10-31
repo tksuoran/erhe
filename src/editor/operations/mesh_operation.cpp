@@ -294,6 +294,9 @@ void Mesh_operation::make_entries(
                 after_geometry->process({.flags = flags});
 
                 std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
+                // The edited primitive keeps the LOD request of the one it
+                // replaces; its build regenerates the chain.
+                after_primitive->lod_settings = mesh_primitive.primitive->lod_settings;
                 const bool renderable_ok = after_primitive->make_renderable_mesh(m_parameters.build_info, render_shape->get_normal_style());
                 const bool raytrace_ok   = after_primitive->make_raytrace();
                 ERHE_VERIFY(renderable_ok && raytrace_ok);

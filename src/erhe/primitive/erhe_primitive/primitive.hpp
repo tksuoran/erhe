@@ -527,6 +527,22 @@ public:
     // allocation failure.
     enum class Stored_build_result : unsigned int { built, declined, failed };
     [[nodiscard]] auto make_stored_meshes      (const Build_info& build_info, Base_mesh_build base_mesh_build, std::string& out_reason) -> Stored_build_result;
+    // A new optimized variant of a prepared primitive (is_prepared(), loaded
+    // by make_prepared_meshes() or make_stored_meshes()) with the LOD chain
+    // `lod_settings` asks for (null: none), for on-request LOD generation
+    // (doc/erhe/meshoptimizer_integration.md "Level of detail"). Both load
+    // paths build the variant from the core soup, which already is in
+    // meshoptimizer order, so this packs the render shape's soup (read back
+    // from its source when released) into buffer_info.optimized_vertex_format
+    // as make_prepared_meshes() does: level 0 has the same bytes as the live
+    // variant, and the levels follow it in the same index allocation. When
+    // the render shape's soup is released, the new variant releases its
+    // reference too and reads back from the same source. Returned, not
+    // published: the caller publishes it on the main thread
+    // (publish_optimized_render_shape()). Null when the primitive is not
+    // prepared, meshes are not optimized, the soup cannot be read or the
+    // allocation fails. Safe on a worker: reads only the render shape.
+    [[nodiscard]] auto make_prepared_optimized_render_shape(const Buffer_info& buffer_info, const Lod_settings* lod_settings) const -> std::shared_ptr<Primitive_render_shape>;
     // The render shape carries prepared mesh data.
     [[nodiscard]] auto is_prepared             () const -> bool;
     // Loads the render shape's pending payload (Primitive_shape::load_payload());
