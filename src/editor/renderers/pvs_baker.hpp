@@ -102,7 +102,7 @@ public:
     // the near plane; the tile rectangle (inclusive, clamped to the face) and
     // layer range of the corners beyond it; in_face false when the
     // rectangle misses the face.
-    bool                         near               {false};
+    bool                         crosses_near_plane {false};
     bool                         in_face            {false};
     glm::uvec4                   rectangle          {0u};
     uint32_t                     layer_min          {0};

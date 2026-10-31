@@ -1195,7 +1195,7 @@ void Pvs_baker::collect_trace(const Pvs_cell_record& record)
                 const glm::vec3 offset = point - m_trace_sample_point;
                 const glm::vec3 v{glm::dot(offset, view.right), glm::dot(offset, view.up), glm::dot(offset, view.direction)};
                 if (v.z <= view.geometry.z_near) {
-                    entry.near = true;
+                    entry.crosses_near_plane = true;
                     continue;
                 }
                 any_beyond = true;

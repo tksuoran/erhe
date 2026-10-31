@@ -140,7 +140,7 @@ namespace {
                     {"disoccluded_samples", entry.disoccluded_samples},
                     {"in_column_words",     entry.in_column_words},
                     {"bounds_vote",         entry.bounds_vote},
-                    {"near",                entry.near},
+                    {"near",                entry.crosses_near_plane},
                     {"in_face",             entry.in_face},
                     {"rectangle",           json::array({entry.rectangle.x, entry.rectangle.y, entry.rectangle.z, entry.rectangle.w})},
                     {"layers",              json::array({entry.layer_min, entry.layer_max})},
