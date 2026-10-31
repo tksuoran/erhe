@@ -168,6 +168,22 @@ device); every needed page was resident before the measured window.
 
 ## Open
 
+- Bake rate: the bake takes one cell per frame (D6), so a Bistro bake is
+  bound by frame pacing at about 150 ms per cell while its GPU work is
+  about 15 ms per cell (Apple M4 Pro). The user wants 10 cells per frame
+  (2026-10-31): the bake node's single pending job and its per-frame
+  dense buffer reuse have to take several cells per frame; D6 in
+  `doc/editor/pvs.md` changes with it.
+- Per-frame cull counts in the benchmark: the Quest measurement reads the
+  PVS and draw counts of one frame (`get_composition_passes` at the end of
+  the window), so a cell size whose average frame time does not follow its
+  culled count (2 m in "Verification") cannot be explained from the
+  result. The benchmark result could carry the per-frame PVS culled and
+  drawn counts.
+- Occlusion counters on the headset: the headset's occlusion test pass is
+  submitted, but its tested and occluded counts read 0 in
+  `get_composition_passes`; only the draw counts show its effect.
+
 - Silhouette test for cone sides (rule 3, opt-in, off). The paper slopes
   a window's cone toward every closed 4-neighbour. On a grazing surface
   (the wall scene: a wall seen along its length from the cells next to
