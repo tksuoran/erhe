@@ -467,6 +467,7 @@ flowchart TD
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition
+- [plans/lod.md](plans/lod.md) (proposed): Mesh level of detail: generation, editor LOD window, Lod properties, runtime selection
 - [plans/metal_backend.md](plans/metal_backend.md) (in progress): Metal backend: parity work
 - [plans/mcp_image_resolution.md](plans/mcp_image_resolution.md) (proposed): MCP image tools: requested resolution
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
