@@ -29,7 +29,10 @@ editor, stop it afterwards).
 - Step 2b DONE: the edge feed resolves each mesh's color from the pass's
   primitive settings (`Primitive_interface_settings::get_pass_color()`), so
   the color source and the hovered color reach the wide-line edges.
-- NEXT: step 3, then step 4.
+- Step 3 DONE: the selection stencil masks draw through the draw lists at
+  the drawn level, with no shader debug; alpha-tested masks follow the
+  cut-out on both paths.
+- NEXT: step 4.
 
 Verification recipe (windowed editor, MCP on 127.0.0.1:3743, read the port
 from `logs/log.txt`): `create_shape` torus `{"position":[0,0.8,-4],
@@ -49,11 +52,10 @@ silhouette):
    - "Content fill selected" and "Content fill alpha tested selected" -
      on the draw lists, so they draw the forced LOD level.
    - "Selection stencil mask (fill disabled)" and "Selection stencil mask
-     (proxy hidden)" (`src/editor/app_rendering.cpp`) - on the bucket path,
-     because they set `color_blend_override` (color writes off) and force
-     `VARIANT_DEPTH_ONLY`, neither of which a draw-list color pass supports
-     (`doc/erhe/draw_list_renderer.md`, the pass routing table). The bucket
-     path draws level 0.
+     (proxy hidden)" (`src/editor/app_rendering.cpp`, with their translucent
+     and alpha-tested forms) - `Composition_pass_output::depth_stencil`
+     passes on the draw lists (`Color_sub_variant::depth_only`), so they
+     draw the forced LOD level too (step 3).
 2. **The outline itself.** "Content outline opaque selected" is an
    `edge_lines` pass in content wide-line group 2: `Viewport_scene_view`
    (and `Headset_view` for the headset) feeds each selected or hovered mesh
@@ -188,57 +190,19 @@ selected mesh in the selection outline pass takes `constant_color1`
 
 ### Step 3: stencil mask passes on the draw lists
 
-- Both mask passes, "Selection stencil mask (fill disabled)" and "Selection
-  stencil mask (proxy hidden)" (`app_rendering.cpp`), take no shader debug:
-  the selection silhouette is not content, and a debug mode must not change
-  the outline. With selection fill off and shader debug on, the outline
-  must still be masked by the forced level's silhouette: that is the
-  verification case. NOT via `shader_debug_override`: since 6d2a0cc37 any
-  pass with a `shader_debug_override` stays on the bucket path
-  (`composition_pass.cpp` routing gate, `!data.shader_debug_override`), so
-  the override would block step 3. A pass-data property that keeps the
-  view's shader debug out of the pass (its prepared `shader_debug` none, and
-  no `shader_debug_layers`) is needed instead; design it with the routing
-  gate's current form in front of you.
-- Findings for the design (2026-10-31): `Draw_list_renderer::Render_parameters`
-  already carries `color_blend_override`, honored by `draw_color`
-  (`draw_list_scene.cpp`, the color blend selection), so a pass-supplied
-  base pipeline or that override both work. The color variant comes from
-  `Color_environment::make_environment_key()` (`draw_list_scene.cpp`), the
-  uniform environment of every color list; `flat_draw_color` is the
-  precedent of a position-pass axis there, so a `depth_only` environment
-  flag setting `Shader_bool::VARIANT_DEPTH_ONLY` fits the "environment
-  affects resolution, not partitioning" rule (that bit is only ever set by
-  force masks). The alpha-tested cutout needs a derived shader gate in
-  `res/shaders/erhe_standard_variant.glsl`, built like
-  `ERHE_VARIANT_ID_RENDER_ALPHA_TEST` / `ERHE_VARIANT_PVS_ALPHA_TEST`:
-  `ERHE_VARIANT_DEPTH_ONLY` on an alpha_test / screen_door material is not a
-  position pass, so `standard.frag` runs the material inputs up to the
-  discard and then writes nothing (a branch beside the ID / PVS writes after
-  the discard). The material blending mode stays in the key under
-  `VARIANT_DEPTH_ONLY` (`Shader_key::derive`), and the gate also fixes the
-  bucket path's full-quad mask for alpha-tested meshes.
-- A dedicated base pipeline for the mask (color writes disabled, the
-  selected fill's depth / stencil state) replaces `color_blend_override`;
-  the pass supplies it like any other base pipeline.
-- The draw-list color passes gain a depth-only sub-variant, resolved per
-  list like the shadow lists' {depth-only, distance, cube} axis, so the
-  `VARIANT_DEPTH_ONLY` force mask becomes a covered sub-variant instead of
-  a fallback trigger. Its alpha-tested form keeps the alpha test:
-  `ERHE_VARIANT_DEPTH_ONLY` enables the position-pass gate that skips
-  material sampling (erhe_standard_variant.glsl), so a plain depth-only
-  variant on alpha-tested lists would stencil the full quad - the known
-  "selection stencil mask is depth-only on alpha-tested meshes" defect,
-  fixed here rather than carried over.
-- The routing rule also requires a draw-list blending policy; both mask
-  passes use `override_with_base_render_pipeline`. Each mask pass becomes
-  an opaque and an alpha-tested pass (`opaque_primitives_only` /
-  `alpha_tested_primitives_only`), mirroring "Content fill selected" /
-  "Content fill alpha tested selected".
-- All mask passes then route to the draw lists. Verification: with
-  selection fill off, and with a proxy-hidden source selected, the outline
-  at each forced level matches step 2's with fill on; an alpha-tested
-  selection's outline follows its cutout; `use_draw_lists` off unchanged.
+Done. The selection stencil masks are `Composition_pass_output::depth_stencil`
+passes on a dedicated `selection_stencil_mask` base pipeline (the selected
+fill's depth / stencil state, color writes disabled), each an opaque, a
+translucent and an alpha-tested pass, routed to the draw lists like the
+fills, so the silhouette is the drawn LOD level; the view's shader debug mode
+and overdraw counting stay out of them. The draw lists draw them with the
+depth-only color sub-variant (`Color_sub_variant::depth_only`, a resolution
+axis, not a `Color_environment` flag: an environment flag would re-resolve
+every list at each switch between the mask and fill passes of a frame), and
+`ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST` keeps an alpha-tested material's
+discard, so on both paths the mask follows the cut-out
+(`doc/erhe/draw_list_renderer.md` "Depth-only color sub-variant",
+`doc/editor/rendering.md` "Selection stencil mask").
 
 ### Step 4: docs
 

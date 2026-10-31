@@ -53,6 +53,20 @@ enum class Composition_pass_kind : unsigned int {
     occlusion_test
 };
 
+// What the standard-shader draws of a pass write. color: the lit variant,
+// with the view's shader debug mode and overdraw counting. depth_stencil:
+// the depth-only variant (VARIANT_DEPTH_ONLY; on the draw lists
+// erhe::scene_renderer::Color_sub_variant::depth_only): depth and stencil
+// only, for the selection stencil masks. The view's shader debug mode and
+// overdraw counting stay out of such a pass (the silhouette is not content;
+// a debug view must not change it), an alpha-tested material keeps its
+// discard (ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST), and the pass's base
+// pipeline carries the color blend state that disables color writes.
+enum class Composition_pass_output : unsigned int {
+    color = 0,
+    depth_stencil
+};
+
 class Composition_pass_data
 {
 public:
@@ -75,10 +89,7 @@ public:
     erhe::scene_renderer::Blending_mode_policy                             blending_mode_policy{erhe::scene_renderer::Blending_mode_policy::not_set};
     erhe::primitive::Primitive_mode                                        primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     erhe::Item_filter                                                      filter{};
-    // When set, overrides the per-bucket color-blend state in Forward_renderer
-    // (otherwise chosen by blend mode). Used by the selection stencil-mask pass
-    // to write depth/stencil only (color_writes_disabled).
-    const erhe::graphics::Color_blend_state*                               color_blend_override{nullptr};
+    Composition_pass_output                                                output{Composition_pass_output::color};
     std::shared_ptr<Scene_root>                                            override_scene_root{};
     uint32_t                                                               shader_key_force_enable_mask{0};
     uint32_t                                                               shader_key_force_disable_mask{0};
@@ -217,6 +228,12 @@ public:
 // draw with the standard shaders. The depth-only and ID variants of such a
 // pass are not counted (bucket_primitives()).
 [[nodiscard]] auto counts_overdraw(const Composition_pass_data& data) -> bool;
+
+// The shader key bits the bucket path forces for a pass: its
+// shader_key_force_enable_mask, plus VARIANT_DEPTH_ONLY for a
+// Composition_pass_output::depth_stencil pass (the draw-list path's
+// Color_sub_variant::depth_only).
+[[nodiscard]] auto get_bucket_force_enable_mask(const Composition_pass_data& data) -> uint32_t;
 
 // The draw-list path's blending selection of a pass's
 // Blending_mode_policy (Composition_pass::prepare() routes only the

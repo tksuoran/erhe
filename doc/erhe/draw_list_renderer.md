@@ -64,6 +64,28 @@ previous frame:
   opacity / blending classification).
 - Main color rendering (triangle fill, opaque, alpha tested and translucent),
   including the view's shader debug mode (`Draw_color_parameters::shader_debug`).
+- Depth-only color passes (the editor's selection stencil masks): the
+  depth-only color sub-variant (below).
+
+### Depth-only color sub-variant
+
+`Draw_color_parameters::sub_variant` (`Color_sub_variant`) selects what a
+color pass draws its lists with: `standard`, or `depth_only`, which sets
+`VARIANT_DEPTH_ONLY` on each list's resolved key - the bit the bucket path
+forces with `shader_key_boolean_mask_force_enable`. It is a resolution axis
+like the view axes (`Draw_list_color_resolution` keys on it, the first
+depth-only draw of a list resolves it once), not part of the color
+environment: the depth-only and the standard passes of one frame draw the
+same lists, and an environment flag would re-resolve every list at each
+switch between them (C5). A depth-only pass takes no shader debug mode and
+no overdraw counting (`resolve_color_stages()` verifies both). The material's
+blending mode stays in the key, so an alpha-tested list keeps its discard:
+`ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST` (`erhe_standard_variant.glsl`) is not a
+position pass, it runs the material inputs up to the color pass's discard and
+writes nothing after it; every other depth-only variant is a position pass.
+The pass supplies a base pipeline with its own color blend state (color
+writes disabled), which takes precedence over the blending class's
+(`Base_render_pipeline::get_pipeline_for()`).
 
 ### Not covered
 
@@ -130,12 +152,13 @@ content fill opaque / translucent, from `app_rendering.cpp` /
 | `SHADOW_FILTER`, `SHADOW_BIAS`, `SHADOW_TECHNIQUE`, `SHADOW_DEPTH_BITS` (color path) | Graphics preset (`app_settings`), identical for every pass | User changes the graphics preset | **Global config** - baked, and recomputed and compared alongside the light partition (R18). The shadow path's distance-technique toggle is the same preset input but is modelled as the R4a sub-variant, not as config |
 | `SHADER_MULTIVIEW_COUNT` | key value 0 when `views.size()==1` (desktop viewports), N when `views.size()==N>=2` (XR) | Per scene view; desktop mirror plus headset can render the same scene in one frame | **View-config axis** - enumerated up front from the same source prewarm uses (`multiview_view_counts`); a draw list caches a resolved variant per enumerated view config; a not-yet-enumerated config seen at draw time resolves lazily once (R19) |
 | `SHADER_DEBUG` | The view's Shader Debug mode (the bone N.V pass has a per-pass override - not covered) | Debug UI | **View axis**, like `OVERDRAW`: `Draw_color_parameters::shader_debug` applies to the lists of `shader_debug_layers` (the editor: content), resolved per (multiview, overdraw, shader debug) with the debug varyings of the list's vertex format (`apply_shader_debug_varyings()`) |
-| Force-enable mask | 0 for content fill; shadow: `VARIANT_DEPTH_ONLY` (directional / spot), `+ VARIANT_SHADOW_DISTANCE` when the distance technique is active, `VARIANT_SHADOW_CUBE` for point-light cube faces (on a cull_none base pipeline); `EDGE_LINES_FROM_ID` toggled onto the fill passes when the ID-buffer edge method is active (fallback while active - Q9); other masks (`SOLID_WIREFRAME`, `EDGE_LINES_CORNER_CAP`, `VARIANT_BRUSH_PREVIEW`) belong to passes that are not covered | Light type per shadow pass; graphics preset; editor settings toggles | **Baked as a shadow sub-variant axis** {depth-only, depth-only+distance, cube} - resolved per shadow list, selected by the caller per shadow pass; `EDGE_LINES_FROM_ID` takes the fallback (Q9) |
+| Force-enable mask | 0 for content fill; `VARIANT_DEPTH_ONLY` for the selection stencil masks; shadow: `VARIANT_DEPTH_ONLY` (directional / spot), `+ VARIANT_SHADOW_DISTANCE` when the distance technique is active, `VARIANT_SHADOW_CUBE` for point-light cube faces (on a cull_none base pipeline); other masks (`SOLID_WIREFRAME`, `EDGE_LINES_CORNER_CAP`, `VARIANT_BRUSH_PREVIEW`) belong to passes that are not covered | Light type per shadow pass; graphics preset; pass definition | **Baked as sub-variant axes**: shadow {depth-only, depth-only+distance, cube} - resolved per shadow list, selected by the caller per shadow pass; color {standard, depth-only} (the depth-only color sub-variant) - resolved per color list, selected by the caller per color pass |
 | Force-disable mask | Always 0 in the editor | - | **Fixed to 0** |
 | `Blending_mode_policy` | `opaque_primitives_only` / `alpha_tested_primitives_only` / `translucent_primitives_only` for fill passes; opaque-only for shadow | Static per pass | **Already baked** - this is the draw list's blending classification (R7) |
 | `Item_filter` | Selected / not-selected / visible splits | Selection and visibility change constantly | Not a shader input - see Q1 / Q2 |
 | `base_render_pipelines` | Static pass definitions (depth / stencil / raster state) | Never at runtime | Supplied by the caller at draw time; pipeline resolution cached per (draw list x pass) |
-| `shader_stages_override`, `color_blend_override` | Only passes that are not covered (selection stencil mask, macOS GL edge lines) | - | **Not supported** - such passes use the fallback |
+| `shader_stages_override` | Only passes that are not covered (passes drawing their own program) | - | **Not supported** - such passes use the fallback |
+| Color blend state | The list's blending class, or the base pipeline's own (a depth-only pass disables color writes there) | Static per pass | Supplied by the caller's base pipeline at draw time |
 | `Primitive_interface_settings`, exposure, camera / viewport, light *data*, joint matrices, material contents | Per-pass / per-frame UBO and primitive-buffer contents | Every frame | Not variant-affecting - per-frame upload, orthogonal to draw list identity |
 
 ### Environment components affect resolution, not partitioning
@@ -161,8 +184,8 @@ partitioning, are:
   as the list's blending classification.
 - Force masks in general can coarsen partitioning (merging lists that differ
   only in a forced bit). The covered bits (`VARIANT_DEPTH_ONLY`,
-  `VARIANT_SHADOW_DISTANCE`, `VARIANT_SHADOW_CUBE`; the ID-buffer edge method
-  uses the fallback, Q9) are set exclusively by force masks -
+  `VARIANT_SHADOW_DISTANCE`, `VARIANT_SHADOW_CUBE`) are set exclusively by
+  force masks -
   `Shader_key::derive` never sets them from a material - so they are guaranteed
   uniform, pipeline-only effects. Any future variant that forces a bit
   materials can also set must be re-analyzed.
@@ -212,7 +235,7 @@ Requirements following from this:
 - R21 (environment invariance): Draw list contents - the set of draw lists,
   their identities, and their entries - are invariant under every environment
   change (light-set changes, graphics preset changes, view config, editor
-  setting toggles such as the ID-buffer edge method). Environment changes may
+  setting toggles). Environment changes may
   only invalidate and re-resolve cached variants / pipelines (R17); they never
   add, remove, move, or re-partition entries. Entries change only on scene-side
   events: registration / unregistration (R1 / R2), re-registration on mesh /
@@ -564,14 +587,15 @@ Drawing:
   shared state (ring buffers, texture heap, samplers).
 - C5 (multiple scene views): several viewports or an XR view rendering the same
   scene in one frame, each with different per-view settings (render style,
-  camera, exposure, shader debug, ID-buffer edge method, multiview), all render
+  camera, exposure, shader debug, multiview), all render
   correctly with no per-frame re-resolution churn. Therefore the color
   environment configuration (R18) contains only scene-level and global inputs
   (the scene's light partition, the global graphics preset) - never per-view
   inputs. Per-view inputs are either draw-time parameters (filter, settings,
   layers, blending selection, camera data), the view axes of a list's color
-  resolutions (multiview R19, overdraw, shader debug), or per-pass fallback
-  routing (`EDGE_LINES_FROM_ID`). Verification: two viewports of one scene, one desktop
+  resolutions (multiview R19, overdraw, shader debug), or per-pass
+  resolution axes (the depth-only color sub-variant). Verification: two
+  viewports of one scene, one desktop
   plus one XR view, one with shader debug on - no re-resolution after the first
   frame (`get_color_environment_change_count()` and the lazy-resolution counter
   stay put).
@@ -1149,10 +1173,7 @@ Drawing:
   residency.
 - Q8: No additional uses of the variant set beyond the covered passes; the
   fallback covers them (R5).
-- Q9: While the ID-buffer edge-line method is enabled, the content fill passes
-  fall back to `Forward_renderer` (`EDGE_LINES_FROM_ID` stays out of
-  `Draw_list_scene` entirely). Treating it as a second baked config remains
-  possible if the fallback cost hurts in practice.
+- Q9: Retired with the ID-buffer edge-line method, which erhe no longer has.
 - Q10: The existing prewarm stays authoritative; both renderers share the
   variant and pipeline caches; draw-list resolution compiles only on a miss and
   only off the per-frame hot path (R22).
@@ -1184,7 +1205,8 @@ Draw_list_key
 
 Environment is not in the key (R21). The resolution configuration is
 `Color_environment` (light partition plus shadow settings, R18), the view config
-(multiview count, R19) and the shadow sub-variant {depth_only,
+(multiview count, R19), the color sub-variant {standard, depth_only} (the
+depth-only color sub-variant) and the shadow sub-variant {depth_only,
 depth_only_distance, cube} (R4a).
 
 Combine rule for color resolution: the resolved key's boolean mask is the
@@ -1506,13 +1528,16 @@ configuration change.
 the effective scene root has a non-null `Draw_list_scene` (R1b);
 `primitive_mode == polygon_fill`; the pass has no `shader_debug_override`
 (the view's mode is passed as `Render_parameters::shader_debug`);
-`shader_stages_override` and `color_blend_override` are null; the shader-key
-force-enable and force-disable masks are zero; `EDGE_LINES_FROM_ID` is not
-applied this frame (Q9); and the blending-mode policy maps to a
-`Blending_selection`. The render-style gate, the appearance-derived
-`Primitive_interface_settings`, exposure and all base render parameters are
-kept on the routed path. Everything else takes the `render()` fallback (brush,
-bone and selection stencil passes). `Shadow_render_node` passes the root's
+`shader_stages_override` is null; the shader-key force-enable and
+force-disable masks are zero; and the blending-mode policy maps to a
+`Blending_selection`. A pass with `Composition_pass_output::depth_stencil`
+(the selection stencil masks) routes like any other: it draws the depth-only
+color sub-variant (`Render_parameters::sub_variant`) with no shader debug
+mode and no overdraw counting, and on the bucket path the same pass forces
+`VARIANT_DEPTH_ONLY` (`get_bucket_force_enable_mask()`). The render-style
+gate, the appearance-derived `Primitive_interface_settings`, exposure and all
+base render parameters are kept on the routed path. Everything else takes the
+`render()` fallback (brush and bone passes). `Shadow_render_node` passes the root's
 `Draw_list_scene` and its layer id list to `Shadow_renderer`.
 
 ## 10. Measured effect

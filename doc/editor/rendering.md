@@ -116,40 +116,44 @@ conditional no-ops per frame, noted below):
 | 2 | Content fill selected | polygon_fill | selected/hovered; also writes selection stencil bit 7 |
 | 3 | Content solid wireframe not selected | solid_wireframe | `SOLID_WIREFRAME` shader-variant overlay over the opaque fill (same depth, no z-fight, no depth write); disabled when `Device_info::use_solid_wireframe` is false; no-op unless the render style enables solid wireframe |
 | 4 | Content solid wireframe selected | solid_wireframe | as above, selected/hovered |
-| 5 | Selection stencil mask (fill disabled) | polygon_fill | depth + stencil bit 7 only, color writes disabled (`VARIANT_DEPTH_ONLY`); active only when the selection polygon fill is OFF -- exactly one of this pass and pass 2 runs per frame |
-| 6 | Selection stencil mask (proxy hidden) | polygon_fill | depth + stencil bit 7 for selected/hovered `proxy_hidden` sources (their render proxies draw the fill) |
-| 7 | Content corner points not selected | corner_points | `VARIANT_POINTS` variant; no-op unless the render style enables corner points |
-| 8 | Content corner points selected | corner_points | as above, selected |
-| 9 | Content polygon centroids not selected | polygon_centroids | `VARIANT_POINTS` variant; no-op unless the render style enables polygon centroids |
-| 10 | Content polygon centroids selected | polygon_centroids | as above, selected |
-| 11 | Content edge lines not selected | edge_lines | wide-line edges via `Content_wide_line_renderer`; suppressed when solid wireframe is enabled |
-| 12 | Content edge lines opaque selected | edge_lines | as above, selected |
-| 13 | Ghost edge lines | edge_lines | geometry graph ghost meshes (`render_wireframe` flag), always on |
-| 14 | Content fill alpha tested not selected | polygon_fill | `Blending_class::alpha_tested` primitives (alpha_test, screen_door) of pass 1; blending off, depth write on |
-| 15 | Content fill alpha tested selected | polygon_fill | as above, of pass 2; writes selection stencil bit 7 |
-| 16 | Occlusion test | - | `Composition_pass_kind::occlusion_test`: the raster occlusion test of the view (`Draw_list_scene::draw_occlusion()`, doc/plans/occlusion_culling.md); viewports only (`Render_context::render_state`), with `occlusion_culling` on, the draw lists and the `gpu` culling classification; draws the camera-facing faces of every tested entry's box, depth test without depth or color writes; the next frame's classification culls the entries it found hidden |
-| 17 | Content outline opaque selected | edge_lines | selection/hover outline (outline pipeline, constant colors; draws where stencil bit 7 is clear) |
-| 18 | Sky | polygon_fill | fullscreen (3 vertices), depth==far, stencil==0; `Sky_composition_pass` subclass switches between the gradient/checker shader and the physically-based atmosphere (`doc/erhe/procedural_sky.md`) |
-| 19 | Grid | polygon_fill | fullscreen infinite plane (12 vertices), depth clamp, blended overlay that leaves the depth buffer to the content |
-| 20 | Content fill translucent not selected | polygon_fill | `Blending_class::translucent` primitives of pass 1, premultiplied blending |
-| 21 | Content fill translucent selected | polygon_fill | as above, of pass 2 |
-| 22 | Brush | polygon_fill | brush layer, `VARIANT_BRUSH_PREVIEW` variant, two pipelines in sequence (cull back then cull front), premultiplied alpha |
-| 23 | Bone solid (N.V) | polygon_fill | bone proxies, six stencil-assisted pipelines; after every content pass because passes 1-2 of it leave stencil tags the edge-line pipelines test |
-| 24 | Rendertarget | polygon_fill | rendertarget-mesh UI (hotbar quad); overlay pass that ignores camera exposure and runs after post-processing (issue #230) |
-| 25 | Rendertarget view anchored | polygon_fill | as above, for the view-anchored hotbar of the hovered view only |
+| 5 | Selection stencil mask (fill disabled) | polygon_fill | the selection silhouette while the selection polygon fill is OFF (exactly one of the masks and the selected fills runs per frame): depth + stencil bit 7 only, `Composition_pass_output::depth_stencil` (the depth-only variant, no shader debug, no overdraw count) on the `selection_stencil_mask` pipeline (color writes disabled); opaque primitives, on the draw lists at the drawn LOD level |
+| 6 | Selection stencil mask (proxy hidden) | polygon_fill | as pass 5, always on, for selected/hovered `proxy_hidden` sources (their render proxies draw the fill) |
+| 7 | Selection stencil mask translucent (fill disabled) | polygon_fill | as pass 5, `Blending_class::translucent` primitives |
+| 8 | Selection stencil mask translucent (proxy hidden) | polygon_fill | as pass 6, `Blending_class::translucent` primitives; they write depth before the sky, the grid and the translucent fills (22-25), so with the selection fill off a selected translucent mesh hides the grid behind it, where the fill-on path (pass 25, after the grid) shows it |
+| 9 | Content corner points not selected | corner_points | `VARIANT_POINTS` variant; no-op unless the render style enables corner points |
+| 10 | Content corner points selected | corner_points | as above, selected |
+| 11 | Content polygon centroids not selected | polygon_centroids | `VARIANT_POINTS` variant; no-op unless the render style enables polygon centroids |
+| 12 | Content polygon centroids selected | polygon_centroids | as above, selected |
+| 13 | Content edge lines not selected | edge_lines | wide-line edges via `Content_wide_line_renderer`; suppressed when solid wireframe is enabled |
+| 14 | Content edge lines opaque selected | edge_lines | as above, selected |
+| 15 | Ghost edge lines | edge_lines | geometry graph ghost meshes (`render_wireframe` flag), always on |
+| 16 | Content fill alpha tested not selected | polygon_fill | `Blending_class::alpha_tested` primitives (alpha_test, screen_door) of pass 1; blending off, depth write on |
+| 17 | Content fill alpha tested selected | polygon_fill | as above, of pass 2; writes selection stencil bit 7 |
+| 18 | Selection stencil mask alpha tested (fill disabled) | polygon_fill | as pass 5, `Blending_class::alpha_tested` primitives: the depth-only variant keeps the material's discard (`ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST`), so the silhouette follows the cut-out |
+| 19 | Selection stencil mask alpha tested (proxy hidden) | polygon_fill | as pass 6, `Blending_class::alpha_tested` primitives |
+| 20 | Occlusion test | - | `Composition_pass_kind::occlusion_test`: the raster occlusion test of the view (`Draw_list_scene::draw_occlusion()`, doc/plans/occlusion_culling.md); viewports only (`Render_context::render_state`), with `occlusion_culling` on, the draw lists and the `gpu` culling classification; draws the camera-facing faces of every tested entry's box, depth test without depth or color writes; the next frame's classification culls the entries it found hidden |
+| 21 | Content outline opaque selected | edge_lines | selection/hover outline (outline pipeline, constant colors; draws where stencil bit 7 is clear) |
+| 22 | Sky | polygon_fill | fullscreen (3 vertices), depth==far, stencil==0; `Sky_composition_pass` subclass switches between the gradient/checker shader and the physically-based atmosphere (`doc/erhe/procedural_sky.md`) |
+| 23 | Grid | polygon_fill | fullscreen infinite plane (12 vertices), depth clamp, blended overlay that leaves the depth buffer to the content |
+| 24 | Content fill translucent not selected | polygon_fill | `Blending_class::translucent` primitives of pass 1, premultiplied blending |
+| 25 | Content fill translucent selected | polygon_fill | as above, of pass 2 |
+| 26 | Brush | polygon_fill | brush layer, `VARIANT_BRUSH_PREVIEW` variant, two pipelines in sequence (cull back then cull front), premultiplied alpha |
+| 27 | Bone solid (N.V) | polygon_fill | bone proxies, six stencil-assisted pipelines; after every content pass because passes 1-2 of it leave stencil tags the edge-line pipelines test |
+| 28 | Rendertarget | polygon_fill | rendertarget-mesh UI (hotbar quad); overlay pass that ignores camera exposure and runs after post-processing (issue #230) |
+| 29 | Rendertarget view anchored | polygon_fill | as above, for the view-anchored hotbar of the hovered view only |
 
 The order serves the GPU's early depth test (on Apple GPUs, hidden surface
 removal; doc/erhe/primitive.md "Blending classes"): a draw that writes depth
 and may discard turns it off for the draws that follow it. Every pass that
 writes depth without discarding - the opaque fills, the selection stencil
 masks, the corner points and centroids - comes before the alpha-tested
-fills (14-15), then the occlusion test (16), which writes nothing and so
+fills and masks (16-19), then the occlusion test (20), which writes nothing and so
 tests against the view's final opaque depth, and the sky follows them, so it
 skips the pixels the alpha-tested content covers. The editor overlays keep
 their places relative to the content they had before the alpha-tested passes existed,
 where moving them would change what they show:
 
-- The corner points and centroids (7-10) write depth without discarding,
+- The corner points and centroids (9-12) write depth without discarding,
   so they come before the edge lines, whose wide-line shader discards.
   Which of a point and a line wins a pixel does not depend on their order
   (the point's `less` test after the line equals the line's
@@ -159,22 +163,16 @@ where moving them would change what they show:
   of the lines meeting at it. Where a line fragment is nearer than the
   point's flat sprite depth, the line blends over the point rather than over
   the surface (a handful of pixels on the default scene with 30 px points).
-- The edge lines (11-12, 13) stay ahead of the alpha-tested fills: content
+- The edge lines (13-14, 15) stay ahead of the alpha-tested fills: content
   drawn after an edge line covers its pixels, as the translucent fills do;
   the wide-line shader discards, so these are discarding draws themselves.
-- The outline (17) follows the alpha-tested fills: it draws regardless of
-  depth where stencil bit 7 is clear, so the alpha-tested selected pass has
-  to write its bit 7 first, and an alpha-tested surface in front of the
+- The outline (21) follows the alpha-tested fills and masks: it draws
+  regardless of depth where stencil bit 7 is clear, so the alpha-tested
+  selected pass (or mask) has to write its bit 7 first, and an alpha-tested surface in front of the
   outline's pixels gets the outline over it like an opaque one does.
-- The grid (19) depth-tests against the alpha-tested content like against
-  the opaque content; the translucent fills (20-21) depth-test against both
+- The grid (23) depth-tests against the alpha-tested content like against
+  the opaque content; the translucent fills (24-25) depth-test against both
   and blend over them, whatever their registration order.
-
-Open: "Selection stencil mask (fill disabled)" (5) overrides the blending
-mode to opaque and draws `VARIANT_DEPTH_ONLY`, which has no alpha test, so
-for a selected or hovered alpha-tested mesh it writes depth and stencil
-bit 7 over the whole quad, the discarded texels included, while the
-selection fill is off. The outline then follows the quad, not the cut-out.
 
 Solid wireframe (passes 3-4) is a shader-variant axis
 (`Shader_bool::SOLID_WIREFRAME`): the expanded fill geometry is redrawn with
@@ -225,6 +223,13 @@ Key pipelines and their depth/stencil/blend configuration:
 - Stencil: enabled, function=always, op=replace, reference=0x80, write_mask=0x80
 - Marks selected geometry in stencil bit 7 for later use by outline, sky, and grid passes
 
+### Selection stencil mask
+
+- Shader: `standard` depth-only variant (`VARIANT_DEPTH_ONLY`; an alpha-tested material keeps its discard)
+- Depth / stencil: as the selected opaque fill
+- Blend: color writes disabled (the pipeline's own color blend state, which takes precedence over the blending class's)
+- Writes the selection silhouette (bit 7) for the meshes whose selected fill does not draw (passes 5-8, 18-19), at the drawn LOD level
+
 The alpha-tested and translucent fill passes use these same two pipelines;
 the blend state comes from the blending class (disabled for opaque and
 alpha tested, premultiplied for translucent).
@@ -253,7 +258,7 @@ alpha tested, premultiplied for translucent).
 - Blend: premultiplied alpha, alpha-to-coverage
 - Draws outline only where bit 7 is NOT set (outside the selected mesh silhouette), then sets bit 7 to prevent double-drawing
 - The edge lines are those of the LOD level the mesh's fill draws (`doc/editor/lod.md` "Edge lines and the selection outline")
-- Color: the pulsing selection color for a selected mesh (the active item's own pulsing color for the active item, `doc/editor/active_item.md` D5) and `constant_color1` for a hovered mesh that is not selected; the feed resolves it per mesh from the pass's primitive settings by the rule of the fill records (`Primitive_interface_settings::get_pass_color()`). The edge-line passes (11-13) resolve theirs the same way, so a render style's `edge_lines_color_source` (constant color or mesh wireframe color) reaches the wide-line edges
+- Color: the pulsing selection color for a selected mesh (the active item's own pulsing color for the active item, `doc/editor/active_item.md` D5) and `constant_color1` for a hovered mesh that is not selected; the feed resolves it per mesh from the pass's primitive settings by the rule of the fill records (`Primitive_interface_settings::get_pass_color()`). The edge-line passes (13-15) resolve theirs the same way, so a render style's `edge_lines_color_source` (constant color or mesh wireframe color) reaches the wide-line edges
 
 ### Sky
 

@@ -280,21 +280,25 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
     // the scene's persistent draw lists when the gate is on and this pass is
     // fully expressible with them - polygon fill, no per-pass shader debug
     // override (the view's shader debug mode is a draw-list resolution axis,
-    // Draw_color_parameters::shader_debug), no shader / blend overrides, no
-    // forced shader bits, and a plain opaque / alpha tested / translucent /
-    // allow_all blending policy. Everything else takes the bucket path,
-    // prepared here.
+    // Draw_color_parameters::shader_debug), no shader override, no forced
+    // shader bits (a depth_stencil pass's depth-only variant is the
+    // Color_sub_variant::depth_only resolution axis), and a plain opaque /
+    // alpha tested / translucent / allow_all blending policy. Everything
+    // else takes the bucket path, prepared here.
     const erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
-    const erhe::scene_renderer::Shader_debug effective_shader_debug = data.shader_debug_override.has_value()
-        ? data.shader_debug_override.value()
-        : context.shader_debug;
+    // A depth_stencil pass takes no shader debug mode (Composition_pass_output).
+    const erhe::scene_renderer::Shader_debug effective_shader_debug =
+        (data.output == Composition_pass_output::depth_stencil)
+            ? erhe::scene_renderer::Shader_debug::none
+            : data.shader_debug_override.has_value()
+                ? data.shader_debug_override.value()
+                : context.shader_debug;
     out.use_draw_lists =
         context.app_context.render_settings->use_draw_lists &&
         (draw_list_scene != nullptr) &&
         (data.primitive_mode == erhe::primitive::Primitive_mode::polygon_fill) &&
         !data.shader_debug_override.has_value() &&
         (data.shader_stages == nullptr) &&
-        (data.color_blend_override == nullptr) &&
         (data.shader_key_force_enable_mask == 0u) &&
         (data.shader_key_force_disable_mask == 0u) &&
         (
@@ -317,7 +321,7 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
             .mesh_spans                            = s_mesh_spans,
             // The root's FORWARD set - the one the draw binds (D5).
             .material_source                       = &scene_root->get_material_set(),
-            .shader_key_boolean_mask_force_enable  = data.shader_key_force_enable_mask,
+            .shader_key_boolean_mask_force_enable  = get_bucket_force_enable_mask(data),
             .shader_key_boolean_mask_force_disable = data.shader_key_force_disable_mask,
             .blending_mode_policy                  = data.blending_mode_policy,
             .primitive_mode                        = data.primitive_mode,
@@ -341,9 +345,17 @@ auto counts_overdraw(const Composition_pass_data& data) -> bool
 {
     return
         (data.kind == Composition_pass_kind::scene_content) &&
+        (data.output == Composition_pass_output::color) &&
         (data.shader_stages == nullptr) &&
         !data.shader_debug_override.has_value() &&
         (std::find(data.mesh_layers.begin(), data.mesh_layers.end(), Mesh_layer_id::content) != data.mesh_layers.end());
+}
+
+auto get_bucket_force_enable_mask(const Composition_pass_data& data) -> uint32_t
+{
+    return (data.output == Composition_pass_output::depth_stencil)
+        ? (data.shader_key_force_enable_mask | erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::VARIANT_DEPTH_ONLY))
+        : data.shader_key_force_enable_mask;
 }
 
 auto get_draw_blending_selection(const Composition_pass_data& data) -> erhe::scene_renderer::Draw_blending_selection
@@ -672,7 +684,6 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 .debug_joint_indices   = debug_joint_indices,
                 .debug_joint_colors    = debug_joint_colors,
                 .debug_target_joint    = debug_target_joint.get(),
-                .color_blend_override  = nullptr,
                 .cull_view             = prepared.cull_view,
                 .command_selection     = prepared.command_selection,
                 .overdraw              = prepared.overdraw,
@@ -680,7 +691,10 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 // The bucket path's default shader_debug_filter (content
                 // meshes only): tool, brush and controller meshes keep
                 // their normal variant.
-                .shader_debug_layers   = shader_debug_content_layers
+                .shader_debug_layers   = shader_debug_content_layers,
+                .sub_variant           = (data.output == Composition_pass_output::depth_stencil)
+                    ? erhe::scene_renderer::Color_sub_variant::depth_only
+                    : erhe::scene_renderer::Color_sub_variant::standard
             }
         );
         if (stats != nullptr) {
@@ -725,7 +739,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 .shadow_debug_light_index = context.shadow_debug_light_index,
                 .joint_poses       = scene_root->get_render_joint_poses(context.app_context.graphics_device->get_frame_index()),
                 .material_source   = &scene_root->get_material_set(),
-                .shader_key_boolean_mask_force_enable  = data.shader_key_force_enable_mask,
+                .shader_key_boolean_mask_force_enable  = get_bucket_force_enable_mask(data),
                 .shader_key_boolean_mask_force_disable = data.shader_key_force_disable_mask,
                 .reverse_depth     = context.scene_view.get_reverse_depth(),
                 .depth_range       = context.scene_view.get_depth_range(),
@@ -744,8 +758,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
             .debug_joint_indices    = debug_joint_indices,
             .debug_joint_colors     = debug_joint_colors,
             .debug_target_joint     = debug_target_joint.get(),
-            .shader_stages_override = data.shader_stages,
-            .color_blend_override   = data.color_blend_override,
+            .shader_stages_override = data.shader_stages
         },
         prepared.buckets
     );

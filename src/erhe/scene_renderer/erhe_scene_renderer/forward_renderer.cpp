@@ -222,8 +222,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             .debug_joint_indices    = parameters.debug_joint_indices,
             .debug_joint_colors     = parameters.debug_joint_colors,
             .debug_target_joint     = parameters.debug_target_joint,
-            .shader_stages_override = parameters.shader_stages_override,
-            .color_blend_override   = parameters.color_blend_override
+            .shader_stages_override = parameters.shader_stages_override
         },
         m_immediate_snapshot
     );
@@ -315,14 +314,13 @@ void Forward_renderer::render(const Draw_parameters& parameters, const Render_bu
                 // Mirrored (negative determinant) buckets get the front-face-
                 // flipped pipeline variant so face culling keeps the same
                 // visible faces as for non-mirrored meshes.
-                // A pass may override the color-blend state (e.g. the selection
-                // stencil-mask pass uses color_writes_disabled to write depth/stencil
-                // only); otherwise pick by the bucket's blend mode.
-                const erhe::graphics::Color_blend_state* color_blend = (parameters.color_blend_override != nullptr)
-                    ? parameters.color_blend_override
-                    : (blending_class == erhe::primitive::Blending_class::translucent)
-                        ? &erhe::graphics::Color_blend_state::color_blend_premultiplied
-                        : &erhe::graphics::Color_blend_state::color_blend_disabled;
+                // The color blend state follows the bucket's blend mode; a base
+                // pipeline with a color blend state of its own (the selection
+                // stencil mask: color writes disabled) takes precedence
+                // (Base_render_pipeline::get_pipeline_for()).
+                const erhe::graphics::Color_blend_state* color_blend = (blending_class == erhe::primitive::Blending_class::translucent)
+                    ? &erhe::graphics::Color_blend_state::color_blend_premultiplied
+                    : &erhe::graphics::Color_blend_state::color_blend_disabled;
                 erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state->get_pipeline_for(
                     base.render_pass->get_descriptor(),
                     color_blend,

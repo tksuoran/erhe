@@ -9103,12 +9103,15 @@
     "name": "set_content_draws"
   },
   {
-    "description": "Set the Visual Style toggles of every viewport scene view (the toolbar Visual Style popup's Default Style checkboxes; style = not selected, or selected for the Selection checkboxes): edge_lines, corner_points, polygon_centroids, solid_wireframe, each true or false, omitted keeps the value. Turning on a mode only a full mesh build provides queues the on-demand full build of every prepared primitive (meshes loaded with prepared mesh data, doc/editor/async_asset_loading.md 'Prepared mesh data') in every scene, exactly as the checkbox does; wait for get_async_status idle before rendering. Returns the resulting style of the first viewport and full_builds_queued.",
+    "description": "Set the Visual Style toggles of every viewport scene view (the toolbar Visual Style popup's Default Style checkboxes; style = not selected, or selected for the Selection checkboxes): polygon_fill, edge_lines, corner_points, polygon_centroids, solid_wireframe, each true or false, omitted keeps the value. Turning on a mode only a full mesh build provides queues the on-demand full build of every prepared primitive (meshes loaded with prepared mesh data, doc/editor/async_asset_loading.md 'Prepared mesh data') in every scene, exactly as the checkbox does; wait for get_async_status idle before rendering. Returns the resulting style of the first viewport and full_builds_queued.",
     "inputSchema": {
       "properties": {
         "style": {
           "description": "not_selected (default) or selected",
           "type": "string"
+        },
+        "polygon_fill": {
+          "type": "boolean"
         },
         "edge_lines": {
           "type": "boolean"

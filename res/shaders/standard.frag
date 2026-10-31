@@ -887,6 +887,10 @@ void main()
     // discard; it writes the layered buffer, and the lit color below is not
     // compiled.
     erhe_pvs_write();
+#elif defined(ERHE_VARIANT_DEPTH_ONLY)
+    // ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST: the fragment survived the color
+    // pass's discard; depth and stencil are its only outputs (the pass's
+    // pipeline writes no color), and the lit color below is not compiled.
 #else
 
     // Exposure is read here, before the light loops: the fp16 accumulation
@@ -1507,6 +1511,6 @@ void main()
     }
 #endif
 
-#endif // !ERHE_VARIANT_ID_RENDER && !ERHE_VARIANT_PVS
+#endif // !ERHE_VARIANT_ID_RENDER && !ERHE_VARIANT_PVS && !ERHE_VARIANT_DEPTH_ONLY
 #endif
 }

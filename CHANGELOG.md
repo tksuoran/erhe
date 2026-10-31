@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::scene_renderer`: `Forward_renderer::Render_parameters::color_blend_override`,
+  `Forward_renderer::Draw_parameters::color_blend_override`,
+  `Draw_list_renderer::Render_parameters::color_blend_override` and
+  `Draw_color_parameters::color_blend_override`. A pass that writes no color
+  supplies a base pipeline with its own color blend state
+  (`Base_render_pipeline_create_info::color_blend`), which takes precedence.
 - `erhe::scene`: `Pvs_bake_parameters::min_entry_pixels`; `ERHE_pvs` no
   longer writes `bake.min_entry_pixels` (readers ignore it).
 
@@ -36,6 +42,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: the depth-only color sub-variant:
+  `Color_sub_variant` (`standard`, `depth_only`), `Draw_color_parameters::sub_variant`,
+  `Draw_list_renderer::Render_parameters::sub_variant` and
+  `Draw_list_color_resolution::sub_variant`; the standard shader's
+  `ERHE_VARIANT_DEPTH_ONLY_ALPHA_TEST` gate keeps an alpha-tested material's
+  discard in its depth-only variant.
 - `erhe::scene_renderer`: `Primitive_interface_settings::get_pass_color()`,
   the record color rule of the primitive record writers.
 - `erhe::scene_renderer`: shader debug modes on the draw-list path:

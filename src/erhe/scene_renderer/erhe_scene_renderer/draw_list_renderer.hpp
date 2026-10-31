@@ -84,7 +84,6 @@ public:
         // Active joint for the joint_weight_ramp debug mode, matched per
         // joint slot by Joint_buffer::update(). nullptr = none.
         const erhe::scene::Node*                               debug_target_joint{nullptr};
-        const erhe::graphics::Color_blend_state*               color_blend_override{nullptr};
         // The pass's culling view in draw_list_scene's view set of the frame
         // (add_color_cull_view() before the frame's classification);
         // Cull_view::none draws unculled (multiview passes).
@@ -98,6 +97,8 @@ public:
         // Draw_color_parameters::shader_debug and shader_debug_layers.
         Shader_debug                                           shader_debug{Shader_debug::none};
         std::span<const erhe::scene::Layer_id>                 shader_debug_layers{};
+        // Draw_color_parameters::sub_variant.
+        Color_sub_variant                                      sub_variant{Color_sub_variant::standard};
     };
 
     auto render(const Render_parameters& parameters) -> Draw_statistics;
