@@ -2536,7 +2536,7 @@ auto Primitive::is_prepared() const -> bool
     return render_shape && (render_shape->get_prepared_data() != nullptr);
 }
 
-auto Primitive::make_prepared_optimized_render_shape(const Buffer_info& buffer_info, const Lod_settings* const lod_settings) const -> std::shared_ptr<Primitive_render_shape>
+auto Primitive::make_prepared_optimized_render_shape(const Buffer_info& buffer_info, const Lod_settings* const requested_lod_settings) const -> std::shared_ptr<Primitive_render_shape>
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -2559,10 +2559,10 @@ auto Primitive::make_prepared_optimized_render_shape(const Buffer_info& buffer_i
         return {};
     }
     std::shared_ptr<Primitive_render_shape> optimized = std::make_shared<Primitive_render_shape>(core, Element_mappings{});
-    if (!optimized->make_buffer_mesh(optimized_buffer_info, lod_settings)) {
+    if (!optimized->make_buffer_mesh(optimized_buffer_info, requested_lod_settings)) {
         return {};
     }
-    if (lod_settings != nullptr) {
+    if (requested_lod_settings != nullptr) {
         log_lod_chain(get_name(), optimized->get_renderable_mesh().lod_chain);
     }
     if (released && source) {
