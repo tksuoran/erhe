@@ -42,6 +42,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: automatic level of detail selection on the CPU
+  (doc/plans/lod_gpu_selection.md step 2a): `cull_lanes::Lod_lane_view`,
+  `cull_lanes::lod_lanes()`, `cull_lanes::select_lod_level()` and
+  `cull_lanes::get_lod_template_level()`; `lod_column_none`,
+  `max_lod_columns`, `max_lod_color_columns`;
+  `Draw_list_scene::get_cull_view_lod_column()`,
+  `Draw_list_scene::get_lod_level()` and the diagnostic
+  `Draw_list_scene::request_lod_level_capture()` /
+  `poll_lod_level_capture()` with `Lod_level_capture`,
+  `Lod_level_capture_column` and `Lod_level_capture_entry`;
+  `Draw_list_lod_levels` and the optional `lod_levels` argument of
+  `Draw_indirect_buffer::update(const Draw_list&, ...)`.
 - `erhe::scene_renderer`: level of detail selection data
   (doc/plans/lod_gpu_selection.md step 1): `Draw_list_entry::lod_table_index`
   and `lod_word` with `lod_table_index_none`, `make_lod_word()`,

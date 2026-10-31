@@ -620,6 +620,53 @@ enum class Cull_classification_check_state : uint8_t
     complete  // the result is ready (poll_cull_classification_check() returns it once)
 };
 
+// The level of detail column of a culling view
+// (doc/plans/lod_gpu_selection.md section 3 "Columns"): one per color view
+// with a Lod_view in a frame whose selection is active, at most
+// max_lod_columns per frame, of which at most max_lod_color_columns color
+// columns.
+constexpr uint32_t lod_column_none      {0xffffffffu};
+constexpr uint32_t max_lod_columns      {64};
+constexpr uint32_t max_lod_color_columns{8};
+
+// Diagnostic capture of the CPU level region of one frame
+// (Draw_list_scene::request_lod_level_capture()): the frame's columns with
+// their views' selection inputs, and per entry of the captured object its
+// box, max_axis_scale, lod_word and per column the selected level.
+class Lod_level_capture_column
+{
+public:
+    uint32_t column{lod_column_none};
+    uint32_t view  {0};
+    Lod_view lod_view{};
+};
+
+class Lod_level_capture_entry
+{
+public:
+    uint32_t              list_index          {0};
+    uint32_t              entry_index         {0};
+    Draw_purpose          purpose             {Draw_purpose::color};
+    uint16_t              mesh_primitive_index{0};
+    glm::vec3             center              {0.0f};
+    glm::vec3             extent              {0.0f};
+    float                 max_axis_scale      {0.0f};
+    uint32_t              lod_table_index     {lod_table_index_none};
+    uint32_t              lod_word            {0};
+    std::vector<uint32_t> levels; // per column of Lod_level_capture::columns
+};
+
+class Lod_level_capture
+{
+public:
+    uint64_t                              frame_index          {0};
+    bool                                  active               {false};
+    Lod_frame_settings                    settings             {};
+    uint32_t                              column_overflow_count{0}; // views past the column limits in the frame
+    std::vector<Lod_level_capture_column> columns;
+    std::vector<Lod_level_capture_entry>  entries;
+};
+
 // Persistent, incrementally maintained rendering-side representation of a
 // scene: registered objects classified into draw lists once, reused every
 // frame (doc/erhe/draw_list_renderer.md).
@@ -1076,6 +1123,23 @@ public:
     // after that.
     void request_occlusion_check();
     [[nodiscard]] auto poll_occlusion_check(Occlusion_check& out) -> Cull_classification_check_state;
+    // Level of detail selection (doc/plans/lod_gpu_selection.md; render
+    // thread, render phase, after the frame's classification): the LOD
+    // column of a view of frame_index's set, lod_column_none for a view
+    // without one (no Lod_view, past the column limits, a frame whose
+    // selection is not active) and for Cull_view::none.
+    [[nodiscard]] auto get_cull_view_lod_column(uint64_t frame_index, Cull_view cull_view) const -> uint32_t;
+    // The level the CPU classification selected for entry entry_index of
+    // published list list_index in the view's column (render phase, after
+    // the frame's classification); empty for a view without a column.
+    [[nodiscard]] auto get_lod_level(uint64_t frame_index, Cull_view cull_view, std::size_t list_index, std::size_t entry_index) const -> std::optional<uint32_t>;
+    // Diagnostic (main thread): request_...() asks the next classified
+    // frame to copy the CPU levels of every column for the entries of
+    // object (a new request replaces an earlier one); poll_...() returns
+    // complete, filling out, once a frame copied them, and is idle again
+    // after that.
+    void request_lod_level_capture(Draw_list_object_id object);
+    [[nodiscard]] auto poll_lod_level_capture(Lod_level_capture& out) -> Cull_classification_check_state;
     // The chunk size of draws through primitive_buffer (P3a): the job table
     // and draw_list_chunks() both cut the lists with it.
     [[nodiscard]] static auto get_records_per_chunk(const Primitive_buffer& primitive_buffer) -> std::size_t;
@@ -1749,6 +1813,43 @@ private:
     std::vector<std::vector<uint64_t>>                               m_cull_pvs_culled_masks;
     std::vector<uint32_t>                                            m_cull_pvs_culled;
     bool                                                             m_cull_pvs_frame{false};
+    // Level of detail selection of the frame being rendered
+    // (doc/plans/lod_gpu_selection.md section 3): per view its LOD column
+    // (lod_column_none without one), assigned at classification; the
+    // frame's column count; the distance scratch of lod_lanes() (capacity
+    // kept); views past the column limits in the frame, and whether that
+    // was logged (once per scene).
+    std::vector<uint32_t>                                            m_cull_view_lod_columns;
+    uint32_t                                                         m_lod_column_count{0};
+    uint32_t                                                         m_lod_column_overflow_count{0};
+    bool                                                             m_lod_column_overflow_logged{false};
+    std::vector<float>                                               m_lod_gap;
+    std::vector<float>                                               m_lod_distance2;
+    // The CPU level region (section 3 "Level regions"), one per frame slot
+    // (sized like m_draw_list_slots at the first classification), written
+    // by the frame's classification: per published list index one uint32_t
+    // per entry per group of 8 columns, group-major (level of entry i in
+    // column c at [(c / 8) * entry_count + i], nibble c % 8), for the
+    // color lists of a frame with columns (empty otherwise). Capacity kept.
+    class Lod_level_slot
+    {
+    public:
+        uint64_t                           frame_index {0};
+        bool                               classified  {false};
+        std::vector<std::vector<uint32_t>> lists;
+    };
+    std::vector<Lod_level_slot>                                      m_lod_level_slots;
+    [[nodiscard]] auto get_lod_level_slot(uint64_t frame_index) const -> const Lod_level_slot&;
+    // The column assignment of the frame's views (classify_cull_views()).
+    void assign_lod_columns(const Draw_list_slot& slot);
+    // request_lod_level_capture(): the requested object and stage under the
+    // mutex; the capture is filled by the classification of the next frame.
+    void capture_lod_levels(const Draw_list_slot& slot, const Lod_level_slot& level_slot);
+    std::mutex                                                       m_lod_capture_mutex;
+    bool                                                             m_lod_capture_requested{false};
+    bool                                                             m_lod_capture_complete {false};
+    Draw_list_object_id                                              m_lod_capture_object{};
+    Lod_level_capture                                                m_lod_capture{};
     std::size_t                                                      m_color_environment_change_count{0};
     std::size_t                                                      m_lazy_resolution_count{0};
 

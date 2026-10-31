@@ -346,8 +346,12 @@ Registration:
   the same level. The bucket fallback path draws level 0 (it reads the
   variant's fill range).
 
-  The selection data (doc/plans/lod_gpu_selection.md, built through its
-  step 1; no level is selected yet, so every draw reads the range above):
+  The automatic selection (doc/plans/lod_gpu_selection.md, built through
+  its step 2a): the CPU classification selects a level per (LOD column,
+  entry), and the CPU command writer draws it; GPU-generated commands
+  (Q6 "GPU command generation") and every shadow pass still draw the range
+  above (the template range), and so does every pass of a frame whose
+  selection is not active. Its data:
   - Per entry, `Draw_list_entry::lod_table_index` (the first row of the
     entry's chain in the level table, `lod_table_index_none` for a variant
     without chain) and `lod_word` (`make_lod_word()`: the effective `Lod`
@@ -385,7 +389,52 @@ Registration:
     head origin and the largest per-eye projection scale). Shadow, PVS bake
     and lightmap views have none. The GPU view record is 14 `vec4`; `[12]`
     holds the origin and the projection scale, `[13]` the LOD column (none:
-    -1), the projection kind, the previous column (-1) and the shadow mode.
+    -1, the value every view carries until the GPU selects levels), the
+    projection kind, the previous column (-1) and the shadow mode.
+  - Columns: in a frame whose selection is active,
+    `classify_cull_views()` gives every color planes view with a `Lod_view`
+    a LOD column, in view order, up to `max_lod_color_columns` (8) color
+    columns and `max_lod_columns` (64) columns; a view past either limit has
+    none and draws the template range (one warning per scene is logged).
+    `get_cull_view_lod_column(frame_index, view)` returns it
+    (`lod_column_none` without one).
+  - Selection: per color list and column, `cull_lanes::lod_lanes()` computes
+    the squared distance from the column's origin to each entry's box (the
+    per-axis gaps of `sphere_axis_lanes()`, 1 for an orthographic view) and
+    `select_lod_level()`: with `k = max_axis_scale * projection_scale`,
+    level L passes when `(error_L * k) * (error_L * k) <= threshold2 *
+    distance2` (`threshold2` the frame's threshold squared); the selected
+    level is the last of the passing prefix of the chain, plus the entry's
+    bias and the frame's bias, clamped to the entry's min / max and to the
+    chain. Only multiplies, adds and compares, in that order:
+    `cull_lanes.cpp` is compiled with `-ffp-contract=off`, so the GPU
+    classification can evaluate the same expressions with `precise` and get
+    the same bits. An entry whose record is forced or off, a skinned entry
+    and an entry without bounds take the template level
+    (`get_lod_template_level()`: the forced level clamped to min / max and
+    to the chain, else 0); an entry without chain level 0. Levels do not
+    depend on visibility: every entry of a color list gets one in every
+    column. The lanes run under the Tracy zone `lod_lanes` inside
+    `classify_cull_views()`. Tested deviceless in `test_cull_lanes.cpp`
+    (`Lod_lanes.*`: switch distances, inside the box, orthographic, bias
+    and clamps, chain end and template levels).
+  - The CPU level region: one per frame slot, owned by the render phase,
+    written by the frame's classification: per color list one `uint32_t`
+    per entry per group of 8 columns, group-major (entry i, column c at
+    `[(c / 8) * entry_count + i]`, nibble `c % 8`), capacity kept.
+    `draw_list_chunks()` hands the view's column of the list's words and the
+    slot's level table to `Draw_indirect_buffer::update(draw_list, ...,
+    lod_levels)` (`Draw_list_lod_levels`), which writes an entry with a
+    chain at `(index_count, first_index)` of its level's table row
+    (`base_vertex` stays the entry's). `get_lod_level(frame_index, view,
+    list, entry)` reads one level. A forced level is written as itself, so
+    with the selection on and every entry forced, the commands equal the
+    template's.
+  - Diagnostics: `request_lod_level_capture(object)` /
+    `poll_lod_level_capture()` copy the next classified frame's columns
+    (their `Lod_view`s) and, per entry of the object, its box,
+    `max_axis_scale`, `lod_word` and level per column (MCP
+    `get_lod_selection`).
 - R2: `unregister` function that removes all entries belonging to an object.
   Removal does not invalidate the draw lists' suitability for hot-path
   iteration (compaction is an implementation choice; stale entries are never

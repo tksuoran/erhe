@@ -226,6 +226,7 @@ private:
     auto query_viewport_size    (const nlohmann::json& args) -> std::string;
     auto query_overdraw_stats   (const nlohmann::json& args) -> std::string;
     auto query_lod_info         (const nlohmann::json& args) -> std::string;
+    auto query_lod_selection    (const nlohmann::json& args) -> std::string;
     auto query_pick_at          (const nlohmann::json& args) -> std::string;
     auto query_server_info      (const nlohmann::json& args) -> std::string;
     auto action_set_window_visibility(const nlohmann::json& args) -> std::string;
@@ -856,6 +857,10 @@ private:
     const Queued_request*                            m_cull_check_request{nullptr};
     std::chrono::steady_clock::time_point            m_cull_check_enqueued_at{};
     std::string                                      m_cull_check_scene_name;
+    // get_lod_selection in flight (main thread only), as above.
+    const Queued_request*                            m_lod_selection_request{nullptr};
+    std::chrono::steady_clock::time_point            m_lod_selection_enqueued_at{};
+    std::string                                      m_lod_selection_scene_name;
     // get_occlusion_check in flight (main thread only), as above.
     const Queued_request*                            m_occlusion_check_request{nullptr};
     std::chrono::steady_clock::time_point            m_occlusion_check_enqueued_at{};

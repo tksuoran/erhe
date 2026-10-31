@@ -93,9 +93,31 @@ as "LOD Selection", "LOD Threshold (pixels)" and "LOD Bias"; the MCP
 `set_graphics_preset` takes `lod_enabled`, `lod_threshold_pixels` and
 `lod_bias` (session only). Each frame's render settings snapshot carries
 them to `Draw_list_scene::publish()` (`Lod_frame_settings`), and
-`get_draw_lists` reports what the last publish recorded (`lod`). Levels are
-not selected yet (`doc/plans/lod_gpu_selection.md`): with the selection on,
-every draw still reads its entry's forced level, or level 0.
+`get_draw_lists` reports what the last publish recorded (`lod`).
+
+## Automatic selection
+
+With "LOD Selection" on and some mesh with a chain in the scene, the
+culling classification selects a level for every color draw-list entry in
+every viewport, four view cell and `render_scene_image` capture (their
+culling views carry a `Lod_view`: the camera position and the projection
+scale of the view's height), and in the headset's union view (the head
+origin and the largest per-eye projection scale; not yet run on a headset):
+the coarsest level whose error stays within
+"LOD Threshold (pixels)" at the distance from the camera to the closest
+point of the mesh's world box (`error * max_axis_scale * projection_scale /
+distance <= threshold`), plus the mesh's `Lod.bias` and "LOD Bias", clamped
+to `Lod.min_level` / `Lod.max_level` and to the chain; a mesh under
+`Lod.mode` forced or off draws its forced level or level 0 as before
+(`doc/erhe/draw_list_renderer.md` R1c). The selection runs on the CPU
+(`doc/plans/lod_gpu_selection.md` step 2a); the color passes whose commands
+the CPU writes draw it. Not yet selected: the color passes with
+GPU-generated commands (`culling_classification` gpu on a device with the
+count draw), the shadow passes and skinned meshes draw the template range
+(the forced level, or level 0); there is no hysteresis, and
+the edge lines and the LOD window's "Drawn" column still show the forced
+level. MCP `get_lod_selection` reports the levels of one frame for a mesh,
+per column, with each column's origin and projection scale.
 
 ## Edge lines and the selection outline
 

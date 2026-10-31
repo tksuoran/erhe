@@ -153,11 +153,13 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE
 
 erhe_target_settings(${_target} "erhe")
 
-# The light binner's fp32 tests are the ones res/shaders/light_cluster_bin.comp
-# evaluates with every intermediate precise (doc/plans/clustered_lights.md C4),
-# and the PVS cone rectangles those of res/shaders/erhe_pvs_disocclusion.glsl
-# (doc/plans/pvs.md "Bake" 5): no multiply-add may be fused, so the CPU and
-# GPU results agree bit for bit.
+# The culling lanes (the masks and the level of detail selection of
+# doc/plans/lod_gpu_selection.md section 2) are the ones
+# res/shaders/cull_classify.comp evaluates with every intermediate precise,
+# the light binner's fp32 tests those of res/shaders/light_cluster_bin.comp
+# (doc/plans/clustered_lights.md C4), and the PVS cone rectangles those of
+# res/shaders/erhe_pvs_disocclusion.glsl (doc/plans/pvs.md "Bake" 5): no
+# multiply-add may be fused, so the CPU and GPU results agree bit for bit.
 # Clang fuses by default (-ffp-contract=on, also clang-cl under /fp:precise)
 # and GCC too (-ffp-contract=fast); MSVC cl does not without /fp:contract.
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
@@ -167,6 +169,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         set(_erhe_no_fp_contract "-ffp-contract=off")
     endif ()
     set_source_files_properties(
+        erhe_scene_renderer/cull_lanes.cpp
         erhe_scene_renderer/light_cluster.cpp
         erhe_scene_renderer/pvs_disocclusion.cpp
         PROPERTIES COMPILE_OPTIONS "${_erhe_no_fp_contract}"

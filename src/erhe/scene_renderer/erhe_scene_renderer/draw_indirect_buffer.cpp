@@ -258,7 +258,8 @@ auto Draw_indirect_buffer::update(
     const std::size_t                   begin,
     const std::size_t                   end,
     const std::span<const std::uint8_t> entry_passes,
-    const Draw_record_layout            record_layout
+    const Draw_record_layout            record_layout,
+    const Draw_list_lod_levels* const   lod_levels
 ) -> Draw_indirect_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -271,6 +272,7 @@ auto Draw_indirect_buffer::update(
     ERHE_VERIFY(begin <= end);
     ERHE_VERIFY(end <= draw_list.entries.size());
     ERHE_VERIFY(entry_passes.size() == draw_list.entries.size());
+    ERHE_VERIFY((lod_levels == nullptr) || (lod_levels->level_words.size() >= draw_list.entries.size()));
     const std::size_t                 max_draw_count = end - begin;
     const std::size_t                 entry_size     = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
     const std::size_t                 max_byte_count = max_draw_count * entry_size;
@@ -286,6 +288,14 @@ auto Draw_indirect_buffer::update(
             continue;
         }
         uint32_t index_count = entry.index_count;
+        uint32_t first_index = entry.first_index;
+        if ((lod_levels != nullptr) && (entry.lod_table_index != lod_table_index_none)) {
+            const uint32_t    level = (lod_levels->level_words[i] >> lod_levels->nibble_shift) & 0xfu;
+            const std::size_t row   = static_cast<std::size_t>(entry.lod_table_index) + level;
+            ERHE_VERIFY(row < lod_levels->lod_table.size());
+            index_count = lod_levels->lod_table[row].x;
+            first_index = lod_levels->lod_table[row].y;
+        }
         if (m_max_index_count_enable) {
             index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
         }
@@ -297,7 +307,7 @@ auto Draw_indirect_buffer::update(
         const erhe::graphics::Draw_indexed_primitives_indirect_command draw_command{
             index_count,
             instance_count,
-            entry.first_index,
+            first_index,
             entry.base_vertex,
             first_instance
         };

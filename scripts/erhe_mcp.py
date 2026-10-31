@@ -5,6 +5,10 @@ Tool results arrive as a text content block whose text is a JSON document;
 McpClient.call() unwraps and parses it.
 """
 
+# The annotations below use PEP 604 unions, which Python 3.9 (the macOS
+# system python3) evaluates only as postponed annotations.
+from __future__ import annotations
+
 import json
 import math
 import os

@@ -1,9 +1,12 @@
 #include "erhe_scene_renderer/cull_lanes.hpp"
 
+#include "erhe_scene/lod.hpp"
 #include "erhe_scene/pvs_database.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <cmath>
 
 namespace erhe::scene_renderer::cull_lanes {
@@ -238,6 +241,96 @@ auto pvs_lanes(
         }
     }
     return tested;
+}
+
+auto get_lod_template_level(const uint32_t lod_word) -> uint32_t
+{
+    const Lod_word_fields fields = decode_lod_word(lod_word);
+    if ((fields.level_count == 0) || (fields.mode != static_cast<uint32_t>(erhe::scene::Lod_mode::forced))) {
+        return 0;
+    }
+    // make_lod_word() stored max_level >= min_level.
+    const uint32_t level = std::clamp(fields.forced_level, fields.min_level, fields.max_level);
+    return std::min(level, fields.level_count - 1u);
+}
+
+auto select_lod_level(
+    const Lod_lane_view& view,
+    const uint32_t       lod_word,
+    const float* const   lod_errors,
+    const float          max_axis_scale,
+    const float          distance2,
+    const uint32_t       unbounded
+) -> uint32_t
+{
+    const Lod_word_fields fields = decode_lod_word(lod_word);
+    if (fields.level_count == 0) {
+        return 0;
+    }
+    if ((fields.mode != static_cast<uint32_t>(erhe::scene::Lod_mode::automatic)) || (unbounded != 0u)) {
+        return get_lod_template_level(lod_word);
+    }
+    // Written so a precise GLSL port in cull_classify.comp evaluates the same
+    // expressions in the same order (doc/plans/lod_gpu_selection.md
+    // section 2, step 2b).
+    const float k   = max_axis_scale * view.projection_scale;
+    const float d2  = (view.projection == Lod_projection::orthographic) ? 1.0f : distance2;
+    const float rhs = view.threshold2 * d2;
+    // Errors grow strictly along a chain, so the passing levels are a
+    // prefix; the selected level is its last.
+    uint32_t selected = 0;
+    for (uint32_t level = 1; level < fields.level_count; ++level) {
+        const float ek  = lod_errors[level] * k;
+        const float lhs = ek * ek;
+        if ((lhs <= rhs) && (selected == (level - 1u))) {
+            selected = level;
+        }
+    }
+    int32_t level = static_cast<int32_t>(selected) + fields.bias + view.global_bias;
+    level = std::max(level, static_cast<int32_t>(fields.min_level));
+    level = std::min(level, static_cast<int32_t>(fields.max_level));
+    level = std::clamp(level, 0, static_cast<int32_t>(fields.level_count) - 1);
+    return static_cast<uint32_t>(level);
+}
+
+void lod_lanes(
+    const Lod_lane_view&                   view,
+    const Draw_list_bounds&                bounds,
+    const std::span<const Draw_list_entry> entries,
+    const std::span<const glm::uvec4>      lod_table,
+    const std::size_t                      count,
+    float* const                           gap,
+    float* const                           distance2,
+    uint32_t* const                        words,
+    const uint32_t                         nibble_shift
+)
+{
+    ERHE_VERIFY(entries.size() >= count);
+    ERHE_VERIFY(bounds.max_axis_scale.size() >= count);
+    ERHE_VERIFY(nibble_shift <= 28u);
+    // The squared distance from the view origin to each box: the range
+    // sphere test's per-axis gaps (sphere_axis_lanes()), with the origin as
+    // the sphere center.
+    std::fill(distance2, distance2 + count, 0.0f);
+    sphere_axis_lanes(bounds.center_x.data(), bounds.extent_x.data(), view.origin.x, count, gap, distance2);
+    sphere_axis_lanes(bounds.center_y.data(), bounds.extent_y.data(), view.origin.y, count, gap, distance2);
+    sphere_axis_lanes(bounds.center_z.data(), bounds.extent_z.data(), view.origin.z, count, gap, distance2);
+    const float* const extent_x       = bounds.extent_x.data();
+    const float* const max_axis_scale = bounds.max_axis_scale.data();
+    std::array<float, 16> errors{};
+    for (std::size_t i = 0; i < count; ++i) {
+        const Draw_list_entry& entry = entries[i];
+        uint32_t level = 0;
+        if (entry.lod_table_index != lod_table_index_none) {
+            const uint32_t level_count = decode_lod_word(entry.lod_word).level_count;
+            ERHE_VERIFY((static_cast<std::size_t>(entry.lod_table_index) + level_count) <= lod_table.size());
+            for (uint32_t l = 0; l < level_count; ++l) {
+                errors[l] = std::bit_cast<float>(lod_table[entry.lod_table_index + l].z);
+            }
+            level = select_lod_level(view, entry.lod_word, errors.data(), max_axis_scale[i], distance2[i], Draw_list_bounds::get_unbounded_flag(extent_x[i]));
+        }
+        words[i] |= (level & 0xfu) << nibble_shift;
+    }
 }
 
 auto reaches_view(const Cull_view_tests& view, const Draw_list_bounds& bounds, View_reach_scratch& scratch) -> bool
