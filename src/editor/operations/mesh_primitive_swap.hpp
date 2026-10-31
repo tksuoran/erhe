@@ -1,9 +1,11 @@
 #pragma once
 
+#include "erhe_primitive/lod.hpp"
 #include "erhe_scene/mesh.hpp"
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace erhe::geometry  { class Geometry; }
@@ -35,5 +37,17 @@ void share_rebuilt_primitive(
     const std::shared_ptr<erhe::primitive::Primitive>& new_primitive,
     const std::function<void(erhe::scene::Mesh&)>&     after_swap = {}
 );
+
+// The LOD request (Primitive::lod_settings) of the mesh's primitive built from
+// `geometry`, for an edit that rebuilds that primitive as a new Primitive: the
+// new one takes the request over before it is built, so its build (or the
+// re-optimization after the edit) regenerates the chain
+// (doc/erhe/meshoptimizer_integration.md "Level of detail"). nullopt when no
+// primitive of the mesh is built from the geometry or it has no request. The
+// caller holds the item host mutex.
+[[nodiscard]] auto get_geometry_lod_settings(
+    const erhe::scene::Mesh&        mesh,
+    const erhe::geometry::Geometry* geometry
+) -> std::optional<erhe::primitive::Lod_settings>;
 
 } // namespace editor

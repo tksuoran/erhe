@@ -1910,6 +1910,7 @@ auto Mesh_component_selection_tool::perform_loop_cut(
 
     const erhe::primitive::Build_info           build_info      = make_rebuild_build_info(*m_context.mesh_memory, *after_geometry);
     std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
+    after_primitive->lod_settings = before_mesh_primitive.primitive->lod_settings; // the edit keeps the LOD request
     const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, before_mesh_primitive.primitive->render_shape->get_normal_style());
     const bool raytrace_ok   = after_primitive->make_raytrace();
     if (!renderable_ok || !raytrace_ok) {
@@ -2868,6 +2869,7 @@ auto Mesh_component_selection_tool::commit_knife_cut(
 
     const erhe::primitive::Build_info           build_info      = make_rebuild_build_info(*m_context.mesh_memory, *destination);
     std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(destination);
+    after_primitive->lod_settings = before_mesh_primitive.primitive->lod_settings; // the edit keeps the LOD request
     const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, before_mesh_primitive.primitive->render_shape->get_normal_style());
     const bool raytrace_ok   = after_primitive->make_raytrace();
     if (!renderable_ok || !raytrace_ok) {
@@ -3088,6 +3090,7 @@ auto Mesh_component_selection_tool::perform_inset(
 
     const erhe::primitive::Build_info           build_info      = make_rebuild_build_info(*m_context.mesh_memory, *after_geometry);
     std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
+    after_primitive->lod_settings = before_mesh_primitive.primitive->lod_settings; // the edit keeps the LOD request
     const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, before_mesh_primitive.primitive->render_shape->get_normal_style());
     const bool raytrace_ok   = after_primitive->make_raytrace();
     if (!renderable_ok || !raytrace_ok) {
@@ -3575,6 +3578,7 @@ auto Mesh_component_selection_tool::perform_bevel(
 
     const erhe::primitive::Build_info           build_info      = make_rebuild_build_info(*m_context.mesh_memory, *after_geometry);
     std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
+    after_primitive->lod_settings = before_mesh_primitive.primitive->lod_settings; // the edit keeps the LOD request
     const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, before_mesh_primitive.primitive->render_shape->get_normal_style());
     const bool raytrace_ok   = after_primitive->make_raytrace();
     if (!renderable_ok || !raytrace_ok) {

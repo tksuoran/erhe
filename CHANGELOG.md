@@ -46,6 +46,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   key carries a debug mode). `SHADER_DEBUG != 0` no longer counts as reading
   the per-pass record fields: `standard.vert` / `standard.frag` drop the
   unread `v_line_width` varying.
+- `erhe::primitive`: `Primitive::make_prepared_optimized_render_shape()`: a
+  new optimized variant of a prepared primitive with an optional LOD chain,
+  repacked from the core soup, returned for the caller to publish.
 - `erhe::primitive`: mesh level of detail (`lod.hpp`): `Lod_settings` with
   `Lod_attributes`, `Lod_border`, `Lod_seams`, `Lod_fallback`; `Lod_level`,
   `Lod_chain` and `max_lod_levels`; `Lod_vertex_input`, `Lod_vertex_data`,

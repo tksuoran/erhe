@@ -329,14 +329,10 @@ doc/editor (window, properties).
 ### Step 1: LOD chain generation in erhe::primitive
 
 Done; described in `doc/erhe/meshoptimizer_integration.md` "Level of
-detail". Carried to step 3: the edit operations build a new `Primitive` for
-the edited mesh, and that `Primitive` takes over the old one's
-`lod_settings` once generation is reachable from the editor. Carried to
-step 2: `Buffer_mesh::index_buffer_range.count` of an optimized mesh with a
-chain covers every level; check that no consumer reads it as the fill count
-(the draw paths read `triangle_fill_indices`). The MCP `get_memory_usage`
-`lod` section has not been exercised at runtime yet (no caller sets
-`lod_settings` before step 3).
+detail". `Buffer_mesh::index_buffer_range.count` of an optimized mesh with
+a chain covers every level; every draw, BLAS and lightmap consumer reads
+`triangle_fill_indices`, and only the Properties "Indices" row and the MCP
+buffer dump report the whole allocation, which is what they describe.
 
 ### Step 2: Lod properties and forced level
 
@@ -352,6 +348,27 @@ chain covers every level; check that no consumer reads it as the fill count
   (`check_pvs_dropped_columns`).
 
 ### Step 3: editor LOD window (generation for the selection)
+
+The generation core is built ahead of step 2 as step 2a; the window and the
+level slider remain. Built (described in
+`doc/erhe/meshoptimizer_integration.md` "Level of detail"):
+`request_lod_generation()` (one deferred finalize task per mesh, each
+distinct `Primitive` once; geometry path re-optimized, prepared and stored
+paths repacked from the core soup), the MCP tools `generate_lods` and
+`get_lod_info`, and the edit operations handing `lod_settings` to the
+`Primitive` they build.
+
+Found while verifying step 2a, not yet investigated:
+- After an in-place edit (vertex move, recalculate normals) the
+  re-optimization welds nothing (torus 8192 -> 8192 vertices, against
+  8192 -> 2145 at creation); not checked whether this happens without LOD.
+- Meshes with per-facet texture coordinates
+  (`generate_facet_texture_coordinates`, e.g. a Catmull-Clark result) get no
+  chain with `Lod_seams::keep`: every edge is a seam. `permissive` gives 4
+  levels.
+- A hold that begins between the finalize snapshot and its commit still lets
+  a geometry-path rebuild swap in the base built before the edit (the edit
+  re-optimization has the same exposure; the variant publish is refused).
 
 - New ImGui window `LOD` (`src/editor/windows/lod_window.*`): `Lod_settings`
   widgets, a `Generate for selection` button (a worker task per unique

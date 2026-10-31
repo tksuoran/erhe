@@ -790,6 +790,7 @@ void Mesh_component_transform::commit(App_context& context)
                 finalize_extrude_normals(*group.geometry);
             }
             std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(group.geometry);
+            after_primitive->lod_settings = primitive.lod_settings; // the edit keeps the LOD request
             const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, primitive.render_shape->get_normal_style());
             const bool raytrace_ok   = after_primitive->make_raytrace();
             ERHE_VERIFY(renderable_ok && raytrace_ok);
@@ -1298,6 +1299,7 @@ void Mesh_component_transform::fork_group(App_context& context, Group& group)
 
     const erhe::primitive::Build_info build_info = make_rebuild_build_info(*context.mesh_memory, *fork_geometry);
     std::shared_ptr<erhe::primitive::Primitive> fork_primitive = std::make_shared<erhe::primitive::Primitive>(fork_geometry);
+    fork_primitive->lod_settings = shared_mesh_primitive.primitive->lod_settings; // the fork keeps the LOD request
     const bool renderable_ok = fork_primitive->make_renderable_mesh(build_info, normal_style);
     const bool raytrace_ok   = fork_primitive->make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);
@@ -1378,6 +1380,7 @@ void Mesh_component_transform::extrude_group(App_context& context, Group& group)
     const erhe::primitive::Normal_style normal_style = original_mesh_primitive.primitive->render_shape->get_normal_style();
     const erhe::primitive::Build_info   build_info   = make_rebuild_build_info(*context.mesh_memory, *extrude.geometry);
     std::shared_ptr<erhe::primitive::Primitive> extrude_primitive = std::make_shared<erhe::primitive::Primitive>(extrude.geometry);
+    extrude_primitive->lod_settings = original_mesh_primitive.primitive->lod_settings; // the edit keeps the LOD request
     const bool renderable_ok = extrude_primitive->make_renderable_mesh(build_info, normal_style);
     const bool raytrace_ok   = extrude_primitive->make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);

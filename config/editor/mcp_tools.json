@@ -10342,6 +10342,117 @@
     "name": "get_memory_usage"
   },
   {
+    "description": "Generate mesh level of detail chains on request (doc/erhe/meshoptimizer_integration.md 'Level of detail', doc/plans/lod.md): sets Primitive::lod_settings of every distinct primitive of the target meshes (a primitive shared by several meshes once) and queues a deferred finalize task that builds a new optimized variant with the chain on a worker and publishes it on the main thread, re-registering every mesh sharing the primitive. Geometry-path primitives re-optimize from their Geometry; prepared primitives (prepared or stored-stream loads) repack their core soup, read back from the file when released. Level 0 keeps the bytes of the variant it replaces; drawing reads level 0 only (no forced or automatic level yet). A primitive under a live-edit optimization hold keeps the settings and gets its chain from the finalize after the edit; edit operations hand the settings to the primitive they build. Asynchronous: poll get_async_status until idle, then read get_lod_info. clear true removes the request and publishes a variant without chain. Reply: mode, settings, mesh_count, primitive_count, queued_count, task_count, unchanged_count (same settings, variant live: nothing queued), held_count, not_optimized_count (mesh optimization off: settings set, no variant to build).",
+    "inputSchema": {
+      "properties": {
+        "clear": {
+          "description": "true: remove the LOD request and rebuild without chain (not with settings)",
+          "type": "boolean"
+        },
+        "node_id": {
+          "description": "Single target node id",
+          "type": "integer"
+        },
+        "node_ids": {
+          "description": "Target node ids (mesh nodes)",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_name": {
+          "description": "Single target node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene of the nodes (required)",
+          "type": "string"
+        },
+        "settings": {
+          "description": "Lod_settings fields; omitted fields take the defaults (level_count 6, ratio 0.5, attributes normals_and_colors, normal_weight 1, color_weight 1, border locked, seams keep, fallback none, normal_merge_angle 20)",
+          "properties": {
+            "attributes": {
+              "enum": [
+                "positions_only",
+                "normals_and_colors"
+              ],
+              "type": "string"
+            },
+            "border": {
+              "enum": [
+                "free",
+                "locked"
+              ],
+              "type": "string"
+            },
+            "color_weight": {
+              "type": "number"
+            },
+            "fallback": {
+              "enum": [
+                "none",
+                "sloppy"
+              ],
+              "type": "string"
+            },
+            "level_count": {
+              "description": "Levels including level 0, 1..8",
+              "type": "integer"
+            },
+            "normal_merge_angle": {
+              "description": "Degrees, [0, 180]",
+              "type": "number"
+            },
+            "normal_weight": {
+              "type": "number"
+            },
+            "ratio": {
+              "description": "Target index count of a level relative to the previous one, (0, 1)",
+              "type": "number"
+            },
+            "seams": {
+              "enum": [
+                "keep",
+                "permissive"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "generate_lods"
+  },
+  {
+    "description": "LOD state of a mesh node's primitives (doc/erhe/meshoptimizer_integration.md 'Level of detail'): per primitive primitive_index, name, prepared, has_optimized_variant, optimization_hold, lod_settings (the request, null when unset), has_chain, generation_seconds, and levels [{level, first_index, index_count, triangle_count, error}] of the optimized variant's chain (level 0 is the fill range, error 0; errors are object space and strictly increasing).",
+    "inputSchema": {
+      "properties": {
+        "node_id": {
+          "description": "Mesh node id",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Mesh node name",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Scene of the nodes (required)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_lod_info"
+  },
+  {
     "description": "Give back the memory of undone glTF loads that the automatic drop declined. Releases the payload of the load that would be redone first, and DISCARDS every redo entry recorded after it - those entries hold references to the released content, so they cannot survive it. Redo entries recorded before the load are untouched. Redoing the released load re-reads the file. Reports released_count and discarded_count. See doc/reloadable-asset-loads.md.",
     "inputSchema": {
       "properties": {},

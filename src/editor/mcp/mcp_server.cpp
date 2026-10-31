@@ -850,6 +850,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_transform_state",            &Mcp_server::query_transform_state                },
         { "get_editor_references",          &Mcp_server::query_editor_references              },
         { "get_memory_usage",               &Mcp_server::query_memory_usage                   },
+        { "generate_lods",                  &Mcp_server::action_generate_lods                 },
+        { "get_lod_info",                   &Mcp_server::query_lod_info                       },
         { "free_undone_loads",              &Mcp_server::action_free_undone_loads             },
         { "debug_set_item_tree_hover",      &Mcp_server::action_debug_set_item_tree_hover     },
         { "debug_set_transform_hover",      &Mcp_server::action_debug_set_transform_hover     },
