@@ -1194,10 +1194,19 @@ mesh_count, primitive_count, queued_count, task_count, unchanged_count,
 held_count, not_optimized_count}`; poll `get_async_status` until `idle`.
 
 `get_lod_info` takes `scene_name` and `node_id` / `node_name`. Returns
-`{node, node_id, primitives}`, per primitive `{primitive_index, name,
-prepared, has_optimized_variant, optimization_hold, lod_settings (null when
-unset), has_chain, generation_seconds, levels}`, each level `{level,
-first_index, index_count, triangle_count, error}`.
+`{node, node_id, lod, draw_lists, primitives}`. `lod` is the mesh's
+effective `Lod` record `{mode, forced_level, bias, min_level, max_level,
+level}` (`erhe::scene::resolve_lod`; `level` is the forced level before the
+chain clamp). `draw_lists` (null without draw lists) is `{registered, lod,
+entries}`: the record the draw lists hold and, per entry, `{mesh_primitive_index,
+purpose, variant, first_index, index_count, triangle_count, level}`, where
+`level` is the chain level whose range the entry copied at registration (-1
+when none matches). Per primitive `{primitive_index, name, prepared,
+has_optimized_variant, optimization_hold, lod_settings (null when unset),
+has_chain, generation_seconds, levels}`, each level `{level, first_index,
+index_count, triangle_count, error}`. A level is forced with the property
+tools: `set_item_property` `Lod.apply_lod` true, `Lod.mode` `Forced` and
+`Lod.forced_level` on the mesh node or on a node above it.
 
 ## Physics Tools
 

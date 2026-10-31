@@ -2671,6 +2671,43 @@ names (D14), as the `Ik.*` values do. Tests: `test_ik_properties.cpp`
 (`editor_ik_solver_tests`) and `test_bone_pose.cpp` (`editor_rig_tests`),
 both of which compile `rig_properties.cpp`.
 
+### 4.29 Lod (attached to Node)
+
+`erhe::scene::Lod` (`erhe_scene/lod.hpp`) registers mesh level of detail
+control as an attached value group of the node (section 4.23), owner type
+`Lod`, holder type `erhe::scene::Node`, UI group `Level of Detail`,
+qualified `Lod.apply_lod` .. `Lod.max_level`. Like `Layout` it is a
+registration holder of `erhe::scene` with static members only, not a
+`Dependency_object`, so its owner type sits directly under the root; the
+group lives in `erhe::scene` because its node system reaches the draw lists
+through a `Scene_host` virtual.
+
+`Lod.apply_lod` (bool, default `false`, does not inherit) is the group's KEY
+property: the node carries a level of detail opinion exactly while it is true.
+The values - `Lod.mode` (enumeration `Lod_mode`, `automatic` | `forced` |
+`off`, default `automatic`, `Enum_info` `c_lod_mode_enum_info` next to it),
+`Lod.forced_level` (int, default 0), `Lod.bias` (int, default 0),
+`Lod.min_level` and `Lod.max_level` (int, defaults 0 and 7) - take
+`attached_group_visible_when(Lod.apply_lod)` as their `visible_when` and all
+inherit, so a group node carrying the key applies them to the meshes of its
+subtree, and a mesh's own local value overrides an inherited one. Authoring a
+value does not set the key: a node or a Style may hold values for the
+carriers below it, as with `Layout`.
+
+Readers go through `read_lod(const erhe::scene::Node&) ->
+std::optional<Lod_data>` (the node's own effective values when it carries the
+group) and `carries_lod(node)`; `resolve_lod(node)` is the record that applies
+to a mesh: its own effective values when it or an ancestor carries the key,
+the default record otherwise. `get_forced_lod_level(Lod_data)` is the level a
+record asks for before automatic selection exists (`clamp(forced_level,
+min_level, max_level)` under `forced`, 0 otherwise). Every value's
+`property_changed` is `erhe::scene::node_system_property_changed`: the
+runtime state the group implies - each mesh's effective record, mirrored into
+the draw lists - is owned by `erhe::scene::Lod_system`, one per `Scene`
+(`doc/erhe/scene.md` "Level of detail control"). The values ride the node's
+`ERHE_node` `properties` map by their qualified names (D14), so they survive a
+glTF round trip. Tests: `src/erhe/scene/test/test_lod_system.cpp`.
+
 ## 5. Out of scope
 
 Kept out deliberately, as they are the WPF parts that serve XAML UI rather

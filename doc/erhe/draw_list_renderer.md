@@ -298,6 +298,30 @@ Registration:
   stays in sync. The preview roots (material / brush previews) and the tools
   root deliberately have none: they are tiny scenes. Their passes take the
   fallback through the null check in the routing rule.
+- R1c (level of detail): an entry's `(first_index, index_count)` is the
+  index range of the level its mesh draws, copied at registration, so both
+  command writers (the CPU writer and `cull_compact.comp`, which read the
+  entry's command template) draw it with no selection code
+  (`doc/plans/lod.md` step 2). `Draw_list_scene` keeps each mesh's
+  `erhe::scene::Lod_data` record (`enqueue_set_lod()`, raised by
+  `Scene_host::on_mesh_lod_changed` from `erhe::scene::Lod_system`,
+  `doc/erhe/scene.md` "Level of detail control") in a map keyed by the mesh,
+  independent of the object, so a re-registration keeps it; the unregister
+  of the mesh (it left the host) drops it. `add_entries()` takes
+  `get_forced_lod_level(record)` - the forced level clamped to the record's
+  min / max, 0 under `automatic` and `off` - and, for an entry resolved to the
+  optimized variant whose `Buffer_mesh::lod_chain` is not empty, the range of
+  that chain level clamped to the chain; level 0, a variant without chain and
+  the base variant draw the fill range as before. A record change whose forced
+  level moved re-registers the object at the flush (a property edit: the list
+  serial moves, so a list copy, a GPU bounds rewrite and a shadow cache
+  content change follow; the entries look their PVS columns up again, so
+  `check_pvs_dropped_columns()` sees no dropped column); a change that keeps
+  the level (bias, or min / max that do not clamp it) only stores the record.
+  A chain published later re-registers every mesh sharing the primitive
+  (R12), which applies the stored level then. Color and shadow entries take
+  the same level. The bucket fallback path draws level 0 (it reads the
+  variant's fill range).
 - R2: `unregister` function that removes all entries belonging to an object.
   Removal does not invalidate the draw lists' suitability for hot-path
   iteration (compaction is an implementation choice; stale entries are never

@@ -183,6 +183,26 @@ public:
     return result;
 }
 
+// The index range an entry draws for the requested level: the level of the
+// optimized variant's LOD chain, clamped to the chain. Level 0, a variant
+// without chain and the base variant (which never has one) draw the
+// classification's fill range, exactly as without LOD. A level never changes
+// base_vertex, the vertex format or the quantization affines, so the range is
+// the only thing that moves (doc/erhe/meshoptimizer_integration.md "Level of
+// detail").
+[[nodiscard]] auto select_lod_index_range(const Primitive_classification& classification, const std::size_t level) -> erhe::primitive::Index_range
+{
+    if ((level == 0) || (classification.variant != erhe::primitive::Mesh_variant::optimized) || (classification.buffer_mesh == nullptr)) {
+        return classification.index_range;
+    }
+    const erhe::primitive::Lod_chain& chain = classification.buffer_mesh->lod_chain;
+    if (chain.is_empty()) {
+        return classification.index_range;
+    }
+    const std::size_t clamped = std::min(level, chain.level_count - 1);
+    return chain.levels[clamped].index_range;
+}
+
 [[nodiscard]] auto material_identity_hash(const erhe::primitive::Material* material) -> uint64_t
 {
     // Material-derived Shader_key components only (no vertex format, no
@@ -396,6 +416,11 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
         log_draw_list->error("Mesh '{}' has {} primitives, exceeds Draw_list_entry limit of 65535; not registered", mesh->get_name(), primitives.size());
         return;
     }
+    // The level every entry of the mesh draws until automatic selection
+    // exists: the forced level of its Lod record, 0 otherwise (doc/plans/lod.md
+    // step 2). Read here, at registration, so the draw path reads only the
+    // index range copied into the entry.
+    const std::size_t forced_lod_level = erhe::scene::get_forced_lod_level(get_mesh_lod(mesh));
     for (std::size_t i = 0, count = primitives.size(); i < count; ++i) {
         for (const Draw_purpose purpose : purposes) {
             const Primitive_classification classification = classify_primitive(
@@ -420,13 +445,14 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
             Draw_list&     draw_list       = edit_draw_list(draw_list_index);
 
             const erhe::primitive::Buffer_mesh& buffer_mesh = *classification.buffer_mesh;
+            const erhe::primitive::Index_range  index_range = select_lod_index_range(classification, forced_lod_level);
             Draw_list_entry entry{};
             entry.object_index         = object_index;
             entry.mesh_primitive_index = static_cast<uint16_t>(i);
             entry.variant              = classification.variant;
             entry.flag_bits            = object.flag_bits;
-            entry.index_count          = static_cast<uint32_t>(classification.index_range.index_count);
-            entry.first_index          = static_cast<uint32_t>(classification.index_range.first_index) + buffer_mesh.base_index();
+            entry.index_count          = static_cast<uint32_t>(index_range.index_count);
+            entry.first_index          = static_cast<uint32_t>(index_range.first_index) + buffer_mesh.base_index();
             entry.base_vertex          = (primitive_mode == erhe::primitive::Primitive_mode::solid_wireframe)
                 ? buffer_mesh.expanded_base_vertex()
                 : buffer_mesh.base_vertex();
@@ -1495,6 +1521,40 @@ auto Draw_list_scene::get_pending_count() const -> std::size_t
     return m_pending.size();
 }
 
+void Draw_list_scene::enqueue_set_lod(const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::scene::Lod_data& lod)
+{
+    const std::lock_guard<std::mutex> lock{m_pending_mutex};
+    m_pending.push_back(Pending_op{.kind = Pending_op::Kind::set_lod, .mesh = mesh, .lod = lod});
+}
+
+auto Draw_list_scene::get_mesh_lod(const erhe::scene::Mesh* mesh) const -> erhe::scene::Lod_data
+{
+    const std::unordered_map<const erhe::scene::Mesh*, erhe::scene::Lod_data>::const_iterator i = m_lod_by_mesh.find(mesh);
+    return (i != m_lod_by_mesh.end()) ? i->second : erhe::scene::Lod_data{};
+}
+
+void Draw_list_scene::apply_lod(const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::scene::Lod_data& lod)
+{
+    const std::size_t old_level = erhe::scene::get_forced_lod_level(get_mesh_lod(mesh.get()));
+    const std::size_t new_level = erhe::scene::get_forced_lod_level(lod);
+    if (lod == erhe::scene::Lod_data{}) {
+        m_lod_by_mesh.erase(mesh.get());
+    } else {
+        m_lod_by_mesh.insert_or_assign(mesh.get(), lod);
+    }
+    if (old_level == new_level) {
+        return; // the entries already draw this level (a bias or min / max edit)
+    }
+    // A property edit, so the full re-register is the right cost: the list
+    // serial moves (a list copy, a GPU bounds rewrite, a shadow cache content
+    // change) and the entries keep their PVS columns, which the registration
+    // looks up again.
+    const Draw_list_object_id id = find_object(mesh.get());
+    if (id.is_valid()) {
+        reregister_object(id);
+    }
+}
+
 void Draw_list_scene::enqueue_material_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     const std::lock_guard<std::mutex> lock{m_pending_mutex};
@@ -1550,6 +1610,9 @@ void Draw_list_scene::flush_pending()
             }
             case Pending_op::Kind::unregister: {
                 unregister_object(op.mesh.get());
+                // The mesh left the host: its Lod record goes with it, and a
+                // re-entry hands it back (Scene_host::on_mesh_lod_changed).
+                m_lod_by_mesh.erase(op.mesh.get());
                 break;
             }
             case Pending_op::Kind::reregister: {
@@ -1624,6 +1687,10 @@ void Draw_list_scene::flush_pending()
             }
             case Pending_op::Kind::set_pvs_database: {
                 set_pvs_database(op.pvs_database);
+                break;
+            }
+            case Pending_op::Kind::set_lod: {
+                apply_lod(op.mesh, op.lod);
                 break;
             }
             default: {

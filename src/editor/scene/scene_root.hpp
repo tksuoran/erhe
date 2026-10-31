@@ -283,6 +283,7 @@ public:
     void on_mesh_transform_changed     (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_display_color_changed (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
+    void on_mesh_lod_changed           (const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::scene::Lod_data& lod) override;
     void on_mesh_bounds_changed        (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_light_changed          (const std::shared_ptr<erhe::scene::Light>& light) override;
 

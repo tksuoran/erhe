@@ -347,8 +347,9 @@ geometry operations generate facet texture coordinates) have seams at every
 vertex and simplify only with `Lod_seams::permissive`. The MCP tools
 `generate_lods` and `get_lod_info` drive and inspect it
 (`doc/agents/mcp_server_usage.md`); completion is `get_async_status` idle.
-Drawing reads level 0 only until the forced and automatic selection steps
-(`doc/plans/lod.md` steps 2 and 4).
+Drawing reads level 0 unless the mesh's `Lod` properties force a level
+(`doc/erhe/draw_list_renderer.md` R1c); automatic selection is
+`doc/plans/lod.md` step 4.
 
 **Paths.**
 

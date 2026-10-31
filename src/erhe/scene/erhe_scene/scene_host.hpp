@@ -9,6 +9,7 @@ namespace erhe::scene {
 
 class Camera;
 class Light;
+class Lod_data;
 class Mesh;
 class Mesh_raytrace;
 class Xformable; using Node = Xformable;
@@ -69,6 +70,14 @@ public:
     // primitives with it - it needs the buffer sinks, which is why the mesh
     // cannot do it itself.
     virtual void on_mesh_display_color_changed  (const std::shared_ptr<Mesh>& mesh) = 0;
+    // on_mesh_lod_changed: the effective `Lod` record of the mesh changed
+    // (Lod_system, doc/erhe/scene.md "Level of detail control"); `lod` is the
+    // new record, the default record when no node at or above the mesh
+    // carries the group. Raised from the Lod_system change sites - a property
+    // edit, or the mesh entering the scene, which may be a worker thread's
+    // attach - so implementations only enqueue. The record is kept until the
+    // mesh leaves the host (unregister_mesh); a re-entry raises it again.
+    virtual void on_mesh_lod_changed            (const std::shared_ptr<Mesh>& mesh, const Lod_data& lod) = 0;
 
     // Light change notification (Light::notify_changed()): a property that
     // decides how the light is shaded / shadow-mapped changed (type,

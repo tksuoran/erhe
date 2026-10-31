@@ -13,7 +13,9 @@
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/lod.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/lod.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 
@@ -33,6 +35,7 @@ using namespace mcp_server_detail;
 
 namespace {
 
+constexpr const char* c_lod_mode_names      [] = { "automatic", "forced", "off" };
 constexpr const char* c_lod_attributes_names[] = { "positions_only", "normals_and_colors" };
 constexpr const char* c_lod_border_names    [] = { "free", "locked" };
 constexpr const char* c_lod_seams_names     [] = { "keep", "permissive" };
@@ -146,6 +149,43 @@ template <std::size_t N>
     return settings;
 }
 
+[[nodiscard]] auto lod_data_to_json(const erhe::scene::Lod_data& data) -> json
+{
+    return json{
+        {"mode",         c_lod_mode_names[static_cast<std::size_t>(data.mode)]},
+        {"forced_level", data.forced_level},
+        {"bias",         data.bias},
+        {"min_level",    data.min_level},
+        {"max_level",    data.max_level},
+        {"level",        erhe::scene::get_forced_lod_level(data)}
+    };
+}
+
+// The level of `buffer_mesh`'s chain whose index range an entry draws:
+// matched by its range, since the entry holds the copy registration made.
+// -1 when no level matches (the entry was registered from another variant or
+// from a buffer mesh published since).
+[[nodiscard]] auto find_entry_level(
+    const erhe::scene_renderer::Draw_list_entry& entry,
+    const erhe::primitive::Buffer_mesh&          buffer_mesh
+) -> int
+{
+    const erhe::primitive::Lod_chain& chain = buffer_mesh.lod_chain;
+    const std::size_t level_count = chain.is_empty() ? std::size_t{1} : chain.level_count;
+    for (std::size_t level = 0; level < level_count; ++level) {
+        const erhe::primitive::Index_range range = chain.is_empty()
+            ? buffer_mesh.triangle_fill_indices
+            : chain.levels[level].index_range;
+        if (
+            (entry.index_count == static_cast<uint32_t>(range.index_count)) &&
+            (entry.first_index == (static_cast<uint32_t>(range.first_index) + buffer_mesh.base_index()))
+        ) {
+            return static_cast<int>(level);
+        }
+    }
+    return -1;
+}
+
 } // anonymous namespace
 
 auto Mcp_server::action_generate_lods(const json& args) -> std::string
@@ -232,6 +272,8 @@ auto Mcp_server::query_lod_info(const json& args) -> std::string
     }
 
     json primitives = json::array();
+    json lod        = json{};
+    json draw_lists = json{};
     {
         // lod_settings and optimized_render_shape are main-thread state; the
         // finalize commits write them under the item host lock.
@@ -274,10 +316,56 @@ auto Mcp_server::query_lod_info(const json& args) -> std::string
             entry["levels"]    = levels;
             primitives.push_back(entry);
         }
+
+        // The effective Lod record (erhe::scene::resolve_lod: the values of
+        // the mesh when it or an ancestor carries Lod.apply_lod) and what the
+        // draw lists hold: the record they were handed and, per entry, the
+        // chain level whose range the entry copied at registration.
+        lod = lod_data_to_json(erhe::scene::resolve_lod(*mesh));
+        const erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root->get_draw_list_scene();
+        if (draw_list_scene != nullptr) {
+            json entries = json::array();
+            const erhe::scene_renderer::Draw_list_object* const object = draw_list_scene->get_object(draw_list_scene->find_object(mesh.get()));
+            if (object != nullptr) {
+                for (const erhe::scene_renderer::Draw_list_entry_location& location : object->locations) {
+                    const erhe::scene_renderer::Draw_list&       draw_list = draw_list_scene->get_draw_lists()[location.draw_list_index];
+                    const erhe::scene_renderer::Draw_list_entry& list_entry = draw_list.entries[location.entry_index];
+                    int level = -1;
+                    if (list_entry.mesh_primitive_index < mesh_primitives.size()) {
+                        const erhe::primitive::Primitive* const primitive = mesh_primitives[list_entry.mesh_primitive_index].primitive.get();
+                        if (primitive != nullptr) {
+                            const erhe::primitive::Buffer_mesh* const buffer_mesh = primitive->get_resolved_renderable_mesh(
+                                list_entry.variant,
+                                erhe::primitive::Primitive_mode::polygon_fill
+                            ).second;
+                            if (buffer_mesh != nullptr) {
+                                level = find_entry_level(list_entry, *buffer_mesh);
+                            }
+                        }
+                    }
+                    entries.push_back({
+                        {"mesh_primitive_index", list_entry.mesh_primitive_index},
+                        {"purpose",              erhe::scene_renderer::c_str(draw_list.key.purpose)},
+                        {"variant",              erhe::primitive::c_str(list_entry.variant)},
+                        {"first_index",          list_entry.first_index},
+                        {"index_count",          list_entry.index_count},
+                        {"triangle_count",       list_entry.index_count / 3u},
+                        {"level",                level}
+                    });
+                }
+            }
+            draw_lists = json{
+                {"registered", object != nullptr},
+                {"lod",        lod_data_to_json(draw_list_scene->get_mesh_lod(mesh.get()))},
+                {"entries",    entries}
+            };
+        }
     }
     return make_json_content({
         {"node",       node->get_name()},
         {"node_id",    node->get_id()},
+        {"lod",        lod},
+        {"draw_lists", draw_lists},
         {"primitives", primitives}
     }).dump();
 }

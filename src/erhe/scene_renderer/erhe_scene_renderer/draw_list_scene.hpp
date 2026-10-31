@@ -15,6 +15,7 @@
 
 #include "erhe_graphics/indirect_count_draws.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_scene/lod.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
@@ -682,6 +683,9 @@ public:
     [[nodiscard]] auto get_exclude_unlit_from_shadows() const -> bool { return m_exclude_unlit_from_shadows; }
 
     [[nodiscard]] auto find_object    (const erhe::scene::Mesh* mesh) const -> Draw_list_object_id;
+    // The Lod record the mesh's entries were (or will be) registered with: the
+    // last one enqueue_set_lod() applied, the default record when none.
+    [[nodiscard]] auto get_mesh_lod   (const erhe::scene::Mesh* mesh) const -> erhe::scene::Lod_data;
     [[nodiscard]] auto get_object     (Draw_list_object_id id) const -> const Draw_list_object*;
     [[nodiscard]] auto get_draw_lists () const -> const std::vector<Draw_list>&;
     [[nodiscard]] auto get_object_count() const -> std::size_t;
@@ -706,6 +710,13 @@ public:
     // mesh-component drag; Scene_host::on_mesh_bounds_changed): rewrite the
     // object's entry AABBs and node extent in flush_pending(), nothing else.
     void enqueue_bounds_update(const std::shared_ptr<erhe::scene::Mesh>& mesh);
+    // The mesh's effective `Lod` record changed (Scene_host::on_mesh_lod_changed,
+    // doc/erhe/draw_list_renderer.md "Level of detail"). Applied in
+    // flush_pending(): the record is kept per mesh until the mesh is
+    // unregistered (enqueue_unregister), and a registered object whose forced
+    // level moved is re-registered, which is where its entries take the level's
+    // index range.
+    void enqueue_set_lod   (const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::scene::Lod_data& lod);
     // Main thread, prepare phase, once per frame before any draw. The caller (Scene_root)
     // holds its item_host_mutex around this call so registration never reads
     // a Buffer_mesh that a worker is replacing.
@@ -1107,12 +1118,13 @@ private:
     class Pending_op
     {
     public:
-        enum class Kind : uint8_t { rebuild_all, register_, unregister, reregister, material_update, set_flags, transform, refresh, bounds, set_pvs_database };
+        enum class Kind : uint8_t { rebuild_all, register_, unregister, reregister, material_update, set_flags, transform, refresh, bounds, set_pvs_database, set_lod };
         Kind                                             kind        {Kind::register_};
         std::shared_ptr<erhe::scene::Mesh>               mesh        {};
         Draw_mobility                                    mobility    {Draw_mobility::dynamic};
         uint64_t                                         flag_bits   {0};
         std::shared_ptr<const erhe::scene::Pvs_database> pvs_database{};
+        erhe::scene::Lod_data                            lod         {};
     };
 
     // One watched material's shader-variant identity and the change serial it
@@ -1129,6 +1141,9 @@ private:
     // Defers a full rebuild to the next flush_pending(), ahead of that
     // flush's queued ops (D1d).
     void enqueue_rebuild_all();
+    // Pending_op::Kind::set_lod: stores the record and re-registers the
+    // object when its forced level moved.
+    void apply_lod(const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::scene::Lod_data& lod);
 
     void assert_main_thread() const;
     static void assert_render_phase();
@@ -1538,6 +1553,11 @@ private:
     std::vector<Draw_list_object>                                    m_objects;
     std::vector<uint32_t>                                            m_free_object_indices;
     std::unordered_map<const erhe::scene::Mesh*, uint32_t>           m_object_index_by_mesh;
+    // The non-default Lod records of the meshes (enqueue_set_lod), read by
+    // add_entries(). Keyed independently of the objects, because a
+    // re-registration releases the object and the record outlives it; erased
+    // when the mesh is unregistered or its record returns to the default.
+    std::unordered_map<const erhe::scene::Mesh*, erhe::scene::Lod_data> m_lod_by_mesh;
     std::size_t                                                      m_alive_object_count{0};
     // Alive objects with mobility skinned (joint GPU-slot sync scans only these).
     std::vector<uint32_t>                                            m_skinned_object_indices;

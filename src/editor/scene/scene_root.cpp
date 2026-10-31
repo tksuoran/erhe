@@ -2125,6 +2125,16 @@ void Scene_root::on_mesh_bounds_changed(const std::shared_ptr<erhe::scene::Mesh>
     s_sharers.clear();
 }
 
+// Lod hook (erhe::scene::Lod_system): any thread, enqueue only (Scene_host
+// contract). The draw lists keep the record and re-register the mesh at the
+// next flush when its forced level moved.
+void Scene_root::on_mesh_lod_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::scene::Lod_data& lod)
+{
+    if (m_draw_list_scene && mesh) {
+        m_draw_list_scene->enqueue_set_lod(mesh, lod);
+    }
+}
+
 // Display color hook: any thread, enqueue only (Scene_host contract). The
 // rebuild itself is App_scenes::rebuild_display_colors(), on the main thread.
 void Scene_root::on_mesh_display_color_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)

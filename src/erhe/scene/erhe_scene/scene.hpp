@@ -4,6 +4,7 @@
 #include "erhe_item/unique_id.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_scene/layout_system.hpp"
+#include "erhe_scene/lod_system.hpp"
 
 #include <glm/glm.hpp>
 
@@ -269,6 +270,12 @@ public:
     // that draw or report a layout.
     [[nodiscard]] auto get_layout_system() const -> const Layout_system&;
 
+    // The scene's own node system for the `Lod` value group
+    // (doc/erhe/scene.md "Level of detail control"): the effective level of
+    // detail record of every mesh that resolves to a non-default one, which it
+    // mirrors into the host through Scene_host::on_mesh_lod_changed.
+    [[nodiscard]] auto get_lod_system() const -> const Lod_system&;
+
     // Scene-wide ambient light color (issues #237 / #240), a registered
     // property (doc/erhe/property_system.md section 4.20). Fed to the forward
     // renderer as the ambient term and serialized with the scene. It does not
@@ -308,9 +315,11 @@ private:
     std::vector<std::size_t>                  m_skin_use_counts;
     std::vector<std::shared_ptr<Light_layer>> m_light_layers;
     std::vector<std::shared_ptr<Camera>>      m_cameras;
-    // The scene's own node system (D2): the layout nodes it hosts. Added to
-    // m_node_systems in the constructor and removed in the destructor.
+    // The scene's own node systems (D2): the layout nodes it hosts and the
+    // level of detail records of its meshes. Added to m_node_systems in the
+    // constructor and removed in the destructor.
     Layout_system                             m_layout_system;
+    Lod_system                                m_lod_system;
 
     // Node systems and the lock taken for both mutation and dispatch. The
     // mutex is recursive because a system's callback may write another value

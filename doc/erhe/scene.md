@@ -22,6 +22,7 @@ A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see 
 - `Animation` / `Animation_sampler` / `Animation_channel` -- Keyframe animation system supporting step, linear, and cubic spline interpolation of any animatable property of any item (see "Animation playback"). `Animation` is a typed prim (`erhe::Typed`, `doc/erhe/item.md` "Prim classes") with the fixed `typeName` token `Animation`, as `Skin` is with `Skin`.
 - `Skin` -- Skeletal skinning data (joint nodes + inverse bind matrices, plus the optional glTF `skeleton` pivot node). `get_skin_transform_root()` returns the node an editor should transform to move a skinned mesh: skinning ignores the mesh node's own transform (glTF 2.0 requires it), so only a common ancestor of the joints moves the posed result. Uses `Skin_data::skeleton` when set, else the closest common ancestor of the joints. One `Skin` is shared by every `Mesh` it skins, and each of those meshes registers it with the scene, so `Scene::register_skin()` / `Scene::unregister_skin()` count the uses: `get_skins()` holds one entry per skin, the entry appears with the first skinned mesh and leaves with the last, and the returned `Skin_registry_change` tells a caller that announces the change (`Scene_root` publishes `Skin_registered_message`) to announce it once.
 - `Mesh_layer` / `Light_layer` -- Organize meshes and lights into layers with flags and IDs.
+- `Lod` -- a value group of the node itself (`lod.hpp`, doc/erhe/property_system.md section 4.29): mesh level of detail control, keyed on `Lod.apply_lod`; `Lod_system` (see "Level of detail control") mirrors each mesh's effective record into the scene host.
 - `Scene_host` -- Abstract interface for registering/unregistering scene objects.
 
 ## Prim levels
@@ -328,10 +329,11 @@ scene close releases what it holds without a `close_scene` subscription.
 A system is added to a scene with `Scene::add_node_system` and removed with
 `Scene::remove_node_system`; the list holds non-owning pointers, so the system
 is owned by whoever created it - the editor's `Scene_root` for the groups it
-serves, the `Scene` itself for a group of its own, which today is
-`Layout_system` (`layout_system.hpp`, `doc/erhe/layout.md`): the layout nodes
-of the scene with their effective container values, driven by the key property
-`Layout.type` and run once per frame by `Scene::update_layouts()`. Both
+serves, the `Scene` itself for a group of its own: `Layout_system`
+(`layout_system.hpp`, `doc/erhe/layout.md`), the layout nodes of the scene
+with their effective container values, driven by the key property
+`Layout.type` and run once per frame by `Scene::update_layouts()`; and
+`Lod_system` (`lod_system.hpp`, "Level of detail control" below). Both
 `add_node_system` and `remove_node_system` are called while no notification is
 being delivered, because a callback may write values of the same scene and
 reach the systems again on the same thread.
@@ -351,8 +353,37 @@ The scene drives a system from three change sites:
    the derived `erhe::Item_flags::active` bit moves, so the system takes the
    node's subtree out of rendering, picking and simulation with it.
 
-Tests: `src/erhe/scene/test/test_node_systems.cpp` and
-`test_layout_system.cpp`.
+Tests: `src/erhe/scene/test/test_node_systems.cpp`,
+`test_layout_system.cpp` and `test_lod_system.cpp`.
+
+## Level of detail control
+
+The `Lod` value group (`lod.hpp`, `doc/erhe/property_system.md` section 4.29)
+states how the meshes at and below a node pick their level of detail
+(`doc/plans/lod.md`): `Lod.apply_lod` is the key, and `mode` (`automatic` |
+`forced` | `off`), `forced_level`, `bias`, `min_level` and `max_level`
+inherit. `resolve_lod(node)` is the `Lod_data` record that applies to a mesh:
+its own effective values when it or an ancestor carries the key, the default
+record otherwise.
+
+`Lod_system` (`lod_system.hpp`), owned by each `Scene` and added to it like
+`Layout_system`, keeps the effective record of every mesh that resolves to a
+non-default one, keyed by `Node*`. It resolves a mesh when the mesh enters the
+scene, when a value of the group changes on it (an inherited value reaches each
+node below whose effective value moved through that node's own notification,
+`doc/erhe/property_system.md` R8), and for the whole subtree when the key
+changes on a node, since the key does not inherit. When a mesh's record
+changes - and only then - it calls
+`Scene_host::on_mesh_lod_changed(mesh, record)`, which is how the record
+reaches the draw lists without `erhe::scene` seeing them
+(`doc/erhe/draw_list_renderer.md` R1c). A mesh leaving the scene drops its
+record on both sides; its re-entry resolves it again. Nothing runs per frame,
+and the draw path never walks the hierarchy.
+
+Reparenting a mesh inside one scene re-resolves it only through the inherited
+values whose effective value moved; a reparent that changes only whether a
+carrier lies above the mesh is not seen until the next change of the group on
+the mesh.
 
 ## Transform observers
 

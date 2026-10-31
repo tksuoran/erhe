@@ -414,6 +414,7 @@ Scene::Scene(const std::string_view name, Scene_host* const host)
     : Item  {name}
     , m_host{host}
     , m_root_node  {std::make_shared<Xform>("root")}
+    , m_lod_system {*this}
 {
     enable_flag_bits(
         erhe::Item_flags::content |
@@ -425,9 +426,10 @@ Scene::Scene(const std::string_view name, Scene_host* const host)
     m_root_node->node_data.transforms.parent_from_node_serial = 1;
     m_root_node->node_data.transforms.world_from_node_serial  = 1;
 
-    // The scene's own node system, added before the scene holds any node so
-    // every layout node reaches it through register_node().
+    // The scene's own node systems, added before the scene holds any node so
+    // every layout node and every mesh reaches them through register_node().
     add_node_system(m_layout_system);
+    add_node_system(m_lod_system);
 }
 
 Scene::~Scene() noexcept
@@ -437,6 +439,7 @@ Scene::~Scene() noexcept
 
     m_root_node->recursive_remove();
 
+    remove_node_system(m_lod_system);
     remove_node_system(m_layout_system);
 
     m_transform_dirty_nodes.clear();
@@ -708,6 +711,11 @@ void Scene::update_layouts()
 auto Scene::get_layout_system() const -> const Layout_system&
 {
     return m_layout_system;
+}
+
+auto Scene::get_lod_system() const -> const Lod_system&
+{
+    return m_lod_system;
 }
 
 void Scene::register_light(const std::shared_ptr<Light>& light)
