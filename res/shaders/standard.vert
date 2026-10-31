@@ -28,11 +28,11 @@ layout(location = 19) flat out uint v_pvs_entry;
 layout(location = 20)      out float v_pvs_depth;
 #endif
 
-#if defined(ERHE_FLAT_DRAW_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS) && !defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_PVS)
-// The flat draw color variant (Shader_bool::FLAT_DRAW_COLOR): the draw's
-// primitive record index, which standard.frag maps to a palette color.
-// Location 19 is the ID-render / PVS location; those variants never carry
-// this axis.
+#if defined(ERHE_VARIANT_FLAT_DRAW_COLOR)
+// The flat draw color variant (Shader_bool::FLAT_DRAW_COLOR, a position
+// pass): the draw's primitive record index, its only varying, which
+// standard.frag maps to a palette color. Location 19 is the ID-render / PVS
+// location; ERHE_VARIANT_FLAT_DRAW_COLOR excludes those variants.
 layout(location = 19) flat out uint v_flat_draw_index;
 #endif
 
@@ -295,7 +295,7 @@ void main()
     v_pvs_entry = uint(primitive.primitives[ERHE_PRIMITIVE_INDEX].color.x) + uint(ERHE_PRIMITIVE_INDEX);
 #endif
 
-#if defined(ERHE_FLAT_DRAW_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS) && !defined(ERHE_VARIANT_ID_RENDER) && !defined(ERHE_VARIANT_PVS)
+#if defined(ERHE_VARIANT_FLAT_DRAW_COLOR)
     v_flat_draw_index = uint(ERHE_PRIMITIVE_INDEX);
 #endif
 
