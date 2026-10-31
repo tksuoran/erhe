@@ -194,9 +194,19 @@ AGP 8.13.2 is the newest AGP that keeps the legacy variant API that
 upgraded independently.
 
 `ANDROID_HOME` names the SDK root and `JAVA_HOME` the JDK. Android Studio's
-default SDK root is `%LOCALAPPDATA%\Android\Sdk` on Windows and
-`$HOME/Android/Sdk` on Linux; its JDK is the `jbr` directory of the Android
-Studio installation.
+default SDK root and bundled JDK per host:
+
+| Host | SDK root | JDK (`JAVA_HOME`) |
+|---|---|---|
+| Windows | `%LOCALAPPDATA%\Android\Sdk` | `C:\Program Files\Android\Android Studio\jbr` |
+| macOS | `$HOME/Library/Android/sdk` | `/Applications/Android Studio.app/Contents/jbr/Contents/Home` |
+| Linux | `$HOME/Android/Sdk` | `<android-studio>/jbr` |
+
+A fresh Android Studio install (its setup wizard) puts only
+`platform-tools`, the emulator and the newest platform and build-tools into
+the SDK root. The NDK, CMake, the pinned platform and build-tools above and
+the "Android SDK Command-line Tools" are not installed, so install them as
+below before the first build.
 
 The SDK packages install from Android Studio (Settings > SDK Manager > SDK
 Tools, "Show Package Details") or from the command line with `sdkmanager`,
@@ -216,6 +226,36 @@ $SDKM --install "ndk;28.2.13676358" "cmake;3.22.1" "platforms;android-35" "build
 With the SDK license accepted, AGP downloads a missing platform or
 build-tools package on the first build by itself; the NDK and CMake are best
 installed up front.
+
+On macOS the whole setup after a fresh Android Studio install is, from a
+shell in an empty scratch directory (the zip name carries a build number:
+take the current one from the download page, or the newest
+`commandlinetools-mac-*` entry in
+<https://dl.google.com/android/repository/repository2-3.xml>, whose
+`<checksum>` is the zip's SHA-1):
+
+```sh
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+curl -sSLO https://dl.google.com/android/repository/commandlinetools-mac-<build>_latest.zip
+shasum commandlinetools-mac-<build>_latest.zip      # compare with the <checksum>
+unzip -q commandlinetools-mac-<build>_latest.zip
+mkdir -p "$ANDROID_HOME/cmdline-tools"
+mv cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+yes | "$SDKM" --licenses
+"$SDKM" --install "ndk;28.2.13676358" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+"$SDKM" --list_installed
+```
+
+Instead of the zip, Android Studio installs the same packages: Settings >
+Languages & Frameworks > Android SDK > SDK Tools, tick "Show Package
+Details", then "NDK (Side by side)" 28.2.13676358, "CMake" 3.22.1 and
+"Android SDK Command-line Tools"; SDK Platforms tab, "Android 15.0" (API
+35). `sdkmanager` prints `test: : integer expression expected` from its
+launcher script on macOS; the message is harmless. The Python 3 that comes
+with Xcode (`/usr/bin/python3`) is enough for the build-time codegen and
+for the Quest helper scripts.
 
 On Windows the wrapper scripts in `scripts/` probe for `ANDROID_HOME` and
 `JAVA_HOME`; `doc/quest.md` lists their invocations. On Linux and macOS

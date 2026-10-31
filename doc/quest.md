@@ -98,7 +98,34 @@ On Windows, three wrapper scripts cover the common flows. All probe
 (falling back to Android Studio's bundled JBR), so no environment setup is
 needed when Android Studio is installed in the default location. On Linux
 and macOS run `gradlew` directly (`doc/android.md` "Toolchain") and `adb` from
-`$ANDROID_HOME/platform-tools`.
+`$ANDROID_HOME/platform-tools`; "macOS and Linux" below has the commands.
+
+### macOS and Linux
+
+The same flows as the Windows scripts, from the repository root (macOS
+paths; on Linux the SDK root is `$HOME/Android/Sdk` and `JAVA_HOME` is the
+`jbr` directory of the Android Studio installation):
+
+```sh
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+ADB="$ANDROID_HOME/platform-tools/adb"
+
+# Build (assembleQuestDebug, assembleQuestRelease, assembleMobileDebug, ...)
+(cd android-project && ./gradlew assembleQuestRelease -PpythonExecutable="$(command -v python3)")
+
+# Install (same flags as install_android.bat; add -s <serial> after "$ADB" for one of several devices)
+"$ADB" install -r -g -d android-project/app/build/outputs/apk/quest/release/app-quest-release.apk
+
+# Launch into immersive mode (Launch protocol in doc/agents/quest.md first)
+"$ADB" shell am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -c com.oculus.intent.category.VR -n org.libsdl.app.quest/org.libsdl.app.ErheActivity
+```
+
+Gradle properties with values (`-Pname=value`) pass through unchanged
+here. `scripts/quest_logcat.sh`, `scripts/quest_bench.py` and
+`scripts/soak_quest.py` find `adb` through `ANDROID_HOME`, falling back to
+Android Studio's default SDK root of the host OS, and run with `python3`
+in place of `py -3`.
 
 ### Build only (`scripts\build_android.bat`)
 
