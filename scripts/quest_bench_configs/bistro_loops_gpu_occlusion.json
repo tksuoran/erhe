@@ -1,0 +1,12 @@
+{
+    "_comment": "Bench configuration for scripts/quest_bench.py run --config (doc/agents/quest.md 'Bench configurations'). The Bistro's own 43 lights, per-type light loops at the preset's light limits, culling classification gpu and occlusion culling on.",
+    "name": "bistro_lights_loops_gpu_occlusion",
+    "description": "The Bistro's own lights, per-type light loops at the preset's limits, culling classification gpu and occlusion culling on",
+    "mcp": [
+        "set_culling_classification={\"mode\": \"gpu\"}",
+        "set_occlusion_culling={\"enabled\": true}"
+    ],
+    "mcp_after_load": [
+        "set_graphics_preset={\"light_shading\": \"loops\"}"
+    ]
+}

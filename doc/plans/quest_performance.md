@@ -210,6 +210,96 @@ approximate.
    measurement on the device and a desktop headless image gate where the
    change touches rendering.
 
+## Bistro configuration sweep
+
+The cost of lighting and culling configurations on the Bistro frame
+(`config/editor/benchmark_bistro.json`, the Save for Quest Bistro file on
+the device), one configuration per `scripts/quest_bench.py run --config`
+file in `scripts/quest_bench_configs/`, each run recorded with `--record`
+in [../reference/quest_bench_runs.md](../reference/quest_bench_runs.md)
+(configuration in effect, results, Quest thermal / clock / usage state).
+The run recipe is `doc/agents/quest.md` "Bench configurations and the run
+record".
+
+Rules of the sweep:
+
+- One run per configuration (no `--repeat`) while discovering; repeats
+  only when two results are close or the user asks for them.
+- The first launch of a new configuration can run slower for its whole
+  measured window at an unchanged GPU clock (seen as run 0 of both GPU
+  culling configurations: XR multiview +10 ms and +9 ms). Before trusting a
+  single run, launch the configuration once untimed first, or rerun a
+  surprising result. The cause is not known.
+- Take every run with `--perfetto` and compare the eye surface's binning
+  plus bin rendering (the app's own GPU work). The `XR multiview` timer
+  also contains the compositor's preemptions of the eye pass, which grow
+  faster than the frame (4.8 ms of a 72 ms frame, 68 ms of a 165 ms
+  frame); the XR counter's app GPU frame time leaves them out.
+- The Bench sun's shadow map is cached in the measured window (static
+  scene and light), so these runs measure shading, not shadow drawing.
+- The APK on the device is the 2026-10-27 build (296a0a3fd); the record
+  names the build of each entry, and entries compare only at the same build
+  and `input_hash`.
+
+Measured so far (XR multiview, single directional light unless named): 43
+clustered lights 119.6 ms; 1 light 67.3 ms; + gpu culling classification
+67.5 ms; + occlusion culling 45.4 ms. Every configuration is GPU-bound at
+99 % with the GPU at its 456 MHz cap (performance levels unset) and thermal
+status 0.
+
+With gpu culling classification and occlusion culling, from the Perfetto
+render stages (eye surface medians: binning + bin rendering = app work;
+preemption; XR multiview):
+
+| Lights | Binning | Bin rendering | App work | Preempted | XR multiview |
+|---|---|---|---|---|---|
+| 1 directional (Bench sun) | 10.6 | 30.2 | 40.8 | 3.7 | 45.6 |
+| Bistro's own, loops at the preset's limits (5 point + 6 spot shaded) | 10.6 | 55.2 | 65.8 | 4.8 | 71.7 |
+| Bistro's own, clustered (43 shaded) | 10.6 | 84.3 | 94.9 | 68.0 | 164.2 |
+
+The loops and clustered rows are the record's 09:11 and 09:16 entries. The
+1 directional row and the single light counters below come from metavr
+captures taken by hand, before `--perfetto` existed, during runs of
+`single_directional_loops_gpu_occlusion` (09:03 - 09:08) that are not in the
+record.
+
+What the render stages and counters show about the eye pass:
+
+- The headset renders without MSAA: the runtime's recommended and maximum
+  swapchain sample count is 1 (editor log "View 0: ... max sample count =
+  1"), and the eye surface is MSAA 1. The preset's `msaa_sample_count`
+  does not reach the headset, so MSAA is not a cost here.
+- The eye surface is 1680x1760, two views, RGBA16F color (64 bpp) and
+  D24S8, binned (HwVizBinning) into 24 bins of 288x448, 17 rendered. The
+  runtime's fixed foveation scales the outer bins by 2 (`fovScaleFactor`).
+  The centre bins carry most of the time (5-6 ms each against 0.3-2 ms).
+- Binning is 10.6 ms in every configuration: two binning stages per frame
+  (about 4.4 + 6 ms), the geometry half of the frame. Vertex fetch stalls
+  53 % of vertex time, ALU / vertex is 145, Textures / Vertex 9.3 (storage
+  buffer reads in the vertex shader go through the texture path), the
+  average polygon covers 18 pixels, about 5 M polygons and 4 M shaded
+  vertices per frame.
+- Fragment shading: about 30 M fragments shaded per frame against 5.9 M
+  eye pixels (single light and loops), 96-129 ALU / fragment, texture
+  fetch stall 4 %, system memory stall 0.4 %: shader time and fragment
+  count (overdraw and quad overshading of small triangles), not bandwidth.
+- The clustered run's counters (2.1 G fragments / s) include the
+  compositor's work during the 68 ms of preemption; its per-frame counts
+  are not comparable.
+- The single light run drew the 1024 px shadow map twice in 4 s (D16
+  surface) although the record reports it cached.
+
+Next configurations, in order:
+
+1. The shadow pass: the single light with the shadow map cache off
+   (`set_shadow_map_cache_enabled`), or shadows off, against the cached run.
+2. The ~41 ms single-light app work: the specular anti-aliasing mode and
+   `use_draw_lists` off, one at a time; then the binning half (geometry:
+   vertex fetch, vertex shader storage reads) and the fragment count
+   (depth prepass or front-to-back order).
+3. CPU / GPU performance levels raised (the 456 MHz cap): whether the frame
+   scales with the GPU clock.
+
 ## Measurement rule
 
 One editor at a time, nothing building on the host while a timed run is
