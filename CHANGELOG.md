@@ -46,6 +46,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   key carries a debug mode). `SHADER_DEBUG != 0` no longer counts as reading
   the per-pass record fields: `standard.vert` / `standard.frag` drop the
   unread `v_line_width` varying.
+- `erhe::scene`: mesh level of detail control (`lod.hpp`): the attached value
+  group `Lod` (`Lod.apply_lod` key; `mode`, `forced_level`, `bias`,
+  `min_level`, `max_level`), `Lod_mode`, `c_lod_mode_enum_info`, `Lod_data`,
+  `carries_lod()`, `read_lod()`, `resolve_lod()`, `get_forced_lod_level()`;
+  `Lod_system` (`lod_system.hpp`), owned by each `Scene` and returned by
+  `Scene::get_lod_system()`.
+- `erhe::scene`: `Scene_host::on_mesh_lod_changed(mesh, Lod_data)`, a new pure
+  virtual every `Scene_host` implements: the mesh's effective `Lod` record
+  changed.
+- `erhe::scene_renderer`: `Draw_list_scene::enqueue_set_lod()` and
+  `get_mesh_lod()`: a mesh's `Lod` record, whose forced level selects the
+  `Lod_chain` range its entries copy at registration.
 - `erhe::primitive`: `Primitive::make_prepared_optimized_render_shape()`: a
   new optimized variant of a prepared primitive with an optional LOD chain,
   repacked from the core soup, returned for the caller to publish.

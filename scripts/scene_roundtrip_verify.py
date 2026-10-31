@@ -8,8 +8,9 @@ verification of doc/editor/gltf_scene_roundtrip.md:
    meshes), an imported textured glTF asset (triangle soup + embedded
    images), an imported skinned + animated asset, physics bodies + a joint,
    a brush placement, a graph mesh binding, a graph texture bound to a
-   material slot, a layout node, tags, a locked node, authored
-   animation keys, and an external-asset prefab instance.
+   material slot, a layout node, a level of detail group, tags, a
+   locked node, authored animation keys, and an external-asset prefab
+   instance.
 2. Saves the scene and validates every ERHE_* extension payload in the
    .glb against its JSON schema (doc/gltf_extensions/schema/), asserting
    full extension coverage (all 9 ERHE_* extensions present) and clean
@@ -62,6 +63,14 @@ import urllib.request
 from erhe_mcp import wait_for_save
 
 PORT = 3743
+# The Lod group values the glTF leg authors on "P6 Box" and checks after the
+# reload, in the string form get_item_properties reports.
+LOD_VALUES = {
+    "Lod.apply_lod":    "true",
+    "Lod.mode":         "Forced",
+    "Lod.forced_level": "2",
+    "Lod.bias":         "1",
+}
 SCHEMA_DIR = pathlib.Path("doc/gltf_extensions/schema")
 RESULTS = []
 
@@ -897,6 +906,18 @@ def section_build_scene():
         spanned = mutate("set_item_property", {"scene_name": scene, "item_name": "P6 Layout Child", "property": "Layout.grid_span", "value": "2 1 1"})
         check(S, "set Layout.grid_span on layout child", bool(spanned) and spanned.get("after") == "2 1 1", str(spanned))
 
+    def block_lod():
+        # Level of detail control is the Lod value group of the node
+        # (doc/erhe/property_system.md section 4.29): the key Lod.apply_lod
+        # and the values ride ERHE_node properties.
+        for name, value in LOD_VALUES.items():
+            written = mutate("set_item_property", {"scene_name": scene, "item_name": "P6 Box", "property": name, "value": value})
+            check(S, f"set {name} on P6 Box", bool(written) and written.get("after") == value, str(written))
+        info = call("get_lod_info", {"scene_name": scene, "node_name": "P6 Box"})
+        check(S, "P6 Box resolves to the forced record",
+              isinstance(info, dict) and (info.get("lod", {}).get("mode") == "forced") and (info.get("lod", {}).get("forced_level") == 2),
+              str(info.get("lod") if isinstance(info, dict) else info))
+
     def block_tags_locks():
         # Tags (ERHE_collections) + a locked node (ERHE_node flags).
         tagged = mutate("add_tags", {
@@ -1062,6 +1083,7 @@ def section_build_scene():
     guarded(S, "physics block", block_physics)
     guarded(S, "brush placement block", block_brush_placement)
     guarded(S, "layout block", block_layout)
+    guarded(S, "lod block", block_lod)
     guarded(S, "tags/locks block", block_tags_locks)
     guarded(S, "animation block", block_animation)
     guarded(S, "rig block", block_rig)
@@ -1292,6 +1314,22 @@ def section_reload_and_diff():
         supplied = properties.get("rot_z_limit_max", {})
         check(S, "the folder still supplies rot_z_limit_max after the reload",
               (supplied.get("value") == "0.5") and (supplied.get("source") == "inherited"), str(supplied))
+
+    # The Lod group's values (ERHE_node properties) come back as local values
+    # of the node, and the node resolves to the same effective record.
+    lod_properties = {
+        entry.get("name"): entry
+        for entry in call("get_item_properties", {"scene_name": loaded_scene, "item_name": "P6 Box"}).get("properties", [])
+        if entry.get("name", "").startswith("Lod.")
+    }
+    for name, value in LOD_VALUES.items():
+        entry = lod_properties.get(name, {})
+        check(S, f"{name} survives the reload as a local value",
+              (entry.get("value") == value) and (entry.get("source") == "local"), str(entry))
+    lod_info = call("get_lod_info", {"scene_name": loaded_scene, "node_name": "P6 Box"})
+    check(S, "P6 Box resolves to the same Lod record after the reload",
+          isinstance(lod_info, dict) and (lod_info.get("lod", {}).get("mode") == "forced") and (lod_info.get("lod", {}).get("forced_level") == 2) and (lod_info.get("lod", {}).get("bias") == 1),
+          str(lod_info.get("lod") if isinstance(lod_info, dict) else lod_info))
 
     screenshot("logs/phase6_after.png")
     compare_screenshots(S, "logs/phase6_before.png", "logs/phase6_after.png")

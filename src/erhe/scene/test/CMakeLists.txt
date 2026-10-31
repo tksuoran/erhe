@@ -14,6 +14,7 @@ add_executable(${_target}
     test_layout_system.cpp
     test_light_frame.cpp
     test_light_properties.cpp
+    test_lod_system.cpp
     test_mesh_primitive_material.cpp
     test_mesh_prims.cpp
     test_node_computed.cpp

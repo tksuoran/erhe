@@ -336,16 +336,28 @@ buffer dump report the whole allocation, which is what they describe.
 
 ### Step 2: Lod properties and forced level
 
-- The `Lod` attached group (section 2.5), shown in the Properties window,
-  serialized, glTF round trip covered by `scene_roundtrip_verify.py`.
-- `Lod_system` and the `Scene_host` hook mirror the effective values into the
-  draw-list objects. `mode == forced` writes the forced level's range into the
-  entry's command template at re-registration, so it works on both command
-  writers with no selection code. Re-registration bumps the list serial: a
-  full list copy, a GPU bounds rewrite and a shadow-cache content change.
-  That cost is fine for a property edit, and it is not the step 4 mechanism.
-  Check that a re-registered entry keeps its PVS column
-  (`check_pvs_dropped_columns`).
+Done; described in `doc/erhe/property_system.md` section 4.29 (the `Lod`
+group, in `erhe::scene` beside `Layout`, since its system reaches the draw
+lists through a `Scene_host` virtual), `doc/erhe/scene.md` "Level of detail
+control" (`Lod_system`, `Scene_host::on_mesh_lod_changed`) and
+`doc/erhe/draw_list_renderer.md` R1c (the forced level's range copied into
+the entries at registration). The MCP `get_lod_info` reports the effective
+record and each entry's level; the level is set with `set_item_property`.
+
+Verified on the headless Metal editor (default scene, a group node with a UV
+sphere and a torus, `generate_lods` on both, 5 and 6 levels):
+`render_scene_image` with no `Lod` value is byte-identical to the build
+before the step, in both `culling_classification` settings and with
+`use_draw_lists` off; forced levels 0..5 on the torus report entry levels
+0..5 (1792, 896, 448, 224, 112, 56 triangles, color and shadow), level 0 is
+byte-identical and every other level differs, and level 6 clamps to 5; cpu
+and gpu classification give identical images per level; with
+`use_draw_lists` off level 0 is drawn; values on the group reach both meshes
+(local values on a mesh win) and clearing `Lod.apply_lod` restores the step-1
+image; a level forced before `generate_lods` shows once the chain is
+published; undo / redo of a level edit restore the levels and images; a PVS
+baked over the meshes stays ready across re-registrations; the values
+survive a glTF save and reload, and `scene_roundtrip_verify.py` checks them.
 
 ### Step 3: editor LOD window (generation for the selection)
 

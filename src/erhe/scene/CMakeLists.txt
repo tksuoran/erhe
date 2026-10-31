@@ -29,6 +29,10 @@ erhe_target_sources_grouped(
     erhe_scene/light_frustum_fit.hpp
     erhe_scene/light_snapshot.cpp
     erhe_scene/light_snapshot.hpp
+    erhe_scene/lod.cpp
+    erhe_scene/lod.hpp
+    erhe_scene/lod_system.cpp
+    erhe_scene/lod_system.hpp
     erhe_scene/mesh.cpp
     erhe_scene/mesh.hpp
     erhe_scene/mesh_raytrace.cpp

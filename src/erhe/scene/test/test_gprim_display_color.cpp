@@ -58,6 +58,7 @@ public:
         display_color_changed.push_back(mesh.get());
     }
     void on_mesh_bounds_changed        (const std::shared_ptr<erhe::scene::Mesh>&) override {}
+    void on_mesh_lod_changed           (const std::shared_ptr<erhe::scene::Mesh>&, const erhe::scene::Lod_data&) override {}
     void on_light_changed              (const std::shared_ptr<erhe::scene::Light>&) override {}
 
     erhe::scene::Scene              scene;
