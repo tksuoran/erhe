@@ -501,10 +501,13 @@ auto make_optimized_render_shape(
         .vertex_format      = *buffer_info.optimized_vertex_format,
         .vertex_buffer_sink = buffer_info.vertex_buffer_sink,
         .index_buffer_sink  = buffer_info.index_buffer_sink,
-        .vertex_input_key   = buffer_info.optimized_vertex_input_key
-        // The edge-line streams and the expanded format are deliberately left
-        // null: this build is fill triangles only, and a soup build reads
-        // none of them.
+        .vertex_input_key   = buffer_info.optimized_vertex_input_key,
+        // The edge-line streams carry the LOD levels' edge lines
+        // (build_lod_edge_lines()); without a LOD request they stay null:
+        // the fill build reads none of them. The expanded format stays
+        // null - a soup build has no solid-wireframe fill.
+        .edge_line_vertex_stream = (lod_settings != nullptr) ? buffer_info.edge_line_vertex_stream : nullptr,
+        .edge_line_joint_stream  = (lod_settings != nullptr) ? buffer_info.edge_line_joint_stream  : nullptr
     };
 
     Mesh_optimize_result optimization = optimize_triangle_soup_cached(*source_soup.get(), options, cache_directory);
@@ -623,7 +626,12 @@ auto make_optimized_render_shape_from_staged_build(
     if (lod_settings != nullptr) {
         const Lod_vertex_data output_lod_vertices = remap_lod_vertex_data(lod_vertices, optimization.vertex_remap, vertex_count);
         lod_indices = generate_lod_chain(output_lod_vertices.get_input(), fill_indices, *lod_settings);
+        if (buffer_info.edge_line_vertex_stream != nullptr) {
+            build_lod_edge_lines(output_lod_vertices.get_input(), lod_indices);
+        }
     }
+    Buffer_range lod_edge_line_vertices{};
+    Buffer_range lod_edge_line_joints  {};
     const std::size_t total_index_count = index_count + lod_indices.indices.size();
 
     Buffer_mesh buffer_mesh;
@@ -650,6 +658,10 @@ auto make_optimized_render_shape_from_staged_build(
             }
             buffer_mesh.vertex_buffer_ranges.emplace_back(vertex_allocation.range);
             buffer_mesh.vertex_allocations.emplace_back(std::move(vertex_allocation.allocation));
+        }
+        if (!allocate_lod_edge_lines(buffer_mesh, buffer_info, lod_indices, lod_edge_line_vertices, lod_edge_line_joints)) {
+            log_primitive->warn("mesh optimize {}: out of edge-line memory for the LOD levels; rendering the source build", name);
+            return {};
         }
     }
 
@@ -690,7 +702,8 @@ auto make_optimized_render_shape_from_staged_build(
         .first_index    = 0,
         .index_count    = index_count
     };
-    buffer_mesh.lod_chain = make_lod_chain(buffer_mesh.triangle_fill_indices, lod_indices);
+    buffer_mesh.lod_chain = make_lod_chain(buffer_mesh.triangle_fill_indices, lod_indices, lod_edge_line_vertices, lod_edge_line_joints);
+    enqueue_lod_edge_lines(buffer_info, lod_indices, lod_edge_line_vertices, lod_edge_line_joints);
     log_lod_chain(name, buffer_mesh.lod_chain);
     buffer_mesh.vertex_input_key = buffer_info.optimized_vertex_input_key;
     // Welding and reordering move no vertex, so the source build's volumes

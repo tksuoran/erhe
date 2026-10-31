@@ -4,6 +4,7 @@
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/buffer_writer.hpp"
+#include "erhe_primitive/edge_line_vertex.hpp"
 #include "erhe_primitive/index_range.hpp"
 #include "erhe_primitive/mesh_optimizer.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -1975,66 +1976,39 @@ void Build_context::build_edge_lines()
                 fwd_a   = facets_it->second.forward[0];
                 fwd_b   = facets_it->second.forward[1];
             }
-            // Edge-traversal winding tdir per face, relative to the SSBO endpoint
-            // order (mesh_vertex_a -> mesh_vertex_b): +1 if the face walks the edge
-            // in that same order, -1 if reversed. (forward[] is lo -> hi; the SSBO
-            // order is lo -> hi iff mesh_vertex_a < mesh_vertex_b.)
+            // forward[] is lo -> hi; the SSBO endpoint order is
+            // mesh_vertex_a -> mesh_vertex_b, which is lo -> hi iff
+            // mesh_vertex_a < mesh_vertex_b.
             const bool a_to_b_is_lo_to_hi = (mesh_vertex_a < mesh_vertex_b);
-
-            GEO::vec3f normal_a = fb_normal_a;
-            GEO::vec3f normal_b = fb_normal_b;
-            float      sign_a   = 0.0f;
-            float      sign_b   = 0.0f;
-            float      tdir_a   = 0.0f; // edge-traversal winding (+/-1), 0 if facet-less
-            float      tdir_b   = 0.0f;
+            const auto make_face = [&](const GEO::index_t facet, const bool forward) -> erhe::primitive::Edge_line_face {
+                const GEO::vec3f normal = GEO::normalize(mesh_facet_normalf(root.mesh, facet));
+                const GEO::vec3f center = mesh_facet_centerf(root.mesh, facet);
+                return erhe::primitive::Edge_line_face{
+                    .normal       = glm::vec3{normal.x, normal.y, normal.z},
+                    .center       = glm::vec3{center.x, center.y, center.z},
+                    .walks_a_to_b = (forward == a_to_b_is_lo_to_hi)
+                };
+            };
+            erhe::primitive::Edge_line_face face_a{};
+            erhe::primitive::Edge_line_face face_b{};
             if (facet_a != GEO::NO_INDEX) {
-                normal_a = GEO::normalize(mesh_facet_normalf(root.mesh, facet_a));
-                const GEO::vec3f edge_dir      = pos_b - pos_a;
-                const GEO::vec3f edge_mid      = 0.5f * (pos_a + pos_b);
-                // Interior-tangent sign for face A: sign so that
-                // sign_a * cross(normal_a, edge_dir) points from the edge
-                // midpoint toward face A's centroid.
-                const GEO::vec3f tangent_a     = GEO::cross(normal_a, edge_dir);
-                const GEO::vec3f center_a      = mesh_facet_centerf(root.mesh, facet_a);
-                const GEO::vec3f to_interior_a = center_a - edge_mid;
-                sign_a = (GEO::dot(tangent_a, to_interior_a) >= 0.0f) ? 1.0f : -1.0f;
-                tdir_a = (fwd_a == a_to_b_is_lo_to_hi) ? 1.0f : -1.0f;
-                if (facet_b != GEO::NO_INDEX) {
-                    normal_b = GEO::normalize(mesh_facet_normalf(root.mesh, facet_b));
-                    // Interior-tangent sign for face B, computed the SAME way from
-                    // face B's own centroid. The compute shader needs each face's
-                    // true interior side to place its half-quad: at a silhouette
-                    // edge both interiors project to the same screen side, which
-                    // only a per-face sign (not a heuristic) gets right.
-                    const GEO::vec3f tangent_b     = GEO::cross(normal_b, edge_dir);
-                    const GEO::vec3f center_b      = mesh_facet_centerf(root.mesh, facet_b);
-                    const GEO::vec3f to_interior_b = center_b - edge_mid;
-                    sign_b = (GEO::dot(tangent_b, to_interior_b) >= 0.0f) ? 1.0f : -1.0f;
-                    tdir_b = (fwd_b == a_to_b_is_lo_to_hi) ? 1.0f : -1.0f;
-                } else {
-                    // Boundary edge (one facet): face B reuses face A's plane on the
-                    // opposite interior side, so the two half-quads form a full ribbon.
-                    normal_b = normal_a;
-                    sign_b   = -sign_a;
-                    tdir_b   = -tdir_a;
-                }
+                face_a = make_face(facet_a, fwd_a);
             }
-
-            // Pack BOTH per-face signs into normal.w: its SIGN carries the
-            // interior-tangent sign (sign_a/sign_b, +/-1), its MAGNITUDE carries the
-            // edge-traversal winding tdir (tdir > 0 -> 1, tdir < 0 -> 2). Exact in
-            // fp32 (values are +/-1 or +/-2). The tent wide-line path decodes both;
-            // the simple-quad and geometry-shader backends read only normal.xyz, so
-            // the packed .w does not affect them. A facet-less edge keeps sign 0 ->
-            // packed 0 -> the shader's degenerate-frame path.
-            const float packed_w_a = sign_a * ((tdir_a < 0.0f) ? 2.0f : 1.0f);
-            const float packed_w_b = sign_b * ((tdir_b < 0.0f) ? 2.0f : 1.0f);
-            const float data_a[8] = { pos_a.x, pos_a.y, pos_a.z, 0.0f, normal_a.x, normal_a.y, normal_a.z, packed_w_a };
-            const float data_b[8] = { pos_b.x, pos_b.y, pos_b.z, 0.0f, normal_b.x, normal_b.y, normal_b.z, packed_w_b };
-            memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_a, vertex_element_size);
-            edge_vertex_write_offset += vertex_element_size;
-            memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_b, vertex_element_size);
-            edge_vertex_write_offset += vertex_element_size;
+            if ((facet_a != GEO::NO_INDEX) && (facet_b != GEO::NO_INDEX)) {
+                face_b = make_face(facet_b, fwd_b);
+            }
+            float endpoints[2 * erhe::primitive::edge_line_vertex_float_count];
+            erhe::primitive::write_edge_line_endpoints(
+                glm::vec3{pos_a.x, pos_a.y, pos_a.z},
+                glm::vec3{pos_b.x, pos_b.y, pos_b.z},
+                (facet_a != GEO::NO_INDEX) ? &face_a : nullptr,
+                ((facet_a != GEO::NO_INDEX) && (facet_b != GEO::NO_INDEX)) ? &face_b : nullptr,
+                glm::vec3{fb_normal_a.x, fb_normal_a.y, fb_normal_a.z},
+                glm::vec3{fb_normal_b.x, fb_normal_b.y, fb_normal_b.z},
+                endpoints
+            );
+            memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, endpoints, 2 * vertex_element_size);
+            edge_vertex_write_offset += 2 * vertex_element_size;
         }
 
         if (has_edge_line_joint_buffer) {

@@ -289,9 +289,10 @@ is a separate, known figure.
 ### Level of detail
 
 `erhe_primitive/lod.hpp`. A LOD chain is a list of index ranges into the
-optimized variant's vertex buffer: no level has vertices of its own, so
+optimized variant's vertex buffer: no level has fill vertices of its own, so
 switching level changes only `(first_index, index_count)` and never
-`base_vertex`, the vertex format or the quantization affines.
+`base_vertex`, the vertex format or the quantization affines. A level after
+level 0 does own its edge lines (below).
 
 **Storage.** `Buffer_mesh::lod_chain` (`Lod_chain`: up to `max_lod_levels` =
 8 `Lod_level {Index_range, error}` entries, level 0 included). Only an
@@ -299,9 +300,34 @@ optimized variant built with `Lod_settings` has one. Level 0 equals
 `triangle_fill_indices` with error 0; the levels after it follow level 0
 directly in the same `index_allocation`, and `index_buffer_range.count`
 covers all of them. A mesh without a chain (`lod_chain.is_empty()`) has one
-implicit level, its fill range. The base variant never has a chain. Each
-`Lod_level` is one record, so per-level data (for example per-level
-edge-line ranges) sits beside its range.
+implicit level, its fill range. The base variant never has a chain.
+
+**Level edge lines.** Each level after level 0 has edge lines built from its
+own triangles (`build_lod_edge_lines()`), so a mesh drawn at level `i` can
+show the edges of level `i` (`doc/plans/selection_outline_lod.md`). Every edge
+of the level's triangles is written once, keyed by the positions of its
+endpoints (vertices split by attribute seams share an edge), as two
+edge-line endpoints in the layout `Content_wide_line_renderer` reads:
+position, the adjacent triangle's normal, and the packed interior-tangent
+sign and traversal winding, from the edge's first two triangles (a boundary
+edge mirrors its one triangle). `write_edge_line_endpoints()`
+(`edge_line_vertex.hpp`) is the one packing rule for these and for the base
+variant's edge lines (`Build_context::build_edge_lines()`). Skinned input
+also writes joint side data, the joints of the first corner at the
+endpoint's position. `Lod_level::edge_line_vertex_range` /
+`edge_line_joint_range` are sub-ranges, per level, of one edge-line vertex
+allocation and one joint allocation held by the optimized `Buffer_mesh`
+(`edge_line_vertex_allocation` / `edge_line_joint_allocation`; the
+variant's own `edge_line_*_buffer_range` stay empty), allocated in the
+variant's allocation transaction by `allocate_lod_edge_lines()` from
+`Buffer_info::edge_line_vertex_stream` / `edge_line_joint_stream`. Level 0's
+ranges are empty: its edge lines are the original variant's. A build
+without an edge-line stream (CPU-buffer sinks) generates none; the soup
+optimize and the prepared repack pass the streams only with a LOD request.
+The ranges live and are freed with the variant. A level's edge lines are
+about 1.5 edges per triangle at 64 bytes per edge (plus 64 bytes per edge of
+joint data when skinned); all levels together are about the size of level
+0's.
 
 **Request.** `Primitive::lod_settings` (`std::optional<Lod_settings>`, unset
 by default) is the request; unset means no generation and builds that are

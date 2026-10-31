@@ -1204,7 +1204,9 @@ purpose, variant, first_index, index_count, triangle_count, level}`, where
 when none matches). Per primitive `{primitive_index, name, prepared,
 has_optimized_variant, optimization_hold, lod_settings (null when unset),
 has_chain, generation_seconds, levels}`, each level `{level, first_index,
-index_count, triangle_count, error}`. A level is forced with the property
+index_count, triangle_count, edge_count, error}` (`edge_count`: the level's
+own edge lines, 0 for level 0, which draws the original variant's). A level
+is forced with the property
 tools: `set_item_property` `Lod.apply_lod` true, `Lod.mode` `Forced` and
 `Lod.forced_level` on the mesh node or on a node above it.
 

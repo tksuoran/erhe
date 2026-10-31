@@ -1819,19 +1819,26 @@ namespace {
 
 // The index and vertex range allocations of a fill-only build of
 // vertex_count / index_count, one atomic multi-pool transaction, and the
-// lockstep check of the vertex streams (see below). The index allocation
-// holds lod_index_count more indices after the fill range (the LOD levels
-// after level 0). False when an allocation fails or the streams are out of
-// lockstep.
+// lockstep check of the vertex streams (see below). With `lod_indices`, the
+// index allocation holds its indices after the fill range (the LOD levels
+// after level 0), and its edge-line data is allocated in the same transaction
+// (allocate_lod_edge_lines(), into `out_lod_edge_line_vertices` /
+// `out_lod_edge_line_joints`). False when an allocation fails or the streams
+// are out of lockstep.
 [[nodiscard]] auto allocate_fill_buffer_mesh(
-    Buffer_mesh&       buffer_mesh,
-    const Buffer_info& buffer_info,
-    const std::size_t  vertex_count,
-    const std::size_t  index_count,
-    const std::size_t  lod_index_count,
-    const char* const  caller
+    Buffer_mesh&                   buffer_mesh,
+    const Buffer_info&             buffer_info,
+    const std::size_t              vertex_count,
+    const std::size_t              index_count,
+    const Lod_chain_indices* const lod_indices,
+    Buffer_range&                  out_lod_edge_line_vertices,
+    Buffer_range&                  out_lod_edge_line_joints,
+    const char* const              caller
 ) -> bool
 {
+    const std::size_t lod_index_count = (lod_indices != nullptr) ? lod_indices->indices.size() : 0;
+    out_lod_edge_line_vertices = Buffer_range{};
+    out_lod_edge_line_joints   = Buffer_range{};
     {
         // One atomic multi-pool allocation transaction per mesh - see
         // buffer_mesh_allocation_mutex() (primitive_builder.hpp).
@@ -1857,6 +1864,12 @@ namespace {
             }
             buffer_mesh.vertex_buffer_ranges.emplace_back(vertex_sink_allocation.range);
             buffer_mesh.vertex_allocations.emplace_back(std::move(vertex_sink_allocation.allocation));
+        }
+        if (
+            (lod_indices != nullptr) &&
+            !allocate_lod_edge_lines(buffer_mesh, buffer_info, *lod_indices, out_lod_edge_line_vertices, out_lod_edge_line_joints)
+        ) {
+            return false;
         }
     }
 
@@ -1920,13 +1933,25 @@ auto build_buffer_mesh_from_triangle_soup(
             vertex_count
         );
         lod_indices = generate_lod_chain(lod_vertices.get_input(), triangle_soup.index_data, *lod_settings);
+        if (buffer_info.edge_line_vertex_stream != nullptr) {
+            build_lod_edge_lines(lod_vertices.get_input(), lod_indices);
+        }
     }
 
-    Buffer_mesh buffer_mesh;
-    if (!allocate_fill_buffer_mesh(buffer_mesh, buffer_info, vertex_count, index_count, lod_indices.indices.size(), "build_buffer_mesh_from_triangle_soup()")) {
+    Buffer_mesh  buffer_mesh;
+    Buffer_range lod_edge_line_vertices{};
+    Buffer_range lod_edge_line_joints  {};
+    if (
+        !allocate_fill_buffer_mesh(
+            buffer_mesh, buffer_info, vertex_count, index_count,
+            &lod_indices, lod_edge_line_vertices, lod_edge_line_joints,
+            "build_buffer_mesh_from_triangle_soup()"
+        )
+    ) {
         return std::optional<Buffer_mesh>{};
     }
-    buffer_mesh.lod_chain = make_lod_chain(buffer_mesh.triangle_fill_indices, lod_indices);
+    buffer_mesh.lod_chain = make_lod_chain(buffer_mesh.triangle_fill_indices, lod_indices, lod_edge_line_vertices, lod_edge_line_joints);
+    enqueue_lod_edge_lines(buffer_info, lod_indices, lod_edge_line_vertices, lod_edge_line_joints);
     buffer_mesh.has_vertex_colors =
         triangle_soup.vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::color, 0).attribute != nullptr;
 
@@ -2550,7 +2575,10 @@ auto Primitive::make_prepared_optimized_render_shape(const Buffer_info& buffer_i
         .vertex_format      = *buffer_info.optimized_vertex_format,
         .vertex_buffer_sink = buffer_info.vertex_buffer_sink,
         .index_buffer_sink  = buffer_info.index_buffer_sink,
-        .vertex_input_key   = buffer_info.optimized_vertex_input_key
+        .vertex_input_key   = buffer_info.optimized_vertex_input_key,
+        // The LOD levels' edge lines (build_lod_edge_lines()).
+        .edge_line_vertex_stream = (requested_lod_settings != nullptr) ? buffer_info.edge_line_vertex_stream : nullptr,
+        .edge_line_joint_stream  = (requested_lod_settings != nullptr) ? buffer_info.edge_line_joint_stream  : nullptr
     };
     const bool                                        released = render_shape->is_triangle_soup_released();
     const std::shared_ptr<const Triangle_soup_source> source   = render_shape->get_triangle_soup_source();
@@ -2590,8 +2618,16 @@ namespace {
     if (variant.streams.size() != buffer_info.vertex_format.streams.size()) {
         return std::optional<Buffer_mesh>{};
     }
-    Buffer_mesh buffer_mesh;
-    if (!allocate_fill_buffer_mesh(buffer_mesh, buffer_info, stored.vertex_count, stored.index_count, 0, "stored vertex streams build")) {
+    Buffer_mesh  buffer_mesh;
+    Buffer_range no_lod_edge_line_vertices{};
+    Buffer_range no_lod_edge_line_joints  {};
+    if (
+        !allocate_fill_buffer_mesh(
+            buffer_mesh, buffer_info, stored.vertex_count, stored.index_count,
+            nullptr, no_lod_edge_line_vertices, no_lod_edge_line_joints,
+            "stored vertex streams build"
+        )
+    ) {
         return std::optional<Buffer_mesh>{};
     }
     buffer_mesh.has_vertex_colors     = stored.has_vertex_colors;

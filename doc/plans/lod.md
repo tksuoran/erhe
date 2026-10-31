@@ -300,16 +300,20 @@ in the loop that already runs per entry, so no new per-frame walk is added.
 
 ### 2.7 Edge lines
 
-The edge-line passes draw per-level line indices built from the simplified
+The edge-line passes draw per-level edge lines built from the simplified
 triangles (D2), so a mesh drawn at level `i` shows the edges of level `i`.
-Each `Lod_level` gains an edge-line `Index_range` beside its fill range.
+Because edge-line vertices are per edge endpoint (with the adjacent faces'
+normals and winding), each `Lod_level` owns edge-line vertex (and joint)
+ranges rather than line indices. Built and fed by
+`doc/plans/selection_outline_lod.md`; the generation and storage are in
+`doc/erhe/meshoptimizer_integration.md` "Level of detail".
 
 ## 3. Decisions (user, 2026-10-31)
 
 - D1: LODs are generated only on request from the editor; import never
   generates them.
-- D2: per-level edge-line indices built from the simplified triangles
-  (section 2.7; step 3).
+- D2: per-level edge lines built from the simplified triangles, every edge
+  of the level's triangles (section 2.7; `doc/plans/selection_outline_lod.md`).
 - D3: a caster drawn as a receiver selects the same level in the shadow pass
   as in the color view; other casters select from the shadow view (section
   2.4; step 4c).
@@ -430,8 +434,10 @@ the feedback in section 6.
   (`mesh_optimizer_cache.cpp`), so LOD levels need a new payload section and
   a format version bump. `Lod_settings` goes in the key.
 - The prepared glTF (`ERHE_gpu_vertex_streams` / `ERHE_mesh_optimized`)
-  carries the levels and their edge-line indices; the exporter writes them and
-  loading does no simplification work.
+  carries the levels and their edge-line vertex (and joint) data, or
+  regenerates the edge lines at load from the stored level indices (CPU
+  only, no simplification); the exporter writes the levels and loading does
+  no simplification work.
 - Measure on Bistro: Release desktop (GPU-bound viewport) and Quest, where
   Bistro is geometry-bound (memory-bank/topics/quest.md). The Quest sweep in
   `doc/reference/quest_bench_runs.md` measures 10.6 ms of binning in every
