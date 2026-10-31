@@ -209,16 +209,17 @@ def scene_names(port):
 
 
 def wait_until_settled(port, scene_file, timeout_s):
+    """Returns (seconds until idle, listed scene name) or (None, None)."""
     start = time.time()
-    listed = False
+    listed_name = None
     while (time.time() - start) < timeout_s:
         status = mcp(port, "get_async_status")
-        if not listed and any(scene_file in name for name in (scene_names(port) or [])):
-            listed = True
-        if listed and isinstance(status, dict) and status.get("idle"):
-            return time.time() - start
+        if listed_name is None:
+            listed_name = next((name for name in (scene_names(port) or []) if scene_file in name), None)
+        if (listed_name is not None) and isinstance(status, dict) and status.get("idle"):
+            return time.time() - start, listed_name
         time.sleep(0.5)
-    return None
+    return None, None
 
 
 def find_tool(tracy_dir, name):
@@ -644,14 +645,13 @@ def run_and_analyze(args, capture_exe, csvexport_exe, editor):
     scene_file = os.path.basename(args.scene)
     start = time.time()
     reply = mcp(port, "open_scene", {"path": args.scene})
-    idle_s = wait_until_settled(port, scene_file, args.timeout)
+    idle_s, scene_name = wait_until_settled(port, scene_file, args.timeout)
     if idle_s is None:
         print(f"open_scene did not settle in {args.timeout:.0f} s: {str(reply)[:200]}")
     else:
         print(f"open: idle after {idle_s:.1f} s")
-    scene_name = next((name for name in (scene_names(port) or []) if scene_file in name), None)
     if scene_name is None:
-        sys.exit("scene not listed")
+        sys.exit(f"scene not listed (list_scenes: {str(scene_names(port))[:300]})")
     # The editor's own session state: the scene's camera and the glTF import
     # root (set_node_transform is absolute, world space).
     for node_name, translation, rotation in (
