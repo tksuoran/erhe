@@ -383,8 +383,9 @@ if (ERHE_SPIRV)
         erhe_graphics/shader_variant_report.cpp
     )
     # The SPIR-V optimizer and disassembler (Graphics_config::spirv_optimization,
-    # shader_variant_browser_directory).
-    target_link_libraries(${_target} PRIVATE SPIRV-Tools-opt SPIRV-Tools-static)
+    # shader_variant_browser_directory); nlohmann_json for the browser's
+    # variants/manifest.json.
+    target_link_libraries(${_target} PRIVATE SPIRV-Tools-opt SPIRV-Tools-static nlohmann_json::nlohmann_json)
 endif()
 
 if (ERHE_GRAPHICS_API_OPENGL)

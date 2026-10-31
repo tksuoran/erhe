@@ -273,6 +273,36 @@ const uint64_t c_optimized_compile_settings_hash = compute_optimized_compile_set
     return optimized;
 }
 
+// variants/manifest.json "tools": what produced the recorded modules.
+[[nodiscard]] auto get_report_tools(const Device& device) -> Shader_variant_report_tools
+{
+    const Device_info& info = device.get_info();
+    const char* texture_heap_path = "unknown";
+    switch (info.texture_heap_path) {
+        case Texture_heap_path::opengl_bindless_textures:  texture_heap_path = "opengl_bindless_textures";  break;
+        case Texture_heap_path::opengl_sampler_array:      texture_heap_path = "opengl_sampler_array";      break;
+        case Texture_heap_path::metal_argument_buffer:     texture_heap_path = "metal_argument_buffer";     break;
+        case Texture_heap_path::vulkan_descriptor_indexing: texture_heap_path = "vulkan_descriptor_indexing"; break;
+    }
+    return Shader_variant_report_tools{
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+        .api                 = "vulkan",
+#elif defined(ERHE_GRAPHICS_API_METAL) || defined(ERHE_GRAPHICS_API_METAL4)
+        .api                 = "metal",
+#elif defined(ERHE_GRAPHICS_API_OPENGL)
+        .api                 = "opengl",
+#else
+        .api                 = "none",
+#endif
+        .glslang_version     = fmt::format("{}.{}.{}{}", GLSLANG_VERSION_MAJOR, GLSLANG_VERSION_MINOR, GLSLANG_VERSION_PATCH, GLSLANG_VERSION_FLAVOR),
+        .spirv_tools_version = spvSoftwareVersionString(),
+        .spirv_target_env    = (c_spirv_tools_target_env == SPV_ENV_VULKAN_1_3) ? "vulkan1.3" : "opengl4.5",
+        .spirv_optimization  = device.get_graphics_config().spirv_optimization,
+        .texture_heap_path   = texture_heap_path,
+        .texture_heap_size   = info.texture_heap_size
+    };
+}
+
 } // anonymous namespace
 
 Glslang_shader_stages::Glslang_shader_stages(Shader_stages_prototype_impl& shader_stages_prototype, Spirv_cache* cache)
@@ -667,7 +697,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
                 stages.push_back(std::move(i->second));
             }
         }
-        report->add(create_info, stages, m_shader_stages_prototype.get_dependency_paths());
+        report->add(create_info, stages, m_shader_stages_prototype.get_dependency_paths(), get_report_tools(device));
     }
     m_report_sources.clear();
 

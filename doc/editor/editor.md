@@ -778,7 +778,10 @@ optimization") unless `ERHE_SPIRV_OPTIMIZATION=0` turns it off.
 every shader program the session compiles into an HTML browser in that
 directory (doc/erhe/graphics.md "Shader variant browser"): open
 `<directory>/index.html`. Programs served from `spirv_cache/` are not
-compiled, so delete it first to record every variant.
+compiled, so delete it first to record every variant. After the run,
+`py -3 scripts/shader_analytics.py <directory>` adds Arm Mali Offline
+Compiler cycle, register, occupancy and spill reports per variant to the
+same pages (doc/erhe/graphics.md "Mali analytics").
 
 **Watchdog and shutdown.** The main-loop stall watchdog
 (`doc/agents/debugging.md` "Main-loop stall watchdog") watches while

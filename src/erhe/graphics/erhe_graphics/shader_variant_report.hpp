@@ -29,15 +29,32 @@ public:
     std::vector<unsigned int>  optimized_spirv; // empty when the optimizer failed or its output did not validate
 };
 
+// What produced the recorded modules, written to variants/manifest.json for
+// scripts/shader_analytics.py: the same for every program of a process.
+class Shader_variant_report_tools
+{
+public:
+    std::string api;                  // "vulkan", "opengl", "metal"
+    std::string glslang_version;
+    std::string spirv_tools_version;  // spvSoftwareVersionString()
+    std::string spirv_target_env;     // the optimizer's target environment, "vulkan1.3" / "opengl4.5"
+    bool        spirv_optimization;   // Graphics_config::spirv_optimization: which module the device uses
+    std::string texture_heap_path;    // Device_info::texture_heap_path
+    uint32_t    texture_heap_size;    // Device_info::texture_heap_size
+};
+
 // The shader variant browser (Graphics_config::shader_variant_browser_directory,
 // doc/erhe/graphics.md "Shader variant browser"): an HTML report of every
 // program Glslang_shader_stages compiles in this process. Each add() writes
-// the program's detail page (sources, SPIR-V disassembly before and after
-// optimization) and the raw .spv files under variants/, and rewrites
+// the program's detail page (shader key, sources, SPIR-V disassembly before
+// and after optimization, Mali analytics) and the raw .spv files under variants/, and rewrites
 // index.html, whose table lists every program recorded so far with its
-// SPIR-V sizes and instruction counts. Programs served from the Spirv_cache
-// are not compiled and so not recorded; delete the cache directory to record
-// every program. Thread-safe: programs compile on any thread.
+// SPIR-V sizes and instruction counts, and variants/manifest.json, the
+// same data for scripts/shader_analytics.py (which writes analytics.js, the
+// sidecar both pages render when present). Programs served from the
+// Spirv_cache are not compiled and so not recorded; delete the cache
+// directory to record every program. Thread-safe: programs compile on any
+// thread.
 class Shader_variant_report
 {
 public:
@@ -46,7 +63,8 @@ public:
     void add(
         const Shader_stages_create_info&                create_info,
         std::span<const Shader_variant_report_stage>    stages,
-        std::span<const std::filesystem::path>          include_paths
+        std::span<const std::filesystem::path>          include_paths,
+        const Shader_variant_report_tools&              tools
     );
 
 private:
@@ -68,11 +86,13 @@ private:
         std::vector<Stage_row>                           stages;
     };
 
-    void write_index() const;
+    void write_index   () const;
+    void write_manifest() const;
 
-    std::filesystem::path m_directory;
-    std::mutex            m_mutex;
-    std::vector<Row>      m_rows;
+    std::filesystem::path       m_directory;
+    std::mutex                  m_mutex;
+    std::vector<Row>            m_rows;
+    Shader_variant_report_tools m_tools;
 };
 
 } // namespace erhe::graphics

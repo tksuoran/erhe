@@ -887,3 +887,6 @@ OpenGL `GL_OVR_multiview2` route is out of scope.
 
 - [Vulkan backend known issues](../plans/vulkan_backend.md) - rounding the
   ID-buffer edge-line end caps in the fragment shader.
+- [plans/vulkan_texture_heap_sampler_array.md](../plans/vulkan_texture_heap_sampler_array.md):
+  a bounded sampler array heap path and the other feature fallbacks a
+  Bifrost (Mali-G52) driver needs.

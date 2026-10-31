@@ -4,6 +4,7 @@
 #include "erhe_file/file.hpp"
 
 #include <fmt/format.h>
+#include <nlohmann/json.hpp>
 #include <spirv-tools/libspirv.hpp>
 
 #include <algorithm>
@@ -150,10 +151,12 @@ Shader_variant_report::Shader_variant_report(const std::filesystem::path& direct
 void Shader_variant_report::add(
     const Shader_stages_create_info&             create_info,
     const std::span<const Shader_variant_report_stage> stages,
-    const std::span<const std::filesystem::path> include_paths
+    const std::span<const std::filesystem::path> include_paths,
+    const Shader_variant_report_tools&           tools
 )
 {
     std::lock_guard<std::mutex> lock{m_mutex};
+    m_tools = tools;
 
     const std::size_t id = m_rows.size();
     Row row{
@@ -163,7 +166,7 @@ void Shader_variant_report::add(
         .stages  = {}
     };
 
-    // Detail page: the program's defines and sizes, then three tabs.
+    // Detail page: the program's sizes, then five tabs (key, sources, SPIR-V before, after, Mali analytics).
     std::string sources_tab;
     std::string before_tab;
     std::string after_tab;
@@ -248,12 +251,13 @@ summary {{ cursor: pointer; padding: 2px 0; }}
 <div class="columns">
 <table><tr><th>Stage</th><th class="num">Bytes before</th><th class="num">Bytes after</th><th class="num">Instr. before</th><th class="num">Instr. after</th><th>.spv</th></tr>
 {3}</table>
-<details><summary>Defines ({4})</summary><table>{5}</table></details>
 </div>
-<p class="tabs"><button class="active" data-tab="sources">Sources</button><button data-tab="before">SPIR-V before optimization</button><button data-tab="after">SPIR-V after optimization</button></p>
-<div class="tab active" id="sources">{6}</div>
+<p class="tabs"><button class="active" data-tab="key">Shader key</button><button data-tab="sources">Sources</button><button data-tab="before">SPIR-V before optimization</button><button data-tab="after">SPIR-V after optimization</button><button data-tab="analytics">Mali analytics</button></p>
+<div class="tab active" id="key"><p class="muted">{4} defines, in the order the program declares them; the index shows the ones that vary among this program's variants as its key slots.</p><table><tr><th>Define</th><th>Value</th></tr>{5}</table></div>
+<div class="tab" id="sources">{6}</div>
 <div class="tab" id="before">{7}</div>
 <div class="tab" id="after">{8}</div>
+<div class="tab" id="analytics"><p class="muted">No analytics recorded: run <code>py -3 scripts/shader_analytics.py &lt;browser directory&gt;</code> to write <code>analytics.js</code> (doc/erhe/graphics.md "Shader variant browser").</p></div>
 <script>
 for (const button of document.querySelectorAll('.tabs button')) {{
   button.addEventListener('click', () => {{
@@ -261,6 +265,62 @@ for (const button of document.querySelectorAll('.tabs button')) {{
     for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t.id === button.dataset.tab);
   }});
 }}
+</script>
+<script src="../analytics.js"></script>
+<script>
+// The Mali analytics tab, rendered from analytics.js (scripts/shader_analytics.py)
+// when it is present: per core, per stage, per compiler variant (Main, or
+// Position and Varying for vertex shaders) a before / after / delta table.
+(function() {{
+  const a = window.erhe_shader_analytics; if (!a || !a.cores) return;
+  const esc = s => String(s).replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}})[c]);
+  const fmt = v => (v === null || v === undefined) ? '-' : (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(2)) : String(v));
+  const stageNames = {{vert: 'Vertex', frag: 'Fragment', comp: 'Compute', geom: 'Geometry', tesc: 'Tessellation control', tese: 'Tessellation evaluation'}};
+  const row = (label, x, y) => {{
+    const d = (typeof x === 'number' && typeof y === 'number') ? (y - x) : null;
+    const cls = (d === null || d === 0) ? '' : (d < 0 ? 'good' : 'bad');
+    return `<tr><td>${{esc(label)}}</td><td class="num">${{fmt(x)}}</td><td class="num">${{fmt(y)}}</td><td class="num ${{cls}}">${{d === null ? '' : (d > 0 ? '+' : '') + fmt(d)}}</td></tr>`;
+  }};
+  const renderStage = (core, s) => {{
+    const b = s.before, af = s.after;
+    let out = '';
+    for (const [label, x] of [['before', b], ['after', af]]) if (x && x.error) out += `<p class="bad">${{label}}: ${{esc(x.error)}}</p>`;
+    const bv = (b && b.variants) || [], av = (af && af.variants) || [];
+    const names = [...new Set([...bv.map(v => v.name), ...av.map(v => v.name)])];
+    for (const name of names) {{
+      const x = bv.find(v => v.name === name), y = av.find(v => v.name === name);
+      out += `<details open><summary>${{esc(name)}} variant</summary><table><tr><th></th><th class="num">Before</th><th class="num">After</th><th class="num">Delta</th></tr>`;
+      for (const [label, key] of [['Work registers', 'work_registers'], ['Uniform registers', 'uniform_registers'], ['Thread occupancy %', 'occupancy'], ['Stack bytes', 'stack_size'], ['Spill bytes', 'spill_bytes'], ['Alloca bytes', 'alloca_bytes'], ['16-bit arithmetic %', 'fp16']]) {{
+        out += row(label, x ? x[key] : null, y ? y[key] : null);
+      }}
+      for (const [label, key, bkey] of [['Total cycles', 'total', 'bound_total'], ['Shortest path', 'shortest', 'bound_shortest'], ['Longest path', 'longest', 'bound_longest']]) {{
+        (core.pipelines || []).forEach((p, i) => {{ out += row(`${{label}}: ${{p}}`, (x && x[key]) ? x[key][i] : null, (y && y[key]) ? y[key][i] : null); }});
+        out += `<tr><td>${{label}}: bound</td><td class="num">${{esc(((x && x[bkey]) || []).join(' '))}}</td><td class="num">${{esc(((y && y[bkey]) || []).join(' '))}}</td><td></td></tr>`;
+      }}
+      out += '</table></details>';
+    }}
+    const props = (af && af.properties) || (b && b.properties) || {{}};
+    if (Object.keys(props).length) out += '<details open><summary>Shader properties</summary><table>' + Object.keys(props).map(k => `<tr><td>${{esc(k)}}</td><td class="${{props[k] === true ? 'bad' : ''}}">${{props[k]}}</td></tr>`).join('') + '</table></details>';
+    const streams = (af && af.attribute_streams) || (b && b.attribute_streams);
+    if (streams) out += `<details><summary>Attribute streams</summary><pre>${{esc(JSON.stringify(streams, null, 1))}}</pre></details>`;
+    for (const [label, x] of [['before', b], ['after', af]]) {{
+      if (!x) continue;
+      const lines = [...(x.warnings || []), ...(x.notes || [])];
+      if (lines.length) out += `<details><summary>${{label}}: warnings and notes (${{lines.length}})</summary><pre>${{esc(lines.join('\n'))}}</pre></details>`;
+      if (x.command) out += `<p class="muted mono">${{label}}: ${{esc(x.command)}}</p>`;
+    }}
+    return out;
+  }};
+  let html = '';
+  for (const coreName of Object.keys(a.cores)) {{
+    const core = a.cores[coreName];
+    const prog = core.programs && core.programs[String({1})];
+    if (!prog) continue;
+    html += `<h3>${{esc(coreName)}} ${{esc(core.revision || '')}} <span class="muted">${{esc(core.architecture || '')}}, driver ${{esc(core.driver || '')}}, Mali Offline Compiler ${{esc(core.malioc_version || '')}}, ${{esc(core.generated || '')}}</span></h3>`;
+    for (const stage of Object.keys(prog)) html += `<h4>${{stageNames[stage] || stage}}</h4>` + renderStage(core, prog[stage]);
+  }}
+  if (html) document.getElementById('analytics').innerHTML = html;
+}})();
 </script>
 </body></html>
 )HTML",
@@ -275,24 +335,79 @@ for (const button of document.querySelectorAll('.tabs button')) {{
 
     m_rows.push_back(std::move(row));
     write_index();
+    write_manifest();
+}
+
+void Shader_variant_report::write_manifest() const
+{
+    nlohmann::json programs = nlohmann::json::array();
+    for (const Row& row : m_rows) {
+        nlohmann::json defines = nlohmann::json::array();
+        for (const auto& [define_name, value] : row.defines) {
+            defines.push_back(nlohmann::json::array({define_name, value}));
+        }
+        nlohmann::json stages = nlohmann::json::array();
+        for (const Stage_row& stage : row.stages) {
+            const char* const short_name = stage_short_name(stage.type);
+            nlohmann::json stage_json{
+                {"type",                        short_name},
+                {"entry_point",                 "main"},
+                {"specialization_constants",    nlohmann::json::array()},
+                {"spirv",                       fmt::format("{}_{}.spv", row.id, short_name)},
+                {"spirv_bytes",                 stage.spirv_bytes},
+                {"instruction_count",           stage.instruction_count},
+                {"optimized_spirv",             nullptr},
+                {"optimized_spirv_bytes",       stage.optimized_spirv_bytes},
+                {"optimized_instruction_count", stage.optimized_instruction_count}
+            };
+            if (stage.optimized_spirv_bytes > 0) {
+                stage_json["optimized_spirv"] = fmt::format("{}_{}_optimized.spv", row.id, short_name);
+            }
+            stages.push_back(std::move(stage_json));
+        }
+        programs.push_back(nlohmann::json{
+            {"id",      row.id},
+            {"name",    row.name},
+            {"defines", std::move(defines)},
+            {"stages",  std::move(stages)}
+        });
+    }
+    const nlohmann::json manifest{
+        {"schema", {{"name", "erhe_shader_variants"}, {"version", 1}}},
+        {"tools", {
+            {"api",                 m_tools.api},
+            {"glslang_version",     m_tools.glslang_version},
+            {"spirv_tools_version", m_tools.spirv_tools_version},
+            {"spirv_target_env",    m_tools.spirv_target_env},
+            {"spirv_optimization",  m_tools.spirv_optimization},
+            {"texture_heap_path",   m_tools.texture_heap_path},
+            {"texture_heap_size",   m_tools.texture_heap_size}
+        }},
+        {"programs", std::move(programs)}
+    };
+    const std::filesystem::path path = m_directory / "variants" / "manifest.json";
+    if (!erhe::file::write_file_via_temp(path, manifest.dump(1))) {
+        log_program->warn("Shader variant browser: failed to write {}", path.string());
+    }
 }
 
 void Shader_variant_report::write_index() const
 {
     // The table data as a JSON array; the page script renders, sorts and
     // filters it, and shows the selected program's page beside the table.
+    // The defines go in full (every axis, zero-valued ones included): the
+    // page lays the key out as one slot per axis and shows the full define
+    // in a tooltip.
     std::string data{"[\n"};
     for (const Row& row : m_rows) {
-        std::string defines;
+        std::string defines{"["};
         for (const auto& [define_name, value] : row.defines) {
-            if (value == "0") {
-                continue; // zero-valued axes clutter the key column
+            if (defines.size() > 1) {
+                defines += ',';
             }
-            if (!defines.empty()) {
-                defines += ' ';
-            }
-            defines += value.empty() ? define_name : fmt::format("{}={}", define_name, value);
+            defines += fmt::format("[{},{}]", json_string(define_name), json_string(value));
         }
+        defines += ']';
         std::string stages;
         std::size_t bytes = 0, optimized_bytes = 0, instructions = 0, optimized_instructions = 0;
         for (const Stage_row& stage : row.stages) {
@@ -307,7 +422,7 @@ void Shader_variant_report::write_index() const
         }
         data += fmt::format(
             "[{},{},{},{},{},{},{},{}],\n",
-            row.id, json_string(row.name), json_string(defines), json_string(stages),
+            row.id, json_string(row.name), defines, json_string(stages),
             bytes, optimized_bytes, instructions, optimized_instructions
         );
     }
@@ -327,36 +442,175 @@ body {{ display: flex; height: 100vh; overflow: hidden; }}
 #table tbody tr {{ cursor: pointer; }}
 #table tbody tr:hover {{ background: var(--hover); }}
 #table tbody tr.selected {{ background: var(--select); }}
-td.key {{ font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }}
+#table th, #table td {{ white-space: nowrap; }}
+td.key {{ font-family: ui-monospace, monospace; font-size: 11px; }}
+td.key span {{ display: inline-block; overflow: hidden; margin-right: 0.6ch; vertical-align: top; }}
+td.key span.off {{ color: var(--line); }}
 iframe {{ flex: 1; border: 0; height: 100%; background: var(--bg); }}
 </style></head><body>
 <div id="left">
 <div id="bar"><strong>Shader variants</strong><span id="summary" class="muted"></span><input id="filter" placeholder="Filter by program or define (all words must match)"></div>
 <div id="scroll"><table id="table"><thead><tr>
-<th class="num" data-col="0">#</th><th data-col="1">Program</th><th data-col="2">Variant key (non-zero defines)</th><th data-col="3">Stages</th>
+<th class="num" data-col="0">#</th><th data-col="1">Program</th><th data-col="2" id="keyhead">Variant key</th><th data-col="3">Stages</th>
 <th class="num" data-col="4">Bytes before</th><th class="num" data-col="5">Bytes after</th><th class="num" data-col="8">Bytes %</th>
 <th class="num" data-col="6">Instr. before</th><th class="num" data-col="7">Instr. after</th>
 </tr></thead><tbody></tbody></table></div>
 </div>
 <iframe id="detail" title="Selected variant"></iframe>
+<script src="analytics.js"></script>
 <script>
 const rows = {1};
 for (const r of rows) r.push(r[4] > 0 ? (100 * r[5] / r[4]) : 0);
+// The variant key column: one slot per define axis that varies among the
+// programs of one name (an axis every variant of a program sets the same
+// way is configuration, not key, and shows in the tooltip only), in the
+// order the axes first appear, each slot as wide as the widest compact
+// label it shows in any row, so the parts align down the table. A slot
+// shows the axis's compact label (below), or a dot when the axis is
+// zero or absent in that row. Each slot's tooltip is the full define; the
+// cell's tooltip is the whole key, every define included.
+// Compact axis codes: a table for the known axes, initials of the words for
+// any other (ERHE_, USE_ and VARIANT_ dropped). A boolean axis (every value
+// it takes is 0 or 1) shows its code, a numeric one its code followed by
+// the value (B2; B1 when the axis also takes 2), a string-valued one its
+// code, '=' and the value with a leading "s_" dropped.
+const compactCodes = {{
+  ERHE_USE_SKINNING: 'Sk',
+  ERHE_USE_VERTEX_VARYING_NORMAL: 'vN', ERHE_USE_VERTEX_VARYING_COLOR: 'vC', ERHE_USE_VERTEX_VARYING_TANGENT: 'vT',
+  ERHE_USE_VERTEX_VARYING_BITANGENT: 'vB', ERHE_USE_VERTEX_VARYING_TEXCOORD0: 'vU0', ERHE_USE_VERTEX_VARYING_TEXCOORD1: 'vU1',
+  ERHE_USE_VERTEX_VARYING_TEXCOORD2: 'vU2', ERHE_USE_VERTEX_VARYING_ANISO_CONTROL: 'vA', ERHE_USE_VERTEX_VARYING_NODE_POSITION: 'vP',
+  ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED: 'Ld', ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED: 'ld',
+  ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED: 'Ls', ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED: 'ls',
+  ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED: 'Lp', ERHE_LIGHT_COUNT_POINT_NOT_SHADOWMAPPED: 'lp',
+  ERHE_LIGHT_SHADING_CLUSTERED: 'LC', ERHE_USE_LIGHTMAP: 'Lm',
+  ERHE_BXDF_MODEL: 'B', ERHE_MATERIAL_BLENDING_MODE: 'Bl',
+  ERHE_SHADOW_FILTER: 'SF', ERHE_SHADOW_BIAS: 'SB', ERHE_SHADOW_DEPTH_BITS: 'SD',
+  ERHE_USE_CIRCULAR_BRUSHED_METAL: 'Br', ERHE_CIRCULAR_BRUSHED_METAL_TEXGEN_MODE: 'BrT',
+  ERHE_SPECULAR_ANTI_ALIASING: 'SAA',
+  ERHE_USE_BASE_COLOR_TEXTURE: 'tB', ERHE_USE_METALLIC_ROUGHNESS_TEXTURE: 'tM', ERHE_USE_NORMAL_TEXTURE: 'tN',
+  ERHE_USE_OCCLUSION_TEXTURE: 'tO', ERHE_USE_EMISSION_TEXTURE: 'tE',
+  ERHE_SOLID_WIREFRAME: 'Wf', ERHE_SHADER_DEBUG: 'Dbg', ERHE_SHADER_MULTIVIEW_COUNT: 'MV', ERHE_OVERDRAW: 'OD',
+  ERHE_VARIANT_DEPTH_ONLY: 'Dp', ERHE_VARIANT_POINTS: 'Pt', ERHE_VARIANT_BRUSH_PREVIEW: 'BP',
+  ERHE_VARIANT_SHADOW_DISTANCE: 'SDi', ERHE_VARIANT_SHADOW_CUBE: 'SCu',
+  SOURCE: 'src', FIRST_PASS: 'FP', LAST_PASS: 'LP'
+}};
+const compactName = name => compactCodes[name] || name.replace(/^ERHE_/, '').replace(/^USE_/, '').replace(/^VARIANT_/, '').split('_').map(w => w[0] || '').join('');
+const booleanAxes = new Set();
+{{
+  const valuesByAxis = new Map();
+  for (const r of rows) for (const [name, value] of r[2]) {{ if (!valuesByAxis.has(name)) valuesByAxis.set(name, new Set()); valuesByAxis.get(name).add(value); }}
+  for (const [name, values] of valuesByAxis) if ([...values].every(v => v === '' || v === '0' || v === '1')) booleanAxes.add(name);
+}}
+const compactLabel = (name, value) => {{
+  const code = compactName(name);
+  if (booleanAxes.has(name)) return code;
+  if (/^-?\d+$/.test(value)) return code + value;
+  return `${{code}}=${{value.replace(/^s_/, '')}}`;
+}};
+const isSet = v => v !== '0';
+const axes = [];
+const axisIndex = new Map();
+for (const r of rows) for (const [name, value] of r[2]) {{
+  if (!axisIndex.has(name)) {{ axisIndex.set(name, axes.length); axes.push({{ name, width: 0, used: false }}); }}
+}}
+const valuesByProgram = new Map(); // program name -> axis name -> set of values ('0' when absent)
+for (const r of rows) {{
+  r.key = new Map(r[2]);
+  r.keyText = r[2].filter(([n, v]) => isSet(v)).map(([n, v]) => compactLabel(n, v)).join(' ');
+  r.keyFull = r[2].map(([n, v]) => v === '' ? n : `${{n}}=${{v}}`).join('\n');
+  if (!valuesByProgram.has(r[1])) valuesByProgram.set(r[1], new Map());
+  const byAxis = valuesByProgram.get(r[1]);
+  for (const a of axes) {{
+    const value = r.key.has(a.name) ? r.key.get(a.name) : '0';
+    if (!byAxis.has(a.name)) byAxis.set(a.name, new Set());
+    byAxis.get(a.name).add(value);
+  }}
+}}
+for (const byAxis of valuesByProgram.values()) for (const [name, values] of byAxis) if (values.size > 1) axes[axisIndex.get(name)].used = true;
+for (const r of rows) for (const [name, value] of r[2]) if (isSet(value)) {{
+  const axis = axes[axisIndex.get(name)];
+  if (axis.used) axis.width = Math.max(axis.width, compactLabel(name, value).length);
+}}
+const shownAxes = axes.filter(a => a.used);
+document.getElementById('keyhead').title = 'One slot per define axis that varies among the variants of a program (the whole key is the cell tooltip), in order:\n' + shownAxes.map(a => `${{compactName(a.name)}} = ${{a.name}}`).join('\n');
+const renderKey = r => shownAxes.map(a => {{
+  const value = r.key.get(a.name);
+  const set = value !== undefined && isSet(value);
+  const full = value === undefined ? `${{a.name}} (absent)` : (value === '' ? a.name : `${{a.name}}=${{value}}`);
+  return `<span class="${{set ? '' : 'off'}}" style="width:${{a.width}}ch" title="${{esc(full)}}">${{set ? esc(compactLabel(a.name, value)) : '.'}}</span>`;
+}}).join('');
+// Mali analytics columns (analytics.js from scripts/shader_analytics.py), per
+// program: the fragment (or compute) Main variant's total cycles before and
+// after optimization with the bound pipelines, the vertex Position and Varying
+// cycles after, the maximum work registers and minimum occupancy over the
+// stages, the spill bytes summed, and flags. Rows get indices 9..17.
+const analytics = window.erhe_shader_analytics;
+const analyticsCore = (analytics && analytics.cores) ? analytics.cores[analytics.default_core] : null;
+const maxCycles = v => (v && v.total) ? Math.max(...v.total.filter(x => typeof x === 'number'), 0) : null;
+function summarize(prog) {{
+  const out = [null, null, '', null, null, null, null, null, ''];
+  if (!prog) return out;
+  const flags = new Set();
+  let regs = null, occ = null, spill = 0;
+  for (const stage of Object.keys(prog)) {{
+    const s = prog[stage], b = s.before, af = s.after || s.before;
+    if ((b && b.error) || (af && af.error)) flags.add('error');
+    if (!af || af.error) continue;
+    for (const v of af.variants || []) {{
+      if (typeof v.work_registers === 'number') regs = (regs === null) ? v.work_registers : Math.max(regs, v.work_registers);
+      if (typeof v.occupancy === 'number') occ = (occ === null) ? v.occupancy : Math.min(occ, v.occupancy);
+      if (typeof v.spill_bytes === 'number') spill += v.spill_bytes;
+      if (v.spill_bytes > 0) flags.add('spill');
+    }}
+    const p = af.properties || {{}};
+    if (p.uses_late_zs_test || p.uses_late_zs_update) flags.add('late-zs');
+    if (p.modifies_coverage) flags.add('coverage');
+    if (p.has_side_effects) flags.add('side-effects');
+    if (p.has_uniform_computation) flags.add('uniform-comp');
+    if (stage === 'frag' || stage === 'comp') {{
+      const mb = b && !b.error && b.variants && b.variants[0], ma = af.variants && af.variants[0];
+      out[0] = mb ? maxCycles(mb) : null; out[1] = ma ? maxCycles(ma) : null; out[2] = (ma && ma.bound_total) ? ma.bound_total.join(' ') : '';
+    }}
+    if (stage === 'vert') for (const v of af.variants || []) {{ if (v.name === 'Varying') out[4] = maxCycles(v); else out[3] = maxCycles(v); }}
+  }}
+  out[5] = regs; out[6] = occ; out[7] = spill; out[8] = [...flags].join(' ');
+  return out;
+}}
+if (analyticsCore) {{
+  for (const r of rows) r.push(...summarize(analyticsCore.programs[String(r[0])]));
+  document.querySelector('#table thead tr').insertAdjacentHTML('beforeend',
+    '<th class="num" data-col="9">Main cyc. before</th><th class="num" data-col="10">Main cyc. after</th><th data-col="11">Bound</th>' +
+    '<th class="num" data-col="12">Pos. cyc.</th><th class="num" data-col="13">Var. cyc.</th><th class="num" data-col="14">Regs</th><th class="num" data-col="15">Occ. %</th><th class="num" data-col="16">Spill B</th><th data-col="17">Flags</th>');
+  document.getElementById('bar').insertAdjacentHTML('beforeend', `<span class="muted">Mali analytics: ${{analytics.default_core}} (${{Object.keys(analytics.cores).length}} core(s) in analytics.js)</span>`);
+}}
 let sortCol = 0, sortAsc = true, selected = -1;
 const tbody = document.querySelector('#table tbody');
 const filter = document.getElementById('filter');
-const esc = s => s.replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}})[c]);
+const esc = s => String(s).replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}})[c]);
+const num = v => (v === null || v === undefined) ? '-' : (Number.isInteger(v) ? String(v) : v.toFixed(2));
 function render() {{
   const words = filter.value.toLowerCase().split(/\s+/).filter(w => w);
-  const shown = rows.filter(r => words.every(w => (r[1] + ' ' + r[2]).toLowerCase().includes(w)));
-  shown.sort((a, b) => {{ const x = a[sortCol], y = b[sortCol]; const c = (typeof x === 'number') ? (x - y) : String(x).localeCompare(String(y)); return sortAsc ? c : -c; }});
-  let before = 0, after = 0;
+  const shown = rows.filter(r => words.every(w => (r[1] + ' ' + r.keyText + ' ' + r.keyFull + ' ' + (r[17] || '')).toLowerCase().includes(w)));
+  shown.sort((a, b) => {{
+    const x = (sortCol === 2) ? a.keyText : a[sortCol], y = (sortCol === 2) ? b.keyText : b[sortCol];
+    const nx = (x === null || x === undefined) ? -1 : x, ny = (y === null || y === undefined) ? -1 : y;
+    const c = (typeof nx === 'number' && typeof ny === 'number') ? (nx - ny) : String(nx).localeCompare(String(ny));
+    return sortAsc ? c : -c;
+  }});
+  let before = 0, after = 0, cyclesBefore = 0, cyclesAfter = 0;
   tbody.innerHTML = shown.map(r => {{
     before += r[4]; after += r[5];
-    return `<tr data-id="${{r[0]}}" class="${{r[0] === selected ? 'selected' : ''}}"><td class="num">${{r[0]}}</td><td>${{esc(r[1])}}</td><td class="key">${{esc(r[2])}}</td><td>${{r[3]}}</td>` +
-      `<td class="num">${{r[4]}}</td><td class="num">${{r[5]}}</td><td class="num">${{r[8].toFixed(1)}}</td><td class="num">${{r[6]}}</td><td class="num">${{r[7]}}</td></tr>`;
+    let cells = `<tr data-id="${{r[0]}}" class="${{r[0] === selected ? 'selected' : ''}}"><td class="num">${{r[0]}}</td><td>${{esc(r[1])}}</td><td class="key" title="${{esc(r.keyFull)}}">${{renderKey(r)}}</td><td>${{r[3]}}</td>` +
+      `<td class="num">${{r[4]}}</td><td class="num">${{r[5]}}</td><td class="num">${{r[8].toFixed(1)}}</td><td class="num">${{r[6]}}</td><td class="num">${{r[7]}}</td>`;
+    if (analyticsCore) {{
+      cyclesBefore += r[9] || 0; cyclesAfter += r[10] || 0;
+      cells += `<td class="num">${{num(r[9])}}</td><td class="num">${{num(r[10])}}</td><td>${{esc(r[11])}}</td><td class="num">${{num(r[12])}}</td><td class="num">${{num(r[13])}}</td>` +
+        `<td class="num">${{num(r[14])}}</td><td class="num ${{r[15] !== null && r[15] < 100 ? 'bad' : ''}}">${{num(r[15])}}</td><td class="num ${{r[16] > 0 ? 'bad' : ''}}">${{num(r[16])}}</td><td class="${{(r[17] || '').includes('error') ? 'bad' : ''}}">${{esc(r[17])}}</td>`;
+    }}
+    return cells + '</tr>';
   }}).join('');
-  document.getElementById('summary').textContent = `${{shown.length}} / ${{rows.length}} programs, SPIR-V ${{before}} -> ${{after}} bytes`;
+  document.getElementById('summary').textContent = `${{shown.length}} / ${{rows.length}} programs, SPIR-V ${{before}} -> ${{after}} bytes` +
+    (analyticsCore ? `, Main cycles ${{cyclesBefore.toFixed(1)}} -> ${{cyclesAfter.toFixed(1)}}` : '');
 }}
 document.querySelector('#table thead').addEventListener('click', e => {{
   const th = e.target.closest('th'); if (!th) return;

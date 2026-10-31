@@ -138,6 +138,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::dataformat`: `convert()` writes `format_packed111110_vec3_unorm`
   (R in the low 11 bits) and `format_packed1010102_vec4_unorm`; converting to
   `format_8_vec4_srgb` writes the source alpha (it wrote blue).
+- `erhe::graphics`: `Shader_variant_report_tools` and a `tools` parameter of
+  `Shader_variant_report::add()`; the shader variant browser writes
+  `variants/manifest.json` for `scripts/shader_analytics.py` and its pages
+  render the `analytics.js` sidecar that script writes.
+
 - `erhe::scene_renderer`: overdraw counting
   (doc/plans/overdraw_visualization.md): the `Shader_int::OVERDRAW` axis with
   `Overdraw_count` (off, shaded, rasterized; `res/shaders/erhe_overdraw.glsl`),

@@ -709,15 +709,97 @@ optimizer of "SPIR-V optimization" (which runs for the report whether or not
 Programs served from the `Spirv_cache` are not compiled and so not recorded:
 delete `spirv_cache/` to record every program.
 
-Each recorded program writes `variants/<n>.html` (defines, per stage sizes,
-and three tabs: the sources including the included files, the SPIR-V
-disassembly before optimization and after it) and the raw modules
-`variants/<n>_<stage>.spv` / `<n>_<stage>_optimized.spv`, and rewrites
-`index.html`: a sortable, filterable table of every program recorded so far
-(program name, variant key as its non-zero defines, stages, SPIR-V bytes and
+Each recorded program writes `variants/<n>.html` (per stage sizes and five
+tabs: the shader key as every define with its value, the sources including
+the included files, the SPIR-V disassembly before optimization and after it,
+and the Mali analytics below)
+and the raw modules `variants/<n>_<stage>.spv` / `<n>_<stage>_optimized.spv`,
+and rewrites `index.html`: a sortable, filterable table of every program
+recorded so far (program name, variant key, stages, SPIR-V bytes and
 instruction counts before and after optimization) that shows the selected
-program's page beside it. Only the table rows stay in memory. Recording runs
-on whichever thread compiles; `add()` takes the report's mutex.
+program's page beside it. The variant key column has one fixed-width slot
+per define axis that varies among the programs of one name, in the order
+the axes first appear, so the parts align down the table; a slot shows the
+axis's compact code (a table in the page for the known axes, `Sk` for
+`ERHE_USE_SKINNING`, `vN` for `ERHE_USE_VERTEX_VARYING_NORMAL`, `B2` for
+`ERHE_BXDF_MODEL=2`; the initials of the words for any other; a boolean
+axis shows the code alone, a numeric one the code and the value) or a dot,
+its tooltip the full define, and the cell's tooltip the whole key, every
+define included (an
+axis every variant of a program sets the same way is configuration and
+shows there only). The filter matches the full defines too. Only the table rows stay in
+memory. Recording runs on whichever thread compiles; `add()` takes the
+report's mutex.
+
+Each `add()` also rewrites `variants/manifest.json` (schema
+`erhe_shader_variants` 1): a `tools` block naming what produced the modules
+(`Shader_variant_report_tools`: the graphics API, the glslang and SPIRV-Tools
+versions, the optimizer's target environment, whether
+`spirv_optimization` was on, the `Device_info` texture heap path and size)
+and, per program, its id, name, every define, and per stage the type, the
+entry point (`main`), the specialization constants (none; erhe sets none)
+and the two module file names with their sizes and instruction counts. The
+manifest is the input of the analytics pass.
+
+### Mali analytics
+
+`py -3 scripts/shader_analytics.py <directory> [--core <name>] [--malioc <path>] [--jobs N] [--force] [--check]`
+runs the Arm Mali Offline Compiler (`malioc`; found through `--malioc`, the
+`MALIOC` environment variable, or `PATH`; its install location is per
+machine) on every stage module of the manifest, before and after the
+optimizer, and keeps each raw JSON report as
+`variants/<n>_<stage>[_optimized].<core>.malioc.json` (the compiler's
+`performance` or `error` report plus an `erhe` block: core, compiler version,
+command line, exit code). A report newer than its module with the same core
+and compiler version is reused unless `--force`. A failed compile is a result
+too: `Unsupported capability (<n>)` is resolved to the SPIR-V capability
+name, and a compiler crash is recorded as an error naming the signal.
+`--check` verifies the sidecar covers every stage of the manifest.
+
+The pass writes `<directory>/analytics.js`
+(`window.erhe_shader_analytics`, schema `erhe_shader_analytics` 1): per
+core, per program id, per stage, a `before` and an `after` summary with the
+compiler's variants (`Main`; `Position` and `Varying` for vertex shaders:
+work and uniform registers, thread occupancy, stack, spill and alloca bytes,
+16-bit arithmetic share, and the total, shortest-path and longest-path
+cycles per pipeline with the bound pipelines), the shader properties
+(uniform computation, side effects, coverage, late ZS test and update,
+color buffer reads), the vertex attribute streams, warnings and notes. A
+script element is the one way a page opened from disk reads a sibling
+file, so the sidecar is JavaScript. When it is present, `index.html` adds
+columns from the `default_core` (the first `--core`): the fragment or
+compute `Main` total cycles before and after optimization with the bound
+pipelines, the vertex `Position` and `Varying` cycles after, the maximum
+work registers and the minimum occupancy over the stages, the spill bytes,
+and flags (`spill`, `late-zs`, `coverage`, `side-effects`, `uniform-comp`,
+`error`) that the filter box matches; the summary line adds the sum of the
+`Main` cycles. Each program page's "Mali analytics" tab shows, per core and
+stage, a before / after / delta table per compiler variant, the properties,
+the attribute streams, warnings and the command line, or the error.
+
+The default core is Mali-G310, the weakest core whose compiler accepts
+erhe's modules as the device uses them. A sweep of 862 cached Vulkan modules
+(2026-10-29, compiler 2026.5.0): every Bifrost core (Mali-G31 to Mali-G76)
+rejects the 532 modules that declare `RuntimeDescriptorArray` (the Vulkan
+texture heap, `Texture_heap_path::vulkan_descriptor_indexing`) and the 12
+ray-query modules; every Valhall core (Mali-G310 to Mali-G710) accepts all
+but the ray-query modules (`RayQueryKHR`, a path erhe disables on devices
+without ray query) and one module that crashes the compiler (the ImGui
+renderer's vertex shader, which samples the texture heap and a sampler
+array; signal 11 on every core); Mali-G620 and Mali-G1 accept the ray-query
+modules too but reject the modules carrying
+`SPV_KHR_relaxed_extended_instruction` (non-semantic debug info erhe
+already recompiles without on devices lacking the feature). Bifrost cores
+become analyzable with the heap path of
+`doc/plans/vulkan_texture_heap_sampler_array.md`. The compiler takes, for a
+SPIR-V module, only the API, the stage and entry point (detected from the
+module), the core and `-S` specialization constants; defines are already
+baked in and API-side pipeline state (depth write, alpha to coverage,
+sampler filtering) is not modeled, so the cycle counts are a static
+estimate per shader (Arm Mali Offline Compiler User Guide 2.7 - 2.9).
+
+Future work: [plans/vulkan_texture_heap_sampler_array.md](../plans/vulkan_texture_heap_sampler_array.md)
+(a Vulkan heap path without descriptor indexing, for Bifrost drivers).
 
 ## Present calibration cache
 
