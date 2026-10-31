@@ -553,14 +553,6 @@ App_rendering::App_rendering(
     selection_outline->data.kind = Composition_pass_kind::editor_aid;
     selection_outline->data.selection_outline_pulse = true;
 
-    // The fill passes that draw each edge pass's meshes, for the LOD level
-    // the edge lines are fed at (get_wide_line_lod_routing()). Selected and
-    // hovered meshes: the selected fill, or the stencil mask while the
-    // selection fill is off (exactly one of the two is active). The ghost
-    // meshes have no fill: level 0.
-    selection_outline      ->data.lod_level_source_passes = {content_fill_selected_or_hovered.get(), selection_stencil_mask.get()};
-    edge_lines_selected    ->data.lod_level_source_passes = {content_fill_selected_or_hovered.get(), selection_stencil_mask.get()};
-    edge_lines_not_selected->data.lod_level_source_passes = {content_fill_not_selected.get()};
     ghost_edge_lines ->data.kind = Composition_pass_kind::editor_aid;
 
     {
@@ -1072,7 +1064,8 @@ void App_rendering::prepare_wide_line_feed(
         return;
     }
     // The forced levels as the draw lists registered them (flushed earlier
-    // in this M2).
+    // in this M2). Edge lines are not content: they draw the mesh's level
+    // whatever path and shader debug mode the view's fill takes.
     const erhe::scene_renderer::Draw_list_scene* draw_list_scene = content_scene_root->get_draw_list_scene();
 
     // Feeds the meshes of one composition pass.
@@ -1097,11 +1090,6 @@ void App_rendering::prepare_wide_line_feed(
         const float     line_width = settings.constant_size;
         const auto&     filter     = data.filter;
         const uint32_t  group      = data.content_wide_line_group;
-        // The level of the fill these meshes are drawn with: the draw lists
-        // draw a mesh's forced level, the bucket path level 0.
-        const bool lod_from_draw_lists =
-            (draw_list_scene != nullptr) &&
-            (get_wide_line_lod_routing(data, context, host_system_time_ns) == Wide_line_lod_routing::draw_lists);
 
         for (const auto layer_id : data.mesh_layers) {
             const auto mesh_layer = scene->get_mesh_layer_by_id(layer_id);
@@ -1110,7 +1098,7 @@ void App_rendering::prepare_wide_line_feed(
             }
             for (const auto& mesh : mesh_layer->meshes) {
                 if (filter(mesh->get_flag_bits())) {
-                    const std::size_t lod_level = lod_from_draw_lists
+                    const std::size_t lod_level = (draw_list_scene != nullptr)
                         ? erhe::scene::get_forced_lod_level(draw_list_scene->get_mesh_lod(mesh.get()))
                         : std::size_t{0};
                     // The active item of the selection gets its own outline

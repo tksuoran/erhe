@@ -1838,9 +1838,7 @@ void Headset_view::prepare_wide_line_feed(const uint64_t frame_index, const std:
         return;
     }
     // A prepare-phase context: what the passes' gating and primitive
-    // settings read (the view's config, scene and shader debug - a shader
-    // debug view routes the fills to the bucket path, as in the render
-    // phase's contexts); nothing is recorded.
+    // settings read (the view's config and scene); nothing is recorded.
     const Render_context context{
         .command_buffer      = nullptr,
         .encoder             = nullptr,
@@ -1851,8 +1849,7 @@ void Headset_view::prepare_wide_line_feed(const uint64_t frame_index, const std:
         .camera              = nullptr,
         .camera_snapshot     = get_render_camera(),
         .viewport_scene_view = nullptr,
-        .scene_root          = scene_root,
-        .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug)
+        .scene_root          = scene_root
     };
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{scene_root->item_host_mutex};
     m_app_context.app_rendering->prepare_wide_line_feed(context, host_system_time_ns, slot.feed);

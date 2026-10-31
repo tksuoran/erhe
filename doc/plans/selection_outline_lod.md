@@ -115,18 +115,16 @@ levels - the root cause.
   variant has a chain level `i` (clamped to the chain like `add_entries()`
   does) with edge lines, the record points at that level's ranges;
   otherwise the original variant's ranges as now.
-- The level comes from the same decision the fill took, not from a rule
-  re-derived beside it. Routing is per pass, per view, per frame
-  (`use_draw_lists`, the pass data, the view's shader debug;
-  composition_pass.cpp). `Viewport_scene_view::prepare_composition()` runs
-  `prepare_composer()` into the frame slot right before
-  `prepare_wide_line_feed()`, both in M2 under `item_host_mutex` and after
-  the draw-list flush, so the feed reads the prepared selected-fill pass's
-  `use_draw_lists` from the slot: through the draw lists it passes
-  `get_forced_lod_level(draw_list_scene->get_mesh_lod(mesh))` (valid there:
-  M2, after `flush_pending()`), on the bucket path 0 (the bucket path draws
-  level 0). A view with shader debug on thus gets level-0 ribbons over its
-  level-0 bucket fill.
+- The feed passes each mesh's
+  `get_forced_lod_level(draw_list_scene->get_mesh_lod(mesh))` (valid in M2,
+  after `flush_pending()`), whatever path the view's fill takes (user
+  decision 2026-10-31): edge lines are not content, so shader debug and the
+  fill's routing never change them; they respect the LOD level and the
+  selection outline style (make_selection_outline_settings()), and are to
+  respect the edge line color source (step 2b). The bucket path (shader
+  debug fills) draws level 0 and is being retired in favour of the draw
+  lists, so a shader debug view shows the outline at level N over a level-0
+  fill.
 - **Headset.** `Headset_view` calls `add_mesh()` inside `render_headset()`,
   on the render thread; `get_mesh_lod()` there would race `apply_lod()`
   in the overlapping M2 (`Draw_list_scene`'s rule: the render phase reads
@@ -148,8 +146,32 @@ levels - the root cause.
   out); `use_draw_lists` off draws level 0 fill and level 0 outline; the
   edge-line display passes ("Content edge lines") show the level's edges.
 
+### Step 2b: edge lines honor the color source
+
+`Render_style_appearance::edge_lines_color_source` (constant color or a
+per-primitive source) does not reach the wide-line edges:
+`App_rendering::prepare_wide_line_feed()` passes one flat color per mesh
+(`settings.get_selected_color()`), `Content_wide_line_record` holds one
+`color`, and the compute pass emits it per record. A hovered, not selected
+mesh in the selection outline pass gets `constant_color0` rather than
+`constant_color1`. The feed resolves the color per mesh / primitive from the
+pass's `Primitive_interface_settings` the way the primitive buffer writers
+do for the bucket and draw-list records (the color source, hovered / active
+flags), so edge lines show the configured source in the viewports and the
+headset. User requirement (2026-10-31): edge lines respect the color source
+setting.
+
 ### Step 3: stencil mask passes on the draw lists
 
+- Both mask passes, "Selection stencil mask (fill disabled)" and "Selection
+  stencil mask (proxy hidden)" (`app_rendering.cpp`), take no shader debug
+  (`shader_debug_override` none): the selection silhouette is not content,
+  and a debug mode must not change the outline. Today they take the view's
+  shader debug, fail the draw-list gate and draw a level-0 silhouette (with
+  `SHADER_DEBUG` in a depth-only variant's key), so with selection fill off
+  and shader debug on the level-N outline is masked by a level-0 silhouette:
+  that is the verification case. This also keeps them routable to the draw
+  lists.
 - A dedicated base pipeline for the mask (color writes disabled, the
   selected fill's depth / stencil state) replaces `color_blend_override`;
   the pass supplies it like any other base pipeline.

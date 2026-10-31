@@ -53,8 +53,6 @@ enum class Composition_pass_kind : unsigned int {
     occlusion_test
 };
 
-class Composition_pass;
-
 class Composition_pass_data
 {
 public:
@@ -111,13 +109,6 @@ public:
     // time-animated make_selection_outline_settings(), taking precedence over
     // primitive_settings.
     bool                                                                   selection_outline_pulse{false};
-    // Edge-line passes: the fill passes that draw this pass's meshes, in
-    // order (doc/plans/selection_outline_lod.md). The first of them that
-    // submits for a view decides the LOD level the edge lines are fed at -
-    // the mesh's forced level when that fill draws through the draw lists,
-    // level 0 on the bucket path - so ribbons and fill draw the same level
-    // (get_wide_line_lod_routing()). Empty: level 0.
-    std::vector<const Composition_pass*>                                   lod_level_source_passes{};
     std::function<void()>                                                  begin{};
     std::function<void()>                                                  end{};
     std::function<const Render_style_data&(const Render_context& context)> get_render_style{};
@@ -162,18 +153,6 @@ enum class Composition_pass_result : unsigned int {
 // and width pulse between the editor-global Selection_outline_style low /
 // high values. A per-frame animation, computed where it is used.
 [[nodiscard]] auto make_selection_outline_settings(const App_context& context, int64_t host_system_time_ns) -> erhe::scene_renderer::Primitive_interface_settings;
-
-// How an edge-line pass's meshes are drawn in `context`, for the LOD level
-// its edge lines are fed at: through the draw lists when the first of
-// data.lod_level_source_passes that submits for context routes to them (its
-// own gating, Composition_pass::prepare() with gating_only), on the bucket
-// path otherwise (no source pass submits, or the pass has none).
-enum class Wide_line_lod_routing : unsigned int
-{
-    bucket_path = 0,
-    draw_lists  = 1
-};
-[[nodiscard]] auto get_wide_line_lod_routing(const Composition_pass_data& data, const Render_context& context, int64_t host_system_time_ns) -> Wide_line_lod_routing;
 
 // The primitive settings a pass draws with: the selection outline pulse, the
 // pass's explicit primitive_settings, or its editor-global appearance.
