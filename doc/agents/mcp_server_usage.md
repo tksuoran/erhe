@@ -197,7 +197,7 @@ compute dispatches of the frame (1, or 0 for a scene without entries).
 `gpu_time_ns` is the dispatch's `Gpu_timer` result, the latest completed
 measurement; a dispatch that overlaps the previous work on the GPU measures
 close to 0 (the timer counts work where it finishes).
-With the PVS rule ([pvs.md](../plans/pvs.md) "Runtime consumption") both
+With the PVS rule ([pvs.md](../editor/pvs.md)) both
 mask sets carry it; `pvs_culled_cpu_count` and `pvs_culled_gpu_count` count
 the bits it removed on each path (the CPU lanes' bits, the GPU's PVS culled
 words) and `pvs_mismatch_count` the bits they disagree on (also in
@@ -269,7 +269,7 @@ binning <view>`, latest completed measurement).
 ### get_pvs_status
 
 The scene's potentially visible set database
-([pvs.md](../plans/pvs.md); `erhe::scene::Pvs_database`, saved as
+([pvs.md](../editor/pvs.md); `erhe::scene::Pvs_database`, saved as
 [`ERHE_pvs`](../gltf_extensions/ERHE_pvs.md)).
 
 Returns: `{scene_name, state, camera}`, `state` one of `absent` (no
@@ -285,7 +285,7 @@ file, and in `camera`: `cell` (`"outside"` outside the grid), `page`,
 `local_cell`, `page_stored`, `has_pvs`, `pvs_size`. `bake` includes
 `method` (`sampled` or `disocclusion`); `bits_hash` is the 64-bit FNV-1a of
 the bits as 16 hex digits, equal for two equal bakes and across a save and
-reload. The consumer ([pvs.md](../plans/pvs.md) "Runtime consumption"):
+reload. The consumer ([pvs.md](../editor/pvs.md)):
 `culling_enabled` (the `pvs_culling` setting), `frame_culling_active` (the
 scene's draw lists published the last frame with the rule on: the setting on
 and the database ready) and `views: [{view, tested, culled}]`, per viewport
@@ -297,8 +297,8 @@ reads the one cell (from the scene file when an open released the bits);
 `bits_in_memory` tells whether the database holds them in memory (after a
 bake, or a save onto its own file).
 
-`streaming` is the PVS page streaming ([pvs.md](../plans/pvs.md)
-"Residency and streaming"; `Draw_list_scene::get_pvs_streaming_status()`):
+`streaming` is the PVS page streaming ([draw_list_renderer.md](../erhe/draw_list_renderer.md)
+Q6 "PVS resident set and page table"; `Draw_list_scene::get_pvs_streaming_status()`):
 `active` (a residency exists), `resident_pages_setting` and
 `stream_radius_pages` (the settings, `set_pvs_streaming`), `generation` (a
 new one per database or settings change), `page_count`, `stored_pages`,
@@ -327,7 +327,7 @@ python3 scripts/mcp_call.py get_pvs_status '{"scene_name":"Default Scene"}'
 ### pvs_bake, pvs_debug_face, get_pvs_bake_status, pvs_cancel, pvs_clear
 
 The PVS bake (`Pvs_baker`, [renderers.md](../editor/renderers.md);
-[pvs.md](../plans/pvs.md) "Bake"). `pvs_bake` starts a bake and returns at
+[pvs.md](../editor/pvs.md) "Bake"). `pvs_bake` starts a bake and returns at
 once; the bake runs over frames and sets the database on the scene when
 its last cell is done.
 
@@ -355,7 +355,7 @@ around the sample point or overlap a disoccluded chunk of a face's
 stored page: nothing is culled); an edit that stales it fails the bake,
 and a bake that does not finish puts the previous database back.
 
-The bake trace ([pvs.md](../plans/pvs.md) "Bake" 7): `pvs_bake` with
+The bake trace ([pvs.md](../editor/pvs.md) "Bake" 7): `pvs_bake` with
 `trace_cell` (a cell index of the grid) and `trace_entries`
 (`[[node_uid, primitive_index], ...]`); with `trace_only` true it bakes
 only that cell of the grid. Given the full bake's region, cell size and
@@ -438,7 +438,7 @@ python3 scripts/mcp_call.py get_pvs_cell '{"scene_name":"Default Scene","cell":0
 ### get_visible_entries
 
 The set of mesh primitives seen from an explicit camera pose, the exact
-from-point visibility a PVS must contain ([pvs.md](../plans/pvs.md)
+from-point visibility a PVS must contain ([pvs.md](../editor/pvs.md)
 "Verification"; design in [editor.md](../editor/editor.md) "Whole-image id
 capture"). Renders the scene's id pass over a whole offscreen image and reads
 it back; independent of the viewport windows; spans several frames like
@@ -889,8 +889,7 @@ Returns: `{enabled, classification, gpu_supported}`.
 
 Set `Editor_settings_config::pvs_culling` (the live setting, as the Settings
 window's PVS Culling checkbox edits it; saved only by a Settings window
-save): `enabled` true or false ([pvs.md](../plans/pvs.md) "Runtime
-consumption"). With a ready database, both culling classification paths
+save): `enabled` true or false ([pvs.md](../editor/pvs.md)). With a ready database, both culling classification paths
 cull from each viewport's color view the baked entries whose bit is clear
 in every grid cell holding a corner of the view's query box (the camera
 position plus and minus `pvs_query_margin`, default 0.05 m; an orthographic
@@ -908,7 +907,7 @@ Set `Editor_settings_config::pvs_resident_pages` and
 `pvs_stream_radius_pages` (the live settings, as the Settings window's PVS
 Resident Pages and PVS Stream Radius entries edit them; saved only by a
 Settings window save) and push them to every scene's draw lists at once
-([pvs.md](../plans/pvs.md) "Residency and streaming"): `resident_pages`
+([draw_list_renderer.md](../erhe/draw_list_renderer.md) Q6 "PVS resident set and page table"): `resident_pages`
 (1 to 65536, default 64) page slots hold PVS pages on the GPU and in the CPU
 lanes' copy; `stream_radius_pages` (0 to 64, default 1) is the radius, in
 pages, around a viewport camera's page that its query box registration
