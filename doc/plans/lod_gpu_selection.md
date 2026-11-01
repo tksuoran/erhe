@@ -662,6 +662,65 @@ L), the `lod_lanes()` cost in R, and `scripts/quest_bench.py --perfetto
 step 6) before and after: binning and app GPU time. Desktop Release Bistro:
 GPU Main before and after.
 
+Results (2026-11-01). Quest 3: release APK at 42cb4188d, off-head,
+`benchmark_bistro_street.json` (the 2 m street walk, 600 measured frames
+at 72 Hz, the same input hash in every run), `bistro_quest_lod_cell_4m.glb`
+(chains stored on 2900 primitives) unless named, culling classification
+gpu, PVS and occlusion off, threshold 1.0 px, band 0.25; every setting set
+over MCP in each run and read back from the replies; two runs per row,
+recorded in `doc/reference/quest_bench_runs.md` (configurations
+`scripts/quest_bench_configs/bistro_single_directional_gpu_culling_lod_*`
+and `bistro_flat_draw_color_gpu_culling_lod_*`). Triangles are
+`get_lod_stats` in the measured window; GPU counters are ovrgpuprofiler
+(`--gpu-metrics`), not Perfetto, so binning is not measured (the metavr
+CLI is not installed on the measuring Mac).
+
+| Run | fps (per run) | R ms | M1 / M2 / M3 ms | app GPU ms | XR multiview ms | shadow ms | triangles | pre-clipped polygons/s |
+|---|---|---|---|---|---|---|---|---|
+| one light, LOD off | 16.20 / 16.79 | 5.21 | 58.7 / 0.81 / 0.71 | 46.7 | 55.7 | 3.6 | 3.12 M | 140 M |
+| one light, LOD on, `every_frame` | 17.65 / 19.01 | 5.64 | 52.9 / 0.81 / 0.70 | 42.3 | 50.0 | 2.8 | 1.91 M | 106 M |
+| one light, LOD on, `on_demand` | 17.83 / 17.67 | 5.23 | 54.3 / 0.81 / 0.71 | 46.9 | 51.4 | 3.3 | 1.91 M | 102 M |
+| one light, file without chains | 16.10 / 16.02 | 5.10 | 60.3 / 0.81 / 0.71 | 52.6 | 57.1 | 4.1 | 3.12 M | 137 M |
+| flat draw color, LOD off | 21.41 / 21.37 | 3.33 | 45.0 / 0.82 / 0.71 | 39.5 | 45.3 | - | 3.12 M | 157 M |
+| flat draw color, LOD on, `every_frame` | 24.05 / 23.87 | 3.38 | 39.9 / 0.79 / 0.71 | 37.9 | 40.6 | - | 1.91 M | 115 M |
+
+- LOD on draws 39 % fewer triangles at the walk (1319 of 3396 entries
+  stay at level 0 and hold 1.34 M of the 1.91 M); the multiview pass
+  drops 5 to 6 ms in both the lit and the geometry-only frame, the frame
+  rate rises 11 % (lit) and 12 % (flat). The frame stays GPU-bound (M1 is
+  `xrWaitFrame`; GPU utilization 99 %): 39 % fewer triangles take 10 %
+  off the multiview pass, so most of the pass is work LOD does not move
+  (the geometry-only frame still takes 40.6 ms for its 3396 draws).
+- The GPU classification grows from 28 to 53 us with selection on (both
+  modes); the command generation from 89 to 119 us.
+- `lod_lanes()` in R: `every_frame` costs R 0.41 ms on the Quest (5.64
+  against 5.23 / 5.21 ms); `on_demand` removes it (R equals LOD off). The
+  fps difference between the two modes is within the run-to-run spread.
+- Readback lag on the Quest (`on_demand`): 2 frames, min 2 max 2 in every
+  600-frame window of both runs.
+- Both eyes: the multiview pass draws one union color column
+  (`get_lod_selection`: one color column, the headset's, and one shadow
+  column), so both eyes take the same level by construction; the image
+  comparison (multiview image of forced L against automatic L) is not
+  possible off-head: `capture_screenshot` and `render_scene_image` do not
+  capture the XR swapchain.
+- The file without chains runs as the chain file with LOD off (16.1 against
+  16.5 fps), so stored chains cost nothing when unused.
+
+Desktop (M4 Pro, Release headless Metal with Tracy, pipelined, vsync and
+pacing off, the same Quest file, Medium preset with the scene's lights,
+viewport 1334x1120, threshold 1.0 px, `every_frame`; GPU `Main` zone
+median over 12 s, two runs each):
+
+| Pose | triangles off -> on | GPU Main off (us) | GPU Main on (us) | R off -> on (us) |
+|---|---|---|---|---|
+| framed | 4.14 M -> 1.82 M | 3369 / 3401 | 2399 / 2392 | 1505 -> 1506 |
+| bench camera | 3.07 M -> 1.97 M | 3283 / 3239 | 2652 / 2304 | 1500 -> 1507 |
+| street (walk midpoint) | 1.22 M -> 0.98 M | 1962 / 1954 | 1796 / 1786 | 1267 -> 1373 |
+
+GPU Main drops 29 % framed, 19 to 29 % at the bench camera and 8 % at the
+street pose.
+
 ### Later
 
 Removing the one-frame latencies of decisions 5 and 6: the shadow map
