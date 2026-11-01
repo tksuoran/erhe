@@ -384,10 +384,13 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe:
     }
 }
 
-void Headset_view::set_loading_screen(std::unique_ptr<Init_status_display> loading_screen)
+void Headset_view::set_loading_screen(std::unique_ptr<Init_status_display> loading_screen, const std::string_view file_name)
 {
     m_loading_screen = std::move(loading_screen);
     m_loading_screen_release_frame.reset();
+    m_loading_file_name    = std::string{file_name};
+    m_loading_failed_shown = false;
+    m_loading_screen_frame_count = 0;
 }
 
 void Headset_view::attach_headlamp()
@@ -2202,6 +2205,25 @@ void Headset_view::prepare_render_view()
         m_loading_screen.reset();
         m_loading_screen_release_frame.reset();
         log_xr->info("Headset loading screen released");
+    }
+    // The load ended without a scene for the headset (the open failed): say
+    // so on the loading screen instead of "Loading" forever. The open is
+    // queued in the first frames, so the check waits 30 frames.
+    if (m_loading_screen) {
+        ++m_loading_screen_frame_count;
+    }
+    if (
+        m_loading_screen &&
+        !m_loading_screen_release_frame.has_value() &&
+        !m_loading_failed_shown &&
+        !get_scene_root() &&
+        (m_loading_screen_frame_count > 30) &&
+        !m_app_context.is_scene_load_in_flight()
+    ) {
+        m_loading_failed_shown = true;
+        m_loading_screen->set_line(0, fmt::format("Could not load \"{}\"", m_loading_file_name));
+        m_loading_screen->set_line(1, "See the editor log for the reason");
+        log_xr->warn("Headset loading screen: no scene after loading '{}'", m_loading_file_name);
     }
     Frame_settings_slot& slot        = m_frame_settings_slots[frame_index % m_frame_settings_slots.size()];
     slot.frame_index = frame_index;

@@ -103,6 +103,14 @@ auto main(int argc, char** argv) -> int
         ::chdir(base);
     }
 
+    // The app's external files directory (/sdcard/Android/data/<pkg>/files,
+    // where scene files and benchmark files are pushed with adb): Android
+    // creates it, owned by the app, the first time the app asks for it. Ask
+    // at startup, so after a clean install it exists before anything is
+    // pushed - a directory adb creates first belongs to the shell user and
+    // the editor cannot read the files in it.
+    static_cast<void>(SDL_GetAndroidExternalStoragePath());
+
     // First-launch migration: copy every file listed in the bundled manifest
     // (config/* and res/editor/assets/*) from the APK to the writable cwd,
     // unless the destination already exists. config must be writable so

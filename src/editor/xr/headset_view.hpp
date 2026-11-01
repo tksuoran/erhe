@@ -341,7 +341,10 @@ public:
     // render phase renders it (Init_status_display::render_xr_multiview())
     // instead of an empty frame; homing the headset in a scene
     // (attach_to_scene()) releases it once the frames in flight completed.
-    void set_loading_screen    (std::unique_ptr<Init_status_display> loading_screen);
+    // file_name names the scene being loaded; when no load is in flight any
+    // more and the headset still has no scene, the screen reports that the
+    // file could not be loaded instead.
+    void set_loading_screen    (std::unique_ptr<Init_status_display> loading_screen, std::string_view file_name);
     void set_headlamp_intensity(float intensity);
     // Any thread: the newest retired counted frame's statistics; height is
     // the views' rows together (view count x eye image height).
@@ -553,6 +556,9 @@ private:
     // m_loading_screen_release_frame.
     std::unique_ptr<Init_status_display>                 m_loading_screen;
     std::optional<uint64_t>                              m_loading_screen_release_frame;
+    std::string                                          m_loading_file_name;
+    bool                                                 m_loading_failed_shown{false};
+    uint64_t                                             m_loading_screen_frame_count{0}; // prepare phases since set_loading_screen()
     // Headlamp: created on the first enable (set_headlamp_enabled()).
     std::shared_ptr<erhe::scene::Light>                  m_headlamp;
     bool                                                 m_headlamp_enabled    {false};
