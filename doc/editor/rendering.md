@@ -436,7 +436,9 @@ GPU readback uses a ring buffer of 4 transfer entries to handle pipeline latency
 
 ## Overdraw visualization
 
-A viewport's Overdraw combo (Off, Shaded, Rasterized) shows per-pixel
-fragment counts in place of the post-processed image (`Overdraw_node`),
+The last two entries of a viewport's shader debug combo, "Overdraw:
+Shaded" and "Overdraw: Rasterized" (`Scene_view::shader_debug_toolbar_combo()`;
+selecting one turns the shader debug off, selecting a shader debug entry
+turns overdraw off), show per-pixel fragment counts in place of the post-processed image (`Overdraw_node`),
 with statistics over MCP; plan and remaining steps:
 [../plans/overdraw_visualization.md](../plans/overdraw_visualization.md).

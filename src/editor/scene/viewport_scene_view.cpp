@@ -1298,112 +1298,38 @@ auto Viewport_scene_view::get_navigation_gizmo() -> ImViewGuizmo::Context&
 
 void Viewport_scene_view::viewport_toolbar()
 {
-    ImGui::PushID("Viewport_scene_view::viewport_toolbar()");
-    ERHE_DEFER( ImGui::PopID(); );
-
-    ImFont* icon_font = m_context.imgui_renderer->material_design_font();
-    const float font_size =
-        m_context.imgui_renderer->get_imgui_settings().scale_factor *
-        m_context.imgui_renderer->get_imgui_settings().material_design_font_size;
-
-    icon_button(
-        icon_font,
-        font_size,
-        ICON_MDI_AXIS_ARROW "##navigation_gizmo",
-        "N##navigation_gizmo",
-        "Show/Hide Navigation Gizmo",
-        m_show_navigation_gizmo
-    );
-
-    popup_button(
-        icon_font,
-        font_size,
-        ICON_MDI_EYE "##ViewportVisualStyle",                      // icon
-        "Visual Style",                                            // title
-        ImGui::GetID("ViewportVisualStylePopup"),                  // popup_id
-        m_show_visual_style_popup,                                 // is_open
-        [this]() { Viewport_config_window::imgui(m_context, get_config()); }  // content_fn
-    );
-    popup_button(
-        icon_font,
-        font_size,
-        ICON_MDI_DOTS_TRIANGLE "##ViewportSceneAndCamera",              // icon
-        "Scene and Camera",                                             // title
-        ImGui::GetID("ViewportSceneAndCameraPopup"),                    // popup_id
-        m_show_scene_and_camera_popup,                                  // is_open
-        [this]() { Scene_view_config_window::imgui(m_context, *this); } // content_fn
-    );
-    popup_button(
-        icon_font,
-        font_size,
-        ICON_MDI_EYE_SETTINGS_OUTLINE "##ViewportDebugVisualizations", // icon
-        "Debug Visualization",                                         // title
-        ImGui::GetID("ViewportDebugVisualizations"),                   // popup_id
-        m_show_debug_visualizations_popup,                             // is_open
-        [this]() { m_debug_visualizations.imgui(*this, m_context); }   // content_fn
-    );
-
-    // Shader debug visualization selector. Lives directly on the toolbar
-    // (rather than behind the "Scene and Camera" popup) so the per-viewport
-    // debug mode is one click away. The combo preview shows the active mode;
-    // the tooltip names the control.
     {
-        int shader_debug_int = static_cast<int>(get_shader_debug());
-        if (erhe::imgui::combo_fit_width(
-                "##ViewportShaderDebug",
-                &shader_debug_int,
-                erhe::scene_renderer::c_shader_debug_strings,
-                IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings)
-            ))
-        {
-            set_shader_debug(static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_int));
-        }
-        ImGui::SetItemTooltip("Shader Debug");
-    }
+        ImGui::PushID("Viewport_scene_view::viewport_toolbar()");
+        ERHE_DEFER( ImGui::PopID(); );
 
-    // Overdraw visualization (doc/plans/overdraw_visualization.md O4). The
-    // chain rewiring is deferred out of the ImGui iteration
-    // (doc/editor/coding_rules.md "ImGui-time work").
-    {
-        const bool supported = is_overdraw_supported();
-        int        mode_int  = static_cast<int>(m_overdraw_mode);
-        ImGui::BeginDisabled(!supported);
-        if (erhe::imgui::combo_fit_width("##ViewportOverdraw", &mode_int, c_overdraw_mode_strings, IM_ARRAYSIZE(c_overdraw_mode_strings))) {
-            const Overdraw_mode mode = static_cast<Overdraw_mode>(mode_int);
-            Scene_views* const  scene_views = m_context.scene_views;
-            const Viewport_scene_view* const view = this;
-            m_context.imgui_windows->queue(
-                [scene_views, view, mode]() {
-                    if (scene_views != nullptr) {
-                        scene_views->set_overdraw_mode(view, mode);
-                    }
-                }
-            );
-        }
-        ImGui::EndDisabled();
-        ImGui::SetItemTooltip(
-            supported
-                ? "Overdraw: Shaded counts the fragment shader invocations per pixel of the content passes (after the early depth test); Rasterized counts every rasterized fragment (ignoring the depth test)"
-                : "Overdraw: not supported on this device (needs fragment stage buffer atomics)"
+        ImFont* icon_font = m_context.imgui_renderer->material_design_font();
+        const float font_size =
+            m_context.imgui_renderer->get_imgui_settings().scale_factor *
+            m_context.imgui_renderer->get_imgui_settings().material_design_font_size;
+
+        icon_button(
+            icon_font,
+            font_size,
+            ICON_MDI_AXIS_ARROW "##navigation_gizmo",
+            "N##navigation_gizmo",
+            "Show/Hide Navigation Gizmo",
+            m_show_navigation_gizmo
         );
-        if (m_overdraw_mode != Overdraw_mode::off) {
-            int max_count = static_cast<int>(m_overdraw_max_count);
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 4.0f);
-            if (ImGui::DragInt("##ViewportOverdrawMaxCount", &max_count, 0.1f, 1, 255)) {
-                set_overdraw_max_count(static_cast<uint32_t>(max_count));
-            }
-            ImGui::SetItemTooltip("Overdraw count shown white");
-        }
     }
+    Scene_view::viewport_toolbar();
+}
 
-    m_context.selection_tool->viewport_toolbar();
-    m_context.transform_tool->viewport_toolbar();
-    if (m_context.mesh_component_selection_tool != nullptr) {
-        m_context.mesh_component_selection_tool->viewport_toolbar();
-    }
-    //// m_context.grid_tool->viewport_toolbar(hovered);
-    //// TODO m_physics_window.viewport_toolbar(hovered);
+void Viewport_scene_view::queue_overdraw_mode(const Overdraw_mode mode)
+{
+    Scene_views* const               scene_views = m_context.scene_views;
+    const Viewport_scene_view* const view        = this;
+    m_context.imgui_windows->queue(
+        [scene_views, view, mode]() {
+            if (scene_views != nullptr) {
+                scene_views->set_overdraw_mode(view, mode);
+            }
+        }
+    );
 }
 
 void Viewport_scene_view::set_shader_debug(erhe::scene_renderer::Shader_debug shader_debug)

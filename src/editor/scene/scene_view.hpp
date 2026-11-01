@@ -33,7 +33,13 @@ namespace erhe::scene {
 }
 namespace erhe::scene_renderer { class Light_projections; }
 
+namespace erhe::scene_renderer {
+    enum class Shader_debug : uint16_t;
+}
+
 namespace editor {
+
+enum class Overdraw_mode : unsigned int; // scene/viewport_render_state.hpp
 
 class Analytic_hover_provider;
 class App_context;
@@ -234,7 +240,26 @@ public:
         const std::function<void()>& content_fn
     );
 
+    // The toolbar every scene view shows (viewport windows and the Headset
+    // window): the Visual Style / Scene and Camera / Debug Visualization
+    // popups, the shader debug combo (with the overdraw modes as its last
+    // entries) and the tool toolbars. Viewport_scene_view puts its
+    // navigation gizmo button in front.
     virtual void viewport_toolbar          ();
+    void         shader_debug_toolbar_combo();
+
+    // The view's shader debug mode and overdraw visualization, for the
+    // toolbar's shader debug combo. The base view has neither.
+    [[nodiscard]] virtual auto get_shader_debug     () const -> erhe::scene_renderer::Shader_debug;
+    virtual void               set_shader_debug     (erhe::scene_renderer::Shader_debug shader_debug);
+    [[nodiscard]] virtual auto get_overdraw_mode    () const -> Overdraw_mode;
+    [[nodiscard]] virtual auto is_overdraw_supported() const -> bool;
+    // Main thread, ImGui time: the overdraw mode change is queued (the
+    // chain rewiring runs outside the ImGui iteration;
+    // doc/editor/coding_rules.md "ImGui-time work").
+    virtual void               queue_overdraw_mode  (Overdraw_mode mode);
+    [[nodiscard]] virtual auto get_overdraw_max_count() const -> uint32_t;
+    virtual void               set_overdraw_max_count(uint32_t max_count);
 
     // Per-frame: resolves any pending persisted "Scene and Camera" selection
     // (scene / camera / shadow-camera looked up by name) once the named scene

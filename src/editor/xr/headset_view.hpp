@@ -308,6 +308,8 @@ public:
     [[nodiscard]] auto get_thermal_step_down_count            () const -> int;
 
     // Implements Scene_view
+    auto get_shader_debug      () const -> erhe::scene_renderer::Shader_debug override;
+    void set_shader_debug      (erhe::scene_renderer::Shader_debug shader_debug) override;
     auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
     auto get_projection_scale (float view_distance) const -> float                                override;
     auto get_shadow_render_node() const -> Shadow_render_node*                  override;

@@ -190,23 +190,24 @@ public:
     
     void viewport_toolbar            () override;
     
-    void set_shader_debug            (erhe::scene_renderer::Shader_debug shader_debug);
-    auto get_shader_debug            () const -> erhe::scene_renderer::Shader_debug;
+    void set_shader_debug            (erhe::scene_renderer::Shader_debug shader_debug) override;
+    auto get_shader_debug            () const -> erhe::scene_renderer::Shader_debug override;
 
     // Main thread: the overdraw visualization of the view, applied from the
     // next prepared frame (Viewport_render_state::overdraw). Only on devices
     // with is_overdraw_supported().
     void set_overdraw_mode           (Overdraw_mode mode);
-    [[nodiscard]] auto get_overdraw_mode() const -> Overdraw_mode;
-    [[nodiscard]] auto is_overdraw_supported() const -> bool;
+    [[nodiscard]] auto get_overdraw_mode() const -> Overdraw_mode override;
+    [[nodiscard]] auto is_overdraw_supported() const -> bool override;
+    void queue_overdraw_mode(Overdraw_mode mode) override;
     // Any thread: the overdraw statistics of the newest retired frame the
     // view counted (not valid before one retired, nor after the mode turned
     // off).
     [[nodiscard]] auto get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics;
     // Main thread: the visualization's color ramp reaches white at this
     // count (Viewport_render_state::overdraw_max_count).
-    void set_overdraw_max_count(uint32_t max_count);
-    [[nodiscard]] auto get_overdraw_max_count() const -> uint32_t;
+    void set_overdraw_max_count(uint32_t max_count) override;
+    [[nodiscard]] auto get_overdraw_max_count() const -> uint32_t override;
     // Render phase: the view's count buffer of frame_index, which its
     // execute filled in that frame; null when it did not count (Overdraw_node
     // reads it).

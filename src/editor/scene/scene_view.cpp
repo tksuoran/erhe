@@ -14,6 +14,8 @@
 #include "grid/grid_tool.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_render_state.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
 #include "windows/scene_view_config_window.hpp"
@@ -31,10 +33,14 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_defer/defer.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
+
+#include <imgui/imgui.h>
 
 #include <glm/gtx/matrix_operation.hpp>
 
 #include <algorithm>
+#include <array>
 
 using erhe::geometry::mesh_facet_normalf;
 using erhe::geometry::to_glm_vec3;
@@ -983,10 +989,129 @@ void Scene_view::viewport_toolbar()
         [this]() { m_debug_visualizations.imgui(*this, m_context); }   // content_fn
     );
 
+    shader_debug_toolbar_combo();
+
     m_context.selection_tool->viewport_toolbar();
     m_context.transform_tool->viewport_toolbar();
+    if (m_context.mesh_component_selection_tool != nullptr) {
+        m_context.mesh_component_selection_tool->viewport_toolbar();
+    }
     //// m_context.grid_tool->viewport_toolbar(hovered);
     //// TODO m_physics_window.viewport_toolbar(hovered);
+}
+
+namespace {
+
+// The shader debug combo's entries: every Shader_debug, then the overdraw
+// visualization modes (doc/plans/overdraw_visualization.md O4). Selecting an
+// overdraw entry turns the view's overdraw mode on and its shader debug off;
+// selecting a shader debug entry turns overdraw off.
+constexpr int c_shader_debug_count = IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings);
+constexpr std::array<const char*, 2> c_overdraw_entry_strings{ "Overdraw: Shaded", "Overdraw: Rasterized" };
+constexpr std::array<Overdraw_mode, 2> c_overdraw_entry_modes{ Overdraw_mode::shaded, Overdraw_mode::rasterized };
+
+} // anonymous namespace
+
+void Scene_view::shader_debug_toolbar_combo()
+{
+    const Overdraw_mode overdraw_mode      = get_overdraw_mode();
+    const bool          overdraw_supported = is_overdraw_supported();
+    int current = static_cast<int>(get_shader_debug());
+    for (std::size_t i = 0; i < c_overdraw_entry_modes.size(); ++i) {
+        if (overdraw_mode == c_overdraw_entry_modes[i]) {
+            current = c_shader_debug_count + static_cast<int>(i);
+        }
+    }
+    const char* const preview = (current < c_shader_debug_count)
+        ? erhe::scene_renderer::c_shader_debug_strings[current]
+        : c_overdraw_entry_strings[static_cast<std::size_t>(current - c_shader_debug_count)];
+
+    int selected = current;
+    if (ImGui::BeginCombo("##ViewportShaderDebug", preview, ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLargest)) {
+        for (int i = 0; i < c_shader_debug_count; ++i) {
+            if (ImGui::Selectable(erhe::scene_renderer::c_shader_debug_strings[i], i == current)) {
+                selected = i;
+            }
+            if (i == current) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::Separator();
+        for (std::size_t i = 0; i < c_overdraw_entry_strings.size(); ++i) {
+            const int index = c_shader_debug_count + static_cast<int>(i);
+            const ImGuiSelectableFlags flags = overdraw_supported ? ImGuiSelectableFlags_None : ImGuiSelectableFlags_Disabled;
+            if (ImGui::Selectable(c_overdraw_entry_strings[i], index == current, flags)) {
+                selected = index;
+            }
+            ImGui::SetItemTooltip(
+                "%s",
+                overdraw_supported
+                    ? ((c_overdraw_entry_modes[i] == Overdraw_mode::shaded)
+                        ? "Counts the fragment shader invocations per pixel of the content passes (after the early depth test)"
+                        : "Counts every rasterized fragment per pixel of the content passes (ignoring the depth test)")
+                    : "Not available in this view (needs fragment stage buffer atomics, and a desktop viewport)"
+            );
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SetItemTooltip("Shader Debug");
+
+    if (selected != current) {
+        if (selected < c_shader_debug_count) {
+            set_shader_debug(static_cast<erhe::scene_renderer::Shader_debug>(selected));
+            if (overdraw_mode != Overdraw_mode::off) {
+                queue_overdraw_mode(Overdraw_mode::off);
+            }
+        } else {
+            set_shader_debug(erhe::scene_renderer::Shader_debug::none);
+            queue_overdraw_mode(c_overdraw_entry_modes[static_cast<std::size_t>(selected - c_shader_debug_count)]);
+        }
+    }
+
+    if (overdraw_mode != Overdraw_mode::off) {
+        int max_count = static_cast<int>(get_overdraw_max_count());
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 4.0f);
+        if (ImGui::DragInt("##ViewportOverdrawMaxCount", &max_count, 0.1f, 1, 255)) {
+            set_overdraw_max_count(static_cast<uint32_t>(max_count));
+        }
+        ImGui::SetItemTooltip("Overdraw count shown white");
+    }
+}
+
+auto Scene_view::get_shader_debug() const -> erhe::scene_renderer::Shader_debug
+{
+    return erhe::scene_renderer::Shader_debug::none;
+}
+
+void Scene_view::set_shader_debug(const erhe::scene_renderer::Shader_debug shader_debug)
+{
+    static_cast<void>(shader_debug);
+}
+
+auto Scene_view::get_overdraw_mode() const -> Overdraw_mode
+{
+    return Overdraw_mode::off;
+}
+
+auto Scene_view::is_overdraw_supported() const -> bool
+{
+    return false;
+}
+
+void Scene_view::queue_overdraw_mode(const Overdraw_mode mode)
+{
+    static_cast<void>(mode);
+}
+
+auto Scene_view::get_overdraw_max_count() const -> uint32_t
+{
+    return 0;
+}
+
+void Scene_view::set_overdraw_max_count(const uint32_t max_count)
+{
+    static_cast<void>(max_count);
 }
 
 }

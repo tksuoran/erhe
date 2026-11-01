@@ -540,24 +540,9 @@ void Headset_view::imgui()
     }
 
 
+    // The scene view toolbar (Scene_view::viewport_toolbar(); the shader
+    // debug combo is on it).
     viewport_toolbar();
-
-    // Shader selection
-    //ImGui::Combo(
-    //    "Shader Debug",
-    //    reinterpret_cast<int*>(&m_shader_stages_variant),
-    //    c_shader_stages_variant_strings,
-    //    IM_ARRAYSIZE(c_shader_stages_variant_strings),
-    //    IM_ARRAYSIZE(c_shader_stages_variant_strings)
-    //);
-
-    ImGui::Combo(
-        "Shader Debug",
-        &m_selected_shader_debug,
-        erhe::scene_renderer::c_shader_debug_strings,
-        IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings),
-        IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings)
-    );
 
     erhe::imgui::Imgui_host* imgui_host = get_imgui_host();
     if (imgui_host != nullptr) {
@@ -2461,6 +2446,16 @@ auto Headset_view::get_world_from_controller() const -> std::optional<glm::mat4>
     const glm::mat4 orientation = glm::mat4_cast(pose->orientation);
     const glm::mat4 translation = glm::translate(glm::mat4{1}, pose->position);
     return get_world_from_stage() * translation * orientation;
+}
+
+auto Headset_view::get_shader_debug() const -> erhe::scene_renderer::Shader_debug
+{
+    return static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug);
+}
+
+void Headset_view::set_shader_debug(const erhe::scene_renderer::Shader_debug shader_debug)
+{
+    m_selected_shader_debug = static_cast<int>(shader_debug);
 }
 
 auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>

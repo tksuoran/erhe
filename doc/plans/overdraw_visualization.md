@@ -262,8 +262,8 @@ Where the build differs from or adds to the design above:
   draw-list path draws a list with one variant, so a per-mesh filter could
   not hold on both paths). `bucket_primitives()` clears the axis on
   depth-only and ID keys.
-- Two counting modes (`Overdraw_count`, the viewport's Overdraw combo and
-  the MCP `mode`): shaded counts the invocations the frame runs (O3);
+- Two counting modes (`Overdraw_count`, the overdraw entries of the viewport's
+  shader debug combo and the MCP `mode`): shaded counts the invocations the frame runs (O3);
   rasterized counts every rasterized fragment of the counted draws,
   ignoring the depth test (counted at the top of `standard.frag`'s
   `main()`, before any discard, with no early fragment tests). Rasterized
@@ -300,8 +300,9 @@ Where the build differs from or adds to the design above:
   32 keeps the rasterized heat map out of white).
 - `Overdraw_node` (`src/editor/rendergraph/overdraw_node.{hpp,cpp}`,
   `res/editor/shaders/overdraw_visualize.frag`) and the rewiring
-  (`Scene_views::set_overdraw_mode()`): the toolbar's Overdraw combo (queued
-  out of the ImGui iteration) and max count; the MCP tool calls it
+  (`Scene_views::set_overdraw_mode()`): the overdraw entries of the toolbar's
+  shader debug combo (queued out of the ImGui iteration;
+  `Scene_view::queue_overdraw_mode()`) and max count; the MCP tool calls it
   directly (MCP requests run in the prepare phase). The node is created
   when the mode leaves off and dropped when it returns to off. Without post-processing the tool meshes
   draw in the content pass and the node covers them; the ImGui navigation
