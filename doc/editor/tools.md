@@ -153,7 +153,7 @@ The Headset window's headlamp button adds (first press), disables and
 enables a spot light, "Headlamp" (`Headset_view::set_headlamp_enabled()`,
 queued to the prepare phase): a child of the headset's root camera (the head
 pose, the eye midpoint), 15 cm above it in head space, aimed along the view
-direction; range 30 m, cone 0.25 / 0.5 rad (inner / outer). Enabling puts it
+direction; range 30 m, cone 0.25 / 1.5 rad (inner / outer). Enabling puts it
 at the front of the scene's light layer
 (`erhe::scene::Light_layer::move_to_front()`), so it is the first spot light
 the light set resolves: it takes the first spot shadow slot (or the first

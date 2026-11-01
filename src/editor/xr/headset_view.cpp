@@ -629,7 +629,7 @@ void Headset_view::set_headlamp_enabled(const bool enabled)
             m_headlamp->set_color           (glm::vec3{1.0f, 1.0f, 1.0f});
             m_headlamp->set_range           (30.0f);
             m_headlamp->set_inner_spot_angle(0.25f); // radians, about 14 degrees
-            m_headlamp->set_outer_spot_angle(0.50f); // about 29 degrees
+            m_headlamp->set_outer_spot_angle(1.50f); // about 86 degrees
             m_headlamp->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::session_only | erhe::Item_flags::exclude_from_prefab);
             log_xr->info("Headlamp added");
         }
