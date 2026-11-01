@@ -39,7 +39,7 @@ ignore it.
     "builds": [
         {
             "backend": "bvh_v2",
-            "library": "5a9d759c51d9028130b5f25733e2b4b2dc67718b",
+            "library": "ad9f7ee3fa54014cef8e789a8d45a3c2e7a117d0",
             "quality": "high",
             "node_count": 1999,
             "nodes": 21,

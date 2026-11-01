@@ -1266,7 +1266,9 @@ elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
     # The pin is also the library tag of stored BVHs (ERHE_raytrace_bvh) and
     # the cache/bvh directory key: erhe_raytrace receives it as the
     # ERHE_BVH_LIBRARY_TAG compile definition (src/erhe/raytrace/CMakeLists.txt).
-    set(ERHE_BVH_GIT_TAG 5a9d759c51d9028130b5f25733e2b4b2dc67718b)
+    # At least ad9f7ee: ThreadPool::TaskGroup::remaining_ guarded by the pool
+    # mutex (before it a worker read a waiter's returned stack TaskGroup).
+    set(ERHE_BVH_GIT_TAG ad9f7ee3fa54014cef8e789a8d45a3c2e7a117d0)
     CPMAddPackage(
         NAME              bvh
         GIT_TAG           ${ERHE_BVH_GIT_TAG}
