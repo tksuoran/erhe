@@ -248,7 +248,7 @@ Headset_view::Headset_view(
     // One culling plane slot per frame in flight (prepare_cull_planes()).
     m_cull_planes_slots.resize(graphics_device.get_number_of_frames_in_flight());
     // One overdraw slot per frame in flight (prepare_render_view()).
-    m_overdraw_slots.resize(graphics_device.get_number_of_frames_in_flight());
+    m_frame_settings_slots.resize(graphics_device.get_number_of_frames_in_flight());
     if (headset == nullptr) {
         return;
     }
@@ -564,6 +564,15 @@ void Headset_view::imgui()
     // debug combo is on it).
     viewport_toolbar();
 
+    // Read by the next prepare phase's hit testing and copied into the
+    // frame's slot for the render phase's ID pick pass.
+    ImGui::Checkbox("Controller Ray Scene Object Hits", &m_controller_scene_object_hits);
+    ImGui::SetItemTooltip(
+        "The controller ray hit tests 3D scene objects (content raytrace and the skinned mesh ID pick pass). "
+        "Off: it still hits the Hud, Hotbar, tool gizmos, brushes and the grid. "
+        "While on, the hit testing time is logged every 10 s."
+    );
+
     erhe::imgui::Imgui_host* imgui_host = get_imgui_host();
     if (imgui_host != nullptr) {
         const glm::vec2 mouse_position = imgui_host->get_mouse_position();
@@ -876,15 +885,33 @@ void Headset_view::update_pointer_context_from_controller()
     m[3] = glm::vec4{get_controller_ray_origin(*pose), 1.0f};
 
     this->Scene_view::set_world_from_control(m);
-    this->Scene_view::update_hover_with_raytrace();
+
+    // The Headset window's "Controller ray scene object hits" off: the ray
+    // still hits rendertargets, tools, brushes and the grid, but no content
+    // (or bone proxy) mesh and no skinned mesh (the ID pick).
+    const bool scene_object_hits = m_controller_scene_object_hits;
+    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+    this->Scene_view::update_hover_with_raytrace(
+        scene_object_hits
+            ? Hover_entry::all_bits
+            : (Hover_entry::all_bits & ~(Hover_entry::content_bit | Hover_entry::bone_bit))
+    );
     // Hybrid picker: raytrace (above) owns static meshes; the ID renderer
     // covers skinned meshes (its rest-pose BVH cannot). This reads the ID
     // buffer rendered from the controller-aligned pick camera in the
     // previous frame's update_id_render() and merges any closer hit.
-    update_hover_with_id_render();
+    if (scene_object_hits) {
+        update_hover_with_id_render();
+    }
     this->Scene_view::update_hover_with_analytic_tools();
     this->Scene_view::update_grid_hover();
     update_quad_layer_hover();
+    if (scene_object_hits) {
+        m_hit_test_timing.add(std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start_time).count());
+        m_hit_test_timing.log_if_due("hit testing (prepare phase: raytrace, ID pick readback, tools, grid, quads)");
+    } else {
+        m_hit_test_timing.reset();
+    }
 }
 
 void Headset_view::update_quad_layer_hover()
@@ -1204,8 +1231,20 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // is read back next frame in update_hover_with_id_render(). Independent
     // of the multiview vs per-eye choice below: the ID pass is single-view
     // and writes its own framebuffer.
-    if (m_frame_timing.should_render && !m_benchmark_mode) {
-        update_id_render(command_buffer);
+    {
+        // The Headset window's scene object hits switch of this frame
+        // (prepare_render_view()); off skips the ID pick pass.
+        const uint64_t             frame_index = m_app_context.graphics_device->get_frame_index();
+        const Frame_settings_slot& slot        = m_frame_settings_slots[frame_index % m_frame_settings_slots.size()];
+        const bool scene_object_hits = (slot.frame_index != frame_index) || slot.scene_object_hits;
+        if (m_frame_timing.should_render && !m_benchmark_mode && scene_object_hits) {
+            const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+            update_id_render(command_buffer);
+            m_id_pick_timing.add(std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start_time).count());
+            m_id_pick_timing.log_if_due("ID pick pass recording (render phase, CPU)");
+        } else {
+            m_id_pick_timing.reset();
+        }
     }
 
     // Multiview render path. Acquires the shared layered swapchain,
@@ -1525,7 +1564,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             // attachments) draws the heat map, then the overlay passes and
             // the debug lines on top. Off: one pass, as without overdraw.
             const uint64_t             overdraw_frame_index = m_app_context.graphics_device->get_frame_index();
-            const Overdraw_frame_slot& overdraw_slot        = m_overdraw_slots[overdraw_frame_index % m_overdraw_slots.size()];
+            const Frame_settings_slot& overdraw_slot        = m_frame_settings_slots[overdraw_frame_index % m_frame_settings_slots.size()];
             const Overdraw_mode        overdraw_mode        = (overdraw_slot.frame_index == overdraw_frame_index) ? overdraw_slot.mode : Overdraw_mode::off;
             const uint32_t             overdraw_view_count  = static_cast<uint32_t>(view_inputs.size());
             const bool                 count_overdraw       =
@@ -2020,10 +2059,47 @@ void Headset_view::prepare_render_view()
 
     // The frame's overdraw mode and max count, read by render_headset().
     const uint64_t       frame_index = m_app_context.graphics_device->get_frame_index();
-    Overdraw_frame_slot& slot        = m_overdraw_slots[frame_index % m_overdraw_slots.size()];
+    Frame_settings_slot& slot        = m_frame_settings_slots[frame_index % m_frame_settings_slots.size()];
     slot.frame_index = frame_index;
     slot.mode        = is_overdraw_supported() ? m_overdraw_mode : Overdraw_mode::off;
     slot.max_count   = m_overdraw_max_count;
+    slot.scene_object_hits = m_controller_scene_object_hits;
+}
+
+void Headset_view::Hit_test_timing::add(const double microseconds)
+{
+    if (!started) {
+        started      = true;
+        window_start = std::chrono::steady_clock::now();
+    }
+    total_us += microseconds;
+    max_us    = std::max(max_us, microseconds);
+    ++frame_count;
+}
+
+void Headset_view::Hit_test_timing::reset()
+{
+    total_us    = 0.0;
+    max_us      = 0.0;
+    frame_count = 0;
+    started     = false;
+}
+
+void Headset_view::Hit_test_timing::log_if_due(const char* what)
+{
+    if (!started || (frame_count == 0)) {
+        return;
+    }
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    const double window_s = std::chrono::duration<double>(now - window_start).count();
+    if (window_s < 10.0) {
+        return;
+    }
+    log_xr->info(
+        "Controller ray {}: average {:.1f} us/frame, max {:.1f} us over {} frames ({:.1f} s)",
+        what, total_us / static_cast<double>(frame_count), max_us, frame_count, window_s
+    );
+    reset();
 }
 
 void Headset_view::prepare_wide_line_feed(const uint64_t frame_index, const std::size_t frames_in_flight, const int64_t host_system_time_ns)

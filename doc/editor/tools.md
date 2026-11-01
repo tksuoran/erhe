@@ -129,6 +129,24 @@ it, and the quad composition layers map back with
   `Headset_view::update_fixed_step()`. The Selection tool also binds X
   (viewport select) while it is enabled as a secondary tool.
 
+## Headset controller ray
+
+The headset's controller ray hit tests in the prepare phase
+(`Headset_view::update_pointer_context_from_controller()`): the raytrace
+(`Scene_view::update_hover_with_raytrace(slot_bits)`), the merge of the
+previous frame's skinned mesh ID pick, the analytic tool hovers, the grid
+and the quad composition layers (Hud, Hotbar). The render phase records the
+ID pick pass (`update_id_render()`).
+
+The Headset window's "Controller Ray Scene Object Hits" checkbox (main
+thread; copied into the frame's settings slot by `prepare_render_view()`
+for the render phase) turns off the hits on 3D scene objects: the content
+and bone slots of the raytrace, the ID pick pass and its merge. The ray
+still hits rendertargets, tools, brushes and the grid (so the Travel tool
+moves towards the grid only). While on, `editor.xr` logs every 10 s the
+average and maximum time per frame of the prepare phase hit testing and of
+the ID pick pass recording (CPU; "Controller ray ...").
+
 ## Public API / Integration Points
 
 - `Tools::register_tool()` -- register a tool

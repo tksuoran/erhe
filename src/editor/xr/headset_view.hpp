@@ -25,6 +25,7 @@
 #include "erhe_xr/headset.hpp"
 
 #include <array>
+#include <chrono>
 #include <limits>
 #include <optional>
 #include <span>
@@ -496,16 +497,40 @@ private:
     // Overdraw (main thread: mode, max count; one slot per frame in flight
     // written by prepare_render_view(); render phase: the count buffer and
     // the heat map pass, created on first use).
-    class Overdraw_frame_slot
+    class Frame_settings_slot
     {
     public:
-        uint64_t      frame_index{0};
-        Overdraw_mode mode       {Overdraw_mode::off};
-        uint32_t      max_count  {8};
+        uint64_t      frame_index       {0};
+        Overdraw_mode mode              {Overdraw_mode::off};
+        uint32_t      max_count         {8};
+        bool          scene_object_hits {true};
+    };
+    // Controller ray hit testing time (doc/editor/tools.md "Headset
+    // controller ray"): accumulated per frame, logged every 10 s while the
+    // scene object hits are on. One instance per thread: the prepare phase
+    // hit tests, the render phase records the ID pick pass.
+    class Hit_test_timing
+    {
+    public:
+        void add  (double microseconds);
+        void reset();
+        // Logs and restarts the window when 10 s have passed.
+        void log_if_due(const char* what);
+
+        double                                total_us    {0.0};
+        double                                max_us      {0.0};
+        uint64_t                              frame_count {0};
+        std::chrono::steady_clock::time_point window_start{};
+        bool                                  started     {false};
     };
     Overdraw_mode                                        m_overdraw_mode{Overdraw_mode::off};
     uint32_t                                             m_overdraw_max_count{8};
-    std::vector<Overdraw_frame_slot>                     m_overdraw_slots;
+    std::vector<Frame_settings_slot>                     m_frame_settings_slots;
+    // Main thread: whether the controller ray hit tests 3D scene objects
+    // (content raytrace + skinned ID pick); the Headset window's checkbox.
+    bool                                                 m_controller_scene_object_hits{true};
+    Hit_test_timing                                      m_hit_test_timing;      // prepare phase
+    Hit_test_timing                                      m_id_pick_timing;       // render phase
     erhe::scene_renderer::Overdraw_view_state            m_overdraw_view_state;
     std::unique_ptr<Headset_overdraw_visualization>      m_overdraw_visualization;
     std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node

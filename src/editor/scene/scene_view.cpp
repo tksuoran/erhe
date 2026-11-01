@@ -603,7 +603,7 @@ void Scene_view::update_grid_hover()
     set_hover(Hover_entry::grid_slot, entry);
 }
 
-void Scene_view::update_hover_with_raytrace()
+void Scene_view::update_hover_with_raytrace(const uint32_t slot_bits)
 {
     const auto& scene_root = get_scene_root();
     if (!scene_root) {
@@ -646,14 +646,24 @@ void Scene_view::update_hover_with_raytrace()
     // multiple masked raycasts later in case there are no hits at all.
     // Skips skinned meshes (mask bit Raytrace_node_mask::skinned) because
     // their BVH is rest-pose only -- they are picked by the ID renderer.
-    const bool any_hit = [&]() {
+    // With some slots left out, only the traced slots' instances count.
+    uint32_t any_hit_mask = Raytrace_node_mask::pickable_static;
+    if (slot_bits != Hover_entry::all_bits) {
+        any_hit_mask = 0;
+        for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot) {
+            if ((slot != Hover_entry::tool_slot) && ((slot_bits & (1u << slot)) != 0)) {
+                any_hit_mask |= Hover_entry::raytrace_slot_masks[slot];
+            }
+        }
+    }
+    const bool any_hit = (any_hit_mask != 0) && [&]() {
         erhe::raytrace::Ray ray{
             .origin    = ray_origin,
             .t_near    = 0.0f,
             .direction = ray_direction,
             .time      = 0.0f,
             .t_far     = 9999.0f,
-            .mask      = Raytrace_node_mask::pickable_static,
+            .mask      = any_hit_mask,
             .id        = 0,
             .flags     = 0
         };
@@ -689,7 +699,7 @@ void Scene_view::update_hover_with_raytrace()
         // Nothing puts a mesh in the tool layer: tool_slot is filled by the
         // analytic hover source (update_hover_with_analytic_tools), which runs
         // after this and merges into the slot this clears.
-        if (slot != Hover_entry::tool_slot) {
+        if ((slot != Hover_entry::tool_slot) && ((slot_bits & (1u << slot)) != 0)) {
             rt_scene.intersect(ray, hit);
         }
         entry.valid = (hit.instance != nullptr);

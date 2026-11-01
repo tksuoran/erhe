@@ -223,7 +223,10 @@ public:
     // and the per-view state of every analytic hover provider.
     void reset_hover               ();
     void update_transforms         ();
-    void update_hover_with_raytrace();
+    // slot_bits (Hover_entry::*_bit): the slots traced; the other slots are
+    // cleared (the raytrace owns every slot it writes). The default traces
+    // all of them.
+    void update_hover_with_raytrace(uint32_t slot_bits = Hover_entry::all_bits);
     // Third hover source, after raytrace and ID render: every provider in
     // App_context::analytic_hover_providers picks against this view's control
     // ray and its entry is merged into Hover_entry::tool_slot by ray-t.
