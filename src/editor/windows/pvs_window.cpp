@@ -69,7 +69,7 @@ void Pvs_window::imgui()
     if (ImGui::CollapsingHeader("Bake parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
         parameters_imgui();
     }
-    if (ImGui::CollapsingHeader("Bake", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Bake##bake_section", ImGuiTreeNodeFlags_DefaultOpen)) {
         bake_imgui(scene_root);
     }
     if (ImGui::CollapsingHeader("Database", ImGuiTreeNodeFlags_DefaultOpen)) {
