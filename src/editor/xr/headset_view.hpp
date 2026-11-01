@@ -80,6 +80,13 @@ class Time;
 class Time_context;
 class Tools;
 
+enum class Update_actions_result : unsigned int
+{
+    ok = 0,
+    no_scene,
+    unusable
+};
+
 class Controller_input
 {;
 public:
@@ -221,7 +228,11 @@ public:
     auto poll_events   () -> bool;
     // Requires a waited frame (frame_timing.wait_ok), not a begun one:
     // xrSyncActions and the view pose use the wait's predicted display time.
-    auto update_actions(const erhe::xr::Frame_timing& frame_timing) -> bool;
+    // ok: the frame renders the headset scene; no_scene: the session is
+    // fine but the headset is not homed in a scene yet (the frame renders
+    // the loading screen or nothing - not a reason to throttle the loop);
+    // unusable: the frame cannot be used (events, wait or actions failed).
+    auto update_actions(const erhe::xr::Frame_timing& frame_timing) -> Update_actions_result;
     // M2, every frame under OpenXR, after the message bus pump and the
     // scenes' render settings snapshot (whether or not the frame was waited,
     // the headset is attached to a scene or the head pose located): copies

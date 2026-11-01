@@ -3102,27 +3102,27 @@ auto Headset_view::poll_events() -> bool
     return m_poll_events_ok;
 }
 
-auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) -> bool
+auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) -> Update_actions_result
 {
     ERHE_PROFILE_FUNCTION();
 
     m_update_actions_ok = false;
     if (!m_context.OpenXR || (m_headset == nullptr)) {
-        return false;
+        return Update_actions_result::unusable;
     }
 
     if (!m_poll_events_ok) {
-        return false;
+        return Update_actions_result::unusable;
     }
 
     m_finger_inputs.clear();
 
     if (!frame_timing.wait_ok) {
-        return false;
+        return Update_actions_result::unusable;
     }
 
     if (!m_headset->update_actions()) {
-        return false;
+        return Update_actions_result::unusable;
     }
 
     // Scene attachment is deferred: the default scene is created from a
@@ -3139,7 +3139,7 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
     // have already run for this frame above (begin_frame() runs in the
     // render phase).
     if (!m_root_node) {
-        return false;
+        return Update_actions_result::no_scene;
     }
 
     update_camera_node();
@@ -3151,11 +3151,11 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
     }
     erhe::xr::Xr_instance* instance = m_headset->get_xr_instance();
     if (instance == nullptr) {
-        return false;
+        return Update_actions_result::unusable;
     }
     erhe::xr::Xr_session* session = m_headset->get_xr_session();
     if (session == nullptr) {
-        return false;
+        return Update_actions_result::unusable;
     }
     const XrSession xr_session = session->get_xr_session();
 
@@ -3243,7 +3243,7 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
     // injected and the controller visualization stays hidden.
     if (m_benchmark_mode) {
         m_update_actions_ok = true;
-        return true;
+        return Update_actions_result::ok;
     }
 
     // Inject XR input events
@@ -3329,7 +3329,7 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
     //    m_hand_tracker->update_hands(*m_headset.get());
     //}
     m_update_actions_ok = true;
-    return true;
+    return Update_actions_result::ok;
 }
 
 void Headset_view::request_renderdoc_capture()

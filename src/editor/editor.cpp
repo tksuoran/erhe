@@ -1585,14 +1585,13 @@ public:
         if (m_app_context.OpenXR && packet.headset_frame_timing.wait_ok) {
             ERHE_PROFILE_SCOPE("OpenXR update events");
             erhe::log::set_breadcrumb("tick: xr update_actions");
-            const bool headset_update_actions_ok = m_headset_view->update_actions(packet.headset_frame_timing);
-            if (headset_update_actions_ok && m_benchmark_driver) {
+            const Update_actions_result headset_update_actions = m_headset_view->update_actions(packet.headset_frame_timing);
+            if ((headset_update_actions == Update_actions_result::ok) && m_benchmark_driver) {
                 sample_benchmark_xr_counters();
             }
-            if (headset_update_actions_ok) {
-                // TOOD m_viewport_config_window->set_edit_data(&m_headset_view->get_config());
-                // TODO m_scene_view_config_window
-            } else {
+            // A frame without a headset scene (the startup scene loads) runs
+            // at the XR rate: the loads it drives are budgeted per frame.
+            if (headset_update_actions == Update_actions_result::unusable) {
                 ERHE_PROFILE_SCOPE("OpenXR sleep");
                 // Throttle loop when the frame was waited but cannot be
                 // used; the overlap phase throttles when xrWaitFrame
