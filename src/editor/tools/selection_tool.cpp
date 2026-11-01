@@ -388,14 +388,12 @@ void Selection::setup_xr_bindings(erhe::commands::Commands& commands, Headset_vi
     if (headset == nullptr) {
         return;
     }
-    erhe::xr::Xr_actions* xr_left  = headset->get_actions_left();
+    // The left controller's X is the headset's move-down button
+    // (Headset_view::update_fixed_step()), not a select.
     erhe::xr::Xr_actions* xr_right = headset->get_actions_right();
     if (xr_right != nullptr) {
         commands.bind_command_to_xr_boolean_action(&m_viewport_select_command,        xr_right->trigger_click, erhe::commands::Button_trigger::Button_pressed);
         commands.bind_command_to_xr_boolean_action(&m_viewport_select_toggle_command, xr_right->a_click,       erhe::commands::Button_trigger::Button_pressed);
-    }
-    if (xr_left != nullptr) {
-        commands.bind_command_to_xr_boolean_action(&m_viewport_select_command,        xr_left ->x_click,       erhe::commands::Button_trigger::Button_pressed);
     }
 }
 #endif

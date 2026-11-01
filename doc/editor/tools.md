@@ -126,8 +126,7 @@ it, and the quad composition layers map back with
   with a 0.15 dead zone. The right thumbstick belongs to the Hotbar.
 - **Left Y / X buttons** (always active, outside benchmark mode): up / down
   along world +Y at 2 m/s while held, read from the action state in
-  `Headset_view::update_fixed_step()`. The Selection tool also binds X
-  (viewport select) while it is enabled as a secondary tool.
+  `Headset_view::update_fixed_step()`. Nothing else binds them.
 
 ## Headset controller ray
 
