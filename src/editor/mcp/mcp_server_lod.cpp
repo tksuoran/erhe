@@ -610,6 +610,10 @@ auto Mcp_server::query_lod_selection(const json& args) -> std::string
         {"column_overflow_count", capture.column_overflow_count},
         {"history_restart_count", capture.history_restart_count},
         {"history_shift_count",   capture.history_shift_count},
+        {"cpu_selection",         erhe::scene_renderer::c_str(capture.settings.cpu_selection)},
+        {"levels_from_gpu",       capture.levels_from_gpu},
+        {"has_retired_frame",     capture.has_retired_frame},
+        {"retired_frame_index",   capture.retired_frame_index},
         {"columns",               std::move(columns)},
         {"template_shadow_views", std::move(template_views)},
         {"entries",               std::move(entries)}

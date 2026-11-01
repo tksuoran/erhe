@@ -66,20 +66,44 @@ enum class Lod_selection : uint8_t
 
 [[nodiscard]] auto c_str(Lod_selection lod_selection) -> const char*;
 
+// Where the CPU's consumers of the selected levels read them
+// (doc/plans/lod_gpu_selection.md section 9, decisions 5 and 6;
+// doc/erhe/draw_list_renderer.md R1c "CPU level source"):
+// - every_frame: the CPU classification runs the selection lanes every
+//   frame (cull_lanes::lod_lanes(), shadow_lod_lanes()), so the CPU command
+//   writer, the edge-line feed, the drawn-level results and the shadow map
+//   cache read the frame's own levels;
+// - on_demand: under Cull_classification::gpu (the compaction writes the
+//   commands) the lanes run only on a classification check's frame; the
+//   CPU consumers read the levels the GPU selected for the retired frame
+//   (frames in flight late) and the shadow map cache its per-column level
+//   changes. Published as every_frame (one info log) where the frame is
+//   classified on the CPU.
+enum class Lod_cpu_selection : uint8_t
+{
+    every_frame = 0,
+    on_demand   = 1,
+    count       = 2
+};
+
+[[nodiscard]] auto c_str(Lod_cpu_selection lod_cpu_selection) -> const char*;
+
 // The frame's level of detail settings (Draw_list_scene::publish(), from the
 // editor's graphics preset): the selection switch, the pixel error
 // threshold, the global bias added to every selected level
 // (doc/plans/lod.md sections 2.3 and 2.5) and the hysteresis band
 // (doc/plans/lod_gpu_selection.md section 6): in [0, 1), an entry moves to
 // a coarser level only once that level's error stays within
-// threshold_pixels * (1 - hysteresis_band); 0 = no hysteresis.
+// threshold_pixels * (1 - hysteresis_band); 0 = no hysteresis; and where
+// the CPU consumers read the levels (Lod_cpu_selection).
 class Lod_frame_settings
 {
 public:
-    Lod_selection selection       {Lod_selection::off};
-    float         threshold_pixels{1.0f};
-    int           bias            {0};
-    float         hysteresis_band {0.0f};
+    Lod_selection     selection       {Lod_selection::off};
+    float             threshold_pixels{1.0f};
+    int               bias            {0};
+    float             hysteresis_band {0.0f};
+    Lod_cpu_selection cpu_selection   {Lod_cpu_selection::every_frame};
 };
 
 // The largest hysteresis band the editor's settings accept (a band near 1

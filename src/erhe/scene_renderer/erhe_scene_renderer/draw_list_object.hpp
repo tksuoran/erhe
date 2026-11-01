@@ -71,12 +71,16 @@ public:
 
 // The level a draw-list entry draws in a view
 // (Draw_list_scene::get_published_entry_lod_level()): the level, and
-// whether the view's LOD column selected it (selected) or the view has no
-// column and the entry draws its template range (template_range).
+// whether the view's LOD column selected it in this frame (selected), the
+// GPU selected it in the newest completed frame (retired: a frame whose
+// Lod_cpu_selection is on_demand), or it is the entry's template range
+// (template_range: the view has no column; in an on_demand frame also a
+// view without a matching completed frame).
 enum class Drawn_lod_level_source : uint8_t
 {
     selected       = 0,
-    template_range = 1
+    template_range = 1,
+    retired        = 2
 };
 
 class Drawn_lod_level

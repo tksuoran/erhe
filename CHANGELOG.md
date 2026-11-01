@@ -42,6 +42,19 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Lod_cpu_selection` (`every_frame`, `on_demand`)
+  with its `c_str()` and `Lod_frame_settings::cpu_selection`
+  (doc/plans/lod_gpu_selection.md section 9, decisions 5 and 6): under the
+  GPU classification, `on_demand` runs the CPU selection lanes only for a
+  classification check's frame; `get_lod_level()`, the CPU command writer,
+  `get_published_entry_lod_level()` and `get_lod_column_change()` then read
+  the newest completed frame's GPU levels and per-column level changes.
+  `Drawn_lod_level_source::retired`; `Lod_level_capture::levels_from_gpu`,
+  `has_retired_frame` and `retired_frame_index`;
+  `Lod_level_capture_entry::global_entry_index`.
+- `erhe::scene_renderer`: `Cull_classification_check::lod_hysteresis_reset`:
+  the frame a classification check records is a level of detail hysteresis
+  restart point on both paths, in both `Lod_cpu_selection` modes.
 - `erhe::scene_renderer`: level of detail selection for the shadow passes
   (doc/plans/lod_gpu_selection.md step 5): `Lod_view::sampling_view_key`
   (not part of `Lod_view::is_same()`), `Lod_shadow_kind` with
@@ -1279,6 +1292,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Draw_list_scene::get_lod_level()` returns
+  `std::optional<Drawn_lod_level>` (the level and its source) instead of
+  `std::optional<uint32_t>`.
 - `erhe::scene_renderer`: a shadow LOD column selects the light's own level
   only for the entries its view keeps; every other entry holds level 0 in
   that column (doc/plans/lod_gpu_selection.md section 9, decision 4).

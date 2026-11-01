@@ -77,6 +77,15 @@ auto c_str(const Lod_selection lod_selection) -> const char*
     }
 }
 
+auto c_str(const Lod_cpu_selection lod_cpu_selection) -> const char*
+{
+    switch (lod_cpu_selection) {
+        case Lod_cpu_selection::every_frame: return "every_frame";
+        case Lod_cpu_selection::on_demand:   return "on_demand";
+        default:                             return "?";
+    }
+}
+
 Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device, const std::filesystem::path& shader_path)
     : m_graphics_device{graphics_device}
     , m_device_capable {is_device_capable(graphics_device)}

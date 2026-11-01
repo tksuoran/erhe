@@ -269,7 +269,7 @@ void Content_wide_line_renderer::add_feed(const Content_wide_line_feed& feed, co
         // The level the record's color entry draws in the view; its
         // template range is the level the record was prepared with.
         const Drawn_lod_level drawn = lod_view.draw_list_scene->get_published_entry_lod_level(lod_view.frame_index, lod_view.cull_view, record.color_entry);
-        if (drawn.source != Drawn_lod_level_source::selected) {
+        if (drawn.source == Drawn_lod_level_source::template_range) {
             if (record.edge_count > 0) {
                 add_record(record);
             }

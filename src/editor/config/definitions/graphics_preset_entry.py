@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_preset_entry",
-    version=8,
+    version=9,
     short_desc="Graphics quality preset",
     long_desc="",
     developer=False,
@@ -76,5 +76,13 @@ struct("Graphics_preset_entry",
         # level's error stays within lod_threshold_pixels * (1 - band); 0 =
         # no hysteresis. Older presets read the default.
         field("lod_hysteresis_band",  Float, added_in=8, default="0.25f", short_desc="LOD Hysteresis Band"),
+        # Where the CPU consumers of the selected levels read them (v9;
+        # doc/plans/lod_gpu_selection.md section 9, decisions 5 and 6):
+        # every_frame runs the CPU selection lanes every frame; on_demand,
+        # under the GPU culling classification only, runs them for a
+        # classification check only, and the edge lines, the selection
+        # outline, the drawn-level results and the shadow map cache read the
+        # newest completed frame's GPU levels. Older presets read the default.
+        field("lod_cpu_selection", EnumRef("Lod_cpu_selection"), added_in=9, default="Lod_cpu_selection::every_frame", short_desc="LOD CPU Selection"),
     ],
 )

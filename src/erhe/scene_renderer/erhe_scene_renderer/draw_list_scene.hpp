@@ -638,6 +638,11 @@ public:
     std::size_t                                 lod_mismatch_count     {0};
     std::vector<Cull_lod_level_mismatch>        lod_mismatches;
     std::size_t                                 lod_region_bytes       {0};
+    // The check's frame restarted the level of detail hysteresis on both
+    // paths (every frame with LOD columns a check records, in both
+    // Lod_cpu_selection modes; doc/erhe/draw_list_renderer.md R1c
+    // "Hysteresis"): frame_index is the restart point.
+    bool                                        lod_hysteresis_reset   {false};
 };
 
 enum class Cull_classification_check_state : uint8_t
@@ -683,6 +688,7 @@ class Lod_level_capture_entry
 public:
     uint32_t              list_index          {0};
     uint32_t              entry_index         {0};
+    uint32_t              global_entry_index  {0}; // the lists back to back (the GPU level region's entry)
     Draw_purpose          purpose             {Draw_purpose::color};
     uint16_t              mesh_primitive_index{0};
     glm::vec3             center              {0.0f};
@@ -707,6 +713,17 @@ public:
     // index (a view added or removed before it).
     std::size_t                           history_restart_count{0};
     std::size_t                           history_shift_count  {0};
+    // Where the frame's CPU consumers read the levels (settings.cpu_selection
+    // as published; doc/erhe/draw_list_renderer.md R1c "CPU level source").
+    // levels_from_gpu (an on_demand frame without CPU lanes): the levels and
+    // the shadow columns' changes below are the GPU's for frame_index, read
+    // back once that frame completed (the capture completes then);
+    // retired_frame_index names the newest completed frame whose GPU levels
+    // the captured frame's CPU consumers read (has_retired_frame false:
+    // none yet).
+    bool                                  levels_from_gpu      {false};
+    bool                                  has_retired_frame    {false};
+    uint64_t                              retired_frame_index  {0};
     std::vector<Lod_level_capture_column>        columns;
     std::vector<Lod_level_capture_template_view> template_views;
     std::vector<Lod_level_capture_entry>         entries;
@@ -1200,8 +1217,13 @@ public:
     [[nodiscard]] auto get_lod_column_change(uint64_t frame_index, Cull_view cull_view) const -> Lod_column_change;
     // The level the CPU classification selected for entry entry_index of
     // published list list_index in the view's column (render phase, after
-    // the frame's classification); empty for a view without a column.
-    [[nodiscard]] auto get_lod_level(uint64_t frame_index, Cull_view cull_view, std::size_t list_index, std::size_t entry_index) const -> std::optional<uint32_t>;
+    // the frame's classification; source selected); empty for a view
+    // without a column. In a frame whose CPU lanes did not run
+    // (Lod_cpu_selection::on_demand): the level the GPU selected for the
+    // entry in the newest completed frame, in that frame's column with the
+    // view's lod_key (source retired); empty when no decoded frame has the
+    // same entry layout and a column with that key.
+    [[nodiscard]] auto get_lod_level(uint64_t frame_index, Cull_view cull_view, std::size_t list_index, std::size_t entry_index) const -> std::optional<Drawn_lod_level>;
     // The level a published color entry draws in a view (render phase,
     // after the frame's classification; doc/plans/lod_gpu_selection.md
     // section 5): the level the classification selected in the view's LOD
@@ -1967,6 +1989,9 @@ private:
 
         uint64_t                                frame_index        {0};
         bool                                    classified         {false};
+        // The frame's CPU lanes ran (lists hold its levels); false in a
+        // Lod_cpu_selection::on_demand frame without a check.
+        bool                                    levels_written     {false};
         uint64_t                                entry_layout_serial{0};
         Cull_classification                     classification     {Cull_classification::cpu};
         uint32_t                                column_count       {0};
@@ -2016,6 +2041,106 @@ private:
     std::mutex                                                       m_lod_capture_mutex;
     bool                                                             m_lod_capture_requested{false};
     bool                                                             m_lod_capture_complete {false};
+    // levels_from_gpu: the capture of frame m_lod_capture_frame_index waits
+    // for that frame's GPU levels (decode_completed_lod_levels()).
+    bool                                                             m_lod_capture_awaits_gpu{false};
+    uint64_t                                                         m_lod_capture_frame_index{0};
+
+    // Lod_cpu_selection::on_demand (doc/plans/lod_gpu_selection.md section
+    // 9, decisions 5 and 6; doc/erhe/draw_list_renderer.md R1c "CPU level
+    // source"), render phase. Per frame slot: a persistent host-readable
+    // copy of the frame's GPU level region with the shadow columns' change
+    // counts in front (lod_change_words words, then group_count *
+    // entry_count level words), written by the frame's classification
+    // dispatch and decoded by the first classification after the device
+    // reports the frame completed (Device::is_frame_completed()) or, when
+    // the device reports it later, by the frame that reuses the slot
+    // (which waited for its retirement), whichever comes first, so the CPU
+    // consumers read the newest completed frame. Grown to the slot's high-water size only while nothing is
+    // pending in it.
+    static constexpr std::size_t lod_change_words{max_lod_columns};
+    class Lod_level_readback
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Buffer>   buffer;
+        std::size_t                               byte_count         {0};
+        uint64_t                                  frame_index        {0};
+        uint32_t                                  entry_count        {0};
+        uint32_t                                  group_count        {0};
+        uint32_t                                  column_count       {0};
+        uint64_t                                  entry_layout_serial{0};
+        std::array<uint64_t, max_lod_columns>     column_keys        {};
+        std::array<uint32_t, max_lod_columns>     previous_columns   {};
+        std::array<Draw_purpose, max_lod_columns> column_purposes    {};
+        bool                                      pending            {false};
+    };
+    std::vector<Lod_level_readback>                                  m_lod_level_readbacks;
+    // The newest decoded frame's GPU levels (the region's layout over all
+    // published lists back to back; capacity kept) and its column keys.
+    class Lod_retired_levels
+    {
+    public:
+        bool                                    valid              {false};
+        uint64_t                                frame_index        {0};
+        uint32_t                                entry_count        {0};
+        uint32_t                                group_count        {0};
+        uint32_t                                column_count       {0};
+        uint64_t                                entry_layout_serial{0};
+        std::array<uint64_t, max_lod_columns>   column_keys        {};
+        std::vector<uint32_t>                   words;
+    };
+    Lod_retired_levels                                               m_lod_retired_levels;
+    // The shadow columns' level changes of the frames the frame being
+    // rendered decoded (oldest first; capacity kept): per frame its column
+    // keys and whether each column changed (no previous column, or some
+    // kept entry's level changed). m_lod_retired_gap: some decoded frame
+    // did not follow the one decoded before it (a frame without a
+    // readback), so every column counts as changed.
+    class Lod_retired_change_frame
+    {
+    public:
+        uint64_t                                       frame_index    {0};
+        uint32_t                                       column_count   {0};
+        std::array<uint64_t, max_lod_columns>          column_keys    {};
+        std::array<uint32_t, max_lod_columns>          changed_entries{};
+        std::array<Lod_column_change, max_lod_columns> change         {};
+    };
+    std::vector<Lod_retired_change_frame>                            m_lod_retired_change_frames;
+    std::size_t                                                      m_lod_retired_change_frame_count{0};
+    bool                                                             m_lod_retired_gap{false};
+    bool                                                             m_lod_has_decoded_frame{false};
+    uint64_t                                                         m_lod_last_decoded_frame{0};
+    // The frame being rendered reads its CPU levels from the retired GPU
+    // levels (an on_demand frame without CPU lanes).
+    bool                                                             m_lod_levels_retired{false};
+    bool                                                             m_lod_cpu_selection_refusal_logged{false};
+    bool                                                             m_lod_cpu_selection_on_demand_logged{false};
+    // The frame being rendered is an on_demand frame with an active
+    // selection (its dispatch counts the shadow columns' changes and copies
+    // the region for the host).
+    bool                                                             m_lod_frame_on_demand{false};
+    // The lag of the retired levels (classified frame minus the newest
+    // decoded frame), summarized in the log every lod_lag_log_frames
+    // on_demand frames.
+    static constexpr uint64_t lod_lag_log_frames{600};
+    uint64_t                                                         m_lod_lag_frames{0};
+    uint64_t                                                         m_lod_lag_sum   {0};
+    uint64_t                                                         m_lod_lag_min   {0};
+    uint64_t                                                         m_lod_lag_max   {0};
+    uint64_t                                                         m_lod_lag_none  {0};
+    // classify_frame_cull_views(): decodes every pending level readback of
+    // a completed frame, oldest first.
+    void decode_completed_lod_levels(uint64_t frame_index);
+    // classify_cull_views() of a GPU-classified frame: a requested
+    // classification check records this frame (the first one classified on
+    // the GPU after the request); true when the frame is the check's.
+    [[nodiscard]] auto begin_gpu_cull_check_frame(uint64_t frame_index) -> bool;
+    // dispatch_gpu_cull_views(): copies the frame's level region and change
+    // counts into its readback slot (on_demand frames).
+    void record_lod_level_readback(uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer);
+    // The newest decoded frame's column for lod_key (lod_column_none:
+    // none, or the decoded frame has another entry layout).
+    [[nodiscard]] auto find_retired_lod_column(const Draw_list_slot& slot, uint64_t lod_key) const -> uint32_t;
     Draw_list_object_id                                              m_lod_capture_object{};
     Lod_level_capture                                                m_lod_capture{};
     std::size_t                                                      m_color_environment_change_count{0};

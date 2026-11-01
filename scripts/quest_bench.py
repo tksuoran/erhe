@@ -1266,7 +1266,10 @@ def append_record(results: list, doc_path: Path) -> None:
     text = doc_path.read_text(encoding="utf-8")
     if not text.endswith("\n"):
         text += "\n"
-    doc_path.write_text(text + "\n" + record_markdown(results), encoding="utf-8", newline="")
+    # open() with newline="" (Path.write_text() takes newline only from
+    # Python 3.10).
+    with open(doc_path, "w", encoding="utf-8", newline="") as handle:
+        handle.write(text + "\n" + record_markdown(results))
     print(f"recorded in {doc_path}")
 
 

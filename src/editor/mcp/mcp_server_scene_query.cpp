@@ -653,6 +653,8 @@ auto Mcp_server::query_cull_classification_check(const json& args) -> std::strin
         {"command_views",           std::move(command_views)},
         {"command_mismatches",      std::move(command_mismatches)},
         {"lod_column_count",        check.lod_column_count},
+        {"lod_hysteresis_reset",    check.lod_hysteresis_reset},
+        {"lod_hysteresis_reset_frame_index", check.lod_hysteresis_reset ? check.frame_index : 0},
         {"lod_level_count",         check.lod_level_count},
         {"lod_coarse_count",        check.lod_coarse_count},
         {"lod_mismatch_count",      check.lod_mismatch_count},

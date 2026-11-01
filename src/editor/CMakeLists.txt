@@ -1089,6 +1089,8 @@ set(_config_sources
     ${_config_out}/light_shading_mode.cpp
     ${_config_out}/specular_anti_aliasing_mode.hpp
     ${_config_out}/specular_anti_aliasing_mode.cpp
+    ${_config_out}/lod_cpu_selection.hpp
+    ${_config_out}/lod_cpu_selection.cpp
     ${_config_out}/shadow_mode.hpp
     ${_config_out}/shadow_mode.cpp
     ${_config_out}/graphics_preset_entry.hpp

@@ -674,6 +674,9 @@ void App_scenes::snapshot_render_settings()
     static_assert(static_cast<unsigned int>(Culling_classification::cpu) == static_cast<unsigned int>(erhe::scene_renderer::Cull_classification::cpu));
     static_assert(static_cast<unsigned int>(Culling_classification::gpu) == static_cast<unsigned int>(erhe::scene_renderer::Cull_classification::gpu));
     static_assert(static_cast<unsigned int>(erhe::scene_renderer::Cull_classification::count) == 2u);
+    static_assert(static_cast<unsigned int>(Lod_cpu_selection::every_frame) == static_cast<unsigned int>(erhe::scene_renderer::Lod_cpu_selection::every_frame));
+    static_assert(static_cast<unsigned int>(Lod_cpu_selection::on_demand) == static_cast<unsigned int>(erhe::scene_renderer::Lod_cpu_selection::on_demand));
+    static_assert(static_cast<unsigned int>(erhe::scene_renderer::Lod_cpu_selection::count) == 2u);
     const unsigned int cull_classification_value = static_cast<unsigned int>(m_context.render_settings->culling_classification);
     ERHE_VERIFY(cull_classification_value < static_cast<unsigned int>(erhe::scene_renderer::Cull_classification::count));
     const erhe::scene_renderer::Cull_classification cull_classification = static_cast<erhe::scene_renderer::Cull_classification>(cull_classification_value);
@@ -697,7 +700,8 @@ void App_scenes::snapshot_render_settings()
         .bias             = graphics_preset.lod_bias,
         // [0, 1) by definition (Lod_frame_settings); a hand-edited preset
         // file may hold anything.
-        .hysteresis_band  = std::clamp(graphics_preset.lod_hysteresis_band, 0.0f, erhe::scene_renderer::max_lod_hysteresis_band)
+        .hysteresis_band  = std::clamp(graphics_preset.lod_hysteresis_band, 0.0f, erhe::scene_renderer::max_lod_hysteresis_band),
+        .cpu_selection    = static_cast<erhe::scene_renderer::Lod_cpu_selection>(static_cast<unsigned int>(graphics_preset.lod_cpu_selection))
     };
     for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
         // Order: the joint pose capture assigns the skins' joint slots, the

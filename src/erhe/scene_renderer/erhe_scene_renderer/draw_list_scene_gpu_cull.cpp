@@ -405,15 +405,11 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
     const std::size_t     entry_count = slot.entry_count;
     const std::size_t     view_count  = m_cull_views.size();
 
-    // A requested check records this frame (the first one classified on the
-    // GPU after the request); its generation, else none.
+    // A requested check records this frame when classify_cull_views()
+    // made it the check's frame; its generation, else none.
     std::optional<uint64_t> check_generation{};
     {
         const std::lock_guard<std::mutex> lock{m_gpu_cull_check->mutex};
-        if (m_gpu_cull_check->stage == Gpu_cull_check::Stage::requested) {
-            m_gpu_cull_check->stage       = Gpu_cull_check::Stage::recording;
-            m_gpu_cull_check->frame_index = frame_index;
-        }
         if (
             (m_gpu_cull_check->stage == Gpu_cull_check::Stage::recording) &&
             (m_gpu_cull_check->frame_index == frame_index)
@@ -597,7 +593,9 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 std::bit_cast<uint32_t>(static_cast<int32_t>(slot.lod_settings.bias))
             };
             std::memcpy(gpu_data.data() + classifier.get_view_lod_header_offset(), &lod_header, sizeof(lod_header));
-            const glm::uvec4 lod_columns{m_lod_column_count, static_cast<uint32_t>(lod_group_count), 0u, 0u};
+            // z: the shadow columns' level changes are counted after the
+            // region (an on_demand frame, Lod_cpu_selection).
+            const glm::uvec4 lod_columns{m_lod_column_count, static_cast<uint32_t>(lod_group_count), m_lod_frame_on_demand ? 1u : 0u, 0u};
             std::memcpy(gpu_data.data() + classifier.get_view_lod_columns_offset(), &lod_columns, sizeof(lod_columns));
             // The column table (sections 3 and 4): per column its view,
             // purpose and the color columns of a shadow column's sampling
@@ -751,16 +749,34 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             // frames in flight it may still be in flight): this dispatch's
             // writes wait for that read.
             Lod_region_slot& region_slot = m_lod_region_slots[frame_index % m_lod_region_slots.size()];
+            const bool count_changes = m_lod_frame_on_demand && (lod_group_count > 0);
+            // The slot's own earlier level readback copy (transfer_src) needs
+            // no barrier: that frame retired before this frame acquired the slot.
             if (region_slot.previous_reader) {
                 ERHE_VERIFY(region_slot.previous_reader_frame < frame_index);
                 command_buffer.buffer_barrier(
                     *region_slot.buffer,
                     Buffer_usage_flag_bit_mask::storage_read | Buffer_usage_flag_bit_mask::compute_shader,
-                    Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader,
+                    count_changes
+                        ? (Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader | Buffer_usage_flag_bit_mask::transfer_dst)
+                        : (Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader),
                     Barrier_scope::earlier_submissions
                 );
             }
             region_slot.previous_reader = false;
+            if (count_changes) {
+                // The shadow columns' change counts after the region start
+                // at zero (cull_classify.comp sums them).
+                {
+                    Blit_command_encoder blit = device.make_blit_command_encoder(command_buffer);
+                    blit.fill_buffer(region_slot.buffer.get(), region_slot.region_bytes, lod_change_words * sizeof(uint32_t), 0x00u);
+                }
+                command_buffer.buffer_barrier(
+                    *region_slot.buffer,
+                    Buffer_usage_flag_bit_mask::transfer_dst,
+                    Buffer_usage_flag_bit_mask::storage_read | Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader
+                );
+            }
         }
         {
             const Scoped_gpu_timer timer_scope{*m_gpu_cull_timer, command_buffer};
@@ -834,6 +850,11 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
         // shadow renderer gave its selection or color passes gave theirs.
         if ((m_shadow_selection_set && (m_shadow_selection_frame_index == frame_index)) || !m_color_selections.empty()) {
             generate_gpu_commands(frame_index, command_buffer, *mask_buffer, mask_byte_offset, mask_bytes, check_generation);
+        }
+        // The frame's levels for the CPU consumers of later frames
+        // (Lod_cpu_selection::on_demand).
+        if (m_lod_frame_on_demand && (lod_group_count > 0)) {
+            record_lod_level_readback(frame_index, command_buffer);
         }
 
         if (check_generation.has_value()) {
@@ -1098,6 +1119,7 @@ auto Draw_list_scene::poll_cull_classification_check(Cull_classification_check& 
     out.dispatch_count = check.dispatch_count;
     out.gpu_time_ns    = m_gpu_cull_timer ? m_gpu_cull_timer->last_result() : 0;
     out.lod_column_count = check.lod_column_count;
+    out.lod_hysteresis_reset = (check.lod_column_count > 0);
     out.lod_region_bytes = check.lod_region_bytes;
 
     // The bit the frame's occlusion consumption removed for (view, entry of
@@ -2118,7 +2140,9 @@ void Draw_list_scene::prepare_lod_region_slot(
     }
     Lod_region_slot&  slot         = m_lod_region_slots[frame_index % m_lod_region_slots.size()];
     const std::size_t region_bytes = group_count * entry_count * Gpu_cull_classifier::lod_level_bytes_per_entry_group;
-    const std::size_t bind_bytes   = std::max(region_bytes, c_min_storage_bind_bytes);
+    // The shadow columns' change counts of an on_demand frame follow the
+    // region (cull_classify.comp).
+    const std::size_t bind_bytes   = std::max(region_bytes + (lod_change_words * sizeof(uint32_t)), c_min_storage_bind_bytes);
     if (!slot.buffer || (slot.buffer->get_capacity_byte_count() < bind_bytes)) {
         // Rare: the slot's high-water size (entries, LOD columns) grew. A
         // later frame that read the old buffer as its previous region may
@@ -2144,6 +2168,218 @@ void Draw_list_scene::prepare_lod_region_slot(
     slot.entry_count         = static_cast<uint32_t>(entry_count);
     slot.group_count         = static_cast<uint32_t>(group_count);
     slot.entry_layout_serial = entry_layout_serial;
+}
+
+auto Draw_list_scene::begin_gpu_cull_check_frame(const uint64_t frame_index) -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_gpu_cull_check->mutex};
+    if (m_gpu_cull_check->stage == Gpu_cull_check::Stage::requested) {
+        m_gpu_cull_check->stage       = Gpu_cull_check::Stage::recording;
+        m_gpu_cull_check->frame_index = frame_index;
+    }
+    return (m_gpu_cull_check->stage == Gpu_cull_check::Stage::recording) && (m_gpu_cull_check->frame_index == frame_index);
+}
+
+void Draw_list_scene::record_lod_level_readback(const uint64_t frame_index, erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+
+    const Draw_list_slot&  slot          = get_published_slot(frame_index);
+    const Lod_region_slot& region_slot   = get_lod_region_slot(frame_index);
+    const Lod_level_slot&  level_slot    = get_lod_level_slot(frame_index);
+    const std::size_t      change_bytes  = lod_change_words * sizeof(uint32_t);
+    const std::size_t      byte_count    = change_bytes + region_slot.region_bytes;
+    Device&                device        = m_gpu_cull_classifier->get_device();
+    const std::size_t      slot_count    = m_draw_list_slots.size();
+    if (m_lod_level_readbacks.size() != slot_count) {
+        // Sized once: the device's frames in flight (publish()).
+        ERHE_VERIFY(m_lod_level_readbacks.empty());
+        m_lod_level_readbacks.resize(slot_count);
+    }
+    Lod_level_readback& readback = m_lod_level_readbacks[frame_index % slot_count];
+    // The slot's previous frame retired before this frame's slot was
+    // acquired, so this frame's classification decoded it.
+    ERHE_VERIFY(!readback.pending);
+    if (!readback.buffer || (readback.buffer->get_capacity_byte_count() < byte_count)) {
+        // A multiple of every nonCoherentAtomSize, so the whole buffer can
+        // be invalidated at the decode.
+        constexpr std::size_t min_capacity = 256;
+        const std::size_t     capacity     = std::bit_ceil(std::max(byte_count, min_capacity));
+        readback.buffer = std::make_unique<Buffer>(
+            device,
+            Buffer_create_info{
+                .capacity_byte_count                    = capacity,
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = Buffer_usage::transfer_dst,
+                .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+                .debug_label                            = erhe::utility::Debug_label{"Draw_list_scene LOD level readback"}
+            }
+        );
+        log_draw_list->info("LOD level readback: frame slot {} buffer {} bytes", frame_index % slot_count, capacity);
+    }
+    // The classification's level and change writes -> the copy (the
+    // compaction only read the region since).
+    command_buffer.buffer_barrier(
+        *region_slot.buffer,
+        Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader,
+        Buffer_usage_flag_bit_mask::transfer_src
+    );
+    {
+        Blit_command_encoder blit = device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_buffer(region_slot.buffer.get(), region_slot.region_bytes, readback.buffer.get(), 0, change_bytes);
+        blit.copy_from_buffer(region_slot.buffer.get(), 0, readback.buffer.get(), change_bytes, region_slot.region_bytes);
+    }
+    readback.byte_count          = byte_count;
+    readback.frame_index         = frame_index;
+    readback.entry_count         = region_slot.entry_count;
+    readback.group_count         = region_slot.group_count;
+    readback.column_count        = m_lod_column_count;
+    readback.entry_layout_serial = slot.entry_layout_serial;
+    for (uint32_t column = 0; column < m_lod_column_count; ++column) {
+        readback.column_keys     [column] = level_slot.column_keys[column];
+        readback.previous_columns[column] = m_lod_previous_columns[column];
+        readback.column_purposes [column] = m_lod_columns[column].purpose;
+    }
+    readback.pending = true;
+}
+
+void Draw_list_scene::decode_completed_lod_levels(const uint64_t frame_index)
+{
+    m_lod_retired_change_frame_count = 0;
+    m_lod_retired_gap                = false;
+    if (m_lod_level_readbacks.empty()) {
+        return;
+    }
+    const erhe::graphics::Device& device = m_gpu_cull_classifier->get_device();
+    for (;;) {
+        // The oldest pending readback (frames complete in order).
+        Lod_level_readback* readback = nullptr;
+        for (Lod_level_readback& candidate : m_lod_level_readbacks) {
+            if (candidate.pending && ((readback == nullptr) || (candidate.frame_index < readback->frame_index))) {
+                readback = &candidate;
+            }
+        }
+        // Completed: the device reports it, or the frame reusing its slot
+        // runs (Device::acquire_frame_slot() waited for its retirement;
+        // the device's completion bookkeeping may report it later).
+        if (
+            (readback == nullptr) ||
+            (!device.is_frame_completed(readback->frame_index) && ((readback->frame_index + m_lod_level_readbacks.size()) > frame_index))
+        ) {
+            break;
+        }
+        ERHE_VERIFY(readback->frame_index < frame_index);
+        ERHE_PROFILE_SCOPE("decode LOD levels");
+        const std::size_t          capacity = readback->buffer->get_capacity_byte_count();
+        const std::span<std::byte> data     = readback->buffer->map_bytes(0, capacity);
+        readback->buffer->invalidate(0, capacity);
+        ERHE_VERIFY(data.size_bytes() >= readback->byte_count);
+        const std::size_t change_bytes = lod_change_words * sizeof(uint32_t);
+        const std::size_t word_count   = static_cast<std::size_t>(readback->group_count) * readback->entry_count;
+        ERHE_VERIFY(readback->byte_count == (change_bytes + (word_count * sizeof(uint32_t))));
+        std::array<uint32_t, lod_change_words> changed_entries{};
+        std::memcpy(changed_entries.data(), data.data(), change_bytes);
+
+        // The newest decoded frame's levels.
+        Lod_retired_levels& retired = m_lod_retired_levels;
+        retired.valid               = true;
+        retired.frame_index         = readback->frame_index;
+        retired.entry_count         = readback->entry_count;
+        retired.group_count         = readback->group_count;
+        retired.column_count        = readback->column_count;
+        retired.entry_layout_serial = readback->entry_layout_serial;
+        retired.column_keys         = readback->column_keys;
+        retired.words.resize(word_count);
+        if (word_count > 0) {
+            std::memcpy(retired.words.data(), data.data() + change_bytes, word_count * sizeof(uint32_t));
+        }
+
+        // Its shadow columns' changes (the shadow map cache's level test):
+        // a column without a previous column started fresh.
+        if (m_lod_retired_change_frame_count == m_lod_retired_change_frames.size()) {
+            m_lod_retired_change_frames.emplace_back();
+        }
+        Lod_retired_change_frame& change_frame = m_lod_retired_change_frames[m_lod_retired_change_frame_count++];
+        change_frame.frame_index  = readback->frame_index;
+        change_frame.column_count = readback->column_count;
+        change_frame.column_keys  = readback->column_keys;
+        for (uint32_t column = 0; column < readback->column_count; ++column) {
+            change_frame.changed_entries[column] = changed_entries[column];
+            change_frame.change[column] =
+                (readback->column_purposes[column] != Draw_purpose::shadow)
+                    ? Lod_column_change::none
+                    : (((readback->previous_columns[column] == lod_column_none) || (changed_entries[column] > 0))
+                        ? Lod_column_change::changed
+                        : Lod_column_change::unchanged);
+        }
+        // A frame between the decoded ones without a readback leaves its
+        // changes unknown.
+        if (!m_lod_has_decoded_frame || (readback->frame_index != (m_lod_last_decoded_frame + 1))) {
+            m_lod_retired_gap = true;
+        }
+        m_lod_has_decoded_frame  = true;
+        m_lod_last_decoded_frame = readback->frame_index;
+
+        // A capture waiting for this frame's GPU levels.
+        {
+            const std::lock_guard<std::mutex> lock{m_lod_capture_mutex};
+            if (m_lod_capture_awaits_gpu && (m_lod_capture_frame_index <= readback->frame_index)) {
+                Lod_level_capture& capture = m_lod_capture;
+                if (m_lod_capture_frame_index == readback->frame_index) {
+                    for (Lod_level_capture_column& column : capture.columns) {
+                        ERHE_VERIFY(column.column < readback->column_count);
+                        column.changed_entries = changed_entries[column.column];
+                        column.change          = change_frame.change[column.column];
+                    }
+                    for (Lod_level_capture_entry& entry : capture.entries) {
+                        const std::size_t global_entry = static_cast<std::size_t>(entry.global_entry_index);
+                        for (const Lod_level_capture_column& column : capture.columns) {
+                            const std::size_t word_index = ((column.column / 8) * static_cast<std::size_t>(readback->entry_count)) + global_entry;
+                            ERHE_VERIFY(word_index < word_count);
+                            entry.levels.push_back((retired.words[word_index] >> (4u * (column.column % 8))) & 0xfu);
+                        }
+                    }
+                }
+                m_lod_capture_awaits_gpu = false;
+                m_lod_capture_requested  = false;
+                m_lod_capture_complete   = true;
+            }
+        }
+        readback->buffer->unmap();
+        readback->pending = false;
+    }
+    // A capture whose frame recorded no readback (nothing to dispatch).
+    {
+        const std::lock_guard<std::mutex> lock{m_lod_capture_mutex};
+        if (m_lod_capture_awaits_gpu) {
+            const bool any_pending = std::ranges::any_of(m_lod_level_readbacks, [](const Lod_level_readback& readback) -> bool { return readback.pending; });
+            if (!any_pending) {
+                m_lod_capture_awaits_gpu = false;
+                m_lod_capture_requested  = false;
+                m_lod_capture_complete   = true;
+            }
+        }
+    }
+}
+
+auto Draw_list_scene::find_retired_lod_column(const Draw_list_slot& slot, const uint64_t lod_key) const -> uint32_t
+{
+    const Lod_retired_levels& retired = m_lod_retired_levels;
+    if (
+        !retired.valid ||
+        (lod_key == 0) ||
+        (retired.entry_layout_serial != slot.entry_layout_serial) ||
+        (retired.entry_count != slot.entry_count)
+    ) {
+        return lod_column_none;
+    }
+    for (uint32_t column = 0; column < retired.column_count; ++column) {
+        if (retired.column_keys[column] == lod_key) {
+            return column;
+        }
+    }
+    return lod_column_none;
 }
 
 auto Draw_list_scene::get_lod_region_slot(const uint64_t frame_index) const -> const Lod_region_slot&

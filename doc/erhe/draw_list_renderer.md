@@ -494,7 +494,9 @@ Registration:
     selection's) whose level differs from the previous column's
     (`cull_lanes::count_lod_level_changes()`), and
     `get_lod_column_change(frame_index, view)` reports `none` (no column),
-    `unchanged` or `changed` (some entry changed, or no previous column).
+    `unchanged` or `changed` (some entry changed, or no previous column;
+    under `Lod_cpu_selection::on_demand` from the completed frames' GPU
+    change counts, below).
     While a cached pass is kept its view does not change, so the entries
     it draws change only by content changes, which the cache tests on its
     own.
@@ -526,7 +528,13 @@ Registration:
     with the same entry layout and the same classification setting;
     otherwise every column starts fresh (a frame gap, an entry added,
     removed or moved, a `culling_classification` switch, a single frame
-    slot). Matching by key keeps a view's history when another view is
+    slot, and the frame a classification check records). A check's frame
+    is a restart point in both `Lod_cpu_selection` modes, so a check's
+    levels never depend on the history the CPU lanes kept (an `on_demand`
+    frame keeps none): an entry inside a hysteresis band may take its fresh
+    level once there, and the hysteresis continues from it
+    (`Cull_classification_check::lod_hysteresis_reset`, MCP
+    `lod_hysteresis_reset`). Matching by key keeps a view's history when another view is
     added or removed before it (its column index shifts). Settings edits
     (threshold, biases, band) do not restart: a bias edit and a threshold
     decrease apply on the edit frame (the clamp to `selected`), a threshold
@@ -610,6 +618,60 @@ Registration:
     and its drawn-level results (`doc/editor/lod.md` "Drawn levels") read
     the levels this way, so the edge lines and the selection outline trace
     the level the fill draws.
+  - CPU level source (`Lod_frame_settings::cpu_selection`,
+    `Lod_cpu_selection`; `doc/plans/lod_gpu_selection.md` section 9,
+    decisions 5 and 6). `every_frame`: the lanes above run in every
+    classified frame. `on_demand`, published only for a frame classified
+    on the GPU (`publish()` publishes `every_frame` otherwise, with one info
+    log; the first `on_demand` frame logs once too): the CPU masks are
+    classified as before, but `select_list_lod_levels()` runs only in the
+    frame a classification check records (`begin_gpu_cull_check_frame()`,
+    decided in `classify_cull_views()`), whose columns match no previous
+    column in either mode (Hysteresis, above); a frame running the lanes
+    after one without CPU levels (`Lod_level_slot::levels_written`) starts
+    fresh too. In every other frame the GPU classification also
+    counts per shadow column the kept entries whose level differs from the
+    matched previous column's (`lod_columns.z`; `atomicAdd` into
+    `lod_change_words` words after the level region, cleared with a
+    transfer fill before the dispatch), and `record_lod_level_readback()`
+    copies those words and the whole level region into the frame slot's
+    persistent host-readable `Lod_level_readback` with the frame's column
+    keys, previous columns and entry layout. `decode_completed_lod_levels()`
+    (at the start of every classification) decodes, oldest first, every
+    pending readback whose frame `Device::is_frame_completed()` reports, or
+    whose slot the frame reuses: the newest one's levels become the retired
+    levels (`Lod_retired_levels`), and each decoded frame's per-column
+    changes (`changed` without a previous column or with a changed entry)
+    are kept for the frame. The consumers then read:
+    `get_lod_level()` and the CPU command writer (a CPU-written pass with a
+    column under the GPU classification) the retired level in the retired
+    frame's column with the view's `lod_key` (`find_retired_lod_column()`;
+    none, so the template range, when that frame has another entry layout
+    or no such column: any entry added or removed puts every view's edge
+    feed and CPU-written passes at the template range until a completed
+    frame has the new layout, while the fill draws the selected levels),
+    `get_published_entry_lod_level()` with source
+    `Drawn_lod_level_source::retired`; `get_lod_column_change()` reports
+    `changed` when the frame's column starts fresh, when a decoded frame
+    did not follow the one decoded before it (a frame without a readback),
+    or when a frame decoded at this classification lacks the key or
+    changed, else `unchanged`: each frame's change reaches the shadow map
+    cache once, when its frame completed, so a cached pass is redrawn that
+    many frames after a level of its column changed and holds the earlier
+    levels until then. The lag is when the device reports completion:
+    both backends retire frames when a later frame's recording ends
+    (`end_frame()`), so the retired levels read in frame N's
+    classification are those of frame N - 2 at best: measured N - 3 on
+    headless Metal 3 (3 frames in flight; the slot reuse decodes it) and
+    N - 2, now and then N - 3, on windowed Metal 3, Metal 4 and
+    KosmicKrisp.
+    No stall is added for an earlier result. `classify_cull_views()` logs
+    the lag every `lod_lag_log_frames` (600) `on_demand` frames ("LOD
+    on_demand: retired level lag"). `request_lod_level_capture()` of an
+    `on_demand` frame copies the columns and entries at the classification
+    and completes with the GPU's levels and level changes of that frame
+    once it is decoded (`Lod_level_capture::levels_from_gpu`,
+    `retired_frame_index`: the frame the captured frame's consumers read).
   - Per-pass level counts (`Lod_level_counts`: per level 0..7 the entries
     drawn and their triangles, `index_count / 3` of the drawn range; an
     entry drawing its template range counts at `get_lod_template_level()`):
