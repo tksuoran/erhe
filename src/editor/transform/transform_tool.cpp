@@ -421,6 +421,23 @@ void Transform_tool::window_imgui()
                 }
             }
         });
+        p.add_entry("Gizmo Position", [this, &settings]() {
+            int position = static_cast<int>(settings.gizmo_position);
+            bool changed = false;
+            for (int i = 0, end = IM_ARRAYSIZE(c_transform_gizmo_position_strings); i < end; ++i) {
+                if (i > 0) {
+                    ImGui::SameLine();
+                }
+                changed = ImGui::RadioButton(c_transform_gizmo_position_strings[i], &position, i) || changed;
+            }
+            if (changed) {
+                const Transform_gizmo_position new_position = static_cast<Transform_gizmo_position>(position);
+                if (settings.gizmo_position != new_position) {
+                    settings.gizmo_position = new_position;
+                    on_reference_settings_changed();
+                }
+            }
+        });
         p.show_entries();
     }
 
@@ -681,10 +698,23 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         refresh_from_root(node.get());
     }
 
+    const bool use_bounding_box_center = (shared.settings.gizmo_position == Transform_gizmo_position::bounding_box_center);
     for (const std::shared_ptr<erhe::scene::Node>& node : m_target_nodes) {
         const Trs_transform& world_from_node = node->world_from_node_transform();
 
-        cumulative_world_translation += world_from_node.get_translation();
+        // The gizmo position of this target (Transform_gizmo_position): the
+        // world bounding box center of its mesh, else its origin.
+        glm::vec3 position = world_from_node.get_translation();
+        if (use_bounding_box_center) {
+            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+            if (mesh) {
+                const erhe::math::Aabb aabb = mesh->get_aabb_world();
+                if (aabb.is_valid_3d()) {
+                    position = aabb.center();
+                }
+            }
+        }
+        cumulative_world_translation += position;
         cumulative_world_scale       += world_from_node.get_scale();
         // Rotations do not average: the anchor orientation is one target's
         // orientation, and that target is the representative one (the active

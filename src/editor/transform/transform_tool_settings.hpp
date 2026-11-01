@@ -35,6 +35,23 @@ static constexpr const char* c_transform_reference_mode_strings[] = {
     "Selection"
 };
 
+// Where the transform gizmo sits for a selected node:
+//   bounding_box_center - a node with a mesh: the center of the mesh's world
+//                         bounding box (meshes whose node origin lies far
+//                         outside their vertices, e.g. Bistro props);
+//                         any other node: its origin
+//   node_origin         - the node's origin
+// The drag applies relative to the gizmo, so rotate and scale pivot there.
+enum class Transform_gizmo_position : unsigned int {
+    bounding_box_center = 0,
+    node_origin         = 1
+};
+
+static constexpr const char* c_transform_gizmo_position_strings[] = {
+    "Bounding Box Center",
+    "Node Origin"
+};
+
 class Transform_tool_settings
 {
 public:
@@ -43,6 +60,7 @@ public:
     bool                     show_scale           {false};
     bool                     hide_inactive        {true};
     Transform_reference_mode reference_mode       {Transform_reference_mode::global};
+    Transform_gizmo_position gizmo_position       {Transform_gizmo_position::bounding_box_center};
     // [0,1] normalized-lerp weight between the two faces sharing a selected edge,
     // used to orient the temp frame's normal in Selection mode.
     float                    edge_normal_blend    {0.5f};
