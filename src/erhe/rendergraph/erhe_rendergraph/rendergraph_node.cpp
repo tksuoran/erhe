@@ -185,10 +185,15 @@ auto Rendergraph_node::is_enabled() const -> bool
     return m_enabled;
 }
 
-auto Rendergraph_node::is_enabled_in_frame(const uint64_t frame_index) const -> bool
+auto Rendergraph_node::is_active() const -> bool
+{
+    return m_active;
+}
+
+auto Rendergraph_node::is_active_in_frame(const uint64_t frame_index) const -> bool
 {
     const Frame_record& record = m_frame_records[frame_index % m_frame_records.size()];
-    return (record.frame_index == frame_index) && record.enabled;
+    return (record.frame_index == frame_index) && record.active;
 }
 
 namespace {
@@ -215,7 +220,7 @@ void Rendergraph_node::record_frame(const uint64_t frame_index)
 {
     Frame_record& record = m_frame_records[frame_index % m_frame_records.size()];
     record.frame_index  = frame_index;
-    record.enabled      = m_enabled;
+    record.active       = m_active;
     record.input_count  = 0;
     record.output_count = 0;
     for (const erhe::graph::Pin& pin : get_input_pins()) {

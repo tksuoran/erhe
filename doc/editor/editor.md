@@ -477,9 +477,10 @@ In order:
     which with pipelining the prepare phase may learn one frame late, so the
     chain runs once more and that frame's readback node records nothing),
     then the node list (in execution order) is copied into the frame's
-    slot and every node's live enabled flag and connections into its
-    record of the frame. `Rendergraph::execute` runs the nodes of its
-    frame's slot enabled in their records, without the graph mutex; an
+    slot and every node's active flag (enabled, and feeding an active
+    consumer or none; `doc/erhe/rendergraph.md` "Active Nodes") and
+    connections into its record of the frame. `Rendergraph::execute` runs
+    the nodes of its frame's slot active in their records, without the graph mutex; an
     enable or disable from the ImGui phase (the Viewport window,
     `Quad_view::set_visible`), a new node or connection reaches the next
     frame, and a node released while a frame not yet rendered names it is

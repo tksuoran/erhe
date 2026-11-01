@@ -36,18 +36,20 @@ public:
     // Prepare phase (main thread, after every edit of the frame): destroys
     // the released nodes no frame still to be rendered names, sorts the
     // live list, calls each enabled node's prepare_rendergraph_node() hook,
-    // then copies the live list (in execution order) into the slot of the
+    // then evaluates every node's active flag (enabled, and either without
+    // a connected consumer or with an active one; consumer-first) and
+    // copies the live list (in execution order) into the slot of the
     // frame being prepared (the role-keyed Device::get_frame_index(); one
-    // slot per frame in flight) and every node's live enabled flag and
+    // slot per frame in flight) and every node's active flag and
     // connections into that node's record of the frame. execute() of that
-    // frame runs exactly the nodes of the slot that are enabled in their
+    // frame runs exactly the nodes of the slot that are active in their
     // record, so a register, release, connect, enable or disable from the
     // ImGui phase or a later prepare phase never reaches a frame the render
     // phase is already rendering.
     void prepare_frame  ();
     // Render phase: runs the nodes of the slot of the frame being rendered
     // (prepare_frame() of the same frame filled it; verified) that are
-    // enabled in it: first every node's pre_execute_rendergraph_node() hook
+    // active in it: first every node's pre_execute_rendergraph_node() hook
     // in execution order, then the pre-execute callback, then every node's
     // execute_rendergraph_node() in execution order. Never takes m_mutex: it
     // reads only the slot and the nodes' records of its frame.
@@ -106,6 +108,10 @@ private:
     void release_node                 (Rendergraph_node* node);
     // Under m_mutex.
     void sort                         ();
+    // Under m_mutex: true when the node has no connected consumer, or one of
+    // its consumers is active. prepare_frame() evaluates nodes
+    // consumer-first, so every consumer's m_active is already this frame's.
+    [[nodiscard]] auto has_active_consumer(const Rendergraph_node& node) const -> bool;
     void unregister_node_locked       (Rendergraph_node* node);
     // Main thread, prepare phase (prepare_frame()), outside m_mutex.
     void destroy_released_retired_nodes();

@@ -98,6 +98,28 @@ void Rendergraph::sort()
     m_is_sorted = true;
 }
 
+auto Rendergraph::has_active_consumer(const Rendergraph_node& node) const -> bool
+{
+    bool any_consumer = false;
+    for (const erhe::graph::Pin& pin : node.get_output_pins()) {
+        for (const erhe::graph::Link* link : pin.get_links()) {
+            const erhe::graph::Pin* sink_pin = link->get_sink();
+            if (sink_pin == nullptr) {
+                continue;
+            }
+            const Rendergraph_node* consumer = static_cast<const Rendergraph_node*>(sink_pin->get_owner_node());
+            if (consumer == nullptr) {
+                continue;
+            }
+            any_consumer = true;
+            if (consumer->m_active) {
+                return true;
+            }
+        }
+    }
+    return !any_consumer;
+}
+
 void Rendergraph::prepare_frame()
 {
     ERHE_PROFILE_FUNCTION();
@@ -117,6 +139,19 @@ void Rendergraph::prepare_frame()
         }
     }
     // After every hook: a hook may disable nodes (a one-frame capture chain).
+    // A node is active when it is enabled and its output feeds something
+    // that runs this frame: a node with no connected consumer (an ImGui
+    // host, the headset view, an unconnected texture producer) is a sink
+    // and active on its own; a node with consumers is active only if one
+    // of them is. m_nodes is in producer-first order, so walking it
+    // backwards sees every consumer before its producers. A hidden
+    // viewport window disables its Viewport_scene_view, and this is what
+    // then keeps that view's shadow node from rendering shadow maps nobody
+    // samples.
+    for (auto i = m_nodes.rbegin(); i != m_nodes.rend(); ++i) {
+        Rendergraph_node* node = *i;
+        node->m_active = node->m_enabled && has_active_consumer(*node);
+    }
     Frame_slot& slot = m_frame_slots[frame_index % m_frame_slots.size()];
     slot.frame_index = frame_index;
     slot.nodes.clear();
@@ -157,7 +192,7 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
     // execute() returns, outside the region.
     bool any_enabled_node_submits = false;
     for (const Rendergraph_node* node : slot.nodes) {
-        if (node->is_enabled_in_frame(frame_index) && node->submits_command_buffer()) {
+        if (node->is_active_in_frame(frame_index) && node->submits_command_buffer()) {
             any_enabled_node_submits = true;
             break;
         }
@@ -176,7 +211,7 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
         // Every node's pre-execute hook, then the callback, before the
         // first node executes (Rendergraph_node::pre_execute_rendergraph_node()).
         for (Rendergraph_node* node : slot.nodes) {
-            if (node->is_enabled_in_frame(frame_index)) {
+            if (node->is_active_in_frame(frame_index)) {
                 erhe::log::set_breadcrumb(node->get_name());
                 node->pre_execute_rendergraph_node(command_buffer);
             }
@@ -186,7 +221,7 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
         }
 
         for (Rendergraph_node* node : slot.nodes) {
-            if (node->is_enabled_in_frame(frame_index)) {
+            if (node->is_active_in_frame(frame_index)) {
                 SPDLOG_LOGGER_TRACE(log_frame, "Execute render graph node '{}'", node->get_name());
                 // Breadcrumb so the main-loop watchdog can name the node a spinning
                 // tick is stuck in. get_name() returns a stored string, so passing

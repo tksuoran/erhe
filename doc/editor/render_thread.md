@@ -269,7 +269,7 @@ new code.
   feed, ray trace scene, lightmap tick slot and composer slots, the debug
   and text renderer frames, the material set's published buffer copy and
   texture heap, the ImGui draw data copies, and the rendergraph's per-frame
-  node list, enabled flags and `Prepared_frame_values<T>` (the M2 to R
+  node list, active flags and `Prepared_frame_values<T>` (the M2 to R
   counterpart of `Render_frame_results`). A list or record set is published
   into a slot only when its change serial moved since that slot's last
   publish, so the steady state copies nothing.
@@ -318,7 +318,7 @@ new code.
   the GPU: `render_scene_image`, `set_ray_trace` `save_path`, the irradiance
   and reference queries, the radiance cascades texel copy; `doc/editor/editor.md`
   "MCP diagnostics that read R's output").
-- **Rendergraph node lifetime.** The node list, enabled flags and pin links
+- **Rendergraph node lifetime.** The node list, active flags and pin links
   are copied per frame in `Rendergraph::prepare_frame`; `execute` runs its
   frame's slot without the graph mutex; a node released while an unrendered
   frame names it is retired until that frame renders

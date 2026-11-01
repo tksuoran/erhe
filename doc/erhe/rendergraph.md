@@ -88,8 +88,8 @@ rendergraph.connect(Rendergraph_node_key::shadow_maps,      shadow_node.get(), v
 rendergraph.connect(Rendergraph_node_key::viewport_texture, viewport.get(),    post_processing.get());
 
 // Each frame
-rendergraph.prepare_frame(); // sorts if needed, copies the node list, enabled flags, connections (and node parameters) into the frame
-rendergraph.execute(command_buffer); // the frame's enabled nodes: every pre-execute hook, the callback, then every execute, in order
+rendergraph.prepare_frame(); // sorts if needed, evaluates and copies the node list, active flags, connections (and node parameters) into the frame
+rendergraph.execute(command_buffer); // the frame's active nodes: every pre-execute hook, the callback, then every execute, in order
 ```
 
 ### Implementing a Node
@@ -206,8 +206,9 @@ phase, never writes what an earlier frame's render phase reads:
   thread, under the graph mutex). `Rendergraph::prepare_frame()` (main
   thread, prepare phase, after every edit of the frame) sorts the live
   list, calls `prepare_rendergraph_node(frame_index)` on every enabled
-  node, then copies the live list, in execution order, into the
-  rendergraph's slot of the frame and every node's live flag and the
+  node, evaluates every node's active flag ("Active Nodes"), then copies
+  the live list, in execution order, into the
+  rendergraph's slot of the frame and every node's active flag and the
   first link of each of its pins into the node's record of the frame
   (one slot and one record per device frame in flight, keyed by the
   role-keyed `Device::get_frame_index()`; sized once, refilled in place).
@@ -215,7 +216,7 @@ phase, never writes what an earlier frame's render phase reads:
   scene image capture disables its chain once the readback was
   recorded): the copy follows every hook.
 - `Rendergraph::execute()` runs exactly the nodes of its frame's slot
-  that are enabled in their record (`is_enabled_in_frame(frame_index)`),
+  that are active in their record (`is_active_in_frame(frame_index)`),
   and verifies that the slot was filled for the frame it renders. A node
   registered, or a connection made, after the frame's copy takes part from
   the next frame. A program without a separate prepare phase calls
@@ -240,7 +241,7 @@ phase, never writes what an earlier frame's render phase reads:
 `Rendergraph::execute()` runs in three steps on the render thread, with
 the frame command buffer and outside any render pass: first
 `pre_execute_rendergraph_node(command_buffer)` of every node of the frame's
-slot that is enabled in it, in execution order; then the pre-execute
+slot that is active in it, in execution order; then the pre-execute
 callback (`Rendergraph::set_pre_execute_callback()`, set once on the main
 thread before the first `prepare_frame()`, verified; none by default); then
 `execute_rendergraph_node()` of the same nodes in the same order. So every
@@ -382,6 +383,25 @@ must not invalidate state needed by other hosts within the same frame.
 the same frame must survive until all nodes have completed execution. The
 `Imgui_renderer` handles this by retaining texture references across hosts
 rather than clearing them per-host.
+
+### Active Nodes
+
+`execute()` runs a node only while it is active: enabled, and either without
+a connected consumer (an ImGui host, the headset view, a texture producer
+nothing is wired to) or with at least one connected consumer that is itself
+active. `prepare_frame()` evaluates the flags after every prepare hook,
+consumer-first over the sorted node list, and copies them into the frame's
+records, so disabling a sink switches off its whole upstream chain from the
+next prepared frame on, and a producer that feeds two consumers keeps
+running while either one runs. `is_active()` (main thread) reports the last
+evaluation, `is_active_in_frame(frame_index)` (render phase) the frame's
+copy. An inactive node gets neither `pre_execute_rendergraph_node()` nor
+`execute_rendergraph_node()` in that frame; a producer that publishes
+per-frame results publishes none for it (the editor's `Shadow_render_node`
+has no `Shadow_frame_result` for a frame it did not execute). The editor's
+Viewport window disables its `Viewport_scene_view` while hidden, and this
+rule is what then keeps the view's shadow node from rendering shadow maps
+nothing samples.
 
 ### Inputs and Outputs Allowed
 

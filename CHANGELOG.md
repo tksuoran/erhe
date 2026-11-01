@@ -42,6 +42,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::rendergraph`: `Rendergraph::execute()` runs only active nodes: a
+  node is active when enabled and either without connected consumers or with
+  an active consumer, evaluated by `Rendergraph::prepare_frame()` after the
+  prepare hooks. `Rendergraph_node::is_active()` (main thread) reports the
+  last evaluation and `Rendergraph_node::is_active_in_frame()` (render phase)
+  the frame's copy; it replaces `Rendergraph_node::is_enabled_in_frame()`.
 - `erhe::imgui`: `Performance_window::sample_gpu_timers()` reconciles and
   samples the GPU timer plots; the owner calls it where no thread creates,
   destroys or records `Gpu_timer`s (the editor: between render phases).

@@ -76,12 +76,19 @@ public:
     // the render phase at the next Rendergraph::prepare_frame(), which copies
     // the flag (with the node's connections) into the frame being prepared.
     [[nodiscard]] auto is_enabled      () const -> bool;
+    // Main thread: whether the last Rendergraph::prepare_frame() found the
+    // node active - enabled, and either without a connected consumer or
+    // with at least one connected consumer that is itself active. A
+    // producer whose every consumer is disabled (a hidden viewport window
+    // disables its Viewport_scene_view) is inactive, so nothing is rendered
+    // for nobody.
+    [[nodiscard]] auto is_active       () const -> bool;
     // Render phase: the node takes part in frame frame_index - it was
-    // enabled when the prepare phase of that frame copied the flags
-    // (Rendergraph::prepare_frame()). A node registered after that copy
-    // takes part from the next frame on. Rendergraph::execute() runs only
-    // the nodes of the frame it renders that are enabled in it.
-    [[nodiscard]] auto is_enabled_in_frame(uint64_t frame_index) const -> bool;
+    // active when the prepare phase of that frame evaluated and copied the
+    // flags (Rendergraph::prepare_frame()). A node registered after that
+    // copy takes part from the next frame on. Rendergraph::execute() runs
+    // only the nodes of the frame it renders that are active in it.
+    [[nodiscard]] auto is_active_in_frame(uint64_t frame_index) const -> bool;
 
     [[nodiscard]] auto get_depth   () const -> int;
 
@@ -117,8 +124,8 @@ protected:
     virtual auto outputs_allowed() const -> bool;
 
     // Prepare phase hook (main thread, Rendergraph::prepare_frame()): called
-    // for every node enabled at the call, before the enabled flags are
-    // copied. A node copies the live parameters its execute of frame
+    // for every node enabled at the call, before the active flags are
+    // evaluated and copied. A node copies the live parameters its execute of frame
     // frame_index reads (edited by the ImGui windows, tools, MCP) into its
     // slot of that frame, so a later prepare phase or the ImGui phase never
     // writes what the render phase reads. A hook may change live enabled
@@ -127,7 +134,7 @@ protected:
     virtual void prepare_rendergraph_node(uint64_t frame_index);
 
     // Render phase hook (render thread, Rendergraph::execute()): called for
-    // every node enabled in the frame, in execution order, before the first
+    // every node active in the frame, in execution order, before the first
     // execute_rendergraph_node() of the frame, outside any render pass, with
     // the frame command buffer. After every hook, and still before the first
     // execute, execute() runs the pre-execute callback
@@ -155,6 +162,7 @@ protected:
     bool                                        m_is_registered{false};
     bool                                        m_has_deleter  {false}; // created by make_rendergraph_node()
     bool                                        m_enabled      {true};  // live flag, main thread
+    bool                                        m_active       {false}; // last prepare_frame() evaluation, main thread
     int                                         m_depth        {0};
 
 private:
@@ -169,14 +177,14 @@ private:
     {
     public:
         uint64_t                                             frame_index {std::numeric_limits<uint64_t>::max()}; // the frame whose prepare phase made the record
-        bool                                                 enabled     {false};
+        bool                                                 active      {false};
         std::size_t                                          input_count {0};
         std::size_t                                          output_count{0};
         std::array<Frame_link, erhe::graph::max_pin_count>   inputs      {};
         std::array<Frame_link, erhe::graph::max_pin_count>   outputs     {};
     };
 
-    // Rendergraph::prepare_frame(): copies the live enabled flag and the
+    // Rendergraph::prepare_frame(): copies the active flag and the
     // first link of every pin into the record of frame_index.
     void record_frame(uint64_t frame_index);
     // The record of the frame the calling render phase renders (role-keyed

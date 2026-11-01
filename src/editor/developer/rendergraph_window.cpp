@@ -133,6 +133,8 @@ public:
     {
         if (!m_rendergraph_node->is_enabled()) {
             ImGui::TextUnformatted("(disabled)");
+        } else if (!m_rendergraph_node->is_active()) {
+            ImGui::TextUnformatted("(no active consumer)");
         }
     }
 
