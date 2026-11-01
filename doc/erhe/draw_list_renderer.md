@@ -1156,7 +1156,12 @@ Drawing:
   dependency is declared at the consumer: `buffer_barrier(previous slot
   buffer, storage_write | compute_shader | fragment_shader, storage_read |
   compute_shader, Barrier_scope::earlier_submissions)` before the dispatch.
-  The culled entries are still tested in N + 1 (their test bit follows the
+  The slot's next frame (any number of frames in flight later) rewrites the
+  words N + 1 read, which may still be in flight: that frame's dispatch
+  first records `buffer_barrier(slot buffer, storage_read |
+  compute_shader, storage_write | compute_shader | fragment_shader,
+  Barrier_scope::earlier_submissions)` whenever a later frame read the slot
+  (`Occlusion_slot::previous_reader`). The culled entries are still tested in N + 1 (their test bit follows the
   frustum), so an entry that becomes visible returns one frame later: one
   frame of lag, a pop-in after a fast camera or object move. The color
   commands generated from the masks and the color passes' drawn / culled
