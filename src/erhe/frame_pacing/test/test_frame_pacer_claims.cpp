@@ -1446,14 +1446,16 @@ TEST(Frame_pacer_claims, c25_upshift_under_measured_gpu_clock)
     EXPECT_EQ(vsync_values(both, 3000), (std::set<int>{1})) << "both clocks return to N=1";
 
     // Work that does not fit N=1 even at full clock keeps the longer cadence.
+    // It settles at N=3 (9 ms at N=2's 41-97 percent clock exceeds two
+    // periods); probes of N=2 from there are the upshift test as designed -
+    // N=2 is judged at full clock, where the work fits, until its clock record
+    // holds cadence_min_samples settled samples, and each failed probe doubles
+    // the dwell (C10). How many samples the startup leaves in that record
+    // depends on the pseudo-random sequence, which std::normal_distribution
+    // leaves to the standard library, so the claim is checked as N=1 never
+    // returning rather than as a count of N=2 probes.
     const std::vector<Frame_record> heavy = run_c25(true, 9.0, 2505);
-    std::size_t changes = 0;
-    for (std::size_t i = 601; i < heavy.size(); ++i) {
-        if (heavy[i].vsyncs != heavy[i - 1].vsyncs) {
-            ++changes;
-        }
-    }
-    EXPECT_EQ(changes, 0u) << "no cadence changes after the startup";
+    EXPECT_EQ(vsync_values(heavy, 601).count(1), 0u) << "never returns to N=1 after the startup";
     EXPECT_GE(heavy.back().vsyncs, 2) << "stays at a longer cadence";
 }
 
