@@ -319,9 +319,13 @@ opaque stacks count 1 in both modes; a scene image with nested
 alpha-tested squares counts each region's square depth exactly; 80 MCP
 toggles with and without post-processing; no new validation message.
 Metal 3 (Mac M4 Pro, headless Debug, 2026-11-01): `overdraw_verify.py`
-fails 31 checks, every one by a uniform factor of 4 (4x MSAA viewport: each
-expected count n reads 4n, e.g. coplanar rasterized 16 instead of 4) - the
-counting fragment shaders run per sample there; not yet investigated.
+passes every check with the viewports at MSAA 1; with the preset's 4x MSAA
+it fails 31 checks, each count 4 times the expected one (coplanar
+rasterized 16 instead of 4). The counting variant's MSL has no per-sample
+input (no `[[sample_id]]`, sample mask or sample interpolation; the stage
+inputs are plain `user(locn)`), so the device runs the fragment function,
+which writes device memory, once per covered sample at 4x MSAA. Open: a
+per-pixel count on Metal under MSAA.
 Not yet verified: Metal 4 (the binding from ICB-executed draws),
 OpenGL, the mode-off render-thread gates against the previous HEAD, and
 occlusion culling's check with the mode on.
