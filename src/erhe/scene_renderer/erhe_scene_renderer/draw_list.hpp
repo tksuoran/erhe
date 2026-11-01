@@ -131,15 +131,26 @@ enum class Lod_projection : uint8_t
 
 [[nodiscard]] auto c_str(Lod_projection projection) -> const char*;
 
+// The level of detail column of a culling view
+// (doc/plans/lod_gpu_selection.md section 3 "Columns"): one per color view
+// with a Lod_view in a frame whose selection is active, at most
+// max_lod_columns per frame, of which at most max_lod_color_columns color
+// columns.
+constexpr uint32_t lod_column_none      {0xffffffffu};
+constexpr uint32_t max_lod_columns      {64};
+constexpr uint32_t max_lod_color_columns{8};
+
 // The level of detail selection inputs of one culling view
 // (Draw_list_scene::add_cull_view(), doc/plans/lod_gpu_selection.md section
 // 3 "Per view and per frame"): the selection origin (a camera position in
 // world space), the projection scale in pixels per unit of tangent
 // (viewport height / (tan(up) - tan(down)); orthographic: viewport height /
 // view height), the projection kind and the caller's identity of the view,
-// stable across frames (the editor: the scene view), which matches the
-// view's selection between frames. A view without one draws the template
-// range of its entries (the forced level, or level 0).
+// stable across frames and never reused for another view (the editor: the
+// scene view's serial id), which matches the view's selection between
+// frames (hysteresis, section 6). lod_key 0 matches nothing: the view's
+// selection starts fresh every frame. A view without a Lod_view draws the
+// template range of its entries (the forced level, or level 0).
 class Lod_view
 {
 public:
@@ -149,7 +160,7 @@ public:
     glm::vec3      origin          {0.0f};
     float          projection_scale{0.0f};
     Lod_projection projection      {Lod_projection::perspective};
-    const void*    lod_key         {nullptr};
+    uint64_t       lod_key         {0};
 };
 
 // The tests of one culling view (Draw_list_scene::add_cull_view(),

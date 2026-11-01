@@ -90,6 +90,7 @@
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/cull_classification.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include <simdjson.h>
@@ -261,6 +262,7 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         check(read_non_negative_float_argument(args, "shadow_bias_texel_scale",  preset.shadow_bias_texel_scale))  &&
         check(read_non_negative_float_argument(args, "shadow_bias_origin_scale", preset.shadow_bias_origin_scale)) &&
         check(read_non_negative_float_argument(args, "lod_threshold_pixels",     preset.lod_threshold_pixels))     &&
+        check(read_non_negative_float_argument(args, "lod_hysteresis_band",      preset.lod_hysteresis_band))      &&
         check(read_int_argument  (args, "lod_bias",                         -7, preset.lod_bias))                         &&
         check(read_int_argument  (args, "directional_shadow_light_count",     0, preset.directional_shadow_light_count))     &&
         check(read_int_argument  (args, "directional_unshadowed_light_count", 0, preset.directional_unshadowed_light_count)) &&
@@ -288,6 +290,9 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
     }
     if (!args_ok) {
         return make_error_content(error);
+    }
+    if (preset.lod_hysteresis_band > erhe::scene_renderer::max_lod_hysteresis_band) {
+        return make_error_content(fmt::format("lod_hysteresis_band must be <= {}", erhe::scene_renderer::max_lod_hysteresis_band));
     }
     // shadow_depth_bits is a request, as in graphics_presets.json: any
     // positive value is accepted and choose_shadow_depth_format() resolves it
@@ -348,6 +353,7 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"lod_enabled",                in_effect.lod_enabled},
         {"lod_threshold_pixels",       in_effect.lod_threshold_pixels},
         {"lod_bias",                   in_effect.lod_bias},
+        {"lod_hysteresis_band",        in_effect.lod_hysteresis_band},
         {"shader_float16",             (m_context.graphics_device != nullptr) && m_context.graphics_device->get_info().shader_float16},
         {"use_draw_lists",             m_context.app_settings->get_use_draw_lists()}
     }).dump();

@@ -103,15 +103,17 @@ degrees. Values not present in `editor_settings.json` take these defaults.
 
 ## Graphics preset settings
 
-The graphics preset (`Graphics_preset_entry`, version 7) holds the automatic
+The graphics preset (`Graphics_preset_entry`, version 8) holds the automatic
 selection's settings: `lod_enabled` (default off), `lod_threshold_pixels`
-(the pixel error a selected level stays within, default 1.0) and `lod_bias`
-(added to every selected level, default 0). The Settings window shows them
-as "LOD Selection", "LOD Threshold (pixels)" and "LOD Bias"; the MCP
-`set_graphics_preset` takes `lod_enabled`, `lod_threshold_pixels` and
-`lod_bias` (session only). Each frame's render settings snapshot carries
-them to `Draw_list_scene::publish()` (`Lod_frame_settings`), and
-`get_draw_lists` reports what the last publish recorded (`lod`).
+(the pixel error a selected level stays within, default 1.0), `lod_bias`
+(added to every selected level, default 0) and `lod_hysteresis_band` (0 to
+0.9, default 0.25; below). The Settings window shows them as "LOD
+Selection", "LOD Threshold (pixels)", "LOD Bias" and "LOD Hysteresis Band";
+the MCP `set_graphics_preset` takes `lod_enabled`, `lod_threshold_pixels`,
+`lod_bias` and `lod_hysteresis_band` (session only). Each frame's render
+settings snapshot carries them to `Draw_list_scene::publish()`
+(`Lod_frame_settings`), and `get_draw_lists` reports what the last publish
+recorded (`lod`).
 
 ## Automatic selection
 
@@ -143,9 +145,22 @@ commands by the compaction per job, read back with the retired frame's
 counts (`Retired_gpu_color_counts::lod_counts`; frames in flight late, so
 they include occlusion like the drawn counts). Not yet selected: the shadow
 passes and skinned meshes draw the template range (the forced level, or
-level 0), and there is no hysteresis. MCP `get_lod_selection` reports the
-levels of one frame for a mesh, per column, with each column's origin and
-projection scale.
+level 0). MCP `get_lod_selection` reports the levels of one frame for a
+mesh, per column, with each column's origin, projection scale, `lod_key`
+and matched previous column, and the scene's hysteresis restart and shift
+counts.
+
+Levels pop with hysteresis: a view moves a mesh to a coarser level only
+once that level's error stays within "LOD Threshold (pixels)" times (1 -
+"LOD Hysteresis Band"), and back to a finer level as soon as the current
+level's error exceeds the threshold, so a camera that stops between the
+two keeps the level it arrived with. With a band of 0.25 a level that
+switches at distance d on the way in switches at d / 0.75 on the way out;
+0 is the plain threshold rule. Each view keeps its history by its scene
+view (a view added or removed beside it keeps it); the history restarts
+after a frame the scene was not rendered in, a mesh added or removed, and
+a `culling_classification` switch (`doc/erhe/draw_list_renderer.md` R1c
+"Hysteresis").
 
 ## Edge lines and the selection outline
 
@@ -200,3 +215,7 @@ distances while it dollies the camera, `render_scene_image` at automatic
 level L against forced level L, and with `--outline` the selected torus's
 viewport (the selection outline, with the selection fill on and off) at
 automatic level L against forced level L, and `get_lod_info`'s drawn level.
+With `--hysteresis BAND` it also dollies back in (the outward switches at
+d_L / (1 - BAND), the inward ones at d_L) and stops the camera inside each
+level's band from either side, requiring the level it arrived with for 300
+frames, with the classification check under gpu at every hold.

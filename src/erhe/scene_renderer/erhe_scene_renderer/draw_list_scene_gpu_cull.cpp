@@ -448,6 +448,36 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
         ERHE_VERIFY(slot.lod_active || (lod_group_count == 0));
         prepare_lod_region_slot(frame_index, entry_count, lod_group_count, slot.entry_layout_serial);
         const Lod_region_slot& lod_region_slot = get_lod_region_slot(frame_index);
+        // Hysteresis (section 6): the previous frame's GPU level region,
+        // read by the views whose column classify_cull_views() matched
+        // (m_lod_previous_columns, the decision both paths share). A match
+        // implies the frame right before was classified on the GPU with the
+        // same entry layout and the matched column, so its slot holds that
+        // frame's region.
+        Lod_region_slot* lod_previous_region_slot = nullptr;
+        for (uint32_t column = 0; column < m_lod_column_count; ++column) {
+            const uint32_t previous_column = m_lod_previous_columns[column];
+            if (previous_column == lod_column_none) {
+                continue;
+            }
+            Lod_region_slot& candidate = m_lod_region_slots[(frame_index - 1) % m_lod_region_slots.size()];
+            ERHE_VERIFY(&candidate != &lod_region_slot);
+            ERHE_VERIFY(candidate.buffer && (candidate.frame_index + 1 == frame_index));
+            ERHE_VERIFY(candidate.entry_layout_serial == slot.entry_layout_serial);
+            ERHE_VERIFY(candidate.entry_count == entry_count);
+            ERHE_VERIFY((previous_column / Gpu_cull_classifier::lod_columns_per_word) < candidate.group_count);
+            lod_previous_region_slot = &candidate;
+        }
+        if (!m_lod_no_previous_buffer) {
+            m_lod_no_previous_buffer = std::make_unique<Buffer>(
+                device,
+                Buffer_create_info{
+                    .capacity_byte_count = c_min_storage_bind_bytes,
+                    .usage               = Buffer_usage::storage,
+                    .debug_label         = erhe::utility::Debug_label{"Draw_list_scene no previous LOD level region"}
+                }
+            );
+        }
         // The previous frame's occlusion words, consumed by this frame's
         // classification (one frame of lag): only those of the frame right
         // before this one, describing the same entries at the same
@@ -555,14 +585,15 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             std::memcpy(gpu_data.data() + classifier.get_view_pvs_pages_offset (), &pvs_pages,  sizeof(pvs_pages));
             std::memcpy(gpu_data.data() + classifier.get_view_pvs_grid_offset  (), &pvs_grid,   sizeof(pvs_grid));
             // The level of detail header (doc/plans/lod_gpu_selection.md
-            // section 3): active, threshold^2, the coarsening threshold^2
-            // (the threshold itself until a hysteresis band exists) and the
-            // global bias, as uint bits.
-            const float threshold2 = slot.lod_settings.threshold_pixels * slot.lod_settings.threshold_pixels;
+            // sections 3 and 6): active, threshold^2, the coarsening
+            // threshold^2 (hysteresis) and the global bias, as uint bits;
+            // the values classify_cull_views() gave the CPU lanes.
+            const float threshold2         = slot.lod_settings.threshold_pixels * slot.lod_settings.threshold_pixels;
+            const float coarsen_threshold2 = cull_lanes::get_lod_coarsen_threshold2(slot.lod_settings.threshold_pixels, slot.lod_settings.hysteresis_band);
             const glm::uvec4 lod_header{
                 slot.lod_active ? 1u : 0u,
                 std::bit_cast<uint32_t>(threshold2),
-                std::bit_cast<uint32_t>(threshold2),
+                std::bit_cast<uint32_t>(coarsen_threshold2),
                 std::bit_cast<uint32_t>(static_cast<int32_t>(slot.lod_settings.bias))
             };
             std::memcpy(gpu_data.data() + classifier.get_view_lod_header_offset(), &lod_header, sizeof(lod_header));
@@ -593,15 +624,17 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 // section 3): the selection origin and projection scale,
                 // then the LOD column (assign_lod_columns(); -1: none, the
                 // view draws the template range), projection kind, previous
-                // column (no hysteresis yet: -1) and shadow mode.
+                // frame's column for the same lod_key (section 6; -1: none,
+                // the selection starts fresh) and shadow mode.
                 if (view.lod_view.has_value()) {
-                    const Lod_view& lod_view = view.lod_view.value();
-                    const uint32_t  column   = m_cull_view_lod_columns[view_index];
+                    const Lod_view& lod_view        = view.lod_view.value();
+                    const uint32_t  column          = m_cull_view_lod_columns[view_index];
+                    const uint32_t  previous_column = (column != lod_column_none) ? m_lod_previous_columns[column] : lod_column_none;
                     record[12] = glm::vec4{lod_view.origin, lod_view.projection_scale};
                     record[13] = glm::vec4{
                         (column != lod_column_none) ? static_cast<float>(column) : -1.0f,
                         static_cast<float>(static_cast<uint32_t>(lod_view.projection)),
-                        -1.0f,
+                        (previous_column != lod_column_none) ? static_cast<float>(previous_column) : -1.0f,
                         0.0f
                     };
                 } else {
@@ -667,6 +700,36 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 Barrier_scope::earlier_submissions
             );
         }
+        if (lod_previous_region_slot != nullptr) {
+            // The previous frame's classification wrote the levels this
+            // dispatch reads; that frame's command buffer was submitted
+            // before this one.
+            command_buffer.buffer_barrier(
+                *lod_previous_region_slot->buffer,
+                Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader,
+                Buffer_usage_flag_bit_mask::storage_read | Buffer_usage_flag_bit_mask::compute_shader,
+                Barrier_scope::earlier_submissions
+            );
+            lod_previous_region_slot->previous_reader       = true;
+            lod_previous_region_slot->previous_reader_frame = frame_index;
+        }
+        {
+            // An earlier frame read this slot's region as its previous one
+            // (the frame after the slot's last frame; with any number of
+            // frames in flight it may still be in flight): this dispatch's
+            // writes wait for that read.
+            Lod_region_slot& region_slot = m_lod_region_slots[frame_index % m_lod_region_slots.size()];
+            if (region_slot.previous_reader) {
+                ERHE_VERIFY(region_slot.previous_reader_frame < frame_index);
+                command_buffer.buffer_barrier(
+                    *region_slot.buffer,
+                    Buffer_usage_flag_bit_mask::storage_read | Buffer_usage_flag_bit_mask::compute_shader,
+                    Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader,
+                    Barrier_scope::earlier_submissions
+                );
+            }
+            region_slot.previous_reader = false;
+        }
         {
             const Scoped_gpu_timer timer_scope{*m_gpu_cull_timer, command_buffer};
             Compute_command_encoder encoder = device.make_compute_command_encoder(command_buffer);
@@ -703,6 +766,11 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             encoder.set_buffer(Buffer_target::storage, slot.gpu_templates.get(), 0, entry_count * Gpu_cull_classifier::template_bytes_per_entry, Gpu_cull_classifier::lod_templates_binding_point);
             encoder.set_buffer(Buffer_target::storage, slot.gpu_lod_table.get(), 0, slot.gpu_lod_table_capacity, Gpu_cull_classifier::lod_table_binding_point);
             encoder.set_buffer(Buffer_target::storage, lod_region_slot.buffer.get(), 0, lod_region_slot.bind_bytes, Gpu_cull_classifier::lod_levels_binding_point);
+            if (lod_previous_region_slot != nullptr) {
+                encoder.set_buffer(Buffer_target::storage, lod_previous_region_slot->buffer.get(), 0, lod_previous_region_slot->bind_bytes, Gpu_cull_classifier::lod_previous_levels_binding_point);
+            } else {
+                encoder.set_buffer(Buffer_target::storage, m_lod_no_previous_buffer.get(), 0, c_min_storage_bind_bytes, Gpu_cull_classifier::lod_previous_levels_binding_point);
+            }
             const std::size_t group_size = Gpu_cull_classifier::workgroup_size;
             encoder.dispatch_compute(static_cast<std::uintptr_t>((entry_count + group_size - 1) / group_size), 1, 1);
         }
@@ -2013,10 +2081,13 @@ void Draw_list_scene::prepare_lod_region_slot(
     const std::size_t region_bytes = group_count * entry_count * Gpu_cull_classifier::lod_level_bytes_per_entry_group;
     const std::size_t bind_bytes   = std::max(region_bytes, c_min_storage_bind_bytes);
     if (!slot.buffer || (slot.buffer->get_capacity_byte_count() < bind_bytes)) {
-        // Rare: the slot's high-water size (entries, LOD columns) grew. The
-        // slot's previous frame retired, so the old buffer is free.
+        // Rare: the slot's high-water size (entries, LOD columns) grew. A
+        // later frame that read the old buffer as its previous region may
+        // still be in flight: a destroyed Buffer frees its GPU memory only
+        // once the frames recorded before its destruction completed.
         Device&           device   = m_gpu_cull_classifier->get_device();
         const std::size_t capacity = std::bit_ceil(bind_bytes);
+        slot.previous_reader = false;
         slot.buffer = std::make_unique<Buffer>(
             device,
             Buffer_create_info{

@@ -188,6 +188,15 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             .writeonly     = true
         }
     }
+    , m_lod_previous_levels_block{
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "cull_lod_previous_levels",
+            .binding_point = static_cast<int>(lod_previous_levels_binding_point),
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    }
     , m_view_buffer    {graphics_device, erhe::graphics::Buffer_target::storage,      "Gpu_cull_classifier views",         views_binding_point}
     , m_mask_buffer    {graphics_device, erhe::graphics::Buffer_target::storage,      "Gpu_cull_classifier masks"}
     , m_readback_buffer{graphics_device, erhe::graphics::Buffer_target::transfer_dst, "Gpu_cull_classifier mask readback"}
@@ -328,6 +337,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_lod_templates_block           .add_uvec4("templates", Shader_resource::unsized_array);
     m_lod_table_block               .add_uvec4("rows",      Shader_resource::unsized_array);
     m_lod_levels_block              .add_uint ("words",     Shader_resource::unsized_array);
+    m_lod_previous_levels_block     .add_uint ("words",     Shader_resource::unsized_array);
     // The occlusion test (occlusion_test.vert / .frag): the view block
     // (std140: per view a mat4 and a vec4, then a uvec4), the bounds as the
     // classifier reads them, and the two occlusion regions as uint words
@@ -385,7 +395,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
             .interface_blocks  = {
                 &m_bounds_block, &m_views_block, &m_masks_block, &m_occlusion_words_block, &m_occlusion_previous_words_block,
                 &m_pvs_database_block, &m_pvs_culled_block, &m_pvs_columns_block, &m_pvs_pages_block,
-                &m_lod_templates_block, &m_lod_table_block, &m_lod_levels_block
+                &m_lod_templates_block, &m_lod_table_block, &m_lod_levels_block, &m_lod_previous_levels_block
             },
             .shaders           = { { Shader_type::compute_shader, shader_path / std::filesystem::path{"cull_classify.comp"} } },
             .bind_group_layout = m_bind_group_layout.get()

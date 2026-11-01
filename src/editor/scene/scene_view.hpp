@@ -6,6 +6,7 @@
 #include "scene/node_raytrace_mask.hpp"
 #include "tools/debug_visualizations.hpp"
 
+#include "erhe_item/unique_id.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene/camera_snapshot.hpp"
@@ -174,6 +175,12 @@ public:
     [[nodiscard]] auto get_render_shadow_fit_camera() const -> const erhe::scene::Camera_snapshot*;
     [[nodiscard]] auto get_render_config           () const -> const Viewport_config&;
     [[nodiscard]] auto get_render_camera_viewport  () const -> erhe::math::Viewport;
+
+    // The view's serial id: unique over the run, never reused by a later
+    // view (unlike the view's address), so it keys the view's level of
+    // detail selection across frames (erhe::scene_renderer::Lod_view::lod_key,
+    // doc/plans/lod_gpu_selection.md section 6).
+    [[nodiscard]] auto get_serial_id() const -> uint64_t;
 
     // The stable name this view persists its settings under ("Default Viewport",
     // "Headset", ...); empty for views that do not persist (previews). Used to
@@ -366,6 +373,7 @@ protected:
 
 private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
+    erhe::Unique_id<Scene_view>                      m_serial_id;
 };
 
 }

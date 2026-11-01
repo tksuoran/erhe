@@ -68,14 +68,22 @@ enum class Lod_selection : uint8_t
 
 // The frame's level of detail settings (Draw_list_scene::publish(), from the
 // editor's graphics preset): the selection switch, the pixel error
-// threshold and the global bias added to every selected level
-// (doc/plans/lod.md sections 2.3 and 2.5).
+// threshold, the global bias added to every selected level
+// (doc/plans/lod.md sections 2.3 and 2.5) and the hysteresis band
+// (doc/plans/lod_gpu_selection.md section 6): in [0, 1), an entry moves to
+// a coarser level only once that level's error stays within
+// threshold_pixels * (1 - hysteresis_band); 0 = no hysteresis.
 class Lod_frame_settings
 {
 public:
     Lod_selection selection       {Lod_selection::off};
     float         threshold_pixels{1.0f};
     int           bias            {0};
+    float         hysteresis_band {0.0f};
 };
+
+// The largest hysteresis band the editor's settings accept (a band near 1
+// would never coarsen).
+constexpr float max_lod_hysteresis_band{0.9f};
 
 } // namespace erhe::scene_renderer

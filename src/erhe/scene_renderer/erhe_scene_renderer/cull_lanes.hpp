@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_scene_renderer/cull_classification.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
 
 #include <glm/glm.hpp>
@@ -126,16 +127,53 @@ void make_pvs_query_cells(
 // Level of detail selection (doc/plans/lod_gpu_selection.md section 2): the
 // inputs of one LOD column. threshold2 is the frame's pixel threshold
 // squared (computed once per frame, the value the GPU reads as float bits),
+// coarsen_threshold2 the hysteresis threshold squared (section 6:
+// get_lod_coarsen_threshold2(), equal to threshold2 without a band),
 // global_bias the frame's bias added to every selected level.
 class Lod_lane_view
 {
 public:
-    glm::vec3      origin          {0.0f};
-    float          projection_scale{0.0f};
-    Lod_projection projection      {Lod_projection::perspective};
-    float          threshold2      {1.0f};
-    int32_t        global_bias     {0};
+    glm::vec3      origin            {0.0f};
+    float          projection_scale  {0.0f};
+    Lod_projection projection        {Lod_projection::perspective};
+    float          threshold2        {1.0f};
+    float          coarsen_threshold2{1.0f};
+    int32_t        global_bias       {0};
 };
+
+// The hysteresis threshold squared of a frame (doc/plans/lod_gpu_selection.md
+// section 6): (threshold_pixels * (1 - band))^2, band in [0, 1); band 0
+// gives threshold_pixels^2 bit for bit (no hysteresis).
+[[nodiscard]] auto get_lod_coarsen_threshold2(float threshold_pixels, float hysteresis_band) -> float;
+
+// A level slot of the previous frame that holds no level (select_lod_level()
+// without history).
+constexpr uint32_t lod_previous_level_none{0xffffffffu};
+
+// The selection history of one classified frame (section 6): the frame, its
+// entry layout (Draw_list_scene's entry_layout_serial), its classification
+// setting and the lod_key of each of its LOD columns, column order.
+class Lod_history_frame
+{
+public:
+    uint64_t                  frame_index        {0};
+    uint64_t                  entry_layout_serial{0};
+    Cull_classification       classification     {Cull_classification::cpu};
+    std::span<const uint64_t> column_keys        {};
+};
+
+// The previous frame's column of each column of current (section 6), into
+// out (one per current column, lod_column_none: no history, selection
+// starts fresh): the previous column with the same non-zero lod_key (the
+// first one), when previous is the frame right before current, with the
+// same entry layout and the same classification setting; none for every
+// column otherwise. Both classification paths read the previous region
+// through this one decision.
+void match_lod_previous_columns(
+    const Lod_history_frame& previous,
+    const Lod_history_frame& current,
+    std::span<uint32_t>      out
+);
 
 // The level an entry draws without selection (the template range of its
 // command, R1c): the forced level clamped to the record's min / max and to
@@ -154,13 +192,20 @@ public:
 // is not under Lod_mode::automatic, or has no bounds (unbounded != 0),
 // takes get_lod_template_level(); an entry without chain level 0.
 // lod_errors are the chain's errors, level 0 first (lod_errors[0] unread).
+// Hysteresis (section 6): with previous_level (the entry's level in the
+// same column in the frame before, lod_previous_level_none without one),
+// the level is previous_level clamped to [coarse, selected], with coarse
+// the level the same rule gives for view.coarsen_threshold2: the entry
+// moves to a coarser level only once that level passes the coarsening
+// threshold, and to a finer one as soon as its level fails threshold2.
 [[nodiscard]] auto select_lod_level(
     const Lod_lane_view& view,
     uint32_t             lod_word,
     const float*         lod_errors,
     float                max_axis_scale,
     float                distance2,
-    uint32_t             unbounded
+    uint32_t             unbounded,
+    uint32_t             previous_level = lod_previous_level_none
 ) -> uint32_t;
 
 // The LOD column's level of every entry of a list into the column's nibble
@@ -170,7 +215,10 @@ public:
 // holds level L's error in z as float bits) and the boxes' squared distance
 // from the view origin, written to distance2 with the per-axis gaps of
 // sphere_axis_lanes() in gap (count floats each, owned by the caller).
-// Levels do not depend on visibility: every entry gets one.
+// Levels do not depend on visibility: every entry gets one. previous_words
+// (null: no history) are the previous frame's level words of the same
+// entries, the matched column at previous_nibble_shift (hysteresis,
+// section 6).
 void lod_lanes(
     const Lod_lane_view&             view,
     const Draw_list_bounds&          bounds,
@@ -180,7 +228,9 @@ void lod_lanes(
     float*                           gap,
     float*                           distance2,
     uint32_t*                        words,
-    uint32_t                         nibble_shift
+    uint32_t                         nibble_shift,
+    const uint32_t*                  previous_words        = nullptr,
+    uint32_t                         previous_nibble_shift = 0
 );
 
 // The lanes' per-box arrays of reaches_view(), owned by the caller (capacity

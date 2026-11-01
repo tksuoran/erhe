@@ -16,6 +16,18 @@ Every step whose distance is more than one dolly step away from every
 switch distance must select exactly the predicted level; the switch itself
 must happen within one dolly step of d_L, for every level of the chain.
 
+With --hysteresis BAND (doc/plans/lod_gpu_selection.md step 4; default 0,
+no hysteresis: the preset's lod_hysteresis_band is set to BAND either way)
+the outward dolly switches to a coarser level L at d_L / (1 - BAND), and a
+second, inward dolly (from the far end back to the start) switches to the
+finer level as soon as the distance drops below d_L. Then, per level L, the
+camera stops inside the band (between d_L and d_L / (1 - BAND)), once
+arriving from a pose of level L - 1 (it keeps L - 1) and once from a pose of
+level L (it keeps L), and the level must stay unchanged for --hold-frames
+classified frames (default 300). Under gpu the classification check runs
+at every hold pose and every tenth dolly step (0 mismatches across a moving
+camera).
+
 Then, per level L, renders render_scene_image at a pose inside L's distance
 range (for the image's own projection scale) with the automatic selection,
 and again with Lod.mode = forced, Lod.forced_level = L, and requires the two
@@ -40,7 +52,8 @@ must differ (negative control). Needs Pillow.
 
 Usage: python3 scripts/lod_dolly_verify.py [--editor PATH] [--threshold PIXELS]
                                            [--classification cpu|gpu|both]
-                                           [--outline]
+                                           [--outline] [--hysteresis BAND]
+                                           [--hold-frames N]
 Exit code 0 = pass.
 """
 
@@ -115,10 +128,12 @@ def predicted_level(distance, switch_distances):
 
 
 class Dolly:
-    def __init__(self, client, scene, threshold):
+    def __init__(self, client, scene, threshold, band=0.0, hold_frames=300):
         self.c              = client
         self.scene          = scene
         self.threshold      = threshold
+        self.band           = band
+        self.hold_frames    = hold_frames
         self.classification = "cpu"
 
     def call(self, tool, args=None):
@@ -130,7 +145,7 @@ class Dolly:
         print(f"culling classification {classification}: {reply}")
 
     def setup(self):
-        self.call("set_graphics_preset", {"lod_enabled": True, "lod_threshold_pixels": self.threshold, "lod_bias": 0})
+        self.call("set_graphics_preset", {"lod_enabled": True, "lod_threshold_pixels": self.threshold, "lod_bias": 0, "lod_hysteresis_band": self.band})
         reply = self.call("create_shape", {
             "scene_name": self.scene, "shape": "torus", "name": "lod_dolly_torus",
             "position": TORUS_POSITION, "scale": 2.0, "motion_mode": "none"
@@ -187,36 +202,88 @@ class Dolly:
         switch_distances = [(error * k) / self.threshold for error in self.errors]
         return reply["frame_index"], distance, entry["levels"][slot], switch_distances
 
-    def dolly(self):
-        # Start just outside the torus box, end past the last switch distance.
-        _, _, _, switch = self.sample(TORUS_POSITION[2] + 6.0, 0)
-        start = max(0.5 * switch[1], 0.1)
-        end   = 1.3 * switch[-1]
-        print(f"switch distances {[round(d, 4) for d in switch]}; dolly {start:.3f} .. {end:.3f} m")
+    def dolly_pass(self, distances, switch_of, label):
+        """Samples the level at each distance; switch_of(switch) gives the
+        distances the level changes at in this direction."""
         observed = {}
         frame    = 0
-        distance_target = start
         previous = None
-        while distance_target <= end:
+        for step, distance_target in enumerate(distances):
             # The box's nearest face on +Z: the camera z that puts it at distance_target.
             z = TORUS_POSITION[2] + self.box_half_z + distance_target
             frame, distance, level, switch = self.sample(z, frame)
+            switch = switch_of(switch)
             observed.setdefault(level, distance)
             expected = predicted_level(distance, switch)
             near_switch = any(abs(distance - d) <= (distance * (DOLLY_FACTOR - 1.0)) for d in switch[1:])
             if near_switch:
-                check_true(f"d={distance:.4f} level {level} within one step of a switch", level in (expected, expected - 1, expected + 1))
+                check_true(f"{label} d={distance:.4f} level {level} within one step of a switch", level in (expected, expected - 1, expected + 1))
             elif level != expected:
-                check_true(f"d={distance:.4f} level {level} == predicted {expected}", False)
+                check_true(f"{label} d={distance:.4f} level {level} == predicted {expected}", False)
             if (previous is not None) and (level != previous[1]):
                 # The switch to level happens between the previous step and this one.
                 d_switch = switch[level] if level > previous[1] else switch[previous[1]]
-                within = (previous[0] - (previous[0] * (DOLLY_FACTOR - 1.0))) <= d_switch <= (distance + (distance * (DOLLY_FACTOR - 1.0)))
-                check_true(f"switch {previous[1]} -> {level} between d={previous[0]:.4f} and d={distance:.4f} (predicted {d_switch:.4f})", within)
+                lo = min(previous[0], distance)
+                hi = max(previous[0], distance)
+                within = (lo - (lo * (DOLLY_FACTOR - 1.0))) <= d_switch <= (hi + (hi * (DOLLY_FACTOR - 1.0)))
+                check_true(f"{label} switch {previous[1]} -> {level} between d={previous[0]:.4f} and d={distance:.4f} (predicted {d_switch:.4f})", within)
             previous = (distance, level)
+            if (self.classification == "gpu") and ((step % 10) == 0):
+                self.classification_check(f"{label} step {step}")
+        check_true(f"{label}: every level of the chain was selected", sorted(observed.keys()) == list(range(LEVEL_COUNT)), f"first distance per level {observed}")
+
+    def dolly(self):
+        # Start just outside the torus box, end past the last switch distance.
+        _, _, _, switch = self.sample(TORUS_POSITION[2] + 6.0, 0)
+        start = max(0.5 * switch[1], 0.1)
+        end   = 1.3 * switch[-1] / (1.0 - self.band)
+        print(f"switch distances {[round(d, 4) for d in switch]}; band {self.band}; dolly {start:.3f} .. {end:.3f} m")
+        distances = []
+        distance_target = start
+        while distance_target <= end:
+            distances.append(distance_target)
             distance_target *= DOLLY_FACTOR
-        check_true("every level of the chain was selected", sorted(observed.keys()) == list(range(LEVEL_COUNT)), f"first distance per level {observed}")
+        # Outward: a coarser level once its error is within the coarsening
+        # threshold, threshold * (1 - band): at d_L / (1 - band).
+        self.dolly_pass(distances, lambda sw: [d / (1.0 - self.band) for d in sw], f"{self.classification} outward")
+        if self.band > 0.0:
+            # Inward: a finer level as soon as the level fails the threshold:
+            # below d_L.
+            self.dolly_pass(list(reversed(distances)), lambda sw: sw, f"{self.classification} inward")
         self.switch = switch
+
+    def hold(self):
+        """Stops inside each level's band, from either side; the level must
+        stay unchanged for hold_frames classified frames."""
+        _, _, _, switch = self.sample(TORUS_POSITION[2] + 6.0, 0)
+        frame = 0
+        for level in range(1, LEVEL_COUNT):
+            d_switch = switch[level]
+            d_coarse = d_switch / (1.0 - self.band)
+            d_band   = 0.5 * (d_switch + d_coarse)
+            # Just below the switch (level - 1 by the threshold) and just
+            # past the coarsening edge (level by both thresholds).
+            finer_pose  = 0.97 * d_switch
+            coarse_pose = 1.03 * d_coarse
+            for label, approach, kept in (("outward", finer_pose, level - 1), ("inward", coarse_pose, level)):
+                frame, _, approach_level, _ = self.sample(TORUS_POSITION[2] + self.box_half_z + approach, frame)
+                check_true(f"{self.classification} hold level {level} {label}: approach pose selects {kept}", approach_level == kept, f"selected {approach_level}")
+                frame, distance, band_level, _ = self.sample(TORUS_POSITION[2] + self.box_half_z + d_band, frame)
+                check_true(f"{self.classification} hold level {level} {label}: band pose d={distance:.4f} keeps {kept}", band_level == kept, f"selected {band_level}")
+                if self.classification == "gpu":
+                    self.classification_check(f"gpu hold level {level} {label}")
+                first   = frame
+                changed = []
+                while frame < (first + self.hold_frames):
+                    reply = self.selection(frame)
+                    frame = reply["frame_index"]
+                    entry = [e for e in reply["entries"] if e["purpose"] == "color"][0]
+                    levels = entry["levels"]
+                    if (len(levels) != 1) or (levels[0] != kept):
+                        changed.append((frame, levels))
+                check_true(f"{self.classification} hold level {level} {label}: level {kept} for {frame - first} frames", not changed, f"changed {changed[:5]}")
+                if self.classification == "gpu":
+                    self.classification_check(f"gpu hold level {level} {label} after {frame - first} frames")
 
     def classification_check(self, label):
         reply = self.call("get_cull_classification_check", {"scene_name": self.scene})
@@ -235,8 +302,10 @@ class Dolly:
         mas = self.max_axis_scale
         switch = [(error * mas * image_projection_scale) / self.threshold for error in self.errors]
         for level in range(LEVEL_COUNT):
-            low  = switch[level] if level > 0 else 0.5 * switch[1]
-            high = switch[level + 1] if (level + 1) < LEVEL_COUNT else 1.5 * switch[-1]
+            # Past the coarsening edge of L (any history selects L) and
+            # before the switch to L + 1.
+            low  = (switch[level] / (1.0 - self.band)) if level > 0 else 0.5 * switch[1]
+            high = switch[level + 1] if (level + 1) < LEVEL_COUNT else 1.5 * switch[-1] / (1.0 - self.band)
             distance = math.sqrt(low * high) if level > 0 else 0.5 * (low + high)
             eye = [TORUS_POSITION[0], TORUS_POSITION[1], TORUS_POSITION[2] + self.box_half_z + distance]
             camera = {"eye": eye, "target": TORUS_POSITION, "fov_y_degrees": fov_y_degrees, "near": 0.03, "far": 2000.0}
@@ -294,8 +363,8 @@ class Dolly:
         _, _, _, switch = self.sample(TORUS_POSITION[2] + 6.0, 0)
         frame = 0
         for level in range(LEVEL_COUNT):
-            low      = switch[level] if level > 0 else 0.5 * switch[1]
-            high     = switch[level + 1] if (level + 1) < LEVEL_COUNT else 1.5 * switch[-1]
+            low      = (switch[level] / (1.0 - self.band)) if level > 0 else 0.5 * switch[1]
+            high     = switch[level + 1] if (level + 1) < LEVEL_COUNT else 1.5 * switch[-1] / (1.0 - self.band)
             distance = math.sqrt(low * high) if level > 0 else 0.5 * (low + high)
             z = TORUS_POSITION[2] + self.box_half_z + distance
             frame, measured, selected, _ = self.sample(z, frame)
@@ -343,6 +412,9 @@ def main():
                         help="culling_classification setting(s) to run (both: cpu, then gpu, and the images compared)")
     parser.add_argument("--outline", action="store_true",
                         help="also compare the selected torus's viewport at automatic and forced levels (selection outline)")
+    parser.add_argument("--hysteresis", type=float, default=0.0,
+                        help="lod_hysteresis_band (0: none); > 0 adds the inward dolly and the band holds")
+    parser.add_argument("--hold-frames", type=int, default=300, help="classified frames each band hold lasts")
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -350,7 +422,7 @@ def main():
     try:
         client = McpClient(port)
         scene  = client.call("list_scenes")["scenes"][0]["name"]
-        dolly  = Dolly(client, scene, args.threshold)
+        dolly  = Dolly(client, scene, args.threshold, args.hysteresis, args.hold_frames)
         classifications = ["cpu", "gpu"] if (args.classification == "both") else [args.classification]
         dolly.set_classification(classifications[0])
         dolly.setup()
@@ -360,6 +432,8 @@ def main():
             dolly.set_classification(classification)
             print(f"--- culling classification {classification}")
             dolly.dolly()
+            if args.hysteresis > 0.0:
+                dolly.hold()
             images[classification] = dolly.images(args.out)
             if args.outline:
                 dolly.outline(args.out)

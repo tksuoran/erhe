@@ -72,6 +72,11 @@ auto Hover_entry::get_name() const -> const std::string&
     return empty_string;
 }
 
+auto Scene_view::get_serial_id() const -> uint64_t
+{
+    return static_cast<uint64_t>(m_serial_id.get_id());
+}
+
 Scene_view::Scene_view(
     App_context&           context,
     Editor_settings_store* editor_settings_store,

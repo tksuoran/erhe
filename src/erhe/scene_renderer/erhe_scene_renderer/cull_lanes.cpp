@@ -254,13 +254,67 @@ auto get_lod_template_level(const uint32_t lod_word) -> uint32_t
     return std::min(level, fields.level_count - 1u);
 }
 
+auto get_lod_coarsen_threshold2(const float threshold_pixels, const float hysteresis_band) -> float
+{
+    // band 0: 1.0f - 0.0f is exactly 1, so the product is threshold_pixels.
+    const float coarsen_pixels = threshold_pixels * (1.0f - hysteresis_band);
+    return coarsen_pixels * coarsen_pixels;
+}
+
+void match_lod_previous_columns(
+    const Lod_history_frame& previous,
+    const Lod_history_frame& current,
+    const std::span<uint32_t> out
+)
+{
+    ERHE_VERIFY(out.size() == current.column_keys.size());
+    std::fill(out.begin(), out.end(), lod_column_none);
+    // Restarts (section 6): a frame that is not the one right after the
+    // previous, another entry layout, a classification switch.
+    if (
+        ((previous.frame_index + 1) != current.frame_index) ||
+        (previous.entry_layout_serial != current.entry_layout_serial) ||
+        (previous.classification != current.classification)
+    ) {
+        return;
+    }
+    for (std::size_t column = 0, end = current.column_keys.size(); column < end; ++column) {
+        const uint64_t key = current.column_keys[column];
+        if (key == 0) {
+            continue;
+        }
+        for (std::size_t previous_column = 0, previous_end = previous.column_keys.size(); previous_column < previous_end; ++previous_column) {
+            if (previous.column_keys[previous_column] == key) {
+                out[column] = static_cast<uint32_t>(previous_column);
+                break;
+            }
+        }
+    }
+}
+
+namespace {
+
+// The selected level plus the entry's and the global bias, clamped to the
+// entry's min / max and to the chain (select_lod_level()).
+[[nodiscard]] auto apply_lod_bias_and_clamps(const Lod_word_fields& fields, const uint32_t selected, const int32_t global_bias) -> int32_t
+{
+    int32_t level = static_cast<int32_t>(selected) + fields.bias + global_bias;
+    level = std::max(level, static_cast<int32_t>(fields.min_level));
+    level = std::min(level, static_cast<int32_t>(fields.max_level));
+    level = std::clamp(level, 0, static_cast<int32_t>(fields.level_count) - 1);
+    return level;
+}
+
+} // anonymous namespace
+
 auto select_lod_level(
     const Lod_lane_view& view,
     const uint32_t       lod_word,
     const float* const   lod_errors,
     const float          max_axis_scale,
     const float          distance2,
-    const uint32_t       unbounded
+    const uint32_t       unbounded,
+    const uint32_t       previous_level
 ) -> uint32_t
 {
     const Lod_word_fields fields = decode_lod_word(lod_word);
@@ -273,23 +327,35 @@ auto select_lod_level(
     // Written so a precise GLSL port in cull_classify.comp evaluates the same
     // expressions in the same order (doc/plans/lod_gpu_selection.md
     // section 2, step 2b).
-    const float k   = max_axis_scale * view.projection_scale;
-    const float d2  = (view.projection == Lod_projection::orthographic) ? 1.0f : distance2;
-    const float rhs = view.threshold2 * d2;
+    const float k     = max_axis_scale * view.projection_scale;
+    const float d2    = (view.projection == Lod_projection::orthographic) ? 1.0f : distance2;
+    const float rhs   = view.threshold2 * d2;
+    const float rhs_c = view.coarsen_threshold2 * d2;
     // Errors grow strictly along a chain, so the passing levels are a
-    // prefix; the selected level is its last.
+    // prefix; the selected level is its last. coarse: the same for the
+    // coarsening threshold (hysteresis, section 6).
     uint32_t selected = 0;
+    uint32_t coarse   = 0;
     for (uint32_t level = 1; level < fields.level_count; ++level) {
         const float ek  = lod_errors[level] * k;
         const float lhs = ek * ek;
         if ((lhs <= rhs) && (selected == (level - 1u))) {
             selected = level;
         }
+        if ((lhs <= rhs_c) && (coarse == (level - 1u))) {
+            coarse = level;
+        }
     }
-    int32_t level = static_cast<int32_t>(selected) + fields.bias + view.global_bias;
-    level = std::max(level, static_cast<int32_t>(fields.min_level));
-    level = std::min(level, static_cast<int32_t>(fields.max_level));
-    level = std::clamp(level, 0, static_cast<int32_t>(fields.level_count) - 1);
+    const int32_t fine_level = apply_lod_bias_and_clamps(fields, selected, view.global_bias);
+    if (previous_level == lod_previous_level_none) {
+        return static_cast<uint32_t>(fine_level);
+    }
+    // The previous level kept inside [coarse, selected] (both after the
+    // biases and clamps, which are monotonic, so coarse <= selected while
+    // coarsen_threshold2 <= threshold2): max, then min, as the GPU does.
+    const int32_t coarse_level = apply_lod_bias_and_clamps(fields, coarse, view.global_bias);
+    int32_t level = std::max(static_cast<int32_t>(previous_level), coarse_level);
+    level = std::min(level, fine_level);
     return static_cast<uint32_t>(level);
 }
 
@@ -302,12 +368,15 @@ void lod_lanes(
     float* const                           gap,
     float* const                           distance2,
     uint32_t* const                        words,
-    const uint32_t                         nibble_shift
+    const uint32_t                         nibble_shift,
+    const uint32_t* const                  previous_words,
+    const uint32_t                         previous_nibble_shift
 )
 {
     ERHE_VERIFY(entries.size() >= count);
     ERHE_VERIFY(bounds.max_axis_scale.size() >= count);
     ERHE_VERIFY(nibble_shift <= 28u);
+    ERHE_VERIFY(previous_nibble_shift <= 28u);
     // The squared distance from the view origin to each box: the range
     // sphere test's per-axis gaps (sphere_axis_lanes()), with the origin as
     // the sphere center.
@@ -327,7 +396,10 @@ void lod_lanes(
             for (uint32_t l = 0; l < level_count; ++l) {
                 errors[l] = std::bit_cast<float>(lod_table[entry.lod_table_index + l].z);
             }
-            level = select_lod_level(view, entry.lod_word, errors.data(), max_axis_scale[i], distance2[i], Draw_list_bounds::get_unbounded_flag(extent_x[i]));
+            const uint32_t previous_level = (previous_words != nullptr)
+                ? ((previous_words[i] >> previous_nibble_shift) & 0xfu)
+                : lod_previous_level_none;
+            level = select_lod_level(view, entry.lod_word, errors.data(), max_axis_scale[i], distance2[i], Draw_list_bounds::get_unbounded_flag(extent_x[i]), previous_level);
         }
         words[i] |= (level & 0xfu) << nibble_shift;
     }

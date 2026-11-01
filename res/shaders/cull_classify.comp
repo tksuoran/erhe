@@ -56,6 +56,9 @@
 //   the entry's selected level in LOD column 8 group + n at nibble n (bits
 //   4 n .. 4 n + 3), for every column of the frame; 0 for the entries of
 //   another purpose than color (only color views have columns)
+// cull_lod_previous_levels.words = the previous frame's level region, same
+//   layout and entries (the same entry layout), read for the views with a
+//   previous column (hysteresis, doc/plans/lod_gpu_selection.md section 6)
 // cull_views.views[14 * view + k]:
 //   k = 0..5 planes (inward, n.xyz + w), 6 range sphere (center.xyz,
 //   radius), 7 = purpose, kind (0 planes, 1 cube face), plane count, cube
@@ -84,7 +87,12 @@
 // under Lod_mode::automatic, or has no bounds, takes its template level (the
 // forced level under Lod_mode::forced, else 0); an entry without chain
 // level 0. Levels do not depend on visibility: every color entry gets one
-// in every column.
+// in every column. Hysteresis (section 6): for a view with a previous
+// column the level is the entry's previous level in that column clamped to
+// [coarse, selected], coarse the level the same rule gives for the
+// coarsening threshold^2 (lod_header.z): a coarser level only once it
+// passes the coarsening threshold, a finer one as soon as the level fails
+// threshold^2.
 //
 // The potentially visible set rule (doc/plans/pvs.md "Runtime
 // consumption"; cull_lanes::pvs_lanes() is the CPU reference, with the same
@@ -227,8 +235,25 @@ bool pvs_keeps(uint column, vec3 query_min, vec3 query_max)
 
 #include "erhe_lod_template_level.glsl"
 
+// The selected level plus the entry's and the global bias, clamped to the
+// entry's min / max and to the chain.
+int apply_lod_bias_and_clamps(uint lod_word, uint level_count, uint selected, int global_bias)
+{
+    uint bias_bits = (lod_word >> 5u) & 0xfu;
+    int  bias      = ((bias_bits & 0x8u) != 0u) ? (int(bias_bits) - 16) : int(bias_bits);
+    int  min_level = int((lod_word >>  9u) & 0x7u);
+    int  max_level = int((lod_word >> 12u) & 0x7u);
+    int  level     = int(selected) + bias + global_bias;
+    level = max(level, min_level);
+    level = min(level, max_level);
+    level = clamp(level, 0, int(level_count) - 1);
+    return level;
+}
+
+const uint lod_previous_level_none = 0xffffffffu;
+
 // cull_lanes::select_lod_level() of one entry in one LOD column.
-uint select_lod_level(uint lod_word, uint table_index, float max_axis_scale, float distance2, bool unbounded, vec4 lod_view, bool orthographic)
+uint select_lod_level(uint lod_word, uint table_index, float max_axis_scale, float distance2, bool unbounded, vec4 lod_view, bool orthographic, uint previous_level)
 {
     uint level_count = (lod_word >> 15u) & 0xfu;
     if (level_count == 0u) {
@@ -238,12 +263,15 @@ uint select_lod_level(uint lod_word, uint table_index, float max_axis_scale, flo
     if ((mode != 0u) || unbounded) {
         return lod_template_level(lod_word);
     }
-    float         threshold2 = uintBitsToFloat(cull_views.lod_header.y);
-    int           global_bias = int(cull_views.lod_header.w);
-    precise float k   = max_axis_scale * lod_view.w;
-    precise float d2  = orthographic ? 1.0 : distance2;
-    precise float rhs = threshold2 * d2;
+    float         threshold2         = uintBitsToFloat(cull_views.lod_header.y);
+    float         coarsen_threshold2 = uintBitsToFloat(cull_views.lod_header.z);
+    int           global_bias        = int(cull_views.lod_header.w);
+    precise float k     = max_axis_scale * lod_view.w;
+    precise float d2    = orthographic ? 1.0 : distance2;
+    precise float rhs   = threshold2 * d2;
+    precise float rhs_c = coarsen_threshold2 * d2;
     uint selected = 0u;
+    uint coarse   = 0u;
     for (uint level = 1u; level < level_count; ++level) {
         float         error = uintBitsToFloat(cull_lod_table.rows[table_index + level].z);
         precise float ek    = error * k;
@@ -251,15 +279,17 @@ uint select_lod_level(uint lod_word, uint table_index, float max_axis_scale, flo
         if ((lhs <= rhs) && (selected == (level - 1u))) {
             selected = level;
         }
+        if ((lhs <= rhs_c) && (coarse == (level - 1u))) {
+            coarse = level;
+        }
     }
-    uint bias_bits = (lod_word >> 5u) & 0xfu;
-    int  bias      = ((bias_bits & 0x8u) != 0u) ? (int(bias_bits) - 16) : int(bias_bits);
-    int  min_level = int((lod_word >>  9u) & 0x7u);
-    int  max_level = int((lod_word >> 12u) & 0x7u);
-    int  level     = int(selected) + bias + global_bias;
-    level = max(level, min_level);
-    level = min(level, max_level);
-    level = clamp(level, 0, int(level_count) - 1);
+    int fine_level = apply_lod_bias_and_clamps(lod_word, level_count, selected, global_bias);
+    if (previous_level == lod_previous_level_none) {
+        return uint(fine_level);
+    }
+    int coarse_level = apply_lod_bias_and_clamps(lod_word, level_count, coarse, global_bias);
+    int level        = max(int(previous_level), coarse_level);
+    level = min(level, fine_level);
     return uint(level);
 }
 
@@ -287,7 +317,13 @@ void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e
             precise float gap_y     = sphere_axis_gap(c.y, e.y, lod_view.y);
             precise float gap_z     = sphere_axis_gap(c.z, e.z, lod_view.z);
             precise float distance2 = ((gap_x * gap_x) + (gap_y * gap_y)) + (gap_z * gap_z);
-            uint level = select_lod_level(lod_word, table_index, max_axis_scale, distance2, unbounded, lod_view, (lod_info.y > 0.5));
+            uint previous_level = lod_previous_level_none;
+            if (lod_info.z >= 0.0) {
+                uint previous_column = uint(lod_info.z);
+                uint previous_word   = cull_lod_previous_levels.words[((previous_column / 8u) * entry_count) + entry];
+                previous_level = (previous_word >> (4u * (previous_column % 8u))) & 0xfu;
+            }
+            uint level = select_lod_level(lod_word, table_index, max_axis_scale, distance2, unbounded, lod_view, (lod_info.y > 0.5), previous_level);
             words[column / 8u] |= (level & 0xfu) << (4u * (column % 8u));
         }
     }

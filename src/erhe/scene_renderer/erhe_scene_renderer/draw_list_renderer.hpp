@@ -137,11 +137,11 @@ public:
         // default) for a view without the PVS rule.
         glm::vec3                          pvs_query_min{ 0.0f};
         glm::vec3                          pvs_query_max{-1.0f};
-        // The caller's identity of the view, stable across frames (the
-        // editor: the scene view): the key of the view's level of detail
-        // selection inputs (Lod_view::lod_key). Null: the view gets no
-        // Lod_view and draws the template range.
-        const void*                        lod_key{nullptr};
+        // The caller's identity of the view, stable across frames and
+        // never reused (the editor: the scene view's serial id): the key of
+        // the view's level of detail selection inputs (Lod_view::lod_key).
+        // 0: the view gets no Lod_view and draws the template range.
+        uint64_t                           lod_key{0};
     };
     // Render phase, before the frame's culling classification
     // (doc/erhe/draw_list_renderer.md Q6, doc/plans/culling.md phase 6a):

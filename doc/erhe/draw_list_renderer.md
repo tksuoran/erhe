@@ -382,17 +382,19 @@ Registration:
     carries them as `lod_header` (active, threshold squared, the coarsening
     threshold squared, the bias).
   - `add_cull_view()` takes an optional `Lod_view` (selection origin,
-    projection scale, `Lod_projection`, a key stable across frames), part
+    projection scale, `Lod_projection`, a `uint64_t` `lod_key` stable
+    across frames and never reused for another view, 0 = none), part
     of the view's identity: two views with equal planes and different
     `Lod_view`s are two views. `Draw_list_renderer::get_color_lod_view()`
     builds a color pass's `Lod_view` from its camera and viewport (the editor keys it
-    by the scene view: viewports, four view cells and scene image captures
+    by the scene view's serial id, `Scene_view::get_serial_id()`, not its
+    address: viewports, four view cells and scene image captures
     through `Composer::add_cull_views()`; the headset's union view from the
     head origin and the largest per-eye projection scale). Shadow, PVS bake
     and lightmap views have none. The GPU view record is 14 `vec4`; `[12]`
     holds the origin and the projection scale, `[13]` the view's LOD column
-    (-1: none), the projection kind, the previous column (-1) and the
-    shadow mode.
+    (-1: none), the projection kind, the previous frame's column for the
+    same `lod_key` (-1: none; hysteresis, below) and the shadow mode.
   - Columns: in a frame whose selection is active,
     `classify_cull_views()` gives every color planes view with a `Lod_view`
     a LOD column, in view order, up to `max_lod_color_columns` (8) color
@@ -419,7 +421,41 @@ Registration:
     column. The lanes run under the Tracy zone `lod_lanes` inside
     `classify_cull_views()`. Tested deviceless in `test_cull_lanes.cpp`
     (`Lod_lanes.*`: switch distances, inside the box, orthographic, bias
-    and clamps, chain end and template levels).
+    and clamps, chain end and template levels, the hysteresis band and its
+    restarts).
+  - Hysteresis (`doc/plans/lod_gpu_selection.md` section 6): with the
+    frame's `Lod_frame_settings::hysteresis_band` b in [0, 1), the coarsening
+    threshold squared is `(threshold_pixels * (1 - b))^2`
+    (`get_lod_coarsen_threshold2()`; b = 0 gives `threshold2` bit for bit).
+    `select_lod_level()` takes the entry's level in the column's previous
+    frame: the same prefix rule for the coarsening threshold gives `coarse`,
+    both ends get the biases and clamps (monotonic, so `coarse <=
+    selected`), and the level is `min(max(previous, coarse), selected)`: an
+    entry moves to a coarser level only once that level's error is within
+    the coarsening threshold, and to a finer one as soon as its level fails
+    the threshold. Without a previous level the selection is the threshold
+    rule alone. The previous level comes from the previous frame's level
+    region of the same path (the CPU reads its own previous `Lod_level_slot`,
+    the GPU its own previous `Lod_region_slot`, bound as
+    `cull_lod_previous_levels` with an earlier-submissions barrier; the
+    slot's next rewrite, whichever later frame records it, waits for that
+    read with another earlier-submissions barrier, and a grown slot's old
+    buffer relies on erhe::graphics deferring a destroyed `Buffer`'s GPU
+    free until the frames recorded before its destruction completed).
+    `classify_cull_views()` decides once per frame which previous column
+    each column reads (`cull_lanes::match_lod_previous_columns()`, shared by
+    both paths through the GPU view record): the previous frame's column
+    with the same non-zero `lod_key`, when the level slot of the frame right
+    before holds that frame (`Lod_level_slot` records its frame index,
+    `entry_layout_serial`, `culling_classification` and each column's key)
+    with the same entry layout and the same classification setting;
+    otherwise every column starts fresh (a frame gap, an entry added,
+    removed or moved, a `culling_classification` switch, a single frame
+    slot). Matching by key keeps a view's history when another view is
+    added or removed before it (its column index shifts). Settings edits
+    (threshold, biases, band) do not restart: a bias edit and a threshold
+    decrease apply on the edit frame (the clamp to `selected`), a threshold
+    increase coarsens through the band.
   - The CPU level region: one per frame slot, owned by the render phase,
     written by the frame's classification: per color list one `uint32_t`
     per entry per group of 8 columns, group-major (entry i, column c at
@@ -465,9 +501,11 @@ Registration:
     column, so it covers the compaction's level read.
   - Diagnostics: `request_lod_level_capture(object)` /
     `poll_lod_level_capture()` copy the next classified frame's columns
-    (their `Lod_view`s) and, per entry of the object, its box,
-    `max_axis_scale`, `lod_word` and level per column (MCP
-    `get_lod_selection`).
+    (their `Lod_view`s and matched previous columns) and, per entry of the
+    object, its box, `max_axis_scale`, `lod_word` and level per column, and
+    the scene's hysteresis counts so far: classified frames with columns
+    where no column had a previous column (restarts) and frames where a
+    column matched one at another index (shifts) (MCP `get_lod_selection`).
   - CPU consumers (section 5 of the plan): `find_published_color_entry(
     frame_index, mesh, primitive_index)` (main thread, prepare phase,
     after `publish()`; verifies the entry layout did not change since the
