@@ -11,7 +11,6 @@
 #include <geogram/mesh/mesh.h>
 
 #include <algorithm>
-#include <cstring>
 #include <format>
 #include <string>
 #include <vector>
@@ -44,7 +43,11 @@ inline void compare_attribute_stores(const GEO::AttributesManager& a, const GEO:
         ASSERT_EQ(store_a->dimension(),    store_b->dimension())    << domain << "." << name;
         ASSERT_EQ(store_a->element_size(), store_b->element_size()) << domain << "." << name;
         const std::size_t byte_count = static_cast<std::size_t>(store_a->size()) * store_a->dimension() * store_a->element_size();
-        EXPECT_EQ(std::memcmp(store_a->data(), store_b->data(), byte_count), 0) << domain << "." << name << " differs";
+        // An empty store has no allocation (data() is null); std::memcmp
+        // forbids null even for zero bytes, an empty std::equal range does not.
+        const unsigned char* const bytes_a = static_cast<const unsigned char*>(static_cast<const void*>(store_a->data()));
+        const unsigned char* const bytes_b = static_cast<const unsigned char*>(static_cast<const void*>(store_b->data()));
+        EXPECT_TRUE(std::equal(bytes_a, bytes_a + byte_count, bytes_b)) << domain << "." << name << " differs";
     }
 }
 
