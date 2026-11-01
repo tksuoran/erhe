@@ -483,9 +483,9 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
         // before this one, describing the same entries at the same
         // positions (no entry added, removed or moved since); otherwise no
         // view is culled by occlusion this frame.
-        const Occlusion_slot* previous_slot = nullptr;
+        Occlusion_slot* previous_slot = nullptr;
         if (occlusion && m_has_occlusion_frame && ((m_occlusion_frame_index + 1) == frame_index)) {
-            const Occlusion_slot& candidate = m_occlusion_slots[m_occlusion_frame_index % m_occlusion_slots.size()];
+            Occlusion_slot& candidate = m_occlusion_slots[m_occlusion_frame_index % m_occlusion_slots.size()];
             if (
                 (&candidate != &occlusion_slot) &&
                 candidate.pending &&
@@ -699,6 +699,23 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 Buffer_usage_flag_bit_mask::storage_read | Buffer_usage_flag_bit_mask::compute_shader,
                 Barrier_scope::earlier_submissions
             );
+            previous_slot->previous_reader       = true;
+            previous_slot->previous_reader_frame = frame_index;
+        }
+        if (occlusion_slot.previous_reader) {
+            // An earlier frame's classification read this slot's words as
+            // its previous ones (the frame after the slot's last frame; with
+            // any number of frames in flight it may still be in flight):
+            // this frame's classification writes and occlusion pass
+            // fragment atomics wait for that read.
+            ERHE_VERIFY(occlusion_slot.previous_reader_frame < frame_index);
+            command_buffer.buffer_barrier(
+                *occlusion_slot.buffer,
+                Buffer_usage_flag_bit_mask::storage_read | Buffer_usage_flag_bit_mask::compute_shader,
+                Buffer_usage_flag_bit_mask::storage_write | Buffer_usage_flag_bit_mask::compute_shader | Buffer_usage_flag_bit_mask::fragment_shader,
+                Barrier_scope::earlier_submissions
+            );
+            occlusion_slot.previous_reader = false;
         }
         if (lod_previous_region_slot != nullptr) {
             // The previous frame's classification wrote the levels this
@@ -1983,7 +2000,12 @@ void Draw_list_scene::prepare_occlusion_slot(
     }
     Occlusion_slot& slot = m_occlusion_slots[frame_index % m_occlusion_slots.size()];
     // The slot's previous frame was decoded at this frame's classification
-    // (decode_retired_occlusion() ran first), so the buffer is free.
+    // (decode_retired_occlusion() ran first), so that frame no longer uses
+    // the buffer. The frame after it may still be reading the words as its
+    // previous ones: dispatch_gpu_cull_views() orders this frame's writes
+    // after that read (Occlusion_slot::previous_reader), and a grown slot's
+    // old Buffer frees its GPU memory only once the frames recorded before
+    // its destruction completed.
     ERHE_VERIFY(!slot.pending);
     Device&           device       = m_gpu_cull_classifier->get_device();
     const std::size_t alignment    = std::max(c_occlusion_region_alignment, static_cast<std::size_t>(device.get_info().shader_storage_buffer_offset_alignment));
@@ -2011,6 +2033,7 @@ void Draw_list_scene::prepare_occlusion_slot(
         // the words were ~350 ms per frame on a discrete GPU with the buffer
         // in host memory. An occlusion check reads a copy (slot.readback).
         const std::size_t capacity = std::bit_ceil(needed);
+        slot.previous_reader = false;
         slot.buffer = std::make_unique<Buffer>(
             device,
             Buffer_create_info{

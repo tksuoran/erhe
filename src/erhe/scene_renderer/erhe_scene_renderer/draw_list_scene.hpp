@@ -2205,6 +2205,14 @@ private:
         uint32_t                                group_count  {0};
         // The frame wrote occlusion words that were not decoded yet.
         bool                                    pending      {false};
+        // Some frame's classification read buffer as its previous words
+        // since the slot's last frame (previous_reader_frame: that frame,
+        // verified earlier than the rewriting frame). That reader is the
+        // frame after the slot's last frame, which may still be in flight
+        // when the slot's next frame rewrites the words: the rewrite waits
+        // for the read (an earlier-submissions barrier).
+        bool                                    previous_reader      {false};
+        uint64_t                                previous_reader_frame{0};
         std::vector<Occlusion_view_record>      views;
     };
     std::vector<Occlusion_slot>                                      m_occlusion_slots;
