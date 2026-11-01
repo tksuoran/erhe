@@ -1,0 +1,16 @@
+{
+    "_comment": "Bench configuration for scripts/quest_bench.py run --config (doc/agents/quest.md 'Bench configurations'). As flat_draw_color_gpu_culling_lod_on_demand, with lod_threshold_pixels 4.0 (band 0.25, bias 0; doc/plans/lod_gpu_selection.md step 6).",
+    "name": "flat_draw_color_gpu_culling_lod_on_demand_t4",
+    "description": "Flat draw color, no lights, no shadows, culling classification gpu, PVS off, occlusion on, lod_enabled on, lod_cpu_selection on_demand, threshold 4.0, band 0.25",
+    "mcp": [
+        "set_culling_classification={\"mode\": \"gpu\"}",
+        "set_pvs_culling={\"enabled\": false}",
+        "set_occlusion_culling={\"enabled\": true}"
+    ],
+    "mcp_after_load": [
+        "set_graphics_preset={\"light_shading\": \"loops\", \"shadow_enable\": false, \"directional_shadow_light_count\": 0, \"directional_unshadowed_light_count\": 0, \"spot_shadow_light_count\": 0, \"spot_unshadowed_light_count\": 0, \"point_shadow_light_count\": 0, \"point_unshadowed_light_count\": 0, \"flat_draw_color\": true, \"lod_enabled\": true, \"lod_threshold_pixels\": 4.0, \"lod_bias\": 0, \"lod_hysteresis_band\": 0.25, \"lod_cpu_selection\": \"on_demand\"}"
+    ],
+    "mcp_measure": [
+        "get_lod_stats"
+    ]
+}

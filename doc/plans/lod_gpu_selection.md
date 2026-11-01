@@ -721,6 +721,44 @@ median over 12 s, two runs each):
 GPU Main drops 29 % framed, 19 to 29 % at the bench camera and 8 % at the
 street pose.
 
+Occlusion on (2026-11-01, release APK at 528047df3, occlusion culling on
+by default; otherwise as the Quest runs above: the street walk, the chain
+file, culling gpu, PVS off, two runs per row, recorded in
+`doc/reference/quest_bench_runs.md`; the `_t4` configurations set
+`lod_threshold_pixels` 4.0). Occlusion leaves 340 to 344 of about 3390
+in-frustum entries drawn (`get_occlusion_check`: 3030 to 3055 occluded in
+the headset view in every run).
+
+| Run | fps (per run) | R ms | M1 / M2 / M3 ms | app GPU ms | XR multiview ms | shadow ms | triangles | pre-clipped polygons/s |
+|---|---|---|---|---|---|---|---|---|
+| one light, LOD off | 29.36 / 29.50 | 5.23 | 32.0 / 0.82 / 0.71 | 28.3 | 28.9 | 3.20 | 803 k | 111 M |
+| one light, threshold 1, `every_frame` | 30.87 / 30.52 | 5.60 | 30.7 / 0.80 / 0.69 | 27.5 | 28.0 | 2.77 | 732 k | 104 M |
+| one light, threshold 1, `on_demand` | 30.45 / 30.67 | 5.19 | 30.8 / 0.80 / 0.70 | 27.2 | 28.1 | 2.77 | 732 k | 103 M |
+| one light, threshold 4, `every_frame` | 33.75 / 33.55 | 5.61 | 27.9 / 0.80 / 0.70 | 26.3 | 26.0 | 2.22 | 512 k | 84 M |
+| one light, threshold 4, `on_demand` | 33.41 / 33.58 | 5.17 | 28.1 / 0.81 / 0.70 | 24.7 | 26.1 | 2.24 | 512 k | 84 M |
+| flat draw color, LOD off | 57.16 / 57.52 | 3.58 | 15.6 / 0.84 / 0.80 | 14.3 | 16.1 | - | 800 k | 149 M |
+| flat draw color, threshold 1, `every_frame` | 59.43 / 58.57 | 3.72 | 15.1 / 0.83 / 0.79 | 13.9 | 15.7 | - | 730 k | 142 M |
+| flat draw color, threshold 1, `on_demand` | 58.88 / 58.61 | 3.49 | 15.1 / 0.84 / 0.77 | 14.0 | 15.7 | - | 730 k | 142 M |
+| flat draw color, threshold 4, `every_frame` | 65.78 / 66.30 | 3.68 | 13.2 / 0.84 / 0.79 | 12.7 | 14.0 | - | 510 k | 111 M |
+| flat draw color, threshold 4, `on_demand` | 66.55 / 65.70 | 3.52 | 13.2 / 0.84 / 0.79 | 12.3 | 14.0 | - | 510 k | 110 M |
+
+- Occlusion first: with occlusion on the frame draws the near entries,
+  most of which stay at level 0 at threshold 1 (252 of 344 entries, 691 k
+  of 732 k triangles), so LOD at threshold 1 removes 9 % of the triangles
+  and adds 4 % fps lit, 3 % flat. With occlusion off the same threshold
+  removed 39 % and added 11 to 12 % (table above): there LOD thins the
+  far, unoccluded entries that occlusion now removes outright.
+- Threshold 4: 512 k triangles (36 % fewer than LOD off; level 0 holds
+  209 entries / 319 k); +14 % fps lit (29.4 -> 33.6), +15 % flat (57.3 ->
+  66.0, the multiview pass 16.1 -> 14.0 ms, near the 13.9 ms of 72 Hz).
+  The shadow pass (not occlusion culled) drops 3.20 -> 2.77 -> 2.22 ms.
+  Threshold 4 was not run with occlusion off.
+- `every_frame` against `on_demand`: equal fps and GPU within run noise;
+  the CPU lanes cost R 0.4 ms (5.60 against 5.19, LOD off 5.23), as with
+  occlusion off. Readback lag in every `on_demand` run: 2 frames (min 2
+  max 2).
+- Not measured: binning (no Perfetto, as above); the per-eye image check.
+
 ### Later
 
 Removing the one-frame latencies of decisions 5 and 6: the shadow map
