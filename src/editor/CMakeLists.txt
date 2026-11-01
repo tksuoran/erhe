@@ -976,6 +976,9 @@ set(_config_sources
     ${_config_out}/hud_config.hpp
     ${_config_out}/hud_config_serialization.hpp
     ${_config_out}/hud_config.cpp
+    ${_config_out}/selection_config.hpp
+    ${_config_out}/selection_config_serialization.hpp
+    ${_config_out}/selection_config.cpp
     ${_config_out}/operation_params.hpp
     ${_config_out}/operation_params_serialization.hpp
     ${_config_out}/operation_params.cpp
@@ -1097,6 +1100,8 @@ set(_config_sources
     ${_config_out}/specular_anti_aliasing_mode.cpp
     ${_config_out}/lod_cpu_selection.hpp
     ${_config_out}/lod_cpu_selection.cpp
+    ${_config_out}/xr_selection_mode.hpp
+    ${_config_out}/xr_selection_mode.cpp
     ${_config_out}/shadow_mode.hpp
     ${_config_out}/shadow_mode.cpp
     ${_config_out}/graphics_preset_entry.hpp

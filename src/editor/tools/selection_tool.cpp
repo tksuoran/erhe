@@ -1,4 +1,7 @@
 #include "tools/selection_tool.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/selection_config.hpp"
+#include "config/generated/xr_selection_mode.hpp"
 #include "editor_item_bits.hpp"
 
 #include "tools/bone_visualization.hpp"
@@ -265,6 +268,44 @@ auto Viewport_select_toggle_command::try_call() -> bool
 
 //
 
+Viewport_select_xr_command::Viewport_select_xr_command(erhe::commands::Commands& commands, App_context& app_context)
+    : Command  {commands, "Selection.viewport_select_xr"}
+    , m_context{app_context}
+{
+}
+
+void Viewport_select_xr_command::try_ready()
+{
+    if (m_context.selection->on_viewport_select_try_ready()) {
+        set_ready();
+    }
+}
+
+auto Viewport_select_xr_command::try_call() -> bool
+{
+    if (get_command_state() != erhe::commands::State::Ready) {
+        return false;
+    }
+    const bool consumed = m_context.selection->on_viewport_select_xr();
+    set_inactive();
+    return consumed;
+}
+
+//
+
+Selection_clear_command::Selection_clear_command(erhe::commands::Commands& commands, App_context& app_context)
+    : Command  {commands, "Selection.clear"}
+    , m_context{app_context}
+{
+}
+
+auto Selection_clear_command::try_call() -> bool
+{
+    return m_context.selection->clear_selection();
+}
+
+//
+
 Selection_delete_command::Selection_delete_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Selection.delete"}
     , m_context{app_context}
@@ -342,6 +383,8 @@ Selection::Selection(erhe::commands::Commands& commands, App_context& context, A
     : m_context                       {context}
     , m_viewport_select_command       {commands, context}
     , m_viewport_select_toggle_command{commands, context}
+    , m_viewport_select_xr_command    {commands, context}
+    , m_clear_command                 {commands, context}
     , m_delete_command                {commands, context}
     , m_cut_command                   {commands, context}
     , m_copy_command                  {commands, context}
@@ -355,6 +398,8 @@ Selection::Selection(erhe::commands::Commands& commands, App_context& context, A
     );
     commands.register_command            (&m_viewport_select_command);
     commands.register_command            (&m_delete_command);
+    commands.register_command            (&m_clear_command);
+    commands.register_command            (&m_viewport_select_xr_command);
     commands.register_command            (&m_cut_command);
     commands.register_command            (&m_copy_command);
     commands.register_command            (&m_duplicate_command);
@@ -365,6 +410,7 @@ Selection::Selection(erhe::commands::Commands& commands, App_context& context, A
     commands.bind_command_to_key         (&m_copy_command,            erhe::window::Key_c,             erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
     commands.bind_command_to_key         (&m_duplicate_command,       erhe::window::Key_d,             erhe::commands::Button_trigger::Button_pressed, erhe::window::Key_modifier_bit_ctrl);
 
+    commands.bind_command_to_menu(&m_clear_command,     "Edit.Clear Selection");
     commands.bind_command_to_menu(&m_delete_command,    "Edit.Delete");
     commands.bind_command_to_menu(&m_cut_command,       "Edit.Cut");
     commands.bind_command_to_menu(&m_copy_command,      "Edit.Copy");
@@ -378,6 +424,8 @@ Selection::Selection(erhe::commands::Commands& commands, App_context& context, A
     );
 
     m_viewport_select_command.set_host(this);
+    m_viewport_select_xr_command.set_host(this);
+    m_clear_command.set_host(this);
     m_delete_command.set_host(this);
 }
 
@@ -393,7 +441,7 @@ void Selection::setup_xr_bindings(erhe::commands::Commands& commands, Headset_vi
     erhe::xr::Xr_actions* xr_right = headset->get_actions_right();
     if (xr_right != nullptr) {
         commands.bind_command_to_xr_boolean_action(&m_viewport_select_command,        xr_right->trigger_click, erhe::commands::Button_trigger::Button_pressed);
-        commands.bind_command_to_xr_boolean_action(&m_viewport_select_toggle_command, xr_right->a_click,       erhe::commands::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_viewport_select_xr_command,     xr_right->a_click,       erhe::commands::Button_trigger::Button_pressed);
     }
 }
 #endif
@@ -1204,6 +1252,28 @@ auto Selection::on_viewport_select_toggle() -> bool
         return true;
     }
     return false;
+}
+
+auto Selection::on_viewport_select_xr() -> bool
+{
+    const bool single =
+        (m_context.editor_settings == nullptr) ||
+        (m_context.editor_settings->selection.openxr_selection_mode == Xr_selection_mode::single);
+    if (!single) {
+        return on_viewport_select_toggle();
+    }
+    if (is_bone_mode()) {
+        return on_viewport_select_bone(false);
+    }
+    const std::shared_ptr<erhe::scene::Mesh> shared_hover_mesh = m_hover_mesh.lock();
+    if (!shared_hover_mesh || !m_hover_content) {
+        return false;
+    }
+    // Clear the scene's selection, then select the mesh unless it was selected.
+    const bool was_selected = is_in_selection(shared_hover_mesh);
+    m_range_selection.reset(shared_hover_mesh->get_item_host());
+    toggle_mesh_selection(shared_hover_mesh, was_selected, true);
+    return true;
 }
 
 auto Selection::clear_selection() -> bool

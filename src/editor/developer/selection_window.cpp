@@ -27,6 +27,18 @@ void Selection_window::imgui()
 {
     const float scale = get_scale_value();
 
+    // The Selection.clear command, queued out of the ImGui iteration
+    // (doc/editor/coding_rules.md "ImGui-time work").
+    {
+        const bool has_selection = !m_context.selection->get_selected_items().empty();
+        ImGui::BeginDisabled(!has_selection);
+        if (ImGui::Button("Clear Selection")) {
+            Selection* const selection = m_context.selection;
+            m_context.imgui_windows->queue([selection]() { selection->clear_selection(); });
+        }
+        ImGui::EndDisabled();
+    }
+
     const auto& items = m_context.selection->get_selected_items();
     for (const auto& item : items) {
         m_context.icon_set->item_icon(item, scale);

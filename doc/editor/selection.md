@@ -113,3 +113,18 @@ MCP-only per-call scene override: a script that wants another scene calls
 `set_active_scene` first, just as a user would click that scene's window.
 Headless verification therefore exercises the same code paths as an interactive
 user.
+
+## Headset selection
+
+The headset controller selects with the right A button
+(`Selection.viewport_select_xr`, `Selection::on_viewport_select_xr()`):
+`Selection_config::openxr_selection_mode` (`editor_settings.json`
+`selection`, Settings window "Selection") picks the behavior. `single`
+(the default) clears the pointed object's scene selection and selects the
+object, or leaves nothing selected when it was the selected one, so 0 or 1
+objects stay selected; `toggle` adds or removes the pointed object (the
+selection accumulates). Pointing at no content does nothing. The right
+trigger keeps the plain viewport select. `Selection.clear` (Edit > Clear
+Selection, the Selection window's "Clear Selection" button) clears the
+selection of every scene.
+

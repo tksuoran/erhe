@@ -31,6 +31,7 @@
 #include "config/generated/grid_config_serialization.hpp"
 #include "config/generated/hotbar_config_serialization.hpp"
 #include "config/generated/hud_config_serialization.hpp"
+#include "config/generated/selection_config_serialization.hpp"
 #include "config/generated/id_renderer_config_serialization.hpp"
 #include "config/generated/inventory_config_serialization.hpp"
 #include "config/generated/inventory_slot_serialization.hpp"
@@ -901,6 +902,7 @@ void Settings_window::imgui()
         add_config_section(settings.headset);
         add_config_section(settings.hotbar);
         add_config_section(settings.hud);
+        add_config_section(settings.selection);
         add_config_section(m_context.app_settings->user_state().inventory);
         add_config_section(settings.load);
         add_config_section(settings.id_renderer);

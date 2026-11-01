@@ -37,6 +37,30 @@ class Scene_root;
 class Selection;
 class Tools;
 
+// Clears the selection (every scene's): Edit menu and the Selection window.
+class Selection_clear_command : public erhe::commands::Command
+{
+public:
+    Selection_clear_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
+// The headset controller select (right A): single or toggle by
+// Selection_config::openxr_selection_mode (Selection::on_viewport_select_xr()).
+class Viewport_select_xr_command : public erhe::commands::Command
+{
+public:
+    Viewport_select_xr_command(erhe::commands::Commands& commands, App_context& context);
+    void try_ready() override;
+    auto try_call () -> bool override;
+
+private:
+    App_context& m_context;
+};
+
 class Selection_delete_command : public erhe::commands::Command
 {
 public:
@@ -277,6 +301,11 @@ public:
     auto on_viewport_select_try_ready() -> bool;
     auto on_viewport_select          () -> bool;
     auto on_viewport_select_toggle   () -> bool;
+    // The headset select: Xr_selection_mode::single selects the pointed
+    // object alone (or deselects it when it was selected), so 0 or 1 objects
+    // stay selected; toggle adds or removes it. Pointing at no content does
+    // nothing (the Clear Selection command clears).
+    auto on_viewport_select_xr       () -> bool;
 
     auto delete_selection   () -> bool;
     // Queue a recursive delete of the given items (the operation delete_selection
@@ -310,6 +339,8 @@ private:
 
     Viewport_select_command        m_viewport_select_command;
     Viewport_select_toggle_command m_viewport_select_toggle_command;
+    Viewport_select_xr_command     m_viewport_select_xr_command;
+    Selection_clear_command        m_clear_command;
     Selection_delete_command       m_delete_command;
     Selection_cut_command          m_cut_command;
     Selection_copy_command         m_copy_command;

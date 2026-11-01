@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=12,
+    version=13,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -47,6 +47,8 @@ struct("Editor_settings_config",
         field("headset",              StructRef("Headset_config"),         added_in=1),
         field("hotbar",               StructRef("Hotbar_config"),          added_in=1),
         field("hud",                  StructRef("Hud_config"),             added_in=1),
+        # Selection behavior (doc/editor/selection.md "Headset selection").
+        field("selection",            StructRef("Selection_config"),       added_in=13),
         field("id_renderer",          StructRef("Id_renderer_config"),     added_in=1),
         field("ray_trace",            StructRef("Ray_trace_config"),       added_in=1),
         field("ddgi",                 StructRef("Ddgi_config"),            added_in=1),
