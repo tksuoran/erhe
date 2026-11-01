@@ -458,6 +458,33 @@ void Headset_view::queue_session_preset_edit(std::function<void(Graphics_preset_
     );
 }
 
+namespace {
+
+// "Headlamp only" lighting: per type loops with one spot light slot (shadow
+// mapped when the headlamp casts shadows) and no other light.
+void set_headlamp_only_lighting(Graphics_preset_entry& preset, const bool cast_shadow)
+{
+    preset.light_shading                      = Light_shading_mode::loops;
+    preset.shadow_enable                      = true;
+    preset.directional_shadow_light_count     = 0;
+    preset.directional_unshadowed_light_count = 0;
+    preset.spot_shadow_light_count            = cast_shadow ? 1 : 0;
+    preset.spot_unshadowed_light_count        = cast_shadow ? 0 : 1;
+    preset.point_shadow_light_count           = 0;
+    preset.point_unshadowed_light_count       = 0;
+}
+
+[[nodiscard]] auto is_headlamp_only_lighting(const Graphics_preset_entry& preset) -> bool
+{
+    return
+        (preset.light_shading == Light_shading_mode::loops) &&
+        (preset.directional_shadow_light_count == 0) && (preset.directional_unshadowed_light_count == 0) &&
+        ((preset.spot_shadow_light_count + preset.spot_unshadowed_light_count) == 1) &&
+        (preset.point_shadow_light_count == 0) && (preset.point_unshadowed_light_count == 0);
+}
+
+} // anonymous namespace
+
 void Headset_view::lighting_and_lod_imgui()
 {
     if (m_app_context.app_settings == nullptr) {
@@ -474,8 +501,13 @@ void Headset_view::lighting_and_lod_imgui()
             (preset.directional_shadow_light_count == 1) && (preset.directional_unshadowed_light_count == 0) &&
             (preset.spot_shadow_light_count        == 0) && (preset.spot_unshadowed_light_count        == 0) &&
             (preset.point_shadow_light_count       == 0) && (preset.point_unshadowed_light_count       == 0);
-        const bool clustered = (preset.light_shading == Light_shading_mode::clustered);
-        const char* const preview = single_directional ? "Single directional light" : (clustered ? "Scene lights (clustered)" : "Preset lighting");
+        const bool clustered     = (preset.light_shading == Light_shading_mode::clustered);
+        const bool headlamp_only = is_headlamp_only_lighting(preset);
+        const char* const preview =
+            single_directional ? "Single directional light" :
+            headlamp_only      ? "Headlamp only" :
+            clustered          ? "Scene lights (clustered)" :
+                                 "Preset lighting";
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 14.0f);
         if (ImGui::BeginCombo("Lighting", preview)) {
             if (ImGui::Selectable("Scene lights (clustered)", clustered && !single_directional)) {
@@ -516,9 +548,13 @@ void Headset_view::lighting_and_lod_imgui()
                     }
                 );
             }
+            if (ImGui::Selectable("Headlamp only", headlamp_only)) {
+                const bool cast_shadow = m_headlamp_cast_shadow;
+                queue_session_preset_edit([cast_shadow](Graphics_preset_entry& edited) { set_headlamp_only_lighting(edited, cast_shadow); });
+            }
             ImGui::EndCombo();
         }
-        ImGui::SetItemTooltip("Session only (graphics_presets.json is not written). Single directional light: the first directional light (the headlamp when enabled) is the only light.");
+        ImGui::SetItemTooltip("Session only (graphics_presets.json is not written). Single directional light: the first directional light is the only light. Headlamp only: one spot light, the headlamp (the first spot light), is the only light.");
     }
 
     // Level of detail selection (doc/editor/lod.md). Session only.
@@ -589,9 +625,11 @@ void Headset_view::set_headlamp_enabled(const bool enabled)
     if (enabled) {
         if (!m_headlamp) {
             m_headlamp = std::make_shared<erhe::scene::Light>("Headlamp");
-            m_headlamp->set_light_type(erhe::scene::Light::Type::directional);
-            m_headlamp->set_color     (glm::vec3{1.0f, 1.0f, 1.0f});
-            m_headlamp->set_range     (0.0f);
+            m_headlamp->set_light_type      (erhe::scene::Light::Type::spot);
+            m_headlamp->set_color           (glm::vec3{1.0f, 1.0f, 1.0f});
+            m_headlamp->set_range           (30.0f);
+            m_headlamp->set_inner_spot_angle(0.25f); // radians, about 14 degrees
+            m_headlamp->set_outer_spot_angle(0.50f); // about 29 degrees
             m_headlamp->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::session_only | erhe::Item_flags::exclude_from_prefab);
             log_xr->info("Headlamp added");
         }
@@ -826,15 +864,15 @@ void Headset_view::imgui()
             const bool enable = !m_headlamp_enabled;
             m_app_context.imgui_windows->queue([this, enable]() { set_headlamp_enabled(enable); });
         }
-        ImGui::SetItemTooltip("A directional light 15 cm above the eyes, shining where you look; the first directional light of the scene");
+        ImGui::SetItemTooltip("A spot light 15 cm above the eyes, aimed where you look (range 30 m); the first spot light of the scene");
         float intensity = m_headlamp_intensity;
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
-        if (ImGui::SliderFloat("Headlamp Intensity", &intensity, 0.0f, 50.0f, "%.2f", ImGuiSliderFlags_Logarithmic)) {
+        if (ImGui::SliderFloat("Headlamp Intensity", &intensity, 0.0f, 20000.0f, "%.0f", ImGuiSliderFlags_Logarithmic)) {
             set_headlamp_intensity(intensity);
         }
-        constexpr float intensity_shortcuts[] = { 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f };
+        constexpr float intensity_shortcuts[] = { 100.0f, 250.0f, 500.0f, 1000.0f, 2500.0f, 5000.0f };
         for (const float shortcut : intensity_shortcuts) {
-            ImGui::PushID(static_cast<int>(shortcut * 10.0f));
+            ImGui::PushID(static_cast<int>(shortcut));
             if (ImGui::Button(fmt::format("{:g}", shortcut).c_str())) {
                 set_headlamp_intensity(shortcut);
             }
@@ -846,6 +884,12 @@ void Headset_view::imgui()
             m_headlamp_cast_shadow = cast_shadow;
             if (m_headlamp) {
                 m_headlamp->set_cast_shadow(cast_shadow);
+            }
+            // "Headlamp only" lighting keeps the one spot slot the headlamp
+            // takes (shadow-mapped or not).
+            const Graphics_preset_entry& preset = m_app_context.app_settings->graphics.current_graphics_preset;
+            if (is_headlamp_only_lighting(preset)) {
+                queue_session_preset_edit([cast_shadow](Graphics_preset_entry& edited) { set_headlamp_only_lighting(edited, cast_shadow); });
             }
         }
     }

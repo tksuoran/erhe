@@ -150,17 +150,18 @@ the ID pick pass recording (CPU; "Controller ray ...").
 ## Headset headlamp
 
 The Headset window's headlamp button adds (first press), disables and
-enables a directional light, "Headlamp" (`Headset_view::set_headlamp_enabled()`,
+enables a spot light, "Headlamp" (`Headset_view::set_headlamp_enabled()`,
 queued to the prepare phase): a child of the headset's root camera (the head
-pose, the eye midpoint), 15 cm above it in head space, shining along the
-view direction. Enabling puts it at the front of the scene's light layer
-(`erhe::scene::Light_layer::move_to_front()`), so it is the first directional
-light the light set resolves: it takes the directional shadow slot, and
-under single directional light limits (one directional light, no spot or
-point lights; the `single_directional` bench configurations) it is the only
-light. Disabling takes it out of the scene; a re-home of the headset moves
-it into the new scene. Intensity (slider and 0.5 - 16 shortcut buttons) and
-shadows apply at once. It is `session_only`: never saved.
+pose, the eye midpoint), 15 cm above it in head space, aimed along the view
+direction; range 30 m, cone 0.25 / 0.5 rad (inner / outer). Enabling puts it
+at the front of the scene's light layer
+(`erhe::scene::Light_layer::move_to_front()`), so it is the first spot light
+the light set resolves: it takes the first spot shadow slot (or the first
+unshadowed spot slot without shadows). The Headset window's "Headlamp only"
+lighting makes it the only light. Disabling takes it out of the scene; a
+re-home of the headset moves it into the new scene. Intensity (slider up to
+20000 and 100 - 5000 shortcut buttons) and shadows apply at once. It is
+`session_only`: never saved.
 
 ## Headset window lighting and LOD
 
@@ -174,7 +175,10 @@ the stored preset):
 - Lighting: "Scene lights (clustered)" - clustered light shading with the
   stored preset's per type light counts; "Single directional light" -
   per type loops, one shadowed directional light, every other count 0 (the
-  first directional light, the headlamp when enabled, is the only light).
+  first directional light is the only light); "Headlamp only" - per type
+  loops, one spot light slot (shadow mapped when the headlamp casts
+  shadows, re-applied when the Headlamp Shadows checkbox changes) and no
+  other light, so the headlamp, the first spot light, is the only light.
 - LOD: selection on / off, threshold (0.125 - 512 pixels, the Settings
   window's range too), bias (-7 - 7: added to each selected level, then
   clamped to the mesh's chain; off selection draws level 0 and ignores it)
