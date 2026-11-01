@@ -3313,124 +3313,27 @@ void Draw_list_scene::classify_cull_views()
         } else {
             level_words.clear();
         }
-        // Levels do not depend on visibility (section 1): every entry of the
-        // list gets a level in every column of its purpose, skinned entries
-        // and entries without bounds their template level (section 8), and
-        // a shadow entry also in every color column, whether or not a
-        // shadow view of the frame names it, so its color rows keep the
-        // color entry's history (section 6).
+        // The masks first: a shadow column selects the light's own level
+        // only for the entries its view keeps (doc/plans/lod_gpu_selection.md
+        // section 9, decision 4).
+        if ((entry_count > 0) && batch_has_purpose[static_cast<std::size_t>(purpose)]) {
+            classify_list_cull_masks(draw_list, masks, pvs_culled_masks);
+        }
+        // Every entry of the list gets a level in every column of its
+        // purpose, skinned entries and entries without bounds their template
+        // level (section 8), and a shadow entry also in every color column,
+        // whether or not a shadow view of the frame names it, so its color
+        // rows keep the color entry's history (section 6). A shadow column's
+        // level of an entry its view does not keep is 0 (section 4).
         if (!level_words.empty() && (entry_count > 0)) {
             select_list_lod_levels(slot, list_index, previous_level_slot, lod_threshold2, lod_coarsen_threshold2, level_words);
-        }
-        if ((entry_count == 0) || !batch_has_purpose[static_cast<std::size_t>(purpose)]) {
-            continue;
-        }
-        const Draw_list_bounds& bounds = draw_list.bounds;
-        ERHE_VERIFY(bounds.extent_x.size() == entry_count);
-        ERHE_VERIFY(draw_list.pvs_columns.size() == entry_count);
-
-        // Skinned entries carry no bounds (they follow the joints): never
-        // culled.
-        if (draw_list.key.mobility == Draw_mobility::skinned) {
-            for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
-                if (m_cull_views[view_index].purpose != purpose) {
-                    continue;
-                }
-                cull_lanes::set_view_bit_lanes(masks.data() + ((view_index / 64) * entry_count), entry_count, uint64_t{1} << (view_index % 64));
-                m_cull_view_survivors[view_index] += entry_count;
-            }
-            continue;
-        }
-
-        // Views outside, entries inside: per view, each test is one
-        // branch-free lane-wise loop over the SoA bounds (vectorized by the
-        // compiler), narrowing the per-entry inside flags; entries with an
-        // invalid AABB are kept in every view.
-        m_cull_unbounded.resize(entry_count);
-        m_cull_inside.resize(entry_count);
-        m_cull_sphere_inside.resize(entry_count);
-        m_cull_sphere_distance2.resize(entry_count);
-        m_cull_sphere_gap_x.resize(entry_count);
-        m_cull_sphere_gap_y.resize(entry_count);
-        m_cull_sphere_gap_z.resize(entry_count);
-        uint32_t* const              unbounded        = m_cull_unbounded.data();
-        uint32_t* const   inside           = m_cull_inside.data();
-        uint32_t* const   sphere_inside    = m_cull_sphere_inside.data();
-        float* const      sphere_distance2 = m_cull_sphere_distance2.data();
-        const cull_lanes::Sphere_gaps sphere_gaps{
-            .x = m_cull_sphere_gap_x.data(),
-            .y = m_cull_sphere_gap_y.data(),
-            .z = m_cull_sphere_gap_z.data()
-        };
-        cull_lanes::mark_unbounded_lanes(bounds, entry_count, unbounded);
-
-        // The range sphere result in sphere_inside and the gaps belong to
-        // this view's sphere (the six faces of one point light follow each
-        // other, so their shared sphere is tested once per list).
-        const Cull_view_tests* sphere_view = nullptr;
-        for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
-            const Cull_view_tests& view = m_cull_views[view_index];
-            if (view.purpose != purpose) {
-                continue;
-            }
-            if (view.kind == Cull_view_kind::cube_face) {
-                if ((sphere_view == nullptr) || !same_sphere(sphere_view->sphere, view.sphere)) {
-                    cull_lanes::sphere_lanes(view.sphere, bounds, entry_count, sphere_gaps, sphere_distance2, sphere_inside);
-                    sphere_view = &view;
-                }
-                // Face f looks along axis f / 2, toward + for even f.
-                const uint32_t    axis      = view.cube_face / 2;
-                const float       direction = ((view.cube_face % 2) == 0) ? 1.0f : -1.0f;
-                const float*      gaps[3]   {sphere_gaps.x, sphere_gaps.y, sphere_gaps.z};
-                const float*      centers[3]{bounds.center_x.data(), bounds.center_y.data(), bounds.center_z.data()};
-                const float*      extents[3]{bounds.extent_x.data(), bounds.extent_y.data(), bounds.extent_z.data()};
-                cull_lanes::cube_face_lanes(
-                    centers[axis],
-                    extents[axis],
-                    view.sphere.center[static_cast<glm::length_t>(axis)],
-                    direction,
-                    gaps[(axis + 1) % 3],
-                    gaps[(axis + 2) % 3],
-                    sphere_inside,
-                    entry_count,
-                    inside
-                );
-            } else {
-                std::fill(inside, inside + entry_count, uint32_t{1});
-                for (uint32_t plane_index = 0; plane_index < view.plane_count; ++plane_index) {
-                    cull_lanes::plane_lanes(view.planes[plane_index], bounds, entry_count, inside);
-                }
-                // The PVS rule after the frustum (a view without it keeps
-                // every entry: keep_all).
-                const cull_lanes::Pvs_query_cells& pvs_cells = m_cull_pvs_view_cells[view_index];
-                if (!pvs_cells.keep_all) {
-                    ERHE_VERIFY(pvs_culled_masks != nullptr);
-                    m_cull_pvs_culled.resize(entry_count);
-                    uint32_t culled_count = 0;
-                    const uint32_t tested = cull_lanes::pvs_lanes(
-                        pvs_cells, draw_list.pvs_columns.data(), unbounded, entry_count, inside, m_cull_pvs_culled.data(), culled_count
-                    );
-                    m_cull_pvs_view_counts[view_index].tested += tested;
-                    m_cull_pvs_view_counts[view_index].culled += culled_count;
-                    if (culled_count > 0) {
-                        uint64_t* const view_masks = pvs_culled_masks->data() + ((view_index / 64) * entry_count);
-                        const uint64_t  view_bit   = uint64_t{1} << (view_index % 64);
-                        for (std::size_t i = 0; i < entry_count; ++i) {
-                            if (m_cull_pvs_culled[i] != 0u) {
-                                view_masks[i] |= view_bit;
-                            }
-                        }
-                    }
-                }
-            }
-            m_cull_view_survivors[view_index] += cull_lanes::write_view_bit_lanes(inside, unbounded, entry_count, masks.data() + ((view_index / 64) * entry_count), static_cast<uint32_t>(view_index % 64));
         }
     }
 
     // The columns' level changes since the frame before (the shadow map
-    // cache's level test, doc/plans/lod_gpu_selection.md section 4): a
-    // column without a previous column starts fresh and counts as changed.
-    count_shadow_lod_changes(slot, level_slot, previous_level_slot);
+    // cache's level test, doc/plans/lod_gpu_selection.md section 4; the
+    // changed entries counted by select_list_lod_levels()): a column
+    // without a previous column starts fresh and counts as changed.
     for (uint32_t column = 0; column < m_lod_column_count; ++column) {
         Lod_column& lod_column = m_lod_columns[column];
         lod_column.change =
@@ -3466,6 +3369,118 @@ void Draw_list_scene::classify_cull_views()
     capture_lod_levels(slot, level_slot);
 }
 
+void Draw_list_scene::classify_list_cull_masks(
+    const Draw_list&             draw_list,
+    std::vector<uint64_t>&       masks,
+    std::vector<uint64_t>* const pvs_culled_masks
+)
+{
+    const std::size_t  first_view  = 0;
+    const std::size_t  end_view    = m_cull_views.size();
+    const std::size_t  entry_count = draw_list.entries.size();
+    const Draw_purpose purpose     = draw_list.key.purpose;
+    const Draw_list_bounds& bounds = draw_list.bounds;
+    ERHE_VERIFY(bounds.extent_x.size() == entry_count);
+    ERHE_VERIFY(draw_list.pvs_columns.size() == entry_count);
+
+    // Skinned entries carry no bounds (they follow the joints): never
+    // culled.
+    if (draw_list.key.mobility == Draw_mobility::skinned) {
+        for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
+            if (m_cull_views[view_index].purpose != purpose) {
+                continue;
+            }
+            cull_lanes::set_view_bit_lanes(masks.data() + ((view_index / 64) * entry_count), entry_count, uint64_t{1} << (view_index % 64));
+            m_cull_view_survivors[view_index] += entry_count;
+        }
+        return;
+    }
+
+    // Views outside, entries inside: per view, each test is one
+    // branch-free lane-wise loop over the SoA bounds (vectorized by the
+    // compiler), narrowing the per-entry inside flags; entries with an
+    // invalid AABB are kept in every view.
+    m_cull_unbounded.resize(entry_count);
+    m_cull_inside.resize(entry_count);
+    m_cull_sphere_inside.resize(entry_count);
+    m_cull_sphere_distance2.resize(entry_count);
+    m_cull_sphere_gap_x.resize(entry_count);
+    m_cull_sphere_gap_y.resize(entry_count);
+    m_cull_sphere_gap_z.resize(entry_count);
+    uint32_t* const              unbounded        = m_cull_unbounded.data();
+    uint32_t* const   inside           = m_cull_inside.data();
+    uint32_t* const   sphere_inside    = m_cull_sphere_inside.data();
+    float* const      sphere_distance2 = m_cull_sphere_distance2.data();
+    const cull_lanes::Sphere_gaps sphere_gaps{
+        .x = m_cull_sphere_gap_x.data(),
+        .y = m_cull_sphere_gap_y.data(),
+        .z = m_cull_sphere_gap_z.data()
+    };
+    cull_lanes::mark_unbounded_lanes(bounds, entry_count, unbounded);
+
+    // The range sphere result in sphere_inside and the gaps belong to
+    // this view's sphere (the six faces of one point light follow each
+    // other, so their shared sphere is tested once per list).
+    const Cull_view_tests* sphere_view = nullptr;
+    for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
+        const Cull_view_tests& view = m_cull_views[view_index];
+        if (view.purpose != purpose) {
+            continue;
+        }
+        if (view.kind == Cull_view_kind::cube_face) {
+            if ((sphere_view == nullptr) || !same_sphere(sphere_view->sphere, view.sphere)) {
+                cull_lanes::sphere_lanes(view.sphere, bounds, entry_count, sphere_gaps, sphere_distance2, sphere_inside);
+                sphere_view = &view;
+            }
+            // Face f looks along axis f / 2, toward + for even f.
+            const uint32_t    axis      = view.cube_face / 2;
+            const float       direction = ((view.cube_face % 2) == 0) ? 1.0f : -1.0f;
+            const float*      gaps[3]   {sphere_gaps.x, sphere_gaps.y, sphere_gaps.z};
+            const float*      centers[3]{bounds.center_x.data(), bounds.center_y.data(), bounds.center_z.data()};
+            const float*      extents[3]{bounds.extent_x.data(), bounds.extent_y.data(), bounds.extent_z.data()};
+            cull_lanes::cube_face_lanes(
+                centers[axis],
+                extents[axis],
+                view.sphere.center[static_cast<glm::length_t>(axis)],
+                direction,
+                gaps[(axis + 1) % 3],
+                gaps[(axis + 2) % 3],
+                sphere_inside,
+                entry_count,
+                inside
+            );
+        } else {
+            std::fill(inside, inside + entry_count, uint32_t{1});
+            for (uint32_t plane_index = 0; plane_index < view.plane_count; ++plane_index) {
+                cull_lanes::plane_lanes(view.planes[plane_index], bounds, entry_count, inside);
+            }
+            // The PVS rule after the frustum (a view without it keeps
+            // every entry: keep_all).
+            const cull_lanes::Pvs_query_cells& pvs_cells = m_cull_pvs_view_cells[view_index];
+            if (!pvs_cells.keep_all) {
+                ERHE_VERIFY(pvs_culled_masks != nullptr);
+                m_cull_pvs_culled.resize(entry_count);
+                uint32_t culled_count = 0;
+                const uint32_t tested = cull_lanes::pvs_lanes(
+                    pvs_cells, draw_list.pvs_columns.data(), unbounded, entry_count, inside, m_cull_pvs_culled.data(), culled_count
+                );
+                m_cull_pvs_view_counts[view_index].tested += tested;
+                m_cull_pvs_view_counts[view_index].culled += culled_count;
+                if (culled_count > 0) {
+                    uint64_t* const view_masks = pvs_culled_masks->data() + ((view_index / 64) * entry_count);
+                    const uint64_t  view_bit   = uint64_t{1} << (view_index % 64);
+                    for (std::size_t i = 0; i < entry_count; ++i) {
+                        if (m_cull_pvs_culled[i] != 0u) {
+                            view_masks[i] |= view_bit;
+                        }
+                    }
+                }
+            }
+        }
+        m_cull_view_survivors[view_index] += cull_lanes::write_view_bit_lanes(inside, unbounded, entry_count, masks.data() + ((view_index / 64) * entry_count), static_cast<uint32_t>(view_index % 64));
+    }
+}
+
 void Draw_list_scene::select_list_lod_levels(
     const Draw_list_slot&       slot,
     const std::size_t           list_index,
@@ -3491,7 +3506,7 @@ void Draw_list_scene::select_list_lod_levels(
     // while the color columns (which come first) are selected.
     std::array<const uint32_t*, max_lod_color_columns> color_inside{};
     for (uint32_t column = 0; column < m_lod_column_count; ++column) {
-        const Lod_column& lod_column = m_lod_columns[column];
+        Lod_column& lod_column = m_lod_columns[column];
         // A color entry has levels in the color columns only.
         if ((lod_column.purpose == Draw_purpose::shadow) && !shadow_list) {
             continue;
@@ -3517,24 +3532,23 @@ void Draw_list_scene::select_list_lod_levels(
             ERHE_VERIFY(previous_list_words.size() == (previous_group_count * entry_count));
             previous_words = previous_list_words.data() + ((previous_column / 8) * entry_count);
         }
-        uint32_t* const words        = level_words.data() + ((column / 8) * entry_count);
-        const uint32_t  nibble_shift = 4u * (column % 8);
-        // The view's own selection: a color column's levels, a shadow
-        // column's levels outside every sampling view's frustum.
-        cull_lanes::lod_lanes(
-            lane_view,
-            bounds,
-            draw_list.entries,
-            slot.lod_table,
-            entry_count,
-            m_lod_gap.data(),
-            m_lod_distance2.data(),
-            words,
-            nibble_shift,
-            previous_words,
-            4u * (previous_column % 8)
-        );
+        uint32_t* const words                 = level_words.data() + ((column / 8) * entry_count);
+        const uint32_t  nibble_shift          = 4u * (column % 8);
+        const uint32_t  previous_nibble_shift = 4u * (previous_column % 8);
         if (lod_column.purpose == Draw_purpose::color) {
+            cull_lanes::lod_lanes(
+                lane_view,
+                bounds,
+                draw_list.entries,
+                slot.lod_table,
+                entry_count,
+                m_lod_gap.data(),
+                m_lod_distance2.data(),
+                words,
+                nibble_shift,
+                previous_words,
+                previous_nibble_shift
+            );
             if (shadow_list) {
                 ERHE_VERIFY(column < max_lod_color_columns);
                 std::vector<uint32_t>& inside = m_lod_color_inside[column];
@@ -3550,60 +3564,49 @@ void Draw_list_scene::select_list_lod_levels(
             }
             continue;
         }
-        // A caster inside a sampling view's frustum takes the finest of
-        // those views' levels (doc/plans/lod_gpu_selection.md section 9,
-        // decisions 1 and 2): the color columns share the first word.
-        cull_lanes::shadow_lod_lanes(color_inside, lod_column.color_column_mask, level_words.data(), entry_count, words, nibble_shift);
-    }
-}
-
-void Draw_list_scene::count_shadow_lod_changes(const Draw_list_slot& slot, const Lod_level_slot& level_slot, const Lod_level_slot* const previous_level_slot)
-{
-    // Per shadow column with a previous column, the entries its pass draws
-    // (the mask bit of its view, or of any of a point light's six face
-    // views) whose level differs from the previous frame's: a pass is kept
-    // only while none does (doc/plans/lod_gpu_selection.md section 4).
-    // While a cached pass is kept its view does not change, so the entries
-    // it draws change only by content changes, which the cache tests.
-    for (uint32_t column = 0; column < m_lod_column_count; ++column) {
-        Lod_column&    lod_column      = m_lod_columns[column];
-        const uint32_t previous_column = m_lod_previous_columns[column];
-        if ((lod_column.purpose != Draw_purpose::shadow) || (previous_column == lod_column_none)) {
-            continue;
-        }
-        ERHE_VERIFY(previous_level_slot != nullptr);
-        const Cull_view_tests& view       = m_cull_views[lod_column.view];
-        const std::size_t      view_count = (view.kind == Cull_view_kind::cube_face) ? 6 : 1;
+        // The entries the shadow column's pass draws: the mask bit of its
+        // view, or of any of a point light's six face views (the frame's
+        // masks of this list, classify_list_cull_masks()).
+        const std::size_t view_count = (view.kind == Cull_view_kind::cube_face) ? 6 : 1;
         ERHE_VERIFY((lod_column.view + view_count) <= m_cull_views.size());
-        for (std::size_t list_index = 0, list_end = slot.lists.size(); list_index < list_end; ++list_index) {
-            const Draw_list&  draw_list   = slot.lists[list_index];
-            const std::size_t entry_count = draw_list.entries.size();
-            if ((draw_list.key.purpose != Draw_purpose::shadow) || (entry_count == 0)) {
-                continue;
+        const std::vector<uint64_t>& masks = m_cull_masks[list_index];
+        m_lod_kept.assign(entry_count, 0u);
+        for (std::size_t face = 0; face < view_count; ++face) {
+            const std::size_t view_index = lod_column.view + face;
+            ERHE_VERIFY(masks.size() >= (((view_index / 64) + 1) * entry_count));
+            const uint64_t* const view_masks = masks.data() + ((view_index / 64) * entry_count);
+            const uint64_t        view_bit   = uint64_t{1} << (view_index % 64);
+            for (std::size_t i = 0; i < entry_count; ++i) {
+                m_lod_kept[i] |= ((view_masks[i] & view_bit) != 0) ? 1u : 0u;
             }
-            const std::vector<uint64_t>& masks = m_cull_masks[list_index];
-            m_lod_change_inside.assign(entry_count, 0u);
-            for (std::size_t face = 0; face < view_count; ++face) {
-                const std::size_t view_index = lod_column.view + face;
-                ERHE_VERIFY(masks.size() >= (((view_index / 64) + 1) * entry_count));
-                const uint64_t* const view_masks = masks.data() + ((view_index / 64) * entry_count);
-                const uint64_t        view_bit   = uint64_t{1} << (view_index % 64);
-                for (std::size_t i = 0; i < entry_count; ++i) {
-                    m_lod_change_inside[i] |= ((view_masks[i] & view_bit) != 0) ? 1u : 0u;
-                }
-            }
-            const std::vector<uint32_t>& words          = level_slot.lists[list_index];
-            const std::vector<uint32_t>& previous_words = previous_level_slot->lists[list_index];
-            const std::size_t previous_group_count = (static_cast<std::size_t>(previous_level_slot->column_count) + 7) / 8;
-            ERHE_VERIFY(previous_words.size() == (previous_group_count * entry_count));
-            ERHE_VERIFY(words.size() >= ((static_cast<std::size_t>(column / 8) + 1) * entry_count));
+        }
+        // Not kept: level 0 (doc/plans/lod_gpu_selection.md section 9,
+        // decision 4). Kept and inside a sampling view's frustum: the finest
+        // of those views' levels (decisions 1 and 2; the color columns share
+        // the first word). Else the light's own selection.
+        cull_lanes::shadow_lod_lanes(
+            lane_view,
+            bounds,
+            draw_list.entries,
+            slot.lod_table,
+            m_lod_kept.data(),
+            color_inside,
+            lod_column.color_column_mask,
+            level_words.data(),
+            entry_count,
+            words,
+            nibble_shift,
+            previous_words,
+            previous_nibble_shift
+        );
+        // The shadow map cache's level test (section 4): the entries the
+        // pass draws whose level differs from the matched previous
+        // column's. While a cached pass is kept its view does not change,
+        // so the entries it draws change only by content changes, which the
+        // cache tests.
+        if (previous_words != nullptr) {
             lod_column.changed_entries += cull_lanes::count_lod_level_changes(
-                words.data() + ((column / 8) * entry_count),
-                4u * (column % 8),
-                previous_words.data() + ((previous_column / 8) * entry_count),
-                4u * (previous_column % 8),
-                m_lod_change_inside.data(),
-                entry_count
+                words, nibble_shift, previous_words, previous_nibble_shift, m_lod_kept.data(), entry_count
             );
         }
     }

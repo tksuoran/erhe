@@ -215,10 +215,11 @@ void match_lod_previous_columns(
 // holds level L's error in z as float bits) and the boxes' squared distance
 // from the view origin, written to distance2 with the per-axis gaps of
 // sphere_axis_lanes() in gap (count floats each, owned by the caller).
-// Levels do not depend on visibility: every entry gets one. previous_words
-// (null: no history) are the previous frame's level words of the same
-// entries, the matched column at previous_nibble_shift (hysteresis,
-// section 6).
+// Levels do not depend on visibility: every entry gets one. An
+// orthographic view skips the distances (select_lod_level() reads 1).
+// previous_words (null: no history) are the previous frame's level words
+// of the same entries, the matched column at previous_nibble_shift
+// (hysteresis, section 6).
 void lod_lanes(
     const Lod_lane_view&             view,
     const Draw_list_bounds&          bounds,
@@ -246,21 +247,40 @@ void frustum_inside_lanes(
     uint32_t*                  inside
 );
 
-// The select rule of a shadow LOD column (section 4): an entry inside the
-// frustum of at least one color column of color_column_mask (bit c: color
-// column c, c < max_lod_color_columns; color_inside[c] its
-// frustum_inside_lanes() flags, read for the columns of the mask) takes the
-// finest (smallest) of those columns' levels in color_words (the first
-// level word of each entry, which holds every color column); any other
-// entry keeps the level already in words at nibble_shift (the shadow
-// view's own selection, lod_lanes()). Integer operations only.
+// The levels of one shadow LOD column (section 4 and section 9, decision 4)
+// into the column's nibble of the level words (words[i] |= level <<
+// nibble_shift; the caller clears the words). Per entry:
+// - not kept by the shadow view (kept[i] == 0: the entry's mask bit in the
+//   shadow view, for a point light in none of its six face views): level 0;
+//   the pass does not draw it.
+// - kept and inside the frustum of at least one color column of
+//   color_column_mask (bit c: color column c, c < max_lod_color_columns;
+//   color_inside[c] its frustum_inside_lanes() flags, read for the columns
+//   of the mask): the finest (smallest) of those columns' levels in
+//   color_words (the first level word of each entry, which holds every
+//   color column).
+// - kept and inside none of them: the shadow view's own selection
+//   (select_lod_level() with view, the squared distance from view.origin to
+//   the box as lod_lanes() computes it, 1 for an orthographic view, and the
+//   previous level at previous_nibble_shift of previous_words, null: no
+//   history). An entry entering the light's reach has previous level 0
+//   (written while it was not kept), so it gets the coarsening-threshold
+//   level (the finer end of the hysteresis band).
+// The own selection runs only for the entries of the third case.
 void shadow_lod_lanes(
+    const Lod_lane_view&                                      view,
+    const Draw_list_bounds&                                   bounds,
+    std::span<const Draw_list_entry>                          entries,
+    std::span<const glm::uvec4>                               lod_table,
+    const uint32_t*                                           kept,
     const std::array<const uint32_t*, max_lod_color_columns>& color_inside,
     uint32_t                                                  color_column_mask,
     const uint32_t*                                           color_words,
     std::size_t                                               count,
     uint32_t*                                                 words,
-    uint32_t                                                  nibble_shift
+    uint32_t                                                  nibble_shift,
+    const uint32_t*                                           previous_words,
+    uint32_t                                                  previous_nibble_shift
 );
 
 // The entries with inside[i] != 0 whose level at nibble_shift of words

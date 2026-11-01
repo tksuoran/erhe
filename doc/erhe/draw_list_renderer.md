@@ -430,7 +430,8 @@ Registration:
     its shadow mode.
   - Selection: per color list and column, `cull_lanes::lod_lanes()` computes
     the squared distance from the column's origin to each entry's box (the
-    per-axis gaps of `sphere_axis_lanes()`, 1 for an orthographic view) and
+    per-axis gaps of `sphere_axis_lanes()`; an orthographic view computes
+    none and uses 1) and
     `select_lod_level()`: with `k = max_axis_scale * projection_scale`,
     level L passes when `(error_L * k) * (error_L * k) <= threshold2 *
     distance2` (`threshold2` the frame's threshold squared); the selected
@@ -442,29 +443,42 @@ Registration:
     the same bits. An entry whose record is forced or off, a skinned entry
     and an entry without bounds take the template level
     (`get_lod_template_level()`: the forced level clamped to min / max and
-    to the chain, else 0); an entry without chain level 0. Levels do not
-    depend on visibility: every entry of a color list gets one in every
-    color column, and every entry of a shadow list one in every column,
-    whether or not a shadow view of the frame names the color column (its
-    color rows keep the color entry's history: the color and shadow
-    entries of a mesh primitive have the same box, `max_axis_scale`,
-    `lod_word` and chain). The lanes run under the Tracy zone `lod_lanes`
-    inside `classify_cull_views()` (`select_list_lod_levels()`). Tested
-    deviceless in `test_cull_lanes.cpp` (`Lod_lanes.*`: switch distances,
-    inside the box, orthographic, bias and clamps, chain end and template
-    levels, the hysteresis band and its restarts; `Lod_shadow_lanes.*`:
-    the frustum test, the select rule, the level change count and the
-    shadow keys).
-  - Shadows (`doc/plans/lod_gpu_selection.md` section 4, decisions 1 and
-    2 of section 9): a shadow column's level of a shadow entry is the
-    finest (smallest) level of the column's sampling color columns whose
-    frustum holds the entry (`cull_lanes::frustum_inside_lanes()`: the color
-    view's planes on the entry's box, or no bounds), else the shadow
-    view's own selection (`lod_lanes()` with the shadow view's `Lod_view`
-    and its own hysteresis history) (`cull_lanes::shadow_lod_lanes()`;
-    occluded or PVS-culled casters inside the frustum take the color
-    level). A shadow pass shared by viewports at different distances takes
-    the finest of their levels, so in the coarser viewport a receiver drawn
+    to the chain, else 0); an entry without chain level 0. Color levels do
+    not depend on visibility: every entry of a color list gets one in every
+    color column, and every entry of a shadow list one in every color
+    column, whether or not a shadow view of the frame names the color
+    column (its color rows keep the color entry's history: the color and
+    shadow entries of a mesh primitive have the same box,
+    `max_axis_scale`, `lod_word` and chain). A shadow list's entries also
+    get a level in every shadow column (below). `classify_cull_views()`
+    classifies a list's masks (`classify_list_cull_masks()`) before its
+    levels, which the shadow columns read. The lanes run under the Tracy
+    zone `lod_lanes` inside `classify_cull_views()`
+    (`select_list_lod_levels()`). Tested deviceless in
+    `test_cull_lanes.cpp` (`Lod_lanes.*`: switch distances, inside the box,
+    orthographic, bias and clamps, chain end and template levels, the
+    hysteresis band and its restarts; `Lod_shadow_lanes.*`: the frustum
+    test, the select rule with entries not kept, the own selection against
+    `lod_lanes()`, the restart of an entry entering the light's reach, the
+    level change count and the shadow keys).
+  - Shadows (`doc/plans/lod_gpu_selection.md` section 4, decisions 1, 2
+    and 4 of section 9; `cull_lanes::shadow_lod_lanes()`): a shadow
+    column's level of a shadow entry its pass does not draw (the entry's
+    mask bit in the column's view, for a point light in any of its six
+    face views, is clear: outside the light's frustum or reach) is 0. A
+    drawn entry takes the finest (smallest) level of the column's sampling
+    color columns whose frustum holds it
+    (`cull_lanes::frustum_inside_lanes()`: the color view's planes on the
+    entry's box, or no bounds; occluded or PVS-culled casters inside the
+    frustum take the color level), any other drawn entry the shadow view's
+    own selection (`select_lod_level()` with the shadow view's `Lod_view`
+    and its own hysteresis history), which runs for those entries only. An
+    entry entering the light's reach reads the 0 written while it was
+    outside, so its own selection starts at the coarsening-threshold level
+    (`min(max(0, coarse), selected) = coarse`, the finer end of the band);
+    it was not drawn in the pass before, so no shadow pops. A shadow pass
+    shared by viewports at different distances takes the finest of their
+    levels, so in the coarser viewport a receiver drawn
     at level L and its finer caster differ by up to `error_L`, which the
     texel-derived shadow bias does not cover: shadow acne is possible there.
     A caster leaving every sampling frustum switches from the color level
@@ -475,10 +489,9 @@ Registration:
     (the CPU writer through `get_cull_view_lod_column()` as for a color
     pass, the compaction through the shadow job's column).
   - The shadow map cache's level test (`doc/erhe/shadows.md` "Shadow map
-    cache"): after the frame's masks, `count_shadow_lod_changes()` counts
-    per shadow column with a previous column the entries its pass draws
-    (the mask bit of its view, or of any of a point light's faces) whose
-    level differs from the previous column's
+    cache"): `select_list_lod_levels()` counts per shadow column with a
+    previous column the entries its pass draws (the same mask bits as the
+    selection's) whose level differs from the previous column's
     (`cull_lanes::count_lod_level_changes()`), and
     `get_lod_column_change(frame_index, view)` reports `none` (no column),
     `unchanged` or `changed` (some entry changed, or no previous column).
@@ -540,7 +553,9 @@ Registration:
     from the command templates (bound to the classification too) and the
     errors from the slot's GPU level table, and for a shadow entry the
     color views' plane tests (`plane_keeps()`, the `plane_lanes()` port)
-    and the select rule of `shadow_lod_lanes()`. It loops over the frame's
+    and the rule of `shadow_lod_lanes()`, after the entry's mask loop,
+    which collects per shadow column whether one of the column's views
+    keeps the entry (the view record's column, `[13].x`). It loops over the frame's
     columns through the view block's column table (`lod_column_views`,
     `max_lod_columns` `uvec4`: the column's view, purpose and sampling
     color column mask; `Gpu_cull_classifier::

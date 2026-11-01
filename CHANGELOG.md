@@ -1279,6 +1279,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: a shadow LOD column selects the light's own level
+  only for the entries its view keeps; every other entry holds level 0 in
+  that column (doc/plans/lod_gpu_selection.md section 9, decision 4).
+  `cull_lanes::shadow_lod_lanes()` takes the shadow view's `Lod_lane_view`,
+  the bounds, entries and level table, the per-entry `kept` flags and the
+  previous frame's words, and writes the column's whole level (it no longer
+  overwrites levels `lod_lanes()` wrote). `cull_lanes::lod_lanes()` skips
+  the distances for an orthographic view.
 - `erhe::scene_renderer`: draw-list shadow passes draw the selected level
   of detail when `Shadow_renderer::Render_parameters::lod_sampling_view_key`
   is set (doc/plans/lod_gpu_selection.md step 5): the shadow views get LOD

@@ -738,6 +738,42 @@ public:
         return out;
     }
 
+    // The levels of every entry in a shadow column at nibble 3
+    // (cull_lanes::shadow_lod_lanes()), the color columns 0..2 at nibbles
+    // 0..2 holding color_words (empty: 0), nibbles 4..7 junk; both must stay.
+    // previous: as levels().
+    [[nodiscard]] auto shadow_levels(
+        const cull_lanes::Lod_lane_view&                                               view,
+        const std::vector<uint32_t>&                                                   kept,
+        const std::array<const uint32_t*, erhe::scene_renderer::max_lod_color_columns>& color_inside = {},
+        const uint32_t                                                                 color_column_mask = 0u,
+        const std::vector<uint32_t>&                                                   color_words = {},
+        const std::vector<uint32_t>&                                                   previous = {}
+    ) -> std::vector<uint32_t>
+    {
+        const std::size_t count = m_entries.size();
+        EXPECT_EQ(kept.size(), count);
+        std::vector<uint32_t> words(count);
+        for (std::size_t i = 0; i < count; ++i) {
+            words[i] = 0x9abc0000u | (color_words.empty() ? 0u : (color_words[i] & 0xfffu));
+        }
+        const std::vector<uint32_t> before = words;
+        std::vector<uint32_t> previous_words;
+        for (const uint32_t level : previous) {
+            previous_words.push_back(0x12345078u | (level << 8u)); // nibble 2
+        }
+        cull_lanes::shadow_lod_lanes(
+            view, m_bounds, m_entries, m_table, kept.data(), color_inside, color_column_mask, words.data(), count, words.data(), 12u,
+            previous.empty() ? nullptr : previous_words.data(), 8u
+        );
+        std::vector<uint32_t> out;
+        for (std::size_t i = 0; i < count; ++i) {
+            EXPECT_EQ(words[i] & ~0xf000u, before[i]) << "entry " << i; // other nibbles untouched
+            out.push_back((words[i] >> 12u) & 0xfu);
+        }
+        return out;
+    }
+
 private:
     std::size_t                                        m_level_count{0};
     std::vector<glm::uvec4>                            m_table;
@@ -1007,43 +1043,95 @@ TEST(Lod_shadow_lanes, frustum_inside_keeps_unbounded_boxes)
     EXPECT_EQ(inside, (std::vector<uint32_t>{1u, 0u, 1u, 1u}));
 }
 
-// The select rule: inside a sampling column's frustum, the finest level of
-// the sampling columns holding the entry; outside all of them, the shadow
-// view's own level; a color column outside the mask is not consulted.
-TEST(Lod_shadow_lanes, finest_sampling_level_inside_own_level_outside)
+// The select rule (section 4, section 9 decision 4): a kept entry inside a
+// sampling column's frustum takes the finest level of the sampling columns
+// holding it; a kept entry outside all of them the shadow view's own
+// level; an entry the shadow view does not keep 0, wherever it is; a color
+// column outside the mask is not consulted.
+TEST(Lod_shadow_lanes, finest_sampling_level_inside_own_level_outside_zero_not_kept)
 {
     using erhe::scene_renderer::max_lod_color_columns;
-    // Color columns 0, 1 and 2 at nibbles 0, 4 and 8 of the first word.
+    // Color columns 0, 1 and 2 at nibbles 0, 1 and 2 of the first word.
     const auto color_word = [](const uint32_t c0, const uint32_t c1, const uint32_t c2) -> uint32_t {
         return c0 | (c1 << 4u) | (c2 << 8u);
     };
     const std::vector<uint32_t> color_words{
         color_word(3, 1, 0), // in 0 and 1: the finer, 1
-        color_word(2, 5, 0), // in 0 only
-        color_word(4, 4, 0), // in neither
-        color_word(5, 2, 0), // in 1 only
-        color_word(6, 6, 0)  // in column 2 only, which is not sampling
+        color_word(4, 5, 0), // in 0 only
+        color_word(4, 4, 0), // in neither: own
+        color_word(5, 3, 0), // in 1 only
+        color_word(6, 6, 0), // in column 2 only, which is not sampling: own
+        color_word(3, 1, 0), // in 0 and 1, not kept
+        color_word(4, 4, 0)  // in neither, not kept
     };
-    const std::vector<uint32_t> inside_0{1, 1, 0, 0, 0};
-    const std::vector<uint32_t> inside_1{1, 0, 0, 1, 0};
-    const std::vector<uint32_t> inside_2{1, 1, 1, 1, 1};
+    const std::vector<uint32_t> inside_0{1, 1, 0, 0, 0, 1, 0};
+    const std::vector<uint32_t> inside_1{1, 0, 0, 1, 0, 1, 0};
+    const std::vector<uint32_t> inside_2{1, 1, 1, 1, 1, 1, 1};
+    const std::vector<uint32_t> kept    {1, 1, 1, 1, 1, 0, 0};
     std::array<const uint32_t*, max_lod_color_columns> color_inside{};
     color_inside[0] = inside_0.data();
     color_inside[1] = inside_1.data();
     color_inside[2] = inside_2.data();
-    // The shadow column at nibble 12 (column 3) of the first word, holding
-    // the own selection 7; the other nibbles stay.
-    std::vector<uint32_t> words(color_words.size());
-    for (std::size_t i = 0; i < words.size(); ++i) {
-        words[i] = color_words[i] | (7u << 12u);
+    // Own selection: level 2 (between the errors of levels 2 and 3).
+    const float projection_scale = 900.0f;
+    const cull_lanes::Lod_lane_view view = make_lod_lane_view(projection_scale, 1.0f);
+    const float d = static_cast<float>(0.5 * (static_cast<double>(c_lod_errors[2]) + static_cast<double>(c_lod_errors[3])) * projection_scale);
+    Lod_lane_fixture fixture{c_lod_errors};
+    for (std::size_t i = 0; i < color_words.size(); ++i) {
+        fixture.add(d, 1.0f);
     }
-    cull_lanes::shadow_lod_lanes(color_inside, 0x3u, words.data(), words.size(), words.data(), 12u);
-    std::vector<uint32_t> levels;
-    for (std::size_t i = 0; i < words.size(); ++i) {
-        levels.push_back((words[i] >> 12u) & 0xfu);
-        EXPECT_EQ(words[i] & 0xfffu, color_words[i]) << "entry " << i;
+    EXPECT_EQ(fixture.levels(view), std::vector<uint32_t>(color_words.size(), 2u));
+    EXPECT_EQ(fixture.shadow_levels(view, kept, color_inside, 0x3u, color_words), (std::vector<uint32_t>{1u, 4u, 2u, 3u, 2u, 0u, 0u}));
+}
+
+// A kept entry outside every sampling frustum takes exactly the level
+// lod_lanes() gives for the shadow view (perspective and orthographic,
+// with and without history): the own selection skipped for the other
+// entries is the same selection.
+TEST(Lod_shadow_lanes, own_selection_equals_lod_lanes)
+{
+    const float projection_scale = 900.0f;
+    Lod_lane_fixture fixture{c_lod_errors};
+    std::vector<uint32_t> previous;
+    for (int step = -2; step < 40; ++step) {
+        fixture.add(0.05f * static_cast<float>(step), 1.0f + (0.125f * static_cast<float>(step % 5)));
+        previous.push_back(static_cast<uint32_t>(step + 2) % 6u);
     }
-    EXPECT_EQ(levels, (std::vector<uint32_t>{1u, 2u, 7u, 2u, 7u}));
+    fixture.add_unbounded(erhe::scene::Lod_data{});
+    previous.push_back(3u);
+    const std::vector<uint32_t> kept(previous.size(), 1u);
+    for (const erhe::scene_renderer::Lod_projection projection : {erhe::scene_renderer::Lod_projection::perspective, erhe::scene_renderer::Lod_projection::orthographic}) {
+        cull_lanes::Lod_lane_view view = make_lod_lane_view(projection_scale, 1.0f);
+        view.projection         = projection;
+        view.projection_scale   = (projection == erhe::scene_renderer::Lod_projection::orthographic) ? 30.0f : projection_scale;
+        view.coarsen_threshold2 = cull_lanes::get_lod_coarsen_threshold2(1.0f, 0.25f);
+        EXPECT_EQ(fixture.shadow_levels(view, kept), fixture.levels(view, 3));
+        EXPECT_EQ(fixture.shadow_levels(view, kept, {}, 0u, {}, previous), fixture.levels(view, 3, previous, 2));
+    }
+}
+
+// Hysteresis of an entry entering the light's reach (decision 4): while
+// not kept its level was written as 0, so its first kept frame clamps 0
+// to [coarse, selected]: the coarsening-threshold level (the finer end of
+// the band); an entry kept the frame before keeps its level inside the
+// band.
+TEST(Lod_shadow_lanes, entering_reach_starts_at_coarsening_threshold_level)
+{
+    const float projection_scale = 900.0f;
+    cull_lanes::Lod_lane_view view = make_lod_lane_view(projection_scale, 1.0f);
+    view.coarsen_threshold2 = cull_lanes::get_lod_coarsen_threshold2(1.0f, 0.5f);
+    // Level 2 by the threshold; the coarsening threshold (0.5 px) gives 1.
+    const float d = static_cast<float>(0.5 * (static_cast<double>(c_lod_errors[2]) + static_cast<double>(c_lod_errors[3])) * projection_scale);
+    Lod_lane_fixture fixture{c_lod_errors};
+    fixture.add(d, 1.0f);
+    fixture.add(d, 1.0f);
+    fixture.add(d, 1.0f);
+    // Frame 1: entry 0 outside the reach, entries 1 and 2 inside.
+    const std::vector<uint32_t> frame_1 = fixture.shadow_levels(view, std::vector<uint32_t>{0u, 1u, 1u}, {}, 0u, {}, std::vector<uint32_t>{2u, 2u, 1u});
+    EXPECT_EQ(frame_1, (std::vector<uint32_t>{0u, 2u, 1u}));
+    // Frame 2: all inside; entry 0 restarts from the written 0.
+    const std::vector<uint32_t> frame_2 = fixture.shadow_levels(view, std::vector<uint32_t>{1u, 1u, 1u}, {}, 0u, {}, frame_1);
+    EXPECT_EQ(frame_2, (std::vector<uint32_t>{1u, 2u, 1u}));
 }
 
 TEST(Lod_shadow_lanes, level_change_count)
