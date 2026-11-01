@@ -262,6 +262,8 @@ class Gltf_scan_summary
 {
 public:
     std::vector<std::string>        contents;
+    // The scan's errors (the file could not be opened or parsed).
+    std::vector<std::string>        errors;
     std::vector<std::string>        extensions_used;
     std::optional<erhe::math::Aabb> bounding_box;
     // Material names + glTF 2.1 uids (parallel; empty uid when absent), so

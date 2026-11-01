@@ -409,6 +409,9 @@ private:
     auto resolve_pending_scene_and_camera() -> bool override;
     void setup_root_camera();
     void attach_headlamp();
+    // Prepare phase: the loading screen's lines from the startup load's
+    // handle (status and percentage, or the error when it failed).
+    void update_loading_screen();
     void setup_pointer_pick_camera();
     void update_camera_node();
     void update_pointer_context_from_controller();
@@ -559,6 +562,7 @@ private:
     std::string                                          m_loading_file_name;
     bool                                                 m_loading_failed_shown{false};
     uint64_t                                             m_loading_screen_frame_count{0}; // prepare phases since set_loading_screen()
+    std::string                                          m_loading_status_line;           // the status line shown, to set it on change only
     // Headlamp: created on the first enable (set_headlamp_enabled()).
     std::shared_ptr<erhe::scene::Light>                  m_headlamp;
     bool                                                 m_headlamp_enabled    {false};

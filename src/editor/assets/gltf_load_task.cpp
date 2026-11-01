@@ -103,9 +103,13 @@ void Gltf_load_task::start_scan(Asset_load_tick_context& tick_context)
             try {
                 const Gltf_scan_summary summary = editor::scan_gltf(path);
                 scan_result->is_erhe_scene = is_erhe_scene(summary.extensions_used);
-                scan_result->ok            = true;
+                scan_result->ok            = summary.errors.empty();
+                if (!summary.errors.empty()) {
+                    scan_result->error = summary.errors.front();
+                }
             } catch (...) {
-                scan_result->ok = false;
+                scan_result->ok    = false;
+                scan_result->error = "scan threw an exception";
             }
             scan_result->finished.store(true, std::memory_order_release);
         }
@@ -293,9 +297,13 @@ void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
             const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
             try {
                 parse_result->gltf_data = erhe::gltf::parse_gltf(parse_arguments);
-                parse_result->ok        = true;
+                parse_result->ok        = parse_result->gltf_data.errors.empty();
+                if (!parse_result->ok) {
+                    parse_result->error = parse_result->gltf_data.errors.front();
+                }
             } catch (...) {
-                parse_result->ok = false;
+                parse_result->ok    = false;
+                parse_result->error = "parse threw an exception";
             }
             log_parsers->info(
                 "async parse_gltf '{}': {} ms",
@@ -358,6 +366,27 @@ auto Gltf_load_task::advance_residency(Asset_load_tick_context& tick_context) ->
         }
     }
     return gltf_data.image_residency.get_pending_image_count() == 0;
+}
+
+void Gltf_load_task::update_status()
+{
+    // Load-time only (allocates the status text): the counts of the build
+    // jobs and the texture residency, while either runs.
+    std::size_t mesh_done  = 0;
+    std::size_t mesh_total = 0;
+    if (m_build_state) {
+        const std::lock_guard<std::mutex> lock{m_build_state->mutex};
+        mesh_done  = m_build_state->finished_count;
+        mesh_total = m_build_state->jobs.size();
+    }
+    const erhe::gltf::Gltf_image_residency& residency = m_parse_result->gltf_data.image_residency;
+    const std::size_t texture_total = residency.decoded_images.size();
+    const std::size_t texture_done  = texture_total - std::min(texture_total, residency.get_pending_image_count());
+    if ((mesh_total > 0) && (mesh_done < mesh_total)) {
+        m_handle->set_status(fmt::format("Building meshes {} / {}, textures {} / {}", mesh_done, mesh_total, texture_done, texture_total));
+    } else {
+        m_handle->set_status(fmt::format("Uploading textures {} / {}", texture_done, texture_total));
+    }
 }
 
 void Gltf_load_task::log_staging_statistics(Asset_load_tick_context& tick_context) const
@@ -439,11 +468,13 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
                 start_parse(tick_context);
                 m_phase = Phase::parsing;
                 m_handle->set_progress(0.05f);
+                m_handle->set_status("Parsing glTF");
                 return Asset_load_state::running;
             }
             start_scan(tick_context);
             m_phase = Phase::scanning;
             m_handle->set_progress(0.01f);
+            m_handle->set_status("Reading file");
             return Asset_load_state::running;
         }
 
@@ -453,7 +484,7 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
             }
             if (!m_scan_result->ok) {
                 m_phase = Phase::settled;
-                m_handle->set_failed("scan failed");
+                m_handle->set_failed(m_scan_result->error.empty() ? std::string{"scan failed"} : m_scan_result->error);
                 notify_done();
                 return Asset_load_state::failed;
             }
@@ -507,6 +538,7 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
             start_parse(tick_context);
             m_phase = Phase::parsing;
             m_handle->set_progress(0.05f);
+            m_handle->set_status("Parsing glTF");
             return Asset_load_state::running;
         }
 
@@ -516,7 +548,7 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
             }
             if (!m_parse_result->ok) {
                 m_phase = Phase::settled;
-                m_handle->set_failed("parse failed");
+                m_handle->set_failed(m_parse_result->error.empty() ? std::string{"parse failed"} : m_parse_result->error);
                 notify_done();
                 return Asset_load_state::failed;
             }
@@ -529,6 +561,7 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
         case Phase::building: {
             // Mesh builds first: publish waits for them, textures may lag.
             dispatch_build_jobs(tick_context);
+            update_status();
             if (!m_build_state->is_finished()) {
                 // The images need nothing from the build: decode and upload
                 // them meanwhile, so the decode overlaps the build instead
@@ -583,7 +616,9 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
         }
 
         case Phase::residency: {
-            if (!advance_residency(tick_context)) {
+            const bool residency_done = advance_residency(tick_context);
+            update_status();
+            if (!residency_done) {
                 return Asset_load_state::running;
             }
             // Bound here, not while the build worker may still run.
@@ -596,6 +631,7 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
         }
 
         case Phase::publish: {
+            m_handle->set_status("Publishing the scene");
             // Publish gate (plan 2.5): the loader transfer queue is
             // budget-drained, so "enqueued" does NOT imply "uploaded". Hold
             // publish until the watermark has passed every ticket the build

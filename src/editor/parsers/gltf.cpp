@@ -1711,6 +1711,7 @@ auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary
     std::vector<std::string>& out = summary.contents;
     erhe::gltf::Gltf_scan scan = erhe::gltf::scan_gltf(path);
     summary.bounding_box = scan.bounding_box;
+    summary.errors       = scan.errors;
 
     if (!scan.errors.empty()) {
         out.push_back("Errors:");

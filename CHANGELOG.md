@@ -42,6 +42,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::gltf`: `Gltf_data::errors`: why `parse_gltf()` produced nothing
+  (the file could not be opened or read, or fastgltf rejected it).
+
 - `erhe::scene`: `Light_layer::move_to_front()` moves a light of the layer
   to the front of `lights`, so it gets its type's first light set slot.
 

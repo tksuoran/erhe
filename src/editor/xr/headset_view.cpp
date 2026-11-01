@@ -35,6 +35,8 @@
 #include "time.hpp"
 #include "xr/headset_overdraw_visualization.hpp"
 #include "init_status_display.hpp"
+#include "assets/asset_load_task.hpp"
+#include "assets/asset_manager.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "tools/hud.hpp"
 #include "tools/tools.hpp"
@@ -381,6 +383,58 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe:
         m_loading_screen_release_frame =
             m_app_context.graphics_device->get_frame_index() +
             m_app_context.graphics_device->get_number_of_frames_in_flight() + 1;
+    }
+}
+
+void Headset_view::update_loading_screen()
+{
+    if (!m_loading_screen || m_loading_screen_release_frame.has_value() || m_loading_failed_shown) {
+        return;
+    }
+    ++m_loading_screen_frame_count;
+
+    // The startup load's handle (load-time only: the handle list is a copy).
+    std::shared_ptr<Asset_load_handle> handle;
+    if (m_app_context.asset_manager != nullptr) {
+        for (const std::shared_ptr<Asset_load_handle>& candidate : m_app_context.asset_manager->get_load_handles()) {
+            if (candidate && (candidate->get_path().filename().string() == m_loading_file_name)) {
+                handle = candidate;
+            }
+        }
+    }
+
+    const auto show_failure = [this](const std::string& reason) {
+        m_loading_failed_shown = true;
+        m_loading_screen->set_line(0, fmt::format("Could not load \"{}\"", m_loading_file_name));
+        m_loading_screen->set_line(1, reason);
+        m_loading_screen->set_line(2, "");
+        log_xr->warn("Headset loading screen: could not load '{}': {}", m_loading_file_name, reason);
+    };
+
+    if (handle && (handle->get_state() == Asset_load_state::failed)) {
+        const std::string error = handle->get_error();
+        show_failure(error.empty() ? std::string{"see the editor log"} : error);
+        return;
+    }
+
+    // No load in flight and still no scene for the headset (the open failed
+    // after the load, or the load never started): the open is queued in the
+    // first frames, so this waits 30 frames.
+    if (!get_scene_root() && (m_loading_screen_frame_count > 30) && !m_app_context.is_scene_load_in_flight()) {
+        show_failure("no scene was opened; see the editor log");
+        return;
+    }
+
+    std::string status_line;
+    if (handle && !handle->is_settled()) {
+        const std::string status = handle->get_status();
+        status_line = fmt::format("{} ({:.0f} %)", status.empty() ? std::string{"Loading"} : status, 100.0f * handle->get_progress());
+    } else if (handle) {
+        status_line = "Opening the scene";
+    }
+    if (status_line != m_loading_status_line) {
+        m_loading_status_line = status_line;
+        m_loading_screen->set_line(1, status_line);
     }
 }
 
@@ -2206,25 +2260,7 @@ void Headset_view::prepare_render_view()
         m_loading_screen_release_frame.reset();
         log_xr->info("Headset loading screen released");
     }
-    // The load ended without a scene for the headset (the open failed): say
-    // so on the loading screen instead of "Loading" forever. The open is
-    // queued in the first frames, so the check waits 30 frames.
-    if (m_loading_screen) {
-        ++m_loading_screen_frame_count;
-    }
-    if (
-        m_loading_screen &&
-        !m_loading_screen_release_frame.has_value() &&
-        !m_loading_failed_shown &&
-        !get_scene_root() &&
-        (m_loading_screen_frame_count > 30) &&
-        !m_app_context.is_scene_load_in_flight()
-    ) {
-        m_loading_failed_shown = true;
-        m_loading_screen->set_line(0, fmt::format("Could not load \"{}\"", m_loading_file_name));
-        m_loading_screen->set_line(1, "See the editor log for the reason");
-        log_xr->warn("Headset loading screen: no scene after loading '{}'", m_loading_file_name);
-    }
+    update_loading_screen();
     Frame_settings_slot& slot        = m_frame_settings_slots[frame_index % m_frame_settings_slots.size()];
     slot.frame_index = frame_index;
     slot.mode        = is_overdraw_supported() ? m_overdraw_mode : Overdraw_mode::off;

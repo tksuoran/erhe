@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 namespace editor {
 
@@ -43,6 +44,9 @@ public:
     [[nodiscard]] auto get_state   () const -> Asset_load_state;
     [[nodiscard]] auto get_progress() const -> float;
     [[nodiscard]] auto get_error   () const -> std::string;
+    // What the load is doing, for progress displays (e.g. "Building meshes
+    // 120 / 2683"); empty before the first phase.
+    [[nodiscard]] auto get_status  () const -> std::string;
     [[nodiscard]] auto is_settled  () const -> bool;
 
     // Cooperative: sets the flag. The task notices at its next phase
@@ -54,6 +58,7 @@ public:
     // Task side.
     void set_state   (Asset_load_state state);
     void set_progress(float progress);
+    void set_status  (std::string_view status);
     void set_failed  (std::string error);
 
 private:
@@ -63,6 +68,7 @@ private:
     std::atomic<bool>             m_cancel_requested{false};
     mutable std::mutex            m_error_mutex;
     std::string                   m_error;
+    std::string                   m_status; // guarded by m_error_mutex
 };
 
 class Prepared_gltf_parse;

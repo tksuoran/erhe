@@ -100,6 +100,7 @@ private:
         std::atomic<bool> finished{false};
         bool              is_erhe_scene{false};
         bool              ok{false};
+        std::string       error;
     };
 
     class Parse_result
@@ -109,6 +110,7 @@ private:
         erhe::gltf::Gltf_data              gltf_data;
         std::shared_ptr<erhe::scene::Node> container_node;
         bool                               ok{false};
+        std::string                        error;
     };
 
     // Worker-side Buffer_mesh build (phase 3a). Separate from Parse_result
@@ -180,6 +182,8 @@ private:
     void notify_done();
     auto advance_residency(Asset_load_tick_context& tick_context) -> bool; // true when every image is resident (not yet bound)
     void log_staging_statistics(Asset_load_tick_context& tick_context) const;
+    // Sets the handle status from the build job and texture residency counts.
+    void update_status();
 
     App_context&                                  m_context;
     Asset_load_request                            m_request;

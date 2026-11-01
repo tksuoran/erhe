@@ -143,6 +143,9 @@ public:
 class Gltf_data
 {
 public:
+    // Why parse_gltf() produced nothing (the file could not be opened or
+    // read, or fastgltf rejected it); empty after a successful parse.
+    std::vector<std::string>                                errors;
     std::vector<std::shared_ptr<erhe::scene::Animation>>    animations;
     std::vector<std::shared_ptr<erhe::scene::Camera>>       cameras;
     std::vector<std::shared_ptr<erhe::scene::Light>>        lights;

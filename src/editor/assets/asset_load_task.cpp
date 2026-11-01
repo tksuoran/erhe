@@ -71,6 +71,20 @@ void Asset_load_handle::set_progress(const float progress)
     m_progress.store(progress, std::memory_order_relaxed);
 }
 
+void Asset_load_handle::set_status(const std::string_view status)
+{
+    const std::lock_guard<std::mutex> lock{m_error_mutex};
+    if (m_status != status) {
+        m_status = std::string{status};
+    }
+}
+
+auto Asset_load_handle::get_status() const -> std::string
+{
+    const std::lock_guard<std::mutex> lock{m_error_mutex};
+    return m_status;
+}
+
 void Asset_load_handle::set_failed(std::string error)
 {
     {

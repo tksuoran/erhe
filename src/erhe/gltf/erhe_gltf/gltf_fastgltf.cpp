@@ -6948,16 +6948,20 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     if (arguments.glb_data.empty()) {
         std::unique_ptr<Gltf_file_stream> file_stream = std::make_unique<Gltf_file_stream>(arguments.path);
         if (!file_stream->is_open()) {
-            log_gltf->error("glTF load error: cannot open '{}'", arguments.path.string());
-            return {};
+            Gltf_data failed;
+            failed.errors.push_back(fmt::format("cannot open '{}'", arguments.path.string()));
+            log_gltf->error("glTF load error: {}", failed.errors.back());
+            return failed;
         }
         skip_glb_bin_state.glb_bin_length = file_stream->get_glb_bin_length();
         data = std::move(file_stream);
     } else {
         fastgltf::Expected<fastgltf::GltfDataBuffer> buffer = fastgltf::GltfDataBuffer::FromBytes(arguments.glb_data.data(), arguments.glb_data.size());
         if (buffer.error() != fastgltf::Error::None) {
-            log_gltf->error("glTF load error: {}", fastgltf::getErrorMessage(buffer.error()));
-            return {};
+            Gltf_data failed;
+            failed.errors.push_back(std::string{fastgltf::getErrorMessage(buffer.error())});
+            log_gltf->error("glTF load error: {}", failed.errors.back());
+            return failed;
         }
         data = std::make_unique<fastgltf::GltfDataBuffer>(std::move(buffer.get()));
     }
@@ -7166,8 +7170,10 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         fastgltf::Options::None // TODO Consider | fastgltf::Options::DecomposeNodeMatrices
     );
     if (auto error = asset.error(); error != fastgltf::Error::None) {
-        log_gltf->error("glTF parse error: {}", fastgltf::getErrorMessage(error));
-        return {};
+        Gltf_data failed;
+        failed.errors.push_back(fmt::format("parse error: {}", fastgltf::getErrorMessage(error)));
+        log_gltf->error("glTF {}", failed.errors.back());
+        return failed;
     }
 
     // Where the buffers are on disk (the asset names the external .bin URIs
@@ -7224,8 +7230,10 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             }
         }
         if (!load_eager_buffer_views(asset.get(), buffer_origins ? *buffer_origins : no_origins, geometry_primitives, payload_views, payload_accessors, eager_byte_count, lazy_view_count)) {
-            log_gltf->error("glTF load error: cannot read the buffers of '{}'", arguments.path.string());
-            return {};
+            Gltf_data failed;
+            failed.errors.push_back(fmt::format("cannot read the buffers of '{}'", arguments.path.string()));
+            log_gltf->error("glTF load error: {}", failed.errors.back());
+            return failed;
         }
         log_gltf->info(
             "glTF load '{}': {} bufferView bytes read whole, {} views read per primitive",
