@@ -93,10 +93,14 @@ Decisions (user, 2026-10-24):
   record's color or size - and their commands come from the frame's job
   table, one more filter per job).
 
+Decision (user, 2026-11-01): occlusion culling is on by default in every
+configuration (desktop and OpenXR editor settings; editor settings v12
+migrates older files, which all stored the former default off, to on).
+
 ## Build order
 
 1. 3a, the occlusion pass produces visibility bits. Done. Editor setting
-   `occlusion_culling` (default off; Settings window, MCP
+   `occlusion_culling` (default on; Settings window, MCP
    `set_occlusion_culling`), recorded per published slot as
    `Occlusion_culling` and effective only with the `gpu` classification
    on a device with `Device_info::use_draw_indirect_count` (the classifier)
@@ -241,8 +245,8 @@ bounded in-frustum entries culled as occluded. Repeat-3 medians not taken.
   hierarchical-Z compute test instead of rasterized boxes, and the baked
   PVS of [pvs.md](pvs.md), which removes entries before the test bits are
   computed.
-- A scene with little occlusion (heavy) pays the pass without a saving;
-  the setting stays off by default until measured on more scenes.
+- A scene with little occlusion (heavy) pays the pass without a saving
+  (net +97 us, step 3b); the default is on regardless (decision above).
 - Headset: the per-eye (non-multiview) path has no occlusion view; the
   headset's images with occlusion on and off are not compared (the Quest
   compositor screenshot shows the passthrough camera, not the app).

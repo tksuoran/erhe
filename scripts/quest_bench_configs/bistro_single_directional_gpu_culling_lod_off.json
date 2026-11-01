@@ -1,11 +1,11 @@
 {
-    "_comment": "Bench configuration for scripts/quest_bench.py run --config (doc/agents/quest.md 'Bench configurations'). As single_directional_loops_gpu_culling, with PVS and occlusion culling off and every LOD setting set explicitly (doc/plans/lod_gpu_selection.md step 6): lod_enabled off, so a file with LOD chains draws level 0. The baseline of the _lod_every_frame and _lod_on_demand configurations.",
+    "_comment": "Bench configuration for scripts/quest_bench.py run --config (doc/agents/quest.md 'Bench configurations'). As single_directional_loops_gpu_culling, with PVS culling off, occlusion culling on and every LOD setting set explicitly (doc/plans/lod_gpu_selection.md step 6): lod_enabled off, so a file with LOD chains draws level 0. The baseline of the _lod_every_frame and _lod_on_demand configurations.",
     "name": "single_directional_loops_gpu_culling_lod_off",
-    "description": "As single_directional_loops_gpu_culling, PVS and occlusion off, lod_enabled off (threshold 1.0, band 0.25, lod_cpu_selection every_frame set explicitly)",
+    "description": "As single_directional_loops_gpu_culling, PVS off, occlusion on, lod_enabled off (threshold 1.0, band 0.25, lod_cpu_selection every_frame set explicitly)",
     "mcp": [
         "set_culling_classification={\"mode\": \"gpu\"}",
         "set_pvs_culling={\"enabled\": false}",
-        "set_occlusion_culling={\"enabled\": false}"
+        "set_occlusion_culling={\"enabled\": true}"
     ],
     "mcp_after_load": [
         "set_graphics_preset={\"light_shading\": \"loops\", \"shadow_enable\": true, \"directional_shadow_light_count\": 1, \"directional_unshadowed_light_count\": 0, \"spot_shadow_light_count\": 0, \"spot_unshadowed_light_count\": 0, \"point_shadow_light_count\": 0, \"point_unshadowed_light_count\": 0, \"lod_enabled\": false, \"lod_threshold_pixels\": 1.0, \"lod_bias\": 0, \"lod_hysteresis_band\": 0.25, \"lod_cpu_selection\": \"every_frame\"}",

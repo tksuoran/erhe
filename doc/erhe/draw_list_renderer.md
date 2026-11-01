@@ -1260,9 +1260,11 @@ Drawing:
   and the pipeline of `res/shaders/occlusion_test.vert/.frag` built; refused,
   logged once: the slot records off), a color view made an occlusion view
   with `add_occlusion_view(frame_index, cull_view, near_plane, key)` (the
-  render phase, before the classification; the editor:
+  render phase, before the classification; the editor, whose setting
+  `occlusion_culling` is on by default:
   `Draw_list_renderer::add_color_occlusion_view()` from
-  `Composer::add_cull_views()`, near plane from the view's clip_from_world,
+  `Composer::add_cull_views()` and, for the headset's multiview pass,
+  `Composer::add_immediate_cull_views()`, near plane from the view's clip_from_world,
   `Draw_list_renderer::get_color_clip_from_world()`) gets one visibility bit
   per entry, in the mask layout (`uvec2` per (group, entry), bit = the
   view's index). The classification dispatch writes, for the frame's

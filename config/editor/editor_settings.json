@@ -1,5 +1,5 @@
 {
-    "_version": 11,
+    "_version": 12,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -518,7 +518,7 @@
     "transform_mode": "extrude_group_normal",
     "indirect_diffuse_source": "ambient",
     "culling_classification": "gpu",
-    "occlusion_culling": false,
+    "occlusion_culling": true,
     "pvs_culling": true,
     "pvs_query_margin": 0.05,
     "pvs_resident_pages": 64,
