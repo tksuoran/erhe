@@ -1,0 +1,16 @@
+{
+    "_comment": "Bench configuration for scripts/quest_bench.py run --config (doc/agents/quest.md 'Bench configurations'). The geometry-only frame of doc/plans/pvs.md 'Verification' (flat draw color: graphics preset flat_draw_color, the ERHE_FLAT_DRAW_COLOR variant, an unlit palette color per draw; zero lights, light_shading loops, shadow_enable false, so no shadow pass), with culling classification gpu, PVS and occlusion off and every LOD setting set explicitly: lod_enabled off. The baseline of _lod_every_frame (doc/plans/lod_gpu_selection.md step 6).",
+    "name": "flat_draw_color_gpu_culling_lod_off",
+    "description": "Flat draw color, no lights, no shadows, culling classification gpu, PVS and occlusion off, lod_enabled off (threshold 1.0, band 0.25, lod_cpu_selection every_frame set explicitly)",
+    "mcp": [
+        "set_culling_classification={\"mode\": \"gpu\"}",
+        "set_pvs_culling={\"enabled\": false}",
+        "set_occlusion_culling={\"enabled\": false}"
+    ],
+    "mcp_after_load": [
+        "set_graphics_preset={\"light_shading\": \"loops\", \"shadow_enable\": false, \"directional_shadow_light_count\": 0, \"directional_unshadowed_light_count\": 0, \"spot_shadow_light_count\": 0, \"spot_unshadowed_light_count\": 0, \"point_shadow_light_count\": 0, \"point_unshadowed_light_count\": 0, \"flat_draw_color\": true, \"lod_enabled\": false, \"lod_threshold_pixels\": 1.0, \"lod_bias\": 0, \"lod_hysteresis_band\": 0.25, \"lod_cpu_selection\": \"every_frame\"}"
+    ],
+    "mcp_measure": [
+        "get_lod_stats"
+    ]
+}
