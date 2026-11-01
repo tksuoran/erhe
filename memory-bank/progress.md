@@ -17,7 +17,9 @@
 ✓gpu-sel-step-4{be0868ae0;hysteresis-band-0.25;WAR-barrier-any-frames-in-flight}+ecea855aa{occlusion-slot-WAR-fix}
 ✓gpu-sel-step-5{4663ad29b;shadows-D3}+47b55a6e8{decision-4;classify-741->397us}
 ✓gpu-sel-decisions-5-6{9312509a7;on_demand;classify-402->200us;Quest-APK-ok}
-?NEXT=lod.md-step-6-persistence(chains+level-edge-lines-in-prepared-glTF;Save-for-Quest)->GPU-plan-step-6-Quest-measurement;LOD-window-interactive-pass(user)
+✓lod.md-step-6{42cb4188d;ERHE_mesh_lod;lod_roundtrip_verify.py-69/69}
+✓gpu-sel-step-6{18e2df455;Quest-+11-12%-fps;desktop-GPU-Main--8..-29%}
+?NEXT=see-prompt_queue.txt{perfetto-binning-after-user-installs-metavr;lit-fps-gap-vs-pvs.md;Later-list(latency-removal,per-object-remap,change-words-only-copy,level-0-holdouts)};LOD-window-interactive-pass(user)
 ?found{no-weld-after-in-place-edit;per-facet-texcoords-no-chain-with-seams-keep;reparent-carrier-only-change-not-re-resolved;scene_roundtrip_verify-pre-existing-failures(Graph_texture-destroyed-on-render-thread-asset_manager.cpp:343);fp16-first-render-outlier}
 
 [TASK::quest-performance]{started-2026-10-24;branch=render-thread;via-harness{opus-coder+fable-review};doc/plans/quest_performance.md;memory-bank/topics/quest.md}
