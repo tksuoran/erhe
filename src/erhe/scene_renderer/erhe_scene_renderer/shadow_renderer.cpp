@@ -1,4 +1,5 @@
 #include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene_renderer/draw_list_renderer.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
@@ -282,22 +283,44 @@ auto Shadow_map_cache::is_kept(
     const std::size_t        index,
     const std::size_t        light_id,
     const glm::mat4&         clip_from_world,
-    const Cull_view_tests&   view
+    const Cull_view_tests&   view,
+    const Lod_column_change  lod_change,
+    const uint64_t           frame_index
 ) const -> bool
 {
     if (!m_usable || (index >= passes.size())) {
         return false;
     }
     const Pass& pass = passes[index];
-    return pass.valid && (pass.light_id == light_id) && (pass.clip_from_world == clip_from_world) && pass.view.is_same(view);
+    if (!pass.valid || (pass.light_id != light_id) || (pass.clip_from_world != clip_from_world) || !pass.view.is_same(view)) {
+        return false;
+    }
+    // The levels (doc/plans/lod_gpu_selection.md section 4): the template
+    // range while the view has no column; the column's levels while they
+    // did not change since the frame the map holds, which must be the
+    // frame right before (a frame without this test leaves them unknown).
+    switch (lod_change) {
+        case Lod_column_change::none:      return pass.levels == Pass_levels::template_range;
+        case Lod_column_change::unchanged: return (pass.levels == Pass_levels::selected) && ((pass.lod_frame_index + 1) == frame_index);
+        case Lod_column_change::changed:   return false;
+        default:                           return false;
+    }
+}
+
+void Shadow_map_cache::keep(std::vector<Pass>& passes, const std::size_t index, const uint64_t frame_index)
+{
+    ERHE_VERIFY(index < passes.size());
+    passes[index].lod_frame_index = frame_index;
 }
 
 void Shadow_map_cache::store(
-    std::vector<Pass>&     passes,
-    const std::size_t      index,
-    const std::size_t      light_id,
-    const glm::mat4&       clip_from_world,
-    const Cull_view_tests& view
+    std::vector<Pass>&      passes,
+    const std::size_t       index,
+    const std::size_t       light_id,
+    const glm::mat4&        clip_from_world,
+    const Cull_view_tests&  view,
+    const Lod_column_change lod_change,
+    const uint64_t          frame_index
 )
 {
     if (!m_usable) {
@@ -306,7 +329,14 @@ void Shadow_map_cache::store(
     if (passes.size() <= index) {
         passes.resize(index + 1);
     }
-    passes[index] = Pass{.light_id = light_id, .clip_from_world = clip_from_world, .view = view, .valid = true};
+    passes[index] = Pass{
+        .light_id        = light_id,
+        .clip_from_world = clip_from_world,
+        .view            = view,
+        .levels          = (lod_change == Lod_column_change::none) ? Pass_levels::template_range : Pass_levels::selected,
+        .lod_frame_index = frame_index,
+        .valid           = true
+    };
 }
 
 void Shadow_map_cache::count_drawn(std::vector<uint32_t>& draw_counts, const std::size_t index)
@@ -863,7 +893,37 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
             const std::span<const glm::vec4>   cull_planes = depth_clamped
                 ? std::span<const glm::vec4>{light_frustum_planes}.first(erhe::math::plane_near)
                 : std::span<const glm::vec4>{light_frustum_planes};
-            cull_views.views_2d[light_projection_transform->shadow_index] = parameters.draw_list_scene->add_cull_view(frame_index, Draw_purpose::shadow, cull_planes);
+            // The pass's level of detail selection inputs: the light's own
+            // projection in the map's viewport, from the light (a spot
+            // light's position; a directional pass is orthographic, so the
+            // origin does not enter its selection), keyed by the light and,
+            // for a directional pass fitted to the sampling view's camera,
+            // by that view (doc/plans/lod_gpu_selection.md sections 4 and 6).
+            const bool               directional = (light.get_light_type() == erhe::scene::Light_type::directional);
+            std::optional<Lod_view>  lod_view{};
+            if (parameters.lod_sampling_view_key != 0) {
+                lod_view = Draw_list_renderer::get_projection_lod_view(
+                    light_projection_transform->projection,
+                    parameters.light_camera_viewport,
+                    get_view_origin(light_projection_transform->world_from_light_camera.get_matrix()),
+                    make_shadow_lod_key(
+                        directional ? Lod_shadow_kind::directional : Lod_shadow_kind::spot,
+                        light.get_id(),
+                        directional ? parameters.lod_sampling_view_key : uint64_t{0}
+                    )
+                );
+                if (lod_view.has_value()) {
+                    lod_view.value().sampling_view_key = parameters.lod_sampling_view_key;
+                }
+            }
+            cull_views.views_2d[light_projection_transform->shadow_index] = parameters.draw_list_scene->add_cull_view(
+                frame_index,
+                Draw_purpose::shadow,
+                cull_planes,
+                glm::vec3{0.0f},
+                glm::vec3{-1.0f},
+                lod_view
+            );
         }
         if (cube_count > 0) {
             for (const std::size_t light_slot : parameters.light_set.get_point_shadow_slots()) {
@@ -883,7 +943,22 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
                     .center = light_pos,
                     .radius = parameters.light_set.get_lights()[light_slot].get_range()
                 };
-                const std::array<Cull_view, 6> face_views = parameters.draw_list_scene->add_point_light_cull_views(frame_index, Draw_purpose::shadow, range_sphere);
+                // One level of detail selection for the six faces: from the
+                // light, through a face's 90-degree projection in the face
+                // viewport (doc/plans/lod_gpu_selection.md sections 3 and 4).
+                std::optional<Lod_view> lod_view{};
+                if (parameters.lod_sampling_view_key != 0) {
+                    lod_view = Draw_list_renderer::get_projection_lod_view(
+                        lpt->projection,
+                        parameters.point_shadow_viewport,
+                        light_pos,
+                        make_shadow_lod_key(Lod_shadow_kind::point, parameters.light_set.get_lights()[light_slot].get_id(), 0)
+                    );
+                    if (lod_view.has_value()) {
+                        lod_view.value().sampling_view_key = parameters.lod_sampling_view_key;
+                    }
+                }
+                const std::array<Cull_view, 6> face_views = parameters.draw_list_scene->add_point_light_cull_views(frame_index, Draw_purpose::shadow, range_sphere, lod_view);
                 std::copy(face_views.begin(), face_views.end(), cull_views.views_cube.begin() + static_cast<std::ptrdiff_t>(lpt->point_shadow_index * 6));
             }
         }
@@ -1049,10 +1124,15 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         const std::size_t light_index  = light_projection_transform->index;
         const std::size_t shadow_index = light_projection_transform->shadow_index;
         const glm::mat4   clip_from_world = light_projection_transform->clip_from_world.get_matrix();
+        const uint64_t        frame_index = m_graphics_device.get_frame_index();
         const Cull_view_tests pass_view = (map_cache != nullptr)
-            ? parameters.draw_list_scene->get_cull_view_tests(m_graphics_device.get_frame_index(), cull_views.views_2d[shadow_index])
+            ? parameters.draw_list_scene->get_cull_view_tests(frame_index, cull_views.views_2d[shadow_index])
             : Cull_view_tests{};
-        if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world, pass_view)) {
+        const Lod_column_change lod_change = (map_cache != nullptr)
+            ? parameters.draw_list_scene->get_lod_column_change(frame_index, cull_views.views_2d[shadow_index])
+            : Lod_column_change::none;
+        if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world, pass_view, lod_change, frame_index)) {
+            Shadow_map_cache::keep(map_cache->m_passes_2d, shadow_index, frame_index);
             if (parameters.draw_statistics != nullptr) {
                 count_cached(parameters.draw_statistics->shadow_map_2d_cached, shadow_index, uint8_t{1});
             }
@@ -1190,7 +1270,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         control_range.release();
         camera_range.release();
         if (map_cache != nullptr) {
-            map_cache->store(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world, pass_view);
+            map_cache->store(map_cache->m_passes_2d, shadow_index, light.get_id(), clip_from_world, pass_view, lod_change, frame_index);
             Shadow_map_cache::count_drawn(map_cache->m_draw_counts_2d, shadow_index);
         }
     }
@@ -1260,10 +1340,15 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
 
             for (int face = 0; face < 6; ++face) {
                 const std::size_t pass_index = (point_shadow_index * 6) + static_cast<std::size_t>(face);
+                const uint64_t        frame_index = m_graphics_device.get_frame_index();
                 const Cull_view_tests face_view = (map_cache != nullptr)
-                    ? parameters.draw_list_scene->get_cull_view_tests(m_graphics_device.get_frame_index(), cull_views.views_cube[pass_index])
+                    ? parameters.draw_list_scene->get_cull_view_tests(frame_index, cull_views.views_cube[pass_index])
                     : Cull_view_tests{};
-                if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key, face_view)) {
+                const Lod_column_change lod_change = (map_cache != nullptr)
+                    ? parameters.draw_list_scene->get_lod_column_change(frame_index, cull_views.views_cube[pass_index])
+                    : Lod_column_change::none;
+                if ((map_cache != nullptr) && map_cache->is_kept(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key, face_view, lod_change, frame_index)) {
+                    Shadow_map_cache::keep(map_cache->m_cube_faces, pass_index, frame_index);
                     if (parameters.draw_statistics != nullptr) {
                         count_cached(parameters.draw_statistics->point_cube_cached_faces, point_shadow_index, static_cast<uint8_t>(1u << face));
                     }
@@ -1393,7 +1478,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                     record_face_statistics(parameters.draw_statistics, pass_index, pass_statistics);
                 }
                 if (map_cache != nullptr) {
-                    map_cache->store(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key, face_view);
+                    map_cache->store(map_cache->m_cube_faces, pass_index, cube_light_id, cube_key, face_view, lod_change, frame_index);
                     Shadow_map_cache::count_drawn(map_cache->m_draw_counts_cube, pass_index);
                 }
             }

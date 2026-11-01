@@ -5,7 +5,7 @@ Status: in progress
 The build order for automatic LOD level selection (`doc/plans/lod.md`
 section 2.3, decisions D3 and D4). It replaces that plan's step 4 ordering
 (4a CPU writer, 4b GPU writer, 4c shadows) and its step 5 (hysteresis). The
-design is accepted by the user (section 9); steps 1, 2a, 2b, 3 and 4 are built.
+design is accepted by the user (section 9); steps 1, 2a, 2b, 3, 4 and 5 are built.
 Selection runs in the culling classification, on the CPU lanes and in
 `res/shaders/cull_classify.comp`, with the same arithmetic, so both produce
 the same level bit for bit; the command writers only read the result.
@@ -226,10 +226,13 @@ each shadow view:
   point: the cube face projection, `projection_scale = resolution / 2`;
   directional pass: orthographic, `viewport_height / ortho_height` of the
   pass, which picks by shadow texel size);
-- shadow mode `template`: a sampling scene view has no LOD column (a shader
-  debug view, a view on the bucket path, a view past the column limit). Its
-  receivers draw the template range, so the shadow view draws every caster
-  at the template range too, with no selection.
+- shadow mode `template`: a sampling scene view has no LOD column (a view
+  whose color passes add no draw-list culling view with a `Lod_view`, a
+  view past the color column limit). Its receivers draw the template range,
+  so the shadow view draws every caster at the template range too, with no
+  selection. A shader debug viewport is not such a view: its passes draw
+  through the draw lists with the debug mode as a resolution axis and get a
+  column like any viewport.
 
 The sampling scene views are named in the shadow view's `Lod_view` (the
 shadow node's viewport) and resolved to columns in
@@ -482,6 +485,38 @@ change (add a mesh) and a `culling_classification` switch restart selection
 without a mismatch.
 
 ### Step 5: shadows
+
+State: done; described in `doc/erhe/draw_list_renderer.md` R1c ("Columns",
+"Shadows", "The shadow map cache's level test"), `doc/erhe/shadows.md`
+"Shadow map cache" and `doc/editor/lod.md` "Automatic selection". Verified
+on the headless Metal editor: G-off render images (default, heavy, a torus
+forced to 3 and to 0, the torus with a spot and a point light; lod off and
+on with forced 0, both classification and `use_draw_lists` settings,
+shadows on) identical to the build before the step, 32 of 32; G-check with
+band 0.25 and camera moves 0 mismatches (shadow columns and the shadow
+entries' color rows included) on default, heavy, heavy four view (24
+columns) and Bistro (chains on every mesh; 9 columns: 1 color, 8 shadow)
+on Metal 3, Metal 4 and KosmicKrisp; the self-shadow gate
+`scripts/lod_dolly_verify.py` with shadows on (the default scene's
+directional lights; the build before the step fails it at levels 1 and 2)
+passes in both settings, with `--hysteresis 0.25 --outline` too (303
+checks); `scripts/shadow_map_cache_check.py` passes, and with `--lod` (a
+torus with a chain in Point T's reach) a camera move that changes no level
+keeps every spot and point pass, a dolly that coarsens the torus redraws
+Point T and the cache-off captures stay identical; a far point light whose
+caster has no chain keeps every face while the torus's level changes; four
+view with a spot light: the shared spot pass takes the finest level of the
+cells holding the torus (perspective 0 over orthographic 2, and with a wide
+perspective field of view orthographic 2 over perspective 4); 13 viewports
+of one scene (past the 8 color columns) make the shared spot and point
+passes and the extra viewports' directional passes draw the template range
+(no column, one warning). Cost (M4 Pro, Release, headless Metal, pipelined,
+Bistro with chains on every mesh, threshold 4, gpu, median per frame):
+`classify_cull_views` 243 us before, 647 us after; `lod_lanes` 84 us before,
+487 us after (the eight shadow columns and every color column for the
+shadow entries); the classification's GPU timer 30.5 us before, 29.6 us
+after (the column table replaces the scan of every view). The Bistro level
+region is 60608 bytes per frame slot (two word groups).
 
 `write_lod_levels()` in `cull_classify.comp` scans every view of the frame
 per entry to find the views with a column (about 45 views for one column on

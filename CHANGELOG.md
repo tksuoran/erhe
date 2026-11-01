@@ -42,6 +42,22 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: level of detail selection for the shadow passes
+  (doc/plans/lod_gpu_selection.md step 5): `Lod_view::sampling_view_key`
+  (not part of `Lod_view::is_same()`), `Lod_shadow_kind` with
+  `make_shadow_lod_key()`, `Lod_shadow_mode` and `Lod_column_change` with
+  their `c_str()`, `Draw_list_scene::get_cull_view_lod_shadow_mode()` and
+  `get_lod_column_change()`, the optional `lod_view` argument of
+  `Draw_list_scene::add_point_light_cull_views()`,
+  `Draw_list_renderer::get_projection_lod_view()`,
+  `Shadow_renderer::Render_parameters::lod_sampling_view_key`,
+  `cull_lanes::frustum_inside_lanes()`, `cull_lanes::shadow_lod_lanes()`
+  and `cull_lanes::count_lod_level_changes()`,
+  `Gpu_cull_classifier::get_view_lod_column_views_offset()` (the view
+  block's column table), `Lod_level_capture_column::purpose`,
+  `color_column_mask`, `changed_entries` and `change`, and
+  `Lod_level_capture::template_views` with
+  `Lod_level_capture_template_view`.
 - `erhe::scene_renderer`: level of detail hysteresis
   (doc/plans/lod_gpu_selection.md step 4): `Lod_frame_settings::hysteresis_band`
   and `max_lod_hysteresis_band`; `cull_lanes::Lod_lane_view::coarsen_threshold2`,
@@ -1263,6 +1279,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: draw-list shadow passes draw the selected level
+  of detail when `Shadow_renderer::Render_parameters::lod_sampling_view_key`
+  is set (doc/plans/lod_gpu_selection.md step 5): the shadow views get LOD
+  columns after the color columns, the level words cover every list (a
+  shadow list's entries in every column), `Draw_list_scene::get_lod_level()`
+  answers for shadow views, and the shadow map cache redraws a pass whose
+  casters' levels changed.
 - `erhe::scene_renderer`: `Lod_view::lod_key` and
   `Draw_list_renderer::Color_cull_view_parameters::lod_key` are `uint64_t`
   (was `const void*`): an identity never reused for another view (the

@@ -46,6 +46,12 @@
 //   word groups (column count / 8, rounded up), 0, 0. No level region is
 //   written when lod_header.x (active) is 0 or the group count is 0 (a
 //   frame whose active selection gave no view a column).
+// cull_views.lod_column_views[column] = the column's view (the first of a
+//   point light's six faces, which share one column), purpose (0 color, 1
+//   shadow), and for a shadow column the color columns of its sampling
+//   views (bit c: color column c), 0. The color columns come first, so
+//   they are in the first level word (doc/plans/lod_gpu_selection.md
+//   sections 3 and 4).
 // cull_templates.templates[2 * entry + 0].w = the entry's lod_word
 //   (erhe::scene_renderer::make_lod_word()), [2 * entry + 1].z = its
 //   lod_table_index (the first level table row of its chain, 0xffffffff:
@@ -54,8 +60,9 @@
 //   0 of one level of one chain, level 0 first
 // cull_lod_levels.words[group * entry_count + entry] = the level region:
 //   the entry's selected level in LOD column 8 group + n at nibble n (bits
-//   4 n .. 4 n + 3), for every column of the frame; 0 for the entries of
-//   another purpose than color (only color views have columns)
+//   4 n .. 4 n + 3): a color entry's in every color column, a shadow
+//   entry's in every column; 0 in a column of the other purpose for a
+//   color entry, and for an entry without chain
 // cull_lod_previous_levels.words = the previous frame's level region, same
 //   layout and entries (the same entry layout), read for the views with a
 //   previous column (hysteresis, doc/plans/lod_gpu_selection.md section 6)
@@ -86,8 +93,14 @@
 // clamped to the entry's min / max and to the chain. An entry that is not
 // under Lod_mode::automatic, or has no bounds, takes its template level (the
 // forced level under Lod_mode::forced, else 0); an entry without chain
-// level 0. Levels do not depend on visibility: every color entry gets one
-// in every column. Hysteresis (section 6): for a view with a previous
+// level 0. Levels do not depend on visibility: every entry gets one in
+// every column of its purpose, and every shadow entry in every color
+// column too. Shadows (section 4): a shadow column of mode select (the
+// frame's classification gives a column only to such views) takes, for an
+// entry inside the frustum of one of its sampling color views (the planes
+// test of the view, or no bounds), the finest of those color levels; for
+// any other entry its own selection from the light (origin and projection
+// scale of the shadow view's record). Hysteresis (section 6): for a view with a previous
 // column the level is the entry's previous level in that column clamped to
 // [coarse, selected], coarse the level the same rule gives for the
 // coarsening threshold^2 (lod_header.z): a coarser level only once it
@@ -293,8 +306,14 @@ uint select_lod_level(uint lod_word, uint table_index, float max_axis_scale, flo
     return uint(level);
 }
 
-// The entry's level region words: for a color entry its level in every
-// LOD column of the frame, 0 for an entry of another purpose.
+// The entry's level region words: its level in every LOD column of its
+// purpose (a color entry: the color columns; a shadow entry: every
+// column), 0 in the others. The loop runs over the frame's columns through
+// the column table (cull_views.lod_column_views), the color columns first.
+// A shadow entry evaluates every color column (its color rows follow the
+// color entry's history) and its frustum, and a shadow column takes the
+// finest level of the sampling color columns whose frustum holds the entry
+// (cull_lanes::shadow_lod_lanes()), else its own selection.
 void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e, bool unbounded, float max_axis_scale)
 {
     uint group_count = cull_views.lod_columns.y;
@@ -303,15 +322,20 @@ void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e
     }
     uint words[8] = uint[8](0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
     uint table_index = cull_templates.templates[(2u * entry) + 1u].z;
-    if ((purpose == 0u) && (table_index != 0xffffffffu)) {
-        uint lod_word   = cull_templates.templates[(2u * entry) + 0u].w;
-        uint view_count = cull_views.header.x;
-        for (uint view = 0u; view < view_count; ++view) {
-            vec4  lod_info = cull_views.views[(14u * view) + 13u];
-            if (!(lod_info.x >= 0.0)) {
+    if (table_index != 0xffffffffu) {
+        uint lod_word     = cull_templates.templates[(2u * entry) + 0u].w;
+        uint column_count = cull_views.lod_columns.x;
+        // Bit c: the entry is inside color column c's frustum (a shadow
+        // entry's receiver test, cull_lanes::frustum_inside_lanes()).
+        uint color_inside = 0u;
+        for (uint column = 0u; column < column_count; ++column) {
+            uvec4 column_view   = cull_views.lod_column_views[column];
+            bool  shadow_column = (column_view.y != 0u);
+            if (shadow_column && (purpose != 1u)) {
                 continue;
             }
-            uint  column   = uint(lod_info.x);
+            uint  view     = column_view.x;
+            vec4  lod_info = cull_views.views[(14u * view) + 13u];
             vec4  lod_view = cull_views.views[(14u * view) + 12u];
             precise float gap_x     = sphere_axis_gap(c.x, e.x, lod_view.x);
             precise float gap_y     = sphere_axis_gap(c.y, e.y, lod_view.y);
@@ -324,6 +348,35 @@ void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e
                 previous_level = (previous_word >> (4u * (previous_column % 8u))) & 0xfu;
             }
             uint level = select_lod_level(lod_word, table_index, max_axis_scale, distance2, unbounded, lod_view, (lod_info.y > 0.5), previous_level);
+            if (!shadow_column) {
+                if (purpose == 1u) {
+                    bool inside = true;
+                    if (!unbounded) {
+                        uint plane_count = uint(cull_views.views[(14u * view) + 7u].z);
+                        for (uint plane = 0u; plane < plane_count; ++plane) {
+                            if (!plane_keeps(cull_views.views[(14u * view) + plane], c, e)) {
+                                inside = false;
+                            }
+                        }
+                    }
+                    if (inside) {
+                        color_inside |= (1u << column);
+                    }
+                }
+            } else {
+                // The sampling color columns holding the entry: the finest
+                // of their levels (the color columns share words[0]).
+                uint sampling = column_view.z & color_inside;
+                if (sampling != 0u) {
+                    uint finest = 0xfu;
+                    for (uint color_column = 0u; color_column < 8u; ++color_column) {
+                        if (((sampling >> color_column) & 1u) != 0u) {
+                            finest = min(finest, (words[0] >> (4u * color_column)) & 0xfu);
+                        }
+                    }
+                    level = finest;
+                }
+            }
             words[column / 8u] |= (level & 0xfu) << (4u * (column % 8u));
         }
     }

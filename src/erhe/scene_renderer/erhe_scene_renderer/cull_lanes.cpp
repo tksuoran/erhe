@@ -405,6 +405,72 @@ void lod_lanes(
     }
 }
 
+void frustum_inside_lanes(
+    const std::span<const glm::vec4> planes,
+    const Draw_list_bounds&          bounds,
+    const uint32_t* const            unbounded,
+    const std::size_t                count,
+    uint32_t* const                  inside
+)
+{
+    std::fill(inside, inside + count, uint32_t{1});
+    for (const glm::vec4& plane : planes) {
+        plane_lanes(plane, bounds, count, inside);
+    }
+    for (std::size_t i = 0; i < count; ++i) {
+        inside[i] |= (unbounded[i] != 0u) ? 1u : 0u;
+    }
+}
+
+void shadow_lod_lanes(
+    const std::array<const uint32_t*, max_lod_color_columns>& color_inside,
+    const uint32_t                                            color_column_mask,
+    const uint32_t* const                                     color_words,
+    const std::size_t                                         count,
+    uint32_t* const                                           words,
+    const uint32_t                                            nibble_shift
+)
+{
+    ERHE_VERIFY(nibble_shift <= 28u);
+    ERHE_VERIFY(color_column_mask < (1u << max_lod_color_columns));
+    for (uint32_t column = 0; column < max_lod_color_columns; ++column) {
+        ERHE_VERIFY((((color_column_mask >> column) & 1u) == 0u) || (color_inside[column] != nullptr));
+    }
+    for (std::size_t i = 0; i < count; ++i) {
+        // The finest level of the sampling columns whose frustum holds the
+        // entry; 0xf (above every level) while none does.
+        uint32_t finest = 0xfu;
+        for (uint32_t column = 0; column < max_lod_color_columns; ++column) {
+            if ((((color_column_mask >> column) & 1u) != 0u) && (color_inside[column][i] != 0u)) {
+                finest = std::min(finest, (color_words[i] >> (4u * column)) & 0xfu);
+            }
+        }
+        if (finest != 0xfu) {
+            words[i] = (words[i] & ~(0xfu << nibble_shift)) | (finest << nibble_shift);
+        }
+    }
+}
+
+auto count_lod_level_changes(
+    const uint32_t* const words,
+    const uint32_t        nibble_shift,
+    const uint32_t* const previous_words,
+    const uint32_t        previous_nibble_shift,
+    const uint32_t* const inside,
+    const std::size_t     count
+) -> uint32_t
+{
+    ERHE_VERIFY(nibble_shift <= 28u);
+    ERHE_VERIFY(previous_nibble_shift <= 28u);
+    uint32_t changed = 0;
+    for (std::size_t i = 0; i < count; ++i) {
+        const uint32_t level          = (words[i] >> nibble_shift) & 0xfu;
+        const uint32_t previous_level = (previous_words[i] >> previous_nibble_shift) & 0xfu;
+        changed += ((inside[i] != 0u) && (level != previous_level)) ? 1u : 0u;
+    }
+    return changed;
+}
+
 auto reaches_view(const Cull_view_tests& view, const Draw_list_bounds& bounds, View_reach_scratch& scratch) -> bool
 {
     const std::size_t count = bounds.extent_x.size();

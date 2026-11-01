@@ -20,6 +20,7 @@ namespace erhe::graphics {
     class Device;
 }
 namespace erhe::scene {
+    class Projection;
     class Xformable; using Node = Xformable;
 }
 
@@ -163,6 +164,21 @@ public:
     // height) and parameters.lod_key; empty for multiview passes, a view
     // without a camera or a key, and a degenerate projection.
     [[nodiscard]] static auto get_color_lod_view(const Color_cull_view_parameters& parameters) -> std::optional<Lod_view>;
+    // The level of detail selection inputs of a view through projection in
+    // viewport from origin, keyed lod_key: the projection scale (viewport
+    // height / (tan(up) - tan(down)); orthographic: viewport height / view
+    // height) and the projection kind; empty for an empty viewport and a
+    // degenerate projection. get_color_lod_view() of a camera, and
+    // Shadow_renderer::fit() of a light's shadow pass (a spot light's cone,
+    // a point light's cube face, a directional light's fitted orthographic
+    // projection in the shadow map's viewport;
+    // doc/plans/lod_gpu_selection.md section 4).
+    [[nodiscard]] static auto get_projection_lod_view(
+        const erhe::scene::Projection& projection,
+        const erhe::math::Viewport&    viewport,
+        const glm::vec3&               origin,
+        uint64_t                       lod_key
+    ) -> std::optional<Lod_view>;
 
     // The clip_from_world of a single-view color pass, built the way
     // Camera_buffer builds it (add_color_cull_view()'s frustum and the

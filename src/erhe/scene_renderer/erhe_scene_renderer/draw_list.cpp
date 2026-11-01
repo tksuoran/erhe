@@ -1,5 +1,7 @@
 #include "erhe_scene_renderer/draw_list.hpp"
 
+#include "erhe_verify/verify.hpp"
+
 #include <glm/glm.hpp>
 
 #include <bit>
@@ -40,6 +42,37 @@ auto c_str(const Lod_projection projection) -> const char*
     switch (projection) {
         case Lod_projection::perspective:  return "perspective";
         case Lod_projection::orthographic: return "orthographic";
+        default:                           return "?";
+    }
+}
+
+auto make_shadow_lod_key(const Lod_shadow_kind kind, const std::size_t light_id, const uint64_t view_key) -> uint64_t
+{
+    ERHE_VERIFY(static_cast<uint64_t>(light_id) < (uint64_t{1} << 32u));
+    ERHE_VERIFY(view_key < (uint64_t{1} << 30u));
+    ERHE_VERIFY((kind == Lod_shadow_kind::directional) || (view_key == 0));
+    return
+        (static_cast<uint64_t>(static_cast<uint8_t>(kind)) << 62u) |
+        (view_key << 32u) |
+        static_cast<uint64_t>(light_id);
+}
+
+auto c_str(const Lod_shadow_mode mode) -> const char*
+{
+    switch (mode) {
+        case Lod_shadow_mode::none:           return "none";
+        case Lod_shadow_mode::select:         return "select";
+        case Lod_shadow_mode::template_range: return "template";
+        default:                              return "?";
+    }
+}
+
+auto c_str(const Lod_column_change change) -> const char*
+{
+    switch (change) {
+        case Lod_column_change::none:      return "none";
+        case Lod_column_change::unchanged: return "unchanged";
+        case Lod_column_change::changed:   return "changed";
         default:                           return "?";
     }
 }

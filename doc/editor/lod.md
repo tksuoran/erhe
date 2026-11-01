@@ -143,12 +143,36 @@ per level: counted by the CPU command writer
 (`Draw_indirect_buffer::update(..., level_counts)`), or with GPU-generated
 commands by the compaction per job, read back with the retired frame's
 counts (`Retired_gpu_color_counts::lod_counts`; frames in flight late, so
-they include occlusion like the drawn counts). Not yet selected: the shadow
-passes and skinned meshes draw the template range (the forced level, or
-level 0). MCP `get_lod_selection` reports the levels of one frame for a
-mesh, per column, with each column's origin, projection scale, `lod_key`
-and matched previous column, and the scene's hysteresis restart and shift
-counts.
+they include occlusion like the drawn counts). Skinned meshes draw the
+template range (the forced level, or level 0).
+
+The draw-list shadow passes select too (`doc/plans/lod_gpu_selection.md`
+step 5): each viewport's `Shadow_render_node` names its scene view as the
+view sampling its maps, and every spot, point (one selection for the six
+cube faces) and directional pass gets a column of its own. A caster inside
+the frustum of a sampling viewport is drawn at the level that viewport
+draws it at, so a mesh shadows itself and its surroundings at the level it
+is seen at; occluded casters inside the frustum count. A spot or point
+pass shared by several viewports (four view) takes the finest level of the
+viewports whose frustum holds the caster, so in a coarser viewport the
+receiver at level L and its finer caster differ by up to the error of
+level L, which the shadow bias does not cover: shadow acne is possible
+there. A caster outside every sampling frustum takes the light's own
+selection: from the light position through the shadow map's projection
+(a spot cone, a cube face at the point map's resolution; a directional
+pass is orthographic, so by the map's texel size), with its own hysteresis
+history. A pass whose sampling viewport has no LOD column (its color
+passes draw no draw-list view with a LOD view, or it is past the color
+column limit) draws every caster at the template range, as that viewport's
+receivers do. The shadow map cache redraws a pass when a level of a caster
+it draws changes (`doc/erhe/shadows.md` "Shadow map cache"); a camera move
+that changes no level keeps every cached spot and point pass.
+
+MCP `get_lod_selection` reports the levels of one frame for a
+mesh, per column, with each column's origin, projection scale, `lod_key`,
+matched previous column, purpose and, for a shadow column, its sampling
+color columns and level change, the shadow views drawing the template
+range, and the scene's hysteresis restart and shift counts.
 
 Levels pop with hysteresis: a view moves a mesh to a coarser level only
 once that level's error stays within "LOD Threshold (pixels)" times (1 -

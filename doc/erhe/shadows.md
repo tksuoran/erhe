@@ -354,10 +354,19 @@ layer or a cube face, the pass's clear included - when
 - the pass's culling view (`Cull_view_tests`: the planes of a 2D pass, the
   range sphere and octant of a cube face) is bitwise the one it was drawn
   with;
-- no draw-list change since it was drawn reaches that view.
+- no draw-list change since it was drawn reaches that view;
+- its casters' levels of detail are the ones it was drawn with
+  (`doc/plans/lod_gpu_selection.md` section 4): a pass whose culling view
+  has no LOD column drew the template range and is kept while the view has
+  none; a pass with a column is kept while
+  `Draw_list_scene::get_lod_column_change()` reports `unchanged` (no entry
+  the pass draws changed its level since the frame right before, against
+  the column with the same `lod_key`) in every frame since it was drawn
+  (`Pass::lod_frame_index` names the frame its levels belong to; a frame
+  without the test, or a column that started fresh, redraws it).
 
-A changed configuration forgets every pass; a changed light, matrix or view
-redraws that pass. A directional light's fitted matrix moves with the
+A changed configuration forgets every pass; a changed light, matrix, view
+or level redraws that pass. A directional light's fitted matrix moves with the
 camera, so its layers redraw on a camera move; spot and point projections
 do not depend on the camera.
 

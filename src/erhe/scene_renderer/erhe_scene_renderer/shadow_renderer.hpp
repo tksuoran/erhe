@@ -131,9 +131,15 @@ public:
 // layer or a cube face - is kept when the frame's configuration (the
 // textures, the rasterizer and technique settings, the viewports, the layer
 // selection and the draw-list scene) equals the one it was drawn under, its
-// light, matrix and culling view equal its own, and no draw-list change
+// light, matrix and culling view equal its own, no draw-list change
 // since it was drawn reaches its culling view
-// (Draw_list_content_changes; skinned objects by their posed bounds). Any
+// (Draw_list_content_changes; skinned objects by their posed bounds), and
+// its casters' levels of detail are the ones it was drawn with: a pass
+// without a LOD column drew the template range and keeps it while its view
+// has none; a pass with a column is kept only while its column's levels
+// did not change in any frame since it was drawn
+// (Draw_list_scene::get_lod_column_change(), checked every frame;
+// doc/plans/lod_gpu_selection.md section 4). Any
 // change of the configuration forgets every pass. The draw-list path only.
 // Owned by the caller next to the textures; clear() when they are
 // reallocated. Render thread.
@@ -166,6 +172,13 @@ private:
         // Draw_list_content_changes::scene_instance.
         uint64_t                            scene_instance      {0};
     };
+    // The levels of detail a pass drew: the template range (its view had
+    // no LOD column), or its column's selected levels.
+    enum class Pass_levels : uint8_t
+    {
+        template_range,
+        selected
+    };
     class Pass
     {
     public:
@@ -174,6 +187,10 @@ private:
         // The culling view the pass was drawn with: the entries it drew are
         // the ones whose bounds this view keeps.
         Cull_view_tests view            {};
+        Pass_levels     levels          {Pass_levels::template_range};
+        // selected: the last frame whose levels the map holds (the frame
+        // that drew the pass, or kept it with its column unchanged).
+        uint64_t        lod_frame_index {0};
         bool            valid           {false};
     };
 
@@ -200,8 +217,29 @@ private:
         unculled
     };
     void forget_reached(std::vector<Pass>& passes, const Draw_list_bounds& changed_bounds, Entry_culling entry_culling);
-    [[nodiscard]] auto is_kept(const std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world, const Cull_view_tests& view) const -> bool;
-    void store(std::vector<Pass>& passes, std::size_t index, std::size_t light_id, const glm::mat4& clip_from_world, const Cull_view_tests& view);
+    // lod_change: the pass's view's level change in frame_index
+    // (Draw_list_scene::get_lod_column_change()).
+    [[nodiscard]] auto is_kept(
+        const std::vector<Pass>& passes,
+        std::size_t              index,
+        std::size_t              light_id,
+        const glm::mat4&         clip_from_world,
+        const Cull_view_tests&   view,
+        Lod_column_change        lod_change,
+        uint64_t                 frame_index
+    ) const -> bool;
+    // A pass is_kept() kept in frame_index: its levels are those of the
+    // frame.
+    static void keep(std::vector<Pass>& passes, std::size_t index, uint64_t frame_index);
+    void store(
+        std::vector<Pass>&     passes,
+        std::size_t            index,
+        std::size_t            light_id,
+        const glm::mat4&       clip_from_world,
+        const Cull_view_tests& view,
+        Lod_column_change      lod_change,
+        uint64_t               frame_index
+    );
     static void count_drawn(std::vector<uint32_t>& draw_counts, std::size_t index);
 
     Configuration                       m_configuration{};
@@ -342,6 +380,17 @@ public:
         // exactly as for the bucket path.
         Draw_list_scene*                                                   draw_list_scene{nullptr};
         std::span<const erhe::scene::Layer_id>                             draw_list_layers{};
+        // Draw-list path, level of detail selection
+        // (doc/plans/lod_gpu_selection.md section 4): the lod_key of the
+        // color view that samples these shadow maps (Lod_view::lod_key; the
+        // editor: the scene view's serial id). Not 0: every pass's culling
+        // view gets a Lod_view from its light (a spot light's cone, a point
+        // light's cube face, a directional pass's fitted orthographic
+        // projection, in the map's viewport) naming that sampling view, and
+        // its casters take the finest level of the sampling views whose
+        // frustum holds them, else the light's own selection. 0: the passes
+        // draw the template range.
+        uint64_t                                                           lod_sampling_view_key{0};
         // Filled per pass by the draw-list path when non-null; cleared first.
         Shadow_draw_statistics*                                            draw_statistics{nullptr};
         // Draw-list path: the contents the maps hold from earlier frames

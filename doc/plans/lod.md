@@ -215,20 +215,23 @@ occluded, PVS-rejected) select from the shadow view's own origin and
 projection, as O3DE does. Directional cascades are orthographic and pick by
 shadow texel size, which matches what the shadow map can resolve.
 
-Consequences for two existing mechanisms:
+Consequences for two existing mechanisms (built,
+`doc/plans/lod_gpu_selection.md` step 5; described in
+`doc/erhe/draw_list_renderer.md` R1c "Shadows" and `doc/erhe/shadows.md`
+"Shadow map cache"):
 
 - The shadow map cache keeps a pass when its light, `clip_from_world`, cull
-  view and draw-list content are unchanged (`shadow_renderer.hpp`
-  `is_kept()` / `store()`). The viewer camera is in none of these keys. With
-  the rule above, the levels the color views selected for the pass's casters
-  join the key: a pass is invalidated when one of those levels changes, not on
-  every camera move. The hysteresis of section 2.6 keeps level changes rare.
+  view and draw-list content are unchanged, and the levels of the casters it
+  draws did not change since it was drawn: a pass is invalidated when one of
+  those levels changes, not on every camera move. The hysteresis of section
+  2.6 keeps level changes rare.
 - Shadow passes of several viewports with bitwise-equal planes share one
-  `Cull_view` and one GPU job per chunk (`draw_list_scene.cpp`,
-  `doc/erhe/draw_list_renderer.md` Q6). Proposed: the passes stay shared while
-  every viewport sampling the map selects the same levels for its visible
-  casters, and split per viewport for a frame where they differ. Directional
-  cascades are fitted per camera already and are not affected.
+  `Cull_view` and one GPU job per chunk (`doc/erhe/draw_list_renderer.md`
+  Q6), and stay shared: a shared pass takes the finest level of the
+  sampling viewports whose frustum holds the caster
+  (`doc/plans/lod_gpu_selection.md` section 9, decision 2, with its shadow
+  acne caveat). Directional passes are fitted per camera already and are
+  not shared.
 
 How the shadow selection reads the color views' levels without an ordering
 between passes is `doc/plans/lod_gpu_selection.md` section 4.
@@ -288,7 +291,7 @@ selection outline in `doc/editor/lod.md` "Edge lines and the selection outline".
   of the level's triangles (section 2.7; built).
 - D3: a caster drawn as a receiver selects the same level in the shadow pass
   as in the color view; other casters select from the shadow view (section
-  2.4; step 4, `doc/plans/lod_gpu_selection.md` section 4).
+  2.4; built, `doc/plans/lod_gpu_selection.md` section 4 and step 5).
 - D4: pop with hysteresis (section 2.6; step 5).
 - D5: levels stored in the prepared glTF (`ERHE_gpu_vertex_streams` /
   `ERHE_mesh_optimized`), written by the exporter, no work at load (step 6).

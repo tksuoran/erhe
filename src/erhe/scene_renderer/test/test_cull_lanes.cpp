@@ -989,4 +989,107 @@ TEST(Lod_lanes, history_restarts_and_key_matching)
     EXPECT_EQ(one, (std::vector<uint32_t>{lod_column_none}));
 }
 
+// Shadow level of detail selection (doc/plans/lod_gpu_selection.md section
+// 4): the frustum test of a sampling color view on a shadow entry's box.
+TEST(Lod_shadow_lanes, frustum_inside_keeps_unbounded_boxes)
+{
+    Boxes boxes;
+    boxes.add(glm::vec3{0.0f, 0.0f, -5.0f}, glm::vec3{1.0f});  // in front of the plane
+    boxes.add(glm::vec3{0.0f, 0.0f,  5.0f}, glm::vec3{1.0f});  // behind it
+    boxes.add(glm::vec3{0.0f, 0.0f,  0.5f}, glm::vec3{1.0f});  // straddling it
+    boxes.add(glm::vec3{0.0f, 0.0f,  5.0f}, glm::vec3{-1.0f}); // behind it, without bounds
+    // Inward normal -Z: z <= 0 is inside.
+    const std::array<glm::vec4, 1> planes{glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+    std::vector<uint32_t> unbounded(boxes.size());
+    cull_lanes::mark_unbounded_lanes(boxes.bounds, boxes.size(), unbounded.data());
+    std::vector<uint32_t> inside(boxes.size(), 7u);
+    cull_lanes::frustum_inside_lanes(planes, boxes.bounds, unbounded.data(), boxes.size(), inside.data());
+    EXPECT_EQ(inside, (std::vector<uint32_t>{1u, 0u, 1u, 1u}));
+}
+
+// The select rule: inside a sampling column's frustum, the finest level of
+// the sampling columns holding the entry; outside all of them, the shadow
+// view's own level; a color column outside the mask is not consulted.
+TEST(Lod_shadow_lanes, finest_sampling_level_inside_own_level_outside)
+{
+    using erhe::scene_renderer::max_lod_color_columns;
+    // Color columns 0, 1 and 2 at nibbles 0, 4 and 8 of the first word.
+    const auto color_word = [](const uint32_t c0, const uint32_t c1, const uint32_t c2) -> uint32_t {
+        return c0 | (c1 << 4u) | (c2 << 8u);
+    };
+    const std::vector<uint32_t> color_words{
+        color_word(3, 1, 0), // in 0 and 1: the finer, 1
+        color_word(2, 5, 0), // in 0 only
+        color_word(4, 4, 0), // in neither
+        color_word(5, 2, 0), // in 1 only
+        color_word(6, 6, 0)  // in column 2 only, which is not sampling
+    };
+    const std::vector<uint32_t> inside_0{1, 1, 0, 0, 0};
+    const std::vector<uint32_t> inside_1{1, 0, 0, 1, 0};
+    const std::vector<uint32_t> inside_2{1, 1, 1, 1, 1};
+    std::array<const uint32_t*, max_lod_color_columns> color_inside{};
+    color_inside[0] = inside_0.data();
+    color_inside[1] = inside_1.data();
+    color_inside[2] = inside_2.data();
+    // The shadow column at nibble 12 (column 3) of the first word, holding
+    // the own selection 7; the other nibbles stay.
+    std::vector<uint32_t> words(color_words.size());
+    for (std::size_t i = 0; i < words.size(); ++i) {
+        words[i] = color_words[i] | (7u << 12u);
+    }
+    cull_lanes::shadow_lod_lanes(color_inside, 0x3u, words.data(), words.size(), words.data(), 12u);
+    std::vector<uint32_t> levels;
+    for (std::size_t i = 0; i < words.size(); ++i) {
+        levels.push_back((words[i] >> 12u) & 0xfu);
+        EXPECT_EQ(words[i] & 0xfffu, color_words[i]) << "entry " << i;
+    }
+    EXPECT_EQ(levels, (std::vector<uint32_t>{1u, 2u, 7u, 2u, 7u}));
+}
+
+TEST(Lod_shadow_lanes, level_change_count)
+{
+    const std::vector<uint32_t> previous{0x10u, 0x20u, 0x30u, 0x00u};
+    const std::vector<uint32_t> current {0x01u, 0x02u, 0x40u, 0x00u};
+    const std::vector<uint32_t> all     {1u, 1u, 1u, 1u};
+    const std::vector<uint32_t> first_two{1u, 1u, 0u, 0u};
+    // Previous nibble 1 (1 2 3 0) against current nibble 0 (1 2 0 0) and
+    // current nibble 1 (0 0 4 0); only the entries inside count.
+    EXPECT_EQ(cull_lanes::count_lod_level_changes(current.data(), 0u, previous.data(), 4u, all.data(), current.size()), 1u);
+    EXPECT_EQ(cull_lanes::count_lod_level_changes(current.data(), 4u, previous.data(), 4u, all.data(), current.size()), 3u);
+    EXPECT_EQ(cull_lanes::count_lod_level_changes(current.data(), 4u, previous.data(), 4u, first_two.data(), current.size()), 2u);
+    EXPECT_EQ(cull_lanes::count_lod_level_changes(current.data(), 0u, previous.data(), 4u, first_two.data(), current.size()), 0u);
+    EXPECT_EQ(cull_lanes::count_lod_level_changes(current.data(), 0u, current.data(), 0u, all.data(), current.size()), 0u);
+}
+
+// Shadow keys: distinct per kind, light and (directional) view, never 0
+// and never a color view's key (a small serial id).
+TEST(Lod_shadow_lanes, shadow_keys_are_distinct)
+{
+    using erhe::scene_renderer::Lod_shadow_kind;
+    using erhe::scene_renderer::make_shadow_lod_key;
+    const std::vector<uint64_t> keys{
+        make_shadow_lod_key(Lod_shadow_kind::spot,        7, 0),
+        make_shadow_lod_key(Lod_shadow_kind::point,       7, 0),
+        make_shadow_lod_key(Lod_shadow_kind::directional, 7, 3),
+        make_shadow_lod_key(Lod_shadow_kind::directional, 7, 4),
+        make_shadow_lod_key(Lod_shadow_kind::spot,        8, 0)
+    };
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        EXPECT_GE(keys[i], uint64_t{1} << 62u);
+        for (std::size_t j = i + 1; j < keys.size(); ++j) {
+            EXPECT_NE(keys[i], keys[j]) << i << " " << j;
+        }
+    }
+}
+
+// The sampling view key is not part of a Lod_view's identity.
+TEST(Lod_shadow_lanes, sampling_view_key_is_not_identity)
+{
+    using erhe::scene_renderer::Lod_view;
+    const Lod_view a{.origin = glm::vec3{1.0f, 2.0f, 3.0f}, .projection_scale = 256.0f, .lod_key = 99, .sampling_view_key = 4};
+    Lod_view b = a;
+    b.sampling_view_key = 5;
+    EXPECT_TRUE(a.is_same(b));
+}
+
 } // anonymous namespace
