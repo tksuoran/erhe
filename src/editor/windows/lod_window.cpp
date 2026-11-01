@@ -1,4 +1,6 @@
 #include "windows/lod_window.hpp"
+#include "app_rendering.hpp"
+#include "renderers/lod_drawn_levels.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -85,10 +87,11 @@ constexpr const char* c_fallback_items  [] = { "None", "Sloppy" };
 class Pixel_view
 {
 public:
-    bool      valid{false};
-    bool      orthographic{false};
-    glm::vec3 position{0.0f};
-    float     projection_scale{0.0f};
+    bool              valid{false};
+    bool              orthographic{false};
+    glm::vec3         position{0.0f};
+    float             projection_scale{0.0f};
+    const Scene_view* scene_view{nullptr}; // the viewport, also without a valid projection
 };
 
 [[nodiscard]] auto get_pixel_view(App_context& context, const Scene_root& scene_root) -> Pixel_view
@@ -113,6 +116,7 @@ public:
     if (!scene_view) {
         return result;
     }
+    result.scene_view = scene_view.get();
     const std::shared_ptr<erhe::scene::Camera> camera = scene_view->get_camera();
     if (!camera || (camera->projection() == nullptr)) {
         return result;
@@ -408,7 +412,7 @@ void Lod_window::level_imgui()
     if (forced) {
         ImGui::Text("Forced to level %d", static_cast<int>(erhe::scene::get_forced_lod_level(record)));
     } else {
-        ImGui::TextUnformatted("Not forced (draws level 0 until automatic selection)");
+        ImGui::TextUnformatted("Not forced (automatic selection with LOD Selection on, else level 0)");
     }
 }
 
@@ -517,7 +521,13 @@ void Lod_window::table_imgui(Scene_root& scene_root)
         }
     }
 
-    const erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root.get_draw_list_scene();
+    // The levels the viewport drew for the selected meshes, as the render
+    // phase of the last rendered frame recorded them. The request is
+    // one-shot: each draw of the window asks for the meshes it shows.
+    Lod_drawn_levels& lod_drawn_levels = m_context.app_rendering->get_lod_drawn_levels();
+    const Lod_drawn_levels_frame* const drawn_frame = lod_drawn_levels.find(m_context.last_rendered_frame_index);
+    lod_drawn_levels.request(Lod_drawn_levels_requester::lod_window, scene_root.shared_from_this(), m_meshes);
+
     for (std::size_t row_index = 0, row_end = m_rows.size(); row_index < row_end; ++row_index) {
         const Primitive_row&              row       = m_rows[row_index];
         const erhe::primitive::Primitive& primitive = *row.primitive;
@@ -534,24 +544,18 @@ void Lod_window::table_imgui(Scene_root& scene_root)
             ImGui::TextUnformatted(primitive.lod_settings.has_value() ? "  no chain (the mesh did not simplify)" : "  no chain");
         }
 
-        // The level the mesh draws: its first color entry for this primitive.
-        int drawn_level = -1;
-        if (draw_list_scene != nullptr) {
-            const erhe::scene_renderer::Draw_list_object* const object = draw_list_scene->get_object(draw_list_scene->find_object(row.mesh));
-            if (object != nullptr) {
-                for (const erhe::scene_renderer::Draw_list_entry_location& location : object->locations) {
-                    const erhe::scene_renderer::Draw_list&       draw_list = draw_list_scene->get_draw_lists()[location.draw_list_index];
-                    const erhe::scene_renderer::Draw_list_entry& entry     = draw_list.entries[location.entry_index];
-                    if ((draw_list.key.purpose != erhe::scene_renderer::Draw_purpose::color) || (entry.mesh_primitive_index != row.mesh_primitive_index)) {
-                        continue;
-                    }
-                    const erhe::primitive::Buffer_mesh* const entry_mesh = primitive.get_resolved_renderable_mesh(
-                        entry.variant,
-                        erhe::primitive::Primitive_mode::polygon_fill
-                    ).second;
-                    if (entry_mesh != nullptr) {
-                        drawn_level = find_draw_list_entry_lod_level(entry, *entry_mesh);
-                    }
+        // The level the viewport drew the mesh's color entry for this
+        // primitive at in the last rendered frame (selected by its LOD
+        // column, or its template range); none before the first result.
+        int                                          drawn_level  = -1;
+        erhe::scene_renderer::Drawn_lod_level_source drawn_source = erhe::scene_renderer::Drawn_lod_level_source::template_range;
+        if ((drawn_frame != nullptr) && (pixel_view.scene_view != nullptr)) {
+            const uint64_t view_key = get_lod_view_key(*pixel_view.scene_view);
+            const uint64_t mesh_id  = row.mesh->get_id();
+            for (const Lod_drawn_level& drawn : drawn_frame->levels) {
+                if ((drawn.view_key == view_key) && (drawn.mesh_id == mesh_id) && (drawn.mesh_primitive_index == row.mesh_primitive_index)) {
+                    drawn_level  = static_cast<int>(drawn.drawn.level);
+                    drawn_source = drawn.drawn.source;
                     break;
                 }
             }
@@ -608,6 +612,14 @@ void Lod_window::table_imgui(Scene_root& scene_root)
         }
         if (pixel_view.valid && !pixel_view.orthographic && !inside) {
             ImGui::Text("Distance %.3f, scale %.3f", distance, max_axis_scale);
+        }
+        if (drawn_level >= 0) {
+            ImGui::Text(
+                "Drawn at level %d (%s, frame %llu)",
+                drawn_level,
+                (drawn_source == erhe::scene_renderer::Drawn_lod_level_source::selected) ? "automatic selection" : "template range",
+                static_cast<unsigned long long>(drawn_frame->frame_index)
+            );
         }
         ImGui::PopID();
     }

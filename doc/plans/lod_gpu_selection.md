@@ -5,7 +5,7 @@ Status: in progress
 The build order for automatic LOD level selection (`doc/plans/lod.md`
 section 2.3, decisions D3 and D4). It replaces that plan's step 4 ordering
 (4a CPU writer, 4b GPU writer, 4c shadows) and its step 5 (hysteresis). The
-design is accepted by the user (section 9); steps 1, 2a and 2b are built.
+design is accepted by the user (section 9); steps 1, 2a, 2b and 3 are built.
 Selection runs in the culling classification, on the CPU lanes and in
 `res/shaders/cull_classify.comp`, with the same arithmetic, so both produce
 the same level bit for bit; the command writers only read the result.
@@ -429,6 +429,20 @@ GPU time on heavy and Bistro before and after (GPU timers, Release); the
 level region size on Bistro.
 
 ### Step 3: CPU consumers
+
+State: done; described in `doc/editor/lod.md` ("Automatic selection",
+"Drawn levels", "Edge lines and the selection outline"),
+`doc/erhe/draw_list_renderer.md` R1c ("CPU consumers", "Per-pass level
+counts") and `doc/erhe/scene_renderer.md` (`Content_wide_line_renderer`).
+Verified on the headless Metal editor: G-off render images (default,
+heavy, a forced-level torus) and selected-torus viewport crops (selection
+fill on and off) identical to the build before the step, 40 of 40;
+`scripts/lod_dolly_verify.py --outline` passes for all 6 levels in both
+settings (automatic level L equals forced level L, fill on and off;
+`get_lod_info` reports the viewport's drawn level); `get_lod_stats` CPU and
+GPU per-pass level counts equal with occlusion off on default, heavy and
+Bistro (Bistro opaque pass: 3724 entries over levels 0 - 5, 1330367
+triangles); level check 0 mismatches on heavy and Bistro.
 
 The edge feed resolved in R (section 5), the `Render_frame_results` level
 copy for `get_lod_info` and the LOD window, `get_lod_stats` on both paths

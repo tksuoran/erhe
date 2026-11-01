@@ -1369,7 +1369,8 @@ void Draw_list_scene::generate_gpu_commands(
     const std::size_t     job_count      = m_gpu_jobs.size();
     const std::size_t     job_bytes      = classifier.get_job_data_offset() + (job_count * Gpu_cull_classifier::job_bytes);
     const std::size_t     command_bytes  = static_cast<std::size_t>(command_count) * command_stride;
-    const std::size_t     count_bytes    = job_count * Gpu_cull_classifier::count_bytes_per_job;
+    // The count slots, then the level of detail counts of every job.
+    const std::size_t     count_bytes    = job_count * (Gpu_cull_classifier::count_bytes_per_job + Gpu_cull_classifier::lod_count_bytes_per_job);
     // Pass words, then as many filter words (cull_compact.comp).
     const uint32_t        pass_word_count = command_count / command_alignment;
     const std::size_t     bits_bytes      = 2 * static_cast<std::size_t>(pass_word_count) * sizeof(uint32_t);
@@ -1605,7 +1606,8 @@ void Draw_list_scene::decode_retired_gpu_counts(const uint64_t frame_index)
     const std::size_t          capacity = readback.buffer->get_capacity_byte_count();
     const std::span<std::byte> data     = readback.buffer->map_bytes(0, capacity);
     readback.buffer->invalidate(0, capacity);
-    ERHE_VERIFY(readback.byte_count == (readback.job_views.size() * Gpu_cull_classifier::count_bytes_per_job));
+    const std::size_t job_count = readback.job_views.size();
+    ERHE_VERIFY(readback.byte_count == (job_count * (Gpu_cull_classifier::count_bytes_per_job + Gpu_cull_classifier::lod_count_bytes_per_job)));
     ERHE_VERIFY(data.size_bytes() >= readback.byte_count);
     m_retired_gpu_shadow_view_counts.assign(readback.view_count, Gpu_shadow_view_counts{});
     m_retired_gpu_color_counts.clear();
@@ -1623,8 +1625,20 @@ void Draw_list_scene::decode_retired_gpu_counts(const uint64_t frame_index)
         if (selection != Command_selection_id::none) {
             const std::size_t selection_index = static_cast<std::size_t>(selection);
             ERHE_VERIFY(selection_index < m_retired_gpu_color_counts.size());
-            m_retired_gpu_color_counts[selection_index].drawn    += counts[0];
-            m_retired_gpu_color_counts[selection_index].filtered += counts[1];
+            Retired_color_selection_counts& selection_counts = m_retired_gpu_color_counts[selection_index];
+            selection_counts.drawn    += counts[0];
+            selection_counts.filtered += counts[1];
+            // The job's level of detail counts (cull_compact.comp): commands
+            // per level, then triangles per level.
+            constexpr std::size_t levels = Gpu_cull_classifier::lod_count_levels;
+            static_assert(levels == Lod_level_counts::level_count);
+            std::array<uint32_t, 2 * levels> lod_words{};
+            const std::size_t lod_offset = (job_count * Gpu_cull_classifier::count_bytes_per_job) + (job_index * Gpu_cull_classifier::lod_count_bytes_per_job);
+            std::memcpy(lod_words.data(), data.data() + lod_offset, sizeof(lod_words));
+            for (std::size_t level = 0; level < levels; ++level) {
+                selection_counts.lod_counts.entries  [level] += lod_words[level];
+                selection_counts.lod_counts.triangles[level] += lod_words[levels + level];
+            }
         }
     }
     m_retired_gpu_shadow_counts = Retired_gpu_shadow_counts{

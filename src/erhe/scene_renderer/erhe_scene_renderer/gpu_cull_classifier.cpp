@@ -436,7 +436,8 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
                     { "ERHE_CULL_COMPACT_FILTER_SHIFT",     fmt::format("{}u", job_filter_shift) },
                     { "ERHE_CULL_COMPACT_FILTER_MASK",      fmt::format("{}u", (1u << (job_lod_column_shift - job_filter_shift)) - 1u) },
                     { "ERHE_CULL_COMPACT_LOD_COLUMN_SHIFT", fmt::format("{}u", job_lod_column_shift) },
-                    { "ERHE_CULL_COMPACT_LOD_COLUMN_NONE",  fmt::format("{}u", job_lod_column_none) }
+                    { "ERHE_CULL_COMPACT_LOD_COLUMN_NONE",  fmt::format("{}u", job_lod_column_none) },
+                    { "ERHE_CULL_COMPACT_LOD_COUNT_LEVELS", fmt::format("{}u", lod_count_levels) }
                 },
                 .interface_blocks  = {
                     &m_compact_templates_block, &m_compact_jobs_block, &m_compact_masks_block, &m_compact_commands_block, &m_compact_counts_block, &m_compact_bits_block,

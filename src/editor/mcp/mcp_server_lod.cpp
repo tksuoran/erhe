@@ -7,6 +7,11 @@
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 #include "app_context.hpp"
+#include "app_rendering.hpp"
+#include "renderers/composition_pass.hpp"
+#include "renderers/lod_drawn_levels.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/lod_window.hpp"
@@ -19,6 +24,7 @@
 #include "erhe_scene/lod.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_graphics/device.hpp"
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
@@ -233,6 +239,73 @@ auto Mcp_server::action_generate_lods(const json& args) -> std::string
 
 auto Mcp_server::query_lod_info(const json& args) -> std::string
 {
+    // The first pass builds the reply and requests the mesh's drawn levels
+    // (Lod_drawn_levels, doc/plans/lod_gpu_selection.md section 5); the
+    // re-runs request them again until a rendered frame recorded them, then
+    // add them to the reply.
+    const bool continuation =
+        (m_lod_info_request != nullptr) &&
+        (m_lod_info_request == m_current_request) &&
+        (m_lod_info_enqueued_at == m_current_request->enqueued_at);
+    Lod_drawn_levels& lod_drawn_levels = m_context.app_rendering->get_lod_drawn_levels();
+    if (continuation) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh       = m_lod_info_mesh.lock();
+        const std::shared_ptr<Scene_root>        scene_root = m_lod_info_scene_root.lock();
+        const uint64_t                           frame      = m_context.graphics_device->get_frame_index();
+        const std::optional<uint64_t>            served     = lod_drawn_levels.get_served_frame_index(Lod_drawn_levels_requester::mcp);
+        const std::optional<uint64_t>            rendered   = m_context.last_rendered_frame_index;
+        // The request is renewed every pass, so every frame from the first
+        // one that served it has the mesh's queries.
+        if (!m_lod_info_first_served.has_value() && served.has_value() && (served.value() >= m_lod_info_request_frame)) {
+            m_lod_info_first_served = served;
+        }
+        const Lod_drawn_levels_frame* const drawn_frame =
+            (m_lod_info_first_served.has_value() && rendered.has_value() && (rendered.value() >= m_lod_info_first_served.value()))
+                ? lod_drawn_levels.find(rendered)
+                : nullptr;
+        // A scene no view renders records no levels: give up after a few
+        // frames, with no drawn levels.
+        constexpr uint64_t max_wait_frames = 16;
+        const bool timed_out = (frame > (m_lod_info_request_frame + max_wait_frames));
+        if ((drawn_frame == nullptr) && !timed_out && mesh && scene_root) {
+            const std::shared_ptr<erhe::scene::Mesh> meshes[1]{mesh};
+            lod_drawn_levels.request(Lod_drawn_levels_requester::mcp, scene_root, meshes);
+            m_defer_current_request = true;
+            return {};
+        }
+        m_lod_info_request = nullptr;
+        json reply = std::move(m_lod_info_reply);
+        m_lod_info_reply = json{};
+        // The levels per view of the frame, a view named by its scene
+        // view's name (the viewports; "?" for another view).
+        json drawn = json::array();
+        if (drawn_frame != nullptr) {
+            for (const Lod_drawn_level& level : drawn_frame->levels) {
+                if (level.mesh_id != m_lod_info_mesh_id) {
+                    continue;
+                }
+                std::string view_name{"?"};
+                if (m_context.scene_views != nullptr) {
+                    for (const std::shared_ptr<Viewport_scene_view>& view : m_context.scene_views->get_viewport_scene_views()) {
+                        if (view && (get_lod_view_key(*view) == level.view_key)) {
+                            view_name = view->get_name();
+                            break;
+                        }
+                    }
+                }
+                drawn.push_back(json{
+                    {"view",                 view_name},
+                    {"mesh_primitive_index", level.mesh_primitive_index},
+                    {"level",                level.drawn.level},
+                    {"source",               erhe::scene_renderer::c_str(level.drawn.source)}
+                });
+            }
+        }
+        reply["drawn_frame_index"] = (drawn_frame != nullptr) ? json(drawn_frame->frame_index) : json(nullptr);
+        reply["drawn"]             = std::move(drawn);
+        return make_json_content(reply).dump();
+    }
+
     const std::string scene_name = args.value("scene_name", "");
     Scene_root* const scene_root = find_scene(scene_name);
     if (scene_root == nullptr) {
@@ -339,12 +412,92 @@ auto Mcp_server::query_lod_info(const json& args) -> std::string
             };
         }
     }
-    return make_json_content({
+    m_lod_info_reply = json{
         {"node",       node->get_name()},
         {"node_id",    node->get_id()},
         {"lod",        lod},
         {"draw_lists", draw_lists},
         {"primitives", primitives}
+    };
+    m_lod_info_mesh          = mesh;
+    m_lod_info_mesh_id       = mesh->get_id();
+    m_lod_info_scene_root    = scene_root->shared_from_this();
+    m_lod_info_request_frame = m_context.graphics_device->get_frame_index();
+    m_lod_info_first_served  = std::nullopt;
+    {
+        const std::shared_ptr<erhe::scene::Mesh> meshes[1]{mesh};
+        lod_drawn_levels.request(Lod_drawn_levels_requester::mcp, scene_root->shared_from_this(), meshes);
+    }
+    m_lod_info_request      = m_current_request;
+    m_lod_info_enqueued_at  = m_current_request->enqueued_at;
+    m_defer_current_request = true;
+    return {};
+}
+
+auto Mcp_server::query_lod_stats(const json& args) -> std::string
+{
+    // Per draw-list color pass of the last rendered frame, the entries it
+    // drew per level of detail and their triangles
+    // (Composition_pass_stats::lod_counts; doc/plans/lod_gpu_selection.md
+    // section 5): counted by the CPU command writer, or from the GPU
+    // compaction's per-job counts of a retired frame (counts_frame_index).
+    const std::string scene_view_filter = args.value("scene_view", "");
+    json passes = json::array();
+    erhe::scene_renderer::Lod_level_counts total{};
+    for (const std::shared_ptr<Composition_pass>& pass : m_context.app_rendering->composition_passes()) {
+        if (!pass) {
+            continue;
+        }
+        const Composition_pass_stats* const stats = pass->get_frame_stats(m_context.last_rendered_frame_index);
+        if ((stats == nullptr) || (stats->result != Composition_pass_result::submitted_draw_lists)) {
+            continue;
+        }
+        if (!scene_view_filter.empty() && (stats->scene_view_name != scene_view_filter)) {
+            continue;
+        }
+        json levels = json::array();
+        uint64_t entry_count    = 0;
+        uint64_t triangle_count = 0;
+        for (std::size_t level = 0; level < erhe::scene_renderer::Lod_level_counts::level_count; ++level) {
+            levels.push_back(json{
+                {"level",     level},
+                {"entries",   stats->lod_counts.entries[level]},
+                {"triangles", stats->lod_counts.triangles[level]}
+            });
+            entry_count    += stats->lod_counts.entries[level];
+            triangle_count += stats->lod_counts.triangles[level];
+        }
+        total.add(stats->lod_counts);
+        passes.push_back(json{
+            {"name",               pass->get_name()},
+            {"scene_view",         stats->scene_view_name},
+            {"gpu_generated",      stats->draw_list_gpu_generated},
+            {"counts_ready",       stats->draw_list_counts_ready},
+            {"counts_frame_index", stats->draw_list_counts_frame_index},
+            {"entry_count",        entry_count},
+            {"triangle_count",     triangle_count},
+            {"drawn_entry_count",  stats->draw_list_entry_count},
+            {"levels",             std::move(levels)}
+        });
+    }
+    json total_levels = json::array();
+    uint64_t total_entries   = 0;
+    uint64_t total_triangles = 0;
+    for (std::size_t level = 0; level < erhe::scene_renderer::Lod_level_counts::level_count; ++level) {
+        total_levels.push_back(json{
+            {"level",     level},
+            {"entries",   total.entries[level]},
+            {"triangles", total.triangles[level]}
+        });
+        total_entries   += total.entries[level];
+        total_triangles += total.triangles[level];
+    }
+    return make_json_content(json{
+        {"frame_index",    m_context.last_rendered_frame_index.has_value() ? json(m_context.last_rendered_frame_index.value()) : json(nullptr)},
+        {"passes",         std::move(passes)},
+        {"entry_count",    total_entries},
+        {"triangle_count", total_triangles},
+        {"levels",         std::move(total_levels)}
     }).dump();
 }
 

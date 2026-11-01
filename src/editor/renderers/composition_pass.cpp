@@ -476,6 +476,9 @@ void Composition_pass::render(const Render_context& context, const Composition_p
         stats->draw_list_entry_count  = 0;
         stats->draw_list_culled_count = 0;
         stats->draw_list_counts_frame_index = 0;
+        stats->lod_counts                   = erhe::scene_renderer::Lod_level_counts{};
+        stats->draw_list_gpu_generated      = false;
+        stats->draw_list_counts_ready       = false;
         stats->occlusion_tested_count       = 0;
         stats->occlusion_occluded_count     = 0;
         stats->occlusion_untested_count     = 0;
@@ -698,6 +701,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
             }
         );
         if (stats != nullptr) {
+            stats->draw_list_gpu_generated = statistics.gpu_generated;
             if (statistics.gpu_generated) {
                 // The GPU-written counts arrive with a retired frame's
                 // count readback.
@@ -707,10 +711,14 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                     stats->draw_list_entry_count        = counts->drawn;
                     stats->draw_list_culled_count       = counts->filtered - counts->drawn;
                     stats->draw_list_counts_frame_index = counts->frame_index;
+                    stats->lod_counts                   = counts->lod_counts;
+                    stats->draw_list_counts_ready       = true;
                 }
             } else {
                 stats->draw_list_entry_count  = statistics.entry_count;
                 stats->draw_list_culled_count = statistics.culled_count;
+                stats->lod_counts             = statistics.lod_counts;
+                stats->draw_list_counts_ready = true;
             }
             // The PVS rule's counts of the pass's view in this frame
             // (doc/plans/pvs.md; the classification's, so the frame's own).

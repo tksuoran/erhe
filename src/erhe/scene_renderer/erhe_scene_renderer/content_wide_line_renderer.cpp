@@ -1,5 +1,6 @@
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_interface.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
@@ -12,6 +13,8 @@
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <algorithm>
 
 namespace erhe::scene_renderer {
 
@@ -127,6 +130,7 @@ void Content_wide_line_renderer::prepare_mesh(
     const Primitive_interface_settings& settings,
     const float                         line_width,
     const uint32_t                      group,
+    const Content_wide_line_draw_lists& draw_lists,
     Content_wide_line_feed&             out
 )
 {
@@ -146,7 +150,34 @@ void Content_wide_line_renderer::prepare_mesh(
     const bool                                mesh_is_skinned  = (skin != nullptr);
     const uint32_t                            base_joint_index = mesh_is_skinned ? skin->skin_data.joint_buffer_index : 0u;
 
-    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+    // The edge lines of one edge / joint range pair; empty (count 0) when
+    // the range is empty or has no buffer.
+    const auto make_level_edges = [&](const erhe::primitive::Buffer_range& edge_range, const erhe::primitive::Buffer_range& joint_range) -> Content_wide_line_level_edges {
+        Content_wide_line_level_edges edges{};
+        if (edge_range.count == 0) {
+            return edges;
+        }
+        erhe::graphics::Buffer* edge_buffer = mesh_memory.get_vertex_buffer(edge_range);
+        if (edge_buffer == nullptr) {
+            return edges;
+        }
+        edges.edge_buffer             = edge_buffer;
+        edges.edge_buffer_byte_offset = edge_range.byte_offset;
+        edges.edge_count              = edge_range.count / 2;
+        if (mesh_is_skinned && (joint_range.count > 0)) {
+            erhe::graphics::Buffer* joint_buffer = mesh_memory.get_vertex_buffer(joint_range);
+            if (joint_buffer != nullptr) {
+                edges.joint_buffer             = joint_buffer;
+                edges.joint_buffer_byte_offset = joint_range.byte_offset;
+                edges.joint_buffer_byte_size   = joint_range.count * joint_range.element_size;
+            }
+        }
+        return edges;
+    };
+
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh.get_primitives();
+    for (std::size_t primitive_index = 0, primitive_end = mesh_primitives.size(); primitive_index < primitive_end; ++primitive_index) {
+        const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[primitive_index];
         if (!mesh_primitive.primitive) {
             continue;
         }
@@ -156,65 +187,112 @@ void Content_wide_line_renderer::prepare_mesh(
         // source, and stays right even while an optimized variant is what gets
         // drawn. A level above 0 has its own edge lines on the variant the
         // draw lists draw it from (lod.hpp).
-        const erhe::primitive::Buffer_range* edge_range_pointer  = nullptr;
-        const erhe::primitive::Buffer_range* joint_range_pointer = nullptr;
-        if (lod_level > 0) {
+        const erhe::primitive::Buffer_mesh* original_mesh =
+            mesh_primitive.primitive->get_renderable_mesh(erhe::primitive::Mesh_variant::original);
+        const Content_wide_line_level_edges original_edges = (original_mesh != nullptr)
+            ? make_level_edges(original_mesh->edge_line_vertex_buffer_range, original_mesh->edge_line_joint_buffer_range)
+            : Content_wide_line_level_edges{};
+
+        // The chain of the variant the draw lists draw.
+        const erhe::primitive::Lod_chain* chain = nullptr;
+        {
             const std::pair<erhe::primitive::Mesh_variant, const erhe::primitive::Buffer_mesh*> drawn =
                 mesh_primitive.primitive->get_resolved_renderable_mesh(erhe::primitive::Mesh_variant::optimized, erhe::primitive::Primitive_mode::polygon_fill);
-            if ((drawn.first == erhe::primitive::Mesh_variant::optimized) && (drawn.second != nullptr)) {
-                const erhe::primitive::Lod_chain& chain = drawn.second->lod_chain;
-                const std::size_t                 level = chain.get_clamped_level(lod_level);
-                if ((level > 0) && (chain.levels[level].edge_line_vertex_range.count > 0)) {
-                    edge_range_pointer  = &chain.levels[level].edge_line_vertex_range;
-                    joint_range_pointer = &chain.levels[level].edge_line_joint_range;
+            if ((drawn.first == erhe::primitive::Mesh_variant::optimized) && (drawn.second != nullptr) && !drawn.second->lod_chain.is_empty()) {
+                chain = &drawn.second->lod_chain;
+            }
+        }
+
+        // Every level's edge lines, level 0 first; a level without its own
+        // edge lines draws level 0's.
+        const uint32_t first_level_edges = static_cast<uint32_t>(out.level_edges.size());
+        uint32_t       level_edge_count  = 0;
+        bool           any_level_edges   = false;
+        if (chain != nullptr) {
+            for (std::size_t level = 0; level < chain->level_count; ++level) {
+                Content_wide_line_level_edges edges = original_edges;
+                if (level > 0) {
+                    const erhe::primitive::Lod_level& chain_level = chain->levels[level];
+                    const Content_wide_line_level_edges own_edges = make_level_edges(chain_level.edge_line_vertex_range, chain_level.edge_line_joint_range);
+                    if (own_edges.edge_count > 0) {
+                        edges = own_edges;
+                    }
                 }
+                any_level_edges = any_level_edges || (edges.edge_count > 0);
+                out.level_edges.push_back(edges);
+                ++level_edge_count;
             }
         }
-        if (edge_range_pointer == nullptr) {
-            const erhe::primitive::Buffer_mesh* buffer_mesh =
-                mesh_primitive.primitive->get_renderable_mesh(erhe::primitive::Mesh_variant::original);
-            if (buffer_mesh == nullptr) {
-                continue;
-            }
-            edge_range_pointer  = &buffer_mesh->edge_line_vertex_buffer_range;
-            joint_range_pointer = &buffer_mesh->edge_line_joint_buffer_range;
-        }
-        const erhe::primitive::Buffer_range& edge_range = *edge_range_pointer;
-        if (edge_range.count == 0) {
-            continue;
-        }
-        erhe::graphics::Buffer* edge_buffer = mesh_memory.get_vertex_buffer(edge_range);
-        if (edge_buffer == nullptr) {
+
+        // The level the record is prepared with: lod_level clamped to the
+        // chain, with its own edge lines, else the original variant's.
+        const std::size_t default_level = ((chain != nullptr) && (lod_level > 0)) ? chain->get_clamped_level(lod_level) : std::size_t{0};
+        const Content_wide_line_level_edges default_edges = (level_edge_count > 0)
+            ? out.level_edges[first_level_edges + default_level]
+            : original_edges;
+        if ((default_edges.edge_count == 0) && !any_level_edges) {
+            out.level_edges.resize(first_level_edges);
             continue;
         }
         Content_wide_line_record record{
-            .edge_buffer             = edge_buffer,
-            .edge_buffer_byte_offset = edge_range.byte_offset,
-            .edge_count              = edge_range.count / 2,
-            .world_from_node         = world_from_node,
-            .color                   = color,
-            .line_width              = line_width,
-            .group                   = group,
-            .mesh_is_skinned         = mesh_is_skinned,
-            .base_joint_index        = base_joint_index
+            .edge_buffer              = default_edges.edge_buffer,
+            .edge_buffer_byte_offset  = default_edges.edge_buffer_byte_offset,
+            .edge_count               = default_edges.edge_count,
+            .world_from_node          = world_from_node,
+            .color                    = color,
+            .line_width               = line_width,
+            .group                    = group,
+            .mesh_is_skinned          = mesh_is_skinned,
+            .joint_buffer             = default_edges.joint_buffer,
+            .joint_buffer_byte_offset = default_edges.joint_buffer_byte_offset,
+            .joint_buffer_byte_size   = default_edges.joint_buffer_byte_size,
+            .base_joint_index         = base_joint_index,
+            .first_level_edges        = first_level_edges,
+            .level_edge_count         = level_edge_count
         };
-        const erhe::primitive::Buffer_range& joint_range = *joint_range_pointer;
-        if (mesh_is_skinned && (joint_range.count > 0)) {
-            erhe::graphics::Buffer* joint_buffer = mesh_memory.get_vertex_buffer(joint_range);
-            if (joint_buffer != nullptr) {
-                record.joint_buffer             = joint_buffer;
-                record.joint_buffer_byte_offset = joint_range.byte_offset;
-                record.joint_buffer_byte_size   = joint_range.count * joint_range.element_size;
-            }
+        if ((draw_lists.draw_list_scene != nullptr) && (level_edge_count > 0)) {
+            record.color_entry = draw_lists.draw_list_scene->find_published_color_entry(draw_lists.frame_index, &mesh, primitive_index);
         }
         out.records.push_back(record);
     }
 }
 
-void Content_wide_line_renderer::add_feed(const Content_wide_line_feed& feed)
+void Content_wide_line_renderer::add_feed(const Content_wide_line_feed& feed, const Content_wide_line_lod_view& lod_view)
 {
     for (const Content_wide_line_record& record : feed.records) {
-        add_record(record);
+        if ((lod_view.draw_list_scene == nullptr) || (record.level_edge_count == 0) || !record.color_entry.is_valid()) {
+            if (record.edge_count > 0) {
+                add_record(record);
+            }
+            continue;
+        }
+        // The level the record's color entry draws in the view; its
+        // template range is the level the record was prepared with.
+        const Drawn_lod_level drawn = lod_view.draw_list_scene->get_published_entry_lod_level(lod_view.frame_index, lod_view.cull_view, record.color_entry);
+        if (drawn.source != Drawn_lod_level_source::selected) {
+            if (record.edge_count > 0) {
+                add_record(record);
+            }
+            continue;
+        }
+        // The entry's chain is the one it was registered with, the record's
+        // the one of the variant at the prepare: the same, but for the
+        // frame in which a worker publishes a new variant.
+        const uint32_t    level = std::min(drawn.level, record.level_edge_count - 1u);
+        const std::size_t index = static_cast<std::size_t>(record.first_level_edges) + level;
+        ERHE_VERIFY(index < feed.level_edges.size());
+        const Content_wide_line_level_edges& edges = feed.level_edges[index];
+        if (edges.edge_count == 0) {
+            continue;
+        }
+        Content_wide_line_record level_record = record;
+        level_record.edge_buffer              = edges.edge_buffer;
+        level_record.edge_buffer_byte_offset  = edges.edge_buffer_byte_offset;
+        level_record.edge_count               = edges.edge_count;
+        level_record.joint_buffer             = edges.joint_buffer;
+        level_record.joint_buffer_byte_offset = edges.joint_buffer_byte_offset;
+        level_record.joint_buffer_byte_size   = edges.joint_buffer_byte_size;
+        add_record(level_record);
     }
 }
 
@@ -230,8 +308,8 @@ void Content_wide_line_renderer::add_mesh(
     // Leaf scratch (AGENTS.md): add_feed() does not re-enter add_mesh().
     static thread_local Content_wide_line_feed s_feed;
     s_feed.clear();
-    prepare_mesh(mesh_memory, mesh, lod_level, settings, line_width, group, s_feed);
-    add_feed(s_feed);
+    prepare_mesh(mesh_memory, mesh, lod_level, settings, line_width, group, Content_wide_line_draw_lists{}, s_feed);
+    add_feed(s_feed, Content_wide_line_lod_view{});
     s_feed.clear();
 }
 

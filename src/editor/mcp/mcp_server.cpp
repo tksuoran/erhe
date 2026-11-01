@@ -853,6 +853,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "generate_lods",                  &Mcp_server::action_generate_lods                 },
         { "get_lod_info",                   &Mcp_server::query_lod_info                       },
         { "get_lod_selection",              &Mcp_server::query_lod_selection                  },
+        { "get_lod_stats",                  &Mcp_server::query_lod_stats                      },
         { "free_undone_loads",              &Mcp_server::action_free_undone_loads             },
         { "debug_set_item_tree_hover",      &Mcp_server::action_debug_set_item_tree_hover     },
         { "debug_set_transform_hover",      &Mcp_server::action_debug_set_transform_hover     },

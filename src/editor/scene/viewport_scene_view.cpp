@@ -515,6 +515,19 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             );
         }
 
+        // The levels of detail this view's culling view draws for the
+        // meshes requested in the frame's prepare phase (the LOD window,
+        // MCP get_lod_info), for the main thread.
+        if (context.scene_root && (context.scene_root->get_draw_list_scene() != nullptr) && (m_context.app_rendering != nullptr)) {
+            ERHE_VERIFY(context.composer_prepared != nullptr);
+            m_context.app_rendering->get_lod_drawn_levels().record_view(
+                frame_index,
+                *this,
+                *context.scene_root->get_draw_list_scene(),
+                context.composer_prepared->color_cull_view
+            );
+        }
+
         // Content wide line compute path, all edge line passes
         if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
             ERHE_PROFILE_SCOPE("Edge line compute");
@@ -524,7 +537,16 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             const erhe::scene_renderer::Content_wide_line_feed& wide_line_feed = context.composer_prepared->wide_line_feed;
             {
                 erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{command_buffer, "content_wide_line_renderer"};
-                m_context.content_wide_line_renderer->add_feed(wide_line_feed);
+                // The feed's levels of detail are those the view's color
+                // culling view selects (classified in the pre-execute hook).
+                m_context.content_wide_line_renderer->add_feed(
+                    wide_line_feed,
+                    erhe::scene_renderer::Content_wide_line_lod_view{
+                        .draw_list_scene = (context.scene_root ? context.scene_root->get_draw_list_scene() : nullptr),
+                        .frame_index     = frame_index,
+                        .cull_view       = context.composer_prepared->color_cull_view
+                    }
+                );
             }
             content_wide_line_mesh_count = wide_line_feed.mesh_count;
 

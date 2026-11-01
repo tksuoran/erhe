@@ -133,7 +133,8 @@ auto Draw_list_renderer::render(const Render_parameters& parameters) -> Draw_sta
         statistics.entry_count     += pass_statistics.entry_count;
         statistics.draw_call_count += pass_statistics.draw_call_count;
         statistics.culled_count    += pass_statistics.culled_count;
-        statistics.gpu_generated    = statistics.gpu_generated || pass_statistics.gpu_generated;
+        statistics.lod_counts.add(pass_statistics.lod_counts);
+        statistics.gpu_generated   = statistics.gpu_generated || pass_statistics.gpu_generated;
     }
 
     m_pass_resources.end_pass(pass_state, render_encoder);

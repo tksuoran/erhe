@@ -94,6 +94,7 @@ auto Composer_frame_slots::begin_prepare(const uint64_t frame_index, const std::
     slot.frame_index      = frame_index;
     slot.prepared         = false;
     slot.cull_views_added = false;
+    slot.color_cull_view  = erhe::scene_renderer::Cull_view::none;
     slot.id_pass.prepared = false;
     slot.id_pass.scan.reset();
     slot.wide_line_feed.clear();
@@ -139,6 +140,7 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
     // The view's level of detail selection is keyed by the scene view
     // (doc/plans/lod_gpu_selection.md section 7).
     view_parameters.lod_key       = &context.scene_view;
+    prepared.color_cull_view      = erhe::scene_renderer::Cull_view::none;
     for (std::size_t i = 0, end = composition_passes.size(); i < end; ++i) {
         const Composition_pass&    composition_pass = *composition_passes[i].get();
         Composition_pass_prepared& pass_prepared    = prepared.passes[i];
@@ -180,6 +182,9 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
         // Add_cull_view() returns the view an earlier pass of this scene
         // added (same purpose, same planes).
         pass_prepared.cull_view = erhe::scene_renderer::Draw_list_renderer::add_color_cull_view(*draw_list_scene, prepared.frame_index, view_parameters);
+        if (pass_scene_root == context.scene_root) {
+            prepared.color_cull_view = pass_prepared.cull_view;
+        }
         // What the pass draws, for the frame's GPU command generation
         // (none for an unculled pass).
         pass_prepared.command_selection = context.app_context.draw_list_renderer->add_color_command_selection(

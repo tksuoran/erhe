@@ -517,6 +517,8 @@ erhe_target_sources_grouped(
     renderers/pvs_baker.hpp
     renderers/render_context.cpp
     renderers/render_context.hpp
+    renderers/lod_drawn_levels.cpp
+    renderers/lod_drawn_levels.hpp
     renderers/render_frame_results.hpp
     renderers/content_draws.hpp
     renderers/render_settings.cpp

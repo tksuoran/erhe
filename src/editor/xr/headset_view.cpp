@@ -1255,6 +1255,25 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             // triangle slab per eye to a single SSBO. The multiview
             // vertex shader then picks the per-eye slab via gl_ViewIndex
             // inside the layered render pass below.
+            // The levels of detail the headset's culling view draws for the
+            // meshes requested in the frame's prepare phase (the LOD window,
+            // MCP get_lod_info), for the main thread.
+            {
+                const uint64_t                                     frame_index          = m_app_context.graphics_device->get_frame_index();
+                const erhe::scene_renderer::Draw_list_scene* const frame_draw_list_scene = frame_scene_root->get_draw_list_scene();
+                if ((frame_draw_list_scene != nullptr) && (m_app_context.app_rendering != nullptr)) {
+                    const bool cull_view_valid =
+                        (m_render_cull_frame_index == frame_index) &&
+                        (m_render_cull_draw_list_scene == frame_draw_list_scene);
+                    m_app_context.app_rendering->get_lod_drawn_levels().record_view(
+                        frame_index,
+                        *this,
+                        *frame_draw_list_scene,
+                        cull_view_valid ? m_render_cull_view : erhe::scene_renderer::Cull_view::none
+                    );
+                }
+            }
+
             erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = m_app_context.content_wide_line_renderer;
             const bool drive_wide_lines = (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled();
             if (drive_wide_lines) {
@@ -1272,7 +1291,21 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                             views_cb,
                             "content_wide_line_renderer (multiview)"
                         };
-                        content_wide_line_renderer->add_feed(slot.feed);
+                        // The levels of detail the headset's culling view
+                        // selects (add_render_cull_view(), this frame); the
+                        // prepared levels without one.
+                        const erhe::scene_renderer::Draw_list_scene* const feed_draw_list_scene = frame_scene_root->get_draw_list_scene();
+                        const bool cull_view_valid =
+                            (m_render_cull_frame_index == frame_index) &&
+                            (m_render_cull_draw_list_scene == feed_draw_list_scene);
+                        content_wide_line_renderer->add_feed(
+                            slot.feed,
+                            erhe::scene_renderer::Content_wide_line_lod_view{
+                                .draw_list_scene = feed_draw_list_scene,
+                                .frame_index     = frame_index,
+                                .cull_view       = cull_view_valid ? m_render_cull_view : erhe::scene_renderer::Cull_view::none
+                            }
+                        );
                     }
                 }
             }

@@ -181,6 +181,29 @@ public:
     std::optional<Lod_view>  lod_view   {};
 };
 
+// The level of detail counts of the entries one pass drew
+// (doc/plans/lod_gpu_selection.md section 5): per level, the entries drawn
+// at that level and the triangles they drew (index_count / 3 of the drawn
+// range). An entry without a LOD column of its view, or without a chain,
+// counts at the level of its template range (cull_lanes::
+// get_lod_template_level(): the forced level clamped to the chain, or 0).
+class Lod_level_counts
+{
+public:
+    static constexpr std::size_t level_count{8}; // erhe::primitive::max_lod_levels
+
+    void add(const Lod_level_counts& other)
+    {
+        for (std::size_t level = 0; level < level_count; ++level) {
+            entries  [level] += other.entries  [level];
+            triangles[level] += other.triangles[level];
+        }
+    }
+
+    std::array<uint32_t, level_count> entries  {};
+    std::array<uint64_t, level_count> triangles{};
+};
+
 class Draw_statistics
 {
 public:
@@ -188,9 +211,12 @@ public:
     std::size_t entry_count    {0}; // entries drawn (after flag filtering and culling)
     std::size_t draw_call_count{0}; // multi-draw submissions (chunks)
     std::size_t culled_count   {0}; // entries passing the filter but outside the view frustum
-    // The draws used GPU-generated commands: entry_count and culled_count
-    // are not counted on the CPU (they arrive with the retired frame's count
-    // readback).
+    // The drawn entries per level of detail, counted by the CPU command
+    // writer (Draw_indirect_buffer::update(Draw_list, ...)).
+    Lod_level_counts lod_counts{};
+    // The draws used GPU-generated commands: entry_count, culled_count and
+    // lod_counts are not counted on the CPU (they arrive with the retired
+    // frame's count readback).
     bool        gpu_generated  {false};
 };
 

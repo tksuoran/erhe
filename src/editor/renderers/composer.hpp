@@ -44,6 +44,13 @@ public:
     std::vector<Composition_pass_prepared> passes;
     Id_pass_prepared                       id_pass;
     erhe::scene_renderer::Content_wide_line_feed wide_line_feed;
+    // The view's color culling view in the draw lists of the view's scene
+    // root (Render_context::scene_root), added by Composer::add_cull_views()
+    // for the view's draw-list passes; none when no pass of the view draws
+    // through that scene's draw lists. The edge-line feed draws the levels
+    // of detail its LOD column selects (doc/editor/lod.md "Edge lines and
+    // the selection outline").
+    erhe::scene_renderer::Cull_view        color_cull_view{erhe::scene_renderer::Cull_view::none};
 };
 
 // A scene view's Composer_prepared, one per frame in flight: the prepare
