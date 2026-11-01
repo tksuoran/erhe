@@ -495,6 +495,22 @@ void Headset_view::update_fixed_step(const Time_context& time_context)
             }
         }
     }
+
+    // Left controller Y / X buttons: up / down along world +Y while held.
+    // Read from the action state (updated by update_actions() earlier in
+    // M2), not from input events.
+    if (!m_benchmark_mode && (m_headset != nullptr)) {
+        constexpr float vertical_speed_m_per_s = 2.0f;
+        const erhe::xr::Xr_actions* const left_actions = m_headset->get_actions_left();
+        const auto is_held = [](const erhe::xr::Xr_action_boolean* action) -> bool {
+            return (action != nullptr) && (action->state.isActive == XR_TRUE) && (action->state.currentState == XR_TRUE);
+        };
+        const bool up   = (left_actions != nullptr) && is_held(left_actions->y_click);
+        const bool down = (left_actions != nullptr) && is_held(left_actions->x_click);
+        if (up != down) {
+            m_camera_offset.y += (up ? 1.0f : -1.0f) * vertical_speed_m_per_s * time_context.simulation_dt_s;
+        }
+    }
 }
 
 auto Headset_view::get_world_from_stage() const -> glm::mat4

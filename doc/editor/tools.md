@@ -108,7 +108,7 @@ world: `Headset_view::get_world_from_stage()` is
 a translation (the camera offset). Every stage-space XR pose (head,
 eyes, controllers, the controller ray, the Hud summon point) goes through
 it, and the quad composition layers map back with
-`get_stage_from_world()`. Two inputs move it, in M2:
+`get_stage_from_world()`. These inputs move it, in M2:
 
 - **Travel tool** (`Headset_travel_tool`, `xr/headset_travel_tool.hpp`;
   hotbar tool, the default priority tool under OpenXR). While the right
@@ -117,10 +117,17 @@ it, and the quad composition layers map back with
   grid hover). Speed is `min(max speed, approach rate * distance)` times the
   analog trigger value, per fixed step (defaults 1.5 1/s and 12 m/s, in the
   tool properties). A ray that hits a rendertarget (Hud, Hotbar) moves
-  nothing.
+  nothing. The trigger value is read from the action state each fixed
+  step, not from input events (which the first consuming command takes);
+  a pressed trigger that moves nothing logs why once per press
+  (`editor.xr` "Travel tool: trigger pressed but not moving").
 - **Left thumbstick** (`Headset.locomotion`, always active): forward / back
   along the horizontal head direction and strafe across it, up to 3 m/s
   with a 0.15 dead zone. The right thumbstick belongs to the Hotbar.
+- **Left Y / X buttons** (always active, outside benchmark mode): up / down
+  along world +Y at 2 m/s while held, read from the action state in
+  `Headset_view::update_fixed_step()`. The Selection tool also binds X
+  (viewport select) while it is enabled as a secondary tool.
 
 ## Public API / Integration Points
 

@@ -3825,7 +3825,6 @@ public:
 #if defined(ERHE_XR_LIBRARY_OPENXR)
                 if (m_app_context.OpenXR) {
                     m_headset_travel_tool = std::make_unique<Headset_travel_tool>(
-                        *m_commands.get(),
                         m_app_context,
                         *m_headset_view.get(),
                         *m_icon_set.get(),
