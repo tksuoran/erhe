@@ -634,7 +634,7 @@ void Settings_window::imgui()
         });
         add_entry("LOD Threshold (pixels)", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
-            if (ImGui::SliderFloat("##", &graphics_preset.lod_threshold_pixels, 0.125f, 16.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+            if (ImGui::SliderFloat("##", &graphics_preset.lod_threshold_pixels, 0.125f, 512.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
                 on_graphics_preset_edited();
             }
         });

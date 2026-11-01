@@ -59,6 +59,7 @@ namespace erhe::window {
 }
 
 struct Viewport_config_data;
+struct Graphics_preset_entry;
 
 namespace editor {
 
@@ -409,6 +410,11 @@ private:
     auto resolve_pending_scene_and_camera() -> bool override;
     void setup_root_camera();
     void attach_headlamp();
+    // Headset window: a session-only change of the graphics preset in
+    // effect (as MCP set_graphics_preset: graphics_presets.json is not
+    // written), queued out of the ImGui iteration.
+    void queue_session_preset_edit(std::function<void(Graphics_preset_entry&)> edit);
+    void lighting_and_lod_imgui();
     // Prepare phase: the loading screen's lines from the startup load's
     // handle (status and percentage, or the error when it failed).
     void update_loading_screen();

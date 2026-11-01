@@ -162,6 +162,24 @@ light. Disabling takes it out of the scene; a re-home of the headset moves
 it into the new scene. Intensity (slider and 0.5 - 16 shortcut buttons) and
 shadows apply at once. It is `session_only`: never saved.
 
+## Headset window lighting and LOD
+
+The Headset window edits the graphics preset in effect for the session
+(`Headset_view::queue_session_preset_edit()`: a copy of
+`Graphics_settings::current_graphics_preset` through `apply_limits()` and
+`apply_preset()`, as MCP `set_graphics_preset`; `graphics_presets.json` is
+not written, the next Settings window preset edit or selection re-applies
+the stored preset):
+
+- Lighting: "Scene lights (clustered)" - clustered light shading with the
+  stored preset's per type light counts; "Single directional light" -
+  per type loops, one shadowed directional light, every other count 0 (the
+  first directional light, the headlamp when enabled, is the only light).
+- LOD: selection on / off, threshold (0.125 - 512 pixels, the Settings
+  window's range too), bias (-7 - 7: added to each selected level, then
+  clamped to the mesh's chain; off selection draws level 0 and ignores it)
+  and hysteresis band.
+
 ## Public API / Integration Points
 
 - `Tools::register_tool()` -- register a tool
