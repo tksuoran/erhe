@@ -276,7 +276,7 @@
     "inputSchema": {
       "properties": {
         "viewport": {
-          "description": "Viewport window title (see get_viewports); default: the first viewport window with a scene view",
+          "description": "Viewport window title (see get_viewports), or \"Headset\" for the OpenXR headset view (multiview path; its counts cover both eyes, height = 2 x eye height); default: the first viewport window with a scene view",
           "type": "string"
         }
       },
@@ -4219,7 +4219,7 @@
           "type": "string"
         },
         "viewport": {
-          "description": "Viewport window title (see get_viewports); default: the first viewport window with a scene view",
+          "description": "Viewport window title (see get_viewports), or \"Headset\" for the OpenXR headset view (multiview path; its counts cover both eyes, height = 2 x eye height); default: the first viewport window with a scene view",
           "type": "string"
         }
       },

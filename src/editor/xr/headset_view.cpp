@@ -33,6 +33,8 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "time.hpp"
+#include "xr/headset_overdraw_visualization.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
 #include "tools/hud.hpp"
 #include "tools/tools.hpp"
 #include "transform/transform_tool.hpp"
@@ -245,6 +247,8 @@ Headset_view::Headset_view(
     ERHE_PROFILE_FUNCTION();
     // One culling plane slot per frame in flight (prepare_cull_planes()).
     m_cull_planes_slots.resize(graphics_device.get_number_of_frames_in_flight());
+    // One overdraw slot per frame in flight (prepare_render_view()).
+    m_overdraw_slots.resize(graphics_device.get_number_of_frames_in_flight());
     if (headset == nullptr) {
         return;
     }
@@ -1487,8 +1491,6 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             render_pass_descriptor.fragment_density_map_texture = frame.shared_fragment_density_map_texture;
             render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"XR multiview"};
 
-            erhe::graphics::Render_pass multiview_render_pass{*m_app_context.graphics_device, render_pass_descriptor};
-
             // Generate the atmosphere LUTs once before the render pass (compute
             // dispatches + barriers cannot run inside a render pass). Sky mode is
             // resolved per scene (#239).
@@ -1500,17 +1502,45 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 m_app_context.sky_renderer->ensure_luts(*m_app_context.graphics_device, views_cb);
             }
 
+            // Overdraw (doc/plans/overdraw_visualization.md "Headset"): the
+            // slot prepare_render_view() wrote for this frame. Counting clears
+            // the count buffer here, outside the render pass; the content
+            // passes count in a first pass, and a second pass (loading the
+            // attachments) draws the heat map, then the overlay passes and
+            // the debug lines on top. Off: one pass, as without overdraw.
+            const uint64_t             overdraw_frame_index = m_app_context.graphics_device->get_frame_index();
+            const Overdraw_frame_slot& overdraw_slot        = m_overdraw_slots[overdraw_frame_index % m_overdraw_slots.size()];
+            const Overdraw_mode        overdraw_mode        = (overdraw_slot.frame_index == overdraw_frame_index) ? overdraw_slot.mode : Overdraw_mode::off;
+            const uint32_t             overdraw_view_count  = static_cast<uint32_t>(view_inputs.size());
+            const bool                 count_overdraw       =
+                (overdraw_mode != Overdraw_mode::off) &&
+                is_overdraw_supported() &&
+                (overdraw_view_count > 0);
+            if (count_overdraw) {
+                m_overdraw_view_state.begin_frame(
+                    *m_app_context.graphics_device,
+                    views_cb,
+                    overdraw_frame_index,
+                    to_overdraw_count(overdraw_mode),
+                    static_cast<uint32_t>(frame.width),
+                    static_cast<uint32_t>(frame.height) * overdraw_view_count
+                );
+                if (!m_overdraw_visualization) {
+                    m_overdraw_visualization = std::make_unique<Headset_overdraw_visualization>(*m_app_context.graphics_device, overdraw_view_count);
+                }
+            } else if (overdraw_mode == Overdraw_mode::off) {
+                m_overdraw_view_state.release();
+            }
+
+            const auto record_pass = [&](erhe::graphics::Render_pass& render_pass, const bool include_content, const bool include_overlay, const bool draw_overdraw)
             {
-                // Outside the render pass: a timestamp written inside a
-                // multiview render pass instance takes one query per view.
-                erhe::graphics::Scoped_gpu_timer scoped_gpu_timer{*m_multiview_gpu_timer, views_cb};
                 erhe::graphics::Render_command_encoder encoder = m_app_context.graphics_device->make_render_command_encoder(views_cb);
-                erhe::graphics::Scoped_render_pass scoped_render_pass{multiview_render_pass, views_cb};
+                erhe::graphics::Scoped_render_pass scoped_render_pass{render_pass, views_cb};
 
                 Render_context render_context {
                     .command_buffer      = &views_cb,
                     .encoder             = &encoder,
-                    .render_pass         = &multiview_render_pass,
+                    .render_pass         = &render_pass,
                     .app_context         = m_app_context,
                     .scene_view          = *this,
                     .viewport_config     = m_viewport_config,
@@ -1521,25 +1551,85 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     .viewport            = viewport_xy,
                     .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
                     .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
+                    .overdraw              = count_overdraw ? to_overdraw_count(overdraw_slot.mode) : erhe::scene_renderer::Overdraw_count::off,
+                    .overdraw_count_buffer = count_overdraw ? m_overdraw_view_state.get_count_buffer(overdraw_frame_index) : nullptr,
                     // The union eye frustum's culling view and the passes'
                     // views (add_render_cull_view()).
                     .immediate_cull_draw_list_scene = m_render_cull_draw_list_scene,
                     .immediate_cull_view            = m_render_cull_view,
                     .immediate_pass_views           = std::span<const Composition_pass_views>{m_render_pass_views}
                 };
+
+                if (draw_overdraw) {
+                    m_overdraw_visualization->draw(
+                        encoder,
+                        render_pass,
+                        *m_app_context.mesh_memory,
+                        *m_overdraw_view_state.get_count_buffer(overdraw_frame_index),
+                        static_cast<uint32_t>(frame.width),
+                        static_cast<uint32_t>(frame.height),
+                        overdraw_slot.max_count
+                    );
+                }
                 // No post-processing in VR: render content + overlay (tool /
                 // rendertarget) in one pass. Tool / rendertarget passes still
                 // ignore camera exposure (issue #230).
-                m_app_context.app_rendering->render_composer(render_context, true, true);
+                if (include_content || include_overlay) {
+                    m_app_context.app_rendering->render_composer(render_context, include_content, include_overlay);
+                }
 
-                // Debug_renderer multiview render. Inside the multiview
-                // render pass so gl_ViewIndex resolves to the right
-                // layer for each draw fanned out by the compute stage
-                // above. multiview = true picks the multiview-compiled
-                // shader stages and the multiview bind group layout.
-                m_app_context.debug_renderer->render(
-                    encoder, multiview_render_pass, viewport_xy, /*multiview=*/true, debug_frame_slot
-                );
+                if (include_overlay) {
+                    // Debug_renderer multiview render. Inside the multiview
+                    // render pass so gl_ViewIndex resolves to the right
+                    // layer for each draw fanned out by the compute stage
+                    // above. multiview = true picks the multiview-compiled
+                    // shader stages and the multiview bind group layout.
+                    m_app_context.debug_renderer->render(
+                        encoder, render_pass, viewport_xy, /*multiview=*/true, debug_frame_slot
+                    );
+                }
+            };
+
+            {
+                // Outside the render pass: a timestamp written inside a
+                // multiview render pass instance takes one query per view.
+                erhe::graphics::Scoped_gpu_timer scoped_gpu_timer{*m_multiview_gpu_timer, views_cb};
+                if (!count_overdraw) {
+                    erhe::graphics::Render_pass multiview_render_pass{*m_app_context.graphics_device, render_pass_descriptor};
+                    record_pass(multiview_render_pass, true, true, false);
+                } else {
+                    // The second pass loads what the first stored: keep the
+                    // stencil (the selection outline tests it) too.
+                    if (render_pass_descriptor.stencil_attachment.texture != nullptr) {
+                        render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Store;
+                    }
+                    render_pass_descriptor.debug_label = erhe::utility::Debug_label{"XR multiview content (overdraw)"};
+                    erhe::graphics::Render_pass content_render_pass{*m_app_context.graphics_device, render_pass_descriptor};
+                    record_pass(content_render_pass, true, false, false);
+
+                    // The counting draws' atomics -> the heat map's reads.
+                    views_cb.buffer_barrier(
+                        *m_overdraw_view_state.get_count_buffer(overdraw_frame_index),
+                        erhe::graphics::Buffer_usage_flag_bit_mask::storage_read | erhe::graphics::Buffer_usage_flag_bit_mask::storage_write | erhe::graphics::Buffer_usage_flag_bit_mask::fragment_shader,
+                        erhe::graphics::Buffer_usage_flag_bit_mask::storage_read | erhe::graphics::Buffer_usage_flag_bit_mask::fragment_shader,
+                        erhe::graphics::Barrier_scope::command_buffer
+                    );
+
+                    render_pass_descriptor.color_attachments[0].load_action = erhe::graphics::Load_action::Load;
+                    if (render_pass_descriptor.depth_attachment.texture != nullptr) {
+                        render_pass_descriptor.depth_attachment.load_action = erhe::graphics::Load_action::Load;
+                    }
+                    if (render_pass_descriptor.stencil_attachment.texture != nullptr) {
+                        render_pass_descriptor.stencil_attachment.load_action  = erhe::graphics::Load_action::Load;
+                        render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care;
+                    }
+                    render_pass_descriptor.debug_label = erhe::utility::Debug_label{"XR multiview overdraw + overlay"};
+                    erhe::graphics::Render_pass overlay_render_pass{*m_app_context.graphics_device, render_pass_descriptor};
+                    record_pass(overlay_render_pass, false, true, true);
+                }
+            }
+            if (count_overdraw) {
+                m_app_context.overdraw_counter->reduce(views_cb, m_overdraw_view_state, overdraw_frame_index);
             }
             if (drive_wide_lines) {
                 content_wide_line_renderer->end_frame();
@@ -1911,6 +2001,13 @@ void Headset_view::prepare_render_view()
     // phase renders (get_render_scene_root()); no camera while the headset
     // is not homed in a scene.
     snapshot_render_view(m_root_node ? m_root_camera.get() : nullptr);
+
+    // The frame's overdraw mode and max count, read by render_headset().
+    const uint64_t       frame_index = m_app_context.graphics_device->get_frame_index();
+    Overdraw_frame_slot& slot        = m_overdraw_slots[frame_index % m_overdraw_slots.size()];
+    slot.frame_index = frame_index;
+    slot.mode        = is_overdraw_supported() ? m_overdraw_mode : Overdraw_mode::off;
+    slot.max_count   = m_overdraw_max_count;
 }
 
 void Headset_view::prepare_wide_line_feed(const uint64_t frame_index, const std::size_t frames_in_flight, const int64_t host_system_time_ns)
@@ -2456,6 +2553,49 @@ auto Headset_view::get_shader_debug() const -> erhe::scene_renderer::Shader_debu
 void Headset_view::set_shader_debug(const erhe::scene_renderer::Shader_debug shader_debug)
 {
     m_selected_shader_debug = static_cast<int>(shader_debug);
+}
+
+auto Headset_view::get_overdraw_mode() const -> Overdraw_mode
+{
+    return m_overdraw_mode;
+}
+
+auto Headset_view::is_overdraw_supported() const -> bool
+{
+    // The multiview path only: the per-eye path has no heat map pass.
+    return
+        m_use_multiview &&
+        (m_app_context.overdraw_counter != nullptr) &&
+        m_app_context.overdraw_counter->is_supported();
+}
+
+void Headset_view::queue_overdraw_mode(const Overdraw_mode mode)
+{
+    m_app_context.imgui_windows->queue(
+        [this, mode]() {
+            set_overdraw_mode(mode);
+        }
+    );
+}
+
+void Headset_view::set_overdraw_mode(const Overdraw_mode mode)
+{
+    m_overdraw_mode = mode;
+}
+
+auto Headset_view::get_overdraw_max_count() const -> uint32_t
+{
+    return m_overdraw_max_count;
+}
+
+void Headset_view::set_overdraw_max_count(const uint32_t max_count)
+{
+    m_overdraw_max_count = std::max(max_count, 1u);
+}
+
+auto Headset_view::get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics
+{
+    return m_overdraw_view_state.get_statistics();
 }
 
 auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>

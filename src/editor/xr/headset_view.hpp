@@ -3,6 +3,7 @@
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #include "renderers/programs.hpp"
 #include "scene/scene_view.hpp"
+#include "scene/viewport_render_state.hpp"
 #include "xr/hand_tracker.hpp"
 #include "xr/controller_visualization.hpp"
 #include "xr/headset_view_resources.hpp"
@@ -19,6 +20,7 @@
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/content_wide_line_feed.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
+#include "erhe_scene_renderer/overdraw_counter.hpp"
 #include "erhe_scene_renderer/joint_poses.hpp"
 #include "erhe_xr/headset.hpp"
 
@@ -66,6 +68,7 @@ class App_rendering;
 class App_settings;
 class Composition_pass_views;
 class Fly_camera_tool;
+class Headset_overdraw_visualization;
 class Hud;
 class Quad_view;
 class Scene_builder;
@@ -310,6 +313,20 @@ public:
     // Implements Scene_view
     auto get_shader_debug      () const -> erhe::scene_renderer::Shader_debug override;
     void set_shader_debug      (erhe::scene_renderer::Shader_debug shader_debug) override;
+    // Overdraw visualization of the headset (doc/plans/overdraw_visualization.md
+    // "Headset"): the multiview path's content passes count, and a heat map
+    // pass covers the eye images before the overlay passes. Main thread; the
+    // prepare phase copies mode and max count into the frame's slot
+    // (prepare_render_view()), the render phase reads the slot.
+    auto get_overdraw_mode     () const -> Overdraw_mode override;
+    auto is_overdraw_supported () const -> bool override;
+    void queue_overdraw_mode   (Overdraw_mode mode) override;
+    auto get_overdraw_max_count() const -> uint32_t override;
+    void set_overdraw_max_count(uint32_t max_count) override;
+    void set_overdraw_mode     (Overdraw_mode mode);
+    // Any thread: the newest retired counted frame's statistics; height is
+    // the views' rows together (view count x eye image height).
+    [[nodiscard]] auto get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics override;
     auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
     auto get_projection_scale (float view_distance) const -> float                                override;
     auto get_shadow_render_node() const -> Shadow_render_node*                  override;
@@ -476,6 +493,21 @@ private:
     // debug-line compute dispatches before it.
     std::unique_ptr<erhe::graphics::Gpu_timer>           m_multiview_gpu_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer>           m_multiview_compute_gpu_timer;
+    // Overdraw (main thread: mode, max count; one slot per frame in flight
+    // written by prepare_render_view(); render phase: the count buffer and
+    // the heat map pass, created on first use).
+    class Overdraw_frame_slot
+    {
+    public:
+        uint64_t      frame_index{0};
+        Overdraw_mode mode       {Overdraw_mode::off};
+        uint32_t      max_count  {8};
+    };
+    Overdraw_mode                                        m_overdraw_mode{Overdraw_mode::off};
+    uint32_t                                             m_overdraw_max_count{8};
+    std::vector<Overdraw_frame_slot>                     m_overdraw_slots;
+    erhe::scene_renderer::Overdraw_view_state            m_overdraw_view_state;
+    std::unique_ptr<Headset_overdraw_visualization>      m_overdraw_visualization;
     std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node
     // The headset's own prim: a Camera is an Xformable (C5), so the headset
     // pose is set on the camera itself.

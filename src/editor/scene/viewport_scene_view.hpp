@@ -203,7 +203,7 @@ public:
     // Any thread: the overdraw statistics of the newest retired frame the
     // view counted (not valid before one retired, nor after the mode turned
     // off).
-    [[nodiscard]] auto get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics;
+    [[nodiscard]] auto get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics override;
     // Main thread: the visualization's color ramp reaches white at this
     // count (Viewport_render_state::overdraw_max_count).
     void set_overdraw_max_count(uint32_t max_count) override;

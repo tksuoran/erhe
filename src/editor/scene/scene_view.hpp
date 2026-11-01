@@ -34,6 +34,7 @@ namespace erhe::scene {
 namespace erhe::scene_renderer { class Light_projections; }
 
 namespace erhe::scene_renderer {
+    class Overdraw_statistics;
     enum class Shader_debug : uint16_t;
 }
 
@@ -259,6 +260,9 @@ public:
     // doc/editor/coding_rules.md "ImGui-time work").
     virtual void               queue_overdraw_mode  (Overdraw_mode mode);
     [[nodiscard]] virtual auto get_overdraw_max_count() const -> uint32_t;
+    // Any thread: the newest retired counted frame's statistics (not valid
+    // without one).
+    [[nodiscard]] virtual auto get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics;
     virtual void               set_overdraw_max_count(uint32_t max_count);
 
     // Per-frame: resolves any pending persisted "Scene and Camera" selection

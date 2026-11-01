@@ -2,7 +2,9 @@
 
 Status: in progress
 
-Build order steps 1 and 2 are built (2026-10-29, Vulkan; "Built" below); step 3 is next.
+Build order steps 1 and 2 are built (2026-10-29, Vulkan; "Built" below),
+and step 7 for the headset's multiview path (2026-11-01; "Headset" below);
+step 3 is next.
 
 This plan extends `doc/editor/rendering.md` (the viewport rendergraph chain
 and the composition passes) and `doc/erhe/shader_variants.md` (the
@@ -316,9 +318,46 @@ rasterized - 4 in every case; with occlusion culling on, the distinct-depth
 opaque stacks count 1 in both modes; a scene image with nested
 alpha-tested squares counts each region's square depth exactly; 80 MCP
 toggles with and without post-processing; no new validation message.
-Not yet verified: Metal 3 / Metal 4 (the binding from ICB-executed draws),
+Metal 3 (Mac M4 Pro, headless Debug, 2026-11-01): `overdraw_verify.py`
+fails 31 checks, every one by a uniform factor of 4 (4x MSAA viewport: each
+expected count n reads 4n, e.g. coplanar rasterized 16 instead of 4) - the
+counting fragment shaders run per sample there; not yet investigated.
+Not yet verified: Metal 4 (the binding from ICB-executed draws),
 OpenGL, the mode-off render-thread gates against the previous HEAD, and
 occlusion culling's check with the mode on.
+
+## Headset (build order step 7)
+
+The OpenXR headset view counts and shows overdraw on its multiview path
+(`Headset_view`, `src/editor/xr/headset_view.cpp`); the per-eye path does
+not offer it (`Headset_view::is_overdraw_supported()`).
+
+- Selection: the overdraw entries of the shader debug combo on the Headset
+  window's toolbar (`Scene_view::viewport_toolbar()`), or MCP
+  `set_overdraw_visualization` / `get_overdraw_stats` with
+  `viewport: "Headset"`. The mode and max count are main-thread state;
+  `Headset_view::prepare_render_view()` (M2) copies them into the frame's
+  slot, which the render phase reads.
+- Counting: `erhe_overdraw.glsl` indexes by `c_view_index`
+  (`gl_ViewIndex` under multiview): view v's rows follow view v - 1's, so
+  one `Overdraw_view_state` buffer of width x (views x height) holds both
+  eyes, and the reduction (O5) reports them together (`height` is the views'
+  rows). Single-view shaders index as before (`c_view_index` is 0).
+- Passes: with the mode off the multiview frame is one render pass, as
+  before. On, it is two: the content passes count in the first (the
+  stencil is stored for the second); a count buffer barrier; the second
+  loads color, depth and stencil and draws the heat map
+  (`Headset_overdraw_visualization`, `src/editor/xr/headset_overdraw_visualization.{hpp,cpp}`,
+  `res/editor/shaders/overdraw_visualize_multiview.frag`), then the overlay
+  passes (tools, rendertargets) and the debug lines on top, so the Hud,
+  Hotbar and gizmos stay usable. The reduction follows the second pass.
+- The heat map uses the ramp of `overdraw_visualize.frag`. There is no
+  scene texture to read in the eye pass, so over count 0 a premultiplied
+  blend (color 0, alpha 0.75) keeps a quarter of the scene color instead of
+  the desktop's 25 % luminance.
+- With fixed foveated rendering (the fragment density map), one fragment
+  covers several pixels in the periphery; it counts once, at its
+  `gl_FragCoord`, and the heat map reads the same coordinate.
 
 ## Verification
 

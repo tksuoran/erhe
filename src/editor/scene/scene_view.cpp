@@ -33,6 +33,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_defer/defer.hpp"
+#include "erhe_scene_renderer/overdraw_counter.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include <imgui/imgui.h>
@@ -1102,6 +1103,11 @@ auto Scene_view::is_overdraw_supported() const -> bool
 void Scene_view::queue_overdraw_mode(const Overdraw_mode mode)
 {
     static_cast<void>(mode);
+}
+
+auto Scene_view::get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics
+{
+    return erhe::scene_renderer::Overdraw_statistics{};
 }
 
 auto Scene_view::get_overdraw_max_count() const -> uint32_t

@@ -10,6 +10,9 @@
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "windows/viewport_window.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_view.hpp"
+#endif
 
 #include "erhe_scene_renderer/overdraw_counter.hpp"
 
@@ -58,6 +61,20 @@ constexpr const char* c_mode_names[] = { "off", "shaded", "rasterized" };
     );
 }
 
+// The headset view when viewport_title names it ("Headset", OpenXR only).
+[[nodiscard]] auto find_headset_view(App_context& context, const std::string& viewport_title) -> Scene_view*
+{
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if ((viewport_title == "Headset") && context.OpenXR && (context.headset_view != nullptr)) {
+        return context.headset_view;
+    }
+#else
+    static_cast<void>(context);
+    static_cast<void>(viewport_title);
+#endif
+    return nullptr;
+}
+
 } // anonymous namespace
 
 auto Mcp_server::action_set_overdraw_visualization(const json& args) -> std::string
@@ -75,12 +92,17 @@ auto Mcp_server::action_set_overdraw_visualization(const json& args) -> std::str
     if (!mode.has_value()) {
         return make_error_content(fmt::format("mode '{}' is not one of \"off\", \"shaded\", \"rasterized\"", mode_name));
     }
-    const std::string                      viewport_title  = args.value("viewport", std::string{});
-    const std::shared_ptr<Viewport_window> viewport_window = find_viewport_window(m_context.scene_views, viewport_title);
-    if (!viewport_window) {
+    const std::string viewport_title = args.value("viewport", std::string{});
+    Scene_view* const headset_view   = find_headset_view(m_context, viewport_title);
+    const std::shared_ptr<Viewport_window> viewport_window = (headset_view == nullptr)
+        ? find_viewport_window(m_context.scene_views, viewport_title)
+        : std::shared_ptr<Viewport_window>{};
+    if ((headset_view == nullptr) && !viewport_window) {
         return viewport_not_found(viewport_title);
     }
-    const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+    Scene_view* const scene_view = (headset_view != nullptr)
+        ? headset_view
+        : static_cast<Scene_view*>(viewport_window->viewport_scene_view().get());
     if ((mode.value() != Overdraw_mode::off) && !scene_view->is_overdraw_supported()) {
         return make_error_content(
             "Overdraw visualization is not supported on this device: the counting needs fragment stage buffer stores "
@@ -93,9 +115,17 @@ auto Mcp_server::action_set_overdraw_visualization(const json& args) -> std::str
         }
         scene_view->set_overdraw_max_count(static_cast<uint32_t>(args["max_count"].get<int>()));
     }
-    m_context.scene_views->set_overdraw_mode(scene_view.get(), mode.value());
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (headset_view != nullptr) {
+        // MCP requests run in the prepare phase: set directly.
+        m_context.headset_view->set_overdraw_mode(mode.value());
+    } else
+#endif
+    {
+        m_context.scene_views->set_overdraw_mode(viewport_window->viewport_scene_view().get(), mode.value());
+    }
     return make_json_content({
-        {"viewport",  viewport_window->get_title()},
+        {"viewport",  (headset_view != nullptr) ? std::string{"Headset"} : viewport_window->get_title()},
         {"mode",      get_mode_name(scene_view->get_overdraw_mode())},
         {"max_count", scene_view->get_overdraw_max_count()}
     }).dump();
@@ -103,16 +133,21 @@ auto Mcp_server::action_set_overdraw_visualization(const json& args) -> std::str
 
 auto Mcp_server::query_overdraw_stats(const json& args) -> std::string
 {
-    const std::string                      viewport_title  = args.value("viewport", std::string{});
-    const std::shared_ptr<Viewport_window> viewport_window = find_viewport_window(m_context.scene_views, viewport_title);
-    if (!viewport_window) {
+    const std::string viewport_title = args.value("viewport", std::string{});
+    Scene_view* const headset_view   = find_headset_view(m_context, viewport_title);
+    const std::shared_ptr<Viewport_window> viewport_window = (headset_view == nullptr)
+        ? find_viewport_window(m_context.scene_views, viewport_title)
+        : std::shared_ptr<Viewport_window>{};
+    if ((headset_view == nullptr) && !viewport_window) {
         return viewport_not_found(viewport_title);
     }
-    const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+    const Scene_view* const scene_view = (headset_view != nullptr)
+        ? headset_view
+        : static_cast<const Scene_view*>(viewport_window->viewport_scene_view().get());
     const Overdraw_mode mode = scene_view->get_overdraw_mode();
     const erhe::scene_renderer::Overdraw_statistics statistics = scene_view->get_overdraw_statistics();
     json result = {
-        {"viewport", viewport_window->get_title()},
+        {"viewport", (headset_view != nullptr) ? std::string{"Headset"} : viewport_window->get_title()},
         {"mode",     get_mode_name(mode)},
         {"valid",    statistics.valid}
     };

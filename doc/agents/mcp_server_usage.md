@@ -607,7 +607,8 @@ OpenXR refuses `headset` with that reason.
 
 A viewport's overdraw visualization (`doc/plans/overdraw_visualization.md`):
 `mode` (required: `off`, `shaded` or `rasterized`), `viewport` (window
-title; default: the first viewport window with a scene view), `max_count`
+title, or `Headset` for the OpenXR headset view, multiview path only;
+default: the first viewport window with a scene view), `max_count`
 (the count shown white, default 8, kept per viewport). Not off, the
 viewport's content passes count per pixel with the viewport's real
 pipelines, draw order and draw-list / culling paths, and the viewport shows
@@ -631,7 +632,9 @@ holds every larger count. `valid` is false (with a `message`) until a counted
 frame retired, and after the mode turned off. `counted_mode` is the mode
 the reported frame counted with; after a mode change, wait until it equals
 `mode`. With MSAA, the pixels a
-triangle edge splits count once per covering triangle.
+triangle edge splits count once per covering triangle. For `Headset` the
+counts cover both eyes: `height` is the eyes' rows together (2 x the eye
+image height), view 1's rows after view 0's.
 `scripts/overdraw_verify.py` checks the counts against stacked full-screen
 rectangles.
 

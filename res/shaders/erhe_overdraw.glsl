@@ -4,7 +4,8 @@
 // Overdraw counting (doc/plans/overdraw_visualization.md O1-O3): the
 // ERHE_OVERDRAW variants of a shader add 1 to the pixel's uint in
 // overdraw_count.counts[] for every invocation, row by row over the view's
-// viewport (camera.cameras[0].viewport; single view only).
+// viewport (camera.cameras[c_view_index].viewport). Under multiview the
+// views' counts follow each other: view v's rows start at v * height rows.
 //
 // ERHE_OVERDRAW values (erhe::scene_renderer::Overdraw_count, the
 // ERHE_OVERDRAW_* constants of erhe_standard_variant.glsl):
@@ -19,16 +20,19 @@
 //   any discard: what the draws rasterize, whatever the depth buffer holds.
 // Helper invocations perform no stores, so they never count.
 
+#include "erhe_camera_view.glsl"
+
 #if (ERHE_OVERDRAW == ERHE_OVERDRAW_SHADED) && !defined(ERHE_FRAGMENT_MAY_DISCARD)
 layout(early_fragment_tests) in;
 #endif
 
 void erhe_count_overdraw()
 {
-    const ivec4 viewport = ivec4(camera.cameras[0].viewport);
+    const ivec4 viewport = ivec4(camera.cameras[c_view_index].viewport);
     const ivec2 pixel    = ivec2(gl_FragCoord.xy) - viewport.xy;
     if ((pixel.x >= 0) && (pixel.y >= 0) && (pixel.x < viewport.z) && (pixel.y < viewport.w)) {
-        atomicAdd(overdraw_count.counts[(uint(pixel.y) * uint(viewport.z)) + uint(pixel.x)], 1u);
+        const uint row = (c_view_index * uint(viewport.w)) + uint(pixel.y);
+        atomicAdd(overdraw_count.counts[(row * uint(viewport.z)) + uint(pixel.x)], 1u);
     }
 }
 
