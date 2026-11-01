@@ -5,6 +5,7 @@
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "config/generated/user_state_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
+#include "erhe_codegen/migration.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
@@ -13,9 +14,40 @@
 
 namespace editor {
 
+namespace {
+
+// The migrations of editor_settings.json (and openxr_editor_settings.json):
+// v12 makes occlusion culling the default (doc/plans/occlusion_culling.md,
+// user decision 2026-11-01). Every file written before stores
+// occlusion_culling explicitly with the old default off, so a v11 or older
+// document gets the new default.
+void register_editor_settings_migrations()
+{
+    static std::once_flag s_once;
+    std::call_once(
+        s_once,
+        []() {
+            erhe::codegen::register_migration<Editor_settings_config>(
+                [](Editor_settings_config& config, const uint32_t old_version, const uint32_t new_version) -> bool
+                {
+                    static_cast<void>(new_version);
+                    if (old_version < 12) {
+                        const Editor_settings_config v12_defaults{};
+                        config.occlusion_culling = v12_defaults.occlusion_culling;
+                    }
+                    return true;
+                }
+            );
+        }
+    );
+}
+
+} // anonymous namespace
+
 Editor_settings_store::Editor_settings_store()
     : m_persist_user_state{!is_ai_driver()}
 {
+    register_editor_settings_migrations();
     bool upgraded = false;
     m_settings = erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_file_path, &upgraded);
     log_startup->info(

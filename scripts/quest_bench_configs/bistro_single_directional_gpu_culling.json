@@ -1,9 +1,10 @@
 {
-    "_comment": "Bench configuration for scripts/quest_bench.py run --config (doc/agents/quest.md 'Bench configurations'). As single_directional_loops, with culling classification gpu (GPU-generated draw commands where the device supports them).",
+    "_comment": "Bench configuration for scripts/quest_bench.py run --config (doc/agents/quest.md 'Bench configurations'). As single_directional_loops, with culling classification gpu (GPU-generated draw commands where the device supports them) and occlusion culling off (set explicitly: occlusion culling is on by default; _gpu_occlusion is this configuration with it on).",
     "name": "single_directional_loops_gpu_culling",
-    "description": "As single_directional_loops, with culling classification gpu (GPU-generated draw commands where the device supports them)",
+    "description": "As single_directional_loops, with culling classification gpu (GPU-generated draw commands where the device supports them), occlusion culling off",
     "mcp": [
-        "set_culling_classification={\"mode\": \"gpu\"}"
+        "set_culling_classification={\"mode\": \"gpu\"}",
+        "set_occlusion_culling={\"enabled\": false}"
     ],
     "mcp_after_load": [
         "set_graphics_preset={\"light_shading\": \"loops\", \"shadow_enable\": true, \"directional_shadow_light_count\": 1, \"directional_unshadowed_light_count\": 0, \"spot_shadow_light_count\": 0, \"spot_unshadowed_light_count\": 0, \"point_shadow_light_count\": 0, \"point_unshadowed_light_count\": 0}",

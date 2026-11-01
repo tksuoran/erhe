@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=11,
+    version=12,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -160,12 +160,14 @@ struct("Editor_settings_config",
         # classification, each viewport's color render pass rasterizes the
         # draw lists' entry boxes against its opaque depth and marks the
         # visible entries; the next frame's classification culls the entries
-        # found hidden (one frame of lag).
+        # found hidden (one frame of lag). On by default (user decision
+        # 2026-11-01); the v12 migration (editor_settings_store.cpp) turns it
+        # on in files written before, which all stored the old default off.
         field(
             "occlusion_culling",
             Bool,
             added_in=8,
-            default="false",
+            default="true",
             short_desc="Occlusion Culling",
             long_desc="Run the raster occlusion test in the viewports (needs the gpu culling classification, a GPU-read draw count and fragment shader storage atomics): the draw lists' entry boxes are drawn against each view's opaque depth and the visible entries are marked. The next frame skips the entries found hidden (one frame of lag).",
             visible=True,
