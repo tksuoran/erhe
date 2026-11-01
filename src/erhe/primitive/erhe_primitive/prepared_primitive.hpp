@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_primitive/lod.hpp"
 #include "erhe_primitive/mesh_optimizer.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_math/aabb.hpp"
@@ -75,7 +76,40 @@ public:
     // had bitwise-identical positions (distinct points that round to one
     // float position).
     std::size_t           dropped_degenerate_triangle_count{0};
+
+    // ERHE_mesh_lod: the LOD chain over the core to write, with its indices;
+    // set by make_export_lod_chain() for a primitive with a requested chain
+    // (Primitive::lod_settings). Empty: no chain is written.
+    std::optional<Stored_lod_chain> lod;
 };
+
+// How make_export_lod_chain() obtained the chain.
+enum class Export_lod_source : unsigned int {
+    none      = 0, // no chain: the mesh does not simplify (or the export core is empty)
+    stored    = 1, // the retained core's stored chain, made with the same settings
+    generated = 2  // generated over the export core with the requested settings
+};
+
+// The LOD chain a prepared export writes for a primitive whose chain was
+// requested with `settings` (Primitive::lod_settings; LOD chains are made on
+// request only, so a primitive without settings gets none and is not passed
+// here). A retained core whose stored chain was made with `settings` writes
+// that chain back (Primitive_shape::load_stored_lod_chain(), no
+// simplification); otherwise the chain is generated over the export core
+// with generate_soup_lod_chain(), the function the on-request generation of a
+// prepared primitive runs over the same core, so the written chain is the one
+// that generation makes after a reload. A primitive whose live variant came
+// from the geometry path (an import before its first prepared save, an edited
+// primitive) had its live chain generated over the optimizer output in the
+// GPU vertex format, not over the export core: its chain before the save and
+// after the reload can differ. Generating here simplifies; a load never does,
+// but a save on the device that loaded the file (the Quest) does for a request
+// without a current stored chain. Sets prepared.lod; returns how.
+auto make_export_lod_chain(
+    Prepared_primitive_export& prepared,
+    const Primitive_shape&     shape,
+    const Lod_settings&        settings
+) -> Export_lod_source;
 
 class Prepare_primitive_result
 {
@@ -148,6 +182,13 @@ public:
     // ERHE_raytrace_bvh: the stored build for the running raytrace backend
     // and library tag, over the core triangles in index order.
     std::optional<erhe::raytrace::Prebuilt_bvh> bvh;
+
+    // ERHE_mesh_lod: the stored LOD chain over the core
+    // (doc/gltf_extensions/ERHE_mesh_lod.md): its settings and level table
+    // (chain.indices is empty). The level indices are the soup's
+    // (Triangle_soup::lod_index_data), released and read back with it;
+    // Primitive_shape::load_stored_lod_chain() joins the two.
+    std::optional<Stored_lod_chain> lod;
 };
 
 // The ERHE_mesh_optimized checks on the core content

@@ -92,6 +92,16 @@ public:
     const std::optional<erhe::primitive::Lod_settings>&  settings
 ) -> Lod_generation_result;
 
+// request_lod_generation() for every mesh of the scene's content layer: the
+// explicit scene-wide request (the LOD window's "Generate for scene", MCP
+// generate_lods with "scope": "scene"), for example before a Save for Quest
+// of a scene to profile with LODs everywhere.
+[[nodiscard]] auto request_scene_lod_generation(
+    App_context&                                        context,
+    Scene_root&                                         scene_root,
+    const std::optional<erhe::primitive::Lod_settings>& settings
+) -> Lod_generation_result;
+
 // Some viewport style draws a primitive mode only the full build provides
 // (edge lines, corner points, polygon centroids, solid wireframe). A load
 // then builds prepared primitives in full in its deferred finalize.

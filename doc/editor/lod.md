@@ -31,6 +31,15 @@ one deferred finalize task per distinct primitive. The window shows "Request
 queued" until the request ran, then the editor's pending and running async
 task counts while tasks run, and the request's counts (meshes, primitives,
 queued, unchanged, held, not optimized).
+"Generate for scene" and "Clear for scene" make the same request for every
+mesh of the active scene's content layer (`request_scene_lod_generation()`;
+MCP `generate_lods` with `scope` `scene`): the explicit request for a scene
+to profile with LODs everywhere. A save (and Save for Quest) stores the
+chains that exist and generates none (`doc/erhe/meshoptimizer_integration.md`
+"Level of detail", "Stored chains"); a load of a file with stored chains
+restores them, and their requests, with no simplification. Like the
+selection request, the scene request is not an operation: undo does not
+revert it.
 
 **Forced level.** A level slider (0 to the longest chain of the selection)
 and a "Release" button. Dragging the slider writes `Lod.apply_lod = true`,
@@ -271,6 +280,13 @@ prepare phase, so a variant a worker commits in between shows the old
 variant's fill under the new variant's edges for one frame (both stay
 allocated until the frame retires).
 
+A primitive loaded with a stored chain has no edge lines until its full
+build (the base variant's and the levels' alike); a viewport style that draws
+edge lines or a selection queues that build, which builds the levels' edge
+lines from the stored indices (on the Quest, the on-demand full build reads
+the mesh and its levels back from the file first). Until it commits, the
+outline is not drawn for that mesh.
+
 ## Verification
 
 `render_scene_image` renders through the same composition passes as a
@@ -295,3 +311,12 @@ With `--hysteresis BAND` it also dollies back in (the outward switches at
 d_L / (1 - BAND), the inward ones at d_L) and stops the camera inside each
 level's band from either side, requiring the level it arrived with for 300
 frames, with the classification check under gpu at every hold.
+
+`scripts/lod_roundtrip_verify.py` checks the stored chains (`ERHE_mesh_lod`,
+`doc/erhe/meshoptimizer_integration.md` "Stored chains"): a soup torus and
+capsule made prepared by a save, chains generated, saved and loaded back,
+saved again and saved for Quest and loaded back: only the requested
+primitive carries a chain, the chains are identical (errors bit for bit),
+`render_scene_image` is identical at forced levels 0..5, at four automatic
+distances and without `Lod`, the level edge counts match after the full
+build a selection queues, and nothing but the two requests generates.

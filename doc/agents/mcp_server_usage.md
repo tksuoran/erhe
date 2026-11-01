@@ -1188,13 +1188,18 @@ Returns: `{pending, running, queued_operations, pending_scene_commits, asset_loa
 
 Mesh level of detail on request (`doc/erhe/meshoptimizer_integration.md`
 "Level of detail"). `generate_lods` takes `scene_name` and `node_ids`, or
-`node_id` / `node_name`, of mesh nodes, plus either `settings` (the
+`node_id` / `node_name`, of mesh nodes, or `scope: "scene"` (every mesh of
+the scene's content layer; the default scope `items` takes the node
+arguments), plus either `settings` (the
 `Lod_settings` fields: `level_count`, `ratio`, `attributes`
 `positions_only` / `normals_and_colors`, `normal_weight`, `color_weight`,
 `border` `free` / `locked`, `seams` `keep` / `permissive`, `fallback` `none`
 / `sloppy`, `normal_merge_angle`; omitted fields take the defaults) or
 `clear: true`. It sets the request on every distinct primitive of the meshes
-and queues the rebuild of their optimized variants. Returns `{mode, settings,
+and queues the rebuild of their optimized variants. A Save for Quest
+(`save_scene_for_quest`) stores the chains that exist and generates none, so a
+scene to profile with LODs everywhere takes `scope: "scene"` first. Returns
+`{mode, scope, settings,
 mesh_count, primitive_count, queued_count, task_count, unchanged_count,
 held_count, not_optimized_count}`; poll `get_async_status` until `idle`.
 

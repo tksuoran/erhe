@@ -2042,6 +2042,16 @@ auto save_scene_gltf(
         export_ms,
         gltf.size()
     );
+    if ((prepared_statistics.lod_stored_count + prepared_statistics.lod_generated_count + prepared_statistics.lod_none_count) > 0) {
+        log_parsers->info(
+            "save_scene_gltf: '{}' LOD chains (ERHE_mesh_lod): {} stored chains written back, {} generated over the export core, {} requests without a chain, {:.1f} ms",
+            erhe::file::to_string(path),
+            prepared_statistics.lod_stored_count,
+            prepared_statistics.lod_generated_count,
+            prepared_statistics.lod_none_count,
+            prepared_statistics.lod_ms
+        );
+    }
     if (gpu_vertex_formats != nullptr) {
         log_parsers->info(
             "save_scene_gltf: '{}' GPU vertex streams: {} primitives written, {} not expressible in the layouts, {:.1f} ms",

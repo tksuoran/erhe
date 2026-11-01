@@ -10358,7 +10358,7 @@
     "name": "get_memory_usage"
   },
   {
-    "description": "Generate mesh level of detail chains on request (doc/erhe/meshoptimizer_integration.md 'Level of detail', doc/plans/lod.md): sets Primitive::lod_settings of every distinct primitive of the target meshes (a primitive shared by several meshes once) and queues a deferred finalize task that builds a new optimized variant with the chain on a worker and publishes it on the main thread, re-registering every mesh sharing the primitive. Geometry-path primitives re-optimize from their Geometry; prepared primitives (prepared or stored-stream loads) repack their core soup, read back from the file when released. Level 0 keeps the bytes of the variant it replaces; drawing reads level 0 unless the mesh's Lod properties force a level (set Lod.apply_lod, Lod.mode = Forced and Lod.forced_level with set_item_property; doc/erhe/draw_list_renderer.md R1c). A primitive under a live-edit optimization hold keeps the settings and gets its chain from the finalize after the edit; edit operations hand the settings to the primitive they build. Asynchronous: poll get_async_status until idle, then read get_lod_info. clear true removes the request and publishes a variant without chain. Reply: mode, settings, mesh_count, primitive_count, queued_count, task_count, unchanged_count (same settings, variant live: nothing queued), held_count, not_optimized_count (mesh optimization off: settings set, no variant to build).",
+    "description": "Generate mesh level of detail chains on request (doc/erhe/meshoptimizer_integration.md 'Level of detail', doc/plans/lod.md): sets Primitive::lod_settings of every distinct primitive of the target meshes (a primitive shared by several meshes once) and queues a deferred finalize task that builds a new optimized variant with the chain on a worker and publishes it on the main thread, re-registering every mesh sharing the primitive. Geometry-path primitives re-optimize from their Geometry; prepared primitives (prepared or stored-stream loads) repack their core soup, read back from the file when released. Level 0 keeps the bytes of the variant it replaces; drawing reads level 0 unless the mesh's Lod properties force a level (set Lod.apply_lod, Lod.mode = Forced and Lod.forced_level with set_item_property; doc/erhe/draw_list_renderer.md R1c). A primitive under a live-edit optimization hold keeps the settings and gets its chain from the finalize after the edit; edit operations hand the settings to the primitive they build. Asynchronous: poll get_async_status until idle, then read get_lod_info. clear true removes the request and publishes a variant without chain. scope scene targets every content mesh of the scene (the LOD window's Generate for scene), for example before save_scene_for_quest, which stores the chains that exist (ERHE_mesh_lod) and generates none of its own. Reply: mode, scope, settings, mesh_count, primitive_count, queued_count, task_count, unchanged_count (same settings, variant live: nothing queued), held_count, not_optimized_count (mesh optimization off: settings set, no variant to build).",
     "inputSchema": {
       "properties": {
         "clear": {
@@ -10382,6 +10382,14 @@
         },
         "scene_name": {
           "description": "Scene of the nodes (required)",
+          "type": "string"
+        },
+        "scope": {
+          "description": "items (default): the node_ids / node_id / node_name targets; scene: every mesh of the scene's content layer (no node arguments), the explicit scene-wide request",
+          "enum": [
+            "items",
+            "scene"
+          ],
           "type": "string"
         },
         "settings": {

@@ -178,9 +178,19 @@ auto Mcp_server::action_generate_lods(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
 
-    // Targets: node_ids, or node_id / node_name.
+    // Targets: scope "scene" (every content mesh of the scene), or
+    // node_ids, or node_id / node_name (scope "items", the default).
+    const std::string scope = args.value("scope", "items");
+    if ((scope != "items") && (scope != "scene")) {
+        return make_error_content("scope must be items or scene");
+    }
+    if ((scope == "scene") && (args.contains("node_ids") || args.contains("node_id") || args.contains("node_name"))) {
+        return make_error_content("scope scene takes no node_ids, node_id or node_name");
+    }
     std::vector<std::shared_ptr<erhe::Item_base>> targets;
-    if (args.contains("node_ids")) {
+    if (scope == "scene") {
+        // Resolved by request_scene_lod_generation() below.
+    } else if (args.contains("node_ids")) {
         const json& ids = args["node_ids"];
         if (!ids.is_array() || ids.empty()) {
             return make_error_content("node_ids must be a non-empty array of node ids");
@@ -222,9 +232,12 @@ auto Mcp_server::action_generate_lods(const json& args) -> std::string
         }
     }
 
-    const Lod_generation_result result = request_lod_generation(m_context, targets, settings);
+    const Lod_generation_result result = (scope == "scene")
+        ? request_scene_lod_generation(m_context, *scene_root, settings)
+        : request_lod_generation(m_context, targets, settings);
     return make_json_content({
         {"mode",                settings.has_value() ? "generate" : "clear"},
+        {"scope",               scope},
         {"settings",            settings.has_value() ? lod_settings_to_json(settings.value()) : json{}},
         {"mesh_count",          result.mesh_count},
         {"primitive_count",     result.primitive_count},

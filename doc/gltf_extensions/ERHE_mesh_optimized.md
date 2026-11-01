@@ -11,8 +11,9 @@ erhe project. Draft vendor extension. The plan that introduces it is
 
 Written against glTF 2.0. Optional (`extensionsUsed` only, never
 `extensionsRequired`). No other extension is required.
-[`ERHE_mesh_topology`](ERHE_mesh_topology.md) and
-[`ERHE_raytrace_bvh`](ERHE_raytrace_bvh.md) depend on this one.
+[`ERHE_mesh_topology`](ERHE_mesh_topology.md),
+[`ERHE_raytrace_bvh`](ERHE_raytrace_bvh.md) and [`ERHE_mesh_lod`](ERHE_mesh_lod.md)
+depend on this one.
 
 ## Scope
 
@@ -121,9 +122,10 @@ through the path for primitives without it, when any of these fails:
 Contract items 3, 4, 7 and 8 are not checked: violating them costs
 performance or weld merges, never correctness of the loaded primitive.
 
-A rejected `ERHE_mesh_optimized` also rejects `ERHE_mesh_topology` and
-`ERHE_raytrace_bvh` on the same primitive, because both depend on core
-triangle `t` being facet `t`.
+A rejected `ERHE_mesh_optimized` also rejects `ERHE_mesh_topology`,
+`ERHE_raytrace_bvh` and `ERHE_mesh_lod` on the same primitive: the first
+two depend on core triangle `t` being facet `t`, the LOD chain on the core
+vertices being the ones it was made over.
 
 ## Schema
 

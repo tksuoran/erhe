@@ -52,6 +52,9 @@ public:
     std::size_t                              index_count {0};
     std::vector<uint8_t>                     indices;
     std::vector<float>                       positions_xyz;
+    // The stored LOD chain's indices (ERHE_mesh_lod; levels after level 0,
+    // back to back), uploaded with level 0 and dropped with the streams.
+    std::vector<uint32_t>                    lod_indices;
     Stored_vertex_variant                    base;
     std::optional<Stored_vertex_variant>     optimized;
     Position_quantization                    position_quantization{};

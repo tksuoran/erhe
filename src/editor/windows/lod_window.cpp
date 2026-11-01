@@ -20,6 +20,7 @@
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/prepared_primitive.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
@@ -314,13 +315,38 @@ void Lod_window::settings_imgui()
 
 void Lod_window::generate_imgui(const std::shared_ptr<Scene_root>& scene_root)
 {
-    static_cast<void>(scene_root);
     const bool has_meshes = !m_meshes.empty();
     ImGui::BeginDisabled(!has_meshes || (m_context.imgui_windows == nullptr));
     const bool generate = ImGui::Button("Generate for selection");
     ImGui::SameLine();
     const bool clear    = ImGui::Button("Clear for selection");
     ImGui::EndDisabled();
+    // The explicit scene-wide request: every content mesh of the active scene
+    // (for example before a Save for Quest, which stores the chains that
+    // exist and generates none).
+    ImGui::BeginDisabled(!scene_root || (m_context.imgui_windows == nullptr));
+    const bool generate_scene = ImGui::Button("Generate for scene");
+    ImGui::SameLine();
+    const bool clear_scene    = ImGui::Button("Clear for scene");
+    ImGui::EndDisabled();
+    if ((generate_scene || clear_scene) && scene_root && (m_context.imgui_windows != nullptr)) {
+        const std::optional<erhe::primitive::Lod_settings> settings = generate_scene
+            ? std::optional<erhe::primitive::Lod_settings>{m_settings}
+            : std::optional<erhe::primitive::Lod_settings>{};
+        m_request_queued = true;
+        m_context.imgui_windows->queue(
+            [this, scene_root, settings]() {
+                const Lod_generation_result result = request_scene_lod_generation(m_context, *scene_root, settings);
+                m_request_queued = false;
+                m_last_request = fmt::format(
+                    "{} for scene: {} meshes, {} primitives, {} queued, {} unchanged, {} held, {} not optimized",
+                    settings.has_value() ? "Generate" : "Clear",
+                    result.mesh_count, result.primitive_count, result.queued_count,
+                    result.unchanged_count, result.held_count, result.not_optimized_count
+                );
+            }
+        );
+    }
     if ((generate || clear) && has_meshes && (m_context.imgui_windows != nullptr)) {
         // ImGui-time work is queued (doc/editor/coding_rules.md): the
         // request runs at the start of the next prepare phase.
@@ -541,7 +567,20 @@ void Lod_window::table_imgui(Scene_root& scene_root)
         const erhe::primitive::Buffer_mesh& buffer_mesh = primitive.optimized_render_shape->get_renderable_mesh();
         const erhe::primitive::Lod_chain&   chain       = buffer_mesh.lod_chain;
         if (chain.is_empty()) {
-            ImGui::TextUnformatted(primitive.lod_settings.has_value() ? "  no chain (the mesh did not simplify)" : "  no chain");
+            // A request matching a stored chain (ERHE_mesh_lod) never
+            // generates: an empty chain then means the stored one did not
+            // load (the erhe.primitive warning says why).
+            const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& prepared_data = primitive.render_shape
+                ? primitive.render_shape->get_prepared_data()
+                : std::shared_ptr<const erhe::primitive::Prepared_primitive_data>{};
+            const bool stored_chain_failed =
+                primitive.lod_settings.has_value() && prepared_data && prepared_data->lod.has_value() &&
+                (prepared_data->lod->settings == primitive.lod_settings.value());
+            ImGui::TextUnformatted(
+                stored_chain_failed                ? "  no chain (the stored chain did not load; see the log)" :
+                primitive.lod_settings.has_value() ? "  no chain (the mesh did not simplify)" :
+                                                     "  no chain"
+            );
         }
 
         // The level the viewport drew the mesh's color entry for this

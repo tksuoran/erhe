@@ -519,7 +519,7 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
         const auto shape_json = [](const erhe::primitive::Shape_memory_statistics& s) -> json {
             const std::size_t total =
                 s.triangle_soup_vertex_bytes + s.triangle_soup_index_bytes + s.element_mapping_bytes +
-                s.prepared_colocation_bytes + s.prepared_bvh_bytes + s.stored_bvh_bytes +
+                s.triangle_soup_lod_index_bytes + s.prepared_colocation_bytes + s.prepared_bvh_bytes + s.stored_bvh_bytes +
                 s.raytrace_buffer_bytes + s.raytrace_facet_map_bytes + s.raytrace_bvh_node_bytes +
                 s.raytrace_primitive_id_bytes + s.raytrace_precomputed_triangle_bytes + s.raytrace_pending_prebuilt_bvh_bytes;
             return json{
@@ -528,6 +528,7 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
                 {"triangle_soup_count",                 s.triangle_soup_count},
                 {"triangle_soup_vertex_bytes",          s.triangle_soup_vertex_bytes},
                 {"triangle_soup_index_bytes",           s.triangle_soup_index_bytes},
+                {"triangle_soup_lod_index_bytes",       s.triangle_soup_lod_index_bytes},
                 {"triangle_soup_released_count",        s.triangle_soup_released_count},
                 {"element_mapping_bytes",               s.element_mapping_bytes},
                 {"prepared_data_count",                 s.prepared_data_count},

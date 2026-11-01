@@ -1303,3 +1303,17 @@ turn them on. Decision D5: a separate item after item 9.
   descriptor carries the at-load bounds and affines, and the base-only build
   uploads exactly the at-load base.
 - Not driven: the paint and component-drag refusals (interactive tools).
+
+## LOD chains in the prepared file
+
+The prepared core can carry a stored LOD chain (`ERHE_mesh_lod`,
+`doc/gltf_extensions/ERHE_mesh_lod.md`; `doc/plans/lod.md` step 6), written
+by a save or Save for Quest for primitives with a requested chain. Its level
+indices follow the rules above for the core: the GPU copy is uploaded with
+level 0 into the optimized variant at load (both the soup and the stored
+streams path), and the CPU copy (`Triangle_soup::lod_index_data`) is read,
+kept and released with the soup under `load.cpu_mesh_data`, so on the Quest
+it is freed after the upload and read back from the file, with the soup and
+all its levels, by the on-demand full build of item 10. Details and
+measurements: `doc/erhe/meshoptimizer_integration.md` "Level of detail",
+"Stored chains".

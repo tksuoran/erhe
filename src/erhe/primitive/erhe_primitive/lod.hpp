@@ -242,6 +242,35 @@ public:
 // zero-area triangle is not a face: its edges are carried by its neighbours.
 void build_lod_edge_lines(const Lod_vertex_input& vertices, Lod_chain_indices& lod_indices);
 
+// A LOD chain stored with a prepared primitive (the ERHE_mesh_lod glTF
+// extension, doc/gltf_extensions/ERHE_mesh_lod.md): the levels after level 0
+// as generate_lod_chain() made them over the prepared core, and the settings
+// they were made with. A stored chain is used as it is: loading it runs no
+// simplification. `chain.levels` holds every level's first index, index
+// count and error; `chain.indices` holds the levels' indices back to back
+// (the prepared data keeps the table only; the indices travel with the soup,
+// Triangle_soup::lod_index_data). No edge-line data: a level's
+// edge lines are built from its indices when the primitive's edge lines are
+// built (build_lod_edge_lines()).
+class Stored_lod_chain
+{
+public:
+    Lod_settings      settings;
+    Lod_chain_indices chain;
+
+    // Sum of the levels' index counts.
+    [[nodiscard]] auto get_index_count() const -> std::size_t;
+};
+
+// The checks a stored chain passes before it is used: 1 to max_lod_levels - 1
+// levels, back to back from index 0, each a non-empty multiple of 3 indices,
+// errors finite, positive and strictly increasing, `chain.indices` (when not
+// empty: a level table checked before its indices are read) holding exactly
+// the levels' indices, every index below
+// `vertex_count`. Returns an empty string when it passes, otherwise the
+// reason (a fixed phrase without numbers).
+[[nodiscard]] auto validate_stored_lod_chain(const Stored_lod_chain& stored, std::size_t vertex_count) -> std::string;
+
 // The edge-line allocations of an optimized variant built with a chain, made
 // inside the variant's allocation transaction (the caller holds
 // buffer_mesh_allocation_mutex()): `lod_indices`' edge-line vertices from
