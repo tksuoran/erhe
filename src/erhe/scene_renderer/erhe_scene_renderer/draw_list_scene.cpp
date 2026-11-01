@@ -3174,19 +3174,54 @@ void Draw_list_scene::classify_cull_views()
     // Level of detail selection (doc/plans/lod_gpu_selection.md sections 1
     // and 3): the frame's LOD columns and the frame slot's level region,
     // whose words the CPU command writer reads (draw_list_chunks()).
-    assign_lod_columns(slot);
     if (m_lod_level_slots.size() != m_draw_list_slots.size()) {
         m_lod_level_slots.resize(m_draw_list_slots.size());
     }
     Lod_level_slot& level_slot = m_lod_level_slots[frame_index % m_lod_level_slots.size()];
-    level_slot.frame_index  = frame_index;
-    level_slot.classified   = true;
+    assign_lod_columns(slot, level_slot);
+    level_slot.frame_index         = frame_index;
+    level_slot.classified          = true;
+    level_slot.entry_layout_serial = slot.entry_layout_serial;
+    level_slot.classification      = slot.classification;
     if (level_slot.lists.size() < draw_lists.size()) {
         level_slot.lists.resize(draw_lists.size());
     }
     const std::size_t lod_group_count = (static_cast<std::size_t>(m_lod_column_count) + 7) / 8;
-    // The frame's threshold squared, the value the GPU's lod_header carries.
-    const float       lod_threshold2  = slot.lod_settings.threshold_pixels * slot.lod_settings.threshold_pixels;
+    // The frame's threshold squared and coarsening threshold squared, the
+    // values the GPU's lod_header carries.
+    const float       lod_threshold2         = slot.lod_settings.threshold_pixels * slot.lod_settings.threshold_pixels;
+    const float       lod_coarsen_threshold2 = cull_lanes::get_lod_coarsen_threshold2(slot.lod_settings.threshold_pixels, slot.lod_settings.hysteresis_band);
+    // Hysteresis (section 6): the previous frame's level region (its own
+    // slot, the CPU's levels) and the column matching by lod_key; a single
+    // frame slot keeps no previous region (selection starts fresh).
+    std::fill(m_lod_previous_columns.begin(), m_lod_previous_columns.end(), lod_column_none);
+    const Lod_level_slot* previous_level_slot = nullptr;
+    if ((m_lod_column_count > 0) && (frame_index > 0) && (m_lod_level_slots.size() >= 2)) {
+        const Lod_level_slot& candidate = m_lod_level_slots[(frame_index - 1) % m_lod_level_slots.size()];
+        if (candidate.classified) {
+            cull_lanes::match_lod_previous_columns(
+                candidate.get_history(),
+                level_slot.get_history(),
+                std::span<uint32_t>{m_lod_previous_columns.data(), m_lod_column_count}
+            );
+            previous_level_slot = &candidate;
+        }
+    }
+    if (m_lod_column_count > 0) {
+        bool any_matched = false;
+        bool any_shifted = false;
+        for (uint32_t column = 0; column < m_lod_column_count; ++column) {
+            const uint32_t previous_column = m_lod_previous_columns[column];
+            any_matched = any_matched || (previous_column != lod_column_none);
+            any_shifted = any_shifted || ((previous_column != lod_column_none) && (previous_column != column));
+        }
+        if (!any_matched) {
+            ++m_lod_history_restart_count;
+        }
+        if (any_shifted) {
+            ++m_lod_history_shift_count;
+        }
+    }
 
     // The PVS rule (doc/plans/pvs.md "Runtime consumption"): per color view
     // with a query box, the cells of the box's corners in the frame's
@@ -3253,12 +3288,25 @@ void Draw_list_scene::classify_cull_views()
                 }
                 const Lod_view& lod_view = m_cull_views[view_index].lod_view.value();
                 const cull_lanes::Lod_lane_view lane_view{
-                    .origin           = lod_view.origin,
-                    .projection_scale = lod_view.projection_scale,
-                    .projection       = lod_view.projection,
-                    .threshold2       = lod_threshold2,
-                    .global_bias      = slot.lod_settings.bias
+                    .origin             = lod_view.origin,
+                    .projection_scale   = lod_view.projection_scale,
+                    .projection         = lod_view.projection,
+                    .threshold2         = lod_threshold2,
+                    .coarsen_threshold2 = lod_coarsen_threshold2,
+                    .global_bias        = slot.lod_settings.bias
                 };
+                // The matched previous column's words of this list: the
+                // same entries (same entry layout), the previous frame's
+                // group count.
+                const uint32_t  previous_column = m_lod_previous_columns[column];
+                const uint32_t* previous_words  = nullptr;
+                if (previous_column != lod_column_none) {
+                    ERHE_VERIFY(previous_level_slot != nullptr);
+                    const std::vector<uint32_t>& previous_list_words = previous_level_slot->lists[list_index];
+                    const std::size_t previous_group_count = (static_cast<std::size_t>(previous_level_slot->column_count) + 7) / 8;
+                    ERHE_VERIFY(previous_list_words.size() == (previous_group_count * entry_count));
+                    previous_words = previous_list_words.data() + ((previous_column / 8) * entry_count);
+                }
                 cull_lanes::lod_lanes(
                     lane_view,
                     bounds,
@@ -3268,7 +3316,9 @@ void Draw_list_scene::classify_cull_views()
                     m_lod_gap.data(),
                     m_lod_distance2.data(),
                     level_words.data() + ((column / 8) * entry_count),
-                    4u * (column % 8)
+                    4u * (column % 8),
+                    previous_words,
+                    4u * (previous_column % 8)
                 );
             }
         }
@@ -3398,13 +3448,25 @@ void Draw_list_scene::classify_cull_views()
     capture_lod_levels(slot, level_slot);
 }
 
-void Draw_list_scene::assign_lod_columns(const Draw_list_slot& slot)
+auto Draw_list_scene::Lod_level_slot::get_history() const -> cull_lanes::Lod_history_frame
+{
+    return cull_lanes::Lod_history_frame{
+        .frame_index         = frame_index,
+        .entry_layout_serial = entry_layout_serial,
+        .classification      = classification,
+        .column_keys         = std::span<const uint64_t>{column_keys.data(), column_count}
+    };
+}
+
+void Draw_list_scene::assign_lod_columns(const Draw_list_slot& slot, Lod_level_slot& level_slot)
 {
     // One column per color view with a Lod_view, in view order, while the
     // limits allow (doc/plans/lod_gpu_selection.md section 3 "Columns");
-    // a view past them draws the template range.
+    // a view past them draws the template range. The level slot records
+    // each column's lod_key (section 6).
     m_lod_column_count          = 0;
     m_lod_column_overflow_count = 0;
+    level_slot.column_count     = 0;
     std::fill(m_cull_view_lod_columns.begin(), m_cull_view_lod_columns.end(), lod_column_none);
     if (!slot.lod_active) {
         return;
@@ -3419,10 +3481,12 @@ void Draw_list_scene::assign_lod_columns(const Draw_list_slot& slot)
             ++m_lod_column_overflow_count;
             continue;
         }
-        m_cull_view_lod_columns[view_index] = m_lod_column_count;
+        m_cull_view_lod_columns[view_index]         = m_lod_column_count;
+        level_slot.column_keys[m_lod_column_count] = view.lod_view.value().lod_key;
         ++m_lod_column_count;
         ++color_column_count;
     }
+    level_slot.column_count = m_lod_column_count;
     if ((m_lod_column_overflow_count > 0) && !m_lod_column_overflow_logged) {
         m_lod_column_overflow_logged = true;
         log_draw_list->warn(
@@ -3576,14 +3640,17 @@ void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_l
     capture.active                = slot.lod_active;
     capture.settings              = slot.lod_settings;
     capture.column_overflow_count = m_lod_column_overflow_count;
+    capture.history_restart_count = m_lod_history_restart_count;
+    capture.history_shift_count   = m_lod_history_shift_count;
     for (std::size_t view_index = 0, end = m_cull_views.size(); view_index < end; ++view_index) {
         const uint32_t column = m_cull_view_lod_columns[view_index];
         if (column != lod_column_none) {
             capture.columns.push_back(
                 Lod_level_capture_column{
-                    .column   = column,
-                    .view     = static_cast<uint32_t>(view_index),
-                    .lod_view = m_cull_views[view_index].lod_view.value()
+                    .column          = column,
+                    .view            = static_cast<uint32_t>(view_index),
+                    .previous_column = m_lod_previous_columns[column],
+                    .lod_view        = m_cull_views[view_index].lod_view.value()
                 }
             );
         }

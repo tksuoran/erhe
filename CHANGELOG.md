@@ -42,6 +42,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: level of detail hysteresis
+  (doc/plans/lod_gpu_selection.md step 4): `Lod_frame_settings::hysteresis_band`
+  and `max_lod_hysteresis_band`; `cull_lanes::Lod_lane_view::coarsen_threshold2`,
+  `cull_lanes::get_lod_coarsen_threshold2()`, `cull_lanes::Lod_history_frame`,
+  `cull_lanes::match_lod_previous_columns()` and
+  `cull_lanes::lod_previous_level_none`; the optional `previous_level`
+  argument of `cull_lanes::select_lod_level()` and `previous_words` /
+  `previous_nibble_shift` of `cull_lanes::lod_lanes()`;
+  `Gpu_cull_classifier::lod_previous_levels_binding_point` (the
+  classification's thirteenth storage block);
+  `Lod_level_capture_column::previous_column` and
+  `Lod_level_capture::history_restart_count` / `history_shift_count`.
 - `erhe::scene_renderer`: CPU consumers of the selected level of detail
   (doc/plans/lod_gpu_selection.md step 3): `Draw_list_published_entry`,
   `Draw_list_scene::find_published_color_entry()`,
@@ -1251,6 +1263,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Lod_view::lod_key` and
+  `Draw_list_renderer::Color_cull_view_parameters::lod_key` are `uint64_t`
+  (was `const void*`): an identity never reused for another view (the
+  editor passes the scene view's serial id), so a view destroyed and another
+  created at the same address do not share selection history; 0 is none.
+  `lod_column_none`, `max_lod_columns` and `max_lod_color_columns` moved
+  from `draw_list_scene.hpp` to `draw_list.hpp` (same namespace).
 - `erhe::scene_renderer`: `Content_wide_line_renderer::prepare_mesh()` takes a
   `const Content_wide_line_draw_lists&` before the feed (the draw lists the
   records name their color entries in; `{}` for none) and also writes the

@@ -2014,7 +2014,7 @@ void Headset_view::prepare_cull_planes(const glm::mat4& world_from_head)
             .origin           = glm::vec3{world_from_head[3]},
             .projection_scale = m_combined_eye_projection_scale,
             .projection       = erhe::scene_renderer::Lod_projection::perspective,
-            .lod_key          = static_cast<const Scene_view*>(this) // the scene view, as Composer::add_cull_views() keys a viewport
+            .lod_key          = get_serial_id() // the scene view, as Composer::add_cull_views() keys a viewport
         };
     }
 

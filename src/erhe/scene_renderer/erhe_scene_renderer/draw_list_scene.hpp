@@ -647,15 +647,6 @@ enum class Cull_classification_check_state : uint8_t
     complete  // the result is ready (poll_cull_classification_check() returns it once)
 };
 
-// The level of detail column of a culling view
-// (doc/plans/lod_gpu_selection.md section 3 "Columns"): one per color view
-// with a Lod_view in a frame whose selection is active, at most
-// max_lod_columns per frame, of which at most max_lod_color_columns color
-// columns.
-constexpr uint32_t lod_column_none      {0xffffffffu};
-constexpr uint32_t max_lod_columns      {64};
-constexpr uint32_t max_lod_color_columns{8};
-
 // Diagnostic capture of the CPU level region of one frame
 // (Draw_list_scene::request_lod_level_capture()): the frame's columns with
 // their views' selection inputs, and per entry of the captured object its
@@ -663,9 +654,10 @@ constexpr uint32_t max_lod_color_columns{8};
 class Lod_level_capture_column
 {
 public:
-    uint32_t column{lod_column_none};
-    uint32_t view  {0};
-    Lod_view lod_view{};
+    uint32_t column         {lod_column_none};
+    uint32_t view           {0};
+    uint32_t previous_column{lod_column_none}; // the matched column of the frame before (hysteresis), none: fresh
+    Lod_view lod_view       {};
 };
 
 class Lod_level_capture_entry
@@ -690,6 +682,13 @@ public:
     bool                                  active               {false};
     Lod_frame_settings                    settings             {};
     uint32_t                              column_overflow_count{0}; // views past the column limits in the frame
+    // Hysteresis (doc/plans/lod_gpu_selection.md section 6), counted over
+    // the scene's classified frames up to the captured one: frames with
+    // LOD columns of which no column had a previous column (a restart), and
+    // frames in which some column matched a previous column at another
+    // index (a view added or removed before it).
+    std::size_t                           history_restart_count{0};
+    std::size_t                           history_shift_count  {0};
     std::vector<Lod_level_capture_column> columns;
     std::vector<Lod_level_capture_entry>  entries;
 };
@@ -1875,17 +1874,36 @@ private:
     // per entry per group of 8 columns, group-major (level of entry i in
     // column c at [(c / 8) * entry_count + i], nibble c % 8), for the
     // color lists of a frame with columns (empty otherwise). Capacity kept.
+    // The slot also records its frame's selection history inputs
+    // (cull_lanes::Lod_history_frame, section 6): the entry layout, the
+    // classification setting and the lod_key of each column; the next
+    // frame's classification reads the region as its previous levels.
     class Lod_level_slot
     {
     public:
-        uint64_t                           frame_index {0};
-        bool                               classified  {false};
-        std::vector<std::vector<uint32_t>> lists;
+        [[nodiscard]] auto get_history() const -> cull_lanes::Lod_history_frame;
+
+        uint64_t                                frame_index        {0};
+        bool                                    classified         {false};
+        uint64_t                                entry_layout_serial{0};
+        Cull_classification                     classification     {Cull_classification::cpu};
+        uint32_t                                column_count       {0};
+        std::array<uint64_t, max_lod_columns>   column_keys        {};
+        std::vector<std::vector<uint32_t>>      lists;
     };
     std::vector<Lod_level_slot>                                      m_lod_level_slots;
+    // Per LOD column of the frame being rendered, the previous frame's
+    // column with the same lod_key whose levels the hysteresis reads
+    // (cull_lanes::match_lod_previous_columns(); lod_column_none: the
+    // column's selection starts fresh), shared by both classification
+    // paths (the GPU view record's previous column).
+    std::array<uint32_t, max_lod_columns>                            m_lod_previous_columns{};
+    // Hysteresis diagnostics (render phase; Lod_level_capture).
+    std::size_t                                                      m_lod_history_restart_count{0};
+    std::size_t                                                      m_lod_history_shift_count  {0};
     [[nodiscard]] auto get_lod_level_slot(uint64_t frame_index) const -> const Lod_level_slot&;
     // The column assignment of the frame's views (classify_cull_views()).
-    void assign_lod_columns(const Draw_list_slot& slot);
+    void assign_lod_columns(const Draw_list_slot& slot, Lod_level_slot& level_slot);
     // request_lod_level_capture(): the requested object and stage under the
     // mutex; the capture is filled by the classification of the next frame.
     void capture_lod_levels(const Draw_list_slot& slot, const Lod_level_slot& level_slot);
@@ -2195,10 +2213,15 @@ private:
     // written by the slot's frame's classification (cull_classify.comp,
     // group_count * entry_count uint32 words, the CPU level words' layout
     // over all published lists back to back), read by its compaction
-    // (cull_compact.comp). Device memory outside the ring buffers, so a
-    // later frame can read it (hysteresis); grown to the slot's high-water
-    // size (logged). The slot's previous frame retired before its prepare
-    // phase, so the rewrite never races the GPU.
+    // (cull_compact.comp). Device memory outside the ring buffers, so the
+    // next frame's classification can read it (hysteresis, its previous
+    // region); grown to the slot's high-water size (logged). The slot's own
+    // previous frame retired before its prepare phase, but the frame after
+    // it may still be reading the region as its previous one: the rewrite
+    // waits for that read (an earlier-submissions barrier whenever
+    // previous_reader is set), and a grown slot's old Buffer frees its GPU
+    // memory only once the frames recorded before its destruction completed
+    // (erhe::graphics Buffer destruction is deferred).
     class Lod_region_slot
     {
     public:
@@ -2209,8 +2232,16 @@ private:
         uint32_t                                entry_count        {0};
         uint32_t                                group_count        {0};
         uint64_t                                entry_layout_serial{0};
+        // Some frame's classification read buffer as its previous level
+        // region since the slot's last write (previous_reader_frame: that
+        // frame, verified earlier than the rewriting frame).
+        bool                                    previous_reader    {false};
+        uint64_t                                previous_reader_frame{0};
     };
     std::vector<Lod_region_slot>                                     m_lod_region_slots;
+    // Bound as the previous level region of a dispatch without history
+    // (the shader reads it only for a view with a previous column).
+    std::unique_ptr<erhe::graphics::Buffer>                          m_lod_no_previous_buffer;
     // dispatch_gpu_cull_views(): the frame slot's region sized for the
     // frame and stamped with it.
     void prepare_lod_region_slot(uint64_t frame_index, std::size_t entry_count, std::size_t group_count, uint64_t entry_layout_serial);

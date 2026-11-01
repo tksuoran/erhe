@@ -5,7 +5,7 @@ Status: in progress
 The build order for automatic LOD level selection (`doc/plans/lod.md`
 section 2.3, decisions D3 and D4). It replaces that plan's step 4 ordering
 (4a CPU writer, 4b GPU writer, 4c shadows) and its step 5 (hysteresis). The
-design is accepted by the user (section 9); steps 1, 2a, 2b and 3 are built.
+design is accepted by the user (section 9); steps 1, 2a, 2b, 3 and 4 are built.
 Selection runs in the culling classification, on the CPU lanes and in
 `res/shaders/cull_classify.comp`, with the same arithmetic, so both produce
 the same level bit for bit; the command writers only read the result.
@@ -286,18 +286,21 @@ Alternatives considered for the edge feed:
 ## 6. Hysteresis (D4)
 
 A column moves an entry to a coarser level only when the coarser level
-passes `coarsen threshold2` (`(threshold * band)^2`, band < 1, a
-`Render_settings` value), and to a finer level as soon as the current level
-fails `threshold2`. The previous level per (column, entry) is the previous
-frame's level region (section 3, "Level regions"):
+passes `coarsen threshold2` (`(threshold * (1 - band))^2`, band in [0, 1),
+the graphics preset's `lod_hysteresis_band`; band 0 gives `threshold2` bit
+for bit, no hysteresis), and to a finer level as soon as the current level
+fails `threshold2`: the level is the previous one clamped to [coarse,
+selected], both after the biases and clamps. The previous level per
+(column, entry) is the previous frame's level region (section 3, "Level
+regions"):
 
 - Columns are matched across frames by `lod_key`, node-free so a rebuilt
   rendergraph keeps it: color, the scene view; 2D shadow, (light id, kind,
   pass index); point light, (light id, kind); a directional pass fitted to
-  a camera adds the scene view. The scene view in a key is a raw pointer
-  today (step 1); a scene view destroyed and another allocated at the same
-  address between two frames would alias, so step 4 keys it by a
-  scene-view serial id instead. The view record names the previous frame's
+  a camera adds the scene view. The scene view in a key is its serial id
+  (`Scene_view::get_serial_id()`, never reused), not its address, so a
+  scene view destroyed and another allocated at the same address do not
+  share history. The view record names the previous frame's
   column for the same key, or none, as the occlusion record names the
   previous frame's view group and bit (`doc/plans/occlusion_culling.md` 3b).
 - No previous column, a changed entry layout (`entry_layout_serial`), a
@@ -453,8 +456,25 @@ equals the image of forced level L at the same pose, both settings);
 
 ### Step 4: hysteresis
 
+State: done; described in `doc/erhe/draw_list_renderer.md` R1c
+("Hysteresis") and `doc/editor/lod.md` ("Automatic selection", "Graphics
+preset settings"). Verified on the headless Metal editor: G-off render
+images (default, heavy, a torus forced and automatic with band 0, both
+classification and `use_draw_lists` settings) identical to step 3, 36 of
+36, and `scripts/lod_dolly_verify.py` with band 0 identical to step 3's
+images, 36 of 36; `--hysteresis 0.25` (with and without `--outline`)
+passes: outward switches at d_L / 0.75, inward at d_L, every band hold
+keeps its level for 300 frames in both settings, the classification check
+0 mismatches at every hold and every tenth dolly step; level check 0
+mismatches with the band on over static frames and a camera move sequence
+on default, heavy, heavy four view and Bistro on Metal 3, Metal 4 and
+KosmicKrisp; restarts (a mesh added, each `culling_classification` switch)
+and a column shift (a viewport hidden) counted by `get_lod_selection` with
+0 mismatches after each.
+
 The previous-region read on both sides, `lod_key` matching, the restarts of
-section 6 and the `Render_settings` band. Before shadows, because the shadow
+section 6 and the graphics preset band (`lod_hysteresis_band`, carried by
+`Lod_frame_settings`). Before shadows, because the shadow
 cache test of step 5 reads the matched previous region. Replaces
 `doc/plans/lod.md` step 5. Gates: G-off; G-check with hysteresis on; a dolly
 that stops inside the band keeps the level for 300 frames; an entry layout

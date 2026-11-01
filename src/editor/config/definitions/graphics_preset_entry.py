@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_preset_entry",
-    version=7,
+    version=8,
     short_desc="Graphics quality preset",
     long_desc="",
     developer=False,
@@ -71,5 +71,10 @@ struct("Graphics_preset_entry",
         field("lod_enabled",          Bool,  added_in=7, default="false", short_desc="LOD Selection"),
         field("lod_threshold_pixels", Float, added_in=7, default="1.0f",  short_desc="LOD Threshold (pixels)"),
         field("lod_bias",             Int,   added_in=7, default="0",     short_desc="LOD Bias"),
+        # The hysteresis band (v8; doc/plans/lod_gpu_selection.md section 6):
+        # in [0, 1), a view moves an entry to a coarser level only once that
+        # level's error stays within lod_threshold_pixels * (1 - band); 0 =
+        # no hysteresis. Older presets read the default.
+        field("lod_hysteresis_band",  Float, added_in=8, default="0.25f", short_desc="LOD Hysteresis Band"),
     ],
 )

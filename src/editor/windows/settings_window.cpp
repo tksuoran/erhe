@@ -75,6 +75,7 @@
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
+#include "erhe_scene_renderer/cull_classification.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_xr/generated/headset_config_serialization.hpp"
 
@@ -639,6 +640,13 @@ void Settings_window::imgui()
         add_entry("LOD Bias", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::SliderInt("##", &graphics_preset.lod_bias, -7, 7)) {
+                on_graphics_preset_edited();
+            }
+        });
+        // The hysteresis band (doc/editor/lod.md "Hysteresis"): 0 = none.
+        add_entry("LOD Hysteresis Band", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            if (ImGui::SliderFloat("##", &graphics_preset.lod_hysteresis_band, 0.0f, erhe::scene_renderer::max_lod_hysteresis_band, "%.2f")) {
                 on_graphics_preset_edited();
             }
         });

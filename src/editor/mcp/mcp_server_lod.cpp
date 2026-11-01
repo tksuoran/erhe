@@ -565,7 +565,9 @@ auto Mcp_server::query_lod_selection(const json& args) -> std::string
             {"view",             column.view},
             {"origin",           json::array({column.lod_view.origin.x, column.lod_view.origin.y, column.lod_view.origin.z})},
             {"projection_scale", column.lod_view.projection_scale},
-            {"projection",       erhe::scene_renderer::c_str(column.lod_view.projection)}
+            {"projection",       erhe::scene_renderer::c_str(column.lod_view.projection)},
+            {"lod_key",          column.lod_view.lod_key},
+            {"previous_column",  (column.previous_column == erhe::scene_renderer::lod_column_none) ? json(nullptr) : json(column.previous_column)}
         });
     }
     json entries = json::array();
@@ -592,7 +594,10 @@ auto Mcp_server::query_lod_selection(const json& args) -> std::string
         {"selection",             erhe::scene_renderer::c_str(capture.settings.selection)},
         {"threshold_pixels",      capture.settings.threshold_pixels},
         {"bias",                  capture.settings.bias},
+        {"hysteresis_band",       capture.settings.hysteresis_band},
         {"column_overflow_count", capture.column_overflow_count},
+        {"history_restart_count", capture.history_restart_count},
+        {"history_shift_count",   capture.history_shift_count},
         {"columns",               std::move(columns)},
         {"entries",               std::move(entries)}
     }).dump();

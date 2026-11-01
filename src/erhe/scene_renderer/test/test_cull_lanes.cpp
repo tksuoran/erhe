@@ -645,15 +645,15 @@ TEST(Lod_word, fields_round_trip_and_clamp)
 TEST(Lod_view, is_same_compares_every_input)
 {
     using erhe::scene_renderer::Lod_view;
-    int key_a = 0;
-    int key_b = 0;
-    const Lod_view a{.origin = glm::vec3{1.0f, 2.0f, 3.0f}, .projection_scale = 500.0f, .lod_key = &key_a};
+    const uint64_t key_a = 1;
+    const uint64_t key_b = 2;
+    const Lod_view a{.origin = glm::vec3{1.0f, 2.0f, 3.0f}, .projection_scale = 500.0f, .lod_key = key_a};
     Lod_view b = a;
     EXPECT_TRUE(a.is_same(b));
     b.projection_scale = 400.0f;
     EXPECT_FALSE(a.is_same(b));
     b = a;
-    b.lod_key = &key_b;
+    b.lod_key = key_b;
     EXPECT_FALSE(a.is_same(b));
     b = a;
     b.projection = erhe::scene_renderer::Lod_projection::orthographic;
@@ -705,13 +705,31 @@ public:
 
     // The levels of every entry in column nibble (0..7), all other nibbles
     // holding junk the lanes must leave alone.
-    [[nodiscard]] auto levels(const cull_lanes::Lod_lane_view& view, const uint32_t nibble = 0) -> std::vector<uint32_t>
+    // previous: the previous frame's level per entry (hysteresis), placed
+    // at previous_nibble of words whose other nibbles hold junk; empty: no
+    // history.
+    [[nodiscard]] auto levels(
+        const cull_lanes::Lod_lane_view& view,
+        const uint32_t                   nibble          = 0,
+        const std::vector<uint32_t>&     previous        = {},
+        const uint32_t                   previous_nibble = 0
+    ) -> std::vector<uint32_t>
     {
         const std::size_t count = m_entries.size();
         std::vector<float>    gap(count);
         std::vector<float>    distance2(count);
         std::vector<uint32_t> words(count, 0xffffffffu & ~(0xfu << (4u * nibble)));
-        cull_lanes::lod_lanes(view, m_bounds, m_entries, m_table, count, gap.data(), distance2.data(), words.data(), 4u * nibble);
+        std::vector<uint32_t> previous_words;
+        if (!previous.empty()) {
+            EXPECT_EQ(previous.size(), count);
+            for (const uint32_t level : previous) {
+                previous_words.push_back((0x9abcdef1u & ~(0xfu << (4u * previous_nibble))) | (level << (4u * previous_nibble)));
+            }
+        }
+        cull_lanes::lod_lanes(
+            view, m_bounds, m_entries, m_table, count, gap.data(), distance2.data(), words.data(), 4u * nibble,
+            previous.empty() ? nullptr : previous_words.data(), 4u * previous_nibble
+        );
         std::vector<uint32_t> out;
         for (const uint32_t word : words) {
             EXPECT_EQ(word | (0xfu << (4u * nibble)), 0xffffffffu); // other nibbles untouched
@@ -732,11 +750,12 @@ const std::vector<float> c_lod_errors{0.0f, 0.001f, 0.0025f, 0.006f, 0.0125f, 0.
 [[nodiscard]] auto make_lod_lane_view(const float projection_scale, const float threshold_pixels) -> cull_lanes::Lod_lane_view
 {
     return cull_lanes::Lod_lane_view{
-        .origin           = glm::vec3{0.0f},
-        .projection_scale = projection_scale,
-        .projection       = erhe::scene_renderer::Lod_projection::perspective,
-        .threshold2       = threshold_pixels * threshold_pixels,
-        .global_bias      = 0
+        .origin             = glm::vec3{0.0f},
+        .projection_scale   = projection_scale,
+        .projection         = erhe::scene_renderer::Lod_projection::perspective,
+        .threshold2         = threshold_pixels * threshold_pixels,
+        .coarsen_threshold2 = cull_lanes::get_lod_coarsen_threshold2(threshold_pixels, 0.0f),
+        .global_bias        = 0
     };
 }
 
@@ -841,6 +860,133 @@ TEST(Lod_lanes, chain_end_and_template_levels)
     EXPECT_EQ(fixture.levels(make_lod_lane_view(900.0f, 1.0f), 5), (std::vector<uint32_t>{5u, 0u, 2u, 5u, 3u, 0u, 4u}));
     EXPECT_EQ(cull_lanes::get_lod_template_level(erhe::scene_renderer::make_lod_word(erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::forced, .forced_level = 4}, 3)), 2u);
     EXPECT_EQ(cull_lanes::get_lod_template_level(erhe::scene_renderer::make_lod_word(erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::forced, .forced_level = 4}, 0)), 0u);
+}
+
+// Hysteresis (doc/plans/lod_gpu_selection.md section 6): band 0 gives the
+// threshold itself, bit for bit, so selection with history equals selection
+// without it.
+TEST(Lod_lanes, hysteresis_band_zero_is_no_hysteresis)
+{
+    for (const float threshold : {1.0f, 2.5f, 0.3f, 7.0f}) {
+        const float threshold2 = threshold * threshold;
+        EXPECT_EQ(std::bit_cast<uint32_t>(cull_lanes::get_lod_coarsen_threshold2(threshold, 0.0f)), std::bit_cast<uint32_t>(threshold2));
+    }
+    const float projection_scale = 900.0f;
+    Lod_lane_fixture fixture{c_lod_errors};
+    for (float d = 0.1f; d < 40.0f; d *= 1.17f) {
+        fixture.add(d, 1.0f);
+    }
+    const cull_lanes::Lod_lane_view view = make_lod_lane_view(projection_scale, 1.0f);
+    const std::vector<uint32_t> fresh = fixture.levels(view);
+    for (uint32_t previous = 0; previous < 8; ++previous) {
+        EXPECT_EQ(fixture.levels(view, 2, std::vector<uint32_t>(fresh.size(), previous), 5), fresh) << "previous " << previous;
+    }
+}
+
+// Inside the band the previous level stays; past the band edges the level
+// follows the threshold: coarser only once the coarser level's error is
+// within threshold * (1 - band) (at d_L / (1 - band), d_L = error_L * k /
+// threshold), finer as soon as the level fails the threshold (below d_L).
+TEST(Lod_lanes, hysteresis_band_keeps_and_leaves)
+{
+    const float projection_scale = 900.0f;
+    const float threshold        = 2.0f;
+    const float band             = 0.25f;
+    cull_lanes::Lod_lane_view view = make_lod_lane_view(projection_scale, threshold);
+    view.coarsen_threshold2 = cull_lanes::get_lod_coarsen_threshold2(threshold, band);
+    for (std::size_t level = 1; level < c_lod_errors.size(); ++level) {
+        const double d_switch = (static_cast<double>(c_lod_errors[level]) * projection_scale) / threshold;
+        const double d_coarse = d_switch / (1.0 - band);
+        // Entries: just below the switch, inside the band, just past the
+        // coarsening edge. Previous level: level - 1 (moving outward) and
+        // level (moving inward).
+        Lod_lane_fixture fixture{c_lod_errors};
+        fixture.add(static_cast<float>(d_switch * 0.999), 1.0f);
+        fixture.add(static_cast<float>(0.5 * (d_switch + d_coarse)), 1.0f);
+        fixture.add(static_cast<float>(d_coarse * 1.001), 1.0f);
+        const uint32_t finer   = static_cast<uint32_t>(level - 1);
+        const uint32_t coarser = static_cast<uint32_t>(level);
+        // Without history: the threshold alone.
+        EXPECT_EQ(fixture.levels(view), (std::vector<uint32_t>{finer, coarser, coarser})) << "level " << level;
+        // Outward from level - 1: kept inside the band, coarser past its edge.
+        EXPECT_EQ(fixture.levels(view, 0, std::vector<uint32_t>(3, finer), 1), (std::vector<uint32_t>{finer, finer, coarser})) << "level " << level;
+        // Inward from level: kept inside the band, finer below the switch.
+        EXPECT_EQ(fixture.levels(view, 4, std::vector<uint32_t>(3, coarser), 6), (std::vector<uint32_t>{finer, coarser, coarser})) << "level " << level;
+    }
+}
+
+// History never holds an entry outside [coarse, selected]: a far coarser
+// previous level drops to the selected one, a far finer one rises to the
+// coarse one; template-level entries ignore history; the biases and clamps
+// apply to both ends.
+TEST(Lod_lanes, hysteresis_clamps_previous_level)
+{
+    const float projection_scale = 900.0f;
+    cull_lanes::Lod_lane_view view = make_lod_lane_view(projection_scale, 1.0f);
+    view.coarsen_threshold2 = cull_lanes::get_lod_coarsen_threshold2(1.0f, 0.5f);
+    // Level 2 by the threshold; the coarsening threshold (0.5 px) gives 1.
+    const float d = static_cast<float>(0.5 * (static_cast<double>(c_lod_errors[2]) + static_cast<double>(c_lod_errors[3])) * projection_scale);
+    Lod_lane_fixture fixture{c_lod_errors};
+    fixture.add(d, 1.0f);
+    fixture.add(d, 1.0f);
+    fixture.add(d, 1.0f, erhe::scene::Lod_data{.mode = erhe::scene::Lod_mode::forced, .forced_level = 4});
+    fixture.add(d, 1.0f, erhe::scene::Lod_data{.bias = 2});
+    fixture.add(d, 1.0f, erhe::scene::Lod_data{.max_level = 1});
+    EXPECT_EQ(fixture.levels(view), (std::vector<uint32_t>{2u, 2u, 4u, 4u, 1u}));
+    // previous 5: dropped to the selected 2; previous 0: raised to coarse
+    // 1; forced: 4 whatever the history; bias 2: [3, 4]; max 1: [1, 1].
+    EXPECT_EQ(fixture.levels(view, 0, std::vector<uint32_t>{5u, 0u, 0u, 0u, 5u}), (std::vector<uint32_t>{2u, 1u, 4u, 3u, 1u}));
+    EXPECT_EQ(fixture.levels(view, 0, std::vector<uint32_t>{1u, 2u, 1u, 5u, 0u}), (std::vector<uint32_t>{1u, 2u, 4u, 4u, 1u}));
+}
+
+// The restarts of section 6: a frame gap, another entry layout or a
+// classification switch give no column a previous column; otherwise
+// columns match by lod_key (0 never matches), whatever their positions.
+TEST(Lod_lanes, history_restarts_and_key_matching)
+{
+    using erhe::scene_renderer::Cull_classification;
+    using erhe::scene_renderer::lod_column_none;
+    const std::vector<uint64_t> previous_keys{7u, 3u, 9u};
+    const std::vector<uint64_t> current_keys {9u, 5u, 7u, 0u};
+    const cull_lanes::Lod_history_frame previous{
+        .frame_index         = 41,
+        .entry_layout_serial = 12,
+        .classification      = Cull_classification::gpu,
+        .column_keys         = previous_keys
+    };
+    cull_lanes::Lod_history_frame current{
+        .frame_index         = 42,
+        .entry_layout_serial = 12,
+        .classification      = Cull_classification::gpu,
+        .column_keys         = current_keys
+    };
+    std::vector<uint32_t> out(current_keys.size(), 123u);
+    cull_lanes::match_lod_previous_columns(previous, current, out);
+    EXPECT_EQ(out, (std::vector<uint32_t>{2u, lod_column_none, 0u, lod_column_none}));
+
+    const std::vector<uint32_t> none(current_keys.size(), lod_column_none);
+    cull_lanes::Lod_history_frame changed = current;
+    changed.frame_index = 43; // a frame gap
+    cull_lanes::match_lod_previous_columns(previous, changed, out);
+    EXPECT_EQ(out, none);
+    changed = current;
+    changed.entry_layout_serial = 13; // an entry added, removed or moved
+    cull_lanes::match_lod_previous_columns(previous, changed, out);
+    EXPECT_EQ(out, none);
+    changed = current;
+    changed.classification = Cull_classification::cpu; // a classification switch
+    cull_lanes::match_lod_previous_columns(previous, changed, out);
+    EXPECT_EQ(out, none);
+    // A key 0 previous column matches nothing either.
+    const std::vector<uint64_t> zero_keys{0u};
+    const std::vector<uint64_t> zero_current{0u};
+    cull_lanes::Lod_history_frame zero_previous = previous;
+    zero_previous.column_keys = zero_keys;
+    cull_lanes::Lod_history_frame zero_frame = current;
+    zero_frame.column_keys = zero_current;
+    std::vector<uint32_t> one(1, 5u);
+    cull_lanes::match_lod_previous_columns(zero_previous, zero_frame, one);
+    EXPECT_EQ(one, (std::vector<uint32_t>{lod_column_none}));
 }
 
 } // anonymous namespace

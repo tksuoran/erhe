@@ -83,10 +83,12 @@ public:
     // compaction's templates buffer), the level table (one uvec4 row per
     // level) and the frame's level region (persistent per frame slot), one
     // uint32 per entry per group of lod_columns_per_word LOD columns,
-    // written by the classification.
-    static constexpr unsigned int lod_templates_binding_point{9};
-    static constexpr unsigned int lod_table_binding_point    {10};
-    static constexpr unsigned int lod_levels_binding_point   {11};
+    // written by the classification; the previous frame's level region
+    // (the frame slot before, read for hysteresis: section 6).
+    static constexpr unsigned int lod_templates_binding_point      {9};
+    static constexpr unsigned int lod_table_binding_point          {10};
+    static constexpr unsigned int lod_levels_binding_point         {11};
+    static constexpr unsigned int lod_previous_levels_binding_point{12};
     static constexpr uint32_t     workgroup_size      {64};
     // GPU bounds: two vec4 per entry (center + max_axis_scale, extent +
     // purpose).
@@ -123,11 +125,11 @@ public:
     // The storage blocks each compute bind group layout lists (all of its
     // bindings); is_device_capable() requires the larger count of compute
     // storage blocks.
-    static constexpr std::array<unsigned int, 12> classify_storage_binding_points{
+    static constexpr std::array<unsigned int, 13> classify_storage_binding_points{
         bounds_binding_point, views_binding_point, masks_binding_point,
         occlusion_words_binding_point, occlusion_previous_words_binding_point,
         pvs_database_binding_point, pvs_culled_binding_point, pvs_columns_binding_point, pvs_pages_binding_point,
-        lod_templates_binding_point, lod_table_binding_point, lod_levels_binding_point
+        lod_templates_binding_point, lod_table_binding_point, lod_levels_binding_point, lod_previous_levels_binding_point
     };
     static constexpr std::array<unsigned int, 8> compact_storage_binding_points{
         compact_templates_binding_point, compact_jobs_binding_point, compact_masks_binding_point,
@@ -281,6 +283,7 @@ private:
     erhe::graphics::Shader_resource                           m_lod_templates_block;
     erhe::graphics::Shader_resource                           m_lod_table_block;
     erhe::graphics::Shader_resource                           m_lod_levels_block;
+    erhe::graphics::Shader_resource                           m_lod_previous_levels_block;
     std::size_t                                               m_view_header_offset{0};
     std::size_t                                               m_view_occlusion_header_offset{0};
     std::size_t                                               m_view_pvs_header_offset{0};

@@ -411,6 +411,7 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
             {"selection",             erhe::scene_renderer::c_str(draw_list_scene->get_lod_frame_settings().selection)},
             {"threshold_pixels",      draw_list_scene->get_lod_frame_settings().threshold_pixels},
             {"bias",                  draw_list_scene->get_lod_frame_settings().bias},
+            {"hysteresis_band",       draw_list_scene->get_lod_frame_settings().hysteresis_band},
             {"active",                draw_list_scene->is_lod_active()},
             {"chain_entry_count",     draw_list_scene->get_lod_chain_entry_count()},
             {"table_row_count",       draw_list_scene->get_lod_table().size()},

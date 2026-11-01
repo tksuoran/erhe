@@ -198,7 +198,7 @@ auto Draw_list_renderer::add_color_cull_view(
 
 auto Draw_list_renderer::get_color_lod_view(const Color_cull_view_parameters& parameters) -> std::optional<Lod_view>
 {
-    if ((parameters.lod_key == nullptr) || (parameters.views.size() != 1) || (parameters.views.front().camera == nullptr)) {
+    if ((parameters.lod_key == 0) || (parameters.views.size() != 1) || (parameters.views.front().camera == nullptr)) {
         return {};
     }
     const Camera_view_input&            view     = parameters.views.front();

@@ -694,7 +694,10 @@ void App_scenes::snapshot_render_settings()
     const erhe::scene_renderer::Lod_frame_settings lod_settings{
         .selection        = graphics_preset.lod_enabled ? erhe::scene_renderer::Lod_selection::on : erhe::scene_renderer::Lod_selection::off,
         .threshold_pixels = graphics_preset.lod_threshold_pixels,
-        .bias             = graphics_preset.lod_bias
+        .bias             = graphics_preset.lod_bias,
+        // [0, 1) by definition (Lod_frame_settings); a hand-edited preset
+        // file may hold anything.
+        .hysteresis_band  = std::clamp(graphics_preset.lod_hysteresis_band, 0.0f, erhe::scene_renderer::max_lod_hysteresis_band)
     };
     for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
         // Order: the joint pose capture assigns the skins' joint slots, the
