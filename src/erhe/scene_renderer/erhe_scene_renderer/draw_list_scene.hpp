@@ -654,10 +654,28 @@ enum class Cull_classification_check_state : uint8_t
 class Lod_level_capture_column
 {
 public:
-    uint32_t column         {lod_column_none};
-    uint32_t view           {0};
-    uint32_t previous_column{lod_column_none}; // the matched column of the frame before (hysteresis), none: fresh
-    Lod_view lod_view       {};
+    uint32_t          column           {lod_column_none};
+    uint32_t          view             {0};
+    uint32_t          previous_column  {lod_column_none}; // the matched column of the frame before (hysteresis), none: fresh
+    Lod_view          lod_view         {};
+    // A shadow column (doc/plans/lod_gpu_selection.md section 4): its
+    // purpose, the color columns of its sampling views (bit c: column c),
+    // the entries its pass draws whose level changed since the frame
+    // before and whether the column counts as changed
+    // (get_lod_column_change()).
+    Draw_purpose      purpose          {Draw_purpose::color};
+    uint32_t          color_column_mask{0};
+    uint32_t          changed_entries  {0};
+    Lod_column_change change           {Lod_column_change::none};
+};
+
+// A shadow view of a captured frame without a LOD column because a
+// sampling view has none (Lod_shadow_mode::template_range).
+class Lod_level_capture_template_view
+{
+public:
+    uint32_t view    {0};
+    uint64_t lod_key {0};
 };
 
 class Lod_level_capture_entry
@@ -689,8 +707,9 @@ public:
     // index (a view added or removed before it).
     std::size_t                           history_restart_count{0};
     std::size_t                           history_shift_count  {0};
-    std::vector<Lod_level_capture_column> columns;
-    std::vector<Lod_level_capture_entry>  entries;
+    std::vector<Lod_level_capture_column>        columns;
+    std::vector<Lod_level_capture_template_view> template_views;
+    std::vector<Lod_level_capture_entry>         entries;
 };
 
 // Persistent, incrementally maintained rendering-side representation of a
@@ -994,7 +1013,10 @@ public:
     // planes with another projection scale (a scene image capture or a
     // second viewport of another height from the same camera) select
     // other levels, so they are another view. None: a view without
-    // selection, which draws the template range.
+    // selection, which draws the template range. A shadow view's
+    // Lod_view::sampling_view_key (never 0, verified) is merged into the
+    // view's sampling views when another caller shares the view; a color
+    // view's is 0 (verified).
     [[nodiscard]] auto add_cull_view(
         uint64_t                       frame_index,
         Draw_purpose                   purpose,
@@ -1017,8 +1039,16 @@ public:
     // light). The six views are consecutive, so classification tests the
     // sphere once per entry for all six; a light with the same purpose and
     // bitwise the same sphere returns the views it already has. The radius
-    // must be positive.
-    [[nodiscard]] auto add_point_light_cull_views(uint64_t frame_index, Draw_purpose purpose, const Cull_sphere& range_sphere) -> std::array<Cull_view, 6>;
+    // must be positive. lod_view: the light's level of detail selection
+    // inputs (a shadow view's, doc/plans/lod_gpu_selection.md section 4),
+    // part of the identity as for add_cull_view(); the six faces share one
+    // LOD column.
+    [[nodiscard]] auto add_point_light_cull_views(
+        uint64_t                       frame_index,
+        Draw_purpose                   purpose,
+        const Cull_sphere&             range_sphere,
+        const std::optional<Lod_view>& lod_view = std::nullopt
+    ) -> std::array<Cull_view, 6>;
     // True when at least one entry of a published list of the view's
     // purpose has the view's bit set (inside the view, without bounds, or
     // skinned), from the survivor count the view's classification keeps;
@@ -1155,6 +1185,19 @@ public:
     // without one (no Lod_view, past the column limits, a frame whose
     // selection is not active) and for Cull_view::none.
     [[nodiscard]] auto get_cull_view_lod_column(uint64_t frame_index, Cull_view cull_view) const -> uint32_t;
+    // The shadow mode of a view of frame_index's set (render phase, after
+    // the frame's classification; doc/plans/lod_gpu_selection.md section
+    // 4): select or template_range for a shadow view with a Lod_view in a
+    // frame whose selection is active, none otherwise.
+    [[nodiscard]] auto get_cull_view_lod_shadow_mode(uint64_t frame_index, Cull_view cull_view) const -> Lod_shadow_mode;
+    // Whether the levels of a shadow view's LOD column changed since the
+    // frame right before (render phase, after the frame's classification;
+    // the shadow map cache's level test, section 4): compared over the
+    // shadow entries with the matched previous column (hysteresis, section
+    // 6); a column without one counts as changed. none for a view without
+    // a column and for Cull_view::none; verifies a column is a shadow
+    // view's.
+    [[nodiscard]] auto get_lod_column_change(uint64_t frame_index, Cull_view cull_view) const -> Lod_column_change;
     // The level the CPU classification selected for entry entry_index of
     // published list list_index in the view's column (render phase, after
     // the frame's classification); empty for a view without a column.
@@ -1858,11 +1901,48 @@ private:
     bool                                                             m_cull_pvs_frame{false};
     // Level of detail selection of the frame being rendered
     // (doc/plans/lod_gpu_selection.md section 3): per view its LOD column
-    // (lod_column_none without one), assigned at classification; the
-    // frame's column count; the distance scratch of lod_lanes() (capacity
-    // kept); views past the column limits in the frame, and whether that
-    // was logged (once per scene).
+    // (lod_column_none without one), assigned at classification, its
+    // shadow mode (section 4) and, for a shadow view, the lod_keys of the
+    // color views sampling its map (the union of the callers that share
+    // the view; overflow: more distinct ones than color columns, so some
+    // has no column); the frame's column count; the distance scratch of
+    // lod_lanes() (capacity kept); views past the column limits in the
+    // frame, and whether that was logged (once per scene).
+    class Lod_sampling_views
+    {
+    public:
+        void add(uint64_t sampling_view_key);
+
+        std::array<uint64_t, max_lod_color_columns> keys    {};
+        uint32_t                                    count   {0};
+        bool                                        overflow{false};
+    };
+    // One LOD column of the frame: its view (face 0 of a point light's six
+    // faces), purpose and, for a shadow column, the color columns of its
+    // sampling views (bit c: color column c) and its level change since the
+    // frame before (get_lod_column_change()).
+    class Lod_column
+    {
+    public:
+        uint32_t          view             {0};
+        Draw_purpose      purpose          {Draw_purpose::color};
+        uint32_t          color_column_mask{0};
+        uint32_t          changed_entries  {0};
+        Lod_column_change change           {Lod_column_change::none};
+    };
     std::vector<uint32_t>                                            m_cull_view_lod_columns;
+    std::vector<Lod_shadow_mode>                                     m_cull_view_lod_shadow_modes;
+    std::vector<Lod_sampling_views>                                  m_cull_view_lod_sampling;
+    std::array<Lod_column, max_lod_columns>                          m_lod_columns{};
+    uint32_t                                                         m_lod_color_column_count{0};
+    // Per color column the frustum flags of the entries of the shadow list
+    // being classified (cull_lanes::frustum_inside_lanes()), and its
+    // unbounded flags (capacity kept).
+    std::array<std::vector<uint32_t>, max_lod_color_columns>         m_lod_color_inside;
+    std::vector<uint32_t>                                            m_lod_unbounded;
+    // count_shadow_lod_changes(): the entries of one shadow list a shadow
+    // column's pass draws (capacity kept).
+    std::vector<uint32_t>                                            m_lod_change_inside;
     uint32_t                                                         m_lod_column_count{0};
     uint32_t                                                         m_lod_column_overflow_count{0};
     bool                                                             m_lod_column_overflow_logged{false};
@@ -1872,8 +1952,10 @@ private:
     // (sized like m_draw_list_slots at the first classification), written
     // by the frame's classification: per published list index one uint32_t
     // per entry per group of 8 columns, group-major (level of entry i in
-    // column c at [(c / 8) * entry_count + i], nibble c % 8), for the
-    // color lists of a frame with columns (empty otherwise). Capacity kept.
+    // column c at [(c / 8) * entry_count + i], nibble c % 8), for every
+    // list of a frame with columns (empty otherwise): a color list's
+    // entries in the color columns (0 in the shadow columns), a shadow
+    // list's in every column. Capacity kept.
     // The slot also records its frame's selection history inputs
     // (cull_lanes::Lod_history_frame, section 6): the entry layout, the
     // classification setting and the lod_key of each column; the next
@@ -1904,6 +1986,24 @@ private:
     [[nodiscard]] auto get_lod_level_slot(uint64_t frame_index) const -> const Lod_level_slot&;
     // The column assignment of the frame's views (classify_cull_views()).
     void assign_lod_columns(const Draw_list_slot& slot, Lod_level_slot& level_slot);
+    // The levels of one published list in every column of the frame
+    // (classify_cull_views(); level_words zeroed, the list's words of the
+    // frame's level slot): the selection of each color column and, for a
+    // shadow list, of each shadow column with the sampling views' levels
+    // (doc/plans/lod_gpu_selection.md section 4); previous_level_slot (null:
+    // none) holds the matched previous columns' levels (hysteresis).
+    void select_list_lod_levels(
+        const Draw_list_slot&  slot,
+        std::size_t            list_index,
+        const Lod_level_slot*  previous_level_slot,
+        float                  lod_threshold2,
+        float                  lod_coarsen_threshold2,
+        std::vector<uint32_t>& level_words
+    );
+    // After the frame's masks: each shadow column's changed_entries, the
+    // entries its pass draws whose level differs from the matched previous
+    // column's in previous_level_slot.
+    void count_shadow_lod_changes(const Draw_list_slot& slot, const Lod_level_slot& level_slot, const Lod_level_slot* previous_level_slot);
     // request_lod_level_capture(): the requested object and stage under the
     // mutex; the capture is filled by the classification of the next frame.
     void capture_lod_levels(const Draw_list_slot& slot, const Lod_level_slot& level_slot);

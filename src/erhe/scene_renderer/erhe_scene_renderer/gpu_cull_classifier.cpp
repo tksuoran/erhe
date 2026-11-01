@@ -326,6 +326,7 @@ Gpu_cull_classifier::Gpu_cull_classifier(erhe::graphics::Device& graphics_device
     m_view_pvs_grid_offset         = m_views_block.add_vec4 ("pvs_grid"        )->get_offset_in_parent();
     m_view_lod_header_offset       = m_views_block.add_uvec4("lod_header"      )->get_offset_in_parent();
     m_view_lod_columns_offset      = m_views_block.add_uvec4("lod_columns"     )->get_offset_in_parent();
+    m_view_lod_column_views_offset = m_views_block.add_uvec4("lod_column_views", max_lod_columns)->get_offset_in_parent();
     m_view_data_offset   = m_views_block.add_vec4 ("views", Shader_resource::unsized_array)->get_offset_in_parent();
     m_masks_block.add_uvec2("masks", Shader_resource::unsized_array);
     m_occlusion_words_block         .add_uint("words", Shader_resource::unsized_array);

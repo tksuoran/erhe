@@ -233,6 +233,49 @@ void lod_lanes(
     uint32_t                         previous_nibble_shift = 0
 );
 
+// Shadow level of detail selection (doc/plans/lod_gpu_selection.md section
+// 4). A shadow entry evaluates every color column; whether it is a
+// receiver drawn in a color view is the color view's frustum test on its
+// box: inside[i] = 1 when the box passes every plane of planes (the
+// plane_lanes() test) or has no bounds (unbounded[i] != 0), else 0.
+void frustum_inside_lanes(
+    std::span<const glm::vec4> planes,
+    const Draw_list_bounds&    bounds,
+    const uint32_t*            unbounded,
+    std::size_t                count,
+    uint32_t*                  inside
+);
+
+// The select rule of a shadow LOD column (section 4): an entry inside the
+// frustum of at least one color column of color_column_mask (bit c: color
+// column c, c < max_lod_color_columns; color_inside[c] its
+// frustum_inside_lanes() flags, read for the columns of the mask) takes the
+// finest (smallest) of those columns' levels in color_words (the first
+// level word of each entry, which holds every color column); any other
+// entry keeps the level already in words at nibble_shift (the shadow
+// view's own selection, lod_lanes()). Integer operations only.
+void shadow_lod_lanes(
+    const std::array<const uint32_t*, max_lod_color_columns>& color_inside,
+    uint32_t                                                  color_column_mask,
+    const uint32_t*                                           color_words,
+    std::size_t                                               count,
+    uint32_t*                                                 words,
+    uint32_t                                                  nibble_shift
+);
+
+// The entries with inside[i] != 0 whose level at nibble_shift of words
+// differs from the level at previous_nibble_shift of previous_words (the
+// matched column of the frame before, hysteresis section 6; the shadow map
+// cache's level test over the entries a shadow pass draws).
+[[nodiscard]] auto count_lod_level_changes(
+    const uint32_t* words,
+    uint32_t        nibble_shift,
+    const uint32_t* previous_words,
+    uint32_t        previous_nibble_shift,
+    const uint32_t* inside,
+    std::size_t     count
+) -> uint32_t;
+
 // The lanes' per-box arrays of reaches_view(), owned by the caller (capacity
 // kept across calls).
 class View_reach_scratch

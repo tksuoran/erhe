@@ -599,6 +599,20 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
             std::memcpy(gpu_data.data() + classifier.get_view_lod_header_offset(), &lod_header, sizeof(lod_header));
             const glm::uvec4 lod_columns{m_lod_column_count, static_cast<uint32_t>(lod_group_count), 0u, 0u};
             std::memcpy(gpu_data.data() + classifier.get_view_lod_columns_offset(), &lod_columns, sizeof(lod_columns));
+            // The column table (sections 3 and 4): per column its view,
+            // purpose and the color columns of a shadow column's sampling
+            // views, so the shader's level loop runs over the columns, not
+            // over every view. Columns past the frame's count are unread.
+            for (uint32_t column = 0; column < m_lod_column_count; ++column) {
+                const Lod_column& lod_column = m_lod_columns[column];
+                const glm::uvec4  column_view{
+                    lod_column.view,
+                    static_cast<uint32_t>(lod_column.purpose),
+                    lod_column.color_column_mask,
+                    0u
+                };
+                std::memcpy(gpu_data.data() + classifier.get_view_lod_column_views_offset() + (column * sizeof(glm::uvec4)), &column_view, sizeof(column_view));
+            }
             std::size_t write_offset = classifier.get_view_data_offset();
             for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
                 const Cull_view_tests& view = m_cull_views[view_index];
@@ -625,7 +639,8 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                 // then the LOD column (assign_lod_columns(); -1: none, the
                 // view draws the template range), projection kind, previous
                 // frame's column for the same lod_key (section 6; -1: none,
-                // the selection starts fresh) and shadow mode.
+                // the selection starts fresh) and shadow mode (section 4,
+                // Lod_shadow_mode).
                 if (view.lod_view.has_value()) {
                     const Lod_view& lod_view        = view.lod_view.value();
                     const uint32_t  column          = m_cull_view_lod_columns[view_index];
@@ -635,7 +650,7 @@ void Draw_list_scene::dispatch_gpu_cull_views(const uint64_t frame_index, erhe::
                         (column != lod_column_none) ? static_cast<float>(column) : -1.0f,
                         static_cast<float>(static_cast<uint32_t>(lod_view.projection)),
                         (previous_column != lod_column_none) ? static_cast<float>(previous_column) : -1.0f,
-                        0.0f
+                        static_cast<float>(static_cast<uint32_t>(m_cull_view_lod_shadow_modes[view_index]))
                     };
                 } else {
                     record[12] = glm::vec4{0.0f};
@@ -1404,8 +1419,9 @@ void Draw_list_scene::generate_gpu_commands(
                     continue;
                 }
                 m_gpu_shadow_job_lookup[(view_index * list_count) + list_index] = static_cast<uint32_t>(m_gpu_jobs.size());
-                // Shadow views have no LOD column yet (step 5).
-                add_list_jobs(list_index, view_index, filter_index, max_per_chunk, Command_selection_id::none, lod_column_none);
+                // A shadow view's LOD column (doc/plans/lod_gpu_selection.md
+                // section 4; none: the template range).
+                add_list_jobs(list_index, view_index, filter_index, max_per_chunk, Command_selection_id::none, m_cull_view_lod_columns[view_index]);
             }
             m_gpu_shadow_view_jobs[view_index].job_count = static_cast<uint32_t>(m_gpu_jobs.size()) - m_gpu_shadow_view_jobs[view_index].first_job;
         }

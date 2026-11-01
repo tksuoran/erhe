@@ -846,6 +846,11 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
             .point_shadow_viewport    = m_point_viewport,
             .draw_list_scene          = draw_list_scene,
             .draw_list_layers         = m_frame_passes.draw_list_layers,
+            // The passes' level of detail selection follows the view whose
+            // color passes sample these maps (doc/plans/lod_gpu_selection.md
+            // section 4), keyed as Composer::add_cull_views() keys its
+            // color view.
+            .lod_sampling_view_key    = m_scene_view.get_serial_id(),
             .draw_statistics          = &result.draw_statistics,
             .map_cache                = render_settings.shadow_map_cache ? &m_map_cache : nullptr,
             .fit_cache                = render_settings.shadow_fit_cache ? &m_fit_cache : nullptr,

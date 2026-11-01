@@ -133,35 +133,96 @@ enum class Lod_projection : uint8_t
 
 // The level of detail column of a culling view
 // (doc/plans/lod_gpu_selection.md section 3 "Columns"): one per color view
-// with a Lod_view in a frame whose selection is active, at most
-// max_lod_columns per frame, of which at most max_lod_color_columns color
-// columns.
+// with a Lod_view, one per 2D shadow view with a Lod_view and one per
+// shadowed point light (its six face views share it) in a frame whose
+// selection is active, at most max_lod_columns per frame, of which at most
+// max_lod_color_columns color columns. The color columns come first
+// (columns 0 .. color count - 1), so they share the first word of the
+// level words.
 constexpr uint32_t lod_column_none      {0xffffffffu};
 constexpr uint32_t max_lod_columns      {64};
 constexpr uint32_t max_lod_color_columns{8};
 
+// The light kinds of a shadow view's lod_key (make_shadow_lod_key()).
+enum class Lod_shadow_kind : uint8_t
+{
+    spot        = 1,
+    point       = 2,
+    directional = 3
+};
+
+// The lod_key of a shadow view (doc/plans/lod_gpu_selection.md section 6),
+// node-free: the light's id and kind (erhe has one pass per light, so they
+// name the pass), and for a directional pass, which is fitted to a camera,
+// view_key, the lod_key of the color view it is fitted to (0 for the other
+// kinds). The kind sits in the top two bits, so a shadow key never equals a
+// color view's key (a scene view serial id) nor 0. Verifies light_id <
+// 2^32 and view_key < 2^30.
+[[nodiscard]] auto make_shadow_lod_key(Lod_shadow_kind kind, std::size_t light_id, uint64_t view_key) -> uint64_t;
+
 // The level of detail selection inputs of one culling view
 // (Draw_list_scene::add_cull_view(), doc/plans/lod_gpu_selection.md section
-// 3 "Per view and per frame"): the selection origin (a camera position in
-// world space), the projection scale in pixels per unit of tangent
-// (viewport height / (tan(up) - tan(down)); orthographic: viewport height /
-// view height), the projection kind and the caller's identity of the view,
-// stable across frames and never reused for another view (the editor: the
-// scene view's serial id), which matches the view's selection between
-// frames (hysteresis, section 6). lod_key 0 matches nothing: the view's
-// selection starts fresh every frame. A view without a Lod_view draws the
-// template range of its entries (the forced level, or level 0).
+// 3 "Per view and per frame"): the selection origin (a camera position, or
+// a light position, in world space), the projection scale in pixels per
+// unit of tangent (viewport height / (tan(up) - tan(down)); orthographic:
+// viewport height / view height), the projection kind and the caller's
+// identity of the view, stable across frames and never reused for another
+// view (the editor: the scene view's serial id; a shadow view:
+// make_shadow_lod_key()), which matches the view's selection between frames
+// (hysteresis, section 6). lod_key 0 matches nothing: the view's selection
+// starts fresh every frame. A view without a Lod_view draws the template
+// range of its entries (the forced level, or level 0).
+//
+// A shadow view's Lod_view names the color view that samples its map
+// (sampling_view_key, that color view's lod_key; section 4): not part of
+// is_same(); Draw_list_scene merges the sampling views of the callers that
+// share the view. 0 for a color view, never 0 for a shadow view.
 class Lod_view
 {
 public:
-    // Bitwise equal (the same selection inputs).
+    // Bitwise equal (the same selection inputs; sampling_view_key is not
+    // compared).
     [[nodiscard]] auto is_same(const Lod_view& other) const -> bool;
 
-    glm::vec3      origin          {0.0f};
-    float          projection_scale{0.0f};
-    Lod_projection projection      {Lod_projection::perspective};
-    uint64_t       lod_key         {0};
+    glm::vec3      origin           {0.0f};
+    float          projection_scale {0.0f};
+    Lod_projection projection       {Lod_projection::perspective};
+    uint64_t       lod_key          {0};
+    uint64_t       sampling_view_key{0};
 };
+
+// How a shadow view selects its casters' levels (doc/plans/lod_gpu_selection.md
+// section 4), decided by the frame's classification: none for a view
+// without a Lod_view (or a color view, or a frame whose selection is not
+// active); select: every sampling color view has a LOD column, a caster
+// inside one of their frustums takes the finest of their levels, any other
+// caster the shadow view's own selection; template_range: some sampling
+// view has no LOD column (its receivers draw the template range), so the
+// shadow view draws the template range too and has no column.
+enum class Lod_shadow_mode : uint8_t
+{
+    none           = 0,
+    select         = 1,
+    template_range = 2
+};
+
+[[nodiscard]] auto c_str(Lod_shadow_mode mode) -> const char*;
+
+// Whether the levels of a view's LOD column changed since the frame before
+// (Draw_list_scene::get_lod_column_change(), the shadow map cache's level
+// test, doc/plans/lod_gpu_selection.md section 4): none: the view has no
+// column (it draws the template range); unchanged: every entry of the
+// column's purpose holds the level it held in the matched column of the
+// frame right before; changed: some entry's level differs, or the column
+// had no previous column (a fresh selection).
+enum class Lod_column_change : uint8_t
+{
+    none      = 0,
+    unchanged = 1,
+    changed   = 2
+};
+
+[[nodiscard]] auto c_str(Lod_column_change change) -> const char*;
 
 // The tests of one culling view (Draw_list_scene::add_cull_view(),
 // add_point_light_cull_views()): what the classification lanes
@@ -187,8 +248,9 @@ public:
     uint32_t                 cube_face  {0}; // cube_face only: 0..5 for +X -X +Y -Y +Z -Z
     glm::vec3                pvs_query_min{ 0.0f}; // planes only
     glm::vec3                pvs_query_max{-1.0f}; // planes only
-    // The view's level of detail selection inputs (planes only; not part
-    // of is_same(), which compares the tests), none for a view without.
+    // The view's level of detail selection inputs (a planes view, and each
+    // of the six faces of a point light; not part of is_same(), which
+    // compares the tests), none for a view without.
     std::optional<Lod_view>  lod_view   {};
 };
 

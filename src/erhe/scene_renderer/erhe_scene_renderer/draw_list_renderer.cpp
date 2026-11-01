@@ -201,17 +201,26 @@ auto Draw_list_renderer::get_color_lod_view(const Color_cull_view_parameters& pa
     if ((parameters.lod_key == 0) || (parameters.views.size() != 1) || (parameters.views.front().camera == nullptr)) {
         return {};
     }
-    const Camera_view_input&            view     = parameters.views.front();
-    const erhe::scene::Camera_snapshot& camera   = *view.camera;
-    if (view.viewport.height <= 0) {
+    const Camera_view_input&            view   = parameters.views.front();
+    const erhe::scene::Camera_snapshot& camera = *view.camera;
+    return get_projection_lod_view(camera.projection(), view.viewport, glm::vec3{camera.position_in_world()}, parameters.lod_key);
+}
+
+auto Draw_list_renderer::get_projection_lod_view(
+    const erhe::scene::Projection& projection,
+    const erhe::math::Viewport&    viewport,
+    const glm::vec3&               origin,
+    const uint64_t                 lod_key
+) -> std::optional<Lod_view>
+{
+    if (viewport.height <= 0) {
         return {};
     }
-    const erhe::scene::Projection&           projection = camera.projection();
-    const erhe::scene::Projection::Fov_sides sides      = projection.get_fov_sides(view.viewport);
-    const float                              height     = static_cast<float>(view.viewport.height);
+    const erhe::scene::Projection::Fov_sides sides  = projection.get_fov_sides(viewport);
+    const float                              height = static_cast<float>(viewport.height);
     Lod_view lod_view{
-        .origin  = glm::vec3{camera.position_in_world()},
-        .lod_key = parameters.lod_key
+        .origin  = origin,
+        .lod_key = lod_key
     };
     if (projection.is_orthographic()) {
         // Fov_sides of an orthographic projection are the view extents.

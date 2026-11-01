@@ -240,6 +240,11 @@ public:
     // documents them).
     [[nodiscard]] auto get_view_lod_header_offset () const -> std::size_t { return m_view_lod_header_offset; }
     [[nodiscard]] auto get_view_lod_columns_offset() const -> std::size_t { return m_view_lod_columns_offset; }
+    // The frame's LOD column table (doc/plans/lod_gpu_selection.md sections
+    // 3 and 4): max_lod_columns uvec4 (std140 array stride 16), per column
+    // its view, purpose (0 color, 1 shadow) and the color columns of a
+    // shadow column's sampling views (bit c: color column c), 0.
+    [[nodiscard]] auto get_view_lod_column_views_offset() const -> std::size_t { return m_view_lod_column_views_offset; }
     [[nodiscard]] auto get_view_data_offset  () const -> std::size_t { return m_view_data_offset; }
     // For Draw_list_scene's command generation.
     [[nodiscard]] auto get_compact_bind_group_layout() const -> const erhe::graphics::Bind_group_layout*;
@@ -292,6 +297,7 @@ private:
     std::size_t                                               m_view_pvs_grid_offset  {0};
     std::size_t                                               m_view_lod_header_offset{0};
     std::size_t                                               m_view_lod_columns_offset{0};
+    std::size_t                                               m_view_lod_column_views_offset{0};
     std::size_t                                               m_view_data_offset  {0};
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_shader_stages;

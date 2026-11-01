@@ -29,6 +29,22 @@ shadow_fit_reused / shadow_fit_serial), moving one light refits that light
 only, and captures with the fit cache off are identical. The captures with the cache on and off must again be
 identical.
 
+With --lod (doc/plans/lod_gpu_selection.md step 5) the automatic level of
+detail selection is on, a torus with a 6-level LOD chain stands in Point T's
+reach (the default scene's solids are too small to simplify), and every
+mesh of the scene gets a chain where it can, before the first sequence, so
+every step also runs with the shadow passes drawing selected levels (a
+step of the per-light test that adds, removes or rebuilds an entry restarts
+the selection's history, so every pass with a LOD column redraws and the
+step keeps no pass); after the first sequence a level sequence checks the
+cache's level test (doc/erhe/shadows.md "Shadow map cache"): a small move
+of the viewport camera that changes no level keeps every spot and point
+pass (the directional fits follow the camera), a dolly far away, which
+coarsens the torus, redraws Point T's faces that draw it, a static frame
+there keeps every spot and point pass, and the dolly back redraws Point T
+again. The captures with the cache on and off must be identical in each
+step.
+
 Needs Pillow and numpy. Example:
   python3 scripts/shadow_map_cache_check.py --editor build_xcode_metal/bin/Release/editor
 """
@@ -82,6 +98,7 @@ def main():
     parser.add_argument("--editor", required=True, help="windowed editor executable (repo-root relative or absolute)")
     parser.add_argument("--out", default="", help="directory for the captures (default: a temporary directory)")
     parser.add_argument("--settle-s", type=float, default=0.5, help="seconds to wait after each edit / cache switch")
+    parser.add_argument("--lod", action="store_true", help="automatic level of detail selection on, LOD chains on the default scene's meshes, and the level test sequence")
     args = parser.parse_args()
 
     out_dir = args.out or tempfile.mkdtemp(prefix="shadow_map_cache_")
@@ -114,6 +131,20 @@ def main():
     nodes = call("get_scene_nodes", scene_name=scene)["nodes"]
     camera_name = call("get_viewports")["viewports"][0]["camera"]
     camera = next(node for node in nodes if node.get("name") == camera_name)
+    if args.lod:
+        call("set_graphics_preset", lod_enabled=True, lod_threshold_pixels=4.0, lod_bias=0, lod_hysteresis_band=0.25)
+        call("create_shape", scene_name=scene, shape="torus", name="LOD torus", position=[0.0, 0.5, -1.2], scale=0.4, motion_mode="none")
+        time.sleep(args.settle_s * 2.0)
+        nodes = call("get_scene_nodes", scene_name=scene)["nodes"]
+        mesh_ids = [node["id"] for node in nodes if "Mesh" in str(node.get("type", ""))]
+        call("generate_lods", scene_name=scene, node_ids=mesh_ids, settings={"level_count": 6})
+        start = time.time()
+        while (time.time() - start) < 120.0:
+            status = call("get_async_status")
+            if isinstance(status, dict) and status.get("idle", False):
+                break
+            time.sleep(0.5)
+        print(f"lod: chains generated for {len(mesh_ids)} meshes")
     cp = camera["position"]
     identity = [0.0, 0.0, 0.0, 1.0]
     steps = [
@@ -152,6 +183,41 @@ def main():
         if mismatch != 0:
             failed.append(tag)
         previous = without_cache
+
+    if args.lod:
+        # The level test: per light the 2D layer's and the cube faces' draw
+        # counts before and after each camera move.
+        def pass_counts():
+            lights = call("get_scene_lights", scene_name=scene).get("lights", [])
+            return {light["name"]: (light.get("shadow_draw_count"), light.get("shadow_cube_face_draw_counts")) for light in lights if light.get("shadow_mapped")}
+
+        # The camera returns to its pose of the move_camera step after the
+        # sequence.
+        back = [cp[0] + 0.7, cp[1] + 0.2, cp[2] - 0.4]
+        far  = [cp[0] + 0.7, cp[1] + 0.2, cp[2] + 120.0]
+        lod_steps = [
+            # (tag, edit, lights that must redraw, lights that must keep every pass)
+            ("lod_small_move", lambda: call("set_node_transform", scene_name=scene, node_id=camera["id"], space="world", translation=[cp[0] + 0.71, cp[1] + 0.2, cp[2] - 0.4], rotation_xyzw=camera["rotation_xyzw"]),
+             [], ["Spot T", "Point T"]),
+            ("lod_far_move",   lambda: call("set_node_transform", scene_name=scene, node_id=camera["id"], space="world", translation=far, rotation_xyzw=camera["rotation_xyzw"]),
+             ["Point T"], []),
+            ("lod_far_static", lambda: None, [], ["Spot T", "Point T"]),
+            ("lod_back",       lambda: call("set_node_transform", scene_name=scene, node_id=camera["id"], space="world", translation=back, rotation_xyzw=camera["rotation_xyzw"]),
+             ["Point T"], []),
+        ]
+        for tag, edit, must_redraw, must_keep in lod_steps:
+            call("set_shadow_map_cache_enabled", enabled=True)
+            time.sleep(args.settle_s * 2.0)
+            before = pass_counts()
+            edit()
+            time.sleep(args.settle_s * 2.0)
+            after = pass_counts()
+            redrawn = sorted(name for name in after if (name in before) and (after[name] != before[name]))
+            ok = all(name in redrawn for name in must_redraw) and not any(name in redrawn for name in must_keep)
+            mismatch, without_cache = compare(tag)
+            print(f"{tag:14s} cache vs no cache: {mismatch} differing pixels; lights with redrawn passes: {redrawn}")
+            if (mismatch != 0) or not ok:
+                failed.append(tag)
 
     # Per-light caster test. A and B: point lights 3 m apart with range 1.2,
     # each with a box caster beside it (below and to the side: the faces
@@ -236,7 +302,15 @@ def main():
                                          translation=[0.0, 0.2445, 0.0], rotation_xyzw=[0.0, 0.0, 0.38268343, 0.92387953]), ["Point B"], ["Point A"]),
         ("skinned_vertex_drag", drag_skinned_vertices,                                                                 ["Point B"], ["Point A"]),
     ]
+    # With --lod, a step that adds, removes or rebuilds an entry changes the
+    # draw lists' entry layout, which restarts the level selection's history
+    # (doc/plans/lod_gpu_selection.md section 6): every pass with a LOD
+    # column counts as changed in that frame and redraws, so these steps
+    # keep no pass.
+    layout_steps = {"add_beside_b", "remove_beside_b", "remove_beside_a", "skinned_add", "skinned_vertex_drag"}
     for tag, edit, may_redraw, must_keep in light_steps:
+        if args.lod and (tag in layout_steps):
+            must_keep = []
         call("set_shadow_map_cache_enabled", enabled=True)
         time.sleep(args.settle_s * 2.0)
         before = face_counts()

@@ -2870,7 +2870,10 @@ void Draw_list_scene::begin_cull_frame(const uint64_t frame_index)
     m_cull_views.clear();
     m_cull_view_survivors.clear();
     m_cull_view_lod_columns.clear();
+    m_cull_view_lod_shadow_modes.clear();
+    m_cull_view_lod_sampling.clear();
     m_lod_column_count          = 0;
+    m_lod_color_column_count    = 0;
     m_lod_column_overflow_count = 0;
     m_cull_pvs_view_cells.clear();
     m_cull_pvs_view_counts.clear();
@@ -2907,8 +2910,27 @@ auto Draw_list_scene::append_cull_view(const Draw_purpose purpose, const Cull_vi
     view.kind    = kind;
     m_cull_view_survivors.push_back(0);
     m_cull_view_lod_columns.push_back(lod_column_none);
+    m_cull_view_lod_shadow_modes.push_back(Lod_shadow_mode::none);
+    m_cull_view_lod_sampling.push_back(Lod_sampling_views{});
     m_cull_pvs_view_counts.push_back(Pvs_view_counts{});
     return view;
+}
+
+void Draw_list_scene::Lod_sampling_views::add(const uint64_t sampling_view_key)
+{
+    for (uint32_t i = 0; i < count; ++i) {
+        if (keys[i] == sampling_view_key) {
+            return;
+        }
+    }
+    // More distinct sampling views than color columns: some sampling view
+    // has no column, which makes the view's shadow mode template_range.
+    if (count == keys.size()) {
+        overflow = true;
+        return;
+    }
+    keys[count] = sampling_view_key;
+    ++count;
 }
 
 auto Draw_list_scene::add_cull_view(
@@ -2925,6 +2947,9 @@ auto Draw_list_scene::add_cull_view(
     if (planes.empty()) {
         return Cull_view::none;
     }
+    // A shadow view's Lod_view names the color view sampling its map; a
+    // color view's names none (doc/plans/lod_gpu_selection.md section 4).
+    ERHE_VERIFY(!lod_view.has_value() || ((purpose == Draw_purpose::shadow) == (lod_view.value().sampling_view_key != 0)));
     begin_cull_frame(frame_index);
     // Every view of the frame is added before its classification.
     ERHE_VERIFY(!m_cull_frame_classified);
@@ -2943,6 +2968,10 @@ auto Draw_list_scene::add_cull_view(
             (view.lod_view.has_value() == lod_view.has_value()) &&
             (!lod_view.has_value() || view.lod_view.value().is_same(lod_view.value()))
         ) {
+            // The sampling views of every caller sharing the view.
+            if (lod_view.has_value() && (purpose == Draw_purpose::shadow)) {
+                m_cull_view_lod_sampling[i].add(lod_view.value().sampling_view_key);
+            }
             return static_cast<Cull_view>(i);
         }
     }
@@ -2952,19 +2981,24 @@ auto Draw_list_scene::add_cull_view(
     view.pvs_query_min = pvs_query_min;
     view.pvs_query_max = pvs_query_max;
     view.lod_view      = lod_view;
+    if (lod_view.has_value() && (purpose == Draw_purpose::shadow)) {
+        m_cull_view_lod_sampling.back().add(lod_view.value().sampling_view_key);
+    }
     return static_cast<Cull_view>(m_cull_views.size() - 1);
 }
 
 auto Draw_list_scene::add_point_light_cull_views(
-    const uint64_t     frame_index,
-    const Draw_purpose purpose,
-    const Cull_sphere& range_sphere
+    const uint64_t                 frame_index,
+    const Draw_purpose             purpose,
+    const Cull_sphere&             range_sphere,
+    const std::optional<Lod_view>& lod_view
 ) -> std::array<Cull_view, 6>
 {
     assert_render_phase();
     // A range sphere of zero radius would cull every caster (a point light
     // with range <= 0 has no shadow, Light::is_active()).
     ERHE_VERIFY(range_sphere.radius > 0.0f);
+    ERHE_VERIFY(!lod_view.has_value() || ((purpose == Draw_purpose::shadow) == (lod_view.value().sampling_view_key != 0)));
     begin_cull_frame(frame_index);
     // Every view of the frame is added before its classification.
     ERHE_VERIFY(!m_cull_frame_classified);
@@ -2976,11 +3010,18 @@ auto Draw_list_scene::add_point_light_cull_views(
             (view.purpose == purpose) &&
             (view.kind == Cull_view_kind::cube_face) &&
             (view.cube_face == 0) &&
-            same_sphere(view.sphere, range_sphere)
+            same_sphere(view.sphere, range_sphere) &&
+            (view.lod_view.has_value() == lod_view.has_value()) &&
+            (!lod_view.has_value() || view.lod_view.value().is_same(lod_view.value()))
         ) {
             ERHE_VERIFY((i + 6) <= end);
             for (std::size_t face = 0; face < 6; ++face) {
                 views[face] = static_cast<Cull_view>(i + face);
+            }
+            // The sampling views of every caller sharing the light, kept
+            // on face 0 (the view of the faces' column).
+            if (lod_view.has_value() && (purpose == Draw_purpose::shadow)) {
+                m_cull_view_lod_sampling[i].add(lod_view.value().sampling_view_key);
             }
             return views;
         }
@@ -2989,7 +3030,11 @@ auto Draw_list_scene::add_point_light_cull_views(
         Cull_view_tests& view = append_cull_view(purpose, Cull_view_kind::cube_face);
         view.sphere    = range_sphere;
         view.cube_face = static_cast<uint32_t>(face);
+        view.lod_view  = lod_view;
         views[face]    = static_cast<Cull_view>(m_cull_views.size() - 1);
+    }
+    if (lod_view.has_value() && (purpose == Draw_purpose::shadow)) {
+        m_cull_view_lod_sampling[static_cast<std::size_t>(views[0])].add(lod_view.value().sampling_view_key);
     }
     return views;
 }
@@ -3259,13 +3304,23 @@ void Draw_list_scene::classify_cull_views()
             pvs_culled_masks->assign(group_count * entry_count, uint64_t{0});
         }
         const Draw_purpose purpose = draw_list.key.purpose;
-        // The list's level words: every color list of a frame with columns
-        // (only color views have columns), from zero.
+        // The list's level words: every list of a frame with columns, from
+        // zero (a color list's entries in the color columns, a shadow list's
+        // in every column; doc/plans/lod_gpu_selection.md section 4).
         std::vector<uint32_t>& level_words = level_slot.lists[list_index];
-        if ((m_lod_column_count > 0) && (purpose == Draw_purpose::color)) {
+        if (m_lod_column_count > 0) {
             level_words.assign(lod_group_count * entry_count, 0u);
         } else {
             level_words.clear();
+        }
+        // Levels do not depend on visibility (section 1): every entry of the
+        // list gets a level in every column of its purpose, skinned entries
+        // and entries without bounds their template level (section 8), and
+        // a shadow entry also in every color column, whether or not a
+        // shadow view of the frame names it, so its color rows keep the
+        // color entry's history (section 6).
+        if (!level_words.empty() && (entry_count > 0)) {
+            select_list_lod_levels(slot, list_index, previous_level_slot, lod_threshold2, lod_coarsen_threshold2, level_words);
         }
         if ((entry_count == 0) || !batch_has_purpose[static_cast<std::size_t>(purpose)]) {
             continue;
@@ -3273,55 +3328,6 @@ void Draw_list_scene::classify_cull_views()
         const Draw_list_bounds& bounds = draw_list.bounds;
         ERHE_VERIFY(bounds.extent_x.size() == entry_count);
         ERHE_VERIFY(draw_list.pvs_columns.size() == entry_count);
-
-        // Levels do not depend on visibility (section 1): every entry of the
-        // list gets a level in every column, skinned entries and entries
-        // without bounds their template level (section 8).
-        if (!level_words.empty()) {
-            ERHE_PROFILE_SCOPE("lod_lanes");
-            m_lod_gap.resize(entry_count);
-            m_lod_distance2.resize(entry_count);
-            for (std::size_t view_index = first_view; view_index < end_view; ++view_index) {
-                const uint32_t column = m_cull_view_lod_columns[view_index];
-                if (column == lod_column_none) {
-                    continue;
-                }
-                const Lod_view& lod_view = m_cull_views[view_index].lod_view.value();
-                const cull_lanes::Lod_lane_view lane_view{
-                    .origin             = lod_view.origin,
-                    .projection_scale   = lod_view.projection_scale,
-                    .projection         = lod_view.projection,
-                    .threshold2         = lod_threshold2,
-                    .coarsen_threshold2 = lod_coarsen_threshold2,
-                    .global_bias        = slot.lod_settings.bias
-                };
-                // The matched previous column's words of this list: the
-                // same entries (same entry layout), the previous frame's
-                // group count.
-                const uint32_t  previous_column = m_lod_previous_columns[column];
-                const uint32_t* previous_words  = nullptr;
-                if (previous_column != lod_column_none) {
-                    ERHE_VERIFY(previous_level_slot != nullptr);
-                    const std::vector<uint32_t>& previous_list_words = previous_level_slot->lists[list_index];
-                    const std::size_t previous_group_count = (static_cast<std::size_t>(previous_level_slot->column_count) + 7) / 8;
-                    ERHE_VERIFY(previous_list_words.size() == (previous_group_count * entry_count));
-                    previous_words = previous_list_words.data() + ((previous_column / 8) * entry_count);
-                }
-                cull_lanes::lod_lanes(
-                    lane_view,
-                    bounds,
-                    draw_list.entries,
-                    slot.lod_table,
-                    entry_count,
-                    m_lod_gap.data(),
-                    m_lod_distance2.data(),
-                    level_words.data() + ((column / 8) * entry_count),
-                    4u * (column % 8),
-                    previous_words,
-                    4u * (previous_column % 8)
-                );
-            }
-        }
 
         // Skinned entries carry no bounds (they follow the joints): never
         // culled.
@@ -3421,6 +3427,18 @@ void Draw_list_scene::classify_cull_views()
         }
     }
 
+    // The columns' level changes since the frame before (the shadow map
+    // cache's level test, doc/plans/lod_gpu_selection.md section 4): a
+    // column without a previous column starts fresh and counts as changed.
+    count_shadow_lod_changes(slot, level_slot, previous_level_slot);
+    for (uint32_t column = 0; column < m_lod_column_count; ++column) {
+        Lod_column& lod_column = m_lod_columns[column];
+        lod_column.change =
+            ((m_lod_previous_columns[column] == lod_column_none) || (lod_column.changed_entries > 0))
+                ? Lod_column_change::changed
+                : Lod_column_change::unchanged;
+    }
+
     // The residency check (doc/plans/pvs.md "Residency and streaming"): a
     // view that culled by PVS read cells whose page table slot must hold
     // that very page (written by apply_pvs_uploads() of this frame or an
@@ -3448,6 +3466,149 @@ void Draw_list_scene::classify_cull_views()
     capture_lod_levels(slot, level_slot);
 }
 
+void Draw_list_scene::select_list_lod_levels(
+    const Draw_list_slot&       slot,
+    const std::size_t           list_index,
+    const Lod_level_slot* const previous_level_slot,
+    const float                 lod_threshold2,
+    const float                 lod_coarsen_threshold2,
+    std::vector<uint32_t>&      level_words
+)
+{
+    ERHE_PROFILE_SCOPE("lod_lanes");
+    const Draw_list&        draw_list   = slot.lists[list_index];
+    const std::size_t       entry_count = draw_list.entries.size();
+    const Draw_list_bounds& bounds      = draw_list.bounds;
+    const bool              shadow_list = (draw_list.key.purpose == Draw_purpose::shadow);
+    ERHE_VERIFY(bounds.extent_x.size() == entry_count);
+    m_lod_gap.resize(entry_count);
+    m_lod_distance2.resize(entry_count);
+    if (shadow_list) {
+        m_lod_unbounded.resize(entry_count);
+        cull_lanes::mark_unbounded_lanes(bounds, entry_count, m_lod_unbounded.data());
+    }
+    // A shadow list's frustum flags per color column (section 4), filled
+    // while the color columns (which come first) are selected.
+    std::array<const uint32_t*, max_lod_color_columns> color_inside{};
+    for (uint32_t column = 0; column < m_lod_column_count; ++column) {
+        const Lod_column& lod_column = m_lod_columns[column];
+        // A color entry has levels in the color columns only.
+        if ((lod_column.purpose == Draw_purpose::shadow) && !shadow_list) {
+            continue;
+        }
+        const Cull_view_tests& view     = m_cull_views[lod_column.view];
+        const Lod_view&        lod_view = view.lod_view.value();
+        const cull_lanes::Lod_lane_view lane_view{
+            .origin             = lod_view.origin,
+            .projection_scale   = lod_view.projection_scale,
+            .projection         = lod_view.projection,
+            .threshold2         = lod_threshold2,
+            .coarsen_threshold2 = lod_coarsen_threshold2,
+            .global_bias        = slot.lod_settings.bias
+        };
+        // The matched previous column's words of this list: the same
+        // entries (same entry layout), the previous frame's group count.
+        const uint32_t  previous_column = m_lod_previous_columns[column];
+        const uint32_t* previous_words  = nullptr;
+        if (previous_column != lod_column_none) {
+            ERHE_VERIFY(previous_level_slot != nullptr);
+            const std::vector<uint32_t>& previous_list_words = previous_level_slot->lists[list_index];
+            const std::size_t previous_group_count = (static_cast<std::size_t>(previous_level_slot->column_count) + 7) / 8;
+            ERHE_VERIFY(previous_list_words.size() == (previous_group_count * entry_count));
+            previous_words = previous_list_words.data() + ((previous_column / 8) * entry_count);
+        }
+        uint32_t* const words        = level_words.data() + ((column / 8) * entry_count);
+        const uint32_t  nibble_shift = 4u * (column % 8);
+        // The view's own selection: a color column's levels, a shadow
+        // column's levels outside every sampling view's frustum.
+        cull_lanes::lod_lanes(
+            lane_view,
+            bounds,
+            draw_list.entries,
+            slot.lod_table,
+            entry_count,
+            m_lod_gap.data(),
+            m_lod_distance2.data(),
+            words,
+            nibble_shift,
+            previous_words,
+            4u * (previous_column % 8)
+        );
+        if (lod_column.purpose == Draw_purpose::color) {
+            if (shadow_list) {
+                ERHE_VERIFY(column < max_lod_color_columns);
+                std::vector<uint32_t>& inside = m_lod_color_inside[column];
+                inside.resize(entry_count);
+                cull_lanes::frustum_inside_lanes(
+                    std::span<const glm::vec4>{view.planes.data(), view.plane_count},
+                    bounds,
+                    m_lod_unbounded.data(),
+                    entry_count,
+                    inside.data()
+                );
+                color_inside[column] = inside.data();
+            }
+            continue;
+        }
+        // A caster inside a sampling view's frustum takes the finest of
+        // those views' levels (doc/plans/lod_gpu_selection.md section 9,
+        // decisions 1 and 2): the color columns share the first word.
+        cull_lanes::shadow_lod_lanes(color_inside, lod_column.color_column_mask, level_words.data(), entry_count, words, nibble_shift);
+    }
+}
+
+void Draw_list_scene::count_shadow_lod_changes(const Draw_list_slot& slot, const Lod_level_slot& level_slot, const Lod_level_slot* const previous_level_slot)
+{
+    // Per shadow column with a previous column, the entries its pass draws
+    // (the mask bit of its view, or of any of a point light's six face
+    // views) whose level differs from the previous frame's: a pass is kept
+    // only while none does (doc/plans/lod_gpu_selection.md section 4).
+    // While a cached pass is kept its view does not change, so the entries
+    // it draws change only by content changes, which the cache tests.
+    for (uint32_t column = 0; column < m_lod_column_count; ++column) {
+        Lod_column&    lod_column      = m_lod_columns[column];
+        const uint32_t previous_column = m_lod_previous_columns[column];
+        if ((lod_column.purpose != Draw_purpose::shadow) || (previous_column == lod_column_none)) {
+            continue;
+        }
+        ERHE_VERIFY(previous_level_slot != nullptr);
+        const Cull_view_tests& view       = m_cull_views[lod_column.view];
+        const std::size_t      view_count = (view.kind == Cull_view_kind::cube_face) ? 6 : 1;
+        ERHE_VERIFY((lod_column.view + view_count) <= m_cull_views.size());
+        for (std::size_t list_index = 0, list_end = slot.lists.size(); list_index < list_end; ++list_index) {
+            const Draw_list&  draw_list   = slot.lists[list_index];
+            const std::size_t entry_count = draw_list.entries.size();
+            if ((draw_list.key.purpose != Draw_purpose::shadow) || (entry_count == 0)) {
+                continue;
+            }
+            const std::vector<uint64_t>& masks = m_cull_masks[list_index];
+            m_lod_change_inside.assign(entry_count, 0u);
+            for (std::size_t face = 0; face < view_count; ++face) {
+                const std::size_t view_index = lod_column.view + face;
+                ERHE_VERIFY(masks.size() >= (((view_index / 64) + 1) * entry_count));
+                const uint64_t* const view_masks = masks.data() + ((view_index / 64) * entry_count);
+                const uint64_t        view_bit   = uint64_t{1} << (view_index % 64);
+                for (std::size_t i = 0; i < entry_count; ++i) {
+                    m_lod_change_inside[i] |= ((view_masks[i] & view_bit) != 0) ? 1u : 0u;
+                }
+            }
+            const std::vector<uint32_t>& words          = level_slot.lists[list_index];
+            const std::vector<uint32_t>& previous_words = previous_level_slot->lists[list_index];
+            const std::size_t previous_group_count = (static_cast<std::size_t>(previous_level_slot->column_count) + 7) / 8;
+            ERHE_VERIFY(previous_words.size() == (previous_group_count * entry_count));
+            ERHE_VERIFY(words.size() >= ((static_cast<std::size_t>(column / 8) + 1) * entry_count));
+            lod_column.changed_entries += cull_lanes::count_lod_level_changes(
+                words.data() + ((column / 8) * entry_count),
+                4u * (column % 8),
+                previous_words.data() + ((previous_column / 8) * entry_count),
+                4u * (previous_column % 8),
+                m_lod_change_inside.data(),
+                entry_count
+            );
+        }
+    }
+}
+
 auto Draw_list_scene::Lod_level_slot::get_history() const -> cull_lanes::Lod_history_frame
 {
     return cull_lanes::Lod_history_frame{
@@ -3460,31 +3621,92 @@ auto Draw_list_scene::Lod_level_slot::get_history() const -> cull_lanes::Lod_his
 
 void Draw_list_scene::assign_lod_columns(const Draw_list_slot& slot, Lod_level_slot& level_slot)
 {
-    // One column per color view with a Lod_view, in view order, while the
-    // limits allow (doc/plans/lod_gpu_selection.md section 3 "Columns");
-    // a view past them draws the template range. The level slot records
-    // each column's lod_key (section 6).
+    // The color columns first, one per color view with a Lod_view in view
+    // order, then one per 2D shadow view with a Lod_view and one per point
+    // light (its six faces share it), while the limits allow
+    // (doc/plans/lod_gpu_selection.md section 3 "Columns"); a view past
+    // them draws the template range. A shadow view whose sampling views all
+    // have a color column selects (section 4); one with a sampling view
+    // without a column draws the template range and gets no column. The
+    // level slot records each column's lod_key (section 6).
     m_lod_column_count          = 0;
+    m_lod_color_column_count    = 0;
     m_lod_column_overflow_count = 0;
     level_slot.column_count     = 0;
     std::fill(m_cull_view_lod_columns.begin(), m_cull_view_lod_columns.end(), lod_column_none);
+    std::fill(m_cull_view_lod_shadow_modes.begin(), m_cull_view_lod_shadow_modes.end(), Lod_shadow_mode::none);
     if (!slot.lod_active) {
         return;
     }
-    uint32_t color_column_count = 0;
+    const auto add_column = [&](const std::size_t view_index, const Draw_purpose purpose, const uint32_t color_column_mask) {
+        const uint32_t column = m_lod_column_count;
+        m_lod_columns[column] = Lod_column{
+            .view              = static_cast<uint32_t>(view_index),
+            .purpose           = purpose,
+            .color_column_mask = color_column_mask,
+            .changed_entries   = 0,
+            .change            = Lod_column_change::changed
+        };
+        m_cull_view_lod_columns[view_index] = column;
+        level_slot.column_keys[column]      = m_cull_views[view_index].lod_view.value().lod_key;
+        ++m_lod_column_count;
+    };
     for (std::size_t view_index = 0, end = m_cull_views.size(); view_index < end; ++view_index) {
         const Cull_view_tests& view = m_cull_views[view_index];
         if ((view.purpose != Draw_purpose::color) || (view.kind != Cull_view_kind::planes) || !view.lod_view.has_value()) {
             continue;
         }
-        if ((color_column_count >= max_lod_color_columns) || (m_lod_column_count >= max_lod_columns)) {
+        if ((m_lod_color_column_count >= max_lod_color_columns) || (m_lod_column_count >= max_lod_columns)) {
             ++m_lod_column_overflow_count;
             continue;
         }
-        m_cull_view_lod_columns[view_index]         = m_lod_column_count;
-        level_slot.column_keys[m_lod_column_count] = view.lod_view.value().lod_key;
-        ++m_lod_column_count;
-        ++color_column_count;
+        add_column(view_index, Draw_purpose::color, 0u);
+        ++m_lod_color_column_count;
+    }
+    for (std::size_t view_index = 0, end = m_cull_views.size(); view_index < end; ++view_index) {
+        const Cull_view_tests& view = m_cull_views[view_index];
+        if ((view.purpose != Draw_purpose::shadow) || !view.lod_view.has_value()) {
+            continue;
+        }
+        // The six faces of a point light are consecutive, face 0 first
+        // (add_point_light_cull_views()): faces 1..5 take face 0's column
+        // and mode.
+        if ((view.kind == Cull_view_kind::cube_face) && (view.cube_face != 0)) {
+            ERHE_VERIFY(view_index >= view.cube_face);
+            const std::size_t face_0 = view_index - view.cube_face;
+            ERHE_VERIFY((m_cull_views[face_0].kind == Cull_view_kind::cube_face) && (m_cull_views[face_0].cube_face == 0));
+            m_cull_view_lod_columns     [view_index] = m_cull_view_lod_columns     [face_0];
+            m_cull_view_lod_shadow_modes[view_index] = m_cull_view_lod_shadow_modes[face_0];
+            continue;
+        }
+        // The sampling views' color columns (section 4): every sampling
+        // view needs one, else the receivers it draws are at the template
+        // range and so are the casters.
+        const Lod_sampling_views& sampling = m_cull_view_lod_sampling[view_index];
+        ERHE_VERIFY(sampling.count > 0);
+        bool     all_sampled       = !sampling.overflow;
+        uint32_t color_column_mask = 0;
+        for (uint32_t i = 0; i < sampling.count; ++i) {
+            bool found = false;
+            for (uint32_t column = 0; column < m_lod_color_column_count; ++column) {
+                if (level_slot.column_keys[column] == sampling.keys[i]) {
+                    color_column_mask |= (1u << column);
+                    found = true;
+                }
+            }
+            all_sampled = all_sampled && found;
+        }
+        if (!all_sampled) {
+            m_cull_view_lod_shadow_modes[view_index] = Lod_shadow_mode::template_range;
+            continue;
+        }
+        if (m_lod_column_count >= max_lod_columns) {
+            ++m_lod_column_overflow_count;
+            m_cull_view_lod_shadow_modes[view_index] = Lod_shadow_mode::template_range;
+            continue;
+        }
+        add_column(view_index, Draw_purpose::shadow, color_column_mask);
+        m_cull_view_lod_shadow_modes[view_index] = Lod_shadow_mode::select;
     }
     level_slot.column_count = m_lod_column_count;
     if ((m_lod_column_overflow_count > 0) && !m_lod_column_overflow_logged) {
@@ -3511,6 +3733,27 @@ auto Draw_list_scene::get_cull_view_lod_column(const uint64_t frame_index, const
     }
     verify_cull_view_classified(frame_index, cull_view);
     return m_cull_view_lod_columns[static_cast<std::size_t>(cull_view)];
+}
+
+auto Draw_list_scene::get_cull_view_lod_shadow_mode(const uint64_t frame_index, const Cull_view cull_view) const -> Lod_shadow_mode
+{
+    if (cull_view == Cull_view::none) {
+        return Lod_shadow_mode::none;
+    }
+    verify_cull_view_classified(frame_index, cull_view);
+    return m_cull_view_lod_shadow_modes[static_cast<std::size_t>(cull_view)];
+}
+
+auto Draw_list_scene::get_lod_column_change(const uint64_t frame_index, const Cull_view cull_view) const -> Lod_column_change
+{
+    const uint32_t column = get_cull_view_lod_column(frame_index, cull_view);
+    if (column == lod_column_none) {
+        return Lod_column_change::none;
+    }
+    ERHE_VERIFY(column < m_lod_column_count);
+    // Counted for the shadow columns only (select_list_lod_levels()).
+    ERHE_VERIFY(m_lod_columns[column].purpose == Draw_purpose::shadow);
+    return m_lod_columns[column].change;
 }
 
 auto Draw_list_scene::get_lod_level(
@@ -3642,15 +3885,28 @@ void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_l
     capture.column_overflow_count = m_lod_column_overflow_count;
     capture.history_restart_count = m_lod_history_restart_count;
     capture.history_shift_count   = m_lod_history_shift_count;
+    for (uint32_t column = 0; column < m_lod_column_count; ++column) {
+        const Lod_column& lod_column = m_lod_columns[column];
+        capture.columns.push_back(
+            Lod_level_capture_column{
+                .column            = column,
+                .view              = lod_column.view,
+                .previous_column   = m_lod_previous_columns[column],
+                .lod_view          = m_cull_views[lod_column.view].lod_view.value(),
+                .purpose           = lod_column.purpose,
+                .color_column_mask = lod_column.color_column_mask,
+                .changed_entries   = lod_column.changed_entries,
+                .change            = (lod_column.purpose == Draw_purpose::shadow) ? lod_column.change : Lod_column_change::none
+            }
+        );
+    }
     for (std::size_t view_index = 0, end = m_cull_views.size(); view_index < end; ++view_index) {
-        const uint32_t column = m_cull_view_lod_columns[view_index];
-        if (column != lod_column_none) {
-            capture.columns.push_back(
-                Lod_level_capture_column{
-                    .column          = column,
-                    .view            = static_cast<uint32_t>(view_index),
-                    .previous_column = m_lod_previous_columns[column],
-                    .lod_view        = m_cull_views[view_index].lod_view.value()
+        const Cull_view_tests& view = m_cull_views[view_index];
+        if ((m_cull_view_lod_shadow_modes[view_index] == Lod_shadow_mode::template_range) && ((view.kind != Cull_view_kind::cube_face) || (view.cube_face == 0))) {
+            capture.template_views.push_back(
+                Lod_level_capture_template_view{
+                    .view    = static_cast<uint32_t>(view_index),
+                    .lod_key = view.lod_view.value().lod_key
                 }
             );
         }
@@ -3674,8 +3930,8 @@ void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_l
             out.max_axis_scale       = draw_list.bounds.max_axis_scale[i];
             out.lod_table_index      = entry.lod_table_index;
             out.lod_word             = entry.lod_word;
-            // A list without level words (shadow lists: no shadow columns
-            // yet) has no levels.
+            // A list without level words (a frame without columns) has no
+            // levels.
             if (words.empty()) {
                 continue;
             }

@@ -31,8 +31,12 @@ camera).
 Then, per level L, renders render_scene_image at a pose inside L's distance
 range (for the image's own projection scale) with the automatic selection,
 and again with Lod.mode = forced, Lod.forced_level = L, and requires the two
-PNGs to be byte-identical. Shadows are off for the image pairs (shadow
-passes draw the template range until doc/plans/lod_gpu_selection.md step 5).
+PNGs to be byte-identical. Shadows are on (the default scene's
+directional lights; --no-shadows turns them off for the image pairs): the
+shadow passes draw the torus at the level the image's view selects for it,
+since it is inside that view's frustum (doc/plans/lod_gpu_selection.md
+step 5), so the torus's shadow on itself and on the floor is part of the
+comparison.
 Under gpu the levels read are still the CPU classification's (the GPU's
 are compared by get_cull_classification_check, which the gpu pass runs at
 every image pose), and the images come from the GPU-generated commands;
@@ -53,7 +57,7 @@ must differ (negative control). Needs Pillow.
 Usage: python3 scripts/lod_dolly_verify.py [--editor PATH] [--threshold PIXELS]
                                            [--classification cpu|gpu|both]
                                            [--outline] [--hysteresis BAND]
-                                           [--hold-frames N]
+                                           [--hold-frames N] [--no-shadows]
 Exit code 0 = pass.
 """
 
@@ -128,8 +132,9 @@ def predicted_level(distance, switch_distances):
 
 
 class Dolly:
-    def __init__(self, client, scene, threshold, band=0.0, hold_frames=300):
+    def __init__(self, client, scene, threshold, band=0.0, hold_frames=300, shadows=True):
         self.c              = client
+        self.shadows        = shadows
         self.scene          = scene
         self.threshold      = threshold
         self.band           = band
@@ -277,9 +282,15 @@ class Dolly:
                 while frame < (first + self.hold_frames):
                     reply = self.selection(frame)
                     frame = reply["frame_index"]
-                    entry = [e for e in reply["entries"] if e["purpose"] == "color"][0]
-                    levels = entry["levels"]
-                    if (len(levels) != 1) or (levels[0] != kept):
+                    # The viewport's color column (the shadow passes have
+                    # columns of their own; the torus's shadow entry holds
+                    # the color entry's level in the color column).
+                    color_columns = [i for i, column in enumerate(reply["columns"]) if column.get("purpose", "color") == "color"]
+                    entry  = [e for e in reply["entries"] if e["purpose"] == "color"][0]
+                    shadow = [e for e in reply["entries"] if e["purpose"] == "shadow"]
+                    levels = [entry["levels"][i] for i in color_columns]
+                    shadow_levels = [shadow[0]["levels"][i] for i in color_columns] if shadow else levels
+                    if (len(levels) != 1) or (levels[0] != kept) or (shadow_levels != levels):
                         changed.append((frame, levels))
                 check_true(f"{self.classification} hold level {level} {label}: level {kept} for {frame - first} frames", not changed, f"changed {changed[:5]}")
                 if self.classification == "gpu":
@@ -298,7 +309,7 @@ class Dolly:
         automatic = {}
         width, height, fov_y_degrees = 640, 400, 50.0
         image_projection_scale = height / (2.0 * math.tan(math.radians(fov_y_degrees) * 0.5))
-        self.call("set_graphics_preset", {"shadow_enable": False})
+        self.call("set_graphics_preset", {"shadow_enable": self.shadows})
         mas = self.max_axis_scale
         switch = [(error * mas * image_projection_scale) / self.threshold for error in self.errors]
         for level in range(LEVEL_COUNT):
@@ -354,10 +365,9 @@ class Dolly:
     def outline(self, out_dir):
         """The selected torus's viewport crop at automatic level L equals the crop with Lod forced to L."""
         self.call("select_items", {"scene_name": self.scene, "ids": [self.torus]})
-        # Shadow passes draw the template range until step 5 (as images()).
         saved_threshold = self.threshold
         self.threshold  = OUTLINE_THRESHOLD
-        self.call("set_graphics_preset", {"shadow_enable": False, "lod_threshold_pixels": self.threshold})
+        self.call("set_graphics_preset", {"shadow_enable": self.shadows, "lod_threshold_pixels": self.threshold})
         # The viewport column's switch distances (sample() reads the
         # column at the camera position).
         _, _, _, switch = self.sample(TORUS_POSITION[2] + 6.0, 0)
@@ -415,6 +425,7 @@ def main():
     parser.add_argument("--hysteresis", type=float, default=0.0,
                         help="lod_hysteresis_band (0: none); > 0 adds the inward dolly and the band holds")
     parser.add_argument("--hold-frames", type=int, default=300, help="classified frames each band hold lasts")
+    parser.add_argument("--no-shadows", action="store_true", help="shadows off for the image and outline comparisons")
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -422,7 +433,7 @@ def main():
     try:
         client = McpClient(port)
         scene  = client.call("list_scenes")["scenes"][0]["name"]
-        dolly  = Dolly(client, scene, args.threshold, args.hysteresis, args.hold_frames)
+        dolly  = Dolly(client, scene, args.threshold, args.hysteresis, args.hold_frames, shadows=not args.no_shadows)
         classifications = ["cpu", "gpu"] if (args.classification == "both") else [args.classification]
         dolly.set_classification(classifications[0])
         dolly.setup()
