@@ -358,6 +358,22 @@ regions"):
 3. `lod_enabled` defaults to off until the dolly and Bistro / Quest
    measurements; then the user decides.
 
+Decisions (user, 2026-11-01):
+
+4. A shadow column computes the light's own selection only for the casters
+   the light's view keeps (its frustum / reach); every other entry writes
+   level 0 in that column. This amends section 1's "levels do not depend on
+   visibility" for the own selection of shadow columns only: color columns
+   and the shadow entries' color rows stay visibility-independent. A caster
+   entering the light's reach starts that column's hysteresis fresh; it was
+   not drawn in the pass, so no shadow pops.
+5. The shadow map cache may decide from levels one frame late, so on
+   devices where the compaction writes the commands
+   (`Device_info::use_draw_indirect_count`) the CPU LOD lanes leave the
+   per-frame path: the cache reads the per-column level-change counts from
+   the retired-frame readback and the edge-line expansion reads the level
+   region on the GPU.
+
 ## 10. Build order
 
 Each step is one commit (or a small series) with its docs; the present-tense
