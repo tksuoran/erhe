@@ -49,6 +49,7 @@
 #include "content_library/content_library.hpp"
 #include "content_library/material_library.hpp"
 #include "init_status_display.hpp"
+#include "windows/status_line.hpp"
 #include "input_state.hpp"
 #include "task_guard.hpp"
 #include "time.hpp"
@@ -937,6 +938,14 @@ public:
         // once the render phase that logged last has ended; the window
         // reads them in its imgui() (doc/editor/render_thread.md section 2.6).
         m_frame_log_window->on_frame_end();
+
+        // The GPU timers are render-phase objects (created and destroyed by
+        // render-phase code, e.g. a shadow node reconfigure): the
+        // Performance window reads them here, between the render phases, and
+        // draws only its samples in the ImGui phase.
+        if (m_app_context.performance_window != nullptr) {
+            m_app_context.performance_window->sample_gpu_timers();
+        }
     }
 
     // Main thread: writes the main role's frame phase to
@@ -3937,59 +3946,7 @@ public:
             install_default_layout(*window_imgui_host, m_app_context);
             window_imgui_host->set_status_bar_callback(
                 [this](erhe::imgui::Window_imgui_host&) {
-                    {
-                        // std::stringstream ss;
-                        // ss << fmt::format("{:.2f} ms", m_time->get_frame_time_average_ms());
-                        // const int running_async_ops = m_app_context.running_async_ops.load();
-                        // if (running_async_ops > 0) {
-                        //     ss << " " << running_async_ops << " running operations";
-                        // }
-                        // const int pending_async_ops = m_app_context.pending_async_ops.load();
-                        // if (pending_async_ops > 0) {
-                        //     if (running_async_ops > 0) {
-                        //         ss << ", ";
-                        //     }
-                        //     ss << pending_async_ops << " queued operations";
-                        // }
-                        // ImGui::TextUnformatted(ss.str().c_str());
-                        const float frame_ms = m_time->get_frame_time_average_ms();
-                        const int running_async_ops = m_app_context.running_async_ops.load();
-                        const int pending_async_ops = m_app_context.pending_async_ops.load();
-                        if (running_async_ops > 0 && pending_async_ops > 0) {
-                            ImGui::Text(
-                                "%.2f ms %d running operations, %d queued operations",
-                                frame_ms, running_async_ops, pending_async_ops
-                            );
-                        }
-                        else if (running_async_ops > 0) {
-                            ImGui::Text(
-                                "%.2f ms %d running operations",
-                                frame_ms, running_async_ops
-                            );
-                        }
-                        else if (pending_async_ops > 0) {
-                            ImGui::Text(
-                                "%.2f ms %d queued operations",
-                                frame_ms, pending_async_ops
-                            );
-                        } else {
-                            ImGui::Text("%.2f ms", frame_ms);
-                        }
-                        ImGui::SameLine();
-
-                        // Geogram operation progress (Remesh / atlas / ...).
-                        // m_geogram_progress is reused so this allocates no heap
-                        // in steady-state frames; returns false when idle.
-                        if (erhe::geometry::get_geogram_progress(m_geogram_progress)) {
-                            ImGui::Text("%s %u%%", m_geogram_progress.task_name.c_str(), m_geogram_progress.percent);
-                            ImGui::SameLine();
-                            ImGui::ProgressBar(
-                                static_cast<float>(m_geogram_progress.percent) / 100.0f,
-                                ImVec2{160.0f, 0.0f}
-                            );
-                            ImGui::SameLine();
-                        }
-                    }
+                    m_status_line.imgui(m_app_context);
                     struct Input_record
                     {
                         bool shift              {false};
@@ -5632,7 +5589,7 @@ public:
 
     // Reused by the status-bar callback so reading Geogram progress allocates no
     // heap memory in steady-state frames (its std::string keeps capacity).
-    erhe::geometry::Geogram_progress_state m_geogram_progress;
+    Status_line                         m_status_line; // the window host's status bar (windows/status_line.hpp)
 
     // Created at init (brushes are built into it by Scene_builder). The scene_root
     // and its windows below are created later, by create_default_scene() when the

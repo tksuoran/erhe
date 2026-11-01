@@ -40,8 +40,14 @@ Gpu_timer_plot::Gpu_timer_plot(erhe::graphics::Gpu_timer* timer, const std::size
     m_values.resize(width);
 }
 
+void Gpu_timer_plot::refresh_label()
+{
+    m_label = m_gpu_timer->label();
+}
+
 void Gpu_timer_plot::sample()
 {
+    refresh_label();
     const auto time_elapsed = static_cast<double>(m_gpu_timer->last_result());
     const auto sample_value = time_elapsed / 1000000.0;
 
@@ -52,7 +58,7 @@ void Gpu_timer_plot::sample()
 
 auto Gpu_timer_plot::label() const -> const char*
 {
-    return m_gpu_timer->label();
+    return m_label.c_str();
 }
 
 auto Gpu_timer_plot::gpu_timer() const -> erhe::graphics::Gpu_timer*
@@ -351,7 +357,7 @@ Performance_window::Performance_window(Imgui_renderer& imgui_renderer, Imgui_win
 {
 }
 
-void Performance_window::imgui()
+void Performance_window::sample_gpu_timers()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -366,7 +372,8 @@ void Performance_window::imgui()
         }
         if (!found) {
             log_performance->trace("Added new GPU timer plot {}", timer->label());
-            m_gpu_timer_plots.emplace_back(timer);
+            Gpu_timer_plot& plot = m_gpu_timer_plots.emplace_back(timer);
+            plot.refresh_label(); // a label before the first draw, also while paused
         }
     }
     m_gpu_timer_plots.erase(
@@ -390,6 +397,17 @@ void Performance_window::imgui()
         ),
         m_gpu_timer_plots.end()
     );
+
+    if (!m_pause) {
+        for (Gpu_timer_plot& plot : m_gpu_timer_plots) {
+            plot.sample();
+        }
+    }
+}
+
+void Performance_window::imgui()
+{
+    ERHE_PROFILE_FUNCTION();
 
     const auto all_cpu_timers = erhe::time::Timer::all_timers();
     for (auto* timer : all_cpu_timers) {
@@ -452,9 +470,7 @@ void Performance_window::imgui()
         for (auto& plot : m_cpu_timer_plots) {
             plot.sample();
         }
-        for (auto& plot : m_gpu_timer_plots) {
-            plot.sample();
-        }
+        // The GPU timer plots are sampled by sample_gpu_timers().
         for (auto* plot : m_generic_plots) {
             plot->sample();
         }

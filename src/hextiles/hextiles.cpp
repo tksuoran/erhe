@@ -397,6 +397,8 @@ public:
                     window_imgui_host->update_render_pass(m_window.get_width(), m_window.get_height());
                 }
             }
+            // Single threaded: the GPU timers are idle here.
+            m_performance_window.sample_gpu_timers();
             m_imgui_windows .begin_frame(m_graphics_device.get_frame_index());
             viewport_menu();
             m_imgui_windows .draw_imgui_windows();

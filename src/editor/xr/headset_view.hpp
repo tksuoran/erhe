@@ -4,6 +4,7 @@
 #include "renderers/programs.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_render_state.hpp"
+#include "windows/status_line.hpp"
 #include "xr/hand_tracker.hpp"
 #include "xr/controller_visualization.hpp"
 #include "xr/headset_view_resources.hpp"
@@ -574,6 +575,7 @@ private:
     // Loading screen (set_loading_screen()): rendered by the render phase
     // while the headset has no scene; released by the prepare phase at
     // m_loading_screen_release_frame.
+    Status_line                                          m_status_line; // top of the Headset window
     std::unique_ptr<Init_status_display>                 m_loading_screen;
     std::optional<uint64_t>                              m_loading_screen_release_frame;
     std::string                                          m_loading_file_name;

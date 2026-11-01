@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace erhe::graphics {
@@ -47,6 +48,10 @@ protected:
     std::vector<float> m_values;
 };
 
+// The plot of one Gpu_timer. sample() reads the timer and copies its label;
+// label() and imgui() read only the copies, so the plot draws while the
+// timer's owner (the render thread) may be destroying it
+// (Performance_window::sample_gpu_timers()).
 class Gpu_timer_plot : public Plot
 {
 public:
@@ -54,11 +59,16 @@ public:
 
     void sample() override;
     auto label() const -> const char* override;
+    // Copies the timer's label (sample() does too).
+    void refresh_label();
 
+    // Identity for the reconciliation only: never dereferenced outside
+    // sample().
     [[nodiscard]] auto gpu_timer() const -> erhe::graphics::Gpu_timer*;
 
 private:
     erhe::graphics::Gpu_timer* m_gpu_timer{nullptr};
+    std::string                m_label;
 };
 
 class Cpu_timer_plot : public Plot
@@ -96,6 +106,13 @@ public:
 
     // Implements Imgui_window
     void imgui() override;
+
+    // Reconciles the GPU timer plots with Gpu_timer::all_gpu_timers() and
+    // samples them. Call it where no thread creates, destroys or records the
+    // timers (the editor: after joining the render phase, before kicking the
+    // next one; a single threaded app: once per frame). imgui() never touches
+    // a Gpu_timer: it draws the samples taken here.
+    void sample_gpu_timers();
 
     void register_plot(Plot* plot);
     void unregister_plot(Plot* plot);

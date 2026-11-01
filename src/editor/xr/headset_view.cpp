@@ -841,6 +841,11 @@ void Headset_view::imgui()
     if (!m_context.OpenXR) {
         return;
     }
+    // The editor window's status line (frame time, async operations,
+    // geogram progress): the headset shows no editor window.
+    m_status_line.imgui(m_app_context);
+    ImGui::NewLine();
+
     // Scene selection: re-homes the headset together with the Hud and the
     // Hotbar (Editor::home_tools(), from the message bus pump).
     std::shared_ptr<Scene_root> scene_root = get_scene_root();

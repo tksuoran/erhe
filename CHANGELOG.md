@@ -42,6 +42,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::imgui`: `Performance_window::sample_gpu_timers()` reconciles and
+  samples the GPU timer plots; the owner calls it where no thread creates,
+  destroys or records `Gpu_timer`s (the editor: between render phases).
+  `Performance_window::imgui()` no longer touches `Gpu_timer`s, and
+  `Gpu_timer_plot` copies its timer's label (`refresh_label()`).
+
 - `erhe::gltf`: `Gltf_data::errors`: why `parse_gltf()` produced nothing
   (the file could not be opened or read, or fastgltf rejected it).
 
