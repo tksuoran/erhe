@@ -247,6 +247,19 @@ bounded in-frustum entries culled as occluded. Repeat-3 medians not taken.
   computed.
 - A scene with little occlusion (heavy) pays the pass without a saving
   (net +97 us, step 3b); the default is on regardless (decision above).
+- Shadow passes are not occlusion culled: the occlusion views are camera
+  views, and a caster hidden from the camera can still cast a visible
+  shadow. Two shadow cullings are wanted (user, 2026-11-01; not started):
+  1. Occlusion from the light's view: caster boxes tested against the
+     previous frame's shadow map depth, so casters the light cannot see
+     behind other casters are skipped (saves vertex work; for a sun over
+     Bistro the roofs hide much of what lies below them).
+  2. Receiver-based caster culling: a caster is skipped when its shadow
+     cannot land on anything the camera sees - its box swept along the
+     light direction tested against the camera's frustum and its
+     occlusion-visible set.
+  The measured upper bound on the Quest Bistro street walk is the shadow
+  pass, 2.2 - 3.2 ms (doc/plans/lod_gpu_selection.md step 6).
 - Headset: the per-eye (non-multiview) path has no occlusion view; the
   headset's images with occlusion on and off are not compared (the Quest
   compositor screenshot shows the passthrough camera, not the app).
