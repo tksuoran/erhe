@@ -13,7 +13,11 @@
 ✓gpu-sel-step-1{e2fdd1e7a;plumbing;images-identical}
 ✓gpu-sel-step-2a{7d63a97be;CPU-lod_lanes;dolly-31/31;Bistro-76us}
 ✓gpu-sel-step-2b{ab9ce6176;cull_classify.comp;0-mismatches-M3/M4/KK;ctest-101/101-x4}
-?NEXT=gpu-sel-step-3-CPU-consumers->4-hysteresis->5-shadows->6-Quest(user);LOD-window-interactive-pass(user)
+✓gpu-sel-step-3{2bb7d135a;CPU-consumers;get_lod_stats}
+✓gpu-sel-step-4{be0868ae0;hysteresis-band-0.25;WAR-barrier-any-frames-in-flight}+ecea855aa{occlusion-slot-WAR-fix}
+✓gpu-sel-step-5{4663ad29b;shadows-D3}+47b55a6e8{decision-4;classify-741->397us}
+✓gpu-sel-decisions-5-6{9312509a7;on_demand;classify-402->200us;Quest-APK-ok}
+?NEXT=lod.md-step-6-persistence(chains+level-edge-lines-in-prepared-glTF;Save-for-Quest)->GPU-plan-step-6-Quest-measurement;LOD-window-interactive-pass(user)
 ?found{no-weld-after-in-place-edit;per-facet-texcoords-no-chain-with-seams-keep;reparent-carrier-only-change-not-re-resolved;scene_roundtrip_verify-pre-existing-failures(Graph_texture-destroyed-on-render-thread-asset_manager.cpp:343);fp16-first-render-outlier}
 
 [TASK::quest-performance]{started-2026-10-24;branch=render-thread;via-harness{opus-coder+fable-review};doc/plans/quest_performance.md;memory-bank/topics/quest.md}
