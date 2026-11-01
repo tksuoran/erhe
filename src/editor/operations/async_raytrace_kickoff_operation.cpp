@@ -13,6 +13,7 @@
 #include "scene/viewport_scene_views.hpp"
 
 #include "erhe_graphics/scoped_worker_context.hpp"
+#include "erhe_primitive/prepared_primitive.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -25,6 +26,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <unordered_set>
 
 namespace editor {
 
@@ -138,16 +140,33 @@ void deferred_finalize_mesh_items(
         std::vector<bool>                                           force_optimized_rebuild;
         std::vector<std::optional<erhe::primitive::Lod_settings>>   lod_settings;
         std::vector<Lod_rebuild>                                    lod_rebuild;
+        // A prepared primitive whose stored LOD chain (ERHE_mesh_lod) is its
+        // request: its full build keeps the stored levels instead of
+        // re-optimizing from the Geometry, which would simplify again
+        // (doc/erhe/meshoptimizer_integration.md "Level of detail").
+        std::vector<bool>                                           keep_stored_lod;
         {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
             mesh_primitives = scene_mesh->get_primitives();
             force_optimized_rebuild.assign(mesh_primitives.size(), false);
             lod_settings.assign(mesh_primitives.size(), std::optional<erhe::primitive::Lod_settings>{});
             lod_rebuild.assign(mesh_primitives.size(), Lod_rebuild::none);
+            keep_stored_lod.assign(mesh_primitives.size(), false);
             for (std::size_t i = 0, end = mesh_primitives.size(); i < end; ++i) {
                 const erhe::primitive::Primitive* const primitive = mesh_primitives[i].primitive.get();
                 if (primitive != nullptr) {
                     lod_settings[i] = primitive->lod_settings;
+                }
+                if (
+                    (primitive != nullptr) &&
+                    parameters.build_info.buffer_info.optimize_meshes &&
+                    (primitive->optimization_hold_count == 0) &&
+                    primitive->lod_settings.has_value() &&
+                    primitive->is_prepared() &&
+                    primitive->render_shape->is_prepared_data_current()
+                ) {
+                    const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& prepared_data = primitive->render_shape->get_prepared_data();
+                    keep_stored_lod[i] = prepared_data->lod.has_value() && (prepared_data->lod->settings == primitive->lod_settings.value());
                 }
                 // A complete base mesh missing its (requested) optimized
                 // variant: an edit commit's synchronous base-only rebuild, or
@@ -257,11 +276,24 @@ void deferred_finalize_mesh_items(
                     ? render_shape->get_normal_style()
                     : erhe::primitive::Normal_style::corner_normals;
                 // A primitive with a LOD request rebuilds its optimized variant
-                // with its chain (Primitive::lod_settings).
+                // with its chain (Primitive::lod_settings). A stored chain is
+                // kept instead: the full build makes the base only, and the
+                // variant is the core repacked with the stored levels and
+                // their edge lines (built from the stored indices).
+                const bool keep_stored = needs_full_build && keep_stored_lod[primitive_index];
                 std::optional<erhe::primitive::Build_info> lod_build_info{};
-                if (lod_settings[primitive_index].has_value()) {
+                if (keep_stored) {
+                    lod_build_info.emplace(mesh_build_info);
+                    lod_build_info->buffer_info.optimize_meshes = false;
+                } else if (lod_settings[primitive_index].has_value()) {
                     lod_build_info.emplace(mesh_build_info);
                     lod_build_info->lod_settings = lod_settings[primitive_index];
+                }
+                if (keep_stored) {
+                    lod_shapes[primitive_index] = primitive.make_prepared_optimized_render_shape(mesh_build_info.buffer_info, &lod_settings[primitive_index].value());
+                    if (!lod_shapes[primitive_index]) {
+                        log_operations->warn("Deferred finalize: could not build the stored LOD variant of '{}'", scene_mesh->get_name());
+                    }
                 }
                 const erhe::primitive::Build_info& primitive_build_info = lod_build_info.has_value() ? lod_build_info.value() : mesh_build_info;
                 if (!render_shape->prepare_geometry_buffer_mesh(primitive_build_info, normal_style, scene_mesh->get_name(), needs_reoptimize)) {
@@ -687,6 +719,28 @@ void request_deferred_base_builds_in_all_scenes(App_context& context)
     }
 }
 
+auto request_scene_lod_generation(
+    App_context&                                        context,
+    Scene_root&                                         scene_root,
+    const std::optional<erhe::primitive::Lod_settings>& settings
+) -> Lod_generation_result
+{
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
+        const erhe::scene::Mesh_layer* const content = scene_root.layers().content();
+        if (content != nullptr) {
+            items.reserve(content->meshes.size());
+            for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content->meshes) {
+                if (mesh) {
+                    items.push_back(mesh);
+                }
+            }
+        }
+    }
+    return request_lod_generation(context, items, settings);
+}
+
 auto request_lod_generation(
     App_context&                                         context,
     const std::vector<std::shared_ptr<erhe::Item_base>>& items,
@@ -726,14 +780,15 @@ auto request_lod_generation(
     std::vector<std::vector<std::shared_ptr<erhe::primitive::Primitive>>> claimed(meshes.size());
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
-        std::vector<const erhe::primitive::Primitive*> seen;
+        // A scene-wide request covers thousands of primitives: a set, not a
+        // linear search per primitive.
+        std::unordered_set<const erhe::primitive::Primitive*> seen;
         for (std::size_t mesh_index = 0, mesh_end = meshes.size(); mesh_index < mesh_end; ++mesh_index) {
             for (const erhe::scene::Mesh_primitive& mesh_primitive : meshes[mesh_index]->get_primitives()) {
                 erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
-                if ((primitive == nullptr) || (std::find(seen.begin(), seen.end(), primitive) != seen.end())) {
+                if ((primitive == nullptr) || !seen.insert(primitive).second) {
                     continue;
                 }
-                seen.push_back(primitive);
                 ++result.primitive_count;
                 if ((primitive->lod_settings == settings) && primitive->optimized_render_shape) {
                     ++result.unchanged_count;

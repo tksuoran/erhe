@@ -42,6 +42,24 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`, `erhe::gltf`: stored LOD chains in the prepared glTF
+  (`ERHE_mesh_lod`, doc/gltf_extensions/ERHE_mesh_lod.md; doc/plans/lod.md
+  step 6). `erhe::primitive`: `Stored_lod_chain`,
+  `validate_stored_lod_chain()`, `Prepared_primitive_data::lod` (settings
+  and level table), `Triangle_soup::lod_index_data` (the level indices, read
+  and released with the soup), `Stored_vertex_streams::lod_indices`,
+  `Primitive_shape::load_stored_lod_chain()`, the
+  `build_buffer_mesh_from_triangle_soup()` and
+  `Primitive_render_shape::make_buffer_mesh()` overloads taking stored levels,
+  `extract_soup_lod_vertex_data()`, `generate_soup_lod_chain()`,
+  `Prepared_primitive_export::lod`, `Export_lod_source` and
+  `make_export_lod_chain()`, `Shape_memory_statistics::triangle_soup_lod_index_bytes`.
+  `make_prepared_meshes()` / `make_stored_meshes()` build the optimized
+  variant with a stored chain and set `Primitive::lod_settings` from it;
+  `make_prepared_optimized_render_shape()` uses a stored chain made with the
+  requested settings instead of generating. `erhe::gltf`:
+  `Gltf_export_prepared_statistics::lod_stored_count`, `lod_generated_count`,
+  `lod_none_count`, `lod_ms`; `Gltf_prepared_mesh_statistics::lod_used_count`.
 - `erhe::scene_renderer`: `Lod_cpu_selection` (`every_frame`, `on_demand`)
   with its `c_str()` and `Lod_frame_settings::cpu_selection`
   (doc/plans/lod_gpu_selection.md section 9, decisions 5 and 6): under the

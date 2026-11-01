@@ -1315,4 +1315,251 @@ TEST(Gltf_roundtrip, prepared_mesh_data_parse_rejects_tampered)
     }
 }
 
+// The mesh primitive of the named node of a parse.
+[[nodiscard]] auto find_node_primitive(const erhe::gltf::Gltf_data& data, const std::string_view name) -> std::shared_ptr<erhe::primitive::Primitive>
+{
+    const std::shared_ptr<erhe::scene::Node> node = find_by_name(data.nodes, name);
+    EXPECT_TRUE(node) << name;
+    if (!node) {
+        return {};
+    }
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+    EXPECT_TRUE(mesh && (mesh->get_primitives().size() == 1)) << name;
+    if (!mesh || (mesh->get_primitives().size() != 1)) {
+        return {};
+    }
+    return mesh->get_primitives().front().primitive;
+}
+
+[[nodiscard]] auto primitive_has_extension(const simdjson::dom::element root, const std::string_view mesh_name, const char* const extension) -> bool
+{
+    for (const simdjson::dom::element mesh : root["meshes"].get_array()) {
+        std::string_view name;
+        if ((mesh["name"].get_string().get(name) != simdjson::SUCCESS) || (name != mesh_name)) {
+            continue;
+        }
+        const simdjson::dom::element primitive = mesh["primitives"].get_array().at(0);
+        return primitive["extensions"][extension].error() == simdjson::SUCCESS;
+    }
+    ADD_FAILURE() << "no mesh " << mesh_name;
+    return false;
+}
+
+// ERHE_mesh_lod (doc/gltf_extensions/ERHE_mesh_lod.md): only a primitive with
+// a LOD request carries a chain; the parse reads the level table into the
+// prepared data and the level indices into the soup, bit for bit what the
+// exporter generated; a re-export of the loaded primitive writes the stored
+// chain back; a tampered level table is rejected while the rest of the
+// prepared data stays in use.
+TEST(Gltf_roundtrip, mesh_lod_round_trips)
+{
+    erhe::scene::Scene          source_scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = parse_file(data_path("lod_grids.gltf"), source_scene);
+    const std::shared_ptr<erhe::primitive::Primitive> chained   = find_node_primitive(source, "Chained");
+    const std::shared_ptr<erhe::primitive::Primitive> unchained = find_node_primitive(source, "Unchained");
+    ASSERT_TRUE(chained && unchained);
+    const erhe::primitive::Lod_settings settings{};
+    chained->lod_settings = settings;
+
+    erhe::gltf::Gltf_export_prepared_statistics statistics;
+    const std::string glb = erhe::gltf::export_gltf(
+        erhe::gltf::Gltf_export_arguments{
+            .root_node           = *source_scene.get_root_node(),
+            .binary              = true,
+            .prepared_mesh_data  = erhe::gltf::Prepared_mesh_data::write,
+            .prepared_statistics = &statistics
+        }
+    );
+    ASSERT_FALSE(glb.empty());
+    EXPECT_EQ(statistics.prepared_count,      2u);
+    EXPECT_EQ(statistics.lod_generated_count, 1u);
+    EXPECT_EQ(statistics.lod_stored_count,    0u);
+    EXPECT_EQ(statistics.lod_none_count,      0u);
+    {
+        const std::string            json_text = glb_json(glb);
+        simdjson::dom::parser        parser;
+        const simdjson::dom::element root = parser.parse(json_text);
+        EXPECT_TRUE (primitive_has_extension(root, "Chained",   "ERHE_mesh_lod"));
+        EXPECT_FALSE(primitive_has_extension(root, "Unchained", "ERHE_mesh_lod"));
+        EXPECT_TRUE(contains(root["extensionsUsed"].get_array(), "ERHE_mesh_lod"));
+        simdjson::dom::array extensions_required;
+        if (root["extensionsRequired"].get(extensions_required) == simdjson::SUCCESS) {
+            EXPECT_FALSE(contains(extensions_required, "ERHE_mesh_lod"));
+        }
+    }
+
+    erhe::scene::Scene          loaded_scene{"loaded", nullptr};
+    const erhe::gltf::Gltf_data loaded = parse_glb(glb, "mesh_lod.glb", loaded_scene, erhe::gltf::Prepared_mesh_data_use::use);
+    EXPECT_EQ(loaded.prepared_mesh_statistics.used_count,     2u);
+    EXPECT_EQ(loaded.prepared_mesh_statistics.rejected_count, 0u);
+    EXPECT_EQ(loaded.prepared_mesh_statistics.lod_used_count, 1u);
+    const std::shared_ptr<erhe::primitive::Primitive> loaded_chained   = find_node_primitive(loaded, "Chained");
+    const std::shared_ptr<erhe::primitive::Primitive> loaded_unchained = find_node_primitive(loaded, "Unchained");
+    ASSERT_TRUE(loaded_chained && loaded_unchained);
+
+    const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& prepared = loaded_chained->render_shape->get_prepared_data();
+    ASSERT_TRUE(prepared && prepared->lod.has_value());
+    EXPECT_EQ(prepared->lod->settings, settings);
+    EXPECT_TRUE(prepared->lod->chain.indices.empty()); // the indices are the soup's
+    const std::shared_ptr<erhe::primitive::Triangle_soup> soup = loaded_chained->render_shape->get_triangle_soup();
+    ASSERT_TRUE(soup);
+    // The chain the exporter generated is the one generation makes over the
+    // loaded core.
+    const erhe::primitive::Lod_chain_indices expected = erhe::primitive::generate_soup_lod_chain(*soup, settings);
+    ASSERT_FALSE(expected.is_empty());
+    EXPECT_EQ(soup->lod_index_data, expected.indices);
+    ASSERT_EQ(prepared->lod->chain.levels.size(), expected.levels.size());
+    for (std::size_t level = 0; level < expected.levels.size(); ++level) {
+        EXPECT_EQ(prepared->lod->chain.levels[level].first_index, expected.levels[level].first_index);
+        EXPECT_EQ(prepared->lod->chain.levels[level].index_count, expected.levels[level].index_count);
+        uint32_t stored_bits   = 0;
+        uint32_t expected_bits = 0;
+        std::memcpy(&stored_bits,   &prepared->lod->chain.levels[level].error, sizeof(uint32_t));
+        std::memcpy(&expected_bits, &expected.levels[level].error,             sizeof(uint32_t));
+        EXPECT_EQ(stored_bits, expected_bits) << "level " << (level + 1);
+    }
+    const std::optional<erhe::primitive::Stored_lod_chain> stored = loaded_chained->render_shape->load_stored_lod_chain();
+    ASSERT_TRUE(stored.has_value());
+    EXPECT_EQ(stored->chain.indices, expected.indices);
+    EXPECT_FALSE(loaded_unchained->render_shape->get_prepared_data()->lod.has_value());
+    EXPECT_TRUE(loaded_unchained->render_shape->get_triangle_soup()->lod_index_data.empty());
+
+    // A re-export of the loaded primitive with the same request writes the
+    // stored chain back.
+    loaded_chained->lod_settings = settings;
+    erhe::gltf::Gltf_export_prepared_statistics resave_statistics;
+    const std::string resaved = erhe::gltf::export_gltf(
+        erhe::gltf::Gltf_export_arguments{
+            .root_node           = *loaded_scene.get_root_node(),
+            .binary              = true,
+            .prepared_mesh_data  = erhe::gltf::Prepared_mesh_data::write,
+            .prepared_statistics = &resave_statistics
+        }
+    );
+    ASSERT_FALSE(resaved.empty());
+    EXPECT_EQ(resave_statistics.retained_count,      2u);
+    EXPECT_EQ(resave_statistics.lod_stored_count,    1u);
+    EXPECT_EQ(resave_statistics.lod_generated_count, 0u);
+
+    // Errors not increasing: ERHE_mesh_lod is rejected, the marker, the
+    // topology and the soup stay.
+    {
+        Glb_chunks chunks = split_glb(glb);
+        const std::string key = "\"levels\":[{\"index_count\":";
+        const std::size_t position = chunks.json.find(key);
+        ASSERT_NE(position, std::string::npos);
+        const std::size_t error_position = chunks.json.find("\"error\":\"", position);
+        ASSERT_NE(error_position, std::string::npos);
+        const std::size_t value_begin = error_position + std::string_view{"\"error\":\""}.size();
+        const std::size_t value_end   = chunks.json.find('"', value_begin);
+        chunks.json.replace(value_begin, value_end - value_begin, "0x1p+10"); // larger than the next level's
+        erhe::scene::Scene          tampered_scene{"tampered", nullptr};
+        const erhe::gltf::Gltf_data tampered = parse_glb(join_glb(chunks), "mesh_lod_tampered.glb", tampered_scene, erhe::gltf::Prepared_mesh_data_use::use);
+        EXPECT_EQ(tampered.prepared_mesh_statistics.rejected_count, 1u);
+        EXPECT_EQ(tampered.prepared_mesh_statistics.lod_used_count, 0u);
+        ASSERT_EQ(tampered.prepared_mesh_statistics.rejection_reasons.size(), 1u);
+        EXPECT_EQ(tampered.prepared_mesh_statistics.rejection_reasons.begin()->first, "ERHE_mesh_lod: level errors not increasing");
+        const std::shared_ptr<erhe::primitive::Primitive> tampered_chained = find_node_primitive(tampered, "Chained");
+        ASSERT_TRUE(tampered_chained);
+        const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& tampered_prepared = tampered_chained->render_shape->get_prepared_data();
+        ASSERT_TRUE(tampered_prepared);
+        EXPECT_TRUE(tampered_prepared->colocation.has_value());
+        EXPECT_FALSE(tampered_prepared->lod.has_value());
+        EXPECT_TRUE(tampered_chained->render_shape->get_triangle_soup()->lod_index_data.empty());
+    }
+}
+
+// The stored vertex streams path ("Save for Quest") builds the optimized
+// variant with the stored chain; a malformed ERHE_mesh_lod drops only the
+// chain there too: the stored streams still load, without a chain and
+// without a request.
+TEST(Gltf_roundtrip, mesh_lod_on_stored_vertex_streams)
+{
+    erhe::scene::Scene          source_scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = parse_file(data_path("lod_grids.gltf"), source_scene);
+    const std::shared_ptr<erhe::primitive::Primitive> chained = find_node_primitive(source, "Chained");
+    ASSERT_TRUE(chained);
+    const erhe::primitive::Lod_settings settings{};
+    chained->lod_settings = settings;
+    const auto [base_format, optimized_format] = make_test_gpu_formats();
+    const erhe::gltf::Gltf_gpu_vertex_formats formats{
+        .base              = &base_format,
+        .base_skinned      = &base_format,
+        .optimized         = &optimized_format,
+        .optimized_skinned = &optimized_format,
+        .index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+        .encoding_version  = erhe::primitive::vertex_encoding_version
+    };
+    erhe::gltf::Gltf_export_arguments arguments{
+        .root_node          = *source_scene.get_root_node(),
+        .binary             = true,
+        .prepared_mesh_data = erhe::gltf::Prepared_mesh_data::write
+    };
+    arguments.gpu_vertex_formats = &formats;
+    const std::string glb = erhe::gltf::export_gltf(arguments);
+    ASSERT_FALSE(glb.empty());
+
+    // The first level's error made larger than the next level's.
+    Glb_chunks chunks = split_glb(glb);
+    const std::size_t levels_position = chunks.json.find("\"levels\":[{\"index_count\":");
+    ASSERT_NE(levels_position, std::string::npos);
+    const std::size_t error_position = chunks.json.find("\"error\":\"", levels_position);
+    ASSERT_NE(error_position, std::string::npos);
+    const std::size_t value_begin = error_position + std::string_view{"\"error\":\""}.size();
+    chunks.json.replace(value_begin, chunks.json.find('"', value_begin) - value_begin, "0x1p+10");
+    const std::string tampered_glb = join_glb(chunks);
+
+    const auto build_chained = [&](const std::string& file_bytes, const char* const file_name, erhe::scene::Scene& scene) -> std::shared_ptr<erhe::primitive::Primitive> {
+        tf::Executor executor{1};
+        const erhe::gltf::Gltf_data data = erhe::gltf::parse_gltf(
+            erhe::gltf::Gltf_parse_arguments{
+                .executor     = executor,
+                .root_node    = scene.get_root_node(),
+                .path         = write_temporary_file(file_name, file_bytes),
+                .parallel     = false,
+                .mesh_payload = erhe::gltf::Mesh_payload_load::deferred
+            }
+        );
+        std::shared_ptr<erhe::primitive::Primitive> primitive = find_node_primitive(data, "Chained");
+        if (!primitive) {
+            return {};
+        }
+        Recording_buffer_sink sink;
+        erhe::primitive::Build_info build_info{
+            .primitive_types = {.fill_triangles = true},
+            .buffer_info     = {
+                .normal_style       = erhe::primitive::Normal_style::corner_normals,
+                .index_type         = erhe::dataformat::Format::format_32_scalar_uint,
+                .vertex_format      = base_format,
+                .vertex_buffer_sink = sink,
+                .index_buffer_sink  = sink,
+                .vertex_input_key   = 1
+            }
+        };
+        build_info.buffer_info.optimize_meshes            = true;
+        build_info.buffer_info.optimized_vertex_format    = &optimized_format;
+        build_info.buffer_info.optimized_vertex_input_key = 2;
+        std::string reason;
+        EXPECT_EQ(primitive->make_stored_meshes(build_info, erhe::primitive::Base_mesh_build::at_load, reason), erhe::primitive::Primitive::Stored_build_result::built) << file_name << ": " << reason;
+        return primitive;
+    };
+
+    erhe::scene::Scene good_scene{"good", nullptr};
+    const std::shared_ptr<erhe::primitive::Primitive> good = build_chained(glb, "mesh_lod_stored.glb", good_scene);
+    ASSERT_TRUE(good && good->optimized_render_shape);
+    const erhe::primitive::Lod_chain_indices expected = erhe::primitive::generate_soup_lod_chain(*good->render_shape->get_triangle_soup(), settings);
+    EXPECT_EQ(good->optimized_render_shape->get_renderable_mesh().lod_chain.level_count, expected.levels.size() + 1);
+    EXPECT_EQ(good->lod_settings, std::optional<erhe::primitive::Lod_settings>{settings});
+
+    erhe::scene::Scene bad_scene{"bad", nullptr};
+    const std::shared_ptr<erhe::primitive::Primitive> bad = build_chained(tampered_glb, "mesh_lod_stored_tampered.glb", bad_scene);
+    ASSERT_TRUE(bad && bad->optimized_render_shape);
+    EXPECT_TRUE(bad->optimized_render_shape->get_renderable_mesh().lod_chain.is_empty());
+    EXPECT_FALSE(bad->lod_settings.has_value());
+    const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& bad_prepared = bad->render_shape->get_prepared_data();
+    ASSERT_TRUE(bad_prepared);
+    EXPECT_TRUE(bad_prepared->colocation.has_value());
+    EXPECT_FALSE(bad_prepared->lod.has_value());
+}
+
 } // anonymous namespace

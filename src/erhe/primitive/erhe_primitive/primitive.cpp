@@ -949,6 +949,11 @@ auto Primitive_shape::load_payload() -> bool
         return false;
     }
     std::shared_ptr<Prepared_primitive_data> prepared_data = source->load_prepared_data(*soup);
+    // The soup was read by this call and is not shared yet: drop the levels
+    // of a chain the validation rejected (the loader read them with the soup).
+    if (!prepared_data || !prepared_data->lod.has_value()) {
+        soup->lod_index_data = std::vector<uint32_t>{};
+    }
     if (prepared_data && prepared_data->bvh.has_value()) {
         m_stored_bvh = std::make_unique<erhe::raytrace::Prebuilt_bvh>(std::move(prepared_data->bvh.value()));
         prepared_data->bvh.reset();
@@ -1228,6 +1233,52 @@ auto Primitive_shape::has_stored_bvh() const -> bool
 {
     const std::lock_guard<std::mutex> build_lock{m_build_mutex};
     return static_cast<bool>(m_stored_bvh);
+}
+
+namespace {
+
+// The stored LOD chain of `prepared_data` (its level table) with the level
+// indices `lod_indices` (the CPU copy the soup or the stored streams carry),
+// checked against `vertex_count`.
+[[nodiscard]] auto make_stored_lod_chain(
+    const Prepared_primitive_data* const prepared_data,
+    const std::span<const uint32_t>      lod_indices,
+    const std::size_t                    vertex_count
+) -> std::optional<Stored_lod_chain>
+{
+    if ((prepared_data == nullptr) || !prepared_data->lod.has_value()) {
+        return std::nullopt;
+    }
+    Stored_lod_chain stored{
+        .settings = prepared_data->lod->settings,
+        .chain    = Lod_chain_indices{
+            .indices = std::vector<uint32_t>{lod_indices.begin(), lod_indices.end()},
+            .levels  = prepared_data->lod->chain.levels
+        }
+    };
+    const std::string reason = stored.chain.indices.empty()
+        ? std::string{"no level indices"}
+        : validate_stored_lod_chain(stored, vertex_count);
+    if (!reason.empty()) {
+        log_primitive->warn("stored LOD chain rejected: {} - no chain", reason);
+        return std::nullopt;
+    }
+    return stored;
+}
+
+} // anonymous namespace
+
+auto Primitive_shape::load_stored_lod_chain() const -> std::optional<Stored_lod_chain>
+{
+    if (!m_prepared_data || !m_prepared_data->lod.has_value()) {
+        return std::nullopt;
+    }
+    // A released soup is read back from its source with its levels.
+    const std::shared_ptr<Triangle_soup> soup = get_triangle_soup();
+    if (!soup) {
+        return std::nullopt; // the source logged why
+    }
+    return make_stored_lod_chain(m_prepared_data.get(), soup->lod_index_data, soup->get_vertex_count());
 }
 
 void Primitive_shape::mark_prepared_data_stale()
@@ -1681,6 +1732,23 @@ auto Primitive_render_shape::make_buffer_mesh(const Buffer_info& buffer_info, co
     return make_buffer_mesh_build_locked(buffer_info, lod_settings);
 }
 
+auto Primitive_render_shape::make_buffer_mesh(const Buffer_info& buffer_info, Lod_chain_indices&& stored_levels) -> bool
+{
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    const std::shared_ptr<Triangle_soup> triangle_soup = get_triangle_soup();
+    if (!triangle_soup) {
+        return false;
+    }
+    std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(*triangle_soup.get(), buffer_info, std::move(stored_levels));
+    if (!buffer_mesh_opt.has_value()) {
+        return false;
+    }
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_renderable_mesh = std::move(buffer_mesh_opt.value());
+    m_base_deferred   = false;
+    return true;
+}
+
 auto Primitive_render_shape::make_buffer_mesh_build_locked(
     const Build_info&                        build_info,
     Normal_style                             normal_style,
@@ -1907,12 +1975,12 @@ namespace {
     return true;
 }
 
-} // anonymous namespace
-
-auto build_buffer_mesh_from_triangle_soup(
+// The soup build with the LOD levels (and their edge-line data) already in
+// `lod_indices` (empty: no chain).
+[[nodiscard]] auto build_soup_buffer_mesh(
     const Triangle_soup& triangle_soup,
     const Buffer_info&   buffer_info,
-    const Lod_settings*  lod_settings
+    Lod_chain_indices&   lod_indices
 ) -> std::optional<Buffer_mesh>
 {
     // TODO Use index_type from buffer_info
@@ -1920,23 +1988,6 @@ auto build_buffer_mesh_from_triangle_soup(
     const std::size_t      source_vertex_stride  = triangle_soup.vertex_format.streams.front().stride;
     const std::size_t      vertex_count          = triangle_soup.vertex_data.size() / source_vertex_stride;
     const std::size_t      index_count           = triangle_soup.index_data.size();
-
-    // The LOD levels, over the soup's own vertices (a soup is one stream);
-    // their indices follow level 0 in the same index allocation.
-    Lod_chain_indices lod_indices{};
-    if (lod_settings != nullptr) {
-        const std::span<const uint8_t> soup_stream{triangle_soup.vertex_data.data(), triangle_soup.vertex_data.size()};
-        const Lod_vertex_data lod_vertices = extract_lod_vertex_data(
-            std::span<const std::span<const uint8_t>>{&soup_stream, 1},
-            triangle_soup.vertex_format,
-            triangle_soup.vertex_format,
-            vertex_count
-        );
-        lod_indices = generate_lod_chain(lod_vertices.get_input(), triangle_soup.index_data, *lod_settings);
-        if (buffer_info.edge_line_vertex_stream != nullptr) {
-            build_lod_edge_lines(lod_vertices.get_input(), lod_indices);
-        }
-    }
 
     Buffer_mesh  buffer_mesh;
     Buffer_range lod_edge_line_vertices{};
@@ -2263,6 +2314,60 @@ auto build_buffer_mesh_from_triangle_soup(
     return buffer_mesh;
 }
 
+} // anonymous namespace
+
+auto extract_soup_lod_vertex_data(const Triangle_soup& triangle_soup) -> Lod_vertex_data
+{
+    const std::size_t              stride       = triangle_soup.vertex_format.streams.front().stride;
+    const std::size_t              vertex_count = triangle_soup.vertex_data.size() / stride;
+    const std::span<const uint8_t> soup_stream{triangle_soup.vertex_data.data(), triangle_soup.vertex_data.size()};
+    return extract_lod_vertex_data(
+        std::span<const std::span<const uint8_t>>{&soup_stream, 1},
+        triangle_soup.vertex_format,
+        triangle_soup.vertex_format,
+        vertex_count
+    );
+}
+
+auto generate_soup_lod_chain(const Triangle_soup& triangle_soup, const Lod_settings& settings) -> Lod_chain_indices
+{
+    const Lod_vertex_data lod_vertices = extract_soup_lod_vertex_data(triangle_soup);
+    return generate_lod_chain(lod_vertices.get_input(), triangle_soup.index_data, settings);
+}
+
+auto build_buffer_mesh_from_triangle_soup(
+    const Triangle_soup& triangle_soup,
+    const Buffer_info&   buffer_info,
+    const Lod_settings*  lod_settings
+) -> std::optional<Buffer_mesh>
+{
+    // The LOD levels, over the soup's own vertices (a soup is one stream);
+    // their indices follow level 0 in the same index allocation.
+    Lod_chain_indices lod_indices{};
+    if (lod_settings != nullptr) {
+        const Lod_vertex_data lod_vertices = extract_soup_lod_vertex_data(triangle_soup);
+        lod_indices = generate_lod_chain(lod_vertices.get_input(), triangle_soup.index_data, *lod_settings);
+        if (buffer_info.edge_line_vertex_stream != nullptr) {
+            build_lod_edge_lines(lod_vertices.get_input(), lod_indices);
+        }
+    }
+    return build_soup_buffer_mesh(triangle_soup, buffer_info, lod_indices);
+}
+
+auto build_buffer_mesh_from_triangle_soup(
+    const Triangle_soup& triangle_soup,
+    const Buffer_info&   buffer_info,
+    Lod_chain_indices&&  stored_levels
+) -> std::optional<Buffer_mesh>
+{
+    Lod_chain_indices lod_indices = std::move(stored_levels);
+    if (!lod_indices.is_empty() && (buffer_info.edge_line_vertex_stream != nullptr)) {
+        const Lod_vertex_data lod_vertices = extract_soup_lod_vertex_data(triangle_soup);
+        build_lod_edge_lines(lod_vertices.get_input(), lod_indices);
+    }
+    return build_soup_buffer_mesh(triangle_soup, buffer_info, lod_indices);
+}
+
 auto Primitive_shape::get_mesh_facet_from_triangle(const erhe::raytrace::IGeometry* geometry, const uint32_t triangle) const -> GEO::index_t
 {
     if (geometry == nullptr) {
@@ -2309,6 +2414,7 @@ void Primitive_shape::add_memory_statistics(Shape_memory_statistics& out, std::u
         ++out.triangle_soup_count;
         out.triangle_soup_vertex_bytes += resident_soup->vertex_data.capacity();
         out.triangle_soup_index_bytes  += resident_soup->index_data.capacity() * sizeof(uint32_t);
+        out.triangle_soup_lod_index_bytes += resident_soup->lod_index_data.capacity() * sizeof(uint32_t);
     }
     // Counted once per source: the optimized variant shares the render
     // shape's soup and source.
@@ -2587,11 +2693,30 @@ auto Primitive::make_prepared_optimized_render_shape(const Buffer_info& buffer_i
         return {};
     }
     std::shared_ptr<Primitive_render_shape> optimized = std::make_shared<Primitive_render_shape>(core, Element_mappings{});
-    if (!optimized->make_buffer_mesh(optimized_buffer_info, requested_lod_settings)) {
-        return {};
-    }
-    if (requested_lod_settings != nullptr) {
-        log_lod_chain(get_name(), optimized->get_renderable_mesh().lod_chain);
+    // A stored chain made with the requested settings is used as it is (its
+    // edge lines are built from its indices); any other request generates.
+    const std::shared_ptr<const Prepared_primitive_data>& prepared_data = render_shape->get_prepared_data();
+    const bool use_stored_chain =
+        (requested_lod_settings != nullptr) &&
+        prepared_data && prepared_data->lod.has_value() &&
+        render_shape->is_prepared_data_current() &&
+        (prepared_data->lod->settings == *requested_lod_settings);
+    std::optional<Stored_lod_chain> stored_chain = use_stored_chain ? render_shape->load_stored_lod_chain() : std::optional<Stored_lod_chain>{};
+    if (stored_chain.has_value()) {
+        if (!optimized->make_buffer_mesh(optimized_buffer_info, std::move(stored_chain->chain))) {
+            return {};
+        }
+    } else {
+        // A stored chain that does not read back builds no chain rather than
+        // a generated one: a stored chain is never replaced by simplification
+        // on the device that loaded it.
+        const Lod_settings* const generate_settings = use_stored_chain ? nullptr : requested_lod_settings;
+        if (!optimized->make_buffer_mesh(optimized_buffer_info, generate_settings)) {
+            return {};
+        }
+        if (generate_settings != nullptr) {
+            log_lod_chain(get_name(), optimized->get_renderable_mesh().lod_chain);
+        }
     }
     if (released && source) {
         // As release_triangle_soup(): the variant reads back from the same
@@ -2612,7 +2737,8 @@ namespace {
     const Stored_vertex_streams& stored,
     const erhe::math::Aabb&      bounding_box,
     const erhe::math::Sphere&    bounding_sphere,
-    const Buffer_info&           buffer_info
+    const Buffer_info&           buffer_info,
+    const Lod_chain_indices*     lod_indices
 ) -> std::optional<Buffer_mesh>
 {
     if (variant.streams.size() != buffer_info.vertex_format.streams.size()) {
@@ -2624,11 +2750,38 @@ namespace {
     if (
         !allocate_fill_buffer_mesh(
             buffer_mesh, buffer_info, stored.vertex_count, stored.index_count,
-            nullptr, no_lod_edge_line_vertices, no_lod_edge_line_joints,
+            lod_indices, no_lod_edge_line_vertices, no_lod_edge_line_joints,
             "stored vertex streams build"
         )
     ) {
         return std::optional<Buffer_mesh>{};
+    }
+    if ((lod_indices != nullptr) && !lod_indices->is_empty()) {
+        // The stored chain's levels follow level 0 in the index allocation,
+        // in the sink's index format (no edge-line stream here: the levels'
+        // edge lines are built with the primitive's full build).
+        buffer_mesh.lod_chain = make_lod_chain(buffer_mesh.triangle_fill_indices, *lod_indices, Buffer_range{}, Buffer_range{});
+        const std::size_t element_size = buffer_mesh.index_buffer_range.element_size;
+        const std::size_t level_0_size = indices.size();
+        indices.resize(level_0_size + (lod_indices->indices.size() * element_size));
+        uint8_t* destination = indices.data() + level_0_size;
+        for (const uint32_t value : lod_indices->indices) {
+            switch (element_size) {
+                case 2: {
+                    const uint16_t value_16 = static_cast<uint16_t>(value);
+                    memcpy(destination, &value_16, sizeof(value_16));
+                    break;
+                }
+                case 4: {
+                    memcpy(destination, &value, sizeof(value));
+                    break;
+                }
+                default: {
+                    ERHE_FATAL("bad index element size");
+                }
+            }
+            destination += element_size;
+        }
     }
     buffer_mesh.has_vertex_colors     = stored.has_vertex_colors;
     buffer_mesh.bounding_box          = bounding_box;
@@ -2730,8 +2883,13 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, const Base_mesh
             .index_buffer_sink  = buffer_info.index_buffer_sink,
             .vertex_input_key   = buffer_info.optimized_vertex_input_key
         };
+        // The stored LOD chain (ERHE_mesh_lod), used as it is.
+        const std::optional<Stored_lod_chain> stored_chain = make_stored_lod_chain(prepared_data.get(), stored->lod_indices, stored->vertex_count);
         std::vector<uint8_t> optimized_indices = stored->indices; // both variants upload the shared indices
-        optimized_mesh = build_stored_buffer_mesh(std::move(stored->optimized.value()), std::move(optimized_indices), *stored, bounding_box, bounding_sphere, optimized_buffer_info);
+        optimized_mesh = build_stored_buffer_mesh(
+            std::move(stored->optimized.value()), std::move(optimized_indices), *stored, bounding_box, bounding_sphere, optimized_buffer_info,
+            stored_chain.has_value() ? &stored_chain->chain : nullptr
+        );
         if (!optimized_mesh.has_value()) {
             return Stored_build_result::failed;
         }
@@ -2743,10 +2901,14 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, const Base_mesh
         : Base_mesh_build::at_load;
     std::optional<Buffer_mesh> base_mesh = (base_build == Base_mesh_build::deferred)
         ? std::optional<Buffer_mesh>{make_base_descriptor(optimized_mesh.value(), buffer_info.vertex_input_key)}
-        : build_stored_buffer_mesh(std::move(stored->base), std::move(stored->indices), *stored, bounding_box, bounding_sphere, buffer_info);
+        : build_stored_buffer_mesh(std::move(stored->base), std::move(stored->indices), *stored, bounding_box, bounding_sphere, buffer_info, nullptr);
     if (!base_mesh.has_value()) {
         return Stored_build_result::failed;
     }
+    const bool has_stored_chain = optimized_mesh.has_value() && !optimized_mesh->lod_chain.is_empty();
+    const std::optional<Lod_settings> stored_lod_settings = (prepared_data && prepared_data->lod.has_value())
+        ? std::optional<Lod_settings>{prepared_data->lod->settings}
+        : std::optional<Lod_settings>{};
     if (!render_shape->install_stored_build(std::move(base_mesh.value()), std::move(prepared_data), std::move(raytrace), base_build)) {
         out_reason = "payload loaded meanwhile";
         return Stored_build_result::declined;
@@ -2754,7 +2916,44 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, const Base_mesh
     if (optimized_mesh.has_value() && !optimized_render_shape) {
         publish_optimized_render_shape(std::make_shared<Primitive_render_shape>(std::move(optimized_mesh.value()), Element_mappings{}));
     }
+    // The stored chain is the primitive's LOD request (a chain is made on
+    // request only; the file carries the request with it). Without the
+    // optimized variant the request is kept, as request_lod_generation()
+    // keeps it with mesh optimization off; a chain that did not read back
+    // leaves the primitive without a request.
+    if (stored_lod_settings.has_value() && (has_stored_chain || !optimize)) {
+        // lod_settings is main-thread state (no lock); written here on a loader
+        // worker because the load builds the primitive before it is shared: the
+        // scene insert follows the build phase (editor gltf.cpp load jobs), like
+        // the optimized variant this call publishes.
+        lod_settings = stored_lod_settings;
+    }
     return Stored_build_result::built;
+}
+
+auto Primitive::make_prepared_optimized_buffer_mesh(Primitive_render_shape& optimized, const Buffer_info& optimized_buffer_info) -> bool
+{
+    // The stored LOD chain (ERHE_mesh_lod), used as it is: the variant is
+    // the core packed with the levels after level 0, no simplification. The
+    // stored chain is the primitive's LOD request (a chain is made on request
+    // only; the file carries the request with it).
+    const std::shared_ptr<const Prepared_primitive_data>& prepared_data = render_shape->get_prepared_data();
+    if (!prepared_data || !prepared_data->lod.has_value()) {
+        return optimized.make_buffer_mesh(optimized_buffer_info);
+    }
+    std::optional<Stored_lod_chain> stored_chain = render_shape->load_stored_lod_chain();
+    if (!stored_chain.has_value()) {
+        return optimized.make_buffer_mesh(optimized_buffer_info); // load_stored_lod_chain() logged why
+    }
+    if (!optimized.make_buffer_mesh(optimized_buffer_info, std::move(stored_chain->chain))) {
+        return false;
+    }
+    // lod_settings is main-thread state (no lock); written here on a loader
+    // worker because the load builds the primitive before it is shared: the
+    // scene insert follows the build phase (editor gltf.cpp load jobs), like
+    // the optimized variant this call publishes.
+    lod_settings = stored_chain->settings;
+    return true;
 }
 
 auto Primitive::make_prepared_meshes(const Build_info& build_info, const Base_mesh_build base_mesh_build) -> bool
@@ -2787,7 +2986,7 @@ auto Primitive::make_prepared_meshes(const Build_info& build_info, const Base_me
                 return false;
             }
             std::shared_ptr<Primitive_render_shape> optimized = std::make_shared<Primitive_render_shape>(core, Element_mappings{});
-            if (!optimized->make_buffer_mesh(optimized_buffer_info)) {
+            if (!make_prepared_optimized_buffer_mesh(*optimized, optimized_buffer_info)) {
                 return false;
             }
             static_cast<void>(render_shape->install_deferred_base_mesh(make_base_descriptor(optimized->get_renderable_mesh(), deferred_info.vertex_input_key)));
@@ -2824,11 +3023,19 @@ auto Primitive::make_prepared_meshes(const Build_info& build_info, const Base_me
             return false;
         }
         std::shared_ptr<Primitive_render_shape> optimized = std::make_shared<Primitive_render_shape>(core, Element_mappings{});
-        if (optimized->make_buffer_mesh(optimized_buffer_info)) {
+        if (make_prepared_optimized_buffer_mesh(*optimized, optimized_buffer_info)) {
             publish_optimized_render_shape(std::move(optimized));
         } else {
             log_primitive->warn("prepared mesh: the optimized buffer mesh did not build; rendering the source build");
         }
+    } else if (!buffer_info.optimize_meshes && render_shape->get_prepared_data()->lod.has_value()) {
+        // No variant to carry the chain: the request is kept, as
+        // request_lod_generation() keeps it with mesh optimization off.
+        // lod_settings is main-thread state (no lock); written here on a loader
+        // worker because the load builds the primitive before it is shared: the
+        // scene insert follows the build phase (editor gltf.cpp load jobs), like
+        // the optimized variant this call publishes.
+        lod_settings = render_shape->get_prepared_data()->lod->settings;
     }
 
     // Real raytrace from the stored BVH; without one the caller takes the

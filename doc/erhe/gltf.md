@@ -337,6 +337,41 @@ same bytes as the soup build of the same file, with the same affines and
 bounds bit for bit; another optimized layout is declined and the soup path
 loads).
 
+## LOD chains (`ERHE_mesh_lod`)
+
+A prepared export (`Prepared_mesh_data::write`, the editor's save and Save for
+Quest) writes `ERHE_mesh_lod` (`doc/gltf_extensions/ERHE_mesh_lod.md`) for a
+prepared soup primitive whose `Primitive::lod_settings` is set (a chain
+requested in the editor; `doc/plans/lod.md` D1) and stores no chain for any
+other primitive. The chain comes from `erhe::primitive::make_export_lod_chain()`
+in the primitive's preparation task: a retained core whose stored chain was
+made with the same settings writes that chain back; any other core gets the
+chain `generate_soup_lod_chain()` makes over the export core with the
+requested settings, which is the chain the on-request generation of the
+loaded primitive makes over the same core (for a primitive whose live
+variant came from the geometry path - an import before its first prepared
+save, an edited primitive - the live chain was generated over the
+optimizer's output in the GPU vertex format instead, so its chain before the
+save and after the reload can differ). That generation is the one
+simplification on the save path: a save on the Quest simplifies there for a
+request without a current stored chain; a load never does. The level indices go into a raw
+bufferView, the errors and the settings' floats are hexadecimal float
+strings. `Gltf_export_prepared_statistics::lod_stored_count`,
+`lod_generated_count`, `lod_none_count` (a request whose core does not
+simplify) and `lod_ms` count them.
+
+On parse the extension is validated with the rest of the prepared mesh data
+(`Gltf_prepared_payload::validate()`, rejected alone): the settings and the
+level table go into `Prepared_primitive_data::lod`; the level indices are
+read with the soup, into `Triangle_soup::lod_index_data`, by the parse and by
+every read back of a released soup (`Gltf_triangle_soup_source::load()`), and
+by `load_stored_vertex_streams()` into `Stored_vertex_streams::lod_indices`.
+`Gltf_prepared_mesh_statistics::lod_used_count` counts the accepted chains
+(`LOD chains N` in the `prepared mesh data` log line). Test:
+`test_gltf_roundtrip.cpp` (`mesh_lod_round_trips`: only the requested
+primitive carries the chain, the parse reads it back bit for bit, a re-export
+writes the stored chain back, a tampered level table is rejected alone).
+
 ## Rebinding after a save
 
 `Gltf_export_arguments::written_layout` receives where an export wrote the

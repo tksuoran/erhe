@@ -116,7 +116,11 @@ enum class Save_report_textures : unsigned int {
             {"preparation_ms",               report.prepared.preparation_ms},
             {"gpu_vertex_stream_count",      report.prepared.gpu_vertex_stream_count},
             {"gpu_vertex_stream_skipped",    report.prepared.gpu_vertex_stream_skipped},
-            {"gpu_vertex_stream_ms",         report.prepared.gpu_vertex_stream_ms}
+            {"gpu_vertex_stream_ms",         report.prepared.gpu_vertex_stream_ms},
+            {"lod_stored_count",             report.prepared.lod_stored_count},
+            {"lod_generated_count",          report.prepared.lod_generated_count},
+            {"lod_none_count",               report.prepared.lod_none_count},
+            {"lod_ms",                       report.prepared.lod_ms}
         }},
         {"sources", {
             {"overwrote_sources",        report.overwrote_sources},

@@ -1,0 +1,39 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_mesh_lod.schema.json",
+    "title": "ERHE_mesh_lod glTF mesh primitive extension",
+    "type": "object",
+    "properties": {
+        "version": {"type": "integer", "const": 1},
+        "indices": {"type": "integer", "minimum": 0, "description": "bufferView index: the levels after level 0, back to back, uint32 LE indices into the core vertices"},
+        "levels": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "index_count": {"type": "integer", "minimum": 3, "description": "a multiple of 3"},
+                    "error":       {"type": "string", "pattern": "^0x[0-9a-fA-F.]+p[+-]?[0-9]+$", "description": "object space error, a positive C99 hexadecimal float"}
+                },
+                "required": ["index_count", "error"]
+            }
+        },
+        "settings": {
+            "type": "object",
+            "properties": {
+                "level_count":        {"type": "integer", "minimum": 2, "maximum": 8},
+                "ratio":              {"type": "string", "description": "C99 hexadecimal float"},
+                "attributes":         {"type": "string", "enum": ["positions_only", "normals_and_colors"]},
+                "normal_weight":      {"type": "string", "description": "C99 hexadecimal float"},
+                "color_weight":       {"type": "string", "description": "C99 hexadecimal float"},
+                "border":             {"type": "string", "enum": ["free", "locked"]},
+                "seams":              {"type": "string", "enum": ["keep", "permissive"]},
+                "fallback":           {"type": "string", "enum": ["none", "sloppy"]},
+                "normal_merge_angle": {"type": "string", "description": "degrees, C99 hexadecimal float"}
+            },
+            "required": ["level_count", "ratio", "attributes", "normal_weight", "color_weight", "border", "seams", "fallback", "normal_merge_angle"]
+        }
+    },
+    "required": ["version", "indices", "levels", "settings"]
+}

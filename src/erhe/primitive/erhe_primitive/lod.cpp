@@ -945,6 +945,50 @@ auto make_lod_chain(
     return chain;
 }
 
+auto Stored_lod_chain::get_index_count() const -> std::size_t
+{
+    std::size_t count = 0;
+    for (const Lod_chain_indices::Level& level : chain.levels) {
+        count += level.index_count;
+    }
+    return count;
+}
+
+auto validate_stored_lod_chain(const Stored_lod_chain& stored, const std::size_t vertex_count) -> std::string
+{
+    const std::vector<Lod_chain_indices::Level>& levels = stored.chain.levels;
+    if (levels.empty() || (levels.size() >= max_lod_levels)) {
+        return "level count out of range";
+    }
+    std::size_t next_first_index = 0;
+    float       previous_error   = 0.0f;
+    for (const Lod_chain_indices::Level& level : levels) {
+        if (level.first_index != next_first_index) {
+            return "levels not back to back";
+        }
+        if ((level.index_count == 0) || ((level.index_count % 3) != 0)) {
+            return "level index count not a positive multiple of 3";
+        }
+        if (!std::isfinite(level.error) || !(level.error > previous_error)) {
+            return "level errors not increasing";
+        }
+        next_first_index += level.index_count;
+        previous_error    = level.error;
+    }
+    if (stored.chain.indices.empty()) {
+        return {};
+    }
+    if (stored.chain.indices.size() != next_first_index) {
+        return "index count differs from the levels";
+    }
+    for (const uint32_t index : stored.chain.indices) {
+        if (index >= vertex_count) {
+            return "index out of range";
+        }
+    }
+    return {};
+}
+
 auto get_lod_totals() -> Lod_totals
 {
     const std::lock_guard<std::mutex> lock{s_totals_mutex};

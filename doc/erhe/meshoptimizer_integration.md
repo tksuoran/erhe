@@ -403,9 +403,82 @@ Drawing reads level 0 unless the mesh's `Lod` properties force a level
   allocation the same way; `make_optimized_render_shape()` passes its
   `lod_settings` there (the import call site passes the `Primitive`'s,
   which is unset).
-- Prepared / stored path: no chain at load (levels in the file are
-  `doc/plans/lod.md` step 6); on-request generation repacks the core soup
-  (above).
+- Prepared / stored path: the chain stored in the file, as it is (below);
+  on-request generation repacks the core soup (above).
+
+**Stored chains.** A prepared save writes the chain of every prepared soup
+primitive with a request (`Primitive::lod_settings`) into the
+`ERHE_mesh_lod` glTF extension (`doc/gltf_extensions/ERHE_mesh_lod.md`,
+`doc/erhe/gltf.md` "LOD chains"): the level indices over the core vertices,
+the per-level errors and the settings. Save for Quest stores the chains
+that exist and requests none of its own: the editor makes them on request
+(the LOD window's "Generate for scene", MCP `generate_lods` with `scope`
+`scene`), on the Mac, and the Quest loads them. The written chain is a
+stored chain written back, or, when the primitive has no current stored
+chain made with its request, the chain `make_export_lod_chain()` generates
+over the export core. For a prepared primitive that is the chain its
+on-request generation makes over the same core; for a primitive whose live
+variant came from the geometry path (an import before its first prepared
+save, an edited primitive) the live chain was generated over the
+optimizer's output in the GPU vertex format, so its chain before the save
+and after the reload can differ. That export-time generation is the only
+simplification a save does (a save on the Quest would do it there, for a
+request without a current stored chain). A load runs no simplification:
+
+- Both prepared load paths (`make_prepared_meshes()`, `make_stored_meshes()`)
+  build the optimized variant with level 0 and the stored levels in one index
+  allocation (`build_buffer_mesh_from_triangle_soup()` with stored levels,
+  `Stored_lod_chain`), and set `Primitive::lod_settings` to the stored
+  settings, so the LOD window, `get_lod_info` and a later save see the
+  request. The GPU copy of every level is uploaded with level 0 at load and
+  stays in the variant's index allocation: the chain is drawable from the
+  first frame, with no on-demand upload and no eviction.
+- The CPU copy of the level indices is `Triangle_soup::lod_index_data`: it
+  is read with the soup and lives and is released with it under
+  `load.cpu_mesh_data` (`doc/editor/async_asset_loading.md` "Releasing CPU
+  mesh data"). With `keep` it stays resident; with `release` (the OpenXR
+  default) it is freed after the upload, and a later reader of the soup (the
+  full build, an export) reads the soup back from the file with all its
+  levels (`Gltf_triangle_soup_source::load()`); a loaded Bistro with chains
+  idling 20 s in the default viewport reads back no soup (0 reloads: no
+  rendering path reads the CPU copy). The stored-streams path reads
+  the level indices into `Stored_vertex_streams::lod_indices`, which go away
+  with the streams after the upload. `Prepared_primitive_data::lod` keeps
+  the settings and the level table only; `Primitive_shape::
+  load_stored_lod_chain()` joins it with the soup's indices.
+- Level edge lines are not built at load: a prepared primitive has no edge
+  lines at all until its full build (level 0's are the base variant's). The
+  full build (`doc/editor/async_asset_loading.md` "Deferred load finalize"
+  and "Deferred base variant"; it runs when a viewport style draws edge lines
+  or another non-fill mode and for a selected mesh, on the Quest as the
+  on-demand full build of `doc/plans/gltf_fast_load.md` "Item 10") keeps a
+  stored chain made with the primitive's request: it builds the base from
+  the Geometry without an optimized variant, and the variant is the core
+  repacked with the stored levels and their edge lines built from the stored
+  indices (`make_prepared_optimized_render_shape()`; `build_lod_edge_lines()`,
+  no simplification), so the selection outline follows the drawn level there
+  too. A stored chain that does not read back gives a variant without chain,
+  never a generated one.
+- A request with the stored settings reuses the stored chain; a request with
+  other settings generates over the core. An in-place edit makes the prepared
+  data stale and the edit's re-optimization generates, as for any edited
+  primitive.
+
+Measured on Bistro (`pvs_bistro_quest_cell_4m`, headless Release, M4 Pro):
+the scene-wide request gives 2900 of 3852 primitives a chain (1.9 s of
+generation over the workers); the 952 others are small (median 37
+triangles) or stop at the first step. Save for Quest grows the file by
+37.5 MB (1052.7 to 1090.2 MB); the load reads the levels in about 14 ms more
+(glTF loading to resident 0.443 to 0.457 s); the GPU index pool grows by
+36.2 MB (99.5 to 135.7 MB), the CPU by 36.2 MB with `keep` and by nothing
+with `release`. On the Quest 3 (release APK, stored-streams load, soups
+released): 2900 chains loaded, no generation, glTF loading to resident 3.99
+s without and 3.91 s with the chains, mesh memory 190.8 to 226.9 MB (index
+pool 49.8 to 85.9 MB), VmHWM 798 to 817 MB (one run each; earlier runs of
+the file without chains spread over 832-894 MB). With the Quest settings
+(`release`, base variant on demand) a selection of three chained Bistro
+meshes queues their full builds, which read the soups back with their
+levels (8 reloads) and build the level edge lines, with no generation.
 
 **Generation** (`generate_lod_chain(Lod_vertex_input, indices,
 Lod_settings)`). Before simplifying, vertices that share position, every seam

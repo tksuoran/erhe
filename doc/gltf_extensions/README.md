@@ -30,6 +30,7 @@ importing it as an asset).
 | [`ERHE_geometry`](ERHE_geometry.md) | mesh primitive | polygon rings + full geogram attribute dump (bit-exact geometry) |
 | [`ERHE_mesh_optimized`](ERHE_mesh_optimized.md) | mesh primitive | marker: the core is welded, colocated and in meshoptimizer order (prepared for fast load) |
 | [`ERHE_mesh_topology`](ERHE_mesh_topology.md) | mesh primitive | stored vertex-to-point colocation (replaces `colocate()` at load) |
+| [`ERHE_mesh_lod`](ERHE_mesh_lod.md) | mesh primitive | draft: stored LOD chain (level index lists, errors, the settings that made them; no simplification at load) |
 | [`ERHE_raytrace_bvh`](ERHE_raytrace_bvh.md) | mesh primitive | prebuilt raytrace BVH over the core triangles |
 | [`ERHE_gpu_vertex_streams`](ERHE_gpu_vertex_streams.md) | mesh primitive | draft: vertex streams in erhe GPU layout + explicit attribute scale / offset ("Save for Quest") |
 | [`ERHE_node`](ERHE_node.md) | node | node Item flags, mesh-prim Item flags |
@@ -50,7 +51,8 @@ the extension's JSON value (the object stored under the extension name in
 `"extensions"`).
 
 Writer / reader: `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp` (library-domain
-extensions: geometry, node, camera, light, material, the prepared mesh data,
+extensions: geometry, node, camera, light, material, the prepared mesh data
+(including the LOD chains),
 texture_ktx2, pvs) and
 `src/editor/parsers/gltf_extensions_export.cpp` /
 `gltf_extensions_import.cpp` (editor-domain extensions: physics, scene,

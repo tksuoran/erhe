@@ -42,6 +42,7 @@ public:
     std::size_t triangle_soup_count       {0};
     std::size_t triangle_soup_vertex_bytes{0};
     std::size_t triangle_soup_index_bytes {0};
+    std::size_t triangle_soup_lod_index_bytes{0}; // Triangle_soup::lod_index_data (the CPU copy of stored LOD chains)
     std::size_t triangle_soup_released_count{0}; // soups released after upload (release_triangle_soup()), not resident
     std::size_t element_mapping_bytes     {0};
     std::size_t prepared_data_count       {0};
@@ -269,6 +270,15 @@ public:
     // The stored BVH of the prepared data is still waiting for
     // make_prepared_raytrace().
     [[nodiscard]] auto has_stored_bvh              () const -> bool;
+    // The stored LOD chain (the ERHE_mesh_lod glTF extension): the level
+    // table of the prepared data (Prepared_primitive_data::lod) with the
+    // level indices of the soup (Triangle_soup::lod_index_data; a released
+    // soup is read back from its source, levels included), checked against
+    // the soup's vertex count (validate_stored_lod_chain()). Empty when the
+    // shape has no stored chain, or, with a warning logged, when the soup
+    // cannot be read or the chain fails the checks. Runs no simplification.
+    // Safe on a worker.
+    [[nodiscard]] auto load_stored_lod_chain       () const -> std::optional<Stored_lod_chain>;
     // In-place content edits (GPU vertex edits: paint, weight paint, mesh
     // component drags - everything that takes Mesh::begin_optimized_variant_edit())
     // change the shape's data without a new shape, so the prepared data no
@@ -370,6 +380,9 @@ public:
     // The soup build. A non-null `lod_settings` also builds the mesh's LOD chain
     // (build_buffer_mesh_from_triangle_soup()); used for optimized variants only.
     auto make_buffer_mesh(const Buffer_info& build_info, const Lod_settings* lod_settings = nullptr) -> bool;
+    // The soup build with a stored LOD chain's levels (Stored_lod_chain::chain)
+    // instead of generated ones; no simplification runs.
+    auto make_buffer_mesh(const Buffer_info& build_info, Lod_chain_indices&& stored_levels) -> bool;
     [[nodiscard]] auto has_buffer_mesh_triangles  () const -> bool;
     [[nodiscard]] auto has_edge_lines             () const -> bool;
     // This shape's one Buffer_mesh, paired with the one Element_mappings that
@@ -542,6 +555,11 @@ public:
     // (publish_optimized_render_shape()). Null when the primitive is not
     // prepared, meshes are not optimized, the soup cannot be read or the
     // allocation fails. Safe on a worker: reads only the render shape.
+    // With a stored chain (Prepared_primitive_data::lod) made with the
+    // requested settings, the variant takes the stored levels as they are and
+    // builds their edge lines from their indices (when buffer_info has an
+    // edge-line stream): no simplification. A stored chain that does not read
+    // back gives a variant without chain, never a generated one.
     [[nodiscard]] auto make_prepared_optimized_render_shape(const Buffer_info& buffer_info, const Lod_settings* requested_lod_settings) const -> std::shared_ptr<Primitive_render_shape>;
     // The render shape carries prepared mesh data.
     [[nodiscard]] auto is_prepared             () const -> bool;
@@ -685,6 +703,12 @@ public:
     // different Primitive, and releasing the wrong object would corrupt both
     // counts.
     void release_optimization_hold();
+
+private:
+    // The load-time optimized variant of a prepared primitive (the core packed
+    // into `optimized_buffer_info`), with the stored LOD chain when the
+    // prepared data has one: then lod_settings becomes the chain's settings.
+    [[nodiscard]] auto make_prepared_optimized_buffer_mesh(Primitive_render_shape& optimized, const Buffer_info& optimized_buffer_info) -> bool;
 };
 
 // A non-null `lod_settings` generates a LOD chain over the soup's vertices
@@ -695,6 +719,25 @@ auto build_buffer_mesh_from_triangle_soup(
     const Buffer_info&   buffer_info,
     const Lod_settings*  lod_settings = nullptr
 ) -> std::optional<Buffer_mesh>;
+
+// The same build with the LOD levels given (a stored chain,
+// Stored_lod_chain::chain, over the soup's vertices) instead of generated:
+// no simplification runs. The levels' edge lines are built from their
+// indices when buffer_info has an edge-line stream.
+auto build_buffer_mesh_from_triangle_soup(
+    const Triangle_soup& triangle_soup,
+    const Buffer_info&   buffer_info,
+    Lod_chain_indices&&  stored_levels
+) -> std::optional<Buffer_mesh>;
+
+// The LOD inputs of a soup's own vertices (extract_lod_vertex_data() over the
+// soup's one stream, the soup's format as key format).
+[[nodiscard]] auto extract_soup_lod_vertex_data(const Triangle_soup& triangle_soup) -> Lod_vertex_data;
+
+// generate_lod_chain() over a soup's own vertices and indices, without edge
+// lines: the chain build_buffer_mesh_from_triangle_soup() makes with
+// `settings`.
+[[nodiscard]] auto generate_soup_lod_chain(const Triangle_soup& triangle_soup, const Lod_settings& settings) -> Lod_chain_indices;
 
 // The GPU vertex streams and index buffer build_buffer_mesh_from_triangle_soup()
 // writes for `triangle_soup` in `vertex_format` / `index_type`, captured on

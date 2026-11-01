@@ -703,4 +703,37 @@ auto prepare_primitive_for_export(Primitive_shape& shape) -> Prepare_primitive_r
     return result;
 }
 
+auto make_export_lod_chain(
+    Prepared_primitive_export& prepared,
+    const Primitive_shape&     shape,
+    const Lod_settings&        settings
+) -> Export_lod_source
+{
+    ERHE_PROFILE_FUNCTION();
+
+    prepared.lod.reset();
+    // A retained core is the file's core, which a stored chain describes.
+    const std::shared_ptr<const Prepared_primitive_data>& data = shape.get_prepared_data();
+    if (prepared.retained_core && data && data->lod.has_value() && (data->lod->settings == settings)) {
+        std::optional<Stored_lod_chain> stored = shape.load_stored_lod_chain();
+        if (stored.has_value()) {
+            prepared.lod = std::move(stored);
+            return Export_lod_source::stored;
+        }
+    }
+    const Triangle_soup& core = get_export_core(prepared);
+    if (core.index_data.empty() || core.vertex_data.empty()) {
+        return Export_lod_source::none;
+    }
+    Lod_chain_indices chain = generate_soup_lod_chain(core, settings);
+    if (chain.is_empty()) {
+        return Export_lod_source::none;
+    }
+    prepared.lod = Stored_lod_chain{
+        .settings = settings,
+        .chain    = std::move(chain)
+    };
+    return Export_lod_source::generated;
+}
+
 } // namespace erhe::primitive

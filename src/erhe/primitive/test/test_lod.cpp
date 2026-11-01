@@ -642,6 +642,86 @@ TEST(Lod, soup_path_stores_levels_after_level_0)
     );
 }
 
+// A stored chain (doc/plans/lod.md step 6, ERHE_mesh_lod) builds the variant
+// the generation builds, from the levels as they are; validate_stored_lod_chain()
+// refuses chains a file could carry but a build must not use.
+TEST(Lod, stored_levels_build_like_generated_ones)
+{
+    const Test_mesh mesh = make_uv_sphere(32, 16);
+    const Vertex_format soup_format{
+        Vertex_stream{
+            0,
+            {
+                {Format::format_32_vec3_float, Vertex_attribute_usage::position,  0},
+                {Format::format_32_vec3_float, Vertex_attribute_usage::normal,    0},
+                {Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0}
+            }
+        }
+    };
+    erhe::primitive::Triangle_soup soup{};
+    soup.vertex_format = soup_format;
+    soup.index_data    = mesh.indices;
+    const std::size_t stride = soup_format.streams.front().stride;
+    soup.vertex_data.assign(mesh.vertices.vertex_count * stride, uint8_t{0});
+    for (std::size_t vertex = 0; vertex < mesh.vertices.vertex_count; ++vertex) {
+        uint8_t* const destination = soup.vertex_data.data() + (vertex * stride);
+        std::memcpy(destination + 0,  &mesh.vertices.positions      [3 * vertex], 3 * sizeof(float));
+        std::memcpy(destination + 12, &mesh.vertices.normals        [3 * vertex], 3 * sizeof(float));
+        std::memcpy(destination + 24, &mesh.vertices.seam_attributes[2 * vertex], 2 * sizeof(float));
+    }
+    const Lod_settings settings{};
+
+    Cpu_build generated_build;
+    const std::optional<erhe::primitive::Buffer_mesh> generated = erhe::primitive::build_buffer_mesh_from_triangle_soup(soup, generated_build.make_buffer_info(soup_format), &settings);
+    ASSERT_TRUE(generated.has_value());
+    ASSERT_GE(generated->lod_chain.level_count, 3u);
+
+    erhe::primitive::Lod_chain_indices levels = erhe::primitive::generate_soup_lod_chain(soup, settings);
+    ASSERT_EQ(levels.levels.size() + 1, generated->lod_chain.level_count);
+    const erhe::primitive::Stored_lod_chain stored{.settings = settings, .chain = levels};
+    EXPECT_EQ(erhe::primitive::validate_stored_lod_chain(stored, mesh.vertices.vertex_count), "");
+
+    Cpu_build stored_build;
+    const std::optional<erhe::primitive::Buffer_mesh> from_stored = erhe::primitive::build_buffer_mesh_from_triangle_soup(soup, stored_build.make_buffer_info(soup_format), std::move(levels));
+    ASSERT_TRUE(from_stored.has_value());
+    ASSERT_EQ(from_stored->lod_chain.level_count, generated->lod_chain.level_count);
+    for (std::size_t level = 0; level < generated->lod_chain.level_count; ++level) {
+        EXPECT_EQ(from_stored->lod_chain.levels[level].index_range.first_index, generated->lod_chain.levels[level].index_range.first_index);
+        EXPECT_EQ(from_stored->lod_chain.levels[level].index_range.index_count, generated->lod_chain.levels[level].index_range.index_count);
+        EXPECT_EQ(from_stored->lod_chain.levels[level].error,                   generated->lod_chain.levels[level].error);
+    }
+    EXPECT_EQ(
+        read_indices(stored_build.index_buffer,    from_stored->index_buffer_range),
+        read_indices(generated_build.index_buffer, generated->index_buffer_range)
+    );
+    EXPECT_EQ(
+        read_bytes(stored_build.vertex_buffer,    from_stored->vertex_buffer_ranges.front()),
+        read_bytes(generated_build.vertex_buffer, generated->vertex_buffer_ranges.front())
+    );
+
+    // Refused chains.
+    {
+        erhe::primitive::Stored_lod_chain bad = stored;
+        bad.chain.indices.back() = static_cast<uint32_t>(mesh.vertices.vertex_count);
+        EXPECT_EQ(erhe::primitive::validate_stored_lod_chain(bad, mesh.vertices.vertex_count), "index out of range");
+    }
+    {
+        erhe::primitive::Stored_lod_chain bad = stored;
+        bad.chain.levels[1].error = bad.chain.levels[0].error;
+        EXPECT_EQ(erhe::primitive::validate_stored_lod_chain(bad, mesh.vertices.vertex_count), "level errors not increasing");
+    }
+    {
+        erhe::primitive::Stored_lod_chain bad = stored;
+        bad.chain.indices.pop_back();
+        EXPECT_EQ(erhe::primitive::validate_stored_lod_chain(bad, mesh.vertices.vertex_count), "index count differs from the levels");
+    }
+    {
+        erhe::primitive::Stored_lod_chain bad = stored;
+        bad.chain.levels[0].index_count -= 1;
+        EXPECT_NE(erhe::primitive::validate_stored_lod_chain(bad, mesh.vertices.vertex_count), "");
+    }
+}
+
 // Per-level edge lines (build_lod_edge_lines(),
 // doc/erhe/meshoptimizer_integration.md "Level of detail"): every edge of a level's triangles once, packed like the base edge
 // lines, stored per level in the optimized variant's edge-line allocations.

@@ -361,6 +361,7 @@ public:
     std::size_t                        rejected_count     {0}; // at least one extension was rejected
     std::size_t                        topology_used_count{0}; // ERHE_mesh_topology accepted
     std::size_t                        bvh_used_count     {0}; // ERHE_raytrace_bvh accepted
+    std::size_t                        lod_used_count     {0}; // ERHE_mesh_lod accepted
     std::size_t                        ignored_count      {0}; // glTF primitives carrying ERHE_mesh_optimized while prepared_mesh_data_use is ignore
     std::map<std::string, std::size_t> rejection_reasons;      // "<extension>: <reason>" -> count
 };
@@ -795,6 +796,12 @@ public:
     std::size_t                        gpu_vertex_stream_count    {0}; // prepared primitives written with ERHE_gpu_vertex_streams
     std::size_t                        gpu_vertex_stream_skipped  {0}; // prepared primitives the GPU formats cannot express
     double                             gpu_vertex_stream_ms       {0.0}; // packing time of the GPU vertex streams, summed over the parallel preparation tasks
+    // ERHE_mesh_lod, over the unique prepared soups whose primitive has a LOD
+    // request (Primitive::lod_settings); soups without one get no chain.
+    std::size_t                        lod_stored_count           {0}; // retained core: its stored chain written back
+    std::size_t                        lod_generated_count        {0}; // chain generated over the export core with the request's settings
+    std::size_t                        lod_none_count             {0}; // request, but the core does not simplify: no chain written
+    double                             lod_ms                     {0.0}; // chain time, summed over the parallel preparation tasks
 };
 
 // The running device's vertex layouts, for an export that writes each

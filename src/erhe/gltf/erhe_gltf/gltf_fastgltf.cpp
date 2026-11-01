@@ -1217,6 +1217,7 @@ public:
     std::string topology;
     std::string bvh;
     std::string gpu_streams; // ERHE_gpu_vertex_streams
+    std::string lod;         // ERHE_mesh_lod
 
     [[nodiscard]] auto operator==(const Prepared_extension_json&) const -> bool = default;
 };
@@ -1884,6 +1885,11 @@ namespace {
             }
         }
     }
+    if (!json.lod.empty() && parse_extension_object(json_parser, json.lod, object)) {
+        if (object.at_key("indices").get_uint64().get(value) == simdjson::SUCCESS) {
+            indices.push_back(value);
+        }
+    }
     if (!json.bvh.empty() && parse_extension_object(json_parser, json.bvh, object)) {
         simdjson::dom::array builds;
         if (object.at_key("builds").get_array().get(builds) == simdjson::SUCCESS) {
@@ -1990,6 +1996,7 @@ public:
     std::string                                topology_json;
     std::string                                bvh_json;
     std::string                                gpu_streams_json; // ERHE_gpu_vertex_streams
+    std::string                                lod_json;         // ERHE_mesh_lod
     std::map<std::uint64_t, Gltf_prepared_view> views;
     std::shared_ptr<const Gltf_buffer_origins> origins;
     std::shared_ptr<Gltf_prepared_statistics>  statistics;
@@ -2000,7 +2007,7 @@ public:
     [[nodiscard]] auto validate(const erhe::primitive::Triangle_soup& soup) const -> std::shared_ptr<erhe::primitive::Prepared_primitive_data>
     {
         const std::vector<float> positions_xyz = erhe::primitive::get_float_positions(soup);
-        return validate(soup.index_data, positions_xyz, Validation_counting::always);
+        return validate(soup.index_data, positions_xyz, soup.lod_index_data, Validation_counting::always);
     }
 
     enum class Validation_counting : unsigned int {
@@ -2012,6 +2019,7 @@ public:
     [[nodiscard]] auto validate(
         const std::span<const uint32_t> indices,
         const std::vector<float>&       positions_xyz,
+        const std::span<const uint32_t> lod_indices,
         const Validation_counting       counting
     ) const -> std::shared_ptr<erhe::primitive::Prepared_primitive_data>
     {
@@ -2029,6 +2037,8 @@ public:
         std::shared_ptr<erhe::primitive::Prepared_primitive_data> data = std::make_shared<erhe::primitive::Prepared_primitive_data>(marker);
         bool topology_used = false;
         bool bvh_used      = false;
+        bool lod_used      = false;
+        bool lod_rejected  = false;
         Gltf_prepared_read_storage storage;
 
         std::string optimized_reason = marker_reason;
@@ -2067,9 +2077,26 @@ public:
                     bvh_used = true;
                 }
             }
+            if (!lod_json.empty()) {
+                erhe::primitive::Stored_lod_chain lod;
+                const std::string reason = read_mesh_lod(positions_xyz.size() / 3, lod_indices, lod);
+                if (!reason.empty()) {
+                    reject("ERHE_mesh_lod", reason, {});
+                    lod_rejected = true;
+                } else {
+                    data->lod = std::move(lod);
+                    lod_used = true;
+                }
+            }
         }
 
-        if ((counting == Validation_counting::accepted_only) && !rejections.empty()) {
+        // A stored-streams load falls back to the soup path (which counts) for
+        // a rejection of the data the streams depend on. A rejected
+        // ERHE_mesh_lod drops only the chain (doc/gltf_extensions/ERHE_mesh_lod.md
+        // "Validation / fallback"): the stored streams load without it and the
+        // rejection is counted here, logged once by reject() above.
+        const bool only_lod_rejected = (rejections.size() == 1) && lod_rejected;
+        if ((counting == Validation_counting::accepted_only) && !rejections.empty() && !only_lod_rejected) {
             return {};
         }
         if (statistics) {
@@ -2088,6 +2115,9 @@ public:
             }
             if (bvh_used) {
                 ++counts.bvh_used_count;
+            }
+            if (lod_used) {
+                ++counts.lod_used_count;
             }
         }
         return data;
@@ -2268,11 +2298,18 @@ public:
             std::memcpy(&stored->positions_xyz[3 * i], position_bytes.data() + (i * position.stream->stride) + position.attribute->offset, 3 * sizeof(float));
         }
 
+        // The stored LOD chain's level indices, uploaded with level 0.
+        if (!lod_json.empty()) {
+            stored->lod_indices = read_lod_index_data();
+        }
         const std::span<const uint32_t> index_span{reinterpret_cast<const uint32_t*>(indices.data()), index_count};
-        stored->prepared_data = validate(index_span, stored->positions_xyz, Validation_counting::accepted_only);
+        stored->prepared_data = validate(index_span, stored->positions_xyz, stored->lod_indices, Validation_counting::accepted_only);
         if (!stored->prepared_data) {
             out_reason = "prepared data rejected";
             return {};
+        }
+        if (!stored->prepared_data->lod.has_value()) {
+            stored->lod_indices = std::vector<uint32_t>{}; // a rejected chain
         }
         stored->indices = std::move(indices);
         return stored;
@@ -2506,6 +2543,160 @@ private:
         return {};
     }
 
+public:
+    // ERHE_mesh_lod (doc/gltf_extensions/ERHE_mesh_lod.md "Validation /
+    // fallback"); the marker is already accepted. Reads the settings and the
+    // level table and checks them, with the level indices the soup or the
+    // stored streams read (read_lod_index_data()), against the core's vertex
+    // count. out_lod receives the settings and the level table only: the
+    // indices stay with the soup (Triangle_soup::lod_index_data).
+    [[nodiscard]] auto read_mesh_lod(
+        const std::size_t                  vertex_count,
+        const std::span<const uint32_t>    lod_indices,
+        erhe::primitive::Stored_lod_chain& out_lod
+    ) const -> std::string
+    {
+        simdjson::dom::parser json_parser;
+        simdjson::dom::object extension_object;
+        if (!parse_extension_object(json_parser, lod_json, extension_object)) {
+            return "malformed JSON or unsupported version";
+        }
+        erhe::primitive::Stored_lod_chain stored{};
+        {
+            simdjson::dom::object settings;
+            if (extension_object.at_key("settings").get_object().get(settings) != simdjson::SUCCESS) {
+                return "malformed settings";
+            }
+            std::uint64_t    level_count{0};
+            std::string_view attributes;
+            std::string_view border;
+            std::string_view seams;
+            std::string_view fallback;
+            const auto read_float = [&settings](const char* const key, float& out_value) -> bool {
+                std::string_view value_text;
+                return (settings.at_key(key).get_string().get(value_text) == simdjson::SUCCESS) && parse_hex_float(value_text, out_value);
+            };
+            if (
+                (settings.at_key("level_count").get_uint64().get(level_count) != simdjson::SUCCESS) ||
+                (level_count < 2) || (level_count > erhe::primitive::max_lod_levels) ||
+                !read_float("ratio",              stored.settings.ratio)         ||
+                !read_float("normal_weight",      stored.settings.normal_weight) ||
+                !read_float("color_weight",       stored.settings.color_weight)  ||
+                !read_float("normal_merge_angle", stored.settings.normal_merge_angle) ||
+                (settings.at_key("attributes").get_string().get(attributes) != simdjson::SUCCESS) ||
+                (settings.at_key("border"    ).get_string().get(border    ) != simdjson::SUCCESS) ||
+                (settings.at_key("seams"     ).get_string().get(seams     ) != simdjson::SUCCESS) ||
+                (settings.at_key("fallback"  ).get_string().get(fallback  ) != simdjson::SUCCESS)
+            ) {
+                return "malformed settings";
+            }
+            if (
+                !(stored.settings.ratio > 0.0f) || !(stored.settings.ratio < 1.0f) ||
+                !(stored.settings.normal_weight >= 0.0f) || !std::isfinite(stored.settings.normal_weight) ||
+                !(stored.settings.color_weight  >= 0.0f) || !std::isfinite(stored.settings.color_weight)  ||
+                !(stored.settings.normal_merge_angle >= 0.0f) || !(stored.settings.normal_merge_angle <= 180.0f)
+            ) {
+                // The ranges an on-request generation accepts (the LOD
+                // window, MCP generate_lods).
+                return "settings out of range";
+            }
+            stored.settings.level_count = static_cast<std::size_t>(level_count);
+            if      (attributes == "positions_only"    ) { stored.settings.attributes = erhe::primitive::Lod_attributes::positions_only;     }
+            else if (attributes == "normals_and_colors") { stored.settings.attributes = erhe::primitive::Lod_attributes::normals_and_colors; }
+            else { return "malformed settings"; }
+            if      (border == "free"  ) { stored.settings.border = erhe::primitive::Lod_border::free;   }
+            else if (border == "locked") { stored.settings.border = erhe::primitive::Lod_border::locked; }
+            else { return "malformed settings"; }
+            if      (seams == "keep"      ) { stored.settings.seams = erhe::primitive::Lod_seams::keep;       }
+            else if (seams == "permissive") { stored.settings.seams = erhe::primitive::Lod_seams::permissive; }
+            else { return "malformed settings"; }
+            if      (fallback == "none"  ) { stored.settings.fallback = erhe::primitive::Lod_fallback::none;   }
+            else if (fallback == "sloppy") { stored.settings.fallback = erhe::primitive::Lod_fallback::sloppy; }
+            else { return "malformed settings"; }
+        }
+        simdjson::dom::array levels;
+        if (extension_object.at_key("levels").get_array().get(levels) != simdjson::SUCCESS) {
+            return "malformed levels";
+        }
+        std::size_t first_index = 0;
+        for (const simdjson::dom::element level_element : levels) {
+            std::uint64_t    index_count{0};
+            std::string_view error_text;
+            erhe::primitive::Lod_chain_indices::Level level{};
+            if (
+                (level_element["index_count"].get_uint64().get(index_count) != simdjson::SUCCESS) ||
+                (level_element["error"].get_string().get(error_text) != simdjson::SUCCESS) ||
+                !parse_hex_float(error_text, level.error) ||
+                (index_count > std::numeric_limits<uint32_t>::max())
+            ) {
+                return "malformed levels";
+            }
+            level.first_index = first_index;
+            level.index_count = static_cast<std::size_t>(index_count);
+            first_index += level.index_count;
+            stored.chain.levels.push_back(level);
+            if (stored.chain.levels.size() >= erhe::primitive::max_lod_levels) {
+                return "level count out of range";
+            }
+        }
+        if (stored.chain.levels.size() >= stored.settings.level_count) {
+            return "more levels than settings.level_count";
+        }
+        if (lod_indices.empty()) {
+            return "indices not read";
+        }
+        if (lod_indices.size() != first_index) {
+            return "bufferView byteLength mismatch";
+        }
+        stored.chain.indices.assign(lod_indices.begin(), lod_indices.end());
+        const std::string reason = erhe::primitive::validate_stored_lod_chain(stored, vertex_count);
+        if (!reason.empty()) {
+            return reason;
+        }
+        stored.chain.indices = std::vector<uint32_t>{};
+        out_lod = std::move(stored);
+        return {};
+    }
+
+    // The ERHE_mesh_lod level indices: the raw bufferView the extension
+    // names, read whole (a resident view is copied). Empty when the
+    // extension is absent, malformed, or its view is not a whole number of
+    // uint32 values or cannot be read; read_mesh_lod() then rejects it.
+    [[nodiscard]] auto read_lod_index_data() const -> std::vector<uint32_t>
+    {
+        simdjson::dom::parser json_parser;
+        simdjson::dom::object extension_object;
+        std::uint64_t         view_index{0};
+        if (
+            lod_json.empty() ||
+            !parse_extension_object(json_parser, lod_json, extension_object) ||
+            (extension_object.at_key("indices").get_uint64().get(view_index) != simdjson::SUCCESS)
+        ) {
+            return {};
+        }
+        const auto i = views.find(view_index);
+        if ((i == views.end()) || i->second.has_stride || ((i->second.byte_length % sizeof(uint32_t)) != 0)) {
+            return {};
+        }
+        std::vector<uint32_t> indices(i->second.byte_length / sizeof(uint32_t));
+        const std::string reason = read_view_into(i->second, std::as_writable_bytes(std::span<uint32_t>{indices}));
+        if (!reason.empty()) {
+            log_gltf->warn("ERHE_mesh_lod: primitive '{}' level indices not read: {}", name, reason);
+            return {};
+        }
+        return indices;
+    }
+
+    // Reads the stored chain's level indices into a soup built for this
+    // payload's primitive (Triangle_soup::lod_index_data): the parse and every
+    // read back of the soup read the levels with it.
+    void read_lod_index_data(erhe::primitive::Triangle_soup& soup) const
+    {
+        if (!lod_json.empty()) {
+            soup.lod_index_data = read_lod_index_data();
+        }
+    }
+
 };
 
 // Reads one glTF primitive's triangle soup back from the source file: the
@@ -2568,11 +2759,17 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
-        return read_and_build(
+        std::shared_ptr<erhe::primitive::Triangle_soup> soup = read_and_build(
             [this](const std::size_t file_index, const std::size_t file_offset, const std::span<std::byte> out) -> bool {
                 return origins->source_files->read(file_index, file_offset, out);
             }
         );
+        // The soup and its stored LOD levels are read together, at the parse
+        // and at every read back of a released soup.
+        if (soup && prepared) {
+            prepared->read_lod_index_data(*soup);
+        }
+        return soup;
     }
 
     [[nodiscard]] auto references_file(const std::filesystem::path& path) const -> bool override
@@ -4380,10 +4577,18 @@ private:
             primitive_entry.triangle_soup = source
                 ? source->load_unchecked()
                 : build_triangle_soup(m_asset.get(), primitive, tangents);
+            if (primitive_entry.triangle_soup && !source && prepared_payload) {
+                prepared_payload->read_lod_index_data(*primitive_entry.triangle_soup);
+            }
             if (primitive_entry.triangle_soup) {
                 std::shared_ptr<erhe::primitive::Prepared_primitive_data> prepared_data = prepared_payload
                     ? prepared_payload->validate(*primitive_entry.triangle_soup)
                     : std::shared_ptr<erhe::primitive::Prepared_primitive_data>{};
+                // The soup was built by this task and is not shared yet: drop
+                // the levels of a chain the validation rejected.
+                if (!prepared_data || !prepared_data->lod.has_value()) {
+                    primitive_entry.triangle_soup->lod_index_data = std::vector<uint32_t>{};
+                }
                 primitive_entry.primitive = prepared_data
                     ? std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup, std::move(prepared_data))
                     : std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
@@ -4910,6 +5115,7 @@ private:
         payload->topology_json = json.topology;
         payload->bvh_json      = json.bvh;
         payload->gpu_streams_json = json.gpu_streams;
+        payload->lod_json      = json.lod;
         payload->origins       = m_buffer_origins;
         payload->statistics    = m_prepared_statistics;
         for (const std::uint64_t view_index : collect_prepared_view_indices(json)) {
@@ -6714,9 +6920,9 @@ void finish_prepared_mesh_statistics(Gltf_data& data, const std::filesystem::pat
             reasons += fmt::format("{}{}: {}", reasons.empty() ? "" : ", ", reason, count);
         }
         log_gltf->info(
-            "prepared mesh data: {} used, {} rejected ({}); topology {}, BVH {} in {}",
+            "prepared mesh data: {} used, {} rejected ({}); topology {}, BVH {}, LOD chains {} in {}",
             statistics.used_count, statistics.rejected_count, reasons,
-            statistics.topology_used_count, statistics.bvh_used_count,
+            statistics.topology_used_count, statistics.bvh_used_count, statistics.lod_used_count,
             path.string()
         );
     }
@@ -7005,6 +7211,8 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                     json.bvh = extension_value;
                 } else if (extension_name == "ERHE_gpu_vertex_streams") {
                     json.gpu_streams = extension_value;
+                } else if (extension_name == "ERHE_mesh_lod") {
+                    json.lod = extension_value;
                 }
             }
             std::vector<std::uint64_t> indices = collect_prepared_view_indices(json);
@@ -7071,6 +7279,8 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                     json.bvh = extension_value;
                 } else if (extension_name == "ERHE_gpu_vertex_streams") {
                     json.gpu_streams = extension_value;
+                } else if (extension_name == "ERHE_mesh_lod") {
+                    json.lod = extension_value;
                 }
             }
             if (json.optimized.empty()) {
@@ -8047,12 +8257,22 @@ private:
     std::map<std::pair<std::size_t, std::size_t>, std::string>                                     m_prepared_primitive_extensions;
     bool                                                                                           m_uses_raytrace_bvh{false};
     bool                                                                                           m_uses_gpu_vertex_streams{false};
+    bool                                                                                           m_uses_mesh_lod{false};
     std::string                                                                                    m_pvs_extension; // ERHE_pvs JSON value, empty for none
     Gltf_export_prepared_statistics                                                                m_prepared_statistics;
 
+    // A soup to prepare: its shape and the LOD request of a primitive
+    // sharing it (the first one with a request).
+    class Soup_export_shape
+    {
+    public:
+        erhe::primitive::Primitive_render_shape*     render_shape{nullptr};
+        std::optional<erhe::primitive::Lod_settings> lod_settings;
+    };
+
     void collect_soup_shapes(
-        const erhe::Hierarchy&                                                                         node,
-        std::unordered_map<erhe::primitive::Triangle_soup*, erhe::primitive::Primitive_render_shape*>& out_shapes
+        const erhe::Hierarchy&                                                   node,
+        std::unordered_map<erhe::primitive::Triangle_soup*, Soup_export_shape>& out_shapes
     )
     {
         for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
@@ -8070,7 +8290,11 @@ private:
                     }
                     const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = get_export_soup(*render_shape);
                     if (soup) {
-                        out_shapes.emplace(soup.get(), render_shape);
+                        Soup_export_shape& entry = out_shapes[soup.get()];
+                        entry.render_shape = render_shape;
+                        if (!entry.lod_settings.has_value()) {
+                            entry.lod_settings = mesh_primitive.primitive->lod_settings;
+                        }
                     }
                 }
             }
@@ -8086,17 +8310,26 @@ private:
         ERHE_PROFILE_FUNCTION();
         const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
 
-        std::unordered_map<erhe::primitive::Triangle_soup*, erhe::primitive::Primitive_render_shape*> shapes;
+        std::unordered_map<erhe::primitive::Triangle_soup*, Soup_export_shape> shapes;
         collect_soup_shapes(m_arguments.root_node, shapes);
-        std::vector<std::pair<erhe::primitive::Triangle_soup*, erhe::primitive::Primitive_render_shape*>> work{shapes.begin(), shapes.end()};
+        std::vector<std::pair<erhe::primitive::Triangle_soup*, Soup_export_shape>> work{shapes.begin(), shapes.end()};
         std::vector<erhe::primitive::Prepare_primitive_result> results(work.size());
         // "Save for Quest": each task also packs its core's GPU vertex
         // streams (ERHE_gpu_vertex_streams).
         std::vector<std::optional<Gpu_stream_pack>> packs(work.size());
         std::vector<double>                         pack_ms(work.size(), 0.0);
         const Gltf_gpu_vertex_formats* const        gpu_formats = m_arguments.gpu_vertex_formats;
-        const auto prepare = [&work, &results, &packs, &pack_ms, gpu_formats](const std::size_t i) {
-            results[i] = erhe::primitive::prepare_primitive_for_export(*work[i].second);
+        // ERHE_mesh_lod: the chains of primitives with a LOD request
+        // (make_export_lod_chain()), counted by how they were obtained.
+        std::vector<erhe::primitive::Export_lod_source> lod_sources(work.size(), erhe::primitive::Export_lod_source::none);
+        std::vector<double>                             lod_ms(work.size(), 0.0);
+        const auto prepare = [&work, &results, &packs, &pack_ms, &lod_sources, &lod_ms, gpu_formats](const std::size_t i) {
+            results[i] = erhe::primitive::prepare_primitive_for_export(*work[i].second.render_shape);
+            if (work[i].second.lod_settings.has_value() && results[i].prepared.has_value()) {
+                const std::chrono::steady_clock::time_point lod_start = std::chrono::steady_clock::now();
+                lod_sources[i] = erhe::primitive::make_export_lod_chain(results[i].prepared.value(), *work[i].second.render_shape, work[i].second.lod_settings.value());
+                lod_ms[i] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lod_start).count();
+            }
             if ((gpu_formats != nullptr) && results[i].prepared.has_value()) {
                 const std::chrono::steady_clock::time_point pack_start = std::chrono::steady_clock::now();
                 packs[i] = pack_gpu_vertex_streams(*gpu_formats, erhe::primitive::get_export_core(results[i].prepared.value()));
@@ -8116,6 +8349,14 @@ private:
         }
         for (std::size_t i = 0, end = work.size(); i < end; ++i) {
             m_prepared_primitives.emplace(work[i].first, std::move(results[i]));
+            if (work[i].second.lod_settings.has_value()) {
+                switch (lod_sources[i]) {
+                    case erhe::primitive::Export_lod_source::stored:    ++m_prepared_statistics.lod_stored_count;    break;
+                    case erhe::primitive::Export_lod_source::generated: ++m_prepared_statistics.lod_generated_count; break;
+                    default:                                            ++m_prepared_statistics.lod_none_count;      break;
+                }
+                m_prepared_statistics.lod_ms += lod_ms[i]; // summed task time
+            }
             if (gpu_formats != nullptr) {
                 m_gpu_stream_packs.emplace(work[i].first, std::move(packs[i]));
                 m_prepared_statistics.gpu_vertex_stream_ms += pack_ms[i]; // summed task time
@@ -8489,7 +8730,37 @@ private:
         if (gpu_streams_members.has_value()) {
             members += gpu_streams_members.value();
         }
+        if (prepared.lod.has_value()) {
+            members += ",\"ERHE_mesh_lod\":" + write_mesh_lod(prepared.lod.value());
+            m_uses_mesh_lod = true;
+        }
         entry.prepared_extensions = std::move(members);
+    }
+
+    // The ERHE_mesh_lod JSON value of a chain (doc/gltf_extensions/ERHE_mesh_lod.md),
+    // its indices in a raw bufferView; floats as hexadecimal literals, exact
+    // to the bit.
+    [[nodiscard]] auto write_mesh_lod(const erhe::primitive::Stored_lod_chain& lod) -> std::string
+    {
+        const std::size_t indices_view = add_raw_buffer_view(std::as_bytes(std::span<const uint32_t>{lod.chain.indices}));
+        const erhe::primitive::Lod_settings& settings = lod.settings;
+        std::string levels;
+        for (const erhe::primitive::Lod_chain_indices::Level& level : lod.chain.levels) {
+            levels += fmt::format("{}{{\"index_count\":{},\"error\":\"{:a}\"}}", levels.empty() ? "" : ",", level.index_count, level.error);
+        }
+        return fmt::format(
+            "{{\"version\":1,\"indices\":{},\"levels\":[{}],\"settings\":{{"
+            "\"level_count\":{},\"ratio\":\"{:a}\",\"attributes\":\"{}\",\"normal_weight\":\"{:a}\",\"color_weight\":\"{:a}\","
+            "\"border\":\"{}\",\"seams\":\"{}\",\"fallback\":\"{}\",\"normal_merge_angle\":\"{:a}\"}}}}",
+            indices_view, levels,
+            settings.level_count, settings.ratio,
+            (settings.attributes == erhe::primitive::Lod_attributes::positions_only) ? "positions_only" : "normals_and_colors",
+            settings.normal_weight, settings.color_weight,
+            (settings.border   == erhe::primitive::Lod_border::free)       ? "free"       : "locked",
+            (settings.seams    == erhe::primitive::Lod_seams::permissive)  ? "permissive" : "keep",
+            (settings.fallback == erhe::primitive::Lod_fallback::sloppy)   ? "sloppy"     : "none",
+            settings.normal_merge_angle
+        );
     }
 
     // Appends one tightly packed uint32 scalar accessor (own buffer + view).
@@ -11354,6 +11625,9 @@ auto Gltf_exporter::export_gltf() -> std::string
         }
         if (m_uses_gpu_vertex_streams) {
             declare_extension_used("ERHE_gpu_vertex_streams");
+        }
+        if (m_uses_mesh_lod) {
+            declare_extension_used("ERHE_mesh_lod");
         }
         if (!m_internal_node_extensions.empty()) {
             declare_extension_used("ERHE_node");

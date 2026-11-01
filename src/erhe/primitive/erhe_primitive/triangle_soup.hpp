@@ -31,6 +31,13 @@ public:
     std::vector<uint8_t>            vertex_data;
     std::vector<uint32_t>           index_data;
     Primitive_type                  primitive_type{Primitive_type::triangles};
+    // The levels after level 0 of the stored LOD chain the soup was loaded
+    // with (ERHE_mesh_lod, Prepared_primitive_data::lod holds the level
+    // table), back to back, into this soup's vertices; empty without one.
+    // The CPU copy of the stored chain: it lives and is released with the
+    // soup (Primitive_shape::release_triangle_soup()), and a soup read back
+    // from its source reads the levels with it.
+    std::vector<uint32_t>           lod_index_data;
 };
 
 // Vertex and index count of a soup, kept by a shape whose soup was released

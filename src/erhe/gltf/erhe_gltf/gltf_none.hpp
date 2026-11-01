@@ -135,6 +135,7 @@ public:
     std::size_t                        rejected_count     {0}; // at least one extension was rejected
     std::size_t                        topology_used_count{0}; // ERHE_mesh_topology accepted
     std::size_t                        bvh_used_count     {0}; // ERHE_raytrace_bvh accepted
+    std::size_t                        lod_used_count     {0}; // ERHE_mesh_lod accepted
     std::size_t                        ignored_count      {0}; // glTF primitives carrying ERHE_mesh_optimized while prepared_mesh_data_use is ignore
     std::map<std::string, std::size_t> rejection_reasons;      // "<extension>: <reason>" -> count
 };

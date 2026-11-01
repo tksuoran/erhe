@@ -163,10 +163,9 @@ its own inputs:
 - **Prepared / stored path** (`Primitive::make_prepared_meshes`,
   `make_stored_meshes`; `ERHE_mesh_optimized` / `ERHE_gpu_vertex_streams`,
   `doc/plans/gltf_fast_load.md`): no meshoptimizer runs and no CPU soup
-  stays. Quest Bistro loads this way. Its levels come from the file (D5).
-  Until step 6 writes them there, on-request generation (step 3) reads the
-  variant's streams back through
-  `Triangle_soup_source::load_stored_vertex_streams()`.
+  stays. Quest Bistro loads this way. Its levels come from the file (D5,
+  `ERHE_mesh_lod`, step 6); on-request generation (step 3) repacks the core
+  soup, read back from the file when released.
 
 On-request generation runs `generate_lod_chain()` on a worker task, builds a
 new optimized `Buffer_mesh` (level 0 plus the levels in one index
@@ -390,14 +389,31 @@ Hysteresis is step 4 of `doc/plans/lod_gpu_selection.md`.
 
 ### Step 6: persistence and import
 
-- The meshoptimizer cache stores remaps, not indices
-  (`mesh_optimizer_cache.cpp`), so LOD levels need a new payload section and
-  a format version bump. `Lod_settings` goes in the key.
-- The prepared glTF (`ERHE_gpu_vertex_streams` / `ERHE_mesh_optimized`)
-  carries the levels and their edge-line vertex (and joint) data, or
-  regenerates the edge lines at load from the stored level indices (CPU
-  only, no simplification); the exporter writes the levels and loading does
-  no simplification work.
+Built and verified on desktop and in a Quest 3 load run; described in `doc/erhe/meshoptimizer_integration.md`
+"Level of detail" ("Stored chains"), `doc/gltf_extensions/ERHE_mesh_lod.md`,
+`doc/erhe/gltf.md` "LOD chains" and `doc/editor/lod.md` ("Generate for
+scene"). A prepared save and Save for Quest store the chains of primitives
+with a request in `ERHE_mesh_lod` (level indices, errors, settings) and
+generate none of their own; the loader builds the optimized variant with the
+stored levels and runs no simplification; the level edge lines are built
+from the stored indices with the primitive's full build (they were about the
+size of level 0's edge lines, and a prepared primitive has no edge lines
+before that build either, so storing them would only add file size and load
+work). The meshoptimizer filesystem cache is unchanged: the prepared and
+stored paths do not use it, and on-request generation runs uncached; a LOD
+payload in the cache is a separate step when the geometry-path generation
+needs it.
+
+Verified on the headless Metal editor: a soup torus and capsule, made
+prepared by a save, with chains generated, saved and reloaded (save and Save
+for Quest): chains identical (levels, triangle counts, errors bit for bit,
+settings; level edge counts identical after the full build a selection
+queues), `render_scene_image` identical at forced levels 0..5, at four
+automatic-selection distances and without `Lod`; with only the torus
+requested, only the torus primitive carries `ERHE_mesh_lod`; files without
+chains render as before. Bistro numbers: `doc/erhe/meshoptimizer_integration.md`
+"Stored chains".
+
 - Measure on Bistro: Release desktop (GPU-bound viewport) and Quest, where
   Bistro is geometry-bound (memory-bank/topics/quest.md). The Quest sweep in
   `doc/reference/quest_bench_runs.md` measures 10.6 ms of binning in every
