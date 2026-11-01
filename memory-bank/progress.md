@@ -19,6 +19,7 @@
 ✓gpu-sel-decisions-5-6{9312509a7;on_demand;classify-402->200us;Quest-APK-ok}
 ✓lod.md-step-6{42cb4188d;ERHE_mesh_lod;lod_roundtrip_verify.py-69/69}
 ✓gpu-sel-step-6{18e2df455;Quest-+11-12%-fps;desktop-GPU-Main--8..-29%}
+✓quest-interactive-session-2026-11-01{Bistro-v3-rotated(-90-X)+LOD+PVS-rebaked-after-save;LOD-controls-confirmed-by-©User;headset-UX-features->activeContext@quest-headset-ux;lod.md-section-6-feedback}
 ?NEXT=see-prompt_queue.txt{perfetto-binning-after-user-installs-metavr;lit-fps-gap-vs-pvs.md;Later-list(latency-removal,per-object-remap,change-words-only-copy,level-0-holdouts)};LOD-window-interactive-pass(user)
 ?found{no-weld-after-in-place-edit;per-facet-texcoords-no-chain-with-seams-keep;reparent-carrier-only-change-not-re-resolved;scene_roundtrip_verify-pre-existing-failures(Graph_texture-destroyed-on-render-thread-asset_manager.cpp:343);fp16-first-render-outlier}
 

@@ -443,4 +443,10 @@ checks (window feel, popping visibility) go to the user.
 
 ## 6. Feedback log
 
-Empty until step 3 reaches the user.
+- 2026-11-01, Quest headset, Bistro v3: the LOD controls work (Headset
+  window: selection on / off, threshold up to 512 px, bias, hysteresis).
+  The global bias did nothing earlier because LOD selection was off in the
+  device's preset; with selection on, +N draws every chained primitive N
+  levels coarser (44 % of Bistro's primitives, 8.7 % of its triangles,
+  have no chain). Coarsest possible: 1.36 M of 4.14 M triangles before
+  culling.

@@ -55,6 +55,38 @@ clash). Confirm the grant with
 `adb shell dumpsys package org.libsdl.app.quest | grep INTERNET`. See
 `doc/agents/mcp_server_usage.md` for the full recipe.
 
+## Bistro scene data on the device
+
+The Quest's Bistro file is prepared on the desktop with the headless editor
+(never on the device) and pushed with adb:
+
+1. Open the source `res/editor/assets/bistro_lights_compressed/bistro_lights_c.gltf`
+   (foreign glTF: an import root node `bistro_lights_c.gltf`). The source
+   is Z-up (the city lies on its side in erhe's Y-up world): set the import
+   root's rotation to -90 degrees about X (`set_node_transform`,
+   `rotation_xyzw` [-0.7071068, 0, 0, 0.7071068]). The save composes the
+   import root's transform into its children.
+2. `generate_lods` with `scope: "scene"` (default settings), wait for
+   `get_async_status` idle, `save_scene` to a scratch file.
+3. Open that file and bake the PVS there (`pvs_bake`, cell size 4 m, the
+   street slab region: content bounds in x and z, y 0.6 - 4.6), then
+   `save_scene_for_quest`. A bake made before the save reloads stale (the
+   save folds the import root rotation into the children's TRS, so the
+   reloaded bounds differ by rounding from the baked ones).
+4. Reload the result and check `get_pvs_status` state `ready`.
+5. Push it into the app's external files directory
+   (`/sdcard/Android/data/org.libsdl.app.quest/files/bistro/`). The editor
+   creates that directory, owned by the app, at its first start
+   (`SDL_GetAndroidExternalStoragePath()` in `main.cpp`); after a clean
+   install, launch once before pushing (a directory adb creates first is
+   owned by the shell user, and the editor cannot open the files in it).
+
+The current file is `bistro_quest_lod_cell_4m_v3.glb` (PVS `bits_hash`
+`f189d1ee59879697`, 2068 cells, LOD chains on 2900 primitives). The older
+`pvs_bistro_*cell_*m.glb` and `bistro_quest_lod_cell_4m.glb` files were
+baked with the city on its side, and `config/editor/benchmark_bistro*.json`
+poses are in that frame: re-pose the benchmarks before comparing runs.
+
 ## Benchmark runs
 
 The editor's benchmark mode (`--benchmark <file>`, a timedemo run: fixed
