@@ -388,6 +388,11 @@ Decisions (user, 2026-11-01):
    per-frame path: the cache reads the per-column level-change counts from
    the retired-frame readback and the edge-line expansion reads the level
    region on the GPU.
+6. For now, on the Quest, the edge lines and the selection outline may
+   also take the level one frame late (the retired-frame level readback),
+   so the Quest runs no CPU LOD lanes per frame and needs no GPU-side
+   edge-line change: for one frame after a level switch the outline can
+   trace the previous level. Desktop keeps same-frame edge lines.
 
 ## 10. Build order
 
@@ -588,6 +593,11 @@ step 6) before and after: binning and app GPU time. Desktop Release Bistro:
 GPU Main before and after.
 
 ### Later
+
+Removing the one-frame latencies of decisions 5 and 6: the shadow map
+cache's keep / redraw decision made on the GPU, and the edge-line expansion
+reading the level region on the GPU, so no consumer needs a level one frame
+late.
 
 A color-by-level debug view: the per-draw record holds no level, so the
 shader would bind the level region and find the entry through the chunk
