@@ -325,6 +325,16 @@ public:
     auto get_overdraw_max_count() const -> uint32_t override;
     void set_overdraw_max_count(uint32_t max_count) override;
     void set_overdraw_mode     (Overdraw_mode mode);
+
+    // Headlamp (doc/editor/tools.md "Headset headlamp"): a directional light
+    // 15 cm above the eye midpoint in head space (a child of the root
+    // camera), shining along the view direction, at the front of the
+    // scene's light layer so it is the first directional light (the only
+    // light under single directional light limits). Session only: never
+    // saved. Main thread, prepare phase (the Headset window queues these).
+    // The first enable creates it; disable takes it out of the scene.
+    void set_headlamp_enabled  (bool enabled);
+    void set_headlamp_intensity(float intensity);
     // Any thread: the newest retired counted frame's statistics; height is
     // the views' rows together (view count x eye image height).
     [[nodiscard]] auto get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics override;
@@ -387,6 +397,7 @@ private:
     // scene the headset renders.
     auto resolve_pending_scene_and_camera() -> bool override;
     void setup_root_camera();
+    void attach_headlamp();
     void setup_pointer_pick_camera();
     void update_camera_node();
     void update_pointer_context_from_controller();
@@ -529,6 +540,11 @@ private:
     // Main thread: whether the controller ray hit tests 3D scene objects
     // (content raytrace + skinned ID pick); the Headset window's checkbox.
     bool                                                 m_controller_scene_object_hits{true};
+    // Headlamp: created on the first enable (set_headlamp_enabled()).
+    std::shared_ptr<erhe::scene::Light>                  m_headlamp;
+    bool                                                 m_headlamp_enabled    {false};
+    float                                                m_headlamp_intensity  {4.0f};
+    bool                                                 m_headlamp_cast_shadow{true};
     Hit_test_timing                                      m_hit_test_timing;      // prepare phase
     Hit_test_timing                                      m_id_pick_timing;       // render phase
     erhe::scene_renderer::Overdraw_view_state            m_overdraw_view_state;

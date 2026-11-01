@@ -66,6 +66,11 @@ public:
 
     void add   (const std::shared_ptr<Light>& light);
     void remove(const std::shared_ptr<Light>& light);
+    // Moves a light of the layer to the front of lights[]: the light set
+    // hands out the slots of each light type in lights[] order, so the front
+    // light of a type gets that type's first (shadow) slot. Returns false
+    // when the light is not in the layer.
+    auto move_to_front(const std::shared_ptr<Light>& light) -> bool;
 
     std::vector<std::shared_ptr<Light>> lights;
     std::string                         name;

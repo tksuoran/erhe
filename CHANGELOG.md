@@ -42,6 +42,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene`: `Light_layer::move_to_front()` moves a light of the layer
+  to the front of `lights`, so it gets its type's first light set slot.
+
 - `erhe::primitive`, `erhe::gltf`: stored LOD chains in the prepared glTF
   (`ERHE_mesh_lod`, doc/gltf_extensions/ERHE_mesh_lod.md; doc/plans/lod.md
   step 6). `erhe::primitive`: `Stored_lod_chain`,

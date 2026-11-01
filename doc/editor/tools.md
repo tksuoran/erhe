@@ -147,6 +147,21 @@ moves towards the grid only). While on, `editor.xr` logs every 10 s the
 average and maximum time per frame of the prepare phase hit testing and of
 the ID pick pass recording (CPU; "Controller ray ...").
 
+## Headset headlamp
+
+The Headset window's headlamp button adds (first press), disables and
+enables a directional light, "Headlamp" (`Headset_view::set_headlamp_enabled()`,
+queued to the prepare phase): a child of the headset's root camera (the head
+pose, the eye midpoint), 15 cm above it in head space, shining along the
+view direction. Enabling puts it at the front of the scene's light layer
+(`erhe::scene::Light_layer::move_to_front()`), so it is the first directional
+light the light set resolves: it takes the directional shadow slot, and
+under single directional light limits (one directional light, no spot or
+point lights; the `single_directional` bench configurations) it is the only
+light. Disabling takes it out of the scene; a re-home of the headset moves
+it into the new scene. Intensity (slider and 0.5 - 16 shortcut buttons) and
+shadows apply at once. It is `session_only`: never saved.
+
 ## Public API / Integration Points
 
 - `Tools::register_tool()` -- register a tool

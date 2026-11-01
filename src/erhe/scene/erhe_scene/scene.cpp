@@ -126,6 +126,17 @@ void Light_layer::add(const std::shared_ptr<Light>& light)
     }
 }
 
+auto Light_layer::move_to_front(const std::shared_ptr<Light>& light) -> bool
+{
+    ERHE_VERIFY(light);
+    const auto i = std::find(lights.begin(), lights.end(), light);
+    if (i == lights.end()) {
+        return false;
+    }
+    std::rotate(lights.begin(), i, i + 1);
+    return true;
+}
+
 void Light_layer::remove(const std::shared_ptr<Light>& light)
 {
     ERHE_VERIFY(light);
