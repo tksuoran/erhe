@@ -34,6 +34,7 @@
 #include "scene/scene_settings_resolve.hpp"
 #include "time.hpp"
 #include "xr/headset_overdraw_visualization.hpp"
+#include "init_status_display.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "tools/hud.hpp"
 #include "tools/tools.hpp"
@@ -373,6 +374,20 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe:
     if (m_headlamp_enabled) {
         attach_headlamp();
     }
+
+    // The loading screen is done: released once no frame in flight renders
+    // it (prepare_render_view()).
+    if (m_loading_screen && !m_loading_screen_release_frame.has_value()) {
+        m_loading_screen_release_frame =
+            m_app_context.graphics_device->get_frame_index() +
+            m_app_context.graphics_device->get_number_of_frames_in_flight() + 1;
+    }
+}
+
+void Headset_view::set_loading_screen(std::unique_ptr<Init_status_display> loading_screen)
+{
+    m_loading_screen = std::move(loading_screen);
+    m_loading_screen_release_frame.reset();
 }
 
 void Headset_view::attach_headlamp()
@@ -1279,6 +1294,27 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // xrBeginFrame makes the next one return XR_FRAME_DISCARDED. A frame
     // that cannot be used (events or actions failed this frame) is ended
     // with no layers.
+    // No scene yet (the startup scene loads): the loading screen's frame,
+    // when there is one, instead of an empty frame.
+    if (
+        m_poll_events_ok &&
+        m_loading_screen &&
+        !m_loading_screen_release_frame.has_value() &&
+        !get_render_scene_root() &&
+        m_frame_timing.should_render &&
+        m_use_multiview
+    ) {
+        m_loading_screen->take_render_lines();
+        const bool rendered = m_headset->render_multiview(
+            command_buffer,
+            [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
+                return m_loading_screen->render_xr_multiview(frame, views_cb);
+            }
+        );
+        m_headset->end_frame(rendered);
+        m_frame_timing = erhe::xr::Frame_timing{};
+        return rendered;
+    }
     if (!m_poll_events_ok || !m_update_actions_ok) {
         m_headset->end_frame(false);
         m_frame_timing = erhe::xr::Frame_timing{};
@@ -2162,6 +2198,11 @@ void Headset_view::prepare_render_view()
 
     // The frame's overdraw mode and max count, read by render_headset().
     const uint64_t       frame_index = m_app_context.graphics_device->get_frame_index();
+    if (m_loading_screen_release_frame.has_value() && (frame_index >= m_loading_screen_release_frame.value())) {
+        m_loading_screen.reset();
+        m_loading_screen_release_frame.reset();
+        log_xr->info("Headset loading screen released");
+    }
     Frame_settings_slot& slot        = m_frame_settings_slots[frame_index % m_frame_settings_slots.size()];
     slot.frame_index = frame_index;
     slot.mode        = is_overdraw_supported() ? m_overdraw_mode : Overdraw_mode::off;

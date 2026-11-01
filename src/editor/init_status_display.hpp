@@ -17,7 +17,7 @@
 namespace erhe::graphics { class Command_buffer; class Device; class Texture; }
 namespace erhe::renderer { class Text_renderer; }
 namespace erhe::window   { class Context_window; }
-namespace erhe::xr       { class Headset; class Quad_layer; }
+namespace erhe::xr       { class Headset; class Quad_layer; class Render_views_frame; }
 
 namespace editor {
 
@@ -56,6 +56,17 @@ public:
     // stays dirty for a later pump(). Drives SDL_PollEvent and
     // xrBegin/EndFrame which must not be called from worker threads.
     void pump();
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    // One multiview XR frame of the loading screen: the projection cleared
+    // transparent with the text on the world-placed quad (head-locked text
+    // until the quad is placed). The init pump's frame body; after init,
+    // Headset_view renders it from the render phase while the headset has
+    // no scene (the startup scene loads), after take_render_lines().
+    auto render_xr_multiview(const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool;
+    // The lines set_line() set become the rendered lines.
+    void take_render_lines();
+#endif
 
 private:
     // Init sets a new line before and after every task, most of which take
@@ -150,6 +161,7 @@ private:
     // shared with workers; populated by pump() under m_state_mutex
     // then read without locking from the rendering path.
     std::vector<std::string>          m_render_lines;
+    std::vector<std::string>          m_logged_lines;
     std::array<double, 4>             m_render_clear_color{0.01, 0.02, 0.06, 1.0};
 };
 

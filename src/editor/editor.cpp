@@ -4203,6 +4203,21 @@ public:
             init_status_display_ptr->pump();
         }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        // Headset with a startup scene (--scene): the init screen stays up as
+        // the loading screen, rendered by the headset view until the scene is
+        // open and the headset is homed in it (instead of empty frames while
+        // the scene loads).
+        if (init_status_display_ptr && m_app_context.OpenXR && !m_no_startup_scene && !m_startup_scene_path.empty() && m_headset_view) {
+            const std::string file_name = std::filesystem::path{m_startup_scene_path}.filename().string();
+            init_status_display_ptr->set_line(0, fmt::format("Loading \"{}\"", file_name));
+            init_status_display_ptr->set_line(1, "");
+            init_status_display_ptr->set_line(2, "");
+            init_status_display_ptr->pump();
+            m_headset_view->set_loading_screen(std::move(init_status_display_ptr));
+        }
+#endif
+
         // Close the init-time command buffer opened in the member init
         // list (or reseated by Init_status_display::pump),
         // submit, and block until the GPU has consumed every recorded

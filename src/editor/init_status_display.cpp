@@ -178,6 +178,13 @@ void Init_status_display::render_text_overlay(
             );
             const float dir = top_left ? +1.0f : -1.0f;
 
+            // Each line is logged once when it changes (the loading screen
+            // also renders every frame after init, Headset_view).
+            const bool log_lines = (m_render_lines != m_logged_lines);
+            if (log_lines) {
+                m_logged_lines = m_render_lines;
+            }
+
             for (std::size_t i = 0; i < line_count; ++i) {
                 const std::string& line = m_render_lines[i];
                 if (line.empty()) {
@@ -190,7 +197,9 @@ void Init_status_display::render_text_overlay(
                     (static_cast<float>(i) - (static_cast<float>(line_count - 1) * 0.5f)) * line_height;
                 const float y = center_y + dir * (offset_from_center + line_height * 0.5f);
                 m_text_renderer.print(glm::vec3{x, y, 0.0f}, c_text_color_abgr, line);
-                log_startup->info("Init: {}", line);
+                if (log_lines) {
+                    log_startup->info("Init: {}", line);
+                }
             }
 
             // Pass through multiview = (view_mask != 0). The multiview
@@ -381,6 +390,13 @@ void Init_status_display::render_present_desktop()
             );
             const float dir = top_left ? +1.0f : -1.0f;
 
+            // Each line is logged once when it changes (the loading screen
+            // also renders every frame after init, Headset_view).
+            const bool log_lines = (m_render_lines != m_logged_lines);
+            if (log_lines) {
+                m_logged_lines = m_render_lines;
+            }
+
             for (std::size_t i = 0; i < line_count; ++i) {
                 const std::string& line = m_render_lines[i];
                 if (line.empty()) {
@@ -393,7 +409,9 @@ void Init_status_display::render_present_desktop()
                     (static_cast<float>(i) - (static_cast<float>(line_count - 1) * 0.5f)) * line_height;
                 const float y = center_y + dir * (offset_from_center + line_height * 0.5f);
                 m_text_renderer.print(glm::vec3{x, y, 0.0f}, c_text_color_abgr, line);
-                log_startup->info("Init: {}",line);
+                if (log_lines) {
+                    log_startup->info("Init: {}", line);
+                }
             }
 
             // The init pump prints into frame slot 0 (the renderer's default).
@@ -419,6 +437,53 @@ void Init_status_display::render_present_desktop()
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+auto Init_status_display::render_xr_multiview(const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool
+{
+    erhe::graphics::Texture* const color_texture         = frame.shared_color_texture;
+    // Skip depth on the init overlay: Text_renderer's
+    // pipeline uses reverse-depth (compare op = greater)
+    // and prints at z = 0 (NDC z = 0 = far in reverse
+    // depth), which would always fail the depth test
+    // against a cleared depth buffer. The overlay is
+    // pure 2D and has nothing else competing for depth,
+    // so dropping the depth attachment is the narrowest
+    // fix and keeps Text_renderer's pipeline unchanged.
+    erhe::graphics::Texture* const depth_stencil_texture = nullptr;
+    if (color_texture == nullptr) {
+        return false;
+    }
+    if ((m_quad_layer != nullptr) && xr_try_capture_initial_pose()) {
+        // World-placed quad carries the text; clear the
+        // projection background to transparent so only the
+        // opaque quad panel is visible (room shows around it).
+        render_text_overlay(
+            views_cb, color_texture, depth_stencil_texture,
+            static_cast<int>(frame.width), static_cast<int>(frame.height),
+            frame.view_mask, "Init_status_display background (XR multiview)",
+            /*draw_text*/ false, c_clear_color_transparent
+        );
+        xr_render_text_into_quad(views_cb);
+    } else {
+        // Quad not ready yet (or unavailable): fall back to the
+        // head-locked screen-space text overlay.
+        render_text_overlay(
+            views_cb, color_texture, depth_stencil_texture,
+            static_cast<int>(frame.width), static_cast<int>(frame.height),
+            frame.view_mask, "Init_status_display (XR multiview)",
+            /*draw_text*/ true, m_render_clear_color
+        );
+    }
+    return true;
+}
+
+void Init_status_display::take_render_lines()
+{
+    std::lock_guard<std::mutex> lock{m_state_mutex};
+    m_render_lines       = m_lines;
+    m_render_clear_color = m_clear_color;
+    m_dirty              = false;
+}
+
 void Init_status_display::render_present_xr()
 {
     ERHE_VERIFY(m_headset != nullptr);
@@ -462,41 +527,7 @@ void Init_status_display::render_present_xr()
                 // projection so a single draw broadcasts to every
                 // layer.
                 auto callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
-                    erhe::graphics::Texture* const color_texture         = frame.shared_color_texture;
-                    // Skip depth on the init overlay: Text_renderer's
-                    // pipeline uses reverse-depth (compare op = greater)
-                    // and prints at z = 0 (NDC z = 0 = far in reverse
-                    // depth), which would always fail the depth test
-                    // against a cleared depth buffer. The overlay is
-                    // pure 2D and has nothing else competing for depth,
-                    // so dropping the depth attachment is the narrowest
-                    // fix and keeps Text_renderer's pipeline unchanged.
-                    erhe::graphics::Texture* const depth_stencil_texture = nullptr;
-                    if (color_texture == nullptr) {
-                        return false;
-                    }
-                    if ((m_quad_layer != nullptr) && xr_try_capture_initial_pose()) {
-                        // World-placed quad carries the text; clear the
-                        // projection background to transparent so only the
-                        // opaque quad panel is visible (room shows around it).
-                        render_text_overlay(
-                            views_cb, color_texture, depth_stencil_texture,
-                            static_cast<int>(frame.width), static_cast<int>(frame.height),
-                            frame.view_mask, "Init_status_display background (XR multiview)",
-                            /*draw_text*/ false, c_clear_color_transparent
-                        );
-                        xr_render_text_into_quad(views_cb);
-                    } else {
-                        // Quad not ready yet (or unavailable): fall back to the
-                        // head-locked screen-space text overlay.
-                        render_text_overlay(
-                            views_cb, color_texture, depth_stencil_texture,
-                            static_cast<int>(frame.width), static_cast<int>(frame.height),
-                            frame.view_mask, "Init_status_display (XR multiview)",
-                            /*draw_text*/ true, m_render_clear_color
-                        );
-                    }
-                    return true;
+                    return render_xr_multiview(frame, views_cb);
                 };
                 xr_rendered = m_headset->render_multiview(*init_cb, callback);
                 // render_frame_multiview() ends + submits init_cb and

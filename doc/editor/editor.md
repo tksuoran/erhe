@@ -919,7 +919,7 @@ The status bar (`Window_imgui_host::set_status_bar_callback`, a child of the roo
 
 ### Initialization Order
 
-Initialization is serial: `Editor::Editor()` constructs the parts in 25 named steps (`ERHE_INIT_STEP_BEGIN("<name>")` / `ERHE_INIT_STEP_END`), each a profile scope and a line on the init status display. Restoring parallel construction is planned (`doc/plans/parallel_editor_init.md`).
+Initialization is serial: `Editor::Editor()` constructs the parts in 25 named steps (`ERHE_INIT_STEP_BEGIN("<name>")` / `ERHE_INIT_STEP_END`), each a profile scope and a line on the init status display. Restoring parallel construction is planned (`doc/plans/parallel_editor_init.md`). Under OpenXR with a startup scene (`--scene`), the init status display stays up after init as the headset's loading screen, reading `Loading "<file name>"`: `Headset_view::set_loading_screen()` takes it over, and while the headset has no scene the render phase renders its frame (`Init_status_display::render_xr_multiview()`: transparent projection, the text on the world-placed quad) instead of an empty one; homing the headset in the opened scene releases it once the frames in flight completed.
 
 ### Physics Integration
 

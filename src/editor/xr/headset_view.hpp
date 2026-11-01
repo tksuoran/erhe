@@ -69,6 +69,7 @@ class App_rendering;
 class App_settings;
 class Composition_pass_views;
 class Fly_camera_tool;
+class Init_status_display;
 class Headset_overdraw_visualization;
 class Hud;
 class Quad_view;
@@ -334,6 +335,13 @@ public:
     // saved. Main thread, prepare phase (the Headset window queues these).
     // The first enable creates it; disable takes it out of the scene.
     void set_headlamp_enabled  (bool enabled);
+
+    // Main thread, end of editor init: the init screen becomes the loading
+    // screen. While the headset has no scene (the startup scene loads) the
+    // render phase renders it (Init_status_display::render_xr_multiview())
+    // instead of an empty frame; homing the headset in a scene
+    // (attach_to_scene()) releases it once the frames in flight completed.
+    void set_loading_screen    (std::unique_ptr<Init_status_display> loading_screen);
     void set_headlamp_intensity(float intensity);
     // Any thread: the newest retired counted frame's statistics; height is
     // the views' rows together (view count x eye image height).
@@ -540,6 +548,11 @@ private:
     // Main thread: whether the controller ray hit tests 3D scene objects
     // (content raytrace + skinned ID pick); the Headset window's checkbox.
     bool                                                 m_controller_scene_object_hits{true};
+    // Loading screen (set_loading_screen()): rendered by the render phase
+    // while the headset has no scene; released by the prepare phase at
+    // m_loading_screen_release_frame.
+    std::unique_ptr<Init_status_display>                 m_loading_screen;
+    std::optional<uint64_t>                              m_loading_screen_release_frame;
     // Headlamp: created on the first enable (set_headlamp_enabled()).
     std::shared_ptr<erhe::scene::Light>                  m_headlamp;
     bool                                                 m_headlamp_enabled    {false};
