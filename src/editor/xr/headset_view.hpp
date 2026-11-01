@@ -71,6 +71,7 @@ class Quad_view;
 class Scene_builder;
 class Scene_root;
 class Time;
+class Time_context;
 class Tools;
 
 class Controller_input
@@ -117,6 +118,19 @@ private:
 };
 
 class Headset_view;
+
+// Left thumbstick locomotion: forwards the stick value to
+// Headset_view::set_locomotion_input(); the fixed step moves the camera root.
+class Headset_locomotion_command : public erhe::commands::Command
+{
+public:
+    Headset_locomotion_command(erhe::commands::Commands& commands, Headset_view& headset_view);
+
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Headset_view& m_headset_view;
+};
 
 class Headset_ray_mode_toggle_command : public erhe::commands::Command
 {
@@ -249,7 +263,23 @@ public:
     // captured from inside the headset.
     void log_controller_ray_state(const char* hand, const char* edge);
 
-    void update_fixed_step();
+    // M2, once per fixed step: applies the camera offset input axes and the
+    // left thumbstick locomotion to the camera root.
+    void update_fixed_step(const Time_context& time_context);
+
+    // Camera root: where the XR stage space sits in the headset scene's
+    // world. world_from_stage = translate(position). Every
+    // stage-space XR pose (head, eyes, controllers) is mapped to world
+    // through it; the quad composition layers map back with its inverse.
+    [[nodiscard]] auto get_world_from_stage() const -> glm::mat4;
+    [[nodiscard]] auto get_stage_from_world() const -> glm::mat4;
+    void translate_camera_root(const glm::vec3& world_delta);
+    // World-space point on the camera root's floor (stage y = 0) under the
+    // head; empty while the head pose is not located.
+    [[nodiscard]] auto get_user_floor_position_in_world() const -> std::optional<glm::vec3>;
+    // Left thumbstick value (x = strafe right, y = forward), from
+    // Headset_locomotion_command.
+    void set_locomotion_input(const glm::vec2& value);
 
     // Benchmark mode (doc/plans/quest_performance.md "Benchmark mode"; main
     // thread, before the frame loop). From then on the controllers do not
@@ -292,7 +322,6 @@ public:
     [[nodiscard]] auto get_headset                          () const -> erhe::xr::Headset*;
     [[nodiscard]] auto get_root_node                        () const -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto is_active                            () const -> bool;
-    [[nodiscard]] auto get_camera_offset                    () const -> glm::vec3;
 
     // Mode-dependent world-space ray origin for the given controller aim
     // pose: the aim pose position (aim mode) or the head-lamp point above
@@ -300,6 +329,8 @@ public:
     // Public so quad-based UI (Rendertarget_imgui_host's OpenXR pointer)
     // intersects with the same ray the user sees.
     [[nodiscard]] auto get_controller_ray_origin(const erhe::xr::Xr_action_pose& pose) const -> glm::vec3;
+    // World-space direction of the controller ray (the aim pose's -Z).
+    [[nodiscard]] auto get_controller_ray_direction(const erhe::xr::Xr_action_pose& pose) const -> glm::vec3;
 
     // World-space transform of the physical controller aim pose (right hand
     // when located, else left; camera offset applied) - explicitly
@@ -409,7 +440,9 @@ private:
     erhe::math::Input_axis                               m_translate_x;
     erhe::math::Input_axis                               m_translate_y;
     erhe::math::Input_axis                               m_translate_z;
-    glm::vec3                                            m_camera_offset{0.0f, 0.0f, 0.0f};
+    glm::vec3                                            m_camera_offset{0.0f, 0.0f, 0.0f}; // camera root position in world
+    glm::vec2                                            m_locomotion_input{0.0f, 0.0f};
+    Headset_locomotion_command                           m_locomotion_command;
     Headset_camera_offset_move_command                   m_offset_x_command;
     Headset_camera_offset_move_command                   m_offset_y_command;
     Headset_camera_offset_move_command                   m_offset_z_command;

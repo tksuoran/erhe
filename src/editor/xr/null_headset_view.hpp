@@ -39,6 +39,7 @@ namespace erhe::window {
 namespace editor {
 
 class App_context;
+class Time_context;
 class App_message_bus;
 class App_rendering;
 class App_settings;
@@ -79,7 +80,7 @@ public:
     );
 
     // Public API
-    void update_fixed_step();
+    void update_fixed_step(const Time_context& time_context);
     void render_headset   ();
     void wait_frame       ();
     void begin_frame      ();
@@ -92,7 +93,8 @@ public:
     [[nodiscard]] auto get_headset                          () const -> void*;
     [[nodiscard]] auto get_root_node                        () const -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto is_active                            () const -> bool { return false; }
-    [[nodiscard]] auto get_camera_offset                    () const -> glm::vec3 { return glm::vec3{}; }
+    [[nodiscard]] auto get_world_from_stage                 () const -> glm::mat4 { return glm::mat4{1.0f}; }
+    [[nodiscard]] auto get_stage_from_world                 () const -> glm::mat4 { return glm::mat4{1.0f}; }
 
     // Implements Renderable
     void render(const Render_context& render_context) override;

@@ -101,6 +101,27 @@ renders the scene of the frame's render view
 (`Headset_view::prepare_render_view()`, taken after the message bus pump),
 and the eye cameras follow that scene (`Headset_view_resources::update()`).
 
+## Headset locomotion
+
+The headset camera root places the XR stage space in the headset scene's
+world: `Headset_view::get_world_from_stage()` is
+a translation (the camera offset). Every stage-space XR pose (head,
+eyes, controllers, the controller ray, the Hud summon point) goes through
+it, and the quad composition layers map back with
+`get_stage_from_world()`. Two inputs move it, in M2:
+
+- **Travel tool** (`Headset_travel_tool`, `xr/headset_travel_tool.hpp`;
+  hotbar tool, the default priority tool under OpenXR). While the right
+  trigger is pressed, the camera root moves so that the user's floor point
+  under the head approaches the point the controller ray hits (content or
+  grid hover). Speed is `min(max speed, approach rate * distance)` times the
+  analog trigger value, per fixed step (defaults 1.5 1/s and 12 m/s, in the
+  tool properties). A ray that hits a rendertarget (Hud, Hotbar) moves
+  nothing.
+- **Left thumbstick** (`Headset.locomotion`, always active): forward / back
+  along the horizontal head direction and strafe across it, up to 3 m/s
+  with a 0.15 dead zone. The right thumbstick belongs to the Hotbar.
+
 ## Public API / Integration Points
 
 - `Tools::register_tool()` -- register a tool

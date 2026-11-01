@@ -189,11 +189,9 @@ void Headset_view_resources::update(erhe::xr::Render_view& render_view, erhe::sc
     render_view.near_depth = 0.03f;
     render_view.far_depth  = 200.0f;
 
-    const glm::vec3 offset = m_headset_view.get_camera_offset();
-
     const glm::mat4 orientation = glm::mat4_cast(render_view.view_pose.orientation);
-    const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, render_view.view_pose.position + offset);
-    const glm::mat4 m           = translation * orientation;
+    const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, render_view.view_pose.position);
+    const glm::mat4 m           = m_headset_view.get_world_from_stage() * translation * orientation;
     m_camera->set_parent_from_node(m);
 }
 

@@ -850,6 +850,8 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
         xr/controller_visualization.hpp
         xr/hand_tracker.cpp
         xr/hand_tracker.hpp
+        xr/headset_travel_tool.cpp
+        xr/headset_travel_tool.hpp
         xr/headset_view.cpp
         xr/headset_view.hpp
         xr/headset_view_resources.cpp

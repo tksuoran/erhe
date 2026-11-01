@@ -135,6 +135,18 @@ auto Headset_camera_offset_move_command::try_call_with_input(erhe::commands::Inp
 
 #pragma endregion Fly_camera_variable_float_command
 
+Headset_locomotion_command::Headset_locomotion_command(erhe::commands::Commands& commands, Headset_view& headset_view)
+    : Command       {commands, "Headset.locomotion"}
+    , m_headset_view{headset_view}
+{
+}
+
+auto Headset_locomotion_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    m_headset_view.set_locomotion_input(input.variant.vector2.absolute_value);
+    return true;
+}
+
 Headset_ray_mode_toggle_command::Headset_ray_mode_toggle_command(erhe::commands::Commands& commands, Headset_view& headset_view)
     : Command       {commands, "Headset.toggle_controller_ray_mode"}
     , m_headset_view{headset_view}
@@ -219,6 +231,7 @@ Headset_view::Headset_view(
     , m_translate_x            {}
     , m_translate_y            {}
     , m_translate_z            {}
+    , m_locomotion_command     {commands, *this}
     , m_offset_x_command       {commands, m_translate_x, 'x'}
     , m_offset_y_command       {commands, m_translate_y, 'y'}
     , m_offset_z_command       {commands, m_translate_z, 'z'}
@@ -263,6 +276,14 @@ Headset_view::Headset_view(
     // Ray mode toggle on thumbstick / trackpad click, either hand. Quest
     // Touch controllers only expose the thumbstick; the trackpad bindings
     // cover interaction profiles that have one instead.
+    // Left thumbstick: move the camera root (the right thumbstick belongs to
+    // the Hotbar).
+    commands.register_command(&m_locomotion_command);
+    erhe::xr::Xr_actions* const left_actions = headset->get_actions_left();
+    if ((left_actions != nullptr) && (left_actions->thumbstick != nullptr)) {
+        commands.bind_command_to_xr_vector2f_action(&m_locomotion_command, left_actions->thumbstick);
+    }
+
     commands.register_command(&m_ray_mode_toggle_command);
     commands.register_command(&m_ray_log_left_command);
     commands.register_command(&m_ray_log_right_command);
@@ -433,7 +454,7 @@ void Headset_view::set_benchmark_head_pose(const glm::vec3& position, const glm:
     m_headset->set_head_pose_override(erhe::xr::Pose{.orientation = orientation, .position = position});
 }
 
-void Headset_view::update_fixed_step()
+void Headset_view::update_fixed_step(const Time_context& time_context)
 {
     m_translate_x.update();
     m_translate_y.update();
@@ -441,10 +462,68 @@ void Headset_view::update_fixed_step()
     const float tx =  m_translate_x.current_value();
     const float ty = -m_translate_y.current_value();
     const float tz =  m_translate_z.current_value();
-    if (tx != 0.0f || ty != 0.0f || tz != 0.0f) {
+    if ((tx != 0.0f) || (ty != 0.0f) || (tz != 0.0f)) {
         const glm::vec3 translation{tx, ty, tz};
         m_camera_offset += translation;
     }
+
+    // Left thumbstick locomotion: forward / back along the horizontal head
+    // direction, left / right across it. The stick is 0 while no input
+    // arrives (benchmark mode injects none).
+    constexpr float dead_zone   = 0.15f;
+    constexpr float max_speed_m_per_s = 3.0f;
+    const float stick_length = glm::length(m_locomotion_input);
+    if ((stick_length > dead_zone) && (m_headset != nullptr)) {
+        glm::vec3 head_position{};
+        glm::quat head_orientation{};
+        if (m_headset->get_headset_pose(head_position, head_orientation)) {
+            const glm::vec3 head_forward = head_orientation * glm::vec3{0.0f, 0.0f, -1.0f};
+            const glm::vec3 forward_flat{head_forward.x, 0.0f, head_forward.z};
+            const float     forward_flat_length = glm::length(forward_flat);
+            if (forward_flat_length > 0.001f) {
+                const glm::vec3 forward = forward_flat / forward_flat_length;
+                const glm::vec3 right   = glm::vec3{-forward.z, 0.0f, forward.x};
+                // Rescale past the dead zone so speed ramps from 0.
+                const float     magnitude = std::min(1.0f, (stick_length - dead_zone) / (1.0f - dead_zone));
+                const glm::vec2 stick     = (m_locomotion_input / stick_length) * magnitude;
+                const glm::vec3 velocity  = max_speed_m_per_s * ((stick.y * forward) + (stick.x * right));
+                m_camera_offset += time_context.simulation_dt_s * velocity;
+            }
+        }
+    }
+}
+
+auto Headset_view::get_world_from_stage() const -> glm::mat4
+{
+    return glm::translate(glm::mat4{1.0f}, m_camera_offset);
+}
+
+auto Headset_view::get_stage_from_world() const -> glm::mat4
+{
+    return glm::translate(glm::mat4{1.0f}, -m_camera_offset);
+}
+
+void Headset_view::translate_camera_root(const glm::vec3& world_delta)
+{
+    m_camera_offset += world_delta;
+}
+
+auto Headset_view::get_user_floor_position_in_world() const -> std::optional<glm::vec3>
+{
+    if (m_headset == nullptr) {
+        return {};
+    }
+    glm::vec3 head_position{};
+    glm::quat head_orientation{};
+    if (!m_headset->get_headset_pose(head_position, head_orientation)) {
+        return {};
+    }
+    return glm::vec3{get_world_from_stage() * glm::vec4{head_position.x, 0.0f, head_position.z, 1.0f}};
+}
+
+void Headset_view::set_locomotion_input(const glm::vec2& value)
+{
+    m_locomotion_input = value;
 }
 
 void Headset_view::imgui()
@@ -555,11 +634,9 @@ void Headset_view::render(const Render_context& render_context)
             ? get_control_ray_origin_in_world().value()
             : get_controller_ray_origin(*pose);
 
-        const auto orientation = glm::mat4_cast(pose->orientation);
-
         const glm::vec3 direction = use_hover
             ? get_control_ray_direction_in_world().value() 
-            : glm::vec3{orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+            : get_controller_ray_direction(*pose);
 
         const auto tip = use_hover
             ? nearest->position.value() 
@@ -789,9 +866,9 @@ void Headset_view::update_pointer_context_from_controller()
     // TODO optimize this transform computation
     // The control ray origin depends on the ray mode (controller aim pose
     // or head attached); the orientation always comes from the controller.
-    const glm::mat4 orientation = glm::mat4_cast(pose->orientation);
-    const glm::mat4 translation = glm::translate(glm::mat4{1}, get_controller_ray_origin(*pose));
-    const glm::mat4 m           = translation * orientation;
+    const glm::mat4 world_from_stage = get_world_from_stage();
+    glm::mat4 m = world_from_stage * glm::mat4_cast(pose->orientation);
+    m[3] = glm::vec4{get_controller_ray_origin(*pose), 1.0f};
 
     this->Scene_view::set_world_from_control(m);
     this->Scene_view::update_hover_with_raytrace();
@@ -1814,8 +1891,8 @@ void Headset_view::update_camera_node()
         return;
     }
     const glm::mat4 m_orientation   = glm::mat4_cast(orientation);
-    const glm::mat4 m_translation   = glm::translate(glm::mat4{1}, position + get_camera_offset());
-    const glm::mat4 world_from_view = m_translation * m_orientation;
+    const glm::mat4 m_translation   = glm::translate(glm::mat4{1}, position);
+    const glm::mat4 world_from_view = get_world_from_stage() * m_translation * m_orientation;
     m_root_camera->set_world_from_node(world_from_view);
     m_root_camera->update_transform(0); // TODO
 
@@ -1832,7 +1909,7 @@ void Headset_view::update_camera_node()
     update_root_camera_projection();
 
     // The eye cameras are children of the scene root node, posed at the
-    // located eye poses with the same camera offset
+    // located eye poses through the same camera root
     // (Headset_view_resources::update()), so the head frame their union is
     // taken about is this one.
     const glm::mat4 world_from_root = m_root_node ? m_root_node->world_from_node() : glm::mat4{1.0f};
@@ -2088,12 +2165,13 @@ void Headset_view::prepare_pvs_query(const glm::mat4& world_from_root)
     if ((slot.frame_index != frame_index) || (slot.plane_count == 0)) {
         return;
     }
-    // The eye cameras are posed at the located eye positions plus the
-    // camera offset, under the scene root node (update_camera_node()).
+    // The eye cameras are posed at the located eye positions through the
+    // camera root, under the scene root node (update_camera_node()).
+    const glm::mat4 world_from_stage = get_world_from_stage();
     glm::vec3 eye_min{ std::numeric_limits<float>::max()};
     glm::vec3 eye_max{-std::numeric_limits<float>::max()};
     for (const erhe::xr::Render_view& view : m_located_eye_views) {
-        const glm::vec3 eye_in_world = glm::vec3{world_from_root * glm::vec4{view.view_pose.position + get_camera_offset(), 1.0f}};
+        const glm::vec3 eye_in_world = glm::vec3{world_from_root * world_from_stage * glm::vec4{view.view_pose.position, 1.0f}};
         eye_min = glm::min(eye_min, eye_in_world);
         eye_max = glm::max(eye_max, eye_in_world);
     }
@@ -2210,11 +2288,6 @@ void Headset_view::update_root_camera_projection()
             .fov_down           = m_combined_eye_fov_sides.down
         }
     );
-}
-
-auto Headset_view::get_camera_offset() const -> glm::vec3
-{
-    return m_camera_offset;
 }
 
 void Headset_view::toggle_controller_ray_mode()
@@ -2353,10 +2426,17 @@ auto Headset_view::get_controller_ray_origin(const erhe::xr::Xr_action_pose& pos
                     right_eye_position = view.view_pose.position;
                 }
             }
-            return right_eye_position + head_orientation * glm::vec3{0.0f, origin_height, 0.0f} + get_camera_offset();
+            const glm::vec3 origin_in_stage = right_eye_position + head_orientation * glm::vec3{0.0f, origin_height, 0.0f};
+            return glm::vec3{get_world_from_stage() * glm::vec4{origin_in_stage, 1.0f}};
         }
     }
-    return pose.position + get_camera_offset();
+    return glm::vec3{get_world_from_stage() * glm::vec4{pose.position, 1.0f}};
+}
+
+auto Headset_view::get_controller_ray_direction(const erhe::xr::Xr_action_pose& pose) const -> glm::vec3
+{
+    const glm::mat3 world_from_stage_rotation{get_world_from_stage()};
+    return world_from_stage_rotation * (pose.orientation * glm::vec3{0.0f, 0.0f, -1.0f});
 }
 
 auto Headset_view::get_world_from_controller() const -> std::optional<glm::mat4>
@@ -2379,8 +2459,8 @@ auto Headset_view::get_world_from_controller() const -> std::optional<glm::mat4>
         return {};
     }
     const glm::mat4 orientation = glm::mat4_cast(pose->orientation);
-    const glm::mat4 translation = glm::translate(glm::mat4{1}, pose->position + get_camera_offset());
-    return translation * orientation;
+    const glm::mat4 translation = glm::translate(glm::mat4{1}, pose->position);
+    return get_world_from_stage() * translation * orientation;
 }
 
 auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>
@@ -2651,12 +2731,12 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
             m_controller_visualization->load_render_models(m_app_context, *session);
             m_controller_render_models_loaded = true;
         }
-        const glm::vec3 camera_offset = get_camera_offset();
+        const glm::mat4 world_from_stage = get_world_from_stage();
         for (const bool right_hand : { false, true }) {
             erhe::xr::Xr_actions*     actions = right_hand ? m_headset->get_actions_right() : m_headset->get_actions_left();
             erhe::xr::Xr_action_pose* grip    = (actions != nullptr) ? actions->grip_pose : nullptr;
             erhe::xr::Xr_action_pose* aim     = (actions != nullptr) ? actions->aim_pose  : nullptr;
-            m_controller_visualization->update_hand(right_hand, grip, aim, camera_offset);
+            m_controller_visualization->update_hand(right_hand, grip, aim, world_from_stage);
             m_controller_visualization->update_hand_controls(right_hand, actions);
         }
     }

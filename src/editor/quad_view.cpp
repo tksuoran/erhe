@@ -201,14 +201,13 @@ auto Quad_view::intersect_ray(glm::vec3 origin_in_world, glm::vec3 direction_in_
 namespace {
 
 // Convert a scene-world transform into a stage-space XrPosef for the quad layer.
-// Scene-world equals the XR stage reference space offset by the headset view's
-// camera offset (every XR pose adds it; the projection layer omits it), so the
-// offset is subtracted here to match the projection layer's reference frame.
-[[nodiscard]] auto stage_pose_from_world(const glm::mat4& world_from_quad, const glm::vec3& camera_offset) -> XrPosef
+// Scene-world is the XR stage reference space placed by the headset view's
+// camera root (every XR pose goes through world_from_stage; the projection
+// layer omits it), so the inverse is applied here to match the projection
+// layer's reference frame.
+[[nodiscard]] auto stage_pose_from_world(const glm::mat4& world_from_quad, const glm::mat4& stage_from_world) -> XrPosef
 {
-    glm::mat4 stage_from_quad = world_from_quad;
-    stage_from_quad[3] -= glm::vec4{camera_offset, 0.0f};
-    return erhe::xr::from_glm(stage_from_quad);
+    return erhe::xr::from_glm(stage_from_world * world_from_quad);
 }
 
 } // namespace
@@ -229,10 +228,10 @@ void Quad_view::apply_transform()
     }
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_quad_layer) {
-        const glm::vec3 camera_offset = (m_headset_view != nullptr) ? m_headset_view->get_camera_offset() : glm::vec3{0.0f};
+        const glm::mat4 stage_from_world = (m_headset_view != nullptr) ? m_headset_view->get_stage_from_world() : glm::mat4{1.0f};
         // The quad layer takes an (unscaled) pose plus an explicit size, so the
         // scale goes into the size rather than the pose matrix.
-        m_quad_layer->set_pose(stage_pose_from_world(m_base_world_from_quad, camera_offset));
+        m_quad_layer->set_pose(stage_pose_from_world(m_base_world_from_quad, stage_from_world));
         m_quad_layer->set_size(XrExtent2Df{m_local_width * m_scale, m_local_height * m_scale});
     }
 #endif

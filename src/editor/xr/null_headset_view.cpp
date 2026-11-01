@@ -31,8 +31,9 @@ void Headset_view::render(const Render_context&)
 {
 }
 
-void Headset_view::update_fixed_step()
+void Headset_view::update_fixed_step(const Time_context& time_context)
 {
+    static_cast<void>(time_context);
 }
 
 void Headset_view::render_headset()

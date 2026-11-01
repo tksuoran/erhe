@@ -331,8 +331,7 @@ void Rendertarget_imgui_host::begin_imgui_frame()
 
         auto* pose = use_right ? right_aim_pose : left_aim_pose;
         if ((pose != nullptr) && m_view->is_quad_visible()) {
-            const auto controller_orientation = glm::mat4_cast(pose->orientation);
-            const auto controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+            const glm::vec3 controller_direction = headset_view.get_controller_ray_direction(*pose);
 
             // Mode-aware ray origin (controller aim pose, or the head-lamp
             // point in head-attached ray mode; camera offset applied inside)

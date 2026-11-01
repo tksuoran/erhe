@@ -157,6 +157,9 @@
 #include "mcp/mcp_server.hpp"
 #include "xr/headset_view.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_travel_tool.hpp"
+#endif
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/hand_tracker.hpp"
 //#   include "xr/theremin.hpp"
 #   include "erhe_xr/headset.hpp"
@@ -1606,7 +1609,12 @@ public:
         m_time->for_each_fixed_step(
             [this](const Time_context& time_context) {
                 ERHE_PROFILE_SCOPE("fixed step update");
-                m_headset_view   ->update_fixed_step();
+                m_headset_view   ->update_fixed_step(time_context);
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+                if (m_headset_travel_tool) {
+                    m_headset_travel_tool->update_fixed_step(time_context);
+                }
+#endif
                 m_fly_camera_tool->update_fixed_step(time_context);
             }
         );
@@ -3814,6 +3822,17 @@ public:
                     *m_icon_set.get(),
                     *m_tools.get()
                 );
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+                if (m_app_context.OpenXR) {
+                    m_headset_travel_tool = std::make_unique<Headset_travel_tool>(
+                        *m_commands.get(),
+                        m_app_context,
+                        *m_headset_view.get(),
+                        *m_icon_set.get(),
+                        *m_tools.get()
+                    );
+                }
+#endif
                 m_selection_tool = std::make_unique<Selection_tool>(
                     m_app_context,
                     *m_icon_set.get(),
@@ -4078,7 +4097,16 @@ public:
             }
         }
 #endif
-        m_tools->set_priority_tool(m_physics_tool.get());
+        // OpenXR: the travel tool (right trigger moves the camera root
+        // towards the controller ray hit) is the default tool.
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_headset_travel_tool) {
+            m_tools->set_priority_tool(m_headset_travel_tool.get());
+        } else
+#endif
+        {
+            m_tools->set_priority_tool(m_physics_tool.get());
+        }
 
         // Attach the global tools to the first scene that is created (scene.create)
         // or loaded. Subscribed here, after Hud/Hotbar/Headset_view are constructed
@@ -5812,6 +5840,9 @@ public:
     std::unique_ptr<Paint_tool         >                     m_paint_tool;
     std::unique_ptr<Weight_paint_tool  >                     m_weight_paint_tool;
     std::unique_ptr<Physics_tool       >                     m_physics_tool;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    std::unique_ptr<Headset_travel_tool>                     m_headset_travel_tool;
+#endif
     std::unique_ptr<Selection_tool     >                     m_selection_tool;
 
     // MCP server (exposes editor commands over HTTP)

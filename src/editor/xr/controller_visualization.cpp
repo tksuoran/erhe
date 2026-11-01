@@ -425,7 +425,7 @@ void Controller_visualization::update_hand(
     const bool                      right_hand,
     const erhe::xr::Xr_action_pose* grip_pose,
     const erhe::xr::Xr_action_pose* aim_pose,
-    const glm::vec3&                camera_offset
+    const glm::mat4&                world_from_stage
 )
 {
     Hand& hand = get_hand(right_hand);
@@ -442,8 +442,8 @@ void Controller_visualization::update_hand(
     }
     hand.node->show();
     const glm::mat4 orientation = glm::mat4_cast(pose->orientation);
-    const glm::mat4 translation = glm::translate(glm::mat4{1}, pose->position + camera_offset);
-    const glm::mat4 m           = translation * orientation;
+    const glm::mat4 translation = glm::translate(glm::mat4{1}, pose->position);
+    const glm::mat4 m           = world_from_stage * translation * orientation;
     hand.node->set_parent_from_node(m);
 }
 

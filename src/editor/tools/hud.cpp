@@ -618,7 +618,8 @@ void Hud::summon()
     glm::vec3 head_position{};
     glm::quat head_orientation{};
     if ((headset != nullptr) && headset->get_headset_pose(head_position, head_orientation)) {
-        head_position += m_headset_view->get_camera_offset();
+        // Stage -> world through the headset camera root.
+        head_position = glm::vec3{m_headset_view->get_world_from_stage() * glm::vec4{head_position, 1.0f}};
 
         // Init status display placement: a configurable distance along the
         // head forward direction, panel level (world up, ignoring head roll),

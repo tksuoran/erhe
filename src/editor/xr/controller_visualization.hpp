@@ -56,14 +56,14 @@ public:
     // unavailable keep the torus placeholder.
     void load_render_models(App_context& context, erhe::xr::Xr_session& xr_session);
 
-    // Per-frame pose update for one hand; camera_offset is added to the
-    // pose position. The hand's node hides when the pose it follows (grip
+    // Per-frame pose update for one hand; the stage-space pose is mapped to
+    // world through world_from_stage (the headset camera root). The hand's node hides when the pose it follows (grip
     // for a render model, aim for the torus) is missing or untracked.
     void update_hand(
         bool                            right_hand,
         const erhe::xr::Xr_action_pose* grip_pose,
         const erhe::xr::Xr_action_pose* aim_pose,
-        const glm::vec3&                camera_offset
+        const glm::mat4&                world_from_stage
     );
 
     // Per-frame control-state update for one hand: poses the render model's
