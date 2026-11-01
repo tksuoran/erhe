@@ -29,14 +29,25 @@ void mark_unbounded_lanes(const Draw_list_bounds& bounds, const std::size_t coun
 // coordinate lies within it) into gap[i], its square added to distance2[i].
 // |c - s| - e is written as the larger of the two signed gaps (the same
 // bits) so the loop holds only selects.
+namespace {
+
+// The gap of one box on one axis (sphere_axis_lanes(); the scalar form
+// shadow_lod_lanes() evaluates per entry).
+[[nodiscard]] inline auto axis_gap(const float center, const float extent, const float sphere_center) -> float
+{
+    const float offset     = center - sphere_center;
+    const float below      = (-offset) - extent;
+    const float above      = offset - extent;
+    const float signed_gap = (below > above) ? below : above;
+    return (signed_gap > 0.0f) ? signed_gap : 0.0f;
+}
+
+} // anonymous namespace
+
 void sphere_axis_lanes(const float* const center, const float* const extent, const float sphere_center, const std::size_t count, float* const gap, float* const distance2)
 {
     for (std::size_t i = 0; i < count; ++i) {
-        const float offset = center[i] - sphere_center;
-        const float below  = (-offset) - extent[i];
-        const float above  = offset - extent[i];
-        const float signed_gap = (below > above) ? below : above;
-        const float d      = (signed_gap > 0.0f) ? signed_gap : 0.0f;
+        const float d = axis_gap(center[i], extent[i], sphere_center);
         gap[i]        = d;
         distance2[i] += d * d;
     }
@@ -359,6 +370,35 @@ auto select_lod_level(
     return static_cast<uint32_t>(level);
 }
 
+namespace {
+
+// select_lod_level() of one entry with its chain's errors from lod_table;
+// level 0 for an entry without chain.
+[[nodiscard]] auto select_entry_lod_level(
+    const Lod_lane_view&              view,
+    const Draw_list_entry&            entry,
+    const std::span<const glm::uvec4> lod_table,
+    const float                       max_axis_scale,
+    const float                       distance2,
+    const uint32_t                    unbounded,
+    const uint32_t                    previous_level
+) -> uint32_t
+{
+    if (entry.lod_table_index == lod_table_index_none) {
+        return 0;
+    }
+    const uint32_t level_count = decode_lod_word(entry.lod_word).level_count;
+    ERHE_VERIFY(level_count <= 16u);
+    ERHE_VERIFY((static_cast<std::size_t>(entry.lod_table_index) + level_count) <= lod_table.size());
+    std::array<float, 16> errors{};
+    for (uint32_t l = 0; l < level_count; ++l) {
+        errors[l] = std::bit_cast<float>(lod_table[entry.lod_table_index + l].z);
+    }
+    return select_lod_level(view, entry.lod_word, errors.data(), max_axis_scale, distance2, unbounded, previous_level);
+}
+
+} // anonymous namespace
+
 void lod_lanes(
     const Lod_lane_view&                   view,
     const Draw_list_bounds&                bounds,
@@ -379,28 +419,23 @@ void lod_lanes(
     ERHE_VERIFY(previous_nibble_shift <= 28u);
     // The squared distance from the view origin to each box: the range
     // sphere test's per-axis gaps (sphere_axis_lanes()), with the origin as
-    // the sphere center.
-    std::fill(distance2, distance2 + count, 0.0f);
-    sphere_axis_lanes(bounds.center_x.data(), bounds.extent_x.data(), view.origin.x, count, gap, distance2);
-    sphere_axis_lanes(bounds.center_y.data(), bounds.extent_y.data(), view.origin.y, count, gap, distance2);
-    sphere_axis_lanes(bounds.center_z.data(), bounds.extent_z.data(), view.origin.z, count, gap, distance2);
+    // the sphere center. An orthographic view reads none (d2 = 1).
+    const bool orthographic = (view.projection == Lod_projection::orthographic);
+    if (!orthographic) {
+        std::fill(distance2, distance2 + count, 0.0f);
+        sphere_axis_lanes(bounds.center_x.data(), bounds.extent_x.data(), view.origin.x, count, gap, distance2);
+        sphere_axis_lanes(bounds.center_y.data(), bounds.extent_y.data(), view.origin.y, count, gap, distance2);
+        sphere_axis_lanes(bounds.center_z.data(), bounds.extent_z.data(), view.origin.z, count, gap, distance2);
+    }
     const float* const extent_x       = bounds.extent_x.data();
     const float* const max_axis_scale = bounds.max_axis_scale.data();
-    std::array<float, 16> errors{};
     for (std::size_t i = 0; i < count; ++i) {
-        const Draw_list_entry& entry = entries[i];
-        uint32_t level = 0;
-        if (entry.lod_table_index != lod_table_index_none) {
-            const uint32_t level_count = decode_lod_word(entry.lod_word).level_count;
-            ERHE_VERIFY((static_cast<std::size_t>(entry.lod_table_index) + level_count) <= lod_table.size());
-            for (uint32_t l = 0; l < level_count; ++l) {
-                errors[l] = std::bit_cast<float>(lod_table[entry.lod_table_index + l].z);
-            }
-            const uint32_t previous_level = (previous_words != nullptr)
-                ? ((previous_words[i] >> previous_nibble_shift) & 0xfu)
-                : lod_previous_level_none;
-            level = select_lod_level(view, entry.lod_word, errors.data(), max_axis_scale[i], distance2[i], Draw_list_bounds::get_unbounded_flag(extent_x[i]), previous_level);
-        }
+        const uint32_t previous_level = (previous_words != nullptr)
+            ? ((previous_words[i] >> previous_nibble_shift) & 0xfu)
+            : lod_previous_level_none;
+        const uint32_t level = select_entry_lod_level(
+            view, entries[i], lod_table, max_axis_scale[i], orthographic ? 1.0f : distance2[i], Draw_list_bounds::get_unbounded_flag(extent_x[i]), previous_level
+        );
         words[i] |= (level & 0xfu) << nibble_shift;
     }
 }
@@ -423,31 +458,66 @@ void frustum_inside_lanes(
 }
 
 void shadow_lod_lanes(
+    const Lod_lane_view&                                      view,
+    const Draw_list_bounds&                                   bounds,
+    const std::span<const Draw_list_entry>                    entries,
+    const std::span<const glm::uvec4>                         lod_table,
+    const uint32_t* const                                     kept,
     const std::array<const uint32_t*, max_lod_color_columns>& color_inside,
     const uint32_t                                            color_column_mask,
     const uint32_t* const                                     color_words,
     const std::size_t                                         count,
     uint32_t* const                                           words,
-    const uint32_t                                            nibble_shift
+    const uint32_t                                            nibble_shift,
+    const uint32_t* const                                     previous_words,
+    const uint32_t                                            previous_nibble_shift
 )
 {
+    ERHE_VERIFY(entries.size() >= count);
+    ERHE_VERIFY(bounds.max_axis_scale.size() >= count);
     ERHE_VERIFY(nibble_shift <= 28u);
+    ERHE_VERIFY(previous_nibble_shift <= 28u);
     ERHE_VERIFY(color_column_mask < (1u << max_lod_color_columns));
     for (uint32_t column = 0; column < max_lod_color_columns; ++column) {
         ERHE_VERIFY((((color_column_mask >> column) & 1u) == 0u) || (color_inside[column] != nullptr));
     }
+    const bool         orthographic   = (view.projection == Lod_projection::orthographic);
+    const float* const center_x       = bounds.center_x.data();
+    const float* const center_y       = bounds.center_y.data();
+    const float* const center_z       = bounds.center_z.data();
+    const float* const extent_x       = bounds.extent_x.data();
+    const float* const extent_y       = bounds.extent_y.data();
+    const float* const extent_z       = bounds.extent_z.data();
+    const float* const max_axis_scale = bounds.max_axis_scale.data();
     for (std::size_t i = 0; i < count; ++i) {
+        // Not drawn in the pass: level 0 (decision 4).
+        if (kept[i] == 0u) {
+            continue;
+        }
         // The finest level of the sampling columns whose frustum holds the
         // entry; 0xf (above every level) while none does.
-        uint32_t finest = 0xfu;
+        uint32_t level = 0xfu;
         for (uint32_t column = 0; column < max_lod_color_columns; ++column) {
             if ((((color_column_mask >> column) & 1u) != 0u) && (color_inside[column][i] != 0u)) {
-                finest = std::min(finest, (color_words[i] >> (4u * column)) & 0xfu);
+                level = std::min(level, (color_words[i] >> (4u * column)) & 0xfu);
             }
         }
-        if (finest != 0xfu) {
-            words[i] = (words[i] & ~(0xfu << nibble_shift)) | (finest << nibble_shift);
+        if (level == 0xfu) {
+            // The own selection: the squared distance as lod_lanes() sums
+            // the gaps of sphere_axis_lanes() (x, then y, then z).
+            float distance2 = 1.0f;
+            if (!orthographic) {
+                const float gap_x = axis_gap(center_x[i], extent_x[i], view.origin.x);
+                const float gap_y = axis_gap(center_y[i], extent_y[i], view.origin.y);
+                const float gap_z = axis_gap(center_z[i], extent_z[i], view.origin.z);
+                distance2 = ((gap_x * gap_x) + (gap_y * gap_y)) + (gap_z * gap_z);
+            }
+            const uint32_t previous_level = (previous_words != nullptr)
+                ? ((previous_words[i] >> previous_nibble_shift) & 0xfu)
+                : lod_previous_level_none;
+            level = select_entry_lod_level(view, entries[i], lod_table, max_axis_scale[i], distance2, Draw_list_bounds::get_unbounded_flag(extent_x[i]), previous_level);
         }
+        words[i] |= (level & 0xfu) << nibble_shift;
     }
 }
 

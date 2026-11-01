@@ -996,6 +996,9 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
 {
     ERHE_PROFILE_FUNCTION();
 
+    // The frame whose classification the passes read (once per draw()).
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+
     ERHE_VERIFY(parameters.view_camera != nullptr);
     ERHE_VERIFY(parameters.texture);
 
@@ -1078,13 +1081,12 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
     // GPU-generated commands: the passes count nothing on the CPU.
     const bool gpu_counted =
         (parameters.draw_list_scene != nullptr) &&
-        parameters.draw_list_scene->has_gpu_shadow_commands(m_graphics_device.get_frame_index());
+        parameters.draw_list_scene->has_gpu_shadow_commands(frame_index);
 
     // The maps keep the passes whose inputs did not change since they were
     // drawn (Shadow_map_cache).
     Shadow_map_cache* const map_cache = (parameters.draw_list_scene != nullptr) ? parameters.map_cache : nullptr;
     if (map_cache != nullptr) {
-        const uint64_t frame_index = m_graphics_device.get_frame_index();
         const Draw_list_content_changes content = parameters.draw_list_scene->get_published_content_changes(frame_index);
         map_cache->begin_frame(
             Shadow_map_cache::Configuration{
@@ -1124,7 +1126,6 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         const std::size_t light_index  = light_projection_transform->index;
         const std::size_t shadow_index = light_projection_transform->shadow_index;
         const glm::mat4   clip_from_world = light_projection_transform->clip_from_world.get_matrix();
-        const uint64_t        frame_index = m_graphics_device.get_frame_index();
         const Cull_view_tests pass_view = (map_cache != nullptr)
             ? parameters.draw_list_scene->get_cull_view_tests(frame_index, cull_views.views_2d[shadow_index])
             : Cull_view_tests{};
@@ -1146,7 +1147,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         // GPU-generated commands: the pass's jobs are prepared before its
         // render pass begins.
         if (gpu_counted) {
-            parameters.draw_list_scene->prepare_gpu_shadow_pass(parameters.command_buffer, cull_views.views_2d[shadow_index], m_graphics_device.get_frame_index());
+            parameters.draw_list_scene->prepare_gpu_shadow_pass(parameters.command_buffer, cull_views.views_2d[shadow_index], frame_index);
         }
         erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{
@@ -1249,7 +1250,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                     .sub_variant          = parameters.use_distance ? Shadow_sub_variant::depth_only_distance : Shadow_sub_variant::depth_only,
                     .cull_view            = cull_views.views_2d[shadow_index],
                     .debug_label          = "shadow draw lists",
-                    .frame_index          = m_graphics_device.get_frame_index()
+                    .frame_index          = frame_index
                 }
             );
             if (parameters.draw_statistics != nullptr) {
@@ -1325,7 +1326,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
             uint8_t skipped_faces = 0;
             if (parameters.draw_list_scene != nullptr) {
                 for (std::size_t face = 0; face < 6; ++face) {
-                    if (!parameters.draw_list_scene->has_cull_view_survivors(m_graphics_device.get_frame_index(), cull_views.views_cube[(point_shadow_index * 6) + face])) {
+                    if (!parameters.draw_list_scene->has_cull_view_survivors(frame_index, cull_views.views_cube[(point_shadow_index * 6) + face])) {
                         skipped_faces |= static_cast<uint8_t>(1u << face);
                     }
                 }
@@ -1340,7 +1341,6 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
 
             for (int face = 0; face < 6; ++face) {
                 const std::size_t pass_index = (point_shadow_index * 6) + static_cast<std::size_t>(face);
-                const uint64_t        frame_index = m_graphics_device.get_frame_index();
                 const Cull_view_tests face_view = (map_cache != nullptr)
                     ? parameters.draw_list_scene->get_cull_view_tests(frame_index, cull_views.views_cube[pass_index])
                     : Cull_view_tests{};
@@ -1358,7 +1358,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                 // GPU-generated commands: a drawn face's jobs are prepared
                 // before its render pass begins (an empty face draws nothing).
                 if (gpu_counted && (((skipped_faces >> face) & 1u) == 0u)) {
-                    parameters.draw_list_scene->prepare_gpu_shadow_pass(parameters.command_buffer, cull_views.views_cube[pass_index], m_graphics_device.get_frame_index());
+                    parameters.draw_list_scene->prepare_gpu_shadow_pass(parameters.command_buffer, cull_views.views_cube[pass_index], frame_index);
                 }
                 erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
                 erhe::graphics::Scoped_render_pass scoped_render_pass{
@@ -1436,7 +1436,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                                 .sub_variant          = Shadow_sub_variant::cube,
                                 .cull_view            = cull_views.views_cube[pass_index],
                                 .debug_label          = "shadow cube draw lists",
-                                .frame_index          = m_graphics_device.get_frame_index()
+                                .frame_index          = frame_index
                             }
                         );
                     } else {
@@ -1463,7 +1463,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                     }
                     if (!skipped_face_culled_count.has_value()) {
                         skipped_face_culled_count = parameters.draw_list_scene->get_filtered_entry_count(
-                            m_graphics_device.get_frame_index(),
+                            frame_index,
                             Draw_purpose::shadow,
                             parameters.draw_list_layers,
                             shadow_filter

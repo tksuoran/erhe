@@ -157,13 +157,17 @@ pass shared by several viewports (four view) takes the finest level of the
 viewports whose frustum holds the caster, so in a coarser viewport the
 receiver at level L and its finer caster differ by up to the error of
 level L, which the shadow bias does not cover: shadow acne is possible
-there. A caster outside every sampling frustum takes the light's own
-selection: from the light position through the shadow map's projection
-(a spot cone, a cube face at the point map's resolution; a directional
-pass is orthographic, so by the map's texel size), with its own hysteresis
-history. A pass whose sampling viewport has no LOD column (its color
-passes draw no draw-list view with a LOD view, or it is past the color
-column limit) draws every caster at the template range, as that viewport's
+there. A caster the pass draws outside every sampling frustum takes the
+light's own selection: from the light position through the shadow map's
+projection (a spot cone, a cube face at the point map's resolution; a
+directional pass is orthographic, so by the map's texel size), with its own
+hysteresis history. A mesh outside the light's frustum or reach is not
+drawn in the pass and has level 0 in its column (`get_lod_selection`
+shows 0 there); when it enters the reach its own selection starts at the
+level the coarsening threshold gives (the finer end of the hysteresis
+band). A pass whose sampling viewport has no LOD column (its color passes
+draw no draw-list view with a LOD view, or it is past the color column
+limit) draws every caster at the template range, as that viewport's
 receivers do. The shadow map cache redraws a pass when a level of a caster
 it draws changes (`doc/erhe/shadows.md` "Shadow map cache"); a camera move
 that changes no level keeps every cached spot and point pass.

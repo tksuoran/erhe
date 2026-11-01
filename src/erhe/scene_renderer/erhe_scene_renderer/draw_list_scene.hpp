@@ -1940,9 +1940,9 @@ private:
     // unbounded flags (capacity kept).
     std::array<std::vector<uint32_t>, max_lod_color_columns>         m_lod_color_inside;
     std::vector<uint32_t>                                            m_lod_unbounded;
-    // count_shadow_lod_changes(): the entries of one shadow list a shadow
+    // select_list_lod_levels(): the entries of one shadow list a shadow
     // column's pass draws (capacity kept).
-    std::vector<uint32_t>                                            m_lod_change_inside;
+    std::vector<uint32_t>                                            m_lod_kept;
     uint32_t                                                         m_lod_column_count{0};
     uint32_t                                                         m_lod_column_overflow_count{0};
     bool                                                             m_lod_column_overflow_logged{false};
@@ -1986,12 +1986,22 @@ private:
     [[nodiscard]] auto get_lod_level_slot(uint64_t frame_index) const -> const Lod_level_slot&;
     // The column assignment of the frame's views (classify_cull_views()).
     void assign_lod_columns(const Draw_list_slot& slot, Lod_level_slot& level_slot);
+    // The masks of one published list against every view of its purpose
+    // (classify_cull_views(); masks and pvs_culled_masks, null without the
+    // PVS rule, are the list's, from zero).
+    void classify_list_cull_masks(
+        const Draw_list&        draw_list,
+        std::vector<uint64_t>&  masks,
+        std::vector<uint64_t>*  pvs_culled_masks
+    );
     // The levels of one published list in every column of the frame
-    // (classify_cull_views(); level_words zeroed, the list's words of the
-    // frame's level slot): the selection of each color column and, for a
-    // shadow list, of each shadow column with the sampling views' levels
-    // (doc/plans/lod_gpu_selection.md section 4); previous_level_slot (null:
-    // none) holds the matched previous columns' levels (hysteresis).
+    // (classify_cull_views(), after the list's masks; level_words zeroed,
+    // the list's words of the frame's level slot): the selection of each
+    // color column and, for a shadow list, of each shadow column for the
+    // entries its view keeps, with the sampling views' levels, and the
+    // shadow column's changed_entries (doc/plans/lod_gpu_selection.md
+    // section 4); previous_level_slot (null: none) holds the matched
+    // previous columns' levels (hysteresis).
     void select_list_lod_levels(
         const Draw_list_slot&  slot,
         std::size_t            list_index,
@@ -2000,10 +2010,6 @@ private:
         float                  lod_coarsen_threshold2,
         std::vector<uint32_t>& level_words
     );
-    // After the frame's masks: each shadow column's changed_entries, the
-    // entries its pass draws whose level differs from the matched previous
-    // column's in previous_level_slot.
-    void count_shadow_lod_changes(const Draw_list_slot& slot, const Lod_level_slot& level_slot, const Lod_level_slot* previous_level_slot);
     // request_lod_level_capture(): the requested object and stage under the
     // mutex; the capture is filled by the classification of the next frame.
     void capture_lod_levels(const Draw_list_slot& slot, const Lod_level_slot& level_slot);

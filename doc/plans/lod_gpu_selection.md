@@ -58,12 +58,14 @@ The GPU levels serve the GPU compaction without a per-frame upload of an
 entries x columns region. The CPU cost lands in the render phase (R), which
 is 3.4 ms on Quest; step 2a measures it.
 
-Levels do not depend on visibility. A level is written for every entry of
-the column's purpose (and, for shadow entries, the color columns, section
-4), inside the frustum or not, occluded or not, PVS-culled or not. The
-occlusion boxes are the entry AABB and the PVS columns are per entry, so
-neither interacts with the level. A level stays stable while visibility
-flips, which the shadow map cache and hysteresis both need.
+Color levels do not depend on visibility. A color column's level is written
+for every color entry and every shadow entry (section 4), inside the
+frustum or not, occluded or not, PVS-culled or not. The occlusion boxes are
+the entry AABB and the PVS columns are per entry, so neither interacts with
+the level. A level stays stable while visibility flips, which the shadow
+map cache and hysteresis both need. A shadow column's level depends on its
+own view's frustum and reach (section 4, decision 4): the classification
+computes an entry's masks before its levels on both paths.
 
 Alternatives considered:
 
@@ -220,10 +222,14 @@ column is evaluated, whether or not a shadow view names it, so the row's
 history starts in the same frame as the color entry's (section 6). Then for
 each shadow view:
 
-- shadow mode `select`: inside at least one sampling color view's frustum:
-  the finest (smallest) of those color levels; otherwise the shadow view's
-  own selection (spot: perspective from the light with the map resolution;
-  point: the cube face projection, `projection_scale = resolution / 2`;
+- shadow mode `select`: an entry the shadow view does not keep (its mask
+  bit in the view is clear; a point light's column: in none of the six face
+  views) holds 0, it is not drawn in the pass (decision 4). A kept entry
+  inside at least one sampling color view's frustum: the finest (smallest)
+  of those color levels; any other kept entry: the shadow view's own
+  selection, evaluated for those entries only (spot: perspective from the
+  light with the map resolution; point: the cube face projection,
+  `projection_scale = resolution / 2`;
   directional pass: orthographic, `viewport_height / ortho_height` of the
   pass, which picks by shadow texel size);
 - shadow mode `template`: a sampling scene view has no LOD column (a view
@@ -317,6 +323,12 @@ regions"):
   So both see the same inputs from the same first frame and hold the same
   level, and a shadow view that starts naming a color view later reads a
   row that is already in step.
+- A shadow column's entry entering the view's frustum or reach reads the 0
+  written while it was not kept (section 4), so its own selection gives
+  `min(max(0, coarse), selected) = coarse`, the coarsening-threshold level
+  (the finer end of the band; a selection without history gives
+  `selected`). It was not drawn in the pass the frame before, so no shadow
+  pops.
 
 ## 7. Views
 
@@ -365,8 +377,11 @@ Decisions (user, 2026-11-01):
    level 0 in that column. This amends section 1's "levels do not depend on
    visibility" for the own selection of shadow columns only: color columns
    and the shadow entries' color rows stay visibility-independent. A caster
-   entering the light's reach starts that column's hysteresis fresh; it was
-   not drawn in the pass, so no shadow pops.
+   entering the light's reach reads the 0 written while it was outside, so
+   its own selection gives the coarsening-threshold level (the finer end of
+   the hysteresis band, section 6), up to one band finer than a selection
+   without history would give; it was not drawn in the pass, so no shadow
+   pops.
 5. The shadow map cache may decide from levels one frame late, so on
    devices where the compaction writes the commands
    (`Device_info::use_draw_indirect_count`) the CPU LOD lanes leave the
@@ -533,6 +548,17 @@ Bistro with chains on every mesh, threshold 4, gpu, median per frame):
 shadow entries); the classification's GPU timer 30.5 us before, 29.6 us
 after (the column table replaces the scan of every view). The Bistro level
 region is 60608 bytes per frame slot (two word groups).
+
+Decision 4 (section 9; the shadow columns' own selection only for the
+entries the light's view keeps, none for entries inside a sampling frustum,
+no distances for an orthographic column) leaves every drawn level as it
+was: render images with LOD on along a camera dolly (default, a torus with
+a spot and a point light, heavy, Bistro; both classification settings) are
+identical to the build before. Same protocol as above, both builds measured
+in one session: `classify_cull_views` 741 us before, 397 us after;
+`lod_lanes` 558 us before, 219 us after; the classification's GPU timer
+29.6 us before, 31.5 us after (the mask loop collects each shadow entry's
+kept columns).
 
 `write_lod_levels()` in `cull_classify.comp` scans every view of the frame
 per entry to find the views with a column (about 45 views for one column on

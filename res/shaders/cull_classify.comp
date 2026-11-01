@@ -93,14 +93,16 @@
 // clamped to the entry's min / max and to the chain. An entry that is not
 // under Lod_mode::automatic, or has no bounds, takes its template level (the
 // forced level under Lod_mode::forced, else 0); an entry without chain
-// level 0. Levels do not depend on visibility: every entry gets one in
-// every column of its purpose, and every shadow entry in every color
-// column too. Shadows (section 4): a shadow column of mode select (the
-// frame's classification gives a column only to such views) takes, for an
-// entry inside the frustum of one of its sampling color views (the planes
-// test of the view, or no bounds), the finest of those color levels; for
-// any other entry its own selection from the light (origin and projection
-// scale of the shadow view's record). Hysteresis (section 6): for a view with a previous
+// level 0. Color levels do not depend on visibility: every entry gets one
+// in every color column, a shadow entry too. Shadows (section 4): a shadow
+// column of mode select (the frame's classification gives a column only to
+// such views) holds 0 for an entry its views do not keep (no mask bit in
+// the column's view, or in any of a point light's six face views; section
+// 9, decision 4); a kept entry inside the frustum of one of the column's
+// sampling color views (the planes test of the view, or no bounds) takes
+// the finest of those color levels, any other kept entry its own selection
+// from the light (origin and projection scale of the shadow view's
+// record). Hysteresis (section 6): for a view with a previous
 // column the level is the entry's previous level in that column clamped to
 // [coarse, selected], coarse the level the same rule gives for the
 // coarsening threshold^2 (lod_header.z): a coarser level only once it
@@ -311,10 +313,13 @@ uint select_lod_level(uint lod_word, uint table_index, float max_axis_scale, flo
 // column), 0 in the others. The loop runs over the frame's columns through
 // the column table (cull_views.lod_column_views), the color columns first.
 // A shadow entry evaluates every color column (its color rows follow the
-// color entry's history) and its frustum, and a shadow column takes the
-// finest level of the sampling color columns whose frustum holds the entry
-// (cull_lanes::shadow_lod_lanes()), else its own selection.
-void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e, bool unbounded, float max_axis_scale)
+// color entry's history) and its frustum. A shadow column (decision 4 of
+// doc/plans/lod_gpu_selection.md section 9; cull_lanes::shadow_lod_lanes()):
+// 0 for an entry its views do not keep (kept: bit c for column c, the
+// entry's mask bits in the column's views, any of a point light's six
+// faces); for a kept entry the finest level of the sampling color columns
+// whose frustum holds it, else its own selection.
+void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e, bool unbounded, float max_axis_scale, uvec2 kept)
 {
     uint group_count = cull_views.lod_columns.y;
     if ((cull_views.lod_header.x == 0u) || (group_count == 0u)) {
@@ -334,36 +339,14 @@ void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e
             if (shadow_column && (purpose != 1u)) {
                 continue;
             }
-            uint  view     = column_view.x;
-            vec4  lod_info = cull_views.views[(14u * view) + 13u];
-            vec4  lod_view = cull_views.views[(14u * view) + 12u];
-            precise float gap_x     = sphere_axis_gap(c.x, e.x, lod_view.x);
-            precise float gap_y     = sphere_axis_gap(c.y, e.y, lod_view.y);
-            precise float gap_z     = sphere_axis_gap(c.z, e.z, lod_view.z);
-            precise float distance2 = ((gap_x * gap_x) + (gap_y * gap_y)) + (gap_z * gap_z);
-            uint previous_level = lod_previous_level_none;
-            if (lod_info.z >= 0.0) {
-                uint previous_column = uint(lod_info.z);
-                uint previous_word   = cull_lod_previous_levels.words[((previous_column / 8u) * entry_count) + entry];
-                previous_level = (previous_word >> (4u * (previous_column % 8u))) & 0xfu;
-            }
-            uint level = select_lod_level(lod_word, table_index, max_axis_scale, distance2, unbounded, lod_view, (lod_info.y > 0.5), previous_level);
-            if (!shadow_column) {
-                if (purpose == 1u) {
-                    bool inside = true;
-                    if (!unbounded) {
-                        uint plane_count = uint(cull_views.views[(14u * view) + 7u].z);
-                        for (uint plane = 0u; plane < plane_count; ++plane) {
-                            if (!plane_keeps(cull_views.views[(14u * view) + plane], c, e)) {
-                                inside = false;
-                            }
-                        }
-                    }
-                    if (inside) {
-                        color_inside |= (1u << column);
-                    }
+            uint view   = column_view.x;
+            uint level  = 0u;
+            bool select = true;
+            if (shadow_column) {
+                uint kept_bit = (column < 32u) ? ((kept.x >> column) & 1u) : ((kept.y >> (column - 32u)) & 1u);
+                if (kept_bit == 0u) {
+                    continue; // not drawn in the pass: level 0
                 }
-            } else {
                 // The sampling color columns holding the entry: the finest
                 // of their levels (the color columns share words[0]).
                 uint sampling = column_view.z & color_inside;
@@ -374,7 +357,42 @@ void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e
                             finest = min(finest, (words[0] >> (4u * color_column)) & 0xfu);
                         }
                     }
-                    level = finest;
+                    level  = finest;
+                    select = false;
+                }
+            }
+            if (select) {
+                vec4 lod_info     = cull_views.views[(14u * view) + 13u];
+                vec4 lod_view     = cull_views.views[(14u * view) + 12u];
+                bool orthographic = (lod_info.y > 0.5);
+                // An orthographic view reads no distance (d2 = 1).
+                precise float distance2 = 1.0;
+                if (!orthographic) {
+                    precise float gap_x = sphere_axis_gap(c.x, e.x, lod_view.x);
+                    precise float gap_y = sphere_axis_gap(c.y, e.y, lod_view.y);
+                    precise float gap_z = sphere_axis_gap(c.z, e.z, lod_view.z);
+                    distance2 = ((gap_x * gap_x) + (gap_y * gap_y)) + (gap_z * gap_z);
+                }
+                uint previous_level = lod_previous_level_none;
+                if (lod_info.z >= 0.0) {
+                    uint previous_column = uint(lod_info.z);
+                    uint previous_word   = cull_lod_previous_levels.words[((previous_column / 8u) * entry_count) + entry];
+                    previous_level = (previous_word >> (4u * (previous_column % 8u))) & 0xfu;
+                }
+                level = select_lod_level(lod_word, table_index, max_axis_scale, distance2, unbounded, lod_view, orthographic, previous_level);
+            }
+            if (!shadow_column && (purpose == 1u)) {
+                bool inside = true;
+                if (!unbounded) {
+                    uint plane_count = uint(cull_views.views[(14u * view) + 7u].z);
+                    for (uint plane = 0u; plane < plane_count; ++plane) {
+                        if (!plane_keeps(cull_views.views[(14u * view) + plane], c, e)) {
+                            inside = false;
+                        }
+                    }
+                }
+                if (inside) {
+                    color_inside |= (1u << column);
                 }
             }
             words[column / 8u] |= (level & 0xfu) << (4u * (column % 8u));
@@ -408,8 +426,6 @@ void main()
     uint purpose   = uint(extent_w.w);
     bool unbounded = !(e.x >= 0.0);
 
-    write_lod_levels(entry, entry_count, purpose, c, e, unbounded, center_w.w);
-
     bool  occlusion        = (cull_views.header.z != 0u);
     bool  previous         = (cull_views.header.w != 0u);
     bool  pvs              = (cull_views.pvs_header.x != 0u);
@@ -421,6 +437,10 @@ void main()
     uvec2 occlusion_tests  = uvec2(0u, 0u);
     uvec2 occlusion_bits   = uvec2(0u, 0u);
     uvec2 occlusion_culled = uvec2(0u, 0u);
+    // The LOD columns of the shadow views keeping a shadow entry (bit c:
+    // column c; write_lod_levels()).
+    bool  lod_kept_views   = (purpose == 1u) && (cull_views.lod_header.x != 0u) && (cull_views.lod_columns.y != 0u);
+    uvec2 lod_kept         = uvec2(0u, 0u);
     for (uint view = 0u; view < view_count; ++view) {
         uint view_group = view / 64u;
         if (view_group != group) {
@@ -499,6 +519,13 @@ void main()
         }
         if (inside && !occluded) {
             bits |= view_bit;
+            if (lod_kept_views) {
+                float lod_column = cull_views.views[base + 13u].x;
+                if (lod_column >= 0.0) {
+                    uint kept_column = uint(lod_column);
+                    lod_kept |= (kept_column < 32u) ? uvec2(1u << kept_column, 0u) : uvec2(0u, 1u << (kept_column - 32u));
+                }
+            }
         }
         if (occluded) {
             occlusion_culled |= view_bit;
@@ -523,4 +550,7 @@ void main()
     if (pvs) {
         write_pvs_culled_words(group, entry_count, entry, pvs_culled);
     }
+    // The levels after the masks: a shadow column selects only for the
+    // entries its views keep.
+    write_lod_levels(entry, entry_count, purpose, c, e, unbounded, center_w.w, lod_kept);
 }
