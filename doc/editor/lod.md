@@ -63,14 +63,32 @@ height over `tan(up) - tan(down)` of the camera's field of view sides
 orthographic camera it is the height over the view's vertical extent, with
 distance 1. `distance` runs from the camera position to the closest point of
 the mesh's world AABB; inside the box the column reads "inside". The
-`Drawn` column marks the level whose index range the mesh's color draw-list
-entry for that primitive holds (`find_draw_list_entry_lod_level()`, which
-the MCP `get_lod_info` uses as well). A line under the table gives the
-distance and the mesh's max axis scale.
+`Drawn` column marks the level that viewport drew the mesh's color
+draw-list entry for that primitive at in the last rendered frame. Lines
+under the table give the distance and the mesh's max axis scale, and the
+drawn level with its source ("automatic selection" when the viewport's LOD
+column selected it, "template range" for the forced level or level 0) and
+the frame. Each draw of the window requests the selected meshes' drawn
+levels (`Lod_drawn_levels`, below), so they arrive one rendered frame
+later and a closed window requests nothing.
 
 The table is read when the window draws, under the scene's item host lock,
 into member scratch vectors that are cleared after each draw, so no
 reference to scene content outlives the draw.
+
+**Drawn levels.** `Lod_drawn_levels` (`src/editor/renderers/lod_drawn_levels.{hpp,cpp}`,
+owned by `App_rendering`) carries the levels the views drew to the main
+thread (`doc/plans/lod_gpu_selection.md` section 5). A requester (the LOD
+window, MCP `get_lod_info`) names meshes of one scene (`request()`,
+one-shot); the next prepare phase resolves them, after the draw lists were
+published, to their primitives' color entries in the frame's published
+lists (`Draw_list_scene::find_published_color_entry()`) into the frame's
+query slot; in the render phase each viewport (in its rendergraph node's
+execute, after the frame's culling classification) and the headset record
+the level each entry draws in their color culling view
+(`Draw_list_scene::get_published_entry_lod_level()`) into a
+`Render_frame_results` slot, which the main thread reads for the last
+rendered frame (`doc/editor/render_thread.md`).
 
 ## Config section
 
@@ -115,20 +133,38 @@ device with the count draw, also in its compute pass with the same
 arithmetic, bit for bit (`doc/plans/lod_gpu_selection.md` steps 2a and
 2b), so every color draw-list pass draws it, whether the CPU writes its
 commands or the GPU generates them; `get_cull_classification_check`
-compares the two (`lod_mismatch_count`). Not yet selected: the shadow
+compares the two (`lod_mismatch_count`). The edge lines and the selection
+outline trace the selected level (below), the LOD window's "Drawn" column
+and MCP `get_lod_info` (`drawn`) report it per view, and MCP
+`get_lod_stats` the entries and triangles each draw-list color pass drew
+per level: counted by the CPU command writer
+(`Draw_indirect_buffer::update(..., level_counts)`), or with GPU-generated
+commands by the compaction per job, read back with the retired frame's
+counts (`Retired_gpu_color_counts::lod_counts`; frames in flight late, so
+they include occlusion like the drawn counts). Not yet selected: the shadow
 passes and skinned meshes draw the template range (the forced level, or
-level 0); there is no hysteresis, and
-the edge lines and the LOD window's "Drawn" column still show the forced
-level. MCP `get_lod_selection` reports the levels of one frame for a mesh,
-per column, with each column's origin and projection scale.
+level 0), and there is no hysteresis. MCP `get_lod_selection` reports the
+levels of one frame for a mesh, per column, with each column's origin and
+projection scale.
 
 ## Edge lines and the selection outline
 
 The edge-line passes (the selection outline, "Content edge lines" selected /
 not selected, the ghost edge lines) draw the edges of the mesh's LOD level
 (level edge lines: `doc/erhe/meshoptimizer_integration.md` "Level of detail"), so the outline traces the drawn
-silhouette. `App_rendering::prepare_wide_line_feed()` feeds each mesh at
-`get_forced_lod_level()` of its `Draw_list_scene` record. Edge lines are not
+silhouette. `App_rendering::prepare_wide_line_feed()` (prepare phase)
+writes one record per mesh primitive at `get_forced_lod_level()` of its
+`Draw_list_scene` record, with the edge lines of every level of the
+primitive's chain and the position of its color entry in the lists
+published for the frame (`Content_wide_line_renderer::prepare_mesh()`,
+`doc/erhe/scene_renderer.md`). The render phase queues the feed after the
+frame's culling classification (`Content_wide_line_renderer::add_feed()`)
+with the view's color culling view (`Composer_prepared::color_cull_view`,
+set by `Composer::add_cull_views()`; the headset's union view): a record
+whose entry's level was selected by the view's LOD column draws that
+level's edge lines, the same level the view's fill draws; otherwise (the
+selection off, a view without a column or without draw-list passes) the
+record draws the forced level it was prepared with. Edge lines are not
 content: the view's shader debug mode and the path its fill takes do not
 change them. The selection silhouette the outline is masked by is drawn at
 the same level: the selected fills and, with the selection fill off or for
@@ -158,3 +194,9 @@ wait for `get_async_status` idle, drag the slider (`mouse_drag`), and compare
 `get_lod_info` and `render_scene_image` md5s per level, after undo / redo,
 after "Release" (equal to the image without `Lod`) and after "Clear for
 selection".
+
+`scripts/lod_dolly_verify.py` checks the automatic selection: the switch
+distances while it dollies the camera, `render_scene_image` at automatic
+level L against forced level L, and with `--outline` the selected torus's
+viewport (the selection outline, with the selection fill on and off) at
+automatic level L against forced level L, and `get_lod_info`'s drawn level.

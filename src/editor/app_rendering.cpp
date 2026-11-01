@@ -131,6 +131,7 @@ App_rendering::App_rendering(
     , m_capture_frame_command{commands, app_context}
     , m_pipeline_passes      {graphics_device, mesh_memory, programs, graphics_device.get_reverse_depth()}
     , m_composer             {"Main Composer"}
+    , m_lod_drawn_levels     {graphics_device.get_number_of_frames_in_flight()}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -918,6 +919,10 @@ void App_rendering::prepare_composition(const uint64_t frame_index, const std::s
     ERHE_PROFILE_FUNCTION();
     erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
 
+    // The requested meshes' color entries in the lists published for this
+    // frame, whose drawn levels the views record in the render phase.
+    m_lod_drawn_levels.prepare(frame_index);
+
     if (m_context.scene_views != nullptr) {
         for (const std::shared_ptr<Viewport_scene_view>& viewport_scene_view : m_context.scene_views->get_viewport_scene_views()) {
             if (viewport_scene_view) {
@@ -1102,9 +1107,16 @@ void App_rendering::prepare_wide_line_feed(
         return;
     }
     // The forced levels as the draw lists registered them (flushed earlier
-    // in this M2). Edge lines are not content: they draw the mesh's level
-    // whatever path and shader debug mode the view's fill takes.
+    // in this M2), and the color entries of the lists published for this
+    // frame, whose level the render phase reads in the view's culling view
+    // (Content_wide_line_renderer::add_feed()). Edge lines are not content:
+    // they draw the mesh's level whatever path and shader debug mode the
+    // view's fill takes.
     const erhe::scene_renderer::Draw_list_scene* draw_list_scene = content_scene_root->get_draw_list_scene();
+    const erhe::scene_renderer::Content_wide_line_draw_lists draw_lists{
+        .draw_list_scene = draw_list_scene,
+        .frame_index     = m_context.graphics_device->get_frame_index()
+    };
 
     // Feeds the meshes of one composition pass.
     const auto feed_pass = [&](const Composition_pass* pass) {
@@ -1150,6 +1162,7 @@ void App_rendering::prepare_wide_line_feed(
                         settings,
                         line_width,
                         group,
+                        draw_lists,
                         out
                     );
                 }

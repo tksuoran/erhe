@@ -274,6 +274,17 @@ public:
     std::size_t             draw_list_entry_count  {0};
     std::size_t             draw_list_culled_count {0};
     uint64_t                draw_list_counts_frame_index{0};
+    // The drawn entries and their triangles per level of detail
+    // (doc/plans/lod_gpu_selection.md section 5), from the same frame as
+    // draw_list_entry_count: counted by the CPU command writer, or with
+    // GPU-generated commands the compaction's per-job counts.
+    erhe::scene_renderer::Lod_level_counts lod_counts{};
+    // The pass drew GPU-generated commands (Draw_statistics::gpu_generated),
+    // and whether its counts above are known: always for CPU-written
+    // commands; with GPU-generated commands once a retired frame's count
+    // readback named the pass (all counts are 0 before).
+    bool                    draw_list_gpu_generated{false};
+    bool                    draw_list_counts_ready {false};
     // An occlusion test pass: the counts of its view in the newest retired
     // frame whose occlusion words were decoded - only frames an occlusion
     // check (MCP get_occlusion_check) recorded are

@@ -42,6 +42,20 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: CPU consumers of the selected level of detail
+  (doc/plans/lod_gpu_selection.md step 3): `Draw_list_published_entry`,
+  `Draw_list_scene::find_published_color_entry()`,
+  `Draw_list_scene::get_published_entry_lod_level()` with `Drawn_lod_level`,
+  `Drawn_lod_level_source` and `c_str(Drawn_lod_level_source)`;
+  `Lod_level_counts` with `Draw_statistics::lod_counts`,
+  `Retired_gpu_color_counts::lod_counts` and the optional `level_counts`
+  argument of `Draw_indirect_buffer::update(const Draw_list&, ...)`;
+  `Gpu_cull_classifier::lod_count_levels` and `lod_count_bytes_per_job`
+  (the per-job level counts after the count slots);
+  `Content_wide_line_level_edges`, `Content_wide_line_draw_lists`,
+  `Content_wide_line_lod_view`, `Content_wide_line_feed::level_edges` and
+  the `Content_wide_line_record` fields `first_level_edges`,
+  `level_edge_count` and `color_entry`.
 - `erhe::scene_renderer`: level of detail selection on the GPU
   (doc/plans/lod_gpu_selection.md step 2b): `Gpu_cull_classifier`
   `lod_templates_binding_point`, `lod_table_binding_point`,
@@ -1237,6 +1251,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Content_wide_line_renderer::prepare_mesh()` takes a
+  `const Content_wide_line_draw_lists&` before the feed (the draw lists the
+  records name their color entries in; `{}` for none) and also writes the
+  edge lines of every level of a primitive's chain; `add_feed()` takes a
+  `const Content_wide_line_lod_view&` (`{}`: every record draws the level it
+  was prepared with) and draws the level the view's LOD column selected.
 - `erhe::scene_renderer`: `Draw_list_scene::publish()` takes the frame's
   `Lod_frame_settings` (after `pvs`), and `add_cull_view()` an optional
   `Lod_view` (after the PVS query box), which joins the view's identity.

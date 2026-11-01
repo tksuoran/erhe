@@ -176,6 +176,12 @@ public:
     // Per job: the uint32 draw count (what the count draw reads, at the
     // job's first word) and the chunk's entries passing the filter.
     static constexpr std::size_t  count_bytes_per_job     {2 * sizeof(uint32_t)};
+    // After the count slots of all jobs, per job its level of detail counts
+    // (doc/plans/lod_gpu_selection.md section 5): the commands the job wrote
+    // per level, then the triangles (index_count / 3) they draw per level
+    // (cull_compact.comp; Lod_level_counts).
+    static constexpr std::size_t  lod_count_levels        {8};
+    static constexpr std::size_t  lod_count_bytes_per_job {2 * lod_count_levels * sizeof(uint32_t)};
 
     // The occlusion test's render pipeline (occlusion_test.vert / .frag).
     static constexpr unsigned int occlusion_view_binding_point       {0}; // uniform, vertex

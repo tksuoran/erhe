@@ -429,13 +429,16 @@ public:
 
 // The GPU command generation's counts of one color selection of a retired
 // frame (Draw_list_scene::get_retired_gpu_color_counts()): entries drawn,
-// and entries passing the filter (culled = filtered - drawn).
+// entries passing the filter (culled = filtered - drawn) and the drawn
+// entries per level of detail.
 class Retired_gpu_color_counts
 {
 public:
-    uint64_t frame_index{0};
-    uint32_t drawn      {0};
-    uint32_t filtered   {0};
+    uint64_t         frame_index{0};
+    uint32_t         drawn      {0};
+    uint32_t         filtered   {0};
+    // The drawn entries per level of detail (Draw_statistics::lod_counts).
+    Lod_level_counts lod_counts {};
 };
 
 // The GPU command generation's counts of one shadow view over its jobs, read
@@ -1157,6 +1160,23 @@ public:
     // published list list_index in the view's column (render phase, after
     // the frame's classification); empty for a view without a column.
     [[nodiscard]] auto get_lod_level(uint64_t frame_index, Cull_view cull_view, std::size_t list_index, std::size_t entry_index) const -> std::optional<uint32_t>;
+    // The level a published color entry draws in a view (render phase,
+    // after the frame's classification; doc/plans/lod_gpu_selection.md
+    // section 5): the level the classification selected in the view's LOD
+    // column, or for a view without a column (Cull_view::none included) the
+    // level of the entry's template range (cull_lanes::
+    // get_lod_template_level()). Verifies that entry names a color entry of
+    // the frame's published lists that belongs to entry.object_index and
+    // entry.mesh_primitive_index (find_published_color_entry() resolved it
+    // for this frame).
+    [[nodiscard]] auto get_published_entry_lod_level(uint64_t frame_index, Cull_view cull_view, const Draw_list_published_entry& entry) const -> Drawn_lod_level;
+    // Main thread, prepare phase, after publish(frame_index): where the
+    // color entry of mesh primitive primitive_index of mesh sits in the
+    // lists published for frame_index; invalid (Draw_list_published_entry::
+    // none) when the mesh is not registered or the primitive has no color
+    // entry. Verifies that the slot was published for frame_index from the
+    // current entry layout (no entry was added or removed since the publish).
+    [[nodiscard]] auto find_published_color_entry(uint64_t frame_index, const erhe::scene::Mesh* mesh, std::size_t primitive_index) const -> Draw_list_published_entry;
     // Diagnostic (main thread): request_...() asks the next classified
     // frame to copy the CPU levels of every column for the entries of
     // object (a new request replaces an earlier one); poll_...() returns
@@ -2106,6 +2126,7 @@ private:
     class Retired_color_selection_counts
     {
     public:
+        Lod_level_counts lod_counts{};
         Gpu_command_key key     {};
         uint32_t        drawn   {0};
         uint32_t        filtered{0};

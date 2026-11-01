@@ -2725,7 +2725,7 @@ void Draw_list_scene::draw_list_chunks(
         } else {
             primitive_range = &shared_records(draw_list, draw_list_index, begin, end, max_per_chunk, primitive_buffer, frame_index);
         }
-        Draw_indirect_buffer_range draw_indirect_range = draw_indirect_buffer.update(draw_list, begin, end, entry_passes, record_layout, lod_levels_used);
+        Draw_indirect_buffer_range draw_indirect_range = draw_indirect_buffer.update(draw_list, begin, end, entry_passes, record_layout, lod_levels_used, &statistics.lod_counts);
         if (record_layout == Draw_record_layout::packed) {
             ERHE_VERIFY(draw_indirect_range.draw_indirect_count == primitive_count);
         } else {
@@ -3063,7 +3063,8 @@ auto Draw_list_scene::get_retired_gpu_color_counts(const Gpu_command_key& key) c
             return Retired_gpu_color_counts{
                 .frame_index = m_retired_gpu_shadow_counts.frame_index,
                 .drawn       = counts.drawn,
-                .filtered    = counts.filtered
+                .filtered    = counts.filtered,
+                .lod_counts  = counts.lod_counts
             };
         }
     }
@@ -3468,6 +3469,76 @@ auto Draw_list_scene::get_lod_level(
     const std::size_t             word_index  = ((column / 8) * entry_count) + entry_index;
     ERHE_VERIFY(word_index < words.size());
     return (words[word_index] >> (4u * (column % 8))) & 0xfu;
+}
+
+auto c_str(const Drawn_lod_level_source source) -> const char*
+{
+    switch (source) {
+        case Drawn_lod_level_source::selected:       return "selected";
+        case Drawn_lod_level_source::template_range: return "template";
+        default:                                     return "?";
+    }
+}
+
+auto Draw_list_scene::get_published_entry_lod_level(
+    const uint64_t                   frame_index,
+    const Cull_view                  cull_view,
+    const Draw_list_published_entry& entry
+) const -> Drawn_lod_level
+{
+    const std::vector<Draw_list>& draw_lists = get_published_draw_lists(frame_index);
+    ERHE_VERIFY(entry.is_valid() && (entry.draw_list_index < draw_lists.size()));
+    const Draw_list& draw_list = draw_lists[entry.draw_list_index];
+    ERHE_VERIFY(draw_list.key.purpose == Draw_purpose::color);
+    ERHE_VERIFY(entry.entry_index < draw_list.entries.size());
+    const Draw_list_entry& list_entry = draw_list.entries[entry.entry_index];
+    // find_published_color_entry() resolved the entry against this frame's
+    // slot: it is the object's entry for the primitive.
+    ERHE_VERIFY((list_entry.object_index == entry.object_index) && (list_entry.mesh_primitive_index == entry.mesh_primitive_index));
+    const std::optional<uint32_t> selected = get_lod_level(frame_index, cull_view, entry.draw_list_index, entry.entry_index);
+    if (selected.has_value()) {
+        return Drawn_lod_level{.level = selected.value(), .source = Drawn_lod_level_source::selected};
+    }
+    return Drawn_lod_level{.level = cull_lanes::get_lod_template_level(list_entry.lod_word), .source = Drawn_lod_level_source::template_range};
+}
+
+auto Draw_list_scene::find_published_color_entry(
+    const uint64_t                 frame_index,
+    const erhe::scene::Mesh* const mesh,
+    const std::size_t              primitive_index
+) const -> Draw_list_published_entry
+{
+    assert_main_thread();
+    const Draw_list_slot& slot = get_published_slot(frame_index);
+    // The object's locations name the working lists; they name the slot's
+    // lists while no entry was added or removed since the publish.
+    ERHE_VERIFY(slot.entry_layout_serial == m_entry_layout_serial);
+    const Draw_list_object_id     object_id = find_object(mesh);
+    const Draw_list_object* const object    = get_object(object_id);
+    if (object == nullptr) {
+        return Draw_list_published_entry{};
+    }
+    const uint32_t object_index = object_id.index;
+    for (const Draw_list_entry_location& location : object->locations) {
+        ERHE_VERIFY(location.draw_list_index < slot.lists.size());
+        const Draw_list& draw_list = slot.lists[location.draw_list_index];
+        if (draw_list.key.purpose != Draw_purpose::color) {
+            continue;
+        }
+        ERHE_VERIFY(location.entry_index < draw_list.entries.size());
+        const Draw_list_entry& entry = draw_list.entries[location.entry_index];
+        ERHE_VERIFY(entry.object_index == object_index);
+        if (entry.mesh_primitive_index != primitive_index) {
+            continue;
+        }
+        return Draw_list_published_entry{
+            .draw_list_index      = location.draw_list_index,
+            .entry_index          = location.entry_index,
+            .object_index         = object_index,
+            .mesh_primitive_index = entry.mesh_primitive_index
+        };
+    }
+    return Draw_list_published_entry{};
 }
 
 void Draw_list_scene::request_lod_level_capture(const Draw_list_object_id object)

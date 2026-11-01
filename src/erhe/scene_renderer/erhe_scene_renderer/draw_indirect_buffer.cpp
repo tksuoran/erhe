@@ -1,4 +1,5 @@
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/cull_lanes.hpp"
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -259,7 +260,8 @@ auto Draw_indirect_buffer::update(
     const std::size_t                   end,
     const std::span<const std::uint8_t> entry_passes,
     const Draw_record_layout            record_layout,
-    const Draw_list_lod_levels* const   lod_levels
+    const Draw_list_lod_levels* const   lod_levels,
+    Lod_level_counts* const             level_counts
 ) -> Draw_indirect_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -289,12 +291,21 @@ auto Draw_indirect_buffer::update(
         }
         uint32_t index_count = entry.index_count;
         uint32_t first_index = entry.first_index;
+        uint32_t drawn_level = 0;
         if ((lod_levels != nullptr) && (entry.lod_table_index != lod_table_index_none)) {
             const uint32_t    level = (lod_levels->level_words[i] >> lod_levels->nibble_shift) & 0xfu;
             const std::size_t row   = static_cast<std::size_t>(entry.lod_table_index) + level;
             ERHE_VERIFY(row < lod_levels->lod_table.size());
             index_count = lod_levels->lod_table[row].x;
             first_index = lod_levels->lod_table[row].y;
+            drawn_level = level;
+        } else if (level_counts != nullptr) {
+            drawn_level = cull_lanes::get_lod_template_level(entry.lod_word);
+        }
+        if (level_counts != nullptr) {
+            ERHE_VERIFY(drawn_level < Lod_level_counts::level_count);
+            level_counts->entries  [drawn_level] += 1;
+            level_counts->triangles[drawn_level] += index_count / 3u;
         }
         if (m_max_index_count_enable) {
             index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));

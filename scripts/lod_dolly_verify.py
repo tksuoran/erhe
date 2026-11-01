@@ -27,8 +27,20 @@ every image pose), and the images come from the GPU-generated commands;
 with both, the automatic image of each level must also be byte-identical
 between cpu and gpu.
 
+With --outline (doc/plans/lod_gpu_selection.md step 3; threshold 16 pixels,
+so the coarsest level's pose stays near), per level L the
+viewport camera is placed inside L's distance range for the viewport's own
+projection scale with the torus selected, and the viewport (cropped from
+capture_screenshot to the viewport window's content region, so other
+windows' text does not count) is captured with the automatic selection and again with Lod forced to
+L; the two crops must be identical, with the selection fill on and off (the
+selected style's polygon_fill), in every classification run: the selection
+outline traces the level the fill draws. A crop forced to the next level
+must differ (negative control). Needs Pillow.
+
 Usage: python3 scripts/lod_dolly_verify.py [--editor PATH] [--threshold PIXELS]
                                            [--classification cpu|gpu|both]
+                                           [--outline]
 Exit code 0 = pass.
 """
 
@@ -51,6 +63,9 @@ DEFAULT_EDITOR = os.path.join("build_xcode_metal_headless", "bin", "Debug", "edi
 TORUS_POSITION = [0.0, 0.8, -4.0]
 LEVEL_COUNT    = 6
 DOLLY_FACTOR   = 1.02  # each dolly step moves the camera 2 % farther
+# The outline check's lod_threshold_pixels: large, so the coarsest level's
+# pose is near enough for the torus to cover the pixels the levels differ in.
+OUTLINE_THRESHOLD = 16.0
 
 
 def launch_editor(editor_exe):
@@ -247,6 +262,69 @@ class Dolly:
         self.call("set_graphics_preset", {"shadow_enable": True})
         return automatic
 
+    def viewport_crop(self, path):
+        """capture_screenshot cropped to the inside of the viewport window; the crop's md5."""
+        from PIL import Image
+        self.call("capture_screenshot", {"path": path})
+        windows = self.call("get_imgui_windows").get("windows", [])
+        # The viewport window's content region (its image).
+        viewports = [w for w in windows if ("Viewport_window::imgui()" in str(w.get("name", ""))) and not w.get("hidden")]
+        if not viewports:
+            raise RuntimeError(f"no viewport window: {[w.get('name') for w in windows]}")
+        rect  = max(viewports, key=lambda w: w["width"] * w["height"])
+        hosts = self.call("get_imgui_hosts").get("hosts", [])
+        host  = next((h for h in hosts if h.get("default")), None)
+        image = Image.open(path).convert("RGB")
+        sx = image.width  / float(host["width"])  if host else 1.0
+        sy = image.height / float(host["height"]) if host else 1.0
+        box  = (int(rect["x"] * sx), int(rect["y"] * sy), int((rect["x"] + rect["width"]) * sx), int((rect["y"] + rect["height"]) * sy))
+        crop = image.crop(box)
+        crop.save(path.replace(".png", "_crop.png"))
+        return hashlib.md5(crop.tobytes()).hexdigest()
+
+    def outline(self, out_dir):
+        """The selected torus's viewport crop at automatic level L equals the crop with Lod forced to L."""
+        self.call("select_items", {"scene_name": self.scene, "ids": [self.torus]})
+        # Shadow passes draw the template range until step 5 (as images()).
+        saved_threshold = self.threshold
+        self.threshold  = OUTLINE_THRESHOLD
+        self.call("set_graphics_preset", {"shadow_enable": False, "lod_threshold_pixels": self.threshold})
+        # The viewport column's switch distances (sample() reads the
+        # column at the camera position).
+        _, _, _, switch = self.sample(TORUS_POSITION[2] + 6.0, 0)
+        frame = 0
+        for level in range(LEVEL_COUNT):
+            low      = switch[level] if level > 0 else 0.5 * switch[1]
+            high     = switch[level + 1] if (level + 1) < LEVEL_COUNT else 1.5 * switch[-1]
+            distance = math.sqrt(low * high) if level > 0 else 0.5 * (low + high)
+            z = TORUS_POSITION[2] + self.box_half_z + distance
+            frame, measured, selected, _ = self.sample(z, frame)
+            check_true(f"outline pose d={measured:.3f} selects level {level}", selected == level, f"selected {selected}")
+            for fill in (True, False):
+                self.call("set_viewport_style", {"style": "selected", "polygon_fill": fill})
+                hashes = []
+                other = (level + 1) % LEVEL_COUNT
+                for mode, forced_level in (("automatic", None), ("forced", level), ("other", other)):
+                    if forced_level is not None:
+                        for prop, value in (("Lod.apply_lod", "true"), ("Lod.mode", "Forced"), ("Lod.forced_level", str(forced_level))):
+                            self.call("set_item_property", {"item_id": self.torus, "property": prop, "value": value})
+                    # Frames rendered after the edit (the selection reads
+                    # the frame classified after the move).
+                    frame = self.selection(frame)["frame_index"]
+                    frame = self.selection(frame + 1)["frame_index"]
+                    path = os.path.join(out_dir, f"lod_outline_{self.classification}_level{level}_fill{int(fill)}_{mode}.png")
+                    hashes.append(self.viewport_crop(path))
+                self.call("set_item_property", {"item_id": self.torus, "property": "Lod.apply_lod", "value": "false"})
+                check_true(f"outline at automatic level {level} (fill {fill}) equals forced level {level}", hashes[0] == hashes[1], f"{hashes[:2]}")
+                check_true(f"outline at forced level {other} (fill {fill}) differs from level {level}", hashes[2] != hashes[1])
+            reply = self.call("get_lod_info", {"scene_name": self.scene, "node_id": self.torus})
+            drawn = [d for d in reply.get("drawn", []) if d["source"] == "selected"]
+            check_true(f"get_lod_info reports the viewport's drawn level {level}", any(d["level"] == level for d in drawn), f"drawn {reply.get('drawn')} frame {reply.get('drawn_frame_index')}")
+        self.call("set_viewport_style", {"style": "selected", "polygon_fill": True})
+        self.call("select_items", {"scene_name": self.scene, "ids": []})
+        self.threshold = saved_threshold
+        self.call("set_graphics_preset", {"shadow_enable": True, "lod_threshold_pixels": self.threshold})
+
     def measure_box(self):
         reply = self.selection(0)
         entry = [e for e in reply["entries"] if e["purpose"] == "color"][0]
@@ -263,6 +341,8 @@ def main():
     parser.add_argument("--out", default=os.path.join(REPO_ROOT, "logs", "lod_dolly"))
     parser.add_argument("--classification", choices=("cpu", "gpu", "both"), default="both",
                         help="culling_classification setting(s) to run (both: cpu, then gpu, and the images compared)")
+    parser.add_argument("--outline", action="store_true",
+                        help="also compare the selected torus's viewport at automatic and forced levels (selection outline)")
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -281,6 +361,8 @@ def main():
             print(f"--- culling classification {classification}")
             dolly.dolly()
             images[classification] = dolly.images(args.out)
+            if args.outline:
+                dolly.outline(args.out)
         if len(classifications) == 2:
             for level, cpu_hash in images["cpu"].items():
                 gpu_hash = images["gpu"][level]

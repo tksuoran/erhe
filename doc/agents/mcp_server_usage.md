@@ -1205,7 +1205,16 @@ when none matches). Per primitive `{primitive_index, name, prepared,
 has_optimized_variant, optimization_hold, lod_settings (null when unset),
 has_chain, generation_seconds, levels}`, each level `{level, first_index,
 index_count, triangle_count, edge_count, error}` (`edge_count`: the level's
-own edge lines, 0 for level 0, which draws the original variant's). A level
+own edge lines, 0 for level 0, which draws the original variant's).
+`drawn` lists, per view of the rendered frame `drawn_frame_index`, the level
+each view drew the mesh's color entries at: `{view (the viewport's scene
+view name, ? for another view), mesh_primitive_index, level, source}`,
+`source` `selected` (the view's automatic level of detail selection,
+`doc/editor/lod.md` "Drawn levels") or `template` (the entry's template
+range: the forced level, or level 0). The call waits for a rendered frame
+that recorded them, a few frames; for a scene no view renders it answers
+after 16 frames with `drawn: []` and `drawn_frame_index: null`. It cannot
+run inside `batch`. A level
 is forced with the property
 tools: `set_item_property` `Lod.apply_lod` true, `Lod.mode` `Forced` and
 `Lod.forced_level` on the mesh node or on a node above it.
@@ -1229,6 +1238,29 @@ dollies a camera with it.
 
 ```bash
 python3 scripts/mcp_call.py get_lod_selection '{"scene_name":"Default Scene","node_name":"torus"}'
+```
+
+### get_lod_stats
+
+The level of detail counts of the draw-list color passes of the last
+rendered frame (`doc/editor/lod.md` "Automatic selection"). Optional
+`scene_view` keeps the passes that scene view (its settings key, as
+`get_composition_passes` `last_scene_view` reports it) drew. Returns
+`{frame_index, passes, entry_count, triangle_count, levels}`; per pass that
+drew through the draw lists `{name, scene_view, gpu_generated,
+counts_ready, counts_frame_index, entry_count, triangle_count,
+drawn_entry_count, levels}` (`gpu_generated`: the pass drew GPU-generated
+commands; `counts_ready` false: their count readback has not named the
+pass yet and every count is 0), `levels` eight `{level, entries, triangles}`: the entries drawn
+at each level (the selected level, or the template range's) and their
+triangles. `counts_frame_index` 0 means the CPU command writer counted the
+frame's own commands; otherwise the counts are the GPU compaction's for
+that retired frame (frames in flight late, occlusion included). The totals
+sum the passes. With occlusion off and a still camera the `cpu` and `gpu`
+`culling_classification` settings report equal counts.
+
+```bash
+python3 scripts/mcp_call.py get_lod_stats '{}'
 ```
 
 ## Physics Tools

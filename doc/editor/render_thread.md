@@ -300,8 +300,9 @@ new code.
   the owner did not render is absent, never an older frame's. The results
   are the shadow node's `Shadow_frame_result` (self-contained light
   projections, draw statistics, CPU time), `Composition_pass_stats`, the
-  DDGI and radiance cascades `Rendered_state` and the ray tracer's
-  `Rendered_output`. With pipelining they reach the main thread one frame
+  DDGI and radiance cascades `Rendered_state`, the ray tracer's
+  `Rendered_output` and the levels of detail the views drew for requested
+  meshes (`Lod_drawn_levels_frame`, `doc/editor/lod.md` "Drawn levels"). With pipelining they reach the main thread one frame
   later than in the serial schedule.
 - **ImGui-time work is deferred.** A window's `imgui()`, a menu entry and a
   host begin callback record no GPU work and mutate nothing R reads; they

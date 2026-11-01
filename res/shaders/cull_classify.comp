@@ -225,21 +225,7 @@ bool pvs_keeps(uint column, vec3 query_min, vec3 query_max)
     return false;
 }
 
-// cull_lanes::get_lod_template_level(): the forced level clamped to the
-// record's min / max and to the chain under Lod_mode::forced, else 0.
-uint lod_template_level(uint lod_word)
-{
-    uint mode        = lod_word & 0x3u;
-    uint level_count = (lod_word >> 15u) & 0xfu;
-    if ((level_count == 0u) || (mode != 1u)) {
-        return 0u;
-    }
-    uint forced_level = (lod_word >>  2u) & 0x7u;
-    uint min_level    = (lod_word >>  9u) & 0x7u;
-    uint max_level    = (lod_word >> 12u) & 0x7u; // make_lod_word() stored max_level >= min_level
-    uint level        = min(max(forced_level, min_level), max_level);
-    return min(level, level_count - 1u);
-}
+#include "erhe_lod_template_level.glsl"
 
 // cull_lanes::select_lod_level() of one entry in one LOD column.
 uint select_lod_level(uint lod_word, uint table_index, float max_axis_scale, float distance2, bool unbounded, vec4 lod_view, bool orthographic)

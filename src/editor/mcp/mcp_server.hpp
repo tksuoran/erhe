@@ -49,6 +49,7 @@ namespace erhe::primitive {
     class Material;
 }
 namespace erhe::scene {
+    class Mesh;
     class Xformable; using Node = Xformable;
 }
 namespace erhe::scene_renderer {
@@ -227,6 +228,7 @@ private:
     auto query_overdraw_stats   (const nlohmann::json& args) -> std::string;
     auto query_lod_info         (const nlohmann::json& args) -> std::string;
     auto query_lod_selection    (const nlohmann::json& args) -> std::string;
+    auto query_lod_stats        (const nlohmann::json& args) -> std::string;
     auto query_pick_at          (const nlohmann::json& args) -> std::string;
     auto query_server_info      (const nlohmann::json& args) -> std::string;
     auto action_set_window_visibility(const nlohmann::json& args) -> std::string;
@@ -861,6 +863,18 @@ private:
     const Queued_request*                            m_lod_selection_request{nullptr};
     std::chrono::steady_clock::time_point            m_lod_selection_enqueued_at{};
     std::string                                      m_lod_selection_scene_name;
+    // get_lod_info in flight (main thread only), as above: the reply
+    // without the drawn levels, the mesh, and the frame the first request
+    // for its drawn levels (Lod_drawn_levels) was made in and the first
+    // frame that served it (renewed every pass: every later frame has it).
+    const Queued_request*                            m_lod_info_request{nullptr};
+    std::chrono::steady_clock::time_point            m_lod_info_enqueued_at{};
+    nlohmann::json                                   m_lod_info_reply;
+    std::weak_ptr<erhe::scene::Mesh>                 m_lod_info_mesh;
+    uint64_t                                         m_lod_info_mesh_id{0};
+    std::weak_ptr<Scene_root>                        m_lod_info_scene_root;
+    uint64_t                                         m_lod_info_request_frame{0};
+    std::optional<uint64_t>                          m_lod_info_first_served{};
     // get_occlusion_check in flight (main thread only), as above.
     const Queued_request*                            m_occlusion_check_request{nullptr};
     std::chrono::steady_clock::time_point            m_occlusion_check_enqueued_at{};

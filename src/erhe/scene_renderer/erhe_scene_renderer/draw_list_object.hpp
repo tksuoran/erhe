@@ -50,6 +50,44 @@ public:
     uint32_t entry_index    {0};
 };
 
+// One mesh primitive's color entry in the draw lists a frame slot published
+// (Draw_list_scene::find_published_color_entry()): the list and entry
+// indices of the slot, and the object and primitive the entry belongs to,
+// which the render phase verifies before it reads the entry's level
+// (Draw_list_scene::get_published_entry_lod_level()). draw_list_index none:
+// the primitive has no color entry.
+class Draw_list_published_entry
+{
+public:
+    static constexpr uint32_t none{0xffffffffu};
+
+    [[nodiscard]] auto is_valid() const -> bool { return draw_list_index != none; }
+
+    uint32_t draw_list_index     {none};
+    uint32_t entry_index         {0};
+    uint32_t object_index        {0};
+    uint32_t mesh_primitive_index{0};
+};
+
+// The level a draw-list entry draws in a view
+// (Draw_list_scene::get_published_entry_lod_level()): the level, and
+// whether the view's LOD column selected it (selected) or the view has no
+// column and the entry draws its template range (template_range).
+enum class Drawn_lod_level_source : uint8_t
+{
+    selected       = 0,
+    template_range = 1
+};
+
+class Drawn_lod_level
+{
+public:
+    uint32_t               level {0};
+    Drawn_lod_level_source source{Drawn_lod_level_source::template_range};
+};
+
+[[nodiscard]] auto c_str(Drawn_lod_level_source source) -> const char*;
+
 // One registered scene object (mesh) inside Draw_list_scene (R10/R11). Owns
 // the mesh (and through it the primitives) for as long as it is registered.
 class Draw_list_object

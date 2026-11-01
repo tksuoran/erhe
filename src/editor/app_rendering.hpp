@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderers/composer.hpp"
+#include "renderers/lod_drawn_levels.hpp"
 #include "editor_item_bits.hpp"
 #include "renderers/composition_pass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
 #include "erhe_commands/command.hpp"
@@ -265,6 +266,10 @@ public:
     void imgui();
     void request_renderdoc_capture();
 
+    // The levels of detail the views drew for requested meshes, one frame
+    // late (the LOD window, MCP get_lod_info; Lod_drawn_levels).
+    [[nodiscard]] auto get_lod_drawn_levels() -> Lod_drawn_levels& { return m_lod_drawn_levels; }
+
     // Joint_weight_ramp debug mode state, owned by Weight_display:
     //   debug_joint_indices.x = 0xffffffffu when no joint is active (the
     //     shader's "missing data" magenta), 0 when one is;
@@ -315,6 +320,7 @@ private:
 
     Pipeline_renderpasses             m_pipeline_passes;
     Composer                          m_composer;
+    Lod_drawn_levels                  m_lod_drawn_levels;
     std::shared_ptr<Composition_pass> m_grid_composition_pass;
     std::shared_ptr<Composition_pass> m_sky_composition_pass;
 

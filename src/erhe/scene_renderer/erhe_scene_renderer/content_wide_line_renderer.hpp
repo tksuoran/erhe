@@ -6,6 +6,7 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/content_wide_line_feed.hpp"
+#include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/content_wide_line_view_writer.hpp"
 
 #include <glm/glm.hpp>
@@ -35,8 +36,33 @@ namespace erhe::scene {
 namespace erhe::scene_renderer {
 
 class Content_wide_line_interface;
+class Draw_list_scene;
 class Mesh_memory;
 class Primitive_interface_settings;
+
+// The draw lists a prepared feed's records name their color entries in
+// (Content_wide_line_renderer::prepare_mesh(); doc/editor/lod.md "Edge
+// lines and the selection outline"): the scene's Draw_list_scene and the
+// frame it published (prepare phase, after Draw_list_scene::publish()).
+class Content_wide_line_draw_lists
+{
+public:
+    const Draw_list_scene* draw_list_scene{nullptr};
+    uint64_t               frame_index    {0};
+};
+
+// The view whose level of detail Content_wide_line_renderer::add_feed()
+// draws the records at: the Draw_list_scene the records' color entries
+// belong to, the frame, and the view's color culling view of that frame
+// (none: the view has no culling view, every record draws the level it
+// was prepared with). Render phase, after the frame's classification.
+class Content_wide_line_lod_view
+{
+public:
+    const Draw_list_scene* draw_list_scene{nullptr};
+    uint64_t               frame_index    {0};
+    Cull_view              cull_view      {Cull_view::none};
+};
 
 // Tent wide-line method controls, passed per frame to
 // Content_wide_line_renderer::set_view_params(). use_tent selects between the
@@ -65,7 +91,7 @@ public:
 //   renderer.begin_frame();
 //   renderer.set_view_params(views, tent_settings, reverse_depth, depth_range, conventions);
 //   renderer.set_joint_buffer(client, std::move(range));    // optional
-//   renderer.add_feed(feed);   // prepared by prepare_mesh(), or add_mesh() per mesh
+//   renderer.add_feed(feed, lod_view); // prepared by prepare_mesh(), or add_mesh() per mesh
 //   renderer.compute(compute_encoder);
 //   renderer.render (render_encoder, pipeline_state, blend, group, multiview);
 //   renderer.end_frame();
@@ -124,6 +150,13 @@ public:
     // writes the zero color the bucket path's edge-line records carry. group
     // partitions dispatches across composition passes (selection outline,
     // selected, not_selected, ...).
+    //
+    // A primitive whose drawn variant has a LOD chain also gets the edge
+    // lines of every level of the chain (level 0 the original variant's, a
+    // level without its own edge lines the original variant's too) in
+    // out.level_edges, and with draw_lists its color entry in the lists
+    // published for the frame (Draw_list_scene::find_published_color_entry()),
+    // so add_feed() can draw the level the view's classification selects.
     static void prepare_mesh(
         Mesh_memory&                        mesh_memory,
         const erhe::scene::Mesh&            mesh,
@@ -131,11 +164,19 @@ public:
         const Primitive_interface_settings& settings,
         float                               line_width,
         uint32_t                            group,
+        const Content_wide_line_draw_lists& draw_lists,
         Content_wide_line_feed&             out
     );
 
     // Render phase: queue the dispatches of a prepared feed. Reads no Mesh.
-    void add_feed(const Content_wide_line_feed& feed);
+    // A record with level edges and a color entry draws the edge lines of
+    // the level its entry draws in lod_view's culling view when the view's
+    // LOD column selected it (Draw_list_scene::
+    // get_published_entry_lod_level(), Drawn_lod_level_source::selected),
+    // clamped to the record's levels; otherwise, and for a lod_view without
+    // a Draw_list_scene, the level it was prepared with. A record whose
+    // edge lines are empty queues nothing.
+    void add_feed(const Content_wide_line_feed& feed, const Content_wide_line_lod_view& lod_view);
 
     // prepare_mesh() and add_feed() of one mesh on the calling thread: the
     // headset, which feeds where it renders.

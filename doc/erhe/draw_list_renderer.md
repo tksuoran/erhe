@@ -347,7 +347,7 @@ Registration:
   variant's fill range).
 
   The automatic selection (doc/plans/lod_gpu_selection.md, built through
-  its step 2b): the CPU classification selects a level per (LOD column,
+  its step 3): the CPU classification selects a level per (LOD column,
   entry), and under `Cull_classification::gpu` the GPU classification
   selects the same level with the same arithmetic; the CPU command writer
   and the GPU command generation (Q6 "GPU command generation") both draw
@@ -468,6 +468,33 @@ Registration:
     (their `Lod_view`s) and, per entry of the object, its box,
     `max_axis_scale`, `lod_word` and level per column (MCP
     `get_lod_selection`).
+  - CPU consumers (section 5 of the plan): `find_published_color_entry(
+    frame_index, mesh, primitive_index)` (main thread, prepare phase,
+    after `publish()`; verifies the entry layout did not change since the
+    publish) returns where a mesh primitive's color entry sits in the
+    frame's published lists, with its object and primitive
+    (`Draw_list_published_entry`); `get_published_entry_lod_level(
+    frame_index, view, entry)` (render phase, after the classification)
+    verifies that entry still names that object's primitive and returns
+    the level it draws in the view (`Drawn_lod_level`: the view's column's
+    level, `selected`, or for a view without a column, `Cull_view::none`
+    included, its template range's level, `template_range`). The editor's
+    edge-line feed (`doc/erhe/scene_renderer.md` `Content_wide_line_renderer`)
+    and its drawn-level results (`doc/editor/lod.md` "Drawn levels") read
+    the levels this way, so the edge lines and the selection outline trace
+    the level the fill draws.
+  - Per-pass level counts (`Lod_level_counts`: per level 0..7 the entries
+    drawn and their triangles, `index_count / 3` of the drawn range; an
+    entry drawing its template range counts at `get_lod_template_level()`):
+    the CPU writer adds each command it writes when the caller passes
+    `level_counts` (`draw_list_chunks()` passes `Draw_statistics::
+    lod_counts`), and the GPU compaction adds each command to a per-job
+    shared sum, written after the count slots of all jobs
+    (`counts[2 * job_count + 16 * job + level]` entries,
+    `+ 8 + level` triangles; `Gpu_cull_classifier::lod_count_bytes_per_job`)
+    and decoded with the retired frame's counts into
+    `Retired_gpu_color_counts::lod_counts`, so the GPU path's counts, like
+    its drawn counts, are frames in flight late and include occlusion.
 - R2: `unregister` function that removes all entries belonging to an object.
   Removal does not invalidate the draw lists' suitability for hot-path
   iteration (compaction is an implementation choice; stale entries are never

@@ -70,6 +70,11 @@
 // cull_commands.commands[5 * command + k]: the job's dense commands
 // cull_counts.counts[2 * job + 0]: the number of commands the job wrote
 // cull_counts.counts[2 * job + 1]: the chunk's entries passing the filter
+// cull_counts.counts[2 * job_count + 16 * job + level]: the job's commands
+//   that draw level (0..7; the selected level, or the template range's
+//   level, lod_template_level()), and at + 8 + level the triangles
+//   (index_count / 3) they draw (doc/plans/lod_gpu_selection.md section 5;
+//   order-independent shared sums)
 
 layout(local_size_x = ERHE_CULL_COMPACT_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 
@@ -181,8 +186,14 @@ void main()
 
 #else // ERHE_CULL_COMPACT_PASS == 1
 
+const uint c_lod_count_levels = ERHE_CULL_COMPACT_LOD_COUNT_LEVELS;
+
 shared uint s_scan[ERHE_CULL_COMPACT_GROUP_SIZE];
 shared uint s_filtered;
+shared uint s_lod_entries  [ERHE_CULL_COMPACT_LOD_COUNT_LEVELS];
+shared uint s_lod_triangles[ERHE_CULL_COMPACT_LOD_COUNT_LEVELS];
+
+#include "erhe_lod_template_level.glsl"
 
 void main()
 {
@@ -204,6 +215,10 @@ void main()
 
     if (lane == 0u) {
         s_filtered = 0u;
+    }
+    if (lane < c_lod_count_levels) {
+        s_lod_entries  [lane] = 0u;
+        s_lod_triangles[lane] = 0u;
     }
     barrier();
 
@@ -240,16 +255,22 @@ void main()
             uvec4 command     = cull_templates.templates[2u * entry];
             uint  index_count = command.x;
             uint  first_index = command.y;
-            if (lod_job) {
-                uint table_index = cull_templates.templates[(2u * entry) + 1u].z;
-                if (table_index != 0xffffffffu) {
-                    uint  word  = cull_lod_levels.words[((lod_column / 8u) * mask_entry_count) + entry];
-                    uint  level = (word >> (4u * (lod_column % 8u))) & 0xfu;
-                    uvec4 row   = cull_lod_table.rows[table_index + level];
-                    index_count = row.x;
-                    first_index = row.y;
-                }
+            uint  drawn_level = 0u;
+            uint  table_index = cull_templates.templates[(2u * entry) + 1u].z;
+            if (lod_job && (table_index != 0xffffffffu)) {
+                uint  word  = cull_lod_levels.words[((lod_column / 8u) * mask_entry_count) + entry];
+                uint  level = (word >> (4u * (lod_column % 8u))) & 0xfu;
+                uvec4 row   = cull_lod_table.rows[table_index + level];
+                index_count = row.x;
+                first_index = row.y;
+                drawn_level = level;
+            } else {
+                drawn_level = lod_template_level(command.w);
             }
+            // A level is below its chain's level count, at most
+            // c_lod_count_levels (erhe::primitive::max_lod_levels).
+            atomicAdd(s_lod_entries  [drawn_level], 1u);
+            atomicAdd(s_lod_triangles[drawn_level], index_count / 3u);
             uint  base        = 5u * position;
             cull_commands.commands[base + 0u] = index_count; // index_count
             cull_commands.commands[base + 1u] = 1u;          // instance_count
@@ -260,9 +281,16 @@ void main()
             bits &= (bits - 1u);
         }
     }
+    // Every lane's commands (and its shared sums) are written.
+    barrier();
     if (lane == (c_group_size - 1u)) {
         cull_counts.counts[(2u * job_index) + 0u] = s_scan[lane];
         cull_counts.counts[(2u * job_index) + 1u] = s_filtered;
+    }
+    if (lane < c_lod_count_levels) {
+        uint lod_base = (2u * cull_jobs.header.x) + (2u * c_lod_count_levels * job_index);
+        cull_counts.counts[lod_base + lane]                      = s_lod_entries  [lane];
+        cull_counts.counts[lod_base + c_lod_count_levels + lane] = s_lod_triangles[lane];
     }
 }
 

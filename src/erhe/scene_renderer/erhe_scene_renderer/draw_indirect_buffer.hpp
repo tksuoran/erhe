@@ -21,6 +21,7 @@ namespace erhe::scene {
 namespace erhe::scene_renderer {
 
 class Draw_list;
+class Lod_level_counts;
 class Render_bucket;
 
 // Which record of the bound primitive range a draw-list command names
@@ -104,13 +105,19 @@ public:
     // (Draw_list_entry::lod_table_index) draws the index range of its
     // selected level from the level table instead (base_vertex stays the
     // entry's); without, every entry draws its own range (the template).
+    // With level_counts (Draw_list_scene::draw_list_chunks() always passes
+    // the pass's Draw_statistics::lod_counts), each written command adds its entry and triangles
+    // (index_count / 3) at the level it draws: the selected level, or for an
+    // entry drawing its template range cull_lanes::get_lod_template_level()
+    // (doc/plans/lod_gpu_selection.md section 5).
     auto update(
         const Draw_list&               draw_list,
         std::size_t                    begin,
         std::size_t                    end,
         std::span<const std::uint8_t>  entry_passes,
         Draw_record_layout             record_layout,
-        const Draw_list_lod_levels*    lod_levels = nullptr
+        const Draw_list_lod_levels*    lod_levels   = nullptr,
+        Lod_level_counts*              level_counts = nullptr
     ) -> Draw_indirect_buffer_range;
 
     // The debug index count clamp (m_max_index_count) applies to the
