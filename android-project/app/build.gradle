@@ -158,6 +158,11 @@ android {
     }
     def stageErheAssetsTask = tasks.register('stageErheAssets', Copy) {
         into stagedAssets
+        // The tracked set decides which res/ files are staged, so it is an
+        // input: a file that becomes tracked (git add of a file already on
+        // disk) changes no source file, and without this the task stays
+        // up to date and the APK misses the file.
+        inputs.property('trackedResPaths', trackedResPaths.map { it.toList().sort() })
         from(file('../../res')) {
             into 'res'
             def tracked = trackedResPaths.get()
