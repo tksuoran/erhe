@@ -51,6 +51,7 @@
 #include "config/generated/shadow_technique_mode.hpp"
 #include "config/generated/sky_config_serialization.hpp"
 #include "config/generated/specular_anti_aliasing_mode.hpp"
+#include "config/generated/lod_cpu_selection.hpp"
 #include "config/generated/text_renderer_config.hpp"
 #include "config/generated/text_renderer_config_serialization.hpp"
 #include "config/generated/threading_config.hpp"
@@ -648,6 +649,28 @@ void Settings_window::imgui()
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::SliderFloat("##", &graphics_preset.lod_hysteresis_band, 0.0f, erhe::scene_renderer::max_lod_hysteresis_band, "%.2f")) {
                 on_graphics_preset_edited();
+            }
+        });
+        // Where the CPU consumers read the levels (doc/editor/lod.md
+        // "Graphics preset settings"): on_demand only under the GPU
+        // culling classification.
+        add_entry("LOD CPU Selection", [this]() {
+            Graphics_preset_entry&          graphics_preset = get_graphics_preset();
+            const Lod_cpu_selection         current         = graphics_preset.lod_cpu_selection;
+            const erhe::codegen::Enum_info& enum_info       = get_enum_info(static_cast<const Lod_cpu_selection*>(nullptr));
+            if (ImGui::BeginCombo("##", std::string{::to_string(current)}.c_str())) {
+                for (const erhe::codegen::Enum_value_info& value_info : enum_info.values) {
+                    const Lod_cpu_selection mode     = static_cast<Lod_cpu_selection>(value_info.value);
+                    const bool              selected = (mode == current);
+                    if (ImGui::Selectable(value_info.name, selected)) {
+                        graphics_preset.lod_cpu_selection = mode;
+                        on_graphics_preset_edited();
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
             }
         });
     }

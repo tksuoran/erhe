@@ -43,7 +43,8 @@
 //   selected; 0: every draw reads its template range), threshold^2 and the
 //   coarsening threshold^2 (float bits), the global bias (int bits).
 // cull_views.lod_columns = the frame's LOD column count, the level region's
-//   word groups (column count / 8, rounded up), 0, 0. No level region is
+//   word groups (column count / 8, rounded up), change counting (1: the
+//   shadow columns' level changes are summed after the region, below), 0. No level region is
 //   written when lod_header.x (active) is 0 or the group count is 0 (a
 //   frame whose active selection gave no view a column).
 // cull_views.lod_column_views[column] = the column's view (the first of a
@@ -62,7 +63,10 @@
 //   the entry's selected level in LOD column 8 group + n at nibble n (bits
 //   4 n .. 4 n + 3): a color entry's in every color column, a shadow
 //   entry's in every column; 0 in a column of the other purpose for a
-//   color entry, and for an entry without chain
+//   color entry, and for an entry without chain; with change counting,
+//   words[group_count * entry_count + column] = the kept entries of shadow
+//   column `column` whose level differs from the previous column's (the
+//   CPU clears them before the dispatch)
 // cull_lod_previous_levels.words = the previous frame's level region, same
 //   layout and entries (the same entry layout), read for the views with a
 //   previous column (hysteresis, doc/plans/lod_gpu_selection.md section 6)
@@ -380,6 +384,22 @@ void write_lod_levels(uint entry, uint entry_count, uint purpose, vec3 c, vec3 e
                     previous_level = (previous_word >> (4u * (previous_column % 8u))) & 0xfu;
                 }
                 level = select_lod_level(lod_word, table_index, max_axis_scale, distance2, unbounded, lod_view, orthographic, previous_level);
+            }
+            // The shadow map cache's level test of a frame whose CPU lanes
+            // do not run (lod_columns.z, Lod_cpu_selection::on_demand):
+            // per shadow column, the kept entries whose level differs from
+            // the matched previous column's, summed in the word after the
+            // region (cull_lanes::count_lod_level_changes()).
+            if (shadow_column && (cull_views.lod_columns.z != 0u)) {
+                vec4 change_info = cull_views.views[(14u * view) + 13u];
+                if (change_info.z >= 0.0) {
+                    uint previous_column = uint(change_info.z);
+                    uint previous_word   = cull_lod_previous_levels.words[((previous_column / 8u) * entry_count) + entry];
+                    uint previous_level  = (previous_word >> (4u * (previous_column % 8u))) & 0xfu;
+                    if (previous_level != (level & 0xfu)) {
+                        atomicAdd(cull_lod_levels.words[(group_count * entry_count) + column], 1u);
+                    }
+                }
             }
             if (!shadow_column && (purpose == 1u)) {
                 bool inside = true;

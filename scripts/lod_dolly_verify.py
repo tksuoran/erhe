@@ -25,8 +25,9 @@ camera stops inside the band (between d_L and d_L / (1 - BAND)), once
 arriving from a pose of level L - 1 (it keeps L - 1) and once from a pose of
 level L (it keeps L), and the level must stay unchanged for --hold-frames
 classified frames (default 300). Under gpu the classification check runs
-at every hold pose and every tenth dolly step (0 mismatches across a moving
-camera).
+before and after every hold and at every tenth dolly step outside the
+bands (0 mismatches across a moving camera; a check is a restart point,
+below).
 
 Then, per level L, renders render_scene_image at a pose inside L's distance
 range (for the image's own projection scale) with the automatic selection,
@@ -54,10 +55,28 @@ selected style's polygon_fill), in every classification run: the selection
 outline traces the level the fill draws. A crop forced to the next level
 must differ (negative control). Needs Pillow.
 
+With --lod-cpu-selection on_demand (doc/plans/lod_gpu_selection.md section
+9, decisions 5 and 6; the graphics preset's lod_cpu_selection, in effect
+under gpu only) the CPU selection lanes run only for a classification
+check: get_lod_selection reports the GPU's levels of the captured frame
+(read back once that frame completed), and the edge lines, the selection
+outline and get_lod_info's drawn levels read the newest completed frame's
+GPU levels, frames in flight late. The outline captures then wait
+OUTLINE_SETTLE_FRAMES classified frames after each edit, so they show a
+static pose, and get_lod_info's drawn level is the retired one.
+
+A classification check is a hysteresis restart point in both modes
+(doc/erhe/draw_list_renderer.md R1c "Hysteresis"): its frame selects every
+level fresh. So the dolly runs its checks only at steps outside every
+band, and a band hold runs its check at the approach pose before the hold
+and after the hold, where the level then is the fresh selection's (the
+threshold rule's level at the band pose).
+
 Usage: python3 scripts/lod_dolly_verify.py [--editor PATH] [--threshold PIXELS]
                                            [--classification cpu|gpu|both]
                                            [--outline] [--hysteresis BAND]
                                            [--hold-frames N] [--no-shadows]
+                                           [--lod-cpu-selection every_frame|on_demand]
 Exit code 0 = pass.
 """
 
@@ -83,6 +102,9 @@ DOLLY_FACTOR   = 1.02  # each dolly step moves the camera 2 % farther
 # The outline check's lod_threshold_pixels: large, so the coarsest level's
 # pose is near enough for the torus to cover the pixels the levels differ in.
 OUTLINE_THRESHOLD = 16.0
+# on_demand: classified frames each outline capture waits after an edit
+# (more than the frames in flight of any backend).
+OUTLINE_SETTLE_FRAMES = 8
 
 
 def launch_editor(editor_exe):
@@ -132,8 +154,9 @@ def predicted_level(distance, switch_distances):
 
 
 class Dolly:
-    def __init__(self, client, scene, threshold, band=0.0, hold_frames=300, shadows=True):
+    def __init__(self, client, scene, threshold, band=0.0, hold_frames=300, shadows=True, cpu_selection="every_frame"):
         self.c              = client
+        self.cpu_selection  = cpu_selection
         self.shadows        = shadows
         self.scene          = scene
         self.threshold      = threshold
@@ -150,7 +173,8 @@ class Dolly:
         print(f"culling classification {classification}: {reply}")
 
     def setup(self):
-        self.call("set_graphics_preset", {"lod_enabled": True, "lod_threshold_pixels": self.threshold, "lod_bias": 0, "lod_hysteresis_band": self.band})
+        self.call("set_graphics_preset", {"lod_enabled": True, "lod_threshold_pixels": self.threshold, "lod_bias": 0, "lod_hysteresis_band": self.band,
+                                          "lod_cpu_selection": self.cpu_selection})
         reply = self.call("create_shape", {
             "scene_name": self.scene, "shape": "torus", "name": "lod_dolly_torus",
             "position": TORUS_POSITION, "scale": 2.0, "motion_mode": "none"
@@ -207,6 +231,12 @@ class Dolly:
         switch_distances = [(error * k) / self.threshold for error in self.errors]
         return reply["frame_index"], distance, entry["levels"][slot], switch_distances
 
+    def in_band(self, distance, switch):
+        """distance lies in a hysteresis band (with a dolly step's margin),
+        where a check's restart could change the level."""
+        margin = DOLLY_FACTOR * DOLLY_FACTOR
+        return (self.band > 0.0) and any((d / margin) <= distance <= ((d / (1.0 - self.band)) * margin) for d in switch[1:])
+
     def dolly_pass(self, distances, switch_of, label):
         """Samples the level at each distance; switch_of(switch) gives the
         distances the level changes at in this direction."""
@@ -216,8 +246,8 @@ class Dolly:
         for step, distance_target in enumerate(distances):
             # The box's nearest face on +Z: the camera z that puts it at distance_target.
             z = TORUS_POSITION[2] + self.box_half_z + distance_target
-            frame, distance, level, switch = self.sample(z, frame)
-            switch = switch_of(switch)
+            frame, distance, level, raw_switch = self.sample(z, frame)
+            switch = switch_of(raw_switch)
             observed.setdefault(level, distance)
             expected = predicted_level(distance, switch)
             near_switch = any(abs(distance - d) <= (distance * (DOLLY_FACTOR - 1.0)) for d in switch[1:])
@@ -233,8 +263,10 @@ class Dolly:
                 within = (lo - (lo * (DOLLY_FACTOR - 1.0))) <= d_switch <= (hi + (hi * (DOLLY_FACTOR - 1.0)))
                 check_true(f"{label} switch {previous[1]} -> {level} between d={previous[0]:.4f} and d={distance:.4f} (predicted {d_switch:.4f})", within)
             previous = (distance, level)
-            if (self.classification == "gpu") and ((step % 10) == 0):
+            # A check restarts the hysteresis: only outside the bands.
+            if (self.classification == "gpu") and ((step % 10) == 0) and not self.in_band(distance, raw_switch):
                 self.classification_check(f"{label} step {step}")
+                frame = self.selection(frame)["frame_index"]
         check_true(f"{label}: every level of the chain was selected", sorted(observed.keys()) == list(range(LEVEL_COUNT)), f"first distance per level {observed}")
 
     def dolly(self):
@@ -273,10 +305,14 @@ class Dolly:
             for label, approach, kept in (("outward", finer_pose, level - 1), ("inward", coarse_pose, level)):
                 frame, _, approach_level, _ = self.sample(TORUS_POSITION[2] + self.box_half_z + approach, frame)
                 check_true(f"{self.classification} hold level {level} {label}: approach pose selects {kept}", approach_level == kept, f"selected {approach_level}")
+                # The check before the hold, outside the band (a restart
+                # point; the approach pose's level is the fresh one).
+                if self.classification == "gpu":
+                    self.classification_check(f"gpu hold level {level} {label} at the approach pose")
+                    frame, _, approach_level, _ = self.sample(TORUS_POSITION[2] + self.box_half_z + approach, frame)
+                    check_true(f"{self.classification} hold level {level} {label}: approach pose after the check selects {kept}", approach_level == kept, f"selected {approach_level}")
                 frame, distance, band_level, _ = self.sample(TORUS_POSITION[2] + self.box_half_z + d_band, frame)
                 check_true(f"{self.classification} hold level {level} {label}: band pose d={distance:.4f} keeps {kept}", band_level == kept, f"selected {band_level}")
-                if self.classification == "gpu":
-                    self.classification_check(f"gpu hold level {level} {label}")
                 first   = frame
                 changed = []
                 while frame < (first + self.hold_frames):
@@ -294,7 +330,11 @@ class Dolly:
                         changed.append((frame, levels))
                 check_true(f"{self.classification} hold level {level} {label}: level {kept} for {frame - first} frames", not changed, f"changed {changed[:5]}")
                 if self.classification == "gpu":
+                    # The check after the hold restarts the hysteresis: the
+                    # band pose then takes the threshold rule's level.
                     self.classification_check(f"gpu hold level {level} {label} after {frame - first} frames")
+                    frame, distance, fresh_level, _ = self.sample(TORUS_POSITION[2] + self.box_half_z + d_band, frame)
+                    check_true(f"{self.classification} hold level {level} {label}: after the check the band pose d={distance:.4f} selects the fresh level {level}", fresh_level == level, f"selected {fresh_level}")
 
     def classification_check(self, label):
         reply = self.call("get_cull_classification_check", {"scene_name": self.scene})
@@ -391,18 +431,35 @@ class Dolly:
                     # the frame classified after the move).
                     frame = self.selection(frame)["frame_index"]
                     frame = self.selection(frame + 1)["frame_index"]
+                    # on_demand: the edge lines read the newest completed
+                    # frame's levels (frames in flight late).
+                    if self.retired_levels():
+                        target = frame + OUTLINE_SETTLE_FRAMES
+                        while frame < target:
+                            frame = self.selection(frame)["frame_index"]
                     path = os.path.join(out_dir, f"lod_outline_{self.classification}_level{level}_fill{int(fill)}_{mode}.png")
                     hashes.append(self.viewport_crop(path))
                 self.call("set_item_property", {"item_id": self.torus, "property": "Lod.apply_lod", "value": "false"})
                 check_true(f"outline at automatic level {level} (fill {fill}) equals forced level {level}", hashes[0] == hashes[1], f"{hashes[:2]}")
                 check_true(f"outline at forced level {other} (fill {fill}) differs from level {level}", hashes[2] != hashes[1])
+            if self.retired_levels():
+                # The forced-level edits above moved the entry layout or
+                # the levels: wait until the completed frames have the pose.
+                target = frame + OUTLINE_SETTLE_FRAMES
+                while frame < target:
+                    frame = self.selection(frame)["frame_index"]
             reply = self.call("get_lod_info", {"scene_name": self.scene, "node_id": self.torus})
-            drawn = [d for d in reply.get("drawn", []) if d["source"] == "selected"]
+            drawn_source = "retired" if self.retired_levels() else "selected"
+            drawn = [d for d in reply.get("drawn", []) if d["source"] == drawn_source]
             check_true(f"get_lod_info reports the viewport's drawn level {level}", any(d["level"] == level for d in drawn), f"drawn {reply.get('drawn')} frame {reply.get('drawn_frame_index')}")
         self.call("set_viewport_style", {"style": "selected", "polygon_fill": True})
         self.call("select_items", {"scene_name": self.scene, "ids": []})
         self.threshold = saved_threshold
         self.call("set_graphics_preset", {"shadow_enable": True, "lod_threshold_pixels": self.threshold})
+
+    def retired_levels(self):
+        # on_demand is in effect under gpu only.
+        return (self.cpu_selection == "on_demand") and (self.classification == "gpu")
 
     def measure_box(self):
         reply = self.selection(0)
@@ -426,6 +483,8 @@ def main():
                         help="lod_hysteresis_band (0: none); > 0 adds the inward dolly and the band holds")
     parser.add_argument("--hold-frames", type=int, default=300, help="classified frames each band hold lasts")
     parser.add_argument("--no-shadows", action="store_true", help="shadows off for the image and outline comparisons")
+    parser.add_argument("--lod-cpu-selection", choices=("every_frame", "on_demand"), default="every_frame",
+                        help="the graphics preset's lod_cpu_selection (on_demand: in effect under gpu)")
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -433,7 +492,7 @@ def main():
     try:
         client = McpClient(port)
         scene  = client.call("list_scenes")["scenes"][0]["name"]
-        dolly  = Dolly(client, scene, args.threshold, args.hysteresis, args.hold_frames, shadows=not args.no_shadows)
+        dolly  = Dolly(client, scene, args.threshold, args.hysteresis, args.hold_frames, shadows=not args.no_shadows, cpu_selection=args.lod_cpu_selection)
         classifications = ["cpu", "gpu"] if (args.classification == "both") else [args.classification]
         dolly.set_classification(classifications[0])
         dolly.setup()

@@ -172,7 +172,9 @@ public:
     // A record with level edges and a color entry draws the edge lines of
     // the level its entry draws in lod_view's culling view when the view's
     // LOD column selected it (Draw_list_scene::
-    // get_published_entry_lod_level(), Drawn_lod_level_source::selected),
+    // get_published_entry_lod_level(), Drawn_lod_level_source::selected; or
+    // retired, the GPU's level of the newest completed frame when the
+    // frame's Lod_cpu_selection is on_demand, one or more frames late),
     // clamped to the record's levels; otherwise, and for a lod_view without
     // a Draw_list_scene, the level it was prepared with. A record whose
     // edge lines are empty queues nothing.

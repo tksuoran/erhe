@@ -66,9 +66,10 @@ the mesh's world AABB; inside the box the column reads "inside". The
 `Drawn` column marks the level that viewport drew the mesh's color
 draw-list entry for that primitive at in the last rendered frame. Lines
 under the table give the distance and the mesh's max axis scale, and the
-drawn level with its source ("automatic selection" when the viewport's LOD
-column selected it, "template range" for the forced level or level 0) and
-the frame. Each draw of the window requests the selected meshes' drawn
+drawn level with its source ("selected" when the viewport's LOD column
+selected it, "retired" when it is the GPU's level of the newest completed
+frame under "LOD CPU Selection" on_demand, "template" for the forced level
+or level 0) and the frame. Each draw of the window requests the selected meshes' drawn
 levels (`Lod_drawn_levels`, below), so they arrive one rendered frame
 later and a closed window requests nothing.
 
@@ -103,14 +104,21 @@ degrees. Values not present in `editor_settings.json` take these defaults.
 
 ## Graphics preset settings
 
-The graphics preset (`Graphics_preset_entry`, version 8) holds the automatic
+The graphics preset (`Graphics_preset_entry`, version 9) holds the automatic
 selection's settings: `lod_enabled` (default off), `lod_threshold_pixels`
 (the pixel error a selected level stays within, default 1.0), `lod_bias`
-(added to every selected level, default 0) and `lod_hysteresis_band` (0 to
-0.9, default 0.25; below). The Settings window shows them as "LOD
-Selection", "LOD Threshold (pixels)", "LOD Bias" and "LOD Hysteresis Band";
-the MCP `set_graphics_preset` takes `lod_enabled`, `lod_threshold_pixels`,
-`lod_bias` and `lod_hysteresis_band` (session only). Each frame's render
+(added to every selected level, default 0), `lod_hysteresis_band` (0 to
+0.9, default 0.25; below) and `lod_cpu_selection` (`Lod_cpu_selection`,
+mirroring `erhe::scene_renderer::Lod_cpu_selection`; default
+`every_frame`; below). The Settings window shows them as "LOD
+Selection", "LOD Threshold (pixels)", "LOD Bias", "LOD Hysteresis Band" and
+"LOD CPU Selection"; the MCP `set_graphics_preset` takes `lod_enabled`,
+`lod_threshold_pixels`, `lod_bias`, `lod_hysteresis_band` and
+`lod_cpu_selection` (session only). The OpenXR preset
+(`config/editor/graphics_presets_openxr.json`, the Quest's) sets
+`lod_cpu_selection` to `on_demand` (a device that already holds its
+writable copy of the file keeps that copy until a clean reinstall;
+`doc/agents/quest.md` "Benchmark runs"). Each frame's render
 settings snapshot carries them to `Draw_list_scene::publish()`
 (`Lod_frame_settings`), and `get_draw_lists` reports what the last publish
 recorded (`lod`).
@@ -172,6 +180,41 @@ receivers do. The shadow map cache redraws a pass when a level of a caster
 it draws changes (`doc/erhe/shadows.md` "Shadow map cache"); a camera move
 that changes no level keeps every cached spot and point pass.
 
+**CPU selection on demand.** With "LOD CPU Selection" `on_demand` and
+`culling_classification` gpu (the compaction writes the draw commands;
+under cpu the setting takes effect as `every_frame`, logged once) the CPU
+classification does not run the selection lanes per frame, only for the
+frame of a `get_cull_classification_check`. The fill and
+the shadow passes draw the GPU's levels of the frame as before; the CPU
+consumers read the GPU's levels of the newest completed frame, read back
+without a stall (`doc/plans/lod_gpu_selection.md` section 9, decisions 5
+and 6; `doc/erhe/draw_list_renderer.md` R1c "CPU level source"): the edge
+lines and the selection outline, the "Drawn" column and `get_lod_info`
+(source `retired`) and the shadow map cache's level test take a level
+change that many frames after it happened. That lag is two or three
+frames (measured: 3 on headless Metal 3, 2 and now and then 3 on windowed
+Metal 3, Metal 4 and KosmicKrisp; the log reports it every 600 frames,
+"LOD on_demand: retired level lag"), since the devices report a frame
+complete when a later frame's recording ends; for those frames after a level switch the outline traces the
+previous level. A view whose `lod_key` or entry layout the newest
+completed frame does not have (a new viewport, a mesh added) feeds its
+template range until a completed frame has it. The match needs the same
+entry layout, so any mesh added or removed makes every view's edge lines and
+CPU-written passes take the template range for the lag window (the fill
+still draws the selected levels): on every such edit the outlines of all
+views, not only the edited mesh's, can differ from the fill for two or
+three frames. In such a frame the color passes without a GPU command
+selection (the unculled and immediate passes) are written by the CPU from
+the retired levels while the fill draws the frame's GPU levels, so within
+one view the ID, outline and stencil passes can draw a different level
+than the fill for the lag window (picking can hit the previous level);
+with the index count clamp refusing GPU color commands every pass is
+CPU-written and they agree. Both are accepted consequences of the
+readback lag. `get_lod_selection` then
+reports the GPU's levels and level changes of the captured frame
+(`levels_from_gpu`; the reply waits for that frame to complete) and the
+frame whose levels that frame's consumers read (`retired_frame_index`).
+
 MCP `get_lod_selection` reports the levels of one frame for a
 mesh, per column, with each column's origin, projection scale, `lod_key`,
 matched previous column, purpose and, for a shadow column, its sampling
@@ -187,8 +230,11 @@ switches at distance d on the way in switches at d / 0.75 on the way out;
 0 is the plain threshold rule. Each view keeps its history by its scene
 view (a view added or removed beside it keeps it); the history restarts
 after a frame the scene was not rendered in, a mesh added or removed, and
-a `culling_classification` switch (`doc/erhe/draw_list_renderer.md` R1c
-"Hysteresis").
+a `culling_classification` switch and in the frame of a
+`get_cull_classification_check`, in both "LOD CPU Selection" modes (the
+reply's `lod_hysteresis_reset`; a mesh inside a band may then take its
+threshold level once, and the hysteresis continues from it)
+(`doc/erhe/draw_list_renderer.md` R1c "Hysteresis").
 
 ## Edge lines and the selection outline
 
@@ -205,7 +251,9 @@ frame's culling classification (`Content_wide_line_renderer::add_feed()`)
 with the view's color culling view (`Composer_prepared::color_cull_view`,
 set by `Composer::add_cull_views()`; the headset's union view): a record
 whose entry's level was selected by the view's LOD column draws that
-level's edge lines, the same level the view's fill draws; otherwise (the
+level's edge lines, the same level the view's fill draws (under "LOD CPU
+Selection" on_demand the level of the newest completed frame, above);
+otherwise (the
 selection off, a view without a column or without draw-list passes) the
 record draws the forced level it was prepared with. Edge lines are not
 content: the view's shader debug mode and the path its fill takes do not

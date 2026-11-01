@@ -493,3 +493,96 @@ Quest state per run (temperatures: thermal HAL maximum per type at the start of 
 |---|---|---|---|---|---|---|---|---|---|---|
 | 0 | 28.36 | 0 -> 0; 0 -> 0, step-downs 0 | 55.3 -> 55.7 | 54.8 -> 54.6 | 54.1 -> 53.9 | 33.0, 100 % | cpu 0 1: 1920 [1382..1920] cap 1382/2054; cpu 2 3 4 5: 1651 [1651..2362] cap 1651/2362 | 456 [456..492] cap 456 | 98 | 23.3 |
 
+
+## 2026-11-01 11:36 - bistro, single_directional_loops_gpu_culling
+
+As single_directional_loops, with culling classification gpu (GPU-generated draw commands where the device supports them).
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 72.0 Hz, input_hash c4294da4554d34d5; results `20261101_113626_bistro_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (9d1b1ef0f-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro.json --no-scene`; scene `pvs_bistro_quest_cell_4m.glb` (listed 4.08 s, idle 4.89 s).
+- Configuration calls: set_culling_classification, set_graphics_preset, create_light, set_node_transform, set_graphics_preset (arguments in the result files' `host` block).
+- LOD (doc/plans/lod_gpu_selection.md decisions 5 and 6): the last set_graphics_preset sets `lod_enabled` on and `lod_cpu_selection` on_demand; the file stores no LOD chains, so the selection is not active.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | loops / loops (Headset) |
+| Lights | directional 1/1 shaded, 1 shadow-mapped (1 cached); point 0/33 shaded, 0 shadow-mapped (0 cached); spot 0/10 shaded, 0 shadow-mapped (0 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+0, spot 0+0, point 0+0 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | off (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 12.85 |
+| Frame wall time (ms) | 77.75 |
+| M2 / R / M3 (ms) | 0.79 / 3.38 / 0.70 |
+| App GPU frame time, XR counter (ms) | 71.13 |
+| GPU utilization, XR counter (%) | 99.3 |
+| CPU utilization average / worst, XR counter (%) | 7.9 / 9.9 |
+| GPU pass Cull classification (ms) | 0.027 |
+| GPU pass Cull command generation (ms) | 0.117 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.039 |
+| GPU pass XR multiview (ms) | 76.743 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 76.943 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 12.85 | 0 -> 0; 0 -> 0, step-downs 0 | 55.9 -> 55.2 | 55.1 -> 54.1 | 55.4 -> 54.2 | 35.0, 98 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1651 cap 1651/2362 | 456 cap 456 | 99 | 20.1 |
+
+
+## 2026-11-01 11:33 - bistro, single_directional_loops_gpu_culling
+
+As single_directional_loops, with culling classification gpu (GPU-generated draw commands where the device supports them).
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 72.0 Hz, input_hash c4294da4554d34d5; results `20261101_113303_bistro_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (9d1b1ef0f-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro.json --no-scene`; scene `pvs_bistro_quest_cell_4m.glb` (listed 4.8 s, idle 5.33 s).
+- Configuration calls: set_culling_classification, set_graphics_preset, create_light, set_node_transform, set_graphics_preset (arguments in the result files' `host` block).
+- LOD (doc/plans/lod_gpu_selection.md decisions 5 and 6): the last set_graphics_preset sets `lod_enabled` on and `lod_cpu_selection` every_frame; the file stores no LOD chains, so the selection is not active.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | loops / loops (Headset) |
+| Lights | directional 1/1 shaded, 1 shadow-mapped (1 cached); point 0/33 shaded, 0 shadow-mapped (0 cached); spot 0/10 shaded, 0 shadow-mapped (0 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+0, spot 0+0, point 0+0 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | off (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 12.77 |
+| Frame wall time (ms) | 77.97 |
+| M2 / R / M3 (ms) | 0.80 / 3.41 / 0.71 |
+| App GPU frame time, XR counter (ms) | 71.63 |
+| GPU utilization, XR counter (%) | 99.2 |
+| CPU utilization average / worst, XR counter (%) | 7.4 / 9.8 |
+| GPU pass Cull classification (ms) | 0.028 |
+| GPU pass Cull command generation (ms) | 0.099 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.039 |
+| GPU pass Shadow 0 (ms) | 0.000 |
+| GPU pass XR multiview (ms) | 76.945 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 77.126 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 12.77 | 0 -> 0; 0 -> 0, step-downs 0 | 59.9 -> 54.8 | 59.0 -> 53.8 | 58.3 -> 54.1 | 33.0, 98 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1651 cap 1651/2362 | 456 cap 456 | 99 | 19.8 |
+

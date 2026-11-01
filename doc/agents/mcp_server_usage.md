@@ -181,7 +181,12 @@ the GPU count and the commands up to it. A new request replaces an earlier
 one. Errors when the device has no GPU path or the setting is cpu
 (`set_culling_classification` `mode=gpu` first; the check then waits for the
 first frame published with it, so both calls can go in one batch) and waits
-a few frames.
+a few frames. With level of detail selection active the check's frame is a
+hysteresis restart point on both paths, in both `lod_cpu_selection` modes:
+an entry inside a hysteresis band may take its fresh level there once, and
+the reply's `lod_hysteresis_reset` (true) and
+`lod_hysteresis_reset_frame_index` name that frame. A script asserting a
+band hold runs its checks before and after the hold, not during it.
 
 ```bash
 py -3 scripts/mcp_call.py get_cull_classification_check b64:<base64 of {"scene_name":"Bench Heavy"}>

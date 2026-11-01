@@ -617,7 +617,7 @@ void Lod_window::table_imgui(Scene_root& scene_root)
             ImGui::Text(
                 "Drawn at level %d (%s, frame %llu)",
                 drawn_level,
-                (drawn_source == erhe::scene_renderer::Drawn_lod_level_source::selected) ? "automatic selection" : "template range",
+                erhe::scene_renderer::c_str(drawn_source),
                 static_cast<unsigned long long>(drawn_frame->frame_index)
             );
         }

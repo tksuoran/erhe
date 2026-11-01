@@ -5,7 +5,9 @@ Status: in progress
 The build order for automatic LOD level selection (`doc/plans/lod.md`
 section 2.3, decisions D3 and D4). It replaces that plan's step 4 ordering
 (4a CPU writer, 4b GPU writer, 4c shadows) and its step 5 (hysteresis). The
-design is accepted by the user (section 9); steps 1, 2a, 2b, 3, 4 and 5 are built.
+design is accepted by the user (section 9); steps 1, 2a, 2b, 3, 4 and 5 are
+built, and decisions 5 and 6 in the scope the user set for the Quest (section
+10, "Decisions 5 and 6 (Quest scope)").
 Selection runs in the culling classification, on the CPU lanes and in
 `res/shaders/cull_classify.comp`, with the same arithmetic, so both produce
 the same level bit for bit; the command writers only read the result.
@@ -394,6 +396,12 @@ Decisions (user, 2026-11-01):
    edge-line change: for one frame after a level switch the outline can
    trace the previous level. Desktop keeps same-frame edge lines.
 
+Readback lag (user, 2026-11-01): the consumers of decisions 5 and 6 read
+the newest frame the device reports completed, with no stall, also when
+that frame is more than one frame behind. The devices report a frame
+complete when a later frame's recording ends, so it is two or three frames
+behind (measured in section 10).
+
 ## 10. Build order
 
 Each step is one commit (or a small series) with its docs; the present-tense
@@ -583,6 +591,68 @@ viewports at different distances from one caster selects the finer level in
 the shared spot pass; a shader debug viewport sampling a spot map draws its
 casters at the template range.
 
+### Decisions 5 and 6 (Quest scope)
+
+State: built; described in `doc/erhe/draw_list_renderer.md` R1c ("CPU level
+source") and `doc/editor/lod.md` ("CPU selection on demand", "Graphics
+preset settings"). `Lod_cpu_selection` (`every_frame` default,
+`on_demand`) in `Lod_frame_settings`, the graphics preset's
+`lod_cpu_selection` (version 9; the OpenXR preset sets `on_demand`). Under
+`on_demand`, in effect only for a frame classified on the GPU, the CPU
+selection lanes run only for a classification check's frame; the CPU masks still run (the
+empty cube face skip, the CPU command writer of passes without GPU
+commands, the checks). The GPU sums each shadow column's level changes
+after the level region, and the frame's region and those sums are copied
+into a persistent per-slot host buffer, decoded at the first
+classification after the device reports the frame completed (or reuses
+its slot): the edge lines and the selection outline, the drawn-level
+results and a CPU-written pass with a column read the newest decoded
+frame's levels, the shadow map cache its per-column changes (each frame's
+changes once). The GPU-side edge-line expansion and the latency removal
+stay in "Later". A classification check's frame is a hysteresis restart
+point on both paths in both modes (user, 2026-11-01: the check's result
+does not depend on the mode or on the CPU lanes' history; the reply's
+`lod_hysteresis_reset`).
+
+Verified (M4 Pro, headless Metal unless named): G-off with `every_frame`
+against the build before (render images: default, heavy, torus forced,
+torus with spot and point; lod off and forced 0; both classification and
+`use_draw_lists` settings; shadows on) 32 of 32 identical, and the LOD-on
+dolly images (default, torus with lights, heavy, Bistro; both
+classification settings) 56 of 56; `on_demand` against `every_frame`
+images at static poses (gpu) identical on Metal 3 (28 of 28), Metal 4 (21
+of 21) and KosmicKrisp (21 of 21); classification check with `on_demand`
+(band 0.25, static and camera moves; default, heavy, heavy four view,
+Bistro) 0 mismatches on all three; `scripts/lod_dolly_verify.py
+--hysteresis 0.25 --outline` passes with `--lod-cpu-selection on_demand`
+(both settings; the outline captures wait 8 frames after each edit) and
+with `every_frame` (both settings), with the checks at dolly steps outside
+the bands and before and after each band hold (a check is a restart
+point, after which the band pose takes its threshold level); `scripts/shadow_map_cache_check.py
+--lod` passes in both modes (a small camera move keeps every spot and
+point pass, the far move and the move back redraw Point T). Lag of the
+retired levels (frame classified minus newest decoded frame): headless
+Metal 3: 3 frames (every frame); windowed Metal 3, Metal 4 and KosmicKrisp:
+2 frames (3 now and then). Cost (Release, headless Metal, pipelined,
+Bistro with chains on every mesh, threshold 4, gpu, Tracy median per
+frame): `classify_cull_views` 402 us at the build before, 396 us with
+`every_frame`, 200 us with `on_demand` (`lod_lanes` 214, 213, 0 us; the
+decode 2.9 us per frame); the classification's GPU timer 32.2, 31.9 and
+33.1 us.
+
+Quest 3 (release APK from this branch, off-head, `benchmark_bistro.json` on
+`pvs_bistro_quest_cell_4m.glb` with `bistro_single_directional_gpu_culling.json`
+and `lod_enabled` on; `doc/reference/quest_bench_runs.md`): the device
+Bistro files store no LOD chains (`doc/plans/lod.md` step 6), so the
+selection is not active and both modes run the same frame; `on_demand` is
+in effect under the GPU classification (its log line; the GPU command
+generation timer runs), and no level readback runs without columns, so
+the Quest's readback lag is not measured yet. `every_frame` / `on_demand`:
+12.77 / 12.85 fps, R 3.41 / 3.38 ms, app GPU 71.6 / 71.1 ms (GPU-bound,
+`XR multiview` 77 ms): equal within run-to-run noise, as expected without
+chains. The measurement with chains follows `doc/plans/lod.md` step 6
+(chains stored by Save for Quest).
+
 ### Step 6: headset and measurement
 
 Quest: the headset union view's column, both eyes the same level (the
@@ -598,6 +668,14 @@ Removing the one-frame latencies of decisions 5 and 6: the shadow map
 cache's keep / redraw decision made on the GPU, and the edge-line expansion
 reading the level region on the GPU, so no consumer needs a level one frame
 late.
+
+A per-object remap of the retired levels instead of the entry layout
+serial match (`find_retired_lod_column()`), so a mesh added or removed
+does not put every view's edge feed and CPU-written passes at the template
+range for the readback lag.
+
+Copy only the change words (not the whole level region, about 60 kB on
+Bistro) in `on_demand` frames where no CPU consumer reads full levels.
 
 A color-by-level debug view: the per-draw record holds no level, so the
 shader would bind the level region and find the entry through the chunk

@@ -253,6 +253,7 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         check(read_enum_argument (args, "shadow_cull_mode",           preset.shadow_cull_mode))           &&
         check(read_enum_argument (args, "light_shading",              preset.light_shading))              &&
         check(read_enum_argument (args, "specular_anti_aliasing",     preset.specular_anti_aliasing))     &&
+        check(read_enum_argument (args, "lod_cpu_selection",          preset.lod_cpu_selection))          &&
         check(read_int_argument  (args, "shadow_resolution",       1, preset.shadow_resolution))          &&
         check(read_int_argument  (args, "shadow_depth_bits",       1, preset.shadow_depth_bits))          &&
         check(read_int_argument  (args, "point_shadow_resolution", 1, preset.point_shadow_resolution))    &&
@@ -354,6 +355,7 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"lod_threshold_pixels",       in_effect.lod_threshold_pixels},
         {"lod_bias",                   in_effect.lod_bias},
         {"lod_hysteresis_band",        in_effect.lod_hysteresis_band},
+        {"lod_cpu_selection",          std::string{to_string(in_effect.lod_cpu_selection)}},
         {"shader_float16",             (m_context.graphics_device != nullptr) && m_context.graphics_device->get_info().shader_float16},
         {"use_draw_lists",             m_context.app_settings->get_use_draw_lists()}
     }).dump();

@@ -1994,6 +1994,21 @@ void Draw_list_scene::publish(
     // table when it changed since the slot's copy.
     slot.lod_settings = lod;
     slot.lod_active   = (lod.selection == Lod_selection::on) && (m_lod_chain_entry_count > 0);
+    // The CPU lanes leave the per-frame path only where the compaction
+    // writes the commands (the GPU classification; doc/plans/
+    // lod_gpu_selection.md section 9, decisions 5 and 6).
+    if (lod.cpu_selection == Lod_cpu_selection::on_demand) {
+        if (effective_classification != Cull_classification::gpu) {
+            if (!m_lod_cpu_selection_refusal_logged) {
+                log_draw_list->info("LOD CPU selection on_demand needs the GPU culling classification; the CPU lanes select every frame");
+                m_lod_cpu_selection_refusal_logged = true;
+            }
+            slot.lod_settings.cpu_selection = Lod_cpu_selection::every_frame;
+        } else if (!m_lod_cpu_selection_on_demand_logged) {
+            log_draw_list->info("LOD CPU selection on_demand: the GPU classification selects the levels, the CPU consumers read the newest completed frame's levels");
+            m_lod_cpu_selection_on_demand_logged = true;
+        }
+    }
     if (slot.lod_table_serial != m_lod_table_serial) {
         slot.lod_table.assign(m_lod_table_rows.begin(), m_lod_table_rows.end());
         slot.lod_table_serial = m_lod_table_serial;
@@ -2650,7 +2665,24 @@ void Draw_list_scene::draw_list_chunks(
     Draw_list_lod_levels        lod_levels{};
     const Draw_list_lod_levels* lod_levels_used = nullptr;
     const uint32_t              lod_column      = get_cull_view_lod_column(frame_index, cull_view);
-    if (lod_column != lod_column_none) {
+    if ((lod_column != lod_column_none) && m_lod_levels_retired) {
+        // An on_demand frame without CPU lanes: the newest completed
+        // frame's GPU levels in its column with the view's lod_key (none:
+        // the template range), the GPU region's layout.
+        const Draw_list_slot& slot           = get_published_slot(frame_index);
+        const uint32_t        retired_column = find_retired_lod_column(slot, get_lod_level_slot(frame_index).column_keys[lod_column]);
+        if (retired_column != lod_column_none) {
+            ERHE_VERIFY(draw_list_index < slot.entry_offsets.size());
+            const std::size_t first_word = ((retired_column / 8) * static_cast<std::size_t>(m_lod_retired_levels.entry_count)) + slot.entry_offsets[draw_list_index];
+            ERHE_VERIFY((first_word + entry_count) <= m_lod_retired_levels.words.size());
+            lod_levels = Draw_list_lod_levels{
+                .level_words  = std::span<const uint32_t>{m_lod_retired_levels.words.data() + first_word, entry_count},
+                .nibble_shift = 4u * (retired_column % 8),
+                .lod_table    = slot.lod_table
+            };
+            lod_levels_used = &lod_levels;
+        }
+    } else if (lod_column != lod_column_none) {
         const Lod_level_slot& level_slot = get_lod_level_slot(frame_index);
         ERHE_VERIFY(draw_list_index < level_slot.lists.size());
         const std::vector<uint32_t>& words      = level_slot.lists[draw_list_index];
@@ -3188,6 +3220,7 @@ void Draw_list_scene::classify_frame_cull_views(const uint64_t frame_index, erhe
     apply_pvs_uploads(frame_index, command_buffer);
     decode_retired_gpu_counts(frame_index);
     decode_retired_occlusion(frame_index);
+    decode_completed_lod_levels(frame_index);
     classify_cull_views();
     if (get_published_slot(frame_index).classification == Cull_classification::gpu) {
         dispatch_gpu_cull_views(frame_index, command_buffer);
@@ -3224,8 +3257,21 @@ void Draw_list_scene::classify_cull_views()
     }
     Lod_level_slot& level_slot = m_lod_level_slots[frame_index % m_lod_level_slots.size()];
     assign_lod_columns(slot, level_slot);
+    // A requested classification check records the first frame classified
+    // on the GPU after the request (dispatch_gpu_cull_views() records its
+    // GPU half); decided here, so the CPU lanes of an on_demand frame run
+    // for it.
+    const bool check_frame = (slot.classification == Cull_classification::gpu) && begin_gpu_cull_check_frame(frame_index);
+    // Lod_cpu_selection::on_demand (published only under the GPU
+    // classification): the CPU lanes run for a check's frame only; the
+    // other frames' CPU consumers read the newest completed frame's GPU
+    // levels (decode_completed_lod_levels()).
+    m_lod_frame_on_demand = slot.lod_active && (slot.lod_settings.cpu_selection == Lod_cpu_selection::on_demand) && (m_lod_column_count > 0);
+    const bool run_lod_lanes = !m_lod_frame_on_demand || check_frame;
+    m_lod_levels_retired     = !run_lod_lanes;
     level_slot.frame_index         = frame_index;
     level_slot.classified          = true;
+    level_slot.levels_written      = run_lod_lanes;
     level_slot.entry_layout_serial = slot.entry_layout_serial;
     level_slot.classification      = slot.classification;
     if (level_slot.lists.size() < draw_lists.size()) {
@@ -3243,7 +3289,14 @@ void Draw_list_scene::classify_cull_views()
     const Lod_level_slot* previous_level_slot = nullptr;
     if ((m_lod_column_count > 0) && (frame_index > 0) && (m_lod_level_slots.size() >= 2)) {
         const Lod_level_slot& candidate = m_lod_level_slots[(frame_index - 1) % m_lod_level_slots.size()];
-        if (candidate.classified) {
+        // A classification check's frame is a restart point in both
+        // Lod_cpu_selection modes (doc/erhe/draw_list_renderer.md R1c
+        // "Hysteresis"): its columns match no previous column on either
+        // path, so its levels do not depend on the CPU lanes' history (an
+        // on_demand frame has none). The GPU takes the same previous
+        // columns. A frame running lanes after a frame without CPU levels
+        // (a switch from on_demand) starts fresh too.
+        if (candidate.classified && !check_frame && (!run_lod_lanes || candidate.levels_written)) {
             cull_lanes::match_lod_previous_columns(
                 candidate.get_history(),
                 level_slot.get_history(),
@@ -3308,7 +3361,7 @@ void Draw_list_scene::classify_cull_views()
         // zero (a color list's entries in the color columns, a shadow list's
         // in every column; doc/plans/lod_gpu_selection.md section 4).
         std::vector<uint32_t>& level_words = level_slot.lists[list_index];
-        if (m_lod_column_count > 0) {
+        if ((m_lod_column_count > 0) && run_lod_lanes) {
             level_words.assign(lod_group_count * entry_count, 0u);
         } else {
             level_words.clear();
@@ -3363,6 +3416,34 @@ void Draw_list_scene::classify_cull_views()
                 m_pvs_nonresident_logged = true;
                 log_draw_list->error("PVS: frame {} culled through {} view(s) whose cells' pages are not resident in their slots", frame_index, failed_views);
             }
+        }
+    }
+
+    // The lag of the levels the on_demand frame's CPU consumers read.
+    if (m_lod_frame_on_demand) {
+        if (m_lod_retired_levels.valid) {
+            const uint64_t lag = frame_index - m_lod_retired_levels.frame_index;
+            const uint64_t measured = m_lod_lag_frames - m_lod_lag_none;
+            m_lod_lag_min = (measured == 0) ? lag : std::min(m_lod_lag_min, lag);
+            m_lod_lag_max = (measured == 0) ? lag : std::max(m_lod_lag_max, lag);
+            m_lod_lag_sum += lag;
+        } else {
+            ++m_lod_lag_none;
+        }
+        ++m_lod_lag_frames;
+        if (m_lod_lag_frames == lod_lag_log_frames) {
+            const uint64_t measured = m_lod_lag_frames - m_lod_lag_none;
+            log_draw_list->info(
+                "LOD on_demand: retired level lag over {} frames (frame {}): min {} max {} mean {:.2f} frames, {} frames without retired levels",
+                m_lod_lag_frames, frame_index, m_lod_lag_min, m_lod_lag_max,
+                (measured > 0) ? (static_cast<double>(m_lod_lag_sum) / static_cast<double>(measured)) : 0.0,
+                m_lod_lag_none
+            );
+            m_lod_lag_frames = 0;
+            m_lod_lag_sum    = 0;
+            m_lod_lag_min    = 0;
+            m_lod_lag_max    = 0;
+            m_lod_lag_none   = 0;
         }
     }
 
@@ -3756,7 +3837,36 @@ auto Draw_list_scene::get_lod_column_change(const uint64_t frame_index, const Cu
     ERHE_VERIFY(column < m_lod_column_count);
     // Counted for the shadow columns only (select_list_lod_levels()).
     ERHE_VERIFY(m_lod_columns[column].purpose == Draw_purpose::shadow);
-    return m_lod_columns[column].change;
+    if (!m_lod_levels_retired) {
+        return m_lod_columns[column].change;
+    }
+    // An on_demand frame without CPU lanes (doc/plans/lod_gpu_selection.md
+    // section 9, decision 5): this frame's selection starting fresh, or the
+    // changes of the frames decoded at this frame's classification (each
+    // frame's changes reach the cache once, when its frame completed). A
+    // frame between decoded ones without a readback, and a decoded frame
+    // without the column, count as changed.
+    if ((m_lod_previous_columns[column] == lod_column_none) || m_lod_retired_gap) {
+        return Lod_column_change::changed;
+    }
+    const uint64_t lod_key = get_lod_level_slot(frame_index).column_keys[column];
+    for (std::size_t i = 0; i < m_lod_retired_change_frame_count; ++i) {
+        const Lod_retired_change_frame& change_frame = m_lod_retired_change_frames[i];
+        bool found = false;
+        for (uint32_t retired_column = 0; retired_column < change_frame.column_count; ++retired_column) {
+            if (change_frame.column_keys[retired_column] != lod_key) {
+                continue;
+            }
+            found = true;
+            if (change_frame.change[retired_column] != Lod_column_change::unchanged) {
+                return Lod_column_change::changed;
+            }
+        }
+        if (!found) {
+            return Lod_column_change::changed;
+        }
+    }
+    return Lod_column_change::unchanged;
 }
 
 auto Draw_list_scene::get_lod_level(
@@ -3764,7 +3874,7 @@ auto Draw_list_scene::get_lod_level(
     const Cull_view   cull_view,
     const std::size_t list_index,
     const std::size_t entry_index
-) const -> std::optional<uint32_t>
+) const -> std::optional<Drawn_lod_level>
 {
     const uint32_t column = get_cull_view_lod_column(frame_index, cull_view);
     if (column == lod_column_none) {
@@ -3775,10 +3885,24 @@ auto Draw_list_scene::get_lod_level(
     ERHE_VERIFY(list_index < draw_lists.size());
     const std::size_t             entry_count = draw_lists[list_index].entries.size();
     ERHE_VERIFY(entry_index < entry_count);
+    if (m_lod_levels_retired) {
+        const Draw_list_slot& slot           = get_published_slot(frame_index);
+        const uint32_t        retired_column = find_retired_lod_column(slot, level_slot.column_keys[column]);
+        if (retired_column == lod_column_none) {
+            return std::nullopt;
+        }
+        ERHE_VERIFY(list_index < slot.entry_offsets.size());
+        const std::size_t word_index = ((retired_column / 8) * static_cast<std::size_t>(m_lod_retired_levels.entry_count)) + slot.entry_offsets[list_index] + entry_index;
+        ERHE_VERIFY(word_index < m_lod_retired_levels.words.size());
+        return Drawn_lod_level{
+            .level  = (m_lod_retired_levels.words[word_index] >> (4u * (retired_column % 8))) & 0xfu,
+            .source = Drawn_lod_level_source::retired
+        };
+    }
     const std::vector<uint32_t>&  words       = level_slot.lists[list_index];
     const std::size_t             word_index  = ((column / 8) * entry_count) + entry_index;
     ERHE_VERIFY(word_index < words.size());
-    return (words[word_index] >> (4u * (column % 8))) & 0xfu;
+    return Drawn_lod_level{.level = (words[word_index] >> (4u * (column % 8))) & 0xfu, .source = Drawn_lod_level_source::selected};
 }
 
 auto c_str(const Drawn_lod_level_source source) -> const char*
@@ -3786,6 +3910,7 @@ auto c_str(const Drawn_lod_level_source source) -> const char*
     switch (source) {
         case Drawn_lod_level_source::selected:       return "selected";
         case Drawn_lod_level_source::template_range: return "template";
+        case Drawn_lod_level_source::retired:        return "retired";
         default:                                     return "?";
     }
 }
@@ -3805,9 +3930,9 @@ auto Draw_list_scene::get_published_entry_lod_level(
     // find_published_color_entry() resolved the entry against this frame's
     // slot: it is the object's entry for the primitive.
     ERHE_VERIFY((list_entry.object_index == entry.object_index) && (list_entry.mesh_primitive_index == entry.mesh_primitive_index));
-    const std::optional<uint32_t> selected = get_lod_level(frame_index, cull_view, entry.draw_list_index, entry.entry_index);
+    const std::optional<Drawn_lod_level> selected = get_lod_level(frame_index, cull_view, entry.draw_list_index, entry.entry_index);
     if (selected.has_value()) {
-        return Drawn_lod_level{.level = selected.value(), .source = Drawn_lod_level_source::selected};
+        return selected.value();
     }
     return Drawn_lod_level{.level = cull_lanes::get_lod_template_level(list_entry.lod_word), .source = Drawn_lod_level_source::template_range};
 }
@@ -3855,8 +3980,9 @@ void Draw_list_scene::request_lod_level_capture(const Draw_list_object_id object
 {
     assert_main_thread();
     const std::lock_guard<std::mutex> lock{m_lod_capture_mutex};
-    m_lod_capture_requested = true;
-    m_lod_capture_complete  = false;
+    m_lod_capture_requested  = true;
+    m_lod_capture_complete   = false;
+    m_lod_capture_awaits_gpu = false;
     m_lod_capture_object    = object;
 }
 
@@ -3876,7 +4002,8 @@ auto Draw_list_scene::poll_lod_level_capture(Lod_level_capture& out) -> Cull_cla
 void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_level_slot& level_slot)
 {
     const std::lock_guard<std::mutex> lock{m_lod_capture_mutex};
-    if (!m_lod_capture_requested) {
+    // An earlier frame's capture waiting for its GPU levels is the one.
+    if (!m_lod_capture_requested || m_lod_capture_awaits_gpu) {
         return;
     }
     // A diagnostic path: it may allocate.
@@ -3888,6 +4015,9 @@ void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_l
     capture.column_overflow_count = m_lod_column_overflow_count;
     capture.history_restart_count = m_lod_history_restart_count;
     capture.history_shift_count   = m_lod_history_shift_count;
+    capture.levels_from_gpu       = m_lod_levels_retired;
+    capture.has_retired_frame     = m_lod_retired_levels.valid;
+    capture.retired_frame_index   = m_lod_retired_levels.frame_index;
     for (uint32_t column = 0; column < m_lod_column_count; ++column) {
         const Lod_column& lod_column = m_lod_columns[column];
         capture.columns.push_back(
@@ -3926,6 +4056,7 @@ void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_l
             Lod_level_capture_entry& out = capture.entries.emplace_back();
             out.list_index           = static_cast<uint32_t>(list_index);
             out.entry_index          = static_cast<uint32_t>(i);
+            out.global_entry_index   = slot.entry_offsets[list_index] + static_cast<uint32_t>(i);
             out.purpose              = draw_list.key.purpose;
             out.mesh_primitive_index = entry.mesh_primitive_index;
             out.center               = glm::vec3{draw_list.bounds.center_x[i], draw_list.bounds.center_y[i], draw_list.bounds.center_z[i]};
@@ -3933,8 +4064,9 @@ void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_l
             out.max_axis_scale       = draw_list.bounds.max_axis_scale[i];
             out.lod_table_index      = entry.lod_table_index;
             out.lod_word             = entry.lod_word;
-            // A list without level words (a frame without columns) has no
-            // levels.
+            // A list without level words (a frame without columns, or the
+            // GPU's levels, filled in once the frame completed) has none
+            // yet.
             if (words.empty()) {
                 continue;
             }
@@ -3944,6 +4076,13 @@ void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_l
                 out.levels.push_back((words[word_index] >> (4u * (column.column % 8))) & 0xfu);
             }
         }
+    }
+    // The GPU's levels and changes of the frame, read back once it
+    // completed (decode_completed_lod_levels()).
+    if (m_lod_levels_retired) {
+        m_lod_capture_awaits_gpu  = true;
+        m_lod_capture_frame_index = level_slot.frame_index;
+        return;
     }
     m_lod_capture_requested = false;
     m_lod_capture_complete  = true;

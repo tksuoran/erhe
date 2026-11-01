@@ -45,6 +45,14 @@ there keeps every spot and point pass, and the dolly back redraws Point T
 again. The captures with the cache on and off must be identical in each
 step.
 
+With --lod-cpu-selection on_demand (doc/plans/lod_gpu_selection.md
+section 9, decision 5; in effect under culling_classification gpu, the
+editor's default) the CPU selection lanes do not run per frame and the
+cache's level test reads the per-column level changes of each frame once
+the GPU completed it, frames in flight late: a level change redraws the
+passes that many frames after it happened. Every step waits far longer
+(--settle-s), so the step expectations are the same.
+
 Needs Pillow and numpy. Example:
   python3 scripts/shadow_map_cache_check.py --editor build_xcode_metal/bin/Release/editor
 """
@@ -99,6 +107,8 @@ def main():
     parser.add_argument("--out", default="", help="directory for the captures (default: a temporary directory)")
     parser.add_argument("--settle-s", type=float, default=0.5, help="seconds to wait after each edit / cache switch")
     parser.add_argument("--lod", action="store_true", help="automatic level of detail selection on, LOD chains on the default scene's meshes, and the level test sequence")
+    parser.add_argument("--lod-cpu-selection", choices=("every_frame", "on_demand"), default="every_frame",
+                        help="with --lod: the graphics preset's lod_cpu_selection")
     args = parser.parse_args()
 
     out_dir = args.out or tempfile.mkdtemp(prefix="shadow_map_cache_")
@@ -132,7 +142,7 @@ def main():
     camera_name = call("get_viewports")["viewports"][0]["camera"]
     camera = next(node for node in nodes if node.get("name") == camera_name)
     if args.lod:
-        call("set_graphics_preset", lod_enabled=True, lod_threshold_pixels=4.0, lod_bias=0, lod_hysteresis_band=0.25)
+        call("set_graphics_preset", lod_enabled=True, lod_threshold_pixels=4.0, lod_bias=0, lod_hysteresis_band=0.25, lod_cpu_selection=args.lod_cpu_selection)
         call("create_shape", scene_name=scene, shape="torus", name="LOD torus", position=[0.0, 0.5, -1.2], scale=0.4, motion_mode="none")
         time.sleep(args.settle_s * 2.0)
         nodes = call("get_scene_nodes", scene_name=scene)["nodes"]
