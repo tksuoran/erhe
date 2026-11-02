@@ -19,6 +19,7 @@
 
 #include <glm/glm.hpp>
 
+#include "developer/nsight_graphics.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
 #include <optional>
@@ -383,6 +384,10 @@ private:
     auto action_set_light_cluster_binning (const nlohmann::json& args) -> std::string;
     auto query_light_cluster_stats        (const nlohmann::json& args) -> std::string;
     auto query_light_cluster_check        (const nlohmann::json& args) -> std::string;
+    auto action_start_nsight              (const nlohmann::json& args, Nsight_graphics::Activity activity) -> std::string;
+    auto action_start_nsight_gpu_trace    (const nlohmann::json& args) -> std::string;
+    auto action_start_nsight_graphics_capture(const nlohmann::json& args) -> std::string;
+    auto query_nsight_status              (const nlohmann::json& args) -> std::string;
     auto action_reset_composition_pass_stats(const nlohmann::json& args) -> std::string;
     auto query_get_physics_state(const nlohmann::json& args) -> std::string;
     auto action_create_physics_body(const nlohmann::json& args) -> std::string;

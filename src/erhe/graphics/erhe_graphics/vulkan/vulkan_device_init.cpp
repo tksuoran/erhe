@@ -22,6 +22,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <string_view>
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
@@ -383,6 +384,20 @@ Device_impl::Device_impl(
     );
     if (renderdoc_layer_present) {
         log_debug->info("RenderDoc capture layer is present - Vulkan validation layer will not be enabled");
+    }
+    // Nsight Graphics' Graphics Capture layer (versioned name,
+    // VK_LAYER_NV_ngfx_capture_<release>) does not support
+    // VK_EXT_present_timing (Present_timing_use).
+    const bool nsight_capture_layer_present = std::any_of(
+        instance_layers.begin(),
+        instance_layers.end(),
+        [](const VkLayerProperties& layer) {
+            return std::string_view{layer.layerName}.starts_with("VK_LAYER_NV_ngfx_capture");
+        }
+    );
+    if (nsight_capture_layer_present) {
+        m_present_timing_use = Present_timing_use::blocked_by_capture_layer;
+        log_context->info("Nsight Graphics capture layer is present - VK_EXT_present_timing will not be enabled");
     }
 
     if (

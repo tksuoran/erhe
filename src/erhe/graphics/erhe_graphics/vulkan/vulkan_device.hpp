@@ -673,7 +673,21 @@ private:
         VkPhysicalDevice vulkan_physical_device,
         bool             renderdoc_capture_support
     ) -> bool;
-    [[nodiscard]] static auto get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl, bool disable_ray_tracing) -> float;
+    // Whether VK_EXT_present_timing may be enabled: Nsight Graphics' Graphics
+    // Capture layer does not support it (it stops the process at device
+    // creation with a blocking "incompatibility" dialog), so it is left out
+    // while that layer is loaded; frame pacing then resolves without tier W.
+    enum class Present_timing_use : unsigned int
+    {
+        allowed,
+        blocked_by_capture_layer
+    };
+    [[nodiscard]] static auto get_physical_device_score(
+        VkPhysicalDevice   vulkan_physical_device,
+        Surface_impl*      surface_impl,
+        bool               disable_ray_tracing,
+        Present_timing_use present_timing_use
+    ) -> float;
     [[nodiscard]] static auto query_device_queue_family_indices(
         VkPhysicalDevice vulkan_physical_device,
         Surface_impl*    surface_impl,
@@ -685,7 +699,8 @@ private:
         Device_extensions&        device_extensions_out,
         std::vector<const char*>* device_extensions_c_str,
         bool                      headless,
-        bool                      disable_ray_tracing
+        bool                      disable_ray_tracing,
+        Present_timing_use        present_timing_use
     ) -> float;
     [[nodiscard]] auto choose_physical_device(Surface_impl* surface_impl, std::vector<const char*>& device_extensions_c_str) -> bool;
 
@@ -735,6 +750,9 @@ private:
     // Device_info::ray_query_disabled_by_capture_layer so the editor can tell
     // the user why ray tracing is unavailable.
     bool                     m_ray_tracing_blocked_by_capture_layer{false};
+    // Set at instance creation when Nsight Graphics' Graphics Capture layer
+    // (VK_LAYER_NV_ngfx_capture_*) is loaded (Present_timing_use).
+    Present_timing_use       m_present_timing_use{Present_timing_use::allowed};
     VkDebugReportCallbackEXT m_debug_report_callback      {VK_NULL_HANDLE};
     VkDebugUtilsMessengerEXT m_debug_utils_messenger      {VK_NULL_HANDLE};
     std::unique_ptr<Surface> m_surface                    {};

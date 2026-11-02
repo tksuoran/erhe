@@ -191,6 +191,8 @@ erhe_target_sources_grouped(
     developer/composer_window.hpp
     developer/ddgi_window.cpp
     developer/ddgi_window.hpp
+    developer/nsight_graphics.cpp
+    developer/nsight_graphics.hpp
     developer/radiance_cascades_window.cpp
     developer/radiance_cascades_window.hpp
     developer/depth_visualization_window.cpp
@@ -875,6 +877,19 @@ endif ()
 
 if (ERHE_GRAPHICS_API_OPENGL)
     target_link_libraries(${_target} PRIVATE erhe::gl)
+endif ()
+
+# Nsight Graphics GPU Trace / Graphics Capture control
+# (doc/editor/nsight_graphics.md); the SDK
+# is header-only and loads the injected trace library at run time.
+if (ERHE_GRAPHICS_API_VULKAN AND NOT ("${ERHE_NSIGHT_GRAPHICS_SDK_DIR}" STREQUAL ""))
+    if (NOT EXISTS "${ERHE_NSIGHT_GRAPHICS_SDK_DIR}/NGFX_GPUTrace_Vulkan.h")
+        message(FATAL_ERROR "ERHE_NSIGHT_GRAPHICS_SDK_DIR=${ERHE_NSIGHT_GRAPHICS_SDK_DIR} has no NGFX_GPUTrace_Vulkan.h")
+    endif ()
+    target_include_directories(${_target} SYSTEM PRIVATE "${ERHE_NSIGHT_GRAPHICS_SDK_DIR}" "${ERHE_VULKAN_HEADERS_INCLUDE_DIR}")
+    target_compile_definitions(${_target} PRIVATE ERHE_NSIGHT_GRAPHICS_SDK)
+    target_link_libraries(${_target} PRIVATE ${CMAKE_DL_LIBS})
+    message(STATUS "Editor built with Nsight Graphics SDK activity control from ${ERHE_NSIGHT_GRAPHICS_SDK_DIR}")
 endif ()
 
 if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")

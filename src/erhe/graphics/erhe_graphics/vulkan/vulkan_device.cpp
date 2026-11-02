@@ -904,7 +904,7 @@ auto Device_impl::choose_physical_device(
             const bool device_disable_ray_tracing =
                 m_graphics_config.vulkan.disable_ray_tracing ||
                 is_ray_tracing_blocked_by_capture_layer(physical_device, m_graphics_config.renderdoc_capture_support);
-            const float score = get_physical_device_score(physical_device, surface_impl, device_disable_ray_tracing);
+            const float score = get_physical_device_score(physical_device, surface_impl, device_disable_ray_tracing, m_present_timing_use);
             if (score > best_score) {
                 best_score      = score;
                 selected_device = physical_device;
@@ -952,11 +952,16 @@ auto Device_impl::choose_physical_device(
         m_ray_tracing_blocked_by_capture_layer;
 
     const bool headless = (surface_impl == nullptr) || surface_impl->is_headless();
-    query_device_extensions(m_vulkan_physical_device, m_device_extensions, &device_extensions_c_str, headless, disable_ray_tracing);
+    query_device_extensions(m_vulkan_physical_device, m_device_extensions, &device_extensions_c_str, headless, disable_ray_tracing, m_present_timing_use);
     return true;
 }
 
-auto Device_impl::get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl, const bool disable_ray_tracing) -> float
+auto Device_impl::get_physical_device_score(
+    VkPhysicalDevice         vulkan_physical_device,
+    Surface_impl*            surface_impl,
+    const bool               disable_ray_tracing,
+    const Present_timing_use present_timing_use
+) -> float
 {
     VkPhysicalDeviceProperties device_properties{};
     vkGetPhysicalDeviceProperties(vulkan_physical_device, &device_properties);
@@ -980,7 +985,7 @@ auto Device_impl::get_physical_device_score(VkPhysicalDevice vulkan_physical_dev
 
     Device_extensions device_extensions{};
     const bool headless = (surface_impl == nullptr) || surface_impl->is_headless();
-    const float extension_score = query_device_extensions(vulkan_physical_device, device_extensions, nullptr, headless, disable_ray_tracing);
+    const float extension_score = query_device_extensions(vulkan_physical_device, device_extensions, nullptr, headless, disable_ray_tracing, present_timing_use);
 
     return device_type_score + extension_score;
 }
@@ -1072,7 +1077,8 @@ auto Device_impl::query_device_extensions(
     Device_extensions&        device_extensions_out,
     std::vector<const char*>* device_extensions_c_str,
     const bool                headless,
-    const bool                disable_ray_tracing
+    const bool                disable_ray_tracing,
+    const Present_timing_use  present_timing_use
 ) -> float
 {
     float total_score = 0.0f;
@@ -1198,7 +1204,9 @@ auto Device_impl::query_device_extensions(
         check_device_extension(VK_KHR_PRESENT_WAIT_EXTENSION_NAME,   device_extensions_out.m_VK_KHR_present_wait,   1.0f);
         check_device_extension(VK_KHR_PRESENT_ID_2_EXTENSION_NAME,   device_extensions_out.m_VK_KHR_present_id2,    1.0f);
         check_device_extension(VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_wait2,  1.0f);
-        check_device_extension(VK_EXT_PRESENT_TIMING_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_timing, 3.0f);
+        if (present_timing_use == Present_timing_use::allowed) {
+            check_device_extension(VK_EXT_PRESENT_TIMING_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_timing, 3.0f);
+        }
         check_device_extension(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME, device_extensions_out.m_VK_GOOGLE_display_timing, 1.0f);
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
         // Exclusive fullscreen (Window_configuration::exclusive_fullscreen):

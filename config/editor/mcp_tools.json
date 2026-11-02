@@ -9487,6 +9487,48 @@
     "name": "get_light_cluster_check"
   },
   {
+    "description": "Start an Nsight Graphics GPU Trace of frame_count consecutive frames through the Nsight Graphics SDK (doc/editor/nsight_graphics.md): the trace starts at the render phase frame start skip_frames frames after the next one and stops at the frame boundary after the last traced frame. The editor must run under `ngfx --activity \"GPU Trace Profiler\" --start-with-ngfx-sdk --stop-with-ngfx-sdk` (scripts/nsight_graphics.py --activity trace) and be built with ERHE_NSIGHT_GRAPHICS_SDK_DIR on the Vulkan backend; otherwise the call errors. Errors also while a request is pending or tracing. Follow with get_nsight_status.",
+    "inputSchema": {
+      "properties": {
+        "frame_count": {
+          "description": "Frames (default 1)",
+          "type": "integer"
+        },
+        "skip_frames": {
+          "description": "Frames to let pass before the activity starts (default 0)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "start_nsight_gpu_trace"
+  },
+  {
+    "description": "Request an Nsight Graphics Graphics Capture (frame debugger capture, .ngfx-capture) of frame_count consecutive frames (1..60) through the Nsight Graphics SDK (doc/editor/nsight_graphics.md): requested at the render phase frame start skip_frames frames after the next one, the capture starts at the next present and ends after frame_count presents. The editor must run under `ngfx --activity \"Graphics Capture\" --hotkey-capture` (scripts/nsight_graphics.py --activity capture) and be built with ERHE_NSIGHT_GRAPHICS_SDK_DIR on the Vulkan backend; otherwise the call errors. Follow with get_nsight_status: capture_file_count grows and capture_file_path names the file once the capture is written.",
+    "inputSchema": {
+      "properties": {
+        "frame_count": {
+          "description": "Frames (default 1)",
+          "type": "integer"
+        },
+        "skip_frames": {
+          "description": "Frames to let pass before the activity starts (default 0)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "start_nsight_graphics_capture"
+  },
+  {
+    "description": "State of the Nsight Graphics activity a start_nsight_* tool requested (doc/editor/nsight_graphics.md): sdk_built, activity (gpu_trace or graphics_capture), state (idle, pending, tracing, stopped = GPU Trace stop issued, capturing = Graphics Capture requested from the SDK, failed), frame_count, frames_started, ngfx_status (GPU Trace: the SDK's status, inactive / active / tracing / draining / errored), capture_file_count and capture_file_path (Graphics Capture: completed capture files of this run and the newest one's path) and error.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_nsight_status"
+  },
+  {
     "name": "set_shadow_map_cache_enabled",
     "description": "Switch the shadow map cache for the rest of this editor run (session-only, never persisted; default enabled): enabled, each shadow pass (2D layer or cube face) is redrawn only when its light, its matrices or the shadow configuration changed, or a draw-list change reached its culling view, since it was drawn, and scenes with skinned objects draw every pass. get_scene_lights reports the kept passes per light (shadow_cached, shadow_cube_cached_faces) and the cumulative draws of each pass (shadow_draw_count, shadow_cube_face_draw_counts). Use to compare images and costs against every pass drawn.",
     "inputSchema": {

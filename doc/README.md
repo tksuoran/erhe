@@ -336,6 +336,7 @@ flowchart TD
 - [editor/lod.md](editor/lod.md) (experimental): Mesh level of detail in the editor: LOD window (generation for the selection, chain table with pixel errors, forced level slider) and the `lod` config section
 - [editor/mesh_component_selection.md](editor/mesh_component_selection.md) (mostly stable): Face / edge / vertex selection and viewport overlay
 - [editor/mesh_modeling.md](editor/mesh_modeling.md) (experimental): Modal mesh modeling tools (loop cut, inset, bevel, knife): gesture lifecycle, keys, MCP tools
+- [editor/nsight_graphics.md](editor/nsight_graphics.md) (experimental): Nsight Graphics GPU Trace and Graphics Capture started by the editor (start_nsight_* MCP tools, ERHE_NSIGHT_GRAPHICS_SDK_DIR, scripts/nsight_graphics.py)
 - [editor/operations.md](editor/operations.md) (stable): Implements the undo/redo operation system and all concrete editor operations
 - [editor/parsers.md](editor/parsers.md) (mostly stable): File format importers for loading 3D content into the editor, plus the erhe-authored glTF scene persistence entry points (doc/editor/gltf_scene_roundtrip.md)
 - [editor/joint_constraint_test_asset.md](editor/joint_constraint_test_asset.md) (stable): Joint constraint test scene: stations, what to look for, verification script

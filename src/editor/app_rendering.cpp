@@ -1741,6 +1741,11 @@ void App_rendering::trigger_capture()
     m_trigger_capture = true;
 }
 
+auto App_rendering::get_nsight_graphics() -> Nsight_graphics&
+{
+    return m_nsight_graphics;
+}
+
 auto App_rendering::width() const -> int
 {
     return m_context.context_window->get_width();
@@ -1795,6 +1800,7 @@ void App_rendering::process_start_capture()
     if (m_trigger_capture) {
         m_context.graphics_device->start_frame_capture();
     }
+    m_nsight_graphics.on_frame_start();
 }
 
 void App_rendering::request_renderdoc_capture()

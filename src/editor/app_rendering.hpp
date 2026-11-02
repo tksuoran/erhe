@@ -6,6 +6,7 @@
 #include "renderers/composition_pass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
 #include "erhe_commands/command.hpp"
 #include "app_message.hpp"
+#include "developer/nsight_graphics.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_message_bus/message_bus.hpp"
@@ -177,6 +178,10 @@ public:
     auto destroy_shadow_node(const std::shared_ptr<Shadow_render_node>& shadow_render_node) -> bool;
 
     void trigger_capture            ();
+    // The Nsight Graphics activity (GPU Trace or Graphics Capture) the
+    // start_nsight_* MCP tools request; process_start_capture() drives it at
+    // each render phase frame start.
+    [[nodiscard]] auto get_nsight_graphics() -> Nsight_graphics&;
     // include_overlay=false renders only content passes (the overlay -- tool /
     // rendertarget meshes -- is then drawn after post-processing by
     // render_overlay). When post-processing is disabled, pass true to render
@@ -328,6 +333,7 @@ private:
     // passes own their own Render_pass objects.
 
     bool                      m_trigger_capture{false};
+    Nsight_graphics           m_nsight_graphics;
     std::vector<std::shared_ptr<Shadow_render_node>> m_all_shadow_render_nodes;
 
     ERHE_PROFILE_MUTEX(std::mutex, m_renderables_mutex);

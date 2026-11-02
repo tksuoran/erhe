@@ -58,6 +58,7 @@ set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Ei
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
 set_option(ERHE_TRACY_ON_DEMAND            "Tracy records only while a profiler is connected. OFF captures startup"    "ON"       "ON;OFF")
 set(ERHE_TRACY_CALLSTACK_DEPTH 32 CACHE STRING "Callstack depth Tracy captures with every function zone; 0 records zones without callstacks (frame-time captures)")
+set(ERHE_NSIGHT_GRAPHICS_SDK_DIR "" CACHE PATH "Nsight Graphics SDK include directory (NsightGraphicsSDK/<version>/include); non-empty builds the editor's Nsight GPU Trace / Graphics Capture MCP tools (Vulkan only)")
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh, tinybvh or none"     "bvh"      "embree;bvh;tinybvh;none")
 set_option(ERHE_SVG_LIBRARY                "SVG loading library. Either plutosvg or none"                               "plutosvg" "plutosvg;none")
 set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"                     "harfbuzz" "harfbuzz;freetype;none")

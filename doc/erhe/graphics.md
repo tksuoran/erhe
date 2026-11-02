@@ -726,7 +726,7 @@ when a stage is compiled; changing it requires a restart.
 It is meant for profiling runs, where the measured shaders should be the
 optimized ones: the editor's `--benchmark` mode turns it on (the Quest
 benchmark runs), and the desktop profiling scripts (`bistro_frame_bench.py`,
-`render_thread_bench.py`) set the editor's
+`render_thread_bench.py`, `nsight_graphics.py`) set the editor's
 `ERHE_SPIRV_OPTIMIZATION=1|0` environment override, on by default
 (`--spirv-optimization off` for an A/B run). SPIRV-Tools and SPIRV-Headers are
 CPM dependencies pinned to the commits glslang's `known_good.json` names

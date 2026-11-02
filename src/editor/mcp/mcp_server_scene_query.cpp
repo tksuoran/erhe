@@ -1313,6 +1313,61 @@ auto Mcp_server::query_light_cluster_check(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_start_nsight(const json& args, const Nsight_graphics::Activity activity) -> std::string
+{
+    // doc/editor/nsight_graphics.md: the activity starts at a render phase
+    // frame start (App_rendering::process_start_capture()).
+    const std::string tool = fmt::format("start_nsight_{}", to_string(activity));
+    if (m_context.app_rendering == nullptr) {
+        return make_error_content(fmt::format("{}: app rendering not available", tool));
+    }
+    for (const char* const key : {"frame_count", "skip_frames"}) {
+        if (args.contains(key) && !args[key].is_number_unsigned()) {
+            return make_error_content(fmt::format("{}: '{}' must be a non-negative integer", tool, key));
+        }
+    }
+    const std::uint32_t frame_count = args.value("frame_count", std::uint32_t{1});
+    const std::uint32_t skip_frames = args.value("skip_frames", std::uint32_t{0});
+    const std::string   error       = m_context.app_rendering->get_nsight_graphics().request(activity, frame_count, skip_frames);
+    if (!error.empty()) {
+        return make_error_content(fmt::format("{}: {}", tool, error));
+    }
+    return make_json_content(json{
+        {"activity",    to_string(activity)},
+        {"frame_count", frame_count},
+        {"skip_frames", skip_frames}
+    }).dump();
+}
+
+auto Mcp_server::action_start_nsight_gpu_trace(const json& args) -> std::string
+{
+    return action_start_nsight(args, Nsight_graphics::Activity::gpu_trace);
+}
+
+auto Mcp_server::action_start_nsight_graphics_capture(const json& args) -> std::string
+{
+    return action_start_nsight(args, Nsight_graphics::Activity::graphics_capture);
+}
+
+auto Mcp_server::query_nsight_status(const json&) -> std::string
+{
+    if (m_context.app_rendering == nullptr) {
+        return make_error_content("get_nsight_status: app rendering not available");
+    }
+    const Nsight_graphics::Status status = m_context.app_rendering->get_nsight_graphics().get_status();
+    return make_json_content(json{
+        {"sdk_built",          status.sdk_built},
+        {"activity",           to_string(status.activity)},
+        {"state",              to_string(status.state)},
+        {"frame_count",        status.frame_count},
+        {"frames_started",     status.frames_started},
+        {"ngfx_status",        status.ngfx_status},
+        {"capture_file_count", status.capture_file_count},
+        {"capture_file_path",  status.capture_file_path},
+        {"error",              status.error}
+    }).dump();
+}
+
 auto Mcp_server::query_list_scenes(const json& args) -> std::string
 {
     static_cast<void>(args);

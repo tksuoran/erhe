@@ -145,6 +145,7 @@ attempt and the launch must be retried.
 | `ERHE_PROFILE_LIBRARY` | Profiler integration | `nvtx`, `superluminal`, `tracy`, `none` | `none` |
 | `ERHE_TRACY_ON_DEMAND` | Tracy records only while a profiler is connected | `ON`, `OFF` | `ON` |
 | `ERHE_TRACY_CALLSTACK_DEPTH` | Callstack depth captured with every Tracy function zone; `0` records zones without callstacks | integer | `32` |
+| `ERHE_NSIGHT_GRAPHICS_SDK_DIR` | Nsight Graphics SDK `include` directory; non-empty builds the editor's Nsight GPU Trace / Graphics Capture control (`doc/editor/nsight_graphics.md`, Vulkan only) | path | empty |
 | `ERHE_XR_LIBRARY` | XR library | `openxr`, `none` | `none` |
 | `ERHE_AUDIO_LIBRARY` | Audio library | `miniaudio`, `none` | `none` |
 | `ERHE_FONT_RASTERIZATION_LIBRARY` | Font rasterization | `freetype`, `none` | `freetype` |
