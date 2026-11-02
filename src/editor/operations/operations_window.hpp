@@ -4,6 +4,7 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_commands/command.hpp"
 #include "app_message.hpp"
+#include "assets/asset_fetch.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/glm.hpp>
@@ -611,6 +612,8 @@ private:
     ImGuiContext*                  m_save_confirm_imgui_context{nullptr};
 
     Make_mesh_config m_make_mesh_config{};
+    Asset_fetch_source m_bistro_fetch_source{get_bistro_fetch_source()};
+    Asset_fetch_source m_sponza_fetch_source{get_sponza_fetch_source()};
     Property_editor  m_property_editor{};
 
     // Operations-window search box. When non-empty, the collapsing section headers

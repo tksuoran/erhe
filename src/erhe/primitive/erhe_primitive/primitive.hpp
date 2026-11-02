@@ -135,9 +135,18 @@ private:
     bool                                       m_is_proxy{false};
 };
 
+// Who builds Geometry and the full buffer mesh (doc/plans/memory_budget.md step 10).
+enum class Full_build_policy : unsigned int {
+    deferred_finalize = 0,
+    on_demand         = 1
+};
+
 class Primitive_shape
 {
 public:
+    // Set before the shape is shared; an on-demand shape's real raytrace is built from its soup.
+    void set_full_build_policy(Full_build_policy policy) { m_full_build_policy = policy; }
+    [[nodiscard]] auto get_full_build_policy() const -> Full_build_policy { return m_full_build_policy; }
     Primitive_shape();
     Primitive_shape(const Primitive_shape&) = delete;
     Primitive_shape& operator=(const Primitive_shape&) = delete;
@@ -327,6 +336,7 @@ protected:
     Triangle_soup_counts                      m_triangle_soup_counts{};     // fixed at construction
     bool                                      m_triangle_soup_released{false}; // under m_state_mutex
     std::shared_ptr<const Prepared_primitive_data> m_prepared_data{};
+    Full_build_policy                              m_full_build_policy{Full_build_policy::deferred_finalize};
     bool                                           m_payload_pending{false}; // under m_state_mutex; source constructor until load_payload()
     std::unique_ptr<erhe::raytrace::Prebuilt_bvh>  m_stored_bvh{};          // under m_build_mutex
     bool                                           m_prepared_data_stale{false}; // under m_state_mutex
@@ -563,6 +573,8 @@ public:
     [[nodiscard]] auto make_prepared_optimized_render_shape(const Buffer_info& buffer_info, const Lod_settings* requested_lod_settings) const -> std::shared_ptr<Primitive_render_shape>;
     // The render shape carries prepared mesh data.
     [[nodiscard]] auto is_prepared             () const -> bool;
+    // Prepared, or Full_build_policy::on_demand: only a request builds Geometry and edge lines.
+    [[nodiscard]] auto has_on_demand_full_build() const -> bool;
     // Loads the render shape's pending payload (Primitive_shape::load_payload());
     // true when nothing is pending.
     auto load_payload() -> bool;

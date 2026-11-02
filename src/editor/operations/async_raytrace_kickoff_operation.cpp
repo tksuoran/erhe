@@ -7,6 +7,7 @@
 #include "parsers/gltf.hpp"
 #include "scene/scene_commit_queue.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_manager.hpp"
 #include "config/generated/viewport_config.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -20,11 +21,13 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_utility/memory_budget.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <deque>
 #include <optional>
 #include <unordered_set>
 
@@ -179,6 +182,7 @@ void deferred_finalize_mesh_items(
                     !primitive->optimized_render_shape &&
                     (primitive->optimization_hold_count == 0) &&
                     primitive->render_shape &&
+                    (primitive->render_shape->get_full_build_policy() != erhe::primitive::Full_build_policy::on_demand) &&
                     primitive->render_shape->has_buffer_mesh_triangles();
 
                 // A LOD request rebuilds the live variant, whether present or
@@ -236,7 +240,7 @@ void deferred_finalize_mesh_items(
             // A deferred base variant (Base_mesh_build::deferred) is built
             // by this full build.
             const bool needs_full_build =
-                (!primitive.is_prepared() || (prepared_full_build == Prepared_full_build::build)) &&
+                (!primitive.has_on_demand_full_build() || (prepared_full_build == Prepared_full_build::build)) &&
                 render_shape && (render_shape->has_buffer_mesh_triangles() || render_shape->is_base_deferred()) && !render_shape->has_edge_lines();
             // A complete mesh whose optimized variant is missing (snapshot
             // decision above) is rebuilt in full with force_rebuild: the
@@ -374,6 +378,15 @@ void deferred_finalize_mesh_items(
                     if (raytrace_shape && raytrace_shape->commit_real_raytrace()) {
                         swapped_a_shape = true;
                     }
+                    // An on-demand shape is final with its real raytrace; a request reads the soup back.
+                    if (
+                        primitive.render_shape &&
+                        (primitive.render_shape->get_full_build_policy() == erhe::primitive::Full_build_policy::on_demand) &&
+                        primitive.has_real_raytrace() &&
+                        !primitive.render_shape->has_edge_lines()
+                    ) {
+                        static_cast<void>(primitive.release_triangle_soup());
+                    }
                     if (primitive.render_shape && primitive.render_shape->commit_deferred_base_mesh()) {
                         // A base-only build: the optimized variant stays.
                         swapped_a_shape = true;
@@ -477,6 +490,138 @@ void deferred_finalize_mesh_items(
 
 } // anonymous namespace
 
+namespace {
+
+// Deferred finalize admission (doc/plans/memory_budget.md step 9); main thread only.
+class Pending_finalize
+{
+public:
+    std::weak_ptr<Scene_root>      scene_root;
+    std::weak_ptr<erhe::Item_base> item;
+    Mesh_optimize_cache_use        cache_use;
+    Prepared_full_build            prepared_full_build;
+    std::size_t                    byte_count;
+};
+
+std::deque<Pending_finalize> s_pending_finalizes;
+
+// Calibrated from the Sponza load (Geometry + BVH + full buffer build peak).
+constexpr std::size_t c_finalize_bytes_per_triangle = 1024;
+
+[[nodiscard]] auto estimate_finalize_byte_count(const erhe::scene::Mesh& mesh) -> std::size_t
+{
+    std::size_t triangle_count = 0;
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+        if ((primitive == nullptr) || !primitive->render_shape) {
+            continue;
+        }
+        const erhe::primitive::Primitive_render_shape& render_shape = *primitive->render_shape.get();
+        triangle_count += render_shape.has_triangle_soup()
+            ? (render_shape.get_triangle_soup_counts().index_count / 3)
+            : render_shape.get_renderable_mesh().triangle_fill_indices.get_triangle_count();
+    }
+    return std::max<std::size_t>(1, triangle_count * c_finalize_bytes_per_triangle);
+}
+
+void pump_finalizes(App_context& context);
+
+// Releases the lease and admits more, also when the finalize throws.
+class Finalize_completion
+{
+public:
+    Finalize_completion(App_context& context, erhe::utility::Memory_budget_lease&& lease)
+        : m_context{context}
+        , m_lease  {std::move(lease)}
+    {
+    }
+    ~Finalize_completion() noexcept
+    {
+        m_lease.reset();
+        m_context.scene_commit_queue->enqueue([&context = m_context]() { pump_finalizes(context); });
+    }
+    Finalize_completion(const Finalize_completion&) = delete;
+    Finalize_completion& operator=(const Finalize_completion&) = delete;
+
+private:
+    App_context&                       m_context;
+    erhe::utility::Memory_budget_lease m_lease;
+};
+
+void start_finalize(
+    App_context&                        context,
+    const std::shared_ptr<Scene_root>&  scene_root,
+    std::shared_ptr<erhe::Item_base>    item,
+    const Mesh_optimize_cache_use       cache_use,
+    const Prepared_full_build           prepared_full_build,
+    erhe::utility::Memory_budget_lease  lease
+)
+{
+    const std::vector<std::shared_ptr<erhe::Item_base>> single_item{std::move(item)};
+    std::shared_ptr<erhe::utility::Memory_budget_lease> held_lease = std::make_shared<erhe::utility::Memory_budget_lease>(std::move(lease));
+    async_for_nodes_with_mesh(
+        context,
+        single_item,
+        [&context, scene_root, cache_use, prepared_full_build, held_lease](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            const Finalize_completion completion{context, std::move(*held_lease)};
+            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, cache_use, prepared_full_build);
+        },
+        // The finalize manages its own narrow worker-context scope.
+        /*op_builds_gpu_meshes=*/false
+    );
+}
+
+// Starts pending finalizes, in order, while their leases fit the load memory budget.
+void pump_finalizes(App_context& context)
+{
+    const std::shared_ptr<erhe::utility::Memory_budget> budget = (context.asset_manager != nullptr)
+        ? context.asset_manager->get_load_memory_budget()
+        : std::shared_ptr<erhe::utility::Memory_budget>{};
+    while (!s_pending_finalizes.empty()) {
+        const Pending_finalize&                pending    = s_pending_finalizes.front();
+        const std::shared_ptr<Scene_root>      scene_root = pending.scene_root.lock();
+        std::shared_ptr<erhe::Item_base>       item       = pending.item.lock();
+        if (!scene_root || !item || (context.app_scenes == nullptr) || !context.app_scenes->is_host_registered(scene_root.get())) {
+            s_pending_finalizes.pop_front();
+            continue;
+        }
+        erhe::utility::Memory_budget_lease lease;
+        if (budget) {
+            lease = budget->try_acquire(pending.byte_count, erhe::utility::Memory_budget_kind::finalize);
+            if (lease.is_empty()) {
+                return;
+            }
+        }
+        const Mesh_optimize_cache_use cache_use           = pending.cache_use;
+        const Prepared_full_build     prepared_full_build = pending.prepared_full_build;
+        s_pending_finalizes.pop_front();
+        start_finalize(context, scene_root, std::move(item), cache_use, prepared_full_build, std::move(lease));
+    }
+}
+
+void queue_finalize(
+    App_context&                                context,
+    const std::shared_ptr<Scene_root>&          scene_root,
+    const std::shared_ptr<erhe::Item_base>&     item,
+    const Mesh_optimize_cache_use               cache_use,
+    const Prepared_full_build                   prepared_full_build
+)
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(item);
+    s_pending_finalizes.push_back(
+        Pending_finalize{
+            .scene_root          = scene_root,
+            .item                = item,
+            .cache_use           = cache_use,
+            .prepared_full_build = prepared_full_build,
+            .byte_count          = mesh ? estimate_finalize_byte_count(*mesh) : 1
+        }
+    );
+}
+
+} // anonymous namespace
+
 void Async_raytrace_kickoff_operation::execute(App_context& context)
 {
     std::shared_ptr<Scene_root> scene_root = m_scene_root;
@@ -504,25 +649,17 @@ void Async_raytrace_kickoff_operation::execute(App_context& context)
             continue;
         }
         ++queued_count;
-        const std::vector<std::shared_ptr<erhe::Item_base>> single_item{item};
-        async_for_nodes_with_mesh(
-            context,
-            single_item,
-            [scene_root, prepared_full_build](Mesh_operation_parameters&& mesh_operation_parameters)
-            {
-                deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::import_cache, prepared_full_build);
-            },
-            // The finalize manages its own NARROW worker-context scope
-            // around the GPU build only (the BVH build is CPU-heavy and
-            // must not hold a pool context) - and is dispatched per mesh,
-            // so it must not fall into the dispatcher's inline mode.
-            /*op_builds_gpu_meshes=*/false
-        );
+        queue_finalize(context, scene_root, item, Mesh_optimize_cache_use::import_cache, prepared_full_build);
+    }
+    std::size_t estimated_byte_count = 0;
+    for (const Pending_finalize& pending : s_pending_finalizes) {
+        estimated_byte_count += pending.byte_count;
     }
     log_operations->info(
-        "Async_raytrace_kickoff: {} deferred finalize tasks queued, {} meshes skipped (prepared mesh data, nothing to finalize)",
-        queued_count, skipped_count
+        "Async_raytrace_kickoff: {} deferred finalize tasks queued ({} still pending, {:.1f} MiB estimated), {} meshes skipped (prepared mesh data, nothing to finalize)",
+        queued_count, s_pending_finalizes.size(), static_cast<double>(estimated_byte_count) / (1024.0 * 1024.0), skipped_count
     );
+    pump_finalizes(context);
 }
 
 void Async_raytrace_kickoff_operation::undo(App_context&)
@@ -546,17 +683,8 @@ void kickoff_deferred_finalize(App_context& context, const std::shared_ptr<erhe:
         return;
     }
     const std::shared_ptr<Scene_root> scene_root = static_cast<Scene_root*>(item_host)->shared_from_this();
-    const std::vector<std::shared_ptr<erhe::Item_base>> single_item{node->shared_from_this()};
-    async_for_nodes_with_mesh(
-        context,
-        single_item,
-        [scene_root](Mesh_operation_parameters&& mesh_operation_parameters)
-        {
-            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::uncached, Prepared_full_build::skip);
-        },
-        // The finalize manages its own narrow worker-context scope.
-        /*op_builds_gpu_meshes=*/false
-    );
+    queue_finalize(context, scene_root, node->shared_from_this(), Mesh_optimize_cache_use::uncached, Prepared_full_build::skip);
+    pump_finalizes(context);
 }
 
 namespace {
@@ -566,7 +694,7 @@ namespace {
 {
     for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
         const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
-        if ((primitive != nullptr) && primitive->is_prepared() && !primitive->render_shape->has_edge_lines()) {
+        if ((primitive != nullptr) && primitive->has_on_demand_full_build() && !primitive->render_shape->has_edge_lines()) {
             return true;
         }
     }
@@ -586,17 +714,8 @@ void queue_prepared_full_build(
         return;
     }
     const std::shared_ptr<Scene_root>                   scene_root = host->shared_from_this();
-    const std::vector<std::shared_ptr<erhe::Item_base>> single_item{mesh->shared_from_this()};
-    async_for_nodes_with_mesh(
-        context,
-        single_item,
-        [scene_root, mode](Mesh_operation_parameters&& mesh_operation_parameters)
-        {
-            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::import_cache, mode);
-        },
-        // The finalize manages its own narrow worker-context scope.
-        /*op_builds_gpu_meshes=*/false
-    );
+    queue_finalize(context, scene_root, mesh->shared_from_this(), Mesh_optimize_cache_use::import_cache, mode);
+    pump_finalizes(context);
     ++queued_count;
 }
 

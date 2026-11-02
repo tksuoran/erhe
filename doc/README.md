@@ -303,6 +303,7 @@ flowchart TD
 ### Editor (`editor/`)
 
 - [editor/active_item.md](editor/active_item.md) (stable): The one explicit active item in Selection: rules, message, undo, MCP
+- [editor/asset_fetch.md](editor/asset_fetch.md) (experimental): Fetch Bistro / Sponza Scene buttons: HTTPS download (httplib + Mbed TLS) and zip extraction (miniz) into res/editor/assets
 - [editor/asset_browser_scan.md](editor/asset_browser_scan.md) (stable): Two-phase asset browser scan: worker directory walk, main-thread tree build
 - [editor/asset_manager.md](editor/asset_manager.md) (mostly stable): Single-loader asset manager: identity, ownership, usership, workflow verbs
 - [editor/async_asset_loading.md](editor/async_asset_loading.md) (mostly stable): Asynchronous glTF / asset loading pipeline: tasks, threads, budgets
@@ -475,6 +476,7 @@ flowchart TD
 - [plans/metal_backend.md](plans/metal_backend.md) (in progress): Metal backend: parity work
 - [plans/mcp_image_resolution.md](plans/mcp_image_resolution.md) (proposed): MCP image tools: requested resolution
 - [plans/mesh_component_selection.md](plans/mesh_component_selection.md) (proposed): Mesh component selection: outstanding work
+- [plans/memory_budget.md](plans/memory_budget.md) (in progress): Texture / mesh memory budget for scene loads: Sponza memory analysis, oversize staging fix, dedicated large textures, load-time BC7 / ASTC encoding and downscaling to fit
 - [plans/mesh_memory.md](plans/mesh_memory.md) (proposed): Mesh memory and primitive shapes: outstanding work
 - [plans/mesh_modeling.md](plans/mesh_modeling.md) (in progress): Blender-style mesh modeling operations: remaining work
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work

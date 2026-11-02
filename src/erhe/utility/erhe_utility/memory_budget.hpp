@@ -10,8 +10,9 @@ namespace erhe::utility {
 // What a share of a Memory_budget pays for, for the statistics.
 enum class Memory_budget_kind : unsigned int {
     mesh  = 0, // vertex / index bytes waiting in the mesh loader queue
-    image = 1, // decoded / encoded image bytes waiting for their upload
-    count = 2
+    image    = 1, // decoded / encoded image bytes waiting for their upload
+    finalize = 2, // working set of a deferred mesh finalize (Geometry, BVH, full build)
+    count    = 3
 };
 
 class Memory_budget;

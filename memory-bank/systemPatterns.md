@@ -22,6 +22,7 @@ C++20{concepts+span+format+constexpr+designated-init}
 !NoBandAid::FixRootCause¬MaskSymptom
 !NoRuntimeAlloc::SteadyFrame#0allocs{scratch-buffers,clear-keep-capacity,¬return-by-value-hot}
 ASCII-only{src+docs}{¬em-dash,¬curly-quotes}
+Comments::1-line{2-rare;3-exceptional;¬doc-blocks-above-class/function→doc/<subsystem>.md;¬repeat-name;¬history}
 ¬LockFree/Atomic{askFirst}→MutexPreferred
 std140/std430::explicit-alignment{UBO/SSBO}
 DiagFloats::hexfloat{%a,bit-exact}

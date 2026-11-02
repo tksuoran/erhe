@@ -7,6 +7,7 @@ set(_deviceless_target "erhe_graphics_tests")
 add_executable(${_deviceless_target}
     main.cpp
     test_display_refresh_resolver.cpp
+    test_image_encoder.cpp
     test_ktx2_container.cpp
     test_present_calibration_cache.cpp
     test_present_calibration_runner.cpp
@@ -33,6 +34,9 @@ target_link_libraries(${_deviceless_target}
         erhe::verify
         GTest::gtest
 )
+
+# test_image_encoder decodes ASTC with the astcenc package erhe::graphics compiles in.
+target_include_directories(${_deviceless_target} SYSTEM PRIVATE "${astcenc_SOURCE_DIR}/Source")
 
 erhe_target_settings(${_deviceless_target} "erhe/tests")
 

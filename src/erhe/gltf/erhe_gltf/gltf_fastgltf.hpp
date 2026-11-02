@@ -3,6 +3,7 @@
 #include "gltf_item_flags.hpp"
 #include "erhe_scene/physics_description.hpp"
 
+#include "erhe_graphics/image_encoder.hpp"
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_math/aabb.hpp"
@@ -118,6 +119,8 @@ public:
     // modification time differs from the recorded ones (it may hold other
     // bytes at the range). Thread-safe; opens and closes the file per call.
     [[nodiscard]] auto read(std::vector<std::byte>& out) const -> bool;
+    // At most max_byte_count bytes from the start, with the checks of read().
+    [[nodiscard]] auto read_prefix(std::size_t max_byte_count, std::vector<std::byte>& out) const -> bool;
 };
 
 // Generic ERHE_* vendor-extension passthrough
@@ -147,6 +150,7 @@ public:
     bool                               resident {false}; // texture created and upload recorded
     bool                               ok       {false}; // decode succeeded (valid once decoded)
     erhe::graphics::Image_info         info{};
+    erhe::graphics::Image_reduction    reduction{};      // from the texture plan, applied by the decode
     std::vector<std::uint8_t>          pixels;           // held from decode until resident
     std::shared_ptr<Gltf_image_source> source;           // encoded stream, decoded from; null when unreadable
     std::string                        name;
@@ -204,6 +208,21 @@ public:
 
 class Gltf_data;
 
+// One load's textures against its budget (doc/plans/memory_budget.md step 5).
+class Gltf_texture_plan
+{
+public:
+    bool        planned         {false}; // plan_textures() ran
+    bool        reduced         {false}; // some image has a reduction
+    bool        fits            {true};  // planned_byte_count <= budget_byte_count
+    std::size_t budget_byte_count   {0};
+    std::size_t estimated_byte_count{0}; // as loaded without reductions
+    std::size_t planned_byte_count  {0};
+    std::size_t image_count         {0}; // requested images with a readable header
+    std::size_t encoded_count       {0};
+    std::size_t downscaled_count    {0};
+};
+
 // The decode and GPU half of image loading, split out of the parse.
 // parse_gltf leaves Gltf_data::images empty and every image's encoded stream
 // here; nothing in Gltf_data holds a Texture until residency has run, so a
@@ -238,6 +257,13 @@ public:
     erhe::graphics::Astc_support               astc_support{erhe::graphics::Astc_support::decode_to_rgba8};
     ::tf::Executor*                            decode_executor{nullptr};
     bool                                       parallel_decode{true};
+    std::size_t                                texture_byte_budget{0}; // 0: no budget
+    erhe::graphics::Block_encode_format        block_encode_format{erhe::graphics::Block_encode_format::none};
+    std::filesystem::path                      reduction_cache_directory; // empty: reduced images are not cached
+
+    // Sets each image's reduction once, before the first decode.
+    void plan_textures();
+    [[nodiscard]] auto get_texture_plan() const -> const Gltf_texture_plan& { return m_texture_plan; }
 
     // Share `budget` (the editor's load memory budget) for the decoded
     // pixels. Set before the first decode; without it the residency uses a
@@ -322,6 +348,7 @@ private:
     // room; it is retried first, so the staging cap's size mark (which makes
     // smaller requests wait behind it) is always honored by its owner.
     std::size_t                              m_retry_image_index{~std::size_t{0}};
+    Gltf_texture_plan                        m_texture_plan;
 };
 
 // One KHR_materials_variants mapping, resolved to the objects the parse
@@ -509,6 +536,10 @@ public:
     // KTX2 images then upload as stored, else they are decoded to RGBA8.
     erhe::graphics::Astc_support astc_support{erhe::graphics::Astc_support::decode_to_rgba8};
     float max_sampler_anisotropy{1.0f};
+    // Forwarded to Gltf_image_residency.
+    erhe::graphics::Block_encode_format block_encode_format{erhe::graphics::Block_encode_format::none};
+    std::size_t                         texture_byte_budget{0};
+    std::filesystem::path               texture_cache_directory;
 };
 
 [[nodiscard]] auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_device_options;

@@ -140,6 +140,7 @@ private:
 
     Device_impl&                   m_device_impl;
     VmaAllocation                  m_vma_allocation{VK_NULL_HANDLE};
+    bool                           m_dedicated_allocation{false}; // holds a Device_impl dedicated image grant
     VkImage                        m_vk_image      {VK_NULL_HANDLE};
     VkSampler                      m_vk_sampler    {VK_NULL_HANDLE};
     std::vector<Cached_image_view> m_cached_image_views;

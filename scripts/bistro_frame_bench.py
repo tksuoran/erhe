@@ -56,7 +56,8 @@ DEFAULT_SCENE = "res/editor/assets/bistro_lights_compressed/bistro_lights_c.gltf
 # The default scene is not in the repository (res/editor/assets/ is
 # ignored): a zip of the bistro_lights_compressed folder (268 MB; the
 # folder's parent is the extraction root) is downloaded from Google Drive
-# when the scene file is missing.
+# when the scene file is missing. The editor's Fetch Bistro Scene button
+# fetches the same archive (doc/editor/asset_fetch.md).
 DEFAULT_SCENE_ARCHIVE_DRIVE_ID = "1GlmOPAURKOgwAshlP8hhiUwg-US-l9JI"
 DEFAULT_SCENE_ARCHIVE_ROOT = "res/editor/assets"
 

@@ -2341,6 +2341,7 @@ Device_impl::Device_impl(
     };
 
     m_info.sub_pixel_precision_bits                  = cap(limits.subPixelPrecisionBits);
+    m_max_dedicated_image_allocations                = limits.maxMemoryAllocationCount / 8;
     m_info.max_per_stage_descriptor_samplers         = limits.maxPerStageDescriptorSamplers;
     m_info.max_combined_texture_image_units          = cap(limits.maxDescriptorSetSampledImages);
     m_info.max_uniform_block_size                    = cap(limits.maxUniformBufferRange);

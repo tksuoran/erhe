@@ -666,6 +666,22 @@ CPMAddPackage(
     GITHUB_REPOSITORY nlohmann/json
 )
 
+# TLS for httplib's HTTPS client (the editor's asset fetch,
+# doc/editor/asset_fetch.md). Mbed TLS builds the same on every erhe
+# platform; the 3.6 LTS release archive carries its generated sources, so
+# no Python step runs at configure time.
+CPMAddPackage(
+    NAME              mbedtls
+    VERSION           3.6.7
+    URL               https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2
+    OPTIONS
+        "ENABLE_PROGRAMS OFF"
+        "ENABLE_TESTING OFF"
+        "MBEDTLS_FATAL_WARNINGS OFF"
+        "USE_SHARED_MBEDTLS_LIBRARY OFF"
+        "USE_STATIC_MBEDTLS_LIBRARY ON"
+)
+
 CPMAddPackage(
     NAME              httplib
     VERSION           0.43.1
@@ -683,7 +699,37 @@ CPMAddPackage(
         # feature set does not depend on incidentally-present vendored targets.
         "HTTPLIB_USE_ZSTD_IF_AVAILABLE OFF"
         "HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF"
+        # One TLS backend on every platform: Mbed TLS, attached below. A system
+        # OpenSSL found by chance would add a second, conflicting backend.
+        "HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF"
+        # Its install export would have to name the Mbed TLS target too.
+        "HTTPLIB_INSTALL OFF"
 )
+# httplib's own MbedTLS switch calls find_package(MbedTLS), which does not
+# see the CPM build-tree target; the header-only target takes it directly.
+target_link_libraries(httplib INTERFACE MbedTLS::mbedtls)
+target_compile_definitions(httplib INTERFACE CPPHTTPLIB_MBEDTLS_SUPPORT)
+if (APPLE)
+    # Root certificates come from the macOS keychain.
+    target_link_libraries(httplib INTERFACE "-framework CoreFoundation" "-framework Security")
+endif ()
+
+# Zip archive extraction for the editor's asset fetch.
+CPMAddPackage(
+    NAME              miniz
+    VERSION           3.1.2
+    GIT_TAG           3.1.2
+    GIT_SHALLOW       TRUE
+    GITHUB_REPOSITORY richgel999/miniz
+    OPTIONS
+        "BUILD_EXAMPLES OFF"
+        "BUILD_FUZZERS OFF"
+        "BUILD_TESTS OFF"
+        "INSTALL_PROJECT OFF"
+)
+# erhe calls the mz_ API only; the zlib-named aliases would collide with zlib
+# headers that other dependencies (httplib on Linux) include.
+target_compile_definitions(miniz PUBLIC MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
 
 include(vscode)
 vscode_support()

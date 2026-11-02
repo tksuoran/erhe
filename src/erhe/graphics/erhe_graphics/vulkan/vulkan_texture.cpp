@@ -53,6 +53,7 @@ auto to_vk_image_view_type(const Texture_type type) -> VkImageViewType
 Texture_impl::Texture_impl(Texture_impl&& other) noexcept
     : m_device_impl           {other.m_device_impl}
     , m_vma_allocation        {other.m_vma_allocation}
+    , m_dedicated_allocation  {other.m_dedicated_allocation}
     , m_vk_image              {other.m_vk_image}
     , m_cached_image_views    {std::move(other.m_cached_image_views)}
     , m_is_view               {other.m_is_view}
@@ -62,8 +63,9 @@ Texture_impl::Texture_impl(Texture_impl&& other) noexcept
     , m_layout_state          {std::move(other.m_layout_state)}
 {
     other.m_vk_image       = VK_NULL_HANDLE;
-    other.m_vma_allocation = VK_NULL_HANDLE;
-    other.m_is_view        = false;
+    other.m_vma_allocation       = VK_NULL_HANDLE;
+    other.m_dedicated_allocation = false;
+    other.m_is_view              = false;
 }
 
 Texture_impl::~Texture_impl() noexcept
@@ -78,9 +80,11 @@ Texture_impl::~Texture_impl() noexcept
     m_cached_image_views.clear();
 
     const VkImage       vk_image       = m_vk_image;
-    const VmaAllocation vma_allocation = m_vma_allocation;
-    m_vk_image       = VK_NULL_HANDLE;
-    m_vma_allocation = VK_NULL_HANDLE;
+    const VmaAllocation vma_allocation       = m_vma_allocation;
+    const bool          dedicated_allocation = m_dedicated_allocation;
+    m_vk_image             = VK_NULL_HANDLE;
+    m_vma_allocation       = VK_NULL_HANDLE;
+    m_dedicated_allocation = false;
 
     if (log_texture->should_log(spdlog::level::debug) && (vk_image != VK_NULL_HANDLE)) {
         log_texture->debug(
@@ -92,7 +96,7 @@ Texture_impl::~Texture_impl() noexcept
     }
 
     m_device_impl.add_completion_handler(
-        [image_views_to_destroy = std::move(image_views_to_destroy), vk_image, vma_allocation](Device_impl& device_impl) {
+        [image_views_to_destroy = std::move(image_views_to_destroy), vk_image, vma_allocation, dedicated_allocation](Device_impl& device_impl) {
             VkDevice vulkan_device = device_impl.get_vulkan_device();
             for (VkImageView view : image_views_to_destroy) {
                 vkDestroyImageView(vulkan_device, view, nullptr);
@@ -110,6 +114,9 @@ Texture_impl::~Texture_impl() noexcept
                     );
                 }
                 vmaDestroyImage(allocator, vk_image, vma_allocation);
+            }
+            if (dedicated_allocation) {
+                device_impl.release_dedicated_image_allocation();
             }
         }
     );
@@ -207,8 +214,14 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
 
     //const bool transfer_dst = erhe::utility::test_bit_set(create_info.usage_mask, Image_usage_flag_bit_mask::transfer_dst);
     // TODO .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT,
+    // A quarter of VMA's default block (doc/plans/memory_budget.md step 2).
+    constexpr std::size_t dedicated_image_byte_count = std::size_t{64} * 1024 * 1024;
+    m_dedicated_allocation =
+        (estimate_texture_byte_count(create_info) >= dedicated_image_byte_count) &&
+        m_device_impl.try_acquire_dedicated_image_allocation();
+    const bool dedicated = m_dedicated_allocation;
     const VmaAllocationCreateInfo allocation_create_info{
-        .flags          = 0,
+        .flags          = dedicated ? static_cast<VmaAllocationCreateFlags>(VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT) : VmaAllocationCreateFlags{0},
         .usage          = VMA_MEMORY_USAGE_AUTO,
         .requiredFlags  = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         .preferredFlags = 0,

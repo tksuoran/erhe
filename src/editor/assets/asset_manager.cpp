@@ -1,6 +1,7 @@
 #include "assets/asset_manager.hpp"
 
 #include "app_context.hpp"
+#include "assets/load_memory_budget.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_load_task.hpp"
@@ -1222,7 +1223,7 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
     erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
         .executor        = *m_context.executor,
-        .device_options  = erhe::gltf::query_gltf_device_options(*m_context.graphics_device),
+        .device_options  = make_gltf_device_options(m_context, *m_context.graphics_device),
         .root_node       = record->root_node,
         .mesh_layer_id   = 0,
         .path            = canonical_path,

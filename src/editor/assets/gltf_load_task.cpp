@@ -1,6 +1,7 @@
 #include "assets/gltf_load_task.hpp"
 
 #include "app_context.hpp"
+#include "assets/load_memory_budget.hpp"
 #include "assets/asset_load_tick_context.hpp"
 #include "assets/asset_manager.hpp"
 #include "config/generated/editor_settings_config.hpp"
@@ -274,7 +275,7 @@ void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
     // handed to the worker by value.
     erhe::gltf::Gltf_parse_arguments parse_arguments{
         .executor        = tick_context.executor,
-        .device_options  = erhe::gltf::query_gltf_device_options(tick_context.graphics_device),
+        .device_options  = make_gltf_device_options(m_context, tick_context.graphics_device),
         .root_node       = parse_result->container_node,
         .mesh_layer_id   = m_mesh_layer_id,
         .path            = path,

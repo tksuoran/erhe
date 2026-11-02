@@ -6,14 +6,7 @@
 
 namespace editor {
 
-// Nsight Graphics activities started by the editor itself through the
-// Nsight Graphics SDK (doc/editor/nsight_graphics.md): a GPU Trace or a
-// Graphics Capture of frames a script picked over MCP, so the result covers
-// a scene state the script set up instead of a timed guess. ngfx launches
-// the editor with the activity injected and waiting for the application
-// (GPU Trace: --start-with-ngfx-sdk --stop-with-ngfx-sdk; Graphics Capture:
-// --hotkey-capture). Built only with ERHE_NSIGHT_GRAPHICS_SDK_DIR on the
-// Vulkan backend; other builds report the tools as unavailable.
+// GPU Trace / Graphics Capture through the Nsight Graphics SDK: doc/editor/nsight_graphics.md
 class Nsight_graphics
 {
 public:
@@ -47,15 +40,11 @@ public:
         std::string   error;
     };
 
-    // Main thread (MCP): runs the activity over frame_count consecutive
-    // frames, starting at the render phase frame start skip_frames frames
-    // after the next one. Returns an empty string, or why nothing was
-    // requested.
+    // Main thread (MCP). Returns an empty string, or why nothing was requested.
     [[nodiscard]] auto request   (Activity activity, std::uint32_t frame_count, std::uint32_t skip_frames) -> std::string;
     [[nodiscard]] auto get_status() -> Status;
 
-    // Render phase, at the start of each frame (before any submit): issues
-    // the SDK calls of a requested activity.
+    // Render phase, at each frame start before any submit.
     void on_frame_start();
 
 private:

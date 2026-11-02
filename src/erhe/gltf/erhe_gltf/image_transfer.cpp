@@ -158,38 +158,13 @@ void Image_transfer::upload(
 
     erhe::graphics::Scoped_transient_object_pool object_pool{};
 
-    // Images larger than the whole staging ring take a dedicated one-shot
-    // staging buffer instead (rare: e.g. 8k uncompressed sources). The
-    // copies are flushed immediately so the buffer can be released right
-    // away instead of piling up until some later frame completes.
+    // Bands, not a one-shot buffer: doc/plans/memory_budget.md step 1.
     if (byte_count + s_staging_alignment > m_staging->get_capacity_byte_count()) {
-        log_gltf->info("Image_transfer: {} byte image exceeds the staging ring; using a dedicated staging buffer", byte_count);
-        erhe::graphics::Buffer staging_buffer{
-            m_graphics_device,
-            erhe::graphics::Buffer_create_info{
-                .capacity_byte_count               = byte_count,
-                .usage                             = erhe::graphics::Buffer_usage::transfer_src,
-                .required_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::host_write,
-                .init_data                         = pixels.data(),
-                .debug_label                       = "Image_transfer oversize staging"
-            }
-        };
-        record_copies(get_transfer_command_buffer(), image_info, staging_buffer, 0, texture, generate_mipmap);
-        flush(); // GPU is done with staging_buffer when this returns
+        upload_in_bands(image_info, pixels, texture, generate_mipmap);
         return;
     }
 
-    erhe::graphics::Ring_buffer_range range = m_staging->acquire(
-        s_staging_alignment, erhe::graphics::Ring_buffer_usage::CPU_write, byte_count
-    );
-    if (range.get_span().empty()) {
-        // Staging ring full of previously staged uploads: flush (submit +
-        // wait + reclaim) and retry. This is what keeps staging bounded and
-        // the load progressing without depending on frame completions.
-        flush();
-        range = m_staging->acquire(s_staging_alignment, erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-    }
-    ERHE_VERIFY(!range.get_span().empty());
+    erhe::graphics::Ring_buffer_range range = acquire_staging(byte_count);
 
     std::memcpy(range.get_span().data(), pixels.data(), byte_count);
     range.bytes_written(byte_count);
@@ -203,6 +178,82 @@ void Image_transfer::upload(
         generate_mipmap
     );
     range.release();
+}
+
+auto Image_transfer::acquire_staging(const std::size_t byte_count) -> erhe::graphics::Ring_buffer_range
+{
+    erhe::graphics::Ring_buffer_range range = m_staging->acquire(
+        s_staging_alignment, erhe::graphics::Ring_buffer_usage::CPU_write, byte_count
+    );
+    if (range.get_span().empty()) {
+        // Ring full: flush (submit + wait + reclaim) and retry.
+        flush();
+        range = m_staging->acquire(s_staging_alignment, erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+    }
+    ERHE_VERIFY(!range.get_span().empty());
+    return range;
+}
+
+void Image_transfer::upload_in_bands(
+    const erhe::graphics::Image_info&   image_info,
+    const std::span<const std::uint8_t> pixels,
+    erhe::graphics::Texture&            texture,
+    const bool                          generate_mipmap
+)
+{
+    const erhe::dataformat::Format format       = image_info.format;
+    const bool                     is_compressed = erhe::dataformat::is_block_compressed(format);
+    const std::size_t              block_extent  = erhe::dataformat::get_block_extent(format);
+    // Half the ring per band, so a band fits beside the one before it.
+    const std::size_t              band_capacity = (m_staging->get_capacity_byte_count() / 2) - s_staging_alignment;
+
+    const int   level_count  = std::max(1, image_info.level_count);
+    std::size_t level_offset = 0;
+    for (int level = 0; level < level_count; ++level) {
+        const std::size_t level_width      = static_cast<std::size_t>(std::max(1, image_info.width  >> level));
+        const std::size_t level_height     = static_cast<std::size_t>(std::max(1, image_info.height >> level));
+        const std::size_t level_byte_count = erhe::dataformat::get_image_level_size_bytes(format, level_width, level_height);
+        const std::size_t block_row_count  = (level_height + block_extent - 1) / block_extent;
+        const std::size_t block_row_bytes  = level_byte_count / block_row_count;
+        const std::size_t band_block_rows  = std::max<std::size_t>(1, band_capacity / block_row_bytes);
+        ERHE_VERIFY(level_offset + level_byte_count <= pixels.size());
+
+        for (std::size_t first_block_row = 0; first_block_row < block_row_count; first_block_row += band_block_rows) {
+            const std::size_t band_rows       = std::min(band_block_rows, block_row_count - first_block_row);
+            const std::size_t band_byte_count = band_rows * block_row_bytes;
+            const std::size_t first_texel_row = first_block_row * block_extent;
+            const std::size_t band_height     = std::min(band_rows * block_extent, level_height - first_texel_row);
+
+            erhe::graphics::Ring_buffer_range range = acquire_staging(band_byte_count);
+            std::memcpy(range.get_span().data(), pixels.data() + level_offset + (first_block_row * block_row_bytes), band_byte_count);
+            range.bytes_written(band_byte_count);
+            range.close();
+
+            erhe::graphics::Blit_command_encoder encoder{m_graphics_device, get_transfer_command_buffer()};
+            encoder.copy_from_buffer(
+                erhe::graphics::Buffer_texel_location{
+                    .buffer          = m_staging->get_buffer(),
+                    .offset          = range.get_byte_start_offset_in_buffer(),
+                    .bytes_per_row   = is_compressed ? 0 : block_row_bytes,
+                    .bytes_per_image = band_byte_count
+                },
+                glm::ivec3{static_cast<int>(level_width), static_cast<int>(band_height), image_info.depth},
+                erhe::graphics::Texture_location{
+                    .texture = &texture,
+                    .slice   = 0,
+                    .level   = static_cast<std::uintptr_t>(level),
+                    .origin  = glm::ivec3{0, static_cast<int>(first_texel_row), 0}
+                }
+            );
+            range.release();
+        }
+        level_offset += level_byte_count;
+    }
+
+    if (generate_mipmap) {
+        erhe::graphics::Blit_command_encoder encoder{m_graphics_device, get_transfer_command_buffer()};
+        encoder.generate_mipmaps(&texture);
+    }
 }
 
 auto Image_transfer::upload_into_frame(

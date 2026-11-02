@@ -3,6 +3,7 @@
 #include "gltf_item_flags.hpp"
 #include "erhe_scene/physics_description.hpp"
 
+#include "erhe_graphics/image_encoder.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_scene/instance_override.hpp"
 
@@ -102,9 +103,28 @@ public:
 
 class Gltf_data;
 
+class Gltf_texture_plan
+{
+public:
+    bool        planned         {false};
+    bool        reduced         {false};
+    bool        fits            {true};
+    std::size_t budget_byte_count   {0};
+    std::size_t estimated_byte_count{0};
+    std::size_t planned_byte_count  {0};
+    std::size_t image_count         {0};
+    std::size_t encoded_count       {0};
+    std::size_t downscaled_count    {0};
+};
+
 class Gltf_image_residency
 {
 public:
+    std::size_t                         texture_byte_budget{0};
+    erhe::graphics::Block_encode_format block_encode_format{erhe::graphics::Block_encode_format::none};
+    void plan_textures() {}
+    [[nodiscard]] auto get_texture_plan() const -> const Gltf_texture_plan& { return m_texture_plan; }
+
     [[nodiscard]] auto get_decode_path_counts() const -> const Gltf_image_decode_path_counts& { return m_decode_path_counts; }
     [[nodiscard]] auto get_pending_image_count() const -> std::size_t { return 0; }
     static constexpr std::size_t default_max_decoded_bytes_in_flight = 128 * 1024 * 1024;
@@ -121,6 +141,7 @@ public:
 
 private:
     Gltf_image_decode_path_counts m_decode_path_counts;
+    Gltf_texture_plan             m_texture_plan;
 };
 
 // What the parse did with the prepared mesh data of a file
@@ -226,6 +247,9 @@ class Gltf_device_options
 public:
     unsigned int transcode_format_preference{0};
     float        max_sampler_anisotropy{1.0f};
+    erhe::graphics::Block_encode_format block_encode_format{erhe::graphics::Block_encode_format::none};
+    std::size_t                         texture_byte_budget{0};
+    std::filesystem::path               texture_cache_directory;
 };
 
 [[nodiscard]] auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_device_options;

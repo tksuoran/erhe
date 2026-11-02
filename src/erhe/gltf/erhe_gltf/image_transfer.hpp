@@ -127,6 +127,13 @@ private:
         bool                              generate_mipmap
     );
     [[nodiscard]] auto get_transfer_command_buffer() -> erhe::graphics::Command_buffer&;
+    [[nodiscard]] auto acquire_staging(std::size_t byte_count) -> erhe::graphics::Ring_buffer_range;
+    void upload_in_bands(
+        const erhe::graphics::Image_info& image_info,
+        std::span<const std::uint8_t>     pixels,
+        erhe::graphics::Texture&          texture,
+        bool                              generate_mipmap
+    );
 
     erhe::graphics::Device&                    m_graphics_device;
     Image_transfer_mode                        m_mode{Image_transfer_mode::blocking_drain};

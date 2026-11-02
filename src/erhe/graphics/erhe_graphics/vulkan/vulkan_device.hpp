@@ -321,6 +321,9 @@ public:
     [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget;
     [[nodiscard]] auto get_debug_state                    () const -> Device_debug_state;
     [[nodiscard]] auto get_allocator                      () -> VmaAllocator&;
+    // At most an eighth of maxMemoryAllocationCount is granted.
+    [[nodiscard]] auto try_acquire_dedicated_image_allocation() -> bool;
+    void release_dedicated_image_allocation();
     // Allocator to use for a buffer with the given usage. Buffers that carry
     // Buffer_usage::shader_device_address must come from an allocator created
     // with VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT; everything else
@@ -980,6 +983,10 @@ private:
     uint64_t    m_gpu_timer_valid_mask      {0};
     bool        m_gpu_timers_supported      {false};
     std::mutex  m_gpu_timer_mutex;
+    std::mutex  m_dedicated_image_mutex;
+    uint32_t    m_dedicated_image_allocation_count{0};
+    uint32_t    m_max_dedicated_image_allocations {0};
+    bool        m_dedicated_image_limit_logged    {false};
     std::array<Gpu_timer_impl*,       s_max_gpu_timers> m_gpu_timer_by_index{};
     std::array<bool,                  s_max_gpu_timers> m_gpu_timer_slot_used{};
     std::array<std::array<bool, s_max_gpu_timers>, s_number_of_frames_in_flight> m_gpu_timer_fired{};

@@ -56,6 +56,8 @@ erhe_target_sources_grouped(
     erhe_graphics/graphics_log.hpp
     erhe_graphics/image_loader.hpp
     erhe_graphics/image_loader_dds.cpp
+    erhe_graphics/image_encoder.cpp
+    erhe_graphics/image_encoder.hpp
     erhe_graphics/image_loader_dds.hpp
     erhe_graphics/image_loader_ktx2.cpp
     erhe_graphics/image_loader_ktx2.hpp
@@ -237,11 +239,11 @@ else ()
 endif ()
 target_include_directories(${_interface_target} SYSTEM PRIVATE "${basis_universal_SOURCE_DIR}")
 
-# ASTC decoder (image_loader_ktx2 raw ASTC path on devices without ASTC
-# sampling): the decoder half of the download-only astcenc package compiled
-# into the interface target. ASTCENC_DECOMPRESS_ONLY drops the encoder; the
-# SIMD level is picked by astcenc_mathlib.h from the compiler's target
-# macros (SSE2/AVX2 on x64, NEON on arm64).
+# ASTC codec: decoder for image_loader_ktx2 (raw ASTC on devices without ASTC
+# sampling) and encoder for image_encoder (load-time texture reduction,
+# doc/plans/memory_budget.md), from the download-only astcenc package. The
+# SIMD level is picked by astcenc_mathlib.h from the compiler's target macros
+# (SSE2/AVX2 on x64, NEON on arm64).
 set(_astcenc_sources
     astcenc_averages_and_directions.cpp
     astcenc_block_sizes.cpp
@@ -269,7 +271,6 @@ set(_astcenc_sources
 list(TRANSFORM _astcenc_sources PREPEND "${astcenc_SOURCE_DIR}/Source/")
 target_sources(${_interface_target} PRIVATE ${_astcenc_sources})
 set_source_files_properties(${_astcenc_sources} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-target_compile_definitions(${_interface_target} PRIVATE ASTCENC_DECOMPRESS_ONLY)
 if (MSVC)
     # Third-party source: exempt from warnings-as-errors.
     set_source_files_properties(${_astcenc_sources} PROPERTIES COMPILE_OPTIONS "/WX-;/W0")
@@ -277,6 +278,17 @@ else ()
     set_source_files_properties(${_astcenc_sources} PROPERTIES COMPILE_OPTIONS "-Wno-error;-w")
 endif ()
 target_include_directories(${_interface_target} SYSTEM PRIVATE "${astcenc_SOURCE_DIR}/Source")
+
+# BC7 encoder for image_encoder: the self-contained scalar port of bc7e from
+# the download-only basis_universal package (encoder/ is otherwise unused).
+set(_bc7e_source "${basis_universal_SOURCE_DIR}/encoder/basisu_bc7e_scalar.cpp")
+target_sources(${_interface_target} PRIVATE ${_bc7e_source})
+set_source_files_properties(${_bc7e_source} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+if (MSVC)
+    set_source_files_properties(${_bc7e_source} PROPERTIES COMPILE_OPTIONS "/WX-;/W0")
+else ()
+    set_source_files_properties(${_bc7e_source} PROPERTIES COMPILE_OPTIONS "-Wno-error;-w")
+endif ()
 
 # DDS reader (image_loader_dds): header-only dds_image package fetched
 # download-only at the top level (dds_image_SOURCE_DIR).

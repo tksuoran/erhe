@@ -58,6 +58,7 @@
 #include "animation/animation_window.hpp"
 #include "asset_browser/asset_browser.hpp"
 #include "assets/asset_load_tick_context.hpp"
+#include "assets/asset_fetch.hpp"
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/brdf_slice.hpp"
@@ -3480,6 +3481,7 @@ public:
             {
                 m_operation_stack        = std::make_unique<Operation_stack                 >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context);
                 m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), *m_executor.get());
+                m_asset_fetch            = std::make_unique<Asset_fetch                     >(m_app_context, *m_asset_browser.get());
                 m_composer_window        = std::make_unique<Composer_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_selection_window       = std::make_unique<Selection_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_settings_window        = std::make_unique<Settings_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
@@ -4318,6 +4320,10 @@ public:
             m_imgui_renderer->release_texture_references();
         }
 
+        // Before the clear below: a running fetch's worker enqueues to the commit queue.
+        m_app_context.asset_fetch = nullptr;
+        m_asset_fetch.reset();
+
         // Wait for all async tasks to complete, then clear task handles
         // and destroy the executor while m_mesh_memory is still alive.
         // Without this, implicit member destruction destroys m_mesh_memory
@@ -4391,6 +4397,7 @@ public:
         m_app_context.draw_list_renderer       = m_draw_list_renderer     .get();
         m_app_context.app_scenes               = m_app_scenes            .get();
         m_app_context.asset_manager            = m_asset_manager         .get();
+        m_app_context.asset_fetch              = m_asset_fetch           .get();
         m_app_context.app_settings             = &m_app_settings;
         m_app_context.developer_config         = &m_editor_settings.developer;
         m_app_context.graphics_config          = &m_graphics_config;
@@ -5697,6 +5704,7 @@ public:
     std::unique_ptr<App_windows            >                 m_app_windows;
 
     std::unique_ptr<Asset_browser                   >        m_asset_browser;
+    std::unique_ptr<Asset_fetch                     >        m_asset_fetch;
     std::unique_ptr<Icon_set                        >        m_icon_set;
     std::unique_ptr<Post_processing                 >        m_post_processing;
     std::unique_ptr<Sky_renderer                    >        m_sky_renderer;

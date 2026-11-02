@@ -431,9 +431,11 @@ own `make_geometry` then no-ops.
 `platform_default` keeps on desktop and releases in OpenXR; `keep`;
 `release`; the committed desktop config says `keep`, the OpenXR config
 `release`) decides whether a load keeps a primitive's CPU triangle soup.
-With `release`, every editor glTF parse records triangle soup reload sources
-(`get_triangle_soup_reload()`, doc/erhe/gltf.md "Triangle soup reload"); the
-build job releases the soup right after its build ("Mesh build jobs"), and
+Every editor glTF parse from a file, prefab templates included, records
+triangle soup reload sources (`get_triangle_soup_reload()`, doc/erhe/gltf.md
+"Triangle soup reload"), so a load over its mesh budget can release soups
+whatever this setting says (doc/plans/memory_budget.md step 10). With
+`release`, the build job releases the soup right after its build ("Mesh build jobs"), and
 `finalize_imported_meshes` releases (or confirms released) the soup of each
 prepared primitive that
 is final - its buffers built, its stored-BVH raytrace committed and, when

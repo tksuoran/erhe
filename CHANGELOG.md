@@ -42,6 +42,28 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `Full_build_policy`; `Primitive_shape::set_full_build_policy()` /
+  `get_full_build_policy()` (an `on_demand` shape's `prepare_real_raytrace()`
+  builds from its soup when it has no Geometry); `Primitive::has_on_demand_full_build()`.
+- `erhe::utility`: `Memory_budget_kind::finalize` (deferred mesh finalize
+  working set); `Memory_budget_kind::count` is now 3.
+- `erhe::gltf`: `image_reduction_cache.hpp` (`make_image_reduction_cache_key()`,
+  `load_reduced_image()`, `store_reduced_image()`);
+  `Gltf_device_options::texture_cache_directory`,
+  `Gltf_image_residency::reduction_cache_directory`.
+- `erhe::graphics`: `image_encoder.hpp` - `Block_encode_format`,
+  `Image_reduction`, `get_reduced_byte_count()`, `reduce_rgba8_image()`
+  (CPU mip chain, BC7 and ASTC 4x4 encoding, box-filter downscaling).
+- `erhe::graphics`: `Texture_memory_class` / `Texture_create_info::memory_class`
+  and `Texture::Memory_statistics::content_texture_count` /
+  `content_byte_count`.
+- `erhe::gltf`: `Gltf_texture_plan`; `Gltf_image_residency::plan_textures()`,
+  `get_texture_plan()`, `texture_byte_budget`, `block_encode_format`;
+  `Gltf_device_options::block_encode_format` and `texture_byte_budget`;
+  `Gltf_decoded_image::reduction`; `Gltf_image_source::read_prefix()`.
+- `erhe::graphics`: `estimate_texture_byte_count(const Texture_create_info&)`,
+  the image byte estimate the process-wide texture memory statistics use.
+  On Vulkan an image of 64 MiB or more now gets a dedicated allocation.
 - `erhe::rendergraph`: `Rendergraph::execute()` runs only active nodes: a
   node is active when enabled and either without connected consumers or with
   an active consumer, evaluated by `Rendergraph::prepare_frame()` after the

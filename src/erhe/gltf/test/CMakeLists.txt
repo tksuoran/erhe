@@ -10,6 +10,7 @@ add_executable(${_target}
     test_gltf_pvs.cpp
     test_gltf_roundtrip.cpp
     test_gltf_soup_reload.cpp
+    test_image_reduction_cache.cpp
 )
 
 target_compile_definitions(${_target} PRIVATE ERHE_GLTF_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
@@ -50,6 +51,7 @@ if (TARGET erhe::gpu_test_support)
         gltf_test_util.cpp
         gltf_test_util.hpp
         test_gltf_texture_gpu.cpp
+        test_image_transfer_gpu.cpp
     )
 
     target_compile_definitions(${_gpu_target} PRIVATE ERHE_GLTF_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")

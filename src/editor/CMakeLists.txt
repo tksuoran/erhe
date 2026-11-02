@@ -125,6 +125,8 @@ erhe_target_sources_grouped(
     app_windows.hpp
     asset_browser/asset_browser.cpp
     asset_browser/asset_browser.hpp
+    assets/asset_fetch.cpp
+    assets/asset_fetch.hpp
     assets/asset_key.cpp
     assets/asset_key.hpp
     assets/asset_load_task.cpp
@@ -143,6 +145,8 @@ erhe_target_sources_grouped(
     assets/asset_reference_config.hpp
     assets/asset_workflow.cpp
     assets/asset_workflow.hpp
+    assets/load_memory_budget.cpp
+    assets/load_memory_budget.hpp
     assets/gltf_load_task.cpp
     assets/gltf_load_task.hpp
     brushes/brush.cpp
@@ -1279,6 +1283,7 @@ target_link_libraries(
         erhe::utility
         erhe::commands
         httplib::httplib
+        miniz
         nlohmann_json::nlohmann_json
         cxxopts
         erhe::defer

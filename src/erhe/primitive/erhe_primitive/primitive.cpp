@@ -1435,12 +1435,20 @@ auto Primitive_shape::prepare_real_raytrace() -> bool
             return true; // prepared by another task, not yet committed
         }
     }
-    const std::shared_ptr<erhe::geometry::Geometry> geometry = make_geometry_build_locked();
-    if (!geometry) {
-        return false;
-    }
     // The BVH build runs with no state lock held.
-    std::unique_ptr<Primitive_raytrace> pending = std::make_unique<Primitive_raytrace>(geometry->get_mesh());
+    std::unique_ptr<Primitive_raytrace> pending;
+    const std::shared_ptr<Triangle_soup> soup = (m_full_build_policy == Full_build_policy::on_demand) && !get_geometry_const()
+        ? get_triangle_soup()
+        : std::shared_ptr<Triangle_soup>{};
+    if (soup) {
+        pending = std::make_unique<Primitive_raytrace>(*soup, std::unique_ptr<erhe::raytrace::Prebuilt_bvh>{});
+    } else {
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = make_geometry_build_locked();
+        if (!geometry) {
+            return false;
+        }
+        pending = std::make_unique<Primitive_raytrace>(geometry->get_mesh());
+    }
     if (!pending->has_raytrace_triangles()) {
         return false;
     }
@@ -2665,6 +2673,11 @@ auto Primitive::release_triangle_soup() -> bool
 auto Primitive::is_prepared() const -> bool
 {
     return render_shape && (render_shape->get_prepared_data() != nullptr);
+}
+
+auto Primitive::has_on_demand_full_build() const -> bool
+{
+    return is_prepared() || (render_shape && (render_shape->get_full_build_policy() == Full_build_policy::on_demand));
 }
 
 auto Primitive::make_prepared_optimized_render_shape(const Buffer_info& buffer_info, const Lod_settings* const requested_lod_settings) const -> std::shared_ptr<Primitive_render_shape>

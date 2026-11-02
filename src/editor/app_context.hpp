@@ -62,6 +62,7 @@ namespace editor {
 class Analytic_hover_provider;
 class Animation_player;
 class Animation_window;
+class Asset_fetch;
 class Asset_manager;
 class Brdf_slice;
 class Brush_preview;
@@ -315,6 +316,7 @@ public:
     erhe::window::Context_window*      context_window       {nullptr};
     Animation_player*                  animation_player     {nullptr};
     Animation_window*                  animation_window     {nullptr};
+    Asset_fetch*                       asset_fetch          {nullptr};
     Asset_manager*                     asset_manager        {nullptr};
     Brdf_slice*                        brdf_slice           {nullptr};
     Brush_tool*                        brush_tool           {nullptr};

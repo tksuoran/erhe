@@ -1229,6 +1229,10 @@ void Operations::imgui()
             cmd.set_make_mesh_config(m_make_mesh_config);
             m_context.imgui_windows->queue([&cmd]() { static_cast<void>(cmd.try_call()); }); // out of the ImGui iteration: records GPU work
         }
+        if (m_context.asset_fetch != nullptr) {
+            m_context.asset_fetch->imgui(m_bistro_fetch_source, button_size.x);
+            m_context.asset_fetch->imgui(m_sponza_fetch_source, button_size.x);
+        }
     }
 
     ImGui::Separator();

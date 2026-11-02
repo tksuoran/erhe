@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <mutex>
 
 namespace erhe::graphics {
 
@@ -71,9 +72,15 @@ namespace {
 std::atomic<std::size_t> g_texture_count{0};
 std::atomic<std::size_t> g_texture_byte_count{0};
 
+std::mutex  g_content_texture_mutex;
+std::size_t g_content_texture_count     {0};
+std::size_t g_content_texture_byte_count{0};
+
+}
+
 // Estimate from the create info. A view or a wrapped external image owns no
 // allocation of its own and is not counted.
-[[nodiscard]] auto estimate_texture_byte_count(const Texture_create_info& create_info) -> std::size_t
+auto estimate_texture_byte_count(const Texture_create_info& create_info) -> std::size_t
 {
     if ((create_info.wrap_texture_name != 0) || (create_info.buffer != nullptr)) {
         return 0;
@@ -93,13 +100,15 @@ std::atomic<std::size_t> g_texture_byte_count{0};
     return slice_bytes * static_cast<std::size_t>(depth) * static_cast<std::size_t>(layers) * samples;
 }
 
-}
 
 auto Texture::get_memory_statistics() -> Texture::Memory_statistics
 {
+    const std::lock_guard<std::mutex> lock{g_content_texture_mutex};
     return Memory_statistics{
-        .texture_count = g_texture_count.load(std::memory_order_relaxed),
-        .byte_count    = g_texture_byte_count.load(std::memory_order_relaxed)
+        .texture_count         = g_texture_count.load(std::memory_order_relaxed),
+        .byte_count            = g_texture_byte_count.load(std::memory_order_relaxed),
+        .content_texture_count = g_content_texture_count,
+        .content_byte_count    = g_content_texture_byte_count
     };
 }
 
@@ -127,6 +136,11 @@ Texture::~Texture() noexcept
     if (m_estimated_byte_count > 0) {
         g_texture_count     .fetch_sub(1,                      std::memory_order_relaxed);
         g_texture_byte_count.fetch_sub(m_estimated_byte_count, std::memory_order_relaxed);
+        if (m_memory_class == Texture_memory_class::content) {
+            const std::lock_guard<std::mutex> lock{g_content_texture_mutex};
+            --g_content_texture_count;
+            g_content_texture_byte_count -= m_estimated_byte_count;
+        }
     }
 }
 
@@ -222,12 +236,18 @@ Texture::Texture(Device& device, const Texture_create_info& create_info)
     : Item{create_info.debug_label.string_view()}
     , m_impl{std::make_unique<Texture_impl>(device, create_info)}
     , m_estimated_byte_count{estimate_texture_byte_count(create_info)}
+    , m_memory_class        {create_info.memory_class}
 {
     ERHE_VERIFY(create_info.usage_mask != 0);
     enable_flag_bits(erhe::Item_flags::show_in_ui);
     if (m_estimated_byte_count > 0) {
         g_texture_count     .fetch_add(1,                     std::memory_order_relaxed);
         g_texture_byte_count.fetch_add(m_estimated_byte_count, std::memory_order_relaxed);
+        if (m_memory_class == Texture_memory_class::content) {
+            const std::lock_guard<std::mutex> lock{g_content_texture_mutex};
+            ++g_content_texture_count;
+            g_content_texture_byte_count += m_estimated_byte_count;
+        }
     }
 }
 auto Texture::get_debug_label() const -> erhe::utility::Debug_label

@@ -4,6 +4,7 @@
 #include "gltf_item_flags.hpp"
 #include "gltf_log.hpp"
 #include "gltf_uid.hpp"
+#include "image_reduction_cache.hpp"
 #include "image_transfer.hpp"
 
 #include "erhe_buffer/ibuffer.hpp"
@@ -449,8 +450,14 @@ using erhe::geometry::get_mesh_info;
 
 auto Gltf_image_source::read(std::vector<std::byte>& out) const -> bool
 {
+    return read_prefix(get_byte_count(), out);
+}
+
+auto Gltf_image_source::read_prefix(const std::size_t max_byte_count, std::vector<std::byte>& out) const -> bool
+{
+    const std::size_t read_byte_count = std::min(max_byte_count, get_byte_count());
     if (!is_file_backed()) {
-        out = encoded_bytes;
+        out.assign(encoded_bytes.begin(), encoded_bytes.begin() + static_cast<std::ptrdiff_t>(read_byte_count));
         return true;
     }
     std::error_code size_error;
@@ -466,11 +473,11 @@ auto Gltf_image_source::read(std::vector<std::byte>& out) const -> bool
         return false;
     }
     std::ifstream file{file_path, std::ios::binary};
-    out.resize(byte_length);
+    out.resize(read_byte_count);
     file.seekg(static_cast<std::streamoff>(file_offset));
-    file.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(byte_length));
+    file.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(read_byte_count));
     if (!file) {
-        log_gltf->error("image source '{}': reading {} bytes at offset {} failed", file_path.string(), byte_length, file_offset);
+        log_gltf->error("image source '{}': reading {} bytes at offset {} failed", file_path.string(), read_byte_count, file_offset);
         out.clear();
         return false;
     }
@@ -3511,6 +3518,9 @@ public:
         m_data_out.image_residency.decoded_images.resize(m_asset->images.size());
         m_data_out.image_residency.transcode_format_preference = m_transcode_format_preference;
         m_data_out.image_residency.astc_support                = m_arguments.device_options.astc_support;
+        m_data_out.image_residency.block_encode_format         = m_arguments.device_options.block_encode_format;
+        m_data_out.image_residency.texture_byte_budget         = m_arguments.device_options.texture_byte_budget;
+        m_data_out.image_residency.reduction_cache_directory   = m_arguments.device_options.texture_cache_directory;
         m_data_out.image_residency.decode_executor             = &m_arguments.executor;
         m_data_out.image_residency.parallel_decode             = m_arguments.parallel;
         const Clock::time_point image_start_time = Clock::now();
@@ -6184,6 +6194,62 @@ namespace {
     return static_cast<std::size_t>(info.row_stride) * static_cast<std::size_t>(info.height);
 }
 
+[[nodiscard]] auto is_single_level_rgba8(const erhe::graphics::Image_info& info) -> bool
+{
+    return (info.level_count <= 1) && (info.depth <= 1) && (
+        (info.format == erhe::dataformat::Format::format_8_vec4_srgb) ||
+        (info.format == erhe::dataformat::Format::format_8_vec4_unorm)
+    );
+}
+
+// Single-level RGBA8 gets a full (maybe encoded) mip chain; containers drop top levels.
+[[nodiscard]] auto get_planned_texture_byte_count(const erhe::graphics::Image_info& info, const erhe::graphics::Image_reduction& reduction) -> std::size_t
+{
+    if (is_single_level_rgba8(info)) {
+        return erhe::graphics::get_reduced_byte_count(info, reduction);
+    }
+    const int levels = std::max(1, info.level_count - reduction.downscale_levels);
+    return erhe::dataformat::get_mip_chain_byte_count(
+        info.format,
+        static_cast<std::size_t>(std::max(1, info.width  >> reduction.downscale_levels)),
+        static_cast<std::size_t>(std::max(1, info.height >> reduction.downscale_levels)),
+        static_cast<std::size_t>(levels)
+    );
+}
+
+// See get_planned_texture_byte_count() for what each kind of image becomes.
+void apply_image_reduction(const erhe::graphics::Image_reduction& reduction, erhe::graphics::Image_info& info, std::vector<std::uint8_t>& pixels)
+{
+    if (is_single_level_rgba8(info)) {
+        erhe::graphics::Image_info reduced_info{};
+        std::vector<std::uint8_t>  reduced_pixels;
+        if (erhe::graphics::reduce_rgba8_image(info, pixels, reduction, reduced_info, reduced_pixels)) {
+            info   = reduced_info;
+            pixels = std::move(reduced_pixels);
+        }
+        return;
+    }
+    const int drop = std::min(reduction.downscale_levels, info.level_count - 1);
+    std::size_t dropped_byte_count = 0;
+    for (int level = 0; level < drop; ++level) {
+        dropped_byte_count += erhe::dataformat::get_image_level_size_bytes(
+            info.format,
+            static_cast<std::size_t>(std::max(1, info.width  >> level)),
+            static_cast<std::size_t>(std::max(1, info.height >> level))
+        );
+    }
+    if ((drop <= 0) || (dropped_byte_count >= pixels.size())) {
+        return;
+    }
+    pixels.erase(pixels.begin(), pixels.begin() + static_cast<std::ptrdiff_t>(dropped_byte_count));
+    info.width       = std::max(1, info.width  >> drop);
+    info.height      = std::max(1, info.height >> drop);
+    info.level_count = info.level_count - drop;
+    if (!erhe::dataformat::is_block_compressed(info.format)) {
+        info.row_stride = info.width * static_cast<int>(erhe::dataformat::get_format_size_bytes(info.format));
+    }
+}
+
 // Body of one decode task (also run inline when decoding is serial). The
 // encoded stream is read now (from the file, for a file-backed source) and
 // dropped when the task ends. The header open() tells the decoded size; the
@@ -6197,6 +6263,8 @@ void run_image_decode(
     const bool                                      linear,
     const erhe::graphics::Transcode_format_preference transcode_format_preference,
     const erhe::graphics::Astc_support              astc_support,
+    const erhe::graphics::Image_reduction           reduction,
+    const std::filesystem::path&                    cache_directory,
     const std::string&                              name
 )
 {
@@ -6244,8 +6312,20 @@ void run_image_decode(
         }
     }
 
+    // A cache hit replaces both the decode and the encode.
     std::vector<std::uint8_t> pixels;
-    if (ok) {
+    const bool use_cache = ok && !cache_directory.empty() && !erhe::graphics::is_identity(reduction) && is_single_level_rgba8(info);
+    Image_reduction_cache_key cache_key{};
+    bool from_cache = false;
+    if (use_cache) {
+        cache_key = make_image_reduction_cache_key(encoded_bytes, reduction, linear);
+        erhe::graphics::Image_info cached_info = info;
+        if (load_reduced_image(cache_directory, cache_key, cached_info, pixels)) {
+            info       = cached_info;
+            from_cache = true;
+        }
+    }
+    if (ok && !from_cache) {
         pixels.resize(pixel_byte_count);
         ok = loader.load(std::span<std::uint8_t>{pixels.data(), pixels.size()});
     }
@@ -6254,6 +6334,11 @@ void run_image_decode(
     if (!ok) {
         log_gltf->error("Image '{}': decode failed", name);
         pixels = std::vector<std::uint8_t>{};
+    } else if (!from_cache && !erhe::graphics::is_identity(reduction)) {
+        apply_image_reduction(reduction, info, pixels);
+        if (use_cache) {
+            store_reduced_image(cache_directory, cache_key, info, pixels);
+        }
     }
 
     {
@@ -6314,7 +6399,8 @@ namespace {
         .depth       = image_info.depth,
         .level_count = image_info.level_count,
         .row_stride  = image_info.row_stride,
-        .debug_label = erhe::utility::Debug_label{decoded.name}
+        .debug_label = erhe::utility::Debug_label{decoded.name},
+        .memory_class = erhe::graphics::Texture_memory_class::content
     };
     const int  mipmap_count    = texture_create_info.get_texture_level_count();
     const bool generate_mipmap =
@@ -6409,6 +6495,14 @@ auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_
     ) {
         options.astc_support = erhe::graphics::Astc_support::native;
     }
+    const auto supports_both = [&graphics_device](const erhe::dataformat::Format srgb, const erhe::dataformat::Format unorm) -> bool {
+        return graphics_device.get_format_properties(srgb).supported && graphics_device.get_format_properties(unorm).supported;
+    };
+    if (supports_both(erhe::dataformat::Format::format_bc7_srgb, erhe::dataformat::Format::format_bc7_unorm)) {
+        options.block_encode_format = erhe::graphics::Block_encode_format::bc7;
+    } else if (supports_both(erhe::dataformat::Format::format_astc_4x4_srgb, erhe::dataformat::Format::format_astc_4x4_unorm)) {
+        options.block_encode_format = erhe::graphics::Block_encode_format::astc_4x4;
+    }
     options.max_sampler_anisotropy = graphics_device.get_info().max_texture_max_anisotropy;
     return options;
 }
@@ -6466,8 +6560,130 @@ auto Gltf_image_residency::is_decode_idle() const -> bool
     return m_decode_queue->m_running_count == 0;
 }
 
+void Gltf_image_residency::plan_textures()
+{
+    if (m_texture_plan.planned) {
+        return;
+    }
+    m_texture_plan.planned           = true;
+    m_texture_plan.budget_byte_count = texture_byte_budget;
+    if (texture_byte_budget == 0) {
+        return;
+    }
+    ERHE_PROFILE_FUNCTION();
+
+    // Headers sit at the start of the stream; the whole stream is the fallback.
+    constexpr std::size_t header_prefix_byte_count = 64 * 1024;
+    std::vector<std::optional<erhe::graphics::Image_info>> infos(decoded_images.size());
+    std::vector<std::byte> bytes;
+    for (std::size_t i = 0, end = decoded_images.size(); i < end; ++i) {
+        const Gltf_decoded_image& decoded = decoded_images[i];
+        if (!decoded.requested || !decoded.source) {
+            continue;
+        }
+        for (const std::size_t prefix : {header_prefix_byte_count, decoded.source->get_byte_count()}) {
+            if (!decoded.source->read_prefix(prefix, bytes)) {
+                break;
+            }
+            erhe::graphics::Image_loader loader;
+            erhe::graphics::Image_info   info{};
+            const std::span<const std::uint8_t> span{reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()};
+            const bool open_ok = loader.open(span, info, decoded.linear, transcode_format_preference, erhe::graphics::Alpha_mode::premultiplied, astc_support);
+            loader.close();
+            if (open_ok) {
+                infos[i] = info;
+                break;
+            }
+            if (prefix >= decoded.source->get_byte_count()) {
+                break;
+            }
+        }
+    }
+    bytes = std::vector<std::byte>{};
+
+    std::size_t total = 0;
+    for (std::size_t i = 0, end = decoded_images.size(); i < end; ++i) {
+        if (infos[i].has_value()) {
+            ++m_texture_plan.image_count;
+            total += get_planned_texture_byte_count(infos[i].value(), erhe::graphics::Image_reduction{});
+        }
+    }
+    m_texture_plan.estimated_byte_count = total;
+
+    if (total > texture_byte_budget) {
+        // Encode: 4x for RGBA8, before any detail is given up.
+        if (block_encode_format != erhe::graphics::Block_encode_format::none) {
+            for (std::size_t i = 0, end = decoded_images.size(); i < end; ++i) {
+                if (infos[i].has_value() && is_single_level_rgba8(infos[i].value())) {
+                    const std::size_t before = get_planned_texture_byte_count(infos[i].value(), decoded_images[i].reduction);
+                    decoded_images[i].reduction.encode_format = block_encode_format;
+                    total = total - before + get_planned_texture_byte_count(infos[i].value(), decoded_images[i].reduction);
+                }
+            }
+        }
+        // Downscale: halve the largest texture until the sum fits.
+        constexpr int floor_extent = 256;
+        while (total > texture_byte_budget) {
+            std::size_t largest_index = decoded_images.size();
+            std::size_t largest_bytes = 0;
+            for (std::size_t i = 0, end = decoded_images.size(); i < end; ++i) {
+                if (!infos[i].has_value()) {
+                    continue;
+                }
+                const erhe::graphics::Image_info&      info      = infos[i].value();
+                const erhe::graphics::Image_reduction& reduction = decoded_images[i].reduction;
+                const int next_downscale = reduction.downscale_levels + 1;
+                const bool can_halve =
+                    ((std::min(info.width, info.height) >> next_downscale) >= floor_extent) &&
+                    (is_single_level_rgba8(info) || (info.level_count > next_downscale));
+                if (!can_halve) {
+                    continue;
+                }
+                const std::size_t bytes_now = get_planned_texture_byte_count(info, reduction);
+                if (bytes_now > largest_bytes) {
+                    largest_bytes = bytes_now;
+                    largest_index = i;
+                }
+            }
+            if (largest_index == decoded_images.size()) {
+                break;
+            }
+            erhe::graphics::Image_reduction& reduction = decoded_images[largest_index].reduction;
+            ++reduction.downscale_levels;
+            total = total - largest_bytes + get_planned_texture_byte_count(infos[largest_index].value(), reduction);
+        }
+    }
+
+    for (const Gltf_decoded_image& decoded : decoded_images) {
+        if (decoded.reduction.encode_format != erhe::graphics::Block_encode_format::none) {
+            ++m_texture_plan.encoded_count;
+        }
+        if (decoded.reduction.downscale_levels > 0) {
+            ++m_texture_plan.downscaled_count;
+        }
+    }
+    m_texture_plan.planned_byte_count = total;
+    m_texture_plan.reduced            = (m_texture_plan.encoded_count + m_texture_plan.downscaled_count) > 0;
+    m_texture_plan.fits               = (total <= texture_byte_budget);
+    if (m_texture_plan.reduced || !m_texture_plan.fits) {
+        const auto log_level = m_texture_plan.fits ? spdlog::level::info : spdlog::level::warn;
+        log_gltf->log(
+            log_level,
+            "Texture plan: {} images take {:.1f} MiB as loaded, budget {:.1f} MiB -> {} encoded, {} downscaled, {:.1f} MiB{}",
+            m_texture_plan.image_count,
+            static_cast<double>(m_texture_plan.estimated_byte_count) / (1024.0 * 1024.0),
+            static_cast<double>(texture_byte_budget) / (1024.0 * 1024.0),
+            m_texture_plan.encoded_count,
+            m_texture_plan.downscaled_count,
+            static_cast<double>(total) / (1024.0 * 1024.0),
+            m_texture_plan.fits ? "" : " (does not fit at the 256 texel floor)"
+        );
+    }
+}
+
 void Gltf_image_residency::schedule_decodes(const std::size_t max_decoded_bytes_in_flight)
 {
+    plan_textures();
     if (!parallel_decode || (decode_executor == nullptr)) {
         return;
     }
@@ -6506,8 +6722,8 @@ void Gltf_image_residency::schedule_decodes(const std::size_t max_decoded_bytes_
         ++queue->m_running_count;
         erhe::task::spawn(
             *decode_executor,
-            [queue, i, source = decoded.source, linear = decoded.linear, preference = transcode_format_preference, astc = astc_support, name = decoded.name]() {
-                run_image_decode(queue, i, source, linear, preference, astc, name);
+            [queue, i, source = decoded.source, linear = decoded.linear, preference = transcode_format_preference, astc = astc_support, reduction = decoded.reduction, cache = reduction_cache_directory, name = decoded.name]() {
+                run_image_decode(queue, i, source, linear, preference, astc, reduction, cache, name);
             }
         );
     }
@@ -6558,7 +6774,7 @@ void Gltf_image_residency::decode_inline(const std::size_t image_index)
     const Gltf_decoded_image& decoded = decoded_images[image_index];
     // Inline decodes run one at a time with nothing else in flight, so the
     // reservation always fits and the task never gives its turn back.
-    run_image_decode(queue, image_index, decoded.source, decoded.linear, transcode_format_preference, astc_support, decoded.name);
+    run_image_decode(queue, image_index, decoded.source, decoded.linear, transcode_format_preference, astc_support, decoded.reduction, reduction_cache_directory, decoded.name);
     collect_decoded();
 }
 
@@ -6589,6 +6805,7 @@ auto Gltf_image_residency::process_next_image(
     const std::size_t             max_decoded_bytes_in_flight
 ) -> bool
 {
+    plan_textures();
     // Blocking: wait for the decode workers (or decode inline) until an
     // image is decoded.
     std::size_t i = decoded_images.size();
@@ -6653,6 +6870,7 @@ auto Gltf_image_residency::process_next_image_into_frame(
     std::size_t&                    remaining_budget_bytes
 ) -> bool
 {
+    plan_textures();
     collect_decoded();
     std::size_t i = decoded_images.size();
     if (

@@ -145,6 +145,19 @@ diagnostic that depends on reproducing the exact same bits.
 
 This project uses **C++20**. Prefer modern C++20 features over older alternatives (e.g. concepts over SFINAE, `std::span` over pointer+size, `std::format`/`fmt` over `sprintf`, `constexpr` where possible, designated initializers, `requires` clauses).
 
+## Code Comments
+
+Comments are short. A comment is one line; two lines rarely; three only when
+nothing shorter says it. A comment says what a reader cannot see in the code
+beside it - a non-obvious reason, an invariant, which thread or frame phase a
+function runs in. Anything longer - what a class is for, how a sequence of
+calls works, the protocol with an external tool, measured results - is
+documentation and belongs in the subsystem's document under `doc/` (named from
+the code with a `doc/...md` reference when the reader needs it), never in a
+comment block above a class or function. A comment never repeats a name
+(`// the mutex` above `m_mutex`), never restates the signature, and never
+tells the history of the code (that is the commit message).
+
 ## C++ Naming Conventions
 
 | Element | Convention | Examples |

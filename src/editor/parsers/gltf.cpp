@@ -9,6 +9,7 @@
 #include "parsers/gltf_physics_import.hpp"
 
 #include "app_context.hpp"
+#include "assets/load_memory_budget.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_load_task.hpp"
@@ -686,12 +687,63 @@ auto get_base_mesh_build(
     return defer ? erhe::primitive::Base_mesh_build::deferred : erhe::primitive::Base_mesh_build::at_load;
 }
 
-auto get_triangle_soup_reload(const App_context& context) -> erhe::gltf::Triangle_soup_reload
+// Always recorded: a load over its mesh budget releases soups whatever load.cpu_mesh_data says.
+auto get_triangle_soup_reload(const App_context&) -> erhe::gltf::Triangle_soup_reload
 {
-    return (get_cpu_mesh_data_retention(context) == Cpu_mesh_data_retention::release)
-        ? erhe::gltf::Triangle_soup_reload::record
-        : erhe::gltf::Triangle_soup_reload::none;
+    return erhe::gltf::Triangle_soup_reload::record;
 }
+
+namespace {
+
+// Measured on Sponza: GPU bytes a full build adds per triangle (doc/plans/memory_budget.md).
+constexpr std::size_t c_full_build_bytes_per_triangle = 1024;
+
+// on_demand when the full builds of the non-prepared primitives would exceed the mesh budget.
+[[nodiscard]] auto get_import_full_build_policy(
+    App_context&                                        context,
+    std::span<const std::shared_ptr<erhe::scene::Node>> nodes
+) -> erhe::primitive::Full_build_policy
+{
+    if ((context.editor_settings == nullptr) || (context.graphics_device == nullptr) || (context.mesh_memory == nullptr)) {
+        return erhe::primitive::Full_build_policy::deferred_finalize;
+    }
+    const std::size_t budget = get_load_memory_budgets(context.editor_settings->load, *context.graphics_device).mesh_byte_count;
+    if (budget == 0) {
+        return erhe::primitive::Full_build_policy::deferred_finalize;
+    }
+    std::size_t used = 0;
+    for (const erhe::scene_renderer::Mesh_memory::Pool_statistics& pool : context.mesh_memory->get_pool_statistics()) {
+        used += pool.statistics.used_bytes;
+    }
+    std::size_t triangle_count = 0;
+    std::unordered_set<const erhe::primitive::Primitive_render_shape*> seen;
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = node ? erhe::scene::get_mesh(node.get()) : std::shared_ptr<erhe::scene::Mesh>{};
+        if (!mesh) {
+            continue;
+        }
+        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+            const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+            if ((primitive == nullptr) || !primitive->render_shape || primitive->is_prepared() || !seen.insert(primitive->render_shape.get()).second) {
+                continue;
+            }
+            triangle_count += primitive->render_shape->get_triangle_soup_counts().index_count / 3;
+        }
+    }
+    const std::size_t estimate = used + (triangle_count * c_full_build_bytes_per_triangle);
+    if (estimate <= budget) {
+        return erhe::primitive::Full_build_policy::deferred_finalize;
+    }
+    log_parsers->info(
+        "glTF import: full builds of {} triangles would take mesh memory to {:.1f} MiB, budget {:.1f} MiB: Geometry and edge lines on demand, soups released",
+        triangle_count,
+        static_cast<double>(estimate) / (1024.0 * 1024.0),
+        static_cast<double>(budget) / (1024.0 * 1024.0)
+    );
+    return erhe::primitive::Full_build_policy::on_demand;
+}
+
+} // anonymous namespace
 
 auto make_import_build_info(
     App_context&                              context,
@@ -1015,6 +1067,8 @@ void finalize_imported_meshes(
     const bool optimize_meshes  = (context.mesh_memory_config != nullptr) && context.mesh_memory_config->optimize_meshes;
     const Base_variant_load base_variant = get_base_variant_load(context);
     std::unordered_set<const erhe::primitive::Primitive*> released_primitives;
+    const erhe::primitive::Full_build_policy full_build_policy = get_import_full_build_policy(context, nodes);
+    const bool full_build_on_demand = (full_build_policy == erhe::primitive::Full_build_policy::on_demand);
 
     // Build_info variant for skinned meshes -- same as the caller's
     // build_info but with vertex_format_skinned so the GPU vertex buffer
@@ -1100,13 +1154,16 @@ void finalize_imported_meshes(
             // dump - reprocessing would overwrite it and break the
             // bit-exact round-trip, so process only when edges are
             // genuinely missing.
+            if (primitive.render_shape && full_build_on_demand) {
+                primitive.render_shape->set_full_build_policy(full_build_policy);
+            }
             if (primitive.render_shape) {
                 // Deferred edge lines: leave the (expensive) triangle-soup ->
                 // Geometry conversion to the per-mesh background task; only a
                 // Geometry that already exists (ERHE_geometry restore) but
                 // genuinely lacks edges is processed here. The eager path
                 // uses get_geometry(), which lazily converts the soup.
-                const std::shared_ptr<erhe::geometry::Geometry>& geometry = defer_edge_lines
+                const std::shared_ptr<erhe::geometry::Geometry>& geometry = (defer_edge_lines || full_build_on_demand)
                     ? primitive.render_shape->get_geometry_const()
                     : primitive.render_shape->get_geometry();
                 if (geometry && (geometry->get_mesh().edges.nb() == 0)) {
@@ -1133,8 +1190,9 @@ void finalize_imported_meshes(
             // async_raytrace_kickoff_operation.cpp). Without a variant the
             // registration below bakes the source build, and the commit
             // re-registers the mesh after attaching the geometry variant.
+            // An on-demand shape gets no variant now either: it is memory the budget does not have.
             const bool deferred_full_build =
-                defer_edge_lines &&
+                (defer_edge_lines || full_build_on_demand) &&
                 primitive.render_shape &&
                 primitive.render_shape->has_buffer_mesh_triangles() &&
                 !primitive.render_shape->has_edge_lines();
@@ -1313,7 +1371,7 @@ auto make_import_gltf_operation(
         erhe::gltf::Image_transfer image_transfer{graphics_device};
         erhe::gltf::Gltf_parse_arguments parse_arguments{
             .executor        = executor,
-            .device_options  = erhe::gltf::query_gltf_device_options(graphics_device),
+            .device_options  = make_gltf_device_options(context, graphics_device),
             .root_node       = root_node,
             .mesh_layer_id   = scene_root->layers().content()->id,
             .path            = path,
@@ -2411,7 +2469,7 @@ auto open_scene_gltf(
         erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
         erhe::gltf::Gltf_parse_arguments parse_arguments{
             .executor        = *context.executor,
-            .device_options  = erhe::gltf::query_gltf_device_options(*context.graphics_device),
+            .device_options  = make_gltf_device_options(context, *context.graphics_device),
             .root_node       = container_node,
             .mesh_layer_id   = Mesh_layer_id::content,
             .path            = path,

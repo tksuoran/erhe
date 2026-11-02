@@ -9,6 +9,8 @@ erhe_target_sources_grouped(
     erhe_gltf/gltf_log.hpp
     erhe_gltf/gltf_uid.cpp
     erhe_gltf/gltf_uid.hpp
+    erhe_gltf/image_reduction_cache.cpp
+    erhe_gltf/image_reduction_cache.hpp
     erhe_gltf/image_transfer.cpp
     erhe_gltf/image_transfer.hpp
 )
@@ -47,6 +49,7 @@ target_link_libraries(${_target}
         Taskflow
         erhe::task
         erhe::file
+        erhe::hash
         erhe::profile
         erhe::geometry
         erhe::graphics

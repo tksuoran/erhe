@@ -5,6 +5,7 @@
 #include "assets/asset_manager.hpp"
 
 #include "app_context.hpp"
+#include "assets/load_memory_budget.hpp"
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -541,11 +542,12 @@ auto Prefab_library::load_template(Prefab& prefab) -> bool
     erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
         .executor        = *m_context.executor,
-        .device_options  = erhe::gltf::query_gltf_device_options(*m_context.graphics_device),
+        .device_options  = make_gltf_device_options(m_context, *m_context.graphics_device),
         .root_node       = template_root,
         .mesh_layer_id   = 0, // instances are retargeted to the destination scene's content layer
         .path            = prefab.source_path,
         .fix_spot_lights = m_context.fix_gltf_spot_lights,
+        .triangle_soup_reload = get_triangle_soup_reload(m_context)
     };
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
     // parse_gltf creates no GPU objects (async-asset-loading plan step 3);

@@ -1525,6 +1525,30 @@ auto Device_impl::get_allocator() -> VmaAllocator&
     return m_vma_allocator;
 }
 
+auto Device_impl::try_acquire_dedicated_image_allocation() -> bool
+{
+    std::lock_guard<std::mutex> lock{m_dedicated_image_mutex};
+    if (m_dedicated_image_allocation_count >= m_max_dedicated_image_allocations) {
+        if (!m_dedicated_image_limit_logged) {
+            log_texture->info(
+                "Dedicated image allocations at their limit ({}); further large images share memory blocks",
+                m_max_dedicated_image_allocations
+            );
+            m_dedicated_image_limit_logged = true;
+        }
+        return false;
+    }
+    ++m_dedicated_image_allocation_count;
+    return true;
+}
+
+void Device_impl::release_dedicated_image_allocation()
+{
+    std::lock_guard<std::mutex> lock{m_dedicated_image_mutex};
+    ERHE_VERIFY(m_dedicated_image_allocation_count > 0);
+    --m_dedicated_image_allocation_count;
+}
+
 auto Device_impl::get_allocator_for_buffer_usage(const Buffer_usage usage) -> VmaAllocator&
 {
     if (

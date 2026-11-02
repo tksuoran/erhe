@@ -16,6 +16,12 @@ class Device;
 class Sampler;
 class Texture;
 
+// Load memory budgets measure content textures (doc/plans/memory_budget.md step 4).
+enum class Texture_memory_class : unsigned int {
+    other   = 0,
+    content = 1
+};
+
 class Texture_create_info
 {
 public:
@@ -49,6 +55,7 @@ public:
     std::shared_ptr<Texture>   view_source           {};
     int                        view_base_level       {0};
     int                        view_base_array_layer {0};
+    Texture_memory_class       memory_class          {Texture_memory_class::other};
 };
 
 class Texture_impl;
@@ -97,8 +104,10 @@ public:
     class Memory_statistics
     {
     public:
-        std::size_t texture_count{0};
-        std::size_t byte_count   {0};
+        std::size_t texture_count        {0};
+        std::size_t byte_count           {0};
+        std::size_t content_texture_count{0}; // Texture_memory_class::content
+        std::size_t content_byte_count   {0};
     };
     [[nodiscard]] static auto get_memory_statistics() -> Memory_statistics;
 
@@ -143,6 +152,7 @@ private:
     std::unique_ptr<Texture_impl> m_impl;
     // Counted into the process-wide totals; 0 for views and wrapped images.
     std::size_t                   m_estimated_byte_count{0};
+    Texture_memory_class          m_memory_class{Texture_memory_class::other};
     bool                          m_two_component_normal{false};
 };
 
@@ -154,6 +164,9 @@ private:
 constexpr uint64_t invalid_texture_handle = 0xffffffffu;
 
 [[nodiscard]] auto get_texture_level_count(int width, int height = 0, int depth = 0) -> int;
+
+// Mip chain x depth x layers x samples; 0 for a view or a wrapped image.
+[[nodiscard]] auto estimate_texture_byte_count(const Texture_create_info& create_info) -> std::size_t;
 
 
 } // namespace erhe::graphics

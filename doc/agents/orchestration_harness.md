@@ -91,7 +91,8 @@ at the first failing gate:
    per file with `git diff -- <path>`, largest file first. The review
    checks the AGENTS.md rules that agents most often miss (class not
    struct, explicit types, no boolean arguments, no per-frame recompute,
-   no allocation in hot paths, no band-aid, ASCII only) and the step's
+   no allocation in hot paths, no band-aid, ASCII only, comments of one
+   line with the explanation in `doc/`) and the step's
    own requirements.
 3. One verification claim re-run by the orchestrator when it is the
    riskiest one (a test binary, an MCP query), with output trimmed to the
