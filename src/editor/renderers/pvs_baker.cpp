@@ -279,7 +279,7 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
     }
 
     const Scene_settings& settings  = scene_root->get_scene_settings();
-    const float           cell_size = request.cell_size.value_or(settings.pvs_cell_size);
+    const float           cell_size = request.cell_size.value_or(settings.export_settings.pvs_cell_size);
     if (!std::isfinite(cell_size) || !(cell_size > 0.0f)) {
         return "cell size must be positive and finite";
     }
@@ -417,8 +417,8 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
 
     // The region: the request, else the scene settings, else (both corners
     // zero = unset) the union of the static entries' world bounds.
-    glm::vec3 region_min = request.region_min.value_or(settings.pvs_region_min);
-    glm::vec3 region_max = request.region_max.value_or(settings.pvs_region_max);
+    glm::vec3 region_min = request.region_min.value_or(settings.export_settings.pvs_region_min);
+    glm::vec3 region_max = request.region_max.value_or(settings.export_settings.pvs_region_max);
     if (!request.region_min.has_value() && !request.region_max.has_value() && (region_min == glm::vec3{0.0f}) && (region_max == glm::vec3{0.0f})) {
         region_min = static_bounds.min;
         region_max = static_bounds.max;

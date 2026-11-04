@@ -75,6 +75,7 @@ private:
     void kick();      // main thread (Scene_commit_queue)
     void work();      // worker task: runs jobs until the queue is empty
     void land();      // main thread (Scene_commit_queue)
+    [[nodiscard]] auto has_malioc_locked() const -> bool;
 
     erhe::graphics::Device&     m_device;
     tf::Executor&               m_executor;
@@ -95,6 +96,7 @@ private:
     bool                            m_kick_posted{false};
     bool                            m_land_posted{false};
     bool                            m_stopping{false};
+    bool                            m_versions_queried{false};
 };
 
 } // namespace editor

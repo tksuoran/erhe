@@ -57,6 +57,7 @@ public:
     [[nodiscard]] auto get_host_system_last_frame_duration_ns() const -> int64_t;
     [[nodiscard]] auto get_frame_number                      () const -> uint64_t;
     [[nodiscard]] auto get_frame_time_average_ms             () const -> float;
+    [[nodiscard]] auto has_transform_animations              () const -> bool;
 
     // advance_simulation == false pauses the fixed-step simulation (physics,
     // fly-camera and headset fixed updates) without losing wall-clock time:

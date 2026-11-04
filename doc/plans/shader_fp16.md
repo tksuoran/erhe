@@ -467,7 +467,10 @@ P6 - P8, and the register target, which the paths do not reach.
 
 Next, in order:
 
-1. **R1 Two-phase fragment**: compute every light's shadow visibility
+1. **R1 Two-phase fragment** (built 2026-11-04: `standard.frag`'s
+   visibility phase, loop path; shader_fp16_verify 1092 saved images and
+   every row byte-identical to the build before, shadow_verify core equal
+   up to its run-to-run noise in the ungated 1 cm hut count): compute every light's shadow visibility
    (`sample_light_visibility()` / the point cube lookup) in a first phase
    right after the receiver plane, before the material fetches and the
    BRDF, into a per-light float array sized by the key's light count on

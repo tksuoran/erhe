@@ -128,6 +128,12 @@ Implements the undo/redo operation system and all concrete editor operations.
     original's is static. The object selection is unchanged and the
     original's new geometry has no component selection. Separate by loose
     parts and by material are not implemented.
+  - `Bake_world_space_operation` (`operations/bake_world_space_operation.hpp`)
+    -- Mesh > Bake Static To World Space and MCP `bake_static_to_world_space`:
+    transforms the static meshes' vertices into world space and moves the
+    nodes under one World Space node with the identity transform, leaving a
+    placeholder node only where children stay behind; undo restores the node
+    tree exactly (`doc/editor/world_space_bake.md`).
 
 - **In-place vertex edits** (NOT `Mesh_operation`: they mutate and reuse the SAME `Geometry` object so `Mesh_component_selection` entries keyed on the Geometry pointer survive, then rebuild one `Primitive` and share it across every mesh referencing the Geometry):
   - `Move_mesh_vertices_operation` -- moves a vertex set of one primitive (mesh-component transform commit) and, for a slide, sets the corner texcoords the slide re-interpolated (`doc/editor/transform.md` "Scalar edits"); refreshes normals, rebuilds static physics.

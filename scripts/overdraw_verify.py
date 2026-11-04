@@ -26,6 +26,10 @@ distinct-depth opaque stacks count 1 per pixel in both modes, the rasterized
 count included: what occlusion culling removes.
 - opaque coplanar: 1 per pixel (only the first draw passes the depth test).
 
+Each measurement is repeated through render_scene_image output "overdraw"
+(O6) from the scene camera at the viewport's size: the image has the
+requested size and its statistics equal the viewport's.
+
 Then turns the mode off and checks the statistics are released.
 
 Usage: python3 scripts/overdraw_verify.py [--count N]
@@ -33,6 +37,8 @@ Exit code 0 = pass.
 """
 
 import argparse
+import os
+import struct
 import sys
 import time
 
@@ -71,6 +77,22 @@ def single_bin(stats):
     if (total - histogram[count]) > stats["height"]:
         return None
     return count
+
+
+def png_size(path):
+    with open(path, "rb") as handle:
+        header = handle.read(24)
+    return struct.unpack(">II", header[16:24])
+
+
+def scene_image_stats(client, scene, mode, width, height):
+    """render_scene_image output overdraw from the scene camera (O6)."""
+    path = os.path.join("logs", "overdraw_verify_scene_image.png")
+    reply = client.call("render_scene_image", {
+        "scene": scene, "camera_node": "Camera", "width": width, "height": height,
+        "output": "overdraw", "overdraw_mode": mode, "path": path
+    })
+    return reply, png_size(path)
 
 
 def main() -> int:
@@ -169,7 +191,39 @@ def main() -> int:
                     f"histogram head {stats['histogram'][:n + 2]}"
                 )
                 print(f"{case_name:22} {mode:10} {configuration_name:16} count {count} invocations {stats['invocations_total']}")
+                reply, size = scene_image_stats(client, scene, mode, stats["width"], stats["height"])
+                image_stats = reply.get("overdraw_statistics", {})
+                if configuration["occlusion"]:
+                    # A capture renders one frame and has no previous frame's
+                    # occlusion test, so it culls nothing: the counts without
+                    # occlusion culling.
+                    image_accept, image_expected = expectations[mode]
+                    image_count = single_bin(image_stats) if image_stats.get("valid") else None
+                    matches = (image_count is not None) and image_accept(image_count)
+                    label = f"counts {image_expected} (no occlusion culling in a one-frame capture)"
+                else:
+                    matches = image_stats.get("histogram") == stats["histogram"]
+                    label = "matches the viewport"
+                check_true(
+                    f"{case_name} / {mode} / {configuration_name}: render_scene_image overdraw {label}",
+                    (size == (stats["width"], stats["height"])) and image_stats.get("valid") and
+                    (image_stats.get("counted_mode") == mode) and matches,
+                    f"png {size}, image invocations {image_stats.get('invocations_total')} vs viewport {stats['invocations_total']}, "
+                    f"image histogram head {image_stats.get('histogram', [])[:n + 2]}"
+                )
         remove(names)
+
+    for bad_args, label in (
+        ({"output": "overdraw", "overdraw_mode": "cost"}, "an unknown overdraw_mode"),
+        ({"output": "overdraw", "shader_debug": 37}, "shader_debug"),
+        ({"output": "png", "overdraw_mode": "shaded"}, "overdraw_mode without output overdraw"),
+    ):
+        try:
+            client.call("render_scene_image", dict({"scene": scene, "camera_node": "Camera", "width": 64, "height": 64}, **bad_args))
+            refused = None
+        except RuntimeError as error:
+            refused = str(error)
+        check_true(f"render_scene_image refuses {label}", refused is not None, str(refused)[:200])
 
     client.call("set_overdraw_visualization", {"viewport": viewport, "mode": "off"})
     time.sleep(1.0)

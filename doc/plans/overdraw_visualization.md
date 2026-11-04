@@ -3,8 +3,8 @@
 Status: in progress
 
 Build order steps 1 and 2 are built (2026-10-29, Vulkan; "Built" below),
-and step 7 for the headset's multiview path (2026-11-01; "Headset" below);
-step 3 is next.
+step 3 (2026-11-04, Vulkan; "Built (step 3)" below) and step 7 for the
+headset's multiview path (2026-11-01; "Headset" below); step 4 is next.
 
 This plan extends `doc/editor/rendering.md` (the viewport rendergraph chain
 and the composition passes) and `doc/erhe/shader_variants.md` (the
@@ -232,9 +232,7 @@ Where each part attaches:
    Verify numerically (Verification below) before anything is drawn.
 2. `Overdraw_node`, the rewiring and post-processing bypass, the Viewport
    window menu item, legend and `set_overdraw_visualization` (O4).
-3. `render_scene_image` `output: "overdraw"` (O6), after
-   `doc/plans/mcp_image_resolution.md` item 2 made `width` / `height`
-   required.
+3. `render_scene_image` `output: "overdraw"` (O6) - built.
 4. Desktop Bistro measurement through O6 from the Quest bench camera
    (`config/editor/benchmark_bistro.json`), occlusion culling off and on,
    the result in `doc/plans/quest_performance.md`, next to the Quest
@@ -329,6 +327,32 @@ per-pixel count on Metal under MSAA.
 Not yet verified: Metal 4 (the binding from ICB-executed draws),
 OpenGL, the mode-off render-thread gates against the previous HEAD, and
 occlusion culling's check with the mode on.
+
+## Built (step 3)
+
+`render_scene_image` `output: "overdraw"` (O6), where the build differs from
+or adds to the design:
+
+- `Overdraw_node` reads its view through `IOverdraw_source`
+  (`src/editor/rendergraph/overdraw_source.hpp`: the frame's count buffer,
+  mode and max count), implemented by `Viewport_scene_view` and
+  `Scene_image_view`.
+- The arguments are `overdraw_mode` (`shaded`, the default, or
+  `rasterized`) and `max_count` (default 8). The cost mode and a counted
+  shader set argument are not offered (the set waits for step 5);
+  `shader_debug` must be 0.
+- The statistics are read with the image: the view renders one frame, and
+  `Overdraw_view_state::collect()` decodes that frame's readback once it
+  completed.
+- Occlusion culling culls nothing in a capture: its test reads the previous
+  frame of the same view, which a one-frame capture does not have.
+
+Verified 2026-11-04 on Vulkan (Intel, headless Release, validation layer
+on): `scripts/overdraw_verify.py` renders every case and configuration
+through O6 from the scene camera at the viewport's size; the image has the
+requested size and its histogram equals the viewport's (with occlusion
+culling on, the culling-off counts); the refusals; a png render with
+output png is byte-identical to the build before O6.
 
 ## Headset (build order step 7)
 

@@ -113,8 +113,11 @@ section 4.23).
 
 ## Save pipeline
 
-Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
-`src/editor/parsers/gltf.cpp`. It assembles one
+Entry points: `editor::begin_scene_save_gltf()`, `write_scene_save_gltf()`
+and `finish_scene_save_gltf()` in `src/editor/parsers/gltf.cpp` (run by
+`Scene_save_service`, "Saving in the background" below), and the
+synchronous `save_scene_gltf()` / `save_scene_gltf_prepared()` that run the
+three on the calling thread. The save assembles one
 `erhe::gltf::Gltf_export_arguments` and calls `erhe::gltf::export_gltf()`:
 
 1. **Root node** - the scene's root; export walks the node tree. Nodes
@@ -207,7 +210,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    asset-root `ERHE_pvs` ([spec](../gltf_extensions/ERHE_pvs.md)) when it is
    ready, mapping each column's node uid to the written node index, and
    writes none for a stale database or one naming a node outside the
-   export. "Save for Quest" carries it the same way.
+   export. Prepare carries it the same way.
 8. `erhe::gltf::export_gltf()` produces the GLB/JSON string;
    `erhe::file::write_file()` writes it.
 
@@ -228,20 +231,77 @@ prefab source is Save Scene on the scene opened from that source.
   a loaded prefab source the prefab is reloaded so every instance in every
   scene reflects the edit - the prefab editing round-trip is open the
   source as a scene, edit, Save Scene.
-- **File > Save glTF for Quest** (`Operations::save_scene_for_quest`, to
-  `res/editor/scenes/<scene name>_quest.glb`) and **MCP
-  `save_scene_for_quest`** run `editor::save_scene_gltf_for_quest()`: the
-  same file, with every Basis Universal KTX2 texture transcoded to a raw
-  ASTC 4x4 KTX2 image (`doc/gltf_extensions/ERHE_texture_ktx2.md`;
-  Zstandard supercompressed levels unless the MCP call passes
-  `texture_supercompression: "none"`), so the Quest uploads the blocks with
-  no transcode, and each prepared primitive carries its GPU-ready vertex
-  streams (`doc/gltf_extensions/ERHE_gpu_vertex_streams.md`). It is an export: the scene's
+- **File > Prepare (Quest)** and **File > Prepare (PC)**
+  (`Operations::prepare_scene`, to
+  `res/editor/scenes/<scene name>_quest.glb` / `_pc.glb`) and **MCP
+  `prepare_scene`** (`target` `quest` or `pc`; `save_scene_for_quest` is
+  `prepare_scene` with `target` `quest`) run a prepared save
+  (`Gltf_scene_save_kind::prepared`): the same file, with every Basis
+  Universal KTX2 texture transcoded to a raw block KTX2 image
+  (`doc/gltf_extensions/ERHE_texture_ktx2.md`): ASTC 4x4 for Quest, BC7 (BC5
+  for a two component normal map) for PC; Zstandard supercompressed levels
+  unless the MCP call passes `texture_supercompression: "none"`. A device
+  of that family uploads the blocks with no transcode. Each prepared
+  primitive carries its GPU-ready vertex streams
+  (`doc/gltf_extensions/ERHE_gpu_vertex_streams.md`). Both targets also
+  write a LOD chain (`ERHE_mesh_lod`) for every primitive, generated with
+  the scene's export settings LOD (`export_settings.lod`, shown in the
+  scene's Properties "Export" group; else the editor config `lod`
+  settings) where the primitive has no LOD request (`doc/editor/lod.md`).
+  With the export
+  setting `bake_static_to_world_space` (on by default) every static mesh
+  is written under one "World Space" node at the scene root with the
+  identity transform and world-space vertices, its LOD chain generated in
+  world space; a transform-only node keeps a baked mesh's place when a
+  child stays there, and every other node is written as it is
+  (`doc/editor/world_space_bake.md`). It is an export: the scene's
   source file binding and dirty state are not changed; only
   `Scene_saved_message` is sent.
 - **MCP `export_gltf`** exports plain interchange (same call minus
   `add_gltf_editor_state` unless `editor_state: true` is passed) - use it
   for handing content to other tools, `save_scene` for full state.
+
+### Saving in the background
+
+File > Save Scene, File > Prepare (PC) / Prepare (Quest) and the MCP save
+tools hand the save to `Scene_save_service` (`src/editor/scene/
+scene_save_service.hpp`), which runs one save at a time with the editor
+running:
+
+1. The request waits until the scene is quiescent: nothing queued on the
+   `Operation_stack`, no async operation, scene commit or asset load in
+   flight (`App_context::is_scene_load_in_flight()`), no mouse drag, live
+   component edit or transform animation. A request for a scene that was
+   closed, or has a close pending, fails.
+2. `begin_scene_save_gltf()` runs on the main thread: it collects the
+   export arguments and the overwritten-source handling below. Then the
+   scene is read-only and `write_scene_save_gltf()` (export and file write)
+   runs on a worker thread; the export's parallel stages use the executor.
+3. When the worker is done, `finish_scene_save_gltf()` runs on the main
+   thread: source rebinding, the save log lines, `Scene_saved_message`, and
+   for a scene save the clean container record and the prefab reload. A
+   USD-backed scene saves on the main thread in step 2 instead.
+
+While a save runs the editor keeps rendering, and nothing writes the scenes
+the worker reads:
+
+- the `Operation_stack` holds queued operations (also `execute_now()`) until
+  the save ends and declines undo / redo; scene commits, geometry graph
+  evaluation, lightmap and PVS bake steps, animation playback and transform
+  animations are held;
+- every ImGui window's contents and the main menu are disabled
+  (`erhe::imgui::Imgui_windows::set_window_contents_disabled()`), hover and
+  item-tree hover flags are not written;
+- the saved scene's physics does not step, its viewports take no pointer
+  input, the fly camera does not move a camera of that scene, and
+  `Scene_root::request_close()` refuses it;
+- MCP refuses every tool but the status and save tools
+  (doc/agents/mcp_server_usage.md "Saving scenes").
+
+The status line shows the running save: the scene, the export stage
+(`erhe::gltf::Gltf_export_stage`: reading mesh data, preparing meshes,
+writing scene, transcoding textures, encoding file), the elapsed time and
+the stage's progress.
 
 ### Saving onto the source file
 
@@ -253,7 +313,7 @@ primitives whose soup source references the target file
 (`Triangle_soup_source::references_file()`) and the content-library
 textures whose image source does (`erhe::gltf::is_same_file()`), and then:
 
-- refuses "Save for Quest" onto it (it rewrites the textures and is a
+- refuses Prepare onto it (it rewrites the textures and is a
   delivery format; decision D4 of doc/plans/gltf_fast_load.md item 9);
 - makes the soup of each such primitive that the export will not write from
   its retained prepared core (its prepared data is stale after an edit)
@@ -395,7 +455,7 @@ keep their state on import.
 - **A file carries the cameras it authored plus the ones the user created.**
   The default camera the editor injects so that a camera-less file has
   something to render through - the foreign-glTF import's, and the one
-  `open_scene_usd` adds - is session state, flagged
+  `open_scene_gltf` and `open_scene_usd` add - is session state, flagged
   `erhe::Item_flags::session_only`: the glTF exporter and the USD writer both
   leave it out, and the next open of the file injects a fresh one fitted to
   the content. A file therefore saves as the prim tree it authored; a
@@ -529,6 +589,8 @@ the whole section skips when the editor was built with
 
 ## Future work
 
+- [plans/background_scene_save.md](../plans/background_scene_save.md) - open
+  items of the background save and Prepare.
 - [plans/gltf.md](../plans/gltf.md) - open items of the persistence design,
   including the state listed under "What is not persisted".
 - [plans/gltf_prefabs.md](../plans/gltf_prefabs.md) - the remaining prefab phases.

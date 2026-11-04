@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "tools/hover_tool.hpp"
+#include "scene/scene_save_service.hpp"
 #include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
@@ -148,6 +149,10 @@ void Hover_tool::on_message(Hover_scene_view_message& message)
 void Hover_tool::on_hover_mesh(Hover_mesh_message& message)
 {
     static_cast<void>(message);
+    // Hover flags are item flags, which a running scene save reads.
+    if ((m_context.scene_save_service != nullptr) && m_context.scene_save_service->is_active()) {
+        return;
+    }
     std::shared_ptr<erhe::scene::Node> hovered_node     = get_hover_node();
     std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_viewport.lock();
     if (old_hovered_node != hovered_node) {
@@ -176,6 +181,9 @@ void Hover_tool::on_hover_mesh(Hover_mesh_message& message)
 
 void Hover_tool::on_hover_tree_node(Hover_tree_node_message& message)
 {
+    if ((m_context.scene_save_service != nullptr) && m_context.scene_save_service->is_active()) {
+        return;
+    }
     std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_item_tree.lock();
     if (old_hovered_node) {
         old_hovered_node->disable_flag_bits(editor::Editor_item_flags::hovered_in_item_tree);

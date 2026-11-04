@@ -250,3 +250,73 @@ TEST(Ktx2Container, zstd_supercompressed_round_trip)
         EXPECT_EQ(pixels[3], 255u);
     }
 }
+
+// BC7 / BC5 ("Prepare (PC)"): the container does not look into the blocks,
+// so the ASTC test image's 16-byte blocks serve as BC7 and BC5 blocks.
+TEST(Ktx2Container, raw_bc_round_trip)
+{
+    const Test_image test_image;
+
+    const std::vector<std::uint8_t> bc7_file = erhe::graphics::write_ktx2_raw_blocks(test_image.make_input(Format::format_bc7_srgb, Normal_marker::none));
+    ASSERT_FALSE(bc7_file.empty());
+    const std::span<const std::uint8_t> bc7_view{bc7_file.data(), bc7_file.size()};
+    erhe::graphics::Ktx2_container bc7;
+    ASSERT_TRUE(erhe::graphics::parse_ktx2(bc7_view, bc7));
+    EXPECT_EQ(bc7.vk_format, erhe::graphics::ktx2_vk_format_bc7_srgb);
+    EXPECT_EQ(erhe::graphics::get_ktx2_raw_block_format(bc7.vk_format), Format::format_bc7_srgb);
+    for (std::uint32_t level = 0; level < 4; ++level) {
+        const std::span<const std::uint8_t> data = bc7.get_level_data(bc7_view, level);
+        ASSERT_EQ(data.size(), test_image.levels[level].size()) << "level " << level;
+        EXPECT_EQ(std::memcmp(data.data(), test_image.levels[level].data(), data.size()), 0) << "level " << level;
+    }
+    // One 128-bit BC7 color sample, sRGB transfer.
+    ASSERT_EQ(bc7.dfd.size(), 44u);
+    EXPECT_EQ(read_u32(bc7.dfd, 12) & 0xFFu, 134u);                // KHR_DF_MODEL_BC7
+    EXPECT_EQ((read_u32(bc7.dfd, 12) >> 16) & 0xFFu, 2u);         // KHR_DF_TRANSFER_SRGB
+    EXPECT_EQ(read_u32(bc7.dfd, 16), 0x0303u);                    // 4x4x1x1 texel block
+    EXPECT_EQ(read_u32(bc7.dfd, 28), (127u << 16) | (0u << 24));  // bits 0..127, color channel
+
+    const std::vector<std::uint8_t> bc5_file = erhe::graphics::write_ktx2_raw_blocks(test_image.make_input(Format::format_bc5_unorm, Normal_marker::two_component));
+    ASSERT_FALSE(bc5_file.empty());
+    erhe::graphics::Ktx2_container bc5;
+    ASSERT_TRUE(erhe::graphics::parse_ktx2(std::span<const std::uint8_t>{bc5_file.data(), bc5_file.size()}, bc5));
+    EXPECT_EQ(bc5.vk_format, erhe::graphics::ktx2_vk_format_bc5_unorm);
+    EXPECT_TRUE(erhe::graphics::is_ktx2_two_component_normal(bc5));
+    // Two 64-bit samples, the red and the green BC4 halves; linear transfer.
+    ASSERT_EQ(bc5.dfd.size(), 60u);
+    EXPECT_EQ(read_u32(bc5.dfd,  8), 2u | (56u << 16));
+    EXPECT_EQ(read_u32(bc5.dfd, 12) & 0xFFu, 132u);                         // KHR_DF_MODEL_BC5
+    EXPECT_EQ((read_u32(bc5.dfd, 12) >> 16) & 0xFFu, 1u);                  // KHR_DF_TRANSFER_LINEAR
+    EXPECT_EQ(read_u32(bc5.dfd, 28),  0u | (63u << 16) | (0u << 24));      // red: bits 0..63
+    EXPECT_EQ(read_u32(bc5.dfd, 44), 64u | (63u << 16) | (1u << 24));      // green: bits 64..127
+    EXPECT_EQ(read_u32(bc5.dfd, 56), 0xFFFFFFFFu);                         // green sampleUpper
+}
+
+TEST(Ktx2Container, loader_passes_raw_bc_through_on_a_bc_device)
+{
+    const Test_image test_image;
+    const std::vector<std::uint8_t> file = erhe::graphics::write_ktx2_raw_blocks(test_image.make_input(Format::format_bc5_unorm, Normal_marker::two_component));
+    erhe::graphics::Image_loader_ktx2 loader;
+    erhe::graphics::Image_info        info{};
+    ASSERT_TRUE(loader.open(std::span<const std::uint8_t>{file.data(), file.size()}, info, true, erhe::graphics::Transcode_format_preference::bc7, erhe::graphics::Astc_support::decode_to_rgba8));
+    EXPECT_EQ(info.format, Format::format_bc5_unorm);
+    EXPECT_EQ(info.level_count, 4);
+    EXPECT_TRUE(info.two_component_normal);
+    EXPECT_EQ(info.decode_path, erhe::graphics::Image_decode_path::raw_blocks);
+    std::vector<std::uint8_t> expected;
+    for (const std::vector<std::uint8_t>& level : test_image.levels) {
+        expected.insert(expected.end(), level.begin(), level.end());
+    }
+    std::vector<std::uint8_t> loaded(expected.size());
+    ASSERT_TRUE(loader.load(std::span<std::uint8_t>{loaded.data(), loaded.size()}));
+    EXPECT_EQ(loaded, expected);
+}
+
+TEST(Ktx2Container, loader_refuses_raw_bc_without_bc_support)
+{
+    const Test_image test_image;
+    const std::vector<std::uint8_t> file = erhe::graphics::write_ktx2_raw_blocks(test_image.make_input(Format::format_bc7_srgb, Normal_marker::none));
+    erhe::graphics::Image_loader_ktx2 loader;
+    erhe::graphics::Image_info        info{};
+    EXPECT_FALSE(loader.open(std::span<const std::uint8_t>{file.data(), file.size()}, info, false, erhe::graphics::Transcode_format_preference::astc_4x4, erhe::graphics::Astc_support::native));
+}

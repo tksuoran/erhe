@@ -1,4 +1,5 @@
 #include "xr/headset_view.hpp"
+#include "windows/scene_control_window.hpp"
 #include "editor_item_bits.hpp"
 #include "erhe_graphics/surface.hpp"
 
@@ -220,8 +221,6 @@ Headset_view::Headset_view(
     const Viewport_config_data&     viewport_config_data,
     erhe::commands::Commands&       commands,
     erhe::graphics::Device&         graphics_device,
-    erhe::imgui::Imgui_renderer&    imgui_renderer,
-    erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
     erhe::window::Context_window&   context_window,
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -237,7 +236,6 @@ Headset_view::Headset_view(
         "Headset",
         make_viewport_config(viewport_config_data)
     }
-    , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset", true}
     , m_translate_x            {}
     , m_translate_y            {}
     , m_translate_z            {}
@@ -439,147 +437,6 @@ void Headset_view::update_loading_screen()
     if (status_line != m_loading_status_line) {
         m_loading_status_line = status_line;
         m_loading_screen->set_line(1, status_line);
-    }
-}
-
-void Headset_view::queue_session_preset_edit(std::function<void(Graphics_preset_entry&)> edit)
-{
-    m_app_context.imgui_windows->queue(
-        [this, edit = std::move(edit)]() {
-            if ((m_app_context.app_settings == nullptr) || (m_app_context.app_message_bus == nullptr)) {
-                return;
-            }
-            Graphics_settings&    graphics = m_app_context.app_settings->graphics;
-            Graphics_preset_entry preset   = graphics.current_graphics_preset;
-            edit(preset);
-            graphics.apply_limits(preset);
-            graphics.apply_preset(preset, *m_app_context.app_message_bus);
-        }
-    );
-}
-
-namespace {
-
-// "Headlamp only" lighting: per type loops with one spot light slot (shadow
-// mapped when the headlamp casts shadows) and no other light.
-void set_headlamp_only_lighting(Graphics_preset_entry& preset, const bool cast_shadow)
-{
-    preset.light_shading                      = Light_shading_mode::loops;
-    preset.shadow_enable                      = true;
-    preset.directional_shadow_light_count     = 0;
-    preset.directional_unshadowed_light_count = 0;
-    preset.spot_shadow_light_count            = cast_shadow ? 1 : 0;
-    preset.spot_unshadowed_light_count        = cast_shadow ? 0 : 1;
-    preset.point_shadow_light_count           = 0;
-    preset.point_unshadowed_light_count       = 0;
-}
-
-[[nodiscard]] auto is_headlamp_only_lighting(const Graphics_preset_entry& preset) -> bool
-{
-    return
-        (preset.light_shading == Light_shading_mode::loops) &&
-        (preset.directional_shadow_light_count == 0) && (preset.directional_unshadowed_light_count == 0) &&
-        ((preset.spot_shadow_light_count + preset.spot_unshadowed_light_count) == 1) &&
-        (preset.point_shadow_light_count == 0) && (preset.point_unshadowed_light_count == 0);
-}
-
-} // anonymous namespace
-
-void Headset_view::lighting_and_lod_imgui()
-{
-    if (m_app_context.app_settings == nullptr) {
-        return;
-    }
-    const Graphics_preset_entry& preset = m_app_context.app_settings->graphics.current_graphics_preset;
-
-    // Lighting: the scene's lights with clustered shading, or one shadowed
-    // directional light (the headlamp when enabled: it is the first
-    // directional light) with every other light unshaded. Session only.
-    {
-        const bool single_directional =
-            (preset.light_shading == Light_shading_mode::loops) &&
-            (preset.directional_shadow_light_count == 1) && (preset.directional_unshadowed_light_count == 0) &&
-            (preset.spot_shadow_light_count        == 0) && (preset.spot_unshadowed_light_count        == 0) &&
-            (preset.point_shadow_light_count       == 0) && (preset.point_unshadowed_light_count       == 0);
-        const bool clustered     = (preset.light_shading == Light_shading_mode::clustered);
-        const bool headlamp_only = is_headlamp_only_lighting(preset);
-        const char* const preview =
-            single_directional ? "Single directional light" :
-            headlamp_only      ? "Headlamp only" :
-            clustered          ? "Scene lights (clustered)" :
-                                 "Preset lighting";
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 14.0f);
-        if (ImGui::BeginCombo("Lighting", preview)) {
-            if (ImGui::Selectable("Scene lights (clustered)", clustered && !single_directional)) {
-                // The stored preset's light counts (shadow slots), clustered.
-                const std::vector<Graphics_preset_entry>& stored = m_app_context.app_settings->graphics.graphics_presets;
-                const std::string name = preset.name;
-                std::optional<Graphics_preset_entry> stored_preset;
-                for (const Graphics_preset_entry& entry : stored) {
-                    if (entry.name == name) {
-                        stored_preset = entry;
-                    }
-                }
-                queue_session_preset_edit(
-                    [stored_preset](Graphics_preset_entry& edited) {
-                        if (stored_preset.has_value()) {
-                            edited.directional_shadow_light_count     = stored_preset->directional_shadow_light_count;
-                            edited.directional_unshadowed_light_count = stored_preset->directional_unshadowed_light_count;
-                            edited.spot_shadow_light_count            = stored_preset->spot_shadow_light_count;
-                            edited.spot_unshadowed_light_count        = stored_preset->spot_unshadowed_light_count;
-                            edited.point_shadow_light_count           = stored_preset->point_shadow_light_count;
-                            edited.point_unshadowed_light_count       = stored_preset->point_unshadowed_light_count;
-                        }
-                        edited.light_shading = Light_shading_mode::clustered;
-                    }
-                );
-            }
-            if (ImGui::Selectable("Single directional light", single_directional)) {
-                queue_session_preset_edit(
-                    [](Graphics_preset_entry& edited) {
-                        edited.light_shading                      = Light_shading_mode::loops;
-                        edited.shadow_enable                      = true;
-                        edited.directional_shadow_light_count     = 1;
-                        edited.directional_unshadowed_light_count = 0;
-                        edited.spot_shadow_light_count            = 0;
-                        edited.spot_unshadowed_light_count        = 0;
-                        edited.point_shadow_light_count           = 0;
-                        edited.point_unshadowed_light_count       = 0;
-                    }
-                );
-            }
-            if (ImGui::Selectable("Headlamp only", headlamp_only)) {
-                const bool cast_shadow = m_headlamp_cast_shadow;
-                queue_session_preset_edit([cast_shadow](Graphics_preset_entry& edited) { set_headlamp_only_lighting(edited, cast_shadow); });
-            }
-            ImGui::EndCombo();
-        }
-        ImGui::SetItemTooltip("Session only (graphics_presets.json is not written). Single directional light: the first directional light is the only light. Headlamp only: one spot light, the headlamp (the first spot light), is the only light.");
-    }
-
-    // Level of detail selection (doc/editor/lod.md). Session only.
-    {
-        bool lod_enabled = preset.lod_enabled;
-        if (ImGui::Checkbox("LOD Selection", &lod_enabled)) {
-            queue_session_preset_edit([lod_enabled](Graphics_preset_entry& edited) { edited.lod_enabled = lod_enabled; });
-        }
-        ImGui::SetItemTooltip("Automatic level of detail selection; off draws every mesh at level 0 (the bias then does nothing)");
-        float threshold = preset.lod_threshold_pixels;
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
-        if (ImGui::SliderFloat("LOD Threshold (pixels)", &threshold, 0.125f, 512.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
-            queue_session_preset_edit([threshold](Graphics_preset_entry& edited) { edited.lod_threshold_pixels = threshold; });
-        }
-        int bias = preset.lod_bias;
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
-        if (ImGui::SliderInt("LOD Bias", &bias, -7, 7)) {
-            queue_session_preset_edit([bias](Graphics_preset_entry& edited) { edited.lod_bias = bias; });
-        }
-        ImGui::SetItemTooltip("Added to every selected level, then clamped to each mesh's chain: +N draws every mesh at least N levels coarser (as far as its chain goes)");
-        float band = preset.lod_hysteresis_band;
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
-        if (ImGui::SliderFloat("LOD Hysteresis Band", &band, 0.0f, erhe::scene_renderer::max_lod_hysteresis_band, "%.2f")) {
-            queue_session_preset_edit([band](Graphics_preset_entry& edited) { edited.lod_hysteresis_band = band; });
-        }
     }
 }
 
@@ -836,11 +693,8 @@ void Headset_view::set_locomotion_input(const glm::vec2& value)
     m_locomotion_input = value;
 }
 
-void Headset_view::imgui()
+void Headset_view::scene_control_imgui(erhe::imgui::Imgui_host* const imgui_host)
 {
-    if (!m_context.OpenXR) {
-        return;
-    }
     // The editor window's status line (frame time, async operations,
     // geogram progress): the headset shows no editor window.
     m_status_line.imgui(m_app_context);
@@ -894,12 +748,10 @@ void Headset_view::imgui()
             // takes (shadow-mapped or not).
             const Graphics_preset_entry& preset = m_app_context.app_settings->graphics.current_graphics_preset;
             if (is_headlamp_only_lighting(preset)) {
-                queue_session_preset_edit([cast_shadow](Graphics_preset_entry& edited) { set_headlamp_only_lighting(edited, cast_shadow); });
+                queue_session_preset_edit(m_app_context, [cast_shadow](Graphics_preset_entry& edited) { set_headlamp_only_lighting(edited, cast_shadow); });
             }
         }
     }
-
-    lighting_and_lod_imgui();
 
     ImGui::Checkbox("Controller Ray Scene Object Hits", &m_controller_scene_object_hits);
     ImGui::SetItemTooltip(
@@ -908,7 +760,6 @@ void Headset_view::imgui()
         "While on, the hit testing time is logged every 10 s."
     );
 
-    erhe::imgui::Imgui_host* imgui_host = get_imgui_host();
     if (imgui_host != nullptr) {
         const glm::vec2 mouse_position = imgui_host->get_mouse_position();
         ImGui::Text("Mouse position x = %f, y = %f", mouse_position.x, mouse_position.y);
@@ -1221,7 +1072,7 @@ void Headset_view::update_pointer_context_from_controller()
 
     this->Scene_view::set_world_from_control(m);
 
-    // The Headset window's "Controller ray scene object hits" off: the ray
+    // The Scene Control window's "Controller ray scene object hits" off: the ray
     // still hits rendertargets, tools, brushes and the grid, but no content
     // (or bone proxy) mesh and no skinned mesh (the ID pick).
     const bool scene_object_hits = m_controller_scene_object_hits;
@@ -1588,7 +1439,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // of the multiview vs per-eye choice below: the ID pass is single-view
     // and writes its own framebuffer.
     {
-        // The Headset window's scene object hits switch of this frame
+        // The Scene Control window's scene object hits switch of this frame
         // (prepare_render_view()); off skips the ID pick pass.
         const uint64_t             frame_index = m_app_context.graphics_device->get_frame_index();
         const Frame_settings_slot& slot        = m_frame_settings_slots[frame_index % m_frame_settings_slots.size()];

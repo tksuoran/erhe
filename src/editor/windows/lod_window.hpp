@@ -63,6 +63,9 @@ class Scene_root;
 // on the operation stack. The slider writes the values live while it is
 // dragged, as the Properties window rows do, and records one compound
 // operation when the edit ends.
+// The generation settings of the editor config section `lod`.
+[[nodiscard]] auto to_lod_settings(const Lod_config& config) -> erhe::primitive::Lod_settings;
+
 class Lod_window : public erhe::imgui::Imgui_window
 {
 public:

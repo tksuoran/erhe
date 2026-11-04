@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string_view>
 
 #if defined(_WIN32)
@@ -393,58 +394,194 @@ void extract_mali_metrics(const json& report, Shader_cost_metrics& metrics, std:
 
 } // anonymous namespace
 
-auto find_offline_compiler(const std::string& configured, const char* env_name, const char* exe_name) -> std::filesystem::path
-{
-    std::error_code error_code;
-    if (!configured.empty()) {
-        return std::filesystem::is_regular_file(configured, error_code) ? std::filesystem::path{configured} : std::filesystem::path{};
-    }
-    if (const char* env = std::getenv(env_name); (env != nullptr) && (env[0] != '\0') && std::filesystem::is_regular_file(env, error_code)) {
-        return std::filesystem::path{env};
-    }
-    const char* path_variable = std::getenv("PATH");
-    if (path_variable == nullptr) {
-        return {};
-    }
+namespace {
+
 #if defined(_WIN32)
-    constexpr char        separator = ';';
-    const std::string     file_name = std::string{exe_name} + ".exe";
+constexpr char c_path_list_separator = ';';
 #else
-    constexpr char        separator = ':';
-    const std::string     file_name{exe_name};
+constexpr char c_path_list_separator = ':';
 #endif
-    const std::string_view paths{path_variable};
-    std::size_t start = 0;
-    while (start <= paths.size()) {
-        std::size_t end = paths.find(separator, start);
-        if (end == std::string_view::npos) {
-            end = paths.size();
+
+// "$NAME", "${NAME}" and a leading "~" expand from the environment; an unset
+// variable makes the entry unusable (empty result).
+[[nodiscard]] auto expand_path_entry(const std::string_view entry) -> std::string
+{
+    std::string result;
+    std::size_t i = 0;
+    if (!entry.empty() && (entry.front() == '~') && ((entry.size() == 1) || (entry[1] == '/') || (entry[1] == '\\'))) {
+        const char* home = std::getenv("HOME");
+#if defined(_WIN32)
+        if (home == nullptr) {
+            home = std::getenv("USERPROFILE");
         }
-        if (end > start) {
-            const std::filesystem::path candidate = std::filesystem::path{paths.substr(start, end - start)} / file_name;
-            if (std::filesystem::is_regular_file(candidate, error_code)) {
-                return candidate;
+#endif
+        if (home == nullptr) {
+            return {};
+        }
+        result = home;
+        i = 1;
+    }
+    while (i < entry.size()) {
+        if (entry[i] != '$') {
+            result.push_back(entry[i++]);
+            continue;
+        }
+        std::size_t name_begin = i + 1;
+        std::size_t name_end   = name_begin;
+        std::size_t next       = name_begin;
+        if ((name_begin < entry.size()) && (entry[name_begin] == '{')) {
+            ++name_begin;
+            name_end = entry.find('}', name_begin);
+            if (name_end == std::string_view::npos) {
+                return {};
             }
+            next = name_end + 1;
+        } else {
+            while ((name_end < entry.size()) && ((std::isalnum(static_cast<unsigned char>(entry[name_end])) != 0) || (entry[name_end] == '_'))) {
+                ++name_end;
+            }
+            next = name_end;
         }
+        const std::string name{entry.substr(name_begin, name_end - name_begin)};
+        const char* const value = name.empty() ? nullptr : std::getenv(name.c_str());
+        if (value == nullptr) {
+            return {};
+        }
+        result += value;
+        i = next;
+    }
+    return result;
+}
+
+// An entry is the executable itself or a directory holding it.
+void add_candidate(
+    const std::string_view                source,
+    const std::string_view                entry,
+    const std::string&                    file_name,
+    Offline_compiler_candidates&          candidates
+)
+{
+    if (entry.empty()) {
+        return;
+    }
+    const std::string expanded = expand_path_entry(entry);
+    candidates.searched.push_back(fmt::format("{} '{}'", source, entry));
+    if (expanded.empty()) {
+        return;
+    }
+    std::error_code error_code;
+    std::filesystem::path candidate{expanded};
+    if (std::filesystem::is_directory(candidate, error_code)) {
+        candidate /= file_name;
+    }
+    if (!std::filesystem::is_regular_file(candidate, error_code)) {
+        return;
+    }
+    const auto canonical_or_self = [](const std::filesystem::path& path) -> std::filesystem::path {
+        std::error_code canonical_error;
+        const std::filesystem::path canonical = std::filesystem::weakly_canonical(path, canonical_error);
+        return canonical_error ? path : canonical;
+    };
+    const std::filesystem::path key = canonical_or_self(candidate);
+    for (const std::filesystem::path& existing : candidates.paths) {
+        if (canonical_or_self(existing) == key) {
+            return; // the same executable through another entry
+        }
+    }
+    candidates.paths.push_back(candidate);
+}
+
+void add_path_list(const std::string_view source, const std::string_view list, const std::string& file_name, Offline_compiler_candidates& candidates)
+{
+    std::size_t start = 0;
+    while (start <= list.size()) {
+        std::size_t end = list.find(c_path_list_separator, start);
+        if (end == std::string_view::npos) {
+            end = list.size();
+        }
+        add_candidate(source, list.substr(start, end - start), file_name, candidates);
         start = end + 1;
     }
-    return {};
+}
+
+// Dotted numeric components compared in order; a missing component is 0.
+[[nodiscard]] auto is_newer_version(const std::string_view lhs, const std::string_view rhs) -> bool
+{
+    std::size_t i = 0;
+    std::size_t j = 0;
+    while ((i < lhs.size()) || (j < rhs.size())) {
+        unsigned long long a = 0;
+        unsigned long long b = 0;
+        while ((i < lhs.size()) && (std::isdigit(static_cast<unsigned char>(lhs[i])) != 0)) { a = (a * 10) + static_cast<unsigned long long>(lhs[i++] - '0'); }
+        while ((j < rhs.size()) && (std::isdigit(static_cast<unsigned char>(rhs[j])) != 0)) { b = (b * 10) + static_cast<unsigned long long>(rhs[j++] - '0'); }
+        if (a != b) {
+            return a > b;
+        }
+        while ((i < lhs.size()) && (std::isdigit(static_cast<unsigned char>(lhs[i])) == 0)) { ++i; }
+        while ((j < rhs.size()) && (std::isdigit(static_cast<unsigned char>(rhs[j])) == 0)) { ++j; }
+    }
+    return false;
+}
+
+[[nodiscard]] auto query_malioc_version(const std::filesystem::path& malioc) -> std::string
+{
+    // "Mali Offline Compiler v2026.5.0 (Build 922df8)"
+    std::string version = find_after(query_version_output(malioc, "--version"), "Mali Offline Compiler");
+    if (!version.empty() && (version.front() == 'v')) {
+        version.erase(0, 1);
+    }
+    return version;
+}
+
+} // anonymous namespace
+
+auto find_offline_compiler_candidates(
+    const std::span<const std::string> configured_paths,
+    const char* const                  env_name,
+    const char* const                  exe_name
+) -> Offline_compiler_candidates
+{
+    Offline_compiler_candidates candidates;
+#if defined(_WIN32)
+    const std::string file_name = std::string{exe_name} + ".exe";
+#else
+    const std::string file_name{exe_name};
+#endif
+    for (const std::string& entry : configured_paths) {
+        add_candidate("settings", entry, file_name, candidates);
+    }
+    if (const char* env = std::getenv(env_name); env != nullptr) {
+        add_path_list(env_name, env, file_name, candidates);
+    }
+    if (const char* path_variable = std::getenv("PATH"); path_variable != nullptr) {
+        const std::size_t searched_before = candidates.searched.size();
+        add_path_list("PATH", path_variable, file_name, candidates);
+        // One summary entry for PATH, not every directory of it.
+        candidates.searched.resize(searched_before);
+        candidates.searched.push_back("PATH");
+    }
+    return candidates;
 }
 
 void query_offline_compiler_versions(Offline_compiler_tools& tools)
 {
-    if (!tools.malioc.empty()) {
-        // "Mali Offline Compiler v2026.5.0 (Build 922df8)"
-        std::string version = find_after(query_version_output(tools.malioc, "--version"), "Mali Offline Compiler");
-        if (!version.empty() && (version.front() == 'v')) {
-            version.erase(0, 1);
-        }
+    tools.malioc.clear();
+    for (const std::filesystem::path& candidate : tools.malioc_candidates) {
+        const std::string version = query_malioc_version(candidate);
         if (version.empty()) {
-            log_programs->warn("Shader analytics: {} --version reported no version; Mali analysis off", tools.malioc.generic_string());
-            tools.malioc.clear();
-        } else {
+            log_programs->warn("Shader analytics: malioc candidate {}: --version reported no version; skipped", candidate.generic_string());
+            continue;
+        }
+        log_programs->info("Shader analytics: malioc candidate {} version {}", candidate.generic_string(), version);
+        if (tools.malioc.empty() || is_newer_version(version, tools.malioc_version)) {
+            tools.malioc         = candidate;
             tools.malioc_version = version;
         }
+    }
+    if (!tools.malioc.empty()) {
+        log_programs->info("Shader analytics: using malioc {} (version {})", tools.malioc.generic_string(), tools.malioc_version);
+    } else if (!tools.malioc_candidates.empty()) {
+        log_programs->warn("Shader analytics: no malioc candidate reported a version; Mali analysis off");
     }
 }
 

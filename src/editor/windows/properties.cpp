@@ -13,6 +13,7 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include <algorithm>
+#include <array>
 #include "operations/compound_operation.hpp"
 #include "operations/material_change_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
@@ -30,6 +31,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/config_ui.hpp"
+#include "config/generated/lod_config_serialization.hpp"
 #include "windows/item_reference.hpp"
 
 // Per-scene overrides (issues #239 / #240): the editor-global defaults type plus
@@ -428,6 +430,32 @@ void Properties::scene_override_properties(erhe::scene::Scene& scene)
     override_struct(scene_settings.shadow_frustum_fit, settings.shadow_frustum_fit, "Shadow Frustum Fit");
     override_struct(scene_settings.camera_controls,    settings.camera_controls,    "Camera Controls");
 
+    // What Prepare (PC / Quest) writes (doc/editor/world_space_bake.md).
+    Scene_export_settings& export_settings = scene_settings.export_settings;
+    push_group("Export", ImGuiTreeNodeFlags_Framed);
+    override_struct(export_settings.lod, settings.lod, "LOD");
+    add_entry("Bake Static To World Space", [&export_settings]() {
+        ImGui::Checkbox("##", &export_settings.bake_static_to_world_space);
+    }, "Prepare writes the static mesh nodes with world-space vertices and identity transforms.");
+    add_entry("Instancing", [&export_settings]() {
+        imgui_enum_combo("##", export_settings.instancing);
+    }, "What the world-space bake does with a primitive several baked nodes share.");
+    if (export_settings.instancing == Bake_instancing::duplicate_within_budget) {
+        add_entry("Instancing Budget (MiB)", [&export_settings]() {
+            ImGui::DragInt("##", &export_settings.instancing_budget_mib, 1.0f, 0, 4096);
+        }, "Vertex and index bytes the bake may add by duplicating shared primitives.");
+    }
+    add_entry("PVS Region Min", [&export_settings]() {
+        ImGui::DragFloat3("##", &export_settings.pvs_region_min.x, 0.1f);
+    }, "Minimum corner of the PVS bake region; both corners zero: the union of the baked entries' bounds.");
+    add_entry("PVS Region Max", [&export_settings]() {
+        ImGui::DragFloat3("##", &export_settings.pvs_region_max.x, 0.1f);
+    }, "Maximum corner of the PVS bake region.");
+    add_entry("PVS Cell Size", [&export_settings]() {
+        ImGui::DragFloat("##", &export_settings.pvs_cell_size, 0.05f, 0.05f, 100.0f, "%.2f m");
+    }, "Edge length of one PVS bake grid cell.");
+    pop_group();
+
     // Clear Color and Post Processing per-scene overrides are intentionally not
     // surfaced here for now (the Scene_settings fields remain and still
     // serialize). Re-add add_entry rows for scene_settings.clear_color /
@@ -644,6 +672,26 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
             add_entry("Vertex Bytes", [=](){ ImGui::Text("%zu", vertex_buffer_range.get_byte_size()); });
             pop_group();
         }
+    }
+
+    // The chain an optimized variant built with a LOD request carries (doc/editor/lod.md).
+    const erhe::primitive::Lod_chain& lod_chain = buffer_mesh->lod_chain;
+    if (!lod_chain.is_empty()) {
+        static constexpr std::array<const char*, erhe::primitive::max_lod_levels> c_level_labels{
+            "Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7"
+        };
+        push_group("Level of Detail", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        add_entry("Levels",             [=](){ ImGui::Text("%zu", lod_chain.level_count); });
+        if (lod_chain.generation_seconds > 0.0f) { // 0 for a chain loaded from a file
+            add_entry("Generation Seconds", [=](){ ImGui::Text("%.3f", lod_chain.generation_seconds); });
+        }
+        for (std::size_t level = 0; level < lod_chain.level_count; ++level) {
+            const erhe::primitive::Lod_level& lod_level = lod_chain.levels[level];
+            add_entry(c_level_labels[level], [=](){
+                ImGui::Text("%zu triangles, error %.5f", lod_level.index_range.get_triangle_count(), lod_level.error);
+            });
+        }
+        pop_group();
     }
 
     if (buffer_mesh->bounding_box.is_valid_3d()) {

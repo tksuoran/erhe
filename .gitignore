@@ -71,6 +71,7 @@ config/editor/desktop_window_imgui_host_imgui.ini
 # camera and visual style selections) and input binding overrides. Written by
 # the running editor; a fresh clone starts from the defaults.
 config/editor/user_state.json
+state/
 config/editor/openxr_user_state.json
 config/editor/input_bindings.json
 

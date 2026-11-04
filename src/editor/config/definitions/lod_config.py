@@ -4,6 +4,7 @@ from erhe_codegen import *
 # doc/plans/lod.md section 2.5). The fields mirror
 # erhe::primitive::Lod_settings; the window starts from these values.
 struct("Lod_config",
+    reflect=True,
     version=1,
     short_desc="Level of Detail",
     long_desc="Default LOD generation settings of the LOD window (erhe::primitive::Lod_settings).",

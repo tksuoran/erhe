@@ -1454,6 +1454,10 @@ auto Scene_root::request_close(App_message_bus& app_message_bus) -> bool
         log_scene->warn("Close of scene '{}' refused: a close is already pending", get_name());
         return false;
     }
+    if (m_save_in_progress) {
+        log_scene->warn("Close of scene '{}' refused: the scene is being saved", get_name());
+        return false;
+    }
     m_close_requested = true;
     app_message_bus.close_scene.queue_message(
         Close_scene_message{

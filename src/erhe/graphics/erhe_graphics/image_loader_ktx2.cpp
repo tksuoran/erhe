@@ -119,10 +119,13 @@ public:
 namespace {
 
 // Opens a raw block KTX2 file (non-zero vkFormat). Fills the state's
-// raw_* members and info.
+// raw_* members and info. ASTC blocks are passed through or decoded to RGBA8
+// (astc_support); BC blocks are passed through on a device that samples BC
+// (its transcode preference is bc7) and refused elsewhere.
 [[nodiscard]] auto open_raw_blocks(
     Image_loader_ktx2_impl_state&       state,
     const std::span<const std::uint8_t> buffer_view,
+    const Transcode_format_preference   transcode_format_preference,
     const Astc_support                  astc_support
 ) -> bool
 {
@@ -159,9 +162,16 @@ namespace {
         }
     }
     const bool srgb = (block_format == erhe::dataformat::Format::format_astc_4x4_srgb);
+    const bool astc =
+        (block_format == erhe::dataformat::Format::format_astc_4x4_srgb) ||
+        (block_format == erhe::dataformat::Format::format_astc_4x4_unorm);
+    if (!astc && (transcode_format_preference != Transcode_format_preference::bc7)) {
+        log_texture->warn("KTX2: raw BC blocks (vkFormat {}) on a device that does not sample BC formats are not supported", container.vk_format);
+        return false;
+    }
     state.raw_file         = buffer_view;
     state.raw_block_format = block_format;
-    if (astc_support == Astc_support::native) {
+    if (!astc || (astc_support == Astc_support::native)) {
         state.payload = Ktx2_payload::raw_blocks;
         state.info = Image_info{
             .width       = static_cast<int>(container.width),
@@ -293,7 +303,7 @@ auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, I
     // Raw block payloads (non-zero vkFormat) are not Basis Universal data:
     // basist rejects them; they are passed through or decoded.
     if (is_ktx2_raw_blocks(buffer_view)) {
-        if (!open_raw_blocks(*m_state, buffer_view, astc_support)) {
+        if (!open_raw_blocks(*m_state, buffer_view, transcode_format_preference, astc_support)) {
             return false;
         }
         image_info       = m_state->info;

@@ -9,6 +9,7 @@
 #include "erhe_task/task.hpp"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <nlohmann/json.hpp>
 #include <taskflow/taskflow.hpp>
 
@@ -27,15 +28,19 @@ Shader_analytics_service::Shader_analytics_service(
     , m_shader_analytics{shader_analytics}
     , m_max_jobs        {static_cast<std::size_t>(std::max(config.max_jobs, 1))}
 {
-    m_tools.malioc    = find_offline_compiler(config.malioc, "MALIOC", "malioc");
-    m_tools.mali_core = config.mali_core;
-    if (m_tools.malioc.empty()) {
-        log_programs->info("Shader analytics: no malioc found (editor settings shader_analytics, MALIOC, PATH); shader cost modes unavailable");
+    const Offline_compiler_candidates malioc = find_offline_compiler_candidates(config.malioc_search_paths, "ERHE_MALIOC", "malioc");
+    m_tools.malioc_candidates = malioc.paths;
+    m_tools.mali_core         = config.mali_core;
+    for (const std::filesystem::path& path : malioc.paths) {
+        log_programs->info("Shader analytics: found malioc {}", path.generic_string());
+    }
+    if (malioc.paths.empty()) {
+        log_programs->info("Shader analytics: malioc not found; searched {}; shader cost modes unavailable", fmt::join(malioc.searched, ", "));
         return;
     }
     log_programs->info(
-        "Shader analytics: malioc '{}'; programs are analyzed in background tasks, reports cached in {}",
-        m_tools.malioc.generic_string(), m_cache_directory.generic_string()
+        "Shader analytics: programs are analyzed in background tasks with the newest malioc version found, reports cached in {}",
+        m_cache_directory.generic_string()
     );
     m_device.set_shader_program_observer(
         [this](const erhe::graphics::Shader_stages_create_info& create_info, const std::span<const erhe::graphics::Shader_program_module> modules) {
@@ -60,11 +65,17 @@ void Shader_analytics_service::start(Scene_commit_queue& main_thread_queue)
     post_kick_locked();
 }
 
+// Until the version queries ran, a compiler counts as present when it has a candidate.
+auto Shader_analytics_service::has_malioc_locked() const -> bool
+{
+    return m_versions_queried ? !m_tools.malioc.empty() : !m_tools.malioc_candidates.empty();
+}
+
 auto Shader_analytics_service::get_status() const -> Status
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
     return Status{
-        .mali_core = m_tools.malioc.empty() ? std::string{} : m_tools.mali_core,
+        .mali_core = has_malioc_locked() ? m_tools.mali_core : std::string{},
         .queued    = m_jobs.size(),
         .running   = m_running,
         .analyzed  = m_analyzed,
@@ -145,7 +156,8 @@ void Shader_analytics_service::work()
         query_offline_compiler_versions(tools);
         {
             const std::lock_guard<std::mutex> lock{m_mutex};
-            m_tools = tools;
+            m_tools            = tools;
+            m_versions_queried = true;
         }
         log_programs->info(
             "Shader analytics: malioc {} ({})",

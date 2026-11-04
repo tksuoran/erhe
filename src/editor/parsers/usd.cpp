@@ -1,4 +1,5 @@
 #include "parsers/usd.hpp"
+#include "scene/scene_settings_resolve.hpp"
 
 #include "editor_log.hpp"
 
@@ -2779,7 +2780,9 @@ public:
         state.enable_physics = payload["enable_physics"].get<bool>();
     }
     if (payload.contains("settings") && payload["settings"].is_object()) {
-        state.settings_json = payload["settings"].dump();
+        nlohmann::json settings = payload["settings"];
+        migrate_scene_settings_json(settings);
+        state.settings_json = settings.dump();
     }
     if (payload.contains("properties") && payload["properties"].is_object()) {
         std::vector<std::pair<std::string, std::string>> properties;

@@ -42,7 +42,7 @@ importing it as an asset).
 | [`ERHE_brushes`](ERHE_brushes.md) | asset root | brush library (geometry via unreferenced meshes) |
 | [`ERHE_node_graphs`](ERHE_node_graphs.md) | asset root | procedural texture / mesh node graphs + bindings |
 | [`ERHE_collections`](ERHE_collections.md) | asset root | named node collections (item tags) |
-| [`ERHE_texture_ktx2`](ERHE_texture_ktx2.md) | asset root | per-texture raw block KTX2 image (ASTC 4x4, "Save for Quest") |
+| [`ERHE_texture_ktx2`](ERHE_texture_ktx2.md) | asset root | per-texture raw block KTX2 image (ASTC 4x4 / BC7 / BC5, Prepare (Quest) / Prepare (PC)) |
 | [`ERHE_pvs`](ERHE_pvs.md) | asset root | draft: the scene's potentially visible set database (paged cell grid, one bit per baked entry) |
 | [`ERHE_asset_reference`](ERHE_asset_reference.md) | top-level object (materials first) | proxy for a definition in another glTF file ({file, uid}) |
 

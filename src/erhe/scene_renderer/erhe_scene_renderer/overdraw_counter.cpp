@@ -52,13 +52,33 @@ void Overdraw_view_state::retire(const uint64_t frame_index)
         return;
     }
     const std::size_t slot_index = frame_index % m_readback_slots.size();
-    Readback_slot&    slot       = m_readback_slots[slot_index];
+    const Readback_slot& slot    = m_readback_slots[slot_index];
     if (!slot.pending) {
         return;
     }
     // This frame reuses the readback frame's slot: that frame retired
     // (Device::acquire_frame_slot() waited for it).
     ERHE_VERIFY((slot.frame_index + m_readback_slots.size()) <= frame_index);
+    decode_slot(slot_index);
+}
+
+auto Overdraw_view_state::collect(const uint64_t frame_index) -> Overdraw_statistics
+{
+    if (m_readback_slots.empty()) {
+        return Overdraw_statistics{};
+    }
+    const std::size_t    slot_index = frame_index % m_readback_slots.size();
+    const Readback_slot& slot       = m_readback_slots[slot_index];
+    if (!slot.pending || (slot.frame_index != frame_index)) {
+        return Overdraw_statistics{};
+    }
+    decode_slot(slot_index);
+    return get_statistics();
+}
+
+void Overdraw_view_state::decode_slot(const std::size_t slot_index)
+{
+    Readback_slot&             slot   = m_readback_slots[slot_index];
     const std::size_t          offset = slot_index * readback_slot_stride;
     const std::span<std::byte> data   = m_readback_buffer->map_bytes(offset, readback_slot_stride);
     m_readback_buffer->invalidate(offset, readback_slot_stride);

@@ -423,6 +423,8 @@ erhe_target_sources_grouped(
     operations/scene_builder_viewport_resources_operation.hpp
     operations/merge_operation.cpp
     operations/merge_operation.hpp
+    operations/bake_world_space_operation.cpp
+    operations/bake_world_space_operation.hpp
     operations/merge_static_subtree_operation.cpp
     operations/merge_static_subtree_operation.hpp
     operations/mesh_primitive_swap.cpp
@@ -601,6 +603,7 @@ erhe_target_sources_grouped(
     rig/rigid_skin.hpp
     rendergraph/overdraw_node.cpp
     rendergraph/overdraw_node.hpp
+    rendergraph/overdraw_source.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp
@@ -670,7 +673,11 @@ erhe_target_sources_grouped(
     scene/scene_image_capture.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
+    scene/scene_save_service.cpp
+    scene/scene_save_service.hpp
     scene/scene_settings_resolve.cpp
+    scene/world_space_bake.cpp
+    scene/world_space_bake.hpp
     scene/scene_settings_resolve.hpp
     scene/variant_table.cpp
     scene/variant_table.hpp
@@ -817,6 +824,8 @@ erhe_target_sources_grouped(
     windows/lod_window.hpp
     windows/pvs_window.cpp
     windows/pvs_window.hpp
+    windows/scene_control_window.cpp
+    windows/scene_control_window.hpp
     windows/shader_variants_window.cpp
     windows/shader_variants_window.hpp
     windows/window_placement.cpp
@@ -834,6 +843,8 @@ erhe_target_sources_grouped(
     windows/item_reference.hpp
     windows/item_tree_window.cpp
     windows/item_tree_window.hpp
+    windows/item_tree_state_store.cpp
+    windows/item_tree_state_store.hpp
     windows/attached_property_listing.cpp
     windows/attached_property_listing.hpp
     windows/dependency_property_rows.cpp
@@ -951,6 +962,11 @@ set(_codegen_sources
     ${_codegen_out}/variant_selection.hpp
     ${_codegen_out}/variant_selection_serialization.hpp
     ${_codegen_out}/variant_selection.cpp
+    ${_codegen_out}/bake_instancing.hpp
+    ${_codegen_out}/bake_instancing.cpp
+    ${_codegen_out}/scene_export_settings.hpp
+    ${_codegen_out}/scene_export_settings_serialization.hpp
+    ${_codegen_out}/scene_export_settings.cpp
     ${_codegen_out}/scene_settings.hpp
     ${_codegen_out}/scene_settings_serialization.hpp
     ${_codegen_out}/scene_settings.cpp
@@ -970,6 +986,8 @@ erhe_codegen_generate(
         "${_codegen_defs}/gltf_source_reference.py"
         "${_codegen_defs}/lightmap_tile_override.py"
         "${_codegen_defs}/variant_selection.py"
+        "${_codegen_defs}/bake_instancing.py"
+        "${_codegen_defs}/scene_export_settings.py"
         "${_codegen_defs}/scene_settings.py"
 )
 erhe_codegen_source_settings(${_codegen_sources})

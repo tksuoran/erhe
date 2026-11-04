@@ -2,6 +2,10 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "scene/scene_save_service.hpp"
+#include "scene/generated/scene_export_settings_serialization.hpp"
+
+#include <simdjson.h>
 #include "editor_item_bits.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
@@ -22,6 +26,7 @@
 #include "scene/scene_id_capture.hpp"
 #include "scene/scene_image_capture.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_render_state.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/selection_tool.hpp"
@@ -120,7 +125,11 @@ enum class Save_report_textures : unsigned int {
             {"lod_stored_count",             report.prepared.lod_stored_count},
             {"lod_generated_count",          report.prepared.lod_generated_count},
             {"lod_none_count",               report.prepared.lod_none_count},
-            {"lod_ms",                       report.prepared.lod_ms}
+            {"lod_ms",                       report.prepared.lod_ms},
+            {"world_bake_mesh_count",        report.prepared.world_bake_mesh_count},
+            {"world_bake_placeholder_count", report.prepared.world_bake_placeholder_count},
+            {"world_bake_primitive_count",   report.prepared.world_bake_primitive_count},
+            {"world_bake_failed_count",      report.prepared.world_bake_failed_count}
         }},
         {"sources", {
             {"overwrote_sources",        report.overwrote_sources},
@@ -145,12 +154,42 @@ enum class Save_report_textures : unsigned int {
 
 } // anonymous namespace
 
-// save_scene / save_scene_for_quest queue the save and return the job at
-// once (state "pending"); run_queued_saves() runs it on the main thread at
-// the end of this process_queued_requests() pass, and get_save_status
+// save_scene / prepare_scene / save_scene_for_quest queue the save and return the job at
+// once (state "pending"); Scene_save_service runs it, and get_save_status
 // reports its progress and result (doc/agents/mcp_server_usage.md "Saving
 // scenes").
-auto Mcp_server::action_save_scene_for_quest(const json& args) -> std::string
+// The scene's export settings, with the fields an `export_settings` object of
+// args names merged over them (RFC 7386). Returns an error message, empty on success.
+auto Mcp_server::resolve_export_settings(const json& args, const Scene_root& scene_root, const char* const tool, Scene_export_settings& out) -> std::string
+{
+    out = scene_root.get_scene_settings().export_settings;
+    const json::const_iterator export_settings_it = args.find("export_settings");
+    if (export_settings_it == args.end()) {
+        return {};
+    }
+    if (!export_settings_it->is_object()) {
+        return fmt::format("{}: export_settings must be an object (Scene_export_settings shape)", tool);
+    }
+    json merged = json::parse(serialize(out, 0), nullptr, false);
+    merged.merge_patch(*export_settings_it);
+    const std::string            text = merged.dump();
+    simdjson::ondemand::parser   parser;
+    simdjson::padded_string      padded{text};
+    simdjson::ondemand::document document;
+    simdjson::ondemand::object   object;
+    Scene_export_settings        parsed{};
+    const bool ok =
+        (parser.iterate(padded).get(document) == simdjson::SUCCESS) &&
+        (document.get_object().get(object) == simdjson::SUCCESS) &&
+        (deserialize(object, parsed) == simdjson::SUCCESS);
+    if (!ok) {
+        return fmt::format("{}: export_settings did not deserialize as Scene_export_settings", tool);
+    }
+    out = std::move(parsed);
+    return {};
+}
+
+auto Mcp_server::queue_prepare(const json& args, const Prepare_target target, const char* const tool) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
     const std::string path_str   = args.value("path", "");
@@ -159,24 +198,41 @@ auto Mcp_server::action_save_scene_for_quest(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     if (scene_root->get_source_format() == Scene_source_format::usd) {
-        return make_error_content("save_scene_for_quest: '" + scene_name + "' is a USD-backed scene; Save for Quest writes glTF only");
+        return make_error_content(fmt::format("{}: '{}' is a USD-backed scene; Prepare writes glTF only", tool, scene_name));
     }
     std::filesystem::path path = path_str.empty()
-        ? (editor::default_scene_dir() / (scene_root->get_name() + "_quest.glb"))
+        ? editor::default_prepared_scene_path(*scene_root, target)
         : std::filesystem::path{path_str};
     if ((path.extension() != std::filesystem::path{".glb"}) && (path.extension() != std::filesystem::path{".gltf"})) {
         path = std::filesystem::path{path.string() + ".glb"};
     }
-    // Decision D3: the ASTC levels Zstandard supercompressed ("zstd") or
+    // Decision D3: the raw block levels Zstandard supercompressed ("zstd") or
     // stored as they upload ("none").
     const std::string supercompression = args.value("texture_supercompression", "zstd");
-    erhe::gltf::Gltf_texture_export texture_export = erhe::gltf::Gltf_texture_export::ktx2_astc_4x4;
-    if (supercompression == "none") {
-        texture_export = erhe::gltf::Gltf_texture_export::ktx2_astc_4x4_uncompressed;
-    } else if (supercompression != "zstd") {
-        return make_error_content("save_scene_for_quest: texture_supercompression must be \"zstd\" or \"none\"");
+    if ((supercompression != "zstd") && (supercompression != "none")) {
+        return make_error_content(fmt::format("{}: texture_supercompression must be \"zstd\" or \"none\"", tool));
     }
-    return make_json_content(queue_save(Save_job_kind::scene_for_quest, scene_root, path, Save_job_source_binding::keep, texture_export)).dump();
+    const erhe::gltf::Gltf_texture_export texture_export = get_prepare_texture_export(target, supercompression == "zstd");
+    Scene_export_settings export_settings{};
+    const std::string settings_error = resolve_export_settings(args, *scene_root, tool, export_settings);
+    if (!settings_error.empty()) {
+        return make_error_content(settings_error);
+    }
+    return make_json_content(queue_save(Gltf_scene_save_kind::prepared, tool, scene_root, path, Scene_save_source_binding::keep, texture_export, export_settings)).dump();
+}
+
+auto Mcp_server::action_save_scene_for_quest(const json& args) -> std::string
+{
+    return queue_prepare(args, Prepare_target::quest, "save_scene_for_quest");
+}
+
+auto Mcp_server::action_prepare_scene(const json& args) -> std::string
+{
+    const std::string target = args.value("target", "");
+    if ((target != "quest") && (target != "pc")) {
+        return make_error_content("prepare_scene: target must be \"quest\" or \"pc\"");
+    }
+    return queue_prepare(args, (target == "pc") ? Prepare_target::pc : Prepare_target::quest, "prepare_scene");
 }
 
 auto Mcp_server::action_save_scene(const json& args) -> std::string
@@ -219,23 +275,24 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
     // is an export that leaves the scene's source binding untouched; a
     // path-less first save writes back like File > Save Scene always has.
     const bool set_as_source = args.value("set_as_source", false);
-    const Save_job_source_binding source_binding = (set_as_source || (path_str.empty() && scene_root->get_source_path().empty()))
-        ? Save_job_source_binding::set_source
-        : Save_job_source_binding::keep;
-    return make_json_content(queue_save(Save_job_kind::scene, scene_root, path, source_binding)).dump();
+    const Scene_save_source_binding source_binding = (set_as_source || (path_str.empty() && scene_root->get_source_path().empty()))
+        ? Scene_save_source_binding::set_source
+        : Scene_save_source_binding::keep;
+    return make_json_content(queue_save(Gltf_scene_save_kind::scene, "save_scene", scene_root, path, source_binding)).dump();
 }
 
 auto Mcp_server::queue_save(
-    const Save_job_kind                kind,
-    const std::shared_ptr<Scene_root>& scene_root,
-    const std::filesystem::path&       path,
-    const Save_job_source_binding      source_binding,
-    const erhe::gltf::Gltf_texture_export texture_export
+    const Gltf_scene_save_kind            kind,
+    const char* const                     tool,
+    const std::shared_ptr<Scene_root>&    scene_root,
+    const std::filesystem::path&          path,
+    const Scene_save_source_binding       source_binding,
+    const erhe::gltf::Gltf_texture_export texture_export,
+    const std::optional<Scene_export_settings>& export_settings
 ) -> json
 {
-    const bool        for_quest = (kind == Save_job_kind::scene_for_quest);
-    const char* const tool      = for_quest ? "save_scene_for_quest" : "save_scene";
-    const char* const format    = for_quest ? c_str(Scene_source_format::gltf) : c_str(scene_root->get_source_format());
+    const bool        prepared = (kind == Gltf_scene_save_kind::prepared);
+    const char* const format   = prepared ? c_str(Scene_source_format::gltf) : c_str(scene_root->get_source_format());
     json job;
     {
         std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
@@ -255,14 +312,46 @@ auto Mcp_server::queue_save(
         }
     }
     const std::uint64_t job_id = job["job_id"].get<std::uint64_t>();
-    m_queued_saves.push_back(Queued_save{
-        .job_id         = job_id,
-        .kind           = kind,
-        .scene_root     = scene_root,
-        .path           = path,
-        .source_binding = source_binding,
-        .texture_export = texture_export
-    });
+    m_context.scene_save_service->request(
+        Scene_save_request{
+            .scene_root     = scene_root,
+            .path           = path,
+            .kind           = kind,
+            .texture_export = prepared ? texture_export : erhe::gltf::Gltf_texture_export::source,
+            .source_binding = source_binding,
+            .export_settings = export_settings,
+            .on_started     = [this, job_id]() {
+                update_save_job(job_id, json{{"state", "running"}});
+            },
+            .on_finished    = [this, job_id, kind, path](const Scene_save_result& result) {
+                if (!result.saved) {
+                    update_save_job(job_id, json{{"state", "failed"}, {"save_ms", result.save_ms}, {"error", result.error}});
+                    log_mcp->warn("MCP server: save job {} failed: {}", job_id, result.error);
+                    return;
+                }
+                std::error_code error_code;
+                const std::uintmax_t file_size  = std::filesystem::file_size(path, error_code);
+                const std::uintmax_t file_bytes = error_code ? std::uintmax_t{0} : file_size;
+                json fields = {
+                    {"state",      "done"},
+                    {"saved",      true},
+                    {"save_ms",    result.save_ms},
+                    {"file_bytes", file_bytes}
+                };
+                if (!result.usd) {
+                    const Save_report_textures textures = (kind == Gltf_scene_save_kind::prepared)
+                        ? Save_report_textures::include
+                        : Save_report_textures::omit;
+                    const json report_json = make_save_report_json(result.report, textures);
+                    for (const auto& [key, value] : report_json.items()) {
+                        fields[key] = value;
+                    }
+                }
+                update_save_job(job_id, fields);
+                log_mcp->info("MCP server: save job {} done: '{}' {} bytes in {:.1f} ms", job_id, path.string(), file_bytes, result.save_ms);
+            }
+        }
+    );
     log_mcp->info("MCP server: {} job {} queued for '{}' -> '{}'", tool, job_id, scene_root->get_name(), path.string());
     job["message"] = "queued - poll get_save_status {job_id} until state is done or failed";
     return job;
@@ -279,80 +368,6 @@ void Mcp_server::update_save_job(const std::uint64_t job_id, const json& fields)
             return;
         }
     }
-}
-
-void Mcp_server::run_queued_saves()
-{
-    // Swapped out first: the vector is not iterated while a save's side
-    // effects (message sends, prefab reload) run.
-    std::vector<Queued_save> saves;
-    saves.swap(m_queued_saves);
-    for (const Queued_save& save : saves) {
-        run_save(save);
-    }
-}
-
-void Mcp_server::run_save(const Queued_save& save)
-{
-    const std::shared_ptr<Scene_root> scene_root = save.scene_root.lock();
-    if (!scene_root) {
-        update_save_job(save.job_id, json{{"state", "failed"}, {"error", "the scene was closed before the save ran"}});
-        log_mcp->warn("MCP server: save job {} failed: the scene was closed before the save ran", save.job_id);
-        return;
-    }
-    update_save_job(save.job_id, json{{"state", "running"}});
-
-    const bool usd = (save.kind == Save_job_kind::scene) && (scene_root->get_source_format() == Scene_source_format::usd);
-    Gltf_scene_save_report report;
-    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-    bool ok = false;
-    switch (save.kind) {
-        case Save_job_kind::scene_for_quest: {
-            ok = editor::save_scene_gltf_for_quest(m_context, *scene_root, save.path, &report, save.texture_export);
-            break;
-        }
-        case Save_job_kind::scene: {
-            // save_scene_gltf also reloads the prefab when 'path' is a loaded
-            // prefab source, refreshing every instance in every scene (this
-            // subsumed the former save_prefab tool).
-            ok = usd
-                ? editor::save_scene_usd (m_context, *scene_root, save.path)
-                : editor::save_scene_gltf(m_context, *scene_root, save.path, &report);
-            break;
-        }
-    }
-    const double save_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
-    if (!ok) {
-        update_save_job(
-            save.job_id,
-            json{{"state", "failed"}, {"save_ms", save_ms}, {"error", "save failed: " + save.path.string() + " (details in logs/log.txt)"}}
-        );
-        log_mcp->warn("MCP server: save job {} failed: '{}'", save.job_id, save.path.string());
-        return;
-    }
-    if (save.source_binding == Save_job_source_binding::set_source) {
-        scene_root->set_source_path(save.path, usd ? Scene_source_format::usd : Scene_source_format::gltf);
-    }
-    std::error_code error_code;
-    const std::uintmax_t file_size  = std::filesystem::file_size(save.path, error_code);
-    const std::uintmax_t file_bytes = error_code ? std::uintmax_t{0} : file_size;
-    json fields = {
-        {"state",      "done"},
-        {"saved",      true},
-        {"save_ms",    save_ms},
-        {"file_bytes", file_bytes}
-    };
-    if (!usd) {
-        const Save_report_textures textures = (save.kind == Save_job_kind::scene_for_quest)
-            ? Save_report_textures::include
-            : Save_report_textures::omit;
-        const json report_json = make_save_report_json(report, textures);
-        for (const auto& [key, value] : report_json.items()) {
-            fields[key] = value;
-        }
-    }
-    update_save_job(save.job_id, fields);
-    log_mcp->info("MCP server: save job {} done: '{}' {} bytes in {:.1f} ms", save.job_id, save.path.string(), file_bytes, save_ms);
 }
 
 auto Mcp_server::query_save_status(const json& args) -> std::string
@@ -1435,7 +1450,7 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             std::filesystem::create_directories(path.parent_path(), ec);
         }
         bool written = false;
-        if (m_scene_image_capture->get_output() == Scene_image_output::png) {
+        if (m_scene_image_capture->get_output() != Scene_image_output::linear) {
             std::vector<std::byte> bytes(pixels.size() * 4);
             for (std::size_t i = 0; i < pixels.size(); ++i) {
                 bytes[(i * 4) + 0] = srgb_encode_8(pixels[i].r);
@@ -1445,6 +1460,14 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             }
             std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
             written = writer->write_png(path, width, height, width * 4, erhe::dataformat::Format::format_8_vec4_srgb, bytes);
+            if (m_scene_image_capture->get_output() == Scene_image_output::overdraw) {
+                const erhe::scene_renderer::Overdraw_statistics& statistics = m_scene_image_capture->get_overdraw_statistics();
+                json overdraw_statistics = json{{"valid", statistics.valid}};
+                if (statistics.valid) {
+                    add_overdraw_count_statistics(statistics, overdraw_statistics);
+                }
+                result["overdraw_statistics"] = overdraw_statistics;
+            }
         } else {
             written = write_pfm(path, width, height, pixels);
             // Statistics over the covered pixels: background-marked (NaN)
@@ -1514,25 +1537,63 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
 
     // Size, output, options.
     constexpr int c_max_size = 8192;
-    const int width  = args.value("width",  1280);
-    const int height = args.value("height", 720);
+    if (!args.contains("width") || !args.contains("height")) {
+        return make_error_content("render_scene_image: 'width' and 'height' are required");
+    }
+    if (!args["width"].is_number_integer() || !args["height"].is_number_integer()) {
+        return make_error_content("render_scene_image: 'width' and 'height' must be integers");
+    }
+    const int width  = args["width"].get<int>();
+    const int height = args["height"].get<int>();
     if ((width < 1) || (height < 1) || (width > c_max_size) || (height > c_max_size)) {
-        return make_error_content(fmt::format("render_scene_image: width and height must be in [1, {}]", c_max_size));
+        return make_error_content(fmt::format("render_scene_image: 'width' and 'height' must be in [1, {}]", c_max_size));
     }
     const std::string output_name = args.value("output", std::string{"png"});
     Scene_image_output output = Scene_image_output::png;
     if (output_name == "linear") {
         output = Scene_image_output::linear;
+    } else if (output_name == "overdraw") {
+        output = Scene_image_output::overdraw;
     } else if (output_name != "png") {
-        return make_error_content("render_scene_image: 'output' must be \"png\" or \"linear\"");
+        return make_error_content("render_scene_image: 'output' must be \"png\", \"linear\" or \"overdraw\"");
     }
     const std::string path = args.value(
         "path",
-        std::string{(output == Scene_image_output::png) ? "logs/render_scene_image.png" : "logs/render_scene_image.pfm"}
+        std::string{(output == Scene_image_output::linear) ? "logs/render_scene_image.pfm" : "logs/render_scene_image.png"}
     );
     const int shader_debug_value = args.value("shader_debug", 0);
     if ((shader_debug_value < 0) || (shader_debug_value >= static_cast<int>(std::size(erhe::scene_renderer::c_shader_debug_strings)))) {
         return make_error_content("render_scene_image: 'shader_debug' is out of range");
+    }
+    // Output overdraw (doc/plans/overdraw_visualization.md O6): the counting
+    // mode and the heat map's max count, with the viewport's defaults.
+    Overdraw_frame overdraw{};
+    if (output == Scene_image_output::overdraw) {
+        if ((m_context.overdraw_counter == nullptr) || !m_context.overdraw_counter->is_supported()) {
+            return make_error_content(
+                "render_scene_image: output \"overdraw\" is not supported on this device: the counting needs fragment stage "
+                "buffer stores and atomics (Device_info::fragment_stores_and_atomics) and the overdraw_reduce compute pipeline"
+            );
+        }
+        if (shader_debug_value != 0) {
+            return make_error_content("render_scene_image: output \"overdraw\" counts the lit content passes; 'shader_debug' must be 0");
+        }
+        const std::string overdraw_mode_name = args.value("overdraw_mode", std::string{"shaded"});
+        if (overdraw_mode_name == "shaded") {
+            overdraw.mode = Overdraw_mode::shaded;
+        } else if (overdraw_mode_name == "rasterized") {
+            overdraw.mode = Overdraw_mode::rasterized;
+        } else {
+            return make_error_content("render_scene_image: 'overdraw_mode' must be \"shaded\" or \"rasterized\"");
+        }
+        if (args.contains("max_count")) {
+            if (!args["max_count"].is_number_integer() || (args["max_count"].get<int>() < 1)) {
+                return make_error_content("render_scene_image: 'max_count' must be an integer >= 1");
+            }
+            overdraw.max_count = static_cast<uint32_t>(args["max_count"].get<int>());
+        }
+    } else if (args.contains("overdraw_mode") || args.contains("max_count")) {
+        return make_error_content("render_scene_image: 'overdraw_mode' and 'max_count' apply to output \"overdraw\" only");
     }
     const int preset_msaa  = (m_context.app_settings != nullptr) ? m_context.app_settings->graphics.current_graphics_preset.msaa_sample_count : 0;
     const int msaa_samples = args.value("msaa_samples", preset_msaa);
@@ -1679,6 +1740,7 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             .background        = background,
             .shader_debug      = static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_value),
             .shadow_debug_light = shadow_debug_light,
+            .overdraw           = overdraw,
             .forward_pass_timer = m_scene_image_forward_timer.get()
         }
     );
@@ -1695,6 +1757,10 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
     };
     if (background == Scene_image_background::marked) {
         m_scene_image_header["background"] = json{{"marker", "nan"}};
+    }
+    if (output == Scene_image_output::overdraw) {
+        m_scene_image_header["overdraw_mode"] = (overdraw.mode == Overdraw_mode::rasterized) ? "rasterized" : "shaded";
+        m_scene_image_header["max_count"]     = overdraw.max_count;
     }
     if (shadow_debug_light) {
         m_scene_image_header["shadow_debug_light"] = shadow_debug_light_json;

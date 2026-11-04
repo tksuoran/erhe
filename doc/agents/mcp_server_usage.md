@@ -338,8 +338,8 @@ its last cell is done.
 
 Arguments of `pvs_bake`: `scene_name`, `method` (`"sampled"`, the default,
 or `"disocclusion"`), `cell_size`, `region_min` and `region_max` (both or
-neither; they override the scene's `Scene_settings` `pvs_cell_size` and
-`pvs_region_min` / `pvs_region_max` for this bake, and an unset region,
+neither; they override the scene's `Scene_settings` `export_settings`
+`pvs_cell_size` and `pvs_region_min` / `pvs_region_max` for this bake, and an unset region,
 both corners zero, is the union of the static entries' world bounds),
 `face_resolution` (512 sampled, 1024 disocclusion), `face_fov_degrees`
 (120); sampled: `samples_per_cell` (9), `captures_in_flight` (8);
@@ -780,13 +780,15 @@ Returns: `{queued, active_item: {name, type, id}}`
 Both save tools are asynchronous. The tool validates its arguments (unknown
 scene, a USD-backed scene for Save for Quest), queues the save and returns
 the job at once: `{job_id, tool, scene_name, path, format, state: "pending",
-saved: false, message}`. The save runs on the main thread at the end of the
-same request pass, after that pass's replies are sent, through the same
-save functions File > Save uses; it holds the main thread for its whole run
-(seconds on a large scene), so other tools wait for it, while
-`get_save_status` does not: the server thread answers it directly from the
-job table. Poll `get_save_status {job_id}` until `state` is `done` or
-`failed` before reading the file.
+saved: false, message}`. The save runs in the editor's scene save service,
+as File > Save does (doc/editor/scene_serialization.md "Saving in the
+background"): `running` once the queued operations have drained, on a worker
+thread while the editor keeps rendering. While a save runs every tool except
+`get_save_status`, `get_async_status`, `get_viewports`, `list_scenes`,
+`capture_screenshot` and the save tools themselves is refused with an error
+naming the running save; `get_save_status` is answered by the server thread
+directly from the job table. Poll `get_save_status {job_id}` until `state` is
+`done` or `failed` before reading the file or issuing other tools.
 
 `get_save_status {job_id}` returns that job: `state` is `pending`,
 `running`, `done` or `failed`. A done job adds `saved: true`, `file_bytes`,
@@ -812,19 +814,29 @@ old file untouched.
 path, File > Save Scene); `set_as_source` binds the scene to `path` once the
 save succeeds.
 
-`save_scene_for_quest` ("Save for Quest", File > Save glTF for Quest)
-writes a glTF scene like `save_scene` (prepared mesh data, editor state),
+`prepare_scene` (File > Prepare (Quest) / Prepare (PC); `target` `quest`
+or `pc`) and `save_scene_for_quest` (`prepare_scene` with `target` `quest`)
+write a glTF scene like `save_scene` (prepared mesh data, editor state),
 but every Basis Universal KTX2 texture is transcoded at save time to a raw
-ASTC 4x4 KTX2 image referenced through `ERHE_texture_ktx2`
+block KTX2 image (ASTC 4x4 for `quest`, BC7 / BC5 for `pc`) referenced
+through `ERHE_texture_ktx2`
 (`doc/gltf_extensions/ERHE_texture_ktx2.md`; levels Zstandard
 supercompressed, or stored as they upload with
 `"texture_supercompression": "none"`), and each prepared primitive carries
 its GPU-ready vertex streams (`ERHE_gpu_vertex_streams`); PNG / JPEG images
 are written as they are. The save status reports the streams in
 `prepared` (`gpu_vertex_stream_count`, `gpu_vertex_stream_skipped`,
-`gpu_vertex_stream_ms`). An export: the scene's source binding and
-dirty state stay. A USD-backed scene is refused. `path` defaults to
-`res/editor/scenes/<scene name>_quest.glb`; `.glb` is appended when the
+`gpu_vertex_stream_ms`). Prepare writes with the scene's export settings
+(`Scene_settings` `export_settings`, `doc/gltf_extensions/ERHE_scene.md`);
+an `export_settings` object (`Scene_export_settings` shape, for example
+`{"lod": {"_version": 1, "level_count": 4}}`) is merged over them (RFC
+7386) for this call only. With `bake_static_to_world_space` the static
+meshes are written in world space under a "World Space" node; the status
+`prepared` reports `world_bake_mesh_count`, `world_bake_placeholder_count`,
+`world_bake_primitive_count` and `world_bake_failed_count`, and the log
+names why the other meshes kept their transforms. An export: the scene's
+source binding and dirty state stay. A USD-backed scene is refused. `path` defaults to
+`res/editor/scenes/<scene name>_<target>.glb`; `.glb` is appended when the
 extension is neither `.glb` nor `.gltf`.
 
 ```bash
@@ -832,6 +844,25 @@ py -3 scripts/mcp_call.py save_scene_for_quest '{"scene_name":"bistro_lights_c.g
 # -> {"job_id": 1, "state": "pending", ...}
 py -3 scripts/mcp_call.py get_save_status '{"job_id":1}'
 # -> {"job_id": 1, "state": "done", "file_bytes": ..., "textures": {...}, ...}
+```
+
+### bake_static_to_world_space
+
+Mesh > Bake Static To World Space on a scene: an undoable operation that
+moves the static meshes under the scene's "World Space" node with the
+identity transform and world-space primitives
+(`doc/editor/world_space_bake.md`). The scene's export settings choose the
+instancing; an `export_settings` object is merged over them (RFC 7386) for
+this call. The reply is the plan: `planned_meshes`, `placeholders`, `kept`
+(reason -> count) and `queued`. The primitives are built when the operation
+executes on the operation stack (Bistro Release: about 1.7 s); poll
+`get_async_status` until `queued_operations` is 0. The log line
+"Bake to World Space: N meshes, M placeholders" names the result; `undo`
+restores the tree.
+
+```bash
+py -3 scripts/mcp_call.py bake_static_to_world_space '{"scene_name":"bistro_lights_c.gltf","export_settings":{"instancing":"skip"}}'
+# -> {"planned_meshes": 2670, "placeholders": 0, "kept": {"animated (or under an animated node)": 13}, "queued": true, ...}
 ```
 
 ### create_node
@@ -1472,12 +1503,17 @@ Two tools write images; choose by what is being verified.
 - `render_scene_image` renders a scene offscreen through an explicit camera
   (`camera`: `eye`, `target`, `up`, `fov_y_degrees`, `near`, `far`,
   `exposure`, `shadow_range`; or `camera_node`: a scene camera's name or id)
-  at an explicit `width` x `height` into a render target owned by the request.
+  at the `width` x `height` the request states (both required) into a render
+  target owned by the request.
   The image is independent of viewport windows and the ImGui layout, and
   editor overlays (grid, gizmos, selection outline, hover, debug
   visualizations) are never drawn. `output`: `png` (tonemapped, what a
-  viewport shows) or `linear` (HDR scene color as `.pfm`, with luminance
-  statistics in the reply). Options: `scene`, `path`, `shader_debug`,
+  viewport shows), `linear` (HDR scene color as `.pfm`, with luminance
+  statistics in the reply) or `overdraw` (the overdraw heat map as a png,
+  `overdraw_mode` `shaded` or `rasterized` and `max_count` as
+  `set_overdraw_visualization` takes them, with `overdraw_statistics` in the
+  reply in the shape `get_overdraw_stats` reports; occlusion culling culls
+  nothing in a one-frame capture). Options: `scene`, `path`, `shader_debug`,
   `shadow_debug_light` (the light, by name or id, that `shader_debug` 30
   shadow_visibility shows), `msaa_samples`, `color_format` (`rgba16f`
   default, `rgba32f` for `output: "linear"`). `shader_debug` 36

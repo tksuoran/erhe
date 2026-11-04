@@ -65,7 +65,8 @@ into an AI chat):
 - The per-user editor state file (`config/editor/user_state.json`: inventory /
   hotbar slots, per scene view scene, camera and visual style selections) is
   neither read nor written, so an agent run starts from that struct's defaults
-  and leaves the user's own state alone. The per-user dock layout
+  and leaves the user's own state alone; the same holds for the item tree row
+  open state `state/item_trees.json` (doc/editor/windows.md "Row open state"). The per-user dock layout
   `config/editor/desktop_window_imgui_host_imgui.ini` is read (so a seeded
   layout, such as the creations' large headless viewports, applies) but never
   written.
@@ -206,6 +207,20 @@ iterate on the default layout, edit the JSON (no rebuild needed), delete the
 ini, and relaunch; a present ini always wins untouched. A run that is not
 AI-driven rewrites tracked config files such as
 `config/editor/desktop_windows.json`; an AI-driven run leaves them untouched.
+
+## Unexpected test results: check the config first
+
+Interactive sessions leave state in the working tree's config files
+(`config/editor/desktop_windows.json`, `editor_settings.json`, the ImGui ini):
+extra viewport windows, changed settings, windows shown or hidden. A headless
+or AI-driven run reads them, so they change what the run renders and what
+`capture_screenshot` shows - an extra viewport window adds views, render
+passes and per-frame work, and can poison screenshot comparisons. When a test
+gives unexpected results, compare these files against the committed versions
+(`git diff config/`) and rerun with the committed config (back up the user's
+copies and restore them afterwards) before investigating the code. Prefer
+`render_scene_image` for scene checks: it renders through an explicit camera
+into its own target, independent of the viewport windows the config opens.
 
 ## Interactive runs need the user
 

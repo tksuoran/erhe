@@ -1,5 +1,6 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
+#include "erhe_window/clipboard.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_host.hpp"
@@ -701,8 +702,18 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
     platform_io.Renderer_TextureMaxWidth = platform_io.Renderer_TextureMaxHeight = m_graphics_device.get_info().max_texture_size;
 
-    // TODO platform_io.Platform_SetClipboardTextFn = ImGui_ImplSDL3_SetClipboardText;
-    // TODO platform_io.Platform_GetClipboardTextFn = ImGui_ImplSDL3_GetClipboardText;
+    // Without these ImGui keeps copied text in an internal buffer only.
+    if (erhe::window::has_system_clipboard()) {
+        platform_io.Platform_SetClipboardTextFn = [](ImGuiContext*, const char* text) {
+            erhe::window::set_clipboard_text((text != nullptr) ? std::string_view{text} : std::string_view{});
+        };
+        platform_io.Platform_GetClipboardTextFn = [](ImGuiContext*) -> const char* {
+            // ImGui reads the pointer before its next clipboard call.
+            static thread_local std::string clipboard_text;
+            clipboard_text = erhe::window::get_clipboard_text();
+            return clipboard_text.c_str();
+        };
+    }
     platform_io.Platform_SetImeDataFn = ImGui_Impl_erhe_PlatformSetImeData;
     // TODO platform_io.Platform_OpenInShellFn = [](ImGuiContext*, const char* url) { return SDL_OpenURL(url) == 0; };
 

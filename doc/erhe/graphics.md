@@ -866,7 +866,7 @@ variants.
 runs the offline compiler of each `--core`: `Mali-<name>` cores the Arm
 Mali Offline Compiler. Without `--core` every compiler found contributes
 its default core. For Mali it runs the Arm Mali Offline Compiler (`malioc`; found through `--malioc`, the
-`MALIOC` environment variable, or `PATH`; its install location is per
+`ERHE_MALIOC` path list (executables or directories), or `PATH`; its install location is per
 machine) on every stage module of the manifest, before and after the
 optimizer, and keeps each raw JSON report as
 `variants/<id>_<stage>[_optimized].<core>.malioc.json` (the compiler's

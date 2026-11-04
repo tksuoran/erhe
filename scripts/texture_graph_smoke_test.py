@@ -305,7 +305,7 @@ def pixel(width, channels, buf, x, y):
 
 def export_png(node_id, path, size=16, output_slot=0):
     return call("texture_graph_export_png",
-                {"node_id": node_id, "path": str(path), "size": size, "output_slot": output_slot})
+                {"node_id": node_id, "path": str(path), "width": size, "height": size, "output_slot": output_slot})
 
 
 # ------------------------------------------------------------------ node specs
@@ -746,11 +746,22 @@ def section_render_export():
     varies = (max(reds) - min(reds)) > 8
     check(S, "output baked result varies (colorized noise)", varies, f"min={min(reds)} max={max(reds)}")
 
+    # The requested size is the written size, also when it is not square.
+    wide_png = TMP_DIR / "output_wide.png"
+    wide = call("texture_graph_export_png", {"node_id": output, "path": str(wide_png), "width": 48, "height": 20})
+    wide_w, wide_h, _, _ = decode_png(wide_png)
+    check(S, "non-square export reports and writes the requested size",
+          isinstance(wide, dict) and (wide.get("width"), wide.get("height")) == (48, 20) and (wide_w, wide_h) == (48, 20),
+          f"result={wide} png={wide_w}x{wide_h}")
+    for bad_args, label in (({}, "missing width / height"), ({"size": 16}, "legacy size"), ({"width": 0, "height": 16}, "width 0")):
+        err = call_expect_error("texture_graph_export_png", dict({"node_id": output, "path": str(TMP_DIR / "refused.png")}, **bad_args))
+        check(S, f"export refuses {label}", (err is not None) and ("width" in str(err)), f"err={err}")
+
     # Export of an unconnected Output node must error (nothing composable).
     fresh_graph()
     lonely = add_node("output")["id"]
     err = call_expect_error("texture_graph_export_png",
-                            {"node_id": lonely, "path": str(TMP_DIR / "lonely.png"), "size": 8})
+                            {"node_id": lonely, "path": str(TMP_DIR / "lonely.png"), "width": 8, "height": 8})
     check(S, "export of unconnected output errors cleanly", err is not None, f"err={err}")
 
 
@@ -1658,7 +1669,7 @@ def section_buffer():
     connect(lonely_buf, 2, lonely_rer, 0)
     get_graph()
     err = call_expect_error("texture_graph_export_png",
-                            {"node_id": lonely_rer, "path": str(TMP_DIR / "buffer_lonely.png"), "size": 8})
+                            {"node_id": lonely_rer, "path": str(TMP_DIR / "buffer_lonely.png"), "width": 8, "height": 8})
     check(S, "export of reroute over an unfed buffer errors cleanly (no crash)", err is not None, f"err={err}")
 
 
@@ -1808,7 +1819,7 @@ def section_material_output():
         check(S, f"content library registers 'Smoke PBR Mat {suffix}'", f"Smoke PBR Mat {suffix}" in tex_names, f"names={tex_names}")
 
     # --- Channel PNG export.
-    export = call("texture_graph_export_material", {"node_id": mat, "dir": str(TMP_DIR / "material"), "size": 16})
+    export = call("texture_graph_export_material", {"node_id": mat, "dir": str(TMP_DIR / "material"), "width": 16, "height": 16})
     files = export.get("files", []) if isinstance(export, dict) else []
     have = " ".join(files)
     check(S, "export writes albedo + normal + metallic_roughness + occlusion PNGs",
@@ -1828,7 +1839,7 @@ def section_material_output():
     connect(gray_uniform(0.50), 0, mat2, 5)  # roughness rgba pin -> luminance 0.50
     connect(gray_uniform(0.75), 0, mat2, 3)  # metallic  rgba pin -> luminance 0.75
     set_param(mat2, {"name": "ORM Pack", "size": 16, "assign": False})
-    export2 = call("texture_graph_export_material", {"node_id": mat2, "dir": str(TMP_DIR / "orm"), "size": 16})
+    export2 = call("texture_graph_export_material", {"node_id": mat2, "dir": str(TMP_DIR / "orm"), "width": 16, "height": 16})
     files2 = export2.get("files", []) if isinstance(export2, dict) else []
     orm_png = next((f for f in files2 if f.endswith("_metallic_roughness.png")), None)
     check(S, "ORM export produced a metallic_roughness PNG", orm_png is not None, f"files={files2}")
@@ -1891,15 +1902,13 @@ def section_graph_texture_asset():
     material_name = ""
     nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
     for node in nodes:
-        if "Mesh" not in node.get("attachment_types", []):
+        if node.get("type") != "Mesh":
             continue
         node_details = call("get_node_details", {"scene_name": scene_name, "node_name": node["name"]})
-        for attachment in node_details.get("attachments", []):
-            for name in attachment.get("materials", []):
-                if name and name != "(none)":
-                    material_name = name
-                    break
-            if material_name:
+        mesh = node_details.get("mesh") or {}
+        for name in mesh.get("materials", []):
+            if name and name != "(none)":
+                material_name = name
                 break
         if material_name:
             break

@@ -381,7 +381,7 @@ void Texture_material_output_node::render_separate_channel(
     if (m_context.current_command_buffer == nullptr) {
         return;
     }
-    const bool ok = renderer.render_into(*m_context.current_command_buffer, slot.target, size, fragment, uniforms);
+    const bool ok = renderer.render_into(*m_context.current_command_buffer, slot.target, size, size, fragment, uniforms);
     if (!ok) {
         return; // compile failure - keep the previous texture / assignment
     }
@@ -435,7 +435,7 @@ void Texture_material_output_node::render_orm(
     if (m_context.current_command_buffer == nullptr) {
         return;
     }
-    const bool ok = renderer.render_into(*m_context.current_command_buffer, m_orm_target, size, fragment, uniforms);
+    const bool ok = renderer.render_into(*m_context.current_command_buffer, m_orm_target, size, size, fragment, uniforms);
     if (!ok) {
         return;
     }

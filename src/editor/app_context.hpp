@@ -97,6 +97,7 @@ class Id_renderer;
 class Imgui_window_scene_views;
 class Inventory_window;
 class Input_bindings_store;
+class Item_tree_state_store;
 class Input_bindings_window;
 class Input_state;
 class Lattice_tool;
@@ -146,6 +147,7 @@ class Texture_graph_window;
 class Texture_file_loader;
 class Thumbnails;
 class Time;
+class Scene_save_service;
 class Tools;
 class Transform_tool;
 class Transform_update_stats_tracker;
@@ -351,6 +353,7 @@ public:
     Icon_set*                          icon_set             {nullptr};
     Id_renderer*                       id_renderer          {nullptr};
     Input_bindings_store*              input_bindings_store {nullptr};
+    Item_tree_state_store*             item_tree_state_store{nullptr};
     Input_bindings_window*             input_bindings_window{nullptr};
     Input_state*                       input_state          {nullptr};
     Inventory_window*                  inventory_window     {nullptr};
@@ -366,6 +369,7 @@ public:
     Node_properties_window*            node_properties_window{nullptr};
     Geometry_spreadsheet_window*       geometry_spreadsheet_window{nullptr};
     Operation_stack*                   operation_stack      {nullptr};
+    Scene_save_service*                scene_save_service   {nullptr};
     Operations*                        operations           {nullptr};
     Properties*                        properties           {nullptr}; // the primary Properties window
     Paint_tool*                        paint_tool           {nullptr};

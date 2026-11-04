@@ -42,6 +42,38 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Overdraw_view_state::collect()`: the statistics of
+  one completed frame, for a view that counts a single frame.
+- `erhe::primitive`: `transform_triangle_soup()`: move a soup's vertices into
+  the space a transform maps them to.
+- `erhe::primitive`: `bake_prepared_primitive_transform()` and
+  `Bake_transform_result`: move a prepared export core into the space a
+  transform maps it to (positions, normals, tangents, winding), recomputing
+  its hash, bounds and BVH.
+- `erhe::gltf`: `Gltf_export_world_bake` and `Gltf_export_arguments::world_bake`
+  (the world-space bake of static meshes under one node);
+  `Gltf_export_prepared_statistics::world_bake_mesh_count`,
+  `world_bake_placeholder_count`, `world_bake_primitive_count`,
+  `world_bake_failed_count`.
+
+- `erhe::gltf`: `Gltf_export_progress` (`gltf_export_progress.hpp`) and
+  `Gltf_export_arguments::progress`: `export_gltf()` reports its stage
+  (`Gltf_export_stage`) and per-stage counts, readable from any thread.
+- `erhe::imgui`: `Imgui_windows::set_window_contents_disabled()` draws every
+  window's contents disabled while set. `Imgui_renderer` installs the
+  platform clipboard callbacks where `erhe::window::has_system_clipboard()`.
+- `erhe::gltf`: `Gltf_export_arguments::default_lod_settings`, the LOD request
+  of prepared soups whose primitives carry none.
+- `erhe::window`: `has_system_clipboard()`, `set_clipboard_text()`,
+  `get_clipboard_text()` (SDL desktop builds).
+- `erhe::graphics`: raw BC KTX2 images: `ktx2_vk_format_bc5_unorm`,
+  `ktx2_vk_format_bc7_unorm`, `ktx2_vk_format_bc7_srgb`;
+  `write_ktx2_raw_blocks()` and `get_ktx2_raw_block_format()` take BC7 /
+  BC5; `Image_loader_ktx2` passes raw BC blocks through when the transcode
+  preference is `bc7` and refuses them otherwise; `Ktx2_block_target`.
+- `erhe::gltf`: `Gltf_texture_export::ktx2_bc` / `ktx2_bc_uncompressed`,
+  `is_bc_texture_export()`, `is_raw_block_texture_export()`,
+  `is_uncompressed_texture_export()`, `get_ktx2_block_target()`.
 - `erhe::graphics`: `Device::set_shader_program_observer()` /
   `notify_shader_program()`, `Shader_program_module`,
   `Shader_program_observer`: every program built from SPIR-V (compiled or
@@ -1380,6 +1412,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::graphics`: `transcode_ktx2_basis_to_astc_4x4()` is
+  `transcode_ktx2_basis_to_raw_blocks()`, which takes a `Ktx2_block_target`
+  (ASTC 4x4, or BC7 with BC5 for a two component normal map).
 - `erhe::graphics`: `Shader_variant_report::find_program_id()` returns the
   program's stable id (`std::optional<std::string>`, 16 hex digits of the
   hash of its name and variant defines) instead of the recording index. The

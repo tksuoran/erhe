@@ -27,7 +27,7 @@ class Scene_id_capture;
 class Scene_root;
 
 // One bake as asked for (MCP pvs_bake, later the PVS window). The optional
-// grid members override the scene's Scene_settings (pvs_region_min / max,
+// grid members override the scene's Scene_settings::export_settings (pvs_region_min / max,
 // pvs_cell_size) for this bake only.
 // Which cells a traced bake bakes (Pvs_bake_request::trace_scope).
 enum class Pvs_trace_scope : unsigned int {

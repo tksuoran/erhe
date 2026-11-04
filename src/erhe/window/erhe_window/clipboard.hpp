@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <string_view>
 
 namespace erhe::window {
@@ -13,5 +14,11 @@ namespace erhe::window {
 // (glfw) or a headless build (none) there is no clipboard backend and this
 // is a no-op.
 void copy_to_clipboard(std::string_view text);
+
+// The system clipboard as text (SDL desktop builds); false where there is none
+// (Android, glfw, headless), where the setter is a no-op and the getter is empty.
+[[nodiscard]] auto has_system_clipboard() -> bool;
+void set_clipboard_text(std::string_view text);
+[[nodiscard]] auto get_clipboard_text() -> std::string;
 
 } // namespace erhe::window

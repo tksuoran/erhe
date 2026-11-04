@@ -252,6 +252,8 @@ public:
     // navigation gizmo button in front.
     virtual void viewport_toolbar          ();
     void         shader_debug_toolbar_combo();
+    // A disabled combo entry saying why no shader cost metric is listed.
+    void         shader_cost_unavailable_entry();
 
     // The view's shader debug mode and overdraw visualization, for the
     // toolbar's shader debug combo. The base view has neither.

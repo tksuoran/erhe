@@ -88,6 +88,8 @@ public:
     [[nodiscard]] auto can_undo      () const -> bool;
     [[nodiscard]] auto can_redo      () const -> bool;
     [[nodiscard]] auto get_undo_block_reason() const -> const char*;
+    // True while a scene save runs: queued operations, undo and redo wait.
+    [[nodiscard]] auto is_held() const -> bool;
     void queue(const std::shared_ptr<Operation>& operation);
 
     // Thread-safe variant of queue() for async worker completions (the

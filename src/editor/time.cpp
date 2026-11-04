@@ -195,6 +195,11 @@ void Time::finish_all_transform_animations(App_message_bus& app_message_bus)
     }
 }
 
+auto Time::has_transform_animations() const -> bool
+{
+    return !m_transform_animations.empty();
+}
+
 void Time::update_transform_animations(App_message_bus& app_message_bus)
 {
     // Finish completed animations

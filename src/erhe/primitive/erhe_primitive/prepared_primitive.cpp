@@ -428,6 +428,131 @@ auto get_export_core(const Prepared_primitive_export& prepared) -> const Triangl
     return prepared.retained_core ? *prepared.retained_core : prepared.core;
 }
 
+auto transform_triangle_soup(Triangle_soup& soup, const glm::mat4& transform) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (soup.vertex_format.streams.empty()) {
+        return false;
+    }
+    const Vertex_stream&    stream    = soup.vertex_format.streams.front();
+    const Vertex_attribute* position  = stream.find_attribute(Vertex_attribute_usage::position,  0);
+    const Vertex_attribute* normal    = stream.find_attribute(Vertex_attribute_usage::normal,    0);
+    const Vertex_attribute* tangent   = stream.find_attribute(Vertex_attribute_usage::tangent,   0);
+    const Vertex_attribute* bitangent = stream.find_attribute(Vertex_attribute_usage::bitangent, 0);
+    if (
+        (position == nullptr) || (position->format != Format::format_32_vec3_float) ||
+        ((normal    != nullptr) && (normal   ->format != Format::format_32_vec3_float)) ||
+        ((tangent   != nullptr) && (tangent  ->format != Format::format_32_vec4_float)) ||
+        ((bitangent != nullptr) && (bitangent->format != Format::format_32_vec3_float)) ||
+        (soup.primitive_type != Primitive_type::triangles)
+    ) {
+        return false;
+    }
+
+    const glm::mat3 linear        {transform};
+    const glm::mat3 normal_matrix = glm::transpose(glm::inverse(linear));
+    const bool      mirrored      = (glm::determinant(linear) < 0.0f);
+    const auto direction = [](const glm::mat3& m, const glm::vec3& v) -> glm::vec3 {
+        const glm::vec3 d = m * v;
+        const float     l = glm::length(d);
+        return (l > 0.0f) ? (d / l) : v;
+    };
+
+    const std::size_t vertex_count = soup.get_vertex_count();
+    for (std::size_t vertex = 0; vertex < vertex_count; ++vertex) {
+        uint8_t* const base = soup.vertex_data.data() + (vertex * stream.stride);
+        glm::vec3 p;
+        std::memcpy(&p, base + position->offset, sizeof(p));
+        p = glm::vec3{transform * glm::vec4{p, 1.0f}};
+        std::memcpy(base + position->offset, &p, sizeof(p));
+        if (normal != nullptr) {
+            glm::vec3 n;
+            std::memcpy(&n, base + normal->offset, sizeof(n));
+            n = direction(normal_matrix, n);
+            std::memcpy(base + normal->offset, &n, sizeof(n));
+        }
+        if (tangent != nullptr) {
+            glm::vec4 t;
+            std::memcpy(&t, base + tangent->offset, sizeof(t));
+            t = glm::vec4{direction(linear, glm::vec3{t}), mirrored ? -t.w : t.w};
+            std::memcpy(base + tangent->offset, &t, sizeof(t));
+        }
+        if (bitangent != nullptr) {
+            glm::vec3 b;
+            std::memcpy(&b, base + bitangent->offset, sizeof(b));
+            b = direction(linear, b);
+            std::memcpy(base + bitangent->offset, &b, sizeof(b));
+        }
+    }
+    if (mirrored) {
+        std::vector<uint32_t>& indices = soup.index_data;
+        for (std::size_t i = 0; (i + 2) < indices.size(); i += 3) {
+            std::swap(indices[i + 1], indices[i + 2]);
+        }
+    }
+    soup.lod_index_data.clear();
+    return true;
+}
+
+auto bake_prepared_primitive_transform(Prepared_primitive_export& prepared, const glm::mat4& transform) -> Bake_transform_result
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (prepared.retained_core) {
+        prepared.core = *prepared.retained_core;
+        prepared.retained_core.reset();
+    }
+    Triangle_soup& core = prepared.core;
+    Bake_transform_result result{};
+    const bool transformed = transform_triangle_soup(core, transform); // the core's formats are float by contract
+    ERHE_VERIFY(transformed);
+    result.flipped_winding = (glm::determinant(glm::mat3{transform}) < 0.0f);
+    const std::size_t vertex_count = core.get_vertex_count();
+
+    // The triangles whose corners now share a position.
+    std::vector<uint32_t>& indices = core.index_data;
+    const std::vector<float> positions = get_float_positions(core);
+    const auto same_position = [&positions](const uint32_t a, const uint32_t b) -> bool {
+        return std::memcmp(&positions[3 * a], &positions[3 * b], 3 * sizeof(float)) == 0;
+    };
+    std::size_t kept = 0;
+    for (std::size_t i = 0; (i + 2) < indices.size(); i += 3) {
+        const uint32_t a = indices[i + 0];
+        const uint32_t b = indices[i + 1];
+        const uint32_t c = indices[i + 2];
+        if (same_position(a, b) || same_position(b, c) || same_position(c, a)) {
+            ++result.dropped_degenerate_triangle_count;
+            continue;
+        }
+        indices[kept + 0] = a;
+        indices[kept + 1] = b;
+        indices[kept + 2] = c;
+        kept += 3;
+    }
+    indices.resize(kept);
+    prepared.dropped_degenerate_triangle_count += result.dropped_degenerate_triangle_count;
+
+    prepared.content_hash = compute_mesh_content_hash(indices, positions);
+    {
+        erhe::math::Point_vector_bounding_volume_source point_source{vertex_count};
+        for (std::size_t vertex = 0; vertex < vertex_count; ++vertex) {
+            point_source.add(positions[(3 * vertex) + 0], positions[(3 * vertex) + 1], positions[(3 * vertex) + 2]);
+        }
+        erhe::math::calculate_bounding_volume(point_source, prepared.bounding_box, prepared.bounding_sphere);
+    }
+    prepared.bvh.reset();
+    prepared.bvh_source = Prepared_bvh_source::none;
+    if (!erhe::raytrace::get_prebuilt_bvh_backend().empty()) {
+        prepared.bvh = build_core_bvh(indices, positions);
+        if (prepared.bvh.has_value()) {
+            prepared.bvh_source = Prepared_bvh_source::rebuilt;
+        }
+    }
+    prepared.lod.reset();
+    return result;
+}
+
 namespace {
 
 // The retained export of a shape whose prepared data is current. Empty when

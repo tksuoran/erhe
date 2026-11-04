@@ -70,7 +70,9 @@ viewpoints is not conservative; it stays the verification oracle (the
   (`Item::get_gltf_uid()`, assigned once and never changed,
   `doc/editor/scene_serialization.md`) and the mesh primitive index. A bake
   gives every mesh node it bakes that has no uid one
-  (`erhe::gltf::generate_gltf_uid()`).
+  (`erhe::gltf::generate_gltf_uid()`). A mesh baked into world space
+  (`doc/editor/world_space_bake.md`) keeps its node and uid, so its
+  columns follow it.
 - Cell: one axis-aligned box of the bake grid, the paper's viewcell. The
   PVS of a cell is one bit per column. Page: `page_size`^3 cells, the unit
   of storage, GPU residency and streaming.
@@ -89,9 +91,10 @@ viewpoints is not conservative; it stays the verification oracle (the
   for Quest" produces. A PVS is small and baked whole, so it lives in the
   scene file; a sidecar directory (`<scene>.lightmap/`) is for the large,
   partially baked lightmap tiles.
-- D2 Bake region. A box and a cell size in the scene's `Scene_settings`
-  (`pvs_region_min`, `pvs_region_max`, `pvs_cell_size`, saved through
-  `ERHE_scene`), edited in the PVS window ("Fit to content bounds" sets the
+- D2 Bake region. A box and a cell size in the scene's export settings
+  (`Scene_settings` `export_settings`: `pvs_region_min`, `pvs_region_max`,
+  `pvs_cell_size`, saved through `ERHE_scene`, also shown in the scene's
+  Properties), edited in the PVS window ("Fit to content bounds" sets the
   box to the static content's bounds). The cells are a uniform grid over
   the box (`Pvs_baker` in `doc/editor/renderers.md` computes it).
 - D3 Static set. The bake gives a column to the entries that are content,

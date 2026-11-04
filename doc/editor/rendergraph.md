@@ -31,6 +31,16 @@ the editor UI.
   Under `--no-post-processing` the post-processing node is left out and the
   png is the HDR scene color, as viewports then show it. The linear output
   reads the scene color itself, so its chain has no post-processing node.
+  The overdraw output puts an `Overdraw_node` in place of the
+  post-processing node, and the view counts its content passes' fragments
+  as a viewport in an overdraw mode does
+  (`doc/plans/overdraw_visualization.md` O6); the reply carries the counts
+  of that frame (`Overdraw_view_state::collect()`). A capture renders one
+  frame, so occlusion culling, which tests against the previous frame of the
+  same view, culls nothing in it.
+- `Scene_image_view` renders once: a later frame of the chain (frame
+  pipelining runs the chain one more frame before the prepare phase sees the
+  readback recorded) renders nothing.
 - `Scene_image_view` is a window-less sibling of `Viewport_scene_view`
   (`Scene_view` + `Texture_rendergraph_node`, HDR `format_16_vec4_float`
   color, or `format_32_vec4_float` for `color_format: "rgba32f"`,
@@ -60,7 +70,8 @@ the editor UI.
   pending request. The first MCP pass builds the chain and defers the
   request; the next `Rendergraph::execute()` runs the chain, and
   `Scene_image_readback_node` copies the chosen texture (the post-processed
-  image for png, the view's resolved HDR color for linear) into a host-visible
+  image for png, the view's resolved HDR color for linear, the heat map for
+  overdraw) into a host-visible
   buffer and records the frame index; the prepare phase of the next frame
   disables the chain's nodes (`Scene_image_capture::prepare_chain`, from the
   readback node's `prepare_rendergraph_node` hook in

@@ -3,6 +3,7 @@
 #include "renderers/composer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
+#include "rendergraph/overdraw_source.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_render_state.hpp"
 
@@ -94,6 +95,7 @@ class Scene_views;
 class Viewport_scene_view
     : public Scene_view
     , public erhe::rendergraph::Texture_rendergraph_node
+    , public IOverdraw_source
     , public std::enable_shared_from_this<Viewport_scene_view>
 {
 public:
@@ -211,7 +213,8 @@ public:
     // Render phase: the view's count buffer of frame_index, which its
     // execute filled in that frame; null when it did not count (Overdraw_node
     // reads it).
-    [[nodiscard]] auto get_overdraw_count_buffer(uint64_t frame_index) const -> const erhe::graphics::Buffer*;
+    [[nodiscard]] auto get_overdraw_count_buffer(uint64_t frame_index) const -> const erhe::graphics::Buffer* override;
+    [[nodiscard]] auto get_overdraw_frame       (uint64_t frame_index) const -> Overdraw_frame override;
 
     void set_renderer_choice(Renderer_choice choice);
     auto get_renderer_choice() const -> Renderer_choice;

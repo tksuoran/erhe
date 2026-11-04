@@ -24,6 +24,7 @@ management system that tracks, registers, and dispatches input events to ImGui w
 - Derive from `Imgui_window` and register with `Imgui_windows` to add UI panels.
 - Per frame: `Imgui_windows::begin_frame(frame_index)` -> draw windows -> `Imgui_windows::end_frame()` (copies each host's draw data) -> per host `update_draw_data_textures()` and `render_draw_data(encoder, pass, host.get_draw_data())` -> `next_frame()`.
 - `image()` / `image_button()` for rendering GPU textures in ImGui.
+- `Imgui_windows::set_window_contents_disabled(true)` draws every window's contents inside `ImGui::BeginDisabled()` until cleared (the editor sets it for a running scene save).
 
 ## Dependencies
 - `erhe::graphics` -- shaders, buffers, textures, render pipeline, ring buffers

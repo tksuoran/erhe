@@ -34,8 +34,12 @@ queued, unchanged, held, not optimized).
 "Generate for scene" and "Clear for scene" make the same request for every
 mesh of the active scene's content layer (`request_scene_lod_generation()`;
 MCP `generate_lods` with `scope` `scene`): the explicit request for a scene
-to profile with LODs everywhere. A save (and Save for Quest) stores the
-chains that exist and generates none (`doc/erhe/meshoptimizer_integration.md`
+to profile with LODs everywhere. A save stores the
+chains that exist and generates none; Prepare (PC) and Prepare (Quest) also
+generate a chain,
+into the file only, with the scene's export settings LOD (`Scene_settings`
+`export_settings.lod`, else the `lod` config settings) for every primitive
+without a request (`doc/erhe/meshoptimizer_integration.md`
 "Level of detail", "Stored chains"); a load of a file with stored chains
 restores them, and their requests, with no simplification. Like the
 selection request, the scene request is not an operation: undo does not
@@ -100,6 +104,17 @@ the level each entry draws in their color culling view
 `Render_frame_results` slot, which the main thread reads for the last
 rendered frame (`doc/editor/render_thread.md`).
 
+## Properties window
+
+The Properties window shows a mesh's chains: under Primitives, each
+primitive's "Optimized Buffer Mesh" group has a "Level of Detail" group when
+its optimized variant carries a chain - the level count, the generation time
+(chains generated this session) and, per level, the triangle count and the
+object space error. The `Lod` values that pick a level (`Lod.apply_lod`,
+mode, forced level, bias, min / max level) are the "Level of Detail"
+attached property group of the node, added through "Add Property"
+(`doc/erhe/property_system.md` section 4.29).
+
 ## Config section
 
 `Editor_settings_config::lod` (`Lod_config`,
@@ -144,7 +159,9 @@ the coarsest level whose error stays within
 "LOD Threshold (pixels)" at the distance from the camera to the closest
 point of the mesh's world box (`error * max_axis_scale * projection_scale /
 distance <= threshold`), plus the mesh's `Lod.bias` and "LOD Bias", clamped
-to `Lod.min_level` / `Lod.max_level` and to the chain; a mesh under
+to `Lod.min_level` / `Lod.max_level` and to the chain (a mesh baked into
+world space, `doc/editor/world_space_bake.md`, has `max_axis_scale` 1 and
+its chain in world units); a mesh under
 `Lod.mode` forced or off draws its forced level or level 0 as before
 (`doc/erhe/draw_list_renderer.md` R1c). The selection runs in the culling
 classification on the CPU and, with `culling_classification` gpu on a

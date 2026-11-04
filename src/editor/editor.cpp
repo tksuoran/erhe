@@ -41,6 +41,7 @@
 #include "render_thread.hpp"
 #include "editor_settings_store.hpp"
 #include "input_bindings_store.hpp"
+#include "windows/item_tree_state_store.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
@@ -50,6 +51,7 @@
 #include "content_library/material_library.hpp"
 #include "init_status_display.hpp"
 #include "windows/status_line.hpp"
+#include "scene/scene_save_service.hpp"
 #include "input_state.hpp"
 #include "task_guard.hpp"
 #include "time.hpp"
@@ -150,6 +152,7 @@
 #include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
 #include "windows/lod_window.hpp"
+#include "windows/scene_control_window.hpp"
 #include "windows/shader_variants_window.hpp"
 #include "windows/pvs_window.hpp"
 #include "windows/inventory_window.hpp"
@@ -859,7 +862,10 @@ public:
         set_frame_phase(erhe::utility::Frame_phase::m3_imgui);
         ERHE_VERIFY(m_app_context.current_command_buffer == nullptr);
 
-        m_hover_tool->reset_item_tree_hover();
+        // Item tree hover writes item flags, which a scene save reads.
+        if (!m_scene_save_service->is_active()) {
+            m_hover_tool->reset_item_tree_hover();
+        }
 
         erhe::log::set_breadcrumb("tick: draw_imgui_windows");
         m_imgui_windows->begin_frame(packet.device_frame_id);
@@ -1528,7 +1534,10 @@ public:
         // MCP, operations, transforms, draw list flush, rendering - then
         // sees scenes that only the main thread changes.
         erhe::log::set_breadcrumb("tick: scene_commit_queue flush");
-        m_scene_commit_queue.flush();
+        // Held while a scene save reads the scenes (scene_save_service.hpp).
+        if (!m_scene_save_service->is_active()) {
+            m_scene_commit_queue.flush();
+        }
 
         // Advance asynchronous asset loads a bounded amount
         // (doc/editor/async_asset_loading_design.md). This sits right after the commit
@@ -1563,12 +1572,18 @@ public:
         m_texture_file_loader->tick(command_buffer);
         take_m2_term(m_phase_timing.m2_upload_us);
 
-        m_time->update_transform_animations(*m_app_message_bus.get());
+        // Animations pause while a scene save reads the scenes.
+        const bool scene_save_active = m_scene_save_service->is_active();
+        if (!scene_save_active) {
+            m_time->update_transform_animations(*m_app_message_bus.get());
+        }
         // Scene animations advance on the same clock as the simulation:
         // predicted display delta when pacing is active (P2.4), wall clock
         // otherwise.
         const int64_t animation_advance_ns = (packet.display_advance_ns >= 0) ? packet.display_advance_ns : m_time->get_host_system_last_frame_duration_ns();
-        m_animation_player->update(static_cast<float>(animation_advance_ns) * 1.0e-9f);
+        if (!scene_save_active) {
+            m_animation_player->update(static_cast<float>(animation_advance_ns) * 1.0e-9f);
+        }
         m_fly_camera_tool->on_frame_begin();
 
         // Updating pointer is probably sufficient to be done once per frame
@@ -1688,12 +1703,18 @@ public:
             m_viewport_scene_views->update_hover_info(imgui_host); // updates what viewport window is being hovered
         }
 
+        // Starts a queued save once the scene is quiescent, finishes a done
+        // one; before the operation stack, which holds operations while it runs.
+        m_scene_save_service->update();
         m_operation_stack->update();
 
         // Geometry graph background evaluation: apply results of a
         // completed run and launch a new one when the graph is dirty
         // (after the operation stack so this frame's edits are seen).
-        m_geometry_graph_window->update_evaluation();
+        // Held while a scene save reads the scenes.
+        if (!m_scene_save_service->is_active()) {
+            m_geometry_graph_window->update_evaluation();
+        }
 
         // Texture graph: synchronous dirty-flag evaluation (cheap GLSL
         // composition, no background engine), run once per frame so the graph
@@ -1737,13 +1758,16 @@ public:
 
         m_fly_camera_tool->on_frame_end();
 
-        lightmap_commit_phase();
+        // Lightmap and PVS bake steps write scene state: held during a save.
+        if (!m_scene_save_service->is_active()) {
+            lightmap_commit_phase();
+        }
 
         // The running PVS bake's step (doc/plans/pvs.md D6): collects the id
         // captures that retired and re-arms them for the next viewpoints,
         // before the rendergraph prepares this frame's nodes. Returns at once
         // when no bake runs.
-        if (m_pvs_baker) {
+        if (m_pvs_baker && !m_scene_save_service->is_active()) {
             m_pvs_baker->tick();
         }
         take_m2_term(m_phase_timing.m2_update_us);
@@ -2791,6 +2815,7 @@ public:
         try {
             m_commands          = std::make_unique<erhe::commands::Commands      >();
             m_input_bindings_store = std::make_unique<Input_bindings_store       >(*m_commands.get());
+            m_item_tree_state_store = std::make_unique<Item_tree_state_store    >();
             m_app_message_bus   = std::make_unique<App_message_bus               >();
             m_app_settings.read(m_editor_settings.headset.openxr);
             // --no-headset-culling: session-only, never persisted.
@@ -3515,6 +3540,7 @@ public:
             ERHE_INIT_STEP_BEGIN("Some windows")
             {
                 m_operation_stack        = std::make_unique<Operation_stack                 >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context);
+                m_scene_save_service     = std::make_unique<Scene_save_service              >(m_app_context);
                 m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), *m_executor.get());
                 m_asset_fetch            = std::make_unique<Asset_fetch                     >(m_app_context, *m_asset_browser.get());
                 m_composer_window        = std::make_unique<Composer_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -3553,6 +3579,7 @@ public:
                 m_lod_window             = std::make_unique<Lod_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), m_editor_settings.lod);
                 m_pvs_window             = std::make_unique<Pvs_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_app_context.pvs_window              = m_pvs_window.get();
+                m_scene_control_window   = std::make_unique<Scene_control_window            >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_shader_variants_window = std::make_unique<Shader_variants_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_graphics_device->get_shader_variant_report());
                 m_app_context.shader_variants_window  = m_shader_variants_window.get();
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
@@ -3671,8 +3698,6 @@ public:
 #endif
                     *m_commands.get(),
                     *m_graphics_device.get(),
-                    *m_imgui_renderer.get(),
-                    *m_imgui_windows.get(),
                     *m_rendergraph.get(),
                     *m_window.get(),
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -3979,7 +4004,15 @@ public:
         if (!m_app_context.OpenXR) {
             window_imgui_host->set_begin_callback(
                 [this](erhe::imgui::Imgui_host& imgui_host) {
+                    // Menus edit the scenes: disabled while a scene save runs.
+                    const bool disabled = m_scene_save_service->is_active();
+                    if (disabled) {
+                        ImGui::BeginDisabled();
+                    }
                     m_app_windows->viewport_menu(imgui_host);
+                    if (disabled) {
+                        ImGui::EndDisabled();
+                    }
                 }
             );
             install_default_layout(*window_imgui_host, m_app_context);
@@ -4318,6 +4351,10 @@ public:
             join_outstanding_frame();
             m_render_thread->stop();
         }
+        // A running scene save reads the scene the teardown below destroys.
+        if (m_scene_save_service) {
+            m_scene_save_service->shutdown();
+        }
         // The packet holds strong references (the indirect diffuse scene
         // root, the lightmap atlas): released now, before the parts their
         // destructors reach (the mesh memory a scene's meshes allocate from)
@@ -4471,6 +4508,7 @@ public:
         m_app_context.icon_set                 = m_icon_set              .get();
         m_app_context.id_renderer              = m_id_renderer           .get();
         m_app_context.input_bindings_store     = m_input_bindings_store  .get();
+        m_app_context.item_tree_state_store    = m_item_tree_state_store .get();
         m_app_context.input_bindings_window    = m_input_bindings_window .get();
         m_app_context.input_state              = m_input_state           .get();
         m_app_context.inventory_window         = m_inventory_window      .get();
@@ -4485,6 +4523,7 @@ public:
         m_app_context.move_tool                = m_move_tool             .get();
         m_app_context.node_properties_window   = m_node_properties_window.get();
         m_app_context.operation_stack          = m_operation_stack       .get();
+        m_app_context.scene_save_service       = m_scene_save_service    .get();
         m_app_context.operations               = m_operations            .get();
         m_app_context.properties               = m_properties            .get();
         m_app_context.geometry_spreadsheet_window = m_geometry_spreadsheet_window.get();
@@ -5680,6 +5719,7 @@ public:
     // No dependencies (constructors)
     std::unique_ptr<erhe::commands::Commands      > m_commands;
     std::unique_ptr<Input_bindings_store          > m_input_bindings_store;
+    std::unique_ptr<Item_tree_state_store         > m_item_tree_state_store;
     std::unique_ptr<App_message_bus               > m_app_message_bus;
     std::unique_ptr<Input_state                   > m_input_state;
     std::unique_ptr<Time                          > m_time;
@@ -5777,6 +5817,7 @@ public:
     std::unique_ptr<Bone_visualization              >        m_bone_visualization;
     std::unique_ptr<Weight_display                  >        m_weight_display;
     std::unique_ptr<Operation_stack                 >        m_operation_stack;
+    std::unique_ptr<Scene_save_service              >        m_scene_save_service;
     std::unique_ptr<Scene_commands                  >        m_scene_commands;
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;
     std::unique_ptr<Commands_window                 >        m_commands_window;
@@ -5809,6 +5850,7 @@ public:
     std::unique_ptr<Lod_window                      >        m_lod_window;
     std::unique_ptr<Pvs_window                      >        m_pvs_window;
     std::unique_ptr<Shader_variants_window          >        m_shader_variants_window;
+    std::unique_ptr<Scene_control_window            >        m_scene_control_window;
     std::unique_ptr<Lightmap_texture_window         >        m_lightmap_texture_window;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
     std::unique_ptr<Animation_player                >        m_animation_player;

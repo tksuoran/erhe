@@ -600,6 +600,28 @@ void main()
     // (its rounding scales with the distance from the camera).
     vec4 shadow_receiver_plane = get_receiver_geometric_normal(v_view_relative_position, v_position_rounding);
 
+    // Visibility phase (doc/plans/shader_fp16.md R1): the loop path looks up
+    // every shadow-mapped light here, before the material and BRDF state is live.
+#  if !defined(ERHE_LIGHT_SHADING_CLUSTERED)
+#    define ERHE_SHADOW_RECORD_COUNT (ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED)
+#    if ERHE_SHADOW_RECORD_COUNT > 0
+    float shadow_visibility[ERHE_SHADOW_RECORD_COUNT];
+    for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED); ++i) {
+        shadow_visibility[i] = sample_light_visibility(v_view_relative_position, v_position_rounding, i, i, shadow_receiver_plane);
+    }
+    for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED); ++i) {
+        uint light_index   = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED) + i;
+        uint shadow_record = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED) + i;
+        shadow_visibility[shadow_record] = sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_record, shadow_receiver_plane);
+    }
+    for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED); ++i) {
+        uint           shadow_record = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED) + i;
+        Light_shadowed light         = light_shadowed_array.lights[shadow_record];
+        shadow_visibility[shadow_record] = sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, light.shadow_params.z, light.shadow_params.x, shadow_receiver_plane);
+    }
+#    endif
+#  endif
+
 #  ifdef ERHE_USE_VERTEX_VARYING_TANGENT
     vec3 T = normalize(v_T);
 #  else
@@ -996,6 +1018,19 @@ void main()
         // (exposure folded in on the fp16 accumulation path). With every
         // path off this is the original fp32 expression in the original
         // order: ((attenuation * radiance) * visibility) * brdf.
+        // The shadow-mapped light's visibility: the loop path's visibility
+        // phase computed it (R1); the clustered path looks it up here.
+#  if defined(ERHE_LIGHT_SHADING_CLUSTERED)
+#    define ERHE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) sample_light_visibility(v_view_relative_position, v_position_rounding, (LIGHT_INDEX), (SHADOW_RECORD), shadow_receiver_plane)
+#    define ERHE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) sample_point_light_visibility(v_view_relative_position, v_position_rounding, (LIGHT).view_origin.xyz, (LIGHT).shadow_params.z, (LIGHT).shadow_params.x, shadow_receiver_plane)
+#  elif ERHE_SHADOW_RECORD_COUNT > 0
+#    define ERHE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) shadow_visibility[(SHADOW_RECORD)]
+#    define ERHE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) shadow_visibility[(SHADOW_RECORD)]
+#  else
+        // No shadow-mapped light: the loops that would read it run zero times.
+#    define ERHE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) 1.0
+#    define ERHE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) 1.0
+#  endif
 #  define ERHE_SHADE_DIRECTIONAL_SHADOWMAPPED(LIGHT_INDEX, SHADOW_RECORD) { \
             uint  light_index    = (LIGHT_INDEX); \
             uint  shadow_record  = (SHADOW_RECORD); \
@@ -1004,7 +1039,7 @@ void main()
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
             if (N_dot_L > 0.0) { \
-                vis_float light_visibility = vis_float(sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_record, shadow_receiver_plane)); \
+                vis_float light_visibility = vis_float(ERHE_LIGHT_VISIBILITY(light_index, shadow_record)); \
                 acc_vec3  intensity        = acc_vec3(ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)) * acc_float(light_visibility); \
                 color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 0.0)); \
             } \
@@ -1030,7 +1065,7 @@ void main()
             att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
             if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
                 att_float spot_attenuation = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
-                vis_float light_visibility = vis_float(sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_record, shadow_receiver_plane)); \
+                vis_float light_visibility = vis_float(ERHE_LIGHT_VISIBILITY(light_index, shadow_record)); \
                 acc_vec3  intensity        = acc_vec3(float(range_attenuation * spot_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)) * acc_float(light_visibility); \
                 color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 1.0)); \
             } \
@@ -1052,13 +1087,14 @@ void main()
         // fragment->light direction; the cube-array layer for this light is
         // its hot record's shadow_params.z (written by light_buffer.cpp).
 #  define ERHE_SHADE_POINT_SHADOWMAPPED(LIGHT_INDEX, SHADOW_RECORD) { \
-            Light_shadowed light = light_shadowed_array.lights[(SHADOW_RECORD)]; \
+            uint  shadow_record  = (SHADOW_RECORD); \
+            Light_shadowed light = light_shadowed_array.lights[shadow_record]; \
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz; \
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
             att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
             if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
-                vis_float light_visibility = vis_float(sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, light.shadow_params.z, light.shadow_params.x, shadow_receiver_plane)); \
+                vis_float light_visibility = vis_float(ERHE_POINT_LIGHT_VISIBILITY(shadow_record, light)); \
                 acc_vec3  intensity        = acc_vec3(float(range_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)) * acc_float(light_visibility); \
                 color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 1.0)); \
             } \
@@ -1153,6 +1189,9 @@ void main()
 #  undef ERHE_SHADE_SPOT_NOT_SHADOWMAPPED
 #  undef ERHE_SHADE_POINT_SHADOWMAPPED
 #  undef ERHE_SHADE_POINT_NOT_SHADOWMAPPED
+#  undef ERHE_LIGHT_VISIBILITY
+#  undef ERHE_POINT_LIGHT_VISIBILITY
+#  undef ERHE_SHADOW_RECORD_COUNT
 
         } // !lightmap_valid - analytic lights gated off for lightmapped draws
 #  undef BXDF_CALL

@@ -61,6 +61,8 @@ public:
     void process_events         (float dt_s, int64_t time_ns);
     void end_frame              ();
     void draw_imgui_windows     ();
+    // Draws every window's contents disabled (ImGui::BeginDisabled) while set.
+    void set_window_contents_disabled(bool disabled);
 
     void window_menu_entries    (Imgui_host& imgui_host, bool developer);
     auto get_windows            () -> std::vector<Imgui_window*>&;
@@ -109,6 +111,7 @@ private:
     erhe::window::Context_window*      m_context_window{nullptr};
     std::recursive_mutex               m_mutex;
     bool                               m_iterating{false};
+    bool                               m_window_contents_disabled{false};
     std::vector<Imgui_window*>         m_imgui_windows;
     ERHE_PROFILE_MUTEX(std::mutex,     m_queued_operations_mutex);
     std::vector<std::function<void()>> m_queued_operations;

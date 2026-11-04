@@ -218,6 +218,14 @@ auto Mcp_server::query_overdraw_stats(const json& args) -> std::string
         }
         return make_json_content(result).dump();
     }
+    add_overdraw_count_statistics(statistics, result);
+    return make_json_content(result).dump();
+}
+
+namespace mcp_server_detail {
+
+void add_overdraw_count_statistics(const erhe::scene_renderer::Overdraw_statistics& statistics, json& result)
+{
     const uint64_t pixel_count = static_cast<uint64_t>(statistics.width) * static_cast<uint64_t>(statistics.height);
     json histogram = json::array();
     for (const uint32_t bin : statistics.histogram) {
@@ -238,7 +246,8 @@ auto Mcp_server::query_overdraw_stats(const json& args) -> std::string
     result["max_count"]           = statistics.max_count;
     result["histogram"]           = histogram;
     result["histogram_last_bin"]  = erhe::scene_renderer::Overdraw_statistics::histogram_last_bin;
-    return make_json_content(result).dump();
 }
+
+} // namespace mcp_server_detail
 
 } // namespace editor

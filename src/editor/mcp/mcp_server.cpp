@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "scene/scene_save_service.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
@@ -43,6 +44,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <string_view>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -451,6 +453,24 @@ auto Mcp_server::handle_error(const json& id, int code, const std::string& messa
     return make_jsonrpc_error(id, code, message);
 }
 
+namespace {
+
+[[nodiscard]] auto is_allowed_during_scene_save(const std::string& tool_name) -> bool
+{
+    static constexpr std::array<std::string_view, 7> allowed{
+        "get_async_status",
+        "get_viewports",
+        "list_scenes",
+        "capture_screenshot",
+        "save_scene",
+        "prepare_scene",
+        "save_scene_for_quest"
+    };
+    return std::find(allowed.begin(), allowed.end(), std::string_view{tool_name}) != allowed.end();
+}
+
+} // anonymous namespace
+
 auto Mcp_server::process_queued_requests() -> int
 {
     std::vector<std::unique_ptr<Queued_request>> requests;
@@ -561,6 +581,16 @@ auto Mcp_server::process_queued_requests() -> int
             continue;
         }
 
+        // A running scene save reads the scenes on a worker: only tools that
+        // neither edit the editor state nor wait for it run meanwhile.
+        if ((m_context.scene_save_service != nullptr) && m_context.scene_save_service->is_active() && !is_allowed_during_scene_save(req->tool_name)) {
+            req->result_promise.set_value(
+                make_error_content(fmt::format("'{}' refused: a scene save is in progress - poll get_save_status until it is done", req->tool_name))
+            );
+            log_mcp->info("MCP server: '{}' refused while a scene save runs", req->tool_name);
+            continue;
+        }
+
         // Per-request exception boundary. process_queued_requests() runs on the
         // main thread, so a handler that throws would skip the set_value() below,
         // break the waiting HTTP thread's promise (observed as
@@ -594,10 +624,6 @@ auto Mcp_server::process_queued_requests() -> int
         ++count;
         log_mcp->info("MCP server: processed '{}'", req->tool_name);
     }
-
-    // After every reply of this pass is settled: the HTTP threads answer
-    // while the saves hold the main thread.
-    run_queued_saves();
 
     return count;
 }
@@ -647,6 +673,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_async_status",               &Mcp_server::query_async_status                   },
         { "get_transform_update_stats",     &Mcp_server::query_transform_update_stats         },
         { "merge_static_subtree",           &Mcp_server::action_merge_static_subtree          },
+        { "bake_static_to_world_space",     &Mcp_server::action_bake_static_to_world_space    },
         { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
         { "raycast",                        &Mcp_server::query_raycast                        },
         { "geometry_query",                 &Mcp_server::query_geometry_batch                 },
@@ -721,6 +748,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "select_variant",                 &Mcp_server::action_select_variant                },
         { "save_scene",                     &Mcp_server::action_save_scene                    },
         { "save_scene_for_quest",           &Mcp_server::action_save_scene_for_quest          },
+        { "prepare_scene",                  &Mcp_server::action_prepare_scene                 },
         { "get_save_status",                &Mcp_server::query_save_status                    },
         { "load_scene",                     &Mcp_server::action_load_scene                    },
         { "open_scene",                     &Mcp_server::action_open_scene                    },

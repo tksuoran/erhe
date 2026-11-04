@@ -137,7 +137,7 @@ previous frame's skinned mesh ID pick, the analytic tool hovers, the grid
 and the quad composition layers (Hud, Hotbar). The render phase records the
 ID pick pass (`update_id_render()`).
 
-The Headset window's "Controller Ray Scene Object Hits" checkbox (main
+The Scene Control window's "Controller Ray Scene Object Hits" checkbox (main
 thread; copied into the frame's settings slot by `prepare_render_view()`
 for the render phase) turns off the hits on 3D scene objects: the content
 and bone slots of the raytrace, the ID pick pass and its merge. The ray
@@ -148,7 +148,7 @@ the ID pick pass recording (CPU; "Controller ray ...").
 
 ## Headset headlamp
 
-The Headset window's headlamp button adds (first press), disables and
+The Scene Control window's headlamp button adds (first press), disables and
 enables a spot light, "Headlamp" (`Headset_view::set_headlamp_enabled()`,
 queued to the prepare phase): a child of the headset's root camera (the head
 pose, the eye midpoint), 15 cm above it in head space, aimed along the view
@@ -156,16 +156,24 @@ direction; range 30 m, cone 0.25 / 1.5 rad (inner / outer). Enabling puts it
 at the front of the scene's light layer
 (`erhe::scene::Light_layer::move_to_front()`), so it is the first spot light
 the light set resolves: it takes the first spot shadow slot (or the first
-unshadowed spot slot without shadows). The Headset window's "Headlamp only"
+unshadowed spot slot without shadows). The Scene Control window's "Headlamp only"
 lighting makes it the only light. Disabling takes it out of the scene; a
 re-home of the headset moves it into the new scene. Intensity (slider up to
 20000 and 100 - 5000 shortcut buttons) and shadows apply at once. It is
 `session_only`: never saved.
 
-## Headset window lighting and LOD
+## Scene Control window
 
-The Headset window edits the graphics preset in effect for the session
-(`Headset_view::queue_session_preset_edit()`: a copy of
+The Scene Control window (`Scene_control_window`, developer menu) holds
+session controls for the scene being viewed. Everywhere it shows the
+lighting and LOD controls below. Under OpenXR it first shows the headset's
+own controls (`Headset_view::scene_control_imgui()`): the editor status
+line (the headset shows no editor window), the headset scene combo, the
+headset view's toolbar (shader debug and overdraw modes), the headlamp
+("Headset headlamp") and the controller ray's scene object hits switch.
+
+The lighting and LOD controls edit the graphics preset in effect for the
+session (`queue_session_preset_edit()`: a copy of
 `Graphics_settings::current_graphics_preset` through `apply_limits()` and
 `apply_preset()`, as MCP `set_graphics_preset`; `graphics_presets.json` is
 not written, the next Settings window preset edit or selection re-applies
@@ -174,7 +182,8 @@ the stored preset):
 - Lighting: "Scene lights (clustered)" - clustered light shading with the
   stored preset's per type light counts; "Single directional light" -
   per type loops, one shadowed directional light, every other count 0 (the
-  first directional light is the only light); "Headlamp only" - per type
+  first directional light is the only light); "Headlamp only" (OpenXR
+  only) - per type
   loops, one spot light slot (shadow mapped when the headlamp casts
   shadows, re-applied when the Headlamp Shadows checkbox changes) and no
   other light, so the headlamp, the first spot light, is the only light.

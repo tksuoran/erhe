@@ -14,18 +14,28 @@ namespace editor {
 
 // The Mali offline compiler (doc/editor/shader_analytics.md),
 // found and version-queried once; analyze() runs it on one program.
+// The executables one search found, in search order, and what it searched.
+class Offline_compiler_candidates
+{
+public:
+    std::vector<std::filesystem::path> paths;
+    std::vector<std::string>           searched; // "settings '<entry>'", "ERHE_MALIOC '<entry>'", "PATH"
+};
+
 class Offline_compiler_tools
 {
 public:
+    std::vector<std::filesystem::path> malioc_candidates;
     std::filesystem::path malioc;               // empty: not found
     std::string           malioc_version;
     std::string           mali_core;            // "Mali-G310"
 };
 
-// configured path, else the environment variable, else PATH; empty when none is a file.
-[[nodiscard]] auto find_offline_compiler(const std::string& configured, const char* env_name, const char* exe_name) -> std::filesystem::path;
+// Every executable found through the configured entries, the env_name path
+// list and PATH (each entry a file or a directory; $NAME, ${NAME}, ~ expand).
+[[nodiscard]] auto find_offline_compiler_candidates(std::span<const std::string> configured_paths, const char* env_name, const char* exe_name) -> Offline_compiler_candidates;
 
-// Runs the compilers' version queries; a tool whose query fails is dropped (logged).
+// Queries every candidate's version and selects the newest per compiler (logged).
 void query_offline_compiler_versions(Offline_compiler_tools& tools);
 
 class Offline_compiler_stage

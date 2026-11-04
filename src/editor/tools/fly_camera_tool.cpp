@@ -1,6 +1,7 @@
 
 #include "tools/fly_camera_tool.hpp"
 
+#include "scene/scene_save_service.hpp"
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
@@ -1459,8 +1460,21 @@ void Fly_camera_tool::check_camera_node_roll()
 }
 #endif // ERHE_CAMERA_ROLL_DIAGNOSTICS
 
+auto Fly_camera_tool::is_camera_read_only() const -> bool
+{
+    // The camera node is scene content: frozen while its scene is saved.
+    if ((m_context.scene_save_service == nullptr) || !m_context.scene_save_service->is_active() || !m_camera_controller) {
+        return false;
+    }
+    const erhe::scene::Node* const node = m_camera_controller->get_node();
+    return (node != nullptr) && m_context.scene_save_service->is_read_only(node->get_item_host());
+}
+
 void Fly_camera_tool::on_frame_begin()
 {
+    if (is_camera_read_only()) {
+        return;
+    }
     update_camera();
 #if ERHE_CAMERA_ROLL_DIAGNOSTICS
     check_camera_node_roll();
@@ -1477,7 +1491,7 @@ void Fly_camera_tool::update_fixed_step(const Time_context& time_context)
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     static_cast<void>(time_context);
-    if (!m_camera_controller) { // TODO
+    if (!m_camera_controller || is_camera_read_only()) {
         return;
     }
     m_camera_controller->update_fixed_step();

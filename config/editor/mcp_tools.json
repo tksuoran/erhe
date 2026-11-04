@@ -585,6 +585,26 @@
     "name": "merge_static_subtree"
   },
   {
+    "description": "Bake the static meshes of a scene into world space (undoable operation): each static mesh (content, not skinned, no physics, not animated or under an animated / rigid-body / external-asset node, soup-backed primitives, admitted by the instancing setting) gets world-space copies of its primitives and moves under the scene's \"World Space\" node (created when missing) with the identity transform; a mesh below which something stays (a child that is not baked) leaves an Xform with its old transform in its place holding it. Reply: planned_meshes, placeholders, kept (reason -> count), queued. The primitives are built when the operation executes on the operation stack; the log line \"Bake to World Space: N meshes, M placeholders\" names the result.",
+    "inputSchema": {
+      "properties": {
+        "export_settings": {
+          "description": "Scene_export_settings fields merged (RFC 7386) over the scene's export settings for this call: lod (Lod_config with _version), bake_static_to_world_space, instancing (skip | duplicate | duplicate_within_budget), instancing_budget_mib, pvs_region_min / pvs_region_max / pvs_cell_size",
+          "type": "object"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "bake_static_to_world_space"
+  },
+  {
     "description": "Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.",
     "inputSchema": {
       "properties": {},
@@ -3490,7 +3510,7 @@
     "name": "save_scene"
   },
   {
-    "description": "Save for Quest: write a glTF scene the way save_scene does (same erhe-authored file with the prepared mesh data extensions and the ERHE_* editor state) but transcode every Basis Universal KTX2 texture at save time to a raw ASTC 4x4 KTX2 image (all mip levels, Zstandard supercompressed unless texture_supercompression is none; SRGB for color textures, UNORM for data textures; a two component X+Y normal map keeps its layout) referenced through the ERHE_texture_ktx2 extension, so a device with ASTC (Quest) uploads the blocks with no transcode, and a device without ASTC decodes them on the CPU. Each prepared primitive also carries its GPU-ready vertex streams in the running layouts (ERHE_gpu_vertex_streams), which a matching device uploads with no vertex packing. PNG / JPEG images are written as they are. An export: the scene's source file binding and dirty state are not changed. Asynchronous like save_scene: the reply returns the queued job at once; get_save_status {job_id} reports its state and, when done, the path, file_bytes, save_ms, the prepared mesh data statistics and the texture transcode counts (textures{image_count, transcoded_count, transcode_failed_count, raw_ktx2_count, source_byte_count, transcoded_byte_count, transcode_ms}).",
+    "description": "Save for Quest (prepare_scene with target quest; File > Prepare (Quest)): write a glTF scene the way save_scene does (same erhe-authored file with the prepared mesh data extensions and the ERHE_* editor state) but transcode every Basis Universal KTX2 texture at save time to a raw ASTC 4x4 KTX2 image (all mip levels, Zstandard supercompressed unless texture_supercompression is none; SRGB for color textures, UNORM for data textures; a two component X+Y normal map keeps its layout) referenced through the ERHE_texture_ktx2 extension, so a device with ASTC (Quest) uploads the blocks with no transcode, and a device without ASTC decodes them on the CPU. Each prepared primitive also carries its GPU-ready vertex streams in the running layouts (ERHE_gpu_vertex_streams), which a matching device uploads with no vertex packing. PNG / JPEG images are written as they are. An export: the scene's source file binding and dirty state are not changed. Asynchronous like save_scene: the reply returns the queued job at once; get_save_status {job_id} reports its state and, when done, the path, file_bytes, save_ms, the prepared mesh data statistics and the texture transcode counts (textures{image_count, transcoded_count, transcode_failed_count, raw_ktx2_count, source_byte_count, transcoded_byte_count, transcode_ms}).",
     "inputSchema": {
       "properties": {
         "path": {
@@ -3516,6 +3536,47 @@
       "type": "object"
     },
     "name": "save_scene_for_quest"
+  },
+  {
+    "description": "Prepare a scene for a GPU family: write a glTF scene the way save_scene does (same erhe-authored file with the prepared mesh data extensions and the ERHE_* editor state) but transcode every Basis Universal KTX2 texture at save time to a raw block KTX2 image referenced through the ERHE_texture_ktx2 extension (all mip levels, Zstandard supercompressed unless texture_supercompression is none; SRGB for color textures, UNORM for data textures). target quest (File > Prepare (Quest); the same as save_scene_for_quest): ASTC 4x4, a two component X+Y normal map keeps its layout (X in RGB, Y in A); a device without ASTC decodes the blocks on the CPU. target pc (File > Prepare (PC)): BC7, a two component normal map becomes BC5 (X in R, Y in G); a device that does not sample BC formats leaves those texture slots empty; Both targets write a LOD chain (ERHE_mesh_lod) for every prepared primitive, generated with the scene's export settings lod (else the editor config lod settings) where the primitive has no LOD request. With bake_static_to_world_space (export settings, default on) every static mesh is written under one \"World Space\" node with the identity transform and world-space vertices; the status prepared block reports world_bake_mesh_count, world_bake_placeholder_count, world_bake_primitive_count and world_bake_failed_count. Each prepared primitive also carries its GPU-ready vertex streams in the running layouts (ERHE_gpu_vertex_streams). PNG / JPEG images are written as they are. An export: the scene's source file binding and dirty state are not changed. Asynchronous like save_scene: the reply returns the queued job at once; get_save_status {job_id} reports its state and, when done, the path, file_bytes, save_ms, the prepared mesh data statistics and the texture transcode counts (textures{image_count, transcoded_count, transcode_failed_count, raw_ktx2_count, source_byte_count, transcoded_byte_count, transcode_ms}).",
+    "inputSchema": {
+      "properties": {
+        "path": {
+          "description": "Destination file path (default: res/editor/scenes/<scene name>_<target>.glb). .glb is appended when the extension is neither .glb nor .gltf",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene (a glTF scene; a USD-backed scene is refused)",
+          "type": "string"
+        },
+        "target": {
+          "description": "GPU family: \"quest\" (ASTC 4x4 textures) or \"pc\" (BC7 / BC5 textures)",
+          "enum": [
+            "quest",
+            "pc"
+          ],
+          "type": "string"
+        },
+        "export_settings": {
+          "description": "Scene_export_settings fields merged (RFC 7386) over the scene's export settings for this call: lod (Lod_config with _version), bake_static_to_world_space, instancing (skip | duplicate | duplicate_within_budget), instancing_budget_mib, pvs_region_min / pvs_region_max / pvs_cell_size",
+          "type": "object"
+        },
+        "texture_supercompression": {
+          "description": "Supercompression of the raw block levels: \"zstd\" (default; Zstandard, the smaller file) or \"none\" (levels stored as they upload)",
+          "enum": [
+            "zstd",
+            "none"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "target"
+      ],
+      "type": "object"
+    },
+    "name": "prepare_scene"
   },
   {
     "description": "Status of the asynchronous scene saves queued by save_scene and save_scene_for_quest. With job_id: that job's object {job_id, tool, scene_name, path, format, state, saved, ...}; state is 'pending' (queued), 'running' (the save holds the main thread), 'done' (saved true, file_bytes, save_ms, export_ms, prepared{prepared_count, retained_count, skipped_count, skip_reasons, bvh_reused_count, bvh_rebuilt_count, bvh_stored_count, bvh_none_count, dropped_degenerate_triangles, preparation_ms, gpu_vertex_stream_count, gpu_vertex_stream_skipped, gpu_vertex_stream_ms}, plus textures{...} for save_scene_for_quest; a USD save reports file_bytes and save_ms only) or 'failed' (error). Without job_id: {jobs: [...]} of the most recent 64 jobs. Answered by the MCP server thread directly, so it replies also while a save is running and other tools wait for the main thread.",
@@ -3563,7 +3624,7 @@
     "name": "open_scene"
   },
   {
-    "description": "Make a scene visible and framed in a viewport window, for headless capture. Binds the scene into a viewport (the one named in 'viewport', else the one already showing the scene, else an empty one, else a new window), looks through the scene's first authored camera when the file has one (untouched, as usdview does) or creates 'MCP frame camera' and places it so the union world AABB of the scene's meshes fills the view when it has none, and reports which in 'camera_source'. A scene opened from a file that authors no camera otherwise leaves its viewport bound to nothing and renders black. The viewport renders on a following frame: wait a few frames before capture_screenshot.",
+    "description": "Make a scene visible and framed in a viewport window, for headless capture. Binds the scene into a viewport (the one named in 'viewport', else the one already showing the scene, else an empty one, else a new window), looks through the scene's first authored camera when the file has one (untouched, as usdview does) or creates 'MCP frame camera' and places it so the union world AABB of the scene's meshes fills the view when it has none, and reports which in 'camera_source'. A scene opened from a file that authors no camera opens with the editor's default camera, which this tool treats as its own. The viewport renders on a following frame: wait a few frames before capture_screenshot.",
     "inputSchema": {
       "properties": {
         "margin": {
@@ -4133,7 +4194,7 @@
     "name": "capture_screenshot"
   },
   {
-    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, scene, camera (effective values), msaa_samples, shader_debug, color_format, shadow_debug_light {name, id, light_index} when given (light_index = the light slot the render used, null when the light got none); shadow_maps {map_width, map_height, map_format, depth_bits, technique, cube_size, cube_format, reverse_depth, depth_range} and shadow_lights [{name, id, type directional|spot|point, slot, position, resolution, layer + texture_from_world + clip_from_world (directional / spot; 4x4 row-major: rows[r] . (x, y, z, 1) = component r, divide by w; texture_from_world gives shadow map uv and depth), cube_index (point; the cube holds radial distances from position)}] - the shadow-mapped lights exactly as this render's own shadow pass used them (the directional fit depends on this camera); for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the covered pixels, and for a linear render with shader_debug != 0 background {marker: 'nan', pixel_count}: pixels no surface covers have NaN RGB (the sky is not drawn in those renders). See doc/editor/rendergraph.md 'Scene image capture'.",
+    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, overdraw_mode / max_count / overdraw_statistics (output overdraw), scene, camera (effective values), msaa_samples, shader_debug, color_format, shadow_debug_light {name, id, light_index} when given (light_index = the light slot the render used, null when the light got none); shadow_maps {map_width, map_height, map_format, depth_bits, technique, cube_size, cube_format, reverse_depth, depth_range} and shadow_lights [{name, id, type directional|spot|point, slot, position, resolution, layer + texture_from_world + clip_from_world (directional / spot; 4x4 row-major: rows[r] . (x, y, z, 1) = component r, divide by w; texture_from_world gives shadow map uv and depth), cube_index (point; the cube holds radial distances from position)}] - the shadow-mapped lights exactly as this render's own shadow pass used them (the directional fit depends on this camera); for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the covered pixels, and for a linear render with shader_debug != 0 background {marker: 'nan', pixel_count}: pixels no surface covers have NaN RGB (the sky is not drawn in those renders). See doc/editor/rendergraph.md 'Scene image capture'.",
     "inputSchema": {
       "properties": {
         "scene": {
@@ -4152,11 +4213,11 @@
           ]
         },
         "width": {
-          "description": "Image width in pixels, 1..8192 (default 1280)",
+          "description": "Image width in pixels, 1..8192 (required: the image is rendered at exactly the requested size)",
           "type": "integer"
         },
         "height": {
-          "description": "Image height in pixels, 1..8192 (default 720)",
+          "description": "Image height in pixels, 1..8192 (required)",
           "type": "integer"
         },
         "path": {
@@ -4164,12 +4225,25 @@
           "type": "string"
         },
         "output": {
-          "description": "'png' (default): the post-processed (bloom + tonemapped) image, sRGB-encoded 8-bit RGBA - what a viewport shows. 'linear': the linear HDR scene color before post-processing (camera exposure applied), written as a portable float map (.pfm: 'PF' header, RGB float32 little-endian, rows bottom to top).",
+          "description": "'png' (default): the post-processed (bloom + tonemapped) image, sRGB-encoded 8-bit RGBA - what a viewport shows. 'linear': the linear HDR scene color before post-processing (camera exposure applied), written as a portable float map (.pfm: 'PF' header, RGB float32 little-endian, rows bottom to top). 'overdraw': the overdraw heat map (doc/plans/overdraw_visualization.md O6) - the content passes' fragment shader invocations per pixel through the viewport's color ramp (over count 0 the scene at 25 % luminance), sRGB PNG; the reply adds overdraw_statistics {valid, counted_mode, width, height, invocations_total, covered_pixels, mean_per_covered_pixel, mean_per_pixel, max_count, histogram, histogram_last_bin} of this render, as get_overdraw_stats reports them. Needs fragment stage buffer atomics; shader_debug must be 0.",
           "enum": [
             "png",
-            "linear"
+            "linear",
+            "overdraw"
           ],
           "type": "string"
+        },
+        "overdraw_mode": {
+          "description": "Output overdraw: 'shaded' (default; the invocations the frame runs, with early depth tests) or 'rasterized' (every rasterized fragment of the counted draws, ignoring the depth test)",
+          "enum": [
+            "shaded",
+            "rasterized"
+          ],
+          "type": "string"
+        },
+        "max_count": {
+          "description": "Output overdraw: the heat map is white from this count up (default 8, as a viewport)",
+          "type": "integer"
         },
         "shader_debug": {
           "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none. Debug modes replace the lit color after exposure, so output 'linear' returns their values unscaled (at the color_format precision). 30 shadow_visibility: visibility of shadow_debug_light (1 = lit, 0 = shadowed; directional / spot / point shadow maps; 1 for a light that is not shadow-mapped). 36 world_position: the fragment world position xyz, the per-pixel receiver position with output 'linear' (MSAA-resolved pixels on silhouettes average positions; pass msaa_samples 0 for exact per-pixel positions). 37 base_color: the resolved base color the BxDF receives (material input source, factor, vertex color and base color texture multiplied), unlit, in linear space.",
@@ -4195,7 +4269,11 @@
           "type": "integer"
         }
       },
-      "type": "object"
+      "type": "object",
+      "required": [
+        "width",
+        "height"
+      ]
     },
     "name": "render_scene_image"
   },
@@ -8758,14 +8836,20 @@
           "description": "PNG file path to write (parent directories are created)",
           "type": "string"
         },
-        "size": {
-          "description": "Square edge length in pixels (default 256, clamped to [1, 4096])",
+        "width": {
+          "description": "Image width in pixels, 1..4096 (required)",
+          "type": "integer"
+        },
+        "height": {
+          "description": "Image height in pixels, 1..4096 (required)",
           "type": "integer"
         }
       },
       "required": [
         "node_id",
-        "path"
+        "path",
+        "width",
+        "height"
       ],
       "type": "object"
     },
@@ -8783,14 +8867,20 @@
           "description": "Id of the Material Output node",
           "type": "integer"
         },
-        "size": {
-          "description": "Square edge length in pixels (default 256, clamped to [1, 4096])",
+        "width": {
+          "description": "Image width in pixels, 1..4096 (required)",
+          "type": "integer"
+        },
+        "height": {
+          "description": "Image height in pixels, 1..4096 (required)",
           "type": "integer"
         }
       },
       "required": [
         "node_id",
-        "dir"
+        "dir",
+        "width",
+        "height"
       ],
       "type": "object"
     },
@@ -10832,7 +10922,10 @@
         "lod_cpu_selection": {
           "description": "Where the CPU consumers of the selected levels read them (doc/plans/lod_gpu_selection.md section 9, decisions 5 and 6; default every_frame): every_frame runs the CPU selection lanes every frame; on_demand, in effect under culling_classification gpu only (otherwise every_frame, logged once), runs them only for a get_cull_classification_check frame (which restarts the hysteresis on both paths) and the edge lines, the selection outline, get_lod_info drawn levels (source retired) and the shadow map cache read the GPU's levels and level changes of the newest completed frame, frames in flight late",
           "type": "string",
-          "enum": ["every_frame", "on_demand"]
+          "enum": [
+            "every_frame",
+            "on_demand"
+          ]
         },
         "flat_draw_color": {
           "description": "true: every color draw writes an unlit palette color picked by its draw (primitive record index; the FLAT_DRAW_COLOR variant axis), with no texture, light or shadow map reads; alpha-tested materials draw solid. Lights and shadow maps are still prepared unless their light counts are 0. A fragment cost measurement mode",

@@ -410,7 +410,11 @@ Drawing reads level 0 unless the mesh's `Lod` properties force a level
 primitive with a request (`Primitive::lod_settings`) into the
 `ERHE_mesh_lod` glTF extension (`doc/gltf_extensions/ERHE_mesh_lod.md`,
 `doc/erhe/gltf.md` "LOD chains"): the level indices over the core vertices,
-the per-level errors and the settings. Save for Quest stores the chains
+the per-level errors and the settings. Prepare (PC) and Prepare (Quest)
+request a chain for every prepared soup primitive without a request, with
+the scene's export settings LOD, else the editor config `lod` settings
+(`Gltf_export_arguments::default_lod_settings`;
+the live scene is not changed); a plain save stores the chains
 that exist and requests none of its own: the editor makes them on request
 (the LOD window's "Generate for scene", MCP `generate_lods` with `scope`
 `scene`), on the Mac, and the Quest loads them. The written chain is a

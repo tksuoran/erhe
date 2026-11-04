@@ -9,10 +9,12 @@
 #include "editor_log.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/sky_renderer.hpp"
+#include "rendergraph/overdraw_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
+#include "scene/viewport_render_state.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "renderers/viewport_config.hpp"
 
@@ -59,6 +61,7 @@ Scene_image_view::Scene_image_view(
     const Render_content                        content,
     const erhe::scene_renderer::Shader_debug    shader_debug,
     const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light,
+    const Overdraw_frame&                       overdraw,
     erhe::graphics::Gpu_timer* const            forward_pass_timer
 )
     // No settings store: nothing about this view persists.
@@ -77,6 +80,7 @@ Scene_image_view::Scene_image_view(
     , m_viewport    {0, 0, width, height}
     , m_content     {content}
     , m_shader_debug{shader_debug}
+    , m_overdraw    {overdraw}
     , m_shadow_debug_light_id{shadow_debug_light ? std::optional<std::size_t>{shadow_debug_light->get_id()} : std::nullopt}
     , m_forward_pass_timer{forward_pass_timer}
 {
@@ -157,6 +161,7 @@ void Scene_image_view::prepare_composition(const uint64_t frame_index, const std
         .viewport            = m_viewport,
         .shader_debug        = m_shader_debug,
         .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
+        .overdraw            = to_overdraw_count(m_overdraw.mode),
         .content             = m_content
     };
     // Bucketing reads the meshes' Buffer_mesh variants, which a worker may
@@ -310,6 +315,7 @@ void Scene_image_view::pre_execute_rendergraph_node(erhe::graphics::Command_buff
             .viewport            = m_viewport,
             .shader_debug        = m_shader_debug,
             .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&m_frame_view_input, 1),
+            .overdraw            = to_overdraw_count(m_overdraw.mode),
             .content             = m_content,
             // The composition the prepare phase decided for this frame.
             .composer_prepared   = &prepared
@@ -324,6 +330,9 @@ void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& 
 
     erhe::utility::Thread_roles::assert_render_thread();
     erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
+    if (m_has_rendered) {
+        return; // the readback recorded the frame that rendered
+    }
     Render_view&                      render_view = get_render_view();
     const std::shared_ptr<Scene_root> scene_root  = render_view.scene_root;
     if (!scene_root || !m_camera || (m_viewport.width < 1) || (m_viewport.height < 1)) {
@@ -354,6 +363,24 @@ void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& 
     // Sized at construction for the request's fixed size.
     ERHE_VERIFY(m_render_target.get_render_pass() != nullptr);
 
+    // Overdraw counting (doc/plans/overdraw_visualization.md O6), as
+    // Viewport_scene_view counts: clear before the render pass, reduce after.
+    const uint64_t frame_index = graphics_device.get_frame_index();
+    erhe::scene_renderer::Overdraw_counter* const overdraw_counter = m_context.overdraw_counter;
+    const bool count_overdraw = (m_overdraw.mode != Overdraw_mode::off);
+    if (count_overdraw) {
+        ERHE_VERIFY((overdraw_counter != nullptr) && overdraw_counter->is_supported());
+        m_overdraw_view_state.begin_frame(
+            graphics_device,
+            command_buffer,
+            frame_index,
+            to_overdraw_count(m_overdraw.mode),
+            static_cast<uint32_t>(m_viewport.width),
+            static_cast<uint32_t>(m_viewport.height)
+        );
+        context.overdraw_count_buffer = m_overdraw_view_state.get_count_buffer(frame_index);
+    }
+
     if (m_forward_pass_timer != nullptr) {
         m_forward_pass_timer->begin(command_buffer);
     }
@@ -370,7 +397,20 @@ void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& 
     if (m_forward_pass_timer != nullptr) {
         m_forward_pass_timer->end(command_buffer);
     }
+    if (count_overdraw) {
+        overdraw_counter->reduce(command_buffer, m_overdraw_view_state, frame_index);
+    }
     m_has_rendered = true;
+}
+
+auto Scene_image_view::get_overdraw_count_buffer(const uint64_t frame_index) const -> const erhe::graphics::Buffer*
+{
+    return m_overdraw_view_state.get_count_buffer(frame_index);
+}
+
+auto Scene_image_view::collect_overdraw_statistics(const uint64_t frame_index) -> erhe::scene_renderer::Overdraw_statistics
+{
+    return m_overdraw_view_state.collect(frame_index);
 }
 
 // ---------------------------------------------------------------------------
@@ -381,7 +421,7 @@ Scene_image_readback_node::Scene_image_readback_node(
     App_context&                    context,
     Scene_image_capture&            capture,
     Scene_image_view&               view,
-    Post_processing_node* const     post_processing_node,
+    erhe::rendergraph::Rendergraph_node* const image_node,
     const int                       width,
     const int                       height,
     const erhe::dataformat::Format  color_format,
@@ -391,7 +431,7 @@ Scene_image_readback_node::Scene_image_readback_node(
     , m_context             {context}
     , m_capture             {&capture}
     , m_view                {view}
-    , m_post_processing_node{post_processing_node}
+    , m_image_node          {image_node}
     , m_width               {width}
     , m_height              {height}
     , m_color_format        {color_format}
@@ -419,7 +459,7 @@ void Scene_image_readback_node::execute_rendergraph_node(erhe::graphics::Command
     using namespace erhe::graphics;
 
     erhe::utility::Thread_roles::assert_render_thread();
-    // The view and the post-processing node are named by every frame that
+    // The view and the image node are named by every frame that
     // names this node (the capture registers and releases the chain
     // together), so a retired chain is alive for the frame executing it.
     const std::lock_guard<std::mutex> lock{m_mutex};
@@ -433,8 +473,8 @@ void Scene_image_readback_node::execute_rendergraph_node(erhe::graphics::Command
         return;
     }
 
-    const std::shared_ptr<Texture> texture = (m_output == Scene_image_output::png) && (m_post_processing_node != nullptr)
-        ? m_post_processing_node->get_producer_output_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture)
+    const std::shared_ptr<Texture> texture = (m_image_node != nullptr)
+        ? m_image_node->get_producer_output_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture)
         : m_view.get_render_target().get_color_texture();
     if (!texture) {
         m_record.error = "no image texture to read back";
@@ -528,6 +568,7 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
         (create_info.background == Scene_image_background::marked) ? Render_content::scene_surfaces : Render_content::scene_only,
         create_info.shader_debug,
         create_info.shadow_debug_light,
+        create_info.overdraw,
         create_info.forward_pass_timer
     );
 
@@ -555,23 +596,36 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
         );
     }
 
+    // Output overdraw: the heat map in place of post-processing (O4, O6).
+    if (m_output == Scene_image_output::overdraw) {
+        m_overdraw_node = erhe::rendergraph::make_rendergraph_node<Overdraw_node>(
+            rendergraph,
+            m_context,
+            m_view,
+            erhe::utility::Debug_label{"Overdraw for scene image"}
+        );
+    }
+    erhe::rendergraph::Rendergraph_node* const image_node = m_overdraw_node
+        ? static_cast<erhe::rendergraph::Rendergraph_node*>(m_overdraw_node.get())
+        : static_cast<erhe::rendergraph::Rendergraph_node*>(m_post_processing_node.get());
+
     m_readback_node = erhe::rendergraph::make_rendergraph_node<Scene_image_readback_node>(
         rendergraph,
         m_context,
         *this,
         *m_view,
-        m_post_processing_node.get(),
+        image_node,
         m_width,
         m_height,
         m_color_format,
         m_output
     );
 
-    if (post_processing) {
-        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport_texture, m_view.get(), m_post_processing_node.get());
-        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport_texture, m_post_processing_node.get(), m_readback_node.get());
-        // The node sizes its pyramid from the view's content texture when it
-        // executes (Post_processing_node::update_size()).
+    if (image_node != nullptr) {
+        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport_texture, m_view.get(), image_node);
+        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport_texture, image_node, m_readback_node.get());
+        // The node sizes its target (post-processing: its pyramid) from the
+        // view's content texture when it executes.
     } else {
         rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport_texture, m_view.get(), m_readback_node.get());
     }
@@ -585,6 +639,7 @@ Scene_image_capture::~Scene_image_capture() noexcept
     }
     // Rendergraph_node destructors unregister the nodes (and their links).
     m_readback_node.reset();
+    m_overdraw_node.reset();
     m_post_processing_node.reset();
     m_view.reset();
     m_shadow_render_node.reset();
@@ -609,6 +664,7 @@ void Scene_image_capture::disable_chain()
     if (m_shadow_render_node  ) { m_shadow_render_node  ->set_enabled(false); }
     if (m_view                ) { m_view                ->set_enabled(false); }
     if (m_post_processing_node) { m_post_processing_node->set_enabled(false); }
+    if (m_overdraw_node       ) { m_overdraw_node       ->set_enabled(false); }
     if (m_readback_node       ) { m_readback_node       ->set_enabled(false); }
 }
 
@@ -632,6 +688,10 @@ auto Scene_image_capture::poll() -> Scene_image_capture_state
             }
             read_pixels(*record.buffer);
             record.buffer.reset();
+            if (m_output == Scene_image_output::overdraw) {
+                // The view rendered (and counted) in the recorded frame only.
+                m_overdraw_statistics = m_view->collect_overdraw_statistics(record.frame);
+            }
             m_shadow_debug_light_index = record.shadow_debug_light_index;
             m_shadow_lights            = record.shadow_lights;
             m_shadow_maps              = record.shadow_maps;

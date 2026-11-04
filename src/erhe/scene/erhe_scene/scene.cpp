@@ -285,7 +285,10 @@ void Scene::sever_host()
     // physics world. Ordering: remove the children first (they read the still-set
     // root-node host as their old host), then clear the root node and scene host.
     if (m_root_node) {
+        sanity_check();
+        m_removing_all_nodes = true;
         m_root_node->remove_all_children_recursively();
+        m_removing_all_nodes = false;
         m_root_node->node_data.host = nullptr;
     }
     m_host = nullptr;
@@ -448,6 +451,7 @@ Scene::~Scene() noexcept
     m_root_node->trace();
     sanity_check();
 
+    m_removing_all_nodes = true;
     m_root_node->recursive_remove();
 
     remove_node_system(m_lod_system);
@@ -557,7 +561,9 @@ void Scene::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
     }
 
 #if !defined(NDEBUG)
-    sanity_check();
+    if (!m_removing_all_nodes) {
+        sanity_check();
+    }
 #endif
 }
 

@@ -2,6 +2,7 @@
 
 #include "renderers/composer.hpp"
 #include "renderers/render_context.hpp"
+#include "rendergraph/overdraw_source.hpp"
 #include "scene/scene_view.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
@@ -9,6 +10,7 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene_renderer/overdraw_counter.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include <glm/glm.hpp>
@@ -35,6 +37,7 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
+class Overdraw_node;
 class Post_processing_node;
 class Scene_image_capture;
 class Scene_root;
@@ -94,10 +97,13 @@ public:
 // only: no ID pass, no tools, no renderables, no debug renderer / text, and
 // the composition passes marked Composition_pass_kind::editor_aid (grid,
 // selection outline, ghost edges, brush, solid bones) are skipped through
-// Render_content::scene_only.
+// Render_content::scene_only. With an overdraw mode it counts its content
+// passes' fragments (doc/plans/overdraw_visualization.md O6) for an
+// Overdraw_node.
 class Scene_image_view
     : public Scene_view
     , public erhe::rendergraph::Texture_rendergraph_node
+    , public IOverdraw_source
 {
 public:
     Scene_image_view(
@@ -113,9 +119,18 @@ public:
         Render_content                              content,
         erhe::scene_renderer::Shader_debug          shader_debug,
         const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light,
+        const Overdraw_frame&                       overdraw,
         erhe::graphics::Gpu_timer*                  forward_pass_timer
     );
     ~Scene_image_view() noexcept override;
+
+    // Implements IOverdraw_source
+    auto get_overdraw_count_buffer(uint64_t frame_index) const -> const erhe::graphics::Buffer* override;
+    auto get_overdraw_frame       (uint64_t frame_index) const -> Overdraw_frame override { static_cast<void>(frame_index); return m_overdraw; }
+
+    // Main thread, once frame_index (the frame the view rendered) completed:
+    // the overdraw statistics of that frame; invalid when it did not count.
+    [[nodiscard]] auto collect_overdraw_statistics(uint64_t frame_index) -> erhe::scene_renderer::Overdraw_statistics;
 
     // Implements Scene_view
     auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
@@ -141,7 +156,9 @@ public:
     void prepare_composition(uint64_t frame_index, std::size_t frames_in_flight, int64_t host_system_time_ns);
 
     // Render phase: true once execute_rendergraph_node() rendered the scene
-    // into the color texture (scene root and camera were alive).
+    // into the color texture (scene root and camera were alive). The view
+    // renders once: a later frame of the chain (frame pipelining) renders
+    // nothing.
     [[nodiscard]] auto has_rendered() const -> bool { return m_has_rendered; }
 
     // Render phase, after the view rendered in the same frame: light slot
@@ -174,6 +191,10 @@ private:
     erhe::math::Viewport                 m_viewport{0, 0, 0, 0};
     Render_content                        m_content     {Render_content::scene_only};
     erhe::scene_renderer::Shader_debug    m_shader_debug{erhe::scene_renderer::Shader_debug::none};
+    Overdraw_frame                        m_overdraw{};
+    // Render phase owned until the view rendered; then read once by
+    // collect_overdraw_statistics().
+    erhe::scene_renderer::Overdraw_view_state m_overdraw_view_state;
     // Light Shader_debug::shadow_visibility shows, by id; none = slot 0.
     std::optional<std::size_t>            m_shadow_debug_light_id;
     // Explicit-range timer bracketing the forward render pass; null = untimed.
@@ -199,7 +220,8 @@ private:
 
 enum class Scene_image_output : unsigned int {
     png = 0, // tonemapped (post-processed) image, what a viewport shows
-    linear   // linear HDR scene color before post-processing
+    linear,  // linear HDR scene color before post-processing
+    overdraw // the overdraw heat map (Overdraw_node), in place of post-processing
 };
 
 // What the pixels no scene surface covers hold.
@@ -233,9 +255,11 @@ public:
 };
 
 // Final node of a capture chain: records the texture-to-buffer copy of the
-// image to read back. It owns everything its execute reads and writes (the
-// image size and format, the readback buffer, the record), and reaches the
-// chain's view and post-processing nodes, which the same frames name, so a
+// image to read back: the viewport_texture output of image_node (the chain's
+// post-processing or overdraw node), else the view's color texture. It owns
+// everything its execute reads and writes (the image size and format, the
+// readback buffer, the record), and reaches the chain's view and image
+// nodes, which the same frames name, so a
 // node retired after its capture was destroyed (an abandoned request) and
 // executing in a frame still to be rendered touches nothing destroyed. The
 // record is written by the render phase and read by the main thread
@@ -250,7 +274,7 @@ public:
         App_context&                    context,
         Scene_image_capture&            capture,
         Scene_image_view&               view,
-        Post_processing_node*           post_processing_node,
+        erhe::rendergraph::Rendergraph_node* image_node,
         int                             width,
         int                             height,
         erhe::dataformat::Format        color_format,
@@ -280,7 +304,7 @@ private:
     App_context&                m_context;
     Scene_image_capture*        m_capture{nullptr}; // prepare phase only; null once released
     Scene_image_view&           m_view;
-    Post_processing_node*       m_post_processing_node{nullptr};
+    erhe::rendergraph::Rendergraph_node* m_image_node{nullptr};
     int                         m_width {0};
     int                         m_height{0};
     erhe::dataformat::Format    m_color_format{erhe::dataformat::Format::format_16_vec4_float};
@@ -307,6 +331,9 @@ public:
     // to its light slot by the render itself, from the light set that render's
     // shadow pass built; null keeps slot 0.
     std::shared_ptr<erhe::scene::Light>  shadow_debug_light;
+    // Output overdraw: the counting mode (shaded or rasterized) and the
+    // heat map's max count.
+    Overdraw_frame                       overdraw{};
     // Explicit-range Gpu_timer the view brackets its forward render pass with
     // (null: untimed). Owned by the caller, which keeps it alive until the
     // result is read, frames after the capture itself is gone.
@@ -314,7 +341,8 @@ public:
 };
 
 // One render_scene_image request: builds the chain Shadow_render_node ->
-// Scene_image_view -> Post_processing_node (png output only) ->
+// Scene_image_view -> Post_processing_node (png output) or Overdraw_node
+// (overdraw output) ->
 // Scene_image_readback_node when constructed, the rendergraph runs it on the next frame, and the destructor
 // removes every node again. It exists only while a request is pending, so the
 // tool costs nothing per frame when unused. Destroy it only once poll()
@@ -342,6 +370,9 @@ public:
     [[nodiscard]] auto get_shadow_debug_light_index() const -> std::optional<uint32_t>;
     [[nodiscard]] auto get_shadow_lights() const -> std::span<const Scene_image_shadow_light>;
     [[nodiscard]] auto get_shadow_maps  () const -> const Scene_image_shadow_maps&;
+    // Output overdraw: the counts of the rendered frame (valid when it
+    // counted), with the pixels.
+    [[nodiscard]] auto get_overdraw_statistics() const -> const erhe::scene_renderer::Overdraw_statistics& { return m_overdraw_statistics; }
     // Scene_image_background::marked: pixels with no surface coverage (their
     // RGB is NaN in get_pixels()).
     [[nodiscard]] auto get_background_pixel_count() const -> std::size_t { return m_background_pixel_count; }
@@ -375,6 +406,8 @@ private:
     std::shared_ptr<Scene_image_view>          m_view;
     std::shared_ptr<Shadow_render_node>        m_shadow_render_node;
     std::shared_ptr<Post_processing_node>      m_post_processing_node;
+    std::shared_ptr<Overdraw_node>             m_overdraw_node;
+    erhe::scene_renderer::Overdraw_statistics  m_overdraw_statistics{};
     std::shared_ptr<Scene_image_readback_node> m_readback_node;
     std::vector<glm::vec4>                     m_pixels;
     // The record's view results, copied by poll() when the capture completes.

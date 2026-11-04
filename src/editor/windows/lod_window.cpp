@@ -68,20 +68,6 @@ constexpr const char* c_border_items    [] = { "Free", "Locked" };
 constexpr const char* c_seams_items     [] = { "Keep", "Permissive" };
 constexpr const char* c_fallback_items  [] = { "None", "Sloppy" };
 
-[[nodiscard]] auto to_lod_settings(const Lod_config& config) -> erhe::primitive::Lod_settings
-{
-    return erhe::primitive::Lod_settings{
-        .level_count        = static_cast<std::size_t>(std::clamp(config.level_count, 1, static_cast<int>(erhe::primitive::max_lod_levels))),
-        .ratio              = config.ratio,
-        .attributes         = static_cast<erhe::primitive::Lod_attributes>(config.attributes),
-        .normal_weight      = config.normal_weight,
-        .color_weight       = config.color_weight,
-        .border             = static_cast<erhe::primitive::Lod_border>(config.border),
-        .seams              = static_cast<erhe::primitive::Lod_seams>(config.seams),
-        .fallback           = static_cast<erhe::primitive::Lod_fallback>(config.fallback),
-        .normal_merge_angle = config.normal_merge_angle
-    };
-}
 
 // The view a pixel error is computed for: the last active viewport's camera
 // position and projection scale (doc/plans/lod.md section 2.3).
@@ -160,6 +146,21 @@ public:
 }
 
 } // anonymous namespace
+
+auto to_lod_settings(const Lod_config& config) -> erhe::primitive::Lod_settings
+{
+    return erhe::primitive::Lod_settings{
+        .level_count        = static_cast<std::size_t>(std::clamp(config.level_count, 1, static_cast<int>(erhe::primitive::max_lod_levels))),
+        .ratio              = config.ratio,
+        .attributes         = static_cast<erhe::primitive::Lod_attributes>(config.attributes),
+        .normal_weight      = config.normal_weight,
+        .color_weight       = config.color_weight,
+        .border             = static_cast<erhe::primitive::Lod_border>(config.border),
+        .seams              = static_cast<erhe::primitive::Lod_seams>(config.seams),
+        .fallback           = static_cast<erhe::primitive::Lod_fallback>(config.fallback),
+        .normal_merge_angle = config.normal_merge_angle
+    };
+}
 
 Lod_window::Lod_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,

@@ -7,6 +7,8 @@
 // scene_root.hpp -> scene/generated/scene_settings.hpp.
 #include "config/generated/editor_settings_config.hpp"
 
+#include <nlohmann/json.hpp>
+
 namespace editor {
 
 auto get_effective_sky(const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Sky_config&
@@ -49,6 +51,38 @@ auto get_effective_post_processing(const Editor_settings_config& editor_settings
 {
     const Scene_settings& overrides = scene_root.get_scene_settings();
     return overrides.post_processing.has_value() ? overrides.post_processing.value() : editor_settings.post_processing;
+}
+
+auto get_effective_export_lod(const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Lod_config&
+{
+    const Scene_export_settings& export_settings = scene_root.get_scene_settings().export_settings;
+    return export_settings.lod.has_value() ? export_settings.lod.value() : editor_settings.lod;
+}
+
+void migrate_scene_settings_json(nlohmann::json& settings)
+{
+    if (!settings.is_object()) {
+        return;
+    }
+    const int version = settings.value("_version", 1);
+    if (version >= 2) {
+        return;
+    }
+    nlohmann::json& export_settings = settings["export_settings"];
+    if (!export_settings.is_object()) {
+        export_settings = nlohmann::json::object();
+    }
+    for (const char* key : {"pvs_region_min", "pvs_region_max", "pvs_cell_size"}) {
+        const nlohmann::json::iterator i = settings.find(key);
+        if (i != settings.end()) {
+            export_settings[key] = std::move(*i);
+            settings.erase(i);
+        }
+    }
+    if (!export_settings.contains("_version")) {
+        export_settings["_version"] = 1;
+    }
+    settings["_version"] = 2;
 }
 
 } // namespace editor

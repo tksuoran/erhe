@@ -82,9 +82,9 @@ void Pvs_window::region_imgui(Scene_root& scene_root)
     // Scene settings (doc/plans/pvs.md D2): no render phase reads them, so
     // the fields edit them in place.
     Scene_settings& settings = scene_root.get_scene_settings();
-    ImGui::DragFloat3("Region min", glm::value_ptr(settings.pvs_region_min), 0.1f);
-    ImGui::DragFloat3("Region max", glm::value_ptr(settings.pvs_region_max), 0.1f);
-    ImGui::DragFloat ("Cell size",  &settings.pvs_cell_size, 0.05f, 0.05f, 100.0f, "%.2f m");
+    ImGui::DragFloat3("Region min", glm::value_ptr(settings.export_settings.pvs_region_min), 0.1f);
+    ImGui::DragFloat3("Region max", glm::value_ptr(settings.export_settings.pvs_region_max), 0.1f);
+    ImGui::DragFloat ("Cell size",  &settings.export_settings.pvs_cell_size, 0.05f, 0.05f, 100.0f, "%.2f m");
     if (ImGui::Button("Fit to content bounds")) {
         erhe::math::Aabb bounds{};
         {
@@ -101,16 +101,16 @@ void Pvs_window::region_imgui(Scene_root& scene_root)
             }
         }
         if (bounds.is_valid_3d()) {
-            settings.pvs_region_min = bounds.min;
-            settings.pvs_region_max = bounds.max;
+            settings.export_settings.pvs_region_min = bounds.min;
+            settings.export_settings.pvs_region_max = bounds.max;
         }
     }
-    const glm::vec3 extent = settings.pvs_region_max - settings.pvs_region_min;
-    if ((settings.pvs_cell_size > 0.0f) && glm::all(glm::greaterThan(extent, glm::vec3{0.0f}))) {
+    const glm::vec3 extent = settings.export_settings.pvs_region_max - settings.export_settings.pvs_region_min;
+    if ((settings.export_settings.pvs_cell_size > 0.0f) && glm::all(glm::greaterThan(extent, glm::vec3{0.0f}))) {
         const glm::uvec3 counts{
-            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.x / settings.pvs_cell_size))),
-            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.y / settings.pvs_cell_size))),
-            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.z / settings.pvs_cell_size)))
+            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.x / settings.export_settings.pvs_cell_size))),
+            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.y / settings.export_settings.pvs_cell_size))),
+            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.z / settings.export_settings.pvs_cell_size)))
         };
         ImGui::Text("Grid: %u x %u x %u = %llu cells", counts.x, counts.y, counts.z, static_cast<unsigned long long>(uint64_t{counts.x} * counts.y * counts.z));
     } else {

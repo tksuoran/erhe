@@ -8473,6 +8473,18 @@ private:
         return entry;
     }
 
+    // A baked mesh primitive: its world-space core, never shared.
+    [[nodiscard]] auto process_world_baked_soup(const erhe::scene::Mesh& mesh, const std::size_t primitive_index) -> Export_entry
+    {
+        const auto it = m_baked_primitives.find({&mesh, primitive_index});
+        ERHE_VERIFY((it != m_baked_primitives.end()) && it->second.result.prepared.has_value()); // is_world_bake_ready()
+        Export_entry entry{};
+        count_prepared_primitive(it->second.result);
+        write_prepared_primitive(entry, it->second.result.prepared.value(), it->second.gpu_stream_pack);
+        ++m_prepared_statistics.world_bake_primitive_count;
+        return entry;
+    }
+
     // Prepared mesh data (doc/plans/gltf_fast_load.md "Exporter"): every
     // unique soup primitive of the export is prepared up front, in parallel
     // on the executor, and written by process_triangle_soup(). A soup the
@@ -8494,11 +8506,52 @@ private:
     public:
         erhe::primitive::Primitive_render_shape*     render_shape{nullptr};
         std::optional<erhe::primitive::Lod_settings> lod_settings;
+        bool                                         unbaked_user{false}; // a mesh writes it as it is (LOD chain, GPU streams needed)
     };
 
-    void collect_soup_shapes(
-        const erhe::Hierarchy&                                                   node,
-        std::unordered_map<erhe::primitive::Triangle_soup*, Soup_export_shape>& out_shapes
+    // A baked mesh's primitive (Gltf_export_world_bake): its own copy of the
+    // shape's prepared core, transformed into world space.
+    class Baked_primitive
+    {
+    public:
+        erhe::primitive::Prepare_primitive_result result;
+        std::optional<Gpu_stream_pack>            gpu_stream_pack;
+    };
+    std::map<std::pair<const erhe::scene::Mesh*, std::size_t>, Baked_primitive> m_baked_primitives;
+    decltype(fastgltf::Node::children)                                            m_world_space_node_indices; // the baked mesh nodes, children of the world space node
+
+    [[nodiscard]] auto find_world_bake(const erhe::scene::Mesh* mesh) const -> const glm::mat4*
+    {
+        if ((m_arguments.world_bake == nullptr) || (mesh == nullptr)) {
+            return nullptr;
+        }
+        const auto it = m_arguments.world_bake->baked_meshes.find(mesh);
+        return (it != m_arguments.world_bake->baked_meshes.end()) ? &it->second : nullptr;
+    }
+
+    // Every soup primitive of the baked mesh prepared and baked.
+    [[nodiscard]] auto is_world_bake_ready(const erhe::scene::Mesh& mesh) const -> bool
+    {
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh.get_primitives();
+        for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
+            const erhe::primitive::Primitive* const primitive = primitives[i].primitive.get();
+            if ((primitive == nullptr) || !primitive->render_shape) {
+                continue;
+            }
+            const auto it = m_baked_primitives.find({&mesh, i});
+            if ((it == m_baked_primitives.end()) || !it->second.result.prepared.has_value()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // The render shapes of the exported meshes, each once, in walk order,
+    // with the first LOD request seen for it.
+    void collect_render_shapes(
+        const erhe::Hierarchy&                                    node,
+        std::vector<Soup_export_shape>&                           out_shapes,
+        std::unordered_map<const erhe::primitive::Primitive_render_shape*, std::size_t>& shape_indices
     )
     {
         for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
@@ -8514,17 +8567,73 @@ private:
                     if (render_shape == nullptr) {
                         continue;
                     }
-                    const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = get_export_soup(*render_shape);
-                    if (soup) {
-                        Soup_export_shape& entry = out_shapes[soup.get()];
-                        entry.render_shape = render_shape;
-                        if (!entry.lod_settings.has_value()) {
-                            entry.lod_settings = mesh_primitive.primitive->lod_settings;
+                    const bool unbaked = (find_world_bake(mesh) == nullptr);
+                    const auto [it, inserted] = shape_indices.try_emplace(render_shape, out_shapes.size());
+                    if (inserted) {
+                        out_shapes.push_back(Soup_export_shape{.render_shape = render_shape, .lod_settings = mesh_primitive.primitive->lod_settings, .unbaked_user = unbaked});
+                    } else {
+                        if (!out_shapes[it->second].lod_settings.has_value()) {
+                            out_shapes[it->second].lod_settings = mesh_primitive.primitive->lod_settings;
                         }
+                        out_shapes[it->second].unbaked_user = out_shapes[it->second].unbaked_user || unbaked;
                     }
                 }
             }
-            collect_soup_shapes(*child, out_shapes);
+            collect_render_shapes(*child, out_shapes, shape_indices);
+        }
+    }
+
+    // Each exported shape keyed by its soup. A soup released after upload is
+    // read back from its file here, in parallel on the executor, and held.
+    void collect_soup_shapes(std::unordered_map<erhe::primitive::Triangle_soup*, Soup_export_shape>& out_shapes)
+    {
+        std::vector<Soup_export_shape> shapes;
+        {
+            std::unordered_map<const erhe::primitive::Primitive_render_shape*, std::size_t> shape_indices;
+            collect_render_shapes(m_arguments.root_node, shapes, shape_indices);
+        }
+        Gltf_export_progress* const progress = m_arguments.progress;
+        if (progress != nullptr) {
+            progress->begin_stage(Gltf_export_stage::mesh_data, shapes.size());
+        }
+        std::vector<std::shared_ptr<erhe::primitive::Triangle_soup>> soups(shapes.size());
+        const auto read = [&shapes, &soups, progress](const std::size_t i) {
+            soups[i] = shapes[i].render_shape->get_triangle_soup();
+            if (progress != nullptr) {
+                progress->advance();
+            }
+        };
+        if ((m_arguments.executor != nullptr) && (shapes.size() > 1)) {
+            ::tf::Taskflow taskflow;
+            for (std::size_t i = 0, end = shapes.size(); i < end; ++i) {
+                taskflow.emplace([&read, i]() { read(i); });
+            }
+            erhe::task::run(*m_arguments.executor, taskflow).wait();
+        } else {
+            for (std::size_t i = 0, end = shapes.size(); i < end; ++i) {
+                read(i);
+            }
+        }
+        // Same result as a serial walk: the last shape of a shared soup is its
+        // entry's shape, the first LOD request seen is kept.
+        for (std::size_t i = 0, end = shapes.size(); i < end; ++i) {
+            const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = m_held_soups.emplace(shapes[i].render_shape, std::move(soups[i])).first->second;
+            if (!soup) {
+                continue;
+            }
+            Soup_export_shape& entry = out_shapes[soup.get()];
+            entry.render_shape = shapes[i].render_shape;
+            if (!entry.lod_settings.has_value()) {
+                entry.lod_settings = shapes[i].lod_settings;
+            }
+            entry.unbaked_user = entry.unbaked_user || shapes[i].unbaked_user;
+        }
+        if (m_arguments.default_lod_settings.has_value()) {
+            for (auto& [soup, entry] : out_shapes) {
+                if (!entry.lod_settings.has_value()) {
+                    entry.lod_settings = m_arguments.default_lod_settings;
+                }
+            }
         }
     }
 
@@ -8537,7 +8646,7 @@ private:
         const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
 
         std::unordered_map<erhe::primitive::Triangle_soup*, Soup_export_shape> shapes;
-        collect_soup_shapes(m_arguments.root_node, shapes);
+        collect_soup_shapes(shapes);
         std::vector<std::pair<erhe::primitive::Triangle_soup*, Soup_export_shape>> work{shapes.begin(), shapes.end()};
         std::vector<erhe::primitive::Prepare_primitive_result> results(work.size());
         // "Save for Quest": each task also packs its core's GPU vertex
@@ -8545,12 +8654,23 @@ private:
         std::vector<std::optional<Gpu_stream_pack>> packs(work.size());
         std::vector<double>                         pack_ms(work.size(), 0.0);
         const Gltf_gpu_vertex_formats* const        gpu_formats = m_arguments.gpu_vertex_formats;
+        Gltf_export_progress* const                 progress    = m_arguments.progress;
+        if (progress != nullptr) {
+            progress->begin_stage(Gltf_export_stage::meshes, work.size());
+        }
         // ERHE_mesh_lod: the chains of primitives with a LOD request
         // (make_export_lod_chain()), counted by how they were obtained.
         std::vector<erhe::primitive::Export_lod_source> lod_sources(work.size(), erhe::primitive::Export_lod_source::none);
         std::vector<double>                             lod_ms(work.size(), 0.0);
-        const auto prepare = [&work, &results, &packs, &pack_ms, &lod_sources, &lod_ms, gpu_formats](const std::size_t i) {
+        const auto prepare = [&work, &results, &packs, &pack_ms, &lod_sources, &lod_ms, gpu_formats, progress](const std::size_t i) {
             results[i] = erhe::primitive::prepare_primitive_for_export(*work[i].second.render_shape);
+            if (!work[i].second.unbaked_user) {
+                // Only baked meshes use it: each bakes a copy (prepare_world_baked_primitives()).
+                if (progress != nullptr) {
+                    progress->advance();
+                }
+                return;
+            }
             if (work[i].second.lod_settings.has_value() && results[i].prepared.has_value()) {
                 const std::chrono::steady_clock::time_point lod_start = std::chrono::steady_clock::now();
                 lod_sources[i] = erhe::primitive::make_export_lod_chain(results[i].prepared.value(), *work[i].second.render_shape, work[i].second.lod_settings.value());
@@ -8560,6 +8680,9 @@ private:
                 const std::chrono::steady_clock::time_point pack_start = std::chrono::steady_clock::now();
                 packs[i] = pack_gpu_vertex_streams(*gpu_formats, erhe::primitive::get_export_core(results[i].prepared.value()));
                 pack_ms[i] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - pack_start).count();
+            }
+            if (progress != nullptr) {
+                progress->advance();
             }
         };
         if ((m_arguments.executor != nullptr) && (work.size() > 1)) {
@@ -8575,7 +8698,7 @@ private:
         }
         for (std::size_t i = 0, end = work.size(); i < end; ++i) {
             m_prepared_primitives.emplace(work[i].first, std::move(results[i]));
-            if (work[i].second.lod_settings.has_value()) {
+            if (work[i].second.lod_settings.has_value() && work[i].second.unbaked_user) { // baked copies count in prepare_world_baked_primitives()
                 switch (lod_sources[i]) {
                     case erhe::primitive::Export_lod_source::stored:    ++m_prepared_statistics.lod_stored_count;    break;
                     case erhe::primitive::Export_lod_source::generated: ++m_prepared_statistics.lod_generated_count; break;
@@ -8588,7 +8711,90 @@ private:
                 m_prepared_statistics.gpu_vertex_stream_ms += pack_ms[i]; // summed task time
             }
         }
+        prepare_world_baked_primitives();
         m_prepared_statistics.preparation_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+    }
+
+    // Per baked mesh primitive: a copy of the shape's prepared core moved
+    // into world space, its LOD chain generated over the baked core and its
+    // GPU streams packed (in parallel on the executor).
+    void prepare_world_baked_primitives()
+    {
+        if (m_arguments.world_bake == nullptr) {
+            return;
+        }
+        ERHE_PROFILE_FUNCTION();
+        class Item
+        {
+        public:
+            const erhe::scene::Mesh*                       mesh{nullptr};
+            std::size_t                                    primitive_index{0};
+            const erhe::primitive::Prepared_primitive_export* base{nullptr};
+            const erhe::primitive::Primitive_render_shape*    shape{nullptr};
+            glm::mat4                                      transform{1.0f};
+            std::optional<erhe::primitive::Lod_settings>   lod_settings;
+        };
+        std::vector<Item> items;
+        for (const auto& [mesh, transform] : m_arguments.world_bake->baked_meshes) {
+            const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+            for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
+                const erhe::primitive::Primitive* const primitive = primitives[i].primitive.get();
+                if ((primitive == nullptr) || !primitive->render_shape) {
+                    continue;
+                }
+                const auto held = m_held_soups.find(primitive->render_shape.get());
+                if ((held == m_held_soups.end()) || !held->second) {
+                    continue;
+                }
+                const auto base = m_prepared_primitives.find(held->second.get());
+                if ((base == m_prepared_primitives.end()) || !base->second.prepared.has_value()) {
+                    continue;
+                }
+                items.push_back(Item{
+                    .mesh            = mesh,
+                    .primitive_index = i,
+                    .base            = &base->second.prepared.value(),
+                    .shape           = primitive->render_shape.get(),
+                    .transform       = transform,
+                    .lod_settings    = primitive->lod_settings.has_value() ? primitive->lod_settings : m_arguments.default_lod_settings
+                });
+            }
+        }
+        std::vector<Baked_primitive>                    baked(items.size());
+        std::vector<erhe::primitive::Export_lod_source> lod_sources(items.size(), erhe::primitive::Export_lod_source::none);
+        const Gltf_gpu_vertex_formats* const            gpu_formats = m_arguments.gpu_vertex_formats;
+        const auto bake = [&items, &baked, &lod_sources, gpu_formats](const std::size_t i) {
+            erhe::primitive::Prepared_primitive_export prepared = *items[i].base;
+            static_cast<void>(erhe::primitive::bake_prepared_primitive_transform(prepared, items[i].transform));
+            if (items[i].lod_settings.has_value()) {
+                // The baked core is not the retained one, so no stored chain applies.
+                lod_sources[i] = erhe::primitive::make_export_lod_chain(prepared, *items[i].shape, items[i].lod_settings.value());
+            }
+            if (gpu_formats != nullptr) {
+                baked[i].gpu_stream_pack = pack_gpu_vertex_streams(*gpu_formats, erhe::primitive::get_export_core(prepared));
+            }
+            baked[i].result.prepared = std::move(prepared);
+        };
+        if ((m_arguments.executor != nullptr) && (items.size() > 1)) {
+            ::tf::Taskflow taskflow;
+            for (std::size_t i = 0, end = items.size(); i < end; ++i) {
+                taskflow.emplace([&bake, i]() { bake(i); });
+            }
+            erhe::task::run(*m_arguments.executor, taskflow).wait();
+        } else {
+            for (std::size_t i = 0, end = items.size(); i < end; ++i) {
+                bake(i);
+            }
+        }
+        for (std::size_t i = 0, end = items.size(); i < end; ++i) {
+            if (items[i].lod_settings.has_value()) {
+                switch (lod_sources[i]) {
+                    case erhe::primitive::Export_lod_source::generated: ++m_prepared_statistics.lod_generated_count; break;
+                    default:                                            ++m_prepared_statistics.lod_none_count;      break;
+                }
+            }
+            m_baked_primitives.emplace(std::pair{items[i].mesh, items[i].primitive_index}, std::move(baked[i]));
+        }
     }
 
     [[nodiscard]] auto take_prepared_primitive(
@@ -9614,7 +9820,9 @@ private:
     // Returns nullopt when no primitive of the mesh exports (see
     // primitive_export_source()): a glTF mesh needs at least one primitive,
     // so such a mesh is not exported and its node is written without one.
-    [[nodiscard]] auto process_mesh(const erhe::scene::Mesh* erhe_mesh) -> std::optional<std::size_t>
+    // world_baked: the mesh's soup primitives are written from their
+    // world-space copies (m_baked_primitives), in a glTF mesh of its own.
+    [[nodiscard]] auto process_mesh(const erhe::scene::Mesh* erhe_mesh, const bool world_baked = false) -> std::optional<std::size_t>
     {
         ERHE_VERIFY(erhe_mesh != nullptr);
 
@@ -9639,6 +9847,7 @@ private:
         // Meshes carrying caller extension payloads keep a private glTF mesh:
         // collapsing them could merge distinct payloads onto one object.
         const bool has_extension_payloads =
+            world_baked ||
             m_arguments.extension_payloads.meshes.contains(erhe_mesh) ||
             [&]() {
                 const auto it = m_arguments.extension_payloads.mesh_primitives.lower_bound({erhe_mesh, 0});
@@ -9704,9 +9913,11 @@ private:
             // JOINTS_n / WEIGHTS_n, COLOR_n) that the welded geometry only
             // holds per-corner. Authored geometry (no soup) exports
             // geometry-normative with the ERHE_geometry extension.
-            Export_entry export_entry = triangle_soup
-                ? process_triangle_soup(*erhe_primitive.render_shape, triangle_soup.get())
-                : process_geometry(geometry.get());
+            Export_entry export_entry = (world_baked && triangle_soup)
+                ? process_world_baked_soup(*erhe_mesh, primitive_index)
+                : triangle_soup
+                    ? process_triangle_soup(*erhe_primitive.render_shape, triangle_soup.get())
+                    : process_geometry(geometry.get());
             for (const fastgltf::Attribute& attribute : export_entry.attributes) {
                 gltf_primitive.attributes.emplace_back(attribute.name, attribute.accessorIndex);
             }
@@ -10111,24 +10322,24 @@ private:
             return std::nullopt;
         }
 
-        // "Save for Quest" (Gltf_texture_export::ktx2_astc_4x4): a Basis
-        // Universal KTX2 image is transcoded to raw ASTC 4x4 blocks; its
-        // buffer is filled by finish_ktx2_transcodes(), on the executor.
+        // Prepare (Quest / PC) (a raw block Gltf_texture_export): a Basis
+        // Universal KTX2 image is transcoded to raw ASTC 4x4 or BC blocks;
+        // its buffer is filled by finish_ktx2_transcodes(), on the executor.
         const std::span<const std::uint8_t> encoded_bytes{
             reinterpret_cast<const std::uint8_t*>(source_bytes.data()),
             source_bytes.size()
         };
-        const bool transcode_to_astc =
-            is_astc_texture_export(m_arguments.texture_export) &&
+        const bool transcode_to_raw =
+            is_raw_block_texture_export(m_arguments.texture_export) &&
             erhe::graphics::is_ktx2_basis(encoded_bytes);
-        const bool raw_ktx2 = transcode_to_astc || erhe::graphics::is_ktx2_raw_blocks(encoded_bytes);
+        const bool raw_ktx2 = transcode_to_raw || erhe::graphics::is_ktx2_raw_blocks(encoded_bytes);
 
         const std::size_t buffer_index = m_gltf_asset.buffers.size();
         {
             fastgltf::Buffer image_buffer{
-                .byteLength = transcode_to_astc ? std::size_t{0} : source_bytes.size(),
+                .byteLength = transcode_to_raw ? std::size_t{0} : source_bytes.size(),
                 .data = fastgltf::sources::Vector{
-                    .bytes    = transcode_to_astc ? std::vector<std::byte>{} : source_bytes,
+                    .bytes    = transcode_to_raw ? std::vector<std::byte>{} : source_bytes,
                     .mimeType = fastgltf::MimeType::GltfBuffer
                 },
                 .name = {}
@@ -10140,7 +10351,7 @@ private:
             fastgltf::BufferView buffer_view{};
             buffer_view.bufferIndex = buffer_index;
             buffer_view.byteOffset  = 0;
-            buffer_view.byteLength  = transcode_to_astc ? std::size_t{0} : source_bytes.size();
+            buffer_view.byteLength  = transcode_to_raw ? std::size_t{0} : source_bytes.size();
             m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
         }
 
@@ -10156,16 +10367,16 @@ private:
         if (raw_ktx2) {
             m_raw_ktx2_images.insert(image_index);
         }
-        if (!transcode_to_astc && (m_arguments.written_layout != nullptr)) {
+        if (!transcode_to_raw && (m_arguments.written_layout != nullptr)) {
             m_arguments.written_layout->source_images.push_back(Gltf_export_written_image{.texture = texture, .image_index = image_index});
         }
-        if (transcode_to_astc) {
+        if (transcode_to_raw) {
             m_pending_ktx2_transcodes.push_back(
                 Pending_ktx2_transcode{
                     .image_index       = image_index,
                     .buffer_index      = buffer_index,
                     .buffer_view_index = buffer_view_index,
-                    .source_bytes      = transcode_to_astc ? std::move(source_bytes) : std::vector<std::byte>{},
+                    .source_bytes      = transcode_to_raw ? std::move(source_bytes) : std::vector<std::byte>{},
                     .color_space       = erhe::dataformat::is_srgb(texture->get_pixelformat())
                         ? erhe::graphics::Ktx2_color_space::srgb
                         : erhe::graphics::Ktx2_color_space::linear,
@@ -10201,7 +10412,7 @@ private:
     // (Gltf_image_source::read()); export_gltf() then returns nothing.
     bool                                m_export_failed{false};
 
-    // Runs the Basis -> raw ASTC 4x4 transcodes process_image() queued, in
+    // Runs the Basis -> raw block (ASTC 4x4 / BC) transcodes process_image() queued, in
     // parallel on the executor, and fills their buffers. A failed transcode
     // writes the Basis source through KHR_texture_basisu instead. After every
     // material pass, before combine_buffers().
@@ -10212,16 +10423,22 @@ private:
         }
         ERHE_PROFILE_FUNCTION();
         const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+        if (m_arguments.progress != nullptr) {
+            m_arguments.progress->begin_stage(Gltf_export_stage::textures, m_pending_ktx2_transcodes.size());
+        }
         const auto transcode = [this](const std::size_t i) {
             Pending_ktx2_transcode& pending = m_pending_ktx2_transcodes[i];
             const std::span<const std::uint8_t> source_bytes{
                 reinterpret_cast<const std::uint8_t*>(pending.source_bytes.data()),
                 pending.source_bytes.size()
             };
-            const erhe::graphics::Ktx2_supercompression supercompression = (m_arguments.texture_export == Gltf_texture_export::ktx2_astc_4x4_uncompressed)
+            const erhe::graphics::Ktx2_supercompression supercompression = is_uncompressed_texture_export(m_arguments.texture_export)
                 ? erhe::graphics::Ktx2_supercompression::none
                 : erhe::graphics::Ktx2_supercompression::zstd;
-            pending.result = erhe::graphics::transcode_ktx2_basis_to_astc_4x4(source_bytes, pending.color_space, supercompression);
+            pending.result = erhe::graphics::transcode_ktx2_basis_to_raw_blocks(source_bytes, get_ktx2_block_target(m_arguments.texture_export), pending.color_space, supercompression);
+            if (m_arguments.progress != nullptr) {
+                m_arguments.progress->advance();
+            }
         };
         if ((m_arguments.executor != nullptr) && (m_pending_ktx2_transcodes.size() > 1)) {
             ::tf::Taskflow taskflow;
@@ -10245,7 +10462,7 @@ private:
                 m_texture_statistics.source_byte_count     += pending.source_bytes.size();
                 m_texture_statistics.transcoded_byte_count += pending.result.size();
             } else {
-                log_gltf->warn("glTF export: ASTC transcode of image '{}' failed - the Basis Universal source is written", pending.name);
+                log_gltf->warn("glTF export: raw block transcode of image '{}' failed - the Basis Universal source is written", pending.name);
                 bytes = std::move(pending.source_bytes);
                 ++m_texture_statistics.transcode_failed_count;
                 m_raw_ktx2_images.erase(pending.image_index);
@@ -10850,6 +11067,22 @@ private:
                 // retained source image bytes to serialize.
                 continue;
             }
+            // World-space bake: the mesh goes under the world space node; a
+            // transform-only node keeps its place when anything is written under it.
+            const erhe::scene::Mesh* const baked_mesh = dynamic_cast<const erhe::scene::Mesh*>(erhe_child_node);
+            if ((find_world_bake(baked_mesh) != nullptr) && (m_arguments.prepared_mesh_data == Prepared_mesh_data::write)) {
+                if (is_world_bake_ready(*baked_mesh)) {
+                    m_world_space_node_indices.push_back(process_node(*erhe_child_node, {}, Node_bake_role::world_space_mesh));
+                    ++m_prepared_statistics.world_bake_mesh_count;
+                    const std::optional<std::size_t> placeholder_index = process_placeholder_node(*erhe_child_node, pre_transform);
+                    if (placeholder_index.has_value()) {
+                        out_node_indices.push_back(placeholder_index.value());
+                        ++m_prepared_statistics.world_bake_placeholder_count;
+                    }
+                    continue;
+                }
+                ++m_prepared_statistics.world_bake_failed_count;
+            }
             out_node_indices.push_back(process_node(*erhe_child_node, pre_transform));
         }
     }
@@ -10870,12 +11103,39 @@ private:
         return gltf_node_index;
     }
 
-    auto process_node(const erhe::scene::Node& erhe_node, const erhe::scene::Trs_transform& pre_transform = {}) -> std::size_t
+    // How process_node() writes a node of a baked mesh (Gltf_export_world_bake).
+    enum class Node_bake_role : unsigned int {
+        none = 0,
+        world_space_mesh // the mesh node itself: identity transform, world-space primitives, no children
+    };
+
+    // The transform-only node left in a baked mesh's place: its transform and
+    // children, no mesh, no identity. Not written when no child is written
+    // under it (every child baked too, or not content).
+    auto process_placeholder_node(const erhe::scene::Node& erhe_node, const erhe::scene::Trs_transform& pre_transform) -> std::optional<std::size_t>
+    {
+        fastgltf::Node gltf_node{};
+        gltf_node.name      = erhe_node.get_name();
+        gltf_node.transform = from_erhe(compose_pre_transform(pre_transform, erhe_node.authored_parent_from_node_transform()));
+        process_child_nodes(erhe_node, erhe::scene::Trs_transform{}, gltf_node.children);
+        if (gltf_node.children.empty()) {
+            return {};
+        }
+        const std::size_t placeholder_index = m_gltf_asset.nodes.size();
+        m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
+        return placeholder_index;
+    }
+
+    auto process_node(const erhe::scene::Node& erhe_node, const erhe::scene::Trs_transform& pre_transform = {}, const Node_bake_role bake_role = Node_bake_role::none) -> std::size_t
     {
         fastgltf::Node gltf_node{};
 
         gltf_node.name = erhe_node.get_name();
-        gltf_node.transform = from_erhe(compose_pre_transform(pre_transform, erhe_node.authored_parent_from_node_transform()));
+        gltf_node.transform = from_erhe(
+            (bake_role == Node_bake_role::world_space_mesh)
+                ? erhe::scene::Trs_transform{}
+                : compose_pre_transform(pre_transform, erhe_node.authored_parent_from_node_transform())
+        );
 
         // glTF 2.1: a prefab-instance node is written as an externalAsset
         // reference. Children are not exported - the
@@ -10918,7 +11178,7 @@ private:
             erhe_mesh.reset();
         }
         if (erhe_mesh) {
-            const std::optional<std::size_t> gltf_mesh_index = process_mesh(erhe_mesh.get());
+            const std::optional<std::size_t> gltf_mesh_index = process_mesh(erhe_mesh.get(), bake_role == Node_bake_role::world_space_mesh);
             if (gltf_mesh_index.has_value()) {
                 gltf_node.meshIndex = gltf_mesh_index.value();
             }
@@ -10945,7 +11205,9 @@ private:
         // (it delegates to the recursive for_each_const()), and process_node
         // recurses itself - using it here exported every nested node once
         // per ancestor level. import_root children are unwrapped.
-        process_child_nodes(erhe_node, erhe::scene::Trs_transform{}, gltf_node.children);
+        if (bake_role != Node_bake_role::world_space_mesh) {
+            process_child_nodes(erhe_node, erhe::scene::Trs_transform{}, gltf_node.children);
+        }
 
         size_t gltf_node_index = m_gltf_asset.nodes.size();
         m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
@@ -11591,6 +11853,9 @@ auto Gltf_exporter::export_gltf() -> std::string
 
     // Before the node pass, which writes the prepared cores.
     prepare_soup_primitives();
+    if (m_arguments.progress != nullptr) {
+        m_arguments.progress->begin_stage(Gltf_export_stage::scene, 0);
+    }
 
     {
         fastgltf::Scene scene{};
@@ -11599,6 +11864,13 @@ auto Gltf_exporter::export_gltf() -> std::string
         // scene root and re-exported nested subtrees. import_root children
         // (the implicit wrapper import creates) are unwrapped.
         process_child_nodes(m_arguments.root_node, erhe::scene::Trs_transform{}, scene.nodeIndices);
+        if (!m_world_space_node_indices.empty()) {
+            fastgltf::Node world_space_node{};
+            world_space_node.name     = m_arguments.world_bake->world_space_node_name;
+            world_space_node.children = std::move(m_world_space_node_indices);
+            scene.nodeIndices.push_back(m_gltf_asset.nodes.size());
+            m_gltf_asset.nodes.emplace_back(std::move(world_space_node));
+        }
         m_gltf_asset.scenes.push_back(std::move(scene));
     }
 
@@ -11894,6 +12166,9 @@ auto Gltf_exporter::export_gltf() -> std::string
         declare_extension_used(extension_name);
     }
 
+    if (m_arguments.progress != nullptr) {
+        m_arguments.progress->begin_stage(Gltf_export_stage::encode, 0);
+    }
     fastgltf::Exporter exporter{};
     exporter.setUserPointer(&export_extras_context);
     exporter.setExtensionsWriteCallback(

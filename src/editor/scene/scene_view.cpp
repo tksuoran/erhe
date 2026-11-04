@@ -16,6 +16,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_render_state.hpp"
 #include "renderers/shader_analytics.hpp"
+#include "renderers/shader_analytics_service.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
@@ -1104,6 +1105,8 @@ void Scene_view::shader_debug_toolbar_combo()
                 }
                 ImGui::SetItemTooltip("Sums per pixel the static %s of the variant of every fragment the content passes shade", get_label(metric));
             }
+        } else {
+            shader_cost_unavailable_entry();
         }
         ImGui::EndCombo();
     }
@@ -1142,6 +1145,27 @@ void Scene_view::shader_debug_toolbar_combo()
         }
         ImGui::SetItemTooltip("Overdraw count shown white");
     }
+}
+
+void Scene_view::shader_cost_unavailable_entry()
+{
+    // doc/editor/shader_analytics.md "Enabling"
+    const Shader_analytics_service* const service = m_context.shader_analytics_service;
+    const char* label   = "Shader cost: analytics off";
+    const char* tooltip = "Shader analytics are off (editor settings shader_analytics.enabled, --no-shader-analytics, or not available on this platform)";
+    if (service != nullptr) {
+        const Shader_analytics_service::Status status = service->get_status();
+        if (status.mali_core.empty()) {
+            label   = "Shader cost: no malioc found";
+            tooltip = "Add the compiler location to editor settings shader_analytics.malioc_search_paths, or to the ERHE_MALIOC environment variable, or put malioc on PATH; the log lists what was searched";
+        } else {
+            label   = "Shader cost: analyzing programs";
+            tooltip = "The offline compiler is analyzing the shader programs; the cost entries appear when the first results land";
+        }
+    }
+    ImGui::Separator();
+    ImGui::Selectable(label, false, ImGuiSelectableFlags_Disabled);
+    ImGui::SetItemTooltip("%s", tooltip);
 }
 
 auto Scene_view::get_shader_debug() const -> erhe::scene_renderer::Shader_debug

@@ -1373,6 +1373,12 @@ auto Viewport_scene_view::get_overdraw_max_count() const -> uint32_t
     return m_overdraw_max_count;
 }
 
+auto Viewport_scene_view::get_overdraw_frame(const uint64_t frame_index) const -> Overdraw_frame
+{
+    const Viewport_render_state& state = get_render_state(frame_index);
+    return Overdraw_frame{.mode = state.overdraw, .max_count = state.overdraw_max_count};
+}
+
 auto Viewport_scene_view::get_overdraw_count_buffer(const uint64_t frame_index) const -> const erhe::graphics::Buffer*
 {
     erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);

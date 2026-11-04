@@ -34,10 +34,13 @@ plain interchange exports never do.
   (the erhe_codegen schema in
   `src/editor/scene/definitions/scene_settings.py`; each absent / null
   override means "use the editor-global default"). The data fields are the
-  scene id, the lightmap tile overrides, the variant selections and the
-  potentially visible set bake grid: `pvs_region_min` and `pvs_region_max`
-  (world-space corners of the bake region, both zero for unset) and
-  `pvs_cell_size` (`doc/editor/pvs.md` D2). Omitted entirely when every
+  scene id, the lightmap tile overrides, the variant selections and
+  `export_settings` (`Scene_export_settings`, what Prepare writes the scene
+  with: the LOD request, the world-space bake switch and its instancing
+  mode, and the potentially visible set bake grid `pvs_region_min` /
+  `pvs_region_max` / `pvs_cell_size`, `doc/editor/pvs.md` D2). A v1
+  `settings` object carries the three PVS fields at its top level; the
+  import moves them into `export_settings`. Omitted entirely when every
   field has its default.
 - `styles` (optional): the content library's style items
   (`doc/editor/style_library.md` D4): `name` and `properties` (the style's local

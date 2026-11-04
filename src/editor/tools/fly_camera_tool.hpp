@@ -234,6 +234,7 @@ public:
     void record_heading_sample(int64_t timestamp_ns);
 
 private:
+    [[nodiscard]] auto is_camera_read_only() const -> bool;
     void update_camera();
     // Adopt the camera-control settings effective for the hovered scene (#239:
     // per-scene override or editor-global default). Called when the hovered scene

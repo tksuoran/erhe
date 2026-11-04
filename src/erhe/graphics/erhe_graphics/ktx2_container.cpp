@@ -18,14 +18,19 @@ constexpr std::uint8_t c_ktx2_identifier[12] = {
 constexpr std::size_t c_header_byte_count      = 80;
 constexpr std::size_t c_level_index_byte_count = 24;
 
-// Khronos Data Format Specification 1.3 constants used by the ASTC
-// descriptor.
+// Khronos Data Format Specification 1.3 constants used by the block
+// format descriptors.
 constexpr std::uint32_t c_khr_df_version_number    = 2;
+constexpr std::uint32_t c_khr_df_model_bc5         = 132;
+constexpr std::uint32_t c_khr_df_model_bc7         = 134;
 constexpr std::uint32_t c_khr_df_model_astc        = 162;
 constexpr std::uint32_t c_khr_df_primaries_bt709   = 1;
 constexpr std::uint32_t c_khr_df_transfer_linear   = 1;
 constexpr std::uint32_t c_khr_df_transfer_srgb     = 2;
 constexpr std::uint32_t c_khr_df_channel_astc_data = 0;
+constexpr std::uint32_t c_khr_df_channel_bc7_color = 0;
+constexpr std::uint32_t c_khr_df_channel_bc5_red   = 0;
+constexpr std::uint32_t c_khr_df_channel_bc5_green = 1;
 
 // Zstandard level for supercompressed levels: ASTC blocks reach about half
 // their size; higher levels gain little and cost save time.
@@ -76,6 +81,9 @@ void write_u64(std::vector<std::uint8_t>& out, const std::size_t offset, const s
     switch (format) {
         case erhe::dataformat::Format::format_astc_4x4_unorm: return ktx2_vk_format_astc_4x4_unorm;
         case erhe::dataformat::Format::format_astc_4x4_srgb:  return ktx2_vk_format_astc_4x4_srgb;
+        case erhe::dataformat::Format::format_bc5_unorm:      return ktx2_vk_format_bc5_unorm;
+        case erhe::dataformat::Format::format_bc7_unorm:      return ktx2_vk_format_bc7_unorm;
+        case erhe::dataformat::Format::format_bc7_srgb:       return ktx2_vk_format_bc7_srgb;
         default:                                              return ktx2_vk_format_undefined;
     }
 }
@@ -208,6 +216,9 @@ auto get_ktx2_raw_block_format(const std::uint32_t vk_format) -> erhe::dataforma
     switch (vk_format) {
         case ktx2_vk_format_astc_4x4_unorm: return erhe::dataformat::Format::format_astc_4x4_unorm;
         case ktx2_vk_format_astc_4x4_srgb:  return erhe::dataformat::Format::format_astc_4x4_srgb;
+        case ktx2_vk_format_bc5_unorm:      return erhe::dataformat::Format::format_bc5_unorm;
+        case ktx2_vk_format_bc7_unorm:      return erhe::dataformat::Format::format_bc7_unorm;
+        case ktx2_vk_format_bc7_srgb:       return erhe::dataformat::Format::format_bc7_srgb;
         default:                            return erhe::dataformat::Format::format_undefined;
     }
 }
@@ -265,17 +276,40 @@ auto write_ktx2_raw_blocks(const Ktx2_raw_blocks_image& image) -> std::vector<st
             : image.levels[level];
     };
 
-    // Data format descriptor: dfdTotalSize + one basic block with one sample.
-    const bool          srgb             = (image.format == erhe::dataformat::Format::format_astc_4x4_srgb);
+    // Data format descriptor: dfdTotalSize + one basic block. ASTC and BC7
+    // blocks are one sample (the whole block); a BC5 block is two, the red
+    // and green BC4 halves.
+    class Dfd_sample
+    {
+    public:
+        std::uint32_t bit_offset;
+        std::uint32_t bit_length;
+        std::uint32_t channel;
+    };
+    const bool srgb =
+        (image.format == erhe::dataformat::Format::format_astc_4x4_srgb) ||
+        (image.format == erhe::dataformat::Format::format_bc7_srgb);
     const std::size_t   block_extent     = erhe::dataformat::get_block_extent(image.format);
     const std::uint32_t block_byte_count = static_cast<std::uint32_t>(erhe::dataformat::get_block_size_bytes(image.format));
-    constexpr std::uint32_t basic_block_byte_count = 24 + 16; // header + one sample
+    std::uint32_t           color_model = c_khr_df_model_astc;
+    std::vector<Dfd_sample> samples{Dfd_sample{.bit_offset = 0, .bit_length = block_byte_count * 8, .channel = c_khr_df_channel_astc_data}};
+    if ((image.format == erhe::dataformat::Format::format_bc7_unorm) || (image.format == erhe::dataformat::Format::format_bc7_srgb)) {
+        color_model = c_khr_df_model_bc7;
+        samples     = {Dfd_sample{.bit_offset = 0, .bit_length = 128, .channel = c_khr_df_channel_bc7_color}};
+    } else if (image.format == erhe::dataformat::Format::format_bc5_unorm) {
+        color_model = c_khr_df_model_bc5;
+        samples     = {
+            Dfd_sample{.bit_offset =  0, .bit_length = 64, .channel = c_khr_df_channel_bc5_red},
+            Dfd_sample{.bit_offset = 64, .bit_length = 64, .channel = c_khr_df_channel_bc5_green}
+        };
+    }
+    const std::uint32_t basic_block_byte_count = static_cast<std::uint32_t>(24 + (16 * samples.size())); // header + samples
     std::vector<std::uint8_t> dfd(4 + basic_block_byte_count, std::uint8_t{0});
     write_u32(dfd,  0, static_cast<std::uint32_t>(dfd.size()));
     write_u32(dfd,  4, 0); // vendorId 0 (Khronos), descriptorType 0 (basic)
     write_u32(dfd,  8, c_khr_df_version_number | (basic_block_byte_count << 16));
     write_u32(dfd, 12,
-        c_khr_df_model_astc |
+        color_model |
         (c_khr_df_primaries_bt709 << 8) |
         ((srgb ? c_khr_df_transfer_srgb : c_khr_df_transfer_linear) << 16)
         // flags 0: straight alpha
@@ -287,11 +321,13 @@ auto write_ktx2_raw_blocks(const Ktx2_raw_blocks_image& image) -> std::vector<st
     );
     write_u32(dfd, 20, zstd ? 0u : block_byte_count); // bytesPlane0: 0 for supercompressed data
     write_u32(dfd, 24, 0);                // bytesPlane4..7
-    // Sample 0: the whole block, ASTC data channel.
-    write_u32(dfd, 28, 0u | ((block_byte_count * 8 - 1) << 16) | (c_khr_df_channel_astc_data << 24));
-    write_u32(dfd, 32, 0);          // sample position
-    write_u32(dfd, 36, 0);          // sampleLower
-    write_u32(dfd, 40, 0xFFFFFFFFu); // sampleUpper
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+        const std::size_t offset = 28 + (16 * i);
+        write_u32(dfd, offset,      samples[i].bit_offset | ((samples[i].bit_length - 1) << 16) | (samples[i].channel << 24));
+        write_u32(dfd, offset +  4, 0);           // sample position
+        write_u32(dfd, offset +  8, 0);           // sampleLower
+        write_u32(dfd, offset + 12, 0xFFFFFFFFu); // sampleUpper
+    }
 
     // Key/value data, keys sorted by byte value.
     std::vector<std::uint8_t> kvd;
@@ -348,18 +384,24 @@ auto write_ktx2_raw_blocks(const Ktx2_raw_blocks_image& image) -> std::vector<st
     return out;
 }
 
-auto transcode_ktx2_basis_to_astc_4x4(
+auto transcode_ktx2_basis_to_raw_blocks(
     const std::span<const std::uint8_t> basis_ktx2,
+    const Ktx2_block_target             target,
     const Ktx2_color_space              color_space,
     const Ktx2_supercompression         supercompression
 ) -> std::vector<std::uint8_t>
 {
     ERHE_PROFILE_FUNCTION();
 
+    // The load-time transcode targets: ASTC 4x4 RGBA, or BC7 (BC5 for a two
+    // component normal map).
     Image_loader_ktx2 loader;
     Image_info        info{};
     const bool linear = (color_space == Ktx2_color_space::linear);
-    if (!loader.open(basis_ktx2, info, linear, Transcode_format_preference::astc_4x4)) {
+    const Transcode_format_preference preference = (target == Ktx2_block_target::bc)
+        ? Transcode_format_preference::bc7
+        : Transcode_format_preference::astc_4x4;
+    if (!loader.open(basis_ktx2, info, linear, preference)) {
         return {};
     }
     const std::size_t chain_byte_count = erhe::dataformat::get_mip_chain_byte_count(

@@ -72,21 +72,22 @@ public:
     void begin_frame();
 
     // Renders the assembled fragment body into target (creating / resizing it
-    // to size x size when needed), leaving it in shader_read_only layout so
+    // to width x height when needed), leaving it in shader_read_only layout so
     // ImGui / materials can sample it immediately. Returns true on success;
     // on shader compile failure it returns false and leaves target unchanged
     // (the caller keeps the previous good texture).
     [[nodiscard]] auto render_into(
         erhe::graphics::Command_buffer&                   command_buffer,
         std::shared_ptr<erhe::graphics::Texture>&         target,
-        int                                               size,
+        int                                               width,
+        int                                               height,
         const std::string&                                fragment_body,
         const std::vector<erhe::texgen::Uniform>&         uniforms,
         const std::vector<erhe::texgen::Sampler_binding>& sampler_decls = {},
         const std::vector<Texture_sample_binding>&        sampler_bindings = {}
     ) -> bool;
 
-    // Renders the assembled fragment into a size x size texture and reads it
+    // Renders the assembled fragment into a width x height texture and reads it
     // back to host memory as tightly packed 8-bit RGBA (color_format()), using
     // a self-contained command buffer that is submitted and waited on before
     // returning. Unlike render_into(), this does NOT record into a frame command
@@ -96,7 +97,8 @@ public:
     // for infrequent diagnostic export (texture_graph_export_png), not the hot
     // path. Returns true on success; false on shader compile failure.
     [[nodiscard]] auto render_and_read_rgba8(
-        int                                               size,
+        int                                               width,
+        int                                               height,
         const std::string&                                fragment_body,
         const std::vector<erhe::texgen::Uniform>&         uniforms,
         std::vector<std::uint8_t>&                        out_pixels,
@@ -134,7 +136,7 @@ private:
         const std::vector<erhe::texgen::Uniform>&         uniforms,
         const std::vector<erhe::texgen::Sampler_binding>& sampler_decls
     ) -> const Compiled*;
-    [[nodiscard]] auto make_target (int size) -> std::shared_ptr<erhe::graphics::Texture>;
+    [[nodiscard]] auto make_target (int width, int height) -> std::shared_ptr<erhe::graphics::Texture>;
 
     static constexpr std::size_t s_frame_ring = 4; // safely more than frames in flight
 

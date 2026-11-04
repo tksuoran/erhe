@@ -18,10 +18,24 @@ runs when all of these hold:
 - not Android (the editor's default there is `Shader_analytics_default::none`);
 - no `--no-shader-analytics` on the command line;
 - `shader_analytics.enabled` in the editor settings (default true; read at startup);
-- the compiler is found. It is looked up as the setting
-  `shader_analytics.malioc` (a path; empty by default), else the `MALIOC`
-  environment variable, else `malioc` on `PATH`. The install locations are per machine; the startup log
-  names what was found, or that nothing was.
+- the compiler is found.
+
+The compiler is searched in three sources, all of them, in this order:
+
+1. the editor setting `shader_analytics.malioc_search_paths` (empty by
+   default; the install locations are per machine, so they go in the local
+   editor settings);
+2. the environment variable `ERHE_MALIOC`, a path list separated like
+   `PATH`;
+3. `PATH`.
+
+An entry is the executable or a directory holding it; `$NAME`, `${NAME}`
+and a leading `~` expand from the environment, and an entry naming an unset
+variable is skipped. The same executable reached through two entries counts
+once. The first analysis task queries every candidate's version
+(`malioc --version`) and uses the newest. The log names every candidate
+found with its version and the one used, or, when the compiler is found
+nowhere, every location searched.
 
 `--shader-analytics <directory>` still loads a browser directory's
 `analytics.js` at startup, read before the device exists so a session that
@@ -44,7 +58,8 @@ The observer only queues a job. A kick posted to the main thread's
 Taskflow tasks; a task runs jobs until the queue is empty. Analysis therefore
 starts with the main loop's first commit-queue flush, after startup, and
 holds at most `max_jobs` worker threads (each waiting on one compiler
-process) while scenes load. The first task queries the compiler versions.
+process) while scenes load. The first task selects the compilers
+("Enabling" above).
 
 Per job (`analyze_program()`, `src/editor/renderers/offline_compiler.*`):
 

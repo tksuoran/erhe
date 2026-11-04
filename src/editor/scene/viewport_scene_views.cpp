@@ -27,6 +27,8 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "scene/scene_save_service.hpp"
+
 #include "erhe_hash/xxhash.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
@@ -291,7 +293,7 @@ void Scene_views::destroy_viewport_scene_view(
         m_overdraw_chains.begin(),
         m_overdraw_chains.end(),
         [&viewport_scene_view](const Overdraw_chain& entry) {
-            return !entry.overdraw_node || (entry.overdraw_node->get_viewport_scene_view() == viewport_scene_view);
+            return !entry.overdraw_node || (entry.overdraw_node->get_source() == viewport_scene_view);
         }
     );
     m_overdraw_chains.erase(overdraw_end, m_overdraw_chains.end());
@@ -490,7 +492,7 @@ void Scene_views::set_overdraw_mode(const Viewport_scene_view* const viewport_sc
     const auto chain = std::find_if(
         m_overdraw_chains.begin(),
         m_overdraw_chains.end(),
-        [&view](const Overdraw_chain& entry) { return entry.overdraw_node->get_viewport_scene_view() == view; }
+        [&view](const Overdraw_chain& entry) { return entry.overdraw_node->get_source() == view; }
     );
 
     if (mode != Overdraw_mode::off) {
@@ -990,6 +992,21 @@ void Scene_views::debug_imgui()
     }
 }
 
+auto Scene_views::is_input_blocked(const Viewport_window& window) const -> bool
+{
+    // A viewport of a scene being saved takes no pointer input: tools,
+    // hover, selection and camera navigation all write the scene.
+    if ((m_app_context.scene_save_service == nullptr) || !m_app_context.scene_save_service->is_active()) {
+        return false;
+    }
+    const std::shared_ptr<Viewport_scene_view> scene_view = window.viewport_scene_view();
+    if (!scene_view) {
+        return false;
+    }
+    const std::shared_ptr<Scene_root> scene_root = scene_view->get_scene_root();
+    return scene_root && m_app_context.scene_save_service->is_read_only(*scene_root);
+}
+
 void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
 {
     ERHE_PROFILE_FUNCTION();
@@ -1046,7 +1063,7 @@ void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
     } else {
         // Normal hover path.
         for (const std::shared_ptr<Viewport_window>& window : m_viewport_windows) {
-            if (window->get_imgui_host() == imgui_host) {
+            if ((window->get_imgui_host() == imgui_host) && !is_input_blocked(*window)) {
                 if (window->is_viewport_hovered()) {
                     window->on_mouse_move(mouse_position);
                 }
@@ -1080,7 +1097,7 @@ void Scene_views::update_hover_info(erhe::imgui::Imgui_host* imgui_host)
     ERHE_VERIFY(imgui_host != nullptr);
 
     for (auto& window : m_viewport_windows) {
-        if (window->get_imgui_host() == imgui_host) {
+        if ((window->get_imgui_host() == imgui_host) && !is_input_blocked(*window)) {
             if (window->is_viewport_hovered()) {
                 window->update_hover_info();
             }
@@ -1092,7 +1109,7 @@ void Scene_views::update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_
 {
     // log_scene_view->info("update_pointer_from_imgui_viewport_windows({})", imgui_host->get_name());
     for (const auto& window : m_viewport_windows) {
-        if (window->get_imgui_host() != imgui_host) {
+        if ((window->get_imgui_host() != imgui_host) || is_input_blocked(*window)) {
             continue;
         }
 

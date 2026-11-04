@@ -256,6 +256,11 @@ void Imgui_windows::end_frame()
     m_iterating = false;
 }
 
+void Imgui_windows::set_window_contents_disabled(const bool disabled)
+{
+    m_window_contents_disabled = disabled;
+}
+
 void Imgui_windows::draw_imgui_windows()
 {
     ERHE_PROFILE_FUNCTION();
@@ -283,7 +288,13 @@ void Imgui_windows::draw_imgui_windows()
                     ImGui::PushID(++window_id);
                     const bool is_window_visible = imgui_window->begin();
                     if (is_window_visible) {
+                        if (m_window_contents_disabled) {
+                            ImGui::BeginDisabled();
+                        }
                         imgui_window->imgui();
+                        if (m_window_contents_disabled) {
+                            ImGui::EndDisabled();
+                        }
                         hidden = false;
                     }
                     if (imgui_window->want_cursor_relative_hold()) {

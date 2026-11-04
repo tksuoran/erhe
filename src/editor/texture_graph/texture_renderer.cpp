@@ -137,9 +137,8 @@ void Texture_renderer::begin_frame()
     m_ubo_ring[m_current_slot].clear(); // keep capacity - no steady-state allocation
 }
 
-auto Texture_renderer::make_target(const int size) -> std::shared_ptr<erhe::graphics::Texture>
+auto Texture_renderer::make_target(const int width, const int height) -> std::shared_ptr<erhe::graphics::Texture>
 {
-    const int clamped = std::max(1, size);
     std::shared_ptr<erhe::graphics::Texture> texture = std::make_shared<erhe::graphics::Texture>(
         m_device,
         erhe::graphics::Texture_create_info{
@@ -150,8 +149,8 @@ auto Texture_renderer::make_target(const int size) -> std::shared_ptr<erhe::grap
                 erhe::graphics::Image_usage_flag_bit_mask::transfer_src,
             .type        = erhe::graphics::Texture_type::texture_2d,
             .pixelformat = color_format(),
-            .width       = clamped,
-            .height      = clamped,
+            .width       = std::max(1, width),
+            .height      = std::max(1, height),
             .debug_label = erhe::utility::Debug_label{"texture graph target"}
         }
     );
@@ -295,7 +294,8 @@ auto Texture_renderer::get_compiled(
 auto Texture_renderer::render_into(
     erhe::graphics::Command_buffer&                   command_buffer,
     std::shared_ptr<erhe::graphics::Texture>&         target,
-    const int                                         size,
+    const int                                         width,
+    const int                                         height,
     const std::string&                                fragment_body,
     const std::vector<erhe::texgen::Uniform>&         uniforms,
     const std::vector<erhe::texgen::Sampler_binding>& sampler_decls,
@@ -330,9 +330,10 @@ auto Texture_renderer::render_into(
         }
     }
 
-    const int clamped = std::max(1, size);
-    if (!target || (target->get_width() != clamped) || (target->get_height() != clamped)) {
-        target = make_target(clamped);
+    const int clamped_width  = std::max(1, width);
+    const int clamped_height = std::max(1, height);
+    if (!target || (target->get_width() != clamped_width) || (target->get_height() != clamped_height)) {
+        target = make_target(clamped_width, clamped_height);
         // Move the fresh texture out of UNDEFINED so the render pass can declare
         // layout_before = shader_read_only_optimal uniformly.
         command_buffer.transition_texture_layout(*target, erhe::graphics::Image_layout::shader_read_only_optimal);
@@ -382,15 +383,15 @@ auto Texture_renderer::render_into(
     descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::shader_read_only_optimal;
     descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
     descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::shader_read_only_optimal;
-    descriptor.render_target_width  = clamped;
-    descriptor.render_target_height = clamped;
+    descriptor.render_target_width  = clamped_width;
+    descriptor.render_target_height = clamped_height;
     descriptor.debug_label = erhe::utility::Debug_label{"texture graph render"};
 
     erhe::graphics::Render_pass            render_pass{m_device, descriptor};
     erhe::graphics::Render_command_encoder encoder = m_device.make_render_command_encoder(command_buffer);
     const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
-    encoder.set_viewport_rect(0, 0, clamped, clamped);
-    encoder.set_scissor_rect (0, 0, clamped, clamped);
+    encoder.set_viewport_rect(0, 0, clamped_width, clamped_height);
+    encoder.set_scissor_rect (0, 0, clamped_width, clamped_height);
     encoder.set_bind_group_layout(&layout);
     encoder.set_render_pipeline(*compiled->pipeline);
     if (ubo) {
@@ -415,7 +416,8 @@ auto Texture_renderer::render_into(
 }
 
 auto Texture_renderer::render_and_read_rgba8(
-    const int                                         size,
+    const int                                         width,
+    const int                                         height,
     const std::string&                                fragment_body,
     const std::vector<erhe::texgen::Uniform>&         uniforms,
     std::vector<std::uint8_t>&                        out_pixels,
@@ -423,9 +425,10 @@ auto Texture_renderer::render_and_read_rgba8(
     const std::vector<Texture_sample_binding>&        sampler_bindings
 ) -> bool
 {
-    const int         clamped       = std::max(1, size);
-    const std::size_t bytes_per_row = static_cast<std::size_t>(clamped) * 4u;
-    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(clamped);
+    const int         clamped_width  = std::max(1, width);
+    const int         clamped_height = std::max(1, height);
+    const std::size_t bytes_per_row  = static_cast<std::size_t>(clamped_width) * 4u;
+    const std::size_t byte_count     = bytes_per_row * static_cast<std::size_t>(clamped_height);
 
     // Host-visible readback buffer for the texture->buffer blit.
     std::shared_ptr<erhe::graphics::Buffer> readback = std::make_shared<erhe::graphics::Buffer>(
@@ -458,7 +461,7 @@ auto Texture_renderer::render_and_read_rgba8(
     // Passing a null target makes render_into create a fresh texture (with
     // transfer_src usage) and transition it out of UNDEFINED.
     std::shared_ptr<erhe::graphics::Texture> target;
-    const bool rendered = render_into(command_buffer, target, clamped, fragment_body, uniforms, sampler_decls, sampler_bindings);
+    const bool rendered = render_into(command_buffer, target, clamped_width, clamped_height, fragment_body, uniforms, sampler_decls, sampler_bindings);
     if (!rendered || !target) {
         command_buffer.end();
         return false; // compile failure - nothing rendered
@@ -470,7 +473,7 @@ auto Texture_renderer::render_and_read_rgba8(
     erhe::graphics::Blit_command_encoder blit = m_device.make_blit_command_encoder(command_buffer);
     blit.copy_from_texture(
         erhe::graphics::Texture_location{.texture = target.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
-        glm::ivec3{clamped, clamped, 1},
+        glm::ivec3{clamped_width, clamped_height, 1},
         erhe::graphics::Buffer_texel_location{.buffer = readback.get(), .offset = 0, .bytes_per_row = static_cast<std::uintptr_t>(bytes_per_row), .bytes_per_image = static_cast<std::uintptr_t>(byte_count)}
     );
     command_buffer.end();

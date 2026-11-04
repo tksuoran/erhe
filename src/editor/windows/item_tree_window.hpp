@@ -73,6 +73,11 @@ public:
     void set_tree_label(std::string_view label);
     [[nodiscard]] auto get_tree_label() const -> const std::string&;
 
+    // Names the tree in the persistent row open state (doc/editor/windows.md
+    // "Row open state"). Empty: the scene's source file or name for a scene
+    // hierarchy, else the tree label.
+    void set_open_state_scope(std::string_view scope);
+
     // Cached references this tree holds across frames, for the MCP query.
     // m_hovered_item / m_popup_item are reset only by the render path, so a
     // tree that stops rendering keeps whatever it last hovered alive.
@@ -194,6 +199,12 @@ private:
         float                                      reference_suffix_width{0.0f};
     };
 
+    // Row open state lives in ImGui window storage; these copy it from / to
+    // Item_tree_state_store when a row's ID is first seen and when it toggles.
+    [[nodiscard]] auto import_open_state  (const erhe::Item_base& item, ImGuiID id, bool default_open) -> bool;
+    void               export_open_state  (const erhe::Item_base& item, bool open);
+    [[nodiscard]] auto get_open_state_scope() const -> std::string;
+
     void imgui_row                    (const Flat_row& row);
     void imgui_rename_field           (const ImVec2& position, float width);
     void item_icon_and_text           (const std::shared_ptr<erhe::Item_base>& item); // drag payload preview
@@ -280,6 +291,7 @@ private:
     float                              m_ui_scale{1.0f};
 
     std::string                        m_tree_label;
+    std::string                        m_open_state_scope;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 
     std::vector<Flat_row>              m_flat_rows;

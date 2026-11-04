@@ -346,6 +346,9 @@ private:
     bool                                      m_updating_node_transforms{false};
     // See set_transform_owner_writes().
     bool                                      m_transform_owner_writes{false};
+    // Set while every node leaves (sever_host(), ~Scene): the whole-tree
+    // sanity check runs once before, not once per unregistered node.
+    bool                                      m_removing_all_nodes{false};
 };
 
 } // namespace erhe::scene

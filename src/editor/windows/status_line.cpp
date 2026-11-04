@@ -1,6 +1,7 @@
 #include "windows/status_line.hpp"
 
 #include "app_context.hpp"
+#include "scene/scene_save_service.hpp"
 #include "time.hpp"
 
 #include <imgui/imgui.h>
@@ -22,6 +23,11 @@ void Status_line::imgui(App_context& context)
         ImGui::Text("%.2f ms", frame_ms);
     }
     ImGui::SameLine();
+
+    // A running or waiting scene save (scene_save_service.hpp).
+    if ((context.scene_save_service != nullptr) && context.scene_save_service->imgui_status()) {
+        ImGui::SameLine();
+    }
 
     // Geogram operation progress (Remesh / atlas / ...); false when idle.
     if (erhe::geometry::get_geogram_progress(m_geogram_progress)) {

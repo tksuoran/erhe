@@ -2,6 +2,7 @@
 #include "renderers/ray_trace_scene.hpp"
 
 #include "app_context.hpp"
+#include "scene/scene_save_service.hpp"
 #include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
 #include "app_settings.hpp"
@@ -143,6 +144,12 @@ void App_scenes::imgui()
     }
 }
 
+auto App_scenes::is_saving(const Scene_root& scene_root) const -> bool
+{
+    // A scene save reads the scene on a worker: its simulation pauses.
+    return (m_context.scene_save_service != nullptr) && m_context.scene_save_service->is_read_only(scene_root);
+}
+
 void App_scenes::update_physics_simulation_fixed_step(const Time_context& time_context)
 {
     ERHE_PROFILE_FUNCTION();
@@ -151,7 +158,7 @@ void App_scenes::update_physics_simulation_fixed_step(const Time_context& time_c
     // while others keep simulating, so the gate is inside the per-scene loop.
     for (const auto& scene_root : m_scene_roots) {
         const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
-        if (!physics.static_enable || !physics.dynamic_enable) {
+        if (!physics.static_enable || !physics.dynamic_enable || is_saving(*scene_root)) {
             continue;
         }
         scene_root->update_physics_simulation_fixed_step(time_context.simulation_dt_s, physics);
@@ -167,7 +174,7 @@ void App_scenes::before_physics_simulation_steps()
     // (after_physics_simulation_steps()).
     for (const auto& scene_root : m_scene_roots) {
         const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
-        if (!physics.static_enable || !physics.dynamic_enable) {
+        if (!physics.static_enable || !physics.dynamic_enable || is_saving(*scene_root)) {
             continue;
         }
         scene_root->before_physics_simulation_steps();
@@ -756,6 +763,9 @@ void App_scenes::after_physics_simulation_steps()
 
     // Prepare phase (M2): the node-side effects of the steps M1 ran.
     for (const auto& scene_root : m_scene_roots) {
+        if (is_saving(*scene_root)) {
+            continue;
+        }
         const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
         const bool running = physics.static_enable && physics.dynamic_enable;
         // Edge-triggered: clears no_transform_update from body-driven nodes

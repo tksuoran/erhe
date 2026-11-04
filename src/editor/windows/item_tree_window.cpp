@@ -31,6 +31,7 @@
 #include "preview/brush_preview.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
+#include "windows/item_tree_state_store.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
@@ -235,6 +236,97 @@ void Item_tree::set_root(const std::shared_ptr<erhe::Hierarchy>& root)
 {
     m_root = root;
     m_flat_rows_dirty = true;
+}
+
+void Item_tree::set_open_state_scope(const std::string_view scope)
+{
+    m_open_state_scope.assign(scope);
+}
+
+auto Item_tree::get_open_state_scope() const -> std::string
+{
+    if (!m_open_state_scope.empty()) {
+        return m_open_state_scope;
+    }
+    if (m_root) {
+        const Scene_root* const scene_root = dynamic_cast<const Scene_root*>(m_root->get_item_host());
+        if (scene_root != nullptr) {
+            const std::filesystem::path& source_path = scene_root->get_source_path();
+            return source_path.empty()
+                ? fmt::format("scene:{}", scene_root->get_name())
+                : fmt::format("scene:{}", source_path.generic_string());
+        }
+    }
+    return m_tree_label;
+}
+
+namespace {
+
+// Stable across sessions and rescans: "<top type>:<top name>/<name>/...", a
+// name repeated among siblings followed by "#<n>" from its second occurrence.
+[[nodiscard]] auto make_open_state_key(const erhe::Item_base& item) -> std::string
+{
+    const erhe::Hierarchy* const hierarchy = dynamic_cast<const erhe::Hierarchy*>(&item);
+    if (hierarchy == nullptr) {
+        return fmt::format("{}:{}", item.get_type_name(), item.get_name());
+    }
+    std::vector<std::string> segments;
+    const erhe::Hierarchy* node = hierarchy;
+    std::shared_ptr<erhe::Hierarchy> parent_holder;
+    for (;;) {
+        parent_holder = node->get_parent().lock();
+        if (!parent_holder) {
+            segments.push_back(fmt::format("{}:{}", node->get_type_name(), node->get_name()));
+            break;
+        }
+        std::size_t occurrence = 0;
+        for (const std::shared_ptr<erhe::Hierarchy>& sibling : parent_holder->get_children()) {
+            if (sibling.get() == node) {
+                break;
+            }
+            if (sibling->get_name() == node->get_name()) {
+                ++occurrence;
+            }
+        }
+        segments.push_back((occurrence == 0) ? node->get_name() : fmt::format("{}#{}", node->get_name(), occurrence));
+        node = parent_holder.get();
+    }
+    std::string key;
+    for (auto i = segments.rbegin(); i != segments.rend(); ++i) {
+        if (!key.empty()) {
+            key.push_back('/');
+        }
+        key += *i;
+    }
+    return key;
+}
+
+} // anonymous namespace
+
+auto Item_tree::import_open_state(const erhe::Item_base& item, const ImGuiID id, const bool default_open) -> bool
+{
+    ImGuiStorage* const storage = ImGui::GetStateStorage();
+    const int current = storage->GetInt(id, -1);
+    if (current != -1) {
+        return current != 0;
+    }
+    // First sight of this ID (new item, rescan, startup): seed ImGui's storage once.
+    bool open = default_open;
+    if (m_context.item_tree_state_store != nullptr) {
+        const std::optional<bool> stored = m_context.item_tree_state_store->get_open(get_open_state_scope(), make_open_state_key(item));
+        if (stored.has_value()) {
+            open = stored.value();
+        }
+    }
+    storage->SetInt(id, open ? 1 : 0);
+    return open;
+}
+
+void Item_tree::export_open_state(const erhe::Item_base& item, const bool open)
+{
+    if (m_context.item_tree_state_store != nullptr) {
+        m_context.item_tree_state_store->set_open(get_open_state_scope(), make_open_state_key(item), open);
+    }
 }
 
 auto Item_tree::get_root() const -> const std::shared_ptr<erhe::Hierarchy>&
@@ -1867,6 +1959,7 @@ void Item_tree::imgui_row(const Flat_row& row)
         if (is_item_toggled_open) {
             m_toggled_open = true;
             m_flat_rows_dirty = true; // open/close changes the visible row set
+            export_open_state(*row.item, is_open);
         }
         if (!m_toggled_open) {
             item_popup_menu(row.item);
@@ -2177,8 +2270,6 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
         //// log_tree->info("filtered {}", item->describe());
         return;
     }
-    const bool force_expand = (show == Show_mode::Show_expanded);
-
     const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
     // A SEALED prefab instance root (a glTF template) hides its interior:
     // the subtree is prefab content, editable only by opening the prefab's
@@ -2193,12 +2284,26 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
         }
     }
 
-    const bool expand =
-        erhe::utility::test_bit_set(item->get_flag_bits(), editor::Editor_item_flags::expand) ||
-        force_expand;
+    // A row shown only because a descendant passes the filters keeps its own
+    // open state: filters never open or close rows.
+    const bool expand = erhe::utility::test_bit_set(item->get_flag_bits(), editor::Editor_item_flags::expand);
 
     const std::shared_ptr<erhe::Item_base>& label_item   = get_label_item(item);
     const erhe::utility::Debug_label        debug_label  = label_item->get_debug_label(); // "<name>##<id>" - tree node id
+
+    // Leaf rows have no open state. For the others the state is in ImGui
+    // per-window storage under the ID TreeNodeEx uses for the row.
+    bool is_open = true;
+    if (!is_leaf) {
+        const ImGuiID id = ImGui::GetID(debug_label.data());
+        is_open = import_open_state(*item, id, expand);
+        // A reveal request (request_reveal) opens the row on the path to a revealed item.
+        if (!is_open && m_reveal_ancestors.contains(item.get())) {
+            ImGui::GetStateStorage()->SetInt(id, 1);
+            export_open_state(*item, true);
+            is_open = true;
+        }
+    }
 
     {
         // NOTE: this reference must not be held across the recursive calls
@@ -2212,7 +2317,6 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
         row.tree_node_flags =
             ImGuiTreeNodeFlags_SpanAvailWidth |
             ImGuiTreeNodeFlags_NoTreePushOnOpen | // rows are flat; indentation comes from the row list
-            (expand ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None) |
             (is_leaf ? ImGuiTreeNodeFlags_Leaf : ImGuiTreeNodeFlags_OpenOnArrow);
 
         Icon_set&         icon_set = *m_context.icon_set;
@@ -2277,20 +2381,6 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
 
     }
 
-    // ImGui treats leaf tree nodes as always open (TreeNodeUpdateNextOpen); for
-    // non-leaf rows the open state lives in ImGui per-window storage, keyed by
-    // the same ID and with the same default imgui_row passes to TreeNodeEx.
-    bool is_open = true;
-    if (!is_leaf) {
-        const ImGuiID id = ImGui::GetID(debug_label.data());
-        is_open = ImGui::GetStateStorage()->GetInt(id, expand ? 1 : 0) != 0;
-        // A reveal request (request_reveal) opens the row on the path to a
-        // revealed item, writing the state TreeNodeEx reads for this row.
-        if (!is_open && m_reveal_ancestors.contains(item.get())) {
-            ImGui::GetStateStorage()->SetInt(id, 1);
-            is_open = true;
-        }
-    }
     if (!is_open) {
         return;
     }

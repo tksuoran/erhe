@@ -1,5 +1,7 @@
 #pragma once
 
+#include "rendergraph/overdraw_source.hpp"
+
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -24,12 +26,11 @@ namespace erhe::rendergraph {
 namespace editor {
 
 class App_context;
-class Viewport_scene_view;
 
-// The overdraw visualization of one viewport (doc/plans/overdraw_visualization.md
-// O4): placed after the viewport's Viewport_scene_view in place of its
-// post-processing node while the viewport's overdraw mode is on
-// (Scene_views::set_overdraw_mode()). One fullscreen pass into its own
+// The overdraw visualization of one view (doc/plans/overdraw_visualization.md
+// O4, O6): placed after the view in place of its post-processing node while
+// the view's overdraw mode is on (Scene_views::set_overdraw_mode(),
+// Scene_image_capture). One fullscreen pass into its own
 // texture of the view's size: the view's per-pixel fragment shader
 // invocation counts (Overdraw_view_state) through a color ramp, and over
 // count 0 the view's color at 25 % luminance
@@ -40,7 +41,7 @@ public:
     Overdraw_node(
         erhe::rendergraph::Rendergraph&             rendergraph,
         App_context&                                app_context,
-        const std::shared_ptr<Viewport_scene_view>& viewport_scene_view,
+        const std::shared_ptr<IOverdraw_source>&    source,
         erhe::utility::Debug_label                  debug_label
     );
     ~Overdraw_node() noexcept override;
@@ -49,9 +50,9 @@ public:
     auto get_type_name           () const -> std::string_view override { return "Overdraw_node"; }
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
-    // The viewport this node belongs to (Scene_views teardown and
-    // rewiring). May be expired during shutdown.
-    [[nodiscard]] auto get_viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view> { return m_viewport_scene_view.lock(); }
+    // The view this node belongs to (Scene_views teardown and rewiring).
+    // May be expired during shutdown.
+    [[nodiscard]] auto get_source() const -> std::shared_ptr<IOverdraw_source> { return m_source.lock(); }
 
 private:
     static constexpr unsigned int input_binding_point     {0};
@@ -61,7 +62,7 @@ private:
     App_context&                             m_app_context;
     // Weak, as Viewport_overlay_node: the node graph does not keep the view
     // alive.
-    std::weak_ptr<Viewport_scene_view>       m_viewport_scene_view;
+    std::weak_ptr<IOverdraw_source>          m_source;
     erhe::graphics::Shader_resource          m_counts_block;
     erhe::graphics::Shader_resource          m_parameters_block;
     erhe::graphics::Bind_group_layout        m_bind_group_layout;

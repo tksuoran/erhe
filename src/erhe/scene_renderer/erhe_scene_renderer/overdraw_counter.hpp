@@ -83,6 +83,12 @@ public:
         uint32_t                        height
     );
 
+    // The statistics of frame_index, which counted with this state and has
+    // completed, and no later frame of the view counts while this runs (a
+    // one-frame capture). Returns invalid statistics when frame_index did
+    // not count.
+    [[nodiscard]] auto collect(uint64_t frame_index) -> Overdraw_statistics;
+
     // Render phase: drops the buffers and the statistics (the mode turned
     // off). Buffers in use by frames in flight are destroyed when those
     // complete.
@@ -107,6 +113,7 @@ private:
     };
 
     void retire(uint64_t frame_index);
+    void decode_slot(std::size_t slot_index);
 
     std::unique_ptr<erhe::graphics::Buffer> m_count_buffer;
     uint64_t                                m_count_frame_index{0};

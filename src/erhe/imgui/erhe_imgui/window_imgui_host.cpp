@@ -51,7 +51,6 @@ Window_imgui_host::Window_imgui_host(
     // NOTE: Imgui_renderer::use_as_backend_renderer_on_context() adds more BackendFlags,
     // ImGuiBackendFlags_RendererHasTextures and ImGuiBackendFlags_RendererHasVtxOffset
 
-    // TODO Clipboard
     // TODO Update monitors
 
     // Our mouse update function expect PlatformHandle to be filled for the main viewport

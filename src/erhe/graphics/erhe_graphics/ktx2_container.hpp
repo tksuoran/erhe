@@ -27,6 +27,9 @@ enum class Ktx2_supercompression : unsigned int
 constexpr std::uint32_t ktx2_vk_format_undefined        = 0;   // Basis Universal payload
 constexpr std::uint32_t ktx2_vk_format_astc_4x4_unorm   = 157; // VK_FORMAT_ASTC_4x4_UNORM_BLOCK
 constexpr std::uint32_t ktx2_vk_format_astc_4x4_srgb    = 158; // VK_FORMAT_ASTC_4x4_SRGB_BLOCK
+constexpr std::uint32_t ktx2_vk_format_bc5_unorm        = 141; // VK_FORMAT_BC5_UNORM_BLOCK
+constexpr std::uint32_t ktx2_vk_format_bc7_unorm        = 145; // VK_FORMAT_BC7_UNORM_BLOCK
+constexpr std::uint32_t ktx2_vk_format_bc7_srgb         = 146; // VK_FORMAT_BC7_SRGB_BLOCK
 
 // KTXwriterScParams value marking a two component X+Y normal map (X in RGB,
 // Y in A), the same marker `ktx encode --normal-mode` writes.
@@ -86,7 +89,7 @@ public:
 class Ktx2_raw_blocks_image
 {
 public:
-    erhe::dataformat::Format                   format{erhe::dataformat::Format::format_astc_4x4_srgb}; // astc_4x4 unorm / srgb
+    erhe::dataformat::Format                   format{erhe::dataformat::Format::format_astc_4x4_srgb}; // astc_4x4 / bc7 unorm / srgb, bc5 unorm
     std::uint32_t                              width {0};
     std::uint32_t                              height{0};
     std::vector<std::span<const std::uint8_t>> levels; // level 0 (largest) first, tightly packed blocks
@@ -102,19 +105,25 @@ public:
 // is not supported or a level has the wrong size.
 [[nodiscard]] auto write_ktx2_raw_blocks(const Ktx2_raw_blocks_image& image) -> std::vector<std::uint8_t>;
 
-// Transcodes a Basis Universal KTX2 file (vkFormat 0) to a raw ASTC 4x4 KTX2
+// Transcodes a Basis Universal KTX2 file (vkFormat 0) to a raw block KTX2
 // file with all of its mip levels, in the given color space, optionally
-// Zstandard supercompressed. A two
-// component normal map (detected the way Image_loader_ktx2 does) keeps its
-// X+Y layout (X in RGB, Y in A) and its marker. Returns an empty vector on
-// failure.
+// Zstandard supercompressed. astc_4x4: ASTC 4x4; a two component normal map
+// (detected the way Image_loader_ktx2 does) keeps its X+Y layout (X in RGB,
+// Y in A). bc: BC7; a two component normal map becomes BC5 (X in R, Y in G).
+// Either keeps the normal map marker. Returns an empty vector on failure.
 enum class Ktx2_color_space : unsigned int
 {
     srgb   = 0,
     linear = 1
 };
-[[nodiscard]] auto transcode_ktx2_basis_to_astc_4x4(
+enum class Ktx2_block_target : unsigned int
+{
+    astc_4x4 = 0, // mobile GPUs (Quest)
+    bc       = 1  // desktop GPUs
+};
+[[nodiscard]] auto transcode_ktx2_basis_to_raw_blocks(
     std::span<const std::uint8_t> basis_ktx2,
+    Ktx2_block_target             target,
     Ktx2_color_space              color_space,
     Ktx2_supercompression         supercompression
 ) -> std::vector<std::uint8_t>;

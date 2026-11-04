@@ -31,6 +31,7 @@
 #include "operations/geometry_operations.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
+#include "operations/bake_world_space_operation.hpp"
 #include "operations/merge_static_subtree_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation.hpp"
@@ -425,10 +426,11 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
         // CURRENT settings instead: omitted fields keep their values and a
         // null deletes an override - no client-side accumulator needed.
         json settings_value = value;
+        migrate_scene_settings_json(settings_value);
         if (args.value("merge", false)) {
             json current = json::parse(serialize(sr->get_scene_settings(), 0), nullptr, false);
             if (current.is_object()) {
-                current.merge_patch(value);
+                current.merge_patch(settings_value);
                 settings_value = std::move(current);
             }
         }
@@ -3991,6 +3993,58 @@ auto Mcp_server::action_merge_static_subtree(const json& args) -> std::string
         {"merged_nodes", merged},
         {"queued",       true},
         {"message",      "executes on the operation stack - poll get_async_status until queued_operations == 0"}
+    }).dump();
+}
+
+// Bake_world_space_operation (doc/editor/world_space_bake.md "Bake Static To World Space operation"):
+// the static meshes of the scene into world space under its "World Space"
+// node, undoable. The instancing comes from the scene's export settings, with
+// an `export_settings` object merged over them.
+auto Mcp_server::action_bake_static_to_world_space(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    Scene_export_settings settings{};
+    const std::string settings_error = resolve_export_settings(args, *sr, "bake_static_to_world_space", settings);
+    if (!settings_error.empty()) {
+        return make_error_content(settings_error);
+    }
+    // The primitives are built in the constructor (main thread, MCP
+    // dispatch); the structural change executes on the operation stack.
+    const std::shared_ptr<Bake_world_space_operation> op = std::make_shared<Bake_world_space_operation>(
+        Bake_world_space_operation::Parameters{
+            .context    = m_context,
+            .build_info = erhe::primitive::Build_info{
+                .primitive_types = {
+                    .fill_triangles          = true,
+                    .fill_triangles_expanded = true,
+                    .edge_lines              = true,
+                    .corner_points           = true,
+                    .centroid_points         = true
+                },
+                .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
+            },
+            .scene_root = sr->shared_from_this(),
+            .settings   = settings
+        }
+    );
+    json kept = json::object();
+    for (const auto& [reason, count] : op->get_kept_reasons()) {
+        kept[reason] = count;
+    }
+    if (op->get_baked_count() > 0) {
+        m_context.operation_stack->queue(op);
+    }
+    return make_json_content({
+        {"scene_name",   sr->get_name()},
+        {"planned_meshes", op->get_baked_count()},
+        {"placeholders", op->get_placeholder_count()},
+        {"kept",         kept},
+        {"queued",       op->get_baked_count() > 0},
+        {"message",      "builds and executes on the operation stack - poll get_async_status until queued_operations == 0; the log names the result"}
     }).dump();
 }
 

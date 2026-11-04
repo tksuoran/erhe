@@ -1,4 +1,5 @@
 #include "parsers/gltf_extensions_import.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "editor_item_bits.hpp"
 
 #include "parsers/gltf_extensions_names.hpp"
@@ -144,7 +145,9 @@ auto parse_gltf_scene_state(const erhe::gltf::Gltf_data& gltf_data) -> std::opti
         state.enable_physics = payload["enable_physics"].get<bool>();
     }
     if (payload.contains("settings") && payload["settings"].is_object()) {
-        state.settings_json = payload["settings"].dump();
+        nlohmann::json settings = payload["settings"];
+        migrate_scene_settings_json(settings);
+        state.settings_json = settings.dump();
     }
     const auto properties_it = payload.find("properties");
     if ((properties_it != payload.end()) && properties_it->is_object()) {

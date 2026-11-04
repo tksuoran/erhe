@@ -39,6 +39,7 @@ namespace erhe::graphics {
     class Swapchain;
 }
 namespace erhe::imgui {
+    class Imgui_host;
     class Imgui_windows;
 }
 namespace erhe::renderer {
@@ -178,15 +179,12 @@ class Headset_view
     : public std::enable_shared_from_this<Headset_view>
     , public Scene_view
     , public Renderable
-    , public erhe::imgui::Imgui_window
 {
 public:
     Headset_view(
         const Viewport_config_data&     viewport_config_data,
         erhe::commands::Commands&       commands,
         erhe::graphics::Device&         graphics_device,
-        erhe::imgui::Imgui_renderer&    imgui_renderer,
-        erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -344,8 +342,8 @@ public:
     // above the eye midpoint in head space (a child of the root camera),
     // aimed along the view direction, at the front of the scene's light
     // layer so it is the first spot light (the only light under the
-    // Headset window's "Headlamp only" lighting). Session only: never
-    // saved. Main thread, prepare phase (the Headset window queues these).
+    // Scene Control window's "Headlamp only" lighting). Session only: never
+    // saved. Main thread, prepare phase (the Scene Control window queues these).
     // The first enable creates it; disable takes it out of the scene.
     void set_headlamp_enabled  (bool enabled);
 
@@ -367,8 +365,9 @@ public:
     auto get_shadow_render_node() const -> Shadow_render_node*                  override;
     auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
 
-    // Implements Imgui_window
-    void imgui() override;
+    // The headset's part of the Scene Control window (OpenXR only).
+    void scene_control_imgui(erhe::imgui::Imgui_host* imgui_host);
+    [[nodiscard]] auto get_headlamp_cast_shadow() const -> bool { return m_headlamp_cast_shadow; }
 
     void add_finger_input(const Finger_point& finger_point);
 
@@ -422,11 +421,6 @@ private:
     auto resolve_pending_scene_and_camera() -> bool override;
     void setup_root_camera();
     void attach_headlamp();
-    // Headset window: a session-only change of the graphics preset in
-    // effect (as MCP set_graphics_preset: graphics_presets.json is not
-    // written), queued out of the ImGui iteration.
-    void queue_session_preset_edit(std::function<void(Graphics_preset_entry&)> edit);
-    void lighting_and_lod_imgui();
     // Prepare phase: the loading screen's lines from the startup load's
     // handle (status and percentage, or the error when it failed).
     void update_loading_screen();
@@ -570,12 +564,12 @@ private:
     uint32_t                                             m_overdraw_max_count{8};
     std::vector<Frame_settings_slot>                     m_frame_settings_slots;
     // Main thread: whether the controller ray hit tests 3D scene objects
-    // (content raytrace + skinned ID pick); the Headset window's checkbox.
+    // (content raytrace + skinned ID pick); the Scene Control window's checkbox.
     bool                                                 m_controller_scene_object_hits{true};
     // Loading screen (set_loading_screen()): rendered by the render phase
     // while the headset has no scene; released by the prepare phase at
     // m_loading_screen_release_frame.
-    Status_line                                          m_status_line; // top of the Headset window
+    Status_line                                          m_status_line; // top of the Scene Control window
     std::unique_ptr<Init_status_display>                 m_loading_screen;
     std::optional<uint64_t>                              m_loading_screen_release_frame;
     std::string                                          m_loading_file_name;

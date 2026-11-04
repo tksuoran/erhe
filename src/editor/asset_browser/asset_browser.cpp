@@ -360,6 +360,7 @@ Asset_browser_window::Asset_browser_window(
     : Item_tree_window{imgui_renderer, imgui_windows, context, window_title, ini_label}
     , m_asset_browser{asset_browser}
 {
+    set_open_state_scope("asset_browser");
 }
 
 void Asset_browser_window::imgui()

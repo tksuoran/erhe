@@ -1,11 +1,15 @@
 #pragma once
 
+#include "gltf_export_progress.hpp"
 #include "gltf_item_flags.hpp"
+#include "erhe_primitive/lod.hpp"
 #include "erhe_scene/physics_description.hpp"
 
 #include "erhe_graphics/image_encoder.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_scene/instance_override.hpp"
+
+#include <glm/glm.hpp>
 
 #include <cstddef>
 #include <functional>
@@ -352,8 +356,11 @@ public:
 //   and referenced through ERHE_texture_ktx2; PNG / JPEG images are written
 //   as they are.
 enum class Gltf_texture_export : unsigned int {
-    source        = 0,
-    ktx2_astc_4x4 = 1
+    source                     = 0,
+    ktx2_astc_4x4              = 1,
+    ktx2_astc_4x4_uncompressed = 2,
+    ktx2_bc                    = 3,
+    ktx2_bc_uncompressed       = 4
 };
 
 // What the texture pass of one export did.
@@ -392,7 +399,20 @@ public:
     std::size_t                        retained_count             {0}; // prepared primitives written back unchanged (subset of prepared_count)
     std::size_t                        dropped_degenerate_triangles{0};
     double                             preparation_ms             {0.0}; // wall time of the parallel preparation
+    std::size_t                        world_bake_mesh_count       {0}; // meshes written under the world space node
+    std::size_t                        world_bake_placeholder_count{0}; // transform-only nodes left in a baked mesh's place (a child stays there)
+    std::size_t                        world_bake_primitive_count  {0}; // soup primitives written in world space
+    std::size_t                        world_bake_failed_count     {0}; // planned meshes written unbaked (a primitive did not prepare)
 };
+
+// The world-space bake of an export; the editor plans it (doc/editor/world_space_bake.md).
+class Gltf_export_world_bake
+{
+public:
+    std::unordered_map<const erhe::scene::Mesh*, glm::mat4> baked_meshes; // world_from_node, relative to the root node
+    std::string                                             world_space_node_name{"World Space"};
+};
+
 
 class Gltf_export_arguments
 {
@@ -427,6 +447,13 @@ public:
     // Receives the texture statistics when non-null.
     Gltf_export_texture_statistics* texture_statistics{nullptr};
     std::shared_ptr<const erhe::scene::Pvs_database> pvs_database{};
+    // Receives the stage and per-stage counts when non-null.
+    Gltf_export_progress* progress{nullptr};
+    // LOD request of every prepared soup whose primitives carry none
+    // (Primitive::lod_settings); its chain is generated over the export core.
+    std::optional<erhe::primitive::Lod_settings> default_lod_settings{};
+    // Prepare's world-space bake; null for none.
+    const Gltf_export_world_bake* world_bake{nullptr};
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;

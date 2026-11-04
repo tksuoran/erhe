@@ -4,6 +4,7 @@
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation.hpp"
+#include "scene/scene_save_service.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
 #include "transform/transform_tool.hpp"
 
@@ -101,6 +102,12 @@ void Operation_stack::verify_main_thread() const
     ERHE_VERIFY(std::this_thread::get_id() == m_context.main_thread_id);
 }
 
+auto Operation_stack::is_held() const -> bool
+{
+    // A scene save reads the scenes on a worker: operations wait until it ends.
+    return (m_context.scene_save_service != nullptr) && m_context.scene_save_service->is_active();
+}
+
 void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
 {
     verify_main_thread();
@@ -110,7 +117,7 @@ void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
     // Not while an operation is executing - re-entrant execution is
     // illegal, so a follow-up queued BY an executing operation keeps the
     // deferred semantics (and lands outside the group).
-    if (m_grouping && !m_executing) {
+    if (m_grouping && !m_executing && !is_held()) {
         m_executing = true;
         operation->execute(m_context);
         m_executing = false;
@@ -140,6 +147,11 @@ void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
 {
     verify_main_thread();
     ERHE_VERIFY(!m_executing);
+    if (is_held()) {
+        log_operations->info("Operation deferred until the running scene save ends");
+        m_queued.push_back(operation);
+        return;
+    }
 
     m_executing = true;
     operation->execute(m_context);
@@ -208,6 +220,15 @@ void Operation_stack::update()
         }
     }
 
+    if (is_held()) {
+        if (m_undo_requested || m_redo_requested) {
+            m_undo_requested = false;
+            m_redo_requested = false;
+            log_operations->info("Undo / redo declined: a scene save is in progress");
+        }
+        return;
+    }
+
     // The Operations window's undo / redo requests, before this frame's
     // queued operations (the order the immediate calls had).
     if (m_undo_requested) {
@@ -238,6 +259,9 @@ void Operation_stack::update()
 
 auto Operation_stack::get_undo_block_reason() const -> const char*
 {
+    if (is_held()) {
+        return "a scene save is in progress";
+    }
     // Undo / redo must not run underneath a live mesh component edit (the G
     // slide, a gizmo component drag, a numeric component edit): it snapshots
     // positions and primitives the undone operation would change beneath it

@@ -363,6 +363,7 @@ flowchart TD
 - [editor/texture_graph.md](editor/texture_graph.md) (mostly stable): Procedural texture graph status against Material Maker
 - [editor/tools.md](editor/tools.md) (stable): Defines the Tool abstraction and the Tools container, plus several concrete tools for interacting with the 3D scene
 - [editor/transform.md](editor/transform.md) (stable): Transform gizmo system for interactive translate, rotate, and scale operations
+- [editor/world_space_bake.md](editor/world_space_bake.md) (experimental): World-space bake of static meshes: per-scene export settings, which meshes bake, placeholders, Prepare at export time and the undoable Bake Static To World Space operation
 - [editor/weight_paint.md](editor/weight_paint.md) (experimental): Blender-style weight painting
 - [editor/window_target_items.md](editor/window_target_items.md) (mostly stable): Editor windows with independent target items
 - [editor/windows.md](editor/windows.md) (stable): ImGui window implementations for the editor UI, including viewport display, property inspection, settings, and configuration
@@ -436,6 +437,7 @@ flowchart TD
 - [plans/apple_gpu_shader_gap.md](plans/apple_gpu_shader_gap.md) (blocked): Apple GPU: the standard shader's cost through SPIRV-Cross vs KosmicKrisp
 - [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
 - [plans/audit_2026_09_30_followups.md](plans/audit_2026_09_30_followups.md) (in progress): 2026-09-30 audit: medium-term set and follow-ups
+- [plans/background_scene_save.md](plans/background_scene_save.md) (in progress): Background scene save and Prepare: outstanding work
 - [plans/bistro_load_profiling.md](plans/bistro_load_profiling.md) (in progress): Bistro load time: profile and optimization candidates
 - [plans/bistro_viewport_gpu.md](plans/bistro_viewport_gpu.md) (in progress): Bistro main viewport GPU cost: measurements, light selection by scene order, options; clustered light culling chosen (clustered_lights.md), geometry open
 - [plans/brushes.md](plans/brushes.md) (proposed): Brushes: outstanding work
@@ -489,6 +491,7 @@ flowchart TD
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
 - [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification
+- [plans/prepared_scene_shadow_phantom.md](plans/prepared_scene_shadow_phantom.md) (in progress): Phantom shadow caster in Prepare (PC) / Prepare (Quest) files: GPU-generated shadow commands with stored vertex streams; findings, reproduction, hypotheses
 - [plans/pvs.md](plans/pvs.md) (in progress): Potentially visible sets: outstanding work (headset and Quest gates, rule 3, near-plane clipped occluders, adaptive cells, page compression)
 - [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
 - [plans/radiance_cascades.md](plans/radiance_cascades.md) (in progress): Radiance cascades: design, gates and measurements, remaining work (failing gates, per-child segments, cascade 0 relocation, change-driven refit)

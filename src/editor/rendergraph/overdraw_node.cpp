@@ -1,7 +1,6 @@
 #include "rendergraph/overdraw_node.hpp"
 #include "scene/viewport_render_state.hpp"
 #include "app_context.hpp"
-#include "scene/viewport_scene_view.hpp"
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
@@ -37,7 +36,7 @@ namespace {
 Overdraw_node::Overdraw_node(
     erhe::rendergraph::Rendergraph&             rendergraph,
     App_context&                                app_context,
-    const std::shared_ptr<Viewport_scene_view>& viewport_scene_view,
+    const std::shared_ptr<IOverdraw_source>&    source,
     erhe::utility::Debug_label                  debug_label
 )
     : erhe::rendergraph::Texture_rendergraph_node{
@@ -50,7 +49,7 @@ Overdraw_node::Overdraw_node(
         }
     }
     , m_app_context        {app_context}
-    , m_viewport_scene_view{viewport_scene_view}
+    , m_source             {source}
     , m_counts_block{
         rendergraph.get_graphics_device(),
         erhe::graphics::Shader_resource::Block_create_info{
@@ -152,8 +151,8 @@ void Overdraw_node::execute_rendergraph_node(erhe::graphics::Command_buffer& com
     erhe::utility::Thread_roles::assert_render_thread();
     erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
 
-    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
-    if (!viewport_scene_view) {
+    const std::shared_ptr<IOverdraw_source> source = m_source.lock();
+    if (!source) {
         return;
     }
     // The view executed before this node in this frame: its color texture
@@ -173,9 +172,10 @@ void Overdraw_node::execute_rendergraph_node(erhe::graphics::Command_buffer& com
 
     erhe::graphics::Device&       graphics_device = m_rendergraph.get_graphics_device();
     const uint64_t                frame_index     = graphics_device.get_frame_index();
-    const erhe::graphics::Buffer* count_buffer    = viewport_scene_view->get_overdraw_count_buffer(frame_index);
-    const uint32_t                max_count       = viewport_scene_view->get_render_state(frame_index).overdraw_max_count;
-    const Overdraw_ramp           ramp            = get_overdraw_ramp(viewport_scene_view->get_render_state(frame_index).overdraw);
+    const erhe::graphics::Buffer* count_buffer    = source->get_overdraw_count_buffer(frame_index);
+    const Overdraw_frame          overdraw_frame  = source->get_overdraw_frame(frame_index);
+    const uint32_t                max_count       = overdraw_frame.max_count;
+    const Overdraw_ramp           ramp            = get_overdraw_ramp(overdraw_frame.mode);
 
     erhe::graphics::Scoped_debug_group debug_group{command_buffer, "Overdraw visualization"};
     if (count_buffer != nullptr) {

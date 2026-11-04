@@ -3,6 +3,7 @@
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_primitive/enums.hpp"
+#include "erhe_primitive/lod.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <filesystem>
@@ -25,6 +26,8 @@ namespace tf              { class Executor; }
 
 enum class Cpu_mesh_data_retention : unsigned int; // config/generated/cpu_mesh_data_retention.hpp
 enum class Base_variant_load : unsigned int;       // config/generated/base_variant_load.hpp
+
+struct Scene_export_settings; // generated into the global namespace by erhe_codegen
 
 namespace editor {
 
@@ -309,22 +312,52 @@ public:
     std::size_t                                 rebound_image_count     {0};
 };
 
-// texture_export selects the image form (erhe::gltf::Gltf_texture_export);
-// source unless "Save for Quest". gpu_vertex_formats, when not null, makes
-// the save write each prepared primitive's GPU-ready vertex streams in those
-// layouts (ERHE_gpu_vertex_streams; "Save for Quest"). 'report', when not
-// null, receives the statistics of the save.
-[[nodiscard]] auto save_scene_gltf(
-    Scene_root&                                scene_root,
-    const std::filesystem::path&               path,
-    tf::Executor*                              executor,
-    erhe::gltf::Gltf_texture_export            texture_export     = erhe::gltf::Gltf_texture_export::source,
-    Gltf_scene_save_report*                    report             = nullptr,
-    const erhe::gltf::Gltf_gpu_vertex_formats* gpu_vertex_formats = nullptr
-) -> bool;
+// What a save writes: the scene file (File > Save Scene) or a prepared
+// delivery file (File > Prepare (PC) / Prepare (Quest)).
+enum class Gltf_scene_save_kind : unsigned int
+{
+    scene = 0,
+    prepared
+};
 
-// THE scene save entry point (File > Save Scene, MCP save_scene): writes the
-// scene with save_scene_gltf() above, sends Scene_saved_message (asset
+// One scene save split by thread (doc/editor/scene_serialization.md "Saving
+// in the background"): begin_scene_save_gltf() and finish_scene_save_gltf()
+// run on the main thread, write_scene_save_gltf() on any thread while the
+// scene is read-only.
+class Gltf_scene_save
+{
+public:
+    class Impl;
+    Gltf_scene_save();
+    ~Gltf_scene_save() noexcept;
+    Gltf_scene_save(const Gltf_scene_save&) = delete;
+    auto operator=(const Gltf_scene_save&) -> Gltf_scene_save& = delete;
+
+    std::unique_ptr<Impl> impl;
+};
+
+// Null when the save is refused (logged): no root node, Prepare onto the
+// scene's source file, a source that cannot be made resident.
+// export_settings (Prepare; null for a plain save): among others the LOD
+// request of the primitives that carry none, whose chains are generated into
+// the file (the scene is left as it is).
+[[nodiscard]] auto begin_scene_save_gltf(
+    App_context&                                        context,
+    Scene_root&                                         scene_root,
+    const std::filesystem::path&                        path,
+    Gltf_scene_save_kind                                kind,
+    erhe::gltf::Gltf_texture_export                     texture_export,
+    const Scene_export_settings*                        export_settings
+) -> std::unique_ptr<Gltf_scene_save>;
+// Exports and writes the file; false when nothing was written (logged).
+[[nodiscard]] auto write_scene_save_gltf(Gltf_scene_save& save) -> bool;
+[[nodiscard]] auto get_scene_save_progress(const Gltf_scene_save& save) -> erhe::gltf::Gltf_export_progress_state;
+// After a successful write: rebinds overwritten sources, logs, fills 'report',
+// and sends the saved-scene side effects (asset browser rescan; for a scene
+// save also the clean container record and the prefab reload).
+void finish_scene_save_gltf(App_context& context, Gltf_scene_save& save, Gltf_scene_save_report* report);
+
+// Synchronous scene save (all three phases on the calling main thread): sends Scene_saved_message (asset
 // browser rescan), and, when 'path' is a loaded prefab source, reloads the
 // prefab so every instance in every scene reflects the edit (this replaced
 // the separate Save Prefab command).
@@ -335,25 +368,39 @@ public:
     Gltf_scene_save_report*      report = nullptr
 ) -> bool;
 
-// "Save for Quest" (File > Save glTF for Quest, MCP save_scene_for_quest;
-// doc/plans/gltf_fast_load.md follow-up item 4): writes the same erhe glTF as
-// save_scene_gltf() above, but every Basis Universal KTX2 texture is
-// transcoded at save time to a raw ASTC 4x4 KTX2 image referenced through
-// ERHE_texture_ktx2 (doc/gltf_extensions/ERHE_texture_ktx2.md), so a device
-// with ASTC uploads the blocks with no transcode. PNG / JPEG images are
-// written as they are. Each prepared primitive also gets its GPU-ready vertex
+// The GPU family a prepared scene file is for (File > Prepare (Quest) /
+// Prepare (PC), MCP prepare_scene; doc/editor/scene_serialization.md).
+enum class Prepare_target : unsigned int
+{
+    quest = 0, // ASTC 4x4 textures
+    pc         // BC7 textures, BC5 two component normal maps
+};
+[[nodiscard]] auto c_str(Prepare_target target) -> const char*; // "quest", "pc"
+// The raw block texture export of a target, Zstandard supercompressed or not.
+[[nodiscard]] auto get_prepare_texture_export(Prepare_target target, bool zstd_supercompression) -> erhe::gltf::Gltf_texture_export;
+// The LOD request Prepare (both targets) generates chains with for
+// primitives that carry none: export_settings.lod, else the editor config
+// `lod` section.
+[[nodiscard]] auto get_export_lod_settings(const App_context& context, const Scene_export_settings& export_settings) -> std::optional<erhe::primitive::Lod_settings>;
+// res/editor/scenes/<scene name>_<target>.glb
+[[nodiscard]] auto default_prepared_scene_path(const Scene_root& scene_root, Prepare_target target) -> std::filesystem::path;
+
+// Prepare: writes the same erhe glTF as save_scene_gltf() above, but every
+// Basis Universal KTX2 texture is transcoded at save time to a raw block
+// KTX2 image (ASTC 4x4, or BC7 / BC5) referenced through ERHE_texture_ktx2
+// (doc/gltf_extensions/ERHE_texture_ktx2.md), so a device sampling that
+// format uploads the blocks with no transcode. PNG / JPEG images are written
+// as they are. Each prepared primitive also gets its GPU-ready vertex
 // streams in the running Mesh_memory layouts (ERHE_gpu_vertex_streams,
 // doc/gltf_extensions/ERHE_gpu_vertex_streams.md). An export: the scene's
 // source file and dirty state are left alone; the asset browser rescans.
-// texture_export is one of the two ASTC forms (decision D3:
-// ktx2_astc_4x4 supercompresses the levels with Zstandard,
-// ktx2_astc_4x4_uncompressed stores them as they upload).
-[[nodiscard]] auto save_scene_gltf_for_quest(
+// texture_export is one of the raw block forms (is_raw_block_texture_export()).
+[[nodiscard]] auto save_scene_gltf_prepared(
     App_context&                    context,
     Scene_root&                     scene_root,
     const std::filesystem::path&    path,
-    Gltf_scene_save_report*         report         = nullptr,
-    erhe::gltf::Gltf_texture_export texture_export = erhe::gltf::Gltf_texture_export::ktx2_astc_4x4
+    erhe::gltf::Gltf_texture_export texture_export,
+    Gltf_scene_save_report*         report = nullptr
 ) -> bool;
 
 // Default location for saved scene files: res/editor/scenes, relative to the

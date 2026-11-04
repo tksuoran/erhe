@@ -22,7 +22,7 @@ class Scene_root;
 
 // The potentially visible set window (doc/plans/pvs.md "Editor";
 // doc/editor/windows.md): for the active scene, the bake region and cell
-// size (Scene_settings pvs_region_min / max and pvs_cell_size, with "Fit to
+// size (Scene_settings::export_settings pvs_region_min / max and pvs_cell_size, with "Fit to
 // content bounds"), the bake parameters, Bake (method combo) / Cancel /
 // Clear, the running bake's progress and estimate, the database's state and
 // sizes, the viewport camera's cell and its PVS size, and the debug overlay

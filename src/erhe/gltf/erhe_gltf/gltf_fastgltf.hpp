@@ -1,13 +1,18 @@
 #pragma once
 
+#include "gltf_export_progress.hpp"
 #include "gltf_item_flags.hpp"
+#include "erhe_primitive/lod.hpp"
 #include "erhe_scene/physics_description.hpp"
 
 #include "erhe_graphics/image_encoder.hpp"
 #include "erhe_graphics/image_loader.hpp"
+#include "erhe_graphics/ktx2_container.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_scene/instance_override.hpp"
+
+#include <glm/glm.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -735,14 +740,36 @@ public:
 // ktx2_astc_4x4 (Zstandard supercompressed levels) and
 // ktx2_astc_4x4_uncompressed (levels stored as they upload) are the two
 // "Save for Quest" forms (doc/plans/gltf_fast_load.md decision D3).
+// The raw block forms transcode every Basis Universal KTX2 texture at save
+// time (ERHE_texture_ktx2): ASTC 4x4 for mobile GPUs (Prepare (Quest)), BC7 /
+// BC5 for desktop GPUs (Prepare (PC)); levels Zstandard supercompressed, or
+// not (_uncompressed).
 enum class Gltf_texture_export : unsigned int {
     source                     = 0,
     ktx2_astc_4x4              = 1,
-    ktx2_astc_4x4_uncompressed = 2
+    ktx2_astc_4x4_uncompressed = 2,
+    ktx2_bc                    = 3,
+    ktx2_bc_uncompressed       = 4
 };
 [[nodiscard]] constexpr auto is_astc_texture_export(const Gltf_texture_export texture_export) -> bool
 {
     return (texture_export == Gltf_texture_export::ktx2_astc_4x4) || (texture_export == Gltf_texture_export::ktx2_astc_4x4_uncompressed);
+}
+[[nodiscard]] constexpr auto is_bc_texture_export(const Gltf_texture_export texture_export) -> bool
+{
+    return (texture_export == Gltf_texture_export::ktx2_bc) || (texture_export == Gltf_texture_export::ktx2_bc_uncompressed);
+}
+[[nodiscard]] constexpr auto is_raw_block_texture_export(const Gltf_texture_export texture_export) -> bool
+{
+    return is_astc_texture_export(texture_export) || is_bc_texture_export(texture_export);
+}
+[[nodiscard]] constexpr auto is_uncompressed_texture_export(const Gltf_texture_export texture_export) -> bool
+{
+    return (texture_export == Gltf_texture_export::ktx2_astc_4x4_uncompressed) || (texture_export == Gltf_texture_export::ktx2_bc_uncompressed);
+}
+[[nodiscard]] constexpr auto get_ktx2_block_target(const Gltf_texture_export texture_export) -> erhe::graphics::Ktx2_block_target
+{
+    return is_bc_texture_export(texture_export) ? erhe::graphics::Ktx2_block_target::bc : erhe::graphics::Ktx2_block_target::astc_4x4;
 }
 
 // Where an export wrote data a later rebind can point sources at
@@ -831,12 +858,26 @@ public:
     std::size_t                        gpu_vertex_stream_skipped  {0}; // prepared primitives the GPU formats cannot express
     double                             gpu_vertex_stream_ms       {0.0}; // packing time of the GPU vertex streams, summed over the parallel preparation tasks
     // ERHE_mesh_lod, over the unique prepared soups whose primitive has a LOD
-    // request (Primitive::lod_settings); soups without one get no chain.
+    // request (Primitive::lod_settings, else Gltf_export_arguments::
+    // default_lod_settings); soups without either get no chain.
     std::size_t                        lod_stored_count           {0}; // retained core: its stored chain written back
     std::size_t                        lod_generated_count        {0}; // chain generated over the export core with the request's settings
     std::size_t                        lod_none_count             {0}; // request, but the core does not simplify: no chain written
     double                             lod_ms                     {0.0}; // chain time, summed over the parallel preparation tasks
+    std::size_t                        world_bake_mesh_count       {0}; // meshes written under the world space node
+    std::size_t                        world_bake_placeholder_count{0}; // transform-only nodes left in a baked mesh's place (a child stays there)
+    std::size_t                        world_bake_primitive_count  {0}; // soup primitives written in world space
+    std::size_t                        world_bake_failed_count     {0}; // planned meshes written unbaked (a primitive did not prepare)
 };
+
+// The world-space bake of an export; the editor plans it (doc/editor/world_space_bake.md).
+class Gltf_export_world_bake
+{
+public:
+    std::unordered_map<const erhe::scene::Mesh*, glm::mat4> baked_meshes; // world_from_node, relative to the root node
+    std::string                                             world_space_node_name{"World Space"};
+};
+
 
 // The running device's vertex layouts, for an export that writes each
 // prepared primitive's GPU-ready vertex streams (ERHE_gpu_vertex_streams,
@@ -952,6 +993,13 @@ public:
     // non-null and ready. A column whose node uid names no exported node
     // skips the extension (logged once).
     std::shared_ptr<const erhe::scene::Pvs_database> pvs_database{};
+    // Receives the stage and per-stage counts when non-null.
+    Gltf_export_progress* progress{nullptr};
+    // LOD request of every prepared soup whose primitives carry none
+    // (Primitive::lod_settings); its chain is generated over the export core.
+    std::optional<erhe::primitive::Lod_settings> default_lod_settings{};
+    // Prepare's world-space bake; null for none.
+    const Gltf_export_world_bake* world_bake{nullptr};
 };
 
 // The file's bytes, or an empty string when the export failed: a texture

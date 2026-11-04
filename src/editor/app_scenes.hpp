@@ -138,6 +138,8 @@ public:
     void imgui();
 
 private:
+    [[nodiscard]] auto is_saving(const Scene_root& scene_root) const -> bool;
+
     // One mesh's slot in a display-color build: the primitive at this index of
     // this mesh's list is the one the built Primitive replaces.
     class Display_color_target

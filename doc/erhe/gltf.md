@@ -277,6 +277,14 @@ Tests: `test_gltf_texture_gpu.cpp` (`raw_ktx2_texture_round_trips_through_erhe_t
 the parsed source is file-backed and reads the written bytes;
 `file_backed_image_source_re_exports_and_refuses_a_changed_file`).
 
+## Export progress
+
+`Gltf_export_arguments::progress`, when not null, receives the export's
+stage (`Gltf_export_stage`: `mesh_data` - released soups read back in
+parallel, `meshes` - per-soup preparation, `scene`, `textures` - raw block
+transcodes, `encode`) and the per-stage done / total counts through a
+mutex; `Gltf_export_progress::get()` reads them from any thread.
+
 ## GPU vertex streams on export
 
 `Gltf_export_arguments::gpu_vertex_formats` (a `Gltf_gpu_vertex_formats`:

@@ -19,7 +19,9 @@
 
 #include <glm/glm.hpp>
 
+#include "scene/generated/scene_export_settings.hpp"
 #include "developer/nsight_graphics.hpp"
+#include "erhe_primitive/lod.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
 #include <optional>
@@ -58,6 +60,10 @@ namespace erhe::scene_renderer {
 }
 
 namespace editor {
+
+enum class Prepare_target : unsigned int; // parsers/gltf.hpp
+enum class Gltf_scene_save_kind : unsigned int; // parsers/gltf.hpp
+enum class Scene_save_source_binding : unsigned int; // scene/scene_save_service.hpp
 
 class App_context;
 class Brush;
@@ -251,6 +257,7 @@ private:
     auto undo_or_redo             (const nlohmann::json& args, bool undo) -> std::string;
     auto query_async_status     (const nlohmann::json& args) -> std::string;
     auto query_transform_update_stats(const nlohmann::json& args) -> std::string;
+    auto action_bake_static_to_world_space    (const nlohmann::json& args) -> std::string;
     auto action_merge_static_subtree(const nlohmann::json& args) -> std::string;
     auto query_shadow_fit_debug (const nlohmann::json& args) -> std::string;
     auto query_raycast          (const nlohmann::json& args) -> std::string;
@@ -326,6 +333,7 @@ private:
     auto action_select_variant    (const nlohmann::json& args) -> std::string;
     auto action_save_scene      (const nlohmann::json& args) -> std::string;
     auto action_save_scene_for_quest(const nlohmann::json& args) -> std::string;
+    auto action_prepare_scene       (const nlohmann::json& args) -> std::string;
     // Thread-agnostic: reads only the save job table under m_save_jobs_mutex,
     // so handle_tools_call answers it on the HTTP thread, also while a save
     // holds the main thread.
@@ -938,37 +946,15 @@ private:
     std::chrono::steady_clock::time_point            m_scene_id_enqueued_at{};
     nlohmann::json                                   m_scene_id_header;
 
-    // Asynchronous scene saves (save_scene, save_scene_for_quest;
-    // doc/agents/mcp_server_usage.md "Saving scenes"). The tool queues a
-    // job and returns its id at once; run_queued_saves() runs the queued
-    // jobs on the main thread at the end of process_queued_requests(), after
-    // the replies of that pass are settled, so a save longer than
-    // k_request_timeout is not cut off. get_save_status reads the job table.
-    enum class Save_job_kind : unsigned int {
-        scene,          // save_scene: the scene's own format, File > Save Scene
-        scene_for_quest // save_scene_for_quest: glTF with ASTC 4x4 KTX2 textures
-    };
-    enum class Save_job_source_binding : unsigned int {
-        keep,      // an export: the scene's source file binding is left alone
-        set_source // Save As: the scene is bound to the written file
-    };
-    class Queued_save
-    {
-    public:
-        std::uint64_t             job_id        {0};
-        Save_job_kind             kind          {Save_job_kind::scene};
-        std::weak_ptr<Scene_root> scene_root;
-        std::filesystem::path     path;
-        Save_job_source_binding   source_binding{Save_job_source_binding::keep};
-        erhe::gltf::Gltf_texture_export texture_export{0}; // scene_for_quest: the ASTC form (0 = source)
-    };
+    // Asynchronous scene saves (save_scene, prepare_scene,
+    // save_scene_for_quest; doc/agents/mcp_server_usage.md "Saving scenes").
+    // The tool hands the save to Scene_save_service and returns the job id
+    // at once; the service's callbacks update the job, get_save_status reads it.
     // Returns the job's status object (state "pending").
-    auto queue_save          (Save_job_kind kind, const std::shared_ptr<Scene_root>& scene_root, const std::filesystem::path& path, Save_job_source_binding source_binding, erhe::gltf::Gltf_texture_export texture_export = erhe::gltf::Gltf_texture_export{0}) -> nlohmann::json;
-    void run_queued_saves    ();
-    void run_save            (const Queued_save& save);
+    auto resolve_export_settings(const nlohmann::json& args, const Scene_root& scene_root, const char* tool, Scene_export_settings& out) -> std::string;
+    auto queue_save          (Gltf_scene_save_kind kind, const char* tool, const std::shared_ptr<Scene_root>& scene_root, const std::filesystem::path& path, Scene_save_source_binding source_binding, erhe::gltf::Gltf_texture_export texture_export = erhe::gltf::Gltf_texture_export{0}, const std::optional<Scene_export_settings>& export_settings = {}) -> nlohmann::json;
+    auto queue_prepare       (const nlohmann::json& args, Prepare_target target, const char* tool) -> std::string;
     void update_save_job     (std::uint64_t job_id, const nlohmann::json& fields);
-    // Main thread only: saves queued by this pass's handlers.
-    std::vector<Queued_save>                         m_queued_saves;
     // Status of the most recent jobs (oldest dropped beyond
     // k_max_save_jobs); every access holds m_save_jobs_mutex.
     static constexpr std::size_t                     k_max_save_jobs{64};

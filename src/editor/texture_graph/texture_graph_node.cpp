@@ -210,6 +210,7 @@ auto Texture_graph_node::render_dag(
         *context.current_command_buffer,
         target,
         size,
+        size,
         fragment,
         shader_code.get_uniforms(),
         shader_code.get_samplers(),

@@ -44,6 +44,7 @@
 #include "erhe_texgen/composer.hpp"
 #include "erhe_texgen/shader_code.hpp"
 
+#include <fmt/format.h>
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
 
@@ -1640,6 +1641,31 @@ auto Mcp_server::action_texture_graph_disconnect(const json& args) -> std::strin
     return make_json_content(result).dump();
 }
 
+namespace {
+
+// Returns an empty string when 'width' and 'height' are valid, else the reason.
+[[nodiscard]] auto parse_texture_export_size(const json& args, int& width, int& height) -> std::string
+{
+    constexpr int c_max_size = 4096;
+    if (args.contains("size")) {
+        return "'size' was replaced by 'width' and 'height'";
+    }
+    if (!args.contains("width") || !args.contains("height")) {
+        return "'width' and 'height' are required";
+    }
+    if (!args["width"].is_number_integer() || !args["height"].is_number_integer()) {
+        return "'width' and 'height' must be integers";
+    }
+    width  = args["width"].get<int>();
+    height = args["height"].get<int>();
+    if ((width < 1) || (height < 1) || (width > c_max_size) || (height > c_max_size)) {
+        return fmt::format("'width' and 'height' must be in [1, {}]", c_max_size);
+    }
+    return {};
+}
+
+} // anonymous namespace
+
 auto Mcp_server::action_texture_graph_export_png(const json& args) -> std::string
 {
     Texture_graph_window* window = m_context.texture_graph_window;
@@ -1651,7 +1677,11 @@ auto Mcp_server::action_texture_graph_export_png(const json& args) -> std::strin
     }
     const std::size_t node_id     = args.value("node_id",     std::size_t{0});
     const std::size_t output_slot = args.value("output_slot", std::size_t{0});
-    const int         size        = std::clamp(args.value("size", 256), 1, 4096);
+    int width  = 0;
+    int height = 0;
+    if (const std::string error = parse_texture_export_size(args, width, height); !error.empty()) {
+        return make_error_content("texture_graph_export_png: " + error);
+    }
     const std::string path        = args.value("path", "");
     if (path.empty()) {
         return make_error_content("Missing 'path'");
@@ -1682,21 +1712,21 @@ auto Mcp_server::action_texture_graph_export_png(const json& args) -> std::strin
 
     const std::vector<Texture_sample_binding> sampler_bindings = gather_texture_sample_bindings(dag);
     std::vector<std::uint8_t> pixels;
-    if (!renderer->render_and_read_rgba8(size, fragment, shader_code.get_uniforms(), pixels, shader_code.get_samplers(), sampler_bindings)) {
+    if (!renderer->render_and_read_rgba8(width, height, fragment, shader_code.get_uniforms(), pixels, shader_code.get_samplers(), sampler_bindings)) {
         return make_error_content("Render / readback failed (shader compile error, or a sampled buffer has not rendered yet)");
     }
 
     std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
-    const int                  row_stride = size * 4;
+    const int                  row_stride = width * 4;
     std::span<const std::byte> data{reinterpret_cast<const std::byte*>(pixels.data()), pixels.size()};
-    if (!writer->write_png(std::filesystem::path{path}, size, size, row_stride, Texture_renderer::color_format(), data)) {
+    if (!writer->write_png(std::filesystem::path{path}, width, height, row_stride, Texture_renderer::color_format(), data)) {
         return make_error_content("Failed to write PNG '" + path + "' (image writer backend may be disabled)");
     }
 
     return make_json_content({
         {"path",   path},
-        {"width",  size},
-        {"height", size}
+        {"width",  width},
+        {"height", height}
     }).dump();
 }
 
@@ -1710,7 +1740,11 @@ auto Mcp_server::action_texture_graph_export_material(const json& args) -> std::
         return make_error_content("Graphics device not available");
     }
     const std::size_t node_id = args.value("node_id", std::size_t{0});
-    const int         size    = std::clamp(args.value("size", 256), 1, 4096);
+    int width  = 0;
+    int height = 0;
+    if (const std::string error = parse_texture_export_size(args, width, height); !error.empty()) {
+        return make_error_content("texture_graph_export_material: " + error);
+    }
     const std::string dir     = args.value("dir", "");
     if (dir.empty()) {
         return make_error_content("Missing 'dir'");
@@ -1741,14 +1775,14 @@ auto Mcp_server::action_texture_graph_export_material(const json& args) -> std::
     json written = json::array();
     for (const Material_channel_export& channel : exports) {
         std::vector<std::uint8_t> pixels;
-        if (!renderer->render_and_read_rgba8(size, channel.fragment, channel.uniforms, pixels)) {
+        if (!renderer->render_and_read_rgba8(width, height, channel.fragment, channel.uniforms, pixels)) {
             return make_error_content("Render / readback failed for channel '" + channel.suffix + "'");
         }
         const std::filesystem::path path = std::filesystem::path{dir} / (base_name + "_" + channel.suffix + ".png");
         std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
-        const int                  row_stride = size * 4;
+        const int                  row_stride = width * 4;
         std::span<const std::byte> data{reinterpret_cast<const std::byte*>(pixels.data()), pixels.size()};
-        if (!writer->write_png(path, size, size, row_stride, Texture_renderer::color_format(), data)) {
+        if (!writer->write_png(path, width, height, row_stride, Texture_renderer::color_format(), data)) {
             return make_error_content("Failed to write PNG '" + path.string() + "'");
         }
         written.push_back(path.string());
@@ -1756,8 +1790,8 @@ auto Mcp_server::action_texture_graph_export_material(const json& args) -> std::
 
     return make_json_content({
         {"files",  written},
-        {"width",  size},
-        {"height", size}
+        {"width",  width},
+        {"height", height}
     }).dump();
 }
 

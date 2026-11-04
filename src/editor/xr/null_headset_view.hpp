@@ -61,14 +61,11 @@ class Headset_view
     : public Scene_view
     , public std::enable_shared_from_this<Headset_view>
     , public Renderable
-    , public erhe::imgui::Imgui_window
 {
 public:
     Headset_view(
         erhe::commands::Commands&       commands,
         erhe::graphics::Device&         graphics_device,
-        erhe::imgui::Imgui_renderer&    imgui_renderer,
-        erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -86,8 +83,8 @@ public:
     void begin_frame      ();
     void end_frame        ();
 
-    // Implements Imgui_window
-    void imgui() override {}
+    void scene_control_imgui(erhe::imgui::Imgui_host*) {}
+    [[nodiscard]] auto get_headlamp_cast_shadow() const -> bool { return false; }
 
     [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
     [[nodiscard]] auto get_headset                          () const -> void*;

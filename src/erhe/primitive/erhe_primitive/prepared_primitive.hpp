@@ -7,6 +7,8 @@
 #include "erhe_math/sphere.hpp"
 #include "erhe_raytrace/prebuilt_bvh.hpp"
 
+#include <glm/glm.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -145,6 +147,32 @@ public:
 
 // The core to write: retained_core when set, otherwise core.
 [[nodiscard]] auto get_export_core(const Prepared_primitive_export& prepared) -> const Triangle_soup&;
+
+// Moves a soup's vertices into the space `transform` maps them to:
+// positions by `transform`, normals by its inverse-transpose, tangents and
+// bitangents by its upper 3x3 (renormalized; tangent w and the triangle
+// winding flip when the determinant is negative). Returns false, leaving the
+// soup unchanged, when the position is not vec3 float or a normal, tangent or
+// bitangent present is not float. Clears lod_index_data (a stored chain is in
+// the old space).
+auto transform_triangle_soup(Triangle_soup& soup, const glm::mat4& transform) -> bool;
+
+class Bake_transform_result
+{
+public:
+    std::size_t dropped_degenerate_triangle_count{0};
+    bool        flipped_winding{false};
+};
+
+// Moves the export's core into the space `transform` maps it to (the
+// world-space bake, doc/editor/world_space_bake.md): positions by
+// `transform`, normals by its inverse-transpose, tangents by its upper 3x3
+// (renormalized; tangent w and the triangle winding flip when the
+// determinant is negative). A retained core is copied first, so the stored
+// LOD chain and BVH no longer apply: triangles whose corners become
+// bitwise-equal are dropped, the content hash and bounds are recomputed, the
+// BVH is rebuilt and `lod` is cleared for make_export_lod_chain().
+auto bake_prepared_primitive_transform(Prepared_primitive_export& prepared, const glm::mat4& transform) -> Bake_transform_result;
 
 // The ERHE_mesh_optimized content_hash: 64-bit FNV-1a (erhe::hash::hash())
 // over every index as 4 bytes little-endian, then every position as three

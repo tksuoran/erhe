@@ -3,7 +3,7 @@ from erhe_codegen import *
 # doc/editor/shader_analytics.md
 struct("Shader_analytics_config",
     reflect=True,
-    version=1,
+    version=2,
     short_desc="Shader Analytics",
     long_desc="Offline compiler analysis of every shader program the editor builds, for the shader cost overdraw modes.",
     developer=False,
@@ -18,15 +18,14 @@ struct("Shader_analytics_config",
             visible=True,
             developer=False
         ),
+        # malioc (v1, one executable path) was replaced by the search path
+        # list in v2; an older file's key is ignored on load.
         field(
-            "malioc",
-            String,
-            added_in=1,
-            default='""',
-            short_desc="malioc Path",
-            long_desc="Arm Mali Offline Compiler executable. Empty: the MALIOC environment variable, then PATH.",
-            visible=True,
-            developer=False
+            "malioc_search_paths",
+            Vector(String),
+            added_in=2,
+            short_desc="malioc Search Paths",
+            long_desc="Arm Mali Offline Compiler executables, or directories holding malioc, searched with the ERHE_MALIOC path list and PATH; $NAME, ${NAME} and a leading ~ expand. The newest version found is used.",
         ),
         field(
             "mali_core",

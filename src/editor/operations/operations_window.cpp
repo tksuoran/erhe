@@ -1,7 +1,9 @@
+#include "operations/bake_world_space_operation.hpp"
 #include "operations/operations_window.hpp"
 #include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
+#include "scene/scene_save_service.hpp"
 #include "app_scenes.hpp"
 #include "app_message_bus.hpp"
 #include "assets/asset_load_task.hpp"
@@ -803,7 +805,9 @@ Operations::Operations(
 
     , m_export_gltf_command       {commands, "File.SaveGltfStandard",              [this]() -> bool { export_gltf            (); return true; } }
     , m_save_scene_command        {commands, "File.SaveGltfErhe",                  [this]() -> bool { save_scene             (); return true; } }
-    , m_save_scene_for_quest_command{commands, "File.SaveGltfForQuest",            [this]() -> bool { save_scene_for_quest   (); return true; } }
+    , m_prepare_scene_quest_command {commands, "File.PrepareQuest",                [this]() -> bool { prepare_scene(Prepare_target::quest); return true; } }
+    , m_prepare_scene_pc_command    {commands, "File.PreparePc",                   [this]() -> bool { prepare_scene(Prepare_target::pc);    return true; } }
+    , m_bake_static_to_world_space_command{commands, "Mesh.BakeStaticToWorldSpace", [this]() -> bool { bake_static_to_world_space(); return true; } }
     , m_load_scene_command        {commands, "File.LoadScene",                     [this]() -> bool { load_scene             (); return true; } }
     , m_create_material           {commands, "Create.Material",                    [this]() -> bool { create_material        (); return true; } }
     , m_create_brush              {commands, "Create.Brush",                       [this]() -> bool { create_brush           (); return true; } }
@@ -880,7 +884,9 @@ Operations::Operations(
 
     commands.register_command(&m_export_gltf_command);
     commands.register_command(&m_save_scene_command);
-    commands.register_command(&m_save_scene_for_quest_command);
+    commands.register_command(&m_prepare_scene_quest_command);
+    commands.register_command(&m_prepare_scene_pc_command);
+    commands.register_command(&m_bake_static_to_world_space_command);
     commands.register_command(&m_load_scene_command);
     commands.register_command(&m_create_material);
     commands.register_command(&m_create_brush);
@@ -957,10 +963,12 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_generate_frame_field_tangents_command, "Geometry.Generate Frame Field Tangents");
     commands.bind_command_to_menu(&m_make_geometry_command,     "Mesh.Make Geometry");
     commands.bind_command_to_menu(&m_make_raytrace_command,     "Mesh.Make Raytrace");
+    commands.bind_command_to_menu(&m_bake_static_to_world_space_command, "Mesh.Bake Static To World Space");
 
     commands.bind_command_to_menu(&m_export_gltf_command,     "File.Save glTF (standard)");
     commands.bind_command_to_menu(&m_save_scene_command,      "File.Save glTF (erhe)");
-    commands.bind_command_to_menu(&m_save_scene_for_quest_command, "File.Save glTF for Quest");
+    commands.bind_command_to_menu(&m_prepare_scene_quest_command, "File.Prepare (Quest)");
+    commands.bind_command_to_menu(&m_prepare_scene_pc_command,    "File.Prepare (PC)");
     commands.bind_command_to_menu(&m_load_scene_command,      "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,         "Create.Material");
     commands.bind_command_to_menu(&m_create_brush,            "Create.Brush from Selection");
@@ -3672,50 +3680,82 @@ void Operations::save_scene()
     save_scene_to_file(*scene_root, path);
 }
 
-void Operations::save_scene_for_quest()
+void Operations::bake_static_to_world_space()
 {
     const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
-        log_operations->warn("save_scene_for_quest: no scene to save");
+        log_operations->warn("bake_static_to_world_space: no scene");
+        return;
+    }
+    const std::shared_ptr<Bake_world_space_operation> op = std::make_shared<Bake_world_space_operation>(
+        Bake_world_space_operation::Parameters{
+            .context    = m_context,
+            .build_info = mesh_context().build_info,
+            .scene_root = scene_root,
+            .settings   = scene_root->get_scene_settings().export_settings
+        }
+    );
+    for (const auto& [reason, count] : op->get_kept_reasons()) {
+        log_operations->info("bake_static_to_world_space: {} mesh(es) kept: {}", count, reason);
+    }
+    if (op->get_baked_count() == 0) {
+        log_operations->info("bake_static_to_world_space: nothing to bake in '{}'", scene_root->get_name());
+        return;
+    }
+    m_context.operation_stack->queue(op);
+}
+
+void Operations::prepare_scene(const Prepare_target target)
+{
+    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
+        log_operations->warn("prepare_scene: no scene to prepare");
         return;
     }
     if (scene_root->get_source_format() == Scene_source_format::usd) {
-        log_operations->warn("save_scene_for_quest: '{}' is a USD-backed scene; Save for Quest writes glTF only", scene_root->get_name());
+        log_operations->warn("prepare_scene: '{}' is a USD-backed scene; Prepare writes glTF only", scene_root->get_name());
         return;
     }
-    const std::filesystem::path path = default_scene_dir() / (scene_root->get_name() + "_quest.glb");
-    try {
-        if (editor::save_scene_gltf_for_quest(m_context, *scene_root, path)) {
-            log_operations->info("Scene '{}' saved for Quest to '{}'", scene_root->get_name(), erhe::file::to_string(path));
+    const std::filesystem::path path = default_prepared_scene_path(*scene_root, target);
+    m_context.scene_save_service->request(
+        Scene_save_request{
+            .scene_root     = scene_root,
+            .path           = path,
+            .kind           = Gltf_scene_save_kind::prepared,
+            .texture_export = get_prepare_texture_export(target, true),
+            .export_settings = scene_root->get_scene_settings().export_settings,
+            .on_finished    = [name = scene_root->get_name(), target, path](const Scene_save_result& result) {
+                if (result.saved) {
+                    log_operations->info("Scene '{}' prepared ({}) to '{}'", name, c_str(target), erhe::file::to_string(path));
+                }
+            }
         }
-    } catch (...) {
-        log_operations->error("exception: save scene for Quest");
-    }
+    );
 }
 
 void Operations::save_scene_to_file(Scene_root& scene_root, const std::filesystem::path& path)
 {
-    try {
-        // Save follows the scene's own format (doc/erhe/usd_compatibility_design.md
-        // E1, G3): a USD-backed scene writes a USDA layer, everything else
-        // writes the erhe-authored glTF. Neither format is ever converted
-        // into the other.
-        const bool                usd = (scene_root.get_source_format() == Scene_source_format::usd);
-        const Scene_source_format format = usd ? Scene_source_format::usd : Scene_source_format::gltf;
-        const bool saved = usd
-            ? editor::save_scene_usd (m_context, scene_root, path)
-            : editor::save_scene_gltf(m_context, scene_root, path);
-        if (saved) {
-            if (scene_root.get_source_path().empty()) {
-                // The scene now lives in this file: further saves write back
-                // to it without confirmation.
-                scene_root.set_source_path(path, format);
+    // Save follows the scene's own format (doc/erhe/usd_compatibility_design.md
+    // E1, G3): Scene_save_service writes a USDA layer for a USD-backed scene
+    // and the erhe-authored glTF for everything else. A scene with no file yet
+    // lives in the written file afterwards: further saves write back to it
+    // without confirmation.
+    const Scene_save_source_binding source_binding = scene_root.get_source_path().empty()
+        ? Scene_save_source_binding::set_source
+        : Scene_save_source_binding::keep;
+    m_context.scene_save_service->request(
+        Scene_save_request{
+            .scene_root     = scene_root.shared_from_this(),
+            .path           = path,
+            .kind           = Gltf_scene_save_kind::scene,
+            .source_binding = source_binding,
+            .on_finished    = [name = scene_root.get_name(), path](const Scene_save_result& result) {
+                if (result.saved) {
+                    log_operations->info("Scene '{}' saved to '{}'", name, erhe::file::to_string(path));
+                }
             }
-            log_operations->info("Scene '{}' saved to '{}'", scene_root.get_name(), erhe::file::to_string(path));
         }
-    } catch (...) {
-        log_operations->error("exception: save scene");
-    }
+    );
 }
 
 auto Operations::get_make_mesh_material() const -> const std::shared_ptr<erhe::primitive::Material>&

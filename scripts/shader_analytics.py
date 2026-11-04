@@ -10,12 +10,13 @@ the sidecar index.html and the per-program pages render when it is present.
 The compiler is chosen per core by its name:
 
 - Mali-<name> (Arm Mali Offline Compiler, malioc): found through --malioc,
-  the MALIOC environment variable, or "malioc" on PATH. One compile per stage
-  module; report variants/<n>_<stage>[_optimized].<core>.malioc.json.
+  the ERHE_MALIOC path list (executables or directories), or "malioc" on
+  PATH. One compile per stage module; report variants/<n>_<stage>[_optimized].<core>.malioc.json.
 
 Without --core every compiler found contributes its default core: Mali-G310
-(the weakest Mali core that accepts erhe's modules). --core may repeat. A report newer than its module(s) with the same core and compiler
-version is not compiled again unless --force. A failed compile is a result
+(the weakest Mali core that accepts erhe's modules). --core may repeat. A
+report newer than its module(s) with the same core and compiler version is
+not compiled again unless --force. A failed compile is a result
 too: the error is kept in the report (malioc: every "Unsupported capability
 (<n>)" resolved to the SPIR-V capability name; a compiler crash is recorded as
 an error naming the signal).
@@ -81,7 +82,14 @@ def compiler_of(core):
 
 
 def find_tool(explicit, env_name, exe_name):
-    candidates = [explicit, os.environ.get(env_name), shutil.which(exe_name)]
+    # env_name holds a path list; each entry is the executable or a directory holding it.
+    file_name = exe_name + (".exe" if os.name == "nt" else "")
+    candidates = [explicit]
+    for entry in os.environ.get(env_name, "").split(os.pathsep):
+        if entry:
+            entry_path = Path(os.path.expandvars(os.path.expanduser(entry)))
+            candidates.append(str(entry_path / file_name) if entry_path.is_dir() else str(entry_path))
+    candidates.append(shutil.which(exe_name))
     for candidate in candidates:
         if candidate and Path(candidate).is_file():
             return str(Path(candidate).resolve())
@@ -389,7 +397,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("directory", type=Path, help="the shader variant browser directory (holds index.html and variants/)")
     parser.add_argument("--core", action="append", help=f"target GPU, Mali-<name> (repeatable; default {DEFAULT_MALI_CORE} when malioc is found)")
-    parser.add_argument("--malioc", help="path to the malioc executable (else $MALIOC, else PATH)")
+    parser.add_argument("--malioc", help="path to the malioc executable (else $ERHE_MALIOC, else PATH)")
     parser.add_argument("--jobs", type=int, default=max(1, min(8, os.cpu_count() or 1)), help="parallel compiler processes")
     parser.add_argument("--force", action="store_true", help="compile every module even when its report is current")
     parser.add_argument("--check", action="store_true", help="after writing analytics.js, verify it covers the manifest")
@@ -398,15 +406,15 @@ def main():
     directory = args.directory.resolve()
     variants_dir = directory / "variants"
     manifest = load_manifest(directory)
-    malioc = find_tool(args.malioc, "MALIOC", "malioc")
+    malioc = find_tool(args.malioc, "ERHE_MALIOC", "malioc")
     if args.core:
         cores = list(dict.fromkeys(args.core))
         if any(compiler_of(c) == "malioc" for c in cores) and malioc is None:
-            sys.exit("shader_analytics: malioc not found; pass --malioc, set MALIOC, or put it on PATH")
+            sys.exit("shader_analytics: malioc not found; pass --malioc, set ERHE_MALIOC, or put it on PATH")
     else:
         cores = [DEFAULT_MALI_CORE] if malioc else []
         if not cores:
-            sys.exit("shader_analytics: malioc not found; pass --malioc, set MALIOC, or put it on PATH")
+            sys.exit("shader_analytics: malioc not found; pass --malioc, set ERHE_MALIOC, or put it on PATH")
     mali_cores = [c for c in cores if compiler_of(c) == "malioc"]
 
     tools = manifest.get("tools", {})

@@ -255,6 +255,9 @@ public:
     // scene has already been unregistered.
     [[nodiscard]] auto request_close(App_message_bus& app_message_bus) -> bool;
     [[nodiscard]] auto is_close_requested() const -> bool { return m_close_requested; }
+    // Set by Scene_save_service while a save reads this scene; a close is refused meanwhile.
+    void set_save_in_progress(const bool value) { m_save_in_progress = value; }
+    [[nodiscard]] auto is_save_in_progress() const -> bool { return m_save_in_progress; }
     // Clears this scene_root's registration state without touching the
     // App_scenes registry. Called by ~App_scenes while it tears down its
     // own list, so that the later ~Scene_root does not try to unregister
@@ -707,6 +710,7 @@ private:
     Usd_time_code_record                            m_usd_time_codes;
     bool                                            m_is_registered{false};
     bool                                            m_close_requested{false};
+    bool                                            m_save_in_progress{false};
 
     // Applies wind forces to wind-receptive dynamic bodies; called once per
     // fixed step from update_physics_simulation_fixed_step() before the world

@@ -224,6 +224,7 @@ private:
     void handle_active_scene_changed(const std::shared_ptr<Scene_root>& scene_root);
 
     void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
+    [[nodiscard]] auto is_input_blocked(const Viewport_window& window) const -> bool;
 
     erhe::message_bus::Subscription<Graphics_settings_message>    m_graphics_settings_subscription;
     erhe::message_bus::Subscription<Active_scene_changed_message> m_active_scene_subscription;

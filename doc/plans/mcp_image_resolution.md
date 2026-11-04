@@ -1,6 +1,6 @@
 # MCP image tools: requested resolution
 
-Status: proposed
+Status: in progress
 
 This plan brings the editor's image-producing MCP tools to the rule in
 `doc/agents/mcp_api_guidelines.md` "Image tools: rendering requests state
@@ -13,9 +13,9 @@ its own size and reports that size. No tool scales an image.
 
 | Tool | Kind | Now | Change |
 |---|---|---|---|
-| `render_scene_image` | render | `width` / `height` optional (1280 x 720), request-owned target | `width` / `height` required |
-| `texture_graph_export_png`, `texture_graph_export_material` | render | `size` optional (256), square | `width` / `height` required, replacing `size` |
-| `render_scene_image` `output: "overdraw"` | render | - | new, `doc/plans/overdraw_visualization.md` O6 |
+| `render_scene_image` | render | `width` / `height` required, request-owned target | done |
+| `texture_graph_export_png`, `texture_graph_export_material` | render | `width` / `height` required (`size` is refused) | done |
+| `render_scene_image` `output: "overdraw"` | render | `width` / `height` required (`doc/plans/overdraw_visualization.md` O6) | done |
 | lightmap debug PNGs (`lightmap_bake_gbuffer` `debug_png_base`, `lightmap_bake_direct` and `lightmap_set_baking` `debug_png`) | capture | the atlas at its size | the reply reports `width` / `height` |
 
 ## R1. Request-owned render targets, reused by size
@@ -32,8 +32,9 @@ request resizes anything the editor shows.
 
 1. The rule in `doc/agents/mcp_api_guidelines.md` (done with this plan).
 2. `render_scene_image` and the texture graph exports: required arguments,
-   schema and descriptions, and every caller (the scripts under `scripts/`
-   and `scripts/creations/` that call them, `mcp_server_tests.cpp`).
+   schema and descriptions, and every caller (done 2026-11-04;
+   `scripts/texture_graph_smoke_test.py` checks a non-square export and the
+   refusals).
 3. The render target cache (R1).
 4. The lightmap debug PNG tools report the size they wrote
    (`capture_screenshot` and `set_ray_trace` `save_path` already do).

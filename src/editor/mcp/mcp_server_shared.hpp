@@ -38,6 +38,9 @@ namespace erhe::scene {
     class Mesh;
     class Xformable; using Node = Xformable;
 }
+namespace erhe::scene_renderer {
+    class Overdraw_statistics;
+}
 
 namespace editor {
 
@@ -291,6 +294,10 @@ auto constant_time_equal(std::string_view a, std::string_view b) -> bool;
 // Returns the token (possibly empty) or std::nullopt if the header is
 // missing or malformed.
 auto bearer_token_from(const httplib::Request& req) -> std::optional<std::string>;
+
+// The counts of shaded / rasterized overdraw statistics (get_overdraw_stats,
+// render_scene_image output overdraw) added to result.
+void add_overdraw_count_statistics(const erhe::scene_renderer::Overdraw_statistics& statistics, json& result);
 
 } // namespace mcp_server_detail
 
