@@ -30,6 +30,7 @@ class Clock_monitor;
 
 class Command_buffer;
 class Command_buffer_impl;
+class Fragment_invocation_capture_impl;
 class Gpu_timer_impl;
 
 class Instance_layers
@@ -295,6 +296,11 @@ public:
     // completion of the calling role's current frame (get_frame_index()):
     // update_frame_completion (render role) or wait_idle.
     void add_completion_handler   (std::function<void(Device_impl&)> callback);
+
+    // doc/plans/shader_cost.md A1. get_: nullptr when unsupported.
+    [[nodiscard]] auto request_fragment_invocation_capture() -> bool;
+    [[nodiscard]] auto take_fragment_invocation_capture   () -> std::optional<Fragment_invocation_capture>;
+    [[nodiscard]] auto get_fragment_invocation_capture    () -> Fragment_invocation_capture_impl* { return m_fragment_invocation_capture.get(); }
     void on_thread_enter          ();
     // No per-context resources in the Vulkan backend; see Device::Device.
     void create_per_context_resources() {}
@@ -911,6 +917,8 @@ private:
     // acquire_frame_slot result-read, which stores results into the timers
     // with the mutex held so a timer being destroyed is never written).
     VkQueryPool m_gpu_timer_query_pool      {VK_NULL_HANDLE};
+
+    std::unique_ptr<Fragment_invocation_capture_impl> m_fragment_invocation_capture;
 
     // Frame-spanning GPU timestamp bracket state (step P0.3). The query
     // pools and m_frame_bracket_frame_id are main role only (acquire_frame_slot,

@@ -41,6 +41,7 @@ namespace erhe::scene_renderer {
 namespace editor {
 
 enum class Overdraw_mode : unsigned int; // scene/viewport_render_state.hpp
+enum class Shader_cost_metric : unsigned int; // renderers/shader_analytics.hpp
 
 class Analytic_hover_provider;
 class App_context;
@@ -262,6 +263,9 @@ public:
     // chain rewiring runs outside the ImGui iteration;
     // doc/editor/coding_rules.md "ImGui-time work").
     virtual void               queue_overdraw_mode  (Overdraw_mode mode);
+    // Main thread, ImGui time: the cost overdraw mode weighted by metric
+    // (doc/plans/shader_cost.md B2), the metric selection queued like the mode.
+    void                       queue_shader_cost    (Shader_cost_metric metric);
     [[nodiscard]] virtual auto get_overdraw_max_count() const -> uint32_t;
     // Any thread: the newest retired counted frame's statistics (not valid
     // without one).

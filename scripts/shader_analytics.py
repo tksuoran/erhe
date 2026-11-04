@@ -1,31 +1,33 @@
-"""Mali Offline Compiler analytics for a shader variant browser directory
-(doc/erhe/graphics.md "Shader variant browser").
+"""Offline GPU compiler analytics for a shader variant browser directory
+(doc/erhe/graphics.md "Shader variant browser" and "Mali analytics").
 
 Reads <browser-directory>/variants/manifest.json (written by the editor run
-with --shader-variant-browser), runs the Arm Mali Offline Compiler (malioc)
-on every recorded stage module before and after the SPIRV-Tools optimizer,
-keeps each raw JSON report next to the module as
-variants/<n>_<stage>[_optimized].<core>.malioc.json, and writes
-<browser-directory>/analytics.js, the sidecar index.html and the per-program
-pages render when it is present.
+with --shader-variant-browser), runs the vendor offline compilers on every
+recorded program before and after the SPIRV-Tools optimizer, keeps each raw
+JSON report next to the modules, and writes <browser-directory>/analytics.js,
+the sidecar index.html and the per-program pages render when it is present.
 
-The compiler is found through --malioc, the MALIOC environment variable, or
-"malioc" on PATH. The default core is Mali-G310, the weakest core that accepts
-erhe's modules as the device uses them (doc/erhe/graphics.md "Mali
-analytics"); --core may repeat. A module whose report is newer than it and
-carries the same core and compiler version is not compiled again unless
---force. A failed compile is a result too: the error report is kept, with
-every "Unsupported capability (<n>)" resolved to the SPIR-V capability name,
-and a compiler crash is recorded as an error naming the signal.
+The compiler is chosen per core by its name:
+
+- Mali-<name> (Arm Mali Offline Compiler, malioc): found through --malioc,
+  the MALIOC environment variable, or "malioc" on PATH. One compile per stage
+  module; report variants/<n>_<stage>[_optimized].<core>.malioc.json.
+
+Without --core every compiler found contributes its default core: Mali-G310
+(the weakest Mali core that accepts erhe's modules). --core may repeat. A report newer than its module(s) with the same core and compiler
+version is not compiled again unless --force. A failed compile is a result
+too: the error is kept in the report (malioc: every "Unsupported capability
+(<n>)" resolved to the SPIR-V capability name; a compiler crash is recorded as
+an error naming the signal).
 
     py -3 scripts/shader_analytics.py <browser-directory> [--core Mali-G310]
         [--malioc <path>] [--jobs N] [--force] [--check]
 
 --check re-reads the analytics.js it wrote and verifies that every program
 and stage of the manifest has a before entry, and an after entry where the
-optimized module exists. Exit code 0 when every module produced a report,
-1 when the compiler or the manifest is missing or the compiler reports a
-command line error.
+optimized module(s) exist. Exit code 0 when every module produced a report,
+1 when a compiler or the manifest is missing or a compiler reports a command
+line error.
 """
 
 import argparse
@@ -38,8 +40,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_CORE = "Mali-G310"
-SIDECAR_SCHEMA_VERSION = 1
+DEFAULT_MALI_CORE = "Mali-G310"
+SIDECAR_SCHEMA_VERSION = 2
 
 # SPIR-V capability numbers the error reports name (spirv.hpp); only the
 # ones erhe's modules declare and a few neighbours.
@@ -55,27 +57,53 @@ CAPABILITY_NAMES = {
     50: "ImageQuery",
     51: "DerivativeControl",
     61: "GroupNonUniform",
-    4423: "StorageBuffer16BitAccess",
-    4427: "StorageUniform16",
-    4437: "MultiView",
-    4439: "VulkanMemoryModel",
-    4441: "DrawParameters",
+    4423: "SubgroupBallotKHR",
+    4427: "DrawParameters",
+    4433: "StorageBuffer16BitAccess",
+    4434: "UniformAndStorageBuffer16BitAccess",
+    4437: "DeviceGroup",
+    4439: "MultiView",
+    4441: "VariablePointersStorageBuffer",
     4472: "RayQueryKHR",
     5301: "ShaderNonUniform",
     5302: "RuntimeDescriptorArray",
+    5345: "VulkanMemoryModel",
     5347: "PhysicalStorageBufferAddresses",
     5379: "DemoteToHelperInvocation",
     5391: "RayQueryPositionFetchKHR",
 }
 
 
-def find_malioc(explicit):
-    candidates = [explicit, os.environ.get("MALIOC"), shutil.which("malioc")]
+def compiler_of(core):
+    if core.startswith("Mali-"):
+        return "malioc"
+    sys.exit(f"shader_analytics: core {core} names no Mali (Mali-<name>) GPU")
+
+
+def find_tool(explicit, env_name, exe_name):
+    candidates = [explicit, os.environ.get(env_name), shutil.which(exe_name)]
     for candidate in candidates:
         if candidate and Path(candidate).is_file():
             return str(Path(candidate).resolve())
     return None
 
+
+def write_json_via_temp(path, data):
+    temp = path.with_suffix(path.suffix + ".tmp")
+    with open(temp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=1)
+    os.replace(temp, path)
+
+
+def read_report(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+# ---------------------------------------------------------------- Mali (malioc)
 
 def run_json(command):
     """Run malioc with --format json; returns (exit_code, parsed_json_or_None, raw_output)."""
@@ -90,8 +118,8 @@ def run_json(command):
     return completed.returncode, parsed, output
 
 
-def query_compiler(malioc, cores):
-    """The compiler version and the validated core list, or exits."""
+def query_malioc(malioc, cores):
+    """The compiler version, after validating the cores, or exits."""
     code, listing, raw = run_json([malioc, "--list", "--format", "json"])
     if code != 0 or listing is None:
         sys.exit(f"shader_analytics: {malioc} --list failed ({code}):\n{raw[:500]}")
@@ -122,22 +150,21 @@ def resolve_capability_names(message):
         start = j + 1
 
 
-def report_is_current(report_path, module_path, core, version):
+def malioc_report_is_current(report_path, module_path, core, version):
     if not report_path.is_file():
         return False
     if report_path.stat().st_mtime < module_path.stat().st_mtime:
         return False
-    try:
-        with open(report_path, encoding="utf-8") as f:
-            report = json.load(f)
-    except (OSError, json.JSONDecodeError):
+    report = read_report(report_path)
+    if report is None:
         return False
     erhe = report.get("erhe", {})
     return erhe.get("core") == core and erhe.get("malioc_version") == version
 
 
-def compile_module(malioc, module_path, report_path, core, version, entry_point, specialization_constants):
+def compile_malioc(malioc, version, job):
     """Runs malioc on one module and writes the raw report with an 'erhe' block."""
+    module_path, report_path, core, entry_point, specialization_constants = job
     command = [malioc, "--vulkan", "--spirv", "-c", core, "--format", "json"]
     if entry_point and entry_point != "main":
         command += ["-n", entry_point]
@@ -171,15 +198,12 @@ def compile_module(malioc, module_path, report_path, core, version, entry_point,
         "command": " ".join(command),
         "exit_code": completed.returncode,
     }
-    temp = report_path.with_suffix(report_path.suffix + ".tmp")
-    with open(temp, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=1)
-    os.replace(temp, report_path)
+    write_json_via_temp(report_path, report)
     return True, None
 
 
-def summarize_report(report):
-    """The sidecar's per-module summary from a raw performance or error report."""
+def summarize_malioc_report(report):
+    """The sidecar's per-module summary from a raw malioc performance or error report."""
     erhe = report.get("erhe", {})
     summary = {"command": erhe.get("command", ""), "error": None, "variants": [], "properties": {}, "attribute_streams": None, "warnings": [], "notes": []}
     shaders = report.get("shaders", [])
@@ -195,7 +219,6 @@ def summarize_report(report):
     hardware = shader.get("hardware", {})
     pipelines = [p.get("name") for p in hardware.get("pipelines", [])]
     core_info = {
-        "core": hardware.get("core"),
         "revision": hardware.get("revision"),
         "architecture": hardware.get("architecture"),
         "driver": shader.get("driver"),
@@ -245,18 +268,7 @@ def summarize_report(report):
     return summary, core_info
 
 
-def load_manifest(directory):
-    path = directory / "variants" / "manifest.json"
-    if not path.is_file():
-        sys.exit(f"shader_analytics: {path} not found; record a browser directory with the editor's --shader-variant-browser option first")
-    with open(path, encoding="utf-8") as f:
-        manifest = json.load(f)
-    if manifest.get("schema", {}).get("name") != "erhe_shader_variants":
-        sys.exit(f"shader_analytics: {path} is not an erhe shader variant manifest")
-    return manifest
-
-
-def plan_jobs(manifest, variants_dir, cores, version, force):
+def plan_malioc_jobs(manifest, variants_dir, cores, version, force):
     """(module path, report path, core, entry point, spec constants) for every module to compile."""
     jobs = []
     skipped = 0
@@ -272,49 +284,48 @@ def plan_jobs(manifest, variants_dir, cores, version, force):
                     continue
                 for core in cores:
                     report_path = variants_dir / f"{Path(name).stem}.{core}.malioc.json"
-                    if not force and report_is_current(report_path, module_path, core, version):
+                    if not force and malioc_report_is_current(report_path, module_path, core, version):
                         skipped += 1
                         continue
                     jobs.append((module_path, report_path, core, stage.get("entry_point", "main"), stage.get("specialization_constants", [])))
     return jobs, skipped
 
 
-def build_sidecar(manifest, variants_dir, cores, version, malioc):
-    """The analytics.js object: per core, per program id, per stage, before/after summaries."""
-    sidecar = {
-        "schema": {"name": "erhe_shader_analytics", "version": SIDECAR_SCHEMA_VERSION},
-        "generated": datetime.datetime.now().isoformat(timespec="seconds"),
-        "malioc": malioc,
-        "malioc_version": version,
-        "manifest_tools": manifest.get("tools", {}),
-        "default_core": cores[0],
-        "cores": {},
-    }
+def build_malioc_core_block(manifest, variants_dir, core, version, generated):
+    block = {"core": core, "compiler": "malioc", "revision": None, "architecture": None, "driver": None, "pipelines": [], "malioc_version": version, "generated": generated, "programs": {}}
     missing = 0
-    for core in cores:
-        core_block = {"core": core, "revision": None, "architecture": None, "driver": None, "pipelines": [], "malioc_version": version, "generated": sidecar["generated"], "programs": {}}
-        for program in manifest.get("programs", []):
-            program_block = {}
-            for stage in program.get("stages", []):
-                stage_block = {"before": None, "after": None}
-                for key, slot in (("spirv", "before"), ("optimized_spirv", "after")):
-                    name = stage.get(key)
-                    if not name:
-                        continue
-                    report_path = variants_dir / f"{Path(name).stem}.{core}.malioc.json"
-                    if not report_path.is_file():
-                        missing += 1
-                        continue
-                    with open(report_path, encoding="utf-8") as f:
-                        report = json.load(f)
-                    summary, core_info = summarize_report(report)
-                    stage_block[slot] = summary
-                    if core_info and not core_block["pipelines"]:
-                        core_block.update({k: v for k, v in core_info.items() if k != "core"})
-                program_block[stage.get("type")] = stage_block
-            core_block["programs"][str(program.get("id"))] = program_block
-        sidecar["cores"][core] = core_block
-    return sidecar, missing
+    for program in manifest.get("programs", []):
+        program_block = {}
+        for stage in program.get("stages", []):
+            stage_block = {"before": None, "after": None}
+            for key, slot in (("spirv", "before"), ("optimized_spirv", "after")):
+                name = stage.get(key)
+                if not name:
+                    continue
+                report = read_report(variants_dir / f"{Path(name).stem}.{core}.malioc.json")
+                if report is None:
+                    missing += 1
+                    continue
+                summary, core_info = summarize_malioc_report(report)
+                stage_block[slot] = summary
+                if core_info and not block["pipelines"]:
+                    block.update(core_info)
+            program_block[stage.get("type")] = stage_block
+        block["programs"][str(program.get("id"))] = program_block
+    return block, missing
+
+
+# ------------------------------------------------------------------- sidecar
+
+def load_manifest(directory):
+    path = directory / "variants" / "manifest.json"
+    if not path.is_file():
+        sys.exit(f"shader_analytics: {path} not found; record a browser directory with the editor's --shader-variant-browser option first")
+    with open(path, encoding="utf-8") as f:
+        manifest = json.load(f)
+    if manifest.get("schema", {}).get("name") != "erhe_shader_variants":
+        sys.exit(f"shader_analytics: {path} is not an erhe shader variant manifest")
+    return manifest
 
 
 def write_sidecar(directory, sidecar):
@@ -351,15 +362,33 @@ def check_sidecar(directory, manifest):
                     continue
                 if stage_block["before"] is None:
                     problems.append(f"{core}: program {program['id']} {stage['type']}: no before entry")
-                if stage.get("optimized_spirv") and stage_block["after"] is None:
+                expect_after = bool(stage.get("optimized_spirv"))
+                if expect_after and stage_block["after"] is None:
                     problems.append(f"{core}: program {program['id']} {stage['type']}: no after entry")
     return problems
+
+
+def run_jobs(label, function, jobs, worker_count):
+    failures = []
+    if not jobs:
+        return failures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as pool:
+        futures = [pool.submit(function, job) for job in jobs]
+        done = 0
+        for future in concurrent.futures.as_completed(futures):
+            ok, message = future.result()
+            done += 1
+            if not ok:
+                failures.append(message)
+            if done % 50 == 0 or done == len(jobs):
+                print(f"shader_analytics: {label} {done}/{len(jobs)}")
+    return failures
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("directory", type=Path, help="the shader variant browser directory (holds index.html and variants/)")
-    parser.add_argument("--core", action="append", help=f"target Arm GPU (repeatable; default {DEFAULT_CORE})")
+    parser.add_argument("--core", action="append", help=f"target GPU, Mali-<name> (repeatable; default {DEFAULT_MALI_CORE} when malioc is found)")
     parser.add_argument("--malioc", help="path to the malioc executable (else $MALIOC, else PATH)")
     parser.add_argument("--jobs", type=int, default=max(1, min(8, os.cpu_count() or 1)), help="parallel compiler processes")
     parser.add_argument("--force", action="store_true", help="compile every module even when its report is current")
@@ -369,45 +398,61 @@ def main():
     directory = args.directory.resolve()
     variants_dir = directory / "variants"
     manifest = load_manifest(directory)
-    cores = args.core or [DEFAULT_CORE]
-    malioc = find_malioc(args.malioc)
-    if malioc is None:
-        sys.exit("shader_analytics: malioc not found; pass --malioc, set MALIOC, or put it on PATH")
-    version = query_compiler(malioc, cores)
+    malioc = find_tool(args.malioc, "MALIOC", "malioc")
+    if args.core:
+        cores = list(dict.fromkeys(args.core))
+        if any(compiler_of(c) == "malioc" for c in cores) and malioc is None:
+            sys.exit("shader_analytics: malioc not found; pass --malioc, set MALIOC, or put it on PATH")
+    else:
+        cores = [DEFAULT_MALI_CORE] if malioc else []
+        if not cores:
+            sys.exit("shader_analytics: malioc not found; pass --malioc, set MALIOC, or put it on PATH")
+    mali_cores = [c for c in cores if compiler_of(c) == "malioc"]
+
     tools = manifest.get("tools", {})
     if tools.get("api") not in (None, "vulkan"):
         print(f"shader_analytics: the manifest's modules were compiled for api '{tools.get('api')}'; they are analyzed as Vulkan modules", file=sys.stderr)
 
-    jobs, skipped = plan_jobs(manifest, variants_dir, cores, version, args.force)
-    print(f"shader_analytics: {malioc} {version}; cores {', '.join(cores)}; {len(jobs)} module(s) to compile, {skipped} current")
+    generated = datetime.datetime.now().isoformat(timespec="seconds")
+    sidecar = {
+        "schema": {"name": "erhe_shader_analytics", "version": SIDECAR_SCHEMA_VERSION},
+        "generated": generated,
+        "manifest_tools": tools,
+        "default_core": cores[0],
+        "default_cores": {},
+        "cores": {},
+    }
     failures = []
-    if jobs:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-            futures = {pool.submit(compile_module, malioc, *job[:3], version, *job[3:]): job for job in jobs}
-            done = 0
-            for future in concurrent.futures.as_completed(futures):
-                ok, message = future.result()
-                done += 1
-                if not ok:
-                    failures.append(message)
-                if done % 50 == 0 or done == len(jobs):
-                    print(f"shader_analytics: {done}/{len(jobs)}")
+    missing = 0
+
+    if mali_cores:
+        malioc_version = query_malioc(malioc, mali_cores)
+        jobs, skipped = plan_malioc_jobs(manifest, variants_dir, mali_cores, malioc_version, args.force)
+        print(f"shader_analytics: {malioc} {malioc_version}; cores {', '.join(mali_cores)}; {len(jobs)} module(s) to compile, {skipped} current")
+        failures += run_jobs("malioc", lambda job: compile_malioc(malioc, malioc_version, job), jobs, args.jobs)
+        sidecar.update({"malioc": malioc, "malioc_version": malioc_version})
+        sidecar["default_cores"]["malioc"] = mali_cores[0]
+        for core in mali_cores:
+            block, core_missing = build_malioc_core_block(manifest, variants_dir, core, malioc_version, generated)
+            sidecar["cores"][core] = block
+            missing += core_missing
+
     for message in failures:
         print(f"shader_analytics: {message}", file=sys.stderr)
 
-    sidecar, missing = build_sidecar(manifest, variants_dir, cores, version, malioc)
     path = write_sidecar(directory, sidecar)
-    errors = 0
-    modules = 0
-    for core_block in sidecar["cores"].values():
+    for core, core_block in sidecar["cores"].items():
+        entries = 0
+        errors = 0
         for program_block in core_block["programs"].values():
             for stage_block in program_block.values():
                 for slot in ("before", "after"):
                     if stage_block[slot] is not None:
-                        modules += 1
+                        entries += 1
                         if stage_block[slot]["error"]:
                             errors += 1
-    print(f"shader_analytics: wrote {path}: {len(manifest.get('programs', []))} program(s), {modules} module report(s), {errors} with compile errors, {missing} missing")
+        print(f"shader_analytics: {core}: {entries} stage report(s), {errors} with compile errors")
+    print(f"shader_analytics: wrote {path}: {len(manifest.get('programs', []))} program(s), {missing} report(s) missing")
 
     if args.check:
         problems = check_sidecar(directory, manifest)

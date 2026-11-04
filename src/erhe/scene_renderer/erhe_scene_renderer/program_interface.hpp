@@ -14,6 +14,9 @@
 #include "erhe_scene_renderer/pvs_layers.hpp"
 
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace erhe::graphics { class Device; }
 
@@ -56,6 +59,8 @@ public:
 
     [[nodiscard]] auto make_prototype(erhe::graphics::Shader_stages_create_info&& create_info) -> erhe::graphics::Shader_stages_prototype;
     [[nodiscard]] auto make_prototype(erhe::graphics::Shader_stages_create_info& create_info) -> erhe::graphics::Shader_stages_prototype;
+    // The defines make_prototype() appends to every program's defines.
+    void add_program_defines(std::vector<std::pair<std::string, std::string>>& defines) const;
     [[nodiscard]] auto make_program  (erhe::graphics::Shader_stages_prototype&& prototype) -> erhe::graphics::Shader_stages;
 
     erhe::graphics::Device&                            graphics_device;

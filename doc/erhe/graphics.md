@@ -732,6 +732,50 @@ benchmark runs), and the desktop profiling scripts (`bistro_frame_bench.py`,
 CPM dependencies pinned to the commits glslang's `known_good.json` names
 (glslang is built with `ENABLE_OPT`).
 
+## Named define values
+
+An enum-valued define names its value in the generated source.
+`Shader_stages_create_info::define_constants` lists, per such define, its
+`Shader_define_constants`: the constants that name its values and whether
+the value is one of them (`Define_constants_kind::value`) or a bit mask of
+them (`bit_mask`). `final_source()` emits each define that has an entry as
+its constants followed by the define as the constant expression of its
+value, with the number in a comment:
+
+    #define ERHE_BXDF_MODEL_UNLIT 0
+    ...
+    #define ERHE_BXDF_MODEL_ANISOTROPIC_BRDF 2
+    ...
+    #define ERHE_BXDF_MODEL ERHE_BXDF_MODEL_ANISOTROPIC_BRDF // 2
+    #define ERHE_FP16_PATHS (ERHE_FP16_PATH_MATERIAL | ERHE_FP16_PATH_BRDF) // 3
+
+A constant shared by several defines (the `ERHE_TEXGEN_MODE_*` family of the
+six texgen axes) is emitted once. `get_define_value_expression()` gives the
+expression; a value no constant names (and a non-numeric value) is emitted as
+it stands. `defines` keeps the numbers, so program identity, the shader
+variant browser key and every reader of the define list are unchanged.
+
+The shader key provides the constants: `Shader_key::get_define_constants()`
+(`erhe::scene_renderer`) builds them from the C++ enumerations behind the int
+axes (`Bxdf_model`, `Material_blending_mode`, `Shader_debug`, `Texgen_mode`,
+`Normalmap_encoding`, `Specular_anti_aliasing`, `Overdraw_count`, the
+`Fp16_path` bits; the shadow filter kernel widths 0 / 2 / 4 / 6, bias and
+technique values), with the GLSL names the shaders compare against. The
+shader files keep their own definitions of those constants for the programs
+built without a shader key; GLSL accepts a redefinition with the same value
+and rejects one with a different value ("Macro redefined; different
+substitutions"), so the two cannot drift apart silently. Count and size axes
+(`LIGHT_COUNT_*`, `SHADOW_DEPTH_BITS`, `SHADER_MULTIVIEW_COUNT`) stay numbers.
+
+## Shader program observer
+
+`Device::set_shader_program_observer()` installs one function called for
+every program built from SPIR-V - compiled by `Glslang_shader_stages` or
+served whole from the `Spirv_cache` - on the building thread, with the
+program's create info and per stage the module the device uses
+(`Shader_program_module`). The editor's background shader analytics use it
+(doc/editor/shader_analytics.md).
+
 ## Shader variant browser
 
 `Graphics_config::shader_variant_browser_directory` (empty: off; the editor
@@ -742,18 +786,39 @@ compiled: per stage the top-level source as parsed, the synthesized
 `erhe_preamble.glsl`, the unoptimized SPIR-V and the SPIR-V after the
 optimizer of "SPIR-V optimization" (which runs for the report whether or not
 `spirv_optimization` is on; the module the device uses follows that setting).
-Programs served from the `Spirv_cache` are not compiled and so not recorded:
-delete `spirv_cache/` to record every program.
+While the report exists the `Spirv_cache` is not read (it is still
+written), so every program the session uses is compiled and recorded. A
+recording starts fresh:
+the report's constructor removes the directory's `variants/`, `index.html`,
+`analytics.js` and `fragments.js` of an earlier recording.
 
-Each recorded program writes `variants/<n>.html` (per stage sizes and five
-tabs: the shader key as every define with its value, the sources including
+A program's id `<id>` is stable across sessions: 16 hex digits of the
+64-bit FNV-1a hash of its key, the JSON `[name, variant defines]` that
+`fragments.js` also matches by (an id colliding with another program's gets
+`_<index>` appended, with an error log). Its index is the recording order
+(the `#` column); a program compiled again in the session replaces its
+record and keeps its index.
+
+Each recorded program writes `variants/<id>.html` (per stage sizes and five
+tabs: the program's identity - every define with its value, then the
+`ERHE_ATTRIBUTE_<name>` and `ERHE_VERTEX_*_ENCODING` defines its vertex
+format contributes (`Shader_stages_create_info::get_variant_defines()`;
+two programs of one shader key and different vertex formats are different
+programs) - and, for an
+enum-valued define, the name of its value ("Named define values"; also in
+the index's key tooltips and the manifest's `define_value_names`), the sources including
 the included files, the SPIR-V disassembly before optimization and after it,
-and the Mali analytics below)
-and the raw modules `variants/<n>_<stage>.spv` / `<n>_<stage>_optimized.spv`,
+and, when `analytics.js` is present, one tab per analyzed core, such as
+"Mali G310", from "Mali analytics" below; the active tab is remembered across program pages)
+and the raw modules `variants/<id>_<stage>.spv` / `<id>_<stage>_optimized.spv`
+and sources `variants/<id>_<stage>.glsl` (the top-level source as parsed) /
+`<id>_<stage>_preamble.glsl`,
 and rewrites `index.html`: a sortable, filterable table of every program
 recorded so far (program name, variant key, stages, SPIR-V bytes and
 instruction counts before and after optimization) that shows the selected
-program's page beside it. The variant key column has one fixed-width slot
+program's page beside it. The buttons on the bar between the two panes
+collapse either pane so the other takes the window (never both; selecting a
+row shows a collapsed page pane again; the state is remembered). The variant key column has one fixed-width slot
 per define axis that varies among the programs of one name, in the order
 the axes first appear, so the parts align down the table; a slot shows the
 axis's compact code (a table in the page for the known axes, `Sk` for
@@ -768,23 +833,43 @@ memory. Recording runs on whichever thread compiles; `add()` takes the
 report's mutex.
 
 Each `add()` also rewrites `variants/manifest.json` (schema
-`erhe_shader_variants` 1): a `tools` block naming what produced the modules
+`erhe_shader_variants` 2; schema 1 had numeric ids, the recording order): a `tools` block naming what produced the modules
 (`Shader_variant_report_tools`: the graphics API, the glslang and SPIRV-Tools
 versions, the optimizer's target environment, whether
 `spirv_optimization` was on, the `Device_info` texture heap path and size)
-and, per program, its id, name, every define, and per stage the type, the
+and, per program, its id (a string), index, name, every define, and per stage the type, the
 entry point (`main`), the specialization constants (none; erhe sets none)
-and the two module file names with their sizes and instruction counts. The
-manifest is the input of the analytics pass.
+and the two module file names with their sizes and instruction counts, the
+top-level source name (`main_name`) and the two source file names; per
+program also the included files (`includes`, paths as the includer resolved
+them). The manifest is the input of the analytics pass and of the editor's
+Shader Variants window (doc/editor/editor.md "Shader variant browser").
+`set_add_callback()` names a function `add()` calls at its end, on the
+compiling thread under the report's mutex.
+
+When `<directory>/fragments.js` is present (written by the MCP tool
+`capture_fragment_invocations`, `doc/plans/shader_cost.md` A), `index.html`
+adds a Fragments column group: per program the fragment shader invocations
+of the captured frame and their share of the frame, and per analytics
+column group the estimate of the frame's work of the variant - the
+fragments times the fragment (or compute) `Main` cost after optimization
+(Mali cycles) - with the estimate's share; the bar
+names the captured frame and how much of its invocations the recorded
+programs cover. Each program page names its fragments. Programs are matched
+by name and variant defines (`JSON.stringify([name, defines])`), so a
+capture matches a browser recorded by another session with the same
+variants.
 
 ### Mali analytics
 
 `py -3 scripts/shader_analytics.py <directory> [--core <name>] [--malioc <path>] [--jobs N] [--force] [--check]`
-runs the Arm Mali Offline Compiler (`malioc`; found through `--malioc`, the
+runs the offline compiler of each `--core`: `Mali-<name>` cores the Arm
+Mali Offline Compiler. Without `--core` every compiler found contributes
+its default core. For Mali it runs the Arm Mali Offline Compiler (`malioc`; found through `--malioc`, the
 `MALIOC` environment variable, or `PATH`; its install location is per
 machine) on every stage module of the manifest, before and after the
 optimizer, and keeps each raw JSON report as
-`variants/<n>_<stage>[_optimized].<core>.malioc.json` (the compiler's
+`variants/<id>_<stage>[_optimized].<core>.malioc.json` (the compiler's
 `performance` or `error` report plus an `erhe` block: core, compiler version,
 command line, exit code). A report newer than its module with the same core
 and compiler version is reused unless `--force`. A failed compile is a result
@@ -793,9 +878,10 @@ name, and a compiler crash is recorded as an error naming the signal.
 `--check` verifies the sidecar covers every stage of the manifest.
 
 The pass writes `<directory>/analytics.js`
-(`window.erhe_shader_analytics`, schema `erhe_shader_analytics` 1): per
-core, per program id, per stage, a `before` and an `after` summary with the
-compiler's variants (`Main`; `Position` and `Varying` for vertex shaders:
+(`window.erhe_shader_analytics`, schema `erhe_shader_analytics` 2): per
+core (its block names its `compiler`, `malioc`; `default_cores`
+names the first core of each compiler), per program id, per stage, a
+`before` and an `after` summary; for a Mali core with the compiler's variants (`Main`; `Position` and `Varying` for vertex shaders:
 work and uniform registers, thread occupancy, stack, spill and alloca bytes,
 16-bit arithmetic share, and the total, shortest-path and longest-path
 cycles per pipeline with the bound pipelines), the shader properties
@@ -803,13 +889,14 @@ cycles per pipeline with the bound pipelines), the shader properties
 color buffer reads), the vertex attribute streams, warnings and notes. A
 script element is the one way a page opened from disk reads a sibling
 file, so the sidecar is JavaScript. When it is present, `index.html` adds
-columns from the `default_core` (the first `--core`): the fragment or
+a column group per compiler, each from that compiler's default core, the
+headers prefixed with the core (`G310`). The Mali group: the fragment or
 compute `Main` total cycles before and after optimization with the bound
 pipelines, the vertex `Position` and `Varying` cycles after, the maximum
 work registers and the minimum occupancy over the stages, the spill bytes,
 and flags (`spill`, `late-zs`, `coverage`, `side-effects`, `uniform-comp`,
 `error`) that the filter box matches; the summary line adds the sum of the
-`Main` cycles. Each program page's "Mali analytics" tab shows, per core and
+`Main` cycles. Each program page's tab of a Mali core shows, per
 stage, a before / after / delta table per compiler variant, the properties,
 the attribute streams, warnings and the command line, or the error.
 

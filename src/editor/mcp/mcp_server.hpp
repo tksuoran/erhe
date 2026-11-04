@@ -373,6 +373,8 @@ private:
     auto action_set_viewport_style        (const nlohmann::json& args) -> std::string;
     auto action_set_headset_scene         (const nlohmann::json& args) -> std::string;
     auto query_occlusion_check            (const nlohmann::json& args) -> std::string;
+    auto query_fragment_invocations       (const nlohmann::json& args) -> std::string;
+    auto action_load_shader_analytics     (const nlohmann::json& args) -> std::string;
     auto query_pvs_status                 (const nlohmann::json& args) -> std::string;
     // The PVS bake tools (mcp_server_pvs.cpp; doc/plans/pvs.md "Editor").
     auto action_pvs_bake                  (const nlohmann::json& args) -> std::string;
@@ -882,6 +884,9 @@ private:
     std::optional<uint64_t>                          m_lod_info_first_served{};
     // get_occlusion_check in flight (main thread only), as above.
     const Queued_request*                            m_occlusion_check_request{nullptr};
+    // capture_fragment_invocations (doc/plans/shader_cost.md A2), as the occlusion check.
+    const Queued_request*                            m_fragment_capture_request{nullptr};
+    std::chrono::steady_clock::time_point            m_fragment_capture_enqueued_at{};
     std::chrono::steady_clock::time_point            m_occlusion_check_enqueued_at{};
     std::string                                      m_occlusion_check_scene_name;
     // get_light_cluster_check in flight (main thread only): the request

@@ -25,17 +25,30 @@ class Scene_root;
 // not off, the view's content passes count per pixel (Overdraw_view_state)
 // and the view shows and reports the counts. shaded counts the fragment
 // shader invocations the frame runs (after the early depth test);
-// rasterized counts every rasterized fragment (ignoring the depth test).
-// The values are erhe::scene_renderer::Overdraw_count's.
+// rasterized counts every rasterized fragment (ignoring the depth test);
+// cost adds each shaded fragment's static shader cost (Shader_analytics,
+// doc/plans/shader_cost.md B2). The values are erhe::scene_renderer::Overdraw_count's.
 enum class Overdraw_mode : unsigned int
 {
     off        = 0,
     shaded     = 1,
-    rasterized = 2
+    rasterized = 2,
+    cost       = 3
 };
 static_assert(static_cast<unsigned int>(Overdraw_mode::shaded)     == static_cast<unsigned int>(erhe::scene_renderer::Overdraw_count::shaded));
 static_assert(static_cast<unsigned int>(Overdraw_mode::rasterized) == static_cast<unsigned int>(erhe::scene_renderer::Overdraw_count::rasterized));
-inline constexpr const char* c_overdraw_mode_strings[] = { "Off", "Shaded", "Rasterized" };
+static_assert(static_cast<unsigned int>(Overdraw_mode::cost)       == static_cast<unsigned int>(erhe::scene_renderer::Overdraw_count::cost));
+inline constexpr const char* c_overdraw_mode_strings[] = { "Off", "Shaded", "Rasterized", "Shader cost" };
+// The heat map of overdraw_visualize.frag: the count steps, or a continuous ramp (cost).
+enum class Overdraw_ramp : uint32_t
+{
+    counts     = 0,
+    continuous = 1
+};
+[[nodiscard]] inline auto get_overdraw_ramp(const Overdraw_mode mode) -> Overdraw_ramp
+{
+    return (mode == Overdraw_mode::cost) ? Overdraw_ramp::continuous : Overdraw_ramp::counts;
+}
 [[nodiscard]] inline auto to_overdraw_count(const Overdraw_mode mode) -> erhe::scene_renderer::Overdraw_count
 {
     return static_cast<erhe::scene_renderer::Overdraw_count>(static_cast<unsigned int>(mode));

@@ -62,6 +62,12 @@ auto main(int argc, char** argv) -> int
     bool        fix_spot_lights{false};
     std::string benchmark_path{};
     std::string shader_variant_browser_directory{};
+    std::string shader_analytics_directory{};
+#if defined(ERHE_OS_ANDROID)
+    editor::Shader_analytics_default shader_analytics_default{editor::Shader_analytics_default::none};
+#else
+    editor::Shader_analytics_default shader_analytics_default{editor::Shader_analytics_default::offline_compilers};
+#endif
     editor::Headset_culling headset_culling{editor::Headset_culling::enabled};
     try {
         cxxopts::Options options{"editor", "erhe editor"};
@@ -71,7 +77,9 @@ auto main(int argc, char** argv) -> int
             ("no-scene", "Start with an empty scene (default camera only): no procedural default scene and no scene load (overrides --scene)")
             ("no-post-processing", "Force viewport post processing off for this session, overriding editor_settings.json (the stored setting is not modified)")
             ("benchmark", "Benchmark file (JSON): run it, log the result, write logs/benchmark_<name>.json and exit", cxxopts::value<std::string>()->default_value(""))
-            ("shader-variant-browser", "Record every shader program compiled in this session into an HTML shader variant browser in this directory (index.html; SPIR-V before and after optimization). Programs served from spirv_cache/ are not recorded: delete it to record every program", cxxopts::value<std::string>()->default_value(""))
+            ("shader-variant-browser", "Record every shader program compiled in this session into an HTML shader variant browser in this directory (index.html; SPIR-V before and after optimization). The session does not read spirv_cache/, so every program it uses is recorded; earlier results in the directory are removed", cxxopts::value<std::string>()->default_value(""))
+            ("shader-analytics", "Load the shader analytics of this shader variant browser directory (variants/manifest.json and analytics.js of scripts/shader_analytics.py) for the shader cost overdraw mode, in addition to the background analysis", cxxopts::value<std::string>()->default_value(""))
+            ("no-shader-analytics", "Do not analyze the programs the editor builds with the Mali offline compiler in background tasks (the Android behavior); --shader-analytics still loads")
             ("no-headset-culling", "Draw the headset's color passes unculled for this session (A/B against the culled draws)")
             ("fix-spot-lights", "Fix up spot lights when loading glTF assets: full color value, intensity 1000, doubled outer cone angle, inner cone angle taken from the original outer cone angle")
             ("h,help",   "Print usage");
@@ -88,6 +96,10 @@ auto main(int argc, char** argv) -> int
         fix_spot_lights       = (result.count("fix-spot-lights") != 0);
         benchmark_path        = result["benchmark"].as<std::string>();
         shader_variant_browser_directory = result["shader-variant-browser"].as<std::string>();
+        shader_analytics_directory       = result["shader-analytics"].as<std::string>();
+        if (result.count("no-shader-analytics") != 0) {
+            shader_analytics_default = editor::Shader_analytics_default::none;
+        }
         headset_culling       = (result.count("no-headset-culling") != 0)
             ? editor::Headset_culling::disabled_for_session
             : editor::Headset_culling::enabled;
@@ -123,6 +135,6 @@ auto main(int argc, char** argv) -> int
     // android-project/app/build.gradle.
     (void)erhe::file::migrate_android_assets_to_writable("erhe_migrate_manifest.txt");
 #endif
-    editor::run_editor(startup_commands_path, startup_scene_path, no_startup_scene, no_post_processing, fix_spot_lights, benchmark_path, headset_culling, shader_variant_browser_directory);
+    editor::run_editor(startup_commands_path, startup_scene_path, no_startup_scene, no_post_processing, fix_spot_lights, benchmark_path, headset_culling, shader_variant_browser_directory, shader_analytics_directory, shader_analytics_default);
     return 0;
 }

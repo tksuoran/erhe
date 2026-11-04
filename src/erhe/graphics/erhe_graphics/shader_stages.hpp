@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace glslang { class TShader; }
 namespace erhe::dataformat { class Vertex_format; }
@@ -42,6 +44,27 @@ public:
     std::vector<std::filesystem::path> paths;
 };
 
+// The named constants of an enum-valued define; final_source() emits the
+// constants and the define as the name of its value (doc/erhe/graphics.md
+// "Named define values").
+enum class Define_constants_kind : unsigned int
+{
+    value,   // the value is one constant
+    bit_mask // the value is the OR of the constants of its set bits
+};
+
+class Shader_define_constants
+{
+public:
+    std::string                                   define;
+    Define_constants_kind                         kind{Define_constants_kind::value};
+    std::vector<std::pair<std::string, uint32_t>> constants;
+};
+
+// The constant naming value ("(A | B)" for a bit mask; "0" for an empty mask);
+// empty when value is not a number or no constant names it.
+[[nodiscard]] auto get_define_value_expression(const Shader_define_constants& constants, std::string_view value) -> std::string;
+
 class Shader_stages_create_info
 {
 public:
@@ -63,6 +86,11 @@ public:
 
     [[nodiscard]] auto attributes_source       () const -> std::string;
     [[nodiscard]] auto attribute_defines_source() const -> std::string;
+    // The defines the vertex format contributes to every stage: ERHE_ATTRIBUTE_<name>
+    // per attribute and the ERHE_VERTEX_*_ENCODING values.
+    [[nodiscard]] auto get_vertex_format_defines() const -> std::vector<std::pair<std::string, std::string>>;
+    // The program variant's identity: defines, then get_vertex_format_defines().
+    [[nodiscard]] auto get_variant_defines     () const -> std::vector<std::pair<std::string, std::string>>;
     [[nodiscard]] auto fragment_outputs_source () const -> std::string;
     [[nodiscard]] auto struct_types_source     () const -> std::string;
     [[nodiscard]] auto interface_blocks_source () const -> std::string;
@@ -72,10 +100,14 @@ public:
 
     [[nodiscard]] auto get_description() const -> std::string;
 
+    // The define_constants entry of a define; nullptr when it has none.
+    [[nodiscard]] auto find_define_constants(std::string_view define) const -> const Shader_define_constants*;
+
     std::string                                      name;
     erhe::utility::Debug_label                       debug_label           {};
     std::vector<std::string>                         pragmas               {};
     std::vector<std::pair<std::string, std::string>> defines               {};
+    std::vector<Shader_define_constants>             define_constants      {};
     std::vector<Shader_stage_extension>              extensions            {};
     std::vector<const Shader_resource*>              struct_types          {};
     std::vector<const Shader_resource*>              interface_blocks      {};
@@ -142,13 +174,16 @@ public:
     void invalidate() const;
 
     [[nodiscard]] auto name                 () const -> const std::string&;
+    // Shader_stages_create_info::get_variant_defines() of the create info the stages were built from.
+    [[nodiscard]] auto get_variant_defines  () const -> const std::vector<std::pair<std::string, std::string>>&;
     [[nodiscard]] auto is_valid             () const -> bool;
     [[nodiscard]] auto get_bind_group_layout() const -> const Bind_group_layout*;
     [[nodiscard]] auto get_impl             () -> Shader_stages_impl&;
     [[nodiscard]] auto get_impl             () const -> const Shader_stages_impl&;
 
 private:
-    std::unique_ptr<Shader_stages_impl> m_impl;
+    std::unique_ptr<Shader_stages_impl>                      m_impl;
+    mutable std::vector<std::pair<std::string, std::string>> m_defines; // replaced with the impl's modules by reload()
 };
 
 class Reloadable_shader_stages

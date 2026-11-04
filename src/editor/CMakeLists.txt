@@ -376,6 +376,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server_references.cpp
     mcp/mcp_server_rig.cpp
     mcp/mcp_server_overdraw.cpp
+    mcp/mcp_server_shader_cost.cpp
     mcp/mcp_server_physics.cpp
     mcp/mcp_server_scene_action.cpp
     mcp/mcp_server_scene_query.cpp
@@ -506,6 +507,12 @@ erhe_target_sources_grouped(
     renderers/frustum_tiler.cpp
     renderers/frustum_tiler.hpp
     renderers/id_renderer.cpp
+    renderers/offline_compiler.cpp
+    renderers/offline_compiler.hpp
+    renderers/shader_analytics.cpp
+    renderers/shader_analytics.hpp
+    renderers/shader_analytics_service.cpp
+    renderers/shader_analytics_service.hpp
     renderers/id_pass_prepared.hpp
     renderers/id_renderer.hpp
     renderers/light_mesh.cpp
@@ -810,6 +817,8 @@ erhe_target_sources_grouped(
     windows/lod_window.hpp
     windows/pvs_window.cpp
     windows/pvs_window.hpp
+    windows/shader_variants_window.cpp
+    windows/shader_variants_window.hpp
     windows/window_placement.cpp
     windows/window_placement.hpp
     windows/inventory_slot_payload.hpp
@@ -998,6 +1007,9 @@ set(_config_sources
     ${_config_out}/selection_config.hpp
     ${_config_out}/selection_config_serialization.hpp
     ${_config_out}/selection_config.cpp
+    ${_config_out}/shader_analytics_config.hpp
+    ${_config_out}/shader_analytics_config_serialization.hpp
+    ${_config_out}/shader_analytics_config.cpp
     ${_config_out}/operation_params.hpp
     ${_config_out}/operation_params_serialization.hpp
     ${_config_out}/operation_params.cpp

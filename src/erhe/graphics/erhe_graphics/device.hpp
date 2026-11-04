@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/enums.hpp"
+#include "erhe_graphics/fragment_invocation_capture.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_math/coordinate_conventions.hpp"
 #include "erhe_utility/debug_label.hpp"
@@ -9,6 +10,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -88,6 +90,7 @@ class Ring_buffer;
 class Sampler;
 class Shader_monitor;
 class Shader_source_cache;
+class Shader_stages_create_info;
 class Shader_variant_report;
 class Spirv_cache;
 class Surface;
@@ -288,6 +291,10 @@ public:
     // shader storage blocks; false on the null device. The raster occlusion
     // test (doc/plans/occlusion_culling.md) needs it.
     bool fragment_stores_and_atomics {false};
+    // Fragment invocations per pipeline can be captured
+    // (Device::request_fragment_invocation_capture()). Vulkan: the
+    // pipelineStatisticsQuery and hostQueryReset features; false elsewhere.
+    bool pipeline_statistics_query   {false};
     // Compute shaders and shader storage buffers are required on every
     // backend (OpenGL requires 4.5 at device creation); there are no
     // capability flags for them and no fallback paths.
@@ -551,6 +558,18 @@ public:
 using Shader_error_callback   = std::function<void(const std::string& error_log, const std::string& shader_source, const std::string& callstack)>;
 using Device_message_callback = std::function<void(Message_severity severity, const std::string& message, const std::string& callstack)>;
 using State_dump_callback     = std::function<void(const std::string& state_dump)>;
+
+// One stage of a built program: the SPIR-V module the device uses (optimized
+// when Graphics_config::spirv_optimization is on).
+class Shader_program_module
+{
+public:
+    Shader_type                    type{Shader_type::vertex_shader};
+    std::span<const unsigned int>  spirv;
+};
+// Called on the building thread for every program built from SPIR-V, compiled or
+// served from the Spirv_cache.
+using Shader_program_observer = std::function<void(const Shader_stages_create_info& create_info, std::span<const Shader_program_module> modules)>;
 using Trace_callback          = std::function<void(const std::string& message)>;
 
 class Frame_state;
@@ -639,6 +658,13 @@ public:
     // Blocks until all in-flight device frames complete; flushes pending
     // completion handlers. For init boundaries, not the steady-state loop.
     void wait_idle();
+
+    // Fragment shader invocations per pipeline bind range of the next frame
+    // whose command buffers begin after the call (doc/plans/shader_cost.md A1).
+    // false: unsupported (Device_info::pipeline_statistics_query) or a capture
+    // is in flight. take_ returns the capture once that frame has completed.
+    [[nodiscard]] auto request_fragment_invocation_capture() -> bool;
+    [[nodiscard]] auto take_fragment_invocation_capture   () -> std::optional<Fragment_invocation_capture>;
 
     // Drop every cached graphics pipeline that was built against any
     // previously-compiled shader stages. Backends that key their pipeline
@@ -862,6 +888,8 @@ public:
     // The shader variant browser recorder, or null when
     // Graphics_config::shader_variant_browser_directory is empty.
     [[nodiscard]] auto get_shader_variant_report          () -> Shader_variant_report*;
+    void               set_shader_program_observer        (Shader_program_observer observer);
+    void               notify_shader_program              (const Shader_stages_create_info& create_info, std::span<const Shader_program_module> modules);
 #endif
     [[nodiscard]] auto get_shader_source_cache            () -> Shader_source_cache&;
     void               set_shader_error_callback          (Shader_error_callback callback);
@@ -997,6 +1025,8 @@ private:
 #if defined(ERHE_SPIRV)
     std::unique_ptr<Spirv_cache> m_spirv_cache;
     std::unique_ptr<Shader_variant_report> m_shader_variant_report;
+    std::mutex                   m_shader_program_observer_mutex;
+    Shader_program_observer      m_shader_program_observer{};
 #endif
     std::unique_ptr<Shader_source_cache> m_shader_source_cache;
     Shader_error_callback        m_shader_error_callback  {};

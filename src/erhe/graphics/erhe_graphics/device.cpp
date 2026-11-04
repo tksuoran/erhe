@@ -251,6 +251,22 @@ void Device::wait_idle()
 {
     m_impl->wait_idle();
 }
+auto Device::request_fragment_invocation_capture() -> bool
+{
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+    return m_impl->request_fragment_invocation_capture();
+#else
+    return false;
+#endif
+}
+auto Device::take_fragment_invocation_capture() -> std::optional<Fragment_invocation_capture>
+{
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+    return m_impl->take_fragment_invocation_capture();
+#else
+    return std::nullopt;
+#endif
+}
 void Device::clear_render_pipeline_cache()
 {
     m_impl->clear_render_pipeline_cache();
@@ -385,6 +401,22 @@ auto Device::get_spirv_cache() -> Spirv_cache&
 auto Device::get_shader_variant_report() -> Shader_variant_report*
 {
     return m_shader_variant_report.get();
+}
+void Device::set_shader_program_observer(Shader_program_observer observer)
+{
+    const std::lock_guard<std::mutex> lock{m_shader_program_observer_mutex};
+    m_shader_program_observer = std::move(observer);
+}
+void Device::notify_shader_program(const Shader_stages_create_info& create_info, const std::span<const Shader_program_module> modules)
+{
+    Shader_program_observer observer;
+    {
+        const std::lock_guard<std::mutex> lock{m_shader_program_observer_mutex};
+        observer = m_shader_program_observer;
+    }
+    if (observer) {
+        observer(create_info, modules);
+    }
 }
 #endif
 auto Device::get_shader_source_cache() -> Shader_source_cache&

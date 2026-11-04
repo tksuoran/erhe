@@ -239,6 +239,7 @@
 // counting of erhe_overdraw.glsl (0: none).
 #define ERHE_OVERDRAW_SHADED     1
 #define ERHE_OVERDRAW_RASTERIZED 2
+#define ERHE_OVERDRAW_COST       3
 
 // ERHE_FRAGMENT_MAY_DISCARD is a derived gate: standard.frag of this key can
 // discard (the alpha-test / screen-door discard of the lit path). The

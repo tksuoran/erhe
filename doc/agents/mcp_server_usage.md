@@ -606,7 +606,7 @@ OpenXR refuses `headset` with that reason.
 ### set_overdraw_visualization
 
 A viewport's overdraw visualization (`doc/plans/overdraw_visualization.md`):
-`mode` (required: `off`, `shaded` or `rasterized`), `viewport` (window
+`mode` (required: `off`, `shaded`, `rasterized` or `cost`), `viewport` (window
 title, or `Headset` for the OpenXR headset view, multiview path only;
 default: the first viewport window with a scene view), `max_count`
 (the count shown white, default 8, kept per viewport). Not off, the
@@ -618,7 +618,18 @@ every rasterized fragment, ignoring the depth test - the mode that shows what
 occlusion and frustum culling remove. Refused with the reason on a device
 without fragment stage buffer atomics.
 
-Returns: `{viewport, mode, max_count}`.
+`cost` (`doc/plans/shader_cost.md` B) counts as `shaded` but each fragment
+adds its shader variant's static cost in `metric` (default: the selected
+one; `load_shader_analytics` loads the costs and lists the metrics); the
+heat map is a continuous ramp up to `max_value` (metric units; default four
+fragments of the costliest recorded variant). A variant the analytics lack
+weighs 0 (`get_overdraw_stats` `missing_variants`). In this mode
+`get_overdraw_stats` reports `covered_pixels`, `max_weight` and
+`max_value` (the costliest pixel, metric units) instead of the total, means
+and histogram, which a 32-bit sum of weights overflows.
+
+Returns: `{viewport, mode, max_count}`, plus `metric, metric_title,
+weight_scale, max_value` for `cost`.
 
 ### get_overdraw_stats
 
@@ -637,6 +648,47 @@ counts cover both eyes: `height` is the eyes' rows together (2 x the eye
 image height), view 1's rows after view 0's.
 `scripts/overdraw_verify.py` checks the counts against stacked full-screen
 rectangles.
+
+### capture_fragment_invocations
+
+Fragment shader invocations per render pipeline of the next rendered frame
+(`doc/plans/shader_cost.md` A): pipeline statistics queries around every
+pipeline bind range of every render pass, so every pipeline counts (scene
+content, grid, sky, occlusion test, post-processing, ImGui) with the
+frame's real shaders. The call returns once the captured frame retired.
+Arguments: `top` (programs and pipelines listed, default 50, 0: all),
+`include_defines` (each program's defines), `browser_directory` (where to
+write `fragments.js`; default: the session's `--shader-variant-browser`
+directory). Returns `{frame_id, total_invocations, range_count,
+dropped_ranges, program_count, pipeline_count, programs, pipelines,
+sidecar}`: per program (name and defines) `invocations`, `share`, `ranges`,
+`pipelines` and `browser_id` (its `variants/<id>.html` in this session's
+browser, null when the program was served from the SPIR-V cache); per
+pipeline debug label and program `invocations`, `share`, `ranges`. The
+counter may include helper invocations: on Intel the default scene's
+`standard` invocations read 1.5 % above the overdraw shaded total of the
+same frame. Only the frame's visible viewports render: a viewport window
+hidden behind another tab of its dock draws nothing. Refused on a device
+without pipeline statistics queries.
+
+### load_shader_analytics
+
+Loads the static shader costs the cost overdraw mode weighs by
+(`doc/plans/shader_cost.md` B): `directory` names a shader variant browser
+directory with `analytics.js` (`scripts/shader_analytics.py`); without it the
+tool reports what is loaded. The editor option `--shader-analytics
+<directory>` loads at startup; a desktop editor also analyzes every program
+it builds in the background (doc/editor/shader_analytics.md), reported as
+`service` (`queued`, `running`, `analyzed`, `failed`, the cores; null when
+off; `--no-shader-analytics` turns it off). Returns `{loaded, directory, program_count,
+metrics, selected_metric, missing_variants}`; `metrics` lists per metric the
+loaded cores provide `metric` (the name `set_overdraw_visualization` takes),
+`title`, `core`, `max_value` (the largest per-fragment value recorded) and
+`weight_scale` (metric units per weight unit). Mali metrics are cycles
+(`mali_cycles`, `mali_arithmetic_cycles`, `mali_texture_cycles`,
+`mali_load_store_cycles`). Programs match by name and variant defines, so
+the browser must have recorded the variants the scene draws (record it
+with an empty `spirv_cache/`).
 
 ### pick_at
 

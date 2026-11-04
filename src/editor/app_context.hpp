@@ -60,6 +60,9 @@ struct Window_config;
 namespace editor {
 
 class Analytic_hover_provider;
+class Shader_analytics;
+class Shader_analytics_service;
+class Shader_variants_window;
 class Animation_player;
 class Animation_window;
 class Asset_fetch;
@@ -311,6 +314,8 @@ public:
     erhe::scene_renderer::Cull_frame_registry*        cull_frame_registry       {nullptr};
     erhe::scene_renderer::Texel_renderer*             texel_renderer            {nullptr};
     erhe::scene_renderer::Shader_variant_cache*       shader_variant_cache      {nullptr};
+    Shader_analytics*                                 shader_analytics          {nullptr};
+    Shader_analytics_service*                         shader_analytics_service  {nullptr};
     erhe::scene_renderer::Program_interface*          program_interface         {nullptr};
 
     erhe::window::Context_window*      context_window       {nullptr};
@@ -386,6 +391,7 @@ public:
     Lightmap_texture_window*           lightmap_texture_window{nullptr};
     Lightmap_window*                   lightmap_window      {nullptr};
     Pvs_window*                        pvs_window           {nullptr};
+    Shader_variants_window*            shader_variants_window{nullptr};
     Rendergraph_window*                rendergraph_window   {nullptr};
     Rotate_tool*                       rotate_tool          {nullptr};
     Bone_visualization*                bone_visualization   {nullptr};

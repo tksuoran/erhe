@@ -24,6 +24,7 @@ add_executable(${_target}
     test_pvs_layers.cpp
     test_pvs_residency.cpp
     test_pvs_streaming.cpp
+    test_shader_define_constants.cpp
     test_shader_key.cpp
 )
 

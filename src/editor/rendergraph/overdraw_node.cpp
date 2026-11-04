@@ -1,4 +1,5 @@
 #include "rendergraph/overdraw_node.hpp"
+#include "scene/viewport_render_state.hpp"
 #include "app_context.hpp"
 #include "scene/viewport_scene_view.hpp"
 
@@ -174,6 +175,7 @@ void Overdraw_node::execute_rendergraph_node(erhe::graphics::Command_buffer& com
     const uint64_t                frame_index     = graphics_device.get_frame_index();
     const erhe::graphics::Buffer* count_buffer    = viewport_scene_view->get_overdraw_count_buffer(frame_index);
     const uint32_t                max_count       = viewport_scene_view->get_render_state(frame_index).overdraw_max_count;
+    const Overdraw_ramp           ramp            = get_overdraw_ramp(viewport_scene_view->get_render_state(frame_index).overdraw);
 
     erhe::graphics::Scoped_debug_group debug_group{command_buffer, "Overdraw visualization"};
     if (count_buffer != nullptr) {
@@ -188,7 +190,7 @@ void Overdraw_node::execute_rendergraph_node(erhe::graphics::Command_buffer& com
 
     erhe::graphics::Ring_buffer_range parameters_range = m_parameters_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, sizeof(std::array<uint32_t, 4>));
     {
-        const std::array<uint32_t, 4> parameters{max_count, 0u, 0u, 0u};
+        const std::array<uint32_t, 4> parameters{max_count, static_cast<uint32_t>(ramp), 0u, 0u};
         std::memcpy(parameters_range.get_span().data(), parameters.data(), sizeof(parameters));
     }
     parameters_range.bytes_written(sizeof(std::array<uint32_t, 4>));

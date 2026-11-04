@@ -1,4 +1,6 @@
 #include "windows/viewport_window.hpp"
+#include "renderers/shader_analytics.hpp"
+#include "scene/viewport_render_state.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -37,6 +39,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
 
+#include <fmt/format.h>
 #include <imgui/imgui.h>
 
 #include <array>
@@ -84,6 +87,11 @@ void Viewport_window::draw_overdraw_legend(const Viewport_scene_view& viewport_s
     };
     const uint32_t max_count = viewport_scene_view.get_overdraw_max_count();
     const erhe::scene_renderer::Overdraw_statistics statistics = viewport_scene_view.get_overdraw_statistics();
+    // The cost mode (doc/plans/shader_cost.md B2): a continuous ramp in the
+    // metric's units; the 32-bit total overflows, so no mean.
+    const Shader_analytics* const analytics = m_app_context.shader_analytics;
+    const bool   cost   = (viewport_scene_view.get_overdraw_mode() == Overdraw_mode::cost) && (analytics != nullptr);
+    const double scale  = cost ? Shader_analytics::get_weight_scale(analytics->get_selected_metric()) : 1.0;
 
     ImDrawList* const draw_list = ImGui::GetWindowDrawList();
     const float  font_size = ImGui::GetFontSize();
@@ -91,7 +99,7 @@ void Viewport_window::draw_overdraw_legend(const Viewport_scene_view& viewport_s
     const float  padding   = 0.5f * font_size;
     const float  cell      = swatch + (1.5f * font_size);
     const float  width     = (padding * 2.0f) + (cell * 7.0f);
-    const float  height    = (padding * 3.0f) + swatch + font_size;
+    const float  height    = (padding * 3.0f) + swatch + font_size + (cost ? font_size : 0.0f);
     const ImVec2 origin{rect_min.x + padding, rect_max.y - padding - height};
     draw_list->AddRectFilled(origin, ImVec2{origin.x + width, origin.y + height}, IM_COL32(0, 0, 0, 160), 0.25f * font_size);
 
@@ -101,15 +109,30 @@ void Viewport_window::draw_overdraw_legend(const Viewport_scene_view& viewport_s
         const ImU32  color = (i < c_ramp.size()) ? c_ramp[i] : IM_COL32(255, 255, 255, 255);
         draw_list->AddRectFilled(swatch_min, ImVec2{swatch_min.x + swatch, swatch_min.y + swatch}, color);
         draw_list->AddRect(swatch_min, ImVec2{swatch_min.x + swatch, swatch_min.y + swatch}, IM_COL32(128, 128, 128, 255));
-        if (i < c_ramp.size()) {
+        if (cost) {
+            std::snprintf(label, sizeof(label), (i < c_ramp.size()) ? "%.0f" : "%.0f+", (static_cast<double>(i) / 6.0) * static_cast<double>(max_count) * scale);
+        } else if (i < c_ramp.size()) {
             std::snprintf(label, sizeof(label), "%zu", i);
         } else {
             std::snprintf(label, sizeof(label), "%u+", static_cast<unsigned int>(max_count));
         }
         draw_list->AddText(ImVec2{swatch_min.x + swatch + (0.2f * font_size), swatch_min.y}, IM_COL32(255, 255, 255, 255), label);
     }
-    char summary[96];
-    if (statistics.valid && (statistics.covered_pixel_count > 0)) {
+    char summary[160];
+    if (cost) {
+        const std::string title = analytics->get_metric_title(analytics->get_selected_metric());
+        if (statistics.valid && (statistics.covered_pixel_count > 0)) {
+            std::snprintf(summary, sizeof(summary), "%s per pixel, max %.0f", title.c_str(), static_cast<double>(statistics.max_count) * scale);
+        } else {
+            std::snprintf(summary, sizeof(summary), "%s per pixel: no counts yet", title.c_str());
+        }
+        if (analytics->get_missing_variant_count() > 0) {
+            draw_list->AddText(
+                ImVec2{origin.x + padding, origin.y + (padding * 2.0f) + swatch + font_size}, IM_COL32(255, 160, 160, 255),
+                fmt::format("{} variant(s) without analytics count 0", analytics->get_missing_variant_count()).c_str()
+            );
+        }
+    } else if (statistics.valid && (statistics.covered_pixel_count > 0)) {
         const double mean = static_cast<double>(statistics.invocation_total) / static_cast<double>(statistics.covered_pixel_count);
         std::snprintf(summary, sizeof(summary), "mean %.2f per covered pixel, max %u", mean, static_cast<unsigned int>(statistics.max_count));
     } else {

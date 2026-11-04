@@ -778,11 +778,39 @@ optimization") unless `ERHE_SPIRV_OPTIMIZATION=0` turns it off.
 **Shader variant browser.** `--shader-variant-browser <directory>` records
 every shader program the session compiles into an HTML browser in that
 directory (doc/erhe/graphics.md "Shader variant browser"): open
-`<directory>/index.html`. Programs served from `spirv_cache/` are not
-compiled, so delete it first to record every variant. After the run,
+`<directory>/index.html`. A recording session compiles every program
+(it does not read `spirv_cache/`), so it records every variant the session
+uses: open the scenes whose costs you want before quitting. After the run,
 `py -3 scripts/shader_analytics.py <directory>` adds Arm Mali Offline
 Compiler cycle, register, occupancy and spill reports per variant to the
 same pages (doc/erhe/graphics.md "Mali analytics").
+
+Recording into a directory clears what an earlier recording left there
+(analytics included), so run `scripts/shader_analytics.py` after each
+recording run; program ids are stable across sessions. The shader cost
+overdraw modes do not need a recording: a desktop editor analyzes every
+program it builds in the background (doc/editor/shader_analytics.md;
+`--no-shader-analytics` turns it off, the Android behavior).
+`--shader-analytics <directory>` additionally loads a recording's
+`analytics.js` at startup, read before a recording into the same
+directory clears it.
+
+The Shader Variants window (`Shader_variants_window`, developer menu) shows
+the same browser inside the editor: it reads a browser directory -
+`variants/manifest.json`, the per stage sources and modules, `analytics.js`
+and `fragments.js` - by default the one this session records into; another
+recorded directory opens from the path field (Session returns to the
+session's). The table has the HTML index's columns, variant key slots,
+analytics and fragments column groups, summary line, all-words filter and
+sorting (the `#` column is the recording order; the program pane names the
+stable id); selecting a row shows the program pane with its stage sizes and
+the Shader key, Sources, SPIR-V before / after optimization and per core
+analytics tabs (the active tab stays across programs; Both / Table / Program
+collapse the panes). The SPIR-V disassembly is made from the `.spv` files
+when a program is selected; included files are read from their paths then.
+The window reloads its directory when the report records a program
+(`Shader_variant_report::set_add_callback()`), when `capture_fragment_invocations`
+writes `fragments.js` there, and on Reload (after `scripts/shader_analytics.py`).
 
 **Watchdog and shutdown.** The main-loop stall watchdog
 (`doc/agents/debugging.md` "Main-loop stall watchdog") watches while

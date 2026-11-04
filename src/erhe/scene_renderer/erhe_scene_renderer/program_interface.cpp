@@ -234,6 +234,14 @@ Program_interface::Program_interface(
     bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(graphics_device, layout_create_info);
 }
 
+void Program_interface::add_program_defines(std::vector<std::pair<std::string, std::string>>& defines) const
+{
+    defines.emplace_back("ERHE_SHADOW_MAPS", "1");
+    defines.emplace_back("ERHE_GRID_LABELS", "1");
+    // The light cluster header stride of light_cluster.data[] (light_cluster.hpp).
+    defines.emplace_back("ERHE_LIGHT_CLUSTER_HEADER_UINT_COUNT", std::to_string(c_light_cluster_header_uint_count) + "u");
+}
+
 auto Program_interface::make_prototype(
     erhe::graphics::Shader_stages_create_info&& in_create_info
 ) -> erhe::graphics::Shader_stages_prototype
@@ -302,10 +310,7 @@ auto Program_interface::make_prototype(
         create_info.add_interface_block(&overdraw_count_block);
     }
     create_info.bind_group_layout = bind_group_layout.get();
-    create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
-    create_info.defines.emplace_back("ERHE_GRID_LABELS", "1");
-    // The light cluster header stride of light_cluster.data[] (light_cluster.hpp).
-    create_info.defines.emplace_back("ERHE_LIGHT_CLUSTER_HEADER_UINT_COUNT", std::to_string(c_light_cluster_header_uint_count) + "u");
+    add_program_defines(create_info.defines);
 
     bool found = false;
     auto process_shader = [&create_info, &found](erhe::graphics::Shader_type shader_type, const std::filesystem::path& path) -> void

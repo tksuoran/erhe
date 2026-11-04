@@ -1,4 +1,5 @@
 #include "xr/headset_overdraw_visualization.hpp"
+#include "scene/viewport_render_state.hpp"
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -107,7 +108,8 @@ void Headset_overdraw_visualization::draw(
     const erhe::graphics::Buffer&           count_buffer,
     const uint32_t                          width,
     const uint32_t                          height,
-    const uint32_t                          max_count
+    const uint32_t                          max_count,
+    const Overdraw_ramp                     ramp
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -127,7 +129,7 @@ void Headset_overdraw_visualization::draw(
     constexpr std::size_t parameters_size = sizeof(std::array<uint32_t, 4>);
     erhe::graphics::Ring_buffer_range parameters_range = m_parameters_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, parameters_size);
     {
-        const std::array<uint32_t, 4> parameters{max_count, width, height, 0u};
+        const std::array<uint32_t, 4> parameters{max_count, width, height, static_cast<uint32_t>(ramp)};
         std::memcpy(parameters_range.get_span().data(), parameters.data(), parameters_size);
     }
     parameters_range.bytes_written(parameters_size);

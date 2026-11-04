@@ -39,6 +39,15 @@ enum class Headset_culling : unsigned int {
     disabled_for_session
 };
 
+// shader_analytics_default, offline_compilers: every program the editor
+// builds is analyzed in the background (desktop default,
+// doc/editor/shader_analytics.md); none: analytics only from
+// --shader-analytics (Android default, --no-shader-analytics).
+enum class Shader_analytics_default : unsigned int {
+    offline_compilers = 0,
+    none
+};
+
 void run_editor(
     const std::string& startup_commands_path     = "config/editor/commands.json",
     const std::string& startup_scene_path        = "",
@@ -47,7 +56,9 @@ void run_editor(
     bool               fix_gltf_spot_lights      = false,
     const std::string& benchmark_path            = "",
     Headset_culling    headset_culling           = Headset_culling::enabled,
-    const std::string& shader_variant_browser_directory = ""
+    const std::string& shader_variant_browser_directory = "",
+    const std::string& shader_analytics_directory       = "",
+    Shader_analytics_default shader_analytics_default   = Shader_analytics_default::none
 );
 
 }

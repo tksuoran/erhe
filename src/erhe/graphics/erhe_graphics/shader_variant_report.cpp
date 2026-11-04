@@ -32,6 +32,19 @@ namespace {
     return result;
 }
 
+[[nodiscard]] auto find_value_name(
+    const std::vector<std::pair<std::string, std::string>>& value_names,
+    const std::string_view                                  define_name
+) -> std::string_view
+{
+    for (const auto& [name, value_name] : value_names) {
+        if (name == define_name) {
+            return value_name;
+        }
+    }
+    return {};
+}
+
 // JSON string literal (for the table data embedded in index.html); '<' is
 // escaped so no "</script>" can end the script element.
 [[nodiscard]] auto json_string(const std::string_view text) -> std::string
@@ -61,33 +74,19 @@ namespace {
 
 [[nodiscard]] auto count_instructions(const std::vector<unsigned int>& spirv) -> std::size_t
 {
-    constexpr std::size_t header_word_count = 5;
-    std::size_t count = 0;
-    std::size_t i     = header_word_count;
-    while (i < spirv.size()) {
-        const unsigned int word_count = spirv[i] >> 16u;
-        if (word_count == 0u) {
-            break;
-        }
-        ++count;
-        i += word_count;
-    }
-    return count;
+    return count_spirv_instructions(spirv);
 }
 
 [[nodiscard]] auto disassemble(const std::vector<unsigned int>& spirv) -> std::string
 {
-    if (spirv.empty()) {
-        return "(none)";
+    return disassemble_spirv(spirv);
+}
+
+void write_text_file(const std::filesystem::path& path, const std::string_view text)
+{
+    if (!erhe::file::write_file_via_temp(path, text)) {
+        log_program->warn("Shader variant browser: failed to write {}", path.string());
     }
-    spvtools::SpirvTools tools{SPV_ENV_UNIVERSAL_1_6};
-    std::string text;
-    const bool ok = tools.Disassemble(
-        spirv,
-        &text,
-        SPV_BINARY_TO_TEXT_OPTION_INDENT | SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES
-    );
-    return ok ? text : std::string{"(disassembly failed)"};
 }
 
 [[nodiscard]] auto stage_short_name(const Shader_type type) -> const char*
@@ -101,6 +100,18 @@ namespace {
         case Shader_type::tess_evaluation_shader: return "tese";
         default:                                  return "stage";
     }
+}
+
+// FNV-1a 64 of the program key, as 16 hex digits: the same program gets the
+// same id in every session, whatever order the programs compile in.
+[[nodiscard]] auto make_program_id(const std::string_view program_key) -> std::string
+{
+    std::uint64_t hash = 0xcbf29ce484222325ull;
+    for (const char c : program_key) {
+        hash ^= static_cast<std::uint64_t>(static_cast<unsigned char>(c));
+        hash *= 0x100000001b3ull;
+    }
+    return fmt::format("{:016x}", hash);
 }
 
 void write_spirv_file(const std::filesystem::path& path, const std::vector<unsigned int>& spirv)
@@ -133,16 +144,71 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 } // anonymous namespace
 
+auto count_spirv_instructions(const std::span<const unsigned int> spirv) -> std::size_t
+{
+    constexpr std::size_t header_word_count = 5;
+    std::size_t count = 0;
+    std::size_t i     = header_word_count;
+    while (i < spirv.size()) {
+        const unsigned int word_count = spirv[i] >> 16u;
+        if (word_count == 0u) {
+            break;
+        }
+        ++count;
+        i += word_count;
+    }
+    return count;
+}
+
+auto disassemble_spirv(const std::span<const unsigned int> spirv) -> std::string
+{
+    if (spirv.empty()) {
+        return "(none)";
+    }
+    spvtools::SpirvTools tools{SPV_ENV_UNIVERSAL_1_6};
+    std::string text;
+    const bool ok = tools.Disassemble(
+        spirv.data(),
+        spirv.size(),
+        &text,
+        SPV_BINARY_TO_TEXT_OPTION_INDENT | SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES
+    );
+    return ok ? text : std::string{"(disassembly failed)"};
+}
+
+auto get_shader_variant_stage_short_name(const Shader_type type) -> const char*
+{
+    return stage_short_name(type);
+}
+
+void Shader_variant_report::set_add_callback(std::function<void()> callback)
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    m_add_callback = std::move(callback);
+}
+
+auto Shader_variant_report::get_directory() const -> const std::filesystem::path&
+{
+    return m_directory;
+}
+
 Shader_variant_report::Shader_variant_report(const std::filesystem::path& directory)
     : m_directory{directory}
 {
+    // A recording starts fresh: the results of an earlier recording here
+    // (modules, pages, analytics, fragments) describe other programs.
     std::error_code error_code;
+    std::filesystem::remove_all(m_directory / "variants", error_code);
+    for (const char* file_name : {"index.html", "analytics.js", "fragments.js"}) {
+        std::filesystem::remove(m_directory / file_name, error_code);
+    }
+    error_code.clear();
     std::filesystem::create_directories(m_directory / "variants", error_code);
     if (error_code) {
         log_program->error("Shader variant browser: cannot create {}: {}", (m_directory / "variants").string(), error_code.message());
     }
     log_program->info(
-        "Shader variant browser: recording compiled programs into {} (programs served from the SPIR-V cache are not recorded; delete spirv_cache/ to record every program)",
+        "Shader variant browser: recording compiled programs into {} (earlier results there removed; the SPIR-V cache is not read while recording)",
         m_directory.string()
     );
     write_index();
@@ -158,15 +224,50 @@ void Shader_variant_report::add(
     std::lock_guard<std::mutex> lock{m_mutex};
     m_tools = tools;
 
-    const std::size_t id = m_rows.size();
-    Row row{
-        .id      = id,
-        .name    = create_info.name,
-        .defines = create_info.defines,
-        .stages  = {}
-    };
+    // The program's identity: its defines and those of its vertex format.
+    const std::vector<std::pair<std::string, std::string>> variant_defines = create_info.get_variant_defines();
 
-    // Detail page: the program's sizes, then five tabs (key, sources, SPIR-V before, after, Mali analytics).
+    // The key fragments.js matches programs by: JSON.stringify([name, defines]) of index.html's rows.
+    nlohmann::json key_defines = nlohmann::json::array();
+    for (const auto& [define_name, value] : variant_defines) {
+        key_defines.push_back(nlohmann::json::array({define_name, value}));
+    }
+    const std::string program_key = nlohmann::json::array({create_info.name, std::move(key_defines)}).dump();
+
+    // A program compiled again (same key) replaces its earlier record.
+    std::size_t index = m_rows.size();
+    for (const Row& existing : m_rows) {
+        if ((existing.name == create_info.name) && (existing.defines == variant_defines)) {
+            index = existing.index;
+        }
+    }
+    std::string id = make_program_id(program_key);
+    for (const Row& existing : m_rows) {
+        if ((existing.id == id) && (existing.index != index)) {
+            log_program->error("Shader variant browser: program id {} of {} collides with #{}; using a suffixed id", id, create_info.name, existing.index);
+            id += fmt::format("_{}", index);
+        }
+    }
+    Row row{
+        .id                 = id,
+        .index              = index,
+        .name               = create_info.name,
+        .defines            = variant_defines,
+        .define_value_names = {},
+        .stages             = {},
+        .includes           = {}
+    };
+    for (const auto& [define_name, value] : variant_defines) {
+        const Shader_define_constants* const constants = create_info.find_define_constants(define_name);
+        if (constants != nullptr) {
+            std::string expression = get_define_value_expression(*constants, value);
+            if (!expression.empty() && (expression != value)) { // an empty mask's "0" adds nothing
+                row.define_value_names.emplace_back(define_name, std::move(expression));
+            }
+        }
+    }
+
+    // Detail page: the program's sizes, then tabs (key, sources, SPIR-V before, after, one per analytics core).
     std::string sources_tab;
     std::string before_tab;
     std::string after_tab;
@@ -178,7 +279,8 @@ void Shader_variant_report::add(
             .spirv_bytes                 = stage.spirv.size() * sizeof(unsigned int),
             .optimized_spirv_bytes       = stage.optimized_spirv.size() * sizeof(unsigned int),
             .instruction_count           = count_instructions(stage.spirv),
-            .optimized_instruction_count = count_instructions(stage.optimized_spirv)
+            .optimized_instruction_count = count_instructions(stage.optimized_spirv),
+            .main_name                   = stage.main_name
         };
         row.stages.push_back(stage_row);
 
@@ -186,6 +288,8 @@ void Shader_variant_report::add(
         const std::string optimized_spv_name = fmt::format("{}_{}_optimized.spv", id, short_name);
         write_spirv_file(m_directory / "variants" / spv_name,           stage.spirv);
         write_spirv_file(m_directory / "variants" / optimized_spv_name, stage.optimized_spirv);
+        write_text_file (m_directory / "variants" / fmt::format("{}_{}.glsl",          id, short_name), stage.main_source);
+        write_text_file (m_directory / "variants" / fmt::format("{}_{}_preamble.glsl", id, short_name), stage.preamble);
 
         size_rows += fmt::format(
             "<tr><td>{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td><td><a href=\"{}\">before</a> <a href=\"{}\">after</a></td></tr>\n",
@@ -222,6 +326,7 @@ void Shader_variant_report::add(
         if (is_main) {
             continue;
         }
+        row.includes.push_back(path.generic_string());
         const std::optional<std::string> text = erhe::file::read("Shader_variant_report::add", path);
         sources_tab += fmt::format(
             "<details><summary>include - <code>{}</code></summary><pre>{}</pre></details>\n",
@@ -231,14 +336,17 @@ void Shader_variant_report::add(
     }
 
     std::string define_rows;
-    for (const auto& [define_name, value] : create_info.defines) {
-        define_rows += fmt::format("<tr><td class=\"mono\">{}</td><td class=\"mono\">{}</td></tr>\n", html_escape(define_name), html_escape(value));
+    for (const auto& [define_name, value] : variant_defines) {
+        define_rows += fmt::format(
+            "<tr><td class=\"mono\">{}</td><td class=\"mono\">{}</td><td class=\"mono\">{}</td></tr>\n",
+            html_escape(define_name), html_escape(value), html_escape(find_value_name(row.define_value_names, define_name))
+        );
     }
 
     const std::string page = fmt::format(
         R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{0} #{1}</title>
+<title>{0} #{10}</title>
 <style>{2}
 body {{ padding: 12px 16px; }}
 .tabs button {{ font: inherit; padding: 4px 12px; border: 1px solid var(--line); background: var(--head); color: var(--fg); cursor: pointer; }}
@@ -247,38 +355,59 @@ body {{ padding: 12px 16px; }}
 summary {{ cursor: pointer; padding: 2px 0; }}
 .columns {{ display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }}
 </style></head><body>
-<h2>{0} <span class="muted">#{1}</span></h2>
+<h2>{0} <span class="muted">#{10} ({1})</span></h2>
+<p id="fragments" class="muted"></p>
 <div class="columns">
 <table><tr><th>Stage</th><th class="num">Bytes before</th><th class="num">Bytes after</th><th class="num">Instr. before</th><th class="num">Instr. after</th><th>.spv</th></tr>
 {3}</table>
 </div>
-<p class="tabs"><button class="active" data-tab="key">Shader key</button><button data-tab="sources">Sources</button><button data-tab="before">SPIR-V before optimization</button><button data-tab="after">SPIR-V after optimization</button><button data-tab="analytics">Mali analytics</button></p>
-<div class="tab active" id="key"><p class="muted">{4} defines, in the order the program declares them; the index shows the ones that vary among this program's variants as its key slots.</p><table><tr><th>Define</th><th>Value</th></tr>{5}</table></div>
+<p class="tabs"><button class="active" data-tab="key">Shader key</button><button data-tab="sources">Sources</button><button data-tab="before">SPIR-V before optimization</button><button data-tab="after">SPIR-V after optimization</button><button data-tab="analytics">GPU analytics</button></p>
+<div class="tab active" id="key"><p class="muted">{4} defines, in the order the program declares them; the index shows the ones that vary among this program's variants as its key slots.</p><table><tr><th>Define</th><th>Value</th><th>Name</th></tr>{5}</table></div>
 <div class="tab" id="sources">{6}</div>
 <div class="tab" id="before">{7}</div>
 <div class="tab" id="after">{8}</div>
-<div class="tab" id="analytics"><p class="muted">No analytics recorded: run <code>py -3 scripts/shader_analytics.py &lt;browser directory&gt;</code> to write <code>analytics.js</code> (doc/erhe/graphics.md "Shader variant browser").</p></div>
+<div class="tab" id="analytics"><p class="muted">No analytics recorded: run <code>py -3 scripts/shader_analytics.py &lt;browser directory&gt;</code> to write <code>analytics.js</code> (doc/erhe/graphics.md "Mali analytics").</p></div>
 <script>
-for (const button of document.querySelectorAll('.tabs button')) {{
-  button.addEventListener('click', () => {{
-    for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('active', b === button);
-    for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t.id === button.dataset.tab);
-  }});
-}}
+// The analytics script below replaces the analytics tab with one tab per core,
+// so switching is delegated; the active tab is remembered across program pages.
+const showTab = id => {{
+  if (!document.getElementById(id)) return false;
+  for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('active', b.dataset.tab === id);
+  for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t.id === id);
+  return true;
+}};
+document.querySelector('.tabs').addEventListener('click', e => {{
+  const button = e.target.closest('button'); if (!button) return;
+  showTab(button.dataset.tab);
+  try {{ localStorage.setItem('erhe_shader_variant_tab', button.dataset.tab); }} catch (error) {{}}
+}});
 </script>
 <script src="../analytics.js"></script>
+<script src="../fragments.js"></script>
 <script>
-// The Mali analytics tab, rendered from analytics.js (scripts/shader_analytics.py)
-// when it is present: per core, per stage, per compiler variant (Main, or
-// Position and Varying for vertex shaders) a before / after / delta table.
+// The program's fragments in a captured frame (fragments.js; doc/plans/shader_cost.md A3).
+(function() {{
+  const f = window.erhe_shader_fragments; if (!f || !f.programs) return;
+  const entry = f.programs[{9}];
+  const total = f.total_invocations || 0;
+  document.getElementById('fragments').textContent = entry
+    ? `Fragments in captured frame ${{f.frame_id}}: ${{entry.invocations}} (${{(100 * entry.invocations / Math.max(total, 1)).toFixed(2)}} % of the frame's ${{total}}) in ${{entry.ranges}} pipeline bind range(s)`
+    : `Not drawn in captured frame ${{f.frame_id}} (fragments.js)`;
+}})();
+</script>
+<script>
+// The analytics tabs, one per core, rendered from analytics.js
+// (scripts/shader_analytics.py) when it is present: per stage, per compiler variant a before /
+// after / delta table (Mali: Main, or Position and Varying for vertex shaders).
 (function() {{
   const a = window.erhe_shader_analytics; if (!a || !a.cores) return;
   const esc = s => String(s).replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}})[c]);
   const fmt = v => (v === null || v === undefined) ? '-' : (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(2)) : String(v));
   const stageNames = {{vert: 'Vertex', frag: 'Fragment', comp: 'Compute', geom: 'Geometry', tesc: 'Tessellation control', tese: 'Tessellation evaluation'}};
-  const row = (label, x, y) => {{
+  // sense: 1 lower is better, -1 higher is better, 0 neither
+  const row = (label, x, y, sense = 1) => {{
     const d = (typeof x === 'number' && typeof y === 'number') ? (y - x) : null;
-    const cls = (d === null || d === 0) ? '' : (d < 0 ? 'good' : 'bad');
+    const cls = (d === null || d === 0 || sense === 0) ? '' : ((d * sense) < 0 ? 'good' : 'bad');
     return `<tr><td>${{esc(label)}}</td><td class="num">${{fmt(x)}}</td><td class="num">${{fmt(y)}}</td><td class="num ${{cls}}">${{d === null ? '' : (d > 0 ? '+' : '') + fmt(d)}}</td></tr>`;
   }};
   const renderStage = (core, s) => {{
@@ -311,31 +440,68 @@ for (const button of document.querySelectorAll('.tabs button')) {{
     }}
     return out;
   }};
-  let html = '';
+  const tabs = [];
   for (const coreName of Object.keys(a.cores)) {{
     const core = a.cores[coreName];
-    const prog = core.programs && core.programs[String({1})];
+    const prog = core.programs && core.programs[{11}];
     if (!prog) continue;
+    let html = '';
+    tabs.push([coreName, () => html]);
     html += `<h3>${{esc(coreName)}} ${{esc(core.revision || '')}} <span class="muted">${{esc(core.architecture || '')}}, driver ${{esc(core.driver || '')}}, Mali Offline Compiler ${{esc(core.malioc_version || '')}}, ${{esc(core.generated || '')}}</span></h3>`;
     for (const stage of Object.keys(prog)) html += `<h4>${{stageNames[stage] || stage}}</h4>` + renderStage(core, prog[stage]);
   }}
-  if (html) document.getElementById('analytics').innerHTML = html;
+  if (!tabs.length) return;
+  // One tab per core ("Mali G310") in place of the analytics placeholder.
+  const placeholder = document.getElementById('analytics');
+  document.querySelector('.tabs button[data-tab="analytics"]').remove();
+  tabs.forEach(([coreName, html], i) => {{
+    const id = 'analytics-' + coreName;
+    document.querySelector('.tabs').insertAdjacentHTML('beforeend', `<button data-tab="${{esc(id)}}">${{esc(coreName.replace('-', ' '))}}</button>`);
+    const div = document.createElement('div');
+    div.className = 'tab'; div.id = id; div.innerHTML = html();
+    placeholder.before(div);
+  }});
+  placeholder.remove();
 }})();
+try {{ const tab = localStorage.getItem('erhe_shader_variant_tab'); if (tab) showTab(tab); }} catch (error) {{}}
 </script>
 </body></html>
 )HTML",
         html_escape(create_info.name), id, c_style,
-        size_rows, create_info.defines.size(), define_rows,
-        sources_tab, before_tab, after_tab
+        size_rows, variant_defines.size(), define_rows,
+        sources_tab, before_tab, after_tab,
+        json_string(program_key),
+        index, json_string(id)
     );
     const std::filesystem::path page_path = m_directory / "variants" / fmt::format("{}.html", id);
     if (!erhe::file::write_file_via_temp(page_path, page)) {
         log_program->warn("Shader variant browser: failed to write {}", page_path.string());
     }
 
-    m_rows.push_back(std::move(row));
+    if (index < m_rows.size()) {
+        m_rows[index] = std::move(row);
+    } else {
+        m_rows.push_back(std::move(row));
+    }
     write_index();
     write_manifest();
+    if (m_add_callback) {
+        m_add_callback();
+    }
+}
+
+auto Shader_variant_report::find_program_id(
+    const std::string_view                                  name,
+    const std::vector<std::pair<std::string, std::string>>& defines
+) -> std::optional<std::string>
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    for (const Row& row : m_rows) {
+        if ((row.name == name) && (row.defines == defines)) {
+            return row.id;
+        }
+    }
+    return std::nullopt;
 }
 
 void Shader_variant_report::write_manifest() const
@@ -346,12 +512,19 @@ void Shader_variant_report::write_manifest() const
         for (const auto& [define_name, value] : row.defines) {
             defines.push_back(nlohmann::json::array({define_name, value}));
         }
+        nlohmann::json define_value_names = nlohmann::json::object();
+        for (const auto& [define_name, value_name] : row.define_value_names) {
+            define_value_names[define_name] = value_name;
+        }
         nlohmann::json stages = nlohmann::json::array();
         for (const Stage_row& stage : row.stages) {
             const char* const short_name = stage_short_name(stage.type);
             nlohmann::json stage_json{
                 {"type",                        short_name},
                 {"entry_point",                 "main"},
+                {"main_name",                   stage.main_name},
+                {"source",                      fmt::format("{}_{}.glsl", row.id, short_name)},
+                {"preamble",                    fmt::format("{}_{}_preamble.glsl", row.id, short_name)},
                 {"specialization_constants",    nlohmann::json::array()},
                 {"spirv",                       fmt::format("{}_{}.spv", row.id, short_name)},
                 {"spirv_bytes",                 stage.spirv_bytes},
@@ -367,13 +540,16 @@ void Shader_variant_report::write_manifest() const
         }
         programs.push_back(nlohmann::json{
             {"id",      row.id},
+            {"index",   row.index},
             {"name",    row.name},
             {"defines", std::move(defines)},
+            {"define_value_names", std::move(define_value_names)},
+            {"includes", row.includes},
             {"stages",  std::move(stages)}
         });
     }
     const nlohmann::json manifest{
-        {"schema", {{"name", "erhe_shader_variants"}, {"version", 1}}},
+        {"schema", {{"name", "erhe_shader_variants"}, {"version", 2}}},
         {"tools", {
             {"api",                 m_tools.api},
             {"glslang_version",     m_tools.glslang_version},
@@ -399,13 +575,20 @@ void Shader_variant_report::write_index() const
     // page lays the key out as one slot per axis and shows the full define
     // in a tooltip.
     std::string data{"[\n"};
+    std::string ids{"["};
     for (const Row& row : m_rows) {
+        ids += fmt::format("{}{}", (ids.size() > 1) ? "," : "", json_string(row.id));
         std::string defines{"["};
         for (const auto& [define_name, value] : row.defines) {
             if (defines.size() > 1) {
                 defines += ',';
             }
-            defines += fmt::format("[{},{}]", json_string(define_name), json_string(value));
+            const std::string_view value_name = find_value_name(row.define_value_names, define_name);
+            if (value_name.empty()) {
+                defines += fmt::format("[{},{}]", json_string(define_name), json_string(value));
+            } else {
+                defines += fmt::format("[{},{},{}]", json_string(define_name), json_string(value), json_string(value_name));
+            }
         }
         defines += ']';
         std::string stages;
@@ -422,11 +605,12 @@ void Shader_variant_report::write_index() const
         }
         data += fmt::format(
             "[{},{},{},{},{},{},{},{}],\n",
-            row.id, json_string(row.name), defines, json_string(stages),
+            row.index, json_string(row.name), defines, json_string(stages),
             bytes, optimized_bytes, instructions, optimized_instructions
         );
     }
     data += "]";
+    ids  += "]";
 
     const std::string page = fmt::format(
         R"HTML(<!doctype html>
@@ -434,7 +618,12 @@ void Shader_variant_report::write_index() const
 <title>Shader variants</title>
 <style>{0}
 body {{ display: flex; height: 100vh; overflow: hidden; }}
-#left {{ flex: 0 0 52%; display: flex; flex-direction: column; border-right: 1px solid var(--line); min-width: 0; }}
+#left {{ flex: 0 0 52%; display: flex; flex-direction: column; min-width: 0; }}
+#divider {{ flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; padding: 6px 2px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); background: var(--head); }}
+#divider button {{ font: inherit; padding: 2px 5px; cursor: pointer; background: var(--bg); color: var(--fg); border: 1px solid var(--line); }}
+body.table-collapsed #left {{ display: none; }}
+body.details-collapsed #detail {{ display: none; }}
+body.details-collapsed #left {{ flex: 1 1 auto; }}
 #bar {{ padding: 8px 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }}
 #bar input {{ font: inherit; padding: 3px 6px; flex: 1 1 200px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); }}
 #scroll {{ overflow: auto; flex: 1; }}
@@ -456,10 +645,15 @@ iframe {{ flex: 1; border: 0; height: 100%; background: var(--bg); }}
 <th class="num" data-col="6">Instr. before</th><th class="num" data-col="7">Instr. after</th>
 </tr></thead><tbody></tbody></table></div>
 </div>
+<div id="divider"><button id="toggle-table"></button><button id="toggle-details"></button></div>
 <iframe id="detail" title="Selected variant"></iframe>
 <script src="analytics.js"></script>
+<script src="fragments.js"></script>
 <script>
 const rows = {1};
+// Row ids (variants/<id>.html, analytics.js keys): stable across sessions; column 0 is the recording order.
+const ids = {2};
+rows.forEach((r, i) => {{ r.id = ids[i]; }});
 for (const r of rows) r.push(r[4] > 0 ? (100 * r[5] / r[4]) : 0);
 // The variant key column: one slot per define axis that varies among the
 // programs of one name (an axis every variant of a program sets the same
@@ -517,7 +711,8 @@ const valuesByProgram = new Map(); // program name -> axis name -> set of values
 for (const r of rows) {{
   r.key = new Map(r[2]);
   r.keyText = r[2].filter(([n, v]) => isSet(v)).map(([n, v]) => compactLabel(n, v)).join(' ');
-  r.keyFull = r[2].map(([n, v]) => v === '' ? n : `${{n}}=${{v}}`).join('\n');
+  r.valueNames = new Map(r[2].filter(d => d[2]).map(d => [d[0], d[2]]));
+  r.keyFull = r[2].map(([n, v, vn]) => (v === '' ? n : `${{n}}=${{v}}`) + (vn ? ` (${{vn}})` : '')).join('\n');
   if (!valuesByProgram.has(r[1])) valuesByProgram.set(r[1], new Map());
   const byAxis = valuesByProgram.get(r[1]);
   for (const a of axes) {{
@@ -536,18 +731,22 @@ document.getElementById('keyhead').title = 'One slot per define axis that varies
 const renderKey = r => shownAxes.map(a => {{
   const value = r.key.get(a.name);
   const set = value !== undefined && isSet(value);
-  const full = value === undefined ? `${{a.name}} (absent)` : (value === '' ? a.name : `${{a.name}}=${{value}}`);
+  const valueName = r.valueNames.get(a.name);
+  const full = value === undefined ? `${{a.name}} (absent)` : ((value === '' ? a.name : `${{a.name}}=${{value}}`) + (valueName ? ` (${{valueName}})` : ''));
   return `<span class="${{set ? '' : 'off'}}" style="width:${{a.width}}ch" title="${{esc(full)}}">${{set ? esc(compactLabel(a.name, value)) : '.'}}</span>`;
 }}).join('');
-// Mali analytics columns (analytics.js from scripts/shader_analytics.py), per
-// program: the fragment (or compute) Main variant's total cycles before and
-// after optimization with the bound pipelines, the vertex Position and Varying
-// cycles after, the maximum work registers and minimum occupancy over the
-// stages, the spill bytes summed, and flags. Rows get indices 9..17.
+// Analytics columns (analytics.js from scripts/shader_analytics.py): one
+// group per compiler, from its default core, appended after column 8; each
+// group records its first column index. Mali, per program: the fragment (or
+// compute) Main total cycles before and after optimization with the bound
+// pipelines, the vertex Position and Varying cycles after, the maximum work
+// registers and minimum occupancy over the stages, the spill bytes summed,
+// and flags.
 const analytics = window.erhe_shader_analytics;
-const analyticsCore = (analytics && analytics.cores) ? analytics.cores[analytics.default_core] : null;
+const analyticsCores = (analytics && analytics.cores) || {{}};
+const maliCoreName = analytics ? (analytics.default_cores ? analytics.default_cores.malioc : analytics.default_core) : null;
 const maxCycles = v => (v && v.total) ? Math.max(...v.total.filter(x => typeof x === 'number'), 0) : null;
-function summarize(prog) {{
+function summarizeMali(prog) {{
   const out = [null, null, '', null, null, null, null, null, ''];
   if (!prog) return out;
   const flags = new Set();
@@ -576,41 +775,108 @@ function summarize(prog) {{
   out[5] = regs; out[6] = occ; out[7] = spill; out[8] = [...flags].join(' ');
   return out;
 }}
-if (analyticsCore) {{
-  for (const r of rows) r.push(...summarize(analyticsCore.programs[String(r[0])]));
-  document.querySelector('#table thead tr').insertAdjacentHTML('beforeend',
-    '<th class="num" data-col="9">Main cyc. before</th><th class="num" data-col="10">Main cyc. after</th><th data-col="11">Bound</th>' +
-    '<th class="num" data-col="12">Pos. cyc.</th><th class="num" data-col="13">Var. cyc.</th><th class="num" data-col="14">Regs</th><th class="num" data-col="15">Occ. %</th><th class="num" data-col="16">Spill B</th><th data-col="17">Flags</th>');
-  document.getElementById('bar').insertAdjacentHTML('beforeend', `<span class="muted">Mali analytics: ${{analytics.default_core}} (${{Object.keys(analytics.cores).length}} core(s) in analytics.js)</span>`);
+const shortCore = name => name.replace(/^Mali-/, '');
+const columnGroups = [];
+// columns: [label, numeric, bad(value)]; sum: the two columns the summary line totals
+if (maliCoreName && analyticsCores[maliCoreName]) columnGroups.push({{
+  core: maliCoreName, summarize: summarizeMali, flags: 8, sum: [0, 1], sumLabel: 'Main cycles',
+  columns: [['Main cyc. before', true], ['Main cyc. after', true], ['Bound', false], ['Pos. cyc.', true], ['Var. cyc.', true], ['Regs', true],
+    ['Occ. %', true, v => v !== null && v < 100], ['Spill B', true, v => v > 0], ['Flags', false, v => (v || '').includes('error')]]
+}});
+// Fragments of a captured frame (fragments.js, MCP capture_fragment_invocations;
+// doc/plans/shader_cost.md A3), matched by the key JSON.stringify([name, defines]):
+// the program's invocations, their share of the frame, and per analytics
+// group the frame's estimated work of the variant - fragments times its
+// fragment Main cost after optimization - and that estimate's share.
+const fragments = window.erhe_shader_fragments;
+const fragmentPrograms = (fragments && fragments.programs) ? fragments.programs : null;
+const rowKey = r => JSON.stringify([r[1], r[2].map(d => [d[0], d[1]])]);
+{{
+  let offset = 9;
+  const coreGroups = columnGroups.slice();
+  for (const g of coreGroups) {{
+    g.offset = offset;
+    g.tag = shortCore(g.core);
+    const programs = analyticsCores[g.core].programs || {{}};
+    for (const r of rows) r.push(...g.summarize(programs[r.id]));
+    offset += g.columns.length;
+  }}
+  if (fragmentPrograms) {{
+    const estimates = coreGroups.map(g => ({{ tag: g.tag, unit: (g === coreGroups.find(c => c.core === maliCoreName)) ? 'cyc.' : 'instr.', column: g.offset + 1 }}));
+    const columns = [['Fragments', true], ['Frame %', true]];
+    for (const e of estimates) columns.push([`${{e.tag}} est. ${{e.unit}}`, true], [`${{e.tag}} est. %`, true]);
+    // A program recorded twice (same name and defines) shows its fragments on both rows, counted once.
+    const matchedKeys = new Set();
+    let total = 0;
+    for (const r of rows) {{
+      const key = rowKey(r);
+      const entry = fragmentPrograms[key];
+      const fragmentCount = entry ? entry.invocations : null;
+      if (entry && !matchedKeys.has(key)) {{ total += fragmentCount; matchedKeys.add(key); }}
+      const values = [fragmentCount, null];
+      for (const e of estimates) values.push(((fragmentCount !== null) && (typeof r[e.column] === 'number')) ? fragmentCount * r[e.column] : null, null);
+      r.push(...values);
+    }}
+    const base = offset;
+    const g = {{ core: null, tag: '', title: `fragments.js: frame ${{fragments.frame_id}}`, offset: base, columns, sum: [0, 2] }};
+    const frameTotal = fragments.total_invocations || total;
+    const uniqueRows = rows.filter((r, i) => rows.findIndex(o => rowKey(o) === rowKey(r)) === i);
+    const estimateTotals = estimates.map((e, i) => uniqueRows.reduce((sum, r) => sum + (r[base + 2 + (2 * i)] || 0), 0));
+    for (const r of rows) {{
+      if (r[base] !== null) r[base + 1] = 100 * r[base] / Math.max(frameTotal, 1);
+      estimates.forEach((e, i) => {{ const v = r[base + 2 + (2 * i)]; if (v !== null) r[base + 3 + (2 * i)] = 100 * v / Math.max(estimateTotals[i], 1); }});
+    }}
+    g.summary = shownRows => {{
+      const shownKeys = new Set();
+      let shownFragments = 0;
+      for (const r of shownRows) {{ const key = rowKey(r); if ((r[base] !== null) && !shownKeys.has(key)) {{ shownFragments += r[base]; shownKeys.add(key); }} }}
+      return `, fragments ${{shownFragments}} of the frame's ${{frameTotal}}`;
+    }};
+    columnGroups.push(g);
+    document.getElementById('bar').insertAdjacentHTML('beforeend',
+      `<span class="muted">Fragments: frame ${{fragments.frame_id}}, ${{matchedKeys.size}} of ${{Object.keys(fragmentPrograms).length}} captured programs recorded here (${{(100 * total / Math.max(frameTotal, 1)).toFixed(1)}} % of the frame's invocations)</span>`);
+    offset += columns.length;
+  }}
+  for (const g of columnGroups) {{
+    document.querySelector('#table thead tr').insertAdjacentHTML('beforeend', g.columns.map(([label, numeric], i) =>
+      `<th class="${{numeric ? 'num' : ''}}" data-col="${{g.offset + i}}" title="${{g.title || g.core}}">${{g.tag ? g.tag + ' ' : ''}}${{label}}</th>`).join(''));
+  }}
+  if (coreGroups.length) document.getElementById('bar').insertAdjacentHTML('beforeend',
+    `<span class="muted">Analytics: ${{coreGroups.map(g => g.core).join(', ')}} (${{Object.keys(analyticsCores).length}} core(s) in analytics.js)</span>`);
 }}
-let sortCol = 0, sortAsc = true, selected = -1;
+let sortCol = 0, sortAsc = true, selected = '';
 const tbody = document.querySelector('#table tbody');
 const filter = document.getElementById('filter');
 const esc = s => String(s).replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}})[c]);
 const num = v => (v === null || v === undefined) ? '-' : (Number.isInteger(v) ? String(v) : v.toFixed(2));
 function render() {{
   const words = filter.value.toLowerCase().split(/\s+/).filter(w => w);
-  const shown = rows.filter(r => words.every(w => (r[1] + ' ' + r.keyText + ' ' + r.keyFull + ' ' + (r[17] || '')).toLowerCase().includes(w)));
+  const flagText = r => columnGroups.map(g => (g.flags === undefined) ? '' : (r[g.offset + g.flags] || '')).join(' ');
+  const shown = rows.filter(r => words.every(w => (r[1] + ' ' + r.keyText + ' ' + r.keyFull + ' ' + flagText(r)).toLowerCase().includes(w)));
   shown.sort((a, b) => {{
     const x = (sortCol === 2) ? a.keyText : a[sortCol], y = (sortCol === 2) ? b.keyText : b[sortCol];
     const nx = (x === null || x === undefined) ? -1 : x, ny = (y === null || y === undefined) ? -1 : y;
     const c = (typeof nx === 'number' && typeof ny === 'number') ? (nx - ny) : String(nx).localeCompare(String(ny));
     return sortAsc ? c : -c;
   }});
-  let before = 0, after = 0, cyclesBefore = 0, cyclesAfter = 0;
+  let before = 0, after = 0;
+  const sums = columnGroups.map(() => [0, 0]);
   tbody.innerHTML = shown.map(r => {{
     before += r[4]; after += r[5];
-    let cells = `<tr data-id="${{r[0]}}" class="${{r[0] === selected ? 'selected' : ''}}"><td class="num">${{r[0]}}</td><td>${{esc(r[1])}}</td><td class="key" title="${{esc(r.keyFull)}}">${{renderKey(r)}}</td><td>${{r[3]}}</td>` +
+    let cells = `<tr data-id="${{r.id}}" class="${{r.id === selected ? 'selected' : ''}}"><td class="num">${{r[0]}}</td><td>${{esc(r[1])}}</td><td class="key" title="${{esc(r.keyFull)}}">${{renderKey(r)}}</td><td>${{r[3]}}</td>` +
       `<td class="num">${{r[4]}}</td><td class="num">${{r[5]}}</td><td class="num">${{r[8].toFixed(1)}}</td><td class="num">${{r[6]}}</td><td class="num">${{r[7]}}</td>`;
-    if (analyticsCore) {{
-      cyclesBefore += r[9] || 0; cyclesAfter += r[10] || 0;
-      cells += `<td class="num">${{num(r[9])}}</td><td class="num">${{num(r[10])}}</td><td>${{esc(r[11])}}</td><td class="num">${{num(r[12])}}</td><td class="num">${{num(r[13])}}</td>` +
-        `<td class="num">${{num(r[14])}}</td><td class="num ${{r[15] !== null && r[15] < 100 ? 'bad' : ''}}">${{num(r[15])}}</td><td class="num ${{r[16] > 0 ? 'bad' : ''}}">${{num(r[16])}}</td><td class="${{(r[17] || '').includes('error') ? 'bad' : ''}}">${{esc(r[17])}}</td>`;
-    }}
+    columnGroups.forEach((g, gi) => {{
+      sums[gi][0] += r[g.offset + g.sum[0]] || 0; sums[gi][1] += r[g.offset + g.sum[1]] || 0;
+      cells += g.columns.map(([label, numeric, bad], i) => {{
+        const v = r[g.offset + i];
+        const cls = [numeric ? 'num' : '', (bad && bad(v)) ? 'bad' : ''].join(' ');
+        return `<td class="${{cls}}">${{numeric ? num(v) : esc(v)}}</td>`;
+      }}).join('');
+    }});
     return cells + '</tr>';
   }}).join('');
   document.getElementById('summary').textContent = `${{shown.length}} / ${{rows.length}} programs, SPIR-V ${{before}} -> ${{after}} bytes` +
-    (analyticsCore ? `, Main cycles ${{cyclesBefore.toFixed(1)}} -> ${{cyclesAfter.toFixed(1)}}` : '');
+    columnGroups.map((g, gi) => g.summary ? g.summary(shown) : `, ${{g.tag}} ${{g.sumLabel}} ${{num(sums[gi][0])}} -> ${{num(sums[gi][1])}}`).join('');
 }}
 document.querySelector('#table thead').addEventListener('click', e => {{
   const th = e.target.closest('th'); if (!th) return;
@@ -618,9 +884,29 @@ document.querySelector('#table thead').addEventListener('click', e => {{
   if (col === sortCol) sortAsc = !sortAsc; else {{ sortCol = col; sortAsc = true; }}
   render();
 }});
+// Collapsible panes: collapsing one gives the other the window; never both.
+const setPanes = state => {{
+  document.body.classList.toggle('table-collapsed', state === 'details');
+  document.body.classList.toggle('details-collapsed', state === 'table');
+  const tableButton = document.getElementById('toggle-table'), detailsButton = document.getElementById('toggle-details');
+  tableButton.textContent = state === 'details' ? '>' : '<';
+  tableButton.title = state === 'details' ? 'Show the variant table' : 'Collapse the variant table';
+  detailsButton.textContent = state === 'table' ? '<' : '>';
+  detailsButton.title = state === 'table' ? 'Show the selected variant' : 'Collapse the selected variant';
+  try {{ localStorage.setItem('erhe_shader_variant_panes', state); }} catch (error) {{}}
+}};
+const paneState = () => document.body.classList.contains('table-collapsed') ? 'details' : (document.body.classList.contains('details-collapsed') ? 'table' : 'both');
+document.getElementById('toggle-table').addEventListener('click', () => setPanes(paneState() === 'details' ? 'both' : 'details'));
+document.getElementById('toggle-details').addEventListener('click', () => setPanes(paneState() === 'table' ? 'both' : 'table'));
+{{
+  let state = 'both';
+  try {{ state = localStorage.getItem('erhe_shader_variant_panes') || 'both'; }} catch (error) {{}}
+  setPanes(['both', 'table', 'details'].includes(state) ? state : 'both');
+}}
 tbody.addEventListener('click', e => {{
   const tr = e.target.closest('tr'); if (!tr) return;
-  selected = Number(tr.dataset.id);
+  if (paneState() === 'table') setPanes('both');
+  selected = tr.dataset.id;
   document.getElementById('detail').src = `variants/${{selected}}.html`;
   render();
 }});
@@ -629,7 +915,7 @@ render();
 </script>
 </body></html>
 )HTML",
-        c_style, data
+        c_style, data, ids
     );
     const std::filesystem::path index_path = m_directory / "index.html";
     if (!erhe::file::write_file_via_temp(index_path, page)) {

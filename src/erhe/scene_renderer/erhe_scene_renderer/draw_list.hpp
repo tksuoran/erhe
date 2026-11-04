@@ -304,6 +304,7 @@ public:
     Overdraw_count                                  overdraw       {Overdraw_count::off};
     Shader_debug                                    shader_debug   {Shader_debug::none};
     Color_sub_variant                               sub_variant    {Color_sub_variant::standard};
+    uint64_t                                        weight_serial  {0}; // Overdraw_count::cost: Shader_variant_cache::get_overdraw_weight_serial()
     const erhe::graphics::Reloadable_shader_stages* stages         {nullptr};
 };
 

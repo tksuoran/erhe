@@ -104,8 +104,14 @@ Shader_stages::Shader_stages(Shader_stages&&) noexcept = default;
 Shader_stages& Shader_stages::operator=(Shader_stages&&) noexcept = default;
 
 Shader_stages::Shader_stages(Device& device, Shader_stages_prototype&& prototype)
-    : m_impl{std::make_unique<Shader_stages_impl>(device, std::move(prototype))}
+    : m_defines{prototype.create_info().get_variant_defines()} // before the impl consumes the prototype
 {
+    m_impl = std::make_unique<Shader_stages_impl>(device, std::move(prototype));
+}
+
+auto Shader_stages::get_variant_defines() const -> const std::vector<std::pair<std::string, std::string>>&
+{
+    return m_defines;
 }
 
 auto Shader_stages::name() const -> const std::string&
@@ -140,6 +146,7 @@ auto Shader_stages::get_impl() const -> const Shader_stages_impl&
 
 void Shader_stages::reload(Shader_stages_prototype&& prototype) const
 {
+    m_defines = prototype.create_info().get_variant_defines(); // before the impl consumes the prototype
     m_impl->reload(std::move(prototype));
 }
 

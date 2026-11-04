@@ -7,6 +7,7 @@
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 #include "app_context.hpp"
+#include "renderers/shader_analytics.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "windows/viewport_window.hpp"
@@ -17,6 +18,8 @@
 #include "erhe_scene_renderer/overdraw_counter.hpp"
 
 #include <fmt/format.h>
+#include <algorithm>
+#include <cmath>
 #include <optional>
 #include <nlohmann/json.hpp>
 
@@ -45,7 +48,7 @@ namespace {
     return {};
 }
 
-constexpr const char* c_mode_names[] = { "off", "shaded", "rasterized" };
+constexpr const char* c_mode_names[] = { "off", "shaded", "rasterized", "cost" };
 
 [[nodiscard]] auto get_mode_name(const Overdraw_mode mode) -> const char*
 {
@@ -80,7 +83,7 @@ constexpr const char* c_mode_names[] = { "off", "shaded", "rasterized" };
 auto Mcp_server::action_set_overdraw_visualization(const json& args) -> std::string
 {
     if (!args.contains("mode") || !args["mode"].is_string()) {
-        return make_error_content("Missing required argument: mode (\"off\", \"shaded\" or \"rasterized\")");
+        return make_error_content("Missing required argument: mode (\"off\", \"shaded\", \"rasterized\" or \"cost\")");
     }
     const std::string mode_name = args["mode"].get<std::string>();
     std::optional<Overdraw_mode> mode{};
@@ -90,7 +93,28 @@ auto Mcp_server::action_set_overdraw_visualization(const json& args) -> std::str
         }
     }
     if (!mode.has_value()) {
-        return make_error_content(fmt::format("mode '{}' is not one of \"off\", \"shaded\", \"rasterized\"", mode_name));
+        return make_error_content(fmt::format("mode '{}' is not one of \"off\", \"shaded\", \"rasterized\", \"cost\"", mode_name));
+    }
+    // The cost mode (doc/plans/shader_cost.md B2) weighs by a metric of the loaded analytics.
+    Shader_analytics* const analytics = m_context.shader_analytics;
+    if (mode.value() == Overdraw_mode::cost) {
+        if ((analytics == nullptr) || !analytics->is_loaded()) {
+            return make_error_content("mode cost needs shader analytics: load_shader_analytics (or --shader-analytics) first");
+        }
+        Shader_cost_metric metric = analytics->get_selected_metric();
+        if (args.contains("metric")) {
+            const std::optional<Shader_cost_metric> parsed = parse_shader_cost_metric(args.value("metric", std::string{}));
+            if (!parsed.has_value()) {
+                return make_error_content(fmt::format("metric '{}' is not a shader cost metric (load_shader_analytics lists them)", args.value("metric", std::string{})));
+            }
+            metric = parsed.value();
+        }
+        if (!analytics->has_metric(metric)) {
+            return make_error_content(fmt::format("the loaded analytics have no Mali core for metric {}", c_str(metric)));
+        }
+        analytics->select_metric(metric);
+    } else if (args.contains("metric") || args.contains("max_value")) {
+        return make_error_content("metric and max_value apply to mode cost only");
     }
     const std::string viewport_title = args.value("viewport", std::string{});
     Scene_view* const headset_view   = find_headset_view(m_context, viewport_title);
@@ -115,6 +139,18 @@ auto Mcp_server::action_set_overdraw_visualization(const json& args) -> std::str
         }
         scene_view->set_overdraw_max_count(static_cast<uint32_t>(args["max_count"].get<int>()));
     }
+    if (mode.value() == Overdraw_mode::cost) {
+        const Shader_cost_metric metric = analytics->get_selected_metric();
+        if (args.contains("max_value")) {
+            if (!args["max_value"].is_number() || (args["max_value"].get<double>() <= 0.0)) {
+                return make_error_content("max_value must be a number > 0 (metric units)");
+            }
+            const double weight_units = args["max_value"].get<double>() / Shader_analytics::get_weight_scale(metric);
+            scene_view->set_overdraw_max_count(std::max(uint32_t{1}, static_cast<uint32_t>(std::lround(weight_units))));
+        } else if (!args.contains("max_count")) {
+            scene_view->set_overdraw_max_count(get_default_shader_cost_max(*analytics, metric));
+        }
+    }
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (headset_view != nullptr) {
         // MCP requests run in the prepare phase: set directly.
@@ -124,11 +160,19 @@ auto Mcp_server::action_set_overdraw_visualization(const json& args) -> std::str
     {
         m_context.scene_views->set_overdraw_mode(viewport_window->viewport_scene_view().get(), mode.value());
     }
-    return make_json_content({
+    json result{
         {"viewport",  (headset_view != nullptr) ? std::string{"Headset"} : viewport_window->get_title()},
         {"mode",      get_mode_name(scene_view->get_overdraw_mode())},
         {"max_count", scene_view->get_overdraw_max_count()}
-    }).dump();
+    };
+    if (mode.value() == Overdraw_mode::cost) {
+        const Shader_cost_metric metric = analytics->get_selected_metric();
+        result["metric"]       = c_str(metric);
+        result["metric_title"] = analytics->get_metric_title(metric);
+        result["weight_scale"] = Shader_analytics::get_weight_scale(metric);
+        result["max_value"]    = static_cast<double>(scene_view->get_overdraw_max_count()) * Shader_analytics::get_weight_scale(metric);
+    }
+    return make_json_content(result).dump();
 }
 
 auto Mcp_server::query_overdraw_stats(const json& args) -> std::string
@@ -155,6 +199,23 @@ auto Mcp_server::query_overdraw_stats(const json& args) -> std::string
         result["message"] = (mode != Overdraw_mode::off)
             ? "No counted frame has retired yet; call again after a few frames"
             : "Overdraw visualization is off for this viewport (set_overdraw_visualization)";
+        return make_json_content(result).dump();
+    }
+    if (statistics.overdraw == erhe::scene_renderer::Overdraw_count::cost) {
+        // Weighted counts: the 32-bit total overflows, so only the per-pixel values.
+        const Shader_analytics* const analytics = m_context.shader_analytics;
+        const double scale = (analytics != nullptr) ? Shader_analytics::get_weight_scale(analytics->get_selected_metric()) : 1.0;
+        result["frame_index"]       = statistics.frame_index;
+        result["counted_mode"]      = "cost";
+        result["width"]             = statistics.width;
+        result["height"]            = statistics.height;
+        result["covered_pixels"]    = statistics.covered_pixel_count;
+        result["max_weight"]        = statistics.max_count;
+        if (analytics != nullptr) {
+            result["metric"]           = c_str(analytics->get_selected_metric());
+            result["max_value"]        = static_cast<double>(statistics.max_count) * scale;
+            result["missing_variants"] = analytics->get_missing_variant_count();
+        }
         return make_json_content(result).dump();
     }
     const uint64_t pixel_count = static_cast<uint64_t>(statistics.width) * static_cast<uint64_t>(statistics.height);

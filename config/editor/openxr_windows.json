@@ -43,6 +43,7 @@
         "ray_trace": false,
         "rendergraph": false,
         "selection": false,
+        "shader_variants": false,
         "settings": false,
         "sheet": false,
         "tail_log": false,

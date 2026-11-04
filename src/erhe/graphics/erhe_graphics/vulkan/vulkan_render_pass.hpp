@@ -37,6 +37,7 @@ public:
     [[nodiscard]] auto get_debug_label           () const -> erhe::utility::Debug_label;
     [[nodiscard]] auto get_command_buffer        () const -> VkCommandBuffer;
     [[nodiscard]] auto get_render_pass           () const -> VkRenderPass;
+    [[nodiscard]] auto get_view_mask             () const -> uint32_t { return m_view_mask; }
 
     // For Render_command_encoder
     void start_render_pass(Command_buffer& command_buffer, Render_pass* render_pass_before, Render_pass* render_pass_after);

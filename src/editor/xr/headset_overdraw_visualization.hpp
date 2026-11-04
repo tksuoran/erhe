@@ -21,6 +21,8 @@ namespace erhe::scene_renderer {
 
 namespace editor {
 
+enum class Overdraw_ramp : uint32_t; // scene/viewport_render_state.hpp
+
 // The headset's overdraw heat map (doc/plans/overdraw_visualization.md
 // "Headset"): one fullscreen multiview draw over the eye images, inside a
 // multiview render pass after the content passes, reading the headset's
@@ -45,7 +47,8 @@ public:
         const erhe::graphics::Buffer&           count_buffer,
         uint32_t                                width,
         uint32_t                                height,
-        uint32_t                                max_count
+        uint32_t                                max_count,
+        Overdraw_ramp                           ramp
     );
 
 private:

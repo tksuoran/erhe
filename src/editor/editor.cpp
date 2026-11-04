@@ -99,6 +99,8 @@
 #include "erhe_scene_renderer/draw_list_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "renderers/prewarm.hpp"
+#include "renderers/shader_analytics.hpp"
+#include "renderers/shader_analytics_service.hpp"
 #include "renderers/render_settings.hpp"
 #include "renderers/material_set_factory.hpp"
 #include "renderers/programs.hpp"
@@ -148,6 +150,7 @@
 #include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
 #include "windows/lod_window.hpp"
+#include "windows/shader_variants_window.hpp"
 #include "windows/pvs_window.hpp"
 #include "windows/inventory_window.hpp"
 #include "windows/properties.hpp"
@@ -2642,7 +2645,21 @@ public:
         return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
-    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off, bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling, const std::string& shader_variant_browser_directory)
+    // Before the device exists: a recording session clears the browser
+    // directory when the device creates its Shader_variant_report.
+    void read_startup_shader_analytics(const std::string& explicit_directory)
+    {
+        if (explicit_directory.empty()) {
+            return;
+        }
+        std::string error;
+        m_startup_shader_analytics = Shader_analytics::read(explicit_directory, error);
+        if (!m_startup_shader_analytics.has_value()) {
+            log_startup->error("--shader-analytics {}: {}", explicit_directory, error);
+        }
+    }
+
+    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off, bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling, const std::string& shader_variant_browser_directory, const std::string& shader_analytics_directory, const Shader_analytics_default shader_analytics_default)
         : m_startup_commands_path{std::move(startup_commands_path)}
         , m_startup_scene_path   {std::move(startup_scene_path)}
         , m_no_startup_scene     {no_startup_scene}
@@ -2664,6 +2681,7 @@ public:
             log_startup->info("--shader-variant-browser: shader_variant_browser_directory = '{}' (erhe_graphics.json not modified)", shader_variant_browser_directory);
             m_graphics_config.shader_variant_browser_directory = shader_variant_browser_directory;
         }
+        read_startup_shader_analytics(shader_analytics_directory);
 
 #if defined(__APPLE__)
         // Must happen before the first Metal framework use - window creation
@@ -3037,6 +3055,20 @@ public:
                     *m_graphics_device.get(),
                     *m_program_interface.get()
                 );
+                m_shader_analytics = std::make_unique<Shader_analytics>(*m_shader_variant_cache.get());
+                if (m_startup_shader_analytics.has_value()) {
+                    m_shader_analytics->apply(std::move(m_startup_shader_analytics.value()));
+                    m_startup_shader_analytics.reset();
+                }
+                // Before the programs build, so each one is observed.
+                if (
+                    (shader_analytics_default == Shader_analytics_default::offline_compilers) &&
+                    m_editor_settings.shader_analytics.enabled
+                ) {
+                    m_shader_analytics_service = std::make_unique<Shader_analytics_service>(
+                        m_editor_settings.shader_analytics, *m_graphics_device.get(), *m_executor.get(), *m_shader_analytics.get()
+                    );
+                }
             }
             {
                 ERHE_PROFILE_SCOPE("Programs");
@@ -3391,6 +3423,9 @@ public:
                     conditionally_enable_window_imgui_host(m_window.get(), m_app_context.OpenXR),
                     get_imgui_config_path(m_app_context.OpenXR)
                 );
+                if (m_shader_analytics_service) {
+                    m_shader_analytics_service->start(m_scene_commit_queue);
+                }
             }
             ERHE_INIT_STEP_END
 
@@ -3518,6 +3553,8 @@ public:
                 m_lod_window             = std::make_unique<Lod_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), m_editor_settings.lod);
                 m_pvs_window             = std::make_unique<Pvs_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_app_context.pvs_window              = m_pvs_window.get();
+                m_shader_variants_window = std::make_unique<Shader_variants_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_graphics_device->get_shader_variant_report());
+                m_app_context.shader_variants_window  = m_shader_variants_window.get();
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
                 m_app_context.frame_pacing_observer = &m_frame_pacing_observer;
                 // The pacer's presentation setup follows the window display's
@@ -4269,6 +4306,9 @@ public:
         // Stop the watchdog first so it cannot touch members during teardown.
         stop_main_loop_watchdog();
 
+        // Waits for running analysis tasks; no more programs are observed.
+        m_shader_analytics_service.reset();
+
         // Then the render thread: run() joins the last frame it kicked
         // when the loop ends; a frame still outstanding (run() left by an
         // exception) is joined here. Then the dedicated thread ends; no
@@ -4385,6 +4425,8 @@ public:
         m_app_context.cull_frame_registry      = m_cull_frame_registry   .get();
         m_app_context.texel_renderer           = m_texel_renderer        .get();
         m_app_context.shader_variant_cache     = m_shader_variant_cache  .get();
+        m_app_context.shader_analytics         = m_shader_analytics      .get();
+        m_app_context.shader_analytics_service = m_shader_analytics_service.get();
         m_app_context.program_interface        = m_program_interface     .get();
         m_app_context.context_window           = m_window                .get();
         m_app_context.brdf_slice               = m_brdf_slice            .get();
@@ -5679,6 +5721,9 @@ public:
     std::unique_ptr<erhe::rendergraph::Rendergraph         > m_rendergraph;
     std::unique_ptr<erhe::renderer::Text_renderer          > m_text_renderer;
     std::unique_ptr<erhe::scene_renderer::Shader_variant_cache>       m_shader_variant_cache;
+    std::unique_ptr<Shader_analytics>                                 m_shader_analytics;
+    std::optional<Shader_analytics_data>                              m_startup_shader_analytics;
+    std::unique_ptr<Shader_analytics_service>                         m_shader_analytics_service;
     std::unique_ptr<Material_set_factory                  >           m_material_set_factory;
     std::unique_ptr<Programs                              >           m_programs;
     // Declared before the two renderers that hold a reference to it.
@@ -5763,6 +5808,7 @@ public:
     std::unique_ptr<Lightmap_window                 >        m_lightmap_window;
     std::unique_ptr<Lod_window                      >        m_lod_window;
     std::unique_ptr<Pvs_window                      >        m_pvs_window;
+    std::unique_ptr<Shader_variants_window          >        m_shader_variants_window;
     std::unique_ptr<Lightmap_texture_window         >        m_lightmap_texture_window;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
     std::unique_ptr<Animation_player                >        m_animation_player;
@@ -5827,7 +5873,7 @@ public:
     std::unique_ptr<Mcp_server         >                     m_mcp_server;
 };
 
-void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off, const bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling, const std::string& shader_variant_browser_directory)
+void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off, const bool fix_gltf_spot_lights, const std::string& benchmark_path, const Headset_culling headset_culling, const std::string& shader_variant_browser_directory, const std::string& shader_analytics_directory, const Shader_analytics_default shader_analytics_default)
 {
 //#if defined(ERHE_PROFILE_LIBRARY_TRACY) && TRACY_ENABLE
 //    while (!TracyIsConnected) {
@@ -5976,7 +6022,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         //    editor.tick();
         //}
 
-        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off, fix_gltf_spot_lights, benchmark_path, headset_culling, shader_variant_browser_directory};
+        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off, fix_gltf_spot_lights, benchmark_path, headset_culling, shader_variant_browser_directory, shader_analytics_directory, shader_analytics_default};
         editor.run();
     }
 

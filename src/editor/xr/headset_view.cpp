@@ -1979,7 +1979,8 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                         *m_overdraw_view_state.get_count_buffer(overdraw_frame_index),
                         static_cast<uint32_t>(frame.width),
                         static_cast<uint32_t>(frame.height),
-                        overdraw_slot.max_count
+                        overdraw_slot.max_count,
+                        get_overdraw_ramp(overdraw_slot.mode)
                     );
                 }
                 // No post-processing in VR: render content + overlay (tool /

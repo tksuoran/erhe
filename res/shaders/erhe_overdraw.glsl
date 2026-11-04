@@ -18,12 +18,21 @@
 // - ERHE_OVERDRAW_RASTERIZED: every rasterized fragment. No early fragment
 //   tests, so the shader runs before the depth test, and it counts before
 //   any discard: what the draws rasterize, whatever the depth buffer holds.
+// - ERHE_OVERDRAW_COST: as shaded, adding ERHE_OVERDRAW_WEIGHT (the static
+//   cost of the variant's OVERDRAW off twin, doc/plans/shader_cost.md B2)
+//   instead of 1.
 // Helper invocations perform no stores, so they never count.
 
 #include "erhe_camera_view.glsl"
 
-#if (ERHE_OVERDRAW == ERHE_OVERDRAW_SHADED) && !defined(ERHE_FRAGMENT_MAY_DISCARD)
+#if ((ERHE_OVERDRAW == ERHE_OVERDRAW_SHADED) || (ERHE_OVERDRAW == ERHE_OVERDRAW_COST)) && !defined(ERHE_FRAGMENT_MAY_DISCARD)
 layout(early_fragment_tests) in;
+#endif
+
+#if ERHE_OVERDRAW == ERHE_OVERDRAW_COST
+#   define ERHE_OVERDRAW_INCREMENT uint(ERHE_OVERDRAW_WEIGHT)
+#else
+#   define ERHE_OVERDRAW_INCREMENT 1u
 #endif
 
 void erhe_count_overdraw()
@@ -32,7 +41,7 @@ void erhe_count_overdraw()
     const ivec2 pixel    = ivec2(gl_FragCoord.xy) - viewport.xy;
     if ((pixel.x >= 0) && (pixel.y >= 0) && (pixel.x < viewport.z) && (pixel.y < viewport.w)) {
         const uint row = (c_view_index * uint(viewport.w)) + uint(pixel.y);
-        atomicAdd(overdraw_count.counts[(row * uint(viewport.z)) + uint(pixel.x)], 1u);
+        atomicAdd(overdraw_count.counts[(row * uint(viewport.z)) + uint(pixel.x)], ERHE_OVERDRAW_INCREMENT);
     }
 }
 

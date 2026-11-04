@@ -3,6 +3,7 @@
 
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/light.hpp"
@@ -13,6 +14,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <sstream>
 
 namespace erhe::scene_renderer {
@@ -53,13 +55,193 @@ auto Shader_key::get_defines() const -> std::vector<std::pair<std::string, std::
         (Shader_int::PARAM != Shader_int::VERTEX_TEXCOORD_ENCODING) && \
         (Shader_int::PARAM != Shader_int::VERTEX_TBN_ENCODING)      && \
         (Shader_int::PARAM != Shader_int::VERTEX_JOINT_WEIGHTS_ENCODING)) { \
-        defines.emplace_back(std::string{"ERHE_" #PARAM}, fmt::format("{}", get(Shader_int::PARAM))); \
+        if ((Shader_int::PARAM != Shader_int::OVERDRAW_WEIGHT) || (get(Shader_int::OVERDRAW) == static_cast<uint32_t>(Overdraw_count::cost))) { \
+            defines.emplace_back(std::string{"ERHE_" #PARAM}, fmt::format("{}", get(Shader_int::PARAM))); \
+        } \
     }
 
     ERHE_SHADER_INT(ERHE_X)
 #undef ERHE_X
 
     return defines;
+}
+
+namespace {
+
+// The named constants of one int axis (its GLSL names: the shaders compare
+// against the same names); nullopt for count and size axes.
+[[nodiscard]] auto make_define_constants(const Shader_int axis, std::string define) -> std::optional<erhe::graphics::Shader_define_constants>
+{
+    using erhe::graphics::Define_constants_kind;
+    using erhe::primitive::Bxdf_model;
+    using erhe::primitive::Material_blending_mode;
+    using erhe::primitive::Normalmap_encoding;
+    using erhe::primitive::Texgen_mode;
+    using erhe::primitive::to_uint32;
+    const auto u = [](const auto value) { return static_cast<uint32_t>(value); };
+    const auto make = [&define](std::vector<std::pair<std::string, uint32_t>> constants, const Define_constants_kind kind = Define_constants_kind::value) {
+        return erhe::graphics::Shader_define_constants{.define = std::move(define), .kind = kind, .constants = std::move(constants)};
+    };
+    switch (axis) {
+        case Shader_int::BXDF_MODEL: {
+            return make({
+                {"ERHE_BXDF_MODEL_UNLIT",                    u(Bxdf_model::unlit)},
+                {"ERHE_BXDF_MODEL_ISOTROPIC_BRDF",           u(Bxdf_model::isotropic_brdf)},
+                {"ERHE_BXDF_MODEL_ANISOTROPIC_BRDF",         u(Bxdf_model::anisotropic_brdf)},
+                {"ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE",        u(Bxdf_model::anisotropic_slope)},
+                {"ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY", u(Bxdf_model::anisotropic_engine_ready)}
+            });
+        }
+        case Shader_int::MATERIAL_BLENDING_MODE: {
+            return make({
+                {"ERHE_MATERIAL_BLENDING_MODE_OPAQUE",      u(Material_blending_mode::opaque)},
+                {"ERHE_MATERIAL_BLENDING_MODE_ALPHA_BLEND", u(Material_blending_mode::alpha_blend)},
+                {"ERHE_MATERIAL_BLENDING_MODE_MULTIPLY",    u(Material_blending_mode::multiply)},
+                {"ERHE_MATERIAL_BLENDING_MODE_ADD",         u(Material_blending_mode::add)},
+                {"ERHE_MATERIAL_BLENDING_MODE_SUBTRACT",    u(Material_blending_mode::subtract)},
+                {"ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR", u(Material_blending_mode::screen_door)},
+                {"ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST",  u(Material_blending_mode::alpha_test)}
+            });
+        }
+        case Shader_int::SHADER_DEBUG: {
+            return make({
+                {"ERHE_SHADER_DEBUG_NONE", u(Shader_debug::none)},
+                {"ERHE_SHADER_DEBUG_VERTEX_NORMAL", u(Shader_debug::vertex_normal)},
+                {"ERHE_SHADER_DEBUG_FRAGMENT_NORMAL", u(Shader_debug::fragment_normal)},
+                {"ERHE_SHADER_DEBUG_NORMAL_TEXTURE", u(Shader_debug::normal_texture)},
+                {"ERHE_SHADER_DEBUG_TANGENT", u(Shader_debug::tangent)},
+                {"ERHE_SHADER_DEBUG_VERTEX_TANGENT_W", u(Shader_debug::vertex_tangent_w)},
+                {"ERHE_SHADER_DEBUG_BITANGENT", u(Shader_debug::bitangent)},
+                {"ERHE_SHADER_DEBUG_TEXCOORD_0", u(Shader_debug::texcoord_0)},
+                {"ERHE_SHADER_DEBUG_TEXCOORD_1", u(Shader_debug::texcoord_1)},
+                {"ERHE_SHADER_DEBUG_BASE_COLOR_TEXTURE", u(Shader_debug::base_color_texture)},
+                {"ERHE_SHADER_DEBUG_VERTEX_COLOR_RGB", u(Shader_debug::vertex_color_rgb)},
+                {"ERHE_SHADER_DEBUG_VERTEX_COLOR_ALPHA", u(Shader_debug::vertex_color_alpha)},
+                {"ERHE_SHADER_DEBUG_ANISO_STRENGTH", u(Shader_debug::aniso_strength)},
+                {"ERHE_SHADER_DEBUG_ANISO_TEXCOORD", u(Shader_debug::aniso_texcoord)},
+                {"ERHE_SHADER_DEBUG_VDOTN", u(Shader_debug::vdotn)},
+                {"ERHE_SHADER_DEBUG_LDOTN", u(Shader_debug::ldotn)},
+                {"ERHE_SHADER_DEBUG_HDOTV", u(Shader_debug::hdotv)},
+                {"ERHE_SHADER_DEBUG_JOINT_INDICES", u(Shader_debug::joint_indices)},
+                {"ERHE_SHADER_DEBUG_JOINT_WEIGHTS", u(Shader_debug::joint_weights)},
+                {"ERHE_SHADER_DEBUG_OMEGA_O", u(Shader_debug::omega_o)},
+                {"ERHE_SHADER_DEBUG_OMEGA_I", u(Shader_debug::omega_i)},
+                {"ERHE_SHADER_DEBUG_OMEGA_G", u(Shader_debug::omega_g)},
+                {"ERHE_SHADER_DEBUG_VERTEX_VALENCY", u(Shader_debug::vertex_valency)},
+                {"ERHE_SHADER_DEBUG_POLYGON_EDGE_COUNT", u(Shader_debug::polygon_edge_count)},
+                {"ERHE_SHADER_DEBUG_METALLIC", u(Shader_debug::metallic)},
+                {"ERHE_SHADER_DEBUG_ROUGHNESS", u(Shader_debug::roughness)},
+                {"ERHE_SHADER_DEBUG_OCCLUSION", u(Shader_debug::occlusion)},
+                {"ERHE_SHADER_DEBUG_EMISSIVE", u(Shader_debug::emissive)},
+                {"ERHE_SHADER_DEBUG_SHADOWMAP_TEXELS", u(Shader_debug::shadowmap_texels)},
+                {"ERHE_SHADER_DEBUG_MISC", u(Shader_debug::misc)},
+                {"ERHE_SHADER_DEBUG_SHADOW_VISIBILITY", u(Shader_debug::shadow_visibility)},
+                {"ERHE_SHADER_DEBUG_VDOTN_DIM", u(Shader_debug::vdotn_dim)},
+                {"ERHE_SHADER_DEBUG_TEXCOORD_2", u(Shader_debug::texcoord_2)},
+                {"ERHE_SHADER_DEBUG_DDGI_IRRADIANCE", u(Shader_debug::ddgi_irradiance)},
+                {"ERHE_SHADER_DEBUG_JOINT_WEIGHT_RAMP", u(Shader_debug::joint_weight_ramp)},
+                {"ERHE_SHADER_DEBUG_VDOTN_TINTED", u(Shader_debug::vdotn_tinted)},
+                {"ERHE_SHADER_DEBUG_WORLD_POSITION", u(Shader_debug::world_position)},
+                {"ERHE_SHADER_DEBUG_BASE_COLOR", u(Shader_debug::base_color)}
+            });
+        }
+        case Shader_int::SHADOW_FILTER: {
+            // PCF kernel width in texels (Forward_renderer::Render_parameters::shadow_filter).
+            return make({
+                {"ERHE_SHADOW_FILTER_HARD",    0u},
+                {"ERHE_SHADOW_FILTER_PCF_2X2", 2u},
+                {"ERHE_SHADOW_FILTER_PCF_4X4", 4u},
+                {"ERHE_SHADOW_FILTER_PCF_6X6", 6u}
+            });
+        }
+        case Shader_int::SHADOW_BIAS: {
+            return make({
+                {"ERHE_SHADOW_BIAS_SLOPE_SCALED",   0u},
+                {"ERHE_SHADOW_BIAS_RECEIVER_PLANE", 1u}
+            });
+        }
+        case Shader_int::SHADOW_TECHNIQUE: {
+            return make({
+                {"ERHE_SHADOW_TECHNIQUE_DEPTH",    0u},
+                {"ERHE_SHADOW_TECHNIQUE_DISTANCE", 1u}
+            });
+        }
+        case Shader_int::BASE_COLOR_TEXGEN_MODE:
+        case Shader_int::METALLIC_ROUGHNESS_TEXGEN_MODE:
+        case Shader_int::NORMAL_TEXGEN_MODE:
+        case Shader_int::OCCLUSION_TEXGEN_MODE:
+        case Shader_int::EMISSIVE_TEXGEN_MODE:
+        case Shader_int::CIRCULAR_BRUSHED_METAL_TEXGEN_MODE: {
+            return make({
+                {"ERHE_TEXGEN_MODE_UV0",      to_uint32(Texgen_mode::uv0)},
+                {"ERHE_TEXGEN_MODE_UV1",      to_uint32(Texgen_mode::uv1)},
+                {"ERHE_TEXGEN_MODE_UV2",      to_uint32(Texgen_mode::uv2)},
+                {"ERHE_TEXGEN_MODE_WORLD_XY", to_uint32(Texgen_mode::world_xy)},
+                {"ERHE_TEXGEN_MODE_WORLD_XZ", to_uint32(Texgen_mode::world_xz)},
+                {"ERHE_TEXGEN_MODE_WORLD_YZ", to_uint32(Texgen_mode::world_yz)},
+                {"ERHE_TEXGEN_MODE_NODE_XY",  to_uint32(Texgen_mode::node_xy)},
+                {"ERHE_TEXGEN_MODE_NODE_XZ",  to_uint32(Texgen_mode::node_xz)},
+                {"ERHE_TEXGEN_MODE_NODE_YZ",  to_uint32(Texgen_mode::node_yz)},
+                {"ERHE_TEXGEN_MODE_TANGENT",  to_uint32(Texgen_mode::tangent)}
+            });
+        }
+        case Shader_int::NORMAL_TEXTURE_ENCODING: {
+            return make({
+                {"ERHE_NORMALMAP_ENCODING_RIGHT_HANDED_THREE_CHANNEL",  to_uint32(Normalmap_encoding::right_handed_three_channel)},
+                {"ERHE_NORMALMAP_ENCODING_RIGHT_HANDED_TWO_CHANNEL_GA", to_uint32(Normalmap_encoding::right_handed_two_channel_ga)},
+                {"ERHE_NORMALMAP_ENCODING_LEFT_HANDED_THREE_CHANNEL",   to_uint32(Normalmap_encoding::left_handed_three_channel)},
+                {"ERHE_NORMALMAP_ENCODING_LEFT_HANDED_TWO_CHANNEL_GA",  to_uint32(Normalmap_encoding::left_handed_two_channel_ga)},
+                {"ERHE_NORMALMAP_ENCODING_RIGHT_HANDED_TWO_CHANNEL_RG", to_uint32(Normalmap_encoding::right_handed_two_channel_rg)},
+                {"ERHE_NORMALMAP_ENCODING_LEFT_HANDED_TWO_CHANNEL_RG",  to_uint32(Normalmap_encoding::left_handed_two_channel_rg)}
+            });
+        }
+        case Shader_int::SPECULAR_ANTI_ALIASING: {
+            return make({
+                {"ERHE_SPECULAR_ANTI_ALIASING_OFF",               u(Specular_anti_aliasing::off)},
+                {"ERHE_SPECULAR_ANTI_ALIASING_NORMAL_KERNEL",     u(Specular_anti_aliasing::normal_kernel)},
+                {"ERHE_SPECULAR_ANTI_ALIASING_FINITE_DIFFERENCE", u(Specular_anti_aliasing::finite_difference)}
+            });
+        }
+        case Shader_int::OVERDRAW: {
+            return make({
+                {"ERHE_OVERDRAW_OFF",        u(Overdraw_count::off)},
+                {"ERHE_OVERDRAW_SHADED",     u(Overdraw_count::shaded)},
+                {"ERHE_OVERDRAW_RASTERIZED", u(Overdraw_count::rasterized)},
+                {"ERHE_OVERDRAW_COST",       u(Overdraw_count::cost)}
+            });
+        }
+        case Shader_int::FP16_PATHS: {
+            return make({
+                {"ERHE_FP16_PATH_MATERIAL",    u(Fp16_path::material)},
+                {"ERHE_FP16_PATH_BRDF",        u(Fp16_path::brdf)},
+                {"ERHE_FP16_PATH_ACCUMULATE",  u(Fp16_path::accumulate)},
+                {"ERHE_FP16_PATH_ATTENUATION", u(Fp16_path::attenuation)},
+                {"ERHE_FP16_PATH_VISIBILITY",  u(Fp16_path::visibility)},
+                {"ERHE_FP16_PATH_FRAME",       u(Fp16_path::frame)},
+                {"ERHE_FP16_PATH_ANISOTROPIC", u(Fp16_path::anisotropic)},
+                {"ERHE_FP16_PATH_VERTEX",      u(Fp16_path::vertex)}
+            }, Define_constants_kind::bit_mask);
+        }
+        default: {
+            return std::nullopt;
+        }
+    }
+}
+
+} // anonymous namespace
+
+auto Shader_key::get_define_constants() const -> std::vector<erhe::graphics::Shader_define_constants>
+{
+    std::vector<erhe::graphics::Shader_define_constants> result;
+#define ERHE_X(PARAM) \
+    if (std::optional<erhe::graphics::Shader_define_constants> constants = make_define_constants(Shader_int::PARAM, "ERHE_" #PARAM); constants.has_value()) { \
+        result.push_back(std::move(constants.value())); \
+    }
+
+    ERHE_SHADER_INT(ERHE_X)
+#undef ERHE_X
+
+    return result;
 }
 
 [[nodiscard]] auto Shader_key::get_blending_class() const -> erhe::primitive::Blending_class

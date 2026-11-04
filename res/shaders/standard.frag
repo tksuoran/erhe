@@ -374,7 +374,7 @@ void main()
     // Points (corner points / polygon centroids) are flat-shaded with the
     // per-draw-primitive color; no lighting. The lit machinery and its
     // includes are skipped via ERHE_VARIANT_POSITION_PASS.
-#  if ERHE_OVERDRAW == ERHE_OVERDRAW_SHADED
+#  if (ERHE_OVERDRAW == ERHE_OVERDRAW_SHADED) || (ERHE_OVERDRAW == ERHE_OVERDRAW_COST)
     erhe_count_overdraw();
 #  endif
     out_color = v_point_color;
@@ -866,7 +866,7 @@ void main()
     // main()) and skip the lighting: the visualization node replaces the
     // image.
 #if ERHE_OVERDRAW != 0
-#  if ERHE_OVERDRAW == ERHE_OVERDRAW_SHADED
+#  if (ERHE_OVERDRAW == ERHE_OVERDRAW_SHADED) || (ERHE_OVERDRAW == ERHE_OVERDRAW_COST)
     erhe_count_overdraw();
 #  endif
 #  if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_BLEND

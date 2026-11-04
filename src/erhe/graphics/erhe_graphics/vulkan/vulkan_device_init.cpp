@@ -2,6 +2,7 @@
 // erhe_graphics target (see CMakeLists.txt) so the portability-subset structs
 // are visible everywhere in this library, not just in this translation unit.
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#include "erhe_graphics/vulkan/vulkan_fragment_invocation_capture.hpp"
 #if defined(__APPLE__)
 #   include "erhe_graphics/clock_monitor_apple.hpp"
 #endif
@@ -1491,7 +1492,7 @@ Device_impl::Device_impl(
             // BC1..BC7 sampled images (e.g. DDS textures from glTF MSFT_texture_dds)
             .textureCompressionBC                    = qf.textureCompressionBC,
             .occlusionQueryPrecise                   = VK_FALSE,
-            .pipelineStatisticsQuery                 = VK_FALSE,
+            .pipelineStatisticsQuery                 = qf.pipelineStatisticsQuery,
             .vertexPipelineStoresAndAtomics          = qf.vertexPipelineStoresAndAtomics,
             // Storage writes and atomics from fragment shaders: the raster
             // occlusion test's visibility bits (Device_info::
@@ -2179,6 +2180,14 @@ Device_impl::Device_impl(
     m_info.use_base_instance = (query_device_features.features.drawIndirectFirstInstance == VK_TRUE);
     m_info.fragment_stores_and_atomics = (query_device_features.features.fragmentStoresAndAtomics == VK_TRUE);
     log_startup->info("Fragment stores and atomics: {}", m_info.fragment_stores_and_atomics);
+    m_info.pipeline_statistics_query = (query_device_features.features.pipelineStatisticsQuery == VK_TRUE) && m_host_query_reset;
+    log_startup->info(
+        "Pipeline statistics query (fragment invocation capture): {} (pipelineStatisticsQuery {}, hostQueryReset {})",
+        m_info.pipeline_statistics_query, (query_device_features.features.pipelineStatisticsQuery == VK_TRUE), m_host_query_reset
+    );
+    if (m_info.pipeline_statistics_query) {
+        m_fragment_invocation_capture = std::make_unique<Fragment_invocation_capture_impl>(*this, m_vulkan_device);
+    }
     // gl_InstanceIndex includes the command's firstInstance on the native
     // and the emulated (per-draw vkCmdDrawIndexedIndirect) multi-draw paths
     // alike; MoltenVK lowers it to the Metal instance_id, which includes the

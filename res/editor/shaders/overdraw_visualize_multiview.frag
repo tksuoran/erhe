@@ -12,9 +12,10 @@ layout(location = 0) in vec2 v_texcoord;
 // keeps a quarter of the scene color), so the geometry stays recognizable.
 //
 // overdraw_visualize_parameters.parameters: x = max_count (counts from it up
-// are white), y = width, z = height of one view.
+// are white), y = width, z = height of one view, w != 0: a continuous ramp
+// up to max_count (the shader cost mode).
 
-vec3 ramp(uint count, uint max_count)
+vec3 ramp(uint count, uint max_count, bool continuous)
 {
     const vec3 steps[6] = vec3[6](
         vec3(0.00, 0.00, 0.00), // 0 black
@@ -26,6 +27,13 @@ vec3 ramp(uint count, uint max_count)
     );
     if (count >= max_count) {
         return vec3(1.0);
+    }
+    if (continuous) {
+        // Shader cost (doc/plans/shader_cost.md B2): the steps then white, linear up to max_count.
+        float position = 6.0 * float(count) / float(max_count);
+        uint  step     = min(uint(position), 5u);
+        vec3  next     = (step == 5u) ? vec3(1.0) : steps[step + 1u];
+        return mix(steps[step], next, position - float(step));
     }
     if (count <= 5u) {
         return steps[count];
@@ -53,6 +61,6 @@ void main()
     if (count == 0u) {
         out_color = vec4(0.0, 0.0, 0.0, 0.75);
     } else {
-        out_color = vec4(srgb_to_linear(ramp(count, max_count)), 1.0);
+        out_color = vec4(srgb_to_linear(ramp(count, max_count, overdraw_visualize_parameters.parameters.w != 0u)), 1.0);
     }
 }

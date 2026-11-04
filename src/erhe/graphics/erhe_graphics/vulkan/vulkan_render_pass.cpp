@@ -1,4 +1,5 @@
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
+#include "erhe_graphics/vulkan/vulkan_fragment_invocation_capture.hpp"
 #include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
@@ -1655,6 +1656,12 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
 #else
     static_cast<void>(render_pass_after);
 #endif
+
+    // A capture's open pipeline range must end inside the render pass.
+    Fragment_invocation_capture_impl* const fragment_capture = m_device_impl.get_fragment_invocation_capture();
+    if ((fragment_capture != nullptr) && (m_command_buffer != VK_NULL_HANDLE)) {
+        fragment_capture->on_render_pass_end(m_command_buffer);
+    }
 
     if ((m_swapchain != nullptr) || (m_emulated_swapchain != nullptr)) {
         // Mirror of the swapchain branch in start_render_pass: record

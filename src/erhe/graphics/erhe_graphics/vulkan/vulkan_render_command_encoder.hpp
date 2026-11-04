@@ -56,6 +56,8 @@ public:
     [[nodiscard]] auto get_command_buffer() -> Command_buffer& { return m_command_buffer; }
 
 private:
+    void on_pipeline_bound(VkCommandBuffer command_buffer, const Shader_stages* shader_stages, std::string_view pipeline_label);
+
     Device&                  m_device;
     Command_buffer&          m_command_buffer;
     const Bind_group_layout* m_bind_group_layout{nullptr};

@@ -572,8 +572,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
     const Shader_stages_create_info& create_info = m_shader_stages_prototype.create_info();
 
     // The shader variant browser records a program only when every stage was
-    // compiled here (a stage served from the cache has no sources or
-    // unoptimized SPIR-V at hand).
+    // compiled here, so a recording session reads no cached stages.
     Shader_variant_report* const report = device.get_shader_variant_report();
     bool report_complete = (report != nullptr);
     std::unordered_map<::EShLanguage, Shader_variant_report_stage> report_stages;
@@ -581,7 +580,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
     for (::EShLanguage stage : m_active_stages) {
         // Try cache first per-stage
         bool from_cache = false;
-        if (m_cache != nullptr) {
+        if ((m_cache != nullptr) && (report == nullptr)) {
             for (const Shader_stage& shader : create_info.shaders) {
                 if (to_glslang(shader.type) == stage) {
                     const std::string source = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
@@ -701,12 +700,28 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
     }
     m_report_sources.clear();
 
+    notify_program(device);
     return true;
+}
+
+void Glslang_shader_stages::notify_program(Device& device) const
+{
+    const Shader_stages_create_info& create_info = m_shader_stages_prototype.create_info();
+    std::vector<Shader_program_module> modules;
+    modules.reserve(create_info.shaders.size());
+    for (const Shader_stage& shader : create_info.shaders) {
+        const auto i = m_spirv_shaders.find(to_glslang(shader.type));
+        if (i != m_spirv_shaders.end()) {
+            modules.push_back(Shader_program_module{.type = shader.type, .spirv = i->second});
+        }
+    }
+    device.notify_shader_program(create_info, modules);
 }
 
 auto Glslang_shader_stages::try_load_all_from_cache(Device& device) -> bool
 {
-    if (m_cache == nullptr) {
+    // A shader variant browser session compiles every program to record it (the cache is still written).
+    if ((m_cache == nullptr) || (device.get_shader_variant_report() != nullptr)) {
         return false;
     }
 
@@ -732,6 +747,7 @@ auto Glslang_shader_stages::try_load_all_from_cache(Device& device) -> bool
 
     // All stages cached
     m_spirv_shaders = std::move(cached_spirv);
+    notify_program(device);
     return true;
 }
 

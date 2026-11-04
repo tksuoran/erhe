@@ -42,6 +42,35 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Device::set_shader_program_observer()` /
+  `notify_shader_program()`, `Shader_program_module`,
+  `Shader_program_observer`: every program built from SPIR-V (compiled or
+  from the `Spirv_cache`) is reported with the modules the device uses.
+- `erhe::graphics`: `disassemble_spirv()`, `count_spirv_instructions()` and
+  `get_shader_variant_stage_short_name()` (`shader_variant_report.hpp`);
+  `Shader_variant_report::set_add_callback()` and `get_directory()`. The
+  shader variant browser also writes each stage's source and preamble
+  (`variants/<n>_<stage>.glsl`, `<n>_<stage>_preamble.glsl`) and lists them,
+  the stage's `main_name` and the program's `includes` in
+  `variants/manifest.json`.
+- `erhe::graphics`: `Device::request_fragment_invocation_capture()` /
+  `take_fragment_invocation_capture()` (`Fragment_invocation_capture`,
+  `Fragment_invocation_range`; `fragment_invocation_capture.hpp`):
+  fragment shader invocations per pipeline bind range of one frame, with
+  pipeline statistics queries (Vulkan); `Device_info::pipeline_statistics_query`;
+  `Shader_stages::get_variant_defines()`, `Shader_stages_create_info::get_variant_defines()` / `get_vertex_format_defines()`; `Shader_variant_report::find_program_id()`.
+- `erhe::graphics`: `Shader_stages_create_info::define_constants`
+  (`Shader_define_constants`, `Define_constants_kind`),
+  `Shader_stages_create_info::find_define_constants()` and
+  `get_define_value_expression()`: `final_source()` emits an enum-valued
+  define as the constant naming its value, after the constants.
+- `erhe::scene_renderer`: `Shader_key::get_define_constants()`, the named
+  constants of the enum-valued int axes.
+- `erhe::scene_renderer`: `Overdraw_count::cost` and the `Shader_int::OVERDRAW_WEIGHT`
+  axis (emitted only for cost keys); `Shader_variant_cache::set_overdraw_weight_provider()`
+  (`Overdraw_weight_provider`) and `get_overdraw_weight_serial()`;
+  `Draw_list_color_resolution::weight_serial`; `Program_interface::add_program_defines()`.
+
 - `erhe::primitive`: `Full_build_policy`; `Primitive_shape::set_full_build_policy()` /
   `get_full_build_policy()` (an `on_demand` shape's `prepare_real_raytrace()`
   builds from its soup when it has no Geometry); `Primitive::has_on_demand_full_build()`.
@@ -1350,6 +1379,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::graphics`: `Shader_variant_report::find_program_id()` returns the
+  program's stable id (`std::optional<std::string>`, 16 hex digits of the
+  hash of its name and variant defines) instead of the recording index. The
+  browser's file names use that id, `variants/manifest.json` is schema 2
+  (string `id` plus `index`), and a new `Shader_variant_report` clears the
+  directory's earlier recording (`variants/`, `index.html`, `analytics.js`,
+  `fragments.js`).
 
 - `erhe::scene_renderer`: `Draw_list_scene::get_lod_level()` returns
   `std::optional<Drawn_lod_level>` (the level and its source) instead of

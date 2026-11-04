@@ -2350,14 +2350,20 @@ auto Draw_list_scene::resolve_color_stages(
     const Color_sub_variant sub_variant
 ) -> const erhe::graphics::Reloadable_shader_stages*
 {
-    for (const Draw_list_color_resolution& resolution : resolutions.color) {
+    // A cost counting variant is current while the overdraw weights are (doc/plans/shader_cost.md B2).
+    const uint64_t weight_serial = (overdraw == Overdraw_count::cost) ? m_shader_variant_cache.get_overdraw_weight_serial() : 0;
+    Draw_list_color_resolution* stale = nullptr;
+    for (Draw_list_color_resolution& resolution : resolutions.color) {
         if (
             (resolution.multiview_count == multiview_count) &&
             (resolution.overdraw        == overdraw) &&
             (resolution.shader_debug    == shader_debug) &&
             (resolution.sub_variant     == sub_variant)
         ) {
-            return resolution.stages;
+            if (resolution.weight_serial == weight_serial) {
+                return resolution.stages;
+            }
+            stale = &resolution;
         }
     }
     if (!m_color_environment_set) {
@@ -2413,7 +2419,12 @@ auto Draw_list_scene::resolve_color_stages(
             resolutions.color_failed = true;
         }
     }
-    resolutions.color.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .overdraw = overdraw, .shader_debug = shader_debug, .sub_variant = sub_variant, .stages = stages});
+    const Draw_list_color_resolution resolution{.multiview_count = multiview_count, .overdraw = overdraw, .shader_debug = shader_debug, .sub_variant = sub_variant, .weight_serial = weight_serial, .stages = stages};
+    if (stale != nullptr) {
+        *stale = resolution;
+    } else {
+        resolutions.color.push_back(resolution);
+    }
     return stages;
 }
 

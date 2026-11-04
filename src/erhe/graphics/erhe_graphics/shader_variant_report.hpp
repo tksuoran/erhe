@@ -5,7 +5,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <mutex>
+#include <optional>
+#include <string_view>
 #include <span>
 #include <string>
 #include <utility>
@@ -14,6 +17,12 @@
 namespace erhe::graphics {
 
 class Shader_stages_create_info;
+
+[[nodiscard]] auto count_spirv_instructions(std::span<const unsigned int> spirv) -> std::size_t;
+// Indented, friendly names; "(none)" for an empty module.
+[[nodiscard]] auto disassemble_spirv       (std::span<const unsigned int> spirv) -> std::string;
+// "vert", "frag", "comp", ...: the stage part of the browser's file names.
+[[nodiscard]] auto get_shader_variant_stage_short_name(Shader_type type) -> const char*;
 
 // One stage of a program compiled by Glslang_shader_stages, as the shader
 // variant browser shows it: the sources handed to glslang and the SPIR-V
@@ -43,18 +52,8 @@ public:
     uint32_t    texture_heap_size;    // Device_info::texture_heap_size
 };
 
-// The shader variant browser (Graphics_config::shader_variant_browser_directory,
-// doc/erhe/graphics.md "Shader variant browser"): an HTML report of every
-// program Glslang_shader_stages compiles in this process. Each add() writes
-// the program's detail page (shader key, sources, SPIR-V disassembly before
-// and after optimization, Mali analytics) and the raw .spv files under variants/, and rewrites
-// index.html, whose table lists every program recorded so far with its
-// SPIR-V sizes and instruction counts, and variants/manifest.json, the
-// same data for scripts/shader_analytics.py (which writes analytics.js, the
-// sidecar both pages render when present). Programs served from the
-// Spirv_cache are not compiled and so not recorded; delete the cache
-// directory to record every program. Thread-safe: programs compile on any
-// thread.
+// The shader variant browser (doc/erhe/graphics.md "Shader variant browser").
+// Thread-safe: programs compile on any thread.
 class Shader_variant_report
 {
 public:
@@ -67,6 +66,16 @@ public:
         const Shader_variant_report_tools&              tools
     );
 
+    // Called at the end of each add(), on the compiling thread, under the report's mutex.
+    void set_add_callback(std::function<void()> callback);
+    [[nodiscard]] auto get_directory() const -> const std::filesystem::path&;
+
+    // The id (variants/<id>.html) of the recorded program with this name and defines.
+    [[nodiscard]] auto find_program_id(
+        std::string_view                                        name,
+        const std::vector<std::pair<std::string, std::string>>& defines
+    ) -> std::optional<std::string>;
+
 private:
     class Stage_row
     {
@@ -76,14 +85,18 @@ private:
         std::size_t optimized_spirv_bytes;
         std::size_t instruction_count;
         std::size_t optimized_instruction_count;
+        std::string main_name;
     };
     class Row
     {
     public:
-        std::size_t                                       id;
+        std::string                                       id;    // stable: from name and defines
+        std::size_t                                       index; // recording order
         std::string                                       name;
         std::vector<std::pair<std::string, std::string>> defines;
+        std::vector<std::pair<std::string, std::string>> define_value_names; // (define, get_define_value_expression())
         std::vector<Stage_row>                           stages;
+        std::vector<std::string>                         includes; // besides the stages' main files
     };
 
     void write_index   () const;
@@ -93,6 +106,7 @@ private:
     std::mutex                  m_mutex;
     std::vector<Row>            m_rows;
     Shader_variant_report_tools m_tools;
+    std::function<void()>       m_add_callback;
 };
 
 } // namespace erhe::graphics

@@ -3,6 +3,7 @@
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#include "erhe_graphics/vulkan/vulkan_fragment_invocation_capture.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
@@ -26,6 +27,8 @@
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
+
+#include <bit>
 
 namespace erhe::graphics {
 
@@ -64,6 +67,7 @@ void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pip
     }
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
+    on_pipeline_bound(command_buffer, pipeline.get_create_info().shader_stages, pipeline.get_create_info().base.debug_label.string_view());
 
     // Set initial draw ID push constant to 0 (only needed for emulated multi-draw)
     if (m_device.get_info().emulate_multi_draw_indirect) {
@@ -77,6 +81,23 @@ void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pip
             &draw_id
         );
     }
+}
+
+void Render_command_encoder_impl::on_pipeline_bound(
+    const VkCommandBuffer      command_buffer,
+    const Shader_stages* const shader_stages,
+    const std::string_view     pipeline_label
+)
+{
+    Fragment_invocation_capture_impl* const capture = m_device.get_impl().get_fragment_invocation_capture();
+    if (capture == nullptr) {
+        return;
+    }
+    const Command_buffer_impl&    command_buffer_impl = m_command_buffer.get_impl();
+    const Render_pass_impl* const render_pass         = command_buffer_impl.get_active_render_pass_impl();
+    const uint32_t                view_mask           = (render_pass != nullptr) ? render_pass->get_view_mask() : 0u;
+    const uint32_t                view_count          = (view_mask == 0u) ? 1u : static_cast<uint32_t>(std::popcount(view_mask));
+    capture->on_pipeline_bound(command_buffer_impl.get_frame_id(), command_buffer, view_count, shader_stages, pipeline_label);
 }
 
 void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline)
@@ -445,6 +466,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     }
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
+    on_pipeline_bound(command_buffer, shader_stages, data.debug_label.string_view());
 
     // Set initial draw ID push constant to 0 (only needed for emulated multi-draw)
     if (m_device.get_info().emulate_multi_draw_indirect) {

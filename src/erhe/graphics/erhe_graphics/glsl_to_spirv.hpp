@@ -38,6 +38,7 @@ public:
     auto try_load_all_from_cache(Device& device) -> bool;
 
 private:
+    void notify_program(Device& device) const;
     Shader_stages_prototype_impl&                                        m_shader_stages_prototype;
     Spirv_cache*                                                         m_cache{nullptr};
     std::unordered_map<::EShLanguage, std::shared_ptr<glslang::TShader>> m_glslang_shaders;

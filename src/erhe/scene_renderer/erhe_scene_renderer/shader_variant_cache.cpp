@@ -30,12 +30,50 @@ Shader_variant_cache::~Shader_variant_cache() noexcept
     }
 }
 
+void Shader_variant_cache::set_overdraw_weight_provider(Overdraw_weight_provider provider)
+{
+    m_overdraw_weight_provider = std::move(provider);
+    m_overdraw_weights.clear();
+    ++m_overdraw_weight_serial;
+}
+
+auto Shader_variant_cache::get_overdraw_weight(const Shader_key& key, const erhe::dataformat::Vertex_format* vertex_format) -> uint32_t
+{
+    const auto it = m_overdraw_weights.find(key);
+    if (it != m_overdraw_weights.end()) {
+        return it->second;
+    }
+    uint32_t weight = 0;
+    if (m_overdraw_weight_provider) {
+        Shader_key twin = key;
+        twin.set(Shader_int::OVERDRAW, static_cast<uint32_t>(Overdraw_count::off));
+        // The twin's identity as get() and make_prototype() build its create info.
+        erhe::graphics::Shader_stages_create_info twin_create_info{
+            .name          = "standard",
+            .defines       = twin.get_defines(),
+            .vertex_format = vertex_format
+        };
+        m_program_interface.add_program_defines(twin_create_info.defines);
+        weight = m_overdraw_weight_provider(twin_create_info.name, twin_create_info.get_variant_defines());
+    }
+    m_overdraw_weights.emplace(key, weight);
+    return weight;
+}
+
 auto Shader_variant_cache::get(
-    const Shader_key&                      shader_key,
+    const Shader_key&                      shader_key_in,
     const erhe::dataformat::Vertex_format* vertex_format
 ) -> erhe::graphics::Reloadable_shader_stages*
 {
     ERHE_PROFILE_SCOPE("Shader_variant_cache::get");
+    // A cost counting variant carries its OVERDRAW off twin's weight (doc/plans/shader_cost.md B2).
+    Shader_key shader_key = shader_key_in;
+    if (shader_key.get(Shader_int::OVERDRAW) == static_cast<uint32_t>(Overdraw_count::cost)) {
+        shader_key.set(Shader_int::OVERDRAW_WEIGHT, 0);
+        shader_key.set(Shader_int::OVERDRAW_WEIGHT, get_overdraw_weight(shader_key, vertex_format));
+    } else {
+        shader_key.set(Shader_int::OVERDRAW_WEIGHT, 0);
+    }
     const auto it = m_entries.find(shader_key);
     if (it != m_entries.end()) {
         erhe::graphics::Reloadable_shader_stages* entry = it->second.get();
@@ -55,10 +93,11 @@ auto Shader_variant_cache::get(
     }
 
     erhe::graphics::Shader_stages_create_info create_info{
-        .name          = "standard",
-        .defines       = shader_key.get_defines(),
-        .vertex_format = vertex_format,
-        .view_count    = shader_key.get(Shader_int::SHADER_MULTIVIEW_COUNT)
+        .name             = "standard",
+        .defines          = shader_key.get_defines(),
+        .define_constants = shader_key.get_define_constants(),
+        .vertex_format    = vertex_format,
+        .view_count       = shader_key.get(Shader_int::SHADER_MULTIVIEW_COUNT)
     };
 
     erhe::graphics::Shader_stages_prototype prototype = m_program_interface.make_prototype(std::move(create_info));

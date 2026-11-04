@@ -625,6 +625,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_viewports",                  &Mcp_server::query_viewports                      },
         { "get_viewport_size",              &Mcp_server::query_viewport_size                  },
         { "get_overdraw_stats",             &Mcp_server::query_overdraw_stats                 },
+        { "capture_fragment_invocations",   &Mcp_server::query_fragment_invocations           },
+        { "load_shader_analytics",          &Mcp_server::action_load_shader_analytics         },
         { "pick_at",                        &Mcp_server::query_pick_at                        },
         { "get_server_info",                &Mcp_server::query_server_info                    },
         { "set_window_visibility",          &Mcp_server::action_set_window_visibility         },

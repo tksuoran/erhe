@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=13,
+    version=14,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -70,6 +70,8 @@ struct("Editor_settings_config",
         field("imgui",                StructRef("Imgui_settings_config"), added_in=1),
         field("icons",                StructRef("Icon_settings_config"),  added_in=1),
         field("threading",            StructRef("Threading_config"),     added_in=1),
+        # Background offline-compiler analysis (doc/editor/shader_analytics.md).
+        field("shader_analytics",     StructRef("Shader_analytics_config"), added_in=14),
         field(
             "post_processing",
             Bool,

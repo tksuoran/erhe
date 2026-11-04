@@ -15,12 +15,14 @@
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_render_state.hpp"
+#include "renderers/shader_analytics.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
 #include "windows/scene_view_config_window.hpp"
 #include "windows/viewport_config_window.hpp"
 
+#include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh_raytrace.hpp"
@@ -1023,19 +1025,43 @@ constexpr std::array<Overdraw_mode, 2> c_overdraw_entry_modes{ Overdraw_mode::sh
 
 } // anonymous namespace
 
+void Scene_view::queue_shader_cost(const Shader_cost_metric metric)
+{
+    Shader_analytics* const analytics = m_context.shader_analytics;
+    if ((analytics == nullptr) || !analytics->has_metric(metric)) {
+        return;
+    }
+    // Queued before the mode, so the cost variants resolve with this metric's weights.
+    m_context.imgui_windows->queue([analytics, metric]() { analytics->select_metric(metric); });
+    queue_overdraw_mode(Overdraw_mode::cost);
+    set_overdraw_max_count(get_default_shader_cost_max(*analytics, metric));
+}
+
 void Scene_view::shader_debug_toolbar_combo()
 {
-    const Overdraw_mode overdraw_mode      = get_overdraw_mode();
-    const bool          overdraw_supported = is_overdraw_supported();
+    const Overdraw_mode     overdraw_mode      = get_overdraw_mode();
+    const bool              overdraw_supported = is_overdraw_supported();
+    const Shader_analytics* analytics          = m_context.shader_analytics;
+    // The cost entries follow the overdraw entries, one per metric the loaded analytics have.
+    const int c_cost_first = c_shader_debug_count + static_cast<int>(c_overdraw_entry_modes.size());
     int current = static_cast<int>(get_shader_debug());
     for (std::size_t i = 0; i < c_overdraw_entry_modes.size(); ++i) {
         if (overdraw_mode == c_overdraw_entry_modes[i]) {
             current = c_shader_debug_count + static_cast<int>(i);
         }
     }
+    if ((overdraw_mode == Overdraw_mode::cost) && (analytics != nullptr)) {
+        current = c_cost_first + static_cast<int>(analytics->get_selected_metric());
+    }
+    std::string cost_preview;
+    if (current >= c_cost_first) {
+        cost_preview = "Shader cost: " + analytics->get_metric_title(static_cast<Shader_cost_metric>(current - c_cost_first));
+    }
     const char* const preview = (current < c_shader_debug_count)
         ? erhe::scene_renderer::c_shader_debug_strings[current]
-        : c_overdraw_entry_strings[static_cast<std::size_t>(current - c_shader_debug_count)];
+        : (current < c_cost_first)
+            ? c_overdraw_entry_strings[static_cast<std::size_t>(current - c_shader_debug_count)]
+            : cost_preview.c_str();
 
     int selected = current;
     if (ImGui::BeginCombo("##ViewportShaderDebug", preview, ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLargest)) {
@@ -1063,6 +1089,22 @@ void Scene_view::shader_debug_toolbar_combo()
                     : "Not available in this view (needs fragment stage buffer atomics, and a desktop viewport)"
             );
         }
+        if ((analytics != nullptr) && analytics->is_loaded()) {
+            ImGui::Separator();
+            for (std::size_t i = 0; i < c_shader_cost_metric_count; ++i) {
+                const Shader_cost_metric metric = static_cast<Shader_cost_metric>(i);
+                if (!analytics->has_metric(metric)) {
+                    continue;
+                }
+                const int  index = c_cost_first + static_cast<int>(i);
+                const std::string label = "Shader cost: " + analytics->get_metric_title(metric);
+                const ImGuiSelectableFlags flags = overdraw_supported ? ImGuiSelectableFlags_None : ImGuiSelectableFlags_Disabled;
+                if (ImGui::Selectable(label.c_str(), index == current, flags)) {
+                    selected = index;
+                }
+                ImGui::SetItemTooltip("Sums per pixel the static %s of the variant of every fragment the content passes shade", get_label(metric));
+            }
+        }
         ImGui::EndCombo();
     }
     ImGui::SetItemTooltip("Shader Debug");
@@ -1073,13 +1115,25 @@ void Scene_view::shader_debug_toolbar_combo()
             if (overdraw_mode != Overdraw_mode::off) {
                 queue_overdraw_mode(Overdraw_mode::off);
             }
-        } else {
+        } else if (selected < c_cost_first) {
             set_shader_debug(erhe::scene_renderer::Shader_debug::none);
             queue_overdraw_mode(c_overdraw_entry_modes[static_cast<std::size_t>(selected - c_shader_debug_count)]);
+        } else {
+            set_shader_debug(erhe::scene_renderer::Shader_debug::none);
+            queue_shader_cost(static_cast<Shader_cost_metric>(selected - c_cost_first));
         }
     }
 
-    if (overdraw_mode != Overdraw_mode::off) {
+    if (overdraw_mode == Overdraw_mode::cost) {
+        // In weight units (Shader_analytics::get_weight_scale()).
+        int max_count = static_cast<int>(get_overdraw_max_count());
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        if (ImGui::DragInt("##ViewportShaderCostMax", &max_count, 1.0f, 1, 1 << 24)) {
+            set_overdraw_max_count(static_cast<uint32_t>(max_count));
+        }
+        ImGui::SetItemTooltip("Shader cost per pixel shown white (weight units)");
+    } else if (overdraw_mode != Overdraw_mode::off) {
         int max_count = static_cast<int>(get_overdraw_max_count());
         ImGui::SameLine();
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 4.0f);

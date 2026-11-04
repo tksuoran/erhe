@@ -46,6 +46,7 @@ erhe_target_sources_grouped(
     erhe_graphics/fragment_output.cpp
     erhe_graphics/fragment_output.hpp
     erhe_graphics/fragment_outputs.cpp
+    erhe_graphics/fragment_invocation_capture.hpp
     erhe_graphics/fragment_outputs.hpp
     erhe_graphics/glsl_file_loader.cpp
     erhe_graphics/glsl_file_loader.hpp
@@ -496,6 +497,8 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_pipeline_cache_file.hpp
         erhe_graphics/vulkan/vulkan_helpers.cpp
         erhe_graphics/vulkan/vulkan_helpers.hpp
+        erhe_graphics/vulkan/vulkan_fragment_invocation_capture.cpp
+        erhe_graphics/vulkan/vulkan_fragment_invocation_capture.hpp
         erhe_graphics/vulkan/vulkan_gpu_timer.cpp
         erhe_graphics/vulkan/vulkan_gpu_timer.hpp
         erhe_graphics/vulkan/vulkan_render_command_encoder.cpp

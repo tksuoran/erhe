@@ -1,4 +1,5 @@
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#include "erhe_graphics/vulkan/vulkan_fragment_invocation_capture.hpp"
 #if defined(__APPLE__)
 #   include "erhe_graphics/clock_monitor_apple.hpp"
 #endif
@@ -290,6 +291,7 @@ Device_impl::~Device_impl() noexcept
     }
 #endif
 
+    m_fragment_invocation_capture.reset();
     if (m_gpu_timer_query_pool != VK_NULL_HANDLE) {
         vkDestroyQueryPool(m_vulkan_device, m_gpu_timer_query_pool, nullptr);
         m_gpu_timer_query_pool = VK_NULL_HANDLE;
@@ -1841,6 +1843,29 @@ void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callb
 
 void Device_impl::on_thread_enter()
 {
+}
+
+auto Device_impl::request_fragment_invocation_capture() -> bool
+{
+    if (!m_fragment_invocation_capture) {
+        return false;
+    }
+    uint64_t first_frame_id = 0;
+    {
+        // The frame being prepared: its command buffers begin after this call
+        // when the call runs in the prepare phase (MCP requests do).
+        const std::lock_guard<std::mutex> lock{m_frame_id_mutex};
+        first_frame_id = std::max(m_prepare_frame_id, m_render_frame_id);
+    }
+    return m_fragment_invocation_capture->request(first_frame_id);
+}
+
+auto Device_impl::take_fragment_invocation_capture() -> std::optional<Fragment_invocation_capture>
+{
+    if (!m_fragment_invocation_capture) {
+        return std::nullopt;
+    }
+    return m_fragment_invocation_capture->take();
 }
 
 void Device_impl::frame_completed(const uint64_t completed_frame)

@@ -128,6 +128,7 @@ if (_gpu_tests_supported)
         test_m5_blend.cpp
         test_m5_depth.cpp
         test_depth_compare.cpp
+        test_fragment_invocation_capture.cpp
         test_depth_clamp.cpp
         test_buffer_transfer.cpp
         test_raster_state.cpp

@@ -15,6 +15,7 @@
 
 namespace erhe::dataformat { class Vertex_format; enum class Format : unsigned int; }
 namespace erhe::primitive  { class Material; }
+namespace erhe::graphics   { class Shader_define_constants; }
 namespace erhe::scene {
     class Light;
     class Light_layer;
@@ -172,6 +173,7 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(VERTEX_JOINT_WEIGHTS_ENCODING)            \
     X(SPECULAR_ANTI_ALIASING)                   \
     X(OVERDRAW)                                 \
+    X(OVERDRAW_WEIGHT)                          \
     X(FP16_PATHS)
 
 enum class Shader_bool : uint32_t {
@@ -205,6 +207,10 @@ public:
     ~Shader_key() noexcept;
 
     [[nodiscard]] auto get_defines() const -> std::vector<std::pair<std::string, std::string>>;
+
+    // The named constants of the enum-valued int axes of get_defines()
+    // (Shader_stages_create_info::define_constants).
+    [[nodiscard]] auto get_define_constants() const -> std::vector<erhe::graphics::Shader_define_constants>;
 
     [[nodiscard]] auto describe() const -> std::string;
 
@@ -421,7 +427,8 @@ enum class Overdraw_count : uint32_t
 {
     off        = 0, // no counting
     shaded     = 1, // the invocations that pass the early depth and stencil tests (the shader work)
-    rasterized = 2  // every rasterized fragment, before the depth test
+    rasterized = 2, // every rasterized fragment, before the depth test
+    cost       = 3  // as shaded, adding the OVERDRAW_WEIGHT axis (the variant's static cost) instead of 1
 };
 
 // The SPECULAR_ANTI_ALIASING axis value of a key.

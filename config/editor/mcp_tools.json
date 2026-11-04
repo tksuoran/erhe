@@ -285,6 +285,40 @@
     "name": "get_overdraw_stats"
   },
   {
+    "description": "Fragment shader invocations per render pipeline of the next rendered frame (doc/plans/shader_cost.md A): pipeline statistics queries around every pipeline bind range of every render pass of that frame, all pipelines (scene content, shadows, grid, sky, tools, ImGui, post-processing), counting what the GPU ran (early depth rejection included). Waits until the captured frame retired. Returns frame_id, total_invocations, range_count, dropped_ranges (bind ranges past the query capacity, not counted), program_count, pipeline_count, programs (per shader program - name and defines - sorted by invocations: program, invocations, share of the frame, ranges, pipelines (debug labels), browser_id (the program's variants/<id>.html in this session's shader variant browser, null when not recorded; only with --shader-variant-browser), defines (with include_defines)) and pipelines (per pipeline debug label and program: invocations, share, ranges). With a browser directory (browser_directory, default the session's --shader-variant-browser directory) it also writes <directory>/fragments.js, which the browser's index shows as the Fragments column, matched by program name and defines. Refused on a device without pipeline statistics queries (Vulkan pipelineStatisticsQuery and hostQueryReset; not OpenGL, Metal or null).",
+    "inputSchema": {
+      "properties": {
+        "browser_directory": {
+          "description": "Shader variant browser directory to write fragments.js into; default: the session's --shader-variant-browser directory (none: no sidecar)",
+          "type": "string"
+        },
+        "include_defines": {
+          "description": "Include each program's defines as [name, value] pairs (default false)",
+          "type": "boolean"
+        },
+        "top": {
+          "description": "Programs and pipelines listed, by invocations (default 50; 0: all). The sidecar always holds every program.",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "capture_fragment_invocations"
+  },
+  {
+    "description": "Shader analytics for the cost overdraw mode (doc/plans/shader_cost.md B): loads (when directory is given) variants/manifest.json and analytics.js (scripts/shader_analytics.py) of a shader variant browser directory and indexes every recorded program's fragment stage cost by program name and variant defines. Without directory it reports what is loaded. Returns loaded, directory, program_count, metrics (per metric the loaded cores provide: metric - the name set_overdraw_visualization mode cost takes - title, core, max_value (the largest per-fragment value among the recorded programs, metric units), weight_scale (metric units per weight unit: cycles are weighted in hundredths)), selected_metric, missing_variants (cost variants drawn whose program the analytics lack; they weigh 0) and service (the background offline compiler analysis of every program the editor builds, doc/editor/shader_analytics.md: mali_core, queued, running, analyzed, failed; null when off). Mali metrics are cycles (mali_cycles: the bound pipeline's, mali_arithmetic_cycles, mali_texture_cycles, mali_load_store_cycles). The values are those of the module the recorded session ran (after the SPIR-V optimizer when it was on).",
+    "inputSchema": {
+      "properties": {
+        "directory": {
+          "description": "Shader variant browser directory with analytics.js; omit to report the loaded analytics",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "load_shader_analytics"
+  },
+  {
     "description": "Headless pick probe: arm the pointer at viewport pixel (x, y) and run the same hover update a real pointer runs, reporting every hover slot (content/tool/brush/rendertarget/grid/bone) plus 'nearest' - the hit resolved by the same slot-ownership rule a viewport click uses (bone slot replaces content in bone selection mode; a bone hit reports the joint a click would select). The id-render readback is ASYNC: the first call at a position returns raytrace hits only; the armed position keeps the id pass rendering there, so call again after a few frames for the merged result that includes id-picked (e.g. skinned) meshes.",
     "inputSchema": {
       "properties": {
@@ -4202,19 +4236,28 @@
     "name": "pop_shader_debug"
   },
   {
-    "description": "Set a viewport's overdraw visualization mode (doc/plans/overdraw_visualization.md): off, shaded or rasterized. Not off, the viewport's content composition passes (opaque, selected, alpha-tested and translucent fills, solid wireframe, corner points, centroids) draw with overdraw shader variants that count per pixel into a buffer of the viewport's render size, with the viewport's real pipelines, draw order, draw-list path, culling and occlusion culling, and the viewport shows the counts as a heat map in place of its post-processed image (0 black - over count 0 the scene at 25 % luminance -, 1 dark blue, 2 green, 3 yellow, 4 orange, 5 red, from max_count up white; gizmos stay on top with post-processing on). shaded counts the fragment shader invocations the frame runs: an opaque variant counts the fragments that pass the early depth and stencil tests, a discarding (alpha-test / screen-door) variant every rasterized fragment it does not discard. rasterized counts every rasterized fragment of every counted draw, ignoring the depth test (what occlusion and frustum culling save before depth testing). get_overdraw_stats reads the counts; capture_screenshot shows the heat map. Refused with the reason on a device without fragment stage buffer stores and atomics.",
+    "description": "Set a viewport's overdraw visualization mode (doc/plans/overdraw_visualization.md): off, shaded, rasterized or cost. Not off, the viewport's content composition passes (opaque, selected, alpha-tested and translucent fills, solid wireframe, corner points, centroids) draw with overdraw shader variants that count per pixel into a buffer of the viewport's render size, with the viewport's real pipelines, draw order, draw-list path, culling and occlusion culling, and the viewport shows the counts as a heat map in place of its post-processed image (0 black - over count 0 the scene at 25 % luminance -, 1 dark blue, 2 green, 3 yellow, 4 orange, 5 red, from max_count up white; gizmos stay on top with post-processing on). shaded counts the fragment shader invocations the frame runs: an opaque variant counts the fragments that pass the early depth and stencil tests, a discarding (alpha-test / screen-door) variant every rasterized fragment it does not discard. rasterized counts every rasterized fragment of every counted draw, ignoring the depth test (what occlusion and frustum culling save before depth testing). get_overdraw_stats reads the counts; capture_screenshot shows the heat map. cost (doc/plans/shader_cost.md B) counts as shaded but each fragment adds its shader variant's static cost in metric (load_shader_analytics loads the costs; a variant the analytics lack weighs 0) and the heat map is a continuous ramp up to max_value; returns metric, metric_title, weight_scale and max_value besides. Refused with the reason on a device without fragment stage buffer stores and atomics.",
     "inputSchema": {
       "properties": {
         "max_count": {
-          "description": "The count from which the heat map is white (integer >= 1; default 8, kept per viewport)",
+          "description": "The count from which the heat map is white (integer >= 1; default 8, kept per viewport; in weight units for mode cost)",
           "type": "integer"
         },
+        "max_value": {
+          "description": "Mode cost: the per-pixel cost shown white, in metric units (default: four fragments of the costliest recorded variant)",
+          "type": "number"
+        },
+        "metric": {
+          "description": "Mode cost: the shader cost metric (load_shader_analytics lists those of the loaded cores; default: the selected one)",
+          "type": "string"
+        },
         "mode": {
-          "description": "\"off\", \"shaded\" (fragment shader invocations after the early depth test) or \"rasterized\" (every rasterized fragment, ignoring the depth test)",
+          "description": "\"off\", \"shaded\" (fragment shader invocations after the early depth test), \"rasterized\" (every rasterized fragment, ignoring the depth test) or \"cost\" (as shaded, each fragment adding its variant's static cost in the metric: doc/plans/shader_cost.md B; needs load_shader_analytics)",
           "enum": [
             "off",
             "shaded",
-            "rasterized"
+            "rasterized",
+            "cost"
           ],
           "type": "string"
         },

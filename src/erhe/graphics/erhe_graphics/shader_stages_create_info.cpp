@@ -19,6 +19,8 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
+#include <charconv>
 #include <sstream>
 #include <string>
 
@@ -52,51 +54,6 @@ auto glsl_token(const Glsl_type attribute_type) -> const char*
 }
 
 namespace {
-
-// The one emitter of ERHE_VERTEX_POSITION_ENCODING, shared by attributes_source()
-// (vertex stages) and attribute_defines_source() (every other stage); final_source()
-// picks exactly one of those per stage, so the macro is emitted once. Its value is a
-// pure function of the vertex format, and those two functions are where the format is
-// in hand - so every shader compiled against a format gets the matching decode without
-// its compile site having to remember to pass a define.
-//
-// A missing define is SILENT in the GLSL preprocessor: it evaluates to passthrough.
-// The #ifndef backstop in res/shaders/erhe_vertex_position.glsl is what turns a
-// format-less compile of a decoding shader into a build failure rather than garbage.
-//
-// Shader_key carries the same axis for variant identity but deliberately omits it
-// from get_defines(), so nothing can redefine it with a conflicting value.
-void write_vertex_position_encoding_define(std::stringstream& sb, const erhe::dataformat::Vertex_format* vertex_format)
-{
-    sb << "#define ERHE_VERTEX_POSITION_ENCODING "
-       << static_cast<uint32_t>(erhe::dataformat::get_vertex_position_encoding(vertex_format))
-       << "\n";
-}
-
-// Same contract as the position define above, for texcoord channels 0 and 1.
-// See res/shaders/erhe_vertex_texcoord.glsl.
-void write_vertex_texcoord_encoding_define(std::stringstream& sb, const erhe::dataformat::Vertex_format* vertex_format)
-{
-    sb << "#define ERHE_VERTEX_TEXCOORD_ENCODING "
-       << static_cast<uint32_t>(erhe::dataformat::get_vertex_texcoord_encoding(vertex_format))
-       << "\n";
-}
-
-// Same contract again, for the tangent frame. See res/shaders/erhe_vertex_tbn.glsl.
-void write_vertex_tbn_encoding_define(std::stringstream& sb, const erhe::dataformat::Vertex_format* vertex_format)
-{
-    sb << "#define ERHE_VERTEX_TBN_ENCODING "
-       << static_cast<uint32_t>(erhe::dataformat::get_vertex_tbn_encoding(vertex_format))
-       << "\n";
-}
-
-// And for the skinning weights. See res/shaders/erhe_vertex_joint_weights.glsl.
-void write_vertex_joint_weights_encoding_define(std::stringstream& sb, const erhe::dataformat::Vertex_format* vertex_format)
-{
-    sb << "#define ERHE_VERTEX_JOINT_WEIGHTS_ENCODING "
-       << static_cast<uint32_t>(erhe::dataformat::get_vertex_joint_weights_encoding(vertex_format))
-       << "\n";
-}
 
 #if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_METAL)
 // Optional shader arithmetic and storage types (Device_info::shader_float16,
@@ -162,17 +119,42 @@ auto Shader_stages_create_info::attributes_source() const -> std::string
             sb << attribute.name,
             sb << ";\n";
         }
-        for (const auto& attribute : vertex_input.attributes) {
-            sb << "#define ERHE_ATTRIBUTE_" << attribute.name << " 1\n";
+        for (const auto& [name, value] : get_vertex_format_defines()) {
+            sb << "#define " << name << " " << value << "\n";
         }
-        write_vertex_position_encoding_define(sb, vertex_format);
-        write_vertex_texcoord_encoding_define(sb, vertex_format);
-        write_vertex_tbn_encoding_define(sb, vertex_format);
-        write_vertex_joint_weights_encoding_define(sb, vertex_format);
         sb << "\n";
     }
 
     return sb.str();
+}
+
+auto Shader_stages_create_info::get_vertex_format_defines() const -> std::vector<std::pair<std::string, std::string>>
+{
+    std::vector<std::pair<std::string, std::string>> result;
+    if (vertex_format == nullptr) {
+        return result;
+    }
+    const Vertex_input_state_data vertex_input = Vertex_input_state_data::make(*vertex_format);
+    for (const auto& attribute : vertex_input.attributes) {
+        result.emplace_back("ERHE_ATTRIBUTE_" + attribute.name, "1");
+    }
+    // The vertex encodings are pure functions of the format, emitted only here (Shader_key
+    // keeps them out of get_defines()); res/shaders/erhe_vertex_*.glsl refuse a format-less
+    // compile of a decoding shader, as a missing define would silently mean passthrough.
+    result.emplace_back("ERHE_VERTEX_POSITION_ENCODING",      std::to_string(static_cast<uint32_t>(erhe::dataformat::get_vertex_position_encoding(vertex_format))));
+    result.emplace_back("ERHE_VERTEX_TEXCOORD_ENCODING",      std::to_string(static_cast<uint32_t>(erhe::dataformat::get_vertex_texcoord_encoding(vertex_format))));
+    result.emplace_back("ERHE_VERTEX_TBN_ENCODING",           std::to_string(static_cast<uint32_t>(erhe::dataformat::get_vertex_tbn_encoding(vertex_format))));
+    result.emplace_back("ERHE_VERTEX_JOINT_WEIGHTS_ENCODING", std::to_string(static_cast<uint32_t>(erhe::dataformat::get_vertex_joint_weights_encoding(vertex_format))));
+    return result;
+}
+
+auto Shader_stages_create_info::get_variant_defines() const -> std::vector<std::pair<std::string, std::string>>
+{
+    std::vector<std::pair<std::string, std::string>> result = defines;
+    for (auto& entry : get_vertex_format_defines()) {
+        result.push_back(std::move(entry));
+    }
+    return result;
 }
 
 auto Shader_stages_create_info::attribute_defines_source() const -> std::string
@@ -184,15 +166,10 @@ auto Shader_stages_create_info::attribute_defines_source() const -> std::string
     std::stringstream sb;
 
     if (vertex_format != nullptr) {
-        Vertex_input_state_data vertex_input = Vertex_input_state_data::make(*vertex_format);
         sb << "// Attribute defines\n";
-        for (const auto& attribute : vertex_input.attributes) {
-            sb << "#define ERHE_ATTRIBUTE_" << attribute.name << " 1\n";
+        for (const auto& [name, value] : get_vertex_format_defines()) {
+            sb << "#define " << name << " " << value << "\n";
         }
-        write_vertex_position_encoding_define(sb, vertex_format);
-        write_vertex_texcoord_encoding_define(sb, vertex_format);
-        write_vertex_tbn_encoding_define(sb, vertex_format);
-        write_vertex_joint_weights_encoding_define(sb, vertex_format);
         sb << "\n";
     }
 
@@ -496,7 +473,20 @@ auto Shader_stages_create_info::final_source(
 
     if (defines.size() > 0) {
         sb << "// Defines\n";
+        std::vector<std::string_view> emitted_constants; // axes may share a constant family
         for (const auto& i : defines) {
+            const Shader_define_constants* const constants = find_define_constants(i.first);
+            const std::string expression = (constants != nullptr) ? get_define_value_expression(*constants, i.second) : std::string{};
+            if (!expression.empty()) {
+                for (const auto& [constant_name, constant_value] : constants->constants) {
+                    if (std::find(emitted_constants.begin(), emitted_constants.end(), constant_name) == emitted_constants.end()) {
+                        sb << "#define " << constant_name << " " << constant_value << '\n';
+                        emitted_constants.push_back(constant_name);
+                    }
+                }
+                sb << "#define " << i.first << " " << expression << " // " << i.second << '\n';
+                continue;
+            }
             // Comment-only entry: empty name means "do not emit #define,
             // just emit the value as a // comment line in the preamble".
             // Used by the standard shader variant cache to surface the
@@ -578,6 +568,46 @@ auto Shader_stages_create_info::get_description() const -> std::string
         ss << " stage: " << shader_stage.get_description();
     }
     return ss.str();
+}
+
+auto get_define_value_expression(const Shader_define_constants& constants, const std::string_view value) -> std::string
+{
+    uint32_t number = 0;
+    const std::from_chars_result result = std::from_chars(value.data(), value.data() + value.size(), number);
+    if (value.empty() || (result.ec != std::errc{}) || (result.ptr != value.data() + value.size())) {
+        return {};
+    }
+    if (constants.kind == Define_constants_kind::value) {
+        for (const auto& [constant_name, constant_value] : constants.constants) {
+            if (constant_value == number) {
+                return constant_name;
+            }
+        }
+        return {};
+    }
+    if (number == 0) {
+        return "0";
+    }
+    std::string expression;
+    uint32_t covered = 0;
+    for (const auto& [constant_name, constant_value] : constants.constants) {
+        if ((constant_value != 0) && ((number & constant_value) == constant_value)) {
+            expression += expression.empty() ? "(" : " | ";
+            expression += constant_name;
+            covered |= constant_value;
+        }
+    }
+    return (covered == number) ? (expression + ")") : std::string{};
+}
+
+auto Shader_stages_create_info::find_define_constants(const std::string_view define) const -> const Shader_define_constants*
+{
+    for (const Shader_define_constants& entry : define_constants) {
+        if (entry.define == define) {
+            return &entry;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace erhe::graphics
