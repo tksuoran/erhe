@@ -208,6 +208,11 @@ private:
 
     [[nodiscard]] auto should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode;
 
+    // Item type filter (doc/editor/windows.md): types present are collected when the rows rebuild.
+    void collect_present_types(const std::shared_ptr<erhe::Item_base>& item);
+    void type_filter_combo    ();
+    [[nodiscard]] auto is_type_hidden(std::string_view type_name) const -> bool;
+
     void try_add_to_attach(
         Compound_operation::Parameters&         compound_parameters,
         const std::shared_ptr<erhe::Item_base>& target_node,
@@ -253,6 +258,9 @@ private:
 
     erhe::Item_filter                                            m_filter;
     ImGuiTextFilter                                              m_text_filter;
+    std::vector<std::string_view>                                m_present_types;       // get_type_name(), sorted
+    std::vector<std::string>                                     m_present_type_labels; // '_' shown as ' '
+    std::vector<std::string_view>                                m_hidden_types;
     std::shared_ptr<erhe::Hierarchy>                             m_root;
     std::shared_ptr<erhe::Item_base>                             m_header_item;
     std::function<bool(const std::shared_ptr<erhe::Item_base>&)> m_item_callback;

@@ -62,6 +62,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <array>
 #include <filesystem>
 #include <limits>
@@ -2057,9 +2058,80 @@ void Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item)
     ImGui::TextUnformatted(name.c_str(), name.c_str() + name.size());
 }
 
+auto Item_tree::is_type_hidden(const std::string_view type_name) const -> bool
+{
+    return std::find(m_hidden_types.begin(), m_hidden_types.end(), type_name) != m_hidden_types.end();
+}
+
+void Item_tree::collect_present_types(const std::shared_ptr<erhe::Item_base>& item)
+{
+    const bool invisible_parent = erhe::utility::test_bit_set(item->get_flag_bits(), editor::Editor_item_flags::invisible_parent);
+    if (!invisible_parent && m_filter(item->get_flag_bits())) {
+        const std::string_view type_name = item->get_type_name();
+        if (std::find(m_present_types.begin(), m_present_types.end(), type_name) == m_present_types.end()) {
+            m_present_types.push_back(type_name);
+        }
+    }
+    if (is_sealed_instance_carrier(*item.get())) {
+        return; // its interior has no rows
+    }
+    const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    if (hierarchy) {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : hierarchy->get_children()) {
+            collect_present_types(child);
+        }
+    }
+}
+
+void Item_tree::type_filter_combo()
+{
+    std::size_t shown_count = 0;
+    for (const std::string_view type_name : m_present_types) {
+        if (!is_type_hidden(type_name)) {
+            ++shown_count;
+        }
+    }
+    char preview[64];
+    if (shown_count == m_present_types.size()) {
+        std::snprintf(preview, sizeof(preview), "All types");
+    } else {
+        std::snprintf(preview, sizeof(preview), "%zu of %zu types", shown_count, m_present_types.size());
+    }
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("99 of 99 types").x + ImGui::GetFrameHeight() + (2.0f * style.FramePadding.x));
+    if (!ImGui::BeginCombo("##Types", preview, ImGuiComboFlags_HeightLarge)) {
+        return;
+    }
+    // Checkboxes keep the popup open, so several types can be toggled at once.
+    bool all = (shown_count == m_present_types.size());
+    if (ImGui::Checkbox("All", &all)) {
+        m_hidden_types.clear();
+        if (!all) {
+            m_hidden_types = m_present_types;
+        }
+        m_flat_rows_dirty = true;
+    }
+    ImGui::Separator();
+    for (std::size_t i = 0; i < m_present_types.size(); ++i) {
+        const std::string_view type_name = m_present_types[i];
+        bool shown = !is_type_hidden(type_name);
+        ImGui::PushID(static_cast<int>(i));
+        if (ImGui::Checkbox(m_present_type_labels[i].c_str(), &shown)) {
+            if (shown) {
+                m_hidden_types.erase(std::remove(m_hidden_types.begin(), m_hidden_types.end(), type_name), m_hidden_types.end());
+            } else {
+                m_hidden_types.push_back(type_name);
+            }
+            m_flat_rows_dirty = true;
+        }
+        ImGui::PopID();
+    }
+    ImGui::EndCombo();
+}
+
 auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode
 {
-    const bool show_by_type = m_filter(item->get_flag_bits());
+    const bool show_by_type = m_filter(item->get_flag_bits()) && !is_type_hidden(item->get_type_name());
     const bool show_by_name = m_text_filter.PassFilter(item->get_name().c_str());
     if (show_by_type && show_by_name) {
         return Show_mode::Show;
@@ -2068,6 +2140,14 @@ auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Sho
     const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
     if (hierarchy) {
         for (const auto& child_node : hierarchy->get_children()) {
+            if (should_show(child_node) != Show_mode::Hide) {
+                return Show_mode::Show_expanded;
+            }
+        }
+    }
+    // The header row reads as the parent of the root's rows, so it is their ancestor too.
+    if ((item == m_header_item) && m_root) {
+        for (const auto& child_node : m_root->get_children()) {
             if (should_show(child_node) != Show_mode::Hide) {
                 return Show_mode::Show_expanded;
             }
@@ -2266,6 +2346,8 @@ void Item_tree::imgui_tree(float ui_scale)
     ImGui::TextUnformatted(ICON_MDI_FILTER);
     ImGui::PopFont();
     ImGui::SameLine();
+    type_filter_combo();
+    ImGui::SameLine();
     if (m_text_filter.Draw("##Filter", -FLT_MIN)) {
         m_flat_rows_dirty = true;
     }
@@ -2413,6 +2495,18 @@ void Item_tree::imgui_tree(float ui_scale)
         m_icon_y_offset  = std::max(0.0f, (ImGui::GetFrameHeight() - icon_font_size) * 0.5f);
         m_label_y_offset = style.FramePadding.y;
         m_flat_rows.clear();
+        m_present_types.clear();
+        if (m_header_item) {
+            collect_present_types(m_header_item);
+        }
+        collect_present_types(m_root);
+        std::sort(m_present_types.begin(), m_present_types.end());
+        m_present_type_labels.clear();
+        for (const std::string_view type_name : m_present_types) {
+            std::string label{type_name};
+            std::replace(label.begin(), label.end(), '_', ' ');
+            m_present_type_labels.push_back(std::move(label));
+        }
         // Optional header (the selectable Scene item, issue #240) is flattened
         // first. The root's rows are flattened at the same indent: the header
         // row draws its icon where the other rows reserve the arrow, so the
