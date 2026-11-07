@@ -13,7 +13,10 @@
 #include <vector>
 
 namespace tinybvh {
-    class BVH;
+    namespace impl {
+        template <typename Float, typename Index> class BVH;
+    }
+    using BVH = impl::BVH<float, uint32_t>;
     struct bvhvec4;
 }
 
@@ -23,6 +26,7 @@ namespace erhe::buffer {
 
 namespace erhe::raytrace {
 
+class Tinybvh_bvh;
 class Tinybvh_instance;
 class Tinybvh_scene;
 class Ray;
@@ -90,7 +94,7 @@ private:
 
     std::vector<Buffer_info> m_buffer_infos;
 
-    std::unique_ptr<tinybvh::BVH>          m_bvh;
+    std::unique_ptr<Tinybvh_bvh>           m_bvh;
     std::vector<tinybvh::bvhvec4>          m_triangles;
     std::size_t                            m_triangle_count{0};
     std::optional<uint64_t>                m_triangle_hash {};

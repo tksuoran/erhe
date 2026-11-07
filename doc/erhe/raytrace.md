@@ -67,9 +67,9 @@ items"). The node records are the backend's own layout, named by
   `aabb_max` xyz, `tri_count`; an inner node has `tri_count` 0 and its
   children at `left_first` and `left_first + 1`, a leaf covers slots
   `left_first .. left_first + tri_count - 1`). The pool is exported as tinybvh
-  holds it (`usedNodes` records, node 1 unused, holes after a threaded build),
-  with the records no inner node reaches zeroed, so equal builds give equal
-  bytes. tinybvh's own `Save()` format is not used: it writes the `BVH`
+  holds it (`usedNodes` records, node 1 unused, holes after a threaded build;
+  the default Bonsai builder places children before their parents), with the
+  records no inner node reaches zeroed, so equal builds give equal bytes. tinybvh's own `Save()` format is not used: it writes the `BVH`
   object itself, pointers included.
 
 `get_prebuilt_bvh_node_record_size(backend)`, `get_prebuilt_bvh_node_bytes()`
@@ -97,8 +97,8 @@ if (other->get_bvh_source() != Bvh_source::prebuilt) {
   definition `ERHE_BVH_LIBRARY_TAG` / `ERHE_TINYBVH_LIBRARY_TAG`, set from
   `ERHE_BVH_GIT_TAG` / `ERHE_TINYBVH_GIT_TAG` in the top-level
   `CMakeLists.txt`), the same on every platform; `get_prebuilt_bvh_max_depth()`
-  is the backend's traversal stack size (64 for `bvh_v2`, 256 for tinybvh's
-  node stack). All are empty or 0 on `embree` and `none`, whose
+  is the backend's traversal stack size (64 for `bvh_v2`, 128 for tinybvh's
+  node stack, `TINYBVH_STACK_SIZE`). All are empty or 0 on `embree` and `none`, whose
   `export_bvh()` and `set_prebuilt_bvh()` return false.
 - `commit()` takes the supplied BVH for that commit only and checks it with
   `validate_prebuilt_bvh()`: backend and library tag, triangle count and
@@ -152,13 +152,14 @@ Backend selected at CMake time via `ERHE_RAYTRACE_LIBRARY`:
 - Uses `vertex_buffer_info->byte_stride` for vertex position lookups (corrected from earlier bug that used index stride)
 
 ### `tinybvh` -- jbikker/tinybvh
-- Single-header library (`tiny_bvh.h`), fetched via CPM (pinned to commit hash; no git tags)
+- Header-only library (`tiny_bvh.h` and the per-platform headers it includes), fetched via CPM (pinned to commit hash; no git tags)
 - `#define TINYBVH_IMPLEMENTATION` in exactly one .cpp file (`tinybvh_geometry.cpp`)
 - `tinybvh::BVH::Build()` takes `bvhvec4` triples (3 per triangle, w unused)
 - Hit normals computed from stored triangle vertices via cross product (tinybvh does not return normals)
-- BVH export / import, see "Prebuilt BVH" (`tinybvh` layout); a commit keeps the `tinybvh::BVH` object (a scene's TLAS names it) and frees its pools first
+- BVH export / import, see "Prebuilt BVH" (`tinybvh` layout); a commit keeps the `tinybvh::BVH` object (a scene's TLAS names it) and frees its pools first. A prebuilt BVH is installed as `BVH::Load()` installs one (not rebuildable; holes and node order unknown), through `Tinybvh_bvh`, a `tinybvh::BVH` subclass in `tinybvh_geometry.cpp` that reaches the protected build flags
 - **TLAS (Top-Level Acceleration Structure)**: enabled by default via `Tinybvh_scene::s_use_tlas`. Uses tinybvh's native `BLASInstance`/`Build`/`Intersect` for O(log N) instance traversal at the scene level. Falls back to linear scan when disabled or for nested hierarchies.
-- Direction normalization: tinybvh normalizes ray direction internally; the backend compensates by scaling t_far by direction length before/after tinybvh calls
+- Direction: tinybvh uses the ray direction as given (`NORMALIZE_RAY_DIR` is not defined; `tinybvh_geometry.cpp` refuses to compile with it), so `t_far` and hit distances are in the caller's direction units on both the BLAS and the TLAS path
+- Zero direction components: tinybvh clamps their reciprocal to `BVH_RCP_FAR` (2^100) and evaluates its slab test with an explicit FMA, so axis-aligned rays from origins far from the world origin hit the nodes they pass through (test: `test/test_axis_aligned_ray.cpp`)
 - Multi-level instance nesting supported (linear scan path)
 
 ### `embree` -- Intel Embree 4.4.0

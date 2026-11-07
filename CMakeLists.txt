@@ -1357,7 +1357,7 @@ elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
 elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "tinybvh")
     # The pin is also the library tag of stored BVHs, as for bvh above
     # (ERHE_TINYBVH_LIBRARY_TAG).
-    set(ERHE_TINYBVH_GIT_TAG 0e4584287823252cf83f0e9cd072848bec5f79c5)
+    set(ERHE_TINYBVH_GIT_TAG c9be3103cc9693b456b0a0353927c11cac7d710f)
     CPMAddPackage(
         NAME              tinybvh
         GIT_TAG           ${ERHE_TINYBVH_GIT_TAG}

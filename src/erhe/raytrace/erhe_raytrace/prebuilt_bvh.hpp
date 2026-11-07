@@ -100,8 +100,8 @@ enum class Bvh_source : unsigned int {
 // The traversal stack size of the bvh_v2 backend: the deepest a prebuilt
 // bvh_v2 BVH may be (validate_prebuilt_bvh() max_depth).
 constexpr std::size_t bvh_v2_traversal_stack_size = 64;
-// The same for tinybvh (the node stack of tinybvh::BVH::Intersect()).
-constexpr std::size_t tinybvh_traversal_stack_size = 256;
+// The same for tinybvh (TINYBVH_STACK_SIZE, the node stack of tinybvh::BVH::Intersect()).
+constexpr std::size_t tinybvh_traversal_stack_size = 128;
 // The traversal stack size of the running backend (0 without one).
 [[nodiscard]] auto get_prebuilt_bvh_max_depth() -> std::size_t;
 

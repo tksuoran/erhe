@@ -21,6 +21,65 @@
 
 namespace erhe::raytrace {
 
+static_assert(tinybvh_traversal_stack_size == TINYBVH_STACK_SIZE);
+#if defined(NORMALIZE_RAY_DIR)
+#   error Tinybvh_geometry::intersect_instance() and Tinybvh_scene::intersect_tlas() expect t in the units of the given direction
+#endif
+static_assert(sizeof(tinybvh::BVH::BVHNode) == sizeof(Tinybvh_node_record));
+
+// The pool operations Tinybvh_geometry needs set tinybvh::BVH's protected build flags.
+class Tinybvh_bvh : public tinybvh::BVH
+{
+public:
+    void release_pools();
+    void install_prebuilt(const Prebuilt_bvh& prebuilt, const tinybvh::bvhvec4slice& vertices);
+};
+
+// The object stays (a scene's TLAS names it); Build() or the import allocates anew.
+void Tinybvh_bvh::release_pools()
+{
+    AlignedFree(bvhNode);
+    AlignedFree(primIdx);
+    AlignedFree(fragment);
+    bvhNode        = nullptr;
+    primIdx        = nullptr;
+    fragment       = nullptr;
+    allocatedNodes = 0;
+    usedNodes      = 0;
+    newNodePtr     = 0;
+    triCount       = 0;
+    idxCount       = 0;
+    verts          = tinybvh::bvhvec4slice{};
+    rebuildable    = true;
+    refittable     = true;
+    hasHoles       = false;
+    orderedNodes   = true;
+}
+
+// As BVH::Load() installs a BVH from its file: no fragments, so not rebuildable.
+void Tinybvh_bvh::install_prebuilt(const Prebuilt_bvh& prebuilt, const tinybvh::bvhvec4slice& vertices)
+{
+    const uint32_t node_count     = static_cast<uint32_t>(prebuilt.tinybvh_nodes.size());
+    const uint32_t triangle_count = static_cast<uint32_t>(prebuilt.primitive_ids.size());
+    bvhNode        = static_cast<BVHNode*>(AlignedAlloc(node_count * sizeof(BVHNode)));
+    primIdx        = static_cast<uint32_t*>(AlignedAlloc(triangle_count * sizeof(uint32_t)));
+    std::memcpy(bvhNode, prebuilt.tinybvh_nodes.data(), node_count * sizeof(BVHNode));
+    std::memcpy(primIdx, prebuilt.primitive_ids.data(), triangle_count * sizeof(uint32_t));
+    allocatedNodes = node_count;
+    usedNodes      = node_count;
+    newNodePtr     = node_count;
+    triCount       = triangle_count;
+    idxCount       = triangle_count;
+    verts          = vertices;
+    aabbMin        = bvhNode[0].aabbMin;
+    aabbMax        = bvhNode[0].aabbMax;
+    rebuildable    = false;
+    // The records do not say how the exporting build ordered and filled the pool.
+    refittable     = false;
+    hasHoles       = true;
+    orderedNodes   = false;
+}
+
 auto IGeometry::create(const std::string_view debug_label, const Geometry_type geometry_type) -> IGeometry*
 {
     return new Tinybvh_geometry(debug_label, geometry_type);
@@ -38,7 +97,7 @@ auto IGeometry::create_unique(const std::string_view debug_label, const Geometry
 
 Tinybvh_geometry::Tinybvh_geometry(const std::string_view debug_label, const Geometry_type geometry_type)
     : m_debug_label{debug_label}
-    , m_bvh{std::make_unique<tinybvh::BVH>()}
+    , m_bvh{std::make_unique<Tinybvh_bvh>()}
 {
     static_cast<void>(geometry_type);
 }
@@ -120,20 +179,7 @@ void Tinybvh_geometry::commit()
 
     m_triangle_count = triangle_count;
     m_triangle_hash  = hash_code;
-    // The BVH object stays (a scene's TLAS names it); its pools go, so Build() or the import allocates anew.
-    {
-        tinybvh::BVH& bvh = *m_bvh;
-        bvh.AlignedFree(bvh.bvhNode);
-        bvh.AlignedFree(bvh.primIdx);
-        bvh.AlignedFree(bvh.fragment);
-        bvh.bvhNode        = nullptr;
-        bvh.primIdx        = nullptr;
-        bvh.fragment       = nullptr;
-        bvh.allocatedNodes = 0;
-        bvh.usedNodes      = 0;
-        bvh.rebuildable    = true;
-        bvh.may_have_holes = false;
-    }
+    m_bvh->release_pools();
 
     // The supplied BVH is for this commit only.
     std::optional<Prebuilt_bvh> prebuilt = std::move(m_prebuilt_bvh);
@@ -174,24 +220,10 @@ auto Tinybvh_geometry::try_use_prebuilt_bvh(const Prebuilt_bvh& prebuilt, const 
         m_prebuilt_bvh_rejection = reason;
         return false;
     }
-    static_assert(sizeof(tinybvh::BVH::BVHNode) == sizeof(Tinybvh_node_record));
-
-    const uint32_t node_count = static_cast<uint32_t>(prebuilt.tinybvh_nodes.size());
-    tinybvh::BVH&  bvh        = *m_bvh;
-    bvh.bvhNode        = static_cast<tinybvh::BVH::BVHNode*>(bvh.AlignedAlloc(node_count * sizeof(tinybvh::BVH::BVHNode)));
-    bvh.primIdx        = static_cast<uint32_t*>(bvh.AlignedAlloc(triangle_count * sizeof(uint32_t)));
-    std::memcpy(bvh.bvhNode, prebuilt.tinybvh_nodes.data(), node_count * sizeof(tinybvh::BVH::BVHNode));
-    std::memcpy(bvh.primIdx, prebuilt.primitive_ids.data(), triangle_count * sizeof(uint32_t));
-    bvh.allocatedNodes = node_count;
-    bvh.usedNodes      = node_count;
-    bvh.newNodePtr     = node_count;
-    bvh.triCount       = static_cast<uint32_t>(triangle_count);
-    bvh.idxCount       = static_cast<uint32_t>(triangle_count);
-    bvh.verts          = tinybvh::bvhvec4slice{m_triangles.data(), static_cast<uint32_t>(triangle_count * 3), sizeof(tinybvh::bvhvec4)};
-    bvh.aabbMin        = bvh.bvhNode[0].aabbMin;
-    bvh.aabbMax        = bvh.bvhNode[0].aabbMax;
-    bvh.rebuildable    = false; // no fragments, as after BVH::Load()
-    bvh.may_have_holes = true;
+    m_bvh->install_prebuilt(
+        prebuilt,
+        tinybvh::bvhvec4slice{m_triangles.data(), static_cast<uint32_t>(triangle_count * 3), sizeof(tinybvh::bvhvec4)}
+    );
     return true;
 }
 
@@ -216,13 +248,20 @@ auto Tinybvh_geometry::export_bvh(Prebuilt_bvh& out) const -> bool
     out.tinybvh_nodes.resize(m_bvh->usedNodes);
     std::memcpy(out.tinybvh_nodes.data(), m_bvh->bvhNode, m_bvh->usedNodes * sizeof(Tinybvh_node_record));
     // Node 1 and the holes of a threaded build hold whatever the pool held; zero them for stable bytes.
-    std::vector<uint8_t> referenced(m_bvh->usedNodes, 0);
+    // A walk from the root: a Bonsai build places children before their parents.
+    std::vector<uint8_t>  referenced(m_bvh->usedNodes, 0);
+    std::vector<uint32_t> stack{0u};
     referenced[0] = 1;
-    for (uint32_t n = 0; n < m_bvh->usedNodes; ++n) {
-        const Tinybvh_node_record& node = out.tinybvh_nodes[n];
-        if ((referenced[n] != 0) && (node.tri_count == 0) && ((node.left_first + 1) < m_bvh->usedNodes)) {
-            referenced[node.left_first]     = 1;
-            referenced[node.left_first + 1] = 1;
+    while (!stack.empty()) {
+        const Tinybvh_node_record& node = out.tinybvh_nodes[stack.back()];
+        stack.pop_back();
+        if ((node.tri_count == 0) && ((node.left_first + 1) < m_bvh->usedNodes)) {
+            for (const uint32_t child : {node.left_first, node.left_first + 1}) {
+                if (referenced[child] == 0) {
+                    referenced[child] = 1;
+                    stack.push_back(child);
+                }
+            }
         }
     }
     for (uint32_t n = 0; n < m_bvh->usedNodes; ++n) {
@@ -319,23 +358,16 @@ auto Tinybvh_geometry::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* 
 
     const glm::mat4 transform = (instance != nullptr) ? instance->get_transform() : glm::mat4{1.0f};
 
-    // tinybvh normalizes the direction in its Ray constructor, which changes
-    // the meaning of t. We need to account for the direction length so that
-    // t values are correct in the caller's coordinate space.
-    const float direction_length = glm::length(ray.direction);
-    const float t_far_normalized = (direction_length > 0.0f) ? (ray.t_far * direction_length) : ray.t_far;
-
+    // tinybvh keeps the direction as given (NORMALIZE_RAY_DIR undefined), so t is in the caller's units.
     tinybvh::Ray tinybvh_ray{
         tinybvh::bvhvec3{ray.origin.x,    ray.origin.y,    ray.origin.z},
         tinybvh::bvhvec3{ray.direction.x, ray.direction.y, ray.direction.z},
-        t_far_normalized
+        ray.t_far
     };
 
     m_bvh->Intersect(tinybvh_ray);
 
-    const float t_original_space = (direction_length > 0.0f) ? (tinybvh_ray.hit.t / direction_length) : tinybvh_ray.hit.t;
-
-    if (t_original_space < ray.t_far) {
+    if (tinybvh_ray.hit.t < ray.t_far) {
         const uint32_t prim_id = tinybvh_ray.hit.prim;
 
         // Compute triangle normal from stored vertices
@@ -347,7 +379,7 @@ auto Tinybvh_geometry::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* 
         const glm::vec3 edge2        = glm::vec3{v2.x - v0.x, v2.y - v0.y, v2.z - v0.z};
         const glm::vec3 local_normal = glm::cross(edge1, edge2);
 
-        ray.t_far       = t_original_space;
+        ray.t_far       = tinybvh_ray.hit.t;
         hit.triangle_id = prim_id;
         hit.uv          = glm::vec2{tinybvh_ray.hit.u, tinybvh_ray.hit.v};
         // A normal is a covector: transforming it by the instance transform

@@ -93,6 +93,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::raytrace`: the `tinybvh` backend follows tinybvh 1.9.1
+  (`ERHE_TINYBVH_GIT_TAG` c9be3103): `tinybvh_traversal_stack_size` is 128
+  (`TINYBVH_STACK_SIZE`), and TLAS hits report `Ray::t_far` in the units of
+  the given direction, as BLAS hits do. Axis-aligned rays no longer miss
+  inner BVH nodes under FMA contraction (`doc/erhe/raytrace.md` "tinybvh").
 - `erhe::gltf`: `parse_gltf()` reads the derived-data extensions
   (`ERHE_mesh_optimized`, `ERHE_mesh_topology`, `ERHE_raytrace_bvh`,
   `ERHE_gpu_vertex_streams`, the chain of `ERHE_mesh_lod`,

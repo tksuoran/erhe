@@ -451,7 +451,8 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
 
     static constexpr size_t invalid_id = std::numeric_limits<size_t>::max();
     static constexpr size_t stack_size = c_traversal_stack_size;
-    static constexpr bool   use_robust_traversal = false;
+    // Robust: the fast slab test computes -org * inv_dir, which overflows for an axis-aligned ray with |org| > 1 on its zero axis.
+    static constexpr bool   use_robust_traversal = true;
 
     auto  prim_id = invalid_id;
     float u{0.0f};
