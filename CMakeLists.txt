@@ -908,11 +908,12 @@ endif ()
 # builds its tools, which erhe does not need.
 CPMAddPackage(
     NAME              basis_universal
-    # v1_60 fails to compile on the NDK (ambiguous safe_shift_left overloads
-    # in basisu_containers.h); v2_50 builds on both MSVC and clang.
-    GIT_TAG           v2_50
-    GIT_SHALLOW       TRUE
-    GITHUB_REPOSITORY BinomialLLC/basis_universal
+    # Fork tksuoran/basis_universal branch erhe_msvc_popcount: v2_50 plus
+    # #include <bit> in encoder/basisu_astc_ldr_fencode.h (MSVC C2039 on
+    # std::popcount). The first upstream release with that include obsoletes it.
+    # v1_60 fails to compile on the NDK (ambiguous safe_shift_left overloads).
+    GIT_TAG           3cab8c5fe204805fae32cfdefdf1b35c5e2745e5
+    GITHUB_REPOSITORY tksuoran/basis_universal
     DOWNLOAD_ONLY     YES
 )
 
