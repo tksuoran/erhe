@@ -498,13 +498,16 @@ endif ()
 if (ERHE_SPIRV)
     # SPIRV-Tools for the optimizer (glslang ENABLE_OPT; erhe::graphics runs
     # spirv-opt's performance passes when Graphics_config::spirv_optimization
-    # is on, doc/erhe/graphics.md "SPIR-V optimization"). Pinned to the
-    # commits glslang's known_good.json names for the glslang commit below;
-    # move them together.
+    # is on, doc/erhe/graphics.md "SPIR-V optimization"). SPIRV-Tools is
+    # pinned at upstream 19e35eae (merge-return use-after-free fix #6885;
+    # Debug builds assert in MergeReturnPass on standard.frag), ahead of the
+    # known_good.json of the glslang commit below and of any release (v2026.4
+    # lacks it); SPIRV-Headers is the revision that commit's DEPS names. Move
+    # back to glslang's known_good pair once it includes the fix.
     CPMAddPackage(
         NAME              SPIRV-Headers
         GITHUB_REPOSITORY KhronosGroup/SPIRV-Headers
-        GIT_TAG           aaffbc59b41bf8faea671b0d1c6b34a584c45171
+        GIT_TAG           cb42dec3830d3ac67fa449ecdc0c0f73d5e74498
         OPTIONS
             "SPIRV_HEADERS_ENABLE_TESTS OFF"
             "SPIRV_HEADERS_ENABLE_INSTALL OFF"
@@ -512,7 +515,7 @@ if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              SPIRV-Tools
         GITHUB_REPOSITORY KhronosGroup/SPIRV-Tools
-        GIT_TAG           c2bafae51eb16d0c71cc08e296690f4002ca7307
+        GIT_TAG           19e35eae1ab1574f31704ac002d77cbad6a064aa
         OPTIONS
             "SPIRV-Headers_SOURCE_DIR ${SPIRV-Headers_SOURCE_DIR}"
             "SPIRV_SKIP_TESTS ON"
