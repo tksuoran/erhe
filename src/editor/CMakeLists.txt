@@ -826,6 +826,8 @@ erhe_target_sources_grouped(
     windows/lightmap_texture_window.hpp
     windows/lightmap_window.cpp
     windows/lightmap_window.hpp
+    windows/light_mixer_window.cpp
+    windows/light_mixer_window.hpp
     windows/lod_window.cpp
     windows/lod_window.hpp
     windows/pvs_window.cpp

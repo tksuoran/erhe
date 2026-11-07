@@ -318,6 +318,24 @@ inline constexpr std::size_t automatic_clustered_light_count = 16;
 // When light_shading is (or resolves to) clustered, the unshadowed limits
 // are not used: every active light is shaded up to max_light_count, and the
 // shadow limits pick the shadow-mapped ones.
+// Item_flags masks that keep active lights out of the shaded set
+// (doc/erhe/scene_renderer.md "Muted and solo lights"): while any light
+// carries a solo bit only those lights are shaded, otherwise a light
+// carrying a muted bit is not. The application names the bits.
+class Light_filter
+{
+public:
+    [[nodiscard]] auto operator==(const Light_filter& other) const -> bool = default;
+
+    uint64_t muted_flag_bits{0};
+    uint64_t solo_flag_bits {0};
+};
+
+// Whether some light of `lights` carries a solo bit of `filter`.
+[[nodiscard]] auto has_solo_light(std::span<const std::shared_ptr<erhe::scene::Light>> lights, const Light_filter& filter) -> bool;
+// Light::is_active() and not silenced by the filter; `solo` is has_solo_light() of the lights.
+[[nodiscard]] auto is_light_shaded(const erhe::scene::Light& light, const Light_filter& filter, bool solo) -> bool;
+
 class Light_count_limits
 {
 public:
@@ -327,6 +345,7 @@ public:
     // array capacity); a light that finds the total full is not shaded.
     std::size_t max_light_count{std::numeric_limits<std::size_t>::max()};
     Light_shading light_shading{Light_shading::loops};
+    Light_filter  filter{};
 
     // Number of 2D shadow map array layers (directional + spot shadow lights).
     [[nodiscard]] auto shadow_map_2d_layer_count() const -> std::size_t
@@ -348,6 +367,7 @@ public:
         }
         result.max_light_count = max_light_count;
         result.light_shading   = light_shading;
+        result.filter          = filter;
         return result;
     }
     // Same shadow / unshadowed limits for directional, spot and point.

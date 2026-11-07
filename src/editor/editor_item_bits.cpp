@@ -31,7 +31,9 @@ constexpr erhe::Item_flag_info c_editor_item_flags[] = {
     { Editor_item_flags::affects_shadow,                 "Affects Shadow",                 nullptr                     },
     { Editor_item_flags::bone_proxy,                     "Bone Proxy",                     nullptr                     },
     { Editor_item_flags::active_item,                    "Active Item",                    nullptr                     },
-    { Editor_item_flags::view_anchored,                  "View Anchored",                  nullptr                     }
+    { Editor_item_flags::view_anchored,                  "View Anchored",                  nullptr                     },
+    { Editor_item_flags::light_muted,                    "Light Muted",                    nullptr                     },
+    { Editor_item_flags::light_solo,                     "Light Solo",                     nullptr                     }
 };
 
 // The C++ class names (the item trees name their drag and drop payloads by them).

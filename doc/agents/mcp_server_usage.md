@@ -154,7 +154,10 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_lights","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{lights: [{name, node, type, color, intensity, range}]}`
+Returns: `{lights: [{name, node, type, color, intensity, range, cast_shadow, muted, solo, shaded, shadow_mapped, ...}]}`.
+`muted` / `solo` are the Light Mixer flags (doc/editor/light_mixer.md). `shaded` is false for a light
+the last frame's light set left out (inactive, muted or not solo, or over the preset's light limits);
+`shaded` and the shadow fields are absent before the scene's first rendered frame.
 
 The shadow pass counts (`shadow_draw_list_entry_count` /
 `shadow_draw_list_culled_count`): under the `gpu` culling classification with

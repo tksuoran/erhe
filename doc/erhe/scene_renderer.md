@@ -222,6 +222,21 @@ holds at least one (zero) record, so no storage range is empty. They are
 written once per view and frame by `write_view()`, or per pass by
 `update()` for passes without view buffers.
 
+### Muted and solo lights
+
+`Light_count_limits::filter` (`Light_filter`, `shader_key.hpp`) holds two
+`Item_flags` masks the application chooses: while any light carries a bit of
+`solo_flag_bits`, only those lights are shaded; otherwise a light carrying a
+bit of `muted_flag_bits` is not. `is_light_shaded()` is `Light::is_active()`
+plus that rule, and `has_solo_light()` decides which half applies.
+`compute_light_layer_partition()` and `Light_set::resolve()` both apply it, so
+a filtered light gets neither a light slot nor a shadow map and the shader
+variant's light counts agree with the light set. A filter change is a light
+change: the application invalidates the light set
+(`Scene_host::on_light_changed()`) when it sets or clears one of the bits. The
+default filter (both masks 0) shades every active light. The editor's use is
+`doc/editor/light_mixer.md`.
+
 ### Specular anti-aliasing
 
 `anisotropic_brdf()` (`res/shaders/erhe_bxdf.glsl`) widens its GGX lobe by a

@@ -601,6 +601,42 @@ TEST_F(Light_cluster_test, shaded_total_stops_at_light_array_capacity)
     EXPECT_LE(erhe::scene_renderer::get_cluster_slot_end(partition), capacity);
 }
 
+TEST_F(Light_cluster_test, filter_mutes_and_solos_lights)
+{
+    make_camera(erhe::scene::Projection::Type::perspective_vertical);
+    make_lights(4, 0.5f, 8.0f);
+    constexpr uint64_t muted_bit = erhe::Item_flags::application_bit(30);
+    constexpr uint64_t solo_bit  = erhe::Item_flags::application_bit(31);
+    Light_count_limits limits = Light_count_limits::uniform(0, 1000);
+    limits.filter = erhe::scene_renderer::Light_filter{.muted_flag_bits = muted_bit, .solo_flag_bits = solo_bit};
+    const std::span<const std::shared_ptr<erhe::scene::Light>> lights{m_lights};
+    const std::size_t all = m_lights.size();
+
+    auto resolve_count = [&]() -> std::size_t {
+        m_light_set.invalidate();
+        static_cast<void>(m_light_set.resolve(lights, limits, 1024));
+        const Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(lights, limits, 1024);
+        EXPECT_EQ(partition, m_light_set.get_partition());
+        return m_light_set.get_lights().size();
+    };
+
+    EXPECT_EQ(resolve_count(), all);
+    m_lights[0]->enable_flag_bits(muted_bit);
+    m_lights[1]->enable_flag_bits(muted_bit);
+    EXPECT_EQ(resolve_count(), all - 2);
+
+    // Solo overrides mute: only solo lights, muted or not, are shaded.
+    m_lights[1]->enable_flag_bits(solo_bit);
+    m_lights[2]->enable_flag_bits(solo_bit);
+    EXPECT_EQ(resolve_count(), 2u);
+    EXPECT_NE(m_light_set.find_slot(m_lights[1]->get_id()), std::numeric_limits<std::size_t>::max());
+    EXPECT_EQ(m_light_set.find_slot(m_lights[0]->get_id()), std::numeric_limits<std::size_t>::max());
+
+    m_lights[1]->disable_flag_bits(solo_bit);
+    m_lights[2]->disable_flag_bits(solo_bit);
+    EXPECT_EQ(resolve_count(), all - 2);
+}
+
 TEST_F(Light_cluster_test, perspective_opengl_lists_are_conservative)
 {
     make_camera(erhe::scene::Projection::Type::perspective_vertical);

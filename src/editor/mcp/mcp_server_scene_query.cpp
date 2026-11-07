@@ -2447,7 +2447,9 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                 {"color",       {light->get_color().x, light->get_color().y, light->get_color().z}},
                 {"intensity",   light->get_intensity()},
                 {"range",       light->get_range()},
-                {"cast_shadow", light->get_cast_shadow()}
+                {"cast_shadow", light->get_cast_shadow()},
+                {"muted",       (light->get_flag_bits() & Editor_item_flags::light_muted) != 0},
+                {"solo",        (light->get_flag_bits() & Editor_item_flags::light_solo) != 0}
             };
             const erhe::scene::Light_projection_transforms* transforms = (light_projections != nullptr)
                 ? light_projections->get_light_projection_transforms_for_light_id(light->get_id())
@@ -2485,6 +2487,10 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                         add_cube_face_statistics(light_json, *draw_statistics, transforms->point_shadow_index);
                     }
                 }
+            } else if (light_projections != nullptr) {
+                // Not in the light set: inactive, muted / not solo, or over the preset's light limits.
+                light_json["shaded"]        = false;
+                light_json["shadow_mapped"] = false;
             }
             lights.push_back(light_json);
         }

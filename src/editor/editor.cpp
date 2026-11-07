@@ -153,6 +153,7 @@
 #include "windows/frame_pacing_window.hpp"
 #include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
+#include "windows/light_mixer_window.hpp"
 #include "windows/lod_window.hpp"
 #include "windows/scene_control_window.hpp"
 #include "windows/shader_variants_window.hpp"
@@ -3587,6 +3588,7 @@ public:
                 m_app_context.lightmap_texture_window = m_lightmap_texture_window.get();
                 m_app_context.lightmap_window         = m_lightmap_window.get();
                 m_lod_window             = std::make_unique<Lod_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), m_editor_settings.lod);
+                m_light_mixer_window     = std::make_unique<Light_mixer_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_pvs_window             = std::make_unique<Pvs_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_app_context.pvs_window              = m_pvs_window.get();
                 m_scene_control_window   = std::make_unique<Scene_control_window            >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -5862,6 +5864,7 @@ public:
     std::unique_ptr<Controller_inputs_window        >        m_controller_inputs_window;
     std::unique_ptr<Lightmap_window                 >        m_lightmap_window;
     std::unique_ptr<Lod_window                      >        m_lod_window;
+    std::unique_ptr<Light_mixer_window              >        m_light_mixer_window;
     std::unique_ptr<Pvs_window                      >        m_pvs_window;
     std::unique_ptr<Shader_variants_window          >        m_shader_variants_window;
     std::unique_ptr<Scene_control_window            >        m_scene_control_window;

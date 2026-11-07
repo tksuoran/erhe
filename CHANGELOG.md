@@ -42,6 +42,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `Light_filter` (`muted_flag_bits`,
+  `solo_flag_bits`), `Light_count_limits::filter`, `has_solo_light()` and
+  `is_light_shaded()`; `Light_set::resolve()` and
+  `compute_light_layer_partition()` leave muted lights out, and while a light
+  is solo, every light that is not (doc/erhe/scene_renderer.md "Muted and solo
+  lights").
 - `erhe::renderer`: `Primitive_renderer::Cone_lines` (`all`, `edges`) and the
   `add_cone()` parameter `lines` (default `all`); `edges` draws only the rim
   circles and the silhouette generatrices.

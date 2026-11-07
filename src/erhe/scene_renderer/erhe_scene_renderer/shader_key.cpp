@@ -631,6 +631,32 @@ auto light_type_index(const erhe::scene::Light_type type) -> std::size_t
     }
 }
 
+auto has_solo_light(const std::span<const std::shared_ptr<erhe::scene::Light>> lights, const Light_filter& filter) -> bool
+{
+    if (filter.solo_flag_bits == 0) {
+        return false;
+    }
+    return std::any_of(
+        lights.begin(),
+        lights.end(),
+        [&filter](const std::shared_ptr<erhe::scene::Light>& light) -> bool {
+            return light && ((light->get_flag_bits() & filter.solo_flag_bits) != 0);
+        }
+    );
+}
+
+auto is_light_shaded(const erhe::scene::Light& light, const Light_filter& filter, const bool solo) -> bool
+{
+    if (!light.is_active()) {
+        return false;
+    }
+    const uint64_t flag_bits = light.get_flag_bits();
+    if (solo) {
+        return (flag_bits & filter.solo_flag_bits) != 0;
+    }
+    return (flag_bits & filter.muted_flag_bits) == 0;
+}
+
 auto compute_light_layer_partition(
     std::span<const std::shared_ptr<erhe::scene::Light>> lights,
     const Light_count_limits&                            light_count_limits,
@@ -643,14 +669,16 @@ auto compute_light_layer_partition(
     // produced here as its caps): input order, shadow slot first while the
     // light casts shadows and there is room, else an unshadowed slot while
     // there is room, else the light is not shaded.
+    const Light_filter& filter = light_count_limits.filter;
+    const bool          solo   = has_solo_light(lights, filter);
     Light_layer_partition partition{};
     partition.light_shading = light_count_limits.light_shading;
     if (partition.light_shading == Light_shading::automatic) {
         const std::size_t active_light_count = static_cast<std::size_t>(std::count_if(
             lights.begin(),
             lights.end(),
-            [](const std::shared_ptr<erhe::scene::Light>& light) -> bool {
-                return light && light->is_active();
+            [&filter, solo](const std::shared_ptr<erhe::scene::Light>& light) -> bool {
+                return light && is_light_shaded(*light, filter, solo);
             }
         ));
         partition.light_shading = (active_light_count > automatic_clustered_light_count)
@@ -668,9 +696,9 @@ auto compute_light_layer_partition(
         if (!light) {
             continue;
         }
-        if (!light->is_active()) {
+        if (!is_light_shaded(*light, filter, solo)) {
             // Inactive light (e.g. a zero-range point light, which reaches
-            // nowhere) contributes nothing, so it is counted in neither the
+            // nowhere) or one the filter silences contributes nothing, so it is counted in neither the
             // shadow nor the non-shadow bucket and the shader's per-type light
             // loops skip it entirely.
             continue;

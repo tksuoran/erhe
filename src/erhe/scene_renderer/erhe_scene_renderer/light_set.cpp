@@ -18,7 +18,7 @@ namespace {
         if (lhs.per_type_shadow    [t] != rhs.per_type_shadow    [t]) { return false; }
         if (lhs.per_type_unshadowed[t] != rhs.per_type_unshadowed[t]) { return false; }
     }
-    return (lhs.max_light_count == rhs.max_light_count) && (lhs.light_shading == rhs.light_shading);
+    return (lhs.max_light_count == rhs.max_light_count) && (lhs.light_shading == rhs.light_shading) && (lhs.filter == rhs.filter);
 }
 
 }
@@ -71,7 +71,7 @@ auto Light_set::resolve(
     // shadow slot while the light casts shadows and its type's shadow count
     // has room, else an unshadowed slot while that count has room, else the
     // light is not shaded (not in the set). Inactive lights (e.g. a zero-range
-    // point light) are never shaded.
+    // point light) and lights the filter silences are never shaded.
     m_slot_lights.assign(slot_count, std::shared_ptr<erhe::scene::Light>{});
     std::size_t cursor_shadow   [light_type_count] = {0, 0, 0, 0};
     std::size_t cursor_nonshadow[light_type_count] = {0, 0, 0, 0};
@@ -80,11 +80,12 @@ auto Light_set::resolve(
     std::size_t spot_light_count{};
     std::size_t point_light_count{};
     std::size_t shaded_count{};
+    const bool  solo = has_solo_light(lights, light_count_limits.filter);
     for (const std::shared_ptr<erhe::scene::Light>& light : lights) {
         if (!light) {
             continue;
         }
-        if (!light->is_active()) {
+        if (!is_light_shaded(*light, light_count_limits.filter, solo)) {
             ++inactive_light_count;
             continue;
         }

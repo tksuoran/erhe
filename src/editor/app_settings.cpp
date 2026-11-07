@@ -1,5 +1,6 @@
 #include "app_settings.hpp"
 #include "app_message_bus.hpp"
+#include "editor_item_bits.hpp"
 #include "editor_log.hpp"
 
 #include "config/generated/editor_settings_config.hpp"
@@ -115,6 +116,11 @@ auto get_light_count_limits(const Graphics_preset_entry& graphics_preset, const 
     // the unshadowed counts, and the shadow counts still pick the
     // shadow-mapped lights (compute_light_layer_partition).
     limits.light_shading = static_cast<erhe::scene_renderer::Light_shading>(graphics_preset.light_shading);
+    // Light Mixer mute / solo (doc/editor/light_mixer.md).
+    limits.filter = erhe::scene_renderer::Light_filter{
+        .muted_flag_bits = Editor_item_flags::light_muted,
+        .solo_flag_bits  = Editor_item_flags::light_solo
+    };
     if (!graphics_preset.shadow_enable) {
         // Shadows off: no light is shadow-mapped, the unshadowed limits still
         // decide how many lights of each type are shaded.

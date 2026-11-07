@@ -77,6 +77,11 @@ public:
     // draws view anchored items decides per view whether it runs. Session
     // state of editor furniture, never serialized.
     static constexpr uint64_t view_anchored             = erhe::Item_flags::application_bit(21);
+    // Light Mixer session state (doc/editor/light_mixer.md): a muted light
+    // is not shaded; while any light is solo only solo lights are shaded
+    // (erhe::scene_renderer::Light_filter). Never serialized.
+    static constexpr uint64_t light_muted               = erhe::Item_flags::application_bit(22);
+    static constexpr uint64_t light_solo                = erhe::Item_flags::application_bit(23);
 
     // The bits register_editor_item_bits() reports as transient
     // (erhe::Item_flags::get_transient_bits()) and as purpose inputs
@@ -84,7 +89,7 @@ public:
     static constexpr uint64_t transient =
         hovered_in_viewport | hovered_in_item_tree | descendant_hovered_in_viewport |
         hovered_in_graph | child_hovered_in_graph | ancestor_hovered_in_graph |
-        affects_shadow | active_item;
+        affects_shadow | active_item | light_muted | light_solo;
     static constexpr uint64_t purpose_guide_when_set = tool | brush | controller | rendertarget;
     // Hover bits the renderers color an entry as hovered by
     // (erhe::scene_renderer::Primitive_interface_settings::hovered_flag_bits).

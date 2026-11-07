@@ -74,7 +74,7 @@ metal::Metal backend on macOS: autorelease pools, render-thread threading, frame
 pvs::Potentially visible sets (complete on desktop 2026-10-31): verify recipe + reference hashes, traps, step 8 headset + open items
 
 [STATE]
-@branch::main{ahead-of-origin/main-unpushed-since-9fe7ab087(+13-commits-2026-11-05-editor-ux);history-cleanup-pending(©User-guides);uncommitted:config/editor/editor_settings.json+desktop_windows.json(user-interactive-session-saves;user-decides)}
+@branch::main{ahead-of-origin/main-unpushed(9-commits-up-to-37fdc1d66+memory-bank-commit);history-rewritten-locally-2026-11-06(©User;one-subsystem-split-out;details->memory-bank/local/context.md[HISTORY_SPLIT_2026_11_06]);local/*-branches=local-only(¬push);uncommitted:config/editor/editor_settings.json+desktop_windows.json(user-interactive-session-saves;user-decides)}
 @branch::lod{Mac-worktree-../erhe-lod;REBASED-onto-main-2026-11-01(©User)+main-fast-forwarded+PUSHED-origin/main-a966e68ac;origin/lod=stale-pre-rebase-history(diverged;force-push-or-delete=user-decision);render-thread-worktree-../erhe-unchanged;-Werror-off-on-Clang/GCC/AppleClang(main-policy:MSVC-/WX-only);git-push-only-on-explicit-instruction}
 
 [BLOCKERS]
