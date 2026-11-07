@@ -2407,3 +2407,97 @@ Quest state per run (temperatures: thermal HAL maximum per type at the start of 
 | 2 | 106.64 | 0 -> 0; 0 -> 0, step-downs 0 | 64.1 -> 64.1 | 64.6 -> 64.1 | 62.3 -> 62.0 | 40.0, 99 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 94 | 30.1 |
 | 3 | 107.20 | 0 -> 0; 0 -> 0, step-downs 0 | 65.4 -> 65.0 | 65.8 -> 65.3 | 63.5 -> 63.2 | 40.0, 99 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2208 [1920..2362] cap 2362/2362 | 456 cap 456 | 94 | 25.7 |
 
+
+## 2026-11-07 22:15 - bistro_street_120, no configuration file
+
+- Runs: 4 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_221511_bistro_street_120_0.json`, `20261107_221611_bistro_street_120_0.json`, `20261107_221702_bistro_street_120_0.json`, `20261107_221755_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (802820c69); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 4.81 s, idle 4.81 s).
+- Scene (R13.4 re-measure after D8 steps 11b - 15): the quest prepared asset of `scripts/prepared_asset_bistro_verify.py --keep-quest` (made 2026-11-07 16:38, PVS `bits_hash` `fd5d5edadffa53f7`, `ready`), APK of this tree after a clean install (the app's settings reset: light shading loops, unlike the 07:47 entries), runs alternated with the following entry's after one uncounted warmup. Per run, listed / idle s, VmHWM MB, fps: 4.81 / 4.81, 826, 83.39; 4.95 / 4.95, 800, 83.13; 4.50 / 4.83, 800, 83.26; 4.46 / 4.46, 788, 83.06 (median listed 4.66 s, VmHWM 800 MB). Draws 393 ASTC 4x4 textures (1806 MB) through 44 draw lists.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | loops / loops (Headset) |
+| Lights | point 0/33 shaded, 0 shadow-mapped (0 cached); spot 1/11 shaded, 1 shadow-mapped (0 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 0+0, spot 1+0, point 0+0 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | - |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 83.20 [83.06..83.39] |
+| Frame wall time (ms) | 11.68 [11.59..11.81] |
+| M2 / R / M3 (ms) | 0.79 [0.79..0.79] / 3.53 [3.46..3.57] / 0.64 [0.64..0.65] |
+| App GPU frame time, XR counter (ms) | 8.47 [8.28..8.55] |
+| GPU utilization, XR counter (%) | 96.2 [96.2..96.6] |
+| CPU utilization average / worst, XR counter (%) | 20.9 [20.4..21.8] / 25.0 [23.2..27.7] |
+| GPU pass Cull classification (ms) | 0.078 [0.077..0.078] |
+| GPU pass Cull command generation (ms) | 0.101 [0.098..0.105] |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.041 [0.041..0.042] |
+| GPU pass Shadow 0 (ms) | 1.537 [1.529..1.541] |
+| GPU pass XR multiview (ms) | 8.576 [8.563..8.585] |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 11.314 [11.293..11.327] |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 83.39 | 0 -> 0; 0 -> 0, step-downs 0 | 57.2 -> 57.7 | 57.6 -> 57.6 | 54.8 -> 54.9 | 31.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1987 [1920..2362] cap 2362/2362 | 456 cap 456 | 96 | 29.7 |
+| 1 | 83.13 | 0 -> 0; 0 -> 0, step-downs 0 | 59.5 -> 59.5 | 59.9 -> 59.6 | 57.3 -> 57.1 | 32.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2141 [1920..2362] cap 2362/2362 | 456 cap 456 | 96 | 27.9 |
+| 2 | 83.26 | 0 -> 0; 0 -> 0, step-downs 0 | 60.4 -> 60.7 | 61.0 -> 60.5 | 58.3 -> 58.1 | 33.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2208 [1920..2362] cap 2362/2362 | 456 cap 456 | 96 | 26.4 |
+| 3 | 83.06 | 0 -> 0; 0 -> 0, step-downs 0 | 61.5 -> 61.7 | 62.0 -> 61.4 | 59.4 -> 59.3 | 33.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 cap 2362/2362 | 456 cap 456 | 96 | 25.2 |
+
+
+## 2026-11-07 22:15 - bistro_street_120, no configuration file
+
+- Runs: 4 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_221545_bistro_street_120_0.json`, `20261107_221640_bistro_street_120_0.json`, `20261107_221730_bistro_street_120_0.json`, `20261107_221823_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (802820c69); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src_quest.glb` (listed 8.41 s, idle 8.41 s).
+- Scene: the prepared glTF file of the 07:47 entries, same APK, alternated with the previous entry's runs. Per run, listed / idle s, VmHWM MB, fps: 8.41 / 8.41, 826, 100.93 (the first open on this install: it derives and stores the device-side editor asset); 5.09 / 5.09, 783, 101.76; 5.60 / 5.60, 782, 100.43; 5.20 / 5.20, 793, 100.56 (median of the last three listed 5.20 s, VmHWM 783 MB). Not a baseline any more: a glTF file parse reads no derived data (R12.2: `ERHE_texture_ktx2`, `ERHE_pvs`, ...), so every draw list samples no texture (28 lists) and the scene has no PVS; the fps gap to the previous entry is texturing, not the prepared asset.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | loops / loops (Headset) |
+| Lights | point 0/33 shaded, 0 shadow-mapped (0 cached); spot 1/11 shaded, 1 shadow-mapped (0 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 0+0, spot 1+0, point 0+0 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 100.75 [100.43..101.76] |
+| Frame wall time (ms) | 9.55 [9.24..9.66] |
+| M2 / R / M3 (ms) | 0.76 [0.74..0.83] / 3.31 [3.24..3.82] / 0.64 [0.64..0.70] |
+| App GPU frame time, XR counter (ms) | 7.06 [7.02..7.30] |
+| GPU utilization, XR counter (%) | 95.7 [94.6..96.3] |
+| CPU utilization average / worst, XR counter (%) | 23.0 [22.5..24.2] / 27.1 [25.8..30.6] |
+| GPU pass Cull classification (ms) | 0.055 [0.055..0.056] |
+| GPU pass Cull command generation (ms) | 0.093 [0.088..0.097] |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.041 [0.041..0.041] |
+| GPU pass Shadow 0 (ms) | 1.508 [1.500..1.515] |
+| GPU pass XR multiview (ms) | 7.074 [7.038..7.108] |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.893 [8.783..8.939] |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 100.93 | 0 -> 0; 0 -> 0, step-downs 0 | 58.5 -> 58.6 | 58.9 -> 58.4 | 56.0 -> 56.0 | 30.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 95 | 27.5 |
+| 1 | 101.76 | 0 -> 0; 0 -> 0, step-downs 0 | 60.3 -> 60.1 | 60.7 -> 59.9 | 58.0 -> 57.7 | 33.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 94 | 34.0 |
+| 2 | 100.43 | 0 -> 0; 0 -> 0, step-downs 0 | 62.0 -> 61.6 | 61.8 -> 61.2 | 59.1 -> 58.9 | 32.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1920..2362] cap 2362/2362 | 456 cap 456 | 96 | 28.8 |
+| 3 | 100.56 | 0 -> 0; 0 -> 0, step-downs 0 | 62.6 -> 62.8 | 63.1 -> 62.5 | 60.6 -> 60.2 | 33.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1651..2362] cap 2362/2362 | 456 cap 456 | 95 | 29.7 |
+

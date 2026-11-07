@@ -15,8 +15,8 @@ The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick.
 
-0. Prepared assets on Quest: finish the device testing, re-measure R13.4,
-   then the user rulings. Read
+0. Prepared assets on Quest: the R13.4 baseline decision, then the user
+   rulings. Read
    "Prepared assets" below and `doc/plans/prepared_assets_design.md` D8.
 1. Quest session follow-ups: "Quest session follow-ups" below
    (`doc/agents/quest.md` "Bistro scene data on the device").
@@ -60,10 +60,19 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 `doc/plans/prepared_assets.md` (R numbers). Behavior:
 `doc/editor/prepared_assets.md`.
 
-- Quest: re-measure R13.4 (load time and VmHWM) on the current build; the
-  open's peak memory is about 14 MB above the plain glb (eight read
-  connections and the byte sources hold about 8 MB; page cache during the load
-  about 7 MB).
+- R13.4 needs a new baseline (user decision). Re-measured 2026-11-07 22:15
+  (`doc/reference/quest_bench_runs.md`): the prepared run is listed in 4.66 s
+  and peaks at 800 MB VmHWM, against 5.20 s / 783 MB for the prepared glTF
+  file of earlier builds. That file is no baseline any more: a glTF file
+  parse reads no derived data (R12.2), so it opens untextured and without a
+  PVS (101 fps against the prepared run's 83 fps, which draws its 393 ASTC
+  textures). The editor writes no prepared glTF file, so R13.4's "today's
+  prepared glTF file" has no current form: candidates are the source glTF
+  opened on the device, or the 07:47 numbers.
+- Texture planning logs "KTX2: level 0 outside the file" once per raw block
+  KTX2 image larger than 64 KiB (307 on the Bistro prepared run):
+  `Gltf_image_residency::plan_textures()` opens a 64 KiB prefix first and
+  `parse_ktx2()` warns before the whole-stream retry succeeds.
 - `scripts/prepared_asset_verify.py` on macOS (Metal headless Release): 11 of
   309 checks fail, unrelated to the PVS: the "beside the source" path checks
   (the temp directory resolves to `/private/var/...`), the world-space image
