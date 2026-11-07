@@ -2,6 +2,7 @@
 
 #include "erhe_file/file_log.hpp"
 #include "erhe_item/item_log.hpp"
+#include "erhe_log/log.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_property/property_log.hpp"
 #include "erhe_scene/scene_log.hpp"
@@ -34,6 +35,13 @@ void initialize_scene_renderer_test_logging()
             erhe::scene_renderer::initialize_logging();
         }
     );
+}
+
+void initialize_deviceless_test_logging()
+{
+    static std::once_flag s_once;
+    std::call_once(s_once, []() { erhe::log::initialize_log_sinks(); });
+    initialize_scene_renderer_test_logging();
 }
 
 } // namespace erhe::scene_renderer::test

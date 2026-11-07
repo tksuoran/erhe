@@ -15,7 +15,6 @@
 #include "erhe_scene_renderer/light_set.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
-#include "erhe_log/log.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/camera_snapshot.hpp"
@@ -31,7 +30,6 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
-#include <mutex>
 #include <random>
 #include <span>
 #include <vector>
@@ -202,10 +200,7 @@ class Light_cluster_test : public ::testing::Test
 protected:
     void SetUp() override
     {
-        // Deviceless binary: no GPU test environment creates the log sinks.
-        static std::once_flag s_once;
-        std::call_once(s_once, []() { erhe::log::initialize_log_sinks(); });
-        erhe::scene_renderer::test::initialize_scene_renderer_test_logging();
+        erhe::scene_renderer::test::initialize_deviceless_test_logging();
     }
 
     void make_camera(const erhe::scene::Projection::Type projection_type)

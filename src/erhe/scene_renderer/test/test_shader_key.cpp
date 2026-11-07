@@ -11,6 +11,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene_renderer/draw_list_key.hpp"
+#include "scene_renderer_test_logging.hpp"
 
 #include <gtest/gtest.h>
 
@@ -246,6 +247,9 @@ TEST(Draw_mobility_vertex_space, follows_the_mesh_skin_and_world_space_flag)
     using erhe::scene_renderer::Draw_mobility;
     using erhe::scene_renderer::get_draw_mobility;
     using erhe::scene_renderer::get_vertex_space;
+
+    // Destroying a Mesh logs through erhe::scene.
+    erhe::scene_renderer::test::initialize_deviceless_test_logging();
 
     // A new mesh without a parent is the root of its identity path.
     const auto mesh = std::make_shared<erhe::scene::Mesh>("mesh");
