@@ -202,6 +202,9 @@ class Editor:
             ports = [int(m.group(1)) for m in pattern.finditer(text) if int(m.group(2)) == self.process.pid]
             if ports and ("Main loop: completed frame 12" in text):
                 self.client = McpClient(ports[0])
+                # The image checks compare forms and runs at full detail: the LOD chains of a
+                # World-space mesh item are simplified from baked vertices, so coarse levels differ.
+                self.call("set_graphics_preset", {"lod_enabled": False})
                 return
             time.sleep(0.25)
         self.process.kill()
@@ -2444,6 +2447,31 @@ def render_world(editor, scene, directory, tag, mesh_form="source"):
     return paths
 
 
+def check_capture_lod_levels(editor, scene, images_dir):
+    """render_scene_image lod_nodes, LOD on: the levels of the rendered frame, its shadow pass drawing each caster at its color level."""
+    editor.call("set_graphics_preset", {"lod_enabled": True})
+    try:
+        name, eye, target = WORLD_CAMERAS[0]
+        camera = {"eye": eye, "target": target, "fov_y_degrees": 50.0, "near": 0.05, "far": 200.0}
+        reply = editor.call("render_scene_image", {"scene": scene, "camera": camera, "width": 480, "height": 270, "output": "png",
+                                                   "path": os.path.join(images_dir, "lod_levels.png"), "lod_nodes": ["shared_a", "shared_b", "shared_c"]})
+    finally:
+        editor.call("set_graphics_preset", {"lod_enabled": False})
+    selection = reply.get("lod_selection", {})
+    columns = selection.get("columns", [])
+    # The capture's color column is the one without history; its shadow column samples it.
+    fresh = [c["column"] for c in columns if (c["purpose"] == "color") and (c["previous_column"] is None)]
+    capture_color = fresh[0] if len(fresh) == 1 else None
+    capture_shadow = [c["column"] for c in columns if (c["purpose"] == "shadow") and (capture_color is not None) and ((c["color_column_mask"] >> capture_color) & 1)]
+    entries = selection.get("entries", [])
+    color_levels  = {e["node_name"]: e["levels"][capture_color] for e in entries if (e["purpose"] == "color") and (capture_color is not None)}
+    shadow_levels = {e["node_name"]: [e["levels"][c] for c in capture_shadow] for e in entries if e["purpose"] == "shadow"}
+    check("world: render_scene_image lod_nodes reports the rendered frame's levels; its shadow pass draws each caster at the capture's color level",
+          (capture_color is not None) and (len(capture_shadow) > 0) and (len(color_levels) == 3) and
+          all(levels == [color_levels[node]] * len(levels) for node, levels in shadow_levels.items()) and (len(shadow_levels) == 3),
+          json.dumps({"frame": selection.get("frame_index"), "color": color_levels, "shadow": shadow_levels}))
+
+
 def check_images_close(label, images_a, images_b):
     results = {name: image_difference(images_a[name], images_b[name]) for name in images_a}
     pixel_count = 480 * 270
@@ -2529,6 +2557,7 @@ def phase_world_space(args, work):
         tree_before = node_tree(editor, scene)
         source_images = render_world(editor, scene, images_dir, "source")
         check("world: no world-space form before a bake", not world_status(editor, scene).get("baked"))
+        check_capture_lod_levels(editor, scene, images_dir)
         refusal = editor.refusal("render_scene_image", {"scene": scene, "camera": {"eye": [0, 1, 5], "target": [0, 0, 0]}, "width": 64, "height": 64,
                                                          "output": "png", "path": os.path.join(images_dir, "refused.png"), "mesh_form": "world_space"})
         check("world: render_scene_image refuses the world-space form before a bake", (refusal is not None) and ("not available" in refusal), (refusal or "")[:160])

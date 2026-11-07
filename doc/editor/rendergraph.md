@@ -42,6 +42,15 @@ the editor UI.
 - `Scene_image_view` renders once: a later frame of the chain (frame
   pipelining runs the chain one more frame before the prepare phase sees the
   readback recorded) renders nothing.
+- LOD levels (`lod_nodes`): the view asks its scene's `Draw_list_scene` for
+  a LOD level capture of the named meshes' entries in the frame it renders
+  in (`request_lod_level_capture()` with that frame, from its first enabled
+  `prepare_composition()`); an earlier frame skips the request and a later one
+  drops it. The reply waits for the capture to complete (the frame's GPU
+  levels read back under `on_demand`) and refuses a capture of another frame
+  than the rendered one. The capture's view is new, so its levels start
+  without hysteresis history: a capture renders the threshold levels of its
+  camera, the same on every call.
 - `Scene_image_view` is a window-less sibling of `Viewport_scene_view`
   (`Scene_view` + `Texture_rendergraph_node`, HDR `format_16_vec4_float`
   color, or `format_32_vec4_float` for `color_format: "rgba32f"`,

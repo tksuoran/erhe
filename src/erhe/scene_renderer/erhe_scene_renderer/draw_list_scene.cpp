@@ -4005,14 +4005,15 @@ auto Draw_list_scene::find_published_color_entry(
     return Draw_list_published_entry{};
 }
 
-void Draw_list_scene::request_lod_level_capture(const Draw_list_object_id object)
+void Draw_list_scene::request_lod_level_capture(const std::span<const Draw_list_object_id> objects, const std::optional<uint64_t> frame_index)
 {
     assert_main_thread();
     const std::lock_guard<std::mutex> lock{m_lod_capture_mutex};
-    m_lod_capture_requested  = true;
-    m_lod_capture_complete   = false;
-    m_lod_capture_awaits_gpu = false;
-    m_lod_capture_object    = object;
+    m_lod_capture_requested    = true;
+    m_lod_capture_complete     = false;
+    m_lod_capture_awaits_gpu   = false;
+    m_lod_capture_objects.assign(objects.begin(), objects.end());
+    m_lod_capture_target_frame = frame_index;
 }
 
 auto Draw_list_scene::poll_lod_level_capture(Lod_level_capture& out) -> Cull_classification_check_state
@@ -4034,6 +4035,15 @@ void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_l
     // An earlier frame's capture waiting for its GPU levels is the one.
     if (!m_lod_capture_requested || m_lod_capture_awaits_gpu) {
         return;
+    }
+    if (m_lod_capture_target_frame.has_value()) {
+        if (level_slot.frame_index < m_lod_capture_target_frame.value()) {
+            return;
+        }
+        if (level_slot.frame_index > m_lod_capture_target_frame.value()) {
+            m_lod_capture_requested = false; // the frame passed unclassified: dropped
+            return;
+        }
     }
     // A diagnostic path: it may allocate.
     Lod_level_capture& capture = m_lod_capture;
@@ -4079,10 +4089,15 @@ void Draw_list_scene::capture_lod_levels(const Draw_list_slot& slot, const Lod_l
         const std::vector<uint32_t>& words       = level_slot.lists[list_index];
         for (std::size_t i = 0; i < entry_count; ++i) {
             const Draw_list_entry& entry = draw_list.entries[i];
-            if (entry.object_index != m_lod_capture_object.index) {
+            const bool captured = std::ranges::any_of(
+                m_lod_capture_objects,
+                [&entry](const Draw_list_object_id& object) -> bool { return object.index == entry.object_index; }
+            );
+            if (!captured) {
                 continue;
             }
             Lod_level_capture_entry& out = capture.entries.emplace_back();
+            out.object_index         = entry.object_index;
             out.list_index           = static_cast<uint32_t>(list_index);
             out.entry_index          = static_cast<uint32_t>(i);
             out.global_entry_index   = slot.entry_offsets[list_index] + static_cast<uint32_t>(i);

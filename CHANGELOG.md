@@ -93,6 +93,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Draw_list_scene::request_lod_level_capture()` takes
+  the objects as a span and an optional frame index: with one, only that
+  frame's classification fills the capture and a later frame drops it.
+  `Lod_level_capture_entry` carries `object_index`.
+
 - `erhe::raytrace`: the `tinybvh` backend follows tinybvh 1.9.1
   (`ERHE_TINYBVH_GIT_TAG` c9be3103): `tinybvh_traversal_stack_size` is 128
   (`TINYBVH_STACK_SIZE`), and TLAS hits report `Ray::t_far` in the units of

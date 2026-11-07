@@ -11,6 +11,7 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene_renderer/draw_list_object.hpp"
 #include "erhe_scene_renderer/overdraw_counter.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
@@ -175,6 +176,12 @@ public:
     [[nodiscard]] auto get_shadow_lights() const -> std::span<const Scene_image_shadow_light> { return m_shadow_lights; }
     [[nodiscard]] auto get_shadow_maps  () const -> const Scene_image_shadow_maps& { return m_shadow_maps; }
 
+    // Main thread: the objects whose LOD levels the frame the view renders in
+    // reports (Draw_list_scene::request_lod_level_capture() for that frame,
+    // from the first enabled prepare_composition()), and that frame.
+    void set_lod_capture_objects(std::vector<erhe::scene_renderer::Draw_list_object_id> objects);
+    [[nodiscard]] auto get_lod_capture_frame() const -> std::optional<uint64_t> { return m_lod_capture_frame; }
+
 protected:
     // Rendergraph_node: a released view leaves App_rendering's list at once,
     // so no prepare phase prepares it while the rendergraph keeps it retired
@@ -202,6 +209,8 @@ private:
     // Explicit-range timer bracketing the forward render pass; null = untimed.
     erhe::graphics::Gpu_timer*            m_forward_pass_timer{nullptr};
     Mesh_form                             m_mesh_form{Mesh_form::source};
+    std::vector<erhe::scene_renderer::Draw_list_object_id> m_lod_capture_objects;
+    std::optional<uint64_t>               m_lod_capture_frame;
     std::optional<uint32_t>               m_shadow_debug_light_index;
     std::vector<Scene_image_shadow_light> m_shadow_lights;
     Scene_image_shadow_maps               m_shadow_maps;
@@ -343,6 +352,8 @@ public:
     erhe::graphics::Gpu_timer*           forward_pass_timer{nullptr};
     // The form of the world-space bake's mesh nodes the image draws (doc/editor/world_space_bake.md "Two forms").
     Mesh_form                            mesh_form{Mesh_form::source};
+    // Draw-list objects whose LOD levels in the rendered frame are captured (empty: none).
+    std::vector<erhe::scene_renderer::Draw_list_object_id> lod_capture_objects;
 };
 
 // One render_scene_image request: builds the chain Shadow_render_node ->
@@ -381,6 +392,10 @@ public:
     // Scene_image_background::marked: pixels with no surface coverage (their
     // RGB is NaN in get_pixels()).
     [[nodiscard]] auto get_background_pixel_count() const -> std::size_t { return m_background_pixel_count; }
+    // Valid while poll() reports complete: the frame the copy was recorded in
+    // (the frame the view rendered in), and the frame the LOD capture asked for.
+    [[nodiscard]] auto get_rendered_frame     () const -> uint64_t { return m_rendered_frame; }
+    [[nodiscard]] auto get_lod_capture_frame  () const -> std::optional<uint64_t>;
 
     // Main thread, prepare phase (Rendergraph::prepare_frame(), through the
     // readback node): one frame is all a capture needs, so once a render
@@ -419,6 +434,7 @@ private:
     std::optional<uint32_t>                    m_shadow_debug_light_index;
     std::vector<Scene_image_shadow_light>      m_shadow_lights;
     Scene_image_shadow_maps                    m_shadow_maps;
+    uint64_t                                   m_rendered_frame{0};
 };
 
 } // namespace editor

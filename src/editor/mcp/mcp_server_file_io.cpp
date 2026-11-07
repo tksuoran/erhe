@@ -58,6 +58,8 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
@@ -1797,10 +1799,50 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             m_defer_current_request = true;
             return {};
         }
+        // lod_nodes: the LOD levels of the rendered frame, polled until the
+        // frame's (GPU) levels are read back.
+        json lod_selection{};
+        if ((state == Scene_image_capture_state::complete) && m_scene_image_lod_scene) {
+            erhe::scene_renderer::Draw_list_scene* const draw_list_scene = m_scene_image_lod_scene->get_draw_list_scene();
+            erhe::scene_renderer::Lod_level_capture capture{};
+            const erhe::scene_renderer::Cull_classification_check_state lod_state = (draw_list_scene != nullptr)
+                ? draw_list_scene->poll_lod_level_capture(capture)
+                : erhe::scene_renderer::Cull_classification_check_state::idle;
+            if (lod_state == erhe::scene_renderer::Cull_classification_check_state::pending) {
+                m_defer_current_request = true;
+                return {};
+            }
+            const std::optional<uint64_t> requested_frame = m_scene_image_capture->get_lod_capture_frame();
+            const uint64_t                rendered_frame  = m_scene_image_capture->get_rendered_frame();
+            m_scene_image_lod_scene.reset();
+            if (
+                (lod_state != erhe::scene_renderer::Cull_classification_check_state::complete) ||
+                !requested_frame.has_value() || (requested_frame.value() != rendered_frame) || (capture.frame_index != rendered_frame)
+            ) {
+                m_scene_image_request = nullptr;
+                m_scene_image_capture.reset();
+                return make_error_content(fmt::format(
+                    "render_scene_image: the LOD levels of the rendered frame {} were not captured (requested for frame {}, captured frame {})",
+                    rendered_frame,
+                    requested_frame.has_value() ? fmt::format("{}", requested_frame.value()) : std::string{"none"},
+                    (lod_state == erhe::scene_renderer::Cull_classification_check_state::complete) ? fmt::format("{}", capture.frame_index) : std::string{"none"}
+                ));
+            }
+            lod_selection = make_lod_level_capture_json(capture);
+            for (json& entry : lod_selection["entries"]) {
+                const uint32_t object_index = entry["object_index"].get<uint32_t>();
+                for (const std::pair<uint32_t, std::string>& node : m_scene_image_lod_nodes) {
+                    if (node.first == object_index) {
+                        entry["node_name"] = node.second;
+                    }
+                }
+            }
+        }
         m_scene_image_request = nullptr;
         if (state == Scene_image_capture_state::failed) {
             const std::string error = m_scene_image_capture->get_error();
             m_scene_image_capture.reset();
+            m_scene_image_lod_scene.reset();
             return make_error_content("render_scene_image: " + error);
         }
 
@@ -1814,6 +1856,9 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             // (not shaded in that frame's light set).
             const std::optional<uint32_t> slot = m_scene_image_capture->get_shadow_debug_light_index();
             result["shadow_debug_light"]["light_index"] = slot.has_value() ? json(slot.value()) : json(nullptr);
+        }
+        if (!lod_selection.is_null()) {
+            result["lod_selection"] = std::move(lod_selection);
         }
         result["shadow_maps"]   = make_scene_image_shadow_maps_json(m_scene_image_capture->get_shadow_maps());
         result["shadow_lights"] = make_scene_image_shadow_lights_json(m_scene_image_capture->get_shadow_lights(), m_scene_image_capture->get_shadow_maps());
@@ -2137,6 +2182,38 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
         shadow_debug_light_json = json{{"name", shadow_debug_light->get_name()}, {"id", shadow_debug_light->get_id()}};
     }
 
+    // lod_nodes: the mesh nodes whose LOD levels the reply reports for the rendered frame.
+    std::vector<erhe::scene_renderer::Draw_list_object_id> lod_objects;
+    std::vector<std::pair<uint32_t, std::string>>          lod_nodes;
+    if (args.contains("lod_nodes")) {
+        const json& selectors = args["lod_nodes"];
+        erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root->get_draw_list_scene();
+        if (!selectors.is_array() || selectors.empty()) {
+            return make_error_content("render_scene_image: 'lod_nodes' must be a non-empty array of node names or ids");
+        }
+        if (draw_list_scene == nullptr) {
+            return make_error_content("render_scene_image: 'lod_nodes' needs draw lists, and the scene has none");
+        }
+        for (const json& selector : selectors) {
+            const json node_args = selector.is_number_integer() ? json{{"node_id", selector}} : json{{"node_name", selector}};
+            const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*scene_root, node_args, "node_id", "node_name");
+            const std::shared_ptr<erhe::scene::Mesh> mesh = node ? erhe::scene::get_mesh(node) : std::shared_ptr<erhe::scene::Mesh>{};
+            if (!mesh) {
+                return make_error_content("render_scene_image: lod_nodes " + selector.dump() + " is no mesh node of the scene");
+            }
+            erhe::scene_renderer::Draw_list_object_id object{};
+            {
+                std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+                object = draw_list_scene->find_object(mesh.get());
+            }
+            if (!object.is_valid()) {
+                return make_error_content(fmt::format("render_scene_image: mesh '{}' is not registered in the draw lists", mesh->get_name()));
+            }
+            lod_objects.push_back(object);
+            lod_nodes.emplace_back(object.index, node->get_name());
+        }
+    }
+
     if (!m_scene_image_forward_timer) {
         m_scene_image_forward_timer = std::make_unique<erhe::graphics::Gpu_timer>(*m_context.graphics_device, "render_scene_image forward pass");
     }
@@ -2155,9 +2232,12 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             .shadow_debug_light = shadow_debug_light,
             .overdraw           = overdraw,
             .forward_pass_timer = m_scene_image_forward_timer.get(),
-            .mesh_form          = mesh_form
+            .mesh_form          = mesh_form,
+            .lod_capture_objects = std::move(lod_objects)
         }
     );
+    m_scene_image_lod_scene = lod_nodes.empty() ? std::shared_ptr<Scene_root>{} : scene_root;
+    m_scene_image_lod_nodes = std::move(lod_nodes);
     m_scene_image_header = json{
         {"path",         path},
         {"width",        width},

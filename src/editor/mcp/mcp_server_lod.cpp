@@ -514,6 +514,70 @@ auto Mcp_server::query_lod_stats(const json& args) -> std::string
     }).dump();
 }
 
+auto mcp_server_detail::make_lod_level_capture_json(const erhe::scene_renderer::Lod_level_capture& capture) -> json
+{
+    json columns = json::array();
+    for (const erhe::scene_renderer::Lod_level_capture_column& column : capture.columns) {
+        columns.push_back(json{
+            {"column",           column.column},
+            {"view",             column.view},
+            {"origin",           json::array({column.lod_view.origin.x, column.lod_view.origin.y, column.lod_view.origin.z})},
+            {"projection_scale", column.lod_view.projection_scale},
+            {"projection",       erhe::scene_renderer::c_str(column.lod_view.projection)},
+            {"lod_key",          column.lod_view.lod_key},
+            {"previous_column",  (column.previous_column == erhe::scene_renderer::lod_column_none) ? json(nullptr) : json(column.previous_column)},
+            {"purpose",          erhe::scene_renderer::c_str(column.purpose)},
+            {"sampling_view_key", column.lod_view.sampling_view_key},
+            {"color_column_mask", column.color_column_mask},
+            {"changed_entries",  column.changed_entries},
+            {"change",           erhe::scene_renderer::c_str(column.change)}
+        });
+    }
+    json template_views = json::array();
+    for (const erhe::scene_renderer::Lod_level_capture_template_view& view : capture.template_views) {
+        template_views.push_back(json{
+            {"view",    view.view},
+            {"lod_key", view.lod_key}
+        });
+    }
+    json entries = json::array();
+    for (const erhe::scene_renderer::Lod_level_capture_entry& entry : capture.entries) {
+        const erhe::scene_renderer::Lod_word_fields lod_fields = erhe::scene_renderer::decode_lod_word(entry.lod_word);
+        entries.push_back(json{
+            {"list_index",           entry.list_index},
+            {"entry_index",          entry.entry_index},
+            {"object_index",         entry.object_index},
+            {"purpose",              erhe::scene_renderer::c_str(entry.purpose)},
+            {"mesh_primitive_index", entry.mesh_primitive_index},
+            {"center",               json::array({entry.center.x, entry.center.y, entry.center.z})},
+            {"extent",               json::array({entry.extent.x, entry.extent.y, entry.extent.z})},
+            {"max_axis_scale",       entry.max_axis_scale},
+            {"lod_table_index",      (entry.lod_table_index == erhe::scene_renderer::lod_table_index_none) ? json(nullptr) : json(entry.lod_table_index)},
+            {"mode",                 lod_fields.mode},
+            {"level_count",          lod_fields.level_count},
+            {"levels",               entry.levels}
+        });
+    }
+    return json{
+        {"frame_index",           capture.frame_index},
+        {"active",                capture.active},
+        {"selection",             erhe::scene_renderer::c_str(capture.settings.selection)},
+        {"threshold_pixels",      capture.settings.threshold_pixels},
+        {"bias",                  capture.settings.bias},
+        {"hysteresis_band",       capture.settings.hysteresis_band},
+        {"column_overflow_count", capture.column_overflow_count},
+        {"history_restart_count", capture.history_restart_count},
+        {"history_shift_count",   capture.history_shift_count},
+        {"cpu_selection",         erhe::scene_renderer::c_str(capture.settings.cpu_selection)},
+        {"levels_from_gpu",       capture.levels_from_gpu},
+        {"has_retired_frame",     capture.has_retired_frame},
+        {"retired_frame_index",   capture.retired_frame_index},
+        {"columns",               std::move(columns)},
+        {"template_shadow_views", std::move(template_views)},
+        {"entries",               std::move(entries)}
+    };
+}
+
 auto Mcp_server::query_lod_selection(const json& args) -> std::string
 {
     // The CPU level region of one classified frame for one mesh
@@ -552,7 +616,7 @@ auto Mcp_server::query_lod_selection(const json& args) -> std::string
         if (!object.is_valid()) {
             return make_error_content(fmt::format("get_lod_selection: mesh '{}' is not registered in the draw lists", mesh->get_name()));
         }
-        draw_list_scene->request_lod_level_capture(object);
+        draw_list_scene->request_lod_level_capture(std::span<const erhe::scene_renderer::Draw_list_object_id>{&object, 1}, std::nullopt);
         m_lod_selection_request     = m_current_request;
         m_lod_selection_enqueued_at = m_current_request->enqueued_at;
         m_lod_selection_scene_name  = scene_name;
@@ -571,66 +635,9 @@ auto Mcp_server::query_lod_selection(const json& args) -> std::string
         return make_error_content("get_lod_selection: the capture was dropped");
     }
 
-    json columns = json::array();
-    for (const erhe::scene_renderer::Lod_level_capture_column& column : capture.columns) {
-        columns.push_back(json{
-            {"column",           column.column},
-            {"view",             column.view},
-            {"origin",           json::array({column.lod_view.origin.x, column.lod_view.origin.y, column.lod_view.origin.z})},
-            {"projection_scale", column.lod_view.projection_scale},
-            {"projection",       erhe::scene_renderer::c_str(column.lod_view.projection)},
-            {"lod_key",          column.lod_view.lod_key},
-            {"previous_column",  (column.previous_column == erhe::scene_renderer::lod_column_none) ? json(nullptr) : json(column.previous_column)},
-            {"purpose",          erhe::scene_renderer::c_str(column.purpose)},
-            {"sampling_view_key", column.lod_view.sampling_view_key},
-            {"color_column_mask", column.color_column_mask},
-            {"changed_entries",  column.changed_entries},
-            {"change",           erhe::scene_renderer::c_str(column.change)}
-        });
-    }
-    json template_views = json::array();
-    for (const erhe::scene_renderer::Lod_level_capture_template_view& view : capture.template_views) {
-        template_views.push_back(json{
-            {"view",    view.view},
-            {"lod_key", view.lod_key}
-        });
-    }
-    json entries = json::array();
-    for (const erhe::scene_renderer::Lod_level_capture_entry& entry : capture.entries) {
-        const erhe::scene_renderer::Lod_word_fields lod_fields = erhe::scene_renderer::decode_lod_word(entry.lod_word);
-        entries.push_back(json{
-            {"list_index",           entry.list_index},
-            {"entry_index",          entry.entry_index},
-            {"purpose",              erhe::scene_renderer::c_str(entry.purpose)},
-            {"mesh_primitive_index", entry.mesh_primitive_index},
-            {"center",               json::array({entry.center.x, entry.center.y, entry.center.z})},
-            {"extent",               json::array({entry.extent.x, entry.extent.y, entry.extent.z})},
-            {"max_axis_scale",       entry.max_axis_scale},
-            {"lod_table_index",      (entry.lod_table_index == erhe::scene_renderer::lod_table_index_none) ? json(nullptr) : json(entry.lod_table_index)},
-            {"mode",                 lod_fields.mode},
-            {"level_count",          lod_fields.level_count},
-            {"levels",               entry.levels}
-        });
-    }
-    return make_json_content(json{
-        {"scene",                 scene_root->get_name()},
-        {"frame_index",           capture.frame_index},
-        {"active",                capture.active},
-        {"selection",             erhe::scene_renderer::c_str(capture.settings.selection)},
-        {"threshold_pixels",      capture.settings.threshold_pixels},
-        {"bias",                  capture.settings.bias},
-        {"hysteresis_band",       capture.settings.hysteresis_band},
-        {"column_overflow_count", capture.column_overflow_count},
-        {"history_restart_count", capture.history_restart_count},
-        {"history_shift_count",   capture.history_shift_count},
-        {"cpu_selection",         erhe::scene_renderer::c_str(capture.settings.cpu_selection)},
-        {"levels_from_gpu",       capture.levels_from_gpu},
-        {"has_retired_frame",     capture.has_retired_frame},
-        {"retired_frame_index",   capture.retired_frame_index},
-        {"columns",               std::move(columns)},
-        {"template_shadow_views", std::move(template_views)},
-        {"entries",               std::move(entries)}
-    }).dump();
+    json reply = make_lod_level_capture_json(capture);
+    reply["scene"] = scene_root->get_name();
+    return make_json_content(reply).dump();
 }
 
 } // namespace editor

@@ -13,6 +13,7 @@
 #include "rendergraph/post_processing.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "scene/viewport_render_state.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -144,6 +145,14 @@ void Scene_image_view::prepare_composition(const uint64_t frame_index, const std
     if (!scene_root || !m_camera || (m_viewport.width < 1) || (m_viewport.height < 1)) {
         return;
     }
+    // The view renders in the first frame it prepares (has_rendered()): its LOD capture is that frame's.
+    if (!m_lod_capture_objects.empty() && !m_lod_capture_frame.has_value()) {
+        erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root->get_draw_list_scene();
+        if (draw_list_scene != nullptr) {
+            draw_list_scene->request_lod_level_capture(m_lod_capture_objects, frame_index);
+            m_lod_capture_frame = frame_index;
+        }
+    }
     const erhe::scene_renderer::Camera_view_input single_view_input{
         .camera      = get_render_camera(),
         .viewport    = m_viewport,
@@ -171,6 +180,11 @@ void Scene_image_view::prepare_composition(const uint64_t frame_index, const std
     // be replacing (commit_geometry_buffer_mesh, under this mutex).
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{scene_root->item_host_mutex};
     m_context.app_rendering->prepare_composer(context, host_system_time_ns, slot);
+}
+
+void Scene_image_view::set_lod_capture_objects(std::vector<erhe::scene_renderer::Draw_list_object_id> objects)
+{
+    m_lod_capture_objects = std::move(objects);
 }
 
 auto Scene_image_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
@@ -576,6 +590,7 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
         create_info.forward_pass_timer,
         create_info.mesh_form
     );
+    m_view->set_lod_capture_objects(create_info.lod_capture_objects);
 
     m_shadow_render_node = m_context.app_rendering->create_shadow_node_for_scene_view(
         *m_context.graphics_device,
@@ -700,6 +715,7 @@ auto Scene_image_capture::poll() -> Scene_image_capture_state
             m_shadow_debug_light_index = record.shadow_debug_light_index;
             m_shadow_lights            = record.shadow_lights;
             m_shadow_maps              = record.shadow_maps;
+            m_rendered_frame           = record.frame;
         }
     );
     return m_state;
@@ -766,6 +782,11 @@ auto Scene_image_capture::get_shadow_debug_light_index() const -> std::optional<
 auto Scene_image_capture::get_shadow_lights() const -> std::span<const Scene_image_shadow_light>
 {
     return std::span<const Scene_image_shadow_light>{m_shadow_lights};
+}
+
+auto Scene_image_capture::get_lod_capture_frame() const -> std::optional<uint64_t>
+{
+    return m_view->get_lod_capture_frame();
 }
 
 auto Scene_image_capture::get_shadow_maps() const -> const Scene_image_shadow_maps&

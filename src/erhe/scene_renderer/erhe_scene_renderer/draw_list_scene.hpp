@@ -686,6 +686,7 @@ public:
     uint32_t              list_index          {0};
     uint32_t              entry_index         {0};
     uint32_t              global_entry_index  {0}; // the lists back to back (the GPU level region's entry)
+    uint32_t              object_index        {0}; // Draw_list_object_id::index of the captured object
     Draw_purpose          purpose             {Draw_purpose::color};
     uint16_t              mesh_primitive_index{0};
     glm::vec3             center              {0.0f};
@@ -1242,12 +1243,12 @@ public:
     // entry. Verifies that the slot was published for frame_index from the
     // current entry layout (no entry was added or removed since the publish).
     [[nodiscard]] auto find_published_color_entry(uint64_t frame_index, const erhe::scene::Mesh* mesh, std::size_t primitive_index) const -> Draw_list_published_entry;
-    // Diagnostic (main thread): request_...() asks the next classified
-    // frame to copy the CPU levels of every column for the entries of
-    // object (a new request replaces an earlier one); poll_...() returns
-    // complete, filling out, once a frame copied them, and is idle again
-    // after that.
-    void request_lod_level_capture(Draw_list_object_id object);
+    // Diagnostic (main thread): request_...() asks a classified frame to copy
+    // the CPU levels of every column for the entries of objects (a new request
+    // replaces an earlier one): the next frame, or with frame_index that frame
+    // alone (a later frame drops the request); poll_...() returns complete,
+    // filling out, once a frame copied them, and is idle again after that.
+    void request_lod_level_capture(std::span<const Draw_list_object_id> objects, std::optional<uint64_t> frame_index);
     [[nodiscard]] auto poll_lod_level_capture(Lod_level_capture& out) -> Cull_classification_check_state;
     // The chunk size of draws through primitive_buffer (P3a): the job table
     // and draw_list_chunks() both cut the lists with it.
@@ -2142,7 +2143,8 @@ private:
     // The newest decoded frame's column for lod_key (lod_column_none:
     // none, or the decoded frame has another entry layout).
     [[nodiscard]] auto find_retired_lod_column(const Draw_list_slot& slot, uint64_t lod_key) const -> uint32_t;
-    Draw_list_object_id                                              m_lod_capture_object{};
+    std::vector<Draw_list_object_id>                                 m_lod_capture_objects;
+    std::optional<uint64_t>                                          m_lod_capture_target_frame;
     Lod_level_capture                                                m_lod_capture{};
     std::size_t                                                      m_color_environment_change_count{0};
     std::size_t                                                      m_lazy_resolution_count{0};

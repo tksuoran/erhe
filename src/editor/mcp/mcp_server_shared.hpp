@@ -40,6 +40,7 @@ namespace erhe::scene {
     class Xformable; using Node = Xformable;
 }
 namespace erhe::scene_renderer {
+    class Lod_level_capture;
     class Overdraw_statistics;
 }
 
@@ -70,6 +71,9 @@ auto make_json_content(const json& data) -> json;
 
 // Error result for tools/call: a text content block with isError set.
 auto make_error_content(const std::string& message) -> std::string;
+
+// The reply fields of get_lod_selection for a captured frame (also render_scene_image lod_nodes).
+[[nodiscard]] auto make_lod_level_capture_json(const erhe::scene_renderer::Lod_level_capture& capture) -> json;
 
 auto get_vec3(const json& args, const char* key, const glm::vec3 fallback) -> glm::vec3;
 

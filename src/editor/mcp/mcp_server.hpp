@@ -939,6 +939,10 @@ private:
     const Queued_request*                            m_scene_image_request{nullptr};
     std::chrono::steady_clock::time_point            m_scene_image_enqueued_at{};
     nlohmann::json                                   m_scene_image_header;
+    // lod_nodes: the scene whose draw lists capture the rendered frame's LOD
+    // levels, and the requested nodes by Draw_list_object_id::index.
+    std::shared_ptr<Scene_root>                      m_scene_image_lod_scene;
+    std::vector<std::pair<uint32_t, std::string>>    m_scene_image_lod_nodes;
     // Explicit-range timer of every render_scene_image forward pass
     // ("render_scene_image forward pass"), created on the first request. It
     // outlives each capture: its result lands frames after the capture's
