@@ -15,8 +15,8 @@ The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick.
 
-0. Prepared assets: the 6 macOS image failures of `scripts/prepared_asset_verify.py`
-   first (user priority), then the user rulings on the D8 coder decisions.
+0. Prepared assets: the world-space form's shadow casters under LOD (user
+   decision, below), then the user rulings on the D8 coder decisions.
    Read "Prepared assets" below and `doc/plans/prepared_assets_design.md` D8.
 1. Quest session follow-ups: "Quest session follow-ups" below
    (`doc/agents/quest.md` "Bistro scene data on the device").
@@ -64,12 +64,13 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   KTX2 image larger than 64 KiB (307 on the Bistro prepared run):
   `Gltf_image_residency::plan_textures()` opens a 64 KiB prefix first and
   `parse_ktx2()` warns before the whole-stream retry succeeds.
-- `scripts/prepared_asset_verify.py` on macOS (Metal headless Release): 6 of
-  310 checks fail, all image comparisons: the four world-space form checks
-  (front about 21000 px differ, max 236/255) and the two R10.3 prepared run
-  images (about 10000 of 129600 px). `prepared_asset_bistro_verify.py` fails
-  the same way (world-space form and pc prepared run against the source
-  meshes, 5.9 % of the pixels by more than 2/255).
+- `scripts/prepared_asset_bistro_verify.py` compares its images with the
+  editor's LOD preset (2 of 32 fail on the Mac's Medium preset, LOD on):
+  turn LOD off for its images as `prepared_asset_verify.py` does.
+- World-space form with LOD: the source meshes cast the shadows of both
+  forms (`doc/editor/world_space_bake.md`), so at coarse levels a proxy's
+  shadow is the local chain's level while it draws the world chain's (user
+  decision on what casts the shadows in that form).
 - User rulings pending on the coder decisions recorded in D8 steps 12, 14
   and 15 (Scene-item-only edits and material swaps do not mark the status
   stale; load key uses the Export LOD; what is not loaded from items). Ruled

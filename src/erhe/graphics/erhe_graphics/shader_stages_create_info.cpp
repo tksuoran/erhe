@@ -119,8 +119,8 @@ auto Shader_stages_create_info::attributes_source() const -> std::string
             sb << attribute.name,
             sb << ";\n";
         }
-        for (const auto& [name, value] : get_vertex_format_defines()) {
-            sb << "#define " << name << " " << value << "\n";
+        for (const auto& [define_name, define_value] : get_vertex_format_defines()) {
+            sb << "#define " << define_name << " " << define_value << "\n";
         }
         sb << "\n";
     }
@@ -167,8 +167,8 @@ auto Shader_stages_create_info::attribute_defines_source() const -> std::string
 
     if (vertex_format != nullptr) {
         sb << "// Attribute defines\n";
-        for (const auto& [name, value] : get_vertex_format_defines()) {
-            sb << "#define " << name << " " << value << "\n";
+        for (const auto& [define_name, define_value] : get_vertex_format_defines()) {
+            sb << "#define " << define_name << " " << define_value << "\n";
         }
         sb << "\n";
     }
