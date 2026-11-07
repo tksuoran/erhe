@@ -15,7 +15,7 @@
 #include <thread>
 #include <vector>
 
-#if !defined(_WIN32)
+#if defined(__linux__)
 #   include <fcntl.h>
 #   include <unistd.h>
 #endif
@@ -106,12 +106,10 @@ protected:
 };
 
 // Drops the file's pages from the OS page cache, so the next reads come from the disk.
+// posix_fadvise exists on Linux and Android only; elsewhere the cold pass is skipped.
 auto evict_from_page_cache(const std::filesystem::path& path) -> bool
 {
-#if defined(_WIN32)
-    static_cast<void>(path);
-    return false;
-#else
+#if defined(__linux__)
     const int fd = ::open(path.c_str(), O_RDONLY);
     if (fd < 0) {
         return false;
@@ -119,6 +117,9 @@ auto evict_from_page_cache(const std::filesystem::path& path) -> bool
     const int result = ::posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
     ::close(fd);
     return result == 0;
+#else
+    static_cast<void>(path);
+    return false;
 #endif
 }
 
