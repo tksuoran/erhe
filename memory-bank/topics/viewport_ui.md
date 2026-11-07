@@ -42,3 +42,6 @@
 ✓3c{cc2f309cd:update_target_nodes-rotates-active-target-to-front;anchor-rotation=representative-entry(was-last);on_active_item-rebuild-outside-component-mode/drag}
 ✓phase-4{plan-doc=standing-description;section-3=verification+user-interactive-list}
   ACTIVE-ITEM-DONE+USER-VERIFIED-2026-09-15
+
+[FOCUS_ARCHIVE_2026-11-07]{compacted-pointers;moved-from-activeContext.md}
+@editor-ux-session-2026-11-05::DONE{39b31e69a+b77f0fcb9+744a9a50b}

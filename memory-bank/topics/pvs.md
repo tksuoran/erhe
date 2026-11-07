@@ -51,3 +51,6 @@ python3 scripts/pvs_verify.py --editor build_xcode_metal_headless/bin/Debug/edit
 ✓step-7{5eace01e3;doc/editor/pvs.md-new(method+D1-D7+Bake-1-7+verification);plan-747->199-lines(outstanding-only+section-map);README-index-in-progress;testing.md-PVS-section;mcp_tools.json-get_visible_entries-fixed(no-back-face-culling-claim)}
 ?step-8-headset{when-Quest-attached}
 ✓cost-measurement{commit-doc:PVS-cost-on-Bistro;see-[STATE]}
+
+[FOCUS_ARCHIVE_2026-11-07]{compacted-pointers;moved-from-activeContext.md}
+@pvs::STEPS-1-7-DONE-2026-10-31{memory-bank/topics/pvs.md;doc/editor/pvs.md;doc/plans/pvs.md}

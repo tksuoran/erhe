@@ -39,3 +39,6 @@
 ✓phase-7::4998557b3{6;GPU-written-indirect+command_barrier_bit}
 ✓phase-8::59462f723+1c3a87bc3{11;Vk-AS-build-input-16B-alignment}
 ✓metal-run::2026-09-30{175-pass+1-skip;2-fixes:compute_atomics-golden-members-only(540B,old-544B-minus-padding)+Results_listener-m_tests-brace-init->[[]]-json-305-no-results.json-ever-written;macOS-Vk-165-pass-cross-checks-golden;report.py-ok}
+
+[FOCUS_ARCHIVE_2026-11-07]{compacted-pointers;moved-from-activeContext.md}
+@agfx-test-port::DONE-2026-09-29{doc/plans/graphics_tests_agfx_port.md;memory-bank/topics/graphics_tests.md}

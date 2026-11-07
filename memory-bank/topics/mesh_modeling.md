@@ -33,3 +33,6 @@ tests::erhe_geometry_tests-264;scripts/mesh_modeling_verify.py-465-checks(headle
 ?user-interactive-checks::loop/ring-preview-look;loop-cut-preview;knife-gesture-by-hand;slide-rail-drawing;move-mode-snap-option(never-run)
 ?remaining::doc/plans/mesh_modeling.md{R1-grid-fill;R2-bevel-rest;R3-knife-project+bisect;R4-separate-by-parts/material;R5-proportional;R6-symmetry;R7-tris/quads;R8-path-select;R9-spin;R10-compute-box-select;R11-follow-ups(Edit-menu-Delete,no-op-undo-entries,Mcp_test-gesture-cases,rail-drawing,pointer-wrap)}
 ?doc-stale::doc/agents/windows.md-claims-headless-tests-ON
+
+[FOCUS_ARCHIVE_2026-11-07]{compacted-pointers;moved-from-activeContext.md}
+@mesh-modeling::DONE-2026-10-01{memory-bank/topics/mesh_modeling.md;doc/plans/mesh_modeling.md}

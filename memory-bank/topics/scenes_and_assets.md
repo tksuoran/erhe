@@ -21,3 +21,10 @@ OpenSceneGltfDefaultCamera{7acfc3c5e}::finish_open_scene_gltf-injects-session_on
 !known-2026-10-04::scene_roundtrip_verify.py-fails-3-on-baseline-7c7c0c0bf{reload-diff-dynamic-bodies-keep-falling(glTF-leg-no-toggle_physics);DEVICE_LOST-write-fault-on-authored.usda-after-glTF-leg(draw-list-path-only);USD-textured-local_property_names+references_override}->doc/plans/audit_2026_09_30_followups.md"Follow-ups found by review"
 !background-save-open::doc/plans/background_scene_save.md{disabled-windows-not-dimmed(input-blocked-verified);Mcp_test.property_row_is_addressable_by_its_label-fails(unverified-vs-HEAD~;user-config-modified);KTX2-level-0-outside-the-file-warnings-at-Bistro-load;Quest-LOD-decision(user);save_container+USD-still-main-thread;Bistro-animation-close-leak}
 !mcp-readiness-trap::wait-for-"listening on 127.0.0.1:3743 (pid <pid>"-of-THIS-run{logs/log.txt-holds-previous-run-until-rewritten}+stop-own-editor-by-launch-pid-only(AGENTS.md"Stopping-processes")
+
+[FOCUS_ARCHIVE_2026-11-07]{compacted-pointers;moved-from-activeContext.md}
+@world-space-vertices-session-2026-11-06::DONE{doc/plans/prepare_pvs_export.md}
+@scene-export-settings+world-space-bake::BUILT-2026-11-04{doc/editor/world_space_bake.md}
+@item-tree-open-state::DONE-2026-11-04{8dad29527+391c288c1}
+@background-scene-save::DONE-2026-11-03{memory-bank/topics/scenes_and_assets.md;doc/plans/background_scene_save.md}
+@gltf-fast-load::STEPS-1-8-DONE-2026-10-25{doc/plans/gltf_fast_load.md;doc/reference/memory_usage_2026_10.md}

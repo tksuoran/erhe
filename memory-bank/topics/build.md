@@ -27,3 +27,9 @@ erhe_profile::PUBLIC-dep-of-erhe_commands{user-approved}
 !macOS-SDK::2-arg-RenderCommandEncoder::useResource-deprecated→stage-taking-overload
 !new-Mac::xcode-select-may-point-at-CommandLineTools→"configure_xcode_*.sh-finds-no-compiler"→sudo-xcode-select-s-Xcode.app
 build-flags::-IDEBuildingContinueBuildingAfterErrors=YES{all-errors-in-one-pass}
+
+[FOCUS_ARCHIVE_2026-11-07]{compacted-pointers;moved-from-activeContext.md}
+@audit-2026-09-30::DONE-c72a8cbb3{doc/reference/audit_erhe_2026_09_30.md}
+@audit-2026-09-30-medium-term::IN-PROGRESS-2026-10-04{doc/plans/audit_2026_09_30_followups.md;memory-bank/topics/graphics_tests.md}
+@item-11-editor-bits::DONE-2026-10-04{7c7c0c0bf}
+@item-17-ci-hardening::DONE-2026-10-04{63ba00fd4+dbe265aec+5f864f47a}

@@ -45,3 +45,11 @@ heavy::line-compute-39.3ms(!)+XR-multiview-21.3+shadow-1.41=61.7(app_gpu-52.7;ti
 !culling-GPU-path-needs-drawIndirectFirstInstance+VK_KHR_draw_indirect_count->check-startup-log-"Record indexing"+classifier-capability-line;culling_classification-defaults-gpu(CPU-fallback-without-capability)
 !measurement-rule::one-editor-at-a-time;nothing-building-on-host-during-timed-device-run
 !build=scripts\build_android.bat quest assembleQuestRelease;install=scripts\install_android.bat quest release{uninstall-first}
+
+[FOCUS_ARCHIVE_2026-11-07]{compacted-pointers;moved-from-activeContext.md}
+@quest-headset-ux::DONE-2026-11-01{doc/agents/quest.md}
+@quest-bistro-sweep::IN-PROGRESS-2026-10-29{doc/plans/quest_performance.md;doc/reference/quest_bench_runs.md}
+@quest-performance::IN-PROGRESS-2026-10-24{doc/plans/quest_performance.md;memory-bank/topics/quest.md}
+
+[PROGRESS_2026-11-07]{compacted-pointers;moved-from-progress.md}
+[TASK::quest-performance]::archived{doc/plans/quest_performance.md;memory-bank/local/quest.md;open=?NEXT-heavy-line-compute-39ms+default-color-pass(grid-2ms;shadow-math);detail=git-log}
