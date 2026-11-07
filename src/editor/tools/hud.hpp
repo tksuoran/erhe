@@ -119,9 +119,7 @@ public:
     auto on_toggle_button_edge  (bool pressed) -> bool;
     void on_toggle_button_update();
 
-    // Reposition the Hud in front of the user's current view - the init
-    // status display's placement method (fixed distance along the head
-    // forward direction, panel level, facing the user) - and show it.
+    // Show the Hud at the default placement, forgetting the remembered pose.
     void summon();
 
     auto try_begin_drag() -> bool;
@@ -139,6 +137,12 @@ public:
 
 private:
     void update_node_transform(const glm::mat4& world_from_hud);
+    // The init status display placement: summon_distance along the head
+    // forward, level, facing the user. False without a head pose.
+    auto place_in_front_of_head() -> bool;
+    [[nodiscard]] auto get_world_from_hud () const -> glm::mat4;
+    // The head pose in world (OpenXR only).
+    [[nodiscard]] auto get_world_from_head() const -> std::optional<glm::mat4>;
 
     // Reference transform for the rigid drag: the physical controller aim
     // pose in XR (independent of the controller ray mode, so push / pull
@@ -189,6 +193,8 @@ private:
     bool  m_enabled {true};
 
     std::optional<glm::mat4> m_node_from_control;
+    // The pose the Hud was hidden in, relative to the head; session only.
+    std::optional<glm::mat4> m_head_from_hud;
 
     // Path B (composition layer) drag state: there is no scene node to grab, so
     // the quad is attached rigidly to the controller and its pose updated via

@@ -373,11 +373,6 @@ Hotbar::Hotbar(
             on_tool_select_message(message);
         }
     );
-    m_render_scene_view_subscription = app_message_bus.render_scene_view.subscribe(
-        [&](Render_scene_view_message& message) {
-            on_render_scene_view_message(message);
-        }
-    );
 }
 
 Hotbar::~Hotbar() noexcept = default;
@@ -686,37 +681,20 @@ void Hotbar::on_tool_select_message(Tool_select_message&)
 // composition pass (App_rendering), not here: the mesh visibility is frame
 // state, set when the hovered view changes (on_hover_scene_view_message()).
 //
-// The node transform is NOT updated here on desktop -- see
-// update_once_per_frame().
-void Hotbar::on_render_scene_view_message(Render_scene_view_message&)
-{
-    if (!m_enabled || !m_show) {
-        return;
-    }
-
-    // Under OpenXR the eye poses only become known when
-    // Headset_view::render_frame() locates the views, which happens inside the
-    // rendergraph -- there is no earlier point in the tick where the camera
-    // world transform for this frame exists, so the update has to stay here.
-    if (m_context.OpenXR && !m_use_radial) {
-        update_node_transform();
-    }
-}
-
 // Update the rendertarget node transform to match the hovered view's camera.
 // Used only for the horizontal hotbar, not for the radial menu (which is
 // world-locked and re-placed on hover change instead).
 //
-// This runs from the editor tick, after scene transform propagation and before
-// App_scenes::flush_draw_lists(). The placement is load-bearing for the draw
-// list renderer: Draw_list_scene keeps persistent per-primitive GPU records
-// that are rewritten only in flush_pending(), from the transform updates the
-// scene hooks enqueued. Moving the quad from inside the rendergraph (where
-// Render_scene_view_message is sent) enqueues the update after that flush, so
-// the draw lists would render the quad with the previous frame's transform --
-// the hotbar visibly trails the camera by one frame. Forward_renderer does not
-// show this because it rebuilds its primitive buffer from live node transforms
-// at draw time.
+// This runs from the editor tick (M2), after scene transform propagation and
+// before App_scenes::flush_draw_lists(), on desktop and under OpenXR alike:
+// the headset root camera is posed earlier in M2 (Headset_view::update_poses),
+// after the fixed steps moved the camera root. The placement is load-bearing
+// for the draw list renderer: Draw_list_scene keeps persistent per-primitive
+// GPU records that are rewritten only in flush_pending(), from the transform
+// updates the scene hooks enqueued. Moving the quad from the render phase
+// enqueues the update after that flush, so the draw lists would render the
+// quad with the previous frame's transform -- the hotbar visibly trails the
+// camera by one frame.
 //
 // The write lands on the quad's rendertarget Xform node; the Rendertarget_mesh
 // that the draw lists sample is a child prim of that node, and a child prim's
@@ -729,9 +707,6 @@ void Hotbar::update_once_per_frame()
 {
     if (!m_enabled || !m_show || m_use_radial) {
         return;
-    }
-    if (m_context.OpenXR) {
-        return; // Updated from on_render_scene_view_message() instead
     }
     update_node_transform();
 

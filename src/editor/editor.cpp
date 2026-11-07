@@ -1600,10 +1600,10 @@ public:
         }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        // - updates cameras
-        // - updates pointer context for headset scene view from controller
         // - sends XR input events to Commands
-        // - updates controller visualization nodes
+        // (the cameras, the controller pointer context and the controller
+        // visualization nodes are posed by update_poses() after the fixed
+        // steps below)
         // xrPollEvent first: the session state transitions it applies
         // (begin / end session, boundary visibility) are read by R's frame
         // functions, so they land here, where R is idle; M1 of the next
@@ -1651,6 +1651,15 @@ public:
             }
         );
         m_app_scenes   ->after_physics_simulation_steps();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        // After the fixed steps moved the camera root and before the commands
+        // tick acts on the controller hover: the root camera, controller ray
+        // and controller nodes from this frame's camera root.
+        if (m_app_context.OpenXR) {
+            erhe::log::set_breadcrumb("tick: xr update_poses");
+            m_headset_view->update_poses();
+        }
+#endif
         take_m2_term(m_phase_timing.m2_sim_us);
         erhe::log::set_breadcrumb("tick: imgui process_events + commands");
         m_imgui_windows->process_events(packet.host_system_dt_s, packet.host_system_time_ns);

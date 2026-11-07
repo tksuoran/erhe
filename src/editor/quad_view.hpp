@@ -103,6 +103,9 @@ public:
     // Set the quad's world transform without reparenting. Path A: callers that
     // parent the node once (e.g. Hud) use this for per-frame repositioning.
     void set_world_from_node(const glm::mat4& world_from_quad);
+    // Headset_view::translate_camera_root(): the quad layer's stage-space
+    // pose is recomputed from the unchanged world transform.
+    void on_world_from_stage_changed();
 
     // Uniform scale applied about the quad center on top of the world transform
     // (default 1 = the natural width/height/pixels_per_meter size). Path A

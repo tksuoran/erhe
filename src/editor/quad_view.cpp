@@ -254,6 +254,11 @@ void Quad_view::set_world_from_node(const glm::mat4& world_from_quad)
     apply_transform();
 }
 
+void Quad_view::on_world_from_stage_changed()
+{
+    apply_transform();
+}
+
 void Quad_view::set_scale(float scale)
 {
     m_scale = scale;

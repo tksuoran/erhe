@@ -252,16 +252,24 @@ In order:
 7. OpenXR: `Headset_view::poll_events()` (`xrPollEvent`; the session state
    transitions it applies are read by R), then, when the wait succeeded,
    `Headset_view::update_actions(timing)` (`xrSyncActions`, hand tracking,
-   view pose, controller nodes and pointer); a failure sleeps 250 ms.
+   view pose, XR input events); a failure sleeps 250 ms.
    The headset's `Scene_view::Render_view` of the frame (scene root and
    root camera; neither while the headset is not homed in a scene) is
    copied later, by `Headset_view::prepare_render_view()` right after the
    scenes' render settings snapshot, every frame; the headset's
    `Shadow_render_node` and `render_headset()` read it in R.
 8. The node-writing fixed steps over the same step list
-   (`Headset_view::update_fixed_step`, `Fly_camera_tool::update_fixed_step`),
+   (`Headset_view::update_fixed_step`, `Headset_travel_tool::update_fixed_step`,
+   `Fly_camera_tool::update_fixed_step`),
    then `App_scenes::after_physics_simulation_steps` (pause / resume edge,
-   queued body activations, body write-back).
+   queued body activations, body write-back), then under OpenXR
+   `Headset_view::update_poses()`: the root camera (eye frustum, cull
+   planes, PVS query box), the controller hover ray and the controller
+   nodes from the camera root the fixed steps just moved. The render phase
+   poses the eye cameras from the same camera root, so everything the
+   frame shows agrees with the eyes; posing before the fixed steps made
+   the controllers and the hotbar trail the eyes by one frame while
+   moving.
 9. ImGui events, `Commands::tick`, `Mcp_server::process_queued_requests`,
    network update, hover reset, hotbar rebuild, the ImGui windows
    (`Imgui_windows::begin_frame` / `draw_imgui_windows` / `end_frame`),

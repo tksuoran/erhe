@@ -377,6 +377,24 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe:
     // The headlamp follows the headset into the scene it is homed in.
     m_headlamp.attach(m_root_camera, glm::translate(glm::mat4{1.0f}, glm::vec3{0.0f, 0.15f, 0.0f}));
 
+#if defined(ERHE_OS_ANDROID)
+    // Quest: the headlamp is on and the only light from the first homing
+    // (doc/editor/tools.md "Headlamp"); the Scene Control window changes
+    // both afterwards.
+    if (!m_default_headlamp_applied) {
+        m_default_headlamp_applied = true;
+        m_headlamp.enable();
+        if ((m_app_context.app_settings != nullptr) && (m_app_context.app_message_bus != nullptr)) {
+            Graphics_settings&    graphics = m_app_context.app_settings->graphics;
+            Graphics_preset_entry preset   = graphics.current_graphics_preset;
+            set_headlamp_only_lighting(preset, m_headlamp.get_cast_shadow());
+            graphics.apply_limits(preset);
+            graphics.apply_preset(preset, *m_app_context.app_message_bus);
+            log_xr->info("Headlamp only lighting applied (Android default)");
+        }
+    }
+#endif
+
     // The loading screen is done: released once no frame in flight renders
     // it (prepare_render_view()).
     if (m_loading_screen && !m_loading_screen_release_frame.has_value()) {
@@ -548,7 +566,7 @@ void Headset_view::update_fixed_step(const Time_context& time_context)
     const float tz =  m_translate_z.current_value();
     if ((tx != 0.0f) || (ty != 0.0f) || (tz != 0.0f)) {
         const glm::vec3 translation{tx, ty, tz};
-        m_camera_offset += translation;
+        translate_camera_root(translation);
     }
 
     // Left thumbstick locomotion: forward / back along the horizontal head
@@ -571,7 +589,7 @@ void Headset_view::update_fixed_step(const Time_context& time_context)
                 const float     magnitude = std::min(1.0f, (stick_length - dead_zone) / (1.0f - dead_zone));
                 const glm::vec2 stick     = (m_locomotion_input / stick_length) * magnitude;
                 const glm::vec3 velocity  = max_speed_m_per_s * ((stick.y * forward) + (stick.x * right));
-                m_camera_offset += time_context.simulation_dt_s * velocity;
+                translate_camera_root(time_context.simulation_dt_s * velocity);
             }
         }
     }
@@ -588,7 +606,7 @@ void Headset_view::update_fixed_step(const Time_context& time_context)
         const bool up   = (left_actions != nullptr) && is_held(left_actions->y_click);
         const bool down = (left_actions != nullptr) && is_held(left_actions->x_click);
         if (up != down) {
-            m_camera_offset.y += (up ? 1.0f : -1.0f) * vertical_speed_m_per_s * time_context.simulation_dt_s;
+            translate_camera_root(glm::vec3{0.0f, (up ? 1.0f : -1.0f) * vertical_speed_m_per_s * time_context.simulation_dt_s, 0.0f});
         }
     }
 }
@@ -605,7 +623,15 @@ auto Headset_view::get_stage_from_world() const -> glm::mat4
 
 void Headset_view::translate_camera_root(const glm::vec3& world_delta)
 {
+    if (world_delta == glm::vec3{0.0f}) {
+        return;
+    }
     m_camera_offset += world_delta;
+    // The quad composition layers are posed in stage space: a moved stage
+    // re-poses them so they stay where they are in world.
+    for (Quad_view* quad_view : m_quad_views) {
+        quad_view->on_world_from_stage_changed();
+    }
 }
 
 auto Headset_view::get_user_floor_position_in_world() const -> std::optional<glm::vec3>
@@ -2891,24 +2917,18 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
     // first ticks can execute before on_scene_created() -> attach_to_scene()
     // has homed the headset (setup_root_camera() sets m_root_node). The same
     // holds after detach_from_scene() while no scene is open.
-    // update_camera_node() and the scene-relative pointer/action handling
-    // below require a scene, so idle until the headset is attached to one. Returning false also
-    // keeps m_update_actions_ok false, so render_headset() skips the frame too.
-    // Mirrors Scene_view::update_transforms()'s no-scene-root guard. The XR
-    // session stays healthy because poll_events()/wait_frame()/xrSyncActions
-    // have already run for this frame above (begin_frame() runs in the
-    // render phase).
+    // The scene-relative posing (update_poses()) and the action handling
+    // below require a scene, so idle until the headset is attached to one.
+    // Returning early also keeps m_update_actions_ok false, so
+    // render_headset() skips the frame too. Mirrors
+    // Scene_view::update_transforms()'s no-scene-root guard. The XR session
+    // stays healthy because poll_events()/wait_frame()/xrSyncActions have
+    // already run for this frame above (begin_frame() runs in the render
+    // phase).
     if (!m_root_node) {
         return Update_actions_result::no_scene;
     }
 
-    update_camera_node();
-
-    // Benchmark mode: no controller pointer hover (the ray trace and ID pick
-    // hover merges and the quad layer hover all run from here).
-    if (!m_benchmark_mode) {
-        update_pointer_context_from_controller();
-    }
     erhe::xr::Xr_instance* instance = m_headset->get_xr_instance();
     if (instance == nullptr) {
         return Update_actions_result::unusable;
@@ -3066,12 +3086,41 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
         }
     }
 
+    //if (m_hand_tracker)
+    //{
+    //    m_hand_tracker->update_hands(*m_headset.get());
+    //}
+    m_update_actions_ok = true;
+    return Update_actions_result::ok;
+}
+
+void Headset_view::update_poses()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Only for a frame update_actions() accepted: that guarantees the
+    // headset, the session and a scene (m_root_node).
+    if (!m_update_actions_ok) {
+        return;
+    }
+
+    update_camera_node();
+
+    // Benchmark mode: no controller pointer hover (the ray trace and ID pick
+    // hover merges and the quad layer hover all run from here) and no
+    // controller visualization.
+    if (m_benchmark_mode) {
+        return;
+    }
+    update_pointer_context_from_controller();
+
     if (m_controller_visualization) {
+        erhe::xr::Xr_session* session = m_headset->get_xr_session();
         // One-shot fetch of the runtime controller render models
         // (XR_FB_render_model): needs a running session and the frame's
         // command buffer (Image_transfer); until both are available the
         // attempt is retried on later frames.
-        if (!m_controller_render_models_loaded && session->is_session_running() && (m_app_context.current_command_buffer != nullptr)) {
+        if (!m_controller_render_models_loaded && (session != nullptr) && session->is_session_running() && (m_app_context.current_command_buffer != nullptr)) {
             m_controller_visualization->load_render_models(m_app_context, *session);
             m_controller_render_models_loaded = true;
         }
@@ -3084,12 +3133,6 @@ auto Headset_view::update_actions(const erhe::xr::Frame_timing& frame_timing) ->
             m_controller_visualization->update_hand_controls(right_hand, actions);
         }
     }
-    //if (m_hand_tracker)
-    //{
-    //    m_hand_tracker->update_hands(*m_headset.get());
-    //}
-    m_update_actions_ok = true;
-    return Update_actions_result::ok;
 }
 
 void Headset_view::request_renderdoc_capture()

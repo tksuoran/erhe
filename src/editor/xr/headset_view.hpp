@@ -233,11 +233,19 @@ public:
     // the loading screen or nothing - not a reason to throttle the loop);
     // unusable: the frame cannot be used (events, wait or actions failed).
     auto update_actions(const erhe::xr::Frame_timing& frame_timing) -> Update_actions_result;
+    // M2, after the fixed steps (which move the camera root: locomotion,
+    // travel) and before the commands tick: poses everything that hangs off
+    // this frame's world_from_stage - the root camera (with the eye frustum,
+    // cull planes and PVS query box), the controller hover ray and the
+    // controller visualization - so they agree with the eye cameras the
+    // render phase poses from the same offset. Nothing on frames
+    // update_actions() did not accept.
+    void update_poses();
     // M2, every frame under OpenXR, after the message bus pump and the
     // scenes' render settings snapshot (whether or not the frame was waited,
     // the headset is attached to a scene or the head pose located): copies
     // this frame's Render_view (scene root and root camera, which
-    // update_actions() posed). The render phase reads it: the headset's
+    // update_poses() posed). The render phase reads it: the headset's
     // Shadow_render_node, which the rendergraph runs every frame, and
     // render_headset(), which renders its scene root. Without a scene there
     // is no root camera; the copy then carries no scene root and no camera,
@@ -290,6 +298,8 @@ public:
     // through it; the quad composition layers map back with its inverse.
     [[nodiscard]] auto get_world_from_stage() const -> glm::mat4;
     [[nodiscard]] auto get_stage_from_world() const -> glm::mat4;
+    // The only write of the camera root position (locomotion, travel, the
+    // Y / X buttons): re-poses the registered quad composition layers.
     void translate_camera_root(const glm::vec3& world_delta);
     // World-space point on the camera root's floor (stage y = 0) under the
     // head; empty while the head pose is not located.
@@ -569,6 +579,7 @@ private:
     std::string                                          m_loading_status_line;           // the status line shown, to set it on change only
     // Carried by the root camera (head space), 15 cm above the eye midpoint.
     Headlamp                                             m_headlamp{m_app_context};
+    bool                                                 m_default_headlamp_applied{false};
     Hit_test_timing                                      m_hit_test_timing;      // prepare phase
     Hit_test_timing                                      m_id_pick_timing;       // render phase
     erhe::scene_renderer::Overdraw_view_state            m_overdraw_view_state;

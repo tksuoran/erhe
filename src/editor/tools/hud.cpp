@@ -32,6 +32,9 @@
 
 #include <imgui/imgui.h>
 
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+
 #include <cmath>
 
 namespace editor {
@@ -552,17 +555,61 @@ void Hud::set_mesh_visibility(const bool value)
         return;
     }
 
+    const std::optional<glm::mat4> world_from_head = get_world_from_head();
+
+    // Hiding remembers the pose relative to the head; showing restores it
+    // in the current head frame. Without a remembered pose (first show, or
+    // after a summon) the Hud is placed in front of the head like the init
+    // status display; without a head pose (desktop) at the control pose.
+    if (m_mesh_visible && !value && world_from_head.has_value()) {
+        m_head_from_hud = glm::inverse(world_from_head.value()) * get_world_from_hud();
+    }
     m_mesh_visible = value;
 
-    Scene_view* hover_scene_view = get_hover_scene_view();
-    if (hover_scene_view != nullptr) {
-        const auto& world_from_control_opt = hover_scene_view->get_world_from_control();
-        if (world_from_control_opt.has_value()) {
-            update_node_transform(world_from_control_opt.value());
+    bool placed = !m_mesh_visible;
+    if (m_mesh_visible && world_from_head.has_value()) {
+        if (m_head_from_hud.has_value()) {
+            m_quad_view->set_world_from_node(world_from_head.value() * m_head_from_hud.value());
+            placed = true;
+        } else {
+            placed = place_in_front_of_head();
+        }
+    }
+    if (!placed) {
+        Scene_view* hover_scene_view = get_hover_scene_view();
+        if (hover_scene_view != nullptr) {
+            const auto& world_from_control_opt = hover_scene_view->get_world_from_control();
+            if (world_from_control_opt.has_value()) {
+                update_node_transform(world_from_control_opt.value());
+            }
         }
     }
 
     m_quad_view->set_visible(m_mesh_visible);
+}
+
+auto Hud::get_world_from_hud() const -> glm::mat4
+{
+    // The drag of the scene-object path moves the node directly, so the
+    // node is the source of truth where there is one.
+    const erhe::scene::Node* node = m_quad_view->get_node();
+    return (node != nullptr) ? node->world_from_node() : m_quad_view->get_world_from_quad();
+}
+
+auto Hud::get_world_from_head() const -> std::optional<glm::mat4>
+{
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    erhe::xr::Headset* headset = (m_headset_view != nullptr) ? m_headset_view->get_headset() : nullptr;
+    glm::vec3 head_position{};
+    glm::quat head_orientation{};
+    if ((headset == nullptr) || !headset->get_headset_pose(head_position, head_orientation)) {
+        return {};
+    }
+    // Stage -> world through the headset camera root.
+    return m_headset_view->get_world_from_stage() * glm::translate(glm::mat4{1.0f}, head_position) * glm::mat4_cast(head_orientation);
+#else
+    return {};
+#endif
 }
 
 auto Hud::on_toggle_button_edge(const bool pressed) -> bool
@@ -609,53 +656,59 @@ void Hud::on_toggle_button_update()
 
 void Hud::summon()
 {
-    if (!m_enabled || !m_quad_view) {
-        return;
-    }
+    // Back to the default placement (summon distance and offsets).
+    m_head_from_hud.reset();
+    set_mesh_visibility(true);
+}
 
+auto Hud::place_in_front_of_head() -> bool
+{
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset* headset = (m_headset_view != nullptr) ? m_headset_view->get_headset() : nullptr;
     glm::vec3 head_position{};
     glm::quat head_orientation{};
-    if ((headset != nullptr) && headset->get_headset_pose(head_position, head_orientation)) {
-        // Stage -> world through the headset camera root.
-        head_position = glm::vec3{m_headset_view->get_world_from_stage() * glm::vec4{head_position, 1.0f}};
-
-        // Init status display placement: a configurable distance along the
-        // head forward direction, panel level (world up, ignoring head roll),
-        // facing the user. Fall back to the head's own up when looking
-        // nearly straight up or down (world-up look_at degenerates there).
-        const float summon_distance_m = (m_context.editor_settings != nullptr)
-            ? m_context.editor_settings->hud.summon_distance
-            : 0.7f;
-        const glm::vec3 forward  = glm::normalize(head_orientation * glm::vec3{0.0f, 0.0f, -1.0f});
-        const glm::vec3 world_up {0.0f, 1.0f, 0.0f};
-        const glm::vec3 up       = (std::abs(glm::dot(forward, world_up)) < 0.99f)
-            ? world_up
-            : glm::normalize(head_orientation * glm::vec3{0.0f, 1.0f, 0.0f});
-        const glm::vec3 position = head_position + summon_distance_m * forward;
-
-        // Same convention as the Hotbar / init display: create_look_at builds
-        // a transform whose local -Z points from the panel toward the head;
-        // the rotate flip turns the panel's front face toward the user.
-        constexpr glm::mat4 rotate{
-            -1.0f, 0.0f, 0.0f, 0.0f,
-             0.0f, 1.0f, 0.0f, 0.0f,
-             0.0f, 0.0f,-1.0f, 0.0f,
-             0.0f, 0.0f, 0.0f, 1.0f
-        };
-        const glm::mat4 world_from_node = erhe::math::create_look_at(position, head_position, up) * rotate;
-
-        m_mesh_visible = true;
-        m_quad_view->set_world_from_node(world_from_node);
-        m_quad_view->set_visible(true);
-        return;
+    if ((headset == nullptr) || !headset->get_headset_pose(head_position, head_orientation)) {
+        return false;
     }
+    // Stage -> world through the headset camera root.
+    head_position = glm::vec3{m_headset_view->get_world_from_stage() * glm::vec4{head_position, 1.0f}};
+
+    // Init status display placement: a configurable distance along the
+    // head forward direction, panel level (world up, ignoring head roll),
+    // facing the user. Fall back to the head's own up when looking
+    // nearly straight up or down (world-up look_at degenerates there).
+    const Hud_config* const hud_config = (m_context.editor_settings != nullptr) ? &m_context.editor_settings->hud : nullptr;
+    const float     summon_distance_m = (hud_config != nullptr) ? hud_config->summon_distance : 0.7f;
+    const glm::vec3 summon_offset     = (hud_config != nullptr)
+        ? glm::vec3{hud_config->summon_offset_x, hud_config->summon_offset_y, hud_config->summon_offset_z}
+        : glm::vec3{0.0f};
+    const glm::vec3 forward  = glm::normalize(head_orientation * glm::vec3{0.0f, 0.0f, -1.0f});
+    const glm::vec3 world_up {0.0f, 1.0f, 0.0f};
+    const glm::vec3 up       = (std::abs(glm::dot(forward, world_up)) < 0.99f)
+        ? world_up
+        : glm::normalize(head_orientation * glm::vec3{0.0f, 1.0f, 0.0f});
+    // The summon offset is in view space: X right, Y up, Z toward the user.
+    const glm::vec3 right    = glm::normalize(glm::cross(forward, up));
+    const glm::vec3 position =
+        head_position +
+        (summon_distance_m - summon_offset.z) * forward +
+        summon_offset.x * right +
+        summon_offset.y * up;
+
+    // Same convention as the Hotbar / init display: create_look_at builds
+    // a transform whose local -Z points from the panel toward the head;
+    // the rotate flip turns the panel's front face toward the user.
+    constexpr glm::mat4 rotate{
+        -1.0f, 0.0f, 0.0f, 0.0f,
+         0.0f, 1.0f, 0.0f, 0.0f,
+         0.0f, 0.0f,-1.0f, 0.0f,
+         0.0f, 0.0f, 0.0f, 1.0f
+    };
+    const glm::mat4 world_from_node = erhe::math::create_look_at(position, head_position, up) * rotate;
+    m_quad_view->set_world_from_node(world_from_node);
+    return true;
+#else
+    return false;
 #endif
-
-    // Desktop / no head pose: the regular visibility path already re-places
-    // the Hud at the control pose.
-    set_mesh_visibility(true);
 }
-
 }

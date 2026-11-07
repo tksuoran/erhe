@@ -762,9 +762,9 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     colors[ImGuiCol_PopupBg]                = ImVec4(0.07f, 0.07f, 0.07f, 1.00f);
     colors[ImGuiCol_Border]                 = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
     colors[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    colors[ImGuiCol_FrameBg]                = ImVec4(0.07f, 0.07f, 0.07f, 0.72f);
-    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.45f, 0.50f, 0.59f, 0.15f);
-    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.45f, 0.50f, 0.59f, 0.24f);
+    colors[ImGuiCol_FrameBg]                = ImVec4(0.07f, 0.07f, 0.07f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.19f, 0.21f, 0.25f, 1.00f);
+    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.25f, 0.28f, 0.34f, 1.00f);
     colors[ImGuiCol_TitleBg]                = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
     colors[ImGuiCol_TitleBgActive]          = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
     colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);

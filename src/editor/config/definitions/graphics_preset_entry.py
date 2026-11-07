@@ -68,8 +68,8 @@ struct("Graphics_preset_entry",
         # draw reads the forced level, or level 0), the pixel error threshold
         # a level must stay within and the global bias added to every
         # selected level. Older presets read the defaults.
-        field("lod_enabled",          Bool,  added_in=7, default="false", short_desc="LOD Selection"),
-        field("lod_threshold_pixels", Float, added_in=7, default="1.0f",  short_desc="LOD Threshold (pixels)"),
+        field("lod_enabled",          Bool,  added_in=7, default="true",  short_desc="LOD Selection"),
+        field("lod_threshold_pixels", Float, added_in=7, default="64.0f", short_desc="LOD Threshold (pixels)"),
         field("lod_bias",             Int,   added_in=7, default="0",     short_desc="LOD Bias"),
         # The hysteresis band (v8; doc/plans/lod_gpu_selection.md section 6):
         # in [0, 1), a view moves an entry to a coarser level only once that

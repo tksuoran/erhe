@@ -51,7 +51,6 @@ namespace editor {
 class App_context;
 class App_message_bus;
 struct Hover_scene_view_message;
-struct Render_scene_view_message;
 struct Tool_select_message;
 class Brush;
 class Hotbar;
@@ -199,7 +198,6 @@ public:
 private:
     void on_hover_scene_view_message (Hover_scene_view_message& message);
     void on_tool_select_message      (Tool_select_message& message);
-    void on_render_scene_view_message(Render_scene_view_message& message);
     void update_node_transform ();
     void slot_button           (uint32_t id, Slot_entry& entry);
     void handle_slot_update    ();
@@ -217,9 +215,8 @@ private:
     [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
 
     Tool_window                              m_window;
-    erhe::message_bus::Subscription<Hover_scene_view_message>  m_hover_scene_view_subscription;
-    erhe::message_bus::Subscription<Tool_select_message>       m_tool_select_subscription;
-    erhe::message_bus::Subscription<Render_scene_view_message> m_render_scene_view_subscription;
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Tool_select_message>      m_tool_select_subscription;
 
     // Commands
     Toggle_menu_visibility_command            m_toggle_visibility_command;

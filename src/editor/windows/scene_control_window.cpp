@@ -6,6 +6,15 @@
 #include "scene/headlamp.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "config/generated/graphics_preset_entry.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/culling_classification.hpp"
+#include "config/generated/light_cluster_binning.hpp"
+#include "renderers/content_draws.hpp"
+#include "windows/config_ui.hpp"
+#include "config/generated/hud_config.hpp"
+#include "config/generated/hud_config_serialization.hpp"
+
+#include <cstring>
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -89,6 +98,75 @@ void Scene_control_window::imgui()
         );
     }
     lighting_and_lod_imgui();
+    culling_imgui();
+    hud_placement_imgui();
+}
+
+void Scene_control_window::hud_placement_imgui()
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    // The reflected Hud_config fields (the Settings window shows the whole
+    // struct). Read at the next show of the Hud: re-placing the visible Hud
+    // while its own slider is dragged would move it under the user.
+    Hud_config& hud = m_context.editor_settings->hud;
+    ImGui::SeparatorText("Hud Placement");
+    constexpr const char* field_names[] = { "summon_distance", "summon_offset_x", "summon_offset_y", "summon_offset_z" };
+    for (const erhe::codegen::Field_info& field : get_fields(static_cast<const Hud_config*>(nullptr))) {
+        bool shown = false;
+        for (const char* name : field_names) {
+            shown = shown || (std::strcmp(field.name, name) == 0);
+        }
+        if (!shown) {
+            continue;
+        }
+        ImGui::PushID(field.name);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
+        static_cast<void>(imgui_field(&hud, field));
+        ImGui::SameLine();
+        ImGui::TextUnformatted(field.short_desc);
+        ImGui::SetItemTooltip("%s", field.long_desc);
+        ImGui::PopID();
+    }
+}
+
+void Scene_control_window::culling_imgui()
+{
+    if ((m_context.editor_settings == nullptr) || (m_context.app_settings == nullptr)) {
+        return;
+    }
+    // The same stored settings the Settings window edits; the render
+    // settings snapshot carries each value to its consumer.
+    Editor_settings_config& settings     = *m_context.editor_settings;
+    App_settings&           app_settings = *m_context.app_settings;
+    ImGui::SeparatorText("Culling");
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
+    static_cast<void>(imgui_enum_combo("Culling Classification", settings.culling_classification));
+    ImGui::SetItemTooltip("Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU that generates the draw commands (devices with a GPU-read draw count; others use the CPU).");
+    if (m_context.OpenXR) {
+        static_cast<void>(ImGui::Checkbox("Headset Culling", &app_settings.headset_culling_session));
+        ImGui::SetItemTooltip("Frustum-cull the headset's color passes against the union of the eye frusta. Session only.");
+    }
+    static_cast<void>(ImGui::Checkbox("Occlusion Culling", &settings.occlusion_culling));
+    ImGui::SetItemTooltip("Raster occlusion test (gpu culling classification only): the entries' boxes are drawn against each view's opaque depth; the next frame skips the entries found hidden.");
+    static_cast<void>(ImGui::Checkbox("PVS Culling", &settings.pvs_culling));
+    ImGui::SetItemTooltip("Cull the entries outside the potentially visible set of the cells around each camera, when the scene has a ready PVS database. A stale or absent database culls nothing.");
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
+    static_cast<void>(ImGui::DragFloat("PVS Query Margin", &settings.pvs_query_margin, 0.005f, 0.0f, 10.0f, "%.3f m"));
+    ImGui::SetItemTooltip("Half the size of the box around a camera whose cells' potentially visible sets the PVS culling reads.");
+    {
+        Content_draws& content_draws = app_settings.content_draws_session;
+        int            index         = static_cast<int>(content_draws);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
+        if (ImGui::Combo("Content Draws", &index, c_content_draws_strings, IM_ARRAYSIZE(c_content_draws_strings))) {
+            content_draws = static_cast<Content_draws>(index);
+        }
+        ImGui::SetItemTooltip("All content draws, or opaque only (no alpha-tested or translucent materials), to measure what they cost. Session only.");
+    }
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
+    static_cast<void>(imgui_enum_combo("Light Cluster Binning", settings.light_cluster_binning));
+    ImGui::SetItemTooltip("Where the light cluster lists of clustered light shading are binned: a compute pass on the GPU, or the CPU on the render thread.");
 }
 
 void Scene_control_window::lighting_and_lod_imgui()

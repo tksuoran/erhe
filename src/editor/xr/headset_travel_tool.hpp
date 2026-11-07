@@ -17,7 +17,8 @@ class Tools;
 // controller ray hits (content or grid), carrying the user's floor point
 // under the head towards it. The speed grows with the distance to the
 // point (capped) and scales with the analog trigger value. A ray that hits
-// a rendertarget (Hud, Hotbar) moves nothing.
+// nothing flies along the ray at the trigger's share of the max speed. A
+// ray that hits a rendertarget (Hud, Hotbar) moves nothing.
 //
 // The trigger value is read from the action state each fixed step, as
 // Rendertarget_imgui_host reads it, not from input events: the trigger's
@@ -48,7 +49,7 @@ private:
     {
         none = 0,
         not_priority_tool,
-        no_hover,
+        no_controller_ray,
         rendertarget_hover,
         no_head_pose,
         arrived

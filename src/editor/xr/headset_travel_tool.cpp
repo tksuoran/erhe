@@ -38,7 +38,7 @@ auto Headset_travel_tool::get_blocked_reason_text(const Blocked_reason reason) -
 {
     switch (reason) {
         case Blocked_reason::not_priority_tool:  return "the Travel tool is not the active tool";
-        case Blocked_reason::no_hover:           return "the controller ray hits no content or grid";
+        case Blocked_reason::no_controller_ray:  return "the controller ray is not located";
         case Blocked_reason::rendertarget_hover: return "the controller ray hits a rendertarget (Hud / Hotbar)";
         case Blocked_reason::no_head_pose:       return "the head pose is not located";
         case Blocked_reason::arrived:            return "arrived at the ray hit";
@@ -86,12 +86,22 @@ void Headset_travel_tool::update_fixed_step(const Time_context& time_context)
     const Hover_entry* nearest = m_headset_view.get_nearest_hover(
         Hover_entry::content_bit | Hover_entry::grid_bit | Hover_entry::rendertarget_bit
     );
-    if ((nearest == nullptr) || !nearest->valid || !nearest->position.has_value()) {
-        log_blocked(Blocked_reason::no_hover);
+    const bool has_hit = (nearest != nullptr) && nearest->valid && nearest->position.has_value();
+    if (has_hit && (nearest->slot == Hover_entry::rendertarget_slot)) {
+        log_blocked(Blocked_reason::rendertarget_hover);
         return;
     }
-    if (nearest->slot == Hover_entry::rendertarget_slot) {
-        log_blocked(Blocked_reason::rendertarget_hover);
+    if (!has_hit) {
+        // No content or grid under the ray (nothing there, or scene object
+        // hits are off): fly along the ray at the trigger's share of max speed.
+        const std::optional<glm::vec3> direction = m_headset_view.get_control_ray_direction_in_world();
+        if (!direction.has_value()) {
+            log_blocked(Blocked_reason::no_controller_ray);
+            return;
+        }
+        m_logged_reason = Blocked_reason::none;
+        const float speed = m_max_speed * std::min(trigger_value, 1.0f);
+        m_headset_view.translate_camera_root((speed * time_context.simulation_dt_s) * direction.value());
         return;
     }
     const std::optional<glm::vec3> user_position = m_headset_view.get_user_floor_position_in_world();

@@ -42,6 +42,8 @@ public:
 
 private:
     void lighting_and_lod_imgui();
+    void culling_imgui();
+    void hud_placement_imgui();
 
     App_context& m_context;
 };

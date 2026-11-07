@@ -108,7 +108,12 @@ world: `Headset_view::get_world_from_stage()` is
 a translation (the camera offset). Every stage-space XR pose (head,
 eyes, controllers, the controller ray, the Hud summon point) goes through
 it, and the quad composition layers map back with
-`get_stage_from_world()`. These inputs move it, in M2:
+`get_stage_from_world()`. Every move goes through
+`Headset_view::translate_camera_root()`, which re-poses the registered quad
+composition layers (`Quad_view::on_world_from_stage_changed()`): their pose
+is handed to the compositor in stage space, so without that the Hud and
+Hotbar would travel with the user while the ray and hover tests kept their
+world position. These inputs move it, in M2:
 
 - **Travel tool** (`Headset_travel_tool`, `xr/headset_travel_tool.hpp`;
   hotbar tool, the default priority tool under OpenXR). While the right
@@ -116,8 +121,10 @@ it, and the quad composition layers map back with
   under the head approaches the point the controller ray hits (content or
   grid hover). Speed is `min(max speed, approach rate * distance)` times the
   analog trigger value, per fixed step (defaults 1.5 1/s and 12 m/s, in the
-  tool properties). A ray that hits a rendertarget (Hud, Hotbar) moves
-  nothing. The trigger value is read from the action state each fixed
+  tool properties). A ray that hits no content or grid (nothing there, or
+  "Controller Ray Scene Object Hits" off) flies along the ray at max speed
+  times the trigger value. A ray that hits a rendertarget (Hud, Hotbar)
+  moves nothing. The trigger value is read from the action state each fixed
   step, not from input events (which the first consuming command takes);
   a pressed trigger that moves nothing logs why once per press
   (`editor.xr` "Travel tool: trigger pressed but not moving").
@@ -127,6 +134,23 @@ it, and the quad composition layers map back with
 - **Left Y / X buttons** (always active, outside benchmark mode): up / down
   along world +Y at 2 m/s while held, read from the action state in
   `Headset_view::update_fixed_step()`. Nothing else binds them.
+
+## Hud
+
+The Hud quad (`Hud`, `tools/hud.hpp`) hosts the ImGui windows under OpenXR.
+The right controller's menu or B button toggles it (decided on release);
+holding either for half a second summons it. Hiding the Hud remembers its
+pose relative to the head (session only), and the next show restores that
+pose in the current head frame, so a grab-dragged Hud (`doc/editor/tools.md`
+"Headset controller ray") comes back where the user left it relative to
+the view. Without a remembered pose - the first show, the show at homing
+(`hud.show`), and every summon, which forgets it - the quad is placed as
+the init status display does: `hud.summon_distance` (0.7 m) along the
+head forward direction, level (world up; the head's up when looking nearly
+straight up or down), facing the user, then moved by `hud.summon_offset_x
+/ y / z` in view space (right, up, toward the user; the Scene Control
+window's "Hud Placement" sliders); on desktop, without a head pose, at the
+control pose.
 
 ## Headset controller ray
 
@@ -141,8 +165,8 @@ The Scene Control window's "Controller Ray Scene Object Hits" checkbox (main
 thread; copied into the frame's settings slot by `prepare_render_view()`
 for the render phase) turns off the hits on 3D scene objects: the content
 and bone slots of the raytrace, the ID pick pass and its merge. The ray
-still hits rendertargets, tools, brushes and the grid (so the Travel tool
-moves towards the grid only). While on, `editor.xr` logs every 10 s the
+still hits rendertargets, tools, brushes and the grid (the Travel tool
+moves towards the grid, or flies along the ray). While on, `editor.xr` logs every 10 s the
 average and maximum time per frame of the prepare phase hit testing and of
 the ID pick pass recording (CPU; "Controller ray ...").
 
@@ -167,7 +191,9 @@ showing another scene) moves it into that scene. Closing the camera's scene
 or removing the camera detaches it; deleting the light itself disables it
 (the next Add creates a new one). Intensity (slider up to 20000 and
 100 - 5000 shortcut buttons) and shadows apply at once. It is
-`session_only`: never saved.
+`session_only`: never saved. On Android (Quest) the headset's headlamp is
+added and enabled at the headset's first homing, and the "Headlamp only"
+lighting is applied with it; the Scene Control window changes both.
 
 ## Scene Control window
 
@@ -198,6 +224,12 @@ the stored preset):
   window's range too), bias (-7 - 7: added to each selected level, then
   clamped to the mesh's chain; off selection draws level 0 and ignores it)
   and hysteresis band.
+
+Below them, "Culling": the stored editor settings the Settings window also
+edits (culling classification, occlusion culling, PVS culling and query
+margin, light cluster binning) and the session-only headset culling (OpenXR)
+and content draws switches, here so a headset session can change them from
+the Hud.
 
 ## Public API / Integration Points
 

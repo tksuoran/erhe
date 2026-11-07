@@ -128,8 +128,8 @@ degrees. Values not present in `editor_settings.json` take these defaults.
 ## Graphics preset settings
 
 The graphics preset (`Graphics_preset_entry`, version 9) holds the automatic
-selection's settings: `lod_enabled` (default off), `lod_threshold_pixels`
-(the pixel error a selected level stays within, default 1.0), `lod_bias`
+selection's settings: `lod_enabled` (default on), `lod_threshold_pixels`
+(the pixel error a selected level stays within, default 64.0), `lod_bias`
 (added to every selected level, default 0), `lod_hysteresis_band` (0 to
 0.9, default 0.25; below) and `lod_cpu_selection` (`Lod_cpu_selection`,
 mirroring `erhe::scene_renderer::Lod_cpu_selection`; default
