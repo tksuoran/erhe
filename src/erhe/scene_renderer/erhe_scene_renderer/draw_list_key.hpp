@@ -19,14 +19,23 @@ enum class Draw_purpose : uint8_t
 };
 
 // Mobility class of the registered object (R10a). Skinned is derived from
-// mesh->skin at registration; static / dynamic is the caller's choice
-// (everything non-skinned is dynamic in the initial scope).
+// mesh->skin and world_space from Item_flags::world_space at registration
+// (the WORLD_SPACE_VERTICES variants draw these lists); static / dynamic is
+// the caller's choice (everything else is dynamic in the initial scope).
 enum class Draw_mobility : uint8_t
 {
-    static_  = 0,
-    dynamic  = 1,
-    skinned  = 2
+    static_     = 0,
+    dynamic     = 1,
+    skinned     = 2,
+    world_space = 3
 };
+
+// The registration's mobility: skinned and world_space come from the mesh,
+// otherwise the caller's choice.
+[[nodiscard]] auto get_draw_mobility(const erhe::scene::Mesh& mesh, Draw_mobility requested) -> Draw_mobility;
+
+// The Vertex_space the shader key of a list of this mobility is derived with.
+[[nodiscard]] auto get_vertex_space(Draw_mobility mobility) -> Vertex_space;
 
 [[nodiscard]] auto c_str(Draw_purpose  purpose ) -> const char*;
 [[nodiscard]] auto c_str(Draw_mobility mobility) -> const char*;
@@ -52,8 +61,8 @@ public:
     erhe::scene::Layer_id           layer_id            {0};
     Buffer_set                      buffer_set          {};
     // Primitive-derived shader key components only (no environment):
-    //  - color : Shader_key{}.derive(material, vertex_format, skinned)
-    //  - shadow: USE_SKINNING only (R4)
+    //  - color : Shader_key{}.derive(material, vertex_format, vertex_space)
+    //  - shadow: USE_SKINNING, WORLD_SPACE_VERTICES and VERTEX_POSITION_ENCODING only (R4)
     Shader_key                      primitive_key       {};
     uint64_t                        primitive_key_hash  {0};
 

@@ -8,6 +8,10 @@
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/material.hpp"
 
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/skin.hpp"
+#include "erhe_scene_renderer/draw_list_key.hpp"
+
 #include <gtest/gtest.h>
 
 #include <memory>
@@ -24,6 +28,7 @@ using erhe::primitive::Material;
 using erhe::scene_renderer::Shader_bool;
 using erhe::scene_renderer::Shader_int;
 using erhe::scene_renderer::Shader_key;
+using erhe::scene_renderer::Vertex_space;
 using erhe::scene_renderer::Specular_anti_aliasing;
 using erhe::scene_renderer::get_specular_anti_aliasing;
 using erhe::scene_renderer::set_specular_anti_aliasing_axis;
@@ -81,7 +86,7 @@ TEST(Shader_key_specular_anti_aliasing, anisotropic_with_tangents_keeps_the_mode
     for (const Bxdf_model bxdf_model : {Bxdf_model::anisotropic_brdf, Bxdf_model::anisotropic_engine_ready}) {
         const std::shared_ptr<Material> material = make_material(bxdf_model);
         for (const Specular_anti_aliasing mode : c_modes) {
-            const Shader_key key = make_environment(mode).derive(material.get(), &format, false);
+            const Shader_key key = make_environment(mode).derive(material.get(), &format, Vertex_space::node);
             EXPECT_TRUE(key.get(Shader_bool::USE_VERTEX_VARYING_TANGENT));
             EXPECT_TRUE(key.get(Shader_bool::USE_VERTEX_VARYING_BITANGENT));
             EXPECT_EQ(get_specular_anti_aliasing(key), mode);
@@ -94,7 +99,7 @@ TEST(Shader_key_specular_anti_aliasing, anisotropic_without_tangents_is_off)
     const Vertex_format             format   = make_format(false);
     const std::shared_ptr<Material> material = make_material(Bxdf_model::anisotropic_brdf);
     for (const Specular_anti_aliasing mode : c_modes) {
-        const Shader_key key = make_environment(mode).derive(material.get(), &format, false);
+        const Shader_key key = make_environment(mode).derive(material.get(), &format, Vertex_space::node);
         EXPECT_FALSE(key.get(Shader_bool::USE_VERTEX_VARYING_TANGENT));
         EXPECT_EQ(get_specular_anti_aliasing(key), Specular_anti_aliasing::off);
     }
@@ -106,7 +111,7 @@ TEST(Shader_key_specular_anti_aliasing, other_bxdf_models_are_off)
     for (const Bxdf_model bxdf_model : {Bxdf_model::unlit, Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_slope}) {
         const std::shared_ptr<Material> material = make_material(bxdf_model);
         for (const Specular_anti_aliasing mode : c_modes) {
-            const Shader_key key = make_environment(mode).derive(material.get(), &format, false);
+            const Shader_key key = make_environment(mode).derive(material.get(), &format, Vertex_space::node);
             EXPECT_EQ(get_specular_anti_aliasing(key), Specular_anti_aliasing::off);
         }
     }
@@ -125,8 +130,8 @@ TEST(Shader_key_specular_anti_aliasing, derive_equals_prepare_then_environment)
         for (const Bxdf_model bxdf_model : {Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_brdf, Bxdf_model::anisotropic_slope, Bxdf_model::anisotropic_engine_ready}) {
             const std::shared_ptr<Material> material = make_material(bxdf_model);
             for (const Specular_anti_aliasing mode : c_modes) {
-                const Shader_key full     = make_environment(mode).derive(material.get(), &format, false);
-                Shader_key       prepared = Shader_key{}.derive(material.get(), &format, false);
+                const Shader_key full     = make_environment(mode).derive(material.get(), &format, Vertex_space::node);
+                Shader_key       prepared = Shader_key{}.derive(material.get(), &format, Vertex_space::node);
                 EXPECT_EQ(get_specular_anti_aliasing(prepared), Specular_anti_aliasing::off);
                 set_specular_anti_aliasing_axis(prepared, mode);
                 EXPECT_EQ(prepared, full);
@@ -163,7 +168,7 @@ TEST(Shader_key_fp16_paths, lit_variants_keep_the_mask)
     for (const Bxdf_model bxdf_model : {Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_brdf, Bxdf_model::anisotropic_slope, Bxdf_model::anisotropic_engine_ready}) {
         const std::shared_ptr<Material> material = make_material(bxdf_model);
         for (const uint32_t mask : c_fp16_masks) {
-            const Shader_key key = make_fp16_environment(mask).derive(material.get(), &format, false);
+            const Shader_key key = make_fp16_environment(mask).derive(material.get(), &format, Vertex_space::node);
             EXPECT_EQ(get_fp16_paths(key), mask);
         }
     }
@@ -174,12 +179,12 @@ TEST(Shader_key_fp16_paths, unlit_position_pass_and_debug_variants_are_zero)
     const Vertex_format format = make_format(true);
     {
         const std::shared_ptr<Material> material = make_material(Bxdf_model::unlit);
-        const Shader_key key = make_fp16_environment(fp16_paths_all).derive(material.get(), &format, false);
+        const Shader_key key = make_fp16_environment(fp16_paths_all).derive(material.get(), &format, Vertex_space::node);
         EXPECT_EQ(get_fp16_paths(key), 0u);
     }
     const std::shared_ptr<Material> material = make_material(Bxdf_model::isotropic_brdf);
     for (const Shader_bool variant : {Shader_bool::VARIANT_DEPTH_ONLY, Shader_bool::VARIANT_ID_RENDER, Shader_bool::VARIANT_SHADOW_DISTANCE, Shader_bool::VARIANT_SHADOW_CUBE, Shader_bool::VARIANT_POINTS}) {
-        Shader_key key = make_fp16_environment(fp16_paths_all).derive(material.get(), &format, false);
+        Shader_key key = make_fp16_environment(fp16_paths_all).derive(material.get(), &format, Vertex_space::node);
         EXPECT_EQ(get_fp16_paths(key), fp16_paths_all);
         key.set(variant, true);
         set_fp16_paths_axis(key, fp16_paths_all);
@@ -188,7 +193,7 @@ TEST(Shader_key_fp16_paths, unlit_position_pass_and_debug_variants_are_zero)
     {
         Shader_key environment = make_fp16_environment(fp16_paths_all);
         environment.set(Shader_int::SHADER_DEBUG, 1u);
-        const Shader_key key = environment.derive(material.get(), &format, false);
+        const Shader_key key = environment.derive(material.get(), &format, Vertex_space::node);
         EXPECT_EQ(get_fp16_paths(key), 0u);
     }
 }
@@ -196,7 +201,7 @@ TEST(Shader_key_fp16_paths, unlit_position_pass_and_debug_variants_are_zero)
 TEST(Shader_key_fp16_paths, unknown_bits_are_dropped)
 {
     const Vertex_format format = make_format(false);
-    Shader_key key = make_fp16_environment(0u).derive(make_material(Bxdf_model::isotropic_brdf).get(), &format, false);
+    Shader_key key = make_fp16_environment(0u).derive(make_material(Bxdf_model::isotropic_brdf).get(), &format, Vertex_space::node);
     set_fp16_paths_axis(key, 0xffffffffu);
     EXPECT_EQ(get_fp16_paths(key), fp16_paths_all);
 }
@@ -208,12 +213,58 @@ TEST(Shader_key_fp16_paths, derive_equals_prepare_then_environment)
         for (const Bxdf_model bxdf_model : {Bxdf_model::unlit, Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_brdf}) {
             const std::shared_ptr<Material> material = make_material(bxdf_model);
             for (const uint32_t mask : c_fp16_masks) {
-                const Shader_key full     = make_fp16_environment(mask).derive(material.get(), &format, false);
-                Shader_key       prepared = Shader_key{}.derive(material.get(), &format, false);
+                const Shader_key full     = make_fp16_environment(mask).derive(material.get(), &format, Vertex_space::node);
+                Shader_key       prepared = Shader_key{}.derive(material.get(), &format, Vertex_space::node);
                 EXPECT_EQ(get_fp16_paths(prepared), 0u);
                 set_fp16_paths_axis(prepared, mask);
                 EXPECT_EQ(prepared, full);
             }
         }
     }
+}
+
+TEST(Shader_key_vertex_space, world_sets_world_space_vertices_only)
+{
+    const Vertex_format             format   = make_format(true);
+    const std::shared_ptr<Material> material = make_material(Bxdf_model::isotropic_brdf);
+    const Shader_key node    = Shader_key{}.derive(material.get(), &format, Vertex_space::node);
+    const Shader_key skinned = Shader_key{}.derive(material.get(), &format, Vertex_space::skinned);
+    const Shader_key world   = Shader_key{}.derive(material.get(), &format, Vertex_space::world);
+    EXPECT_FALSE(node.get(Shader_bool::WORLD_SPACE_VERTICES));
+    // The format has no joint attributes: a skinned mesh keeps the node path.
+    EXPECT_FALSE(skinned.get(Shader_bool::USE_SKINNING));
+    EXPECT_FALSE(skinned.get(Shader_bool::WORLD_SPACE_VERTICES));
+    EXPECT_TRUE (world.get(Shader_bool::WORLD_SPACE_VERTICES));
+    EXPECT_FALSE(world.get(Shader_bool::USE_SKINNING));
+    Shader_key world_cleared = world;
+    world_cleared.set(Shader_bool::WORLD_SPACE_VERTICES, false);
+    EXPECT_EQ(world_cleared, node);
+}
+
+TEST(Draw_mobility_vertex_space, follows_the_mesh_skin_and_world_space_flag)
+{
+    using erhe::scene_renderer::Draw_mobility;
+    using erhe::scene_renderer::get_draw_mobility;
+    using erhe::scene_renderer::get_vertex_space;
+
+    // A new mesh without a parent is the root of its identity path.
+    const auto mesh = std::make_shared<erhe::scene::Mesh>("mesh");
+    EXPECT_EQ(get_vertex_space(*mesh), Vertex_space::world);
+    EXPECT_EQ(get_draw_mobility(*mesh, Draw_mobility::dynamic), Draw_mobility::world_space);
+    EXPECT_EQ(get_vertex_space(Draw_mobility::world_space), Vertex_space::world);
+
+    // Off the identity: the caller's mobility, node space.
+    mesh->set_parent_from_node(erhe::scene::Trs_transform{glm::vec3{1.0f, 0.0f, 0.0f}});
+    EXPECT_EQ(get_vertex_space(*mesh), Vertex_space::node);
+    EXPECT_EQ(get_draw_mobility(*mesh, Draw_mobility::dynamic), Draw_mobility::dynamic);
+    EXPECT_EQ(get_draw_mobility(*mesh, Draw_mobility::static_), Draw_mobility::static_);
+    EXPECT_EQ(get_vertex_space(Draw_mobility::dynamic), Vertex_space::node);
+    EXPECT_EQ(get_vertex_space(Draw_mobility::static_), Vertex_space::node);
+
+    // A skin wins over the identity path: the two are mutually exclusive.
+    const auto skinned = std::make_shared<erhe::scene::Mesh>("skinned");
+    skinned->skin = std::make_shared<erhe::scene::Skin>();
+    EXPECT_EQ(get_vertex_space(*skinned), Vertex_space::skinned);
+    EXPECT_EQ(get_draw_mobility(*skinned, Draw_mobility::dynamic), Draw_mobility::skinned);
+    EXPECT_EQ(get_vertex_space(Draw_mobility::skinned), Vertex_space::skinned);
 }

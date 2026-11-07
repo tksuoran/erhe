@@ -182,6 +182,19 @@ vec3 erhe_min_axis(vec3 v)
 }
 #endif
 
+#if defined(ERHE_WORLD_SPACE_VERTICES) && defined(ERHE_USE_SKINNING)
+#   error "ERHE_WORLD_SPACE_VERTICES excludes ERHE_USE_SKINNING"
+#endif
+
+// Node-space directions to world space; world-space vertices need nothing.
+#if defined(ERHE_WORLD_SPACE_VERTICES)
+#   define ERHE_WORLD_FROM_NODE_NORMAL(n) (n)
+#   define ERHE_WORLD_FROM_NODE_VECTOR(v) (v)
+#else
+#   define ERHE_WORLD_FROM_NODE_NORMAL(n) vec3(world_from_node_normal * vec4((n), 0.0))
+#   define ERHE_WORLD_FROM_NODE_VECTOR(v) vec3(world_from_node * vec4((v), 0.0))
+#endif
+
 // `precise` is core GLSL from 4.00.
 #if __VERSION__ >= 400
 #   define ERHE_VIEW_RELATIVE_PRECISE precise
@@ -191,6 +204,29 @@ vec3 erhe_min_axis(vec3 v)
 
 void main()
 {
+#if defined(ERHE_WORLD_SPACE_VERTICES)
+    // The vertices are in world space (doc/erhe/shader_variants.md
+    // "World-space vertices"): world_from_node is the identity and is not read.
+    vec3 node_position = erhe_decode_vertex_position(
+        primitive.primitives[ERHE_PRIMITIVE_INDEX].position_scale.xyz,
+        primitive.primitives[ERHE_PRIMITIVE_INDEX].position_offset.xyz
+    );
+    vec4 position = vec4(node_position, 1.0);
+#   if ERHE_VERTEX_POSITION_ENCODING == ERHE_VERTEX_POSITION_ENCODING_SNORM16X3_AABB
+    // Decoded relative to the view origin: the offset (the AABB center) less
+    // the view origin first, so the rounding scales with the distance from the
+    // view origin, not with the primitive's distance from the world origin.
+    ERHE_VIEW_RELATIVE_PRECISE vec3 view_relative_offset = primitive.primitives[ERHE_PRIMITIVE_INDEX].position_offset.xyz - camera.cameras[c_view_index].view_origin.xyz;
+    ERHE_VIEW_RELATIVE_PRECISE vec3 view_relative_scaled = a_position * primitive.primitives[ERHE_PRIMITIVE_INDEX].position_scale.xyz;
+    ERHE_VIEW_RELATIVE_PRECISE vec4 view_relative_position = vec4(view_relative_scaled + view_relative_offset, 1.0);
+    float position_rounding = get_world_vertex_position_rounding(view_relative_scaled, view_relative_offset, view_relative_position.xyz);
+#   else
+    ERHE_VIEW_RELATIVE_PRECISE vec4 view_relative_position = vec4(node_position - camera.cameras[c_view_index].view_origin.xyz, 1.0);
+    // The general bound with the identity linear part (constant-folded).
+    float position_rounding = get_vertex_position_rounding(mat3(1.0), node_position, -camera.cameras[c_view_index].view_origin.xyz);
+#   endif
+    gl_Position = camera.cameras[c_view_index].clip_from_view_relative * view_relative_position;
+#else
     mat4 world_from_node;
     mat4 world_from_node_normal;
 
@@ -252,6 +288,7 @@ void main()
     // mesh far from its node origin carries a large bound however near the
     // view origin its vertex is), the translation with its own magnitude.
     float position_rounding     = get_vertex_position_rounding(mat3(world_from_node), node_position, view_relative_translation);
+#endif // ERHE_WORLD_SPACE_VERTICES
 
     // Object space tangent frame. Under the optimized variant's quaternion
     // encoding there is no a_normal attribute at all and both the normal and the
@@ -334,7 +371,7 @@ void main()
     float point_distance         = distance(view_position_in_world, position.xyz);
     float clip_depth_direction   = camera.cameras[c_view_index].clip_depth_direction;
 #   ifdef ERHE_HAS_VERTEX_NORMAL
-    vec3  point_normal           = normalize(vec3(world_from_node_normal * vec4(node_normal, 0.0)));
+    vec3  point_normal           = normalize(ERHE_WORLD_FROM_NODE_NORMAL(node_normal));
     vec3  point_view_vector      = normalize(view_position_in_world - position.xyz);
     float point_NdotV            = dot(point_normal, point_view_vector);
     gl_Position.z               -= clip_depth_direction * 0.0005 * abs(point_NdotV);
@@ -348,11 +385,11 @@ void main()
 #if !defined(ERHE_VARIANT_POSITION_PASS)
 
 #   if defined(ERHE_USE_VERTEX_VARYING_NORMAL)
-    vec3 normal          = normalize(vec3(world_from_node_normal * vec4(node_normal, 0.0)));
+    vec3 normal          = normalize(ERHE_WORLD_FROM_NODE_NORMAL(node_normal));
 #   endif
 
 #   if defined(ERHE_USE_VERTEX_VARYING_TANGENT)
-    vec3 tangent         = vec3(world_from_node * vec4(node_tangent, 0.0));
+    vec3 tangent         = ERHE_WORLD_FROM_NODE_VECTOR(node_tangent);
 #   endif
 
 #   if defined(ERHE_USE_VERTEX_VARYING_BITANGENT) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_NORMAL)
@@ -414,12 +451,16 @@ void main()
     // from the authored tangent) keeps the projection stable across a mesh and
     // dependent only on the node's scale, while the scale correction makes the
     // generated texcoords track a non-uniformly scaled node.
+#       if defined(ERHE_WORLD_SPACE_VERTICES)
+    const vec3 texgen_node_scale = vec3(1.0);
+#       else
     vec3 texgen_node_scale_squared = vec3(
         dot(world_from_node[0].xyz, world_from_node[0].xyz),
         dot(world_from_node[1].xyz, world_from_node[1].xyz),
         dot(world_from_node[2].xyz, world_from_node[2].xyz)
     );
     vec3 texgen_node_scale = sqrt(max(texgen_node_scale_squared, vec3(1.0e-12)));
+#       endif
     vec3 texgen_normal     = normalize(node_normal / texgen_node_scale);
     vec3 texgen_tangent    = normalize(cross(erhe_min_axis(texgen_normal), texgen_normal));
     v_T_scale_only         = texgen_tangent;

@@ -385,7 +385,9 @@ void Item_base::set_derived_flag_bit(const uint64_t bit, const bool value)
     const uint64_t old_flag_bits = m_flag_bits;
     m_flag_bits = value ? (m_flag_bits | bit) : (m_flag_bits & ~bit);
     if (m_flag_bits != old_flag_bits) {
-        bump_item_mutation_serial();
+        if ((bit & ~Item_flags::get_transient_bits()) != 0u) {
+            bump_item_mutation_serial();
+        }
         handle_flag_bits_update(old_flag_bits, m_flag_bits);
     }
 }
@@ -468,7 +470,7 @@ void Item_base::set_flag_bits(const uint64_t requested_mask, const bool value)
     uint64_t mask = requested_mask;
     if ((mask & Item_flags::derived) != 0u) {
         erhe::item::log->error(
-            "Item_base::set_flag_bits({}) on '{}': {} is a property (Item_base::visible_property / Item_base::active_property / Item_base::defined_property / Mesh::shadow_cast_property / Mesh::lightmapped_property); the derived bits are dropped from the mask",
+            "Item_base::set_flag_bits({}) on '{}': {} is a property (Item_base::visible_property / Item_base::active_property / Item_base::defined_property / Mesh::shadow_cast_property / Mesh::lightmapped_property / the node transform for world_space); the derived bits are dropped from the mask",
             value, m_name, Item_flags::to_string(mask & Item_flags::derived)
         );
         mask &= ~Item_flags::derived;

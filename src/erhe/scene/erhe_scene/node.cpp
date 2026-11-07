@@ -158,6 +158,16 @@ const Property<glm::vec3> Xformable::world_translation_property = Property<glm::
         .ui    = Property_ui{.group = "World Transform", .tooltip = "Position in world space (computed)", .label = "Translation"}
     }
 );
+const Property<bool> Xformable::world_space_property = Property<bool>::register_computed(
+    "world_space", Xformable::property_owner_type(),
+    [](const Dependency_object& object) -> Property_value {
+        return erhe::utility::test_bit_set(static_cast<const Xformable&>(object).get_flag_bits(), erhe::Item_flags::world_space);
+    },
+    Property_metadata{
+        .flags = Property_flags::none,
+        .ui    = Property_ui{.group = "World Transform", .tooltip = "Every node from the scene root to this one has the identity transform (computed)", .label = "World Space"}
+    }
+);
 const Property<glm::quat> Xformable::world_rotation_property = Property<glm::quat>::register_computed(
     "world_rotation", Xformable::property_owner_type(),
     [](const Dependency_object& object) -> Property_value {
@@ -238,11 +248,16 @@ Node_data::Node_data(const Node_data& src, for_clone)
 {
 }
 
-Xformable::Xformable() = default;
+// A node without a parent starts as the root of its path (Item_flags::world_space).
+Xformable::Xformable()
+{
+    set_derived_flag_bit(erhe::Item_flags::world_space, true);
+}
 
 Xformable::Xformable(const std::string_view name)
     : Item{name}
 {
+    set_derived_flag_bit(erhe::Item_flags::world_space, true);
 }
 
 Xformable::Xformable(const Xformable& src, for_clone)
@@ -252,6 +267,7 @@ Xformable::Xformable(const Xformable& src, for_clone)
     if (src.m_xform_op_stack) {
         m_xform_op_stack = std::make_unique<Xform_op_stack>(*src.m_xform_op_stack);
     }
+    set_derived_flag_bit(erhe::Item_flags::world_space, parent_from_node() == glm::mat4{1.0f});
 }
 
 Xformable::~Xformable() noexcept
@@ -443,6 +459,13 @@ void Xformable::handle_transform_update(const uint64_t serial)
 
     node_data.transforms.parent_from_node_serial = effective_serial;
     node_data.transforms.world_from_node_serial  = effective_serial;
+
+    // Item_flags::world_space: the parent's bit and this node's own identity.
+    // The propagation pass runs this parent first, so the parent's bit is current.
+    const std::shared_ptr<Xformable> parent_node        = get_parent_node();
+    const bool                       parent_world_space = !parent_node || erhe::utility::test_bit_set(parent_node->get_flag_bits(), erhe::Item_flags::world_space);
+    set_derived_flag_bit(erhe::Item_flags::world_space, parent_world_space && (parent_from_node() == glm::mat4{1.0f}));
+
     if (m_transform_observers) {
         m_transform_observers->notify(*this);
     }
@@ -460,6 +483,7 @@ void Xformable::handle_transform_update(const uint64_t serial)
     invalidate_dependents(world_translation_property);
     invalidate_dependents(world_rotation_property);
     invalidate_dependents(world_scale_property);
+    invalidate_dependents(world_space_property);
 
     // Descendants inherit this node's new world transform; queue the subtree
     // for propagation in the scene's next update_node_transforms() pass. Every

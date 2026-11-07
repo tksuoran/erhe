@@ -71,7 +71,8 @@ public:
     const erhe::scene::Mesh_primitive&    mesh_primitive,
     const erhe::primitive::Primitive_mode primitive_mode,
     const Draw_purpose                    purpose,
-    const bool                            exclude_unlit_from_shadows
+    const bool                            exclude_unlit_from_shadows,
+    const Vertex_space                    vertex_space
 ) -> Primitive_classification
 {
     Primitive_classification result{};
@@ -130,14 +131,13 @@ public:
     }
 
     const Vertex_input_entry& vertex_input_entry = mesh_memory.get_vertex_input(buffer_mesh->vertex_input_key);
-    const bool                skinned            = static_cast<bool>(mesh.skin);
 
     switch (purpose) {
         case Draw_purpose::color: {
             // Primitive-derived components only: derive from an empty
             // environment key. The pass environment is combined at
             // resolution time (R17/R21).
-            result.key = Shader_key{}.derive(material, &vertex_input_entry.vertex_format, skinned);
+            result.key = Shader_key{}.derive(material, &vertex_input_entry.vertex_format, vertex_space);
             break;
         }
         case Draw_purpose::shadow: {
@@ -148,9 +148,10 @@ public:
             // skinning, and how a_position is encoded - without the latter a
             // quantized mesh would rasterize its caster from raw [-1,1]
             // positions while the lit pass decodes correctly.
-            const Shader_key full = Shader_key{}.derive(nullptr, &vertex_input_entry.vertex_format, skinned);
+            const Shader_key full = Shader_key{}.derive(nullptr, &vertex_input_entry.vertex_format, vertex_space);
             result.key = Shader_key{};
-            result.key.set(Shader_bool::USE_SKINNING, full.get(Shader_bool::USE_SKINNING));
+            result.key.set(Shader_bool::USE_SKINNING,         full.get(Shader_bool::USE_SKINNING));
+            result.key.set(Shader_bool::WORLD_SPACE_VERTICES, full.get(Shader_bool::WORLD_SPACE_VERTICES));
             // Derived from buffer_mesh->vertex_input_key, while the variant is
             // compiled against buffer_set.vertex_input_key (the *expanded* format
             // for solid wireframe). Those agree for every mode even with the
@@ -244,7 +245,7 @@ public:
     // derive() with a null vertex format drops every has_<attribute> gate,
     // which hides use_aniso_control (only visible together with the aniso
     // vertex attribute) - fold it in explicitly.
-    uint64_t hash = Shader_key{}.derive(material, nullptr, false).get_hash();
+    uint64_t hash = Shader_key{}.derive(material, nullptr, Vertex_space::node).get_hash();
     if ((material != nullptr) && material->get_use_aniso_control()) {
         hash = erhe::hash::hash(static_cast<uint8_t>(1u), hash);
     }
@@ -471,7 +472,7 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
     for (std::size_t i = 0, count = primitives.size(); i < count; ++i) {
         for (const Draw_purpose purpose : purposes) {
             const Primitive_classification classification = classify_primitive(
-                m_mesh_memory, *mesh, primitives[i], primitive_mode, purpose, m_exclude_unlit_from_shadows
+                m_mesh_memory, *mesh, primitives[i], primitive_mode, purpose, m_exclude_unlit_from_shadows, get_vertex_space(object.mobility)
             );
             if (!classification.accepted) {
                 continue;
@@ -1126,7 +1127,7 @@ auto Draw_list_scene::register_object(const Draw_list_object_create_info& create
     const uint32_t    object_index = allocate_object();
     Draw_list_object& object       = m_objects[object_index];
     object.info                 = info;
-    object.mobility             = mesh->skin ? Draw_mobility::skinned : info.mobility;
+    object.mobility             = get_draw_mobility(*mesh, info.mobility);
     object.negative_determinant = sample_negative_determinant(*mesh);
     object.layer_id             = mesh->layer_id;
     object.flag_bits            = mesh->get_flag_bits();
@@ -1337,7 +1338,7 @@ auto Draw_list_scene::try_material_slot_update(const uint32_t object_index) -> b
     for (std::size_t i = 0, count = primitives.size(); i < count; ++i) {
         for (const Draw_purpose purpose : purposes) {
             const Primitive_classification classification = classify_primitive(
-                m_mesh_memory, *mesh, primitives[i], primitive_mode, purpose, m_exclude_unlit_from_shadows
+                m_mesh_memory, *mesh, primitives[i], primitive_mode, purpose, m_exclude_unlit_from_shadows, get_vertex_space(object.mobility)
             );
             if (!classification.accepted) {
                 continue;
@@ -1467,7 +1468,7 @@ void Draw_list_scene::rebuild_all()
             continue;
         }
         const erhe::scene::Mesh* mesh = object.info.mesh.get();
-        object.mobility             = mesh->skin ? Draw_mobility::skinned : object.info.mobility;
+        object.mobility             = get_draw_mobility(*mesh, object.info.mobility);
         object.negative_determinant = sample_negative_determinant(*mesh);
         object.layer_id             = mesh->layer_id;
         object.flag_bits            = mesh->get_flag_bits();
@@ -1812,6 +1813,16 @@ void Draw_list_scene::flush_pending()
                 const Draw_list_object_id id = find_object(op.mesh.get());
                 if (!id.is_valid()) {
                     break; // flags set before attach / after detach: ignore
+                }
+                // Item_flags::world_space set (bake) or dropped (moved off the
+                // identity): the entries move to the other mobility's lists.
+                {
+                    const Draw_list_object& object = m_objects[id.index];
+                    const erhe::scene::Mesh* mesh  = object.info.mesh.get();
+                    if ((mesh != nullptr) && (get_draw_mobility(*mesh, object.info.mobility) != object.mobility)) {
+                        reregister_object(id);
+                        break;
+                    }
                 }
                 // R10b: the negative_determinant flag is maintained by
                 // handle_transform_update(); a change relative to the

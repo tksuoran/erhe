@@ -122,7 +122,10 @@ ADB="$ANDROID_HOME/platform-tools/adb"
 ```
 
 Gradle properties with values (`-Pname=value`) pass through unchanged
-here. `scripts/quest_logcat.sh`, `scripts/quest_bench.py` and
+here. `-PnativeCompileJobs=<n>` and `-PnativeLinkJobs=<n>` cap the
+concurrent native compile and link jobs (CMake job pools, which ninja
+honors whatever its `-j`); without them ninja runs as many jobs as the host
+has cores, which can exhaust the memory of a host with many cores. `scripts/quest_logcat.sh`, `scripts/quest_bench.py` and
 `scripts/soak_quest.py` find `adb` through `ANDROID_HOME`, falling back to
 Android Studio's default SDK root of the host OS, and run with `python3`
 in place of `py -3`.

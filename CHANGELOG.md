@@ -42,6 +42,19 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::item`: `Item_flags::world_space`, a derived and transient bit
+  (not serialized; `set_flag_bits()` refuses it): every node from the scene
+  root to the item has the identity transform. `erhe::scene::Xformable`
+  writes it on each transform update; `Xformable::world_space_property` is
+  its read-only computed property. `Item_base::set_derived_flag_bit()` no
+  longer bumps the item mutation serial for a transient bit.
+- `erhe::scene_renderer`: `Shader_bool::WORLD_SPACE_VERTICES`
+  (`ERHE_WORLD_SPACE_VERTICES`), `Vertex_space`, `get_vertex_space(const
+  erhe::scene::Mesh&)`, `get_vertex_space(Draw_mobility)`,
+  `get_draw_mobility()` and `Draw_mobility::world_space`: world-space
+  meshes draw in lists of their own with variants that skip
+  `world_from_node`.
+
 - `erhe::scene_renderer`: `Light_filter` (`muted_flag_bits`,
   `solo_flag_bits`), `Light_count_limits::filter`, `has_solo_light()` and
   `is_light_shaded()`; `Light_set::resolve()` and
@@ -1432,6 +1445,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::graphics` (Vulkan): a `Buffer` whose required or preferred memory
+  properties include `host_read` prefers host-cached memory, so CPU readbacks
+  no longer land in uncached write-combined memory.
+
+- `erhe::scene_renderer`: `Shader_key::derive()` takes a `Vertex_space` in
+  place of `bool mesh_has_skin`.
 
 - `erhe::graphics`: `transcode_ktx2_basis_to_astc_4x4()` is
   `transcode_ktx2_basis_to_raw_blocks()`, which takes a `Ktx2_block_target`

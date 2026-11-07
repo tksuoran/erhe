@@ -10898,12 +10898,13 @@ private:
         const std::size_t                          gltf_node_index,
         const std::shared_ptr<erhe::scene::Mesh>&  erhe_mesh,
         const std::shared_ptr<erhe::scene::Light>& erhe_light,
-        const std::string_view                     extra_erhe_node_members = {}
+        const std::string_view                     extra_erhe_node_members = {},
+        const uint64_t                             extra_flag_bits         = 0 // written as set on the node and the mesh
     )
     {
         std::string members = fmt::format(
             "\"flags\":{},\"properties\":{}",
-            persistent_item_flags_to_json(erhe_node.get_flag_bits()),
+            persistent_item_flags_to_json(erhe_node.get_flag_bits() | extra_flag_bits),
             item_local_properties_to_json(erhe_node)
         );
         // The prim class of a prim that carries no transform
@@ -10932,7 +10933,7 @@ private:
         if (erhe_mesh) {
             members += fmt::format(
                 ",\"mesh_flags\":{},\"mesh_properties\":{}",
-                persistent_item_flags_to_json(erhe_mesh->get_flag_bits()),
+                persistent_item_flags_to_json(erhe_mesh->get_flag_bits() | extra_flag_bits),
                 item_local_properties_to_json(*erhe_mesh)
             );
         }
@@ -11212,7 +11213,11 @@ private:
         size_t gltf_node_index = m_gltf_asset.nodes.size();
         m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
         m_erhe_node_to_gltf_node_index.insert({&erhe_node, gltf_node_index});
-        record_node_extensions(erhe_node, gltf_node_index, erhe_mesh, erhe_light);
+        // A baked mesh is written as the bake operation leaves it (doc/editor/world_space_bake.md).
+        const uint64_t baked_flag_bits = (bake_role == Node_bake_role::world_space_mesh)
+            ? erhe::Item_flags::lock_channel_mask
+            : uint64_t{0};
+        record_node_extensions(erhe_node, gltf_node_index, erhe_mesh, erhe_light, {}, baked_flag_bits);
         if (erhe_mesh && erhe_mesh->skin) {
             // node.skinIndex is resolved by process_skins() after the node
             // pass - joint nodes may come later in traversal order.
@@ -11868,8 +11873,13 @@ auto Gltf_exporter::export_gltf() -> std::string
             fastgltf::Node world_space_node{};
             world_space_node.name     = m_arguments.world_bake->world_space_node_name;
             world_space_node.children = std::move(m_world_space_node_indices);
-            scene.nodeIndices.push_back(m_gltf_asset.nodes.size());
+            const std::size_t world_space_node_index = m_gltf_asset.nodes.size();
+            scene.nodeIndices.push_back(world_space_node_index);
             m_gltf_asset.nodes.emplace_back(std::move(world_space_node));
+            // The flags of the node the bake operation creates, plus its locks.
+            erhe::scene::Xform world_space{m_arguments.world_bake->world_space_node_name};
+            world_space.enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::lock_channel_mask);
+            record_node_extensions(world_space, world_space_node_index, {}, {});
         }
         m_gltf_asset.scenes.push_back(std::move(scene));
     }

@@ -1269,7 +1269,7 @@ void bucket_primitives(
             Shader_key shader_key = environment_shader_key.derive(
                 material,
                 &vertex_input_entry.vertex_format,
-                static_cast<bool>(mesh->skin)
+                get_vertex_space(*mesh)
             );
             // The shader-debug override visualization is a content-inspection aid; do not recolor
             // tool / brush / controller / rendertarget meshes. Drop the SHADER_DEBUG axis for any mesh

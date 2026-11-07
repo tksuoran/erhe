@@ -5,8 +5,10 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_item/item_flags.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -314,7 +316,7 @@ namespace {
 auto Shader_key::derive(
     const erhe::primitive::Material*       material,
     const erhe::dataformat::Vertex_format* vertex_format,
-    const bool                             mesh_has_skin
+    const Vertex_space                     vertex_space
 ) const -> Shader_key
 {
     Shader_key key{};
@@ -360,8 +362,11 @@ auto Shader_key::derive(
     const bool has_joint_weights = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::joint_weights, 0);
 
     // Skinning: needs both joint attributes AND the mesh actually has a Skin.
-    if (has_joint_indices && has_joint_weights && mesh_has_skin) {
+    if (has_joint_indices && has_joint_weights && (vertex_space == Vertex_space::skinned)) {
         key.set(Shader_bool::USE_SKINNING, true);
+    }
+    if (vertex_space == Vertex_space::world) {
+        key.set(Shader_bool::WORLD_SPACE_VERTICES, true);
     }
 
     // Color is always passed through if present
@@ -609,6 +614,24 @@ void set_specular_anti_aliasing_axis(Shader_key& key, const Specular_anti_aliasi
 auto get_specular_anti_aliasing(const Shader_key& key) -> Specular_anti_aliasing
 {
     return static_cast<Specular_anti_aliasing>(key.get(Shader_int::SPECULAR_ANTI_ALIASING));
+}
+
+auto c_str(const Vertex_space vertex_space) -> const char*
+{
+    switch (vertex_space) {
+        case Vertex_space::node:    return "node";
+        case Vertex_space::skinned: return "skinned";
+        case Vertex_space::world:   return "world";
+        default:                    return "?";
+    }
+}
+
+auto get_vertex_space(const erhe::scene::Mesh& mesh) -> Vertex_space
+{
+    if (mesh.skin) {
+        return Vertex_space::skinned;
+    }
+    return ((mesh.get_flag_bits() & erhe::Item_flags::world_space) != 0) ? Vertex_space::world : Vertex_space::node;
 }
 
 auto c_str(const Light_shading light_shading) -> const char*

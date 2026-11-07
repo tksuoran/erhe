@@ -612,8 +612,8 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
             }
 
             // Content-library materials whose meshes are not yet attached:
-            // key each against the fallback Vertex_formats with both
-            // mesh_has_skin = false and mesh_has_skin = true so a later
+            // key each against the fallback Vertex_formats in every
+            // Vertex_space (node, skinned, world) so a later
             // runtime mesh-attach hits the cache. The optimized formats are
             // warmed beside the content ones: they can differ in the position
             // encoding (quantized optimized variant) and in the attribute
@@ -624,7 +624,8 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                 if (!material) {
                     continue;
                 }
-                for (const bool has_skin : { false, true }) {
+                for (const Vertex_space vertex_space : { Vertex_space::node, Vertex_space::skinned, Vertex_space::world }) {
+                    const bool has_skin = (vertex_space == Vertex_space::skinned);
                     const erhe::dataformat::Vertex_format* const vertex_formats[] = {
                         has_skin ? &parameters.mesh_memory.vertex_format_skinned           : &parameters.mesh_memory.vertex_format_not_skinned,
                         has_skin ? &parameters.mesh_memory.vertex_format_skinned_optimized : &parameters.mesh_memory.vertex_format_not_skinned_optimized
@@ -634,7 +635,7 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                         Shader_key derived{};
                         {
                             ERHE_PROFILE_SCOPE("Shader_key::derive");
-                            derived = environment_key.derive(material.get(), vertex_format, has_skin);
+                            derived = environment_key.derive(material.get(), vertex_format, vertex_space);
                         }
                         derived.bool_mask |=  parameters.shader_key_force_enable_mask;
                         derived.bool_mask &= ~parameters.shader_key_force_disable_mask;

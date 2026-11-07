@@ -45,6 +45,7 @@
 #include "tools/mesh_component_selection.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
+#include "transform/channel_locks.hpp"
 #include "windows/item_tree_window.hpp"
 #include "windows/window_placement.hpp"
 
@@ -743,6 +744,7 @@ Operations::Operations(
     , m_normalize_command         {commands, "Geometry.Normalize",             [this]() -> bool { normalize         (); return true; } }
     , m_bake_transform_command    {commands, "Geometry.BakeTransform",         [this]() -> bool { bake_transform    (); return true; } }
     , m_center_transform_command  {commands, "Geometry.CenterTransform",       [this]() -> bool { center_transform  (); return true; } }
+    , m_reset_transform_command   {commands, "Geometry.ResetTransform",        [this]() -> bool { reset_transform   (); return true; } }
     , m_reverse_command           {commands, "Geometry.Reverse",               [this]() -> bool { reverse           (); return true; } }
     , m_repair_command            {commands, "Geometry.Repair",                [this]() -> bool { repair            (); return true; } }
     , m_weld_command              {commands, "Geometry.Weld",                  [this]() -> bool { weld              (); return true; } }
@@ -824,6 +826,7 @@ Operations::Operations(
     commands.register_command(&m_normalize_command     );
     commands.register_command(&m_bake_transform_command);
     commands.register_command(&m_center_transform_command);
+    commands.register_command(&m_reset_transform_command);
     commands.register_command(&m_reverse_command       );
     commands.register_command(&m_repair_command        );
     commands.register_command(&m_weld_command          );
@@ -903,6 +906,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_normalize_command,        "Geometry.Normalize");
     commands.bind_command_to_menu(&m_bake_transform_command,   "Geometry.Bake-Transform");
     commands.bind_command_to_menu(&m_center_transform_command, "Geometry.Canter-Transform");
+    commands.bind_command_to_menu(&m_reset_transform_command,  "Geometry.Reset-Transform");
     commands.bind_command_to_menu(&m_reverse_command,          "Geometry.Reverse");
     commands.bind_command_to_menu(&m_repair_command,           "Geometry.Repair");
     commands.bind_command_to_menu(&m_weld_command,             "Geometry.Weld");
@@ -1023,6 +1027,7 @@ Operations::Operations(
     m_param_invokers[&m_flip_joint_command]                    = [this](const Operation_params& p){ flip_joint(static_cast<Add_joint_avoidance>(p.add_joint_avoidance)); };
     m_param_invokers[&m_bake_transform_command]                = [this](const Operation_params&  ){ bake_transform(); };
     m_param_invokers[&m_center_transform_command]              = [this](const Operation_params&  ){ center_transform(); };
+    m_param_invokers[&m_reset_transform_command]               = [this](const Operation_params&  ){ reset_transform(); };
     m_param_invokers[&m_triangulate_command]                   = [this](const Operation_params&  ){ triangulate(); };
     m_param_invokers[&m_normalize_command]                     = [this](const Operation_params&  ){ normalize(); };
     m_param_invokers[&m_reverse_command]                       = [this](const Operation_params&  ){ reverse(); };
@@ -1659,6 +1664,9 @@ void Operations::imgui()
         }
         if (visible("Center Transform") && operation_button("Center Transform", &m_center_transform_command, has_selection_mode, button_size)) {
             center_transform();
+        }
+        if (visible("Reset Transform") && operation_button("Reset Transform", &m_reset_transform_command, has_selection_mode, button_size)) {
+            reset_transform();
         }
     }
 
@@ -2446,6 +2454,38 @@ void Operations::bake_transform()
                 }
             )
         );
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
+    );
+}
+
+void Operations::reset_transform()
+{
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    if (!resolve_operation_items(false, Operation_reference::operands_only, items)) {
+        return;
+    }
+    Compound_operation::Parameters compound_operation_parameters;
+    for (const std::shared_ptr<erhe::scene::Node>& node : get_all<erhe::scene::Node>(items)) {
+        const erhe::scene::Trs_transform before = node->parent_from_node_transform();
+        const erhe::scene::Trs_transform after  = apply_channel_locks(before, erhe::scene::Trs_transform{}, node->get_flag_bits());
+        if (after == before) {
+            continue;
+        }
+        compound_operation_parameters.operations.push_back(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = node,
+                    .parent_from_node_before = before,
+                    .parent_from_node_after  = after,
+                    .xform_op_stack_before   = node->copy_xform_op_stack()
+                }
+            )
+        );
+    }
+    if (compound_operation_parameters.operations.empty()) {
+        return;
     }
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(std::move(compound_operation_parameters))

@@ -62,6 +62,23 @@ android {
                 // Android block, so the value stays a build argument. See
                 // src/erhe/usd/notes.md, "Configurations".
                 cmakeArgs << "-DERHE_USD_LIBRARY=lightusd"
+                // Optional caps on concurrent native compile / link jobs
+                // (-PnativeCompileJobs=12 -PnativeLinkJobs=2): CMake job pools,
+                // which ninja honors whatever its -j; unset keeps ninja's default.
+                def compileJobs = project.findProperty("nativeCompileJobs")
+                def linkJobs    = project.findProperty("nativeLinkJobs")
+                if ((compileJobs != null) || (linkJobs != null)) {
+                    def pools = []
+                    if (compileJobs != null) {
+                        pools << "compile=${compileJobs}"
+                        cmakeArgs << "-DCMAKE_JOB_POOL_COMPILE=compile"
+                    }
+                    if (linkJobs != null) {
+                        pools << "link=${linkJobs}"
+                        cmakeArgs << "-DCMAKE_JOB_POOL_LINK=link"
+                    }
+                    cmakeArgs << "-DCMAKE_JOB_POOLS=${pools.join(';')}"
+                }
                 arguments cmakeArgs as String[]
                 abiFilters 'arm64-v8a'
             }

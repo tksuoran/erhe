@@ -56,11 +56,17 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
     VmaAllocator  allocator   = m_vma_allocator;
     VkResult      result      = VK_SUCCESS;
 
+    // A buffer the CPU reads prefers cached memory: reads from write-combined
+    // or host-visible device memory cost orders of magnitude more.
+    const uint64_t host_access_mask = create_info.required_memory_property_bit_mask | create_info.preferred_memory_property_bit_mask;
+    const uint64_t preferred_mask   = erhe::utility::test_bit_set(host_access_mask, Memory_property_flag_bit_mask::host_read)
+        ? (create_info.preferred_memory_property_bit_mask | Memory_property_flag_bit_mask::host_cached)
+        : create_info.preferred_memory_property_bit_mask;
     const VmaAllocationCreateInfo allocation_create_info{
         .flags          = to_vulkan_memory_allocation_create_flags(create_info.memory_allocation_create_flag_bit_mask),
         .usage          = VMA_MEMORY_USAGE_UNKNOWN,
         .requiredFlags  = to_vulkan_memory_property_flags(create_info.required_memory_property_bit_mask),
-        .preferredFlags = to_vulkan_memory_property_flags(create_info.preferred_memory_property_bit_mask),
+        .preferredFlags = to_vulkan_memory_property_flags(preferred_mask),
         .memoryTypeBits = 0xffff'ffffu,
         .pool           = VK_NULL_HANDLE,
         .pUserData      = nullptr,

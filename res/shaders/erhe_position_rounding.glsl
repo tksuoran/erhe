@@ -28,6 +28,16 @@ float get_vertex_position_rounding(mat3 linear, vec3 node_position, vec3 view_re
     return length(rounding);
 }
 
+// The same bound for a quantized world-space vertex (ERHE_WORLD_SPACE_VERTICES,
+// standard.vert) decoded relative to the view origin as scaled + offset, where
+// scaled = a_position * position_scale and offset = position_offset less the
+// view origin: one rounding each of the offset, the product and the sum, the
+// 2u covering the second-order terms.
+float get_world_vertex_position_rounding(vec3 scaled, vec3 view_relative_offset, vec3 view_relative_position) {
+    vec3 rounding = (2.0 * erhe_fp32_unit_roundoff) * (abs(scaled) + abs(view_relative_offset) + abs(view_relative_position));
+    return length(rounding);
+}
+
 // Bound on the rounding of an interpolated view-relative position (a
 // fragment's receiver point, a caster fragment's point): its triangle's
 // vertices (vertex_rounding: the interpolated get_vertex_position_rounding()

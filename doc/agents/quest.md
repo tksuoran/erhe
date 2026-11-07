@@ -68,11 +68,17 @@ The Quest's Bistro file is prepared on the desktop with the headless editor
    import root's transform into its children.
 2. `generate_lods` with `scope: "scene"` (default settings), wait for
    `get_async_status` idle, `save_scene` to a scratch file.
-3. Open that file and bake the PVS there (`pvs_bake`, cell size 4 m, the
-   street slab region: content bounds in x and z, y 0.6 - 4.6), then
-   `save_scene_for_quest`. A bake made before the save reloads stale (the
-   save folds the import root rotation into the children's TRS, so the
-   reloaded bounds differ by rounding from the baked ones).
+3. Open that file, run `bake_static_to_world_space` on it (or set the
+   scene's `export_settings.bake_static_to_world_space` false for a
+   node-space file; `set_scene_settings` needs `"_version": 2` on the
+   settings object, else `export_settings` is dropped), bake the PVS there
+   (`pvs_bake`, cell size 4 m, the street slab region: content bounds in x
+   and z, y 0.6 - 4.6), then `save_scene_for_quest`. A bake made before the
+   save reloads stale (the save folds the import root rotation into the
+   children's TRS, so the reloaded bounds differ by rounding from the baked
+   ones), and so does a PVS of meshes that Prepare world-bakes itself (the
+   columns keep the unbaked transforms and bounds): bake to world space
+   before the PVS bake.
 4. Reload the result and check `get_pvs_status` state `ready`.
 5. Push it into the app's external files directory
    (`/sdcard/Android/data/org.libsdl.app.quest/files/bistro/`). The editor
@@ -81,8 +87,16 @@ The Quest's Bistro file is prepared on the desktop with the headless editor
    install, launch once before pushing (a directory adb creates first is
    owned by the shell user, and the editor cannot open the files in it).
 
-The current file is `bistro_quest_lod_cell_4m_v3.glb` (PVS `bits_hash`
-`f189d1ee59879697`, 2068 cells, LOD chains on 2900 primitives). The older
+The current files (2026-11-06, Linux headless Release on NVIDIA) are
+`bistro_quest_lod_cell_4m_v4_ws.glb` (static meshes in world space, PVS
+`bits_hash` `76620449951931a4`) and `bistro_quest_lod_cell_4m_v4_node.glb`
+(the same in node space, `56f7c094d19a1f1b`), both 2068 cells and LOD
+chains on 2900 primitives. A file's prepared mesh data is rejected when its
+stored BVHs come from another build of the BVH library
+(`ERHE_raytrace_bvh: no build for the running backend and library`); the
+Quest then rebuilds every primitive and the load does not go idle within
+`quest_bench.py`'s timeout: `bistro_quest_lod_cell_4m_v3.glb` (Mac, Nov 1)
+does that with the current APK. The older
 `pvs_bistro_*cell_*m.glb` and `bistro_quest_lod_cell_4m.glb` files were
 baked with the city on its side, and `config/editor/benchmark_bistro*.json`
 poses are in that frame: re-pose the benchmarks before comparing runs.

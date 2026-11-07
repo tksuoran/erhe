@@ -17,6 +17,7 @@ namespace erhe::dataformat { class Vertex_format; enum class Format : unsigned i
 namespace erhe::primitive  { class Material; }
 namespace erhe::graphics   { class Shader_define_constants; }
 namespace erhe::scene {
+    class Mesh;
     class Light;
     class Light_layer;
     enum class Light_type : unsigned int;
@@ -122,6 +123,7 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(USE_EMISSION_TEXTURE)             \
     X(USE_CIRCULAR_BRUSHED_METAL)       \
     X(USE_SKINNING)                     \
+    X(WORLD_SPACE_VERTICES)             \
     X(USE_VERTEX_VARYING_NORMAL)        \
     X(USE_VERTEX_VARYING_TANGENT)       \
     X(USE_VERTEX_VARYING_BITANGENT)     \
@@ -195,6 +197,23 @@ enum class Shader_int : uint32_t {
     return uint32_t{1} << static_cast<uint32_t>(param);
 }
 
+// How the standard vertex shader reaches world space from a mesh's vertices
+// (doc/erhe/shader_variants.md "World-space vertices"): through the node's
+// world_from_node, through the skin's joints (USE_SKINNING, when the vertex
+// format carries the joint attributes), or not at all - the mesh carries
+// Item_flags::world_space (WORLD_SPACE_VERTICES). Mutually exclusive.
+enum class Vertex_space : uint8_t
+{
+    node    = 0,
+    skinned = 1,
+    world   = 2
+};
+
+[[nodiscard]] auto c_str(Vertex_space vertex_space) -> const char*;
+
+// The mesh's Vertex_space from its skin and its Item_flags::world_space.
+[[nodiscard]] auto get_vertex_space(const erhe::scene::Mesh& mesh) -> Vertex_space;
+
 class Shader_key
 {
 public:
@@ -259,7 +278,7 @@ public:
     [[nodiscard]] auto derive(
         const erhe::primitive::Material*       material,
         const erhe::dataformat::Vertex_format* vertex_format,
-        bool                                   mesh_has_skin
+        Vertex_space                           vertex_space
     ) const -> Shader_key;
 
     uint32_t                                                     bool_mask{0};

@@ -33,6 +33,16 @@ namespace {
 
 constexpr const char* c_world_space_node_name = "World Space";
 
+// What the bake sets on a baked mesh and on the World Space node.
+constexpr uint64_t c_baked_flag_bits = erhe::Item_flags::lock_channel_mask;
+
+// Puts the c_baked_flag_bits of `item` back to `before_bits`.
+void restore_flag_bits(erhe::Item_base& item, const uint64_t before_bits)
+{
+    item.disable_flag_bits(c_baked_flag_bits & ~before_bits);
+    item.enable_flag_bits(before_bits);
+}
+
 [[nodiscard]] auto find_world_space_node(const erhe::scene::Node& root) -> std::shared_ptr<erhe::scene::Node>
 {
     for (const std::shared_ptr<erhe::Hierarchy>& child : root.get_children()) {
@@ -99,14 +109,15 @@ Bake_world_space_operation::Bake_world_space_operation(Parameters&& parameters)
         m_world_space->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         m_world_space_created = true;
     }
+    m_world_space_before_flag_bits = m_world_space->get_flag_bits() & c_baked_flag_bits;
 
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root->layers().content()->meshes) {
         const auto planned = plan.bake.baked_meshes.find(mesh.get());
         if (planned == plan.bake.baked_meshes.end()) {
             continue;
         }
-        if ((mesh->get_parent().lock() == m_world_space) && (mesh->parent_from_node() == glm::mat4{1.0f})) {
-            continue; // baked before
+        if ((mesh->get_flag_bits() & erhe::Item_flags::world_space) != 0) {
+            continue; // already in world space
         }
         Entry entry{};
         entry.mesh                    = mesh;
@@ -114,6 +125,7 @@ Bake_world_space_operation::Bake_world_space_operation(Parameters&& parameters)
         entry.before_name             = mesh->get_name();
         entry.before_parent_from_node = mesh->parent_from_node_transform();
         entry.primitives_before       = mesh->get_primitives();
+        entry.before_flag_bits        = mesh->get_flag_bits() & c_baked_flag_bits;
         for (std::shared_ptr<erhe::scene::Node> ancestor = mesh->get_parent_node(); ancestor; ancestor = ancestor->get_parent_node()) {
             ++entry.depth;
         }
@@ -276,6 +288,7 @@ void Bake_world_space_operation::execute(App_context& context)
         if (m_world_space_created) {
             m_world_space->set_parent(root);
         }
+        m_world_space->enable_flag_bits(c_baked_flag_bits);
         // Parents first: a baked child is taken from its parent's placeholder.
         // set_parent() keeps world transforms, so the mesh moves (children
         // riding along) before its own transform becomes the identity.
@@ -294,6 +307,7 @@ void Bake_world_space_operation::execute(App_context& context)
             }
             entry.mesh->set_parent_from_node(erhe::scene::Trs_transform{});
             set_mesh_primitives(context, entry.mesh, entry.primitives_after);
+            entry.mesh->enable_flag_bits(c_baked_flag_bits);
         }
     }
     // The optimized variants (the dispatcher takes the item host mutex itself).
@@ -322,6 +336,7 @@ void Bake_world_space_operation::undo(App_context& context)
         // finds the state its execute() step left.
         for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
             Entry& entry = *it;
+            restore_flag_bits(*entry.mesh, entry.before_flag_bits);
             set_mesh_primitives(context, entry.mesh, entry.primitives_before);
             entry.mesh->set_parent(entry.execute_parent, entry.execute_position);
             entry.mesh->set_parent_from_node(entry.before_parent_from_node);
@@ -336,6 +351,7 @@ void Bake_world_space_operation::undo(App_context& context)
                 entry.mesh->set_name(entry.before_name); // renamed beside a sibling of the same name
             }
         }
+        restore_flag_bits(*m_world_space, m_world_space_before_flag_bits);
         if (m_world_space_created) {
             m_world_space->set_parent(std::shared_ptr<erhe::Hierarchy>{});
         }

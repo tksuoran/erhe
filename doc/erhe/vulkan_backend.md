@@ -557,7 +557,14 @@ pass layouts); it goes once every transition is explicit
 
 **Buffers** (`vulkan_buffer.cpp`). VMA-backed `VkBuffer`. `Buffer_usage` maps to
 `VkBufferUsageFlags`; the usage is retained for the upload barrier. Persistently
-mapped, host-coherent memory is used where requested.
+mapped, host-coherent memory is used where requested. A buffer whose required
+or preferred memory properties include `host_read` (a readback the CPU reads)
+also prefers `VK_MEMORY_PROPERTY_HOST_CACHED_BIT`: VMA otherwise takes the first
+host-visible type, which on NVIDIA is uncached (write-combined) memory, where
+CPU reads cost orders of magnitude more. Measured on the Bistro PVS bake
+(512x512 id readbacks decoded on the CPU, RTX 5070 laptop): the decode was 89%
+of the main thread and 54 ms of a 64 ms frame; cached memory took the bake from
+34 to 198 captures/s.
 
 **Textures** (`vulkan_texture.cpp`). VMA-backed `VkImage`. Image views are cached
 per `(aspect, base_layer, layer_count, base_level, level_count)` tuple;

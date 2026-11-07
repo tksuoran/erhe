@@ -1,0 +1,41 @@
+{
+    "_comment": "benchmark_bistro_street.json at a 120 Hz display (display_refresh_rate_hz), for configurations that reach the 72 Hz ceiling; same frame_dt and camera path, so the measured frames are the same timedemo.",
+    "name": "bistro_street_120",
+    "warmup_frames": 1500,
+    "measure_frames": 600,
+    "frame_dt": 0.013888889,
+    "settle_timeout_frames": 3600,
+    "passthrough": false,
+    "display_refresh_rate_hz": 120,
+    "camera_path": {
+        "type": "keyframes",
+        "frames": [
+            {
+                "frame": 0,
+                "position": [
+                    12.2489,
+                    2.2,
+                    35.1512
+                ],
+                "yaw_pitch_roll_deg": [
+                    45.0,
+                    0.0,
+                    0.0
+                ]
+            },
+            {
+                "frame": 600,
+                "position": [
+                    10.8346,
+                    2.2,
+                    33.737
+                ],
+                "yaw_pitch_roll_deg": [
+                    45.0,
+                    0.0,
+                    0.0
+                ]
+            }
+        ]
+    }
+}

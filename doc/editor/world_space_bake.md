@@ -68,6 +68,18 @@ bitwise equal after the transform) are dropped, as the content build drops
 them. Prepared data: `erhe::primitive::bake_prepared_primitive_transform()`;
 a soup: `erhe::primitive::transform_triangle_soup()`.
 
+## Flags of a baked mesh
+
+A baked mesh and the World Space node carry the transform channel locks
+(`lock_translation_*`, `lock_rotation_*`, `lock_scale_*`), persistent flags
+written by name in `ERHE_node`, so interactive editing does not move them.
+The baked mesh's path from the scene root is the identity, so it carries
+the derived `Item_flags::world_space` and draws with the
+`WORLD_SPACE_VERTICES` shader variants (`doc/erhe/shader_variants.md`
+"World-space vertices"); a mesh moved anyway (locks cleared) draws through
+its node transform, and a reset back to the identity draws it as
+world-space again.
+
 ## Placeholders
 
 A baked mesh moves out of its parent; every other node stays where it is
@@ -84,8 +96,9 @@ plan. The exporter prepares each shape once, then per baked mesh primitive
 bakes a copy of the prepared core, generates its LOD chain and packs its GPU
 streams (`prepare_world_baked_primitives()`). The node pass writes each baked
 mesh under the World Space node with a glTF mesh of its own, and a
-placeholder only when a child is written under it; a mesh whose primitives
-did not all prepare is written unbaked in place. The MCP save status
+placeholder only when a child is written under it, with the locks of
+"Flags of a baked mesh" on the baked meshes and the World Space node; a
+mesh whose primitives did not all prepare is written unbaked in place. The MCP save status
 `prepared` block reports `world_bake_mesh_count`,
 `world_bake_placeholder_count`, `world_bake_primitive_count` and
 `world_bake_failed_count`. The baked node keeps its glTF uid, so PVS columns
@@ -115,13 +128,15 @@ bake_world_space_operation.{hpp,cpp}`), Mesh > Bake Static To World Space
   place in its parent, the children move into the placeholder keeping their
   local transforms, and the mesh's transform becomes the identity. A baked
   child is therefore taken from its parent's placeholder. The World Space
-  node is created when the root has no identity Xform of that name.
+  node is created when the root has no identity Xform of that name, and
+  the locks of "Flags of a baked mesh" are set.
 - `undo()` runs the inverse of each step in reverse order: primitives,
   parent and position the step recorded, transform, the placeholder's
   children back into the mesh, the placeholder removed, the name restored
-  (renamed beside a sibling of the same name). The tree is restored exactly.
-- A mesh already under World Space with the identity transform is not
-  planned again.
+  (renamed beside a sibling of the same name), and the locks the bake set
+  cleared. The tree and the locks are restored exactly.
+- A mesh that carries `Item_flags::world_space` (its path is the identity
+  already) is not planned.
 
 ## Verification
 

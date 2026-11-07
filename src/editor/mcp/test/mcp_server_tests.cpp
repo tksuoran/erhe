@@ -6185,3 +6185,113 @@ TEST_F(Mcp_test, shadow_head_on_receivers_have_no_acne_with_constant_depth_bias)
             << " unobstructed floor pixels read shadow visibility < 0.999";
     }
 }
+
+// ---- World-space draws (doc/erhe/shader_variants.md "World-space vertices") ----------
+//
+// Item_flags::world_space follows the transform path and the draw lists follow
+// the flag: the fixture's Deccer cubes hold "Cube" on an identity path and its
+// children off it. The path rule itself is unit tested (erhe_scene_tests
+// World_space_flag); this case covers the draw-list re-key and the MCP surface.
+
+namespace {
+
+// Draw-list entries per mobility, color and shadow purposes together.
+[[nodiscard]] auto entries_by_mobility(Mcp_client& client, const std::string& scene) -> std::map<std::string, std::size_t>
+{
+    std::map<std::string, std::size_t> counts;
+    Mcp_client::Tool_result result = client.call_tool("get_draw_lists", json{{"scene_name", scene}, {"verbose", true}});
+    EXPECT_FALSE(result.is_error) << result.text;
+    if (result.is_error) {
+        return counts;
+    }
+    for (const json& list : result.payload.at("draw_lists")) {
+        counts[list.at("mobility").get<std::string>()] += list.at("entry_count").get<std::size_t>();
+    }
+    return counts;
+}
+
+[[nodiscard]] auto node_id_by_name(Mcp_client& client, const std::string& scene, const std::string& name) -> int
+{
+    Mcp_client::Tool_result result = client.call_tool("get_scene_nodes", json{{"scene_name", scene}});
+    EXPECT_FALSE(result.is_error) << result.text;
+    for (const json& node : result.payload.at("nodes")) {
+        if (node.value("name", "") == name) {
+            return node.at("id").get<int>();
+        }
+    }
+    ADD_FAILURE() << "node '" << name << "' not found";
+    return -1;
+}
+
+} // anonymous namespace
+
+TEST_F(Mcp_test, world_space_draws_follow_the_identity_path)
+{
+    Mcp_env&           env    = Mcp_env::get();
+    Mcp_client&        client = env.client();
+    const std::string& scene  = env.scene_name();
+
+    const int import_root = node_id_by_name(client, scene, "SM_Deccer_Cubes_Textured.glb");
+    const int cube        = node_id_by_name(client, scene, "Cube");
+    const int cube_001    = node_id_by_name(client, scene, "Cube.001");
+    ASSERT_GE(import_root, 0);
+    ASSERT_GE(cube, 0);
+    ASSERT_GE(cube_001, 0);
+    auto world_space = [&client](const int id) -> bool {
+        const json property = item_property(client, id, "world_space");
+        EXPECT_TRUE(property.value("read_only", false)) << property.dump();
+        return property.value("value", "") == "true";
+    };
+    auto move_import_root = [&](const float z) {
+        Mcp_client::Tool_result moved = client.call_tool("set_node_transform", json{
+            {"scene_name",  scene},
+            {"node_id",     import_root},
+            {"space",       "local"},
+            {"translation", {0.0f, 0.0f, z}}
+        });
+        ASSERT_FALSE(moved.is_error) << moved.text;
+        advance_frames(client, 3);
+    };
+
+    ASSERT_TRUE(world_space(cube));
+    ASSERT_FALSE(world_space(cube_001));
+    const std::map<std::string, std::size_t> before = entries_by_mobility(client, scene);
+    ASSERT_GT(before.count("world_space"), 0u) << "the identity-path Cube draws from no world_space list";
+    const std::size_t world_entries = before.at("world_space");
+
+    // An ancestor off the identity re-keys the Cube to node-space lists ...
+    move_import_root(2.0f);
+    EXPECT_FALSE(world_space(cube));
+    EXPECT_EQ(entries_by_mobility(client, scene).count("world_space"), 0u);
+
+    // ... and back on the identity re-keys it to world_space lists.
+    move_import_root(0.0f);
+    EXPECT_TRUE(world_space(cube));
+    EXPECT_EQ(entries_by_mobility(client, scene), before);
+
+    // Reset Transform puts Cube.001 on the identity path; undo takes it off.
+    ASSERT_FALSE(client.call_tool("select_items", json{{"scene_name", scene}, {"ids", {cube_001}}}).is_error);
+    advance_frames(client, 2);
+    ASSERT_FALSE(client.call_tool("Geometry.ResetTransform", json::object()).is_error);
+    advance_frames(client, 3);
+    EXPECT_TRUE(world_space(cube_001));
+    EXPECT_GT(entries_by_mobility(client, scene)["world_space"], world_entries);
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    advance_frames(client, 3);
+    EXPECT_FALSE(world_space(cube_001));
+    EXPECT_EQ(entries_by_mobility(client, scene), before);
+
+    // The flag is derived: neither flag nor property writes reach it.
+    Mcp_client::Tool_result flag_write = client.call_tool("set_item_flags", json{
+        {"scene_name", scene}, {"ids", {cube}}, {"flags", {"world_space"}}, {"enabled", false}
+    });
+    EXPECT_TRUE(flag_write.is_error) << flag_write.text;
+    Mcp_client::Tool_result property_write = client.call_tool("set_item_property", json{
+        {"scene_name", scene}, {"item_id", cube}, {"property", "world_space"}, {"value", false}
+    });
+    EXPECT_TRUE(property_write.is_error) << property_write.text;
+    advance_frames(client, 2);
+    EXPECT_TRUE(world_space(cube));
+
+    client.call_tool("select_items", json{{"scene_name", scene}, {"paths", json::array()}});
+}

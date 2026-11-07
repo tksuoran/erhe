@@ -8,6 +8,8 @@
 //   - ERHE_USE_VERTEX_VARYING_X => ERHE_ATTRIBUTE_a_X (the underlying
 //     attribute is always declared when the varying is enabled),
 //   - ERHE_USE_SKINNING => the joint attributes are present,
+//   - ERHE_WORLD_SPACE_VERTICES => not ERHE_USE_SKINNING (the primitive's
+//     world_from_node is the identity),
 //   - ERHE_LIGHT_COUNT_*_* being a compile-time integer literal so the
 //     light loops unroll or vanish,
 //   - ERHE_BXDF_MODEL being a compile-time integer literal mapped from

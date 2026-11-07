@@ -68,6 +68,7 @@ mesh lacks tangents, the normal-mapping path drops out.
 | Macro | Set when |
 |-------|----------|
 | `ERHE_USE_SKINNING` | vertex format has `joint_indices` AND `joint_weights` AND the mesh has a `Skin` attached |
+| `ERHE_WORLD_SPACE_VERTICES` | every node from the scene root to the mesh has the identity transform (`Item_flags::world_space`) and the mesh has no `Skin` ("World-space vertices" below) |
 | `ERHE_USE_VERTEX_VARYING_NORMAL` | vertex format has `normal` AND the BxDF is not `unlit` |
 | `ERHE_USE_VERTEX_VARYING_TANGENT` | vertex format has `tangent` AND `normal` AND (any texgen source is `tangent` OR (BxDF not `unlit` AND (material has a `normal` sampler OR the BxDF is anisotropic OR `material.use_circular_brushed_metal`))) |
 | `ERHE_USE_VERTEX_VARYING_BITANGENT` | same condition as tangent |
@@ -110,6 +111,53 @@ varyings gated purely on attribute presence in shader source
 (`v_tangent_scale`, `v_valency_edge_count` -- both `#ifdef
 ERHE_ATTRIBUTE_a_*`) are unaffected by this and already reach the
 fragment shader whenever the mesh carries the attribute.
+
+### World-space vertices (`WORLD_SPACE_VERTICES`)
+
+A mesh whose node space is world space renders without its
+`world_from_node`. `Item_flags::world_space` says so: a derived bit that
+`erhe::scene::Xformable::handle_transform_update()` writes on every node,
+set when the node's local transform is exactly the identity and its parent
+node carries the bit (a node without a parent starts with it). Every
+transform write funnels through there, and the propagation pass visits a
+parent before its descendants, so the bit is current wherever the world
+transforms are. It is not serialized, `set_flag_bits()` refuses it, and the
+Properties window shows it as the read-only computed `world_space`
+(`Xformable::world_space_property`). The world-space bake
+(`doc/editor/world_space_bake.md`) and Reset Transform
+(`doc/editor/operations.md`) are the ways to get there. `get_vertex_space(const Mesh&)` (`shader_key.hpp`) maps a
+mesh to a `Vertex_space` - `node`, `skinned` (a `Skin`) or `world` (the
+flag) - which `Shader_key::derive()` takes; the three are mutually
+exclusive, and `standard.vert` refuses a key with both `ERHE_USE_SKINNING`
+and `ERHE_WORLD_SPACE_VERTICES`. The draw lists keep these meshes in lists
+of their own, `Draw_mobility::world_space`, whose color and shadow keys
+carry the axis; the bucket path derives it per mesh.
+
+`standard.vert` under the axis reads neither `world_from_node` nor
+`world_from_node_normal` (128 bytes of the primitive record), transforms no
+position, normal or tangent, and sets the tangent texgen scale to 1. The
+view-relative position is the decoded position less the view origin; a
+quantized position (`ERHE_VERTEX_POSITION_ENCODING_SNORM16X3_AABB`) is
+decoded as `a_position * position_scale + (position_offset - view_origin)`,
+the bracket first, so its rounding scales with the distance from the view
+origin (`get_world_vertex_position_rounding()`,
+`erhe_position_rounding.glsl`; `doc/erhe/shadows.md` "View-relative
+positions"). A float position gives the same bits as the node path.
+
+A change of the bit reaches the draw lists as a flag change of the mesh,
+which re-registers it into the lists of its new mobility. The path, not the
+world transform, decides: a parent rotation undone by its child's is not
+the identity path.
+
+Measured with the offline compilers on the prepared Bistro (median over the
+program pairs that differ only in the axis; vertex stage, after the SPIR-V
+optimizer):
+
+| Programs | Mali-G310 position load/store cycles | Mali-G310 varying work registers | PowerVR BXM-8-256 cycles |
+|---|---|---|---|
+| lit, quantized positions (33) | 9 -> 5 | 63 -> 32 | 267 -> 223 |
+| lit, float positions (16) | 7 -> 3 | 45.5 -> 16.5 | 106 -> 71 |
+| depth-only, quantized (2) | 9 -> 5 | - | 72 -> 51.5 |
 
 ### Scene sub-key (integer counts)
 

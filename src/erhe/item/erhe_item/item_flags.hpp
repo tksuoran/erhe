@@ -123,8 +123,13 @@ public:
     static constexpr uint64_t lock_scale_x              = (uint64_t{1} << 27);
     static constexpr uint64_t lock_scale_y              = (uint64_t{1} << 28);
     static constexpr uint64_t lock_scale_z              = (uint64_t{1} << 29);
+    // Derived by erhe::scene::Xformable on every transform update: every node
+    // from the scene root to this one has the identity local transform, so
+    // node space is world space (doc/erhe/shader_variants.md "World-space
+    // vertices"). Not serialized; read-only (Xformable::world_space_property).
+    static constexpr uint64_t world_space               = (uint64_t{1} << 30);
     // The number of library bits (c_bit_labels has exactly this many entries).
-    static constexpr uint64_t count                     = 30;
+    static constexpr uint64_t count                     = 31;
 
     static constexpr uint64_t lock_translation_mask     = lock_translation_x | lock_translation_y | lock_translation_z;
     static constexpr uint64_t lock_rotation_mask        = lock_rotation_x    | lock_rotation_y    | lock_rotation_z;
@@ -163,17 +168,18 @@ public:
     // filtering. Changes to only these bits do not bump the item mutation
     // serial, so they do not invalidate cached item tree rows. `transient`
     // is the library part; get_transient_bits() adds the registered part.
-    static constexpr uint64_t transient = selected | negative_determinant;
+    static constexpr uint64_t transient = selected | negative_determinant | world_space;
     [[nodiscard]] static auto get_transient_bits() -> uint64_t;
 
     // Derived bits (D23 in doc/erhe/property_system.md): the effective value
     // of the visible and active properties (Item_base) and of the
     // shadow_cast / lightmapped properties (erhe::scene::Mesh), written
-    // only by the property changed callbacks. set_flag_bits rejects them;
+    // only by the property changed callbacks, and world_space, written by
+    // erhe::scene::Xformable from the transforms. set_flag_bits rejects them;
     // write the property instead (set_visible,
     // set_value(Item_base::active_property, ...),
     // set_value(Mesh::shadow_cast_property, ...)).
-    static constexpr uint64_t derived = visible | active | shadow_cast | lightmapped;
+    static constexpr uint64_t derived = visible | active | shadow_cast | lightmapped | world_space;
 
     // The flag bits an item's default Purpose is derived from
     // (Item_base::derive_purpose_from_flags): any of the registered
@@ -216,6 +222,7 @@ public:
         "Lock Scale X",
         "Lock Scale Y",
         "Lock Scale Z",
+        "World Space",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

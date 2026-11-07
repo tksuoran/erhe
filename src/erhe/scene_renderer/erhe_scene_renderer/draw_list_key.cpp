@@ -13,13 +13,32 @@ auto c_str(const Draw_purpose purpose) -> const char*
     }
 }
 
+auto get_draw_mobility(const erhe::scene::Mesh& mesh, const Draw_mobility requested) -> Draw_mobility
+{
+    switch (get_vertex_space(mesh)) {
+        case Vertex_space::skinned: return Draw_mobility::skinned;
+        case Vertex_space::world:   return Draw_mobility::world_space;
+        default:                    return requested;
+    }
+}
+
+auto get_vertex_space(const Draw_mobility mobility) -> Vertex_space
+{
+    switch (mobility) {
+        case Draw_mobility::skinned:     return Vertex_space::skinned;
+        case Draw_mobility::world_space: return Vertex_space::world;
+        default:                         return Vertex_space::node;
+    }
+}
+
 auto c_str(const Draw_mobility mobility) -> const char*
 {
     switch (mobility) {
-        case Draw_mobility::static_: return "static";
-        case Draw_mobility::dynamic: return "dynamic";
-        case Draw_mobility::skinned: return "skinned";
-        default:                     return "?";
+        case Draw_mobility::static_:     return "static";
+        case Draw_mobility::dynamic:     return "dynamic";
+        case Draw_mobility::skinned:     return "skinned";
+        case Draw_mobility::world_space: return "world_space";
+        default:                         return "?";
     }
 }
 

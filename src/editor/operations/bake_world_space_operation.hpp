@@ -53,6 +53,7 @@ private:
         std::string                                      before_name;           // a name taken under World Space is renamed
         erhe::scene::Trs_transform                       before_parent_from_node;
         std::vector<erhe::scene::Mesh_primitive>         primitives_before;
+        uint64_t                                         before_flag_bits{0};   // the c_baked_flag_bits the mesh had
         std::vector<erhe::scene::Mesh_primitive>         primitives_after;
         std::shared_ptr<erhe::scene::Node>               placeholder;           // null: no descendant stays in place
         std::shared_ptr<erhe::Hierarchy>                 execute_parent;        // the parent execute() took the mesh from
@@ -66,6 +67,7 @@ private:
     bool                                 m_built{false};
     std::shared_ptr<erhe::scene::Node>   m_world_space;
     bool                                 m_world_space_created{false};
+    uint64_t                             m_world_space_before_flag_bits{0}; // its lock bits before execute()
     std::vector<Entry>                   m_entries;
     std::map<std::string, std::size_t>   m_kept_reasons;
 };

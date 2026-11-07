@@ -162,6 +162,8 @@ public:
     void normalize();
     void bake_transform();
     void center_transform();
+    // Sets the selected nodes' local transforms to the identity (channel locks kept).
+    void reset_transform();
     void reverse();
     void repair();
     void weld();
@@ -457,6 +459,7 @@ private:
     erhe::commands::Lambda_command m_normalize_command;
     erhe::commands::Lambda_command m_bake_transform_command;
     erhe::commands::Lambda_command m_center_transform_command;
+    erhe::commands::Lambda_command m_reset_transform_command;
     erhe::commands::Lambda_command m_reverse_command;
     erhe::commands::Lambda_command m_repair_command;
     erhe::commands::Lambda_command m_weld_command;

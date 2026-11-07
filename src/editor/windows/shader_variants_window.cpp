@@ -39,7 +39,7 @@ const ImVec4 c_bad_color {0.94f, 0.44f, 0.40f, 1.0f};
 
 // The HTML index's compact axis codes (shader_variant_report.cpp write_index()).
 constexpr std::pair<std::string_view, std::string_view> c_compact_codes[] = {
-    {"ERHE_USE_SKINNING", "Sk"},
+    {"ERHE_USE_SKINNING", "Sk"}, {"ERHE_WORLD_SPACE_VERTICES", "Ws"},
     {"ERHE_USE_VERTEX_VARYING_NORMAL", "vN"}, {"ERHE_USE_VERTEX_VARYING_COLOR", "vC"}, {"ERHE_USE_VERTEX_VARYING_TANGENT", "vT"},
     {"ERHE_USE_VERTEX_VARYING_BITANGENT", "vB"}, {"ERHE_USE_VERTEX_VARYING_TEXCOORD0", "vU0"}, {"ERHE_USE_VERTEX_VARYING_TEXCOORD1", "vU1"},
     {"ERHE_USE_VERTEX_VARYING_TEXCOORD2", "vU2"}, {"ERHE_USE_VERTEX_VARYING_ANISO_CONTROL", "vA"}, {"ERHE_USE_VERTEX_VARYING_NODE_POSITION", "vP"},

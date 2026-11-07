@@ -1622,7 +1622,7 @@ void Shadow_renderer::prewarm_pipelines(
     // is off both derive the same key and the extra gets are cache hits.
     {
         // All three sub-variants (depth-only, depth-only + distance, cube) x
-        // {not skinned, skinned} x {content, optimized}: neither the distance
+        // {node, world-space, skinned} x {content, optimized}: neither the distance
         // technique, the first point light, nor the first optimized-variant
         // caster compiles on the draw-list path.
         const uint32_t sub_variant_masks[] = {
@@ -1647,6 +1647,10 @@ void Shadow_renderer::prewarm_pipelines(
             key.bool_mask = mask;
             prewarm(key, m_mesh_memory.vertex_format_not_skinned);
             prewarm(key, m_mesh_memory.vertex_format_not_skinned_optimized);
+            key.set(Shader_bool::WORLD_SPACE_VERTICES, true);
+            prewarm(key, m_mesh_memory.vertex_format_not_skinned);
+            prewarm(key, m_mesh_memory.vertex_format_not_skinned_optimized);
+            key.set(Shader_bool::WORLD_SPACE_VERTICES, false);
             key.set(Shader_bool::USE_SKINNING, true);
             prewarm(key, m_mesh_memory.vertex_format_skinned);
             prewarm(key, m_mesh_memory.vertex_format_skinned_optimized);

@@ -606,7 +606,13 @@ with the distance from the world origin.
   interpolated to the fragment: the barycentric combination of the vertex
   errors is bounded by the same combination of their bounds. `v_position`
   stays the absolute world position for lighting, DDGI, texgen and
-  `Shader_debug::world_position`.
+  `Shader_debug::world_position`. A world-space mesh
+  (`ERHE_WORLD_SPACE_VERTICES`, doc/erhe/shader_variants.md) subtracts the
+  view origin from its float position, the bound above with the identity;
+  a quantized one decodes relative to the view origin, `a_position * scale +
+  (offset - view_origin)`, bounded by `2u` times `|scaled| + |offset -
+  view_origin| + |result|` per component
+  (`get_world_vertex_position_rounding()`).
 - **Hot shadowed record.** Per shadow-mapped light, composed once per frame by
   `Light_projections::apply()` (`light_view_relative_transforms`, parallel to
   the slots) and copied into the light's hot record

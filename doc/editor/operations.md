@@ -106,7 +106,12 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Item_insert_remove_operation` -- insert/remove prims from the scene tree; also how a content-library resource enters and leaves a scene (`make_library_attach_operation` / `make_resource_insert_operation`, `operations/library_attach_operation.hpp`, which place the resource prim under an explicit prim or, without one, under its kind `Scope`; the attach form also records the library's per-resource bookkeeping)
   - `Item_parent_change_operation` -- reparent any `erhe::Hierarchy`: scene nodes, content-library resource prims and folder `Scope`s alike (the Hierarchy drag and MCP `reparent_item`)
   - `Item_reposition_in_parent_operation` -- reorder siblings
-  - `Node_transform_operation` -- undo/redo node transforms
+  - `Node_transform_operation` -- undo/redo node transforms. Reset Transform
+    (`Geometry.ResetTransform`, the Operations window and the Geometry menu)
+    queues one per selected node, setting its local transform to the identity
+    except for its locked channels (`apply_channel_locks()`); a mesh whose
+    whole path from the scene root is then the identity draws as world-space
+    vertices (`doc/erhe/shader_variants.md` "World-space vertices").
   - `Material_change_operation` -- undo/redo a whole `Material_data` snapshot (MCP `edit_material`); the Properties window records `Property_set_operation`s instead
   - `Property_set_operation` -- one property's local state (value, expression or none) before / after; the Properties window rows, MCP `set_item_property`, and MCP `edit_light` / `edit_camera` (one per field, grouped into a `Compound_operation` with a `Node_transform_operation` for `edit_light`'s position)
   - `Lightmap_tile_overrides_operation` -- a scene's lightmap quadtree leaf overrides before / after (the Lightmap window's and MCP's subdivide / merge); execute and undo let the Lightmap window re-prepare a live partition
