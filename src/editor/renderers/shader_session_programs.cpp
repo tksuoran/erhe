@@ -31,6 +31,11 @@ Shader_session_programs::Shader_session_programs(erhe::graphics::Device& device)
 
 Shader_session_programs::~Shader_session_programs() noexcept
 {
+    stop();
+}
+
+void Shader_session_programs::stop()
+{
     m_device.set_shader_program_observer({});
     std::unique_lock<std::mutex> lock{m_mutex};
     m_stopping = true;

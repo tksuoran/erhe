@@ -4431,6 +4431,10 @@ public:
         // (declared after m_item_task_guard) before m_item_task_guard, and clearing
         // the task handles cascades through shared_ptr drops to
         // Free_list_allocator::free() on the already-destroyed allocator.
+        // Queued shader stats jobs would otherwise all run before wait_for_all() returns.
+        if (m_shader_session_programs) {
+            m_shader_session_programs->stop();
+        }
         if (m_executor) {
             m_executor->wait_for_all();
         }

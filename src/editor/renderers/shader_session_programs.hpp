@@ -96,6 +96,9 @@ public:
     // Main thread, once: module stats missing from the SPIR-V cache are
     // computed in at most max_jobs background tasks from then on.
     void start(Scene_commit_queue& main_thread_queue, tf::Executor& executor, std::size_t max_jobs);
+    // Main thread, before the executor is drained: drops the queued jobs and
+    // waits for the running ones.
+    void stop();
     [[nodiscard]] auto get_device() -> erhe::graphics::Device& { return m_device; }
 
 private:

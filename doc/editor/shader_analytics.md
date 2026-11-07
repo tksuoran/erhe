@@ -66,6 +66,10 @@ valid for the SPIRV-Tools version that computed them): read when the
 program is reported, else computed from the record in background tasks
 (at most `shader_analytics.max_jobs`, spawned from the main thread's commit
 queue after `start()`) and stored, so a later session reads them at once.
+Editor shutdown calls `stop()` before it drains the task executor: the
+queued statistics and analysis jobs are dropped (the next session computes
+them) and only the running ones complete, so the exit does not wait for
+every program's optimizer run after a SPIRV-Tools version change.
 
 With no browser directory open, the Shader Variants window
 (`doc/editor/editor.md` "Shader variant browser") lists these programs,
