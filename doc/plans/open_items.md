@@ -16,7 +16,7 @@ decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick.
 
 0. Prepared assets on Quest: finish the device testing, re-measure R13.4,
-   fix the PVS item's empty scene id, then the user rulings. Read
+   then the user rulings. Read
    "Prepared assets" below and `doc/plans/prepared_assets_design.md` D8.
 1. Quest session follow-ups: "Quest session follow-ups" below
    (`doc/agents/quest.md` "Bistro scene data on the device").
@@ -64,9 +64,11 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   open's peak memory is about 14 MB above the plain glb (eight read
   connections and the byte sources hold about 8 MB; page cache during the load
   about 7 MB).
-- The PVS item written by Export's rebake carries an empty scene id; the
-  device logs "baked for scene id ''" and still applies the database. Export
-  records the baked form's scene id in the PVS item.
+- `scripts/prepared_asset_verify.py` on macOS (Metal headless Release): 11 of
+  309 checks fail, unrelated to the PVS: the "beside the source" path checks
+  (the temp directory resolves to `/private/var/...`), the world-space image
+  comparisons (front about 21000 px differ), R10.7 Ensure order, R10.5 and
+  the R10.3 images.
 - User rulings pending on the coder decisions recorded in D8 steps 12, 14
   and 15 (whole-scene key collect per change; the automatic read-only status
   job; Scene-item-only edits and material swaps not hooked into the status;

@@ -2516,10 +2516,12 @@ auto finish_open_scene_gltf(
     // The file's PVS database (ERHE_pvs; its columns name the parsed nodes'
     // uids, which the nodes keep in the scene).
     if (gltf_data.pvs_database) {
-        if (gltf_data.pvs_database->get_header().scene_id != scene_root->get_scene_id()) {
+        // As stored, like the bake: get_scene_id() would generate an id that no bake can carry.
+        const std::string& stored_scene_id = scene_root->get_scene_settings().scene_id;
+        if (gltf_data.pvs_database->get_header().scene_id != stored_scene_id) {
             log_parsers->warn(
                 "open_scene_gltf: the PVS database of '{}' was baked for scene id '{}', the scene's id is '{}'",
-                erhe::file::to_string(path), gltf_data.pvs_database->get_header().scene_id, scene_root->get_scene_id()
+                erhe::file::to_string(path), gltf_data.pvs_database->get_header().scene_id, stored_scene_id
             );
         }
         scene_root->set_pvs_database(std::move(gltf_data.pvs_database), Mesh_form::source);

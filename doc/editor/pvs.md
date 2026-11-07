@@ -98,6 +98,9 @@ viewpoints is not conservative; it stays the verification oracle (the
   carries one opens without its PVS; bake again). A PVS is
   small and baked whole; a sidecar directory
   (`<scene>.lightmap/`) is for the large, partially baked lightmap tiles.
+  The header records the scene's stored `scene_id` (empty for a scene that
+  has none); the open compares it with the Scene item's stored id and logs
+  a warning on a mismatch, applying the database either way.
 - D2 Bake region. A box and a cell size in the scene's export settings
   (`Scene_settings` `export_settings`: `pvs_region_min`, `pvs_region_max`,
   `pvs_cell_size`, saved through `ERHE_scene`, also shown in the scene's

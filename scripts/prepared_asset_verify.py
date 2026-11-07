@@ -2899,6 +2899,9 @@ def phase_pvs(args, work):
               f"{run} {status.get('state')} {status.get('form')} columns {status.get('column_count')}")
         check("pvs: the prepared run's viewport is PVS culled (its nodes are the world-space form)",
               any(view.get("tested", 0) > 0 for view in run_views.get("views", [])), json.dumps(run_views.get("views")))
+        mismatch = [line for line in read_log().splitlines() if "was baked for scene id" in line]
+        check("pvs: the prepared run's PVS carries the Scene item's stored scene id (no mismatch warning)",
+              mismatch == [], "; ".join(mismatch[:2]))
         editor.close(run)
     finally:
         editor.stop()
