@@ -31,6 +31,10 @@ Exceptionally, a few dependencies are directly included in `src/`.
 -   Xcode command line tools (provides clang and system headers)
 -   CMake
 -   Python 3
+-   For debugging with lldb: developer mode for debuggers enabled once per
+    machine with `sudo DevToolsSecurity -enable` (the user is in the
+    `_developer` group, which admin users are by default). Without it every
+    debugger launch or attach asks for authorization in a dialog.
 
 ## Build Steps
 

@@ -18,6 +18,10 @@ This is the authoritative macOS/Linux lldb run-book. The Windows VS-MCP prose
 - **macOS / Linux -> lldb via a shell.** `/usr/bin/lldb` ships with the
   Command Line Tools (no install). The Debug builds have full symbols:
   `build_xcode_{metal,vulkan,metal_headless}/bin/Debug/editor`.
+  **On macOS, first run `DevToolsSecurity -status`.** If developer mode is
+  disabled, do not start lldb (it blocks on an authorization dialog on the
+  user's screen); ask the user to run `! sudo DevToolsSecurity -enable` once
+  (`doc/agents/macos.md` "Debugging").
 - **Windows -> the `visualstudio` MCP server** (`mcp__visualstudio__*`). It drives a
   live VS instance: `debugger_add_breakpoint` -> `debugger_launch` -> poll
   `debugger_status` until it breaks -> `debugger_get_callstack` /

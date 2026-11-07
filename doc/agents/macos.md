@@ -24,6 +24,15 @@ cmake --build build_xcode_metal4 --target editor --config Debug
 cmake --build build_xcode_vulkan --target editor --config Debug
 ```
 
+After an Xcode update that replaces the SDK (`MacOSX<version>.sdk`), an
+existing tree keeps the old SDK in `CMakeCache.txt` and in its compiler
+detection (`CMakeFiles/<cmake version>/`): configure fails on imported targets
+naming the removed SDK path, and once those entries are found again, libc++
+headers fail ("tried including <stddef.h> but didn't find libc++'s
+<stddef.h>") because the new SDK's `usr/include` is no longer filtered as an
+implicit include directory. Delete the cache lines naming the old SDK and the
+`CMakeFiles/<cmake version>/` directory, then configure again.
+
 Executables land in `<build>/bin/<Config>/`. The headless Metal build is
 described in `doc/erhe/metal_headless.md`; the Metal 4 backend (in progress,
 built beside Metal 3) in `doc/erhe/metal4_backend.md`.
@@ -112,6 +121,22 @@ lists them). MoltenVK's timestamp queries do not time render passes on this
 GPU.
 
 ## Debugging
+
+Before the first lldb launch or attach of a session, check developer mode:
+
+```bash
+DevToolsSecurity -status                       # "Developer mode is currently enabled."
+dseditgroup -o checkmember -m "$(id -un)" _developer
+```
+
+When it reports disabled, do not start lldb: macOS shows an authorization
+dialog on the user's screen and lldb waits on it, so a batch lldb call hangs
+until its timeout. Ask the user to run `! sudo DevToolsSecurity -enable` (a
+one-time, per-machine setting; `doc/building.md` "macOS"), then debug.
+
+With an argument that contains `*` (a gtest filter), `run` fails with
+"lldb-argdumper exited with error 1"; launch with
+`process launch --shell-expand-args false` instead.
 
 Invoke the **`erhe-cpp-debugging`** skill: it is the lldb run-book (Python SB
 API emitting JSON preferred; crash capture, all-thread hang snapshots,
