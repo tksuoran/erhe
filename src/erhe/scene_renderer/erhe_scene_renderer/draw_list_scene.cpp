@@ -3000,7 +3000,8 @@ auto Draw_list_scene::add_cull_view(
     const std::span<const glm::vec4> planes,
     const glm::vec3&                 pvs_query_min,
     const glm::vec3&                 pvs_query_max,
-    const std::optional<Lod_view>&   lod_view
+    const std::optional<Lod_view>&   lod_view,
+    const erhe::Item_filter&         caster_filter
 ) -> Cull_view
 {
     assert_render_phase();
@@ -3027,7 +3028,8 @@ auto Draw_list_scene::add_cull_view(
             (std::memcmp(&view.pvs_query_min, &pvs_query_min, sizeof(glm::vec3)) == 0) &&
             (std::memcmp(&view.pvs_query_max, &pvs_query_max, sizeof(glm::vec3)) == 0) &&
             (view.lod_view.has_value() == lod_view.has_value()) &&
-            (!lod_view.has_value() || view.lod_view.value().is_same(lod_view.value()))
+            (!lod_view.has_value() || view.lod_view.value().is_same(lod_view.value())) &&
+            (view.caster_filter == caster_filter)
         ) {
             // The sampling views of every caller sharing the view.
             if (lod_view.has_value() && (purpose == Draw_purpose::shadow)) {
@@ -3042,6 +3044,7 @@ auto Draw_list_scene::add_cull_view(
     view.pvs_query_min = pvs_query_min;
     view.pvs_query_max = pvs_query_max;
     view.lod_view      = lod_view;
+    view.caster_filter = caster_filter;
     if (lod_view.has_value() && (purpose == Draw_purpose::shadow)) {
         m_cull_view_lod_sampling.back().add(lod_view.value().sampling_view_key);
     }
@@ -3052,7 +3055,8 @@ auto Draw_list_scene::add_point_light_cull_views(
     const uint64_t                 frame_index,
     const Draw_purpose             purpose,
     const Cull_sphere&             range_sphere,
-    const std::optional<Lod_view>& lod_view
+    const std::optional<Lod_view>& lod_view,
+    const erhe::Item_filter&       caster_filter
 ) -> std::array<Cull_view, 6>
 {
     assert_render_phase();
@@ -3073,7 +3077,8 @@ auto Draw_list_scene::add_point_light_cull_views(
             (view.cube_face == 0) &&
             same_sphere(view.sphere, range_sphere) &&
             (view.lod_view.has_value() == lod_view.has_value()) &&
-            (!lod_view.has_value() || view.lod_view.value().is_same(lod_view.value()))
+            (!lod_view.has_value() || view.lod_view.value().is_same(lod_view.value())) &&
+            (view.caster_filter == caster_filter)
         ) {
             ERHE_VERIFY((i + 6) <= end);
             for (std::size_t face = 0; face < 6; ++face) {
@@ -3091,8 +3096,9 @@ auto Draw_list_scene::add_point_light_cull_views(
         Cull_view_tests& view = append_cull_view(purpose, Cull_view_kind::cube_face);
         view.sphere    = range_sphere;
         view.cube_face = static_cast<uint32_t>(face);
-        view.lod_view  = lod_view;
-        views[face]    = static_cast<Cull_view>(m_cull_views.size() - 1);
+        view.lod_view      = lod_view;
+        view.caster_filter = caster_filter;
+        views[face]        = static_cast<Cull_view>(m_cull_views.size() - 1);
     }
     if (lod_view.has_value() && (purpose == Draw_purpose::shadow)) {
         m_cull_view_lod_sampling[static_cast<std::size_t>(views[0])].add(lod_view.value().sampling_view_key);
@@ -3108,14 +3114,12 @@ void Draw_list_scene::set_shadow_command_selection(const uint64_t frame_index, c
     ERHE_VERIFY(!(m_cull_frame_started && (m_cull_frame_index == frame_index) && m_cull_frame_classified));
     if (m_shadow_selection_set && (m_shadow_selection_frame_index == frame_index)) {
         // Every shadow renderer of the frame draws with the same selection.
-        ERHE_VERIFY(selection.filter == m_shadow_selection_filter);
         ERHE_VERIFY(std::ranges::equal(selection.layers, m_shadow_selection_layers));
         ERHE_VERIFY(selection.primitive_buffer == m_shadow_selection_primitive_buffer);
         return;
     }
     m_shadow_selection_set          = true;
     m_shadow_selection_frame_index  = frame_index;
-    m_shadow_selection_filter       = selection.filter;
     m_shadow_selection_layers.assign(selection.layers.begin(), selection.layers.end());
     m_shadow_selection_primitive_buffer = selection.primitive_buffer;
 }
@@ -3762,6 +3766,12 @@ void Draw_list_scene::assign_lod_columns(const Draw_list_slot& slot, Lod_level_s
         };
         m_cull_view_lod_columns[view_index] = column;
         level_slot.column_keys[column]      = m_cull_views[view_index].lod_view.value().lod_key;
+        // The history and retired-level lookups find a column by its key.
+        if (purpose == Draw_purpose::shadow) {
+            for (uint32_t other = 0; other < column; ++other) {
+                ERHE_VERIFY(level_slot.column_keys[other] != level_slot.column_keys[column]);
+            }
+        }
         ++m_lod_column_count;
     };
     for (std::size_t view_index = 0, end = m_cull_views.size(); view_index < end; ++view_index) {
@@ -4329,8 +4339,11 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
     const bool gpu_commands =
         has_gpu_shadow_commands(parameters.frame_index) &&
         (parameters.cull_view != Cull_view::none);
+    // The view's commands and CPU classification are its casters'.
+    if (parameters.cull_view != Cull_view::none) {
+        ERHE_VERIFY(parameters.filter == m_cull_views[static_cast<std::size_t>(parameters.cull_view)].caster_filter);
+    }
     if (gpu_commands) {
-        ERHE_VERIFY(parameters.filter == m_shadow_selection_filter);
         ERHE_VERIFY(std::ranges::equal(parameters.layers, m_shadow_selection_layers));
         ERHE_VERIFY(&parameters.primitive_buffer == m_shadow_selection_primitive_buffer);
     }
@@ -4564,14 +4577,27 @@ void Draw_list_scene::prepare_shadow_bounds(
     ERHE_VERIFY(frames_in_flight > 0);
 
     // The slot count is the device's frames in flight, fixed for the
-    // device's lifetime: sized once, so the render phase indexes a vector
-    // that never reallocates.
-    if (m_shadow_bounds_slots.empty()) {
-        m_shadow_bounds_slots.resize(frames_in_flight);
+    // device's lifetime: sized once per track, so the render phase indexes a
+    // vector that never reallocates.
+    Shadow_bounds_track* track = nullptr;
+    for (std::size_t i = 0; i < m_shadow_bounds_track_count; ++i) {
+        if (m_shadow_bounds_tracks[i].caster_filter == selection.caster_filter) {
+            track = &m_shadow_bounds_tracks[i];
+            break;
+        }
     }
-    ERHE_VERIFY(m_shadow_bounds_slots.size() == frames_in_flight);
+    if (track == nullptr) {
+        ERHE_VERIFY(m_shadow_bounds_track_count < max_shadow_bounds_tracks);
+        Shadow_bounds_track& added = m_shadow_bounds_tracks[m_shadow_bounds_track_count];
+        added.caster_filter = selection.caster_filter;
+        added.slots.resize(frames_in_flight);
+        const std::lock_guard<std::mutex> lock{m_shadow_bounds_track_mutex};
+        ++m_shadow_bounds_track_count;
+        track = &added;
+    }
+    ERHE_VERIFY(track->slots.size() == frames_in_flight);
 
-    Shadow_bounds_slot& slot = m_shadow_bounds_slots[frame_index % frames_in_flight];
+    Shadow_bounds_slot& slot = track->slots[frame_index % frames_in_flight];
     slot.frame_index = frame_index;
     slot.prepared    = true;
 
@@ -4587,21 +4613,32 @@ void Draw_list_scene::prepare_shadow_bounds(
         // slot gathers again and the extents identity moves.
         mark_shadow_bounds_changed();
     }
-    gather_shadow_bounds(selection, slot);
+    gather_shadow_bounds(selection, *track, slot);
 }
 
-auto Draw_list_scene::get_shadow_bounds(const uint64_t frame_index) const -> const Shadow_bounds&
+auto Draw_list_scene::get_shadow_bounds(const uint64_t frame_index, const erhe::Item_filter& caster_filter) const -> const Shadow_bounds&
 {
     assert_render_phase();
-    ERHE_VERIFY(!m_shadow_bounds_slots.empty());
-    const Shadow_bounds_slot& slot = m_shadow_bounds_slots[frame_index % m_shadow_bounds_slots.size()];
-    // The prepare phase of this frame filled the slot (and the prepare
-    // phase of no later frame has reused it yet).
-    ERHE_VERIFY(slot.prepared && (slot.frame_index == frame_index));
-    return slot.bounds;
+    std::size_t track_count = 0;
+    {
+        const std::lock_guard<std::mutex> lock{m_shadow_bounds_track_mutex};
+        track_count = m_shadow_bounds_track_count;
+    }
+    for (std::size_t i = 0; i < track_count; ++i) {
+        const Shadow_bounds_track& track = m_shadow_bounds_tracks[i];
+        if (track.caster_filter != caster_filter) {
+            continue;
+        }
+        const Shadow_bounds_slot& slot = track.slots[frame_index % track.slots.size()];
+        // The prepare phase of this frame filled the slot (and the prepare
+        // phase of no later frame has reused it yet).
+        ERHE_VERIFY(slot.prepared && (slot.frame_index == frame_index));
+        return slot.bounds;
+    }
+    ERHE_FATAL("get_shadow_bounds(): no bounds were prepared for this caster filter");
 }
 
-void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_selection& selection, Shadow_bounds_slot& slot)
+void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_selection& selection, Shadow_bounds_track& track, Shadow_bounds_slot& slot)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -4613,17 +4650,15 @@ void Draw_list_scene::gather_shadow_bounds(const Shadow_bounds_selection& select
     // The same state and selection gather the same extents (the slots of
     // the frames in flight each gather them): one identity for all of them.
     const bool same_extents =
-        (m_extents_serial != 0) &&
-        (m_extents_bounds_serial == m_shadow_bounds_serial) &&
-        (m_extents_caster_filter == selection.caster_filter) &&
-        std::equal(m_extents_layers.begin(), m_extents_layers.end(), selection.layers.begin(), selection.layers.end());
+        (track.extents_serial != 0) &&
+        (track.extents_bounds_serial == m_shadow_bounds_serial) &&
+        std::equal(track.extents_layers.begin(), track.extents_layers.end(), selection.layers.begin(), selection.layers.end());
     if (!same_extents) {
-        ++m_extents_serial;
-        m_extents_bounds_serial = m_shadow_bounds_serial;
-        m_extents_caster_filter = selection.caster_filter;
-        m_extents_layers.assign(selection.layers.begin(), selection.layers.end());
+        track.extents_serial        = ++m_extents_serial;
+        track.extents_bounds_serial = m_shadow_bounds_serial;
+        track.extents_layers.assign(selection.layers.begin(), selection.layers.end());
     }
-    slot.bounds.extents_identity = Caster_extents_identity{.scene_instance = m_scene_instance, .serial = m_extents_serial};
+    slot.bounds.extents_identity = Caster_extents_identity{.scene_instance = m_scene_instance, .serial = track.extents_serial};
 
     Shadow_bounds& bounds = slot.bounds;
     bounds.caster_world_aabbs.clear();

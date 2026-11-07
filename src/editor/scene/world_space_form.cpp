@@ -67,8 +67,8 @@ void World_space_form::install(Scene_root& scene_root, std::vector<World_space_f
             proxy->layer_id = mesh->layer_id;
             proxy->set_primitives(proxy_primitives);
             proxy->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::render_proxy | Editor_item_flags::world_space_form);
-            // The source meshes cast the shadows of both forms.
-            proxy->set_value(erhe::scene::Mesh::shadow_cast_property, false);
+            // A view's shadow passes draw the casters of the form it draws (get_view_filter()).
+            proxy->set_value(erhe::scene::Mesh::shadow_cast_property, mesh->get_value(erhe::scene::Mesh::shadow_cast_property));
             proxies.push_back(std::move(proxy));
             sources.push_back(mesh);
         }

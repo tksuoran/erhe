@@ -2585,6 +2585,19 @@ def phase_world_space(args, work):
               (len(world_items) == 9) and (named == set(WORLD_NODES)), f"{len(world_items)} items; nodes {sorted(named)}")
         world_images = render_world(editor, scene, images_dir, "world_form", "world_space")
         check_images_close("world: the world-space form renders as the source meshes", world_images, source_images)
+        # A view's shadow passes draw the casters of the form it draws: sources that stop casting change the source form alone.
+        for node in ("shared_a", "shared_b", "shared_c"):
+            editor.call("set_item_property", {"scene_name": scene, "item_name": node, "property": "shadow_cast", "value": False})
+        editor.wait_idle()
+        source_uncast = render_world(editor, scene, images_dir, "source_uncast")
+        world_uncast  = render_world(editor, scene, images_dir, "world_form_uncast", "world_space")
+        for _ in range(3):
+            editor.call("undo", {})
+        editor.wait_idle()
+        check("world: the world-space form's shadows are cast by its own meshes (sources without shadow_cast change only the source form)",
+              all(image_difference(world_uncast[n], world_images[n])[0] == 0 for n in world_images) and
+              all(image_difference(source_uncast[n], source_images[n])[0] > 0 for n in source_images),
+              json.dumps({n: [image_difference(world_uncast[n], world_images[n])[0], image_difference(source_uncast[n], source_images[n])[0]] for n in world_images}))
         bake_again = bake_world(editor, scene)
         check("world: a second bake makes nothing", export_counts(bake_again, "world_mesh").get("made") == 0, counts_text(bake_again))
 

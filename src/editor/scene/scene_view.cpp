@@ -389,6 +389,11 @@ auto Scene_view::get_render_camera_viewport() const -> erhe::math::Viewport
     return get_render_view().camera_viewport;
 }
 
+auto Scene_view::get_render_mesh_form() const -> Mesh_form
+{
+    return get_render_view().mesh_form;
+}
+
 auto Scene_view::get_light_projections() const -> const erhe::scene_renderer::Light_projections*
 {
     auto* shadow_render_node = get_shadow_render_node();

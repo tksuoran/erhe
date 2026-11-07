@@ -50,11 +50,27 @@ auto make_shadow_lod_key(const Lod_shadow_kind kind, const std::size_t light_id,
 {
     ERHE_VERIFY(static_cast<uint64_t>(light_id) < (uint64_t{1} << 32u));
     ERHE_VERIFY(view_key < (uint64_t{1} << 30u));
-    ERHE_VERIFY((kind == Lod_shadow_kind::directional) || (view_key == 0));
     return
         (static_cast<uint64_t>(static_cast<uint8_t>(kind)) << 62u) |
         (view_key << 32u) |
         static_cast<uint64_t>(light_id);
+}
+
+auto make_shadow_caster_key(const erhe::Item_filter& filter) -> uint64_t
+{
+    if (filter == shadow_caster_filter) {
+        return 0;
+    }
+    // FNV-1a over the four masks, folded to 30 bits; 0 is the default filter's.
+    uint64_t hash = 0xcbf29ce484222325ull;
+    for (const uint64_t mask : {filter.require_all_bits_set, filter.require_at_least_one_bit_set, filter.require_all_bits_clear, filter.require_at_least_one_bit_clear}) {
+        for (uint32_t byte = 0; byte < 8; ++byte) {
+            hash ^= (mask >> (8u * byte)) & 0xffu;
+            hash *= 0x100000001b3ull;
+        }
+    }
+    const uint64_t key = (hash ^ (hash >> 30u) ^ (hash >> 60u)) & ((uint64_t{1} << 30u) - 1u);
+    return (key == 0) ? 1 : key;
 }
 
 auto c_str(const Lod_shadow_mode mode) -> const char*

@@ -400,9 +400,12 @@ Registration:
     a point light's cube face projection from the light for all six faces,
     `add_point_light_cull_views()` taking it, a directional pass's fitted
     orthographic projection), keyed by `make_shadow_lod_key()` (the light's
-    id and kind - erhe has one pass per light - and for a directional pass,
-    fitted to the sampling view's camera, that view's key; the kind sits in
-    the top two bits, so a shadow key never equals a color key), with
+    id and kind, and for a directional pass, fitted to the sampling view's
+    camera, that view's key; for a spot or point pass, its casters
+    (`make_shadow_caster_key()`: 0 for `shadow_caster_filter`, else a 30-bit
+    hash), since a light has one pass per caster filter; the kind sits in the
+    top two bits, so a shadow key never equals a color key; two shadow
+    columns of a frame never share a key, verified), with
     `Lod_view::sampling_view_key` the sampling view's key. The sampling
     view is not part of the identity: callers that share a shadow view
     (several viewports and one spot or point light) merge their sampling
@@ -1118,8 +1121,12 @@ Drawing:
   color passes item): the shadow and color passes draw commands a compute
   pass writes from the GPU masks.
   `Shadow_renderer::fit()` gives the frame's `Shadow_command_selection`
-  (`Draw_list_scene::set_shadow_command_selection()`: the caster filter, the
-  draw-list layers and its `Primitive_buffer`'s chunk size) with its views.
+  (`Draw_list_scene::set_shadow_command_selection()`: the draw-list layers
+  and its `Primitive_buffer`'s chunk size) with its views; each shadow view
+  carries its caster filter (`Cull_view_tests::caster_filter`, from
+  `Shadow_renderer::Render_parameters::caster_filter`, part of the view's
+  identity, so callers with other casters get views of their own), and its
+  jobs test it.
   Each draw-list color pass gives its `Color_command_selection` with its
   culling view (`Draw_list_renderer::add_color_command_selection()` from
   `Composer::add_cull_views()`, the rendergraph node's pre-execute hook:
@@ -1500,13 +1507,16 @@ Drawing:
   `shadow_draw_list_culled_count`). The shadow frustum fit reads its caster
   and receiver bounds from the same objects instead of transforming every
   content mesh's box per shadow render; a caster is an object with at least
-  one shadow entry passing `shadow_caster_filter`. The prepare phase
+  one shadow entry passing the selection's caster filter, and each caster
+  filter has bounds of its own (up to four per scene; a pass reads those of
+  its `Render_parameters::caster_filter`). The prepare phase
   gathers them (`Draw_list_scene::prepare_shadow_bounds(selection,
   frame_index, frames_in_flight)`: the entries' AABB, the posed joint
   bounds for a skinned object, the node's world transform and node-space
   extent per caster as `Caster_vertex_extent`) into one `Shadow_bounds`
   slot per frame in flight, and the render phase reads the slot of its
-  frame (`get_shadow_bounds(frame_index)`, which verifies the slot was
+  frame and caster filter (`get_shadow_bounds(frame_index, caster_filter)`,
+  which verifies the slot was
   prepared for that frame), so the render phase dereferences no mesh or
   node. Every change the gather reads (registration and unregistration,
   entries, flags, the transform and bounds hooks) bumps a serial; a slot

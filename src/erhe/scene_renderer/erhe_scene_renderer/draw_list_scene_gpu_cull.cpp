@@ -1424,11 +1424,11 @@ void Draw_list_scene::generate_gpu_commands(
     if (shadow_selection) {
         ERHE_VERIFY(m_shadow_selection_primitive_buffer != nullptr);
         const std::size_t max_per_chunk = get_records_per_chunk(*m_shadow_selection_primitive_buffer);
-        const uint32_t    filter_index  = get_gpu_job_filter_index(m_shadow_selection_filter);
         for (std::size_t view_index = 0; view_index < view_count; ++view_index) {
             if (m_cull_views[view_index].purpose != Draw_purpose::shadow) {
                 continue;
             }
+            const uint32_t filter_index = get_gpu_job_filter_index(m_cull_views[view_index].caster_filter);
             // The view's jobs are consecutive (one shadow pass draws them).
             m_gpu_shadow_view_jobs[view_index].first_job = static_cast<uint32_t>(m_gpu_jobs.size());
             for (std::size_t list_index = 0; list_index < list_count; ++list_index) {

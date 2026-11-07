@@ -2,6 +2,7 @@
 
 #include "grid/grid_frame.hpp"
 #include "renderers/viewport_config.hpp"
+#include "scene/mesh_form.hpp"
 #include "config/generated/scene_and_camera_settings.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "tools/debug_visualizations.hpp"
@@ -155,6 +156,8 @@ public:
     // projections scale with the projection size only.
     [[nodiscard]] virtual auto get_projection_scale  (float view_distance) const -> float = 0;
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }
+    // Main thread: the form of the world-space bake's mesh nodes the view draws now.
+    [[nodiscard]] virtual auto get_drawn_mesh_form   () const -> Mesh_form { return Mesh_form::source; }
     [[nodiscard]] virtual auto get_shadow_texture    () const -> erhe::graphics::Texture*;
     [[nodiscard]] virtual auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node* = 0;
     // The light projections the view's forward passes shade with. Render
@@ -186,6 +189,8 @@ public:
     [[nodiscard]] auto get_render_shadow_fit_camera() const -> const erhe::scene::Camera_snapshot*;
     [[nodiscard]] auto get_render_config           () const -> const Viewport_config&;
     [[nodiscard]] auto get_render_camera_viewport  () const -> erhe::math::Viewport;
+    // The form of the world-space bake's mesh nodes the view draws this frame (its shadow passes' casters too).
+    [[nodiscard]] auto get_render_mesh_form        () const -> Mesh_form;
 
     // The view's serial id: unique over the run, never reused by a later
     // view (unlike the view's address), so it keys the view's level of
@@ -332,6 +337,7 @@ protected:
         bool                         shadow_fit_camera_valid{false};
         Viewport_config              viewport_config        {};
         erhe::math::Viewport         camera_viewport        {0, 0, 0, 0};
+        Mesh_form                    mesh_form              {Mesh_form::source};
     };
 
     // Captures the scene root, camera (none when null), the shadow fit

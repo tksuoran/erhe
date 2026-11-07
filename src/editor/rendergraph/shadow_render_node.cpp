@@ -13,6 +13,7 @@
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
+#include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 
@@ -524,7 +525,9 @@ void Shadow_render_node::prepare_casters(const uint64_t frame_index, const std::
             .mesh_spans            = mesh_spans,
             // The root's forward set, which the bucket path binds (D5).
             .material_source       = &scene_root->get_material_set(),
-            .exclude_unlit_casters = render_settings.exclude_unlit_primitives
+            .exclude_unlit_casters = render_settings.exclude_unlit_primitives,
+            // The casters of the form the view draws (doc/editor/world_space_bake.md "Two forms").
+            .caster_filter         = get_view_filter(erhe::scene_renderer::shadow_caster_filter, m_scene_view.get_drawn_mesh_form())
         },
         slot.casters
     );
@@ -808,6 +811,8 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
     // frusta are the shadow passes' culling views, which the frame's
     // classification classifies with the color views after every node's
     // pre-execute hook (doc/plans/culling.md phase 6a).
+    // The casters of the form the view draws this frame (doc/editor/world_space_bake.md "Two forms").
+    const erhe::Item_filter caster_filter = get_view_filter(erhe::scene_renderer::shadow_caster_filter, m_scene_view.get_render_mesh_form());
     m_frame_passes.scene_root       = scene_root;
     m_frame_passes.draw_list_layers = { scene_root->layers().content()->id }; // content layer only, as the bucket path
     m_frame_passes.parameters.emplace(
@@ -846,6 +851,7 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
             .point_shadow_viewport    = m_point_viewport,
             .draw_list_scene          = draw_list_scene,
             .draw_list_layers         = m_frame_passes.draw_list_layers,
+            .caster_filter            = caster_filter,
             // The passes' level of detail selection follows the view whose
             // color passes sample these maps (doc/plans/lod_gpu_selection.md
             // section 4), keyed as Composer::add_cull_views() keys its
@@ -856,7 +862,7 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
             .fit_cache                = render_settings.shadow_fit_cache ? &m_fit_cache : nullptr,
             .exclude_unlit_casters    = exclude_unlit_casters,
             .casters                  = casters,
-            .shadow_bounds            = &root_draw_list_scene->get_shadow_bounds(frame_index)
+            .shadow_bounds            = &root_draw_list_scene->get_shadow_bounds(frame_index, caster_filter)
         }
     );
     // With the cache switched off the passes draw every frame without it:

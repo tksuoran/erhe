@@ -142,15 +142,25 @@ An open scene holds both forms of every admitted mesh node (R8.5):
 
 The proxies are derived data: no export, save or item tree shows them, they
 take no part in the ID pass or ray queries (picking, selection and editing
-act on the sources), and they cast no shadows - the sources cast the shadows
-of both forms. The PVS bake renders this form (R8.9): a proxy's PVS columns
+act on the sources). A proxy casts shadows as its source did when the form
+was installed (`shadow_cast`), and a view's shadow passes draw the casters
+of the form the view draws (below), so a shadow is the drawn mesh's at the
+drawn level of detail. The PVS bake renders this form (R8.9): a proxy's PVS columns
 name its source node (`World_space_form::find_source()`), and a PVS baked on
 the form culls only in a view that draws it (R8.10, `doc/editor/pvs.md` D5).
 
 What a view draws: `get_view_filter()` (`renderers/render_context`) leaves
 `world_space_form` out of every content pass of a view that draws source
 meshes and `world_space_source` out of one that draws the world-space form
-(`Render_context::mesh_form`). The viewport toolbar combo of a scene that has
+(`Render_context::mesh_form`), and its shadow node passes the same filter
+over `shadow_caster_filter` as the passes' caster filter
+(`Shadow_renderer::Render_parameters::caster_filter`, from the frame's copy
+`Scene_view::get_render_mesh_form()`; the bucket path prepares with
+`Scene_view::get_drawn_mesh_form()`; `Scene_root::prepare_shadow_bounds()`
+gathers the caster bounds of each form, the world-space one while a form is
+installed; a form is replaced only by `install()` within one main-thread call,
+so a view that draws it, a scene image capture included, always finds its
+bounds). The viewport toolbar combo of a scene that has
 a form chooses Source Meshes or World-Space Meshes
 (`Viewport_scene_view::queue_mesh_form()`); the world-space entry is enabled
 while the form is available and otherwise names why ("<n> of <m> missing",

@@ -478,7 +478,7 @@ void Shadow_renderer::prepare(const Prepare_parameters& parameters, Render_bucke
             m_mesh_memory,
             environment_key,
             meshes,
-            shadow_caster_filter,
+            parameters.caster_filter,
             primitive_mode,
             Blending_mode_policy::opaque_primitives_only, // TODO Think about what would be correct
             erhe::primitive::Mesh_variant::optimized,
@@ -684,7 +684,7 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
 
     const auto& mesh_spans = parameters.mesh_spans;
 
-    const erhe::Item_filter& shadow_filter = shadow_caster_filter;
+    const erhe::Item_filter& shadow_filter = parameters.caster_filter;
 
     // One world-space AABB per shadow caster for the tight directional
     // shadow frustum fit. The per-light contribution filter - culling casters
@@ -716,7 +716,7 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
         // the render phase reads no mesh or node.
         const Shadow_bounds& shadow_bounds = (parameters.shadow_bounds != nullptr)
             ? *parameters.shadow_bounds
-            : parameters.draw_list_scene->get_shadow_bounds(m_graphics_device.get_frame_index());
+            : parameters.draw_list_scene->get_shadow_bounds(m_graphics_device.get_frame_index(), parameters.caster_filter);
         caster_world_aabbs      = shadow_bounds.caster_world_aabbs;
         caster_vertex_extents   = shadow_bounds.caster_vertex_extents;
         caster_extents_identity = shadow_bounds.extents_identity;
@@ -909,7 +909,7 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
                     make_shadow_lod_key(
                         directional ? Lod_shadow_kind::directional : Lod_shadow_kind::spot,
                         light.get_id(),
-                        directional ? parameters.lod_sampling_view_key : uint64_t{0}
+                        directional ? parameters.lod_sampling_view_key : make_shadow_caster_key(parameters.caster_filter)
                     )
                 );
                 if (lod_view.has_value()) {
@@ -922,7 +922,8 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
                 cull_planes,
                 glm::vec3{0.0f},
                 glm::vec3{-1.0f},
-                lod_view
+                lod_view,
+                parameters.caster_filter
             );
         }
         if (cube_count > 0) {
@@ -952,13 +953,13 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
                         lpt->projection,
                         parameters.point_shadow_viewport,
                         light_pos,
-                        make_shadow_lod_key(Lod_shadow_kind::point, parameters.light_set.get_lights()[light_slot].get_id(), 0)
+                        make_shadow_lod_key(Lod_shadow_kind::point, parameters.light_set.get_lights()[light_slot].get_id(), make_shadow_caster_key(parameters.caster_filter))
                     );
                     if (lod_view.has_value()) {
                         lod_view.value().sampling_view_key = parameters.lod_sampling_view_key;
                     }
                 }
-                const std::array<Cull_view, 6> face_views = parameters.draw_list_scene->add_point_light_cull_views(frame_index, Draw_purpose::shadow, range_sphere, lod_view);
+                const std::array<Cull_view, 6> face_views = parameters.draw_list_scene->add_point_light_cull_views(frame_index, Draw_purpose::shadow, range_sphere, lod_view, parameters.caster_filter);
                 std::copy(face_views.begin(), face_views.end(), cull_views.views_cube.begin() + static_cast<std::ptrdiff_t>(lpt->point_shadow_index * 6));
             }
         }
@@ -983,7 +984,6 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
             parameters.draw_list_scene->set_shadow_command_selection(
                 frame_index,
                 Shadow_command_selection{
-                    .filter           = shadow_caster_filter,
                     .layers           = parameters.draw_list_layers,
                     .primitive_buffer = &m_primitive_buffer
                 }
@@ -1004,7 +1004,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
 
     const auto& mesh_spans = parameters.mesh_spans;
 
-    const erhe::Item_filter& shadow_filter = shadow_caster_filter;
+    const erhe::Item_filter& shadow_filter = parameters.caster_filter;
 
     erhe::graphics::Scoped_debug_group debug_group{
         parameters.command_buffer,
@@ -1103,7 +1103,8 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
                 .border_texels         = parameters.shadow_map_footprint.get_border_texels(),
                 .light_camera_viewport = parameters.light_camera_viewport,
                 .point_shadow_viewport = parameters.point_shadow_viewport,
-                .scene_instance        = content.scene_instance
+                .scene_instance        = content.scene_instance,
+                .caster_filter         = shadow_filter
             },
             parameters.draw_list_layers,
             content,

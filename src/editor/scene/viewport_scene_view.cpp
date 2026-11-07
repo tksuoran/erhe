@@ -194,12 +194,7 @@ void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_
     state.msaa_sample_count     = m_msaa_sample_count;
     state.shader_debug          = m_shader_debug;
     state.overdraw              = is_overdraw_supported() ? m_overdraw_mode : Overdraw_mode::off;
-    // The world-space form while the view asks for it and every admitted node's world-space mesh is valid (R8.8).
-    state.mesh_form             = (
-        (m_mesh_form == Mesh_form::world_space) &&
-        state.scene_root &&
-        state.scene_root->get_world_space_form().get_status().is_available()
-    ) ? Mesh_form::world_space : Mesh_form::source;
+    state.mesh_form             = get_drawn_mesh_form();
     state.overdraw_max_count    = m_overdraw_max_count;
     state.is_scene_view_hovered = m_is_scene_view_hovered;
     state.position_in_viewport  = m_position_in_viewport;
@@ -229,6 +224,7 @@ void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_
     {
         ERHE_PROFILE_SCOPE("prepare_render snapshot_render_view");
         snapshot_render_view(state.camera.get());
+        get_render_view().mesh_form = state.mesh_form;
     }
 
     // The same gates as execute_rendergraph_node(): a disabled node is not
@@ -1414,6 +1410,17 @@ void Viewport_scene_view::set_mesh_form(const Mesh_form form)
 auto Viewport_scene_view::get_mesh_form() const -> Mesh_form
 {
     return m_mesh_form;
+}
+
+auto Viewport_scene_view::get_drawn_mesh_form() const -> Mesh_form
+{
+    // The world-space form while the view asks for it and every admitted node's world-space mesh is valid (R8.8).
+    const std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    return (
+        (m_mesh_form == Mesh_form::world_space) &&
+        scene_root &&
+        scene_root->get_world_space_form().get_status().is_available()
+    ) ? Mesh_form::world_space : Mesh_form::source;
 }
 
 void Viewport_scene_view::set_overdraw_mode(const Overdraw_mode mode)

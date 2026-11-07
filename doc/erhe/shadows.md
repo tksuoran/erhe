@@ -348,7 +348,7 @@ layer or a cube face, the pass's clear included - when
   mode, the technique, depth clamp, the depth convention, the empty border,
   both viewports, the draw-list layer selection and the draw-list scene
   (`Draw_list_content_changes::scene_instance`, unique per process: content
-  serials of different scenes are unrelated);
+  serials of different scenes are unrelated) and the caster filter;
 - the pass's light id and matrix equal its own: `clip_from_world` for a 2D
   layer, the cube projection translated by the light position for a face;
 - the pass's culling view (`Cull_view_tests`: the planes of a 2D pass, the
@@ -459,9 +459,10 @@ since skinned entries are not culled: a 2D pass's planes (a depth-clamped
 pass's side planes) are its clip volume, and a cube face's lies inside its
 octant and the sphere through the face frustum's far corners (radius range
 times sqrt(3), with a margin), not inside the range sphere. A
-flags change is tested only when the caster filter (`shadow_caster_filter`)
-accepts its old and new flags differently: a selection or hover flag
-leaves every pass (the shadow shaders read no flag-dependent record field).
+flags change is tested only when the passes' caster filter
+(`Render_parameters::caster_filter`, `shadow_caster_filter` by default; part
+of the configuration) accepts its old and new flags differently: a
+selection or hover flag leaves every pass (the shadow shaders read no flag-dependent record field).
 Different otherwise (a frame the cache did not draw through, such as a
 frame without shadow passes), or `unbounded`: every pass is forgotten.
 With the cache switched off `Shadow_render_node` clears it every frame, so

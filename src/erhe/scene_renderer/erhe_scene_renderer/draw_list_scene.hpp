@@ -380,27 +380,15 @@ public:
     std::vector<Occlusion_view_check> views;
 };
 
-// The shadow pass filter: the objects that cast shadows. Shadow_renderer
-// draws casters through it and the frustum fit gathers caster bounds
-// through it (Shadow_bounds_selection::caster_filter).
-inline constexpr erhe::Item_filter shadow_caster_filter{
-    .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::shadow_cast,
-    .require_at_least_one_bit_set   = 0u,
-    // proxy_hidden: visually replaced by a render_proxy that casts the
-    // shadows instead (lightmap piece meshes).
-    .require_all_bits_clear         = erhe::Item_flags::proxy_hidden,
-    .require_at_least_one_bit_clear = 0u
-};
-
 // What the shadow passes of one frame draw, for the GPU command generation
 // (doc/plans/culling.md phase 6, Draw_list_scene::set_shadow_command_selection):
-// the filter, layer selection and Primitive_buffer every draw_shadow() of the
-// frame passes (the buffer's record capacity is the chunk size both the job
-// table and the draws cut the lists with).
+// the layer selection and Primitive_buffer every draw_shadow() of the frame
+// passes (the buffer's record capacity is the chunk size both the job table
+// and the draws cut the lists with); each shadow view carries its own caster
+// filter (Cull_view_tests::caster_filter).
 class Shadow_command_selection
 {
 public:
-    erhe::Item_filter                      filter          {shadow_caster_filter};
     // EMPTY selects every layer (Draw_shadow_parameters::layers).
     std::span<const erhe::scene::Layer_id> layers          {};
     const Primitive_buffer*                primitive_buffer{nullptr};
@@ -1035,14 +1023,17 @@ public:
     // selection, which draws the template range. A shadow view's
     // Lod_view::sampling_view_key (never 0, verified) is merged into the
     // view's sampling views when another caller shares the view; a color
-    // view's is 0 (verified).
+    // view's is 0 (verified). caster_filter: a shadow view's casters
+    // (Cull_view_tests::caster_filter), part of the identity; a color view
+    // takes the default.
     [[nodiscard]] auto add_cull_view(
         uint64_t                       frame_index,
         Draw_purpose                   purpose,
         std::span<const glm::vec4>     planes,
         const glm::vec3&               pvs_query_min = glm::vec3{0.0f},
         const glm::vec3&               pvs_query_max = glm::vec3{-1.0f},
-        const std::optional<Lod_view>& lod_view      = std::nullopt
+        const std::optional<Lod_view>& lod_view      = std::nullopt,
+        const erhe::Item_filter&       caster_filter = shadow_caster_filter
     ) -> Cull_view;
     // The PVS rule's counts of a view of frame_index's set (render phase,
     // after the frame's classification): zero for a view without a query
@@ -1061,12 +1052,13 @@ public:
     // must be positive. lod_view: the light's level of detail selection
     // inputs (a shadow view's, doc/plans/lod_gpu_selection.md section 4),
     // part of the identity as for add_cull_view(); the six faces share one
-    // LOD column.
+    // LOD column. caster_filter: as for add_cull_view().
     [[nodiscard]] auto add_point_light_cull_views(
         uint64_t                       frame_index,
         Draw_purpose                   purpose,
         const Cull_sphere&             range_sphere,
-        const std::optional<Lod_view>& lod_view = std::nullopt
+        const std::optional<Lod_view>& lod_view      = std::nullopt,
+        const erhe::Item_filter&       caster_filter = shadow_caster_filter
     ) -> std::array<Cull_view, 6>;
     // True when at least one entry of a published list of the view's
     // purpose has the view's bit set (inside the view, without bounds, or
@@ -1284,11 +1276,13 @@ public:
     // it was last gathered (registration, flags, transform and bounds hooks)
     // or the selection differs; otherwise only the skinned objects' posed
     // bounds are rewritten.
+    // Each caster filter has slots of its own: a frame may prepare one
+    // selection per filter (the casters of the forms its views draw).
     void prepare_shadow_bounds(const Shadow_bounds_selection& selection, uint64_t frame_index, std::size_t frames_in_flight);
-    // The slot prepare_shadow_bounds() filled for frame_index (render
-    // thread, render phase). Verifies that the slot was prepared for that
-    // frame.
-    [[nodiscard]] auto get_shadow_bounds(uint64_t frame_index) const -> const Shadow_bounds&;
+    // The slot prepare_shadow_bounds() filled for frame_index and
+    // caster_filter (render thread, render phase). Verifies that the slot was
+    // prepared for that frame.
+    [[nodiscard]] auto get_shadow_bounds(uint64_t frame_index, const erhe::Item_filter& caster_filter) const -> const Shadow_bounds&;
     // Diagnostics: full gathers prepare_shadow_bounds() ran (a frame in
     // which nothing changed runs none).
     [[nodiscard]] auto get_shadow_bounds_gather_count() const -> std::size_t { return m_shadow_bounds_gather_count; }
@@ -1666,6 +1660,17 @@ private:
     // Something the shadow bounds gather reads changed: object membership,
     // entries, flags, world AABBs, node extents or node transforms.
     void mark_shadow_bounds_changed() { ++m_shadow_bounds_serial; }
+    // The slots of one caster filter, one per frame in flight, and the
+    // extents identity of its last gather (Shadow_bounds::extents_identity).
+    class Shadow_bounds_track
+    {
+    public:
+        erhe::Item_filter                  caster_filter{};
+        std::vector<Shadow_bounds_slot>    slots;
+        uint64_t                           extents_bounds_serial{0};
+        std::vector<erhe::scene::Layer_id> extents_layers;
+        uint64_t                           extents_serial       {0};
+    };
     // Draw_list_content_changes bookkeeping (prepare phase): whether any
     // entry of the object is in a shadow list; the bounds the object's
     // entries carry as a changed box; one changed box.
@@ -1681,7 +1686,7 @@ private:
     // False (and the changes unbounded) once the boxes of the changes
     // since the last publish reach their limit.
     [[nodiscard]] auto reserve_changed_box() -> bool;
-    void gather_shadow_bounds        (const Shadow_bounds_selection& selection, Shadow_bounds_slot& slot);
+    void gather_shadow_bounds        (const Shadow_bounds_selection& selection, Shadow_bounds_track& track, Shadow_bounds_slot& slot);
     // Rewrites the skinned objects' posed bounds in the slot; false when an
     // object's bounds became valid or invalid (the caller gathers again).
     [[nodiscard]] auto update_skinned_shadow_bounds(Shadow_bounds_slot& slot) const -> bool;
@@ -2149,16 +2154,17 @@ private:
     std::size_t                                                      m_color_environment_change_count{0};
     std::size_t                                                      m_lazy_resolution_count{0};
 
-    // One per frame in flight (sized by the first prepare_shadow_bounds()).
-    std::vector<Shadow_bounds_slot>                                  m_shadow_bounds_slots;
+    // One per caster filter prepared (added by prepare_shadow_bounds(); a
+    // track never moves). The count is read by the render phase of an
+    // earlier frame while the prepare phase adds a track: under the mutex.
+    static constexpr std::size_t                                     max_shadow_bounds_tracks{4};
+    std::array<Shadow_bounds_track, max_shadow_bounds_tracks>        m_shadow_bounds_tracks;
+    std::size_t                                                      m_shadow_bounds_track_count{0};
+    mutable std::mutex                                               m_shadow_bounds_track_mutex;
     // One per frame in flight (sized by the first publish()).
     std::vector<Draw_list_slot>                                      m_draw_list_slots;
     uint64_t                                                         m_shadow_bounds_serial{1};
-    // Shadow_bounds::extents_identity: the serial and selection of the last
-    // gather, and the identity serial handed out for them.
-    uint64_t                                                         m_extents_bounds_serial{0};
-    erhe::Item_filter                                                m_extents_caster_filter{};
-    std::vector<erhe::scene::Layer_id>                               m_extents_layers;
+    // The last Shadow_bounds::extents_identity serial handed out (every track's are distinct).
     uint64_t                                                         m_extents_serial{0};
     std::size_t                                                      m_shadow_bounds_gather_count{0};
 
@@ -2286,7 +2292,6 @@ private:
     // are a copy (capacity kept).
     bool                                                             m_shadow_selection_set{false};
     uint64_t                                                         m_shadow_selection_frame_index{0};
-    erhe::Item_filter                                                m_shadow_selection_filter{};
     std::vector<erhe::scene::Layer_id>                               m_shadow_selection_layers;
     const Primitive_buffer*                                          m_shadow_selection_primitive_buffer{nullptr};
     // The frame's color selections (add_color_command_selection()), their

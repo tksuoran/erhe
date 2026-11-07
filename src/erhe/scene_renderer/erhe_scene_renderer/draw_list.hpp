@@ -3,6 +3,7 @@
 #include "erhe_scene_renderer/draw_list_entry.hpp"
 #include "erhe_scene_renderer/draw_list_key.hpp"
 
+#include "erhe_item/item_flags.hpp"
 #include "erhe_math/aabb.hpp"
 
 #include <array>
@@ -17,6 +18,17 @@ namespace erhe::graphics {
 }
 
 namespace erhe::scene_renderer {
+
+// The objects that cast shadows; a caller may narrow it
+// (Shadow_renderer::Render_parameters::caster_filter).
+inline constexpr erhe::Item_filter shadow_caster_filter{
+    .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::shadow_cast,
+    .require_at_least_one_bit_set   = 0u,
+    // proxy_hidden: visually replaced by a render_proxy that casts the
+    // shadows instead (lightmap piece meshes).
+    .require_all_bits_clear         = erhe::Item_flags::proxy_hidden,
+    .require_at_least_one_bit_clear = 0u
+};
 
 // Shadow caster sub-variant (doc/erhe/draw_list_renderer.md R4a):
 // which forced VARIANT bits the shadow pass draws with. Selected by the
@@ -152,13 +164,16 @@ enum class Lod_shadow_kind : uint8_t
 };
 
 // The lod_key of a shadow view (doc/plans/lod_gpu_selection.md section 6),
-// node-free: the light's id and kind (erhe has one pass per light, so they
-// name the pass), and for a directional pass, which is fitted to a camera,
-// view_key, the lod_key of the color view it is fitted to (0 for the other
-// kinds). The kind sits in the top two bits, so a shadow key never equals a
-// color view's key (a scene view serial id) nor 0. Verifies light_id <
-// 2^32 and view_key < 2^30.
+// node-free: the light's id and kind, and view_key: for a directional pass,
+// which is fitted to a camera, the lod_key of the color view it is fitted
+// to; for a spot or point pass, its casters (make_shadow_caster_key()), since
+// a light has one pass per caster filter. The kind sits in the top two bits,
+// so a shadow key never equals a color view's key (a scene view serial id)
+// nor 0. Verifies light_id < 2^32 and view_key < 2^30.
 [[nodiscard]] auto make_shadow_lod_key(Lod_shadow_kind kind, std::size_t light_id, uint64_t view_key) -> uint64_t;
+// The view_key of a spot or point pass drawing the casters of filter: 0 for
+// shadow_caster_filter, else a nonzero 30-bit hash of the filter.
+[[nodiscard]] auto make_shadow_caster_key(const erhe::Item_filter& filter) -> uint64_t;
 
 // The level of detail selection inputs of one culling view
 // (Draw_list_scene::add_cull_view(), doc/plans/lod_gpu_selection.md section
@@ -252,6 +267,8 @@ public:
     // of the six faces of a point light; not part of is_same(), which
     // compares the tests), none for a view without.
     std::optional<Lod_view>  lod_view   {};
+    // A shadow view's casters: part of its identity, not of is_same().
+    erhe::Item_filter        caster_filter{shadow_caster_filter};
 };
 
 // The level of detail counts of the entries one pass drew

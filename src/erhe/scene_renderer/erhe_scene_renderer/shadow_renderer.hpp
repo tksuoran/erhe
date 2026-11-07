@@ -171,6 +171,8 @@ private:
         erhe::math::Viewport                point_shadow_viewport{};
         // Draw_list_content_changes::scene_instance.
         uint64_t                            scene_instance      {0};
+        // Render_parameters::caster_filter: other casters, other maps.
+        erhe::Item_filter                   caster_filter       {shadow_caster_filter};
     };
     // The levels of detail a pass drew: the template range (its view had
     // no LOD column), or its column's selected levels.
@@ -380,6 +382,8 @@ public:
         // exactly as for the bucket path.
         Draw_list_scene*                                                   draw_list_scene{nullptr};
         std::span<const erhe::scene::Layer_id>                             draw_list_layers{};
+        // The casters the passes draw and fit to (doc/erhe/draw_list_renderer.md).
+        erhe::Item_filter                                                  caster_filter{shadow_caster_filter};
         // Draw-list path, level of detail selection
         // (doc/plans/lod_gpu_selection.md section 4): the lod_key of the
         // color view that samples these shadow maps (Lod_view::lod_key; the
@@ -434,10 +438,12 @@ public:
         const Material_set*                                                material_source{nullptr};
         // See Render_parameters::exclude_unlit_casters.
         bool                                                               exclude_unlit_casters{false};
+        // See Render_parameters::caster_filter.
+        erhe::Item_filter                                                  caster_filter{shadow_caster_filter};
     };
 
     // Prepare phase (main thread): buckets the casters of mesh_spans
-    // (shadow_caster_filter, opaque primitives, optimized variant, unlit
+    // (parameters.caster_filter, opaque primitives, optimized variant, unlit
     // primitives left out when asked) with no pass variant bits and writes
     // their records and draw commands into out. Mutates nothing of this
     // renderer.

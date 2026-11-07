@@ -1,6 +1,7 @@
 #include "scene/scene_root.hpp"
 #include "assets/prepared_keys.hpp"
 #include "assets/asset_paths.hpp"
+#include "renderers/render_context.hpp"
 #include "scene/world_space_form.hpp"
 #include "renderers/ray_trace_scene.hpp"
 #include "scene/scene_settings_resolve.hpp"
@@ -2272,14 +2273,21 @@ void Scene_root::prepare_shadow_bounds(const uint64_t frame_index, const std::si
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{item_host_mutex};
     // The shadow nodes draw the content layer (Shadow_render_node).
     const erhe::scene::Layer_id content_layers[] = { m_layers.content()->id };
-    m_draw_list_scene->prepare_shadow_bounds(
-        erhe::scene_renderer::Shadow_bounds_selection{
-            .layers        = content_layers,
-            .caster_filter = erhe::scene_renderer::shadow_caster_filter
-        },
-        frame_index,
-        frames_in_flight
-    );
+    // The casters of each form a view may draw (Shadow_render_node: get_view_filter()).
+    const bool world_space_drawable = m_world_space_form->get_status().baked;
+    for (const Mesh_form form : {Mesh_form::source, Mesh_form::world_space}) {
+        if ((form == Mesh_form::world_space) && !world_space_drawable) {
+            continue;
+        }
+        m_draw_list_scene->prepare_shadow_bounds(
+            erhe::scene_renderer::Shadow_bounds_selection{
+                .layers        = content_layers,
+                .caster_filter = get_view_filter(erhe::scene_renderer::shadow_caster_filter, form)
+            },
+            frame_index,
+            frames_in_flight
+        );
+    }
 }
 
 void Scene_root::publish_draw_lists(

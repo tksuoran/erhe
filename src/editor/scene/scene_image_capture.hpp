@@ -140,6 +140,7 @@ public:
     auto get_projection_scale  (float view_distance) const -> float            override;
     auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
     auto get_shadow_render_node() const -> Shadow_render_node*                  override;
+    auto get_drawn_mesh_form   () const -> Mesh_form                            override { return m_mesh_form; }
     auto get_camera_viewport   () const -> erhe::math::Viewport                 override { return m_viewport; }
 
     // Implements Rendergraph_node

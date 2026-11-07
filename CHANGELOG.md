@@ -93,6 +93,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: shadow passes take their casters per caller:
+  `Shadow_renderer::Render_parameters::caster_filter` and
+  `Prepare_parameters::caster_filter` (default `shadow_caster_filter`), the
+  trailing `caster_filter` argument of `Draw_list_scene::add_cull_view()` and
+  `add_point_light_cull_views()` (part of a view's identity),
+  `Cull_view_tests::caster_filter`; `Shadow_command_selection::filter` is
+  removed (the GPU jobs test each shadow view's filter), and
+  `shadow_caster_filter` moved to `draw_list.hpp`.
+  `Draw_list_scene::get_shadow_bounds()` takes the caster filter: each filter
+  prepared by `prepare_shadow_bounds()` has bounds of its own.
+  `make_shadow_lod_key()` takes a spot or point pass's caster key
+  (`make_shadow_caster_key()`) as its `view_key`.
 - `erhe::scene_renderer`: `Draw_list_scene::request_lod_level_capture()` takes
   the objects as a span and an optional frame index: with one, only that
   frame's classification fills the capture and a later frame drops it.

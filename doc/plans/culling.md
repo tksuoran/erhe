@@ -346,7 +346,8 @@ Each phase lands on its own, verified, before the next starts.
    (`doc/erhe/graphics.md` "Draw count from the GPU"); the
    `Gpu_cull_classifier` capability now needs the count draw.
    `Shadow_renderer::fit()` gives the frame's `Shadow_command_selection`
-   (caster filter, draw-list layers, chunk size); under `gpu` the
+   (draw-list layers, chunk size; each shadow view carries its caster
+   filter); under `gpu` the
    classification then builds a job table per frame (one job per shadow view
    and per chunk of each selected shadow list, its command range aligned to
    32) and records the two passes of `res/shaders/cull_compact.comp`: pass

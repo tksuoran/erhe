@@ -99,6 +99,7 @@ Scene_image_view::Scene_image_view(
     // (the copy holds no scene root, so the view does not keep the scene
     // alive).
     capture_render_view(m_camera.get(), m_request_render_view);
+    m_request_render_view.mesh_form = m_mesh_form;
     m_request_render_view.scene_root.reset();
     register_input("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     // The last M2 step prepares this view's composition until it is released.
