@@ -346,7 +346,7 @@ flowchart TD
 - [editor/prewarm.md](editor/prewarm.md) (stable): Init-time GPU shader and pipeline prewarming
 - [editor/properties_window.md](editor/properties_window.md) (stable): Properties window single registered-property row path
 - [editor/pvs.md](editor/pvs.md) (experimental): Potentially visible sets: disocclusion-buffer bake per grid cell, its rules (D1 to D7), the bake steps, verification and the documents of its parts
-- [editor/shader_analytics.md](editor/shader_analytics.md) (experimental): Background Mali offline compiler analysis of every program the editor builds, for the shader cost overdraw modes: enabling, compiler lookup, report cache, task limits
+- [editor/shader_analytics.md](editor/shader_analytics.md) (experimental): Background Mali / PowerVR offline compiler analysis, and the in-editor analysis of the session's programs from SPIR-V cache records of every program the editor builds, for the shader cost overdraw modes: enabling, compiler lookup, report cache, task limits
 - [editor/radiance_cascades.md](editor/radiance_cascades.md) (experimental): Radiance cascades: indirect diffuse source selection, cascade layout and atlases, trace, merge, reduce, probe overlay, window and MCP tools
 - [editor/raytrace.md](editor/raytrace.md) (experimental): GPU ray-query raytracing
 - [editor/raytrace_materials.md](editor/raytrace_materials.md) (mostly stable): Material-aware ray-traced rendering: textures, glass, light sampling
@@ -500,6 +500,7 @@ flowchart TD
 - [plans/rigging/fabrik_ik.md](plans/rigging/fabrik_ik.md) (in progress): FABRIK inverse kinematics requirements
 - [plans/rigging/rigging_tools.md](plans/rigging/rigging_tools.md) (in progress): Rigging tools roadmap (IK, constraints, skinning, drivers)
 - [plans/rigging/skeleton_editing.md](plans/rigging/skeleton_editing.md) (in progress): Rigging Phase 3 - skeleton editing and posing basics requirements
+- [plans/shader_analysis_followups.md](plans/shader_analysis_followups.md) (proposed): Shader analysis: verification on Windows, macOS and Android, test suites, large-scene reload cost, persisted session results
 - [plans/shader_cost.md](plans/shader_cost.md) (in progress): Shader cost: fragment invocations per pipeline (pipeline statistics queries) and the per-pixel shader cost overdraw mode
 - [plans/shader_fp16.md](plans/shader_fp16.md) (in progress): Standard shader fp16 paths: switchable half-precision chains with boundary statements, test stations, gates and first results
 - [plans/shadow_robustness.md](plans/shadow_robustness.md) (proposed): Shadow robustness future work (Metal verification, forward pass cost profiling and optimization)

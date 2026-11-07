@@ -337,10 +337,11 @@ or adds to the design:
   (`src/editor/rendergraph/overdraw_source.hpp`: the frame's count buffer,
   mode and max count), implemented by `Viewport_scene_view` and
   `Scene_image_view`.
-- The arguments are `overdraw_mode` (`shaded`, the default, or
-  `rasterized`) and `max_count` (default 8). The cost mode and a counted
-  shader set argument are not offered (the set waits for step 5);
-  `shader_debug` must be 0.
+- The arguments are `overdraw_mode` (`shaded`, the default, `rasterized`,
+  or `cost` with `metric` and `max_value`, `doc/plans/shader_cost.md` B2)
+  and `max_count` (default 8; for `cost` four fragments of the costliest
+  recorded variant). A counted shader set argument is not offered (the set
+  waits for step 5); `shader_debug` must be 0.
 - The statistics are read with the image: the view renders one frame, and
   `Overdraw_view_state::collect()` decodes that frame's readback once it
   completed.

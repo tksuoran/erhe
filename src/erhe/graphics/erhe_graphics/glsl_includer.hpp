@@ -37,9 +37,13 @@ public:
     // The synthesized preamble served for preamble_include_name; exposed so
     // compile-error diagnostics can dump it next to the main source.
     [[nodiscard]] auto get_preamble() const -> const std::string& { return m_preamble; }
+    // The files this includer's parse included, once each, in first-include
+    // order (the dependencies output also holds earlier parses' files).
+    [[nodiscard]] auto get_included() const -> const std::vector<std::filesystem::path>& { return m_included; }
 
 private:
     IncludeResult* resolve(const char* header_name);
+    void           add_included(const std::filesystem::path& path);
 
     std::filesystem::path                m_primary_dir;
     std::vector<std::filesystem::path>   m_extra_include_paths;
@@ -47,6 +51,7 @@ private:
     std::string                          m_preamble_include_name;
     std::vector<std::filesystem::path>*  m_dependencies_out{nullptr};
     std::set<std::filesystem::path>      m_active_paths;
+    std::vector<std::filesystem::path>   m_included;
 };
 
 } // namespace erhe::graphics

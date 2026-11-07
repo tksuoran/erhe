@@ -111,7 +111,8 @@ default, `--no-shader-analytics` turns it off, never on Android).
 
 The metrics a cost view offers (`Shader_cost_metric`): Mali G310 fragment
 `Main` total cycles (the bound pipeline's), arithmetic cycles, texture
-cycles.
+cycles, load/store cycles; PowerVR BXM-8-256 fragment `Main` cycles (the profiling compiler's
+straight-line count), instructions, samples, temporary registers.
 
 ### B2. The cost overdraw mode
 
@@ -136,7 +137,12 @@ histogram out. The frame's total cost is A's estimate.
 
 UI: the viewport's shader debug combo gets "Shader cost: <metric>" entries,
 enabled when analytics are loaded and overdraw is supported. MCP:
-`set_overdraw_visualization` takes mode `cost` with a `metric`.
+`set_overdraw_visualization` takes mode `cost` with a `metric`, and
+`render_scene_image` `output: "overdraw"` takes `overdraw_mode: "cost"` with
+a `metric` and a `max_value` (metric units; or `max_count` in weight units),
+so a cost image of an explicit camera needs no viewport. The metric is one
+selection for the editor (the weights are defines of the cost variants): a
+render in another metric switches the cost views of viewports to it.
 
 ## Remaining
 

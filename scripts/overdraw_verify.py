@@ -30,6 +30,14 @@ Each measurement is repeated through render_scene_image output "overdraw"
 (O6) from the scene camera at the viewport's size: the image has the
 requested size and its statistics equal the viewport's.
 
+When shader analytics are loaded (the editor's background analysis, or
+--shader-analytics), the alpha_test stack is counted in the cost mode
+(doc/plans/shader_cost.md B2) for every metric load_shader_analytics lists:
+no variant lacks analytics, the stack weighs more than 0 (0 in the texture
+metrics: its unlit material samples none), and render_scene_image
+overdraw_mode "cost" reports the same max weight, covered pixels and max
+value as the viewport.
+
 Then turns the mode off and checks the statistics are released.
 
 Usage: python3 scripts/overdraw_verify.py [--count N]
@@ -85,14 +93,63 @@ def png_size(path):
     return struct.unpack(">II", header[16:24])
 
 
-def scene_image_stats(client, scene, mode, width, height):
+def scene_image_stats(client, scene, mode, width, height, extra=None):
     """render_scene_image output overdraw from the scene camera (O6)."""
     path = os.path.join("logs", "overdraw_verify_scene_image.png")
-    reply = client.call("render_scene_image", {
+    reply = client.call("render_scene_image", dict({
         "scene": scene, "camera_node": "Camera", "width": width, "height": height,
         "output": "overdraw", "overdraw_mode": mode, "path": path
-    })
+    }, **(extra or {})))
     return reply, png_size(path)
+
+
+def wait_for_analysis(client, timeout_s=300.0):
+    """The loaded analytics once the background analysis is idle; None when there are none."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        analytics = client.call("load_shader_analytics", {})
+        service = analytics.get("service") or {}
+        if (not service) or ((service.get("queued") == 0) and (service.get("running") == 0)):
+            return analytics if analytics.get("loaded") else None
+        time.sleep(0.5)
+    raise RuntimeError("the background shader analysis did not finish")
+
+
+def check_cost_mode(client, scene, viewport, n):
+    """The cost mode of the viewport and of render_scene_image, per metric."""
+    analytics = wait_for_analysis(client)
+    if analytics is None:
+        print("cost mode: no shader analytics loaded; skipped")
+        return
+    for metric in analytics["metrics"]:
+        name = metric["metric"]
+        result = client.call("set_overdraw_visualization", {"viewport": viewport, "mode": "cost", "metric": name})
+        check_true(f"set_overdraw_visualization cost {name}", (result.get("mode") == "cost") and (result.get("metric") == name), str(result))
+        stats = settled_stats(client, viewport)
+        weight = stats["max_weight"]
+        # The stack's unlit material samples no texture: its texture metrics weigh 0.
+        samples_textures = any(word in name for word in ("texture", "samples"))
+        check_true(
+            f"cost {name}: no variant lacks analytics and the stack weighs {'0' if samples_textures else 'more than 0'}",
+            (stats.get("missing_variants") == 0) and ((weight == 0) if samples_textures else (weight > 0)),
+            str(stats)
+        )
+        reply, size = scene_image_stats(client, scene, "cost", stats["width"], stats["height"], {"metric": name})
+        image_stats = reply.get("overdraw_statistics", {})
+        check_true(
+            f"cost {name}: render_scene_image matches the viewport",
+            (size == (stats["width"], stats["height"])) and image_stats.get("valid") and
+            (image_stats.get("counted_mode") == "cost") and (image_stats.get("metric") == name) and
+            (image_stats.get("max_weight") == weight) and (image_stats.get("covered_pixels") == stats["covered_pixels"]) and
+            (image_stats.get("max_value") == stats["max_value"]) and (reply.get("metric") == name),
+            f"image {image_stats}, reply metric {reply.get('metric')} max_value {reply.get('max_value')}, viewport {stats}"
+        )
+        print(f"cost {name:28} max weight {weight} ({stats['max_value']} {metric['title']}) covered {stats['covered_pixels']}")
+    # max_value sets the white point in metric units: 100 weight units.
+    first = analytics["metrics"][0]
+    max_value = 100.0 * first["weight_scale"]
+    reply, _ = scene_image_stats(client, scene, "cost", 64, 64, {"metric": first["metric"], "max_value": max_value})
+    check_true("render_scene_image cost max_value", (reply.get("max_count") == 100) and (abs(reply.get("max_value", 0.0) - max_value) < 1.0e-9), str(reply))
 
 
 def main() -> int:
@@ -213,10 +270,20 @@ def main() -> int:
                 )
         remove(names)
 
+    client.call("set_draw_lists_enabled", {"enabled": True})
+    client.call("set_culling_classification", {"mode": "gpu"})
+    client.call("set_occlusion_culling", {"enabled": False})
+    names = make_stack("alpha_test", distinct)
+    check_cost_mode(client, scene, viewport, n)
+    remove(names)
+
     for bad_args, label in (
-        ({"output": "overdraw", "overdraw_mode": "cost"}, "an unknown overdraw_mode"),
+        ({"output": "overdraw", "overdraw_mode": "bogus"}, "an unknown overdraw_mode"),
         ({"output": "overdraw", "shader_debug": 37}, "shader_debug"),
         ({"output": "png", "overdraw_mode": "shaded"}, "overdraw_mode without output overdraw"),
+        ({"output": "overdraw", "overdraw_mode": "shaded", "metric": "mali_cycles"}, "metric without overdraw_mode cost"),
+        ({"output": "overdraw", "overdraw_mode": "cost", "metric": "bogus"}, "an unknown metric"),
+        ({"output": "overdraw", "overdraw_mode": "cost", "max_value": 10.0, "max_count": 10}, "max_value with max_count"),
     ):
         try:
             client.call("render_scene_image", dict({"scene": scene, "camera_node": "Camera", "width": 64, "height": 64}, **bad_args))

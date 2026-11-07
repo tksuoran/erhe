@@ -77,9 +77,9 @@ auto main(int argc, char** argv) -> int
             ("no-scene", "Start with an empty scene (default camera only): no procedural default scene and no scene load (overrides --scene)")
             ("no-post-processing", "Force viewport post processing off for this session, overriding editor_settings.json (the stored setting is not modified)")
             ("benchmark", "Benchmark file (JSON): run it, log the result, write logs/benchmark_<name>.json and exit", cxxopts::value<std::string>()->default_value(""))
-            ("shader-variant-browser", "Record every shader program compiled in this session into an HTML shader variant browser in this directory (index.html; SPIR-V before and after optimization). The session does not read spirv_cache/, so every program it uses is recorded; earlier results in the directory are removed", cxxopts::value<std::string>()->default_value(""))
+            ("shader-variant-browser", "Record every shader program compiled in this session into an HTML shader variant browser in this directory (index.html; SPIR-V before and after optimization). Every program the session uses is recorded, cached programs from their spirv_cache/ records; earlier results in the directory are removed", cxxopts::value<std::string>()->default_value(""))
             ("shader-analytics", "Load the shader analytics of this shader variant browser directory (variants/manifest.json and analytics.js of scripts/shader_analytics.py) for the shader cost overdraw mode, in addition to the background analysis", cxxopts::value<std::string>()->default_value(""))
-            ("no-shader-analytics", "Do not analyze the programs the editor builds with the Mali offline compiler in background tasks (the Android behavior); --shader-analytics still loads")
+            ("no-shader-analytics", "Do not analyze the programs the editor builds with the Mali / PowerVR offline compilers in background tasks (the Android behavior); --shader-analytics still loads")
             ("no-headset-culling", "Draw the headset's color passes unculled for this session (A/B against the culled draws)")
             ("fix-spot-lights", "Fix up spot lights when loading glTF assets: full color value, intensity 1000, doubled outer cone angle, inner cone angle taken from the original outer cone angle")
             ("h,help",   "Print usage");

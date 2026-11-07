@@ -234,43 +234,22 @@ const uint64_t c_optimized_compile_settings_hash = compute_optimized_compile_set
     return device.get_graphics_config().spirv_optimization ? c_optimized_compile_settings_hash : c_compile_settings_hash;
 }
 
-// spirv-opt's performance passes with the entry point interface preserved
-// (the stages of a program are optimized one at a time, so no stage may
-// drop an input or output the other side declares). Returns the optimized
-// module, or nothing when the optimizer fails or its output does not
-// validate; the caller then keeps the unoptimized module.
-[[nodiscard]] auto optimize_spirv(const std::vector<unsigned int>& spirv, std::string_view label) -> std::optional<std::vector<unsigned int>>
+
+// Graphics_config::spirv_cache_records (doc/erhe/graphics.md "SPIR-V cache records").
+[[nodiscard]] auto use_cache_records(const Device& device) -> bool
 {
-    std::string messages;
-    const spvtools::MessageConsumer consumer = [&messages](
-        const spv_message_level_t level,
-        const char*,
-        const spv_position_t&     position,
-        const char*               message
-    ) {
-        if (level <= SPV_MSG_WARNING) {
-            messages += fmt::format("  word {}: {}\n", position.index, message);
-        }
-    };
-
-    spvtools::Optimizer optimizer{c_spirv_tools_target_env};
-    optimizer.SetMessageConsumer(consumer);
-    optimizer.RegisterPerformancePasses(true);
-    spvtools::OptimizerOptions optimizer_options{};
-    optimizer_options.set_run_validator(false);
-    std::vector<unsigned int> optimized;
-    if (!optimizer.Run(spirv.data(), spirv.size(), &optimized, optimizer_options)) {
-        log_program->error("SPIR-V optimization of {} failed; using the unoptimized module:\n{}", label, messages);
-        return {};
+    const std::string& setting = device.get_graphics_config().spirv_cache_records;
+    if (setting == "on") {
+        return true;
     }
-
-    spvtools::SpirvTools tools{c_spirv_tools_target_env};
-    tools.SetMessageConsumer(consumer);
-    if (!tools.Validate(optimized)) {
-        log_program->error("Optimized SPIR-V of {} does not validate; using the unoptimized module:\n{}", label, messages);
-        return {};
+    if (setting == "off") {
+        return false;
     }
-    return optimized;
+#if defined(ERHE_OS_ANDROID)
+    return false;
+#else
+    return true;
+#endif
 }
 
 // variants/manifest.json "tools": what produced the recorded modules.
@@ -304,6 +283,80 @@ const uint64_t c_optimized_compile_settings_hash = compute_optimized_compile_set
 }
 
 } // anonymous namespace
+
+// spirv-opt's performance passes with the entry point interface preserved
+// (the stages of a program are optimized one at a time, so no stage may
+// drop an input or output the other side declares). Returns the optimized
+// module, or nothing when the optimizer fails or its output does not
+// validate; the caller then keeps the unoptimized module.
+auto optimize_spirv(const std::span<const unsigned int> spirv, const std::string_view label) -> std::optional<std::vector<unsigned int>>
+{
+    std::string messages;
+    const spvtools::MessageConsumer consumer = [&messages](
+        const spv_message_level_t level,
+        const char*,
+        const spv_position_t&     position,
+        const char*               message
+    ) {
+        if (level <= SPV_MSG_WARNING) {
+            messages += fmt::format("  word {}: {}\n", position.index, message);
+        }
+    };
+
+    spvtools::Optimizer optimizer{c_spirv_tools_target_env};
+    optimizer.SetMessageConsumer(consumer);
+    optimizer.RegisterPerformancePasses(true);
+    spvtools::OptimizerOptions optimizer_options{};
+    optimizer_options.set_run_validator(false);
+    std::vector<unsigned int> optimized;
+    if (!optimizer.Run(spirv.data(), spirv.size(), &optimized, optimizer_options)) {
+        log_program->error("SPIR-V optimization of {} failed; using the unoptimized module:\n{}", label, messages);
+        return {};
+    }
+
+    spvtools::SpirvTools tools{c_spirv_tools_target_env};
+    tools.SetMessageConsumer(consumer);
+    if (!tools.Validate(optimized)) {
+        log_program->error("Optimized SPIR-V of {} does not validate; using the unoptimized module:\n{}", label, messages);
+        return {};
+    }
+    return optimized;
+}
+
+auto get_spirv_tools_version() -> std::string
+{
+    return spvSoftwareVersionString();
+}
+
+// The record stores the unoptimized module only when the cached one is the
+// optimized one; the other module is recomputed (optimize_spirv() is a
+// function of the unoptimized module).
+auto make_report_stage(
+    const Spirv_cache_record&           record,
+    const std::span<const unsigned int> cached_module,
+    const Shader_type                   type,
+    const std::string_view              label
+) -> Shader_variant_report_stage
+{
+    const std::vector<unsigned int> cached{cached_module.begin(), cached_module.end()};
+    Shader_variant_report_stage stage{
+        .type            = type,
+        .main_name       = record.main_name,
+        .main_source     = record.main_source,
+        .preamble        = record.preamble,
+        .spirv           = record.unoptimized_spirv.empty() ? cached : record.unoptimized_spirv,
+        .optimized_spirv = {}
+    };
+    if (!record.unoptimized_spirv.empty()) {
+        stage.optimized_spirv = cached;
+    } else {
+        std::optional<std::vector<unsigned int>> optimized = optimize_spirv(stage.spirv, label);
+        if (optimized.has_value()) {
+            stage.optimized_spirv = std::move(optimized.value());
+        }
+    }
+    return stage;
+}
 
 Glslang_shader_stages::Glslang_shader_stages(Shader_stages_prototype_impl& shader_stages_prototype, Spirv_cache* cache)
     : m_shader_stages_prototype{shader_stages_prototype}
@@ -435,11 +488,12 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
     glslang_shader.setEnvClient(c_env_client, c_env_client_version);
     glslang_shader.setEnvTarget(c_env_target, c_env_target_version);
 
-    if (device.get_shader_variant_report() != nullptr) {
+    if ((device.get_shader_variant_report() != nullptr) || use_cache_records(device)) {
         m_report_sources[language] = Report_source{
-            .main_name   = main_name,
-            .main_source = main_with_preamble,
-            .preamble    = version_line + preamble_body
+            .main_name     = main_name,
+            .main_source   = main_with_preamble,
+            .preamble      = version_line + preamble_body,
+            .include_paths = {} // filled after the parse
         };
     }
 
@@ -498,6 +552,13 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
         log_glsl->info("\n{}\n", info_log);
     }
 
+    // A cached stage's record lists the stage's own includes: programs share cached stages.
+    if (const auto report_source = m_report_sources.find(language); report_source != m_report_sources.end()) {
+        report_source->second.include_paths.clear();
+        for (const std::filesystem::path& path : includer.get_included()) {
+            report_source->second.include_paths.push_back(path.generic_string());
+        }
+    }
     return true;
 }
 
@@ -577,24 +638,49 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
     bool report_complete = (report != nullptr);
     std::unordered_map<::EShLanguage, Shader_variant_report_stage> report_stages;
 
+    const bool records = use_cache_records(device);
     for (::EShLanguage stage : m_active_stages) {
-        // Try cache first per-stage
+        const Shader_stage* stage_shader = nullptr;
+        for (const Shader_stage& shader : create_info.shaders) {
+            if (to_glslang(shader.type) == stage) {
+                stage_shader = &shader;
+                break;
+            }
+        }
+        const std::string label = fmt::format("{} {} stage", create_info.name, glslang_stage_name(stage));
+
+        // Try the cache first per stage. With records on, or while recording,
+        // only an entry that carries its record is a hit.
         bool from_cache = false;
-        if ((m_cache != nullptr) && (report == nullptr)) {
-            for (const Shader_stage& shader : create_info.shaders) {
-                if (to_glslang(shader.type) == stage) {
-                    const std::string source = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
-                    std::vector<unsigned int> cached = m_cache->get(source, shader.type, get_compile_settings_hash(device));
-                    if (!cached.empty()) {
-                        m_spirv_shaders[stage] = std::move(cached);
-                        from_cache = true;
-                        report_complete = false;
+        if ((m_cache != nullptr) && (stage_shader != nullptr)) {
+            const std::string cache_key = m_cache->get_key(
+                m_shader_stages_prototype.get_final_source(*stage_shader, std::nullopt),
+                stage_shader->type,
+                get_compile_settings_hash(device)
+            );
+            m_cache_keys[stage] = cache_key;
+            std::optional<Spirv_cache_record> record;
+            bool usable = true;
+            if (report != nullptr) {
+                record = m_cache->get_record(cache_key);
+                usable = record.has_value();
+            } else if (records) {
+                usable = m_cache->has_record(cache_key);
+            }
+            if (usable) {
+                std::vector<unsigned int> cached = m_cache->get_module(cache_key);
+                if (!cached.empty()) {
+                    if (record.has_value()) {
+                        report_stages[stage] = make_report_stage(record.value(), cached, stage_shader->type, label);
                     }
-                    break;
+                    m_spirv_shaders[stage] = std::move(cached);
+                    from_cache = true;
                 }
             }
         }
 
+        // The module before the optimizer, kept for the record when the optimized one is cached.
+        std::vector<unsigned int> unoptimized_for_record;
         const auto generate = [&](const glslang::SpvOptions& options) {
             spv::SpvBuildLogger       logger;
             auto*                     intermediate  = m_glslang_program->getIntermediate(stage);
@@ -608,10 +694,7 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
             const bool optimize = device.get_graphics_config().spirv_optimization;
             std::optional<std::vector<unsigned int>> optimized;
             if (optimize || (report != nullptr)) {
-                optimized = optimize_spirv(
-                    spirv_binary,
-                    fmt::format("{} {} stage", create_info.name, glslang_stage_name(stage))
-                );
+                optimized = optimize_spirv(spirv_binary, label);
             }
             if (report != nullptr) {
                 // The browser shows both modules whichever one is used.
@@ -623,20 +706,34 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
                 report_stage.spirv           = spirv_binary;
                 report_stage.optimized_spirv = optimized.has_value() ? optimized.value() : std::vector<unsigned int>{};
             }
+            unoptimized_for_record.clear();
             if (optimize && optimized.has_value()) {
+                if (records) {
+                    unoptimized_for_record = spirv_binary;
+                }
                 spirv_binary = std::move(optimized.value());
             }
             m_spirv_shaders[stage] = std::move(spirv_binary);
         };
         const auto store_in_cache = [&]() {
-            if (m_cache != nullptr) {
-                for (const Shader_stage& shader : create_info.shaders) {
-                    if (to_glslang(shader.type) == stage) {
-                        const std::string source = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
-                        m_cache->put(source, shader.type, get_compile_settings_hash(device), m_spirv_shaders[stage]);
-                        break;
-                    }
-                }
+            if ((m_cache == nullptr) || (stage_shader == nullptr)) {
+                return;
+            }
+            const std::string source = m_shader_stages_prototype.get_final_source(*stage_shader, std::nullopt);
+            m_cache->put(source, stage_shader->type, get_compile_settings_hash(device), m_spirv_shaders[stage]);
+            const std::string cache_key = m_cache->get_key(source, stage_shader->type, get_compile_settings_hash(device));
+            m_cache_keys[stage] = cache_key;
+            const auto report_source = m_report_sources.find(stage);
+            if (records && (report_source != m_report_sources.end())) {
+                Spirv_cache_record record{
+                    .main_name         = report_source->second.main_name,
+                    .main_source       = report_source->second.main_source,
+                    .preamble          = report_source->second.preamble,
+                    .include_paths     = {},
+                    .unoptimized_spirv = unoptimized_for_record
+                };
+                record.include_paths = report_source->second.include_paths;
+                m_cache->put_record(cache_key, record);
             }
         };
 
@@ -688,15 +785,28 @@ auto Glslang_shader_stages::link_program(Device& device) -> bool
     }
 
     if (report_complete) {
+        // The files the stages' parses included, as a recording from records
+        // lists them; the prototype's dependency paths also hold every
+        // #include line get_final_source() finds, inactive branches included.
         std::vector<Shader_variant_report_stage> stages;
+        std::vector<std::filesystem::path>       include_paths;
         for (const Shader_stage& shader : create_info.shaders) {
             const auto i = report_stages.find(to_glslang(shader.type));
             if (i != report_stages.end()) {
                 i->second.type = shader.type;
                 stages.push_back(std::move(i->second));
             }
+            const auto source = m_report_sources.find(to_glslang(shader.type));
+            if (source != m_report_sources.end()) {
+                for (const std::string& include : source->second.include_paths) {
+                    const std::filesystem::path path{include};
+                    if (std::find(include_paths.begin(), include_paths.end(), path) == include_paths.end()) {
+                        include_paths.push_back(path);
+                    }
+                }
+            }
         }
-        report->add(create_info, stages, m_shader_stages_prototype.get_dependency_paths(), get_report_tools(device));
+        report->add(create_info, stages, include_paths, get_report_tools(device));
     }
     m_report_sources.clear();
 
@@ -712,7 +822,12 @@ void Glslang_shader_stages::notify_program(Device& device) const
     for (const Shader_stage& shader : create_info.shaders) {
         const auto i = m_spirv_shaders.find(to_glslang(shader.type));
         if (i != m_spirv_shaders.end()) {
-            modules.push_back(Shader_program_module{.type = shader.type, .spirv = i->second});
+            const auto key = m_cache_keys.find(to_glslang(shader.type));
+            modules.push_back(Shader_program_module{
+                .type      = shader.type,
+                .spirv     = i->second,
+                .cache_key = (key != m_cache_keys.end()) ? std::string_view{key->second} : std::string_view{}
+            });
         }
     }
     device.notify_shader_program(create_info, modules);
@@ -720,19 +835,29 @@ void Glslang_shader_stages::notify_program(Device& device) const
 
 auto Glslang_shader_stages::try_load_all_from_cache(Device& device) -> bool
 {
-    // A shader variant browser session compiles every program to record it (the cache is still written).
-    if ((m_cache == nullptr) || (device.get_shader_variant_report() != nullptr)) {
+    if (m_cache == nullptr) {
         return false;
     }
+    // With records on only entries that carry their record are hits; a
+    // recording session takes the recorded stages from the records.
+    Shader_variant_report* const report  = device.get_shader_variant_report();
+    const bool                   records = use_cache_records(device);
 
     const Shader_stages_create_info& create_info = m_shader_stages_prototype.create_info();
     std::unordered_map<::EShLanguage, std::vector<unsigned int>> cached_spirv;
+    std::unordered_map<::EShLanguage, std::string>               cache_keys;
+    std::vector<Shader_variant_report_stage>                     report_stages;
+    std::vector<std::filesystem::path>                           include_paths;
 
     for (const Shader_stage& shader : create_info.shaders) {
         const std::string source   = m_shader_stages_prototype.get_final_source(shader, std::nullopt);
         const EShLanguage language = to_glslang(shader.type);
+        const std::string key      = m_cache->get_key(source, shader.type, get_compile_settings_hash(device));
 
-        std::vector<unsigned int> spirv = m_cache->get(source, shader.type, get_compile_settings_hash(device));
+        if ((records || (report != nullptr)) && !m_cache->has_record(key)) {
+            return false; // compile: the entry gains its record
+        }
+        std::vector<unsigned int> spirv = m_cache->get_module(key);
         if (spirv.empty()) {
             return false; // Cache miss on any stage means we must compile all
         }
@@ -742,11 +867,29 @@ auto Glslang_shader_stages::try_load_all_from_cache(Device& device) -> bool
         ) {
             return false; // Unloadable on this device - recompile with the link_program fallback
         }
+        if (report != nullptr) {
+            const std::optional<Spirv_cache_record> record = m_cache->get_record(key);
+            if (!record.has_value()) {
+                return false;
+            }
+            report_stages.push_back(make_report_stage(record.value(), spirv, shader.type, fmt::format("{} {} stage", create_info.name, glslang_stage_name(language))));
+            for (const std::string& include : record->include_paths) {
+                const std::filesystem::path path{include};
+                if (std::find(include_paths.begin(), include_paths.end(), path) == include_paths.end()) {
+                    include_paths.push_back(path);
+                }
+            }
+        }
         cached_spirv[language] = std::move(spirv);
+        cache_keys[language]   = key;
     }
 
     // All stages cached
     m_spirv_shaders = std::move(cached_spirv);
+    m_cache_keys    = std::move(cache_keys);
+    if (report != nullptr) {
+        report->add(create_info, report_stages, include_paths, get_report_tools(device));
+    }
     notify_program(device);
     return true;
 }

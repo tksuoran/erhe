@@ -383,6 +383,7 @@ private:
     auto query_occlusion_check            (const nlohmann::json& args) -> std::string;
     auto query_fragment_invocations       (const nlohmann::json& args) -> std::string;
     auto action_load_shader_analytics     (const nlohmann::json& args) -> std::string;
+    auto action_analyze_shader_programs   (const nlohmann::json& args) -> std::string;
     auto query_pvs_status                 (const nlohmann::json& args) -> std::string;
     // The PVS bake tools (mcp_server_pvs.cpp; doc/plans/pvs.md "Editor").
     auto action_pvs_bake                  (const nlohmann::json& args) -> std::string;

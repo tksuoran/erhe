@@ -1155,12 +1155,12 @@ void Scene_view::shader_cost_unavailable_entry()
     const char* tooltip = "Shader analytics are off (editor settings shader_analytics.enabled, --no-shader-analytics, or not available on this platform)";
     if (service != nullptr) {
         const Shader_analytics_service::Status status = service->get_status();
-        if (status.mali_core.empty()) {
-            label   = "Shader cost: no malioc found";
-            tooltip = "Add the compiler location to editor settings shader_analytics.malioc_search_paths, or to the ERHE_MALIOC environment variable, or put malioc on PATH; the log lists what was searched";
+        if (status.mali_core.empty() && status.powervr_core.empty()) {
+            label   = "Shader cost: no offline compiler found";
+            tooltip = "Add the compiler location to editor settings shader_analytics.malioc_search_paths / powervr_search_paths, or to the ERHE_MALIOC / ERHE_POWERVR environment variables, or put malioc / ProfilingCompilerCLIWrapper on PATH; the log lists what was searched";
         } else {
             label   = "Shader cost: analyzing programs";
-            tooltip = "The offline compiler is analyzing the shader programs; the cost entries appear when the first results land";
+            tooltip = "The offline compilers are analyzing the shader programs; the cost entries appear when the first results land";
         }
     }
     ImGui::Separator();

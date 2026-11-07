@@ -686,9 +686,23 @@ loaded cores provide `metric` (the name `set_overdraw_visualization` takes),
 `title`, `core`, `max_value` (the largest per-fragment value recorded) and
 `weight_scale` (metric units per weight unit). Mali metrics are cycles
 (`mali_cycles`, `mali_arithmetic_cycles`, `mali_texture_cycles`,
-`mali_load_store_cycles`). Programs match by name and variant defines, so
-the browser must have recorded the variants the scene draws (record it
-with an empty `spirv_cache/`).
+`mali_load_store_cycles`), PowerVR metrics the profiling compiler's
+counters (`powervr_cycles`, `powervr_instructions`, `powervr_samples`,
+`powervr_registers`). Programs match by name and variant defines, so the
+browser must have recorded the variants the scene draws (a recording
+records every program the session uses).
+
+### analyze_shader_programs
+
+The full offline compiler analysis of the programs this session built,
+run in the editor (doc/editor/shader_analytics.md "Session programs"):
+`analyze` `all` queues every program not analyzed yet, `listed` the
+`program_ids`; the jobs run in background tasks, so call again without
+`analyze` until `analyzed` counts them. Returns `compilers_ready`,
+`program_count`, `analyzed`, `queued`, `programs` (`id`, `name`,
+`analyzed`) and `listed` (`id`, `name`, `key`, `analysis` per core: the
+`analytics.js` core block fields as `block` and the program's stage
+summaries as `program`) for the `program_ids`.
 
 ### pick_at
 
@@ -1510,10 +1524,10 @@ Two tools write images; choose by what is being verified.
   visualizations) are never drawn. `output`: `png` (tonemapped, what a
   viewport shows), `linear` (HDR scene color as `.pfm`, with luminance
   statistics in the reply) or `overdraw` (the overdraw heat map as a png,
-  `overdraw_mode` `shaded` or `rasterized` and `max_count` as
-  `set_overdraw_visualization` takes them, with `overdraw_statistics` in the
-  reply in the shape `get_overdraw_stats` reports; occlusion culling culls
-  nothing in a one-frame capture). Options: `scene`, `path`, `shader_debug`,
+  `overdraw_mode` `shaded`, `rasterized` or `cost` (with `metric` and
+  `max_value`) and `max_count` as `set_overdraw_visualization` takes them,
+  with `overdraw_statistics` in the reply in the shape `get_overdraw_stats`
+  reports; occlusion culling culls nothing in a one-frame capture). Options: `scene`, `path`, `shader_debug`,
   `shadow_debug_light` (the light, by name or id, that `shader_debug` 30
   shadow_visibility shows), `msaa_samples`, `color_format` (`rgba16f`
   default, `rgba32f` for `output: "linear"`). `shader_debug` 36

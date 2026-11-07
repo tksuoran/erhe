@@ -266,3 +266,11 @@ none
 >doc-mergetool-leftovers::dbfecf6e0{committed-in-a91828fcd}✓
 >results::Metal-ctest-1657/1658{aa_cost_benchmark=Gpu_timer-stub}+editor-MCP-95/95
 
+[2026-11-04::shader-analysis-pvr]
+>powervr-analytics::d3e0967ad{script+editor-service;PowerVR-BXM-8-256}✓
+>render_scene_image-cost::15cdca360{overdraw_mode-cost;overdraw_verify.py-cost-section}✓
+>vendor-group-row::dc8eeed1f{Shader-Variants-group-header+vendor-toggles}✓
+>spirv-cache-records::9081384de{records+recording-from-records;include-lists-from-parses}✓
+>session-programs::9d45f8f0e+596e2a9d4{window-without-recording;background-module-stats;resizable-columns}✓
+>in-editor-analysis::02e468e3a+d5b0cada8{analyze_program_stages;MCP-analyze_shader_programs;status-refresh}✓
+>results::148-programs-analyzed~63s-2-jobs;444-blocks-equal-to-script-except-PowerVR-vertex

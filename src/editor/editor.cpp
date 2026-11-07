@@ -103,6 +103,7 @@
 #include "renderers/prewarm.hpp"
 #include "renderers/shader_analytics.hpp"
 #include "renderers/shader_analytics_service.hpp"
+#include "renderers/shader_session_programs.hpp"
 #include "renderers/render_settings.hpp"
 #include "renderers/material_set_factory.hpp"
 #include "renderers/programs.hpp"
@@ -3086,12 +3087,13 @@ public:
                     m_startup_shader_analytics.reset();
                 }
                 // Before the programs build, so each one is observed.
+                m_shader_session_programs = std::make_unique<Shader_session_programs>(*m_graphics_device.get());
                 if (
                     (shader_analytics_default == Shader_analytics_default::offline_compilers) &&
                     m_editor_settings.shader_analytics.enabled
                 ) {
                     m_shader_analytics_service = std::make_unique<Shader_analytics_service>(
-                        m_editor_settings.shader_analytics, *m_graphics_device.get(), *m_executor.get(), *m_shader_analytics.get()
+                        m_editor_settings.shader_analytics, *m_shader_session_programs.get(), *m_executor.get(), *m_shader_analytics.get()
                     );
                 }
             }
@@ -3448,6 +3450,13 @@ public:
                     conditionally_enable_window_imgui_host(m_window.get(), m_app_context.OpenXR),
                     get_imgui_config_path(m_app_context.OpenXR)
                 );
+                if (m_shader_session_programs) {
+                    m_shader_session_programs->start(
+                        m_scene_commit_queue,
+                        *m_executor.get(),
+                        static_cast<std::size_t>(std::max(m_editor_settings.shader_analytics.max_jobs, 1))
+                    );
+                }
                 if (m_shader_analytics_service) {
                     m_shader_analytics_service->start(m_scene_commit_queue);
                 }
@@ -3580,7 +3589,7 @@ public:
                 m_pvs_window             = std::make_unique<Pvs_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_app_context.pvs_window              = m_pvs_window.get();
                 m_scene_control_window   = std::make_unique<Scene_control_window            >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
-                m_shader_variants_window = std::make_unique<Shader_variants_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_graphics_device->get_shader_variant_report());
+                m_shader_variants_window = std::make_unique<Shader_variants_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_graphics_device->get_shader_variant_report(), m_shader_session_programs.get(), m_shader_analytics_service.get());
                 m_app_context.shader_variants_window  = m_shader_variants_window.get();
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
                 m_app_context.frame_pacing_observer = &m_frame_pacing_observer;
@@ -4464,6 +4473,7 @@ public:
         m_app_context.shader_variant_cache     = m_shader_variant_cache  .get();
         m_app_context.shader_analytics         = m_shader_analytics      .get();
         m_app_context.shader_analytics_service = m_shader_analytics_service.get();
+        m_app_context.shader_session_programs  = m_shader_session_programs.get();
         m_app_context.program_interface        = m_program_interface     .get();
         m_app_context.context_window           = m_window                .get();
         m_app_context.brdf_slice               = m_brdf_slice            .get();
@@ -5763,6 +5773,7 @@ public:
     std::unique_ptr<erhe::scene_renderer::Shader_variant_cache>       m_shader_variant_cache;
     std::unique_ptr<Shader_analytics>                                 m_shader_analytics;
     std::optional<Shader_analytics_data>                              m_startup_shader_analytics;
+    std::unique_ptr<Shader_session_programs>                          m_shader_session_programs; // outlives the service and the Shader Variants window
     std::unique_ptr<Shader_analytics_service>                         m_shader_analytics_service;
     std::unique_ptr<Material_set_factory                  >           m_material_set_factory;
     std::unique_ptr<Programs                              >           m_programs;

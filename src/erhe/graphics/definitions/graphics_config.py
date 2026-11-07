@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Graphics_config",
     reflect=True,
-    version=5,
+    version=6,
     short_desc="Graphics Settings",
     long_desc="",
     developer=False,
@@ -163,7 +163,17 @@ struct("Graphics_config",
             added_in=5,
             default='""',
             short_desc="Shader Variant Browser Directory",
-            long_desc="When not empty, every shader program compiled from GLSL in this process is recorded into an HTML shader variant browser in this directory (doc/erhe/graphics.md 'Shader variant browser'): index.html lists each program's variant key with its SPIR-V size and instruction count before and after the SPIRV-Tools optimizer, and each program's page shows its sources and both SPIR-V disassemblies. Programs served from the SPIR-V cache are not compiled and so not recorded; delete spirv_cache/ to record every program. The editor's --shader-variant-browser <directory> option sets it. Change requires restart.",
+            long_desc="When not empty, every shader program compiled from GLSL in this process is recorded into an HTML shader variant browser in this directory (doc/erhe/graphics.md 'Shader variant browser'): index.html lists each program's variant key with its SPIR-V size and instruction count before and after the SPIRV-Tools optimizer, and each program's page shows its sources and both SPIR-V disassemblies. The recording reads only SPIR-V cache entries that carry their record (spirv_cache_records) and compiles every other program, so every program the process uses is recorded. The editor's --shader-variant-browser <directory> option sets it. Change requires restart.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "spirv_cache_records",
+            String,
+            added_in=6,
+            default='"auto"',
+            short_desc="SPIR-V Cache Records",
+            long_desc="Keep beside each SPIR-V cache entry what shader analysis needs (doc/erhe/graphics.md 'SPIR-V cache records'): the stage's sources as parsed, its preamble, its includes and, when the cached module is the optimized one, the unoptimized module. 'auto' is on except on Android, 'on' and 'off' force it. With records on, a cached entry without a record compiles once to gain one. Change requires restart.",
             visible=True,
             developer=False
         ),

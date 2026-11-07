@@ -7,6 +7,7 @@
 // mcp_server_shared.cpp; only templates stay in the header.
 
 #include "content_library/content_library.hpp"  // Content_library (find_library_item)
+#include "renderers/shader_analytics.hpp"        // Shader_analytics, Shader_cost_metric
 #include "tools/mesh_component_selection.hpp"   // Mesh_component_mode
 #include "transform/transform_tool_settings.hpp" // Transform_reference_mode
 
@@ -298,6 +299,20 @@ auto bearer_token_from(const httplib::Request& req) -> std::optional<std::string
 // The counts of shaded / rasterized overdraw statistics (get_overdraw_stats,
 // render_scene_image output overdraw) added to result.
 void add_overdraw_count_statistics(const erhe::scene_renderer::Overdraw_statistics& statistics, json& result);
+
+// Overdraw mode cost (doc/plans/shader_cost.md B2): the metric args "metric"
+// names (default: the selected one) checked against the loaded analytics and
+// selected; it is global, so cost views elsewhere switch to it too. Nullopt
+// with the reason in error.
+[[nodiscard]] auto select_shader_cost_metric(Shader_analytics* analytics, const json& args, std::string& error) -> std::optional<Shader_cost_metric>;
+
+// The per-pixel values of cost overdraw statistics in metric units, added to result.
+void add_overdraw_cost_statistics(
+    const erhe::scene_renderer::Overdraw_statistics& statistics,
+    const Shader_analytics&                          analytics,
+    Shader_cost_metric                               metric,
+    json&                                            result
+);
 
 } // namespace mcp_server_detail
 

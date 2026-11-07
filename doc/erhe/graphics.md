@@ -730,7 +730,33 @@ benchmark runs), and the desktop profiling scripts (`bistro_frame_bench.py`,
 `ERHE_SPIRV_OPTIMIZATION=1|0` environment override, on by default
 (`--spirv-optimization off` for an A/B run). SPIRV-Tools and SPIRV-Headers are
 CPM dependencies pinned to the commits glslang's `known_good.json` names
-(glslang is built with `ENABLE_OPT`).
+(glslang is built with `ENABLE_OPT`). `optimize_spirv()`
+(`shader_variant_report.hpp`) runs the same optimizer on any module, on any
+thread.
+
+## SPIR-V cache records
+
+With `Graphics_config::spirv_cache_records` on (`auto`: on except on
+Android; `on`, `off`), every stage `Glslang_shader_stages::link_program()`
+compiles stores, beside its `Spirv_cache` entry and under the same key, the
+`Spirv_cache_record` shader analysis reads: the top-level file name, the
+source as glslang parsed it (`#version`, the preamble include, the file),
+the synthesized preamble, the files the stage's parse included (its own,
+not its program's: programs share cached stages, such as one vertex shader
+under several post-processing programs), and the unoptimized module when
+the cached module is the optimized one. With
+`spirv_optimization` off nothing more is stored: the optimized module is
+`optimize_spirv()` of the cached one. Files: `<key>.record.json` (written
+last, so a record names only files that exist), the texts as
+content-addressed blobs `blobs/<fnv64>.glsl` (a program's top-level file is
+shared by all its variants), `<key>.unoptimized.spv`. A default editor
+session's sources add about 47 KB per stage beside about 160 KB per module.
+
+With records on a cache entry without its record is not a hit: the stage
+compiles once and its entry gains a record, so an existing cache fills in
+during one session. `Shader_program_module::cache_key` names the entry of
+each module a program observer sees, so the observer reads the record later
+(`Spirv_cache::get_record()`).
 
 ## Named define values
 
@@ -786,9 +812,10 @@ compiled: per stage the top-level source as parsed, the synthesized
 `erhe_preamble.glsl`, the unoptimized SPIR-V and the SPIR-V after the
 optimizer of "SPIR-V optimization" (which runs for the report whether or not
 `spirv_optimization` is on; the module the device uses follows that setting).
-While the report exists the `Spirv_cache` is not read (it is still
-written), so every program the session uses is compiled and recorded. A
-recording starts fresh:
+While the report exists a `Spirv_cache` entry is read only when it carries
+its record ("SPIR-V cache records"), and the program is recorded from the
+records; every other program compiles, so every program the session uses is
+recorded. A recording starts fresh:
 the report's constructor removes the directory's `variants/`, `index.html`,
 `analytics.js` and `fragments.js` of an earlier recording.
 
@@ -809,7 +836,9 @@ enum-valued define, the name of its value ("Named define values"; also in
 the index's key tooltips and the manifest's `define_value_names`), the sources including
 the included files, the SPIR-V disassembly before optimization and after it,
 and, when `analytics.js` is present, one tab per analyzed core, such as
-"Mali G310", from "Mali analytics" below; the active tab is remembered across program pages)
+"Mali G310" and "PowerVR BXM-8-256", from "Mali analytics" and
+"PowerVR analytics" below; the active tab is
+remembered across program pages)
 and the raw modules `variants/<id>_<stage>.spv` / `<id>_<stage>_optimized.spv`
 and sources `variants/<id>_<stage>.glsl` (the top-level source as parsed) /
 `<id>_<stage>_preamble.glsl`,
@@ -853,7 +882,7 @@ adds a Fragments column group: per program the fragment shader invocations
 of the captured frame and their share of the frame, and per analytics
 column group the estimate of the frame's work of the variant - the
 fragments times the fragment (or compute) `Main` cost after optimization
-(Mali cycles) - with the estimate's share; the bar
+(Mali and PowerVR cycles) - with the estimate's share; the bar
 names the captured frame and how much of its invocations the recorded
 programs cover. Each program page names its fragments. Programs are matched
 by name and variant defines (`JSON.stringify([name, defines])`), so a
@@ -862,10 +891,11 @@ variants.
 
 ### Mali analytics
 
-`py -3 scripts/shader_analytics.py <directory> [--core <name>] [--malioc <path>] [--jobs N] [--force] [--check]`
+`py -3 scripts/shader_analytics.py <directory> [--core <name>] [--malioc <path>] [--powervr <path>] [--jobs N] [--force] [--check]`
 runs the offline compiler of each `--core`: `Mali-<name>` cores the Arm
-Mali Offline Compiler. Without `--core` every compiler found contributes
-its default core. For Mali it runs the Arm Mali Offline Compiler (`malioc`; found through `--malioc`, the
+Mali Offline Compiler (this section), `PowerVR-<GPU>` cores the
+Imagination PowerVR profiling compiler ("PowerVR analytics"). Without
+`--core` every compiler found contributes its default core. For Mali it runs the Arm Mali Offline Compiler (`malioc`; found through `--malioc`, the
 `ERHE_MALIOC` path list (executables or directories), or `PATH`; its install location is per
 machine) on every stage module of the manifest, before and after the
 optimizer, and keeps each raw JSON report as
@@ -879,7 +909,7 @@ name, and a compiler crash is recorded as an error naming the signal.
 
 The pass writes `<directory>/analytics.js`
 (`window.erhe_shader_analytics`, schema `erhe_shader_analytics` 2): per
-core (its block names its `compiler`, `malioc`; `default_cores`
+core (its block names its `compiler`, `malioc` or `powervr`; `default_cores`
 names the first core of each compiler), per program id, per stage, a
 `before` and an `after` summary; for a Mali core with the compiler's variants (`Main`; `Position` and `Varying` for vertex shaders:
 work and uniform registers, thread occupancy, stack, spill and alloca bytes,
@@ -890,7 +920,7 @@ color buffer reads), the vertex attribute streams, warnings and notes. A
 script element is the one way a page opened from disk reads a sibling
 file, so the sidecar is JavaScript. When it is present, `index.html` adds
 a column group per compiler, each from that compiler's default core, the
-headers prefixed with the core (`G310`). The Mali group: the fragment or
+headers prefixed with the core (`G310`, `BXM-8-256`). The Mali group: the fragment or
 compute `Main` total cycles before and after optimization with the bound
 pipelines, the vertex `Position` and `Varying` cycles after, the maximum
 work registers and the minimum occupancy over the stages, the spill bytes,
@@ -923,6 +953,63 @@ estimate per shader (Arm Mali Offline Compiler User Guide 2.7 - 2.9).
 
 Future work: [plans/vulkan_texture_heap_sampler_array.md](../plans/vulkan_texture_heap_sampler_array.md)
 (a Vulkan heap path without descriptor indexing, for Bifrost drivers).
+
+### PowerVR analytics
+
+For `PowerVR-<GPU>` cores (default `PowerVR-BXM-8-256`)
+`scripts/shader_analytics.py` runs the Imagination PowerVR profiling compiler
+(`ProfilingCompilerCLIWrapper` of the PowerVR SDK, with its per-core compiler
+libraries `libspvcompiler_sdk.<BVNC>.so` in the same directory; found
+through `--powervr`, the `ERHE_POWERVR` path list, or `PATH`; its install
+location is per machine) on every stage module, before and after the
+optimizer, like the Mali pass. The compiler names a core by its BVNC; the
+GPU name resolves to it through the BVNC list `ProfilingCompilerCLIWrapper
+-h` prints (`35.3.408.101: Series B BXM-8-256, MediaTek Dimensity 930`), and
+`PowerVR-<BVNC>` names one directly (a few Series 6 GPU names list several
+BVNCs). A core is usable only when the SDK holds its SPIR-V compiler library.
+The wrapper has no version option: the version is the DDK build the library
+embeds (`rogueddk MAIN@6451761`). It detects the stage from the module's
+entry point and takes no entry point name or specialization constants. It
+writes its report into its working directory as `<module file name>.json`,
+so each invocation runs in its own temporary directory; the exit code is 1
+when the compile fails, with the error on stdout (`ERROR: Compiler failed
+with unknown error.` for every rejected module), and a malformed module
+crashes it (SIGABRT). Each raw report is kept as
+`variants/<id>_<stage>[_optimized].<core>.powervr.json` (the compiler's
+`information`, per shader variant (`Main`) its `counters` and its USC
+`disassembly`, plus an `erhe` block: core, BVNC, compiler version, module,
+command line, exit code, and the compiler's text on failure). The report's
+`information.type` reads `vertex` for every stage and is not used. The
+compiler is not deterministic on vertex modules: the same module compiled
+again reports one instruction more or fewer (with the cycle, pre-feedback
+cost and output register counts) in 16 of 20 vertex modules over 8 runs,
+while fragment and compute modules repeat exactly; `Memory Used HWM` (the
+compiler's own memory) varies on every stage.
+
+Per stage the sidecar keeps, per variant, every counter under its long name
+(cycle count, instruction count, temporary, input and output registers,
+USC utilisation, maximum parallel instances, sample and iterate counts,
+register bank reads, writes and clashes, pre- and post-feedback phase
+costs) and the cycles, instructions, temporary registers, samples and USC
+utilisation for the index. The cycle count (`uNaiveCycleCount`) is a
+straight-line count: a loop body counts once whatever its trip count (a
+fragment shader whose loop runs a uniform count of iterations: 511 cycles,
+against 472 for the same body run once). The index column group: the
+fragment (or compute) cycles before and after, its instructions and samples
+after, the vertex cycles after, the maximum temporary registers and minimum
+USC utilisation over the stages, and the `error` flag; the summary line adds
+the sum of the fragment and compute cycles. The program page shows, per
+stage, a before / after / delta table of every counter.
+
+The default core is BXM-8-256, of the SPIR-V compiler libraries the
+profiling compiler ships (22.87.104.18 GE8320, 24.50.208.504 GM9445 and
+35.3.408.101 BXM-8-256) the one that accepts erhe's modules as the device
+uses them. A sweep of 3146 cached Vulkan modules (2026-11-04, build
+MAIN@6451761): BXM-8-256 (Volcanic) accepts all but the 34 ray-query
+modules; GM9445 (Rogue) also rejects the 1862 modules that declare
+`RuntimeDescriptorArray` (the Vulkan texture heap), as Mali Bifrost does
+(GE8320 compiles a trivial shader and rejects the texture heap `standard`
+fragment shader too; not swept).
 
 ## Present calibration cache
 

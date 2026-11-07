@@ -1463,7 +1463,12 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             if (m_scene_image_capture->get_output() == Scene_image_output::overdraw) {
                 const erhe::scene_renderer::Overdraw_statistics& statistics = m_scene_image_capture->get_overdraw_statistics();
                 json overdraw_statistics = json{{"valid", statistics.valid}};
-                if (statistics.valid) {
+                const std::optional<Shader_cost_metric> metric = result.contains("metric")
+                    ? parse_shader_cost_metric(result["metric"].get<std::string>())
+                    : std::optional<Shader_cost_metric>{};
+                if (statistics.valid && metric.has_value() && (m_context.shader_analytics != nullptr)) {
+                    add_overdraw_cost_statistics(statistics, *m_context.shader_analytics, metric.value(), overdraw_statistics);
+                } else if (statistics.valid) {
                     add_overdraw_count_statistics(statistics, overdraw_statistics);
                 }
                 result["overdraw_statistics"] = overdraw_statistics;
@@ -1568,6 +1573,7 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
     // Output overdraw (doc/plans/overdraw_visualization.md O6): the counting
     // mode and the heat map's max count, with the viewport's defaults.
     Overdraw_frame overdraw{};
+    std::optional<Shader_cost_metric> shader_cost_metric{};
     if (output == Scene_image_output::overdraw) {
         if ((m_context.overdraw_counter == nullptr) || !m_context.overdraw_counter->is_supported()) {
             return make_error_content(
@@ -1583,8 +1589,10 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             overdraw.mode = Overdraw_mode::shaded;
         } else if (overdraw_mode_name == "rasterized") {
             overdraw.mode = Overdraw_mode::rasterized;
+        } else if (overdraw_mode_name == "cost") {
+            overdraw.mode = Overdraw_mode::cost;
         } else {
-            return make_error_content("render_scene_image: 'overdraw_mode' must be \"shaded\" or \"rasterized\"");
+            return make_error_content("render_scene_image: 'overdraw_mode' must be \"shaded\", \"rasterized\" or \"cost\"");
         }
         if (args.contains("max_count")) {
             if (!args["max_count"].is_number_integer() || (args["max_count"].get<int>() < 1)) {
@@ -1592,8 +1600,30 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             }
             overdraw.max_count = static_cast<uint32_t>(args["max_count"].get<int>());
         }
-    } else if (args.contains("overdraw_mode") || args.contains("max_count")) {
-        return make_error_content("render_scene_image: 'overdraw_mode' and 'max_count' apply to output \"overdraw\" only");
+        if (overdraw.mode == Overdraw_mode::cost) {
+            // doc/plans/shader_cost.md B2: weighted by a metric of the loaded analytics.
+            std::string error;
+            shader_cost_metric = select_shader_cost_metric(m_context.shader_analytics, args, error);
+            if (!shader_cost_metric.has_value()) {
+                return make_error_content("render_scene_image: " + error);
+            }
+            if (args.contains("max_value")) {
+                if (args.contains("max_count")) {
+                    return make_error_content("render_scene_image: give 'max_value' (metric units) or 'max_count' (weight units), not both");
+                }
+                if (!args["max_value"].is_number() || !(args["max_value"].get<double>() > 0.0)) {
+                    return make_error_content("render_scene_image: 'max_value' must be a number > 0 (metric units)");
+                }
+                const double weight_units = args["max_value"].get<double>() / Shader_analytics::get_weight_scale(shader_cost_metric.value());
+                overdraw.max_count = std::max(uint32_t{1}, static_cast<uint32_t>(std::lround(weight_units)));
+            } else if (!args.contains("max_count")) {
+                overdraw.max_count = get_default_shader_cost_max(*m_context.shader_analytics, shader_cost_metric.value());
+            }
+        } else if (args.contains("metric") || args.contains("max_value")) {
+            return make_error_content("render_scene_image: 'metric' and 'max_value' apply to overdraw_mode \"cost\" only");
+        }
+    } else if (args.contains("overdraw_mode") || args.contains("max_count") || args.contains("metric") || args.contains("max_value")) {
+        return make_error_content("render_scene_image: 'overdraw_mode', 'max_count', 'metric' and 'max_value' apply to output \"overdraw\" only");
     }
     const int preset_msaa  = (m_context.app_settings != nullptr) ? m_context.app_settings->graphics.current_graphics_preset.msaa_sample_count : 0;
     const int msaa_samples = args.value("msaa_samples", preset_msaa);
@@ -1759,8 +1789,15 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
         m_scene_image_header["background"] = json{{"marker", "nan"}};
     }
     if (output == Scene_image_output::overdraw) {
-        m_scene_image_header["overdraw_mode"] = (overdraw.mode == Overdraw_mode::rasterized) ? "rasterized" : "shaded";
+        m_scene_image_header["overdraw_mode"] = args.value("overdraw_mode", std::string{"shaded"});
         m_scene_image_header["max_count"]     = overdraw.max_count;
+        if (shader_cost_metric.has_value()) {
+            const Shader_cost_metric metric = shader_cost_metric.value();
+            m_scene_image_header["metric"]       = c_str(metric);
+            m_scene_image_header["metric_title"] = m_context.shader_analytics->get_metric_title(metric);
+            m_scene_image_header["weight_scale"] = Shader_analytics::get_weight_scale(metric);
+            m_scene_image_header["max_value"]    = static_cast<double>(overdraw.max_count) * Shader_analytics::get_weight_scale(metric);
+        }
     }
     if (shadow_debug_light) {
         m_scene_image_header["shadow_debug_light"] = shadow_debug_light_json;

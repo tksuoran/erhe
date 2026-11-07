@@ -98,21 +98,10 @@ auto Mcp_server::action_set_overdraw_visualization(const json& args) -> std::str
     // The cost mode (doc/plans/shader_cost.md B2) weighs by a metric of the loaded analytics.
     Shader_analytics* const analytics = m_context.shader_analytics;
     if (mode.value() == Overdraw_mode::cost) {
-        if ((analytics == nullptr) || !analytics->is_loaded()) {
-            return make_error_content("mode cost needs shader analytics: load_shader_analytics (or --shader-analytics) first");
+        std::string error;
+        if (!select_shader_cost_metric(analytics, args, error).has_value()) {
+            return make_error_content(error);
         }
-        Shader_cost_metric metric = analytics->get_selected_metric();
-        if (args.contains("metric")) {
-            const std::optional<Shader_cost_metric> parsed = parse_shader_cost_metric(args.value("metric", std::string{}));
-            if (!parsed.has_value()) {
-                return make_error_content(fmt::format("metric '{}' is not a shader cost metric (load_shader_analytics lists them)", args.value("metric", std::string{})));
-            }
-            metric = parsed.value();
-        }
-        if (!analytics->has_metric(metric)) {
-            return make_error_content(fmt::format("the loaded analytics have no Mali core for metric {}", c_str(metric)));
-        }
-        analytics->select_metric(metric);
     } else if (args.contains("metric") || args.contains("max_value")) {
         return make_error_content("metric and max_value apply to mode cost only");
     }
@@ -201,21 +190,8 @@ auto Mcp_server::query_overdraw_stats(const json& args) -> std::string
             : "Overdraw visualization is off for this viewport (set_overdraw_visualization)";
         return make_json_content(result).dump();
     }
-    if (statistics.overdraw == erhe::scene_renderer::Overdraw_count::cost) {
-        // Weighted counts: the 32-bit total overflows, so only the per-pixel values.
-        const Shader_analytics* const analytics = m_context.shader_analytics;
-        const double scale = (analytics != nullptr) ? Shader_analytics::get_weight_scale(analytics->get_selected_metric()) : 1.0;
-        result["frame_index"]       = statistics.frame_index;
-        result["counted_mode"]      = "cost";
-        result["width"]             = statistics.width;
-        result["height"]            = statistics.height;
-        result["covered_pixels"]    = statistics.covered_pixel_count;
-        result["max_weight"]        = statistics.max_count;
-        if (analytics != nullptr) {
-            result["metric"]           = c_str(analytics->get_selected_metric());
-            result["max_value"]        = static_cast<double>(statistics.max_count) * scale;
-            result["missing_variants"] = analytics->get_missing_variant_count();
-        }
+    if ((statistics.overdraw == erhe::scene_renderer::Overdraw_count::cost) && (m_context.shader_analytics != nullptr)) {
+        add_overdraw_cost_statistics(statistics, *m_context.shader_analytics, m_context.shader_analytics->get_selected_metric(), result);
         return make_json_content(result).dump();
     }
     add_overdraw_count_statistics(statistics, result);
@@ -223,6 +199,49 @@ auto Mcp_server::query_overdraw_stats(const json& args) -> std::string
 }
 
 namespace mcp_server_detail {
+
+auto select_shader_cost_metric(Shader_analytics* const analytics, const json& args, std::string& error) -> std::optional<Shader_cost_metric>
+{
+    if ((analytics == nullptr) || !analytics->is_loaded()) {
+        error = "mode cost needs shader analytics: load_shader_analytics (or --shader-analytics) first, or wait for the background analysis (load_shader_analytics reports its service)";
+        return std::nullopt;
+    }
+    Shader_cost_metric metric = analytics->get_selected_metric();
+    if (args.contains("metric")) {
+        const std::string name = args["metric"].is_string() ? args["metric"].get<std::string>() : args["metric"].dump();
+        const std::optional<Shader_cost_metric> parsed = parse_shader_cost_metric(name);
+        if (!parsed.has_value()) {
+            error = fmt::format("metric '{}' is not a shader cost metric (load_shader_analytics lists them)", name);
+            return std::nullopt;
+        }
+        metric = parsed.value();
+    }
+    if (!analytics->has_metric(metric)) {
+        error = fmt::format("the loaded analytics have no {} core for metric {}", c_str(get_compiler(metric)), c_str(metric));
+        return std::nullopt;
+    }
+    analytics->select_metric(metric);
+    return metric;
+}
+
+void add_overdraw_cost_statistics(
+    const erhe::scene_renderer::Overdraw_statistics& statistics,
+    const Shader_analytics&                          analytics,
+    const Shader_cost_metric                         metric,
+    json&                                            result
+)
+{
+    // Weighted counts: the 32-bit total overflows, so only the per-pixel values.
+    result["frame_index"]      = statistics.frame_index;
+    result["counted_mode"]     = "cost";
+    result["width"]            = statistics.width;
+    result["height"]           = statistics.height;
+    result["covered_pixels"]   = statistics.covered_pixel_count;
+    result["max_weight"]       = statistics.max_count;
+    result["metric"]           = c_str(metric);
+    result["max_value"]        = static_cast<double>(statistics.max_count) * Shader_analytics::get_weight_scale(metric);
+    result["missing_variants"] = analytics.get_missing_variant_count();
+}
 
 void add_overdraw_count_statistics(const erhe::scene_renderer::Overdraw_statistics& statistics, json& result)
 {

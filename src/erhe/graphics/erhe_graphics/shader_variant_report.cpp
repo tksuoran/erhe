@@ -318,12 +318,13 @@ void Shader_variant_report::add(
     }
 
     // The included files, read now (the includer resolved them from these
-    // paths during the parse); the top-level files are shown per stage.
+    // paths during the parse), once each in first-include order (the parse
+    // lists a file once per #include of it); the top-level files are shown per stage.
     for (const std::filesystem::path& path : include_paths) {
         const bool is_main = std::any_of(stages.begin(), stages.end(), [&path](const Shader_variant_report_stage& stage) {
             return stage.main_name == path.generic_string();
         });
-        if (is_main) {
+        if (is_main || (std::find(row.includes.begin(), row.includes.end(), path.generic_string()) != row.includes.end())) {
             continue;
         }
         row.includes.push_back(path.generic_string());
@@ -366,7 +367,7 @@ summary {{ cursor: pointer; padding: 2px 0; }}
 <div class="tab" id="sources">{6}</div>
 <div class="tab" id="before">{7}</div>
 <div class="tab" id="after">{8}</div>
-<div class="tab" id="analytics"><p class="muted">No analytics recorded: run <code>py -3 scripts/shader_analytics.py &lt;browser directory&gt;</code> to write <code>analytics.js</code> (doc/erhe/graphics.md "Mali analytics").</p></div>
+<div class="tab" id="analytics"><p class="muted">No analytics recorded: run <code>py -3 scripts/shader_analytics.py &lt;browser directory&gt;</code> to write <code>analytics.js</code> (doc/erhe/graphics.md "Mali analytics", "PowerVR analytics").</p></div>
 <script>
 // The analytics script below replaces the analytics tab with one tab per core,
 // so switching is delegated; the active tab is remembered across program pages.
@@ -398,7 +399,8 @@ document.querySelector('.tabs').addEventListener('click', e => {{
 <script>
 // The analytics tabs, one per core, rendered from analytics.js
 // (scripts/shader_analytics.py) when it is present: per stage, per compiler variant a before /
-// after / delta table (Mali: Main, or Position and Varying for vertex shaders).
+// after / delta table (Mali: Main, or Position and Varying for vertex shaders;
+// PowerVR: Main).
 (function() {{
   const a = window.erhe_shader_analytics; if (!a || !a.cores) return;
   const esc = s => String(s).replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}})[c]);
@@ -440,6 +442,24 @@ document.querySelector('.tabs').addEventListener('click', e => {{
     }}
     return out;
   }};
+  // PowerVR: per variant (Main) the compiler's counters, by their long names.
+  const powervrSense = n => (n === 'USC Utilisation' || n === 'Max Parallel Instances') ? -1 : (n === 'Memory Used HWM' ? 0 : 1);
+  const renderPowervrStage = s => {{
+    const b = s.before, af = s.after;
+    let out = '';
+    for (const [label, x] of [['before', b], ['after', af]]) if (x && x.error) out += `<p class="bad">${{label}}: ${{esc(x.error)}}</p>`;
+    const bv = (b && b.variants) || [], av = (af && af.variants) || [];
+    const names = [...new Set([...bv.map(v => v.name), ...av.map(v => v.name)])];
+    for (const name of names) {{
+      const x = bv.find(v => v.name === name), y = av.find(v => v.name === name);
+      const xs = new Map((x && x.counters) || []), ys = new Map((y && y.counters) || []);
+      const counterNames = [...new Set([...xs.keys(), ...ys.keys()])];
+      out += `<details open><summary>${{esc(name)}}</summary><table><tr><th></th><th class="num">Before</th><th class="num">After</th><th class="num">Delta</th></tr>`;
+      out += counterNames.map(n => row(n, xs.get(n), ys.get(n), powervrSense(n))).join('') + '</table></details>';
+    }}
+    for (const [label, x] of [['before', b], ['after', af]]) if (x && x.command) out += `<p class="muted mono">${{label}}: ${{esc(x.command)}}</p>`;
+    return out;
+  }};
   const tabs = [];
   for (const coreName of Object.keys(a.cores)) {{
     const core = a.cores[coreName];
@@ -447,11 +467,16 @@ document.querySelector('.tabs').addEventListener('click', e => {{
     if (!prog) continue;
     let html = '';
     tabs.push([coreName, () => html]);
+    if (core.compiler === 'powervr') {{
+      html += `<h3>${{esc(coreName)}} <span class="muted">BVNC ${{esc(core.bvnc || '')}}, ${{esc(core.architecture || '')}} (${{esc(core.soc || '')}}), PowerVR profiling compiler ${{esc(core.powervr_version || '')}}, ${{esc(core.generated || '')}}</span></h3>`;
+      for (const stage of Object.keys(prog)) html += `<h4>${{stageNames[stage] || stage}}</h4>` + renderPowervrStage(prog[stage]);
+      continue;
+    }}
     html += `<h3>${{esc(coreName)}} ${{esc(core.revision || '')}} <span class="muted">${{esc(core.architecture || '')}}, driver ${{esc(core.driver || '')}}, Mali Offline Compiler ${{esc(core.malioc_version || '')}}, ${{esc(core.generated || '')}}</span></h3>`;
     for (const stage of Object.keys(prog)) html += `<h4>${{stageNames[stage] || stage}}</h4>` + renderStage(core, prog[stage]);
   }}
   if (!tabs.length) return;
-  // One tab per core ("Mali G310") in place of the analytics placeholder.
+  // One tab per core ("Mali G310", "PowerVR BXM-8-256") in place of the analytics placeholder.
   const placeholder = document.getElementById('analytics');
   document.querySelector('.tabs button[data-tab="analytics"]').remove();
   tabs.forEach(([coreName, html], i) => {{
@@ -741,10 +766,13 @@ const renderKey = r => shownAxes.map(a => {{
 // compute) Main total cycles before and after optimization with the bound
 // pipelines, the vertex Position and Varying cycles after, the maximum work
 // registers and minimum occupancy over the stages, the spill bytes summed,
-// and flags.
+// and flags. PowerVR: the fragment (or compute) Main cycles before and after, its
+// instructions and samples after, the vertex Main cycles after, the maximum
+// temporary registers and minimum USC utilisation over the stages, flags.
 const analytics = window.erhe_shader_analytics;
 const analyticsCores = (analytics && analytics.cores) || {{}};
 const maliCoreName = analytics ? (analytics.default_cores ? analytics.default_cores.malioc : analytics.default_core) : null;
+const powervrCoreName = (analytics && analytics.default_cores) ? analytics.default_cores.powervr : null;
 const maxCycles = v => (v && v.total) ? Math.max(...v.total.filter(x => typeof x === 'number'), 0) : null;
 function summarizeMali(prog) {{
   const out = [null, null, '', null, null, null, null, null, ''];
@@ -775,13 +803,39 @@ function summarizeMali(prog) {{
   out[5] = regs; out[6] = occ; out[7] = spill; out[8] = [...flags].join(' ');
   return out;
 }}
-const shortCore = name => name.replace(/^Mali-/, '');
+function summarizePowervr(prog) {{
+  const out = [null, null, null, null, null, null, null, ''];
+  if (!prog) return out;
+  let error = false, temps = null, util = null;
+  const main = summary => (summary && !summary.error && summary.variants) ? summary.variants.find(x => x.name === 'Main') : null;
+  for (const stage of Object.keys(prog)) {{
+    const s = prog[stage], b = s.before, af = s.after || s.before;
+    if ((b && b.error) || (af && af.error)) error = true;
+    if (!af || af.error) continue;
+    for (const v of af.variants || []) {{
+      if (typeof v.temp_registers === 'number') temps = (temps === null) ? v.temp_registers : Math.max(temps, v.temp_registers);
+      if (typeof v.utilisation === 'number') util = (util === null) ? v.utilisation : Math.min(util, v.utilisation);
+    }}
+    const mb = main(b), ma = main(af);
+    if (stage === 'frag' || stage === 'comp') {{ out[0] = mb ? mb.cycles : null; out[1] = ma ? ma.cycles : null; out[2] = ma ? ma.instructions : null; out[3] = ma ? ma.samples : null; }}
+    if (stage === 'vert') out[4] = ma ? ma.cycles : null;
+  }}
+  out[5] = temps; out[6] = util; out[7] = error ? 'error' : '';
+  return out;
+}}
+const shortCore = name => name.replace(/^Mali-/, '').replace(/^PowerVR-/, '');
 const columnGroups = [];
-// columns: [label, numeric, bad(value)]; sum: the two columns the summary line totals
+// columns: [label, numeric, bad(value)]; sum: the two columns the summary line totals;
+// unit: of the fragment cost column (offset + 1) the fragments estimate multiplies
 if (maliCoreName && analyticsCores[maliCoreName]) columnGroups.push({{
-  core: maliCoreName, summarize: summarizeMali, flags: 8, sum: [0, 1], sumLabel: 'Main cycles',
+  core: maliCoreName, summarize: summarizeMali, flags: 8, sum: [0, 1], sumLabel: 'Main cycles', unit: 'cyc.',
   columns: [['Main cyc. before', true], ['Main cyc. after', true], ['Bound', false], ['Pos. cyc.', true], ['Var. cyc.', true], ['Regs', true],
     ['Occ. %', true, v => v !== null && v < 100], ['Spill B', true, v => v > 0], ['Flags', false, v => (v || '').includes('error')]]
+}});
+if (powervrCoreName && analyticsCores[powervrCoreName]) columnGroups.push({{
+  core: powervrCoreName, summarize: summarizePowervr, flags: 7, sum: [0, 1], sumLabel: 'FS/CS cycles', unit: 'cyc.',
+  columns: [['Cyc. before', true], ['Cyc. after', true], ['Instr.', true], ['Samples', true], ['VS cyc.', true], ['Temps', true],
+    ['Util. %', true], ['Flags', false, v => (v || '').includes('error')]]
 }});
 // Fragments of a captured frame (fragments.js, MCP capture_fragment_invocations;
 // doc/plans/shader_cost.md A3), matched by the key JSON.stringify([name, defines]):
@@ -802,7 +856,7 @@ const rowKey = r => JSON.stringify([r[1], r[2].map(d => [d[0], d[1]])]);
     offset += g.columns.length;
   }}
   if (fragmentPrograms) {{
-    const estimates = coreGroups.map(g => ({{ tag: g.tag, unit: (g === coreGroups.find(c => c.core === maliCoreName)) ? 'cyc.' : 'instr.', column: g.offset + 1 }}));
+    const estimates = coreGroups.map(g => ({{ tag: g.tag, unit: g.unit, column: g.offset + 1 }}));
     const columns = [['Fragments', true], ['Frame %', true]];
     for (const e of estimates) columns.push([`${{e.tag}} est. ${{e.unit}}`, true], [`${{e.tag}} est. %`, true]);
     // A program recorded twice (same name and defines) shows its fragments on both rows, counted once.

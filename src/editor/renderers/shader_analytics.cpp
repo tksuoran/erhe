@@ -21,16 +21,35 @@ constexpr const char* c_metric_names[] = {
     "mali_cycles",
     "mali_arithmetic_cycles",
     "mali_texture_cycles",
-    "mali_load_store_cycles"
+    "mali_load_store_cycles",
+    "powervr_cycles",
+    "powervr_instructions",
+    "powervr_samples",
+    "powervr_registers"
 };
 constexpr const char* c_metric_labels[] = {
     "cycles",
     "arithmetic cycles",
     "texture cycles",
-    "load/store cycles"
+    "load/store cycles",
+    "cycles",
+    "instructions",
+    "samples",
+    "temporary registers"
 };
-static_assert(std::size(c_metric_names)  == c_shader_cost_metric_count);
-static_assert(std::size(c_metric_labels) == c_shader_cost_metric_count);
+constexpr Offline_compiler c_metric_compilers[] = {
+    Offline_compiler::mali,
+    Offline_compiler::mali,
+    Offline_compiler::mali,
+    Offline_compiler::mali,
+    Offline_compiler::powervr,
+    Offline_compiler::powervr,
+    Offline_compiler::powervr,
+    Offline_compiler::powervr
+};
+static_assert(std::size(c_metric_names)     == c_shader_cost_metric_count);
+static_assert(std::size(c_metric_labels)    == c_shader_cost_metric_count);
+static_assert(std::size(c_metric_compilers) == c_shader_cost_metric_count);
 
 constexpr double c_missing = std::numeric_limits<double>::quiet_NaN();
 
@@ -99,7 +118,42 @@ constexpr double c_missing = std::numeric_limits<double>::quiet_NaN();
     return value.is_number() ? value.get<double>() : c_missing;
 }
 
+void set_metric(Shader_cost_metrics& metrics, const Shader_cost_metric metric, const double value)
+{
+    metrics[static_cast<std::size_t>(metric)] = value;
+}
+
 } // anonymous namespace
+
+auto c_str(const Offline_compiler compiler) -> const char*
+{
+    switch (compiler) {
+        case Offline_compiler::mali:    return "Mali";
+        case Offline_compiler::powervr: return "PowerVR";
+        default:                        return "?";
+    }
+}
+
+auto Offline_compiler_cores::get(const Offline_compiler compiler) const -> const std::string&
+{
+    switch (compiler) {
+        case Offline_compiler::mali: return mali;
+        default:                     return powervr;
+    }
+}
+
+auto Offline_compiler_cores::get(const Offline_compiler compiler) -> std::string&
+{
+    switch (compiler) {
+        case Offline_compiler::mali: return mali;
+        default:                     return powervr;
+    }
+}
+
+auto Offline_compiler_cores::empty() const -> bool
+{
+    return mali.empty() && powervr.empty();
+}
 
 auto c_str(const Shader_cost_metric metric) -> const char*
 {
@@ -111,6 +165,12 @@ auto get_label(const Shader_cost_metric metric) -> const char*
 {
     const std::size_t index = static_cast<std::size_t>(metric);
     return (index < c_shader_cost_metric_count) ? c_metric_labels[index] : "?";
+}
+
+auto get_compiler(const Shader_cost_metric metric) -> Offline_compiler
+{
+    const std::size_t index = static_cast<std::size_t>(metric);
+    return (index < c_shader_cost_metric_count) ? c_metric_compilers[index] : Offline_compiler::mali;
 }
 
 auto parse_shader_cost_metric(const std::string_view name) -> std::optional<Shader_cost_metric>
@@ -128,9 +188,10 @@ Shader_analytics::Shader_analytics(erhe::scene_renderer::Shader_variant_cache& s
 {
 }
 
-auto Shader_analytics::get_weight_scale(const Shader_cost_metric) -> double
+auto Shader_analytics::get_weight_scale(const Shader_cost_metric metric) -> double
 {
-    return 0.01;
+    // Mali cycle counts are fractional; PowerVR counts are integers.
+    return (get_compiler(metric) == Offline_compiler::mali) ? 0.01 : 1.0;
 }
 
 auto Shader_analytics::load(const std::filesystem::path& directory) -> std::string
@@ -157,11 +218,16 @@ auto Shader_analytics::read(const std::filesystem::path& directory, std::string&
     }
     const json& cores = (*analytics)["cores"];
     const json  default_cores = analytics->value("default_cores", json::object());
-    const std::string mali_core = default_cores.value("malioc", std::string{});
-    if (mali_core.empty()) {
-        error = "analytics.js names no Mali core (schema 2 default_cores)";
+    Offline_compiler_cores analytics_cores{
+        .mali    = default_cores.value("malioc",  std::string{}),
+        .powervr = default_cores.value("powervr", std::string{})
+    };
+    if (analytics_cores.empty()) {
+        error = "analytics.js names no Mali or PowerVR core (schema 2 default_cores)";
         return std::nullopt;
     }
+    const std::string& mali_core    = analytics_cores.mali;
+    const std::string& powervr_core = analytics_cores.powervr;
     const bool  optimized = manifest->value("tools", json::object()).value("spirv_optimization", false);
     const char* slot      = optimized ? "after" : "before";
 
@@ -200,25 +266,35 @@ auto Shader_analytics::read(const std::filesystem::path& directory, std::string&
                 metrics[static_cast<std::size_t>(Shader_cost_metric::mali_load_store_cycles)] = cycles_of("load_store");
             }
         }
+        if (!powervr_core.empty() && cores.contains(powervr_core)) {
+            const json* summary = find_fragment_summary(cores[powervr_core], id, slot);
+            const json* main    = (summary != nullptr) ? find_main_variant(*summary) : nullptr;
+            if (main != nullptr) {
+                set_metric(metrics, Shader_cost_metric::powervr_cycles,       number_or_missing(main->value("cycles",         json{})));
+                set_metric(metrics, Shader_cost_metric::powervr_instructions, number_or_missing(main->value("instructions",   json{})));
+                set_metric(metrics, Shader_cost_metric::powervr_samples,      number_or_missing(main->value("samples",        json{})));
+                set_metric(metrics, Shader_cost_metric::powervr_registers,    number_or_missing(main->value("temp_registers", json{})));
+            }
+        }
         programs[key] = metrics;
     }
 
     return Shader_analytics_data{
-        .directory   = directory,
-        .mali_core   = mali_core,
-        .modules     = slot,
-        .programs    = std::move(programs)
+        .directory = directory,
+        .cores     = std::move(analytics_cores),
+        .modules   = slot,
+        .programs  = std::move(programs)
     };
 }
 
 void Shader_analytics::apply(Shader_analytics_data&& data)
 {
-    m_directory   = std::move(data.directory);
-    m_mali_core   = std::move(data.mali_core);
-    m_programs    = std::move(data.programs);
+    m_directory = std::move(data.directory);
+    m_cores     = std::move(data.cores);
+    m_programs  = std::move(data.programs);
     log_render->info(
-        "Shader analytics: {} programs from {} (Mali core '{}', {} modules)",
-        m_programs.size(), m_directory.generic_string(), m_mali_core, data.modules
+        "Shader analytics: {} programs from {} (Mali core '{}', PowerVR core '{}', {} modules)",
+        m_programs.size(), m_directory.generic_string(), m_cores.mali, m_cores.powervr, data.modules
     );
     if (!has_metric(m_selected_metric)) {
         for (std::size_t i = 0; i < c_shader_cost_metric_count; ++i) {
@@ -232,17 +308,21 @@ void Shader_analytics::apply(Shader_analytics_data&& data)
 }
 
 void Shader_analytics::add_programs(
-    const std::string&                                          mali_core,
+    const Offline_compiler_cores&                               cores,
     std::vector<std::pair<std::string, Shader_cost_metrics>>&& programs
 )
 {
-    if (m_mali_core.empty()) {
-        m_mali_core = mali_core;
+    for (const Offline_compiler compiler : {Offline_compiler::mali, Offline_compiler::powervr}) {
+        if (m_cores.get(compiler).empty()) {
+            m_cores.get(compiler) = cores.get(compiler);
+        }
     }
-    const bool mali_matches = (m_mali_core == mali_core);
     for (auto& [key, metrics] : programs) {
-        if (!mali_matches) {
-            metrics.fill(c_missing);
+        for (std::size_t i = 0; i < c_shader_cost_metric_count; ++i) {
+            const Offline_compiler compiler = get_compiler(static_cast<Shader_cost_metric>(i));
+            if (m_cores.get(compiler) != cores.get(compiler)) {
+                metrics[i] = c_missing;
+            }
         }
         m_programs.insert_or_assign(std::move(key), metrics);
     }
@@ -258,9 +338,9 @@ void Shader_analytics::add_programs(
     install_weights();
 }
 
-auto Shader_analytics::get_core(const Shader_cost_metric) const -> const std::string&
+auto Shader_analytics::get_core(const Shader_cost_metric metric) const -> const std::string&
 {
-    return m_mali_core;
+    return m_cores.get(get_compiler(metric));
 }
 
 auto Shader_analytics::has_metric(const Shader_cost_metric metric) const -> bool
@@ -270,8 +350,11 @@ auto Shader_analytics::has_metric(const Shader_cost_metric metric) const -> bool
 
 auto Shader_analytics::get_metric_title(const Shader_cost_metric metric) const -> std::string
 {
+    // "PowerVR-BXM-8-256" -> "PowerVR BXM-8-256": the vendor prefix's dash only.
     std::string core = get_core(metric);
-    std::replace(core.begin(), core.end(), '-', ' ');
+    if (const std::size_t dash = core.find('-'); dash != std::string::npos) {
+        core[dash] = ' ';
+    }
     return core.empty() ? std::string{get_label(metric)} : fmt::format("{} {}", core, get_label(metric));
 }
 

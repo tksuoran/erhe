@@ -62,6 +62,7 @@ namespace editor {
 class Analytic_hover_provider;
 class Shader_analytics;
 class Shader_analytics_service;
+class Shader_session_programs;
 class Shader_variants_window;
 class Animation_player;
 class Animation_window;
@@ -318,6 +319,7 @@ public:
     erhe::scene_renderer::Shader_variant_cache*       shader_variant_cache      {nullptr};
     Shader_analytics*                                 shader_analytics          {nullptr};
     Shader_analytics_service*                         shader_analytics_service  {nullptr};
+    Shader_session_programs*                          shader_session_programs   {nullptr};
     erhe::scene_renderer::Program_interface*          program_interface         {nullptr};
 
     erhe::window::Context_window*      context_window       {nullptr};

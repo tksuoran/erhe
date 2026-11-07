@@ -33,9 +33,10 @@ the editor UI.
   reads the scene color itself, so its chain has no post-processing node.
   The overdraw output puts an `Overdraw_node` in place of the
   post-processing node, and the view counts its content passes' fragments
-  as a viewport in an overdraw mode does
-  (`doc/plans/overdraw_visualization.md` O6); the reply carries the counts
-  of that frame (`Overdraw_view_state::collect()`). A capture renders one
+  as a viewport in an overdraw mode does, the shader cost mode included
+  (`doc/plans/overdraw_visualization.md` O6, `doc/plans/shader_cost.md`
+  B2); the reply carries the counts of that frame
+  (`Overdraw_view_state::collect()`). A capture renders one
   frame, so occlusion culling, which tests against the previous frame of the
   same view, culls nothing in it.
 - `Scene_image_view` renders once: a later frame of the chain (frame

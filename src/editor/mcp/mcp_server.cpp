@@ -653,6 +653,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_overdraw_stats",             &Mcp_server::query_overdraw_stats                 },
         { "capture_fragment_invocations",   &Mcp_server::query_fragment_invocations           },
         { "load_shader_analytics",          &Mcp_server::action_load_shader_analytics         },
+        { "analyze_shader_programs",        &Mcp_server::action_analyze_shader_programs       },
         { "pick_at",                        &Mcp_server::query_pick_at                        },
         { "get_server_info",                &Mcp_server::query_server_info                    },
         { "set_window_visibility",          &Mcp_server::action_set_window_visibility         },

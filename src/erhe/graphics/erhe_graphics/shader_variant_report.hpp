@@ -23,6 +23,23 @@ class Shader_stages_create_info;
 [[nodiscard]] auto disassemble_spirv       (std::span<const unsigned int> spirv) -> std::string;
 // "vert", "frag", "comp", ...: the stage part of the browser's file names.
 [[nodiscard]] auto get_shader_variant_stage_short_name(Shader_type type) -> const char*;
+// The SPIRV-Tools optimizer as Graphics_config::spirv_optimization runs it
+// (doc/erhe/graphics.md "SPIR-V optimization"); nullopt when it fails or its
+// output does not validate (logged with label). Any thread.
+[[nodiscard]] auto optimize_spirv(std::span<const unsigned int> spirv, std::string_view label) -> std::optional<std::vector<unsigned int>>;
+// The linked SPIRV-Tools (spvSoftwareVersionString()): optimize_spirv()'s output depends on it.
+[[nodiscard]] auto get_spirv_tools_version() -> std::string;
+
+class Spirv_cache_record;
+class Shader_variant_report_stage;
+// A recorded stage from a Spirv_cache entry: its module and its record (both
+// modules; the one the cache does not hold is optimize_spirv() of the other).
+[[nodiscard]] auto make_report_stage(
+    const Spirv_cache_record&     record,
+    std::span<const unsigned int> cached_module,
+    Shader_type                   type,
+    std::string_view              label
+) -> Shader_variant_report_stage;
 
 // One stage of a program compiled by Glslang_shader_stages, as the shader
 // variant browser shows it: the sources handed to glslang and the SPIR-V

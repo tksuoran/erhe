@@ -1,18 +1,24 @@
 #include "windows/shader_variants_window.hpp"
+#include "renderers/shader_analytics_service.hpp"
+#include "renderers/shader_session_programs.hpp"
 
 #include "editor_log.hpp"
 
 #include "erhe_file/file.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/shader_variant_report.hpp"
+#include "erhe_graphics/spirv_cache.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <fmt/format.h>
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
 #include <algorithm>
 #include <cctype>
+#include <cfloat>
 #include <cmath>
 #include <cstring>
 #include <optional>
@@ -117,8 +123,23 @@ constexpr std::pair<std::string_view, std::string_view> c_compact_codes[] = {
     if (core.starts_with("Mali-")) {
         return std::string{core.substr(5)};
     }
+    if (core.starts_with("PowerVR-")) {
+        return std::string{core.substr(8)};
+    }
     return std::string{core};
 }
+
+// "Mali-G310" -> "Mali G310", "PowerVR-BXM-8-256" -> "PowerVR BXM-8-256": the vendor prefix's dash only.
+[[nodiscard]] auto core_title(const std::string_view core) -> std::string
+{
+    std::string title{core};
+    if (const std::size_t dash = title.find('-'); dash != std::string::npos) {
+        title[dash] = ' ';
+    }
+    return title;
+}
+
+constexpr const char* c_vendor_names[] = { "Mali", "PowerVR" };
 
 // JS-like truthiness lookups; null when absent.
 [[nodiscard]] auto member(const ordered_json* object, const char* key) -> const ordered_json*
@@ -396,10 +417,14 @@ void Shader_variants_window::Text_block::imgui(const char* label, const bool def
 Shader_variants_window::Shader_variants_window(
     erhe::imgui::Imgui_renderer&                 imgui_renderer,
     erhe::imgui::Imgui_windows&                  imgui_windows,
-    erhe::graphics::Shader_variant_report* const report
+    erhe::graphics::Shader_variant_report* const report,
+    Shader_session_programs* const               session_programs,
+    const Shader_analytics_service* const        shader_analytics_service
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Shader Variants", "shader_variants", true}
-    , m_report{report}
+    , m_report          {report}
+    , m_session_programs        {session_programs}
+    , m_shader_analytics_service{shader_analytics_service}
 {
     set_min_size(480.0f, 240.0f);
     set_initial_placement("", 0.8f, 0.8f);
@@ -408,12 +433,24 @@ Shader_variants_window::Shader_variants_window(
         m_directory_input = m_directory.generic_string();
         m_report->set_add_callback([this]() { request_reload(); });
     }
+    // Change-driven: the session list reloads when a program builds, shown or not.
+    if (m_session_programs != nullptr) {
+        m_session_programs->set_change_callback([this]() {
+            const std::lock_guard<std::mutex> lock{m_reload_mutex};
+            if (m_showing_session) {
+                m_reload_requested = true;
+            }
+        });
+    }
 }
 
 Shader_variants_window::~Shader_variants_window() noexcept
 {
     if (m_report != nullptr) {
         m_report->set_add_callback({});
+    }
+    if (m_session_programs != nullptr) {
+        m_session_programs->set_change_callback({});
     }
 }
 
@@ -484,7 +521,11 @@ auto Shader_variants_window::load_manifest(std::string& error) -> bool
                     .spirv_bytes                 = s.value("spirv_bytes",                 std::size_t{0}),
                     .optimized_spirv_bytes       = s.value("optimized_spirv_bytes",       std::size_t{0}),
                     .instruction_count           = s.value("instruction_count",           std::size_t{0}),
-                    .optimized_instruction_count = s.value("optimized_instruction_count", std::size_t{0})
+                    .optimized_instruction_count = s.value("optimized_instruction_count", std::size_t{0}),
+                    .cache_key                   = {},
+                    .shader_type                 = erhe::graphics::Shader_type::vertex_shader,
+                    .spirv_known                 = true,
+                    .optimized_spirv_known       = true
                 });
             }
         }
@@ -493,11 +534,167 @@ auto Shader_variants_window::load_manifest(std::string& error) -> bool
     return true;
 }
 
+void Shader_variants_window::load_session()
+{
+    const Shader_session_analysis_status analysis_status = m_session_programs->get_analysis_status();
+    m_session_analysis_info = !analysis_status.compilers_ready
+        ? ((m_shader_analytics_service == nullptr)
+            ? std::string{"Analysis needs the background shader analytics (editor settings shader_analytics.enabled) and an offline compiler"}
+            : std::string{"Analysis starts once the offline compilers are selected"})
+        : fmt::format(
+            "This session's programs: {} of {} analyzed{}; selecting a program analyzes it",
+            analysis_status.analyzed, analysis_status.program_count,
+            (analysis_status.queued > 0) ? fmt::format(", {} queued", analysis_status.queued) : std::string{}
+        );
+    // One column group per offline compiler the background analysis uses.
+    const Shader_analytics_service::Status status = (m_shader_analytics_service != nullptr)
+        ? m_shader_analytics_service->get_status()
+        : Shader_analytics_service::Status{};
+    m_mali_core    = status.mali_core;
+    m_powervr_core = status.powervr_core;
+    m_session_programs->copy_programs(m_session_scratch);
+
+    // The analyzed programs' results in the analytics.js shape: per core its
+    // block, with the programs by id (doc/erhe/graphics.md "Mali analytics").
+    ordered_json cores = ordered_json::object();
+    for (Shader_session_program& session_program : m_session_scratch) {
+        if (!session_program.analysis.is_object()) {
+            continue;
+        }
+        for (auto& [core_name, entry] : session_program.analysis.items()) {
+            if (!cores.contains(core_name)) {
+                ordered_json block = entry.contains("block") ? entry["block"] : ordered_json::object();
+                block["programs"] = ordered_json::object();
+                cores[core_name] = std::move(block);
+            }
+            if (entry.contains("program")) {
+                cores[core_name]["programs"][session_program.id] = std::move(entry["program"]);
+            }
+        }
+    }
+    m_analytics = ordered_json{
+        {"default_cores", ordered_json{{"malioc", m_mali_core}, {"powervr", m_powervr_core}}},
+        {"cores",         std::move(cores)}
+    };
+    const bool optimized = m_session_programs->get_device().get_graphics_config().spirv_optimization;
+    for (const Shader_session_program& session_program : m_session_scratch) {
+        Program program;
+        program.id    = session_program.id;
+        program.index = session_program.index;
+        program.name  = session_program.name;
+        program.fragments_key = session_program.key;
+        for (const auto& [name, value] : session_program.defines) {
+            Define define{.name = name, .value = value, .value_name = {}};
+            for (const auto& [value_name_define, value_name] : session_program.define_value_names) {
+                if (value_name_define == name) {
+                    define.value_name = value_name;
+                }
+            }
+            program.defines.push_back(std::move(define));
+        }
+        const auto detail = m_session_details.find(program.id);
+        if (detail != m_session_details.end()) {
+            program.stages   = detail->second.stages;
+            program.includes = detail->second.includes;
+        } else {
+            // Both modules' sizes once the background stats arrived; until
+            // then only the module the device uses is known.
+            for (const Shader_session_stage& session_stage : session_program.stages) {
+                const char* const type = erhe::graphics::get_shader_variant_stage_short_name(session_stage.type);
+                const bool known = session_stage.stats_known;
+                program.stages.push_back(Stage{
+                    .type                        = (type != nullptr) ? std::string{type} : std::string{"?"},
+                    .main_name                   = {},
+                    .source                      = {},
+                    .preamble                    = {},
+                    .spirv                       = {},
+                    .optimized_spirv             = {},
+                    .spirv_bytes                 = known ? session_stage.unoptimized_bytes        : (optimized ? 0 : session_stage.module_bytes),
+                    .optimized_spirv_bytes       = known ? session_stage.optimized_bytes          : (optimized ? session_stage.module_bytes : 0),
+                    .instruction_count           = known ? session_stage.unoptimized_instructions : (optimized ? 0 : session_stage.module_instructions),
+                    .optimized_instruction_count = known ? session_stage.optimized_instructions   : (optimized ? session_stage.module_instructions : 0),
+                    .cache_key                   = session_stage.cache_key,
+                    .shader_type                 = session_stage.type,
+                    .spirv_known                 = known || !optimized,
+                    .optimized_spirv_known       = known || optimized
+                });
+            }
+        }
+        m_programs.push_back(std::move(program));
+    }
+}
+
+// The Sources and SPIR-V tabs of a session program, from its stages'
+// SPIR-V cache records (doc/erhe/graphics.md "SPIR-V cache records").
+void Shader_variants_window::select_session(const std::size_t program_index)
+{
+    Program& program = m_programs[program_index];
+    const auto cached = m_session_details.find(program.id);
+    const bool have_detail = (cached != m_session_details.end());
+    erhe::graphics::Spirv_cache& cache = m_session_programs->get_device().get_spirv_cache();
+    std::vector<std::string> includes;
+    for (Stage& stage : program.stages) {
+        Stage_detail& detail = m_stage_details.emplace_back();
+        const std::optional<erhe::graphics::Spirv_cache_record> record = stage.cache_key.empty()
+            ? std::optional<erhe::graphics::Spirv_cache_record>{}
+            : cache.get_record(stage.cache_key);
+        const std::vector<unsigned int> module = stage.cache_key.empty() ? std::vector<unsigned int>{} : cache.get_module(stage.cache_key);
+        if (!record.has_value() || module.empty()) {
+            const char* const reason = "(no SPIR-V cache record for this stage: Graphics_config::spirv_cache_records is off, or the program is not cached)";
+            detail.source.set(reason);
+            detail.preamble.set(reason);
+            detail.before.set(reason);
+            detail.after.set(reason);
+            continue;
+        }
+        const erhe::graphics::Shader_variant_report_stage report_stage = erhe::graphics::make_report_stage(
+            record.value(), module, stage.shader_type, fmt::format("{} {} stage", program.name, stage.type)
+        );
+        detail.source  .set(report_stage.main_source);
+        detail.preamble.set(report_stage.preamble);
+        detail.before  .set(erhe::graphics::disassemble_spirv(report_stage.spirv));
+        detail.after   .set(
+            report_stage.optimized_spirv.empty()
+                ? std::string{"(the optimizer failed or its output did not validate; see logs/log.txt)"}
+                : erhe::graphics::disassemble_spirv(report_stage.optimized_spirv)
+        );
+        stage.main_name                   = report_stage.main_name;
+        stage.spirv_bytes                 = report_stage.spirv.size() * sizeof(unsigned int);
+        stage.optimized_spirv_bytes       = report_stage.optimized_spirv.size() * sizeof(unsigned int);
+        stage.instruction_count           = erhe::graphics::count_spirv_instructions(report_stage.spirv);
+        stage.optimized_instruction_count = erhe::graphics::count_spirv_instructions(report_stage.optimized_spirv);
+        stage.spirv_known                 = true;
+        stage.optimized_spirv_known       = true;
+        // The stage's own includes, the top-level files left out, once each.
+        for (const std::string& include : record->include_paths) {
+            if ((include != record->main_name) && (std::find(includes.begin(), includes.end(), include) == includes.end())) {
+                includes.push_back(include);
+            }
+        }
+    }
+    // Analyzed in the background unless done (the window reloads when it lands).
+    m_session_programs->request_analysis(program.fragments_key);
+    if (!have_detail) {
+        program.includes = std::move(includes);
+        m_session_details[program.id] = Session_detail{.stages = program.stages, .includes = program.includes};
+        set_spirv_cells(program);
+        m_sort_dirty = true;
+        update_shown();
+    }
+    for (const std::string& include : program.includes) {
+        Include_detail& include_detail = m_include_details.emplace_back();
+        include_detail.path = include;
+        std::optional<std::string> text = read_text(include);
+        include_detail.text.set(text.has_value() ? std::move(text.value()) : std::string{"(unreadable)"});
+    }
+}
+
 void Shader_variants_window::load_sidecars()
 {
     m_analytics = read_js_sidecar(m_directory / "analytics.js", "window.erhe_shader_analytics");
     m_fragments = read_js_sidecar(m_directory / "fragments.js", "window.erhe_shader_fragments");
     m_mali_core.clear();
+    m_powervr_core.clear();
     const ordered_json* cores = member(&m_analytics, "cores");
     const auto core_name = [cores](const ordered_json* name) -> std::string {
         if ((name == nullptr) || !name->is_string() || (member(cores, name->get_ref<const std::string&>().c_str()) == nullptr)) {
@@ -506,9 +703,10 @@ void Shader_variants_window::load_sidecars()
         return name->get<std::string>();
     };
     if (const ordered_json* default_cores = member(&m_analytics, "default_cores"); default_cores != nullptr) {
-        m_mali_core = core_name(member(default_cores, "malioc"));
+        m_mali_core    = core_name(member(default_cores, "malioc"));
+        m_powervr_core = core_name(member(default_cores, "powervr"));
     } else {
-        m_mali_core = core_name(member(&m_analytics, "default_core"));
+        m_mali_core   = core_name(member(&m_analytics, "default_core"));
     }
 }
 
@@ -628,6 +826,60 @@ void Shader_variants_window::build_key_slots()
     m_columns[2].tooltip = std::move(key_tooltip);
 }
 
+// Columns 0 - 8: index, name, key, stages, SPIR-V bytes and instructions
+// before / after optimization ("-" for a module a session program has not
+// read yet).
+void Shader_variants_window::set_spirv_cells(Program& program) const
+{
+    const auto number_cell = [](const std::optional<double> value) -> Cell {
+        return value.has_value()
+            ? Cell{.number = value.value(), .has_number = true, .bad = false, .text = format_number(value.value())}
+            : Cell{.number = 0.0, .has_number = false, .bad = false, .text = "-"};
+    };
+    const auto text_cell = [](std::string text) -> Cell {
+        return Cell{.number = 0.0, .has_number = false, .bad = false, .text = std::move(text)};
+    };
+    std::string stages;
+    std::size_t bytes = 0, optimized_bytes = 0, instructions = 0, optimized_instructions = 0;
+    bool before_known = true;
+    bool after_known  = true;
+    for (const Stage& stage : program.stages) {
+        if (!stages.empty()) {
+            stages += ' ';
+        }
+        stages                 += stage.type;
+        bytes                  += stage.spirv_bytes;
+        optimized_bytes        += stage.optimized_spirv_bytes;
+        instructions           += stage.instruction_count;
+        optimized_instructions += stage.optimized_instruction_count;
+        before_known = before_known && stage.spirv_known;
+        after_known  = after_known  && stage.optimized_spirv_known;
+    }
+    const auto known = [](const bool is_known, const std::size_t value) -> std::optional<double> {
+        return is_known ? std::optional<double>{static_cast<double>(value)} : std::nullopt;
+    };
+    const double percent = (bytes > 0) ? (100.0 * static_cast<double>(optimized_bytes) / static_cast<double>(bytes)) : 0.0;
+    std::array<Cell, 9> cells{
+        number_cell(static_cast<double>(program.index)),
+        text_cell(program.name),
+        text_cell(program.key_text),
+        text_cell(std::move(stages)),
+        number_cell(known(before_known, bytes)),
+        number_cell(known(after_known, optimized_bytes)),
+        (before_known && after_known)
+            ? Cell{.number = percent, .has_number = true, .bad = false, .text = fmt::format("{:.1f}", percent)}
+            : Cell{.number = 0.0, .has_number = false, .bad = false, .text = "-"},
+        number_cell(known(before_known, instructions)),
+        number_cell(known(after_known, optimized_instructions))
+    };
+    if (program.cells.size() < cells.size()) {
+        program.cells.resize(cells.size());
+    }
+    for (std::size_t i = 0; i < cells.size(); ++i) {
+        program.cells[i] = std::move(cells[i]);
+    }
+}
+
 void Shader_variants_window::build_cells()
 {
     const auto number_cell = [](const std::optional<double> value) -> Cell {
@@ -640,29 +892,8 @@ void Shader_variants_window::build_cells()
     };
 
     for (Program& program : m_programs) {
-        std::string stages;
-        std::size_t bytes = 0, optimized_bytes = 0, instructions = 0, optimized_instructions = 0;
-        for (const Stage& stage : program.stages) {
-            if (!stages.empty()) {
-                stages += ' ';
-            }
-            stages                 += stage.type;
-            bytes                  += stage.spirv_bytes;
-            optimized_bytes        += stage.optimized_spirv_bytes;
-            instructions           += stage.instruction_count;
-            optimized_instructions += stage.optimized_instruction_count;
-        }
-        const double percent = (bytes > 0) ? (100.0 * static_cast<double>(optimized_bytes) / static_cast<double>(bytes)) : 0.0;
         program.cells.clear();
-        program.cells.push_back(number_cell(static_cast<double>(program.index)));
-        program.cells.push_back(text_cell(program.name));
-        program.cells.push_back(text_cell(program.key_text));
-        program.cells.push_back(text_cell(std::move(stages)));
-        program.cells.push_back(number_cell(static_cast<double>(bytes)));
-        program.cells.push_back(number_cell(static_cast<double>(optimized_bytes)));
-        program.cells.push_back(Cell{.number = percent, .has_number = true, .bad = false, .text = fmt::format("{:.1f}", percent)});
-        program.cells.push_back(number_cell(static_cast<double>(instructions)));
-        program.cells.push_back(number_cell(static_cast<double>(optimized_instructions)));
+        set_spirv_cells(program);
     }
 
     const ordered_json* cores = member(&m_analytics, "cores");
@@ -681,9 +912,9 @@ void Shader_variants_window::build_cells()
             std::tuple{"Occ. %", true, Bad_rule::below_100}, std::tuple{"Spill B", true, Bad_rule::above_0},
             std::tuple{"Flags", false, Bad_rule::has_error}
         }) {
-            m_columns.push_back(Column{.label = tag + label, .tooltip = m_mali_core, .numeric = numeric, .bad = bad});
+            m_columns.push_back(Column{.label = tag + label, .tooltip = m_mali_core, .numeric = numeric, .bad = bad, .group = core_title(m_mali_core), .vendor = Column_vendor::mali});
         }
-        m_groups.push_back(Column_group{.tag = short_core(m_mali_core), .offset = offset, .sum_a = 0, .sum_b = 1, .sum_label = "Main cycles", .fragments = false});
+        m_groups.push_back(Column_group{.tag = short_core(m_mali_core), .offset = offset, .sum_a = 0, .sum_b = 1, .sum_label = "Main cycles", .unit = "cyc.", .fragments = false, .vendor = Column_vendor::mali});
         core_group_names.push_back(m_mali_core);
         const ordered_json* programs = member(member(cores, m_mali_core.c_str()), "programs");
         for (Program& program : m_programs) {
@@ -775,13 +1006,87 @@ void Shader_variants_window::build_cells()
         }
     }
 
+    // PowerVR: fragment (or compute) Main cycles before / after, its
+    // instructions and samples after, vertex Main cycles, max temporary
+    // registers, min USC utilisation, flags.
+    if (!m_powervr_core.empty()) {
+        const std::string tag = short_core(m_powervr_core) + " ";
+        const std::size_t offset = m_columns.size();
+        for (const auto& [label, numeric, bad] : {
+            std::tuple{"Cyc. before", true, Bad_rule::none}, std::tuple{"Cyc. after", true, Bad_rule::none},
+            std::tuple{"Instr.", true, Bad_rule::none}, std::tuple{"Samples", true, Bad_rule::none},
+            std::tuple{"VS cyc.", true, Bad_rule::none}, std::tuple{"Temps", true, Bad_rule::none},
+            std::tuple{"Util. %", true, Bad_rule::none}, std::tuple{"Flags", false, Bad_rule::has_error}
+        }) {
+            m_columns.push_back(Column{.label = tag + label, .tooltip = m_powervr_core, .numeric = numeric, .bad = bad, .group = core_title(m_powervr_core), .vendor = Column_vendor::powervr});
+        }
+        m_groups.push_back(Column_group{.tag = short_core(m_powervr_core), .offset = offset, .sum_a = 0, .sum_b = 1, .sum_label = "FS/CS cycles", .unit = "cyc.", .fragments = false, .vendor = Column_vendor::powervr});
+        core_group_names.push_back(m_powervr_core);
+        const ordered_json* programs = member(member(cores, m_powervr_core.c_str()), "programs");
+        const auto main_value = [](const ordered_json* summary, const char* key) -> std::optional<double> {
+            if ((summary == nullptr) || has_error(summary)) {
+                return std::nullopt;
+            }
+            return get_number(member(find_variant(member(summary, "variants"), "Main"), key));
+        };
+        for (Program& program : m_programs) {
+            const ordered_json* prog = member(programs, program.id.c_str());
+            std::optional<double> cycles_before, cycles_after, instructions, samples, vs_cycles, temps, utilisation;
+            bool error = false;
+            if ((prog != nullptr) && prog->is_object()) {
+                for (const auto& [stage, s] : prog->items()) {
+                    const ordered_json* b  = member(&s, "before");
+                    const ordered_json* af = member(&s, "after");
+                    if (af == nullptr) {
+                        af = b;
+                    }
+                    if (has_error(b) || has_error(af)) {
+                        error = true;
+                    }
+                    if ((af == nullptr) || has_error(af)) {
+                        continue;
+                    }
+                    if (const ordered_json* variants = member(af, "variants"); (variants != nullptr) && variants->is_array()) {
+                        for (const ordered_json& v : *variants) {
+                            if (const std::optional<double> r = get_number(member(&v, "temp_registers")); r.has_value()) {
+                                temps = temps.has_value() ? std::max(temps.value(), r.value()) : r.value();
+                            }
+                            if (const std::optional<double> u = get_number(member(&v, "utilisation")); u.has_value()) {
+                                utilisation = utilisation.has_value() ? std::min(utilisation.value(), u.value()) : u.value();
+                            }
+                        }
+                    }
+                    if ((stage == "frag") || (stage == "comp")) {
+                        cycles_before = main_value(b, "cycles");
+                        cycles_after  = main_value(af, "cycles");
+                        instructions  = main_value(af, "instructions");
+                        samples       = main_value(af, "samples");
+                    }
+                    if (stage == "vert") {
+                        vs_cycles = main_value(af, "cycles");
+                    }
+                }
+            }
+            program.cells.push_back(number_cell(cycles_before));
+            program.cells.push_back(number_cell(cycles_after));
+            program.cells.push_back(number_cell(instructions));
+            program.cells.push_back(number_cell(samples));
+            program.cells.push_back(number_cell(vs_cycles));
+            program.cells.push_back(number_cell(temps));
+            program.cells.push_back(number_cell(utilisation));
+            program.cells.push_back(text_cell(error ? std::string{"error"} : std::string{}));
+        }
+    }
+
     m_analytics_info.clear();
     if (!core_group_names.empty()) {
         std::string names;
         for (const std::string& name : core_group_names) {
             names += (names.empty() ? "" : ", ") + name;
         }
-        m_analytics_info = fmt::format("Analytics: {} ({} core(s) in analytics.js)", names, (cores != nullptr) ? cores->size() : 0);
+        m_analytics_info = is_session()
+            ? fmt::format("Analytics: {} (the offline compilers of this session)", names)
+            : fmt::format("Analytics: {} ({} core(s) in analytics.js)", names, (cores != nullptr) ? cores->size() : 0);
     }
 
     // Fragments of a captured frame (fragments.js), matched by JSON [name, defines]:
@@ -793,25 +1098,27 @@ void Shader_variants_window::build_cells()
         class Estimate
         {
         public:
-            std::string tag;
-            std::string unit;
-            std::size_t column;
+            std::string   tag;
+            std::string   unit;
+            std::size_t   column;
+            Column_vendor vendor;
         };
         std::vector<Estimate> estimates;
         for (const Column_group& group : m_groups) {
             estimates.push_back(Estimate{
                 .tag    = group.tag,
-                .unit   = (group.offset == m_groups.front().offset) && !m_mali_core.empty() ? "cyc." : "instr.",
-                .column = group.offset + 1
+                .unit   = group.unit,
+                .column = group.offset + 1,
+                .vendor = group.vendor
             });
         }
         const std::string frame_id = member(&m_fragments, "frame_id") != nullptr ? m_fragments["frame_id"].dump() : std::string{"?"};
         const std::size_t base = m_columns.size();
-        m_columns.push_back(Column{.label = "Fragments", .tooltip = fmt::format("fragments.js: frame {}", frame_id), .numeric = true, .bad = Bad_rule::none});
-        m_columns.push_back(Column{.label = "Frame %",   .tooltip = m_columns.back().tooltip, .numeric = true, .bad = Bad_rule::none});
+        m_columns.push_back(Column{.label = "Fragments", .tooltip = fmt::format("fragments.js: frame {}", frame_id), .numeric = true, .bad = Bad_rule::none, .group = "Fragments"});
+        m_columns.push_back(Column{.label = "Frame %",   .tooltip = m_columns.back().tooltip, .numeric = true, .bad = Bad_rule::none, .group = "Fragments"});
         for (const Estimate& e : estimates) {
-            m_columns.push_back(Column{.label = fmt::format("{} est. {}", e.tag, e.unit), .tooltip = m_columns[base].tooltip, .numeric = true, .bad = Bad_rule::none});
-            m_columns.push_back(Column{.label = fmt::format("{} est. %", e.tag),         .tooltip = m_columns[base].tooltip, .numeric = true, .bad = Bad_rule::none});
+            m_columns.push_back(Column{.label = fmt::format("{} est. {}", e.tag, e.unit), .tooltip = m_columns[base].tooltip, .numeric = true, .bad = Bad_rule::none, .group = "Fragments", .vendor = e.vendor});
+            m_columns.push_back(Column{.label = fmt::format("{} est. %", e.tag),         .tooltip = m_columns[base].tooltip, .numeric = true, .bad = Bad_rule::none, .group = "Fragments", .vendor = e.vendor});
         }
         std::unordered_set<std::string> matched;
         std::unordered_set<std::string> unique_seen;
@@ -855,7 +1162,7 @@ void Shader_variants_window::build_cells()
                 }
             }
         }
-        m_groups.push_back(Column_group{.tag = {}, .offset = base, .sum_a = 0, .sum_b = 2, .sum_label = {}, .fragments = true});
+        m_groups.push_back(Column_group{.tag = {}, .offset = base, .sum_a = 0, .sum_b = 2, .sum_label = {}, .unit = {}, .fragments = true, .vendor = Column_vendor::none});
         m_fragments_info = fmt::format(
             "Fragments: frame {}, {} of {} captured programs recorded here ({:.1f} % of the frame's invocations)",
             frame_id, matched.size(), fragment_programs->size(), 100.0 * total / std::max(frame_total, 1.0)
@@ -898,7 +1205,11 @@ void Shader_variants_window::reload()
     m_fragments = nullptr;
     m_analytics_info.clear();
     m_fragments_info.clear();
-    if (m_directory.empty()) {
+    {
+        const std::lock_guard<std::mutex> lock{m_reload_mutex};
+        m_showing_session = is_session();
+    }
+    if (m_directory.empty() && (m_session_programs == nullptr)) {
         m_load_error = "No browser directory: start the editor with --shader-variant-browser <directory>, or open a recorded one";
         m_stage_details.clear();
         m_include_details.clear();
@@ -907,17 +1218,21 @@ void Shader_variants_window::reload()
 
     for (const char* label : {"#", "Program", "Variant key", "Stages", "Bytes before", "Bytes after", "Bytes %", "Instr. before", "Instr. after"}) {
         const bool numeric = (std::strcmp(label, "#") == 0) || std::string_view{label}.starts_with("Bytes") || std::string_view{label}.starts_with("Instr");
-        m_columns.push_back(Column{.label = label, .tooltip = {}, .numeric = numeric, .bad = Bad_rule::none});
+        m_columns.push_back(Column{.label = label, .tooltip = {}, .numeric = numeric, .bad = Bad_rule::none, .group = {}, .vendor = Column_vendor::none});
     }
-    if (!load_manifest(m_load_error)) {
+    if (is_session()) {
+        load_session();
+    } else if (!load_manifest(m_load_error)) {
         m_columns.clear();
         m_stage_details.clear();
         m_include_details.clear();
         return;
+    } else {
+        load_sidecars();
     }
-    load_sidecars();
     build_key_slots();
     build_cells();
+    m_vendor_columns_dirty = true; // a new column set: apply the vendor choice to it
     m_sort_dirty = true;
     update_shown();
 
@@ -972,13 +1287,30 @@ void Shader_variants_window::update_shown()
         return m_sort_ascending ? (c < 0) : (c > 0);
     });
 
+    // Sums over the shown programs; a sum some program has no value for
+    // (a session program not selected yet) names how many it covers.
     std::size_t before = 0;
     std::size_t after  = 0;
+    std::size_t before_count = 0;
+    std::size_t after_count  = 0;
     for (const std::size_t i : m_shown) {
-        before += static_cast<std::size_t>(m_programs[i].cells[4].number);
-        after  += static_cast<std::size_t>(m_programs[i].cells[5].number);
+        const Program& program = m_programs[i];
+        if (program.cells[4].has_number) {
+            before += static_cast<std::size_t>(program.cells[4].number);
+            ++before_count;
+        }
+        if (program.cells[5].has_number) {
+            after += static_cast<std::size_t>(program.cells[5].number);
+            ++after_count;
+        }
     }
-    m_summary = fmt::format("{} / {} programs, SPIR-V {} -> {} bytes", m_shown.size(), m_programs.size(), before, after);
+    const auto sum_text = [this](const std::size_t sum, const std::size_t count) -> std::string {
+        if (count == m_shown.size()) {
+            return fmt::format("{}", sum);
+        }
+        return (count == 0) ? std::string{"-"} : fmt::format("{} ({} programs)", sum, count);
+    };
+    m_summary = fmt::format("{} / {} programs, SPIR-V {} -> {} bytes", m_shown.size(), m_programs.size(), sum_text(before, before_count), sum_text(after, after_count));
     for (const Column_group& group : m_groups) {
         if (group.fragments) {
             std::unordered_set<std::string_view> keys;
@@ -995,11 +1327,24 @@ void Shader_variants_window::update_shown()
         }
         double sum_a = 0.0;
         double sum_b = 0.0;
+        std::size_t count_a = 0;
+        std::size_t count_b = 0;
         for (const std::size_t i : m_shown) {
-            sum_a += m_programs[i].cells[group.offset + group.sum_a].number;
-            sum_b += m_programs[i].cells[group.offset + group.sum_b].number;
+            const Cell& a = m_programs[i].cells[group.offset + group.sum_a];
+            const Cell& b = m_programs[i].cells[group.offset + group.sum_b];
+            if (a.has_number) {
+                sum_a += a.number;
+                ++count_a;
+            }
+            if (b.has_number) {
+                sum_b += b.number;
+                ++count_b;
+            }
         }
-        m_summary += fmt::format(", {} {} {} -> {}", group.tag, group.sum_label, format_number(sum_a), format_number(sum_b));
+        const auto group_sum_text = [this](const double sum, const std::size_t count) -> std::string {
+            return (count == 0) ? std::string{"-"} : (count == m_shown.size()) ? format_number(sum) : fmt::format("{} ({} programs)", format_number(sum), count);
+        };
+        m_summary += fmt::format(", {} {} {} -> {}", group.tag, group.sum_label, group_sum_text(sum_a, count_a), group_sum_text(sum_b, count_b));
     }
 }
 
@@ -1010,6 +1355,10 @@ void Shader_variants_window::select(const std::size_t program_index)
     m_selected = program_index;
     m_stage_details.clear();
     m_include_details.clear();
+    if (is_session()) {
+        select_session(program_index);
+        return;
+    }
     const Program& program = m_programs[program_index];
     const std::filesystem::path variants = m_directory / "variants";
     const auto text_or = [&variants](const std::string& file, const char* missing) -> std::string {
@@ -1043,7 +1392,12 @@ void Shader_variants_window::select(const std::size_t program_index)
 void Shader_variants_window::bar_imgui()
 {
     ImGui::SetNextItemWidth(std::max(ImGui::GetContentRegionAvail().x - 220.0f, 120.0f));
-    const bool open = ImGui::InputTextWithHint("##directory", "Browser directory", &m_directory_input, ImGuiInputTextFlags_EnterReturnsTrue);
+    const bool open = ImGui::InputTextWithHint(
+        "##directory",
+        (m_session_programs != nullptr) ? "Browser directory (empty: this session's programs)" : "Browser directory",
+        &m_directory_input,
+        ImGuiInputTextFlags_EnterReturnsTrue
+    );
     ImGui::SameLine();
     if (ImGui::Button("Open") || open) {
         m_directory = std::filesystem::path{m_directory_input};
@@ -1065,6 +1419,28 @@ void Shader_variants_window::bar_imgui()
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Show the directory this session records into");
         }
+    } else if ((m_report == nullptr) && (m_session_programs != nullptr) && !m_directory.empty()) {
+        ImGui::SameLine();
+        if (ImGui::Button("Session")) {
+            m_directory.clear();
+            m_directory_input.clear();
+            m_selected = c_none;
+            reload();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Show the programs this session built, from their SPIR-V cache records");
+        }
+    }
+    if (is_session()) {
+        // Analysis status: change-driven reloads refresh it as results land.
+        if (ImGui::Button("Analyze all")) {
+            m_session_programs->request_analysis_all();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Run the offline compilers on every listed program, before and after optimization, in background tasks");
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", m_session_analysis_info.c_str());
     }
 
     if (!m_load_error.empty()) {
@@ -1101,16 +1477,22 @@ void Shader_variants_window::table_imgui()
     if (!ImGui::BeginTable("##variants", static_cast<int>(m_columns.size()), flags)) {
         return;
     }
-    ImGui::TableSetupScrollFreeze(3, 1); // #, Program, Variant key
+    ImGui::TableSetupScrollFreeze(3, 2); // #, Program, Variant key; the group row and the column header row
     for (std::size_t c = 0; c < m_columns.size(); ++c) {
         ImGuiTableColumnFlags column_flags = ImGuiTableColumnFlags_None;
         if (c == 0) {
             column_flags |= ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_NoHide;
         }
-        if (c == 2) {
-            column_flags |= ImGuiTableColumnFlags_NoResize;
-        }
         ImGui::TableSetupColumn(m_columns[c].label.c_str(), column_flags, 0.0f, static_cast<ImGuiID>(c));
+    }
+    // Change-driven: a vendor toggled in the group row menu, or a reload built new columns.
+    if (m_vendor_columns_dirty) {
+        m_vendor_columns_dirty = false;
+        for (std::size_t c = 0; c < m_columns.size(); ++c) {
+            if (m_columns[c].vendor != Column_vendor::none) {
+                ImGui::TableSetColumnEnabled(static_cast<int>(c), m_vendor_shown[static_cast<std::size_t>(m_columns[c].vendor)]);
+            }
+        }
     }
 
     if (ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs(); (sort_specs != nullptr) && sort_specs->SpecsDirty) {
@@ -1121,6 +1503,9 @@ void Shader_variants_window::table_imgui()
         sort_specs->SpecsDirty = false;
         update_shown();
     }
+
+    bool open_vendor_menu = false;
+    group_row_imgui(open_vendor_menu);
 
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
     for (std::size_t c = 0; c < m_columns.size(); ++c) {
@@ -1194,12 +1579,106 @@ void Shader_variants_window::table_imgui()
     }
     ImGui::EndTable();
 
+    // Opened here, outside the table, so BeginPopup() below sees the same id.
+    if (open_vendor_menu) {
+        ImGui::OpenPopup("##vendor_columns");
+    }
+    vendor_menu_imgui();
+
     if (clicked != c_none) {
         if (m_panes == Panes::table) {
             m_panes = Panes::both;
         }
         select(clicked);
     }
+}
+
+void Shader_variants_window::group_row_imgui(bool& open_vendor_menu)
+{
+    const float row_height = ImGui::GetFrameHeight();
+    ImGui::TableNextRow(ImGuiTableRowFlags_Headers, row_height);
+    ImGuiTable* const table = ImGui::GetCurrentTable();
+    if (table == nullptr) {
+        return;
+    }
+
+    // Runs of adjacent enabled columns with one group label, in display order
+    // (the user may reorder and hide columns); the layout is valid after TableNextRow().
+    m_group_runs.clear();
+    m_column_runs.assign(m_columns.size(), -1);
+    int previous = -1;
+    for (int order = 0; order < table->ColumnsCount; ++order) {
+        const int               c      = table->DisplayOrderToIndex[order];
+        const ImGuiTableColumn& column = table->Columns[c];
+        if (!column.IsEnabled || (static_cast<std::size_t>(c) >= m_columns.size())) {
+            continue;
+        }
+        const std::string& label = m_columns[static_cast<std::size_t>(c)].group;
+        if (label.empty()) {
+            previous = -1;
+            continue;
+        }
+        if ((previous < 0) || (*m_group_runs[static_cast<std::size_t>(previous)].label != label)) {
+            m_group_runs.push_back(Group_run{.label = &label, .min_x = column.MinX, .visible_min_x = FLT_MAX});
+            previous = static_cast<int>(m_group_runs.size()) - 1;
+        }
+        m_column_runs[static_cast<std::size_t>(c)] = previous;
+        if (column.IsVisibleX) {
+            Group_run& run = m_group_runs[static_cast<std::size_t>(previous)];
+            run.visible_min_x = std::min(run.visible_min_x, column.ClipRect.Min.x);
+        }
+    }
+
+    // Each visible cell of a run draws the run's label at the same position,
+    // clipped to itself, so the label reads across the run. The label sticks
+    // to the run's visible left edge while the run scrolls under the frozen columns.
+    const ImU32 text_color   = ImGui::GetColorU32(ImGuiCol_Text);
+    const ImU32 run_colors[] = { ImGui::GetColorU32(ImGuiCol_Header), ImGui::GetColorU32(ImGuiCol_Header, 0.55f) };
+    const float padding      = ImGui::GetStyle().CellPadding.x;
+    for (std::size_t c = 0; c < m_columns.size(); ++c) {
+        if (!ImGui::TableSetColumnIndex(static_cast<int>(c))) {
+            continue;
+        }
+        ImGui::PushID(static_cast<int>(c));
+        const int    run_index = m_column_runs[c];
+        const ImVec2 cursor    = ImGui::GetCursorScreenPos();
+        if (run_index >= 0) {
+            const Group_run& run = m_group_runs[static_cast<std::size_t>(run_index)];
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, run_colors[static_cast<std::size_t>(run_index) % 2]);
+            ImGui::GetWindowDrawList()->AddText(ImVec2{std::max(run.min_x, run.visible_min_x) + padding, cursor.y}, text_color, run.label->c_str());
+        }
+        ImGui::InvisibleButton("##group", ImVec2{std::max(ImGui::GetContentRegionAvail().x, 1.0f), ImGui::GetTextLineHeight()}, ImGuiButtonFlags_MouseButtonRight);
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+            open_vendor_menu = true;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Right-click to choose the vendors whose columns are shown");
+        }
+        ImGui::PopID();
+    }
+}
+
+void Shader_variants_window::vendor_menu_imgui()
+{
+    if (!ImGui::BeginPopup("##vendor_columns")) {
+        return;
+    }
+    ImGui::TextDisabled("Vendor columns");
+    for (std::size_t v = 0; v < c_vendor_count; ++v) {
+        const Column_vendor vendor  = static_cast<Column_vendor>(v);
+        const bool          present = std::any_of(m_columns.begin(), m_columns.end(), [vendor](const Column& column) { return column.vendor == vendor; });
+        bool shown = m_vendor_shown[v];
+        ImGui::BeginDisabled(!present);
+        if (ImGui::Checkbox(c_vendor_names[v], &shown)) {
+            m_vendor_shown[v]      = shown;
+            m_vendor_columns_dirty = true;
+        }
+        ImGui::EndDisabled();
+        if (!present) {
+            ImGui::SetItemTooltip("analytics.js has no %s core", c_vendor_names[v]);
+        }
+    }
+    ImGui::EndPopup();
 }
 
 void Shader_variants_window::key_tab_imgui(const Program& program)
@@ -1402,6 +1881,87 @@ void Shader_variants_window::mali_core_imgui(const ordered_json& core, const ord
     }
 }
 
+void Shader_variants_window::powervr_core_imgui(const ordered_json& core, const ordered_json& program)
+{
+    const auto text = [&core](const char* key) -> const char* {
+        const ordered_json* v = member(&core, key);
+        return ((v != nullptr) && v->is_string()) ? v->get_ref<const std::string&>().c_str() : "";
+    };
+    ImGui::Text("%s", text("core"));
+    ImGui::SameLine();
+    ImGui::TextDisabled("BVNC %s, %s (%s), PowerVR profiling compiler %s, %s", text("bvnc"), text("architecture"), text("soc"), text("powervr_version"), text("generated"));
+    // [[name, value], ...] lookup.
+    const auto pair_value = [](const ordered_json* list, const std::string& name) -> const ordered_json* {
+        if ((list == nullptr) || !list->is_array()) {
+            return nullptr;
+        }
+        for (const ordered_json& entry : *list) {
+            if (entry.is_array() && (entry.size() >= 2) && entry[0].is_string() && (entry[0].get_ref<const std::string&>() == name)) {
+                return entry[1].is_null() ? nullptr : &entry[1];
+            }
+        }
+        return nullptr;
+    };
+    // sense: 1 lower is better, -1 higher is better, 0 neither
+    const auto sense_of = [](const std::string& counter) -> int {
+        if ((counter == "USC Utilisation") || (counter == "Max Parallel Instances")) {
+            return -1;
+        }
+        return (counter == "Memory Used HWM") ? 0 : 1;
+    };
+    for (const auto& [stage, s] : program.items()) {
+        ImGui::PushID(stage.c_str());
+        ImGui::SeparatorText(stage_title(stage));
+        const ordered_json* b  = member(&s, "before");
+        const ordered_json* af = member(&s, "after");
+        error_lines(b, af);
+        const ordered_json* bv = member(b, "variants");
+        const ordered_json* av = member(af, "variants");
+        for (const ordered_json* list : {bv, av}) {
+            if ((list == nullptr) || !list->is_array()) {
+                continue;
+            }
+            for (const ordered_json& variant : *list) {
+                const std::string name = variant.value("name", std::string{});
+                if ((list == av) && (find_variant(bv, name) != nullptr)) {
+                    continue; // shown with the before list
+                }
+                const ordered_json* xs = member(find_variant(bv, name), "counters");
+                const ordered_json* ys = member(find_variant(av, name), "counters");
+                ImGui::PushID(name.c_str());
+                if (ImGui::TreeNodeEx("##variant", ImGuiTreeNodeFlags_DefaultOpen, "%s", name.c_str())) {
+                    if (begin_compare_table("##compare")) {
+                        for (const ordered_json* counters : {xs, ys}) {
+                            if ((counters == nullptr) || !counters->is_array()) {
+                                continue;
+                            }
+                            for (const ordered_json& entry : *counters) {
+                                if (!entry.is_array() || entry.empty() || !entry[0].is_string()) {
+                                    continue;
+                                }
+                                const std::string& counter = entry[0].get_ref<const std::string&>();
+                                if ((counters == ys) && (pair_value(xs, counter) != nullptr)) {
+                                    continue;
+                                }
+                                compare_row(counter.c_str(), pair_value(xs, counter), pair_value(ys, counter), sense_of(counter));
+                            }
+                        }
+                        ImGui::EndTable();
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+        }
+        for (const auto& [label, summary] : {std::pair{"before", b}, std::pair{"after", af}}) {
+            if (summary != nullptr) {
+                command_line(label, summary);
+            }
+        }
+        ImGui::PopID();
+    }
+}
+
 void Shader_variants_window::detail_imgui()
 {
     if (m_selected >= m_programs.size()) {
@@ -1501,7 +2061,13 @@ void Shader_variants_window::detail_imgui()
             }
             if (ImGui::BeginTabItem(tab_label)) {
                 if (tab_child("##core")) {
-                    mali_core_imgui(core, *prog);
+                    const ordered_json* compiler = member(&core, "compiler");
+                    const std::string   compiler_name = ((compiler != nullptr) && compiler->is_string()) ? compiler->get<std::string>() : std::string{};
+                    if (compiler_name == "powervr") {
+                        powervr_core_imgui(core, *prog);
+                    } else {
+                        mali_core_imgui(core, *prog);
+                    }
                 }
                 ImGui::EndChild();
                 ImGui::EndTabItem();
@@ -1509,7 +2075,11 @@ void Shader_variants_window::detail_imgui()
         }
     }
     if (!any_core && ImGui::BeginTabItem("GPU analytics")) {
-        ImGui::TextWrapped("No analytics recorded: run py -3 scripts/shader_analytics.py <browser directory> to write analytics.js (doc/erhe/graphics.md \"Mali analytics\"), then Reload.");
+        if (is_session()) {
+            ImGui::TextWrapped("%s", m_session_analysis_info.empty() ? "Not analyzed yet." : m_session_analysis_info.c_str());
+        } else {
+            ImGui::TextWrapped("No analytics recorded: run py -3 scripts/shader_analytics.py <browser directory> to write analytics.js (doc/erhe/graphics.md \"Mali analytics\", \"PowerVR analytics\"), then Reload.");
+        }
         ImGui::EndTabItem();
     }
     ImGui::EndTabBar();

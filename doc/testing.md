@@ -334,7 +334,7 @@ G-shadow / G-cost, the matrix) is defined in
   the hard filter, whose visibility factor is exact in fp16).
 - **G-cost**: launch the gates with `--shader-variant-browser <dir>` so the
   lit variants of every mask are recorded, then `py -3
-  scripts/shader_analytics.py <dir>` (`erhe/graphics.md` "Mali analytics");
+  scripts/shader_analytics.py <dir>` (`erhe/graphics.md` "Mali analytics", "PowerVR analytics");
   the browser's `H` key slot separates the masks, and the registers, spill
   and 16-bit arithmetic share columns are the gate.
 - **Unit tests**: `erhe_scene_renderer_tests --gtest_filter=Shader_key_fp16_paths*`

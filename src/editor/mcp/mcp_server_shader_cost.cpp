@@ -6,6 +6,7 @@
 #include "app_context.hpp"
 #include "renderers/shader_analytics.hpp"
 #include "renderers/shader_analytics_service.hpp"
+#include "renderers/shader_session_programs.hpp"
 #include "windows/shader_variants_window.hpp"
 
 #include "erhe_file/file.hpp"
@@ -262,11 +263,12 @@ auto Mcp_server::action_load_shader_analytics(const json& args) -> std::string
     if (m_context.shader_analytics_service != nullptr) {
         const Shader_analytics_service::Status status = m_context.shader_analytics_service->get_status();
         service = json{
-            {"mali_core", status.mali_core},
-            {"queued",    status.queued},
-            {"running",   status.running},
-            {"analyzed",  status.analyzed},
-            {"failed",    status.failed}
+            {"mali_core",    status.mali_core},
+            {"powervr_core", status.powervr_core},
+            {"queued",       status.queued},
+            {"running",      status.running},
+            {"analyzed",     status.analyzed},
+            {"failed",       status.failed}
         };
     }
     if (!analytics->is_loaded()) {
@@ -294,6 +296,78 @@ auto Mcp_server::action_load_shader_analytics(const json& args) -> std::string
         {"selected_metric",  c_str(analytics->get_selected_metric())},
         {"missing_variants", analytics->get_missing_variant_count()},
         {"service",          std::move(service)}
+    }).dump();
+}
+
+
+auto Mcp_server::action_analyze_shader_programs(const json& args) -> std::string
+{
+    // doc/editor/shader_analytics.md "Session programs": the programs this
+    // session built, analyzed by the offline compilers in background tasks.
+    Shader_session_programs* const session_programs = m_context.shader_session_programs;
+    if (session_programs == nullptr) {
+        return make_error_content("analyze_shader_programs: no session program list in this editor");
+    }
+    const std::string analyze = args.value("analyze", std::string{"none"});
+    if ((analyze != "none") && (analyze != "all") && (analyze != "listed")) {
+        return make_error_content("analyze_shader_programs: 'analyze' must be \"none\", \"all\" or \"listed\"");
+    }
+    std::vector<std::string> program_ids;
+    if (args.contains("program_ids")) {
+        if (!args["program_ids"].is_array()) {
+            return make_error_content("analyze_shader_programs: 'program_ids' must be an array of program ids");
+        }
+        for (const json& id : args["program_ids"]) {
+            if (!id.is_string()) {
+                return make_error_content("analyze_shader_programs: 'program_ids' must be an array of program ids");
+            }
+            program_ids.push_back(id.get<std::string>());
+        }
+    }
+    std::vector<Shader_session_program> programs;
+    session_programs->copy_programs(programs);
+    const auto find_program = [&programs](const std::string& id) -> const Shader_session_program* {
+        for (const Shader_session_program& program : programs) {
+            if (program.id == id) {
+                return &program;
+            }
+        }
+        return nullptr;
+    };
+    for (const std::string& id : program_ids) {
+        if (find_program(id) == nullptr) {
+            return make_error_content(fmt::format("analyze_shader_programs: no session program with id {}", id));
+        }
+    }
+    if (analyze == "all") {
+        session_programs->request_analysis_all();
+    } else if (analyze == "listed") {
+        for (const std::string& id : program_ids) {
+            session_programs->request_analysis(find_program(id)->key);
+        }
+    }
+    const Shader_session_analysis_status status = session_programs->get_analysis_status();
+    json listed = json::array();
+    for (const std::string& id : program_ids) {
+        const Shader_session_program& program = *find_program(id);
+        listed.push_back(json{
+            {"id",       program.id},
+            {"name",     program.name},
+            {"key",      program.key},
+            {"analysis", json::parse(program.analysis.dump())}
+        });
+    }
+    json all = json::array();
+    for (const Shader_session_program& program : programs) {
+        all.push_back(json{{"id", program.id}, {"name", program.name}, {"analyzed", !program.analysis.is_null()}});
+    }
+    return make_json_content(json{
+        {"compilers_ready", status.compilers_ready},
+        {"program_count",   status.program_count},
+        {"analyzed",        status.analyzed},
+        {"queued",          status.queued},
+        {"programs",        std::move(all)},
+        {"listed",          std::move(listed)}
     }).dump();
 }
 

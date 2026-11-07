@@ -42,6 +42,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: SPIR-V cache records: `Spirv_cache_record`,
+  `Spirv_cache::get_key()`, `get_module()`, `has_record()`, `get_record()`,
+  `put_record()`, `Spirv_cache_module_stats`, `get_module_stats()`,
+  `put_module_stats()`; `get_spirv_tools_version()`;
+  `Graphics_config::spirv_cache_records` (`auto`, `on`,
+  `off`); `Shader_program_module::cache_key`; `optimize_spirv()` and
+  `make_report_stage()` (a recorded stage from a cache entry and its record)
+  in `shader_variant_report.hpp`. A shader variant browser recording takes cached
+  stages that carry a record instead of compiling them.
 - `erhe::scene_renderer`: `Overdraw_view_state::collect()`: the statistics of
   one completed frame, for a view that counts a single frame.
 - `erhe::primitive`: `transform_triangle_soup()`: move a soup's vertices into

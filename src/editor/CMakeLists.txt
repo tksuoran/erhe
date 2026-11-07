@@ -515,6 +515,8 @@ erhe_target_sources_grouped(
     renderers/shader_analytics.hpp
     renderers/shader_analytics_service.cpp
     renderers/shader_analytics_service.hpp
+    renderers/shader_session_programs.cpp
+    renderers/shader_session_programs.hpp
     renderers/id_pass_prepared.hpp
     renderers/id_renderer.hpp
     renderers/light_mesh.cpp

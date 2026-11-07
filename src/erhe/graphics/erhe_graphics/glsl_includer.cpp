@@ -38,6 +38,13 @@ Glsl_includer::Glsl_includer(
 
 Glsl_includer::~Glsl_includer() = default;
 
+void Glsl_includer::add_included(const std::filesystem::path& path)
+{
+    if (std::find(m_included.begin(), m_included.end(), path) == m_included.end()) {
+        m_included.push_back(path);
+    }
+}
+
 auto Glsl_includer::includeSystem(const char* header_name, const char*, size_t) -> IncludeResult*
 {
     return resolve(header_name);
@@ -63,6 +70,7 @@ auto Glsl_includer::resolve(const char* header_name) -> IncludeResult*
         }
         Include_entry* entry = new Include_entry{preamble_path, {}};
         m_active_paths.insert(preamble_path);
+        add_included(preamble_path);
         if (m_dependencies_out != nullptr) {
             m_dependencies_out->push_back(preamble_path);
         }
@@ -114,6 +122,7 @@ auto Glsl_includer::resolve(const char* header_name) -> IncludeResult*
 
     Include_entry* entry = new Include_entry{resolved, std::move(source.value())};
     m_active_paths.insert(resolved);
+    add_included(resolved);
     if (m_dependencies_out != nullptr) {
         const auto i = std::find(m_dependencies_out->begin(), m_dependencies_out->end(), resolved);
         if (i == m_dependencies_out->end()) {

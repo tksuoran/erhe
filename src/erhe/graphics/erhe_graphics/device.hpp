@@ -566,6 +566,7 @@ class Shader_program_module
 public:
     Shader_type                    type{Shader_type::vertex_shader};
     std::span<const unsigned int>  spirv;
+    std::string_view               cache_key{}; // the Spirv_cache entry; empty when the module is not cached
 };
 // Called on the building thread for every program built from SPIR-V, compiled or
 // served from the Spirv_cache.

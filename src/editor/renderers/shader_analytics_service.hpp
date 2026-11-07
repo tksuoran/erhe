@@ -23,6 +23,8 @@ namespace tf             { class Executor; }
 
 namespace editor {
 
+class Shader_session_programs;
+
 // Offline compiler analysis of every program the device builds, in
 // background tasks (doc/editor/shader_analytics.md).
 class Scene_commit_queue;
@@ -32,7 +34,7 @@ class Shader_analytics_service
 public:
     Shader_analytics_service(
         const Shader_analytics_config& config,
-        erhe::graphics::Device&        device,
+        Shader_session_programs&       session_programs,
         tf::Executor&                  executor,
         Shader_analytics&              shader_analytics
     );
@@ -43,7 +45,8 @@ public:
     class Status
     {
     public:
-        std::string mali_core;   // empty: no malioc
+        std::string mali_core;    // empty: no malioc
+        std::string powervr_core; // empty: no PowerVR compiler
         std::size_t queued   {0};
         std::size_t running  {0};
         std::size_t analyzed {0};
@@ -76,8 +79,10 @@ private:
     void work();      // worker task: runs jobs until the queue is empty
     void land();      // main thread (Scene_commit_queue)
     [[nodiscard]] auto has_malioc_locked() const -> bool;
+    [[nodiscard]] auto has_powervr_locked() const -> bool;
 
-    erhe::graphics::Device&     m_device;
+    Shader_session_programs&    m_session_programs;
+    std::size_t                 m_listener_id{0};
     tf::Executor&               m_executor;
     Scene_commit_queue*         m_main_thread_queue{nullptr};
     Shader_analytics&           m_shader_analytics;

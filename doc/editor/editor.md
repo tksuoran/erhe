@@ -778,12 +778,14 @@ optimization") unless `ERHE_SPIRV_OPTIMIZATION=0` turns it off.
 **Shader variant browser.** `--shader-variant-browser <directory>` records
 every shader program the session compiles into an HTML browser in that
 directory (doc/erhe/graphics.md "Shader variant browser"): open
-`<directory>/index.html`. A recording session compiles every program
-(it does not read `spirv_cache/`), so it records every variant the session
-uses: open the scenes whose costs you want before quitting. After the run,
+`<directory>/index.html`. A recording session records every variant the
+session uses, from the `spirv_cache/` records of cached programs and by
+compiling the others: open the scenes whose costs you want before quitting. After the run,
 `py -3 scripts/shader_analytics.py <directory>` adds Arm Mali Offline
-Compiler cycle, register, occupancy and spill reports per variant to the
-same pages (doc/erhe/graphics.md "Mali analytics").
+Compiler cycle, register, occupancy and spill reports and PowerVR
+profiling compiler cycle, instruction and register reports per variant to
+the same pages (doc/erhe/graphics.md "Mali analytics", "PowerVR
+analytics").
 
 Recording into a directory clears what an earlier recording left there
 (analytics included), so run `scripts/shader_analytics.py` after each
@@ -800,13 +802,23 @@ the same browser inside the editor: it reads a browser directory -
 `variants/manifest.json`, the per stage sources and modules, `analytics.js`
 and `fragments.js` - by default the one this session records into; another
 recorded directory opens from the path field (Session returns to the
-session's). The table has the HTML index's columns, variant key slots,
+session's). In a session that records nothing, the window shows this
+session's programs from their SPIR-V cache records with the path field
+empty, and analyzes them itself: selecting a program analyzes it, Analyze
+all analyzes every program (`doc/editor/shader_analytics.md` "Session
+programs"). The table has the HTML index's columns, variant key slots,
 analytics and fragments column groups, summary line, all-words filter and
 sorting (the `#` column is the recording order; the program pane names the
 stable id); selecting a row shows the program pane with its stage sizes and
 the Shader key, Sources, SPIR-V before / after optimization and per core
 analytics tabs (the active tab stays across programs; Both / Table / Program
-collapse the panes). The SPIR-V disassembly is made from the `.spv` files
+collapse the panes). Above the column headers a group row labels each run
+of adjacent columns of one analytics core ("Mali G310",
+"PowerVR BXM-8-256") or of the fragments group, following column order and
+horizontal scrolling; right-clicking it opens a checkbox per vendor (all on
+by default, for the session) that hides or shows every column of that
+vendor, its fragments estimate columns included. Both header rows and the
+`#`, Program and Variant key columns stay frozen. The SPIR-V disassembly is made from the `.spv` files
 when a program is selected; included files are read from their paths then.
 The window reloads its directory when the report records a program
 (`Shader_variant_report::set_add_callback()`), when `capture_fragment_invocations`

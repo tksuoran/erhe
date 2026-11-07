@@ -7,11 +7,14 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
@@ -207,6 +210,19 @@ void hash_text(uint64_t& hash, const std::string_view text)
     hash_bytes(hash, "|", 1);
 }
 
+[[nodiscard]] auto stage_short_name(const erhe::graphics::Shader_type type) -> const char*
+{
+    switch (type) {
+        case erhe::graphics::Shader_type::vertex_shader:          return "vert";
+        case erhe::graphics::Shader_type::fragment_shader:        return "frag";
+        case erhe::graphics::Shader_type::compute_shader:         return "comp";
+        case erhe::graphics::Shader_type::geometry_shader:        return "geom";
+        case erhe::graphics::Shader_type::tess_control_shader:    return "tesc";
+        case erhe::graphics::Shader_type::tess_evaluation_shader: return "tese";
+        default:                                                  return nullptr;
+    }
+}
+
 auto write_spirv(const std::filesystem::path& path, const std::vector<unsigned int>& spirv) -> bool
 {
     const std::string_view bytes{reinterpret_cast<const char*>(spirv.data()), spirv.size() * sizeof(unsigned int)};
@@ -220,6 +236,28 @@ auto write_spirv(const std::filesystem::path& path, const std::vector<unsigned i
         command += (command.empty() ? "" : " ") + argument;
     }
     return command;
+}
+
+// Non-empty lines of a compiler's text output, trailing blanks trimmed.
+[[nodiscard]] auto split_lines(const std::string& text) -> std::vector<std::string>
+{
+    std::vector<std::string> lines;
+    std::size_t line_start = 0;
+    while (line_start < text.size()) {
+        std::size_t line_end = text.find('\n', line_start);
+        if (line_end == std::string::npos) {
+            line_end = text.size();
+        }
+        std::string line = text.substr(line_start, line_end - line_start);
+        while (!line.empty() && ((line.back() == '\r') || (line.back() == ' '))) {
+            line.pop_back();
+        }
+        if (!line.empty()) {
+            lines.push_back(std::move(line));
+        }
+        line_start = line_end + 1;
+    }
+    return lines;
 }
 
 [[nodiscard]] auto read_cached_report(const std::filesystem::path& path) -> std::optional<json>
@@ -297,6 +335,61 @@ void write_cached_report(const std::filesystem::path& path, const json& report)
     return report;
 }
 
+// ProfilingCompilerCLIWrapper on the fragment module; the raw report plus an
+// "erhe" block. The report lands in the working directory as <module>.json.
+[[nodiscard]] auto run_powervr(const Offline_compiler_tools& tools, const std::vector<unsigned int>& spirv) -> json
+{
+    Scratch_directory scratch;
+    const std::filesystem::path module_path = scratch.path / "frag.spv";
+    std::vector<std::string> arguments{
+        tools.powervr.string(), "-a", "spv", "-b", tools.powervr_bvnc, "-p", tools.powervr.parent_path().string(), "-i", module_path.string()
+    };
+    json report;
+    std::vector<std::string> messages;
+    int exit_code = 0;
+    if (!write_spirv(module_path, spirv)) {
+        messages.push_back("cannot write the module");
+    } else {
+        const Process_result result = run_process(arguments, scratch.path);
+        exit_code = result.exit_code;
+        const std::filesystem::path report_path = scratch.path / "frag.spv.json";
+        std::error_code error_code;
+        if (result.started && std::filesystem::is_regular_file(report_path, error_code)) {
+            const std::optional<std::string> text = erhe::file::read("PowerVR report", report_path);
+            if (text.has_value()) {
+                report = json::parse(text.value(), nullptr, false);
+            }
+        }
+        if (!result.started || report.is_discarded() || !report.is_object() || !report.contains("shaders") || !report["shaders"].is_object()) {
+            // stdout carries the disassembly on success, the error line on failure.
+            messages = split_lines(result.out);
+            for (std::string& line : split_lines(result.err)) {
+                messages.push_back(std::move(line));
+            }
+            if (!result.started) {
+                messages.insert(messages.begin(), fmt::format("cannot start {}", c_powervr_executable));
+            } else if (result.exit_code < 0) {
+                messages.insert(messages.begin(), fmt::format("compiler crashed with signal {}", -result.exit_code));
+            } else if (messages.empty()) {
+                messages.push_back(fmt::format("compiler exited {} without a report", result.exit_code));
+            }
+            report = json{{"output", "failed"}, {"shaders", json::object()}};
+        }
+    }
+    if (!report.is_object()) {
+        report = json{{"output", "failed"}, {"shaders", json::object()}};
+    }
+    report["erhe"] = json{
+        {"core",            tools.powervr_core},
+        {"bvnc",            tools.powervr_bvnc},
+        {"powervr_version", tools.powervr_version},
+        {"command",         join_command(arguments)},
+        {"exit_code",       exit_code},
+        {"messages",        messages}
+    };
+    return report;
+}
+
 [[nodiscard]] auto number_of(const json& value) -> double
 {
     if (value.is_number()) {
@@ -365,6 +458,30 @@ void extract_mali_metrics(const json& report, Shader_cost_metrics& metrics, std:
     metrics[static_cast<std::size_t>(Shader_cost_metric::mali_arithmetic_cycles)] = cycles_of("arith_total");
     metrics[static_cast<std::size_t>(Shader_cost_metric::mali_texture_cycles)]    = cycles_of("texture");
     metrics[static_cast<std::size_t>(Shader_cost_metric::mali_load_store_cycles)] = cycles_of("load_store");
+}
+
+// The fragment Main counters of a raw PowerVR report.
+void extract_powervr_metrics(const json& report, Shader_cost_metrics& metrics, std::string& error)
+{
+    const json& shaders = report.contains("shaders") ? report["shaders"] : json::object();
+    const auto  main    = shaders.is_object() ? shaders.find("Main") : shaders.end();
+    if (!shaders.is_object() || (main == shaders.end()) || !main->is_object() || !main->contains("counters")) {
+        std::string messages;
+        for (const json& message : report.value("erhe", json::object()).value("messages", json::array())) {
+            messages += (messages.empty() ? "" : "; ") + (message.is_string() ? message.get<std::string>() : message.dump());
+        }
+        error += fmt::format("{}PowerVR: {}", error.empty() ? "" : "; ", messages.empty() ? std::string{"no Main counters"} : messages);
+        return;
+    }
+    const json& counters = (*main)["counters"];
+    const auto counter = [&counters](const char* key) -> double {
+        const auto entry = counters.find(key);
+        return ((entry != counters.end()) && entry->is_object() && entry->contains("value")) ? number_of((*entry)["value"]) : c_missing;
+    };
+    metrics[static_cast<std::size_t>(Shader_cost_metric::powervr_cycles)]       = counter("uNaiveCycleCount");
+    metrics[static_cast<std::size_t>(Shader_cost_metric::powervr_instructions)] = counter("uInstructionCount");
+    metrics[static_cast<std::size_t>(Shader_cost_metric::powervr_samples)]      = counter("uSamples");
+    metrics[static_cast<std::size_t>(Shader_cost_metric::powervr_registers)]    = counter("uTempRegisterCount");
 }
 
 [[nodiscard]] auto query_version_output(const std::filesystem::path& tool, const char* argument) -> std::string
@@ -533,6 +650,96 @@ void add_path_list(const std::string_view source, const std::string_view list, c
     return version;
 }
 
+[[nodiscard]] auto is_bvnc(const std::string_view text) -> bool
+{
+    int dots = 0;
+    bool digit_before = false;
+    for (const char c : text) {
+        if (std::isdigit(static_cast<unsigned char>(c)) != 0) {
+            digit_before = true;
+        } else if ((c == '.') && digit_before) {
+            ++dots;
+            digit_before = false;
+        } else {
+            return false;
+        }
+    }
+    return (dots == 3) && digit_before;
+}
+
+// "PowerVR-BXM-8-256" or "PowerVR-35.3.408.101" -> the BVNC, through the
+// wrapper's -h list ("35.3.408.101: Series B BXM-8-256, MediaTek Dimensity 930").
+// Empty, with the reason in error, when the core names no single BVNC.
+[[nodiscard]] auto resolve_powervr_bvnc(const std::string& help_text, const std::string& core, std::string& error) -> std::string
+{
+    const std::string_view name = std::string_view{core}.substr(std::string_view{"PowerVR-"}.size());
+    if (is_bvnc(name)) {
+        return std::string{name};
+    }
+    std::vector<std::string> bvncs;
+    for (const std::string& line : split_lines(help_text)) {
+        const std::size_t first = line.find_first_not_of(" \t");
+        const std::size_t colon = line.find(':');
+        if ((first == std::string::npos) || (colon == std::string::npos) || (colon < first)) {
+            continue;
+        }
+        const std::string bvnc = line.substr(first, colon - first);
+        if (!is_bvnc(bvnc)) {
+            continue;
+        }
+        // The GPU is the last word before the first comma: " Series B BXM-8-256, MediaTek ..."
+        const std::size_t comma = line.find(',', colon);
+        std::string_view  words{std::string_view{line}.substr(colon + 1, (comma == std::string::npos) ? std::string_view::npos : (comma - colon - 1))};
+        while (!words.empty() && (std::isspace(static_cast<unsigned char>(words.back())) != 0)) {
+            words.remove_suffix(1);
+        }
+        const std::size_t last_space = words.find_last_of(" \t");
+        const std::string_view gpu = (last_space == std::string_view::npos) ? words : words.substr(last_space + 1);
+        if (!gpu.empty() && (gpu == name)) {
+            bvncs.push_back(bvnc);
+        }
+    }
+    if (bvncs.size() == 1) {
+        return bvncs.front();
+    }
+    error = bvncs.empty()
+        ? fmt::format("-h names no GPU {}", name)
+        : fmt::format("{} names {} BVNCs; use PowerVR-<BVNC>", name, bvncs.size());
+    return {};
+}
+
+// The SPIR-V compiler library of a BVNC beside the wrapper ("libspvcompiler_sdk.35.3.408.101.so").
+[[nodiscard]] auto find_powervr_library(const std::filesystem::path& wrapper, const std::string& bvnc) -> std::filesystem::path
+{
+    const std::string pattern = fmt::format("spvcompiler_sdk.{}.", bvnc);
+    std::error_code error_code;
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator{wrapper.parent_path(), error_code}) {
+        if (entry.path().filename().string().find(pattern) != std::string::npos) {
+            return entry.path();
+        }
+    }
+    return {};
+}
+
+// The wrapper has no version option; the library embeds its DDK build ("rogueddk MAIN@6451761").
+[[nodiscard]] auto read_powervr_library_version(const std::filesystem::path& library) -> std::string
+{
+    const std::optional<std::string> bytes = erhe::file::read("PowerVR compiler library", library);
+    if (!bytes.has_value()) {
+        return {};
+    }
+    constexpr std::string_view marker{"rogueddk "};
+    const std::size_t start = bytes.value().find(marker);
+    if (start == std::string::npos) {
+        return {};
+    }
+    std::size_t end = start + marker.size();
+    while ((end < bytes.value().size()) && (std::isgraph(static_cast<unsigned char>(bytes.value()[end])) != 0)) {
+        ++end;
+    }
+    return bytes.value().substr(start + marker.size(), end - start - marker.size());
+}
+
 } // anonymous namespace
 
 auto find_offline_compiler_candidates(
@@ -583,9 +790,79 @@ void query_offline_compiler_versions(Offline_compiler_tools& tools)
     } else if (!tools.malioc_candidates.empty()) {
         log_programs->warn("Shader analytics: no malioc candidate reported a version; Mali analysis off");
     }
+
+    tools.powervr.clear();
+    const bool powervr_core_valid = std::string_view{tools.powervr_core}.starts_with("PowerVR-");
+    if (!tools.powervr_candidates.empty() && !powervr_core_valid) {
+        log_programs->warn("Shader analytics: the core {} is not PowerVR-<GPU> or PowerVR-<BVNC>; PowerVR analysis off", tools.powervr_core);
+    }
+    for (const std::filesystem::path& candidate : powervr_core_valid ? std::span<const std::filesystem::path>{tools.powervr_candidates} : std::span<const std::filesystem::path>{}) {
+        std::string error;
+        const std::string bvnc = resolve_powervr_bvnc(query_version_output(candidate, "-h"), tools.powervr_core, error);
+        if (bvnc.empty()) {
+            log_programs->warn("Shader analytics: {} candidate {}: {}; skipped", c_powervr_executable, candidate.generic_string(), error);
+            continue;
+        }
+        const std::filesystem::path library = find_powervr_library(candidate, bvnc);
+        if (library.empty()) {
+            log_programs->warn("Shader analytics: {} candidate {}: no SPIR-V compiler library for BVNC {} beside it; skipped", c_powervr_executable, candidate.generic_string(), bvnc);
+            continue;
+        }
+        const std::string version = read_powervr_library_version(library);
+        if (version.empty()) {
+            log_programs->warn("Shader analytics: {} candidate {}: {} names no rogueddk build; skipped", c_powervr_executable, candidate.generic_string(), library.generic_string());
+            continue;
+        }
+        log_programs->info("Shader analytics: {} candidate {} BVNC {} version {}", c_powervr_executable, candidate.generic_string(), bvnc, version);
+        if (tools.powervr.empty() || is_newer_version(version, tools.powervr_version)) {
+            tools.powervr         = candidate;
+            tools.powervr_version = version;
+            tools.powervr_bvnc    = bvnc;
+        }
+    }
+    if (!tools.powervr.empty()) {
+        log_programs->info("Shader analytics: using {} {} (BVNC {}, version {})", c_powervr_executable, tools.powervr.generic_string(), tools.powervr_bvnc, tools.powervr_version);
+    } else if (!tools.powervr_candidates.empty() && powervr_core_valid) {
+        log_programs->warn("Shader analytics: no {} candidate compiles for {}; PowerVR analysis off", c_powervr_executable, tools.powervr_core);
+    }
 }
 
 namespace {
+
+// The raw report of each compiler from the cache, else from a run that is
+// then cached; keyed by the compiler, its versions, the core and the module
+// bytes, so a module is compiled once per compiler version.
+[[nodiscard]] auto get_malioc_report(const Offline_compiler_tools& tools, const std::vector<unsigned int>& spirv, const std::filesystem::path& cache_directory) -> json
+{
+    uint64_t hash = 0xcbf29ce484222325ull;
+    hash_text(hash, "malioc");
+    hash_text(hash, tools.malioc_version);
+    hash_text(hash, tools.mali_core);
+    hash_bytes(hash, spirv.data(), spirv.size() * sizeof(unsigned int));
+    const std::filesystem::path path = cache_directory / fmt::format("{:016x}.{}.malioc.json", hash, tools.mali_core);
+    std::optional<json> report = read_cached_report(path);
+    if (!report.has_value()) {
+        report = run_malioc(tools, spirv);
+        write_cached_report(path, report.value());
+    }
+    return std::move(report.value());
+}
+
+[[nodiscard]] auto get_powervr_report(const Offline_compiler_tools& tools, const std::vector<unsigned int>& spirv, const std::filesystem::path& cache_directory) -> json
+{
+    uint64_t hash = 0xcbf29ce484222325ull;
+    hash_text(hash, "powervr");
+    hash_text(hash, tools.powervr_version);
+    hash_text(hash, tools.powervr_bvnc);
+    hash_bytes(hash, spirv.data(), spirv.size() * sizeof(unsigned int));
+    const std::filesystem::path path = cache_directory / fmt::format("{:016x}.{}.powervr.json", hash, tools.powervr_core);
+    std::optional<json> report = read_cached_report(path);
+    if (!report.has_value()) {
+        report = run_powervr(tools, spirv);
+        write_cached_report(path, report.value());
+    }
+    return std::move(report.value());
+}
 
 void analyze_program_reports(
     const Offline_compiler_tools&                 tools,
@@ -595,21 +872,11 @@ void analyze_program_reports(
     std::string&                                  error
 )
 {
-    const Offline_compiler_stage* const fragment = &fragment_stage;
-
     if (!tools.malioc.empty()) {
-        uint64_t hash = 0xcbf29ce484222325ull;
-        hash_text(hash, "malioc");
-        hash_text(hash, tools.malioc_version);
-        hash_text(hash, tools.mali_core);
-        hash_bytes(hash, fragment->spirv.data(), fragment->spirv.size() * sizeof(unsigned int));
-        const std::filesystem::path path = cache_directory / fmt::format("{:016x}.{}.malioc.json", hash, tools.mali_core);
-        std::optional<json> report = read_cached_report(path);
-        if (!report.has_value()) {
-            report = run_malioc(tools, fragment->spirv);
-            write_cached_report(path, report.value());
-        }
-        extract_mali_metrics(report.value(), metrics, error);
+        extract_mali_metrics(get_malioc_report(tools, fragment_stage.spirv, cache_directory), metrics, error);
+    }
+    if (!tools.powervr.empty()) {
+        extract_powervr_metrics(get_powervr_report(tools, fragment_stage.spirv, cache_directory), metrics, error);
     }
 }
 
@@ -642,6 +909,344 @@ auto analyze_program(
         error += fmt::format("{}unexpected report: {}", error.empty() ? "" : "; ", exception.what());
     }
     return metrics;
+}
+
+
+// ---------------------------------------------------------------------------
+// Full program analytics: the summaries of scripts/shader_analytics.py
+// (summarize_malioc_report(), summarize_powervr_report()), field for field, so the Shader Variants window
+// reads in-editor results and analytics.js alike.
+
+namespace {
+
+using ojson = nlohmann::ordered_json;
+
+[[nodiscard]] auto value_or_null(const json& object, const char* key) -> ojson
+{
+    if (!object.is_object()) {
+        return nullptr;
+    }
+    const auto i = object.find(key);
+    return (i == object.end()) ? ojson(nullptr) : ojson::parse(i->dump());
+}
+
+[[nodiscard]] auto to_ojson(const json& value) -> ojson
+{
+    return ojson::parse(value.dump());
+}
+
+[[nodiscard]] auto as_message_text(const json& value) -> std::string
+{
+    return value.is_string() ? value.get<std::string>() : value.dump();
+}
+
+// SPIR-V capability names the malioc error reports name by number.
+[[nodiscard]] auto capability_name(const int number) -> const char*
+{
+    switch (number) {
+        case 1:    return "Shader";
+        case 11:   return "Float16";
+        case 22:   return "Int64";
+        case 23:   return "Int16";
+        case 32:   return "ClipDistance";
+        case 33:   return "CullDistance";
+        case 45:   return "SampledCubeArray";
+        case 49:   return "StorageImageExtendedFormats";
+        case 50:   return "ImageQuery";
+        case 51:   return "DerivativeControl";
+        case 61:   return "GroupNonUniform";
+        case 4423: return "SubgroupBallotKHR";
+        case 4427: return "DrawParameters";
+        case 4433: return "StorageBuffer16BitAccess";
+        case 4434: return "UniformAndStorageBuffer16BitAccess";
+        case 4437: return "DeviceGroup";
+        case 4439: return "MultiView";
+        case 4441: return "VariablePointersStorageBuffer";
+        case 4472: return "RayQueryKHR";
+        case 5301: return "ShaderNonUniform";
+        case 5302: return "RuntimeDescriptorArray";
+        case 5345: return "VulkanMemoryModel";
+        case 5347: return "PhysicalStorageBufferAddresses";
+        case 5379: return "DemoteToHelperInvocation";
+        case 5391: return "RayQueryPositionFetchKHR";
+        default:   return nullptr;
+    }
+}
+
+// "Unsupported capability (5302)" -> "Unsupported capability (5302 RuntimeDescriptorArray)"
+[[nodiscard]] auto resolve_capability_names(std::string message) -> std::string
+{
+    constexpr std::string_view marker{"Unsupported capability ("};
+    std::size_t start = 0;
+    for (;;) {
+        const std::size_t i = message.find(marker, start);
+        if (i == std::string::npos) {
+            return message;
+        }
+        const std::size_t j = message.find(')', i);
+        if (j == std::string::npos) {
+            return message;
+        }
+        const std::string number = message.substr(i + marker.size(), j - i - marker.size());
+        const bool digits = !number.empty() && std::all_of(number.begin(), number.end(), [](const char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; });
+        if (digits && (number.size() < 9)) {
+            if (const char* name = capability_name(std::stoi(number)); name != nullptr) {
+                message.insert(j, std::string{" "} + name);
+            }
+        }
+        start = j + 1;
+    }
+}
+
+// Returns (summary, core_info or null).
+[[nodiscard]] auto summarize_malioc_report(const json& report) -> std::pair<ojson, ojson>
+{
+    const json erhe = report.value("erhe", json::object());
+    ojson summary{
+        {"command",           erhe.value("command", std::string{})},
+        {"error",             nullptr},
+        {"variants",          ojson::array()},
+        {"properties",        ojson::object()},
+        {"attribute_streams", nullptr},
+        {"warnings",          ojson::array()},
+        {"notes",             ojson::array()}
+    };
+    const json shaders = report.value("shaders", json::array());
+    const bool performance = report.value("schema", json::object()).value("name", std::string{}) == "performance";
+    if (!performance || !shaders.is_array() || shaders.empty()) {
+        std::string messages;
+        if (shaders.is_array()) {
+            for (const json& shader : shaders) {
+                for (const json& error : shader.value("errors", json::array())) {
+                    messages += (messages.empty() ? "" : "; ") + resolve_capability_names(as_message_text(error));
+                }
+            }
+        }
+        summary["error"] = messages.empty() ? std::string{"no performance report"} : messages;
+        return {std::move(summary), nullptr};
+    }
+    const json& shader   = shaders[0];
+    const json  hardware = shader.value("hardware", json::object());
+    std::vector<std::string> pipelines;
+    for (const json& pipeline : hardware.value("pipelines", json::array())) {
+        pipelines.push_back(pipeline.value("name", std::string{}));
+    }
+    ojson core_info{
+        {"revision",     value_or_null(hardware, "revision")},
+        {"architecture", value_or_null(hardware, "architecture")},
+        {"driver",       value_or_null(shader, "driver")},
+        {"pipelines",    pipelines}
+    };
+    for (const json& property : shader.value("properties", json::array())) {
+        summary["properties"][property.value("name", std::string{})] = value_or_null(property, "value");
+    }
+    for (const json& variant : shader.value("variants", json::array())) {
+        json properties = json::object();
+        for (const json& property : variant.value("properties", json::array())) {
+            properties[property.value("name", std::string{})] = property.contains("value") ? property["value"] : json(nullptr);
+        }
+        const json performance_block = variant.value("performance", json::object());
+        // A variant's cycle_count arrays follow the variant's own pipelines
+        // order; the summary stores them in the hardware block's order.
+        std::vector<std::string> variant_pipelines = pipelines;
+        if (performance_block.contains("pipelines") && performance_block["pipelines"].is_array()) {
+            variant_pipelines.clear();
+            for (const json& name : performance_block["pipelines"]) {
+                variant_pipelines.push_back(name.is_string() ? name.get<std::string>() : name.dump());
+            }
+        }
+        const auto cycles = [&](const char* key) -> std::pair<ojson, ojson> {
+            const json entry = performance_block.value(key, json::object());
+            ojson counts = value_or_null(entry, "cycle_count");
+            if (!counts.is_null() && (variant_pipelines != pipelines)) {
+                ojson reordered = ojson::array();
+                for (const std::string& name : pipelines) {
+                    ojson value = nullptr;
+                    for (std::size_t i = 0; (i < variant_pipelines.size()) && (i < counts.size()); ++i) {
+                        if (variant_pipelines[i] == name) {
+                            value = counts[i];
+                        }
+                    }
+                    reordered.push_back(std::move(value));
+                }
+                counts = std::move(reordered);
+            }
+            ojson bound = ojson::array();
+            for (const json& unit : entry.value("bound_pipelines", json::array())) {
+                if (!unit.is_null() && !(unit.is_string() && unit.get_ref<const std::string&>().empty())) {
+                    bound.push_back(to_ojson(unit));
+                }
+            }
+            return {std::move(counts), std::move(bound)};
+        };
+        auto [total,    bound_total]    = cycles("total_cycles");
+        auto [shortest, bound_shortest] = cycles("shortest_path_cycles");
+        auto [longest,  bound_longest]  = cycles("longest_path_cycles");
+        summary["variants"].push_back(ojson{
+            {"name",              value_or_null(variant, "name")},
+            {"work_registers",    value_or_null(properties, "work_registers_used")},
+            {"uniform_registers", value_or_null(properties, "uniform_registers_used")},
+            {"occupancy",         value_or_null(properties, "thread_occupancy")},
+            {"stack_size",        value_or_null(properties, "stack_size")},
+            {"has_spilling",      value_or_null(properties, "has_stack_spilling")},
+            {"spill_bytes",       value_or_null(properties, "stack_spill_bytes")},
+            {"alloca_bytes",      value_or_null(properties, "stack_alloca_bytes")},
+            {"fp16",              value_or_null(properties, "fp16_arithmetic")},
+            {"total",             std::move(total)},
+            {"bound_total",       std::move(bound_total)},
+            {"shortest",          std::move(shortest)},
+            {"bound_shortest",    std::move(bound_shortest)},
+            {"longest",           std::move(longest)},
+            {"bound_longest",     std::move(bound_longest)}
+        });
+    }
+    summary["attribute_streams"] = value_or_null(shader, "attribute_streams");
+    for (const json& warning : shader.value("warnings", json::array())) {
+        summary["warnings"].push_back(as_message_text(warning));
+    }
+    for (const json& note : shader.value("notes", json::array())) {
+        summary["notes"].push_back(as_message_text(note));
+    }
+    return {std::move(summary), std::move(core_info)};
+}
+
+[[nodiscard]] auto powervr_counter_label(const std::string& key, const json& entry) -> std::string
+{
+    const std::string long_name = entry.value("long_name", std::string{});
+    if (!long_name.empty()) {
+        return long_name;
+    }
+    return (key == "uNaiveCycleCount") ? std::string{"Naive Cycle Count"} : key;
+}
+
+// Returns (summary, core_info or null).
+[[nodiscard]] auto summarize_powervr_report(const json& report) -> std::pair<ojson, ojson>
+{
+    const json erhe = report.value("erhe", json::object());
+    ojson summary{
+        {"command",  erhe.value("command", std::string{})},
+        {"error",    nullptr},
+        {"variants", ojson::array()},
+        {"messages", to_ojson(erhe.value("messages", json::array()))}
+    };
+    const json shaders = report.value("shaders", json::object());
+    if (!shaders.is_object() || shaders.empty()) {
+        std::string text;
+        for (const json& message : erhe.value("messages", json::array())) {
+            text += (text.empty() ? "" : "; ") + as_message_text(message);
+        }
+        summary["error"] = text.empty() ? std::string{"no report"} : text;
+        return {std::move(summary), nullptr};
+    }
+    const json information = report.value("information", json::object());
+    ojson core_info{
+        {"gpu",          value_or_null(information, "gpu")},
+        {"architecture", value_or_null(information, "architecture")},
+        {"soc",          value_or_null(information, "soc")}
+    };
+    for (const auto& [name, shader] : shaders.items()) {
+        const json counters = shader.is_object() ? shader.value("counters", json::object()) : json::object();
+        ojson counter_pairs = ojson::array();
+        for (const auto& [key, entry] : counters.items()) {
+            if (entry.is_object()) {
+                counter_pairs.push_back(ojson::array({powervr_counter_label(key, entry), value_or_null(entry, "value")}));
+            }
+        }
+        const auto counter = [&counters](const char* key) -> ojson {
+            const auto i = counters.find(key);
+            return ((i != counters.end()) && i->is_object()) ? value_or_null(*i, "value") : ojson(nullptr);
+        };
+        summary["variants"].push_back(ojson{
+            {"name",           name},
+            {"counters",       std::move(counter_pairs)},
+            {"cycles",         counter("uNaiveCycleCount")},
+            {"instructions",   counter("uInstructionCount")},
+            {"temp_registers", counter("uTempRegisterCount")},
+            {"samples",        counter("uSamples")},
+            {"utilisation",    counter("fUSCUtilisation")}
+        });
+    }
+    return {std::move(summary), std::move(core_info)};
+}
+
+[[nodiscard]] auto generated_now() -> std::string
+{
+    const std::time_t now = std::time(nullptr);
+    std::tm local{};
+#if defined(_WIN32)
+    localtime_s(&local, &now);
+#else
+    localtime_r(&now, &local);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S", &local);
+    return buffer;
+}
+
+} // anonymous namespace
+
+auto analyze_program_stages(
+    const Offline_compiler_tools&                         tools,
+    const std::span<const Offline_compiler_program_stage> stages,
+    const std::filesystem::path&                          cache_directory
+) -> nlohmann::ordered_json
+{
+    ojson result = ojson::object();
+    const std::string generated = generated_now();
+    const auto stage_key = [](const erhe::graphics::Shader_type type) -> std::string {
+        const char* const name = stage_short_name(type);
+        return (name != nullptr) ? std::string{name} : std::string{"?"};
+    };
+    // The reports are the compilers' output: a shape this code does not
+    // expect is a failed analysis of this program, not of the editor.
+    try {
+        // Mali and PowerVR: one compile per stage module.
+        const auto per_module = [&](
+            const char*        compiler,
+            const std::string& core,
+            ojson              block,
+            const std::function<std::pair<ojson, ojson>(const std::vector<unsigned int>&)>& summarize
+        ) {
+            ojson program = ojson::object();
+            bool  core_info_set = false;
+            for (const Offline_compiler_program_stage& stage : stages) {
+                ojson stage_block{{"before", nullptr}, {"after", nullptr}};
+                for (const auto& [slot, module] : {std::pair{"before", &stage.before}, std::pair{"after", &stage.after}}) {
+                    if (module->empty()) {
+                        continue;
+                    }
+                    auto [summary, core_info] = summarize(*module);
+                    stage_block[slot] = std::move(summary);
+                    if (!core_info.is_null() && !core_info_set) {
+                        for (auto& [key, value] : core_info.items()) {
+                            block[key] = value;
+                        }
+                        core_info_set = true;
+                    }
+                }
+                program[stage_key(stage.type)] = std::move(stage_block);
+            }
+            block["compiler"] = compiler;
+            result[core] = ojson{{"block", std::move(block)}, {"program", std::move(program)}};
+        };
+        if (!tools.malioc.empty()) {
+            per_module(
+                "malioc", tools.mali_core,
+                ojson{{"core", tools.mali_core}, {"compiler", "malioc"}, {"revision", nullptr}, {"architecture", nullptr}, {"driver", nullptr}, {"pipelines", ojson::array()}, {"malioc_version", tools.malioc_version}, {"generated", generated}},
+                [&](const std::vector<unsigned int>& module) { return summarize_malioc_report(get_malioc_report(tools, module, cache_directory)); }
+            );
+        }
+        if (!tools.powervr.empty()) {
+            per_module(
+                "powervr", tools.powervr_core,
+                ojson{{"core", tools.powervr_core}, {"compiler", "powervr"}, {"bvnc", tools.powervr_bvnc}, {"gpu", nullptr}, {"architecture", nullptr}, {"soc", nullptr}, {"powervr_version", tools.powervr_version}, {"generated", generated}},
+                [&](const std::vector<unsigned int>& module) { return summarize_powervr_report(get_powervr_report(tools, module, cache_directory)); }
+            );
+        }
+    } catch (const json::exception& exception) { // json and ordered_json share their exception types
+        log_programs->warn("Shader analytics: unexpected compiler report: {}", exception.what());
+    }
+    return result;
 }
 
 } // namespace editor

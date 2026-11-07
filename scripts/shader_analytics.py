@@ -1,5 +1,6 @@
 """Offline GPU compiler analytics for a shader variant browser directory
-(doc/erhe/graphics.md "Shader variant browser" and "Mali analytics").
+(doc/erhe/graphics.md "Shader variant browser", "Mali analytics" and
+"PowerVR analytics").
 
 Reads <browser-directory>/variants/manifest.json (written by the editor run
 with --shader-variant-browser), runs the vendor offline compilers on every
@@ -7,14 +8,21 @@ recorded program before and after the SPIRV-Tools optimizer, keeps each raw
 JSON report next to the modules, and writes <browser-directory>/analytics.js,
 the sidecar index.html and the per-program pages render when it is present.
 
-The compiler is chosen per core by its name:
+Two compilers, chosen per core by its name:
 
 - Mali-<name> (Arm Mali Offline Compiler, malioc): found through --malioc,
   the ERHE_MALIOC path list (executables or directories), or "malioc" on
-  PATH. One compile per stage module; report variants/<n>_<stage>[_optimized].<core>.malioc.json.
+  PATH. One compile per stage module; report
+  variants/<n>_<stage>[_optimized].<core>.malioc.json.
+- PowerVR-<GPU> or PowerVR-<BVNC> (Imagination PowerVR profiling compiler,
+  ProfilingCompilerCLIWrapper, with its compiler libraries in the same
+  directory): found through --powervr, the ERHE_POWERVR path list, or PATH.
+  One compile per stage module; report
+  variants/<n>_<stage>[_optimized].<core>.powervr.json.
 
 Without --core every compiler found contributes its default core: Mali-G310
-(the weakest Mali core that accepts erhe's modules). --core may repeat. A
+(the weakest Mali core that accepts erhe's modules) and PowerVR-BXM-8-256
+(the one PowerVR core of the SDK that accepts them). --core may repeat. A
 report newer than its module(s) with the same core and compiler version is
 not compiled again unless --force. A failed compile is a result
 too: the error is kept in the report (malioc: every "Unsupported capability
@@ -22,7 +30,8 @@ too: the error is kept in the report (malioc: every "Unsupported capability
 an error naming the signal).
 
     py -3 scripts/shader_analytics.py <browser-directory> [--core Mali-G310]
-        [--malioc <path>] [--jobs N] [--force] [--check]
+        [--core PowerVR-BXM-8-256] [--malioc <path>] [--powervr <path>]
+        [--jobs N] [--force] [--check]
 
 --check re-reads the analytics.js it wrote and verifies that every program
 and stage of the manifest has a before entry, and an after entry where the
@@ -36,12 +45,16 @@ import concurrent.futures
 import datetime
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 DEFAULT_MALI_CORE = "Mali-G310"
+DEFAULT_POWERVR_CORE = "PowerVR-BXM-8-256"
+POWERVR_EXE = "ProfilingCompilerCLIWrapper"
 SIDECAR_SCHEMA_VERSION = 2
 
 # SPIR-V capability numbers the error reports name (spirv.hpp); only the
@@ -78,7 +91,9 @@ CAPABILITY_NAMES = {
 def compiler_of(core):
     if core.startswith("Mali-"):
         return "malioc"
-    sys.exit(f"shader_analytics: core {core} names no Mali (Mali-<name>) GPU")
+    if core.startswith("PowerVR-"):
+        return "powervr"
+    sys.exit(f"shader_analytics: core {core} names no Mali (Mali-<name>) or PowerVR (PowerVR-<GPU>) GPU")
 
 
 def find_tool(explicit, env_name, exe_name):
@@ -323,6 +338,193 @@ def build_malioc_core_block(manifest, variants_dir, core, version, generated):
     return block, missing
 
 
+# ------------------------------------------------------ PowerVR (ProfilingCompilerCLIWrapper)
+
+# Counters whose report entry has no long_name.
+POWERVR_COUNTER_LABELS = {"uNaiveCycleCount": "Naive Cycle Count"}
+
+
+def query_powervr_listing(tool):
+    """[(bvnc, gpu, description)] from the wrapper's -h BVNC list ("35.3.408.101: Series B BXM-8-256, MediaTek Dimensity 930")."""
+    completed = subprocess.run([tool, "-h"], capture_output=True, text=True)
+    listing = []
+    for line in (completed.stdout + completed.stderr).splitlines():
+        match = re.match(r"\s*(\d+\.\d+\.\d+\.\d+)\s*:\s*(.+)$", line)
+        if match:
+            description = match.group(2).strip()
+            gpu = description.split(",")[0].split()[-1]
+            listing.append((match.group(1), gpu, description))
+    return listing
+
+
+def resolve_powervr_bvnc(core, listing):
+    """PowerVR-BXM-8-256 or PowerVR-35.3.408.101 -> (bvnc, None), or (None, error)."""
+    name = core[len("PowerVR-") :]
+    if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", name):
+        return name, None
+    bvncs = [bvnc for bvnc, gpu, _ in listing if gpu == name]
+    if len(bvncs) == 1:
+        return bvncs[0], None
+    known = ", ".join(sorted({f"PowerVR-{gpu}" for _, gpu, _ in listing}))
+    if len(bvncs) > 1:
+        return None, f"{core} names several BVNCs ({', '.join(bvncs)}); use PowerVR-<BVNC>"
+    return None, f"unknown core {core}; the wrapper's -h list names: {known}"
+
+
+def powervr_library(tool, bvnc):
+    """The SPIR-V compiler library of one BVNC next to the wrapper, or None."""
+    matches = sorted(Path(tool).parent.glob(f"*spvcompiler_sdk.{bvnc}.*"))
+    return matches[0] if matches else None
+
+
+def powervr_library_version(library):
+    """The DDK build the library embeds ("rogueddk MAIN@6451761" -> "MAIN@6451761"), or None."""
+    match = re.search(rb"rogueddk ([A-Za-z0-9_.@-]+)", library.read_bytes())
+    return match.group(1).decode("ascii") if match else None
+
+
+def query_powervr(tool, cores):
+    """{core: (bvnc, library version)}, after validating each core has its SPIR-V library, or exits."""
+    listing = query_powervr_listing(tool)
+    if not listing:
+        sys.exit(f"shader_analytics: {tool} -h listed no BVNCs")
+    result = {}
+    for core in cores:
+        bvnc, error = resolve_powervr_bvnc(core, listing)
+        if error:
+            sys.exit(f"shader_analytics: {error}")
+        library = powervr_library(tool, bvnc)
+        if library is None:
+            sys.exit(f"shader_analytics: no SPIR-V compiler library for {core} (BVNC {bvnc}) next to {tool}")
+        version = powervr_library_version(library)
+        if version is None:
+            sys.exit(f"shader_analytics: {library} names no rogueddk build")
+        result[core] = (bvnc, version)
+    return result
+
+
+def powervr_report_is_current(report_path, module_path, core, version):
+    if not report_path.is_file():
+        return False
+    if report_path.stat().st_mtime < module_path.stat().st_mtime:
+        return False
+    report = read_report(report_path)
+    if report is None:
+        return False
+    erhe = report.get("erhe", {})
+    return erhe.get("core") == core and erhe.get("powervr_version") == version
+
+
+def compile_powervr(tool, core_versions, job):
+    """Runs the wrapper on one module and writes the raw report with an 'erhe' block."""
+    module_path, report_path, core, entry_point, specialization_constants = job
+    bvnc, version = core_versions[core]
+    if (entry_point and entry_point != "main") or specialization_constants:
+        return False, f"PowerVR: the compiler takes no entry point or specialization constants ({module_path.name})"
+    command = [tool, "-a", "spv", "-b", bvnc, "-p", str(Path(tool).parent), "-i", str(module_path)]
+    # The report is written into the working directory as <module file name>.json.
+    try:
+        with tempfile.TemporaryDirectory(prefix="erhe_powervr_") as work_dir:
+            completed = subprocess.run(command, capture_output=True, text=True, cwd=work_dir)
+            report = read_report(Path(work_dir) / (module_path.name + ".json"))
+    except OSError as error:
+        return False, f"cannot run {tool}: {error}"
+    messages = []
+    if report is None or not isinstance(report.get("shaders"), dict):
+        # stdout carries the disassembly on success, the error line on failure.
+        messages = [line.strip() for line in (completed.stdout + "\n" + completed.stderr).splitlines() if line.strip()]
+        if any("libraries not found" in m for m in messages):
+            return False, f"PowerVR compiler libraries not found for {report_path.name}:\n" + "\n".join(messages[:10])
+        if completed.returncode < 0:
+            messages.insert(0, f"compiler crashed with signal {-completed.returncode}")
+        elif not messages:
+            messages.insert(0, f"compiler exited {completed.returncode} without a report")
+        report = {"output": "failed", "shaders": {}}
+    report["erhe"] = {
+        "core": core,
+        "bvnc": bvnc,
+        "powervr_version": version,
+        "module": module_path.name,
+        "command": " ".join(command),
+        "exit_code": completed.returncode,
+        "messages": messages,
+    }
+    write_json_via_temp(report_path, report)
+    return True, None
+
+
+def summarize_powervr_report(report):
+    """The sidecar's per-module summary from a raw PowerVR report."""
+    erhe = report.get("erhe", {})
+    summary = {"command": erhe.get("command", ""), "error": None, "variants": [], "messages": erhe.get("messages", [])}
+    shaders = report.get("shaders")
+    if not isinstance(shaders, dict) or not shaders:
+        summary["error"] = "; ".join(erhe.get("messages", [])) or "no report"
+        return summary, None
+    information = report.get("information", {})
+    core_info = {"gpu": information.get("gpu"), "architecture": information.get("architecture"), "soc": information.get("soc")}
+    for name, shader in shaders.items():
+        counters = shader.get("counters", {}) if isinstance(shader, dict) else {}
+        values = {key: entry.get("value") for key, entry in counters.items() if isinstance(entry, dict)}
+        summary["variants"].append({
+            "name": name,
+            "counters": [[(entry.get("long_name") or POWERVR_COUNTER_LABELS.get(key) or key), entry.get("value")] for key, entry in counters.items() if isinstance(entry, dict)],
+            "cycles": values.get("uNaiveCycleCount"),
+            "instructions": values.get("uInstructionCount"),
+            "temp_registers": values.get("uTempRegisterCount"),
+            "samples": values.get("uSamples"),
+            "utilisation": values.get("fUSCUtilisation"),
+        })
+    return summary, core_info
+
+
+def plan_powervr_jobs(manifest, variants_dir, core_versions, force):
+    """(module path, report path, core, entry point, spec constants) for every module to compile."""
+    jobs = []
+    skipped = 0
+    for program in manifest.get("programs", []):
+        for stage in program.get("stages", []):
+            for key in ("spirv", "optimized_spirv"):
+                name = stage.get(key)
+                if not name:
+                    continue
+                module_path = variants_dir / name
+                if not module_path.is_file():
+                    print(f"shader_analytics: missing module {module_path}", file=sys.stderr)
+                    continue
+                for core, (_, version) in core_versions.items():
+                    report_path = variants_dir / f"{Path(name).stem}.{core}.powervr.json"
+                    if not force and powervr_report_is_current(report_path, module_path, core, version):
+                        skipped += 1
+                        continue
+                    jobs.append((module_path, report_path, core, stage.get("entry_point", "main"), stage.get("specialization_constants", [])))
+    return jobs, skipped
+
+
+def build_powervr_core_block(manifest, variants_dir, core, bvnc, version, generated):
+    block = {"core": core, "compiler": "powervr", "bvnc": bvnc, "gpu": None, "architecture": None, "soc": None, "powervr_version": version, "generated": generated, "programs": {}}
+    missing = 0
+    for program in manifest.get("programs", []):
+        program_block = {}
+        for stage in program.get("stages", []):
+            stage_block = {"before": None, "after": None}
+            for key, slot in (("spirv", "before"), ("optimized_spirv", "after")):
+                name = stage.get(key)
+                if not name:
+                    continue
+                report = read_report(variants_dir / f"{Path(name).stem}.{core}.powervr.json")
+                if report is None:
+                    missing += 1
+                    continue
+                summary, core_info = summarize_powervr_report(report)
+                stage_block[slot] = summary
+                if core_info and not block["gpu"]:
+                    block.update(core_info)
+            program_block[stage.get("type")] = stage_block
+        block["programs"][str(program.get("id"))] = program_block
+    return block, missing
+
+
 # ------------------------------------------------------------------- sidecar
 
 def load_manifest(directory):
@@ -396,8 +598,9 @@ def run_jobs(label, function, jobs, worker_count):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("directory", type=Path, help="the shader variant browser directory (holds index.html and variants/)")
-    parser.add_argument("--core", action="append", help=f"target GPU, Mali-<name> (repeatable; default {DEFAULT_MALI_CORE} when malioc is found)")
+    parser.add_argument("--core", action="append", help=f"target GPU, Mali-<name> or PowerVR-<GPU> (repeatable; default {DEFAULT_MALI_CORE} and {DEFAULT_POWERVR_CORE} for each compiler found)")
     parser.add_argument("--malioc", help="path to the malioc executable (else $ERHE_MALIOC, else PATH)")
+    parser.add_argument("--powervr", help=f"path to the PowerVR {POWERVR_EXE} executable, its compiler libraries beside it (else $ERHE_POWERVR, else PATH)")
     parser.add_argument("--jobs", type=int, default=max(1, min(8, os.cpu_count() or 1)), help="parallel compiler processes")
     parser.add_argument("--force", action="store_true", help="compile every module even when its report is current")
     parser.add_argument("--check", action="store_true", help="after writing analytics.js, verify it covers the manifest")
@@ -407,15 +610,19 @@ def main():
     variants_dir = directory / "variants"
     manifest = load_manifest(directory)
     malioc = find_tool(args.malioc, "ERHE_MALIOC", "malioc")
+    powervr = find_tool(args.powervr, "ERHE_POWERVR", POWERVR_EXE)
     if args.core:
         cores = list(dict.fromkeys(args.core))
         if any(compiler_of(c) == "malioc" for c in cores) and malioc is None:
             sys.exit("shader_analytics: malioc not found; pass --malioc, set ERHE_MALIOC, or put it on PATH")
+        if any(compiler_of(c) == "powervr" for c in cores) and powervr is None:
+            sys.exit(f"shader_analytics: {POWERVR_EXE} not found; pass --powervr, set ERHE_POWERVR, or put it on PATH")
     else:
-        cores = [DEFAULT_MALI_CORE] if malioc else []
+        cores = ([DEFAULT_MALI_CORE] if malioc else []) + ([DEFAULT_POWERVR_CORE] if powervr else [])
         if not cores:
-            sys.exit("shader_analytics: malioc not found; pass --malioc, set ERHE_MALIOC, or put it on PATH")
+            sys.exit(f"shader_analytics: no malioc or {POWERVR_EXE} found; pass --malioc / --powervr, set ERHE_MALIOC / ERHE_POWERVR, or put them on PATH")
     mali_cores = [c for c in cores if compiler_of(c) == "malioc"]
+    powervr_cores = [c for c in cores if compiler_of(c) == "powervr"]
 
     tools = manifest.get("tools", {})
     if tools.get("api") not in (None, "vulkan"):
@@ -442,6 +649,20 @@ def main():
         sidecar["default_cores"]["malioc"] = mali_cores[0]
         for core in mali_cores:
             block, core_missing = build_malioc_core_block(manifest, variants_dir, core, malioc_version, generated)
+            sidecar["cores"][core] = block
+            missing += core_missing
+
+    if powervr_cores:
+        core_versions = query_powervr(powervr, powervr_cores)
+        jobs, skipped = plan_powervr_jobs(manifest, variants_dir, core_versions, args.force)
+        described = ", ".join(f"{core} (BVNC {bvnc}, {version})" for core, (bvnc, version) in core_versions.items())
+        print(f"shader_analytics: {powervr}; cores {described}; {len(jobs)} module(s) to compile, {skipped} current")
+        failures += run_jobs("powervr", lambda job: compile_powervr(powervr, core_versions, job), jobs, args.jobs)
+        sidecar.update({"powervr": powervr})
+        sidecar["default_cores"]["powervr"] = powervr_cores[0]
+        for core in powervr_cores:
+            bvnc, version = core_versions[core]
+            block, core_missing = build_powervr_core_block(manifest, variants_dir, core, bvnc, version, generated)
             sidecar["cores"][core] = block
             missing += core_missing
 

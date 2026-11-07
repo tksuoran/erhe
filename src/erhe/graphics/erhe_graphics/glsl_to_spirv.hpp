@@ -43,19 +43,22 @@ private:
     Spirv_cache*                                                         m_cache{nullptr};
     std::unordered_map<::EShLanguage, std::shared_ptr<glslang::TShader>> m_glslang_shaders;
     std::unordered_map<::EShLanguage, std::vector<unsigned int>>         m_spirv_shaders;
+    std::unordered_map<::EShLanguage, std::string>                       m_cache_keys; // Spirv_cache entry key per stage
     std::unordered_set<::EShLanguage>                                    m_active_stages;
     std::shared_ptr<glslang::TProgram>                                   m_glslang_program;
     std::string                                                          m_last_compile_log;
     std::string                                                          m_last_link_log;
 
-    // The sources of each compiled stage, kept only while the device records
-    // the shader variant browser (Device::get_shader_variant_report()).
+    // The sources of each compiled stage, kept while the device records the
+    // shader variant browser (Device::get_shader_variant_report()) or writes
+    // SPIR-V cache records (Graphics_config::spirv_cache_records).
     class Report_source
     {
     public:
-        std::string main_name;
-        std::string main_source;
-        std::string preamble;
+        std::string              main_name;
+        std::string              main_source;
+        std::string              preamble;
+        std::vector<std::string> include_paths; // this stage's own dependencies (its parse's)
     };
     std::unordered_map<::EShLanguage, Report_source>                     m_report_sources;
 };

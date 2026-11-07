@@ -306,7 +306,7 @@
     "name": "capture_fragment_invocations"
   },
   {
-    "description": "Shader analytics for the cost overdraw mode (doc/plans/shader_cost.md B): loads (when directory is given) variants/manifest.json and analytics.js (scripts/shader_analytics.py) of a shader variant browser directory and indexes every recorded program's fragment stage cost by program name and variant defines. Without directory it reports what is loaded. Returns loaded, directory, program_count, metrics (per metric the loaded cores provide: metric - the name set_overdraw_visualization mode cost takes - title, core, max_value (the largest per-fragment value among the recorded programs, metric units), weight_scale (metric units per weight unit: cycles are weighted in hundredths)), selected_metric, missing_variants (cost variants drawn whose program the analytics lack; they weigh 0) and service (the background offline compiler analysis of every program the editor builds, doc/editor/shader_analytics.md: mali_core, queued, running, analyzed, failed; null when off). Mali metrics are cycles (mali_cycles: the bound pipeline's, mali_arithmetic_cycles, mali_texture_cycles, mali_load_store_cycles). The values are those of the module the recorded session ran (after the SPIR-V optimizer when it was on).",
+    "description": "Shader analytics for the cost overdraw mode (doc/plans/shader_cost.md B): loads (when directory is given) variants/manifest.json and analytics.js (scripts/shader_analytics.py) of a shader variant browser directory and indexes every recorded program's fragment stage cost by program name and variant defines. Without directory it reports what is loaded. Returns loaded, directory, program_count, metrics (per metric the loaded cores provide: metric - the name set_overdraw_visualization mode cost takes - title, core, max_value (the largest per-fragment value among the recorded programs, metric units), weight_scale (metric units per weight unit: cycles are weighted in hundredths)), selected_metric, missing_variants (cost variants drawn whose program the analytics lack; they weigh 0) and service (the background offline compiler analysis of every program the editor builds, doc/editor/shader_analytics.md: mali_core, powervr_core, queued, running, analyzed, failed; null when off). Mali metrics are cycles (mali_cycles: the bound pipeline's, mali_arithmetic_cycles, mali_texture_cycles, mali_load_store_cycles); PowerVR metrics are the profiling compiler's counters (powervr_cycles: its naive cycle count, loop bodies counted once, powervr_instructions, powervr_samples, powervr_registers: temporary registers). The values are those of the module the recorded session ran (after the SPIR-V optimizer when it was on).",
     "inputSchema": {
       "properties": {
         "directory": {
@@ -317,6 +317,31 @@
       "type": "object"
     },
     "name": "load_shader_analytics"
+  },
+  {
+    "description": "The shader programs this editor session built (doc/editor/shader_analytics.md 'Session programs'), analyzed in the editor by the offline compilers the background shader analytics selected (malioc, the PowerVR profiling compiler) on every stage before and after the SPIR-V optimizer, from the SPIR-V cache records. analyze 'all' queues every program not analyzed yet, 'listed' the program_ids (first); the analysis runs in background tasks, so call again (analyze omitted) until analyzed counts them. Returns compilers_ready (false until the background analysis selected its compilers; analysis waits for it), program_count, analyzed, queued, programs [{id, name, analyzed}] and listed [{id, name, key, analysis}] for the program_ids: analysis is null until analyzed, else per core {block: the analytics.js core block fields (core, compiler, versions, ...), program: {stage: {before, after}}} with the summaries scripts/shader_analytics.py writes into analytics.js (doc/erhe/graphics.md 'Mali analytics', 'PowerVR analytics'). Program ids are the shader variant browser's.",
+    "inputSchema": {
+      "properties": {
+        "analyze": {
+          "description": "\"none\" (default; report only), \"all\" (queue every program not analyzed yet) or \"listed\" (queue program_ids)",
+          "enum": [
+            "none",
+            "all",
+            "listed"
+          ],
+          "type": "string"
+        },
+        "program_ids": {
+          "description": "Program ids whose analysis to return (and to queue with analyze 'listed')",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "name": "analyze_shader_programs"
   },
   {
     "description": "Headless pick probe: arm the pointer at viewport pixel (x, y) and run the same hover update a real pointer runs, reporting every hover slot (content/tool/brush/rendertarget/grid/bone) plus 'nearest' - the hit resolved by the same slot-ownership rule a viewport click uses (bone slot replaces content in bone selection mode; a bone hit reports the joint a click would select). The id-render readback is ASYNC: the first call at a position returns raytrace hits only; the armed position keeps the id pass rendering there, so call again after a few frames for the merged result that includes id-picked (e.g. skinned) meshes.",
@@ -4194,7 +4219,7 @@
     "name": "capture_screenshot"
   },
   {
-    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, overdraw_mode / max_count / overdraw_statistics (output overdraw), scene, camera (effective values), msaa_samples, shader_debug, color_format, shadow_debug_light {name, id, light_index} when given (light_index = the light slot the render used, null when the light got none); shadow_maps {map_width, map_height, map_format, depth_bits, technique, cube_size, cube_format, reverse_depth, depth_range} and shadow_lights [{name, id, type directional|spot|point, slot, position, resolution, layer + texture_from_world + clip_from_world (directional / spot; 4x4 row-major: rows[r] . (x, y, z, 1) = component r, divide by w; texture_from_world gives shadow map uv and depth), cube_index (point; the cube holds radial distances from position)}] - the shadow-mapped lights exactly as this render's own shadow pass used them (the directional fit depends on this camera); for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the covered pixels, and for a linear render with shader_debug != 0 background {marker: 'nan', pixel_count}: pixels no surface covers have NaN RGB (the sky is not drawn in those renders). See doc/editor/rendergraph.md 'Scene image capture'.",
+    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, overdraw_mode / max_count / overdraw_statistics (output overdraw; overdraw_mode cost adds metric, metric_title, weight_scale and max_value), scene, camera (effective values), msaa_samples, shader_debug, color_format, shadow_debug_light {name, id, light_index} when given (light_index = the light slot the render used, null when the light got none); shadow_maps {map_width, map_height, map_format, depth_bits, technique, cube_size, cube_format, reverse_depth, depth_range} and shadow_lights [{name, id, type directional|spot|point, slot, position, resolution, layer + texture_from_world + clip_from_world (directional / spot; 4x4 row-major: rows[r] . (x, y, z, 1) = component r, divide by w; texture_from_world gives shadow map uv and depth), cube_index (point; the cube holds radial distances from position)}] - the shadow-mapped lights exactly as this render's own shadow pass used them (the directional fit depends on this camera); for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the covered pixels, and for a linear render with shader_debug != 0 background {marker: 'nan', pixel_count}: pixels no surface covers have NaN RGB (the sky is not drawn in those renders). See doc/editor/rendergraph.md 'Scene image capture'.",
     "inputSchema": {
       "properties": {
         "scene": {
@@ -4225,7 +4250,7 @@
           "type": "string"
         },
         "output": {
-          "description": "'png' (default): the post-processed (bloom + tonemapped) image, sRGB-encoded 8-bit RGBA - what a viewport shows. 'linear': the linear HDR scene color before post-processing (camera exposure applied), written as a portable float map (.pfm: 'PF' header, RGB float32 little-endian, rows bottom to top). 'overdraw': the overdraw heat map (doc/plans/overdraw_visualization.md O6) - the content passes' fragment shader invocations per pixel through the viewport's color ramp (over count 0 the scene at 25 % luminance), sRGB PNG; the reply adds overdraw_statistics {valid, counted_mode, width, height, invocations_total, covered_pixels, mean_per_covered_pixel, mean_per_pixel, max_count, histogram, histogram_last_bin} of this render, as get_overdraw_stats reports them. Needs fragment stage buffer atomics; shader_debug must be 0.",
+          "description": "'png' (default): the post-processed (bloom + tonemapped) image, sRGB-encoded 8-bit RGBA - what a viewport shows. 'linear': the linear HDR scene color before post-processing (camera exposure applied), written as a portable float map (.pfm: 'PF' header, RGB float32 little-endian, rows bottom to top). 'overdraw': the overdraw heat map (doc/plans/overdraw_visualization.md O6) - the content passes' fragment shader invocations per pixel through the viewport's color ramp (over count 0 the scene at 25 % luminance), sRGB PNG; the reply adds overdraw_statistics {valid, counted_mode, width, height, invocations_total, covered_pixels, mean_per_covered_pixel, mean_per_pixel, max_count, histogram, histogram_last_bin} of this render, as get_overdraw_stats reports them (overdraw_mode cost: {valid, counted_mode, width, height, covered_pixels, max_weight, metric, max_value, missing_variants}). Needs fragment stage buffer atomics; shader_debug must be 0.",
           "enum": [
             "png",
             "linear",
@@ -4234,16 +4259,25 @@
           "type": "string"
         },
         "overdraw_mode": {
-          "description": "Output overdraw: 'shaded' (default; the invocations the frame runs, with early depth tests) or 'rasterized' (every rasterized fragment of the counted draws, ignoring the depth test)",
+          "description": "Output overdraw: 'shaded' (default; the invocations the frame runs, with early depth tests), 'rasterized' (every rasterized fragment of the counted draws, ignoring the depth test) or 'cost' (as shaded, each fragment adding its shader variant's static cost in metric - doc/plans/shader_cost.md B; needs loaded shader analytics, see load_shader_analytics; the heat map is a continuous ramp up to max_value)",
           "enum": [
             "shaded",
-            "rasterized"
+            "rasterized",
+            "cost"
           ],
           "type": "string"
         },
         "max_count": {
-          "description": "Output overdraw: the heat map is white from this count up (default 8, as a viewport)",
+          "description": "Output overdraw: the heat map is white from this count up (default 8, as a viewport; for overdraw_mode cost in weight units, default four fragments of the costliest recorded variant)",
           "type": "integer"
+        },
+        "metric": {
+          "description": "Output overdraw, overdraw_mode cost: the shader cost metric (load_shader_analytics lists those of the loaded cores; default: the selected one). The metric is global: it becomes the one cost views of viewports show too.",
+          "type": "string"
+        },
+        "max_value": {
+          "description": "Output overdraw, overdraw_mode cost: the per-pixel cost shown white, in metric units (in place of max_count; default: four fragments of the costliest recorded variant)",
+          "type": "number"
         },
         "shader_debug": {
           "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none. Debug modes replace the lit color after exposure, so output 'linear' returns their values unscaled (at the color_format precision). 30 shadow_visibility: visibility of shadow_debug_light (1 = lit, 0 = shadowed; directional / spot / point shadow maps; 1 for a light that is not shadow-mapped). 36 world_position: the fragment world position xyz, the per-pixel receiver position with output 'linear' (MSAA-resolved pixels on silhouettes average positions; pass msaa_samples 0 for exact per-pixel positions). 37 base_color: the resolved base color the BxDF receives (material input source, factor, vertex color and base color texture multiplied), unlit, in linear space.",

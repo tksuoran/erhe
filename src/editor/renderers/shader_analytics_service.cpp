@@ -1,4 +1,5 @@
 #include "renderers/shader_analytics_service.hpp"
+#include "renderers/shader_session_programs.hpp"
 
 #include "config/generated/shader_analytics_config.hpp"
 #include "editor_log.hpp"
@@ -19,30 +20,38 @@ namespace editor {
 
 Shader_analytics_service::Shader_analytics_service(
     const Shader_analytics_config& config,
-    erhe::graphics::Device&        device,
+    Shader_session_programs&       session_programs,
     tf::Executor&                  executor,
     Shader_analytics&              shader_analytics
 )
-    : m_device          {device}
+    : m_session_programs{session_programs}
     , m_executor        {executor}
     , m_shader_analytics{shader_analytics}
     , m_max_jobs        {static_cast<std::size_t>(std::max(config.max_jobs, 1))}
 {
-    const Offline_compiler_candidates malioc = find_offline_compiler_candidates(config.malioc_search_paths, "ERHE_MALIOC", "malioc");
-    m_tools.malioc_candidates = malioc.paths;
-    m_tools.mali_core         = config.mali_core;
-    for (const std::filesystem::path& path : malioc.paths) {
-        log_programs->info("Shader analytics: found malioc {}", path.generic_string());
+    const Offline_compiler_candidates malioc  = find_offline_compiler_candidates(config.malioc_search_paths,  "ERHE_MALIOC",  "malioc");
+    const Offline_compiler_candidates powervr = find_offline_compiler_candidates(config.powervr_search_paths, "ERHE_POWERVR", c_powervr_executable);
+    m_tools.malioc_candidates  = malioc.paths;
+    m_tools.powervr_candidates = powervr.paths;
+    m_tools.mali_core          = config.mali_core;
+    m_tools.powervr_core       = config.powervr_core;
+    for (const auto& [name, candidates] : {std::pair{"malioc", &malioc}, std::pair{c_powervr_executable, &powervr}}) {
+        for (const std::filesystem::path& path : candidates->paths) {
+            log_programs->info("Shader analytics: found {} {}", name, path.generic_string());
+        }
+        if (candidates->paths.empty()) {
+            log_programs->info("Shader analytics: {} not found; searched {}", name, fmt::join(candidates->searched, ", "));
+        }
     }
-    if (malioc.paths.empty()) {
-        log_programs->info("Shader analytics: malioc not found; searched {}; shader cost modes unavailable", fmt::join(malioc.searched, ", "));
+    if (malioc.paths.empty() && powervr.paths.empty()) {
+        log_programs->info("Shader analytics: no malioc or {} found; shader cost modes unavailable", c_powervr_executable);
         return;
     }
     log_programs->info(
-        "Shader analytics: programs are analyzed in background tasks with the newest malioc version found, reports cached in {}",
+        "Shader analytics: programs are analyzed in background tasks with the newest version found of each compiler, reports cached in {}",
         m_cache_directory.generic_string()
     );
-    m_device.set_shader_program_observer(
+    m_listener_id = m_session_programs.add_listener(
         [this](const erhe::graphics::Shader_stages_create_info& create_info, const std::span<const erhe::graphics::Shader_program_module> modules) {
             on_program(create_info, modules);
         }
@@ -51,7 +60,9 @@ Shader_analytics_service::Shader_analytics_service(
 
 Shader_analytics_service::~Shader_analytics_service() noexcept
 {
-    m_device.set_shader_program_observer({});
+    if (m_listener_id != 0) {
+        m_session_programs.remove_listener(m_listener_id);
+    }
     std::unique_lock<std::mutex> lock{m_mutex};
     m_stopping = true;
     m_jobs.clear();
@@ -71,15 +82,21 @@ auto Shader_analytics_service::has_malioc_locked() const -> bool
     return m_versions_queried ? !m_tools.malioc.empty() : !m_tools.malioc_candidates.empty();
 }
 
+auto Shader_analytics_service::has_powervr_locked() const -> bool
+{
+    return m_versions_queried ? !m_tools.powervr.empty() : !m_tools.powervr_candidates.empty();
+}
+
 auto Shader_analytics_service::get_status() const -> Status
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
     return Status{
-        .mali_core = has_malioc_locked() ? m_tools.mali_core : std::string{},
-        .queued    = m_jobs.size(),
-        .running   = m_running,
-        .analyzed  = m_analyzed,
-        .failed    = m_failed
+        .mali_core    = has_malioc_locked()  ? m_tools.mali_core    : std::string{},
+        .powervr_core = has_powervr_locked() ? m_tools.powervr_core : std::string{},
+        .queued       = m_jobs.size(),
+        .running     = m_running,
+        .analyzed    = m_analyzed,
+        .failed      = m_failed
     };
 }
 
@@ -159,9 +176,12 @@ void Shader_analytics_service::work()
             m_tools            = tools;
             m_versions_queried = true;
         }
+        // The Shader Variants window's full analysis uses the same compilers.
+        m_session_programs.set_offline_compiler_tools(tools);
         log_programs->info(
-            "Shader analytics: malioc {} ({})",
-            m_tools.malioc_version, m_tools.malioc.empty() ? std::string{"off"} : m_tools.mali_core
+            "Shader analytics: malioc {} ({}), PowerVR {} ({})",
+            m_tools.malioc_version, m_tools.malioc.empty() ? std::string{"off"} : m_tools.mali_core,
+            m_tools.powervr_version, m_tools.powervr.empty() ? std::string{"off"} : m_tools.powervr_core
         );
     });
 
@@ -203,7 +223,7 @@ void Shader_analytics_service::work()
 void Shader_analytics_service::land()
 {
     std::vector<std::pair<std::string, Shader_cost_metrics>> programs;
-    std::string mali_core;
+    Offline_compiler_cores cores;
     {
         const std::lock_guard<std::mutex> lock{m_mutex};
         m_land_posted = false;
@@ -211,10 +231,11 @@ void Shader_analytics_service::land()
             programs.emplace_back(std::move(result.key), result.metrics);
         }
         m_results.clear();
-        mali_core = m_tools.malioc.empty() ? std::string{} : m_tools.mali_core;
+        cores.mali    = m_tools.malioc.empty()  ? std::string{} : m_tools.mali_core;
+        cores.powervr = m_tools.powervr.empty() ? std::string{} : m_tools.powervr_core;
     }
     if (!programs.empty()) {
-        m_shader_analytics.add_programs(mali_core, std::move(programs));
+        m_shader_analytics.add_programs(cores, std::move(programs));
     }
 }
 
