@@ -324,7 +324,7 @@ public:
     void update_last_selected(const std::shared_ptr<erhe::Item_base>& item);
 
 private:
-    void toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& mesh, bool was_selected, bool clear_others);
+    void toggle_node_selection(const std::shared_ptr<erhe::scene::Node>& picked, bool was_selected, bool clear_others);
 
     // Bone selection mode: the click acts on the JOINT NODE a hovered bone
     // proxy stands for, through the ordinary selection, so Properties, undo and
@@ -354,7 +354,8 @@ private:
     std::vector<std::shared_ptr<erhe::Item_base>> m_command_target_selection; // get_command_target_selection() scratch
     std::weak_ptr<Scene_root>                     m_active_scene_root;
     Range_selection                               m_range_selection;
-    std::weak_ptr<erhe::scene::Mesh>              m_hover_mesh   {};
+    // The hovered content node: a mesh, or a light picked by its debug visualization.
+    std::weak_ptr<erhe::scene::Node>              m_hover_node   {};
     // Joint node behind the hovered bone proxy; resolved in try_ready while bone
     // mode is active, empty otherwise.
     std::weak_ptr<erhe::scene::Node>              m_hover_bone_joint{};

@@ -1789,8 +1789,9 @@ auto Mcp_server::action_set_transform_reference_mode(const json& args) -> std::s
     else if (mode_str == "local")     { mode = Transform_reference_mode::local;     }
     else if (mode_str == "reference") { mode = Transform_reference_mode::reference; }
     else if (mode_str == "selection") { mode = Transform_reference_mode::selection; }
+    else if (mode_str == "bbox")      { mode = Transform_reference_mode::bbox;      }
     else {
-        return make_error_content("Invalid mode: " + mode_str + " (global/world, local, reference, selection)");
+        return make_error_content("Invalid mode: " + mode_str + " (global/world, local, reference, selection, bbox)");
     }
 
     Transform_tool_shared& shared = m_context.transform_tool->shared;

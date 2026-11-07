@@ -24,6 +24,7 @@
 #include <string_view>
 #include <vector>
 
+namespace erhe              { class Item_base; }
 namespace erhe::rendergraph { class Rendergraph_node; }
 namespace erhe::geometry    { class Geometry; }
 namespace erhe::graphics    { class Texture; }
@@ -108,6 +109,8 @@ public:
     Grid_frame                                grid_frame                {}; // the plane of the view the grid was hit in
     // Set for entries from an analytic hover source (no mesh); names it.
     Analytic_hover_provider*                  analytic_provider         {nullptr};
+    // The picked item of an analytic entry that stands for one (a light).
+    std::weak_ptr<erhe::Item_base>            item_weak                 {};
 
     std::size_t                               scene_mesh_primitive_index{std::numeric_limits<std::size_t>::max()};
     std::shared_ptr<erhe::geometry::Geometry> geometry                  {};

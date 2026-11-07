@@ -30,7 +30,7 @@ right-aligned (`doc/editor/windows.md`).
 
 **Hierarchy context menu.** `Scene_root` registers item context-menu
 callbacks. "Create" lists the child prim catalog beside the other creatable
-kinds and inserts the new item as the last child of the clicked prim. Every
+kinds and inserts the new item as the last child of the clicked prim; the empty area of the window offers it too, creating under the scene root node. Every
 entry pushes a deferred lambda that runs after the popup closes. The joint
 entry keeps its own behavior instead of the catalog `make`: it connects to
 the first selected node of the same scene other than the clicked one, when

@@ -41,8 +41,10 @@ VkStructureType") at device creation and `Gpu_test.device_up_clean` fails.
 Use a validation layer from a Vulkan SDK at least as new as the pinned
 headers (`VK_ADD_LAYER_PATH=<sdk>/share/vulkan/explicit_layer.d`).
 
-Kill a stray editor with `pkill -x editor`; `pkill -f` patterns match the
-shell running the command as well.
+Stop an editor the session launched by the pid captured at launch
+(AGENTS.md "Stopping processes"); never by name or pattern (`pkill -x`
+also stops the user's editors, `pkill -f` also matches the shell running
+the command).
 
 ## AddressSanitizer
 

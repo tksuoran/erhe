@@ -229,6 +229,7 @@ constexpr float handle_shade_ambient = 0.55f;
 constexpr float handle_shade_diffuse = 0.45f;
 constexpr float cone_base_darken     = 0.5f;
 constexpr vec4 box_outline_color{1.00f, 0.70f, 0.1f, 1.0f};
+constexpr vec4 origin_indicator_color{0.85f, 0.85f, 0.85f, 0.85f};
 
 // All handle rendering uses the x-ray buckets: the occluded pass blends at
 // full strength instead of the dim hidden-pass constant, so the gizmo stays
@@ -840,6 +841,57 @@ auto Handle_visualizations::get_octant_signs(const vec3& eye, const vec3& center
         }
     }
     return m_octant_signs;
+}
+
+void Handle_visualizations::render_origin_indicator(const Render_context& context, const erhe::scene::Trs_transform& world_from_origin)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!has_target() || (context.camera == nullptr) || (m_scene_view == nullptr)) {
+        return;
+    }
+    const float s = m_view_scale;
+    if (!(s > 0.0f) || !std::isfinite(s)) {
+        return;
+    }
+
+    const Transform_tool_config& tt_config = m_context.editor_settings->transform_tool;
+    const Gizmo_sizes gz        = get_gizmo_sizes(tt_config);
+    const vec3        eye       = get_eye(*context.camera);
+    const vec3        c         = m_world_from_anchor.get_translation();
+    const vec3        origin    = world_from_origin.get_translation();
+    const mat3        rotation  = glm::mat3_cast(world_from_origin.get_rotation());
+    const vec4        axis_colors[3] = {tt_config.axis_color_x, tt_config.axis_color_y, tt_config.axis_color_z};
+
+    // Axes sized for the origin's own distance, like the gizmo at its anchor.
+    const float origin_scale = (tt_config.gizmo_scale / 100.0f) * m_scene_view->get_projection_scale(glm::distance(eye, origin));
+    if (std::isfinite(origin_scale) && (origin_scale > 0.0f)) {
+        const float axis_length = 0.5f * gz.rotate_ring_major_radius * origin_scale;
+        erhe::renderer::Primitive_renderer line_renderer = context.get(handle_line_config);
+        for (int axis = 0; axis < 3; ++axis) {
+            line_renderer.add_line(
+                axis_colors[axis], gz.line_width, origin,
+                axis_colors[axis], gz.line_width, origin + axis_length * rotation[axis]
+            );
+        }
+    }
+
+    const vec3  to_origin = origin - c;
+    const float distance  = glm::length(to_origin);
+    if (!(distance > 0.0f)) {
+        return;
+    }
+    const vec3 direction = to_origin / distance;
+    const vec3 helper    = (std::abs(direction.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
+    const vec3 side1     = glm::normalize(glm::cross(direction, helper));
+    const vec3 side2     = glm::cross(direction, side1);
+    const vec3 base      = c + (1.08f * gz.view_ring_radius * s) * direction;
+    erhe::renderer::Primitive_renderer triangle_renderer = context.get(handle_fill_config);
+    draw_cone_fill(
+        triangle_renderer, origin_indicator_color, eye, base, direction, side1, side2,
+        1.5f * gz.translate_cone_length * s, 1.5f * gz.translate_cone_radius * s,
+        true, cone_base_darken
+    );
 }
 
 void Handle_visualizations::render(const Render_context& context, const Handle hover_handle, const Handle active_handle)
@@ -1848,6 +1900,7 @@ void Handle_visualizations::viewport_toolbar()
     reference_mode_button("L", Transform_reference_mode::local,     "Transform in Local space");
     reference_mode_button("R", Transform_reference_mode::reference, "Transform in Reference node space");
     reference_mode_button("S", Transform_reference_mode::selection, "Transform in mesh component Selection space");
+    reference_mode_button("B", Transform_reference_mode::bbox,      "Transform about the Bounding box center, in World space");
 
     {
         const auto mode = settings.show_translate ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;

@@ -48,7 +48,7 @@ Defines the Tool abstraction and the Tools container, plus several concrete tool
 
 - **`Clipboard`** -- Cut/copy/paste for scene items.
 
-- **`Debug_visualizations`** -- Renders debug overlays (light visualization, skin joints, physics shapes, joint constraints).
+- **`Debug_visualizations`** -- Renders debug overlays (light visualization, skin joints, physics shapes, joint constraints). A light is visualized when the view's Lights mode admits it and it has the Show Debug Visualizations flag (`Debug_visualizations::is_light_visualized()`). It is drawn as a camera-facing ring of rays around its position in the light color (`light_ray_ring()`); a directional light's ring sits at the window-space vanishing point of its source direction (`get_light_visual_position()`: the point on the camera ray along that direction at view depth 0.99 of the far distance, depth tested against the scene and clear of far plane clipping; nothing while the direction is behind the camera, and nothing in an orthographic view); `Debug_visualizations_style::light_ray_count`, `light_ray_inner_radius`, `light_ray_length` and `light_ray_width` set the count and the sizes in pixels (`get_light_ring_radii()`). A spot light with a cone (range and outer angle above 0, `has_spot_cone()`; any other spot light draws like a point light) keeps only the rays whose line of sight passes through its cone (`spot_light_ring`, default on) and can draw the edges of its outer cone out to its range (`spot_light_cone`, default off; `Primitive_renderer::add_cone()` with `Cone_lines::edges`) and draws the edges of a cylinder behind its cone tip along the light's +Z, as wide as the ring's outer radius mapped from pixels to world units at the light and half that long (`spot_light_cylinder`, default on); a point light with a range above 0 draws the silhouette circle of a sphere of that radius (`point_light_range_sphere`, default on; `add_sphere()` with `Sphere_lines::silhouette`, nothing while the camera is inside it). A directional light adds its shadow frustum box / planes only when those toggles are on (`light_line_width`). `Light_hover_provider` (an `Analytic_hover_provider`) picks a visualized light by a sphere as large as its ring and replaces the content hover with it (`Hover_entry::item_weak`; `Analytic_hover_merge::replace`, the ring is drawn over the content), so a viewport click selects the light (`Selection::toggle_node_selection()`).
   - Joint constraints (`Joint_constraint_visualization`, `tools/joint_constraint_visualization.hpp`; geometry from the pure builders of `tools/joint_visualization.hpp`): the per-view setting `joint_constraints` (`Joint_constraint_filter`) chooses which constraints are drawn - `off`, `all`, `hovered_mesh` (the physics joints whose frame node or body node is the hovered mesh; the bones of the hovered mesh's skin and the bone ancestors of a rigidly bound mesh) or `hovered_bone` (the IK limits of the hovered bone and the physics joints whose frame or body node it is) - and `joint_constraints_physics` / `joint_constraints_ik` which kinds. Hovered is `Item_base::is_hovered()`: the viewport hover (bones are hovered in the viewport in bone selection mode) or the item tree hover; a `Joint` prim hovered in the item tree shows in both hovered modes. Drawn in the x-ray line bucket.
   - A physics joint (`Physics_joint_state`, from `Joint_system`'s entry): a live joint draws the frames its constraint was built with, carried by the bodies (`body * frame_in_a`, `body * frame_in_b` or the world frame); a pending one draws its frame nodes' world transforms in `joint_pending_color`. Axis triads at both frames (frame B shorter), a link from each frame to its body's origin, translation axes along frame A (free: thin line, limited: segment with end ticks, fixed: nothing) with a cross at frame B's origin, and the rotation limits drawn as where the body's arm - body A's center relative to the pivot, held in frame A (for a pending joint the mesh its first frame node sits in) - can go, fixed to frame B: a limit rotation q puts the arm at `frame_b * inverse(q) * arm`. That is the swing boundary (pyramid: the edges of the swing angle rectangle with spokes to its corners; cone: a circle with four spokes), the twist range arc (swept by the part of the arm across the twist axis), and the current arm as the spoke to the body. So a hinge's sector hangs through the body it limits whatever the joint frames' orientation, and draws alike on both backends although Jolt states a hinge about Z as a pyramid swing of its X twist axis and Box3D as a twist about Z. A body centered on the pivot has no arm; its limits are drawn with the frame axis the limit moves (the twist axis for a swing, a swing axis for the twist). Two levels, each a per-view toggle: `joint_constraints_contract` (default on) draws `erhe::physics::get_contract_joint_limits()` - the erhe::physics joint contract, the same on every backend - in `joint_limit_color`, and `joint_constraints_backend` (default off) draws `erhe::physics::get_enforced_joint_limits()` - what the built backend simulates - in `joint_backend_color`, or `joint_approximated_color` where the backend differs from the contract (`is_exact` false); with both on, the frames are drawn once and the two limit sets overlay. Each level's current values are `measure_joint_coordinates()` against that level's shape; a value outside its range by more than 1 mm / 1 degree is drawn in `joint_violation_color`. Size: `Debug_visualizations_style::joint_size`, or with 0 half the larger of the body's bounding radius and the frame-to-body distance.
   - An IK bone (`Ik_limit_state`): every bone (and any node with its own `Ik.*` value) whose constraint - `resolve_ik_constraint()` with the twist axis from `Rig.tail`, or the running IK drag's resolved constraint for a joint of its chain (`Ik_drag::find_joint_constraint()`) - is enabled. The swing boundary is `sample_ik_swing_boundary()` (the authored region in the solver's clamp space; a locked swing axis pinned at the current rotation, or the drag-start one during a drag) drawn at bone length about the rest frame `parent world * rest_rotation`, with the current bone direction as a spoke; a limited, unlocked twist axis adds the twist range arc and the current twist. `joint_violation_color` marks a rotation outside the authored limits (`is_ik_rotation_within_limits()`).
@@ -146,20 +146,27 @@ moves towards the grid only). While on, `editor.xr` logs every 10 s the
 average and maximum time per frame of the prepare phase hit testing and of
 the ID pick pass recording (CPU; "Controller ray ...").
 
-## Headset headlamp
+## Headlamp
 
 The Scene Control window's headlamp button adds (first press), disables and
-enables a spot light, "Headlamp" (`Headset_view::set_headlamp_enabled()`,
-queued to the prepare phase): a child of the headset's root camera (the head
-pose, the eye midpoint), 15 cm above it in head space, aimed along the view
-direction; range 30 m, cone 0.25 / 1.5 rad (inner / outer). Enabling puts it
-at the front of the scene's light layer
+enables a spot light, "Headlamp" (`Headlamp`, `src/editor/scene/headlamp.*`;
+the button is queued to the prepare phase), 15 cm above a camera along its
+up axis, aimed along the view direction; range 30 m, cone 0.25 / 1.5 rad (inner / outer, full cone angles) by default; the Scene Control window's Headlamp Cone Min / Max sliders set them (`Headlamp::set_spot_angles()`, inner clamped to outer). The camera is the headset's root camera (the head pose,
+the eye midpoint) under OpenXR (`Headset_view` owns that headlamp), and
+otherwise the camera the Fly Camera controls - the camera of the viewport
+it was last bound to, chosen in that viewport's toolbar
+(`Fly_camera_tool::set_camera()` re-attaches it; it stays with the last
+camera while the pointer is outside the viewports). Enabling puts it at the
+front of the scene's light layer
 (`erhe::scene::Light_layer::move_to_front()`), so it is the first spot light
 the light set resolves: it takes the first spot shadow slot (or the first
-unshadowed spot slot without shadows). The Scene Control window's "Headlamp only"
-lighting makes it the only light. Disabling takes it out of the scene; a
-re-home of the headset moves it into the new scene. Intensity (slider up to
-20000 and 100 - 5000 shortcut buttons) and shadows apply at once. It is
+unshadowed spot slot without shadows). The Scene Control window's "Headlamp
+only" lighting makes it the only light. Disabling takes it out of the scene;
+moving to a camera of another scene (a re-home of the headset, a viewport
+showing another scene) moves it into that scene. Closing the camera's scene
+or removing the camera detaches it; deleting the light itself disables it
+(the next Add creates a new one). Intensity (slider up to 20000 and
+100 - 5000 shortcut buttons) and shadows apply at once. It is
 `session_only`: never saved.
 
 ## Scene Control window
@@ -170,7 +177,8 @@ lighting and LOD controls below. Under OpenXR it first shows the headset's
 own controls (`Headset_view::scene_control_imgui()`): the editor status
 line (the headset shows no editor window), the headset scene combo, the
 headset view's toolbar (shader debug and overdraw modes), the headlamp
-("Headset headlamp") and the controller ray's scene object hits switch.
+("Headlamp") and the controller ray's scene object hits switch. Without
+OpenXR it first shows the Fly Camera's headlamp controls ("Headlamp").
 
 The lighting and LOD controls edit the graphics preset in effect for the
 session (`queue_session_preset_edit()`: a copy of
@@ -182,8 +190,7 @@ the stored preset):
 - Lighting: "Scene lights (clustered)" - clustered light shading with the
   stored preset's per type light counts; "Single directional light" -
   per type loops, one shadowed directional light, every other count 0 (the
-  first directional light is the only light); "Headlamp only" (OpenXR
-  only) - per type
+  first directional light is the only light); "Headlamp only" - per type
   loops, one spot light slot (shadow mapped when the headlamp casts
   shadows, re-applied when the Headlamp Shadows checkbox changes) and no
   other light, so the headlamp, the first spot light, is the only light.

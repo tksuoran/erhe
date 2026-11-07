@@ -58,8 +58,10 @@
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene_renderer/texel_renderer.hpp"
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <imgui/imgui.h>
 #include <nlohmann/json.hpp>
 
@@ -116,6 +118,54 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 [[nodiscard]] auto should_visualize(const Visualization_mode mode, const erhe::Item_base* const item)
 {
     return should_visualize(mode, item->is_selected(), editor::is_hovered(*item));
+}
+
+// Whether the line of sight from eye through point passes through the finite
+// cone (apex, unit axis, cosine of the half angle, length range): the point
+// is then seen inside the cone.
+[[nodiscard]] auto sight_line_hits_cone(
+    const glm::vec3& eye,
+    const glm::vec3& point,
+    const glm::vec3& apex,
+    const glm::vec3& axis,
+    const float      cos_half,
+    const float      range
+) -> bool
+{
+    const glm::vec3 v  = point - eye;
+    const glm::vec3 w  = eye - apex;
+    const float     c2 = cos_half * cos_half;
+    const auto axial_in_range = [&](const float t) -> bool {
+        const float axial = glm::dot(w + (t * v), axis);
+        return (axial >= 0.0f) && (axial <= range);
+    };
+    const float w_axial = glm::dot(w, axis);
+    if ((w_axial >= 0.0f) && (w_axial <= range) && ((w_axial * w_axial) >= (c2 * glm::dot(w, w)))) {
+        return true; // the eye is inside the cone
+    }
+    // (axial)^2 = c2 |x|^2 along x(t) = w + t v: a quadratic in t.
+    const float v_axial = glm::dot(v, axis);
+    const float qa = (v_axial * v_axial) - (c2 * glm::dot(v, v));
+    const float qb = 2.0f * ((w_axial * v_axial) - (c2 * glm::dot(w, v)));
+    const float qc = (w_axial * w_axial) - (c2 * glm::dot(w, w));
+    if (std::abs(qa) < 1.0e-12f) {
+        if (std::abs(qb) < 1.0e-12f) {
+            return false;
+        }
+        const float t = -qc / qb;
+        return (t > 0.0f) && axial_in_range(t);
+    }
+    const float discriminant = (qb * qb) - (4.0f * qa * qc);
+    if (discriminant < 0.0f) {
+        return false;
+    }
+    const float root = std::sqrt(discriminant);
+    for (const float t : { (-qb - root) / (2.0f * qa), (-qb + root) / (2.0f * qa) }) {
+        if ((t > 0.0f) && axial_in_range(t)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 }
@@ -503,24 +553,32 @@ void Debug_visualizations::light_visualization(
 {
     ERHE_PROFILE_FUNCTION();
 
-    using namespace erhe::utility;
-    if (!test_bit_set(light->get_flag_bits(), editor::Editor_item_flags::show_debug_visualizations)) {
-        return;
-    }
-
     const Light_visualization_context light_context{
         .render_context   = render_context,
         .selected_camera  = selected_camera,
         .light            = light,
-        .light_color      = glm::vec4{light->get_color(), 1.0f},
-        .half_light_color = glm::vec4{0.5f * light->get_color(), 0.5f}
+        .light_color      = glm::vec4{light->get_color(), 1.0f}
     };
 
-    switch (light->get_light_type()) {
-        case erhe::scene::Light_type::directional: directional_light_visualization(light_context); break;
-        case erhe::scene::Light_type::point:       point_light_visualization      (light_context); break;
-        case erhe::scene::Light_type::spot:        spot_light_visualization       (light_context); break;
-        default: break;
+    const Debug_visualizations_style& style = render_context.app_context.editor_settings->debug_visualizations_style;
+    const bool spot_cone  = has_spot_cone(*light);
+    const bool point_like =
+        (light->get_light_type() == erhe::scene::Light_type::point) ||
+        ((light->get_light_type() == erhe::scene::Light_type::spot) && !spot_cone);
+    if (!spot_cone || style.spot_light_ring) {
+        light_ray_ring(light_context);
+    }
+    if (spot_cone && style.spot_light_cone) {
+        spot_light_cone(light_context);
+    }
+    if (spot_cone && style.spot_light_cylinder) {
+        spot_light_cylinder(light_context);
+    }
+    if (point_like && style.point_light_range_sphere && (light->get_range() > 0.0f)) {
+        point_light_range_sphere(light_context);
+    }
+    if ((light->get_light_type() == erhe::scene::Light_type::directional) && (m_settings.frustum_box || m_settings.frustum_planes)) {
+        directional_light_visualization(light_context);
     }
 }
 
@@ -552,7 +610,6 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
     }
 
     const glm::mat4 world_from_light_clip   = light_projection_transforms->clip_from_world.get_inverse_matrix();
-    const glm::mat4 world_from_light_camera = light_projection_transforms->world_from_light_camera.get_matrix();
 
     line_renderer.set_thickness(style.light_line_width);
 
@@ -572,35 +629,6 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
             line_renderer.add_plane(context.light_color, plane);
         }
     }
-
-    const float projection_scale = light_projections.parameters.view_camera->get_projection_scale();
-    const float r_major = light_projections.parameters.view_camera->get_shadow_range() / (40.0f * projection_scale);
-    line_renderer.set_thickness(-1.0f);
-    line_renderer.add_lines(
-        world_from_light_camera,
-        context.light_color,
-        {
-            { O, -1.0f * axis_z },
-            { O - r_major * axis_x, O + r_major * axis_x },
-            { O - r_major * axis_y, O + r_major * axis_y }
-        }
-    );
-
-    const float r_minor = light_projections.parameters.view_camera->get_shadow_range() / (100.0f * projection_scale);
-    line_renderer.set_thickness(-2.0f);
-    std::array<erhe::renderer::Line, 7> lines;
-    for (int i = 0; i < 7; ++i) {
-        const float rel   = static_cast<float>(i) / 7.0f;
-        const float theta = rel * glm::pi<float>();
-        const float x     = r_minor * cos(theta);
-        const float y     = r_minor * sin(theta);
-        lines[i] = erhe::renderer::Line{O - x * axis_x - y * axis_y, O + x * axis_x + y * axis_y};
-    }
-    line_renderer.add_lines(
-        world_from_light_camera,
-        context.light_color,
-        lines
-    );
 }
 
 void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context& context)
@@ -1026,218 +1054,189 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
     }
 }
 
-void Debug_visualizations::point_light_visualization(const Light_visualization_context& context)
+void Debug_visualizations::spot_light_cone(const Light_visualization_context& context)
 {
     const Debug_visualizations_style& style = context.render_context.app_context.editor_settings->debug_visualizations_style;
-    const erhe::scene::Node* const node = context.light;
-    auto&                              render_context = context.render_context;
-    erhe::renderer::Primitive_renderer line_renderer  = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
-
-    constexpr float scale = 0.5f;
-    const auto nnn = scale * glm::normalize(-axis_x - axis_y - axis_z);
-    const auto nnp = scale * glm::normalize(-axis_x - axis_y + axis_z);
-    const auto npn = scale * glm::normalize(-axis_x + axis_y - axis_z);
-    const auto npp = scale * glm::normalize(-axis_x + axis_y + axis_z);
-    const auto pnn = scale * glm::normalize( axis_x - axis_y - axis_z);
-    const auto pnp = scale * glm::normalize( axis_x - axis_y + axis_z);
-    const auto ppn = scale * glm::normalize( axis_x + axis_y - axis_z);
-    const auto ppp = scale * glm::normalize( axis_x + axis_y + axis_z);
-    line_renderer.set_thickness(style.light_line_width);
-    line_renderer.add_lines(
-        node->world_from_node(),
-        context.light_color,
-        {
-            { -scale * axis_x, scale * axis_x},
-            { -scale * axis_y, scale * axis_y},
-            { -scale * axis_z, scale * axis_z},
-            { nnn, ppp },
-            { nnp, ppn },
-            { npn, pnp },
-            { npp, pnn }
-        }
-    );
-}
-
-void Debug_visualizations::spot_light_visualization(const Light_visualization_context& context)
-{
-    const Debug_visualizations_style& style = context.render_context.app_context.editor_settings->debug_visualizations_style;
-    const erhe::scene::Node* const node = context.light;
-
-    const auto* camera_node = context.render_context.get_camera_node();
+    const erhe::scene::Node* const camera_node = context.render_context.get_camera_node();
     if (camera_node == nullptr) {
         return;
     }
+    const erhe::scene::Light* const light = context.light;
+    const float range  = light->get_range();
+    // The outer spot angle is the full cone angle (the shader takes cos(angle / 2)).
+    const float radius = range * std::tan(0.5f * light->get_outer_spot_angle());
+    // add_cone() builds along +Y; the spot light shines down its -Z.
+    const glm::mat4 light_from_cone = glm::rotate(glm::mat4{1.0f}, -glm::half_pi<float>(), glm::vec3{1.0f, 0.0f, 0.0f});
+    const erhe::scene::Trs_transform world_from_cone{light->world_from_node() * light_from_cone};
 
     erhe::renderer::Primitive_renderer line_renderer = context.render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
-    const erhe::scene::Light* light = context.light;
-
-    constexpr int   edge_count       = 200;
-    constexpr float light_cone_sides = edge_count * 6;
-    const float outer_alpha   = light->get_outer_spot_angle();
-    const float inner_alpha   = light->get_inner_spot_angle();
-    const float length        = light->get_range();
-    const float outer_apothem = length * std::tan(outer_alpha * 0.5f);
-    const float inner_apothem = length * std::tan(inner_alpha * 0.5f);
-    const float outer_radius  = outer_apothem / std::cos(glm::pi<float>() / static_cast<float>(light_cone_sides));
-    const float inner_radius  = inner_apothem / std::cos(glm::pi<float>() / static_cast<float>(light_cone_sides));
-
-    const mat4 m             = node->world_from_node();
-    const vec3 view_position = node->transform_point_from_world_to_local(
-        vec3{camera_node->position_in_world()}
+    const glm::vec4 minor_color{glm::vec3{context.light_color}, 0.5f};
+    line_renderer.add_cone(
+        world_from_cone, context.light_color, minor_color,
+        -style.light_ray_width, -0.5f * style.light_ray_width, // negative: pixels
+        glm::vec3{0.0f}, range, 0.0f, radius,
+        glm::vec3{camera_node->position_in_world()}, 32,
+        erhe::renderer::Primitive_renderer::Cone_lines::edges
     );
+}
 
-    //auto* app_time = get<App_time>();
-    //const float time = static_cast<float>(app_time->time());
-    //const float half_position = (app_time != nullptr)
-    //    ? time - floor(time)
-    //    : 0.5f;
-
-    line_renderer.set_thickness(style.light_line_width);
-
-    for (int i = 0; i < light_cone_sides; ++i) {
-        const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(light_cone_sides);
-        const float t1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(light_cone_sides);
-        line_renderer.add_lines(
-            m,
-            context.light_color,
-            {
-                {
-                    -length * axis_z
-                    + outer_radius * std::cos(t0) * axis_x
-                    + outer_radius * std::sin(t0) * axis_y,
-                    -length * axis_z
-                    + outer_radius * std::cos(t1) * axis_x
-                    + outer_radius * std::sin(t1) * axis_y
-                }
-            }
-        );
-        line_renderer.add_lines(
-            m,
-            context.half_light_color,
-            {
-                {
-                    -length * axis_z + inner_radius * std::cos(t0) * axis_x + inner_radius * std::sin(t0) * axis_y,
-                    -length * axis_z + inner_radius * std::cos(t1) * axis_x + inner_radius * std::sin(t1) * axis_y
-                }
-                //{
-                //    -length * axis_z * half_position
-                //    + outer_radius * std::cos(t0) * axis_x * half_position
-                //    + outer_radius * std::sin(t0) * axis_y * half_position,
-                //    -length * axis_z * half_position
-                //    + outer_radius * std::cos(t1) * axis_x * half_position
-                //    + outer_radius * std::sin(t1) * axis_y * half_position
-                //}
-            }
-        );
+void Debug_visualizations::spot_light_cylinder(const Light_visualization_context& context)
+{
+    // Behind the cone tip, along the light's +Z: the ring's outer radius in
+    // pixels mapped to world units at the light, half of it long.
+    const Debug_visualizations_style& style = context.render_context.app_context.editor_settings->debug_visualizations_style;
+    const erhe::scene::Node* const camera_node = context.render_context.get_camera_node();
+    if (camera_node == nullptr) {
+        return;
     }
-    line_renderer.add_lines(
-        m,
-        context.half_light_color,
-        {
-            //{
-            //    O,
-            //    -length * axis_z - outer_radius * axis_x,
-            //},
-            //{
-            //    O,
-            //    -length * axis_z + outer_radius * axis_x
-            //},
-            //{
-            //    O,
-            //    -length * axis_z - outer_radius * axis_y,
-            //},
-            //{
-            //    O,
-            //    -length * axis_z + outer_radius * axis_y
-            //},
-            {
-                O,
-                -length * axis_z
-            },
-            {
-                -length * axis_z - inner_radius * axis_x,
-                -length * axis_z + inner_radius * axis_x
-            },
-            {
-                -length * axis_z - inner_radius * axis_y,
-                -length * axis_z + inner_radius * axis_y
-            }
-        }
+    const erhe::scene::Light* const light    = context.light;
+    const glm::vec3                 position = glm::vec3{light->position_in_world()};
+    const glm::vec3                 camera_position = glm::vec3{camera_node->position_in_world()};
+    const std::optional<glm::vec2>  radii    = get_light_ring_radii(style, context.render_context.scene_view, camera_position, position);
+    if (!radii.has_value()) {
+        return;
+    }
+    const float radius = radii->y;
+
+    // The light's position and orientation without its scale; add_cone()
+    // builds along +Y, turned to the light's +Z.
+    erhe::scene::Trs_transform world_from_light;
+    world_from_light.set_translation_and_rotation(position, light->world_from_node_transform().get_rotation());
+    const glm::mat4 light_from_cylinder = glm::rotate(glm::mat4{1.0f}, glm::half_pi<float>(), glm::vec3{1.0f, 0.0f, 0.0f});
+    const erhe::scene::Trs_transform world_from_cylinder{world_from_light.get_matrix() * light_from_cylinder};
+
+    erhe::renderer::Primitive_renderer line_renderer = context.render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    const glm::vec4 minor_color{glm::vec3{context.light_color}, 0.5f};
+    line_renderer.add_cone(
+        world_from_cylinder, context.light_color, minor_color,
+        -style.light_ray_width, -0.5f * style.light_ray_width, // negative: pixels
+        glm::vec3{0.0f}, 0.5f * radius, radius, radius,
+        camera_position, 32,
+        erhe::renderer::Primitive_renderer::Cone_lines::edges
     );
+}
 
-    class Cone_edge
-    {
-    public:
-        Cone_edge(
-            const vec3& p,
-            const vec3& n,
-            const vec3& t,
-            const vec3& b,
-            const float phi,
-            const float n_dot_v
-        )
-        : p      {p}
-        , n      {n}
-        , t      {t}
-        , b      {b}
-        , phi    {phi}
-        , n_dot_v{n_dot_v}
-        {
-        }
-
-        vec3  p;
-        vec3  n;
-        vec3  t;
-        vec3  b;
-        float phi;
-        float n_dot_v;
-    };
-
-    std::vector<Cone_edge> cone_edges;
-    for (int i = 0; i < edge_count; ++i) {
-        const float phi     = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(edge_count);
-        const float sin_phi = std::sin(phi);
-        const float cos_phi = std::cos(phi);
-
-        const vec3 p{
-            + outer_radius * sin_phi,
-            + outer_radius * cos_phi,
-            -length
-        };
-
-        const vec3 B = normalize(O - p); // generatrix
-        const vec3 T{
-            static_cast<float>(std::sin(phi + glm::half_pi<float>())),
-            static_cast<float>(std::cos(phi + glm::half_pi<float>())),
-            0.0f
-        };
-        const vec3  N0      = glm::cross(B, T);
-        const vec3  N       = glm::normalize(N0);
-        const vec3  v       = normalize(p - view_position);
-        const float n_dot_v = dot(N, v);
-
-        cone_edges.emplace_back(p, N, T, B, phi, n_dot_v);
+void Debug_visualizations::point_light_range_sphere(const Light_visualization_context& context)
+{
+    const Debug_visualizations_style& style = context.render_context.app_context.editor_settings->debug_visualizations_style;
+    const erhe::scene::Node* const camera_node = context.render_context.get_camera_node();
+    if (camera_node == nullptr) {
+        return;
     }
+    erhe::scene::Trs_transform world_from_light;
+    world_from_light.set_translation(glm::vec3{context.light->position_in_world()});
+    erhe::renderer::Primitive_renderer line_renderer = context.render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    const glm::vec4 minor_color{glm::vec3{context.light_color}, 0.5f};
+    line_renderer.add_sphere(
+        world_from_light, context.light_color, minor_color,
+        -style.light_ray_width, -0.5f * style.light_ray_width, // negative: pixels
+        glm::vec3{0.0f}, context.light->get_range(),
+        &camera_node->world_from_node_transform(), style.sphere_step_count,
+        erhe::renderer::Primitive_renderer::Sphere_lines::silhouette
+    );
+}
 
-    std::vector<Cone_edge> sign_flip_edges;
-    for (size_t i = 0; i < cone_edges.size(); ++i) {
-        const std::size_t next_i    = (i + 1) % cone_edges.size();
-        const auto&       edge      = cone_edges[i];
-        const auto&       next_edge = cone_edges[next_i];
-        if (sign(edge.n_dot_v) != sign(next_edge.n_dot_v)) {
-            if (std::abs(edge.n_dot_v) < std::abs(next_edge.n_dot_v)) {
-                sign_flip_edges.push_back(edge);
-            } else {
-                sign_flip_edges.push_back(next_edge);
-            }
-        }
+auto Debug_visualizations::is_light_visualized(const Debug_visualizations_settings& settings, const erhe::scene::Light& light) -> bool
+{
+    return
+        erhe::utility::test_bit_set(light.get_flag_bits(), editor::Editor_item_flags::show_debug_visualizations) &&
+        should_visualize(settings.lights, &light);
+}
+
+auto Debug_visualizations::get_light_visual_position(const erhe::scene::Light& light, const erhe::scene::Camera& camera) -> std::optional<glm::vec3>
+{
+    if (light.get_light_type() != erhe::scene::Light_type::directional) {
+        return glm::vec3{light.position_in_world()};
     }
+    const erhe::scene::Projection* const projection = camera.projection();
+    if ((projection == nullptr) || projection->is_orthographic()) {
+        return {};
+    }
+    // The light shines down its -Z; its source direction is +Z.
+    const glm::vec3 source_direction = glm::normalize(glm::vec3{light.direction_in_world()});
+    const glm::vec3 view_forward     = glm::normalize(glm::vec3{camera.world_from_node() * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}});
+    const float     cos_to_forward   = glm::dot(source_direction, view_forward);
+    if (cos_to_forward <= 0.0f) {
+        return {};
+    }
+    // Every camera + t * source_direction (t > 0) projects to the direction's
+    // window-space vanishing point; view depth just inside the far plane keeps
+    // the depth test against the scene without far plane clipping.
+    const float t = (0.99f * projection->get_z_far()) / cos_to_forward;
+    return glm::vec3{camera.position_in_world()} + (t * source_direction);
+}
 
-    for (auto& edge : sign_flip_edges) {
-        line_renderer.add_lines(m, context.light_color, { { O, edge.p } } );
-        //line_renderer.add_lines(m, red,   { { edge.p, edge.p + 0.1f * edge.n } }, thickness);
-        //line_renderer.add_lines(m, green, { { edge.p, edge.p + 0.1f * edge.t } }, thickness);
-        //line_renderer.add_lines(m, blue,  { { edge.p, edge.p + 0.1f * edge.b } }, thickness);
+auto Debug_visualizations::has_spot_cone(const erhe::scene::Light& light) -> bool
+{
+    return
+        (light.get_light_type() == erhe::scene::Light_type::spot) &&
+        (light.get_range() > 0.0f) &&
+        (light.get_outer_spot_angle() > 0.0f);
+}
+
+auto Debug_visualizations::get_light_ring_radii(
+    const Debug_visualizations_style& style,
+    Scene_view&                       scene_view,
+    const glm::vec3&                  camera_position,
+    const glm::vec3&                  light_position
+) -> std::optional<glm::vec2>
+{
+    // Viewport_scene_view::get_projection_scale() is 500 x world units per pixel.
+    const float world_per_pixel = scene_view.get_projection_scale(glm::distance(camera_position, light_position)) / 500.0f;
+    if (!std::isfinite(world_per_pixel) || !(world_per_pixel > 0.0f)) {
+        return {};
+    }
+    const float inner = style.light_ray_inner_radius * world_per_pixel;
+    return glm::vec2{inner, inner + (style.light_ray_length * world_per_pixel)};
+}
+
+void Debug_visualizations::light_ray_ring(const Light_visualization_context& context)
+{
+    // A ring of short rays around the light, facing the camera, sized in
+    // pixels; a spot light with a cone keeps only the rays seen inside it.
+    const Debug_visualizations_style& style = context.render_context.app_context.editor_settings->debug_visualizations_style;
+    const erhe::scene::Node* const camera_node = context.render_context.get_camera_node();
+    if ((camera_node == nullptr) || (style.light_ray_count <= 0)) {
+        return;
+    }
+    const std::shared_ptr<erhe::scene::Camera> camera = context.render_context.scene_view.get_camera();
+    if (!camera) {
+        return;
+    }
+    const erhe::scene::Light* const light = context.light;
+    const std::optional<glm::vec3> visual_position = get_light_visual_position(*light, *camera);
+    if (!visual_position.has_value()) {
+        return;
+    }
+    const glm::vec3 position          = visual_position.value();
+    const glm::mat4 world_from_camera = camera_node->world_from_node();
+    const glm::vec3 camera_position   = glm::vec3{world_from_camera[3]};
+    const glm::vec3 right             = glm::normalize(glm::vec3{world_from_camera[0]});
+    const glm::vec3 up                = glm::normalize(glm::vec3{world_from_camera[1]});
+    const std::optional<glm::vec2> radii = get_light_ring_radii(style, context.render_context.scene_view, camera_position, position);
+    if (!radii.has_value()) {
+        return;
+    }
+    const float inner = radii->x;
+    const float outer = radii->y;
+
+    const bool      is_spot   = has_spot_cone(*light);
+    const glm::vec3 spot_axis = glm::normalize(glm::vec3{light->world_from_node() * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}});
+    // The outer spot angle is the full cone angle (the shader takes cos(angle / 2)).
+    const float     cos_half  = std::cos(0.5f * light->get_outer_spot_angle());
+
+    erhe::renderer::Primitive_renderer line_renderer = context.render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    line_renderer.set_thickness(-style.light_ray_width); // negative: pixels
+    const int ray_count = style.light_ray_count;
+    for (int i = 0; i < ray_count; ++i) {
+        const float     theta     = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ray_count);
+        const glm::vec3 direction = (std::cos(theta) * right) + (std::sin(theta) * up);
+        const glm::vec3 p0        = position + inner * direction;
+        const glm::vec3 p1        = position + outer * direction;
+        if (is_spot && !sight_line_hits_cone(camera_position, 0.5f * (p0 + p1), position, spot_axis, cos_half, light->get_range())) {
+            continue;
+        }
+        line_renderer.add_lines(context.light_color, {{p0, p1}});
     }
 }
 
@@ -2189,7 +2188,7 @@ void Debug_visualizations::render(const Render_context& context)
     }
 
     for (const auto& light : scene_root->layers().light()->lights) {
-        if (should_visualize(m_settings.lights, light)) {
+        if (is_light_visualized(m_settings, *light)) {
             light_visualization(context, selected_camera, light.get());
         }
     }
@@ -2482,6 +2481,14 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
 
     p.add_entry("Sphere Step Count", [&style](){ ImGui::SliderInt  ("##", &style.sphere_step_count,    1,    200); });
     p.add_entry("Light Line Width",  [&style](){ ImGui::SliderFloat("##", &style.light_line_width,     0.1f, 100.0f); });
+    p.add_entry("Light Ray Count",   [&style](){ ImGui::SliderInt  ("##", &style.light_ray_count,        0,    64); });
+    p.add_entry("Light Ray Inner Radius (px)", [&style](){ ImGui::SliderFloat("##", &style.light_ray_inner_radius, 0.0f, 100.0f); });
+    p.add_entry("Light Ray Length (px)",       [&style](){ ImGui::SliderFloat("##", &style.light_ray_length,       0.0f, 100.0f); });
+    p.add_entry("Light Ray Width (px)",        [&style](){ ImGui::SliderFloat("##", &style.light_ray_width,        0.1f, 20.0f); });
+    p.add_entry("Spot Light Ring",             [&style](){ ImGui::Checkbox   ("##", &style.spot_light_ring); });
+    p.add_entry("Spot Light Cone",             [&style](){ ImGui::Checkbox   ("##", &style.spot_light_cone); });
+    p.add_entry("Spot Light Cylinder",         [&style](){ ImGui::Checkbox   ("##", &style.spot_light_cylinder); });
+    p.add_entry("Point Light Range Sphere",    [&style](){ ImGui::Checkbox   ("##", &style.point_light_range_sphere); });
     p.add_entry("Camera Line Width", [&style](){ ImGui::SliderFloat("##", &style.camera_line_width,    0.1f, 100.0f); });
     p.add_entry("Camera Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.camera_line_color.x,  ImGuiColorEditFlags_Float); });
     p.add_entry("Layout Line Width", [&style](){ ImGui::SliderFloat("##", &style.layout_line_width,    0.1f, 100.0f); });

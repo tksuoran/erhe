@@ -34,6 +34,7 @@
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
 #include <imgui/imgui.h>
@@ -708,6 +709,7 @@ Fly_camera_tool::Fly_camera_tool(
 )
     : Tool                            {app_context, tools, Tool_flags::background}
     , m_window                        {imgui_renderer, imgui_windows, "Fly Camera", "fly_camera", [this]() { window_imgui(); }}
+    , m_headlamp                      {app_context}
     , m_turn_command                  {commands, app_context}
     , m_tumble_command                {commands, app_context}
     , m_track_command                 {commands, app_context}
@@ -839,6 +841,18 @@ Fly_camera_tool::Fly_camera_tool(
             on_hover_viewport_change();
         }
     );
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [&](Close_scene_message& message) {
+            if (message.scene_root) {
+                m_headlamp.on_close_scene(*message.scene_root);
+            }
+        }
+    );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [&](Items_removed_message& message) {
+            m_headlamp.on_items_removed(*message.removed);
+        }
+    );
 
     m_turn_command                  .set_host(this);
     m_tumble_command                .set_host(this);
@@ -894,6 +908,14 @@ void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera, erhe::scene:
     m_camera_controller->set_node(node);
     m_camera = camera;
     m_node = node;
+
+    // The headlamp stays with the last camera when the pointer leaves the viewports.
+    if (camera != nullptr) {
+        m_headlamp.attach(
+            std::static_pointer_cast<erhe::scene::Node>(camera->shared_from_this()),
+            glm::translate(glm::mat4{1.0f}, glm::vec3{0.0f, 0.15f, 0.0f})
+        );
+    }
 }
 
 auto Fly_camera_tool::get_camera() const -> erhe::scene::Camera*

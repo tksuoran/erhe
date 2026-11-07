@@ -139,6 +139,7 @@
 #include "tools/weight_paint_tool.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/debug_visualizations.hpp"
+#include "tools/light_hover_provider.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/lattice_tool.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
@@ -4577,6 +4578,8 @@ public:
         m_app_context.tools                    = m_tools                 .get();
         m_app_context.transform_tool           = m_transform_tool        .get();
         m_app_context.analytic_hover_providers.push_back(m_transform_tool.get());
+        m_light_hover_provider = std::make_unique<Light_hover_provider>(m_app_context);
+        m_app_context.analytic_hover_providers.push_back(m_light_hover_provider.get());
         m_app_context.scene_views              = m_viewport_scene_views  .get();
 
         // Subsystems whose live state lives outside Editor_settings_config /
@@ -5895,6 +5898,7 @@ public:
     std::unique_ptr<Rotate_tool         >                    m_rotate_tool;
     std::unique_ptr<Scale_tool          >                    m_scale_tool;
     std::unique_ptr<Transform_tool      >                    m_transform_tool;
+    std::unique_ptr<Light_hover_provider>                    m_light_hover_provider;
     std::unique_ptr<Hud                 >                    m_hud;
     std::unique_ptr<Hotbar              >                    m_hotbar;
     std::unique_ptr<Inventory_window    >                    m_inventory_window;

@@ -375,9 +375,7 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, erhe:
     }
 
     // The headlamp follows the headset into the scene it is homed in.
-    if (m_headlamp_enabled) {
-        attach_headlamp();
-    }
+    m_headlamp.attach(m_root_camera, glm::translate(glm::mat4{1.0f}, glm::vec3{0.0f, 0.15f, 0.0f}));
 
     // The loading screen is done: released once no frame in flight renders
     // it (prepare_render_view()).
@@ -449,69 +447,6 @@ void Headset_view::set_loading_screen(std::unique_ptr<Init_status_display> loadi
     m_loading_screen_frame_count = 0;
 }
 
-void Headset_view::attach_headlamp()
-{
-    const std::shared_ptr<Scene_root> scene_root = get_scene_root();
-    if (!scene_root || !m_root_camera || !m_headlamp) {
-        return;
-    }
-    erhe::scene::Light_layer* const light_layer = scene_root->layers().light();
-    ERHE_VERIFY(light_layer != nullptr);
-    m_headlamp->layer_id = light_layer->id;
-    // Head space: the root camera is the head pose (the eye midpoint); the
-    // light looks down the camera's -Z, the view direction.
-    m_headlamp->set_parent(m_root_camera);
-    m_headlamp->set_parent_from_node(glm::translate(glm::mat4{1.0f}, glm::vec3{0.0f, 0.15f, 0.0f}));
-    {
-        // The light set resolves lights[] in the prepare phase under this
-        // mutex.
-        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{scene_root->item_host_mutex};
-        const bool moved = light_layer->move_to_front(m_headlamp);
-        ERHE_VERIFY(moved);
-    }
-    // The light order changed: the light sets resolve again.
-    scene_root->on_light_changed(m_headlamp);
-}
-
-void Headset_view::set_headlamp_enabled(const bool enabled)
-{
-    if (enabled == m_headlamp_enabled) {
-        return;
-    }
-    m_headlamp_enabled = enabled;
-    if (enabled) {
-        if (!m_headlamp) {
-            m_headlamp = std::make_shared<erhe::scene::Light>("Headlamp");
-            m_headlamp->set_light_type      (erhe::scene::Light::Type::spot);
-            m_headlamp->set_color           (glm::vec3{1.0f, 1.0f, 1.0f});
-            m_headlamp->set_range           (30.0f);
-            m_headlamp->set_inner_spot_angle(0.25f); // radians, about 14 degrees
-            m_headlamp->set_outer_spot_angle(1.50f); // about 86 degrees
-            m_headlamp->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::session_only | erhe::Item_flags::exclude_from_prefab);
-            log_xr->info("Headlamp added");
-        }
-        m_headlamp->set_intensity  (m_headlamp_intensity);
-        m_headlamp->set_cast_shadow(m_headlamp_cast_shadow);
-        attach_headlamp();
-        log_xr->info("Headlamp enabled (intensity {})", m_headlamp_intensity);
-    } else {
-        if (m_headlamp) {
-            // Leaving the scene unregisters the light (the light sets resolve
-            // again).
-            m_headlamp->set_parent(std::shared_ptr<erhe::scene::Node>{});
-        }
-        log_xr->info("Headlamp disabled");
-    }
-}
-
-void Headset_view::set_headlamp_intensity(const float intensity)
-{
-    m_headlamp_intensity = std::max(intensity, 0.0f);
-    if (m_headlamp) {
-        m_headlamp->set_intensity(m_headlamp_intensity);
-    }
-}
-
 auto Headset_view::resolve_pending_scene_and_camera() -> bool
 {
     const std::string& scene_name = m_pending_scene_and_camera.scene_name;
@@ -539,9 +474,7 @@ void Headset_view::detach_from_scene()
     m_controller_render_models_loaded = false;
     // The headlamp leaves with the headset; attach_to_scene() puts it into
     // the next scene when it is enabled.
-    if (m_headlamp) {
-        m_headlamp->set_parent(std::shared_ptr<erhe::scene::Node>{});
-    }
+    m_headlamp.detach();
     // The cameras stay alive (the render phase of a frame in flight may
     // still read the pointer pick camera); they leave the scene and
     // setup_root_camera() parents them into the next one.
@@ -715,43 +648,7 @@ void Headset_view::scene_control_imgui(erhe::imgui::Imgui_host* const imgui_host
 
     // Read by the next prepare phase's hit testing and copied into the
     // frame's slot for the render phase's ID pick pass.
-    // Headlamp: Add (first enable) / Enable / Disable, queued to the
-    // prepare phase (scene graph edit). Intensity and shadows apply at once.
-    {
-        const char* const label = m_headlamp_enabled ? "Disable Headlamp" : (m_headlamp ? "Enable Headlamp" : "Add Headlamp");
-        if (ImGui::Button(label)) {
-            const bool enable = !m_headlamp_enabled;
-            m_app_context.imgui_windows->queue([this, enable]() { set_headlamp_enabled(enable); });
-        }
-        ImGui::SetItemTooltip("A spot light 15 cm above the eyes, aimed where you look (range 30 m); the first spot light of the scene");
-        float intensity = m_headlamp_intensity;
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
-        if (ImGui::SliderFloat("Headlamp Intensity", &intensity, 0.0f, 20000.0f, "%.0f", ImGuiSliderFlags_Logarithmic)) {
-            set_headlamp_intensity(intensity);
-        }
-        constexpr float intensity_shortcuts[] = { 100.0f, 250.0f, 500.0f, 1000.0f, 2500.0f, 5000.0f };
-        for (const float shortcut : intensity_shortcuts) {
-            ImGui::PushID(static_cast<int>(shortcut));
-            if (ImGui::Button(fmt::format("{:g}", shortcut).c_str())) {
-                set_headlamp_intensity(shortcut);
-            }
-            ImGui::PopID();
-            ImGui::SameLine();
-        }
-        bool cast_shadow = m_headlamp_cast_shadow;
-        if (ImGui::Checkbox("Headlamp Shadows", &cast_shadow)) {
-            m_headlamp_cast_shadow = cast_shadow;
-            if (m_headlamp) {
-                m_headlamp->set_cast_shadow(cast_shadow);
-            }
-            // "Headlamp only" lighting keeps the one spot slot the headlamp
-            // takes (shadow-mapped or not).
-            const Graphics_preset_entry& preset = m_app_context.app_settings->graphics.current_graphics_preset;
-            if (is_headlamp_only_lighting(preset)) {
-                queue_session_preset_edit(m_app_context, [cast_shadow](Graphics_preset_entry& edited) { set_headlamp_only_lighting(edited, cast_shadow); });
-            }
-        }
-    }
+    m_headlamp.imgui("A spot light 15 cm above the eyes, aimed where you look (range 30 m); the first spot light of the scene");
 
     ImGui::Checkbox("Controller Ray Scene Object Hits", &m_controller_scene_object_hits);
     ImGui::SetItemTooltip(

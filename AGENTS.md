@@ -47,6 +47,16 @@ Configure and build through the `scripts/` wrappers on every platform; they enco
 
 A change to shared infrastructure (e.g. `erhe::scene_renderer`) keeps these targets building and consistent: the `editor` executable, `src/example`, `src/hello_swap`, `src/hextiles` and the `erhe::*` libraries.
 
+## Stopping processes
+
+Stop only processes the agent launched itself, and only by the process ID
+captured at launch (e.g. `$!` after starting it in the background, or the
+`pid` the editor logs with "listening on 127.0.0.1:3743 (pid <pid>"). Never
+kill by name or pattern (`pkill`, `killall`, `taskkill /IM`): that also hits
+the user's own instances. When a process the user started has to stop, ask
+the user to stop it - it may be attached to a debugger, where a signal does
+not end it and a kill can disrupt the user's debugging session.
+
 ## No Band-Aid Fixes
 
 Every proposed solution must be evaluated with the question: "is this just a band-aid?" If the answer is yes, the solution must be rejected. A band-aid is any change that masks, works around, or tolerates the symptom of a bug without addressing the root cause - for example, a defensive null check that lets shutdown proceed when an object should not have been null in the first place, a try/catch that swallows an unexpected error, or a "tolerant" code path that accommodates state the system was not supposed to enter. Find and fix the actual cause; do not paper over it.

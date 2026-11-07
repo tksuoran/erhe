@@ -3,6 +3,8 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
+#include "scene/headlamp.hpp"
+#include "tools/fly_camera_tool.hpp"
 #include "config/generated/graphics_preset_entry.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -76,9 +78,15 @@ void Scene_control_window::imgui()
     ERHE_PROFILE_FUNCTION();
 
     // The headset's own controls (status line, headset scene, its view
-    // toolbar, headlamp, controller ray) need an OpenXR session.
+    // toolbar, headlamp, controller ray) need an OpenXR session; without one
+    // the headlamp rides on the fly camera's camera.
     if (m_context.OpenXR && (m_context.headset_view != nullptr)) {
         m_context.headset_view->scene_control_imgui(get_imgui_host());
+    } else if (m_context.fly_camera_tool != nullptr) {
+        m_context.fly_camera_tool->get_headlamp().imgui(
+            "A spot light 15 cm above the camera the Fly Camera controls (the viewport's camera, chosen in its toolbar), "
+            "aimed along the view (range 30 m); the first spot light of the scene"
+        );
     }
     lighting_and_lod_imgui();
 }
@@ -148,9 +156,13 @@ void Scene_control_window::lighting_and_lod_imgui()
                     }
                 );
             }
-            // The headlamp is the headset's (OpenXR only).
-            if (m_context.OpenXR && (m_context.headset_view != nullptr) && ImGui::Selectable("Headlamp only", headlamp_only)) {
-                const bool cast_shadow = m_context.headset_view->get_headlamp_cast_shadow();
+            // The headset's headlamp under OpenXR, else the fly camera's.
+            const bool headset_headlamp = m_context.OpenXR && (m_context.headset_view != nullptr);
+            const bool has_headlamp     = headset_headlamp || (m_context.fly_camera_tool != nullptr);
+            if (has_headlamp && ImGui::Selectable("Headlamp only", headlamp_only)) {
+                const bool cast_shadow = headset_headlamp
+                    ? m_context.headset_view->get_headlamp_cast_shadow()
+                    : m_context.fly_camera_tool->get_headlamp().get_cast_shadow();
                 queue_session_preset_edit(m_context, [cast_shadow](Graphics_preset_entry& edited) { set_headlamp_only_lighting(edited, cast_shadow); });
             }
             ImGui::EndCombo();

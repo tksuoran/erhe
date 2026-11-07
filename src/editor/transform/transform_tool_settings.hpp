@@ -21,35 +21,22 @@ static constexpr const char* c_scale_gizmo_mode_strings[] = {
 //   selection - a frame derived from the active mesh component selection
 //               (face centroid/normal/tangent, edge midpoint/direction/normal,
 //               or vertex position/normal/tangent)
+//   bbox      - world axes at the world bounding box center of a selected
+//               mesh (a non-mesh node: its origin); rotate and scale pivot there
 enum class Transform_reference_mode : unsigned int {
     global    = 0,
     local     = 1,
     reference = 2,
-    selection = 3
+    selection = 3,
+    bbox      = 4
 };
 
 static constexpr const char* c_transform_reference_mode_strings[] = {
     "Global",
     "Local",
     "Reference",
-    "Selection"
-};
-
-// Where the transform gizmo sits for a selected node:
-//   bounding_box_center - a node with a mesh: the center of the mesh's world
-//                         bounding box (meshes whose node origin lies far
-//                         outside their vertices, e.g. Bistro props);
-//                         any other node: its origin
-//   node_origin         - the node's origin
-// The drag applies relative to the gizmo, so rotate and scale pivot there.
-enum class Transform_gizmo_position : unsigned int {
-    bounding_box_center = 0,
-    node_origin         = 1
-};
-
-static constexpr const char* c_transform_gizmo_position_strings[] = {
-    "Bounding Box Center",
-    "Node Origin"
+    "Selection",
+    "BBox"
 };
 
 class Transform_tool_settings
@@ -60,7 +47,6 @@ public:
     bool                     show_scale           {false};
     bool                     hide_inactive        {true};
     Transform_reference_mode reference_mode       {Transform_reference_mode::global};
-    Transform_gizmo_position gizmo_position       {Transform_gizmo_position::bounding_box_center};
     // [0,1] normalized-lerp weight between the two faces sharing a selected edge,
     // used to orient the temp frame's normal in Selection mode.
     float                    edge_normal_blend    {0.5f};
@@ -83,11 +69,15 @@ public:
     float                    rotate_snap          {15.0f};
     Scale_gizmo_mode         scale_gizmo_mode     {Scale_gizmo_mode::basic};
 
-    // The gizmo uses the anchor's stored orientation in every mode except Global,
-    // which strips it back to world axes (identity basis).
+    // The gizmo uses the anchor's stored orientation in every mode except Global
+    // and BBox, which strip it back to world axes (identity basis).
     [[nodiscard]] auto use_anchor_orientation() const -> bool
     {
-        return reference_mode != Transform_reference_mode::global;
+        return (reference_mode != Transform_reference_mode::global) && (reference_mode != Transform_reference_mode::bbox);
+    }
+    [[nodiscard]] auto is_bbox() const -> bool
+    {
+        return reference_mode == Transform_reference_mode::bbox;
     }
     [[nodiscard]] auto is_local() const -> bool
     {

@@ -194,6 +194,7 @@ void Item_tree::on_items_removed(const Removed_items& removed)
         m_popup_item.reset();
         m_popup_id_string.clear();
         m_popup_id = 0;
+        m_popup_target = Popup_target::none;
     }
     for (const Flat_row& row : m_flat_rows) {
         const bool row_removed =
@@ -230,6 +231,7 @@ void Item_tree::debug_set_hovered_item(const std::shared_ptr<erhe::Item_base>& i
 {
     m_hovered_item = item;
     m_popup_item   = item;
+    m_popup_target = item ? Popup_target::item : Popup_target::none;
 }
 
 void Item_tree::set_root(const std::shared_ptr<erhe::Hierarchy>& root)
@@ -365,6 +367,11 @@ void Item_tree::set_hover_callback(std::function<void()> fun)
 void Item_tree::add_item_context_menu_callback(Context_menu_callback fun)
 {
     m_item_context_menu_callbacks.push_back(std::move(fun));
+}
+
+void Item_tree::add_root_context_menu_callback(Context_menu_callback fun)
+{
+    m_root_context_menu_callbacks.push_back(std::move(fun));
 }
 
 void Item_tree::clear_selection()
@@ -1506,6 +1513,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
     ) {
         log_tree->debug("Item context menu OPEN: '{}' (ImGui right-button {} over hovered item)", item->get_name(), m_context.OpenXR ? "press" : "release");
         m_popup_item = item;
+        m_popup_target = Popup_target::item;
         m_popup_id_string = fmt::format("{}##{}-popup-menu", item->get_name(), item->get_id());
         m_popup_id = ImGui::GetID(m_popup_id_string.c_str());
         ImGui::OpenPopupEx(
@@ -1514,7 +1522,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         );
     }
 
-    if ((m_popup_item != item) || m_popup_id_string.empty()) {
+    if ((m_popup_target != Popup_target::item) || (m_popup_item != item) || m_popup_id_string.empty()) {
         return;
     }
 
@@ -1661,11 +1669,13 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             m_popup_item.reset();
             m_popup_id_string.clear();
             m_popup_id = 0;
+            m_popup_target = Popup_target::none;
         }
     } else {
         m_popup_item.reset();
         m_popup_id_string.clear();
         m_popup_id = 0;
+        m_popup_target = Popup_target::none;
     }
     ImGui::PopStyleVar(1);
 }
@@ -1807,13 +1817,17 @@ void Item_tree::root_popup_menu()
     const bool context_menu_click = m_context.OpenXR
         ? ImGui::IsMouseClicked(ImGuiMouseButton_Right)
         : ImGui::IsMouseReleased(ImGuiMouseButton_Right);
+    // Paste is the only built-in empty-area entry; it needs a root that takes children.
+    const bool root_takes_paste = is_tree_prim(m_root);
     if (
         window_hovered &&
         context_menu_click &&
-        !m_popup_item
+        !m_popup_item &&
+        (root_takes_paste || !m_root_context_menu_callbacks.empty())
     ) {
         log_tree->debug("Root context menu OPEN: '{}' (ImGui right-button {} over hovered window)", m_root->get_name(), m_context.OpenXR ? "press" : "release");
         m_popup_item = m_root;
+        m_popup_target = Popup_target::root;
         m_popup_id_string = fmt::format("{}##{}-popup-menu", m_root->get_name(), m_root->get_id());
         m_popup_id = ImGui::GetID(m_popup_id_string.c_str());
         ImGui::OpenPopupEx(
@@ -1822,7 +1836,7 @@ void Item_tree::root_popup_menu()
         );
     }
 
-    if ((m_popup_item != m_root) || m_popup_id_string.empty()) {
+    if ((m_popup_target != Popup_target::root) || m_popup_id_string.empty()) {
         return;
     }
 
@@ -1834,26 +1848,17 @@ void Item_tree::root_popup_menu()
     if (begin_popup_context_item) {
         bool close{false};
 
-        if (!m_item_context_menu_callbacks.empty()) {
-            for (const Context_menu_callback& cb : m_item_context_menu_callbacks) {
-                cb(m_root, m_operations, close);
+        for (const Context_menu_callback& cb : m_root_context_menu_callbacks) {
+            cb(m_root, m_operations, close);
+        }
+        if (root_takes_paste) {
+            if (!m_root_context_menu_callbacks.empty()) {
+                ImGui::Separator();
             }
-            ImGui::Separator();
-        }
-
-        const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
-        const bool clipboard_is_empty = clipboard_contents.empty();
-        if (clipboard_is_empty) {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::MenuItem("Paste")) {
-            const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(m_root);
-            if (hierarchy) {
-                m_context.clipboard->try_paste(hierarchy, hierarchy->get_child_count());
+            const bool clipboard_is_empty = m_context.clipboard->get_contents().empty();
+            if (ImGui::MenuItem("Paste", nullptr, false, !clipboard_is_empty)) {
+                m_context.clipboard->try_paste(m_root, m_root->get_child_count());
             }
-        }
-        if (clipboard_is_empty) {
-            ImGui::EndDisabled();
         }
 
         ImGui::EndPopup();
@@ -1861,11 +1866,13 @@ void Item_tree::root_popup_menu()
             m_popup_item.reset();
             m_popup_id_string.clear();
             m_popup_id = 0;
+            m_popup_target = Popup_target::none;
         }
     } else {
         m_popup_item.reset();
         m_popup_id_string.clear();
         m_popup_id = 0;
+        m_popup_target = Popup_target::none;
     }
     ImGui::PopStyleVar(1);
 }
@@ -2692,6 +2699,7 @@ void Item_tree::imgui_tree(float ui_scale)
         m_popup_item.reset();
         m_popup_id_string.clear();
         m_popup_id = 0;
+        m_popup_target = Popup_target::none;
     }
 
     ImGui::EndTable();

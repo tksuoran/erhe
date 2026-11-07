@@ -1115,7 +1115,12 @@ auto Selection::on_viewport_select_try_ready() -> bool
     const auto& content      = m_hover_scene_view->get_hover(Hover_entry::content_slot);
     const auto& tool         = m_hover_scene_view->get_hover(Hover_entry::tool_slot);
     const auto& rendertarget = m_hover_scene_view->get_hover(Hover_entry::rendertarget_slot);
-    m_hover_mesh    = content.scene_mesh_weak;
+    {
+        const std::shared_ptr<erhe::scene::Mesh> content_mesh = content.scene_mesh_weak.lock();
+        m_hover_node = content_mesh
+            ? std::shared_ptr<erhe::scene::Node>{content_mesh}
+            : std::dynamic_pointer_cast<erhe::scene::Node>(content.item_weak.lock());
+    }
     m_hover_content = content.valid;
     m_hover_tool    = tool.valid;
 
@@ -1203,15 +1208,15 @@ auto Selection::on_viewport_select() -> bool
         return on_viewport_select_bone(m_context.input_state->control);
     }
 
-    auto shared_hover_mesh = m_hover_mesh.lock();
-    if (!shared_hover_mesh) {
+    auto shared_hover_node = m_hover_node.lock();
+    if (!shared_hover_node) {
         return false;
     }
 
-    const bool was_selected = is_in_selection(shared_hover_mesh);
+    const bool was_selected = is_in_selection(shared_hover_node);
     if (m_context.input_state->control) {
         if (m_hover_content) {
-            toggle_mesh_selection(shared_hover_mesh, was_selected, false);
+            toggle_node_selection(shared_hover_node, was_selected, false);
             return true;
         }
         return false;
@@ -1228,9 +1233,9 @@ auto Selection::on_viewport_select() -> bool
             clear_selection();
         }
     } else {
-        erhe::Item_host* const host = shared_hover_mesh->get_item_host();
+        erhe::Item_host* const host = shared_hover_node->get_item_host();
         m_range_selection.reset(host);
-        toggle_mesh_selection(shared_hover_mesh, was_selected, true);
+        toggle_node_selection(shared_hover_node, was_selected, true);
     }
     return true;
 }
@@ -1241,14 +1246,14 @@ auto Selection::on_viewport_select_toggle() -> bool
         return on_viewport_select_bone(true);
     }
 
-    auto shared_hover_mesh = m_hover_mesh.lock();
-    if (!shared_hover_mesh) {
+    auto shared_hover_node = m_hover_node.lock();
+    if (!shared_hover_node) {
         return false;
     }
 
     if (m_hover_content) {
-        const bool was_selected = is_in_selection(shared_hover_mesh);
-        toggle_mesh_selection(shared_hover_mesh, was_selected, false);
+        const bool was_selected = is_in_selection(shared_hover_node);
+        toggle_node_selection(shared_hover_node, was_selected, false);
         return true;
     }
     return false;
@@ -1265,14 +1270,14 @@ auto Selection::on_viewport_select_xr() -> bool
     if (is_bone_mode()) {
         return on_viewport_select_bone(false);
     }
-    const std::shared_ptr<erhe::scene::Mesh> shared_hover_mesh = m_hover_mesh.lock();
-    if (!shared_hover_mesh || !m_hover_content) {
+    const std::shared_ptr<erhe::scene::Node> shared_hover_node = m_hover_node.lock();
+    if (!shared_hover_node || !m_hover_content) {
         return false;
     }
-    // Clear the scene's selection, then select the mesh unless it was selected.
-    const bool was_selected = is_in_selection(shared_hover_mesh);
-    m_range_selection.reset(shared_hover_mesh->get_item_host());
-    toggle_mesh_selection(shared_hover_mesh, was_selected, true);
+    // Clear the scene's selection, then select the node unless it was selected.
+    const bool was_selected = is_in_selection(shared_hover_node);
+    m_range_selection.reset(shared_hover_node->get_item_host());
+    toggle_node_selection(shared_hover_node, was_selected, true);
     return true;
 }
 
@@ -1302,7 +1307,7 @@ auto Selection::clear_selection() -> bool
     return true;
 }
 
-void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& mesh, const bool was_selected, const bool clear_others)
+void Selection::toggle_node_selection(const std::shared_ptr<erhe::scene::Node>& picked, const bool was_selected, const bool clear_others)
 {
     Scoped_selection_change selection_change{*this};
 
@@ -1310,9 +1315,9 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
 
     // A card proxy stands in for the subtree its model prim replaced, so a
     // pick of it selects that prim (doc/erhe/usd_compatibility.md, "Draw modes").
-    erhe::scene::Node* node = mesh.get();
-    if ((mesh->get_flag_bits() & erhe::Item_flags::draw_mode_proxy) != 0) {
-        const std::shared_ptr<erhe::scene::Xformable> owner = mesh->get_parent_node();
+    erhe::scene::Node* node = picked.get();
+    if ((picked->get_flag_bits() & erhe::Item_flags::draw_mode_proxy) != 0) {
+        const std::shared_ptr<erhe::scene::Xformable> owner = picked->get_parent_node();
         if (owner) {
             node = owner.get();
         }
@@ -1320,7 +1325,7 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
 
     // Prefab instance subtrees are sealed: picking anything inside an
     // instance selects the outermost instance root instead of the picked
-    // mesh node. The interior's lock_viewport_selection is part of the seal
+    // picked node. The interior's lock_viewport_selection is part of the seal
     // and must not block that redirection; the redirected target's own lock
     // flags still apply.
     erhe::scene::Node* const prefab_instance_root = get_outermost_prefab_instance_node(node);
@@ -1328,8 +1333,8 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
     erhe::scene::Node* const target_node = redirected ? prefab_instance_root : node;
 
     if (!redirected) {
-        const bool mesh_lock_viewport_select = test_bit_set(mesh->get_flag_bits(), editor::Editor_item_flags::lock_viewport_selection);
-        if (mesh_lock_viewport_select) {
+        const bool picked_lock_viewport_select = test_bit_set(picked->get_flag_bits(), editor::Editor_item_flags::lock_viewport_selection);
+        if (picked_lock_viewport_select) {
             return;
         }
     }
@@ -1348,10 +1353,10 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
         // Deselect within the clicked node's scene only; other scenes (and
         // non-hosted items) keep their selection.
         clear_selection(target_node->get_item_host());
-        if (!effective_was_selected && mesh) {
+        if (!effective_was_selected) {
             add = true;
         }
-    } else if (mesh) {
+    } else {
         if (effective_was_selected) {
             // Ctrl-click on a selected item that is not the active one makes
             // it active and leaves the selection alone; on the active one it

@@ -8,7 +8,7 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=5,
+    version=9,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
@@ -60,7 +60,16 @@ struct("Debug_visualizations_style",
         field("selection_minor_width",             Float, added_in=1, default="2.0f",   short_desc="Selection Minor Width"),
         field("sphere_step_count",                 Int,   added_in=1, default="80",     short_desc="Sphere Step Count"),
 
-        field("light_line_width",                  Float, added_in=1, default="8.0f",   short_desc="Light Line Width"),
+        field("light_line_width",                  Float, added_in=1, default="8.0f",   short_desc="Light Line Width", long_desc="Directional light shadow frustum box and planes"),
+        # Every visualized light: a camera-facing ring of rays in the light color.
+        field("light_ray_count",                   Int,   added_in=6, default="12",     short_desc="Light Ray Count"),
+        field("light_ray_inner_radius",            Float, added_in=6, default="8.0f",   short_desc="Light Ray Inner Radius", long_desc="Pixels from the light position to the start of each ray"),
+        field("light_ray_length",                  Float, added_in=6, default="8.0f",   short_desc="Light Ray Length",       long_desc="Ray length in pixels"),
+        field("light_ray_width",                   Float, added_in=6, default="2.0f",   short_desc="Light Ray Width",        long_desc="Ray line width in pixels"),
+        field("spot_light_ring",                   Bool,  added_in=7, default="true",   short_desc="Spot Light Ring",        long_desc="Draw the rays of the ring that are seen inside the spot light's cone"),
+        field("spot_light_cone",                   Bool,  added_in=7, default="false",  short_desc="Spot Light Cone",        long_desc="Draw the edges of the spot light's outer cone out to its range"),
+        field("spot_light_cylinder",               Bool,  added_in=9, default="true",   short_desc="Spot Light Cylinder",    long_desc="Draw a cylinder behind the spot light's cone tip, as wide as the ring, half as long"),
+        field("point_light_range_sphere",          Bool,  added_in=8, default="true",   short_desc="Point Light Range Sphere", long_desc="Draw a sphere of the point light's range"),
         field("camera_line_width",                 Float, added_in=1, default="8.0f",   short_desc="Camera Line Width"),
         field("camera_line_color",                 Vec4,  added_in=1, default="1.0f, 1.0f, 1.0f, 1.0f", short_desc="Camera Line Color"),
         field("layout_line_width",                 Float, added_in=1, default="2.0f",   short_desc="Layout Line Width"),

@@ -415,7 +415,8 @@ void Primitive_renderer::add_sphere(
     const glm::vec3&                    local_center,
     const float                         local_radius,
     const erhe::scene::Transform* const camera_world_from_node,
-    const int                           step_count
+    const int                           step_count,
+    const Sphere_lines                  lines
 )
 {
     const erhe::math::Sphere sphere = erhe::math::transform(
@@ -488,9 +489,11 @@ void Primitive_renderer::add_sphere(
             add_arc(minor_line_renderer, t_mid + t_cut, glm::two_pi<float>() - (2.0f * t_cut), minor_color, minor_thickness);
         }
     };
-    add_great_circle(axis_x, axis_y);
-    add_great_circle(axis_y, axis_z);
-    add_great_circle(axis_x, axis_z);
+    if (lines == Sphere_lines::all) {
+        add_great_circle(axis_x, axis_y);
+        add_great_circle(axis_y, axis_z);
+        add_great_circle(axis_x, axis_z);
+    }
 
     if (!camera_outside) {
         return; // no silhouette without a camera or from inside the sphere
@@ -561,7 +564,8 @@ void Primitive_renderer::add_cone(
     const float                   bottom_radius,
     const float                   top_radius,
     const glm::vec3&              camera_position_in_world,
-    const int                     side_count
+    const int                     side_count,
+    const Cone_lines              lines
 )
 {
     constexpr glm::vec3 axis_x       {1.0f, 0.0f, 0.0f};
@@ -625,18 +629,20 @@ void Primitive_renderer::add_cone(
             minor_line_renderer.add_lines(m, minor_color, { { p0, p1 } });
         }
     };
-    if (bottom_radius > 0.0f) {
-        add_structural_line(bottom_visible, bottom_center - bottom_radius * axis_x, bottom_center + bottom_radius * axis_x);
-        add_structural_line(bottom_visible, bottom_center - bottom_radius * axis_z, bottom_center + bottom_radius * axis_z);
-    }
-    if (top_radius > 0.0f) {
-        add_structural_line(top_visible, top_center - top_radius * axis_x, top_center + top_radius * axis_x);
-        add_structural_line(top_visible, top_center - top_radius * axis_z, top_center + top_radius * axis_z);
-    }
-    add_structural_line(false, bottom_center, top_center);
-    for (const float phi : { 0.0f, glm::half_pi<float>(), glm::pi<float>(), 3.0f * glm::half_pi<float>() }) {
-        const glm::vec3 radial = (std::cos(phi) * axis_x) + (std::sin(phi) * axis_z);
-        add_structural_line(facing(phi), bottom_center + bottom_radius * radial, top_center + top_radius * radial);
+    if (lines == Cone_lines::all) {
+        if (bottom_radius > 0.0f) {
+            add_structural_line(bottom_visible, bottom_center - bottom_radius * axis_x, bottom_center + bottom_radius * axis_x);
+            add_structural_line(bottom_visible, bottom_center - bottom_radius * axis_z, bottom_center + bottom_radius * axis_z);
+        }
+        if (top_radius > 0.0f) {
+            add_structural_line(top_visible, top_center - top_radius * axis_x, top_center + top_radius * axis_x);
+            add_structural_line(top_visible, top_center - top_radius * axis_z, top_center + top_radius * axis_z);
+        }
+        add_structural_line(false, bottom_center, top_center);
+        for (const float phi : { 0.0f, glm::half_pi<float>(), glm::pi<float>(), 3.0f * glm::half_pi<float>() }) {
+            const glm::vec3 radial = (std::cos(phi) * axis_x) + (std::sin(phi) * axis_z);
+            add_structural_line(facing(phi), bottom_center + bottom_radius * radial, top_center + top_radius * radial);
+        }
     }
 
     // Rim circles: visible parts (cap visible or lateral surface facing the

@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace erhe::graphics { class Command_buffer; }
@@ -103,6 +104,23 @@ public:
     // need per-view mesh flags, which do not exist.
     [[nodiscard]] static auto skins_shown(const Debug_visualizations_settings& settings, Scene_root& scene_root) -> bool;
 
+    // A light is drawn when the view's Lights mode admits it and it has the
+    // Show Debug Visualizations flag; Light_hover_provider picks the same set.
+    [[nodiscard]] static auto is_light_visualized(const Debug_visualizations_settings& settings, const erhe::scene::Light& light) -> bool;
+    // Where a light's ring is drawn and picked: its position, or for a
+    // directional light the window-space vanishing point of its source
+    // direction (nullopt behind the camera or in an orthographic view).
+    [[nodiscard]] static auto get_light_visual_position(const erhe::scene::Light& light, const erhe::scene::Camera& camera) -> std::optional<glm::vec3>;
+    // A spot light with a positive range and cone angle; any other spot draws like a point light.
+    [[nodiscard]] static auto has_spot_cone(const erhe::scene::Light& light) -> bool;
+    // World radii (inner, outer) of a light's ray ring seen from camera_position.
+    [[nodiscard]] static auto get_light_ring_radii(
+        const Debug_visualizations_style& style,
+        Scene_view&                       scene_view,
+        const glm::vec3&                  camera_position,
+        const glm::vec3&                  light_position
+    ) -> std::optional<glm::vec2>;
+
     // Bone display settings (solid style, bone width) live in the editor-global
     // Debug_visualizations_style, not here: they drive Bone_visualization, whose
     // proxies are shared by every scene view.
@@ -117,7 +135,6 @@ private:
         std::shared_ptr<erhe::scene::Camera> selected_camera;
         const erhe::scene::Light*            light           {nullptr};
         glm::vec4                            light_color     {0};
-        glm::vec4                            half_light_color{0};
     };
 
     void shadow_debug            (const Render_context& render_context);
@@ -137,8 +154,10 @@ private:
 
     void directional_light_visualization (const Light_visualization_context& context);
     void shadow_frustum_fit_visualization(const Render_context& context);
-    void point_light_visualization       (const Light_visualization_context& context);
-    void spot_light_visualization        (const Light_visualization_context& context);
+    void light_ray_ring                  (const Light_visualization_context& context);
+    void spot_light_cone                 (const Light_visualization_context& context);
+    void spot_light_cylinder             (const Light_visualization_context& context);
+    void point_light_range_sphere        (const Light_visualization_context& context);
     void camera_visualization            (const Render_context& render_context, const erhe::scene::Camera* camera);
     void layout_visualization            (const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout_data& layout);
     void selection_visualization         (const Render_context& context);

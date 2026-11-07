@@ -627,8 +627,9 @@ auto Scene_root::make_browser_window(
     // header row (which creates under the scene root node). Any prim parents
     // any prim (doc/erhe/usd_compatibility_design.md C5), so each entry inserts the
     // new item, undoably, as the last child of the clicked prim - a Camera
-    // under a Material as readily as a Material under an Xform.
-    m_node_tree_window->add_item_context_menu_callback(
+    // under a Material as readily as a Material under an Xform. The empty
+    // area offers it too, creating under the scene root node.
+    const Item_tree::Context_menu_callback create_menu =
         [this, &context](
             const std::shared_ptr<erhe::Item_base>& item,
             std::vector<std::function<void()>>&     deferred_operations,
@@ -711,8 +712,9 @@ auto Scene_root::make_browser_window(
                     ImGui::SetTooltip("%s", child_refusal.value().c_str());
                 }
             }
-        }
-    );
+        };
+    m_node_tree_window->add_item_context_menu_callback(create_menu);
+    m_node_tree_window->add_root_context_menu_callback(create_menu);
     m_node_tree_window->add_item_context_menu_callback(
         [this, &context](
             const std::shared_ptr<erhe::Item_base>& item,

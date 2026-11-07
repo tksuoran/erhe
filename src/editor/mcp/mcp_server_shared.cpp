@@ -374,6 +374,7 @@ auto transform_reference_mode_lc(const Transform_reference_mode mode) -> const c
         case Transform_reference_mode::local:     return "local";
         case Transform_reference_mode::reference: return "reference";
         case Transform_reference_mode::selection: return "selection";
+        case Transform_reference_mode::bbox:      return "bbox";
         case Transform_reference_mode::global:
         default:                                  return "global";
     }

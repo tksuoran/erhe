@@ -109,6 +109,8 @@ public:
     void set_item_callback              (std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
     void set_hover_callback             (std::function<void()> fun);
     void add_item_context_menu_callback (Context_menu_callback fun);
+    // Entries of the empty-area context menu; the callbacks get the root as item.
+    void add_root_context_menu_callback (Context_menu_callback fun);
 
     auto drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& node) -> bool;
 
@@ -277,6 +279,7 @@ private:
     std::function<bool(const std::shared_ptr<erhe::Item_base>&)> m_item_callback;
     std::function<void()>                                        m_hover_callback;
     std::vector<Context_menu_callback>                           m_item_context_menu_callbacks;
+    std::vector<Context_menu_callback>                           m_root_context_menu_callbacks;
 
     std::shared_ptr<Operation>         m_operation;
     std::vector<std::function<void()>> m_operations;
@@ -284,7 +287,10 @@ private:
     bool                               m_toggled_open{false};
     std::weak_ptr<erhe::Item_base>     m_last_focus_item;
     std::shared_ptr<erhe::Item_base>   m_hovered_item;
+    // Which menu the open popup is: a row's root item and the empty area share m_popup_item.
+    enum class Popup_target : unsigned int { none, item, root };
     std::shared_ptr<erhe::Item_base>   m_popup_item;
+    Popup_target                       m_popup_target{Popup_target::none};
     std::string                        m_popup_id_string;
     unsigned int                       m_popup_id{0};
     bool                               m_shift_down_range_selection_started{false};

@@ -171,7 +171,9 @@ public:
     // arcs minor style; the visible/hidden split is exact, so visible arc
     // endpoints lie on the silhouette circle. Without a camera (or with the
     // camera inside the sphere) the great circles are drawn fully in minor
-    // style and the silhouette is omitted.
+    // style and the silhouette is omitted. Sphere_lines::silhouette draws only
+    // the silhouette circle (nothing without a camera or from inside the sphere).
+    enum class Sphere_lines : unsigned int { all, silhouette };
     void add_sphere(
         const erhe::scene::Transform& transform,
         const glm::vec4&              major_color,
@@ -181,7 +183,8 @@ public:
         const glm::vec3&              local_center,
         float                         local_radius,
         const erhe::scene::Transform* camera_world_from_node = nullptr,
-        int                           step_count = 40
+        int                           step_count = 40,
+        Sphere_lines                  lines = Sphere_lines::all
     );
 
     // Cone (or truncated cone) on the local Y axis. Draws the rim circles,
@@ -191,7 +194,9 @@ public:
     // split at the silhouette azimuths, a cap cross line is visible when its
     // cap is, a lateral generatrix when the lateral surface faces the camera
     // at its azimuth; visible parts use major style, the rest and the axis
-    // (inside the cone) minor style.
+    // (inside the cone) minor style. Cone_lines::edges draws only the rim
+    // circles and the silhouette generatrices.
+    enum class Cone_lines : unsigned int { all, edges };
     void add_cone(
         const erhe::scene::Transform& transform,
         const glm::vec4&              major_color,
@@ -203,7 +208,8 @@ public:
         float                         bottom_radius,
         float                         top_radius,
         const glm::vec3&              camera_position_in_world,
-        int                           side_count
+        int                           side_count,
+        Cone_lines                    lines = Cone_lines::all
     );
 
     // Tapered capsule on the local Y axis: cap spheres of bottom_radius at

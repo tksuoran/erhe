@@ -2,6 +2,7 @@
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #include "renderers/programs.hpp"
+#include "scene/headlamp.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_render_state.hpp"
 #include "windows/status_line.hpp"
@@ -338,14 +339,6 @@ public:
     void set_overdraw_max_count(uint32_t max_count) override;
     void set_overdraw_mode     (Overdraw_mode mode);
 
-    // Headlamp (doc/editor/tools.md "Headset headlamp"): a spot light 15 cm
-    // above the eye midpoint in head space (a child of the root camera),
-    // aimed along the view direction, at the front of the scene's light
-    // layer so it is the first spot light (the only light under the
-    // Scene Control window's "Headlamp only" lighting). Session only: never
-    // saved. Main thread, prepare phase (the Scene Control window queues these).
-    // The first enable creates it; disable takes it out of the scene.
-    void set_headlamp_enabled  (bool enabled);
 
     // Main thread, end of editor init: the init screen becomes the loading
     // screen. While the headset has no scene (the startup scene loads) the
@@ -356,7 +349,6 @@ public:
     // more and the headset still has no scene, the screen reports that the
     // file could not be loaded instead.
     void set_loading_screen    (std::unique_ptr<Init_status_display> loading_screen, std::string_view file_name);
-    void set_headlamp_intensity(float intensity);
     // Any thread: the newest retired counted frame's statistics; height is
     // the views' rows together (view count x eye image height).
     [[nodiscard]] auto get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics override;
@@ -367,7 +359,7 @@ public:
 
     // The headset's part of the Scene Control window (OpenXR only).
     void scene_control_imgui(erhe::imgui::Imgui_host* imgui_host);
-    [[nodiscard]] auto get_headlamp_cast_shadow() const -> bool { return m_headlamp_cast_shadow; }
+    [[nodiscard]] auto get_headlamp_cast_shadow() const -> bool { return m_headlamp.get_cast_shadow(); }
 
     void add_finger_input(const Finger_point& finger_point);
 
@@ -420,7 +412,6 @@ private:
     // scene the headset renders.
     auto resolve_pending_scene_and_camera() -> bool override;
     void setup_root_camera();
-    void attach_headlamp();
     // Prepare phase: the loading screen's lines from the startup load's
     // handle (status and percentage, or the error when it failed).
     void update_loading_screen();
@@ -576,11 +567,8 @@ private:
     bool                                                 m_loading_failed_shown{false};
     uint64_t                                             m_loading_screen_frame_count{0}; // prepare phases since set_loading_screen()
     std::string                                          m_loading_status_line;           // the status line shown, to set it on change only
-    // Headlamp: created on the first enable (set_headlamp_enabled()).
-    std::shared_ptr<erhe::scene::Light>                  m_headlamp;
-    bool                                                 m_headlamp_enabled    {false};
-    float                                                m_headlamp_intensity  {500.0f};
-    bool                                                 m_headlamp_cast_shadow{true};
+    // Carried by the root camera (head space), 15 cm above the eye midpoint.
+    Headlamp                                             m_headlamp{m_app_context};
     Hit_test_timing                                      m_hit_test_timing;      // prepare phase
     Hit_test_timing                                      m_id_pick_timing;       // render phase
     erhe::scene_renderer::Overdraw_view_state            m_overdraw_view_state;

@@ -42,6 +42,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::renderer`: `Primitive_renderer::Cone_lines` (`all`, `edges`) and the
+  `add_cone()` parameter `lines` (default `all`); `edges` draws only the rim
+  circles and the silhouette generatrices.
+- `erhe::renderer`: `Primitive_renderer::Sphere_lines` (`all`, `silhouette`)
+  and the `add_sphere()` parameter `lines` (default `all`); `silhouette`
+  draws only the view silhouette circle.
 - `erhe::graphics`: SPIR-V cache records: `Spirv_cache_record`,
   `Spirv_cache::get_key()`, `get_module()`, `has_record()`, `get_record()`,
   `put_record()`, `Spirv_cache_module_stats`, `get_module_stats()`,

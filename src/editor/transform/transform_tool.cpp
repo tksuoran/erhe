@@ -421,23 +421,6 @@ void Transform_tool::window_imgui()
                 }
             }
         });
-        p.add_entry("Gizmo Position", [this, &settings]() {
-            int position = static_cast<int>(settings.gizmo_position);
-            bool changed = false;
-            for (int i = 0, end = IM_ARRAYSIZE(c_transform_gizmo_position_strings); i < end; ++i) {
-                if (i > 0) {
-                    ImGui::SameLine();
-                }
-                changed = ImGui::RadioButton(c_transform_gizmo_position_strings[i], &position, i) || changed;
-            }
-            if (changed) {
-                const Transform_gizmo_position new_position = static_cast<Transform_gizmo_position>(position);
-                if (settings.gizmo_position != new_position) {
-                    settings.gizmo_position = new_position;
-                    on_reference_settings_changed();
-                }
-            }
-        });
         p.show_entries();
     }
 
@@ -547,9 +530,30 @@ void Transform_tool_shared::apply_reference_frame()
         const std::shared_ptr<erhe::scene::Node> node = reference_node.lock();
         if (node) {
             world_from_anchor_initial_state = node->world_from_node_transform();
+            anchor_from_origin              = erhe::scene::Trs_transform{};
         }
     }
     world_from_anchor = world_from_anchor_initial_state;
+}
+
+auto Transform_tool_shared::get_world_from_origin() const -> erhe::scene::Trs_transform
+{
+    return component_mode ? world_from_anchor : (world_from_anchor * anchor_from_origin);
+}
+
+auto Transform_tool_shared::get_world_from_origin_initial_state() const -> erhe::scene::Trs_transform
+{
+    return component_mode ? world_from_anchor_initial_state : (world_from_anchor_initial_state * anchor_from_origin);
+}
+
+auto Transform_tool_shared::has_origin_offset() const -> bool
+{
+    return !component_mode && (anchor_from_origin.get_translation() != glm::vec3{0.0f});
+}
+
+void Transform_tool_shared::set_anchor_from_origin(const erhe::scene::Trs_transform& updated_world_from_origin)
+{
+    world_from_anchor = updated_world_from_origin * erhe::scene::Trs_transform::inverse(anchor_from_origin);
 }
 
 void Transform_tool::on_reference_settings_changed()
@@ -568,7 +572,8 @@ auto Transform_tool::resolve_transform_target(
     const std::shared_ptr<erhe::scene::Node>& node
 ) -> std::shared_ptr<erhe::scene::Node>
 {
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+    // The node's own mesh only: get_mesh() also returns a child mesh.
+    const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
     if (!mesh || !mesh->skin) {
         return node;
     }
@@ -610,6 +615,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         : s_no_selection;
 
     vec3 cumulative_world_translation{0.0f, 0.0f, 0.0f};
+    vec3 cumulative_origin_translation{0.0f, 0.0f, 0.0f};
     quat cumulative_world_rotation   {1.0f, 0.0f, 0.0f, 0.0f};
     vec3 cumulative_world_scale      {0.0f, 0.0f, 0.0f};
     std::size_t node_count{0};
@@ -698,15 +704,16 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         refresh_from_root(node.get());
     }
 
-    const bool use_bounding_box_center = (shared.settings.gizmo_position == Transform_gizmo_position::bounding_box_center);
+    const bool use_bounding_box_center = shared.settings.is_bbox();
     for (const std::shared_ptr<erhe::scene::Node>& node : m_target_nodes) {
         const Trs_transform& world_from_node = node->world_from_node_transform();
 
-        // The gizmo position of this target (Transform_gizmo_position): the
+        // The gizmo position of this target (BBox mode): the
         // world bounding box center of its mesh, else its origin.
         glm::vec3 position = world_from_node.get_translation();
         if (use_bounding_box_center) {
-            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+            // The node's own mesh only: get_mesh() also returns a child mesh.
+            const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
             if (mesh) {
                 const erhe::math::Aabb aabb = mesh->get_aabb_world();
                 if (aabb.is_valid_3d()) {
@@ -714,7 +721,8 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
                 }
             }
         }
-        cumulative_world_translation += position;
+        cumulative_world_translation  += position;
+        cumulative_origin_translation += world_from_node.get_translation();
         cumulative_world_scale       += world_from_node.get_scale();
         // Rotations do not average: the anchor orientation is one target's
         // orientation, and that target is the representative one (the active
@@ -748,6 +756,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         }
     }
 
+    shared.anchor_from_origin = erhe::scene::Trs_transform{};
     if (node_count == 0) {
         shared.world_from_anchor_initial_state = erhe::scene::Trs_transform{};
         // The Transform window's numeric-edit state is rebuilt from the
@@ -760,11 +769,21 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
             m_edit_state = Edit_state{};
         }
     } else {
+        const float count = static_cast<float>(node_count);
         shared.world_from_anchor_initial_state.set_trs(
-            cumulative_world_translation / static_cast<float>(node_count),
+            cumulative_world_translation / count,
             cumulative_world_rotation,
-            cumulative_world_scale / static_cast<float>(node_count)
+            cumulative_world_scale / count
         );
+        // The origin frame differs from the anchor by translation only; a zero
+        // scale axis cannot express the offset, so the gizmo stays at the origin.
+        const vec3 anchor_scale = cumulative_world_scale / count;
+        const vec3 offset       = (cumulative_origin_translation - cumulative_world_translation) / count;
+        if ((offset != vec3{0.0f}) && (anchor_scale.x != 0.0f) && (anchor_scale.y != 0.0f) && (anchor_scale.z != 0.0f)) {
+            shared.anchor_from_origin.set_translation((glm::conjugate(cumulative_world_rotation) * offset) / anchor_scale);
+        } else if (offset != vec3{0.0f}) {
+            shared.world_from_anchor_initial_state.set_translation(cumulative_origin_translation / count);
+        }
     }
 
     // Finalize the reference frame: in Reference mode the chosen reference node
@@ -832,6 +851,12 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
     }
 
     shared.world_from_anchor.set(updated_world_from_anchor);
+}
+
+void Transform_tool::adjust_from_origin(const Trs_transform& updated_world_from_origin)
+{
+    // The anchor rides along with the origin frame at its fixed offset.
+    adjust(updated_world_from_origin.get_matrix() * shared.anchor_from_origin.get_inverse_matrix());
 }
 
 void Transform_tool::adjust_translation(const glm::vec3 translation)
@@ -1029,7 +1054,7 @@ void Transform_tool::apply_translation_edit(const glm::vec3 translation, const b
         return;
     }
     if (!local || (shared.entries.size() > 1)) {
-        adjust_translation(translation - shared.world_from_anchor_initial_state.get_translation());
+        adjust_translation(translation - shared.get_world_from_origin_initial_state().get_translation());
         return;
     }
     // In local mode the edited value is in parent space; apply it directly
@@ -1043,7 +1068,7 @@ void Transform_tool::apply_translation_edit(const glm::vec3 translation, const b
     parent_from_node.set_translation(translation);
     entry.node->set_parent_from_node(parent_from_node);
     enforce_channel_locks(*entry.node, entry.parent_from_node_before);
-    shared.world_from_anchor.set(entry.node->world_from_node());
+    shared.set_anchor_from_origin(entry.node->world_from_node_transform());
     update_transforms();
 }
 
@@ -1073,7 +1098,10 @@ void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool lo
             node->set_world_from_node(world_from_node);
             enforce_channel_locks(*node, entry.parent_from_node_before);
         }
-        shared.world_from_anchor.set_rotation(rotation);
+        // Each node turns about its own origin, so the origin frame stays put.
+        Trs_transform world_from_origin = shared.get_world_from_origin_initial_state();
+        world_from_origin.set_rotation(rotation);
+        shared.set_anchor_from_origin(world_from_origin);
     } else {
         for (auto& entry : shared.entries) {
             auto& node = entry.node;
@@ -1084,7 +1112,7 @@ void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool lo
             parent_from_node.set_rotation(rotation);
             node->set_parent_from_node(parent_from_node);
             enforce_channel_locks(*node, entry.parent_from_node_before);
-            shared.world_from_anchor.set(node->world_from_node());
+            shared.set_anchor_from_origin(node->world_from_node_transform());
         }
     }
     update_transforms();
@@ -1105,9 +1133,9 @@ void Transform_tool::apply_scale_edit(const glm::vec3 scale, const bool local)
         return;
     }
     if (!local || (shared.entries.size() > 1)) {
-        Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
-        updated_world_from_anchor.set_scale(scale);
-        adjust(updated_world_from_anchor.get_matrix());
+        Trs_transform updated_world_from_origin = shared.get_world_from_origin_initial_state();
+        updated_world_from_origin.set_scale(scale);
+        adjust_from_origin(updated_world_from_origin);
         return;
     }
     // In local mode the edited value is in parent space; apply it directly
@@ -1121,7 +1149,7 @@ void Transform_tool::apply_scale_edit(const glm::vec3 scale, const bool local)
     parent_from_node.set_scale(scale);
     entry.node->set_parent_from_node(parent_from_node);
     enforce_channel_locks(*entry.node, entry.parent_from_node_before);
-    shared.world_from_anchor.set(entry.node->world_from_node());
+    shared.set_anchor_from_origin(entry.node->world_from_node_transform());
     update_transforms();
 }
 
@@ -1140,9 +1168,9 @@ void Transform_tool::apply_skew_edit(const glm::vec3 skew, const bool local)
         return;
     }
     if (!local || (shared.entries.size() > 1)) {
-        Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
-        updated_world_from_anchor.set_skew(skew);
-        adjust(updated_world_from_anchor.get_matrix());
+        Trs_transform updated_world_from_origin = shared.get_world_from_origin_initial_state();
+        updated_world_from_origin.set_skew(skew);
+        adjust_from_origin(updated_world_from_origin);
         return;
     }
     // In local mode the edited value is in parent space; apply it directly
@@ -1155,7 +1183,7 @@ void Transform_tool::apply_skew_edit(const glm::vec3 skew, const bool local)
     Trs_transform parent_from_node = entry.parent_from_node_before;
     parent_from_node.set_skew(skew);
     entry.node->set_parent_from_node(parent_from_node);
-    shared.world_from_anchor.set(entry.node->world_from_node());
+    shared.set_anchor_from_origin(entry.node->world_from_node_transform());
     update_transforms();
 }
 
@@ -1758,6 +1786,9 @@ void Transform_tool::tool_render(const Render_context& context)
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
         visualizations->render(context, m_hover_handle, m_active_handle);
+        if (shared.has_origin_offset() && !shared.entries.empty()) {
+            visualizations->render_origin_indicator(context, shared.get_world_from_origin());
+        }
     }
 
     if (m_context.editor_settings->transform_tool.hover_preview) {
@@ -2917,15 +2948,16 @@ Edit_state::Edit_state(
         m_first_node        = shared.entries.front().node;
         m_world_from_parent = m_first_node->world_from_parent();
         m_use_world_mode    = !shared.settings.is_local() || m_multiselect;
+        shared.world_from_origin = shared.get_world_from_origin();
 
         m_transform =
             m_use_world_mode
-                ? &shared.world_from_anchor
+                ? &shared.world_from_origin
                 : &shared.entries.front().node->parent_from_node_transform();
 
         m_rotation_transform =
             (m_use_world_mode || m_multiselect)
-                ? &shared.world_from_anchor
+                ? &shared.world_from_origin
                 : &shared.entries.front().node->parent_from_node_transform();
     }
 

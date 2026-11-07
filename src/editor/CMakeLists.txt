@@ -630,6 +630,8 @@ erhe_target_sources_grouped(
     scene/four_view.hpp
     scene/frame_controller.cpp
     scene/frame_controller.hpp
+    scene/headlamp.cpp
+    scene/headlamp.hpp
     scene/ik_properties.cpp
     scene/ik_properties.hpp
     scene/mesh_intersect.cpp
@@ -735,6 +737,8 @@ erhe_target_sources_grouped(
     tools/clipboard.hpp
     tools/debug_visualizations.cpp
     tools/debug_visualizations.hpp
+    tools/light_hover_provider.cpp
+    tools/light_hover_provider.hpp
     tools/joint_constraint_visualization.cpp
     tools/joint_constraint_visualization.hpp
     tools/joint_visualization.cpp

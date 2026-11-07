@@ -563,6 +563,11 @@ void Scene_view::reset_hover()
     }
 }
 
+auto Analytic_hover_provider::get_analytic_hover_slot() const -> uint32_t
+{
+    return Hover_entry::tool_slot;
+}
+
 void Scene_view::update_hover_with_analytic_tools()
 {
     const std::optional<glm::vec3> origin_opt    = get_control_ray_origin_in_world();
@@ -579,7 +584,12 @@ void Scene_view::update_hover_with_analytic_tools()
             continue;
         }
         entry->analytic_provider = provider;
-        merge_hover(Hover_entry::tool_slot, entry.value());
+        const uint32_t slot = provider->get_analytic_hover_slot();
+        if (provider->get_analytic_hover_merge() == Analytic_hover_merge::replace) {
+            set_hover(slot, entry.value());
+        } else {
+            merge_hover(slot, entry.value());
+        }
     }
 }
 

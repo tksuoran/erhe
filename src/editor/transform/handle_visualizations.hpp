@@ -95,6 +95,9 @@ public:
     // Draws all handles visible in the view being rendered. hover / active
     // brighten and thicken the corresponding handle.
     void render(const Render_context& context, Handle hover_handle, Handle active_handle);
+    // The node origin when the gizmo sits elsewhere: axes at the origin and a
+    // cone beside the gizmo pointing at it. Drawn only, never picked.
+    void render_origin_indicator(const Render_context& context, const erhe::scene::Trs_transform& world_from_origin);
 
     // Analytic hit test with the control ray; returns the nearest handle
     // within pick range, or nullopt. Only handles that render() would draw

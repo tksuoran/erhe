@@ -156,6 +156,15 @@ public:
     // via Transform_tool_settings::use_anchor_orientation().
     void apply_reference_frame();
 
+    // The node-origin frame (doc/editor/transform.md "Gizmo position"): the
+    // anchor is the gizmo's place; the origin frame is what the Transform
+    // window shows and numeric edits change.
+    [[nodiscard]] auto get_world_from_origin              () const -> erhe::scene::Trs_transform;
+    [[nodiscard]] auto get_world_from_origin_initial_state() const -> erhe::scene::Trs_transform;
+    [[nodiscard]] auto has_origin_offset                  () const -> bool;
+    // Places the anchor at its fixed offset from an updated origin frame.
+    void set_anchor_from_origin(const erhe::scene::Trs_transform& world_from_origin);
+
     Transform_tool_settings                settings;
     std::vector<Transform_entry>           entries;
     // Arbitrary node whose orientation drives the gizmo in Reference mode.
@@ -164,6 +173,10 @@ public:
     float                                  initial_drag_position_distance_to_camera{0.0f};
     erhe::scene::Trs_transform             world_from_anchor_initial_state;
     erhe::scene::Trs_transform             world_from_anchor;
+    // Translation-only, in anchor space; identity unless the gizmo sits at a bounding box center.
+    erhe::scene::Trs_transform             anchor_from_origin;
+    // Refreshed by Edit_state each draw; the Transform window's world-mode values point here.
+    erhe::scene::Trs_transform             world_from_origin;
     bool                                   touched             {false};
     // True when a mesh component selection (vertex/edge/face) is driving the gizmo
     // instead of node selection. When set, shared.entries is empty and the gizmo
@@ -357,6 +370,7 @@ public:
 
     // Interface for Subtool usage
     void adjust            (const glm::mat4& updated_world_from_anchor);
+    void adjust_from_origin(const erhe::scene::Trs_transform& updated_world_from_origin);
     void adjust_translation(glm::vec3 translation);
     void adjust_rotation   (glm::vec3 center_of_rotation, glm::quat rotation);
     void adjust_scale      (glm::vec3 center_of_scale,    glm::vec3 scale);

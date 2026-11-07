@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -17,10 +18,21 @@ class Scene_view;
 // entry into Hover_entry::tool_slot by ray-t, next to the raytrace and ID
 // render sources. Analytic entries carry valid / position / normal and name
 // their provider; they carry no mesh.
+// How a provider's entry enters its slot: the nearer hit along the ray, or
+// in place of what the slot holds (an x-ray overlay drawn over the content).
+enum class Analytic_hover_merge : unsigned int {
+    nearest,
+    replace
+};
+
 class Analytic_hover_provider
 {
 public:
     virtual ~Analytic_hover_provider() noexcept = default;
+
+    // The Hover_entry slot the entries go to (default: Hover_entry::tool_slot).
+    [[nodiscard]] virtual auto get_analytic_hover_slot () const -> uint32_t;
+    [[nodiscard]] virtual auto get_analytic_hover_merge() const -> Analytic_hover_merge { return Analytic_hover_merge::nearest; }
 
     // Shown by hover readouts in place of a mesh name.
     [[nodiscard]] virtual auto get_analytic_hover_name() const -> const std::string& = 0;

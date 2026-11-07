@@ -4,6 +4,7 @@
 #include "tools/tool.hpp"
 #include "tools/tool_window.hpp"
 #include "scene/frame_controller.hpp"
+#include "scene/headlamp.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/windows/graph.hpp"
@@ -193,6 +194,7 @@ public:
     void update_fixed_step    (const Time_context& time_context);
 
     [[nodiscard]] auto get_camera() const -> erhe::scene::Camera*;
+    [[nodiscard]] auto get_headlamp() -> Headlamp& { return m_headlamp; }
     void set_camera (erhe::scene::Camera* camera, erhe::scene::Node* node = nullptr);
     void translation(int64_t timestamp_ns, int tx, int ty, int tz);
     void rotation   (int64_t timestamp_ns, int rx, int ry, int rz);
@@ -255,7 +257,11 @@ private:
 #endif
 
     Tool_window                           m_window;
+    // Carried by the camera this tool controls (non-OpenXR; Scene Control window).
+    Headlamp                              m_headlamp;
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message>    m_items_removed_subscription;
     Fly_camera_turn_command               m_turn_command;
     Fly_camera_tumble_command             m_tumble_command;
     Fly_camera_track_command              m_track_command;

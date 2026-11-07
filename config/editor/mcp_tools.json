@@ -7370,7 +7370,8 @@
             "world",
             "local",
             "reference",
-            "selection"
+            "selection",
+            "bbox"
           ],
           "type": "string"
         },
@@ -7395,7 +7396,7 @@
     "name": "set_transform_reference_mode"
   },
   {
-    "description": "Read the transform tool's current state: reference frame / transform space (reference_mode: global/local/reference/selection), the chosen reference_node (for reference mode), edge_normal_blend (selection mode), the mesh transform_mode (move/extrude/...), whether a mesh-component selection is driving the gizmo (component_mode), the selected node count, and the resolved world-space anchor_frame (origin + orientation the gizmo and local-space numeric edits operate in). Complements set_transform_reference_mode / set_transform_mode.",
+    "description": "Read the transform tool's current state: reference frame / transform space (reference_mode: global/local/reference/selection/bbox), the chosen reference_node (for reference mode), edge_normal_blend (selection mode), the mesh transform_mode (move/extrude/...), whether a mesh-component selection is driving the gizmo (component_mode), the selected node count, and the resolved world-space anchor_frame (origin + orientation the gizmo and local-space numeric edits operate in). Complements set_transform_reference_mode / set_transform_mode.",
     "inputSchema": {
       "properties": {},
       "type": "object"
