@@ -93,8 +93,9 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   (`doc/plans/audit_2026_09_30_followups.md`).
 - macOS: with the Vulkan SDK `setup-env.sh` sourced, SDL's Cocoa surface
   creation gets MoltenVK's `vkGetInstanceProcAddr` and every GPU test and the
-  editor segfault (not fixed in code); the editor's SIGTERM exit is slow (not
-  investigated).
+  editor segfault (not fixed in code). Measure the editor's SIGTERM exit on
+  macOS: exit now waits only for the running shader stats jobs
+  (`doc/editor/shader_analytics.md` "Session programs").
 - Mesh editing: no weld after an in-place edit; per-facet texcoords with
   seams keep no LOD chain; a reparent that changes only the carrier is not
   re-resolved.
@@ -180,6 +181,11 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
   Dell `displayUpdateGranularity`; Vulkan present calibration and prewarm on
   macOS; tier W on Linux.
 - CI: LeakSanitizer is not enabled.
+- SPIRV-Tools is pinned at upstream `19e35eae` with SPIRV-Headers from its
+  DEPS, ahead of the `known_good.json` of the `tksuoran/glslang` commit
+  (`CMakeLists.txt`); built and tested on macOS only. Check the Windows,
+  Linux and Android CI builds, and move back to glslang's pair once glslang
+  includes the fix.
 
 ## Rendering features
 
