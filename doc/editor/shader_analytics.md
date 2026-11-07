@@ -49,6 +49,12 @@ service's results merge into the same `Shader_analytics`, by program.
 
 ## Session programs
 
+The session program list (`Shader_session_programs`), its background
+analysis (`Shader_analytics_service`) and the Shader Variants window read the
+programs' SPIR-V modules, so they are built only with `ERHE_SPIRV` (the
+Vulkan and Metal backends); an OpenGL or `none` build has neither, and MCP
+`analyze_shader_programs` refuses there.
+
 `Shader_session_programs` (`src/editor/renderers/shader_session_programs.*`)
 owns `erhe::graphics::Device::set_shader_program_observer()`, which reports
 every program the device builds from SPIR-V, compiled or served from the

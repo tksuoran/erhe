@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-class Shader_analytics_config;
+struct Shader_analytics_config; // generated (config/definitions), a struct
 
 namespace erhe::graphics { class Shader_stages_create_info; }
 namespace tf             { class Executor; }

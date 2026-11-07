@@ -16,7 +16,9 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_render_state.hpp"
 #include "renderers/shader_analytics.hpp"
+#if defined(ERHE_SPIRV)
 #include "renderers/shader_analytics_service.hpp"
+#endif
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
@@ -1165,9 +1167,10 @@ void Scene_view::shader_debug_toolbar_combo()
 void Scene_view::shader_cost_unavailable_entry()
 {
     // doc/editor/shader_analytics.md "Enabling"
-    const Shader_analytics_service* const service = m_context.shader_analytics_service;
     const char* label   = "Shader cost: analytics off";
     const char* tooltip = "Shader analytics are off (editor settings shader_analytics.enabled, --no-shader-analytics, or not available on this platform)";
+#if defined(ERHE_SPIRV)
+    const Shader_analytics_service* const service = m_context.shader_analytics_service;
     if (service != nullptr) {
         const Shader_analytics_service::Status status = service->get_status();
         if (status.mali_core.empty() && status.powervr_core.empty()) {
@@ -1178,6 +1181,7 @@ void Scene_view::shader_cost_unavailable_entry()
             tooltip = "The offline compilers are analyzing the shader programs; the cost entries appear when the first results land";
         }
     }
+#endif
     ImGui::Separator();
     ImGui::Selectable(label, false, ImGuiSelectableFlags_Disabled);
     ImGui::SetItemTooltip("%s", tooltip);

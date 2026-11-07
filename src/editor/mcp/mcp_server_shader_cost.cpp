@@ -5,15 +5,19 @@
 #include "mcp/mcp_server_shared.hpp"
 #include "app_context.hpp"
 #include "renderers/shader_analytics.hpp"
+#if defined(ERHE_SPIRV)
 #include "renderers/shader_analytics_service.hpp"
 #include "renderers/shader_session_programs.hpp"
 #include "windows/shader_variants_window.hpp"
+#endif
 
 #include "erhe_file/file.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/fragment_invocation_capture.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
+#if defined(ERHE_SPIRV)
 #include "erhe_graphics/shader_variant_report.hpp"
+#endif
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
@@ -139,7 +143,9 @@ auto Mcp_server::query_fragment_invocations(const json& args) -> std::string
         pipeline_total.ranges      += 1;
     }
 
+#if defined(ERHE_SPIRV)
     erhe::graphics::Shader_variant_report* const report = device->get_shader_variant_report();
+#endif
     const auto share = [total_invocations](const uint64_t invocations) {
         return (total_invocations > 0) ? static_cast<double>(invocations) / static_cast<double>(total_invocations) : 0.0;
     };
@@ -161,10 +167,12 @@ auto Mcp_server::query_fragment_invocations(const json& args) -> std::string
             {"ranges",      program_total->ranges},
             {"pipelines",   program_total->pipelines}
         };
+#if defined(ERHE_SPIRV)
         if (report != nullptr) {
             const std::optional<std::string> id = report->find_program_id(program_total->program, program_total->defines);
             entry["browser_id"] = id.has_value() ? json(id.value()) : json(nullptr);
         }
+#endif
         if (include_defines) {
             entry["defines"] = defines_to_json(program_total->defines);
         }
@@ -234,9 +242,11 @@ auto Mcp_server::query_fragment_invocations(const json& args) -> std::string
         const std::filesystem::path path = std::filesystem::path{browser_directory} / "fragments.js";
         const bool written = erhe::file::write_file_via_temp(path, "window.erhe_shader_fragments = " + escaped + ";\n");
         result["sidecar"] = written ? json(path.generic_string()) : json(nullptr);
+#if defined(ERHE_SPIRV)
         if (written && (m_context.shader_variants_window != nullptr)) {
             m_context.shader_variants_window->request_reload();
         }
+#endif
         if (!written) {
             result["sidecar_error"] = fmt::format("could not write {}", path.generic_string());
         }
@@ -260,6 +270,7 @@ auto Mcp_server::action_load_shader_analytics(const json& args) -> std::string
     }
     // The background analysis (doc/editor/shader_analytics.md); null when off.
     json service = nullptr;
+#if defined(ERHE_SPIRV)
     if (m_context.shader_analytics_service != nullptr) {
         const Shader_analytics_service::Status status = m_context.shader_analytics_service->get_status();
         service = json{
@@ -271,6 +282,7 @@ auto Mcp_server::action_load_shader_analytics(const json& args) -> std::string
             {"failed",       status.failed}
         };
     }
+#endif
     if (!analytics->is_loaded()) {
         return make_json_content(json{{"loaded", false}, {"service", std::move(service)}}).dump();
     }
@@ -302,6 +314,10 @@ auto Mcp_server::action_load_shader_analytics(const json& args) -> std::string
 
 auto Mcp_server::action_analyze_shader_programs(const json& args) -> std::string
 {
+#if !defined(ERHE_SPIRV)
+    static_cast<void>(args);
+    return make_error_content("analyze_shader_programs: this build has no SPIR-V (ERHE_SPIRV off), so no session program list");
+#else
     // doc/editor/shader_analytics.md "Session programs": the programs this
     // session built, analyzed by the offline compilers in background tasks.
     Shader_session_programs* const session_programs = m_context.shader_session_programs;
@@ -369,6 +385,7 @@ auto Mcp_server::action_analyze_shader_programs(const json& args) -> std::string
         {"programs",        std::move(all)},
         {"listed",          std::move(listed)}
     }).dump();
+#endif
 }
 
 } // namespace editor

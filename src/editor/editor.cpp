@@ -103,8 +103,10 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "renderers/prewarm.hpp"
 #include "renderers/shader_analytics.hpp"
+#if defined(ERHE_SPIRV)
 #include "renderers/shader_analytics_service.hpp"
 #include "renderers/shader_session_programs.hpp"
+#endif
 #include "renderers/render_settings.hpp"
 #include "renderers/material_set_factory.hpp"
 #include "renderers/programs.hpp"
@@ -157,7 +159,9 @@
 #include "windows/light_mixer_window.hpp"
 #include "windows/lod_window.hpp"
 #include "windows/scene_control_window.hpp"
+#if defined(ERHE_SPIRV)
 #include "windows/shader_variants_window.hpp"
+#endif
 #include "windows/pvs_window.hpp"
 #include "windows/inventory_window.hpp"
 #include "windows/properties.hpp"
@@ -3099,6 +3103,7 @@ public:
                     m_shader_analytics->apply(std::move(m_startup_shader_analytics.value()));
                     m_startup_shader_analytics.reset();
                 }
+#if defined(ERHE_SPIRV)
                 // Before the programs build, so each one is observed.
                 m_shader_session_programs = std::make_unique<Shader_session_programs>(*m_graphics_device.get());
                 if (
@@ -3109,6 +3114,9 @@ public:
                         m_editor_settings.shader_analytics, *m_shader_session_programs.get(), *m_executor.get(), *m_shader_analytics.get()
                     );
                 }
+#else
+                static_cast<void>(shader_analytics_default);
+#endif
             }
             {
                 ERHE_PROFILE_SCOPE("Programs");
@@ -3463,6 +3471,7 @@ public:
                     conditionally_enable_window_imgui_host(m_window.get(), m_app_context.OpenXR),
                     get_imgui_config_path(m_app_context.OpenXR)
                 );
+#if defined(ERHE_SPIRV)
                 if (m_shader_session_programs) {
                     m_shader_session_programs->start(
                         m_scene_commit_queue,
@@ -3473,6 +3482,7 @@ public:
                 if (m_shader_analytics_service) {
                     m_shader_analytics_service->start(m_scene_commit_queue);
                 }
+#endif
             }
             ERHE_INIT_STEP_END
 
@@ -3604,8 +3614,10 @@ public:
                 m_pvs_window             = std::make_unique<Pvs_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_app_context.pvs_window              = m_pvs_window.get();
                 m_scene_control_window   = std::make_unique<Scene_control_window            >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+#if defined(ERHE_SPIRV)
                 m_shader_variants_window = std::make_unique<Shader_variants_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_graphics_device->get_shader_variant_report(), m_shader_session_programs.get(), m_shader_analytics_service.get());
                 m_app_context.shader_variants_window  = m_shader_variants_window.get();
+#endif
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
                 m_app_context.frame_pacing_observer = &m_frame_pacing_observer;
                 // The pacer's presentation setup follows the window display's
@@ -4363,8 +4375,10 @@ public:
         // Stop the watchdog first so it cannot touch members during teardown.
         stop_main_loop_watchdog();
 
+#if defined(ERHE_SPIRV)
         // Waits for running analysis tasks; no more programs are observed.
         m_shader_analytics_service.reset();
+#endif
 
         // Then the render thread: run() joins the last frame it kicked
         // when the loop ends; a frame still outstanding (run() left by an
@@ -4432,9 +4446,11 @@ public:
         // the task handles cascades through shared_ptr drops to
         // Free_list_allocator::free() on the already-destroyed allocator.
         // Queued shader stats jobs would otherwise all run before wait_for_all() returns.
+#if defined(ERHE_SPIRV)
         if (m_shader_session_programs) {
             m_shader_session_programs->stop();
         }
+#endif
         if (m_executor) {
             m_executor->wait_for_all();
         }
@@ -4491,8 +4507,10 @@ public:
         m_app_context.texel_renderer           = m_texel_renderer        .get();
         m_app_context.shader_variant_cache     = m_shader_variant_cache  .get();
         m_app_context.shader_analytics         = m_shader_analytics      .get();
+#if defined(ERHE_SPIRV)
         m_app_context.shader_analytics_service = m_shader_analytics_service.get();
         m_app_context.shader_session_programs  = m_shader_session_programs.get();
+#endif
         m_app_context.program_interface        = m_program_interface     .get();
         m_app_context.context_window           = m_window                .get();
         m_app_context.brdf_slice               = m_brdf_slice            .get();
@@ -5795,8 +5813,10 @@ public:
     std::unique_ptr<erhe::scene_renderer::Shader_variant_cache>       m_shader_variant_cache;
     std::unique_ptr<Shader_analytics>                                 m_shader_analytics;
     std::optional<Shader_analytics_data>                              m_startup_shader_analytics;
+#if defined(ERHE_SPIRV)
     std::unique_ptr<Shader_session_programs>                          m_shader_session_programs; // outlives the service and the Shader Variants window
     std::unique_ptr<Shader_analytics_service>                         m_shader_analytics_service;
+#endif
     std::unique_ptr<Material_set_factory                  >           m_material_set_factory;
     std::unique_ptr<Programs                              >           m_programs;
     // Declared before the two renderers that hold a reference to it.
@@ -5884,7 +5904,9 @@ public:
     std::unique_ptr<Lod_window                      >        m_lod_window;
     std::unique_ptr<Light_mixer_window              >        m_light_mixer_window;
     std::unique_ptr<Pvs_window                      >        m_pvs_window;
+#if defined(ERHE_SPIRV)
     std::unique_ptr<Shader_variants_window          >        m_shader_variants_window;
+#endif
     std::unique_ptr<Scene_control_window            >        m_scene_control_window;
     std::unique_ptr<Lightmap_texture_window         >        m_lightmap_texture_window;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;

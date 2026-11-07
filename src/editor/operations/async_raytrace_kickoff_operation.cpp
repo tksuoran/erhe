@@ -581,7 +581,6 @@ void pump_finalizes(App_context& context)
 }
 
 void queue_finalize(
-    App_context&                                context,
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::Item_base>&     item,
     const Prepared_full_build                   prepared_full_build
@@ -627,7 +626,7 @@ void Async_raytrace_kickoff_operation::execute(App_context& context)
             continue;
         }
         ++queued_count;
-        queue_finalize(context, scene_root, item, prepared_full_build);
+        queue_finalize(scene_root, item, prepared_full_build);
     }
     std::size_t estimated_byte_count = 0;
     for (const Pending_finalize& pending : s_pending_finalizes) {
@@ -661,7 +660,7 @@ void kickoff_deferred_finalize(App_context& context, const std::shared_ptr<erhe:
         return;
     }
     const std::shared_ptr<Scene_root> scene_root = static_cast<Scene_root*>(item_host)->shared_from_this();
-    queue_finalize(context, scene_root, node->shared_from_this(), Prepared_full_build::skip);
+    queue_finalize(scene_root, node->shared_from_this(), Prepared_full_build::skip);
     pump_finalizes(context);
 }
 
@@ -692,7 +691,7 @@ void queue_prepared_full_build(
         return;
     }
     const std::shared_ptr<Scene_root>                   scene_root = host->shared_from_this();
-    queue_finalize(context, scene_root, mesh->shared_from_this(), mode);
+    queue_finalize(scene_root, mesh->shared_from_this(), mode);
     pump_finalizes(context);
     ++queued_count;
 }

@@ -527,10 +527,6 @@ erhe_target_sources_grouped(
     renderers/offline_compiler.hpp
     renderers/shader_analytics.cpp
     renderers/shader_analytics.hpp
-    renderers/shader_analytics_service.cpp
-    renderers/shader_analytics_service.hpp
-    renderers/shader_session_programs.cpp
-    renderers/shader_session_programs.hpp
     renderers/id_pass_prepared.hpp
     renderers/id_renderer.hpp
     renderers/light_mesh.cpp
@@ -853,8 +849,6 @@ erhe_target_sources_grouped(
     windows/pvs_window.hpp
     windows/scene_control_window.cpp
     windows/scene_control_window.hpp
-    windows/shader_variants_window.cpp
-    windows/shader_variants_window.hpp
     windows/window_placement.cpp
     windows/window_placement.hpp
     windows/inventory_slot_payload.hpp
@@ -923,6 +917,20 @@ else ()
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         xr/null_headset_view.cpp
         xr/null_headset_view.hpp
+    )
+endif ()
+
+# The session program list, its offline compiler analysis and the Shader
+# Variants window read the SPIR-V modules (doc/editor/shader_analytics.md).
+if (ERHE_SPIRV)
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        renderers/shader_analytics_service.cpp
+        renderers/shader_analytics_service.hpp
+        renderers/shader_session_programs.cpp
+        renderers/shader_session_programs.hpp
+        windows/shader_variants_window.cpp
+        windows/shader_variants_window.hpp
     )
 endif ()
 
