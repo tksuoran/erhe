@@ -2746,6 +2746,11 @@ auto Scene_root::is_prepared_status_pending() const -> bool
     return m_prepared_keys->is_pending();
 }
 
+auto Scene_root::is_prepared_status_stale() const -> bool
+{
+    return m_prepared_keys->is_stale();
+}
+
 auto Scene_root::get_prepared_keys() -> Prepared_keys&
 {
     return *m_prepared_keys;

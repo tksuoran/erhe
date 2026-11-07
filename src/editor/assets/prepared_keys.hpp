@@ -32,11 +32,9 @@ enum class Prepared_key_change : unsigned int
     target         // the status was asked for another target
 };
 
-// The status of one scene's stores, kept current from its change sites
-// (R8.12, R3.7): a change marks it stale, the next prepare phase starts a key
-// check on a worker (Scene_export_mode::key_check, the scene stays usable),
-// and when that check leaves the Scene key open a status job (scene read-only)
-// computes it. Owned by its Scene_root.
+// The status of one scene's stores (doc/editor/prepared_assets.md "Status"):
+// a change site marks it stale; request_update() asks for a key check, which
+// the next prepare phase starts. Owned by its Scene_root.
 class Prepared_keys
 {
 public:
@@ -55,8 +53,11 @@ public:
     [[nodiscard]] auto get_target() const -> const std::string&;
     [[nodiscard]] auto get_prepared_asset_path() const -> const std::filesystem::path&;
 
+    // Main thread: the next prepare phase checks the keys when the status is stale.
+    void request_update();
+
     // Main thread, M2 (Scene_save_service::update()): finishes a done key
-    // check and starts the next check the changes ask for.
+    // check and starts a requested one.
     void update(App_context& context, const std::shared_ptr<Scene_root>& scene_root);
     // Main thread, after an Export of the scene into prepared_asset_path (empty:
     // the default location) wrote the Scene item of this key (hex): a check of the
@@ -69,7 +70,9 @@ public:
     // Main thread.
     [[nodiscard]] auto get_status () const -> const std::shared_ptr<const Prepared_status_report>&;
     [[nodiscard]] auto get_error  () const -> const std::string&;
-    // A change is not reflected yet: a check or a status job runs or waits to run.
+    // A change came after the status was computed.
+    [[nodiscard]] auto is_stale   () const -> bool;
+    // An update is requested and not finished, or a status job runs or waits to run.
     [[nodiscard]] auto is_pending () const -> bool;
     // Main thread: a key check or a status job of the scene runs or is queued.
     [[nodiscard]] auto is_job_pending() const -> bool;
@@ -89,6 +92,7 @@ private:
     std::shared_ptr<const Prepared_status_report> m_status;
     std::string                                   m_error;
     std::size_t                                   m_status_job_count{0};
+    bool                                          m_update_requested{false};
     // The last Export's Scene key, valid while m_change_serial is m_exported_serial.
     std::string                                   m_exported_scene_key;
     std::string                                   m_exported_target;
@@ -105,7 +109,7 @@ private:
 
 // Main thread: Refresh (Properties, MCP get_prepared_status refresh): every
 // open editor asset is listed again at its next use - another editor or a file
-// copy may have written it (R5.6) - and the scene's status is computed again.
+// copy may have written it (R5.6) - and an update of the scene's status is requested.
 void refresh_prepared_status(App_context& context, Scene_root& scene_root);
 
 }

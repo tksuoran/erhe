@@ -507,14 +507,15 @@ public:
     void add_unresolved_source(const std::filesystem::path& path);
     [[nodiscard]] auto get_unresolved_sources() const -> const std::vector<std::filesystem::path>&;
 
-    // The status of the scene's stores, kept current by Prepared_keys from the
-    // change sites (doc/editor/prepared_assets.md "Status"). set_prepared_status
+    // The status of the scene's stores, which Prepared_keys marks stale at the
+    // change sites and computes on request (doc/editor/prepared_assets.md "Status"). set_prepared_status
     // and mark_prepared_status_pending: a Scene_save_service status job; main thread only.
     void set_prepared_status        (const std::shared_ptr<const Prepared_status_report>& status, const std::string& error);
     void mark_prepared_status_pending();
     [[nodiscard]] auto get_prepared_status        () const -> const std::shared_ptr<const Prepared_status_report>&;
     [[nodiscard]] auto get_prepared_status_error  () const -> const std::string&;
     [[nodiscard]] auto is_prepared_status_pending () const -> bool;
+    [[nodiscard]] auto is_prepared_status_stale   () const -> bool;
     [[nodiscard]] auto get_prepared_keys() -> Prepared_keys&;
 
     // The world-space form of the scene (doc/editor/world_space_bake.md "Two forms").

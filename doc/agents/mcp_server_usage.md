@@ -877,8 +877,8 @@ texture keys`, `encoding basis texture items`, `making texture items`,
 `writing scene item` or `copying items`.
 
 `get_prepared_status` (`scene_name`; `target` `pc` (default) or `quest`; `path` as for
-`prepare_scene`; `refresh`) answers at once with the status the editor keeps
-current: `{scene_name, target, pending, error, prepared_status{files[{source,
+`prepare_scene`; `update`; `refresh`) answers at once with the last computed
+status: `{scene_name, target, pending, stale, error, prepared_status{files[{source,
 editor_asset, role, depth, location, editor_asset_bytes}], scene_name, target,
 editor_asset, editor_asset_bytes, prepared_asset, prepared_asset_exists,
 prepared_asset_bytes, prepared_item_count, scene_key, prepared_scene_key,
@@ -886,9 +886,9 @@ matches, mismatch, kinds{<kind>{present, missing, stored_count,
 stored_bytes, unreferenced_count, unreferenced_bytes}},
 inline_primitive_count, asked_key_count, computed_hash_count, drop,
 dropped_count, bytes_before_drop, compute_ms}}` (doc/editor/prepared_assets.md
-"Status"). Poll it after an edit until `pending` is false (`prepared_status` is
-absent while it is true); `refresh: true` lists the stores again for a change
-another process made. `drop_prepared_items` (the same arguments plus `drop`:
+"Status"). An edit only marks it `stale`: pass `update: true` once, then poll
+until `pending` is false (`prepared_status` is absent while it is true);
+`refresh: true` also lists the stores again for a change another process made. `drop_prepared_items` (the same arguments plus `drop`:
 `unreferenced`, `target`, `all` or `prepared_asset`) queues a status job of the
 store container in the scene save service and returns its job at once; the
 scene is read-only while it runs (a drop removes what it names; a drop changes

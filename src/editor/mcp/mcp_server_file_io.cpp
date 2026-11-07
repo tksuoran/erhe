@@ -472,7 +472,7 @@ auto Mcp_server::query_world_space_meshes(const json& args) -> std::string
     }).dump();
 }
 
-// The status Prepared_keys keeps current (doc/editor/prepared_assets.md "Status"); answered at once.
+// The status Prepared_keys keeps (doc/editor/prepared_assets.md "Status"); answered at once, update / refresh request a check.
 auto Mcp_server::action_get_prepared_status(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
@@ -500,12 +500,15 @@ auto Mcp_server::action_get_prepared_status(const json& args) -> std::string
     keys.set_target(target_name, path);
     if (args.value("refresh", false)) {
         refresh_prepared_status(m_context, *scene_root);
+    } else if (args.value("update", false)) {
+        keys.request_update();
     }
     const bool pending = scene_root->is_prepared_status_pending();
     json reply{
         {"scene_name", scene_root->get_name()},
         {"target",     target_name},
         {"pending",    pending},
+        {"stale",      scene_root->is_prepared_status_stale()},
         {"error",      keys.get_error()}
     };
     const std::shared_ptr<const Prepared_status_report>& status = keys.get_status();

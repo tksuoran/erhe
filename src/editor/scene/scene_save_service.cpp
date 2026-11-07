@@ -104,7 +104,7 @@ void request_prepared_status(
 void on_prefab_instances_reloaded(App_context& context, const std::shared_ptr<Scene_root>& scene_root)
 {
     static_cast<void>(context);
-    log_export->info("Prefab instances of '{}' reloaded: its status is computed again", scene_root->get_name());
+    log_export->info("Prefab instances of '{}' reloaded: its status is out of date", scene_root->get_name());
     scene_root->get_prepared_keys().on_change(Prepared_key_change::prefab_reload);
 }
 

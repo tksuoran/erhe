@@ -629,7 +629,7 @@ def main():
         return 2
     start = time.monotonic()
     cache_before = pav.cache_directory_state()
-    work = tempfile.mkdtemp(prefix="prepared_asset_bistro_verify_", dir=args.work)
+    work = os.path.realpath(tempfile.mkdtemp(prefix="prepared_asset_bistro_verify_", dir=args.work))
     print(f"work directory {work}", flush=True)
     images = os.path.join(work, "images")
     os.makedirs(images, exist_ok=True)

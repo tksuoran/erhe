@@ -553,7 +553,7 @@ namespace {
 
 void Properties::prepared_status_properties(Scene_root& scene_root)
 {
-    // The status follows the change sites (Prepared_keys); the drops queue a status job.
+    // The change sites mark the status stale (Prepared_keys); Update and Refresh compute it, the drops queue a status job.
     if (
         scene_root.get_source_path().empty() ||
         scene_root.is_prepared_run() ||
@@ -572,6 +572,13 @@ void Properties::prepared_status_properties(Scene_root& scene_root)
             return;
         }
         const bool pending = root->is_prepared_status_pending();
+        const bool stale   = root->is_prepared_status_stale();
+        ImGui::BeginDisabled(pending || !stale);
+        if (ImGui::Button("Update")) {
+            root->get_prepared_keys().request_update();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
         ImGui::BeginDisabled(root->get_prepared_keys().is_job_pending());
         if (ImGui::Button("Refresh")) {
             refresh_prepared_status(m_context, *root);
@@ -580,12 +587,14 @@ void Properties::prepared_status_properties(Scene_root& scene_root)
         ImGui::SameLine();
         if (pending) {
             ImGui::TextUnformatted("checking...");
+        } else if (stale) {
+            ImGui::TextUnformatted(root->get_prepared_status() ? "out of date" : "not computed");
         } else if (!root->get_prepared_status_error().empty()) {
             ImGui::TextUnformatted(root->get_prepared_status_error().c_str());
         } else if (root->get_prepared_status()) {
             ImGui::TextUnformatted("current");
         }
-    }, "The keys the scene asks for against the editor asset and the prepared asset (pc), computed again at every edit they depend on. Refresh lists the stores again, for a change another editor or a file copy made.");
+    }, "The keys the scene asks for against the editor asset and the prepared asset (pc). An edit they depend on marks the status out of date; Update computes it again. Refresh also lists the stores again, for a change another editor or a file copy made.");
 
     const std::shared_ptr<const Prepared_status_report> status = scene_root.get_prepared_status();
     if (status) {

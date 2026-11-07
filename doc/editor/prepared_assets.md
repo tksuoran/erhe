@@ -242,10 +242,10 @@ items made once.
   source, MCP `reload_prefab`) re-clones them with the re-parsed template's
   primitives, so the next Export or status computes their new keys; the
   reload is the change site `on_prefab_instances_reloaded()`
-  (`scene/scene_save_service`), which queues a status job for every scene
-  whose instances it refreshed and that keeps a status (logged "Prefab
-  instances of '<scene>' reloaded: the status (<target>) is computed
-  again"). A closed scene computes them at its next Export.
+  (`scene/scene_save_service`), which marks the status of every scene whose
+  instances it refreshed stale (logged "Prefab instances of '<scene>'
+  reloaded: its status is out of date"). A closed scene computes them at its
+  next Export.
 - Failures (R10.8): before Ensure makes anything, every file is read
   (`ERHE_scene` of its glTF JSON) and its editor asset opened; a file that
   cannot be read fails the Export with "Export of '<scene>' failed: the
@@ -665,10 +665,11 @@ in the reply's `format_notices`. Unit tests: `editor_asset_tests`
 
 ## Status
 
-The status of a scene's stores (R13.1, R8.11) is current at all times
-(R8.12): `Prepared_keys` (`src/editor/assets/prepared_keys`, one per
-`Scene_root`, `Scene_root::get_prepared_keys()`) keeps it, following the
-inputs the keys are computed from (R3.7). Its change sites, all change-driven:
+The status of a scene's stores (R13.1, R8.11) is computed on request:
+`Prepared_keys` (`src/editor/assets/prepared_keys`, one per `Scene_root`,
+`Scene_root::get_prepared_keys()`) keeps the last computed status and marks
+it stale at the change sites of the inputs the keys are computed from (R3.7,
+R8.12). Its change sites, all change-driven:
 
 - `Scene_root::register_mesh` / `unregister_mesh` of a content mesh that is not
   a render proxy (a mesh added or removed, its undo);
@@ -685,11 +686,14 @@ inputs the keys are computed from (R3.7). Its change sites, all change-driven:
   bake (every scene's status is marked, since stores are shared, R10.1);
 - a Refresh, or a status asked for another target or prepared asset path.
 
-A change marks the status stale; nothing is compared or recomputed per frame.
+A change marks the status stale and computes nothing (2026-11-07, user
+decision); the status shown stays the last computed one, flagged stale. An
+update is requested by Update or Refresh in the scene's Properties or by MCP
+`get_prepared_status` `update` / `refresh` (`Prepared_keys::request_update()`).
 `Scene_save_service::update()` serves the scenes' `Prepared_keys` in the
 prepare phase (M2): with no save queued or running and the scene quiescent
-(no operation in flight, no load, no live edit), a stale status starts a key
-check, and the frame stays free of its work (R3.8):
+(no operation in flight, no load, no live edit), a requested update of a
+stale status starts a key check, and the frame stays free of its work (R3.8):
 
 1. On the main thread, `begin_scene_export()` in `Scene_export_mode::key_check`
    collects what the keys read, as Export collects it (the shapes, the
@@ -782,10 +786,11 @@ pure parts (`measure_store_items`, `measure_catalog_items`, `select_drop_keys`,
 
 The scene's Properties, group "Scene Overrides" > "Export", show the status
 `Prepared_keys` keeps (`Scene_root::get_prepared_status()`): "Prepared Status"
-("current", "checking..." while a change is not reflected yet, or the error),
-with Refresh, which lists the stores again for a change no edit of this
-editor reports (another editor writing the same editor asset, R5.6, or a file
-copied over it); "Prepared Asset Matches", "Editor Asset" and "Prepared
+("current", "out of date" after a change, "not computed" before the first
+update, "checking..." while a requested update runs, or the error), with
+Update (enabled while the status is stale) and Refresh, which also lists the
+stores again for a change no edit of this editor reports (another editor
+writing the same editor asset, R5.6, or a file copied over it); "Prepared Asset Matches", "Editor Asset" and "Prepared
 Asset" (path and size), a row per kind ("Mesh Items", "World-Space Mesh
 Items", "BVH Items", "Texture Items", "Basis Texture Items", "Scene Items"),
 and "Drop" with Drop Unreferenced, Drop PC Items, Drop All Items and Delete
@@ -839,13 +844,16 @@ items`, `making texture items`,
 total are cells) or `copying items` (and for Bake World-Space Meshes and a
 `rebake` Export `loading the world-space form`), as the status line shows it.
 
-`get_prepared_status` (arguments `target`, `pc` by default, `path` and
-`refresh`) answers at once with the status of "Status":
-`{scene_name, target, pending, error, prepared_status{...}}`, where `pending`
-is true while a change is not reflected yet (a check or a status job runs or
-waits to run; a client polls until it is false) and `prepared_status` is
-absent meanwhile; a target or path other than the last one switches the
-status to them, and `refresh` is the Properties Refresh. `drop_prepared_items`
+`get_prepared_status` (arguments `target`, `pc` by default, `path`,
+`update` and `refresh`) answers at once with the status of "Status":
+`{scene_name, target, pending, stale, error, prepared_status{...}}`, where
+`stale` is true when a change came after `prepared_status` was computed,
+`update` requests an update (the Properties Update) and `pending` is true
+while a requested update has not finished (a check or a status job runs or
+waits to run; a client passes `update` once and polls until it is false);
+`prepared_status` is absent while pending. A target or path other than the
+last one switches the status to them (stale until an update), and `refresh`
+is the Properties Refresh. `drop_prepared_items`
 (argument `target`) queues a status job with the drop and reports through
 `get_save_status` like an Export: a done job carries `prepared_status{...}`
 (doc/agents/mcp_server_usage.md "Saving scenes").
@@ -1072,8 +1080,8 @@ any failure:
 - After a `set_mesh_attribute_values` move of one torus vertex an Export
   makes one mesh item, its BVH item and one Scene item; after `undo` an
   Export makes none and has the first Scene key.
-- `get_prepared_status`, polled until nothing is pending and never asked to
-  refresh, after the second Export: no item missing, the prepared asset
+- `get_prepared_status` with `update`, polled until nothing is pending and
+  never asked to refresh, after the second Export: no item missing, the prepared asset
   matches, the Export's Scene key, both paths and sizes; after the vertex
   edit: one mesh item, its BVH item and the Scene item missing, no match;
   after undo and Export: matches, with the edit's mesh item, BVH item and
@@ -1309,8 +1317,9 @@ erhe-saved, and checks:
 - in a new process a second Export makes nothing (and writes the prepared asset anew); `prefab_a` with
   its own export settings (`raytrace_bvh` off) logs that one setting with
   both values, and the host's value applies (R10.5);
-- a Save of an edit of `prefab_b` opened as a scene queues the host's status
-  again, which then misses one mesh item and does not match; MCP
+- a Save of an edit of `prefab_b` opened as a scene marks the host's status
+  stale and starts no key check; an update then misses one mesh item and
+  does not match; MCP
   `reload_prefab` after restoring the file matches again (R10.6);
 - `bake_static_to_world_space` with `instancing` `duplicate` makes six
   World-space mesh items in the host's editor asset, none in the prefabs';
@@ -1336,6 +1345,9 @@ erhe-saved, and checks:
   scene's library holds no key for it); a USD prefab source is exported as
   the open scene holds it but its editor asset reads no `ERHE_scene`; Bake
   World-Space Meshes does not read the dependency files first.
+- The status computes only on request (Update, Refresh, MCP `update`); a
+  live refresh beside Refresh in the export settings, which the user turns
+  on, would compute it again after each change.
 - An open scene does not load its editor asset's PVS item: after a new
   session's Bake World-Space Meshes the open scene has no PVS until a bake;
   a prepared run's PVS bits are read whole (no page streaming from an item).

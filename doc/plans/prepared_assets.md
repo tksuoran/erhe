@@ -117,8 +117,9 @@ are in `doc/plans/prepared_assets_design.md`. It extends
   changes the keys as a saved one does and Export exports what is on
   screen.
 - R3.7 An edit that changes source content, a node's placement or an
-  export setting recomputes exactly the keys that cover it, at the edit
-  (change-driven, `AGENTS.md` 'No "update each frame" patterns').
+  export setting marks the scene's status stale at the edit (change-driven,
+  `AGENTS.md` 'No "update each frame" patterns'); the keys are computed
+  again when an update is requested (R8.12; 2026-11-07, user decision).
 - R3.8 Computing all keys of a scene costs far less than making the items
   (target: Bistro in under 2 seconds on the desktop). Key computation,
   lookup and storing run in the background: the scene is usable while they
@@ -344,7 +345,9 @@ Two changes to existing behaviour that the items rely on.
 - R8.10 PVS culling applies in a viewport that draws the world-space form.
 - R8.11 The editor reports the editor asset's path, its size, the size per
   item kind and target, and the count and size of unreferenced items.
-- R8.12 The status of a scene (R13.1) is current at all times (R3.7).
+- R8.12 The status of a scene (R13.1) is computed on request (a button
+  where it is shown, an asynchronous MCP request) and shows whether a change
+  came since (R3.7).
 - R8.13 The user can drop the unreferenced items, all items of one target,
   or all items, from an editor asset; dropped items are made again on
   demand, and the file gives the space back.
@@ -426,8 +429,8 @@ referenced materials are defined in (`ERHE_asset_reference`,
   that use it; the variants the open scene does not ask for are
   unreferenced from its view and are kept (R3.3).
 - R10.6 A reload of a prefab's instances (a Save of the prefab source,
-  MCP `reload_prefab`) is the change site (R3.7) that recomputes the keys
-  of every open scene that instantiates it. A scene that was closed finds
+  MCP `reload_prefab`) is the change site (R3.7) that marks the status of
+  every open scene that instantiates it stale. A scene that was closed finds
   the change at its next open through R3.6.
 - R10.7 Ensure (R9.2) makes the items of the files a scene depends on
   before the scene's own, deepest prefab first.

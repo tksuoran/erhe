@@ -319,8 +319,8 @@ class Editor:
         return status
 
     def status(self, scene, drop=None, target="pc", refresh=False, timeout=600.0):
-        """The status the editor keeps current (get_prepared_status, polled until no change is
-        pending; no Refresh), or a drop_prepared_items job polled to its end and its prepared_status."""
+        """The status computed on request (get_prepared_status with update, polled until it is not
+        pending; Refresh only with refresh), or a drop_prepared_items job polled to its end and its prepared_status."""
         if drop is not None:
             job_id = self.call("drop_prepared_items", {"scene_name": scene, "drop": drop, "target": target})["job_id"]
             job = self.finish_export(job_id)
@@ -330,12 +330,12 @@ class Editor:
             return job.get("prepared_status", {})
         self.wait_idle()
         arguments = {"scene_name": scene, "target": target}
-        if refresh:
-            arguments["refresh"] = True
+        arguments["refresh" if refresh else "update"] = True
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             reply = self.call("get_prepared_status", arguments)
             arguments.pop("refresh", None)
+            arguments.pop("update", None)
             if not reply.get("pending"):
                 if "prepared_status" not in reply:
                     raise RuntimeError(f"no status of {scene}: {reply.get('error', '')}")
@@ -993,7 +993,7 @@ def phase_export(args, work):
               json.dumps(editor.scene_settings(scene).get("export_settings"))[:200])
         editor.wait_idle()
         deadline = time.monotonic() + 60.0
-        reply = editor.call("get_prepared_status", {"scene_name": scene})
+        reply = editor.call("get_prepared_status", {"scene_name": scene, "update": True})
         while reply.get("pending") and (time.monotonic() < deadline):
             time.sleep(0.05)
             reply = editor.call("get_prepared_status", {"scene_name": scene})
@@ -1153,9 +1153,18 @@ def phase_reexport_and_open(args, work, source, source_images, first_status):
         editor.wait_idle()
         after = editor.call("get_mesh_attribute_values", {"scene_name": scene, "node_name": "torus", "domain": "vertex", "indices": [0], "attributes": ["position"]})
         check("the MCP edit moved the torus vertex", json.dumps(position) != json.dumps(after), json.dumps(edit)[:200])
+        # The edit marks the status stale and computes nothing until an update is requested.
+        time.sleep(0.5)
+        unrequested = editor.call("get_prepared_status", {"scene_name": scene})
+        check(
+            "status after the vertex edit, before an update is requested: stale, not pending, the earlier status still shown",
+            (unrequested.get("stale") is True) and (unrequested.get("pending") is False) and
+            (status_kind(unrequested.get("prepared_status", {}), "local_mesh").get("missing") == 0),
+            json.dumps({k: unrequested.get(k) for k in ("stale", "pending", "error")})
+        )
         prepared_status = editor.status(scene)
         check(
-            "status after the vertex edit, with no Refresh: one mesh item and its BVH item missing, the prepared asset does not match",
+            "status after the vertex edit, with an update and no Refresh: one mesh item and its BVH item missing, the prepared asset does not match",
             (status_kind(prepared_status, "local_mesh").get("missing") == 1) and (status_kind(prepared_status, "local_mesh").get("present") == 3) and
             (status_kind(prepared_status, "raytrace_bvh").get("missing") == 1) and (status_kind(prepared_status, "raytrace_bvh").get("present") == 3) and
             (status_kind(prepared_status, "scene").get("missing") == 1) and prepared_status.get("matches") is False,
@@ -2572,9 +2581,9 @@ def phase_world_space(args, work):
         check("world: Export leaves the node tree as authored and the form valid",
               (node_tree(editor, scene) == tree_before) and world_status(editor, scene).get("available"))
 
-        # R8.12: right after the Export the status is current with no Refresh (the Export's Scene key).
+        # R8.12: right after the Export an update needs no status job (the Export's Scene key).
         exported_status = editor.status(scene)
-        check("world: the status after the Export matches with its Scene key and no request",
+        check("world: the status after the Export matches with its Scene key and no status job",
               exported_status.get("matches") is True and (exported_status.get("scene_key") == first_scene_key) and
               (status_kind(exported_status, "world_mesh").get("missing") == 0), status_text(exported_status))
 
@@ -3192,7 +3201,7 @@ def phase_several_files(args, work):
               counts_text(status))
         check("R10.5: only the differing setting is logged", log.count("has export setting") == 1, str(log.count("has export setting")))
 
-        # R10.6: a Save of the prefab source reloads the instances and computes the host's kept status again.
+        # R10.6: a Save of the prefab source reloads the instances and marks the host's status stale.
         state = editor.status(scene)
         check("R10.6: the host's status matches before the prefab edit", state.get("matches"), status_text(state))
         original_b = os.path.join(work, "prefab_b_original.glb")
@@ -3206,12 +3215,13 @@ def phase_several_files(args, work):
         editor.wait_idle()
         editor.save(name_b, prefab_b)
         editor.wait_idle()
-        deadline = time.monotonic() + 60.0
-        while ("Key check of 'host'" not in log_since(mark)) and (time.monotonic() < deadline):
-            time.sleep(0.1)
+        time.sleep(0.5)
         log = log_since(mark)
-        check("R10.6: the Save of the prefab source recomputes the status of the scene that instantiates it",
-              ("Prefab instances of 'host' reloaded: its status is computed again" in log) and ("Key check of 'host' (pc)" in log))
+        stale = editor.call("get_prepared_status", {"scene_name": scene})
+        check("R10.6: the Save of the prefab source marks the status of the scene that instantiates it stale, computing nothing",
+              ("Prefab instances of 'host' reloaded: its status is out of date" in log) and ("Key check of 'host' (pc)" not in log) and
+              (stale.get("stale") is True) and (stale.get("pending") is False),
+              json.dumps({k: stale.get(k) for k in ("stale", "pending")}))
         state = editor.status(scene)
         check("R10.6: after the prefab edit the host's status misses the prefab's new mesh item and does not match",
               (status_kind(state, "local_mesh").get("missing") == 1) and not state.get("matches"), status_text(state))
@@ -3376,7 +3386,8 @@ def main():
 
     start = time.monotonic()
     cache_before = cache_directory_state()
-    work = tempfile.mkdtemp(prefix="prepared_asset_verify_")
+    # Canonical, as the editor reports paths (macOS /var is a link to /private/var).
+    work = os.path.realpath(tempfile.mkdtemp(prefix="prepared_asset_verify_"))
     print(f"work directory {work}", flush=True)
     try:
         if args.only_world:

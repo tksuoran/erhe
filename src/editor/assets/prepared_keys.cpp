@@ -104,13 +104,23 @@ auto Prepared_keys::is_job_pending() const -> bool
     return m_check || (m_status_job_count > 0);
 }
 
+void Prepared_keys::request_update()
+{
+    m_update_requested = true;
+}
+
+auto Prepared_keys::is_stale() const -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    return m_stale;
+}
+
 auto Prepared_keys::is_pending() const -> bool
 {
     if (is_job_pending()) {
         return true;
     }
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    return m_stale;
+    return m_update_requested && is_stale();
 }
 
 void Prepared_keys::on_export_finished(const std::string_view target, const std::filesystem::path& prepared_asset_path, const std::string& scene_key)
@@ -191,13 +201,14 @@ void Prepared_keys::update(App_context& context, const std::shared_ptr<Scene_roo
         }
         finish_check(context, scene_root);
     }
-    if (m_status_job_count > 0) {
+    if (!m_update_requested || (m_status_job_count > 0)) {
         return;
     }
     std::uint64_t serial = 0;
     {
         const std::lock_guard<std::mutex> lock{m_mutex};
         if (!m_stale) {
+            m_update_requested = false;
             return;
         }
         serial = m_change_serial;
@@ -207,6 +218,7 @@ void Prepared_keys::update(App_context& context, const std::shared_ptr<Scene_roo
     if ((save_service == nullptr) || (save_service->get_pending_count() > 0) || !save_service->is_scene_quiescent()) {
         return;
     }
+    m_update_requested = false;
     const auto settle = [this, serial](std::shared_ptr<const Prepared_status_report> status, std::string error) {
         m_status = std::move(status);
         m_error  = std::move(error);
@@ -268,7 +280,9 @@ void refresh_prepared_status(App_context& context, Scene_root& scene_root)
     if (context.editor_asset_registry != nullptr) {
         context.editor_asset_registry->invalidate_item_catalogs();
     }
-    scene_root.get_prepared_keys().on_change(Prepared_key_change::stores);
+    Prepared_keys& keys = scene_root.get_prepared_keys();
+    keys.on_change(Prepared_key_change::stores);
+    keys.request_update();
 }
 
 }

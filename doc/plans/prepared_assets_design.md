@@ -374,7 +374,10 @@ order; 6 needs 5; 8 needs 7; 9 needs 8; 10 needs 8.
       prepared run holds open fails the Export (documented, not run here).
 12. Change-driven keys (R3.5, R3.7, R8.12): content hashes carried as
     loaded state and recomputed at the edit, keys recomputed at change
-    sites, status current without a request. Built: `doc/erhe/primitive.md`
+    sites, status computed on request (2026-11-07, user decision: an edit
+    marks the status stale, Update / Refresh in the Properties and MCP
+    `get_prepared_status` `update` compute it; this replaced a key check
+    started after every change). Built: `doc/erhe/primitive.md`
     "Content hash", `doc/erhe/gltf.md` "Content hashes" (Save Scene stored
     each prepared core's source content hash in `ERHE_mesh_optimized`
     `source_content_hash`, a reopen takes it; since step 14 Save Scene writes
