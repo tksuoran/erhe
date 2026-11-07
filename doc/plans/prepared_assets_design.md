@@ -333,11 +333,10 @@ order; 6 needs 5; 8 needs 7; 9 needs 8; 10 needs 8.
       the mesh build reads 0.22 s longer from the store than from the file
       (2037 against 1817 ms), and the 8 MB are the open store (eight read
       connections, a byte source per item buffer); R13.4's "no higher" does
-      not hold by those 14 MB. Re-measured after steps 11b - 15 (2026-11-07
-      22:15 entries): listed 4.66 s, VmHWM 800 MB against 5.20 s / 783 MB,
-      but the prepared glTF file now opens untextured and without a PVS
-      (R12.2), so it no longer measures R13.4; the baseline is a user
-      decision (`doc/plans/open_items.md` "Prepared assets").
+      not hold by those 14 MB. Closed: R13.4 compares with no other load
+      (2026-11-07, user decision). Recorded after steps 11b - 15 (2026-11-07
+      22:15 entries): listed 4.66 s, VmHWM 800 MB, 83 fps with the 393 ASTC
+      textures and the PVS.
     - The device image comparison: `render_scene_image` crashes on the Quest
       (pre-existing, `Render_pass::start_render_pass` from
       `Shadow_renderer::draw`).

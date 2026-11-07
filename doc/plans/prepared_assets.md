@@ -528,10 +528,11 @@ setting, the glTF extension schemas, `doc/agents/quest.md`).
   of the scene builds no BVH and runs no mesh optimizer, and reaches idle
   sooner than the first.
 - R13.4 Verified on Quest 3 with the Bistro recipe of
-  `doc/agents/quest.md`: the prepared run of R11; loading takes no longer
-  and peaks no higher in memory than loading today's prepared glTF file
-  (`doc/plans/gltf_fast_load.md` item 10 numbers); the scene renders as
-  today's prepared glTF file of the same scene and settings does.
+  `doc/agents/quest.md`: the prepared run of R11 loads and renders the
+  scene; its load time and peak memory are recorded
+  (`doc/reference/quest_bench_runs.md`) and compared with no other load
+  (2026-11-07, user decision: the editor writes no prepared glTF file to
+  compare with).
 - R13.5 Unit tests without a GPU cover content hashing, key computation,
   lookup, dropping unreferenced items, the Copy step, the container's read
   and write paths with two writers, R6.1 and R6.2.
