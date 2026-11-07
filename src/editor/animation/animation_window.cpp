@@ -943,7 +943,8 @@ void Animation_window::channel_list_pane()
 
     ImGui::PushID("all_channels");
     if (ImGui::TreeNodeEx("Channels", ImGuiTreeNodeFlags_DefaultOpen)) {
-        m_channel_filter.Draw("##channel_filter", -FLT_MIN);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        m_channel_filter.Draw("##channel_filter");
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Filter channels by name (e.g. 'arm', 'Rotation'); All / None / Animated apply to the filtered channels");
         }

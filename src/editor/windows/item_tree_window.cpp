@@ -2445,7 +2445,8 @@ void Item_tree::imgui_tree(float ui_scale)
     ImGui::SameLine();
     type_filter_combo();
     ImGui::SameLine();
-    if (m_text_filter.Draw("##Filter", -FLT_MIN)) {
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    if (m_text_filter.Draw("##Filter")) {
         m_flat_rows_dirty = true;
     }
 

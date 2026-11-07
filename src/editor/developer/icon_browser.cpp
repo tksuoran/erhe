@@ -217,7 +217,8 @@ void Icon_browser::imgui()
     ImGui::TextUnformatted(ICON_MDI_FILTER);
     ImGui::PopFont();
     ImGui::SameLine();
-    m_name_filter.Draw("##icon_filter", -FLT_MIN);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    m_name_filter.Draw("##icon_filter");
 
     ImGui::PushFont(icon_font, font_size);
     float line_height = ImGui::GetFrameHeight();

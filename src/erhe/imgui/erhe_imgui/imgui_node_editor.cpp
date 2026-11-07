@@ -646,7 +646,7 @@ void ed::Node::Draw(ImDrawList* drawList, DrawFlags flags)
                     m_GroupBorderColor,
                     Editor->DrawLen(m_GroupRounding),
                     Editor->DrawLen(m_GroupBorderWidth),
-                    ImDrawFlags_RoundCornersAll 
+                    ImDrawFlags_RoundAll 
                 );
             }
         }
@@ -705,7 +705,7 @@ void ed::Node::DrawBorder(ImDrawList* drawList, ImU32 color, float thickness, fl
             color,
             Editor->DrawLen(ImMax(0.0f, m_Rounding + offset)),
             Editor->DrawLen(thickness),
-            ImDrawFlags_RoundCornersAll // c_AllRoundCornersFlags,
+            ImDrawFlags_RoundAll // c_AllRoundCornersFlags,
         );
     }
 }
