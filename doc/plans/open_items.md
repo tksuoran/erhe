@@ -8,6 +8,53 @@ while working on other subsystems. Where a subsystem plan already holds the
 full item, the entry names that plan. When an item is picked up, it moves
 into its subsystem's plan (or is fixed) and its line here is removed.
 
+## Work order
+
+The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
+"Session handoff"). Items 1 and 2 come first; items 3 - 10 each need a user
+decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
+ask the user which to pick.
+
+0. Prepared assets on Quest: finish the device testing, re-measure R13.4,
+   fix the PVS item's empty scene id, then the user rulings. Read
+   "Prepared assets" below and `doc/plans/prepared_assets_design.md` D8.
+1. Quest session follow-ups: "Quest session follow-ups" below
+   (`doc/agents/quest.md` "Bistro scene data on the device").
+2. LOD follow-ups: `doc/plans/lod_gpu_selection.md` step 6 "Results" and
+   "Later"; shadow culling in `doc/plans/occlusion_culling.md` "Open".
+3. PVS: the Quest wall gate (plan step 8), the bake at 10 cells per frame,
+   the other "Open" items (`doc/plans/pvs.md`, `doc/editor/pvs.md`).
+4. Raster occlusion culling, user decisions first: the step 5 second draw,
+   fill cost at the Bistro bench camera, headset per-eye culling
+   (`doc/plans/occlusion_culling.md` "Build order" and "Open").
+5. Metal 4 gates at the external display, then the Metal 3 keep or remove
+   decision (`doc/plans/metal_backend.md` section 7;
+   `doc/plans/resource_barriers.md` for the barrier leftovers).
+6. Frame pacing re-gates: fixed 60 Hz, the display's update granularity,
+   MoltenVK fullscreen (`doc/plans/frame_pacing_adaptive_sync.md`
+   "Verification").
+7. Quest 3 performance (needs the headset): `doc/plans/quest_performance.md`.
+8. Scene round-trip failures: `doc/plans/scene_roundtrip_failures.md`.
+9. Audit follow-ups: `doc/plans/audit_2026_09_30_followups.md`.
+10. Bistro load decisions (step 5 KTX2, step 7c lazy attribute stores,
+    geogram colocate serialization, worker release reopen cost):
+    `doc/plans/bistro_load_profiling.md` "Status".
+
+## Quest session follow-ups
+
+- `origin/lod` is stale after its rebase onto `main`: force-push or delete
+  (user decision).
+- Re-pose `config/editor/benchmark_bistro.json` and
+  `config/editor/benchmark_bistro_street.json` for the upright Bistro (the
+  source rotated -90 degrees about X); `benchmark_bistro_street_120.json`
+  is already in that frame.
+- Textures look blotchy on the Mac (plant leaves).
+- The loading screen shows a generic reason after a fast failure (the load
+  handle is reaped before the screen reads it).
+- Metal counts overdraw per sample under MSAA
+  (`doc/plans/overdraw_visualization.md`).
+- The right trigger still selects while travelling.
+
 ## Prepared assets
 
 Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
@@ -197,9 +244,3 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
   profiling (`doc/plans/shadow_robustness.md`).
 - Debug line anti-aliasing: joined polylines, content wide lines, a Metal run
   (`doc/plans/debug_renderer_anti_aliasing.md`).
-
-## Repository state
-
-- `origin/lod` is stale after the rebase onto `main`: force-push or delete
-  (user decision).
-- `main` is ahead of `origin/main`; pushing waits for the user.

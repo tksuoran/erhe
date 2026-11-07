@@ -124,7 +124,7 @@ worker is running, what the last report said, what the queue says. It:
    and checks each new expected-results item against its reason (a
    README quote or a Storm match, or it is reverted to a plan bullet).
    Records the state in `memory-bank/activeContext.md` and, when the loop
-   is handed to a later session, in `prompt_queue.txt`.
+   is handed to a later session, in `doc/plans/open_items.md` "Work order".
 4. Launches the next worker with the same brief while a stop remains and
    the user has not said to stop. The brief does not change between
    workers: the test database and the sidecars carry the state, so a fresh
@@ -149,7 +149,7 @@ Repeat: run the loop command with ERHE_AI_DRIVER=1; triage the entry it
 stops on (four outcomes, evidence first); fix, verify and commit as the
 document says; run again. Commit after every closed entry with a message
 that names the asset, the cause and the fix. Push nothing. Do not edit
-prompt_queue.txt or memory-bank/.
+doc/plans/open_items.md or memory-bank/.
 
 Stop and report when your context is about half full, when the loop
 completes without a stop, or when an entry needs a decision the plan does

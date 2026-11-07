@@ -17,7 +17,7 @@ stable domain recipes live in `references/*.md` (see "Domain recipes"
 below) - fold workflow/tooling facts HERE and domain facts into the
 matching reference file (new domain = new file + one index line here).
 This skill is the canonical home for creation knowledge - agent memory
-and prompt_queue.txt only point here.
+and doc/plans/open_items.md only point here.
 
 ## Existing creations
 
@@ -433,7 +433,7 @@ file is read before any creation work:
   records WHY and any debugging lesson; end with the attribution trailer
   the session's commit guidance gives. Only the script (and common.py changes) are committed; the user
   pushes.
-- Agent memory and prompt_queue.txt only POINT at git log and this skill -
+- Agent memory and doc/plans/open_items.md only POINT at git log and this skill -
   do not grow commit ledgers in them; git log is the history.
 - MCP node/material ids are per-session - never hardcode them.
 - **Box "steps" means SUBDIVISIONS since 2026-08-10** (breaking change,

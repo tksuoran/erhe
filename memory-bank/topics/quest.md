@@ -4,7 +4,7 @@
 @docs::doc/agents/quest.md+doc/plans/quest_performance.md+doc/reference/quest_profiling_2026_05_01.md+doc/plans/xr.md+doc/plans/android.md+doc/plans/culling.md(Open)+doc/editor/render_thread.md(section-9-future-work)
 @local::memory-bank/local/quest.md{device-numbers;gitignored}
 
-[OPEN_2026-10-24]{priority-order;mirrored-in-prompt_queue.txt}
+[OPEN_2026-10-24]{priority-order;work-order=doc/plans/open_items.md}
 1✓baseline-DONE-2026-10-24{benchmark_orbit@120Hz-repeat-3;both-scenes-GPU-bound;numbers->local/quest.md+plan-Baseline;render-thread-overlap-VERIFIED;was:phase-timing-log-M1/M2/R+ovrgpuprofiler;default-scene+heavier-scene;commit-id-in-log-first-line;expect:xrWaitFrame(N+1)-inside-R(N)+fps+XR_FB_performance_metrics+passthrough+quad-layers+controller-rays+ID-pick-intact;numbers->local/quest.md;method->doc/plans/quest_performance.md}
 2!headset-passes-unculled{multiview-never-culled;per-eye-stopped-at-phase-6a;fix=erhe::xr-locate-eye-views-once-in-pre_execute_rendergraph_node+Xr_session::render_frame-reuses+union-frustum-view-for-multiview-color-pass;doc/plans/culling.md-Open}
 3✓texture-sampling-DONE-2026-10-24{no-mip/sampler-defect;shadow-compare+compositor-fetches;preset-_version-bug-fixed;one-dir-shadow-light;open:glTF-default-sampler-nearest;grid-2ms;shadow-math-1ms/light;was:re-measure-first;mips-not-sampled(mip_level_count=1+min_lod=max_lod=0)=highest;nearest-vs-linear-audit;FFR-level;texture-compression;fp16-revisit-deferred}

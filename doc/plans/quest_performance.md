@@ -4,7 +4,8 @@ Status: in progress
 
 The next focus after the culling plan ([culling.md](culling.md), phases 1
 to 6 done): the editor's frame time on a Meta Quest 3. This document holds
-the task's state; `prompt_queue.txt` only points here.
+the task's state; `doc/plans/open_items.md` "Work order" only points
+here.
 
 ## Starting points
 

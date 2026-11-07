@@ -5,8 +5,8 @@ Status: in progress
 `scripts/scene_roundtrip_verify.py` (`doc/editor/scene_serialization.md`,
 run-book) failed three checks. Found while verifying audit item 11; recorded
 first in `doc/plans/audit_2026_09_30_followups.md` "Follow-ups found by
-review". This document holds the state of each; the queue
-(`prompt_queue.txt`) points here.
+review". This document holds the state of each; `doc/plans/open_items.md`
+"Work order" points here.
 
 ## How the runs are made
 

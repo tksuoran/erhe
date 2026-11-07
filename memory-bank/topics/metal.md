@@ -161,7 +161,7 @@ repro-loop::fresh-editor-per-run{ctest-R-3-tests;sleep-3-between;--repeat-breaks
 @verified::Metal-ctest-1637/1637+Metal4-gpu-217/217+Vulkan-MoltenVK-1640/1640+KosmicKrisp-1640/1640
 !Windows-sessions-add-deps/Device_info-fields-unbuilt-on-Mac->after-sync:reconfigure-trees(stale-cache=missing-include)+build-Metal(non-Vulkan-ifdef-breaks)+run-gpu-tests(new-tests-never-ran-on-Metal)
 
-[OPEN]→prompt_queue.txt+doc/plans/metal_backend.md{7-Metal-4-code-COMPLETE;user-gates-pending(pacing-cached/fresh+M4-vs-M3+fullscreen-re-gate)->Metal-3-decision;doc/plans/resource_barriers.md{step-2-item-1-DONE-5cf6e13d2;step-3-Vk-qualifiers-DONE-1fd30277d;left=tracked-layout-VERIFY+step-4-cleanup+shadow-site-qualification};M4-per-draw-gap-FIXED-2ae347dfe(draw-id-push-constant-removed;ImGui-first_instance-07330bebc);c9e5f8faf-vertex-stage-dedicated-sampler-remap(both-backends)}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
+[OPEN]→doc/plans/open_items.md+doc/plans/metal_backend.md{7-Metal-4-code-COMPLETE;user-gates-pending(pacing-cached/fresh+M4-vs-M3+fullscreen-re-gate)->Metal-3-decision;doc/plans/resource_barriers.md{step-2-item-1-DONE-5cf6e13d2;step-3-Vk-qualifiers-DONE-1fd30277d;left=tracked-layout-VERIFY+step-4-cleanup+shadow-site-qualification};M4-per-draw-gap-FIXED-2ae347dfe(draw-id-push-constant-removed;ImGui-first_instance-07330bebc);c9e5f8faf-vertex-stage-dedicated-sampler-remap(both-backends)}+render-thread-gate-cases-not-run-on-Metal{bake,wide-line,skinned,four-view}
 
 [PROGRESS_2026-10-24]{moved-from-progress.md-at-code-completion}
 [TASK::metal-draw-count]{started-2026-10-23;branch=render-thread;via-harness;doc/plans/metal_backend.md-sec-6+7}

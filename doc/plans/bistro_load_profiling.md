@@ -18,7 +18,7 @@ Profile what the editor spends while opening
 nodes, 206 materials, 43 lights; ~360 MB of KTX2 textures), in a Release
 and in a Debug build, and rank what could be optimized. Report and propose
 before implementing anything. This document holds the task's state;
-`prompt_queue.txt` only points here.
+`doc/plans/open_items.md` "Work order" only points here.
 
 ## Starting points
 

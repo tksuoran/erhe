@@ -457,8 +457,8 @@ directory).
   material before/after a UV drag.
 - **Builds**: ninja MSVC Vulkan + headless VS build every step; OpenGL build
   at least once per phase touching rendering.
-- Follow the stale-editor hygiene (kill editors +
-  `get_server_info` pid check) from `prompt_queue.txt`.
+- Stop only the editors the session launched, by their logged pid
+  (`AGENTS.md` "Stopping processes"; `get_server_info` reports the pid).
 
 ## Blender reference material
 

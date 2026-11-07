@@ -29,11 +29,11 @@ ones that match your session before starting work.
 The memory bank has the matching per-topic state under `memory-bank/topics/`
 (see "Memory Bank" below).
 
-## Session handoff: `prompt_queue.txt`
+## Session handoff: `doc/plans/open_items.md`
 
-When an untracked `prompt_queue.txt` exists in the repo root, it is a handoff written by an older AI coding session so that work can continue with fresh context: read it first and continue the work it describes. It may hold a queue of sequential handoffs (do the first item, and only write the next when the current one is done and verified). Once an item has been read and its work is done, remove that item; when the file holds nothing outstanding, delete it - do not keep a stale file around. The file holds outstanding work only: it is never a record of work already done. Notes about the work done must already be in the commit messages for that work, and any durable statement of how the code now behaves belongs in the subsystem's document under `doc/` - so no information is lost by deleting an item. (Writing a new `prompt_queue.txt` is only warranted when handing off still-unfinished work to a future session.)
+Outstanding work handed from one session to the next lives in `doc/plans/open_items.md`, which is committed and shared by every machine. Its "Work order" section lists the tasks to pick up and the order to work them in - at most three lines per task, naming the task, its ordering constraints (a user decision, hardware such as the Quest) and the dedicated document to read first; the other sections hold the open items that have no plan of their own. Read "Work order" at the start of a session that continues earlier work. Each task's details (state, decisions, verification recipes, gotchas) live in that task's own document under `doc/`, never in the list; when a task is done, remove its line in the commit that finishes it. The list holds outstanding work only: notes about work done belong in the commit messages, and durable statements of how the code behaves belong in the subsystem's document.
 
-**Keep the queue lean.** `prompt_queue.txt` only lists the outstanding tasks and the order to work them in - at most three lines per task, naming the task, its ordering constraints, and the dedicated document to read first. Each task's details (state, decisions, verification recipes, gotchas) live in that task's own document under `doc/`, not in the queue. When writing a handoff, put the substance in the task's doc and add or update the queue's three-line pointer; never let the queue grow per-task sections that duplicate or fork the doc.
+`prompt_queue.txt` (an untracked per-machine handoff file) is retired: when one exists in the repo root, move each of its outstanding items into `doc/plans/open_items.md` (the pointer into "Work order", any detail into the task's document), commit, and delete the file.
 
 ## Documentation
 
