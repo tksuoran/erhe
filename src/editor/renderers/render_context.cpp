@@ -1,12 +1,31 @@
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
 #include "app_context.hpp"
+#include "editor_item_bits.hpp"
 
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
 
 namespace editor {
+
+auto c_str(const Mesh_form form) -> const char*
+{
+    switch (form) {
+        case Mesh_form::source:      return "source";
+        case Mesh_form::world_space: return "world_space";
+        default:                     return "?";
+    }
+}
+
+auto get_view_filter(const erhe::Item_filter& filter, const Mesh_form mesh_form) -> erhe::Item_filter
+{
+    erhe::Item_filter view_filter = filter;
+    view_filter.require_all_bits_clear |= (mesh_form == Mesh_form::world_space)
+        ? Editor_item_flags::world_space_source
+        : Editor_item_flags::world_space_form;
+    return view_filter;
+}
 
 auto Render_context::get_camera_node() const -> const erhe::scene::Node*
 {

@@ -1,8 +1,10 @@
 #pragma once
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/image_loader_ktx2.hpp"
 
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -10,7 +12,7 @@
 namespace erhe::graphics {
 
 // Minimal KTX2 container support for raw block-compressed images - the
-// "Save for Quest" glTF textures (doc/gltf_extensions/ERHE_texture_ktx2.md):
+// quest Texture items and Scene items (doc/erhe/gltf.md "Texture items"):
 // one 2D image, one layer, one face, a mip chain, a non-zero vkFormat, and
 // no supercompression or Zstandard supercompression (each level compressed
 // on its own). Basis Universal KTX2 files (vkFormat 0) are parsed by the
@@ -108,9 +110,10 @@ public:
 // Transcodes a Basis Universal KTX2 file (vkFormat 0) to a raw block KTX2
 // file with all of its mip levels, in the given color space, optionally
 // Zstandard supercompressed. astc_4x4: ASTC 4x4; a two component normal map
-// (detected the way Image_loader_ktx2 does) keeps its X+Y layout (X in RGB,
-// Y in A). bc: BC7; a two component normal map becomes BC5 (X in R, Y in G).
-// Either keeps the normal map marker. Returns an empty vector on failure.
+// (normal_layout, or detected the way Image_loader_ktx2 does) keeps its X+Y
+// layout (X in RGB, Y in A). bc: BC7; a two component normal map becomes BC5
+// (X in R, Y in G). Either keeps the normal map marker. Returns an empty
+// vector on failure.
 enum class Ktx2_color_space : unsigned int
 {
     srgb   = 0,
@@ -125,12 +128,15 @@ enum class Ktx2_block_target : unsigned int
     std::span<const std::uint8_t> basis_ktx2,
     Ktx2_block_target             target,
     Ktx2_color_space              color_space,
-    Ktx2_supercompression         supercompression
+    Ktx2_supercompression         supercompression,
+    Ktx2_normal_layout            normal_layout = Ktx2_normal_layout::detect
 ) -> std::vector<std::uint8_t>;
 
 // Whether a KTX2 file holds Basis Universal data (vkFormat 0) or raw
 // blocks (any other vkFormat). Both false for a buffer that is not KTX2.
 [[nodiscard]] auto is_ktx2_basis       (std::span<const std::uint8_t> file) -> bool;
 [[nodiscard]] auto is_ktx2_raw_blocks  (std::span<const std::uint8_t> file) -> bool;
+// is_ktx2_raw_blocks() of the header of the file at path (false when it cannot be read).
+[[nodiscard]] auto is_ktx2_raw_blocks_file(const std::filesystem::path& path) -> bool;
 
 } // namespace erhe::graphics

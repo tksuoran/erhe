@@ -6,10 +6,16 @@ add_executable(${_target}
     main.cpp
     gltf_test_util.cpp
     gltf_test_util.hpp
+    test_gltf_authoring.cpp
+    test_gltf_content_hash.cpp
+    test_gltf_identities.cpp
+    test_gltf_mesh_item.cpp
     test_gltf_parse.cpp
     test_gltf_pvs.cpp
+    test_gltf_raw_block_images.cpp
     test_gltf_roundtrip.cpp
     test_gltf_soup_reload.cpp
+    test_gltf_texture_properties.cpp
     test_image_reduction_cache.cpp
 )
 

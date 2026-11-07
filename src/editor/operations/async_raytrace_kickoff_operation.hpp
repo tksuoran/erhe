@@ -94,8 +94,7 @@ public:
 
 // request_lod_generation() for every mesh of the scene's content layer: the
 // explicit scene-wide request (the LOD window's "Generate for scene", MCP
-// generate_lods with "scope": "scene"), for example before a Save for Quest
-// of a scene to profile with LODs everywhere.
+// generate_lods with "scope": "scene").
 [[nodiscard]] auto request_scene_lod_generation(
     App_context&                                        context,
     Scene_root&                                         scene_root,

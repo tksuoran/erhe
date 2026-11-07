@@ -5,20 +5,6 @@
     "type": "object",
     "properties": {
         "version": {"type": "integer", "const": 1},
-        "indices": {"type": "integer", "minimum": 0, "description": "bufferView index: the levels after level 0, back to back, uint32 LE indices into the core vertices"},
-        "levels": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 7,
-            "items": {
-                "type": "object",
-                "properties": {
-                    "index_count": {"type": "integer", "minimum": 3, "description": "a multiple of 3"},
-                    "error":       {"type": "string", "pattern": "^0x[0-9a-fA-F.]+p[+-]?[0-9]+$", "description": "object space error, a positive C99 hexadecimal float"}
-                },
-                "required": ["index_count", "error"]
-            }
-        },
         "settings": {
             "type": "object",
             "properties": {
@@ -35,5 +21,5 @@
             "required": ["level_count", "ratio", "attributes", "normal_weight", "color_weight", "border", "seams", "fallback", "normal_merge_angle"]
         }
     },
-    "required": ["version", "indices", "levels", "settings"]
+    "required": ["version", "settings"]
 }

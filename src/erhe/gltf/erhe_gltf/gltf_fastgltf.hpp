@@ -3,12 +3,14 @@
 #include "gltf_export_progress.hpp"
 #include "gltf_item_flags.hpp"
 #include "erhe_primitive/lod.hpp"
+#include "erhe_hash/content_hash.hpp"
 #include "erhe_scene/physics_description.hpp"
 
 #include "erhe_graphics/image_encoder.hpp"
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/ktx2_container.hpp"
 #include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/texture_properties.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_scene/instance_override.hpp"
 
@@ -19,10 +21,12 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <filesystem>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -46,8 +50,13 @@ namespace erhe::dataformat {
 }
 namespace erhe::primitive {
     class Buffer_sink;
-    class Primitive;
     class Material;
+    class Prepared_primitive_export;
+    class Primitive;
+    class Primitive_shape;
+}
+namespace erhe::raytrace {
+    class Prebuilt_bvh;
 }
 namespace erhe::scene {
     class Animation;
@@ -102,6 +111,17 @@ public:
 // no image file bytes in memory (doc/erhe/gltf.md "Image source streams").
 // GPU-only textures (e.g. editor graph-texture bakes) have no
 // Gltf_image_source and are never exported as images.
+class Gltf_buffer_reader;
+
+// Whether a parse sets the content hash (erhe::hash::Content_hash) of each
+// soup primitive and image it reads, while the bytes are in memory
+// (doc/erhe/gltf.md "Content hashes").
+enum class Gltf_content_hash_load : unsigned int
+{
+    none = 0,
+    compute
+};
+
 class Gltf_image_source
 {
 public:
@@ -116,16 +136,31 @@ public:
     std::uintmax_t                  file_size      {0};
     std::filesystem::file_time_type file_write_time{};
 
-    [[nodiscard]] auto is_file_backed() const -> bool { return !file_path.empty(); }
+    // Named-buffer stream (an item, doc/erhe/gltf.md "Image source streams"):
+    // byte_length bytes at reader_offset of the reader.
+    std::shared_ptr<const Gltf_buffer_reader> reader;
+    std::uint64_t                             reader_offset{0};
+
+    [[nodiscard]] auto is_file_backed  () const -> bool { return !file_path.empty(); }
+    [[nodiscard]] auto is_reader_backed() const -> bool { return static_cast<bool>(reader); }
     // The stream's size, resident or not.
-    [[nodiscard]] auto get_byte_count() const -> std::size_t { return is_file_backed() ? byte_length : encoded_bytes.size(); }
-    // The stream: the resident bytes, or the file range read now. False,
-    // with an error logged, when the file cannot be read or its size or
+    [[nodiscard]] auto get_byte_count() const -> std::size_t { return (is_file_backed() || is_reader_backed()) ? byte_length : encoded_bytes.size(); }
+    // The stream: the resident bytes, or the file or reader range read now. False,
+    // with an error logged, when the range cannot be read or the file's size or
     // modification time differs from the recorded ones (it may hold other
     // bytes at the range). Thread-safe; opens and closes the file per call.
     [[nodiscard]] auto read(std::vector<std::byte>& out) const -> bool;
     // At most max_byte_count bytes from the start, with the checks of read().
     [[nodiscard]] auto read_prefix(std::size_t max_byte_count, std::vector<std::byte>& out) const -> bool;
+
+    // XXH3-128 of the stream, set once by the load that reads it (Gltf_content_hash_load
+    // compute) or by the editor; nullopt until then. Thread-safe.
+    [[nodiscard]] auto get_content_hash() const -> std::optional<erhe::hash::Content_hash>;
+    void set_content_hash(const erhe::hash::Content_hash& content_hash) const;
+
+private:
+    mutable std::mutex                              m_content_hash_mutex;
+    mutable std::optional<erhe::hash::Content_hash> m_content_hash;
 };
 
 // Generic ERHE_* vendor-extension passthrough
@@ -161,6 +196,10 @@ public:
     std::string                        name;
     std::string                        uid;              // glTF 2.1 uid, carried onto the Texture
     std::filesystem::path              source_path;
+    // Set onto the Texture (doc/erhe/gltf.md "Texture properties"): the file's
+    // ERHE_texture_properties, else derived from the first use at the parse.
+    erhe::graphics::Texture_properties texture_properties{};
+    bool                               texture_properties_stored{false};
 };
 
 class Gltf_image_decode_queue; // gltf_fastgltf.cpp: worker decode state shared with the tasks
@@ -265,6 +304,7 @@ public:
     std::size_t                                texture_byte_budget{0}; // 0: no budget
     erhe::graphics::Block_encode_format        block_encode_format{erhe::graphics::Block_encode_format::none};
     std::filesystem::path                      reduction_cache_directory; // empty: reduced images are not cached
+    Gltf_content_hash_load                     content_hashes{Gltf_content_hash_load::none}; // the decode sets each image source's content hash
 
     // Sets each image's reduction once, before the first decode.
     void plan_textures();
@@ -394,7 +434,7 @@ public:
     std::size_t                        topology_used_count{0}; // ERHE_mesh_topology accepted
     std::size_t                        bvh_used_count     {0}; // ERHE_raytrace_bvh accepted
     std::size_t                        lod_used_count     {0}; // ERHE_mesh_lod accepted
-    std::size_t                        ignored_count      {0}; // glTF primitives carrying ERHE_mesh_optimized while prepared_mesh_data_use is ignore
+    std::size_t                        ignored_count      {0}; // glTF primitives of a Gltf_document::file parse carrying ERHE_mesh_optimized
     std::map<std::string, std::size_t> rejection_reasons;      // "<extension>: <reason>" -> count
 };
 
@@ -474,7 +514,7 @@ public:
     // reads while the load reads the primitives' payloads; closed by
     // close_source_files() (doc/erhe/gltf.md "Reading buffers by range").
     std::shared_ptr<Gltf_source_files>            source_files;
-    // The asset-root ERHE_pvs extension (doc/gltf_extensions/ERHE_pvs.md):
+    // The asset-root ERHE_pvs extension (doc/erhe/gltf.md "PVS items"):
     // the scene's potentially visible set database, ready, its columns
     // naming the parsed nodes' glTF uids; null when the file has none or
     // the extension was rejected.
@@ -549,11 +589,21 @@ public:
 
 [[nodiscard]] auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_device_options;
 
-// Whether parse_gltf reads the prepared mesh data extensions
-// (ERHE_mesh_optimized, ERHE_mesh_topology, ERHE_raytrace_bvh) of soup
-// primitives. ignore loads them as plain soups, as a file without the
-// extensions (the load.use_prepared_mesh_data editor setting).
-enum class Prepared_mesh_data_use : unsigned int {
+// What a parse reads (R1.1, R12.2). file: a glTF file, which holds authoring
+// data alone - the derived-data extensions (ERHE_mesh_optimized,
+// ERHE_mesh_topology, ERHE_raytrace_bvh, ERHE_gpu_vertex_streams, the chain of
+// ERHE_mesh_lod, ERHE_texture_ktx2, ERHE_pvs) are not read (logged once), so
+// the primitives build from their soups. item: a document of derived data (a
+// Scene item, a mesh item document), which reads and validates them.
+enum class Gltf_document : unsigned int {
+    file = 0,
+    item = 1
+};
+
+// Whether parse_gltf offers a primitive's ERHE_raytrace_bvh to its raytrace.
+// ignore reads the primitive as one without it: the BVH is built in memory
+// (a prepared run whose BVH items carry another stamp, R11.4).
+enum class Stored_bvh_use : unsigned int {
     ignore = 0,
     use    = 1
 };
@@ -583,6 +633,21 @@ enum class Mesh_payload_load : unsigned int {
     deferred = 1
 };
 
+// The bytes of a named external glTF buffer (doc/erhe/gltf.md "Mesh items").
+// read_at() runs on any thread, in parallel.
+class Gltf_buffer_reader
+{
+public:
+    virtual ~Gltf_buffer_reader() noexcept = default;
+    // Fills `out` with the bytes at `offset`; false when the range is not there.
+    [[nodiscard]] virtual auto read_at(std::uint64_t offset, std::span<std::byte> out) const -> bool = 0;
+    // close_source_files(): the load's reads are done; release what they hold open (read_at() still works).
+    virtual void close() const {}
+};
+
+// The reader of a buffer uri; null for a uri it does not know (read as a file path).
+using Gltf_buffer_resolver = std::function<std::shared_ptr<const Gltf_buffer_reader>(std::string_view uri)>;
+
 struct Gltf_parse_arguments
 {
     ::tf::Executor&                           executor;
@@ -605,12 +670,22 @@ struct Gltf_parse_arguments
     // All buffers and images must be embedded in the GLB, as with assets
     // delivered by OpenXR XR_FB_render_model / XR_EXT_render_model.
     std::span<const std::byte>                glb_data{};
-    // Read and validate the prepared mesh data extensions and attach the
+    // When set, read the GLB through this reader instead of the file at `path`
+    // (a GLB held in a container item): the JSON chunk for the parse, the BIN
+    // chunk by range, as a file's (`path` names it in logs and resolves URIs).
+    std::shared_ptr<const Gltf_buffer_reader> glb_reader{};
+    std::uint64_t                             glb_size{0};
+    // item: read and validate the derived-data extensions and attach the
     // accepted payloads to the soup primitives' render shapes
     // (erhe::primitive::Primitive_shape::get_prepared_data()).
-    Prepared_mesh_data_use                    prepared_mesh_data_use{Prepared_mesh_data_use::use};
+    Gltf_document                             document{Gltf_document::file};
+    // R3.5: compute the content hashes of the soups and images the parse reads.
+    Gltf_content_hash_load                    content_hashes{Gltf_content_hash_load::none};
     Triangle_soup_reload                      triangle_soup_reload{Triangle_soup_reload::none};
     Mesh_payload_load                         mesh_payload{Mesh_payload_load::in_parse};
+    // Named external buffers (mesh items); empty: every buffer uri is a file.
+    Gltf_buffer_resolver                      buffer_resolver{};
+    Stored_bvh_use                            stored_bvh_use{Stored_bvh_use::use};
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;
@@ -730,58 +805,43 @@ public:
 
 // How the exporter writes texture images.
 // - source: the retained encoded stream as loaded (PNG / JPEG / Basis KTX2
-//   via KHR_texture_basisu / raw block KTX2 via ERHE_texture_ktx2).
-// - ktx2_astc_4x4: "Save for Quest" (doc/gltf_extensions/ERHE_texture_ktx2.md):
+//   via KHR_texture_basisu). A raw block KTX2 source is written through
+//   ERHE_texture_ktx2 and exists only in a document of derived data
+//   (Prepared_mesh_data::write): a file parse refuses it as a source (R1.1).
+// - ktx2_astc_4x4: the quest Scene item (doc/erhe/gltf.md "Texture items"):
 //   every Basis Universal KTX2 image is transcoded to a raw ASTC 4x4 KTX2
 //   (all mip levels, SRGB or UNORM from the texture's format, each level
-//   Zstandard supercompressed) on the executor
-//   and referenced through ERHE_texture_ktx2; PNG / JPEG images are written
-//   as they are.
-// ktx2_astc_4x4 (Zstandard supercompressed levels) and
-// ktx2_astc_4x4_uncompressed (levels stored as they upload) are the two
-// "Save for Quest" forms (doc/plans/gltf_fast_load.md decision D3).
-// The raw block forms transcode every Basis Universal KTX2 texture at save
-// time (ERHE_texture_ktx2): ASTC 4x4 for mobile GPUs (Prepare (Quest)), BC7 /
-// BC5 for desktop GPUs (Prepare (PC)); levels Zstandard supercompressed, or
-// not (_uncompressed).
+//   Zstandard supercompressed, or not: _uncompressed) on the executor and
+//   referenced through ERHE_texture_ktx2; PNG / JPEG images are written as
+//   they are. Only with Prepared_mesh_data::write.
 enum class Gltf_texture_export : unsigned int {
     source                     = 0,
     ktx2_astc_4x4              = 1,
-    ktx2_astc_4x4_uncompressed = 2,
-    ktx2_bc                    = 3,
-    ktx2_bc_uncompressed       = 4
+    ktx2_astc_4x4_uncompressed = 2
 };
-[[nodiscard]] constexpr auto is_astc_texture_export(const Gltf_texture_export texture_export) -> bool
+[[nodiscard]] constexpr auto is_raw_block_texture_export(const Gltf_texture_export texture_export) -> bool
 {
     return (texture_export == Gltf_texture_export::ktx2_astc_4x4) || (texture_export == Gltf_texture_export::ktx2_astc_4x4_uncompressed);
 }
-[[nodiscard]] constexpr auto is_bc_texture_export(const Gltf_texture_export texture_export) -> bool
-{
-    return (texture_export == Gltf_texture_export::ktx2_bc) || (texture_export == Gltf_texture_export::ktx2_bc_uncompressed);
-}
-[[nodiscard]] constexpr auto is_raw_block_texture_export(const Gltf_texture_export texture_export) -> bool
-{
-    return is_astc_texture_export(texture_export) || is_bc_texture_export(texture_export);
-}
 [[nodiscard]] constexpr auto is_uncompressed_texture_export(const Gltf_texture_export texture_export) -> bool
 {
-    return (texture_export == Gltf_texture_export::ktx2_astc_4x4_uncompressed) || (texture_export == Gltf_texture_export::ktx2_bc_uncompressed);
-}
-[[nodiscard]] constexpr auto get_ktx2_block_target(const Gltf_texture_export texture_export) -> erhe::graphics::Ktx2_block_target
-{
-    return is_bc_texture_export(texture_export) ? erhe::graphics::Ktx2_block_target::bc : erhe::graphics::Ktx2_block_target::astc_4x4;
+    return texture_export == Gltf_texture_export::ktx2_astc_4x4_uncompressed;
 }
 
-// Where an export wrote data a later rebind can point sources at
-// (rebind_sources_to_written_file()): the primitives written from their
-// retained prepared core (the file's data is the primitive's soup), and the
-// images written from their source stream unchanged.
+// Which soup the file holds a primitive's accessors as.
+enum class Gltf_written_soup : unsigned int
+{
+    retained_core = 0, // the shape's soup, its retained prepared core
+    soup,              // the shape's soup, raw
+    authoring          // the shape's authoring soup, raw (doc/erhe/primitive.md "Authoring soup")
+};
 class Gltf_export_written_primitive
 {
 public:
     std::shared_ptr<erhe::primitive::Primitive> primitive;
     std::size_t                                 mesh_index     {0};
     std::size_t                                 primitive_index{0};
+    Gltf_written_soup                           soup{Gltf_written_soup::retained_core};
 };
 class Gltf_export_written_image
 {
@@ -789,6 +849,10 @@ public:
     const erhe::graphics::Texture* texture    {nullptr};
     std::size_t                    image_index{0};
 };
+// Where an export wrote data a later rebind can point sources at
+// (rebind_sources_to_written_file()): the primitives whose soup the file holds
+// as it is (a retained prepared core, a raw soup, an authoring soup), and the
+// images written from their source stream unchanged.
 class Gltf_export_written_layout
 {
 public:
@@ -829,11 +893,15 @@ public:
     std::size_t source_byte_count    {0}; // encoded bytes of the transcoded sources
     std::size_t transcoded_byte_count{0}; // bytes of the KTX2 files they became
     double      transcode_ms         {0.0}; // wall time of the parallel transcode
+    std::size_t texture_item_count   {0}; // images written against Texture items
 };
 
-// Whether the exporter writes triangle-soup primitives as prepared cores with
-// the ERHE_mesh_optimized, ERHE_mesh_topology and ERHE_raytrace_bvh
-// extensions (doc/plans/gltf_fast_load.md "Exporter") instead of the raw soup.
+// What kind of document an export writes (R1.1). none: authoring data alone -
+// raw soups, LOD requests (ERHE_mesh_lod settings), source images that core
+// glTF or KHR_texture_basisu carries; a scene file. write: derived data -
+// triangle-soup primitives as prepared cores with the ERHE_mesh_optimized,
+// ERHE_mesh_topology and ERHE_raytrace_bvh extensions, raw block images;
+// a prepared asset's Scene item (doc/erhe/gltf.md "Authoring data").
 enum class Prepared_mesh_data : unsigned int {
     none  = 0,
     write = 1
@@ -868,6 +936,8 @@ public:
     std::size_t                        world_bake_placeholder_count{0}; // transform-only nodes left in a baked mesh's place (a child stays there)
     std::size_t                        world_bake_primitive_count  {0}; // soup primitives written in world space
     std::size_t                        world_bake_failed_count     {0}; // planned meshes written unbaked (a primitive did not prepare)
+    std::size_t                        mesh_item_count             {0}; // unique primitives written against a mesh item (Gltf_export_arguments::mesh_item_provider)
+    std::size_t                        world_mesh_item_count       {0}; // baked mesh primitives written against a World-space mesh item (world_mesh_item_provider)
 };
 
 // The world-space bake of an export; the editor plans it (doc/editor/world_space_bake.md).
@@ -881,7 +951,7 @@ public:
 
 // The running device's vertex layouts, for an export that writes each
 // prepared primitive's GPU-ready vertex streams (ERHE_gpu_vertex_streams,
-// doc/gltf_extensions/ERHE_gpu_vertex_streams.md; "Save for Quest"): the
+// doc/erhe/gltf.md "GPU vertex streams on export"; mesh items): the
 // base and optimized formats, skinned or not (a primitive whose soup has
 // joint attributes uses the skinned pair), the index format and the encoder
 // version. The editor fills it from its Mesh_memory.
@@ -895,6 +965,85 @@ public:
     erhe::dataformat::Format               index_type       {erhe::dataformat::Format::format_32_scalar_uint};
     int                                    encoding_version {0};
 };
+
+// What a prepared export writes for one primitive: one payload and its
+// self-contained JSON meta (doc/erhe/gltf.md "Mesh items").
+class Gltf_mesh_item
+{
+public:
+    std::vector<std::byte> payload;
+    std::string            meta;
+};
+
+// Writes the item of one prepared primitive, without its BVH; with
+// gpu_vertex_formats (null for none) its GPU vertex streams too. Thread-safe.
+[[nodiscard]] auto write_mesh_item(
+    const erhe::primitive::Prepared_primitive_export& prepared,
+    const Gltf_gpu_vertex_formats*                    gpu_vertex_formats
+) -> Gltf_mesh_item;
+
+// The Raytrace BVH of a prepared primitive as an item of its own: the
+// ERHE_raytrace_bvh views as one payload and the extension as its meta
+// (doc/erhe/gltf.md "Raytrace BVH items").
+class Gltf_raytrace_bvh_item
+{
+public:
+    std::vector<std::byte> payload;
+    std::string            meta;
+};
+
+// Thread-safe.
+[[nodiscard]] auto write_raytrace_bvh_item(const erhe::raytrace::Prebuilt_bvh& bvh) -> Gltf_raytrace_bvh_item;
+
+// A scene's potentially visible set database as an item: the three ERHE_pvs
+// payloads as one payload and a meta naming its columns by node uid
+// (doc/erhe/gltf.md "PVS items").
+class Gltf_pvs_item
+{
+public:
+    std::vector<std::byte> payload;
+    std::string            meta;
+};
+
+// Nullopt when the database is not ready (logged). Thread-safe.
+[[nodiscard]] auto write_pvs_item(const erhe::scene::Pvs_database& database) -> std::optional<Gltf_pvs_item>;
+
+// An item an export writes against: its buffer uri and meta.
+class Gltf_item_reference
+{
+public:
+    std::string uri;
+    std::string meta;
+};
+
+// A mesh item an export writes a primitive against, with the BVH item its
+// ERHE_raytrace_bvh reads (none: the primitive is written without one).
+class Gltf_mesh_item_reference
+{
+public:
+    std::string                        uri;
+    std::string                        meta;
+    std::optional<Gltf_item_reference> raytrace_bvh{};
+};
+
+// What load_mesh_item_primitive() loads: one mesh item, with its BVH item when
+// the reference names one, through a resolver that knows both uris.
+class Gltf_mesh_item_load_arguments
+{
+public:
+    ::tf::Executor&          executor; // the parse runs serially; nothing is spawned
+    Gltf_mesh_item_reference reference;
+    Gltf_buffer_resolver     buffer_resolver;
+    std::filesystem::path    path;     // names the store in logs
+    Triangle_soup_reload     triangle_soup_reload{Triangle_soup_reload::record};
+    Mesh_payload_load        mesh_payload{Mesh_payload_load::in_parse};
+};
+
+// The primitive of one mesh item as a parse of a mesh item document of that
+// item makes it (doc/erhe/gltf.md "Mesh item documents"): a prepared soup
+// primitive whose soup is the item's core, read through the resolver; null
+// with out_error set when the item does not parse. Any thread.
+[[nodiscard]] auto load_mesh_item_primitive(const Gltf_mesh_item_load_arguments& arguments, std::string& out_error) -> std::shared_ptr<erhe::primitive::Primitive>;
 
 class Gltf_export_arguments
 {
@@ -966,17 +1115,17 @@ public:
     // outside the export is skipped with a warning. The caller lists the
     // extension names in extensions_used, as it does for extension_payloads.
     std::function<std::vector<std::pair<const erhe::scene::Node*, std::string>>(const Gltf_export_index_lookup&)> node_extensions_builder{};
-    // Prepared mesh data for triangle-soup primitives. none (the default)
-    // writes the raw soups; save_scene passes write. Geometry-normative
-    // primitives (ERHE_geometry) are unaffected.
+    // The kind of document (Prepared_mesh_data): none (the default) for a
+    // scene file, write for a Scene item. Geometry-normative primitives
+    // (ERHE_geometry) are written the same in both.
     Prepared_mesh_data prepared_mesh_data{Prepared_mesh_data::none};
     // Executor the per-primitive preparation runs on (one task per unique
     // soup); serial on the calling thread when null.
     ::tf::Executor* executor{nullptr};
     // Receives the prepared-mesh-data statistics when non-null.
     Gltf_export_prepared_statistics* prepared_statistics{nullptr};
-    // Texture image form (Gltf_texture_export); source unless "Save for
-    // Quest". The transcodes run on 'executor' (serial when null).
+    // Texture image form (Gltf_texture_export); source unless a quest Scene
+    // item. The transcodes run on 'executor' (serial when null).
     Gltf_texture_export texture_export{Gltf_texture_export::source};
     // When non-null (and prepared_mesh_data is write), each prepared
     // primitive is written with GPU-ready vertex streams in these layouts:
@@ -988,11 +1137,10 @@ public:
     // Receives where the retained primitives and the unchanged images were
     // written when non-null (rebind_sources_to_written_file()).
     Gltf_export_written_layout*     written_layout{nullptr};
-    // The scene's potentially visible set database, written as the
-    // asset-root ERHE_pvs extension (doc/gltf_extensions/ERHE_pvs.md) when
-    // non-null and ready. A column whose node uid names no exported node
-    // skips the extension (logged once).
-    std::shared_ptr<const erhe::scene::Pvs_database> pvs_database{};
+    // A PVS item (write_pvs_item()) the asset-root ERHE_pvs extension is
+    // written against, with no bytes; a column uid that names no exported
+    // node skips the extension (logged).
+    std::optional<Gltf_item_reference> pvs_item{};
     // Receives the stage and per-stage counts when non-null.
     Gltf_export_progress* progress{nullptr};
     // LOD request of every prepared soup whose primitives carry none
@@ -1000,7 +1148,37 @@ public:
     std::optional<erhe::primitive::Lod_settings> default_lod_settings{};
     // Prepare's world-space bake; null for none.
     const Gltf_export_world_bake* world_bake{nullptr};
+    // Per primitive shape, soup or geometry-normative, the mesh item to write
+    // it against (no bytes, no preparation, no ERHE_geometry), or nullopt;
+    // baked meshes do not use it.
+    std::function<std::optional<Gltf_mesh_item_reference>(const erhe::primitive::Primitive_shape&)> mesh_item_provider{};
+    // Per texture, the Texture item (a raw block KTX2 image or a PNG / JPEG
+    // source image, doc/erhe/gltf.md "Texture items") its image is written
+    // against, with no bytes; nullopt writes the image as texture_export says.
+    std::function<std::optional<Gltf_item_reference>(const erhe::graphics::Texture&)> texture_item_provider{};
+    // Per primitive of a world_bake mesh, the World-space mesh item to write it
+    // against, or nullopt; a baked mesh with an item for every primitive is
+    // written from them and prepares nothing (doc/erhe/gltf.md "Mesh items").
+    std::function<std::optional<Gltf_mesh_item_reference>(const erhe::scene::Mesh&, std::size_t primitive_index)> world_mesh_item_provider{};
+    // Not empty: the document holds one node and one mesh per reference, in
+    // order, each mesh one primitive written against its item; root_node's
+    // tree is not written (doc/erhe/gltf.md "Mesh item documents").
+    std::vector<Gltf_mesh_item_reference> mesh_item_document{};
 };
+
+// What a Texture item's meta holds (doc/erhe/gltf.md "Texture items"); the
+// payload is a raw block KTX2 file or a PNG / JPEG source image.
+class Gltf_texture_item_meta
+{
+public:
+    std::uint64_t byte_length{0};
+    std::string   mime_type; // "image/ktx2", "image/png" or "image/jpeg"
+};
+// The meta JSON of a raw block KTX2 file; empty when the bytes do not parse.
+[[nodiscard]] auto make_texture_item_meta(std::span<const std::uint8_t> ktx2) -> std::string;
+// The meta JSON of a PNG / JPEG source image held as it is; empty for any other bytes.
+[[nodiscard]] auto make_source_image_item_meta(std::span<const std::uint8_t> image) -> std::string;
+[[nodiscard]] auto parse_texture_item_meta(std::string_view meta) -> std::optional<Gltf_texture_item_meta>;
 
 // The file's bytes, or an empty string when the export failed: a texture
 // source the file must carry could not be read (Gltf_image_source::read(),

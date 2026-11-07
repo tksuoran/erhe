@@ -133,15 +133,14 @@ Implements the undo/redo operation system and all concrete editor operations.
     original's is static. The object selection is unchanged and the
     original's new geometry has no component selection. Separate by loose
     parts and by material are not implemented.
-  - `Bake_world_space_operation` (`operations/bake_world_space_operation.hpp`)
-    -- Mesh > Bake Static To World Space and MCP `bake_static_to_world_space`:
-    transforms the static meshes' vertices into world space and moves the
-    nodes under one World Space node with the identity transform, leaving a
-    placeholder node only where children stay behind; undo restores the node
-    tree exactly (`doc/editor/world_space_bake.md`).
+  - Mesh > Bake World-Space Meshes (MCP `bake_world_space_meshes`) is no
+    operation: a `Scene_save_service` job that makes World-space mesh items
+    in the editor asset and loads the scene's world-space form from them,
+    leaving the node tree and the undo stack as they were
+    (`doc/editor/world_space_bake.md`).
 
 - **In-place vertex edits** (NOT `Mesh_operation`: they mutate and reuse the SAME `Geometry` object so `Mesh_component_selection` entries keyed on the Geometry pointer survive, then rebuild one `Primitive` and share it across every mesh referencing the Geometry):
-  - `Move_mesh_vertices_operation` -- moves a vertex set of one primitive (mesh-component transform commit) and, for a slide, sets the corner texcoords the slide re-interpolated (`doc/editor/transform.md` "Scalar edits"); refreshes normals, rebuilds static physics.
+  - `Move_mesh_vertices_operation` -- moves a vertex set of one primitive (mesh-component transform commit) and, for a slide, sets the corner texcoords the slide re-interpolated (`doc/editor/transform.md` "Scalar edits"); refreshes normals, rebuilds static physics. Undo restores the primitives, normals and physics from before it ("Undo of an in-place edit" below).
   - `Paint_weights_operation` -- rewrites `vertex_joint_indices_0` / `vertex_joint_weights_0` of a vertex set (one `Weight_paint_tool` stroke); no physics or normal work (positions unchanged), but the primitive rebuild refreshes the solid-wireframe / edge-line streams that carry their own copy of the joint data.
 
 - **`Operations`** window -- ImGui window providing buttons for all geometry operations. Its "Components" section holds the delete and dissolve buttons, each enabled in the component mode whose set it reads (Delete Vertices and Dissolve Vertices in vertex mode; Delete Edges, Delete Only Edges and Faces and Dissolve Edges in edge mode; Delete Faces, Delete Only Faces and Dissolve Faces in face mode; Limited Dissolve with a component or a mesh selection), and the dissolve options as widgets; the options are `Operations` members read by the buttons and the `Geometry.Dissolve.*` commands. The commands are `Geometry.Delete.Vertices` / `.Edges` / `.Faces` / `.OnlyEdgesAndFaces` / `.OnlyFaces`, `Geometry.Dissolve.Faces` / `.Edges` / `.Vertices` / `.Limited`, and the mode-dispatching `Geometry.Delete.Selected` (Delete) and `Geometry.Dissolve.Selected` (Ctrl+X) of `doc/editor/mesh_component_selection.md`. The same section holds the merge buttons - Merge at Center, at Cursor, at First, at Last, Collapse (enabled with a selection in vertex, edge or face mode) and Merge by Distance (with a component or a mesh selection) - with the UVs checkbox and the by-distance threshold, centroid and include-unselected widgets as `Operations` members; the commands are `Geometry.Merge.AtCenter` (M) / `.AtCursor` / `.AtFirst` / `.AtLast` / `.Collapse` / `.ByDistance`. `Geometry.Merge.AtCursor` logs and does nothing when no content point is hovered. The Subdivide Edges button (enabled with a selection in vertex, edge or face mode) comes with the cuts, smoothness and only-quads widgets as `Operations` members; its command is `Geometry.Subdivide.Edges` (no key: Blender reaches it from a menu). The Split and Separate buttons (enabled with a selection in vertex, edge or face mode) and the Rip button (vertex or edge mode) run `Geometry.Split.Selected` (Y), `Geometry.Separate.Selection` (P) and `Geometry.Rip.Selected` (V; toward the component tool's last hovered content point); each declines without a live selection in a mode it reads. The Fill button (vertex, edge or face mode) and the Connect button (vertex or edge mode) run `Geometry.Fill.Selected` (F) and `Geometry.Connect.Selected` (J). The Bridge Edge Loops button (vertex, edge or face mode) comes with the connect loops combo (open loop, closed loop, loop pairs), the merge checkbox, merge factor, twist and cuts widgets (`Operations::m_bridge_loops_options`); its command is `Geometry.Bridge.Loops` (no key: Blender reaches it from a menu). The Flip Normals button (vertex, edge or face mode) runs `Geometry.Normals.Flip`; Recalculate Outside and Recalculate Inside (a component selection, or a mesh selection in object mode) run `Geometry.Normals.RecalculateOutside` (Shift+N) and `Geometry.Normals.RecalculateInside`. The Smooth Vertices button (vertex, edge or face mode) comes with the smoothing factor and repeat widgets (`Operations::m_smooth_vertices_options`); its command `Geometry.Smooth.Vertices` computes the positions with `smooth_vertices()` on the main thread and queues one `Move_mesh_vertices_operation` "Smooth Vertices" per affected primitive (a `Compound_operation` for several), which edits the Geometry in place, so the component selection survives; it is not a `Mesh_operation`. Every command and button of the section that acts on the component selection goes through one guard (`has_component_mode_selection()` in `operations_window.cpp`): it declines without a live selection in a mode the command reads and while a modal component edit (slide, loop cut, inset, bevel, knife) runs. The Inset button (enabled with a face mode selection) comes with the thickness and depth drags and the boundary, even offset, relative offset, edge rail, outset, individual and interpolate checkboxes (`Operations::m_inset_options`); it runs the numeric inset `Mesh_component_selection_tool::inset()` (one `Fork_geometry_operation` "Inset", `doc/editor/mesh_modeling.md`), not a `Mesh_operation`. The Bevel button (enabled with an edge or vertex mode selection) comes with the amount drag, the offset type combo (offset, width) and the loop slide checkbox (`Operations::m_bevel_options`); it runs the numeric bevel `Mesh_component_selection_tool::bevel()` (one `Fork_geometry_operation` "Bevel", `doc/editor/mesh_modeling.md`), not a `Mesh_operation`.
@@ -179,6 +178,37 @@ saved scene records.
 Catmull-Clark, attribute and position edits, vertex-selection transforms
 (including the fork of shared geometry), merge and separate, each with its
 undo.
+
+## Undo of an in-place edit
+
+An undo puts back the state before the edit, so the undone scene exports
+to the keys it had (doc/editor/prepared_assets.md "Keys"):
+
+- `share_rebuilt_primitive()` hands back, in `out_retained`, each sharing
+  mesh's primitives from before its swap (`Retained_mesh_primitives`), and
+  `restore_mesh_primitives()` swaps them back with the edit's notifications
+  (the raytrace brackets of `swap_mesh_primitives()`, the per-mesh step,
+  `Mesh_geometry_changed_message`).
+- `Move_mesh_vertices_operation` holds, from execute to undo, the retained
+  primitives, each mesh's physics (`Mesh_operation::capture_physics()`) and
+  the Geometry's four normal attributes as stored
+  (`Geometry_normals_snapshot`: facet, vertex, smooth vertex and corner
+  normals, value and present flag per element). Undo writes the before
+  positions and texcoords, restores the normals and the primitives - the
+  original soup, prepared data and GPU buffers, not a rebuild - and the
+  physics, then drops what it held; redo runs the edit again. A primitive
+  that lost its optimized variant (a live drag) gets the background
+  re-optimization.
+- `Set_geometry_attribute_operation` holds the retained primitives the same
+  way and restores them after writing the before values.
+- A mesh component drag writes positions, GPU positions, normals and bounds
+  into the edited primitive while it runs; its commit puts them back
+  (`Mesh_component_transform::revert_live_writes()`, also its cancel) before
+  queueing the `Move_mesh_vertices_operation`, so the primitive the
+  operation retains is the one before the drag.
+- `Paint_colors_operation` and `Paint_weights_operation` rebuild on undo: a
+  paint stroke writes into the primitive's GPU buffers as it runs and the
+  stroke end leaves them painted.
 
 ## Threading and re-entrancy
 

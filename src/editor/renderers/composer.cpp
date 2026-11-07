@@ -191,7 +191,7 @@ void Composer::add_cull_views(const Render_context& context, Composer_prepared& 
             *draw_list_scene,
             prepared.frame_index,
             pass_prepared.cull_view,
-            composition_pass.data.filter,
+            get_view_filter(composition_pass.data.filter, context.mesh_form),
             composition_pass.data.mesh_layers,
             get_draw_blending_selection(composition_pass.data),
             get_gpu_command_key(composition_pass, context.scene_view)
@@ -251,7 +251,7 @@ void Composer::add_immediate_cull_views(
             draw_list_scene,
             frame_index,
             cull_view,
-            composition_pass.data.filter,
+            get_view_filter(composition_pass.data.filter, context.mesh_form),
             composition_pass.data.mesh_layers,
             get_draw_blending_selection(composition_pass.data),
             key
@@ -304,6 +304,10 @@ void Composer::prepare_pvs_query(const Render_context& context, Composer_prepare
         (context.views.front().camera == nullptr) ||
         context.views.front().camera->projection().is_orthographic()
     ) {
+        return;
+    }
+    // R8.10: the PVS culls in a view that draws the form it was baked on.
+    if (!context.scene_root || (context.mesh_form != context.scene_root->get_pvs_form())) {
         return;
     }
     const glm::vec3 position = glm::vec3{context.views.front().camera->position_in_world()};

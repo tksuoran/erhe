@@ -94,6 +94,12 @@ auto make_material_external(
         out_error = "asset manager not available";
         return false;
     }
+    // A prepared run holds derived data (raw block textures among it), which no glTF file carries.
+    const std::string refusal = get_prepared_run_refusal(scene_root, "Make External");
+    if (!refusal.empty()) {
+        out_error = refusal;
+        return false;
+    }
     ERHE_VERIFY(material);
     Asset_manager& asset_manager = *context.asset_manager;
     if (!scene_root.is_asset_definition(*material)) {
@@ -166,8 +172,8 @@ auto make_material_internal(
     }
 
     // Scene-owned copy through the manager (single creation funnel). The
-    // Item_base copy constructor intentionally does not copy the gltf uid:
-    // the copy is a NEW asset, stamped on its first export.
+    // Item_base copy constructor does not copy the gltf uid: the copy is a
+    // NEW asset with a uid of its own.
     const std::shared_ptr<erhe::primitive::Material> copy =
         context.asset_manager->create<erhe::primitive::Material>(scene_root, *material);
 

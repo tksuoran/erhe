@@ -4,6 +4,8 @@
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "assets/asset_manager.hpp"
+#include "assets/prepared_asset.hpp"
+#include "assets/scene_export.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
@@ -134,7 +136,8 @@ void queue_open_scene_gltf(
     App_context&                                            context,
     const std::filesystem::path&                            path,
     const Erhe_scene_open                                   erhe_scene_open,
-    std::function<void(const std::shared_ptr<Scene_root>&)> on_erhe_scene_opened
+    std::function<void(const std::shared_ptr<Scene_root>&)> on_erhe_scene_opened,
+    std::shared_ptr<Prepared_open>                          prepared_open
 )
 {
     // Asynchronous path (doc/editor/async_asset_loading_design.md step 6):
@@ -145,7 +148,8 @@ void queue_open_scene_gltf(
         std::shared_ptr<Asset_load_handle> handle = context.asset_manager->queue_load(
             Asset_load_request{
                 .path            = path,
-                .erhe_scene_open = erhe_scene_open
+                .erhe_scene_open = erhe_scene_open,
+                .prepared_open   = prepared_open
             },
             [&context, path, on_erhe_scene_opened](const Asset_load_result& result) {
                 if (result.state != Asset_load_state::done) {
@@ -178,6 +182,25 @@ void queue_open_scene_gltf(
     }
 
     // Blocking path (async_gltf_load off), scan included.
+    if (is_prepared_asset_path(path)) {
+        if (!prepared_open) {
+            prepared_open = std::make_shared<Prepared_open>(resolve_prepared_open(path, get_prepared_build_formats(context)));
+        }
+        if (prepared_open->kind == Prepared_open_kind::failed) {
+            log_operations->error("Open scene: '{}' failed: {}", erhe::file::to_string(path), prepared_open->error);
+            return;
+        }
+        log_prepared_open(path, *prepared_open);
+        if (prepared_open->kind == Prepared_open_kind::open_source) {
+            queue_open_scene_gltf(context, prepared_open->source_path, erhe_scene_open, std::move(on_erhe_scene_opened));
+            return;
+        }
+        std::shared_ptr<Scene_root> scene_root = editor::open_scene_gltf(context, path, prepared_open.get());
+        if (scene_root && on_erhe_scene_opened) {
+            on_erhe_scene_opened(scene_root);
+        }
+        return;
+    }
     if (erhe_scene_open == Erhe_scene_open::full_scene) {
         const Gltf_scan_summary summary = editor::scan_gltf(path);
         if (is_erhe_scene(summary.extensions_used)) {

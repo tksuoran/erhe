@@ -1,6 +1,6 @@
 // get_vertex_format_signature(): the canonical layout text the
 // ERHE_gpu_vertex_streams glTF extension stores and compares
-// (doc/gltf_extensions/ERHE_gpu_vertex_streams.md "Signature").
+// (doc/erhe/gltf.md "GPU vertex streams on export").
 
 #include <gtest/gtest.h>
 

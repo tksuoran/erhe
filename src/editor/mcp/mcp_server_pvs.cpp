@@ -65,6 +65,7 @@ namespace {
 {
     json result{
         {"state",             c_str(status.state)},
+        {"stage",             c_str(status.stage)},
         {"scene_name",        status.scene_name},
         {"method",            erhe::scene::c_str(status.method)},
         {"grid_origin",       to_json(status.grid_origin)},
@@ -76,12 +77,14 @@ namespace {
         {"capture_count",     status.capture_count},
         {"captures_done",     status.captures_done},
         {"unmatched_entries", status.unmatched_entries},
-        {"uids_assigned",     status.uids_assigned},
         {"cells_with_pvs",    status.cells_with_pvs},
         {"seconds_elapsed",   status.seconds_elapsed},
         {"seconds_remaining", status.seconds_remaining},
         {"debug_face",        status.debug_face}
     };
+    if (!status.pvs_item_key.empty()) {
+        result["pvs_item"] = json{{"key", status.pvs_item_key}, {"made", status.pvs_item_made}, {"bytes", status.pvs_item_bytes}};
+    }
     if (status.method == erhe::scene::Pvs_bake_method::disocclusion) {
         result["sample_point_test"]          = status.sample_point_test;
         result["cells_without_sample_point"] = status.cells_without_sample_point;
@@ -377,7 +380,7 @@ auto Mcp_server::action_pvs_clear(const json& args) -> std::string
         return make_error_content("pvs_clear: scene not found: " + scene_name);
     }
     const bool had_database = (scene_root->get_pvs_database() != nullptr);
-    scene_root->set_pvs_database({});
+    scene_root->set_pvs_database({}, Mesh_form::source);
     return make_json_content(json{
         {"scene_name",   scene_root->get_name()},
         {"had_database", had_database},

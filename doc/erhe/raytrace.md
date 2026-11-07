@@ -18,7 +18,8 @@ intersection tests.
 - `Geometry_type` -- enum: triangle, quad, subdivision
 - `Prebuilt_bvh` -- an exported / importable BVH with its content hash, triangle count, backend and library tag (`prebuilt_bvh.hpp`)
 - `Bvh_node_record` -- one 28-byte node in the `bvh_v2` record layout
-- `Bvh_source` -- where a committed geometry's BVH came from: `none`, `built`, `cache`, `prebuilt`
+- `Tinybvh_node_record` -- one 32-byte node in the `tinybvh` record layout
+- `Bvh_source` -- where a committed geometry's BVH came from: `none`, `built`, `prebuilt`
 
 ## Public API
 ```cpp
@@ -51,13 +52,29 @@ index copies this way. Test: `Geometry.ReleaseBuffersKeepsHitsIdentical`
 ## Prebuilt BVH
 
 A committed geometry's BVH can be exported and supplied to a later
-`commit()` of the same triangles, so the BVH is neither built nor read from
-`cache/bvh`. This is the runtime half of the glTF extension
-[`ERHE_raytrace_bvh`](../gltf_extensions/ERHE_raytrace_bvh.md), whose
-`bvh_v2` payload `Prebuilt_bvh` mirrors: `nodes` are `Bvh_node_record`s laid
-out like `bvh::v2::Node<float, 3>` (six floats, then `index.value` with
-`prim_count` in bits 0-3 and `first_id` in bits 4-31), and
-`primitive_ids[i]` is the core triangle index (index order) of BVH slot `i`.
+`commit()` of the same triangles, so the BVH is not built. This is the
+runtime half of the Raytrace BVH items (`doc/erhe/gltf.md` "Raytrace BVH
+items"). The node records are the backend's own layout, named by
+`Prebuilt_bvh::backend`; `primitive_ids[i]` is the core triangle index
+(index order) of BVH slot `i` in both:
+
+- `bvh_v2` (the `bvh` backend): `nodes`, `Bvh_node_record`s laid out like
+  `bvh::v2::Node<float, 3>` (six floats min x, max x, min y, max y, min z,
+  max z, then `index.value` with `prim_count` in bits 0-3 and `first_id` in
+  bits 4-31). Every node is in the tree.
+- `tinybvh`: `tinybvh_nodes`, `Tinybvh_node_record`s laid out like
+  `tinybvh::BVH::BVHNode` (Wald's 32-byte node: `aabb_min` xyz, `left_first`,
+  `aabb_max` xyz, `tri_count`; an inner node has `tri_count` 0 and its
+  children at `left_first` and `left_first + 1`, a leaf covers slots
+  `left_first .. left_first + tri_count - 1`). The pool is exported as tinybvh
+  holds it (`usedNodes` records, node 1 unused, holes after a threaded build),
+  with the records no inner node reaches zeroed, so equal builds give equal
+  bytes. tinybvh's own `Save()` format is not used: it writes the `BVH`
+  object itself, pointers included.
+
+`get_prebuilt_bvh_node_record_size(backend)`, `get_prebuilt_bvh_node_bytes()`
+and `set_prebuilt_bvh_node_bytes()` give the records as bytes for the item
+payload, so the glTF reader and writer need not know the layouts.
 
 ```cpp
 // After commit()
@@ -73,32 +90,48 @@ if (other->get_bvh_source() != Bvh_source::prebuilt) {
 ```
 
 - `get_triangle_hash()` is the FNV-1a hash `commit()` computes over the
-  triangle positions in order (also the `cache/bvh` key);
+  triangle positions in order;
   `get_triangle_count()` is the triangle count of the last commit.
-- `get_prebuilt_bvh_backend()` is `bvh_v2` and `get_prebuilt_bvh_library()`
-  the bvh dependency's pinned `GIT_TAG` (compile definition
-  `ERHE_BVH_LIBRARY_TAG`, set from `ERHE_BVH_GIT_TAG` in the top-level
-  `CMakeLists.txt`), the same on every platform. Both are empty on the other
-  backends, whose `export_bvh()` and `set_prebuilt_bvh()` return false.
+- `get_prebuilt_bvh_backend()` is `bvh_v2` or `tinybvh` and
+  `get_prebuilt_bvh_library()` the dependency's pinned `GIT_TAG` (compile
+  definition `ERHE_BVH_LIBRARY_TAG` / `ERHE_TINYBVH_LIBRARY_TAG`, set from
+  `ERHE_BVH_GIT_TAG` / `ERHE_TINYBVH_GIT_TAG` in the top-level
+  `CMakeLists.txt`), the same on every platform; `get_prebuilt_bvh_max_depth()`
+  is the backend's traversal stack size (64 for `bvh_v2`, 256 for tinybvh's
+  node stack). All are empty or 0 on `embree` and `none`, whose
+  `export_bvh()` and `set_prebuilt_bvh()` return false.
 - `commit()` takes the supplied BVH for that commit only and checks it with
   `validate_prebuilt_bvh()`: backend and library tag, triangle count and
   hash, node count, child and slot ranges, the tree shape (node 0 has no
-  parent, every other node exactly one inner parent, all nodes reachable from
-  node 0, at most 64 inner ancestors = the traversal stack size) and that
-  `primitive_ids` is a permutation. When it passes, the nodes and ids are
+  parent, every node it reaches exactly one inner parent, at most `max_depth`
+  inner ancestors; `bvh_v2` also every node reachable from node 0, `tinybvh`
+  unreachable nodes allowed) and that `primitive_ids` is a permutation. When it passes, the nodes and ids are
   installed and the usual triangle precompute runs; otherwise `commit()`
   logs one warning with the reason, keeps it in
-  `get_prebuilt_bvh_rejection()`, and continues with `cache/bvh`, then a
-  build.
+  `get_prebuilt_bvh_rejection()`, and builds one ("BVH sources").
 - `hash_triangle_positions()` is one triangle's step of that hash and
   `compute_triangle_hash(indices, positions_xyz)` the hash over an indexed
   triangle list; `commit()` hashes with the former, so a writer that
   reorders triangles (the glTF exporter's prepared core) recomputes the hash
   the loader's `commit()` will compare. `bvh_v2_traversal_stack_size` (64)
   is the `max_depth` for `validate_prebuilt_bvh()`.
-- `get_bvh_source()` tells which of `prebuilt`, `cache` or `built` the last
-  commit used. A cache entry and a prebuilt BVH give the same nodes, ids and
-  hits as the build they were taken from (`test/test_prebuilt_bvh.cpp`).
+- `get_bvh_source()` tells which of `prebuilt` or `built` the last commit
+  used. A prebuilt BVH gives the same nodes, ids and hits as the build it was
+  taken from (`test/test_prebuilt_bvh.cpp`).
+
+## BVH sources
+
+The `bvh` and `tinybvh` backends' `commit()` takes a prebuilt BVH when one
+was supplied and validates, else builds one (logged "BVH build <label> in
+<ms> ms" / "tinybvh build <label> in <ms> ms"). Neither reads or writes a
+disk cache: the editor stores each BVH it builds as a Raytrace BVH item of
+the file's editor asset (doc/editor/prepared_assets.md "The editor's own
+loading", R8.4) and supplies it as a prebuilt BVH at the next load;
+`cache/bvh` and `cache/tinybvh` directories an earlier build left are not
+read. The item's format stamp is the library tag
+(doc/editor/prepared_assets.md "Format stamps"), so the items of one backend
+are not the other's: a prepared asset made by a `bvh` build and run by a
+`tinybvh` build (or the reverse) builds its BVHs in memory.
 
 ## Dependencies
 - `erhe::dataformat` -- `Format` enum for buffer types
@@ -112,7 +145,6 @@ Backend selected at CMake time via `ERHE_RAYTRACE_LIBRARY`:
 ### `bvh` (default) -- madmann91/bvh v2
 - Header-only BVH library fetched via CPM (pinned to specific commit)
 - Parallel BVH build via `bvh::v2::ThreadPool` + `bvh::v2::ParallelExecutor`
-- Hash-based BVH disk caching in `cache/bvh/<library-tag>/<hash>`, where `<library-tag>` is the pinned `GIT_TAG` (`ERHE_BVH_LIBRARY_TAG`), so the key is the same on Android, where the checkout has no `.git`
 - BVH export / import, see "Prebuilt BVH"
 - Manual ray traversal with precomputed triangles
 - No scene-level acceleration -- O(N) linear scan of instances per ray
@@ -124,7 +156,7 @@ Backend selected at CMake time via `ERHE_RAYTRACE_LIBRARY`:
 - `#define TINYBVH_IMPLEMENTATION` in exactly one .cpp file (`tinybvh_geometry.cpp`)
 - `tinybvh::BVH::Build()` takes `bvhvec4` triples (3 per triangle, w unused)
 - Hit normals computed from stored triangle vertices via cross product (tinybvh does not return normals)
-- Hash-based BVH disk caching via `tinybvh::BVH::Save()`/`Load()` in `cache/tinybvh/<git-commit>/<hash>`
+- BVH export / import, see "Prebuilt BVH" (`tinybvh` layout); a commit keeps the `tinybvh::BVH` object (a scene's TLAS names it) and frees its pools first
 - **TLAS (Top-Level Acceleration Structure)**: enabled by default via `Tinybvh_scene::s_use_tlas`. Uses tinybvh's native `BLASInstance`/`Build`/`Intersect` for O(log N) instance traversal at the scene level. Falls back to linear scan when disabled or for nested hierarchies.
 - Direction normalization: tinybvh normalizes ray direction internally; the backend compensates by scaling t_far by direction length before/after tinybvh calls
 - Multi-level instance nesting supported (linear scan path)

@@ -1,7 +1,7 @@
 §MBEL:5.0
 ©erhe::Topic::pvs
 @scope::Potentially visible sets: offline disocclusion-buffer bake per grid cell, database in the scene file (ERHE_pvs), GPU/CPU runtime culling in the classification, page streaming; what is landed, the traps, the verification recipe, what is open
-@docs::doc/editor/pvs.md{method+rules-D1-D7+bake+verification}+doc/plans/pvs.md{outstanding:step-8-headset+Open}+doc/erhe/draw_list_renderer.md-Q6{PVS+resident-set}+9.2{passes}+doc/erhe/scene.md+doc/gltf_extensions/ERHE_pvs.md+doc/agents/mcp_server_usage.md+doc/testing.md
+@docs::doc/editor/pvs.md{method+rules-D1-D7+bake+verification}+doc/plans/pvs.md{outstanding:step-8-headset+Open}+doc/erhe/draw_list_renderer.md-Q6{PVS+resident-set}+9.2{passes}+doc/erhe/scene.md+doc/erhe/gltf.md(PVS-item;ERHE_pvs-file-extension-removed-2026-11-07)+doc/agents/mcp_server_usage.md+doc/testing.md
 
 [STATE_2026-10-31]
 @complete-on-desktop::steps-1-7-landed{a1eb7cf57..5eace01e3;commits-per-step-in-doc/plans/pvs.md-"Build order"}
@@ -13,7 +13,7 @@
 
 [VERIFY_RECIPE]
 python3 scripts/pvs_verify.py --editor build_xcode_metal_headless/bin/Debug/editor --sections sampled,wall,streaming{,heavy,bistro}
-@reference-hashes::sampled-c80c51abedaed3c5(all-backends)|wall-4fe439f63f8d385d(M3-headless+M4-headless+MoltenVK)|Bistro-befefef64ac2a8e1(M3-headless;MoltenVK-differs-raster-ULP-25/572-cells=per-backend-determinism-only)
+@reference-hashes::since-fdd2db1b4(columns-in-world-form-order):sampled-eb0aa3903eb78865|wall-23b23844bb191325(Linux-NVIDIA;other-backends-not-rerun);before:sampled-c80c51abedaed3c5(all-backends)|wall-4fe439f63f8d385d(M3-headless+M4-headless+MoltenVK)|Bistro-befefef64ac2a8e1(M3-headless;MoltenVK-differs-raster-ULP-25/572-cells=per-backend-determinism-only)
 @expected::wall-0-misses/1.241(12-leaking-cells-reported-not-FAIL)|heavy-0/2.208|Bistro-0/7.715|streaming-capacity-4-radius-1-12-poses:28-uploads(4-before-pose-0)/24-evictions,max-4/4,1-upload/frame,0-mismatches-incl-checks-while-moving,images-identical-on/off
 @tests::ctest -L "gpu|editor" 101/101 Metal+MoltenVK;deviceless erhe_scene_renderer_tests-88+erhe_scene_tests-177+erhe_gltf_tests-26;GPU Pvs_disocclusion_gpu_test bit-exact-CPU-ref-M3/M4/MoltenVK/KK-incl-64-layers
 @cost::bake~125-155ms/cell-Debug-M4-Pro;Bistro-572-cells

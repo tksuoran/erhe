@@ -4,67 +4,22 @@
 #include <fmt/chrono.h>
 
 #include "erhe_buffer/ibuffer.hpp"
-#include "erhe_file/file.hpp"
 #include "erhe_raytrace/tinybvh/tinybvh_geometry.hpp"
 #include "erhe_raytrace/tinybvh/tinybvh_instance.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
+#include "erhe_raytrace/prebuilt_bvh.hpp"
 #include "erhe_raytrace/ray.hpp"
 
 #include "erhe_hash/hash.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_time/timer.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <glm/gtx/matrix_operation.hpp>
 
-#include <fstream>
+#include <cstring>
 
 namespace erhe::raytrace {
-
-[[nodiscard]] auto get_tinybvh_cache_path(const uint64_t hash_code) -> std::filesystem::path
-{
-    const std::filesystem::path cache_path =
-        std::filesystem::path{"cache"} / std::filesystem::path{"tinybvh"} / std::filesystem::path{ERHE_TINYBVH_GIT_COMMIT};
-    const bool directory_ok = erhe::file::ensure_directory_exists(cache_path);
-    if (!directory_ok) {
-        return {};
-    }
-    const std::string hash_string = fmt::format("{}", hash_code);
-    return cache_path / std::filesystem::path{hash_string};
-}
-
-auto save_tinybvh(tinybvh::BVH& bvh, const uint64_t hash_code) -> bool
-{
-    const std::filesystem::path cache_path = get_tinybvh_cache_path(hash_code);
-    const std::string file_name = cache_path.string();
-    if (file_name.empty()) {
-        return false;
-    }
-    try {
-        bvh.Save(file_name.c_str());
-        return true;
-    } catch (...) {
-        return false;
-    }
-}
-
-auto load_tinybvh(
-    tinybvh::BVH&              bvh,
-    const uint64_t             hash_code,
-    const tinybvh::bvhvec4*    triangles,
-    const uint32_t             triangle_count
-) -> bool
-{
-    const std::filesystem::path cache_path = get_tinybvh_cache_path(hash_code);
-    const std::string file_name = cache_path.string();
-    if (file_name.empty()) {
-        return false;
-    }
-    try {
-        return bvh.Load(file_name.c_str(), triangles, triangle_count);
-    } catch (...) {
-        return false;
-    }
-}
 
 auto IGeometry::create(const std::string_view debug_label, const Geometry_type geometry_type) -> IGeometry*
 {
@@ -128,8 +83,8 @@ void Tinybvh_geometry::commit()
     const char* raw_vertex_ptr = reinterpret_cast<char*>(vertex_buffer->get_span().data()) + vertex_buffer_info->byte_offset;
     const std::size_t triangle_count = index_buffer_info->item_count;
 
-    // Collect triangles and compute hash
-    uint64_t hash_code{0xcbf29ce484222325};
+    // Collect triangles and compute hash (Prebuilt_bvh::triangle_hash)
+    uint64_t hash_code{erhe::hash::c_seed};
     m_triangles.clear();
     m_triangles.reserve(triangle_count * 3);
 
@@ -153,9 +108,7 @@ void Tinybvh_geometry::commit()
             const float p2_y = *reinterpret_cast<const float*>(raw_vertex_ptr + (i2 * vertex_buffer_info->byte_stride) + (1 * sizeof(float)));
             const float p2_z = *reinterpret_cast<const float*>(raw_vertex_ptr + (i2 * vertex_buffer_info->byte_stride) + (2 * sizeof(float)));
 
-            hash_code = erhe::hash::hash(p0_x, p0_y, p0_z, hash_code);
-            hash_code = erhe::hash::hash(p1_x, p1_y, p1_z, hash_code);
-            hash_code = erhe::hash::hash(p2_x, p2_y, p2_z, hash_code);
+            hash_code = hash_triangle_positions(glm::vec3{p0_x, p0_y, p0_z}, glm::vec3{p1_x, p1_y, p1_z}, glm::vec3{p2_x, p2_y, p2_z}, hash_code);
 
             // tinybvh expects 3 bvhvec4 per triangle (w is unused)
             m_triangles.push_back(tinybvh::bvhvec4{p0_x, p0_y, p0_z, 0.0f});
@@ -166,24 +119,134 @@ void Tinybvh_geometry::commit()
     }
 
     m_triangle_count = triangle_count;
+    m_triangle_hash  = hash_code;
+    // The BVH object stays (a scene's TLAS names it); its pools go, so Build() or the import allocates anew.
+    {
+        tinybvh::BVH& bvh = *m_bvh;
+        bvh.AlignedFree(bvh.bvhNode);
+        bvh.AlignedFree(bvh.primIdx);
+        bvh.AlignedFree(bvh.fragment);
+        bvh.bvhNode        = nullptr;
+        bvh.primIdx        = nullptr;
+        bvh.fragment       = nullptr;
+        bvh.allocatedNodes = 0;
+        bvh.usedNodes      = 0;
+        bvh.rebuildable    = true;
+        bvh.may_have_holes = false;
+    }
 
-    const bool load_ok = load_tinybvh(*m_bvh, hash_code, m_triangles.data(), static_cast<uint32_t>(triangle_count));
-    if (!load_ok) {
+    // The supplied BVH is for this commit only.
+    std::optional<Prebuilt_bvh> prebuilt = std::move(m_prebuilt_bvh);
+    m_prebuilt_bvh.reset();
+    m_prebuilt_bvh_rejection.clear();
+
+    if (prebuilt.has_value() && try_use_prebuilt_bvh(prebuilt.value(), hash_code, triangle_count)) {
+        m_bvh_source  = Bvh_source::prebuilt;
+        m_bvh_quality = prebuilt.value().quality;
+        return;
+    }
+
+    {
         ERHE_PROFILE_SCOPE("tinybvh build");
         erhe::time::Timer timer{m_debug_label.c_str()};
-
         timer.begin();
         m_bvh->Build(m_triangles.data(), static_cast<uint32_t>(triangle_count));
         timer.end();
-
         const long long time = std::chrono::duration_cast<std::chrono::milliseconds>(timer.duration().value()).count();
         log_geometry->info("tinybvh build {} in {} ms", debug_label(), time);
+    }
+    m_bvh_source  = Bvh_source::built;
+    m_bvh_quality = Bvh_build_quality::high;
+}
 
-        const bool save_ok = save_tinybvh(*m_bvh, hash_code);
-        if (!save_ok) {
-            log_geometry->error("tinybvh save failed, hash = {}", hash_code);
+// Installs a validated prebuilt BVH (doc/erhe/raytrace.md "Prebuilt BVH") into
+// m_bvh, whose pools commit() freed, as tinybvh::BVH::Load() does from its
+// file: the node pool and the primitive indices over m_triangles.
+auto Tinybvh_geometry::try_use_prebuilt_bvh(const Prebuilt_bvh& prebuilt, const uint64_t hash_code, const std::size_t triangle_count) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::string reason = validate_prebuilt_bvh(
+        prebuilt, get_prebuilt_bvh_backend(), get_prebuilt_bvh_library(), hash_code, triangle_count, tinybvh_traversal_stack_size
+    );
+    if (!reason.empty()) {
+        log_geometry->warn("Prebuilt BVH for {} rejected: {}", debug_label(), reason);
+        m_prebuilt_bvh_rejection = reason;
+        return false;
+    }
+    static_assert(sizeof(tinybvh::BVH::BVHNode) == sizeof(Tinybvh_node_record));
+
+    const uint32_t node_count = static_cast<uint32_t>(prebuilt.tinybvh_nodes.size());
+    tinybvh::BVH&  bvh        = *m_bvh;
+    bvh.bvhNode        = static_cast<tinybvh::BVH::BVHNode*>(bvh.AlignedAlloc(node_count * sizeof(tinybvh::BVH::BVHNode)));
+    bvh.primIdx        = static_cast<uint32_t*>(bvh.AlignedAlloc(triangle_count * sizeof(uint32_t)));
+    std::memcpy(bvh.bvhNode, prebuilt.tinybvh_nodes.data(), node_count * sizeof(tinybvh::BVH::BVHNode));
+    std::memcpy(bvh.primIdx, prebuilt.primitive_ids.data(), triangle_count * sizeof(uint32_t));
+    bvh.allocatedNodes = node_count;
+    bvh.usedNodes      = node_count;
+    bvh.newNodePtr     = node_count;
+    bvh.triCount       = static_cast<uint32_t>(triangle_count);
+    bvh.idxCount       = static_cast<uint32_t>(triangle_count);
+    bvh.verts          = tinybvh::bvhvec4slice{m_triangles.data(), static_cast<uint32_t>(triangle_count * 3), sizeof(tinybvh::bvhvec4)};
+    bvh.aabbMin        = bvh.bvhNode[0].aabbMin;
+    bvh.aabbMax        = bvh.bvhNode[0].aabbMax;
+    bvh.rebuildable    = false; // no fragments, as after BVH::Load()
+    bvh.may_have_holes = true;
+    return true;
+}
+
+auto Tinybvh_geometry::set_prebuilt_bvh(Prebuilt_bvh&& prebuilt) -> bool
+{
+    m_prebuilt_bvh = std::move(prebuilt);
+    return true;
+}
+
+auto Tinybvh_geometry::export_bvh(Prebuilt_bvh& out) const -> bool
+{
+    if ((m_bvh_source == Bvh_source::none) || !m_triangle_hash.has_value() || !m_bvh || (m_bvh->usedNodes == 0)) {
+        return false;
+    }
+    ERHE_VERIFY(m_bvh->idxCount == m_triangle_count);
+    out.backend        = std::string{get_prebuilt_bvh_backend()};
+    out.library        = std::string{get_prebuilt_bvh_library()};
+    out.quality        = m_bvh_quality;
+    out.triangle_hash  = m_triangle_hash.value();
+    out.triangle_count = m_triangle_count;
+    out.nodes.clear();
+    out.tinybvh_nodes.resize(m_bvh->usedNodes);
+    std::memcpy(out.tinybvh_nodes.data(), m_bvh->bvhNode, m_bvh->usedNodes * sizeof(Tinybvh_node_record));
+    // Node 1 and the holes of a threaded build hold whatever the pool held; zero them for stable bytes.
+    std::vector<uint8_t> referenced(m_bvh->usedNodes, 0);
+    referenced[0] = 1;
+    for (uint32_t n = 0; n < m_bvh->usedNodes; ++n) {
+        const Tinybvh_node_record& node = out.tinybvh_nodes[n];
+        if ((referenced[n] != 0) && (node.tri_count == 0) && ((node.left_first + 1) < m_bvh->usedNodes)) {
+            referenced[node.left_first]     = 1;
+            referenced[node.left_first + 1] = 1;
         }
     }
+    for (uint32_t n = 0; n < m_bvh->usedNodes; ++n) {
+        if (referenced[n] == 0) {
+            out.tinybvh_nodes[n] = Tinybvh_node_record{};
+        }
+    }
+    out.primitive_ids.assign(m_bvh->primIdx, m_bvh->primIdx + m_bvh->idxCount);
+    return true;
+}
+
+auto Tinybvh_geometry::get_triangle_hash() const -> std::optional<uint64_t>
+{
+    return m_triangle_hash;
+}
+
+auto Tinybvh_geometry::get_bvh_source() const -> Bvh_source
+{
+    return m_bvh_source;
+}
+
+auto Tinybvh_geometry::get_prebuilt_bvh_rejection() const -> std::string_view
+{
+    return m_prebuilt_bvh_rejection;
 }
 
 // commit() copies what traversal and hit reporting read (the precomputed

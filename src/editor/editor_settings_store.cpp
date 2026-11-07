@@ -20,7 +20,9 @@ namespace {
 // v12 makes occlusion culling the default (doc/plans/occlusion_culling.md,
 // user decision 2026-11-01). Every file written before stores
 // occlusion_culling explicitly with the old default off, so a v11 or older
-// document gets the new default.
+// document gets the new default. v16 adds the default export settings,
+// whose LOD request an older document took from its lod settings. v17 drops
+// export_container: the reader skips the key, the upgrade rewrite omits it.
 void register_editor_settings_migrations()
 {
     static std::once_flag s_once;
@@ -34,6 +36,9 @@ void register_editor_settings_migrations()
                     if (old_version < 12) {
                         const Editor_settings_config v12_defaults{};
                         config.occlusion_culling = v12_defaults.occlusion_culling;
+                    }
+                    if (old_version < 16) {
+                        config.export_settings.lod = config.lod;
                     }
                     return true;
                 }

@@ -4,7 +4,6 @@
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/mesh_optimizer.hpp"
 
-#include <filesystem>
 
 namespace erhe::primitive {
 
@@ -60,12 +59,6 @@ public:
     // carries the new value - see Mesh_memory::make_primitive_buffer_info().
     bool                  optimize_meshes      {false};
     Mesh_optimize_options mesh_optimize_options{};
-
-    // Filesystem cache of the geometry path's optimizer passes - see
-    // optimize_indexed_mesh_cached(). Empty (the default) runs them uncached.
-    // The owner of the build decides: the editor sets it for imported meshes
-    // only, so procedural and edited geometry does not grow the cache.
-    std::filesystem::path mesh_optimize_cache_directory{};
 
     // Vertex format the optimized variant is BUILT IN - the same content
     // attributes as vertex_format minus the per-corner facet id, which a welded

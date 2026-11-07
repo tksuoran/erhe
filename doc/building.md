@@ -162,6 +162,7 @@ attempt and the launch must be retried.
 | `ERHE_USE_TSAN` | ThreadSanitizer (Clang, GCC, AppleClang; exclusive with `ERHE_USE_ASAN`, ignored on MSVC) | `ON`, `OFF` | `OFF` |
 | `ERHE_WARNINGS_AS_ERRORS` | Warnings as errors on every erhe target with MSVC (`/WX`); the CPM dependencies keep their own policy | `ON`, `OFF` | `ON` |
 | `ERHE_USE_FPNG` | Build the fpng image writer (fast PNG save) | `ON`, `OFF` | `ON` |
+| `ERHE_BASIS_ENCODER` | Build the Basis Universal encoder (`doc/erhe/graphics.md` "Basis Universal encoder"; Export's Basis texture items); forced `OFF` on Android | `ON`, `OFF` | `ON` |
 | `ERHE_USE_PRECOMPILED_HEADERS` | Precompiled headers (faster builds) | `ON`, `OFF` | `OFF` |
 
 Defaults are the raw CMake cache defaults; the `scripts/` configure wrappers

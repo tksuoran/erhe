@@ -1,11 +1,14 @@
 #pragma once
 
 #include "erhe_raytrace/igeometry.hpp"
+#include "erhe_raytrace/prebuilt_bvh.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -52,14 +55,21 @@ public:
     auto get_user_data() const -> const void*      override;
     auto is_enabled   () const -> bool             override;
     auto debug_label  () const -> std::string_view override;
+    auto get_triangle_hash         () const -> std::optional<uint64_t> override;
+    auto get_triangle_count        () const -> std::size_t             override;
+    auto export_bvh                (Prebuilt_bvh& out) const -> bool   override;
+    auto set_prebuilt_bvh          (Prebuilt_bvh&& prebuilt) -> bool   override;
+    auto get_bvh_source            () const -> Bvh_source              override;
+    auto get_prebuilt_bvh_rejection() const -> std::string_view        override;
 
     // Tinybvh_geometry public API
     auto intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* instance) -> bool;
     auto get_bvh           () -> tinybvh::BVH*;
-    auto get_triangle_count() const -> std::size_t;
     auto get_triangles     () const -> const std::vector<tinybvh::bvhvec4>&;
 
 private:
+    [[nodiscard]] auto try_use_prebuilt_bvh(const Prebuilt_bvh& prebuilt, uint64_t hash_code, std::size_t triangle_count) -> bool;
+
     class Buffer_info
     {
     public:
@@ -83,6 +93,11 @@ private:
     std::unique_ptr<tinybvh::BVH>          m_bvh;
     std::vector<tinybvh::bvhvec4>          m_triangles;
     std::size_t                            m_triangle_count{0};
+    std::optional<uint64_t>                m_triangle_hash {};
+    Bvh_build_quality                      m_bvh_quality   {Bvh_build_quality::high};
+    Bvh_source                             m_bvh_source    {Bvh_source::none};
+    std::optional<Prebuilt_bvh>            m_prebuilt_bvh  {};
+    std::string                            m_prebuilt_bvh_rejection;
 };
 
 } // namespace erhe::raytrace

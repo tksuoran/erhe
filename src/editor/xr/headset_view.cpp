@@ -2460,14 +2460,20 @@ void Headset_view::prepare_pvs_query(const glm::mat4& world_from_root)
         eye_min = glm::min(eye_min, eye_in_world);
         eye_max = glm::max(eye_max, eye_in_world);
     }
-    const float margin = m_app_context.render_settings->pvs_query_margin;
-    slot.pvs_query_min = eye_min - glm::vec3{margin};
-    slot.pvs_query_max = eye_max + glm::vec3{margin};
-
     const std::shared_ptr<Scene_root> scene_root = get_scene_root();
     if (!scene_root) {
         return;
     }
+    // The headset draws the source form: a database baked on the world-space form culls nothing here (R8.10).
+    if (scene_root->get_pvs_form() != Mesh_form::source) {
+        slot.pvs_query_min = glm::vec3{ 0.0f};
+        slot.pvs_query_max = glm::vec3{-1.0f};
+        return;
+    }
+    const float margin = m_app_context.render_settings->pvs_query_margin;
+    slot.pvs_query_min = eye_min - glm::vec3{margin};
+    slot.pvs_query_max = eye_max + glm::vec3{margin};
+
     erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root->get_draw_list_scene();
     if (draw_list_scene == nullptr) {
         return;

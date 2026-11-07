@@ -29,16 +29,24 @@ plain interchange exports never do.
   (`doc/editor/style_library.md` D3), assigned after `styles` below has
   created every style of the file. Omitted when the scene uses none.
 - `enable_physics`: whether the scene owns a physics world.
+- `editor_asset` (optional): the path of the scene's editor asset relative
+  to the file (`doc/plans/prepared_assets.md` R2.2;
+  `doc/editor/prepared_assets.md` "Locations"), written by Save Scene; an
+  open of the file and an Export that reads it as a prefab source or a
+  material container look for the editor asset there first. A prepared file
+  and a Scene item carry none.
 - `settings` (optional): per-scene overrides of editor-global settings
   (erhe #239) and per-scene editor data as a `Scene_settings` JSON object
   (the erhe_codegen schema in
   `src/editor/scene/definitions/scene_settings.py`; each absent / null
   override means "use the editor-global default"). The data fields are the
   scene id, the lightmap tile overrides, the variant selections and
-  `export_settings` (`Scene_export_settings`, what Prepare writes the scene
-  with: the LOD request, the world-space bake switch and its instancing
-  mode, and the potentially visible set bake grid `pvs_region_min` /
-  `pvs_region_max` / `pvs_cell_size`, `doc/editor/pvs.md` D2). A v1
+  `export_settings` (`Scene_export_settings`, what Export writes
+  the scene with: the LOD request, the world-space bake switch and its
+  instancing mode, the potentially visible set bake grid `pvs_region_min` /
+  `pvs_region_max` / `pvs_cell_size` (`doc/editor/pvs.md` D2),
+  `texture_supercompression` and `raytrace_bvh`; null or absent when the
+  scene has none, `doc/editor/prepared_assets.md` "Export settings"). A v1
   `settings` object carries the three PVS fields at its top level; the
   import moves them into `export_settings`. Omitted entirely when every
   field has its default.

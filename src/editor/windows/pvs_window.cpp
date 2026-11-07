@@ -81,10 +81,15 @@ void Pvs_window::region_imgui(Scene_root& scene_root)
 {
     // Scene settings (doc/plans/pvs.md D2): no render phase reads them, so
     // the fields edit them in place.
-    Scene_settings& settings = scene_root.get_scene_settings();
-    ImGui::DragFloat3("Region min", glm::value_ptr(settings.export_settings.pvs_region_min), 0.1f);
-    ImGui::DragFloat3("Region max", glm::value_ptr(settings.export_settings.pvs_region_max), 0.1f);
-    ImGui::DragFloat ("Cell size",  &settings.export_settings.pvs_cell_size, 0.05f, 0.05f, 100.0f, "%.2f m");
+    std::optional<Scene_export_settings>& optional_settings = scene_root.get_scene_settings().export_settings;
+    if (!optional_settings.has_value()) {
+        ImGui::TextWrapped("The scene has no export settings, which hold the region; add them in Properties > Export.");
+        return;
+    }
+    Scene_export_settings& settings = optional_settings.value();
+    ImGui::DragFloat3("Region min", glm::value_ptr(settings.pvs_region_min), 0.1f);
+    ImGui::DragFloat3("Region max", glm::value_ptr(settings.pvs_region_max), 0.1f);
+    ImGui::DragFloat ("Cell size",  &settings.pvs_cell_size, 0.05f, 0.05f, 100.0f, "%.2f m");
     if (ImGui::Button("Fit to content bounds")) {
         erhe::math::Aabb bounds{};
         {
@@ -101,16 +106,16 @@ void Pvs_window::region_imgui(Scene_root& scene_root)
             }
         }
         if (bounds.is_valid_3d()) {
-            settings.export_settings.pvs_region_min = bounds.min;
-            settings.export_settings.pvs_region_max = bounds.max;
+            settings.pvs_region_min = bounds.min;
+            settings.pvs_region_max = bounds.max;
         }
     }
-    const glm::vec3 extent = settings.export_settings.pvs_region_max - settings.export_settings.pvs_region_min;
-    if ((settings.export_settings.pvs_cell_size > 0.0f) && glm::all(glm::greaterThan(extent, glm::vec3{0.0f}))) {
+    const glm::vec3 extent = settings.pvs_region_max - settings.pvs_region_min;
+    if ((settings.pvs_cell_size > 0.0f) && glm::all(glm::greaterThan(extent, glm::vec3{0.0f}))) {
         const glm::uvec3 counts{
-            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.x / settings.export_settings.pvs_cell_size))),
-            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.y / settings.export_settings.pvs_cell_size))),
-            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.z / settings.export_settings.pvs_cell_size)))
+            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.x / settings.pvs_cell_size))),
+            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.y / settings.pvs_cell_size))),
+            static_cast<uint32_t>(std::max(1.0f, std::ceil(extent.z / settings.pvs_cell_size)))
         };
         ImGui::Text("Grid: %u x %u x %u = %llu cells", counts.x, counts.y, counts.z, static_cast<unsigned long long>(uint64_t{counts.x} * counts.y * counts.z));
     } else {
@@ -197,7 +202,7 @@ void Pvs_window::bake_imgui(const std::shared_ptr<Scene_root>& scene_root)
             [weak_scene_root]() {
                 const std::shared_ptr<Scene_root> target = weak_scene_root.lock();
                 if (target) {
-                    target->set_pvs_database({});
+                    target->set_pvs_database({}, Mesh_form::source);
                 }
             }
         );
@@ -264,12 +269,11 @@ void Pvs_window::database_imgui(Scene_root& scene_root)
     if (draw_list_scene != nullptr) {
         draw_list_scene->get_pvs_streaming_status(m_streaming_status);
         ImGui::Text(
-            "Resident pages %u of %u slots (%.1f KB), uploads %llu, evictions %llu%s",
+            "Resident pages %u of %u slots (%.1f KB), uploads %llu, evictions %llu",
             m_streaming_status.resident_pages, m_streaming_status.capacity,
             static_cast<double>(m_streaming_status.slot_bytes) / 1024.0,
             static_cast<unsigned long long>(m_streaming_status.uploads),
-            static_cast<unsigned long long>(m_streaming_status.evictions),
-            m_streaming_status.bits_in_memory ? ", bits in memory" : ", bits stream from the scene file"
+            static_cast<unsigned long long>(m_streaming_status.evictions)
         );
     }
 
@@ -278,12 +282,8 @@ void Pvs_window::database_imgui(Scene_root& scene_root)
         const glm::vec3 position = glm::vec3{camera->world_from_node()[3]};
         const std::optional<uint32_t> cell = database->find_cell(position);
         if (cell.has_value()) {
-            if (database->has_cell_pvs(cell.value()) && database->has_resident_bits()) {
+            if (database->has_cell_pvs(cell.value())) {
                 ImGui::Text("Camera cell %u: PVS %u of %u columns", cell.value(), database->get_cell_pvs_size(cell.value()), database->get_column_count());
-            } else if (database->has_cell_pvs(cell.value())) {
-                // The bits stream from the scene file (doc/plans/pvs.md
-                // "Residency and streaming"); get_pvs_cell reads a cell's.
-                ImGui::Text("Camera cell %u: has a PVS (the bits stream from the scene file)", cell.value());
             } else {
                 ImGui::Text("Camera cell %u: no PVS (everything visible)", cell.value());
             }

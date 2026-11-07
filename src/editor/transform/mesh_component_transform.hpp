@@ -299,6 +299,9 @@ private:
     // vertices at their new positions (section 4.6 "correct UVs") into out.
     void collect_corrected_texcoords(const Group& group, std::vector<Corner_texcoord_change>& out);
     // True when a vertex of the group is off its captured start position.
+    // Puts the vertex positions, GPU positions and normals, and bounds the drag
+    // wrote into the edited primitive back to their state at begin().
+    void revert_live_writes(App_context& context, Group& group);
     [[nodiscard]] auto has_moved_vertex(const Group& group) const -> bool;
 
     // True if any mesh OTHER than `mesh` references `geometry` in the scene.

@@ -52,6 +52,7 @@
 #include "init_status_display.hpp"
 #include "windows/status_line.hpp"
 #include "scene/scene_save_service.hpp"
+#include "assets/editor_asset.hpp"
 #include "input_state.hpp"
 #include "task_guard.hpp"
 #include "time.hpp"
@@ -182,6 +183,7 @@
 #   endif
 #endif
 
+#include "erhe_asset_store/asset_store_log.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_dataformat/dataformat_log.hpp"
@@ -1770,7 +1772,7 @@ public:
         // captures that retired and re-arms them for the next viewpoints,
         // before the rendergraph prepares this frame's nodes. Returns at once
         // when no bake runs.
-        if (m_pvs_baker && !m_scene_save_service->is_active()) {
+        if (m_pvs_baker && (!m_scene_save_service->is_active() || m_scene_save_service->is_pvs_bake_stage())) {
             m_pvs_baker->tick();
         }
         take_m2_term(m_phase_timing.m2_update_us);
@@ -3552,6 +3554,7 @@ public:
             {
                 m_operation_stack        = std::make_unique<Operation_stack                 >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context);
                 m_scene_save_service     = std::make_unique<Scene_save_service              >(m_app_context);
+                m_editor_asset_registry  = std::make_unique<Editor_asset_registry           >(std::filesystem::path{"cache"} / "editor_assets");
                 m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), *m_executor.get());
                 m_asset_fetch            = std::make_unique<Asset_fetch                     >(m_app_context, *m_asset_browser.get());
                 m_composer_window        = std::make_unique<Composer_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -4537,6 +4540,7 @@ public:
         m_app_context.node_properties_window   = m_node_properties_window.get();
         m_app_context.operation_stack          = m_operation_stack       .get();
         m_app_context.scene_save_service       = m_scene_save_service    .get();
+        m_app_context.editor_asset_registry    = m_editor_asset_registry .get();
         m_app_context.operations               = m_operations            .get();
         m_app_context.properties               = m_properties            .get();
         m_app_context.geometry_spreadsheet_window = m_geometry_spreadsheet_window.get();
@@ -5833,6 +5837,7 @@ public:
     std::unique_ptr<Bone_visualization              >        m_bone_visualization;
     std::unique_ptr<Weight_display                  >        m_weight_display;
     std::unique_ptr<Operation_stack                 >        m_operation_stack;
+    std::unique_ptr<Editor_asset_registry           >        m_editor_asset_registry;
     std::unique_ptr<Scene_save_service              >        m_scene_save_service;
     std::unique_ptr<Scene_commands                  >        m_scene_commands;
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;
@@ -5976,6 +5981,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         gl::initialize_logging();
         gl_helpers::initialize_logging();
 #endif
+        erhe::asset_store::initialize_logging();
         erhe::commands::initialize_logging();
         erhe::dataformat::initialize_logging();
         erhe::file::initialize_logging();

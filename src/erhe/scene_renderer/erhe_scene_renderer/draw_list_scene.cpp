@@ -793,11 +793,18 @@ auto Draw_list_scene::find_pvs_column(const Draw_list_object& object, const uint
     if (!m_pvs_database || !object.info.mesh) {
         return erhe::scene::Pvs_database::untracked_column;
     }
-    const std::string& uid = object.info.mesh->get_gltf_uid();
+    const std::string_view uid = m_pvs_identity_function
+        ? m_pvs_identity_function(*object.info.mesh)
+        : std::string_view{object.info.mesh->get_gltf_uid()};
     if (uid.empty()) {
         return erhe::scene::Pvs_database::untracked_column;
     }
-    return m_pvs_database->find_column(uid, mesh_primitive_index);
+    return m_pvs_database->find_column(std::string{uid}, mesh_primitive_index);
+}
+
+void Draw_list_scene::set_pvs_identity_function(std::function<std::string_view(const erhe::scene::Mesh&)> function)
+{
+    m_pvs_identity_function = std::move(function);
 }
 
 void Draw_list_scene::check_pvs_object(const Draw_list_object& object, const erhe::math::Aabb& world_aabb)

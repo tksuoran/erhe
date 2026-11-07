@@ -213,12 +213,14 @@ TEST_F(Gltf_texture_gpu_test, ktx2_texture_exports_through_khr_texture_basisu)
     }
 }
 
-// A raw block KTX2 image (ASTC 4x4, as "Save for Quest" writes it) is written
-// through the asset-root ERHE_texture_ktx2 extension: the texture names no
-// core source and no KHR_texture_basisu. Parsing the file back resolves the
-// texture to its image through the extension, and the retained stream is the
-// written KTX2 file byte for byte. ktx2_astc_4x4 leaves a raw KTX2 and a PNG
-// as they are (only Basis Universal payloads are transcoded).
+// A raw block KTX2 image (ASTC 4x4, as a quest Scene item carries it) is
+// written into a document of derived data through the asset-root
+// ERHE_texture_ktx2 extension: the texture names no core source and no
+// KHR_texture_basisu. Parsing the document back resolves the texture to its
+// image through the extension, and the retained stream is the written KTX2
+// file byte for byte. ktx2_astc_4x4 leaves a raw KTX2 and a PNG as they are
+// (only Basis Universal payloads are transcoded). A file parse of the same
+// document refuses the image as a source (raw GPU blocks are derived data).
 TEST_F(Gltf_texture_gpu_test, raw_ktx2_texture_round_trips_through_erhe_texture_ktx2)
 {
     const std::shared_ptr<erhe::graphics::Texture> astc_texture = make_texture("astc_texture");
@@ -258,6 +260,7 @@ TEST_F(Gltf_texture_gpu_test, raw_ktx2_texture_round_trips_through_erhe_texture_
         };
         arguments.texture_export     = texture_export;
         arguments.texture_statistics = &statistics;
+        arguments.prepared_mesh_data = erhe::gltf::Prepared_mesh_data::write;
         const std::string glb = erhe::gltf::export_gltf(arguments);
         ASSERT_FALSE(glb.empty());
         EXPECT_EQ(statistics.transcoded_count, 0u);
@@ -286,7 +289,7 @@ TEST_F(Gltf_texture_gpu_test, raw_ktx2_texture_round_trips_through_erhe_texture_
         EXPECT_EQ(root["images"].get_array().at(image_index)["mimeType"].get_string().value(), "image/ktx2");
 
         erhe::scene::Scene          loaded{"loaded", nullptr};
-        const erhe::gltf::Gltf_data data = parse_file(write_temporary_file("raw_ktx2_texture.glb", glb), loaded);
+        const erhe::gltf::Gltf_data data = parse_file(write_temporary_file("raw_ktx2_texture.glb", glb), loaded, erhe::gltf::Gltf_document::item);
         const std::vector<erhe::gltf::Gltf_material_texture_binding>& bindings = data.image_residency.material_texture_bindings;
         ASSERT_EQ(bindings.size(), 1u);
         EXPECT_EQ(bindings[0].slot, erhe::gltf::Gltf_material_texture_slot::base_color);
@@ -301,6 +304,11 @@ TEST_F(Gltf_texture_gpu_test, raw_ktx2_texture_round_trips_through_erhe_texture_
         ASSERT_TRUE(loaded_source->read(loaded_bytes));
         ASSERT_EQ(loaded_bytes.size(), ktx2.size());
         EXPECT_EQ(std::memcmp(loaded_bytes.data(), ktx2.data(), ktx2.size()), 0);
+
+        erhe::scene::Scene          file_scene{"file", nullptr};
+        const erhe::gltf::Gltf_data file_data = parse_file(write_temporary_file("raw_ktx2_texture_file.glb", glb), file_scene);
+        ASSERT_LT(image_index, file_data.image_sources.size());
+        EXPECT_FALSE(file_data.image_sources[image_index]);
     }
 }
 

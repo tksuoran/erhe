@@ -1,6 +1,5 @@
 #include "erhe_scene/pvs_database.hpp"
 
-#include "erhe_file/positional_file_reader.hpp"
 #include "erhe_hash/hash.hpp"
 
 #include <fmt/format.h>
@@ -239,14 +238,12 @@ Pvs_database::Pvs_database(
     Pvs_header                     header,
     std::vector<Pvs_column>        columns,
     std::vector<Pvs_page_entry>    pages,
-    std::vector<uint32_t>          bits,
-    std::optional<Pvs_bits_source> bits_source
+    std::vector<uint32_t>          bits
 )
-    : m_header      {std::move(header)}
-    , m_columns     {std::move(columns)}
-    , m_pages       {std::move(pages)}
-    , m_bits        {std::move(bits)}
-    , m_bits_source {std::move(bits_source)}
+    : m_header {std::move(header)}
+    , m_columns{std::move(columns)}
+    , m_pages  {std::move(pages)}
+    , m_bits   {std::move(bits)}
 {
     m_bit_word_count = m_bits.size();
     m_bits_hash      = erhe::hash::hash(m_bits.data(), m_bits.size() * sizeof(uint32_t));
@@ -431,77 +428,6 @@ auto Pvs_database::count_pvs_words(const std::span<const uint32_t> words) -> uin
     return count;
 }
 
-auto Pvs_database::has_resident_bits() const -> bool
-{
-    const std::lock_guard<std::mutex> lock{m_bits_state_mutex};
-    return m_bits_in_memory;
-}
-
-auto Pvs_database::release_bits() -> bool
-{
-    const std::lock_guard<std::mutex> lock{m_bits_mutex};
-    if (!m_bits_source.has_value() || m_bits.empty()) {
-        return false;
-    }
-    std::vector<uint32_t> released{};
-    m_bits.swap(released);
-    const std::lock_guard<std::mutex> state_lock{m_bits_state_mutex};
-    m_bits_in_memory = (m_bit_word_count == 0);
-    return true;
-}
-
-auto Pvs_database::make_bits_resident() -> bool
-{
-    const std::lock_guard<std::mutex> lock{m_bits_mutex};
-    if (m_bits.size() == m_bit_word_count) {
-        m_bits_source.reset();
-        return true;
-    }
-    if (!m_bits_source.has_value()) {
-        return false;
-    }
-    std::vector<uint32_t> bits(m_bit_word_count);
-    if (!read_source_words(0, std::span<uint32_t>{bits})) {
-        return false;
-    }
-    m_bits.swap(bits);
-    m_bits_source.reset();
-    const std::lock_guard<std::mutex> state_lock{m_bits_state_mutex};
-    m_bits_in_memory = true;
-    return true;
-}
-
-auto Pvs_database::bits_source_references(const std::filesystem::path& path) const -> bool
-{
-    const std::lock_guard<std::mutex> lock{m_bits_mutex};
-    if (!m_bits_source.has_value()) {
-        return false;
-    }
-    std::error_code error;
-    const bool same = std::filesystem::equivalent(m_bits_source->path, path, error);
-    return !error && same;
-}
-
-auto Pvs_database::read_source_words(const std::size_t first_word, const std::span<uint32_t> out) const -> bool
-{
-    // Under m_bits_mutex (the callers lock it).
-    if (!m_bits_source.has_value()) {
-        return false;
-    }
-    const uint64_t byte_offset = static_cast<uint64_t>(first_word) * sizeof(uint32_t);
-    const uint64_t byte_count  = static_cast<uint64_t>(out.size()) * sizeof(uint32_t);
-    if ((byte_offset + byte_count) > m_bits_source->byte_length) {
-        return false;
-    }
-    // Opened per read and closed at once: an open handle keeps a save from
-    // replacing the file on Windows (erhe::file::Positional_file_reader).
-    erhe::file::Positional_file_reader reader;
-    if (!reader.open(m_bits_source->path)) {
-        return false;
-    }
-    return reader.read_at(m_bits_source->byte_offset + byte_offset, std::as_writable_bytes(out));
-}
-
 auto Pvs_database::read_page_words(const uint32_t page, const std::span<uint32_t> out) const -> bool
 {
     if (!is_page_stored(page) || (out.size() != get_words_per_page())) {
@@ -511,12 +437,8 @@ auto Pvs_database::read_page_words(const uint32_t page, const std::span<uint32_t
     if ((offset + out.size()) > m_bit_word_count) {
         return false;
     }
-    const std::lock_guard<std::mutex> lock{m_bits_mutex};
-    if (!m_bits.empty()) {
-        std::copy_n(m_bits.begin() + static_cast<std::ptrdiff_t>(offset), out.size(), out.begin());
-        return true;
-    }
-    return read_source_words(offset, out);
+    std::copy_n(m_bits.begin() + static_cast<std::ptrdiff_t>(offset), out.size(), out.begin());
+    return true;
 }
 
 auto Pvs_database::read_cell_words(const uint32_t cell, std::vector<uint32_t>& out) const -> bool
@@ -534,23 +456,8 @@ auto Pvs_database::read_cell_words(const uint32_t cell, std::vector<uint32_t>& o
         return false;
     }
     out.resize(words_per_cell);
-    const std::lock_guard<std::mutex> lock{m_bits_mutex};
-    if (!m_bits.empty()) {
-        std::copy_n(m_bits.begin() + static_cast<std::ptrdiff_t>(offset), words_per_cell, out.begin());
-        return true;
-    }
-    return read_source_words(offset, std::span<uint32_t>{out});
-}
-
-auto Pvs_database::read_bits(std::vector<uint32_t>& out) const -> bool
-{
-    out.resize(m_bit_word_count);
-    const std::lock_guard<std::mutex> lock{m_bits_mutex};
-    if (m_bits.size() == m_bit_word_count) {
-        std::copy(m_bits.begin(), m_bits.end(), out.begin());
-        return true;
-    }
-    return read_source_words(0, std::span<uint32_t>{out});
+    std::copy_n(m_bits.begin() + static_cast<std::ptrdiff_t>(offset), words_per_cell, out.begin());
+    return true;
 }
 
 auto Pvs_database::find_column(const std::string& node_uid, const uint32_t primitive_index) const -> uint32_t

@@ -9,7 +9,7 @@ Runtime selection and its control properties come after that. Later steps are
 chosen from the user's feedback on the earlier ones.
 
 Builds on `doc/erhe/meshoptimizer_integration.md` (the optimized variant on
-`Primitive`, the deferred finalize, the filesystem cache),
+`Primitive`, the deferred finalize),
 `doc/erhe/draw_list_renderer.md` (entries, command templates) and
 `doc/plans/culling.md` (CPU lanes, GPU command compaction).
 
@@ -399,10 +399,9 @@ stored levels and runs no simplification; the level edge lines are built
 from the stored indices with the primitive's full build (they were about the
 size of level 0's edge lines, and a prepared primitive has no edge lines
 before that build either, so storing them would only add file size and load
-work). The meshoptimizer filesystem cache is unchanged: the prepared and
-stored paths do not use it, and on-request generation runs uncached; a LOD
-payload in the cache is a separate step when the geometry-path generation
-needs it.
+work). The mesh optimizer keeps no disk cache; the editor asset's mesh
+items hold the chains (doc/editor/prepared_assets.md "The editor's own
+loading").
 
 Verified on the headless Metal editor: a soup torus and capsule, made
 prepared by a save, with chains generated, saved and reloaded (save and Save

@@ -215,6 +215,7 @@ flowchart TD
 
 ### Libraries and library-level subsystems (`erhe/`)
 
+- [erhe/asset_store.md](erhe/asset_store.md) (experimental): Content-addressed item store in one SQLite file (keys, XXH3-128 key builder, transactions, range reads), the container of editor and prepared assets
 - [erhe/box3d_physics.md](erhe/box3d_physics.md) (experimental): Box3D physics backend: capabilities, behavior, verification status
 - [erhe/buffer.md](erhe/buffer.md) (stable): Provides buffer allocation primitives used by both GPU and CPU buffer systems
 - [erhe/bvh_scene_acceleration.md](erhe/bvh_scene_acceleration.md) (mostly stable): Hybrid asynchronous TLAS acceleration for the bvh raytrace backend
@@ -344,6 +345,7 @@ flowchart TD
 - [editor/joint_constraint_test_asset.md](editor/joint_constraint_test_asset.md) (stable): Joint constraint test scene: stations, what to look for, verification script
 - [editor/physics.md](editor/physics.md) (stable): Physics-related tools, UI, and collision shape generation for the editor
 - [editor/post_processing.md](editor/post_processing.md) (mostly stable): Bloom post-processing pipeline: textures, passes, synchronization
+- [editor/prepared_assets.md](editor/prepared_assets.md) (experimental): Editor assets and prepared assets: locations, records, item keys, the Export job (Ensure, Copy) and the MCP prepare_scene / get_save_status fields
 - [editor/prewarm.md](editor/prewarm.md) (stable): Init-time GPU shader and pipeline prewarming
 - [editor/properties_window.md](editor/properties_window.md) (stable): Properties window single registered-property row path
 - [editor/pvs.md](editor/pvs.md) (experimental): Potentially visible sets: disocclusion-buffer bake per grid cell, its rules (D1 to D7), the bake steps, verification and the documents of its parts
@@ -364,7 +366,7 @@ flowchart TD
 - [editor/texture_graph.md](editor/texture_graph.md) (mostly stable): Procedural texture graph status against Material Maker
 - [editor/tools.md](editor/tools.md) (stable): Defines the Tool abstraction and the Tools container, plus several concrete tools for interacting with the 3D scene
 - [editor/transform.md](editor/transform.md) (stable): Transform gizmo system for interactive translate, rotate, and scale operations
-- [editor/world_space_bake.md](editor/world_space_bake.md) (experimental): World-space bake of static meshes: per-scene export settings, which meshes bake, placeholders, Prepare at export time and the undoable Bake Static To World Space operation
+- [editor/world_space_bake.md](editor/world_space_bake.md) (experimental): World-space bake of static meshes: per-scene export settings, which meshes bake, World-space mesh items and Bake World-Space Meshes, the two forms of an open scene and the viewport toolbar choice, validity, the Scene item's World Space node and Prepare at export time
 - [editor/weight_paint.md](editor/weight_paint.md) (experimental): Blender-style weight painting
 - [editor/window_target_items.md](editor/window_target_items.md) (mostly stable): Editor windows with independent target items
 - [editor/windows.md](editor/windows.md) (stable): ImGui window implementations for the editor UI, including viewport display, property inspection, settings, and configuration
@@ -418,18 +420,13 @@ flowchart TD
 - [gltf_extensions/ERHE_camera.md](gltf_extensions/ERHE_camera.md) (mostly stable): ERHE_camera
 - [gltf_extensions/ERHE_collections.md](gltf_extensions/ERHE_collections.md) (mostly stable): ERHE_collections
 - [gltf_extensions/ERHE_geometry.md](gltf_extensions/ERHE_geometry.md) (mostly stable): ERHE_geometry
-- [gltf_extensions/ERHE_gpu_vertex_streams.md](gltf_extensions/ERHE_gpu_vertex_streams.md) (experimental): ERHE_gpu_vertex_streams
 - [gltf_extensions/ERHE_light.md](gltf_extensions/ERHE_light.md) (mostly stable): ERHE_light
 - [gltf_extensions/ERHE_material.md](gltf_extensions/ERHE_material.md) (mostly stable): ERHE_material
-- [gltf_extensions/ERHE_mesh_optimized.md](gltf_extensions/ERHE_mesh_optimized.md) (experimental): ERHE_mesh_optimized
-- [gltf_extensions/ERHE_mesh_lod.md](gltf_extensions/ERHE_mesh_lod.md) (experimental): ERHE_mesh_lod - a prepared primitive's stored LOD chain (level index lists, per-level errors, the Lod_settings that made them)
-- [gltf_extensions/ERHE_mesh_topology.md](gltf_extensions/ERHE_mesh_topology.md) (experimental): ERHE_mesh_topology
+- [gltf_extensions/ERHE_mesh_lod.md](gltf_extensions/ERHE_mesh_lod.md) (experimental): ERHE_mesh_lod - a primitive's LOD request (the Lod_settings of the chain to generate)
 - [gltf_extensions/ERHE_node.md](gltf_extensions/ERHE_node.md) (mostly stable): ERHE_node
 - [gltf_extensions/ERHE_node_graphs.md](gltf_extensions/ERHE_node_graphs.md) (mostly stable): ERHE_node_graphs
-- [gltf_extensions/ERHE_pvs.md](gltf_extensions/ERHE_pvs.md) (experimental): ERHE_pvs
-- [gltf_extensions/ERHE_raytrace_bvh.md](gltf_extensions/ERHE_raytrace_bvh.md) (experimental): ERHE_raytrace_bvh
 - [gltf_extensions/ERHE_scene.md](gltf_extensions/ERHE_scene.md) (mostly stable): ERHE_scene
-- [gltf_extensions/ERHE_texture_ktx2.md](gltf_extensions/ERHE_texture_ktx2.md) (experimental): ERHE_texture_ktx2
+- [gltf_extensions/ERHE_texture_properties.md](gltf_extensions/ERHE_texture_properties.md) (experimental): ERHE_texture_properties
 
 ### Plans (`plans/`)
 
@@ -439,6 +436,9 @@ flowchart TD
 - [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
 - [plans/audit_2026_09_30_followups.md](plans/audit_2026_09_30_followups.md) (in progress): 2026-09-30 audit: medium-term set and follow-ups
 - [plans/background_scene_save.md](plans/background_scene_save.md) (in progress): Background scene save and Prepare: outstanding work
+- [plans/prepared_assets.md](plans/prepared_assets.md) (proposed): Source, editor and prepared assets: requirements (three assets, content-addressed items, SQLite container, Export)
+- [plans/prepared_assets_design.md](plans/prepared_assets_design.md) (proposed): Source, editor and prepared assets: design and incremental build plan (MVP first)
+- [plans/prepare_pvs_export.md](plans/prepare_pvs_export.md) (proposed): Prepare and the potentially visible set: PVS mode export setting, baking the PVS after the world-space bake
 - [plans/bistro_load_profiling.md](plans/bistro_load_profiling.md) (in progress): Bistro load time: profile and optimization candidates
 - [plans/bistro_viewport_gpu.md](plans/bistro_viewport_gpu.md) (in progress): Bistro main viewport GPU cost: measurements, light selection by scene order, options; clustered light culling chosen (clustered_lights.md), geometry open
 - [plans/brushes.md](plans/brushes.md) (proposed): Brushes: outstanding work
@@ -492,7 +492,7 @@ flowchart TD
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work
 - [plans/post_processing.md](plans/post_processing.md) (proposed): Post-processing follow-ups
 - [plans/procedural_sky.md](plans/procedural_sky.md) (proposed): Procedural sky verification
-- [plans/prepared_scene_shadow_phantom.md](plans/prepared_scene_shadow_phantom.md) (in progress): Phantom shadow caster in Prepare (PC) / Prepare (Quest) files: GPU-generated shadow commands with stored vertex streams; findings, reproduction, hypotheses
+- [plans/prepared_scene_shadow_phantom.md](plans/prepared_scene_shadow_phantom.md) (in progress): Phantom shadow caster with stored vertex streams (prepared runs): GPU-generated shadow commands; findings, reproduction, hypotheses
 - [plans/pvs.md](plans/pvs.md) (in progress): Potentially visible sets: outstanding work (headset and Quest gates, rule 3, near-plane clipped occluders, adaptive cells, page compression)
 - [plans/property_system.md](plans/property_system.md) (proposed): Property system: remaining work
 - [plans/radiance_cascades.md](plans/radiance_cascades.md) (in progress): Radiance cascades: design, gates and measurements, remaining work (failing gates, per-child segments, cascade 0 relocation, change-driven refit)

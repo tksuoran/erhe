@@ -457,14 +457,17 @@ namespace {
 
 [[nodiscard]] auto is_allowed_during_scene_save(const std::string& tool_name) -> bool
 {
-    static constexpr std::array<std::string_view, 7> allowed{
+    static constexpr std::array<std::string_view, 10> allowed{
         "get_async_status",
+        "get_pvs_bake_status",
         "get_viewports",
         "list_scenes",
         "capture_screenshot",
         "save_scene",
         "prepare_scene",
-        "save_scene_for_quest"
+        "save_scene_for_quest",
+        "get_prepared_status",
+        "drop_prepared_items"
     };
     return std::find(allowed.begin(), allowed.end(), std::string_view{tool_name}) != allowed.end();
 }
@@ -584,6 +587,12 @@ auto Mcp_server::process_queued_requests() -> int
         // A running scene save reads the scenes on a worker: only tools that
         // neither edit the editor state nor wait for it run meanwhile.
         if ((m_context.scene_save_service != nullptr) && m_context.scene_save_service->is_active() && !is_allowed_during_scene_save(req->tool_name)) {
+            // A status job the editor started on its own (Prepared_keys) is short and
+            // not the client's: the request waits for it instead of failing.
+            if (m_context.scene_save_service->is_automatic_status_job_active()) {
+                m_deferred_requests.push_back(std::move(req));
+                continue;
+            }
             req->result_promise.set_value(
                 make_error_content(fmt::format("'{}' refused: a scene save is in progress - poll get_save_status until it is done", req->tool_name))
             );
@@ -674,7 +683,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_async_status",               &Mcp_server::query_async_status                   },
         { "get_transform_update_stats",     &Mcp_server::query_transform_update_stats         },
         { "merge_static_subtree",           &Mcp_server::action_merge_static_subtree          },
-        { "bake_static_to_world_space",     &Mcp_server::action_bake_static_to_world_space    },
+        { "bake_world_space_meshes",        &Mcp_server::action_bake_world_space_meshes       },
+        { "get_world_space_meshes",         &Mcp_server::query_world_space_meshes             },
         { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
         { "raycast",                        &Mcp_server::query_raycast                        },
         { "geometry_query",                 &Mcp_server::query_geometry_batch                 },
@@ -751,6 +761,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "save_scene_for_quest",           &Mcp_server::action_save_scene_for_quest          },
         { "prepare_scene",                  &Mcp_server::action_prepare_scene                 },
         { "get_save_status",                &Mcp_server::query_save_status                    },
+        { "get_prepared_status",            &Mcp_server::action_get_prepared_status           },
+        { "drop_prepared_items",            &Mcp_server::action_drop_prepared_items           },
         { "load_scene",                     &Mcp_server::action_load_scene                    },
         { "open_scene",                     &Mcp_server::action_open_scene                    },
         { "frame_scene",                    &Mcp_server::action_frame_scene                   },
@@ -798,6 +810,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_pvs_streaming",              &Mcp_server::action_set_pvs_streaming             },
         { "set_content_draws",              &Mcp_server::action_set_content_draws             },
         { "set_viewport_style",             &Mcp_server::action_set_viewport_style            },
+        { "set_viewport_mesh_form",         &Mcp_server::action_set_viewport_mesh_form        },
         { "get_occlusion_check",            &Mcp_server::query_occlusion_check                },
         { "get_pvs_status",                 &Mcp_server::query_pvs_status                     },
         { "pvs_bake",                       &Mcp_server::action_pvs_bake                      },

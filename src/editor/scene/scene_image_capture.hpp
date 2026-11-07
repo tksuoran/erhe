@@ -3,6 +3,7 @@
 #include "renderers/composer.hpp"
 #include "renderers/render_context.hpp"
 #include "rendergraph/overdraw_source.hpp"
+#include "scene/mesh_form.hpp"
 #include "scene/scene_view.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
@@ -120,7 +121,8 @@ public:
         erhe::scene_renderer::Shader_debug          shader_debug,
         const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light,
         const Overdraw_frame&                       overdraw,
-        erhe::graphics::Gpu_timer*                  forward_pass_timer
+        erhe::graphics::Gpu_timer*                  forward_pass_timer,
+        Mesh_form                                   mesh_form
     );
     ~Scene_image_view() noexcept override;
 
@@ -199,6 +201,7 @@ private:
     std::optional<std::size_t>            m_shadow_debug_light_id;
     // Explicit-range timer bracketing the forward render pass; null = untimed.
     erhe::graphics::Gpu_timer*            m_forward_pass_timer{nullptr};
+    Mesh_form                             m_mesh_form{Mesh_form::source};
     std::optional<uint32_t>               m_shadow_debug_light_index;
     std::vector<Scene_image_shadow_light> m_shadow_lights;
     Scene_image_shadow_maps               m_shadow_maps;
@@ -338,6 +341,8 @@ public:
     // (null: untimed). Owned by the caller, which keeps it alive until the
     // result is read, frames after the capture itself is gone.
     erhe::graphics::Gpu_timer*           forward_pass_timer{nullptr};
+    // The form of the world-space bake's mesh nodes the image draws (doc/editor/world_space_bake.md "Two forms").
+    Mesh_form                            mesh_form{Mesh_form::source};
 };
 
 // One render_scene_image request: builds the chain Shadow_render_node ->

@@ -1689,3 +1689,721 @@ Quest state per run (temperatures: thermal HAL maximum per type at the start of 
 | 0 | 119.99 | 0 -> 0; 0 -> 0, step-downs 0 | 66.1 -> 65.2 | 63.9 -> 63.0 | 62.2 -> 61.8 | 38.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1920..2362] cap 2362/2362 | 456 cap 456 | 70 | 36.7 |
 | 1 | 119.97 | 0 -> 0; 0 -> 0, step-downs 0 | 65.9 -> 65.4 | 64.2 -> 63.3 | 62.5 -> 62.2 | 38.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1920..2362] cap 2362/2362 | 456 cap 456 | 69 | 35.7 |
 
+
+## 2026-11-06 23:16 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261106_231647_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (3a3bc4e2a-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 7.91 s, idle 7.91 s).
+- Scene: the store Export (target quest) of the erhe-saved Bistro source (import root rotated -90 X, LOD chains generated): 3272 mesh items, Scene item 420 MB with the 393 images as raw ASTC 4x4 inside it (no textures as items yet); the following entry is Prepare (Quest) of the same source as a .glb, node space, no PVS. Memory in the measured window (`get_memory_usage`): VmHWM 2017 MB, VmRSS 1200 MB, retained image source bytes 402 MB (the images parsed from the in-memory Scene item are held).
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.68 |
+| Frame wall time (ms) | 9.29 |
+| M2 / R / M3 (ms) | 0.75 / 3.16 / 0.72 |
+| App GPU frame time, XR counter (ms) | 6.75 |
+| GPU utilization, XR counter (%) | 95.3 |
+| CPU utilization average / worst, XR counter (%) | 24.3 / 28.0 |
+| GPU pass Cull classification (ms) | 0.052 |
+| GPU pass Cull command generation (ms) | 0.106 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.286 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.556 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.68 | 0 -> 0; 0 -> 0, step-downs 0 | 55.5 -> 55.3 | 55.2 -> 55.3 | 51.8 -> 52.3 | 31.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 cap 2362/2362 | 456 cap 456 | 95 | 26.6 |
+
+
+## 2026-11-06 23:17 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261106_231714_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (3a3bc4e2a-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src_quest.glb` (listed 4.57 s, idle 4.57 s).
+- Scene: Prepare (Quest) `.glb` of the same source as the previous entry (node space, no PVS). Memory in the measured window (`get_memory_usage`): VmHWM 833 MB, VmRSS 787 MB, retained image source bytes 0.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 104.99 |
+| Frame wall time (ms) | 9.37 |
+| M2 / R / M3 (ms) | 0.76 / 3.14 / 0.72 |
+| App GPU frame time, XR counter (ms) | 6.74 |
+| GPU utilization, XR counter (%) | 95.6 |
+| CPU utilization average / worst, XR counter (%) | 21.0 / 24.2 |
+| GPU pass Cull classification (ms) | 0.053 |
+| GPU pass Cull command generation (ms) | 0.113 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.344 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.620 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 104.99 | 0 -> 0; 0 -> 0, step-downs 0 | 57.1 -> 57.1 | 57.5 -> 57.3 | 54.5 -> 54.5 | 32.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2054 [1920..2362] cap 2362/2362 | 456 cap 456 | 95 | 27.5 |
+
+
+## 2026-11-07 01:03 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_010341_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (0fe5de98a-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 5.81 s, idle 5.81 s).
+- Scene: the store Export (target quest, prepared assets D8 step 6b) of the erhe-saved Bistro source (import root rotated -90 X, LOD chains generated): 3272 mesh items, 3272 BVH items, 266 Texture items (ASTC 4x4, 293 MB; the 393 images name them), Scene item 18.5 MB with no image inside; compare with the step 2 entry of 2026-11-06 23:16 (Scene item 420 MB with the images inside) and with the `.glb` entries around it. Memory in the measured window (`get_memory_usage`): VmHWM 864 MB, VmRSS 793 MB, retained image source bytes 0 (step 2: 2017 MB, 1200 MB, 402 MB).
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 106.73 |
+| Frame wall time (ms) | 9.14 |
+| M2 / R / M3 (ms) | 0.76 / 3.24 / 0.75 |
+| App GPU frame time, XR counter (ms) | 6.67 |
+| GPU utilization, XR counter (%) | 94.7 |
+| CPU utilization average / worst, XR counter (%) | 24.0 / 26.0 |
+| GPU pass Cull classification (ms) | 0.052 |
+| GPU pass Cull command generation (ms) | 0.106 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.160 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.441 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 106.73 | 0 -> 0; 0 -> 0, step-downs 0 | 47.4 -> 49.2 | 47.9 -> 49.5 | 43.5 -> 45.5 | 30.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1651..2362] cap 2362/2362 | 456 cap 456 | 94 | 28.7 |
+
+
+## 2026-11-07 01:04 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_010419_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (0fe5de98a-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src_quest.glb` (listed 4.25 s, idle 4.56 s).
+- Scene: Prepare (Quest) `.glb` of the step 2 source (node space, no PVS), the same file as the 2026-11-06 23:17 entry, with the D8 step 6b APK. Memory in the measured window (`get_memory_usage`): VmHWM 826 MB, VmRSS 826 MB, retained image source bytes 0.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 104.87 |
+| Frame wall time (ms) | 9.34 |
+| M2 / R / M3 (ms) | 0.74 / 3.17 / 0.72 |
+| App GPU frame time, XR counter (ms) | 6.70 |
+| GPU utilization, XR counter (%) | 95.0 |
+| CPU utilization average / worst, XR counter (%) | 23.1 / 26.8 |
+| GPU pass Cull classification (ms) | 0.052 |
+| GPU pass Cull command generation (ms) | 0.113 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.282 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.569 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 104.87 | 0 -> 0; 0 -> 0, step-downs 0 | 55.1 -> 56.7 | 55.7 -> 56.7 | 51.6 -> 53.0 | 30.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 94 | 27.7 |
+
+
+## 2026-11-07 01:04 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_010458_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (0fe5de98a-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 5.91 s, idle 5.91 s).
+- Scene: the store Export (target quest, prepared assets D8 step 6b) of the erhe-saved Bistro source (import root rotated -90 X, LOD chains generated): 3272 mesh items, 3272 BVH items, 266 Texture items (ASTC 4x4, 293 MB; the 393 images name them), Scene item 18.5 MB with no image inside; compare with the step 2 entry of 2026-11-06 23:16 (Scene item 420 MB with the images inside) and with the `.glb` entries around it. Memory in the measured window (`get_memory_usage`): VmHWM 844 MB, VmRSS 794 MB, retained image source bytes 0 (step 2: 2017 MB, 1200 MB, 402 MB).
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.43 |
+| Frame wall time (ms) | 9.32 |
+| M2 / R / M3 (ms) | 0.77 / 3.29 / 0.75 |
+| App GPU frame time, XR counter (ms) | 6.76 |
+| GPU utilization, XR counter (%) | 95.2 |
+| CPU utilization average / worst, XR counter (%) | 22.7 / 31.6 |
+| GPU pass Cull classification (ms) | 0.053 |
+| GPU pass Cull command generation (ms) | 0.108 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.286 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.559 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.43 | 0 -> 0; 0 -> 0, step-downs 0 | 57.3 -> 57.1 | 57.7 -> 57.2 | 54.8 -> 54.5 | 30.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 95 | 29.5 |
+
+
+## 2026-11-07 01:05 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_010523_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (0fe5de98a-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src_quest.glb` (listed 4.3 s, idle 4.3 s).
+- Scene: Prepare (Quest) `.glb` of the step 2 source (node space, no PVS), the same file as the 2026-11-06 23:17 entry, with the D8 step 6b APK. Memory in the measured window (`get_memory_usage`): VmHWM 825 MB, VmRSS 782 MB, retained image source bytes 0.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.47 |
+| Frame wall time (ms) | 9.33 |
+| M2 / R / M3 (ms) | 0.77 / 3.27 / 0.74 |
+| App GPU frame time, XR counter (ms) | 6.66 |
+| GPU utilization, XR counter (%) | 95.0 |
+| CPU utilization average / worst, XR counter (%) | 25.0 / 27.3 |
+| GPU pass Cull classification (ms) | 0.053 |
+| GPU pass Cull command generation (ms) | 0.122 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.256 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.543 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.47 | 0 -> 0; 0 -> 0, step-downs 0 | 57.8 -> 57.7 | 58.2 -> 58.0 | 55.4 -> 55.3 | 32.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1651..2362] cap 2362/2362 | 456 cap 456 | 94 | 30.6 |
+
+
+## 2026-11-07 01:43 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_014311_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (9778f56d9-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 4.36 s, idle 4.36 s).
+- Scene: the D8 step 6b store Export of the erhe-saved Bistro source (as the 2026-11-07 01:03 entry), converted to 64 KiB pages (`PRAGMA page_size = 65536; VACUUM`: the same rows in the page size a new container gets), with the payload-read APK of `doc/erhe/asset_store.md` "Reading payloads" (64 KiB pages, open payload handles in the load, 8 read connections, Scene item keys read with simdjson). build_imported_buffer_meshes 1807 ms (6b: 2389 / 2717 ms). Memory in the measured window (`get_memory_usage`): VmHWM 859 MB, VmRSS 800 MB, retained image source bytes 0.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 106.68 |
+| Frame wall time (ms) | 9.27 |
+| M2 / R / M3 (ms) | 0.78 / 3.30 / 0.74 |
+| App GPU frame time, XR counter (ms) | 6.65 |
+| GPU utilization, XR counter (%) | 94.6 |
+| CPU utilization average / worst, XR counter (%) | 24.3 / 31.7 |
+| GPU pass Cull classification (ms) | 0.053 |
+| GPU pass Cull command generation (ms) | 0.113 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.251 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.523 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 106.68 | 0 -> 0; 0 -> 0, step-downs 0 | 58.9 -> 59.1 | 59.4 -> 59.3 | 56.7 -> 56.8 | 36.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1651 [1382..2362] cap 2362/2362 | 456 cap 456 | 94 | 29.1 |
+
+
+## 2026-11-07 01:43 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_014335_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (9778f56d9-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src_quest.glb` (listed 4.67 s, idle 4.67 s).
+- Scene: Prepare (Quest) `.glb` of the step 2 source (node space, no PVS), the same file as the 2026-11-07 01:04 entry, with the same APK as the store runs beside it. build_imported_buffer_meshes 1816 ms. Memory in the measured window (`get_memory_usage`): VmHWM 815 MB, VmRSS 773 MB, retained image source bytes 0.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.31 |
+| Frame wall time (ms) | 9.32 |
+| M2 / R / M3 (ms) | 0.76 / 3.22 / 0.73 |
+| App GPU frame time, XR counter (ms) | 6.71 |
+| GPU utilization, XR counter (%) | 94.8 |
+| CPU utilization average / worst, XR counter (%) | 24.6 / 31.2 |
+| GPU pass Cull classification (ms) | 0.052 |
+| GPU pass Cull command generation (ms) | 0.116 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.274 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.561 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.31 | 0 -> 0; 0 -> 0, step-downs 0 | 60.6 -> 60.5 | 61.1 -> 60.8 | 58.5 -> 58.4 | 37.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1651..2208] cap 2362/2362 | 456 cap 456 | 94 | 29.6 |
+
+
+## 2026-11-07 01:43 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_014359_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (9778f56d9-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 4.54 s, idle 4.54 s).
+- Scene: the D8 step 6b store Export of the erhe-saved Bistro source (as the 2026-11-07 01:03 entry), converted to 64 KiB pages (`PRAGMA page_size = 65536; VACUUM`: the same rows in the page size a new container gets), with the payload-read APK of `doc/erhe/asset_store.md` "Reading payloads" (64 KiB pages, open payload handles in the load, 8 read connections, Scene item keys read with simdjson). build_imported_buffer_meshes 1871 ms (6b: 2389 / 2717 ms). Memory in the measured window (`get_memory_usage`): VmHWM 850 MB, VmRSS 793 MB, retained image source bytes 0.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.78 |
+| Frame wall time (ms) | 9.28 |
+| M2 / R / M3 (ms) | 0.78 / 3.33 / 0.75 |
+| App GPU frame time, XR counter (ms) | 6.90 |
+| GPU utilization, XR counter (%) | 95.4 |
+| CPU utilization average / worst, XR counter (%) | 24.7 / 32.4 |
+| GPU pass Cull classification (ms) | 0.052 |
+| GPU pass Cull command generation (ms) | 0.116 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.264 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.542 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.78 | 0 -> 0; 0 -> 0, step-downs 0 | 61.8 -> 62.3 | 62.3 -> 61.8 | 59.7 -> 59.6 | 37.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 95 | 29.6 |
+
+
+## 2026-11-07 01:44 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_014424_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (9778f56d9-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src_quest.glb` (listed 4.36 s, idle 4.36 s).
+- Scene: Prepare (Quest) `.glb` of the step 2 source (node space, no PVS), the same file as the 2026-11-07 01:04 entry, with the same APK as the store runs beside it. build_imported_buffer_meshes 1828 ms. Memory in the measured window (`get_memory_usage`): VmHWM 814 MB, VmRSS 798 MB, retained image source bytes 0.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.36 |
+| Frame wall time (ms) | 9.28 |
+| M2 / R / M3 (ms) | 0.79 / 3.36 / 0.76 |
+| App GPU frame time, XR counter (ms) | 6.61 |
+| GPU utilization, XR counter (%) | 94.8 |
+| CPU utilization average / worst, XR counter (%) | 25.0 / 26.7 |
+| GPU pass Cull classification (ms) | 0.052 |
+| GPU pass Cull command generation (ms) | 0.105 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.254 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.520 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.36 | 0 -> 0; 0 -> 0, step-downs 0 | 62.6 -> 62.3 | 63.1 -> 62.7 | 60.5 -> 60.3 | 37.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2054 [1920..2362] cap 2362/2362 | 456 cap 456 | 94 | 27.2 |
+
+
+## 2026-11-07 01:44 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_014447_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (9778f56d9-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 4.41 s, idle 4.41 s).
+- Scene: the D8 step 6b store Export of the erhe-saved Bistro source (as the 2026-11-07 01:03 entry), converted to 64 KiB pages (`PRAGMA page_size = 65536; VACUUM`: the same rows in the page size a new container gets), with the payload-read APK of `doc/erhe/asset_store.md` "Reading payloads" (64 KiB pages, open payload handles in the load, 8 read connections, Scene item keys read with simdjson). build_imported_buffer_meshes 1809 ms (6b: 2389 / 2717 ms). Memory in the measured window (`get_memory_usage`): VmHWM 851 MB, VmRSS 785 MB, retained image source bytes 0.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.78 |
+| Frame wall time (ms) | 9.29 |
+| M2 / R / M3 (ms) | 0.77 / 3.38 / 0.76 |
+| App GPU frame time, XR counter (ms) | 6.85 |
+| GPU utilization, XR counter (%) | 95.0 |
+| CPU utilization average / worst, XR counter (%) | 24.6 / 29.7 |
+| GPU pass Cull classification (ms) | 0.052 |
+| GPU pass Cull command generation (ms) | 0.117 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.244 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.525 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.78 | 0 -> 0; 0 -> 0, step-downs 0 | 63.0 -> 63.4 | 63.6 -> 62.9 | 61.1 -> 60.8 | 38.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1651..2362] cap 2362/2362 | 456 cap 456 | 95 | 29.3 |
+
+
+## 2026-11-07 01:45 - bistro_street_120, no configuration file
+
+- Runs: 1 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_014511_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (9778f56d9-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src_quest.glb` (listed 4.31 s, idle 4.62 s).
+- Scene: Prepare (Quest) `.glb` of the step 2 source (node space, no PVS), the same file as the 2026-11-07 01:04 entry, with the same APK as the store runs beside it. build_imported_buffer_meshes 1791 ms. Memory in the measured window (`get_memory_usage`): VmHWM 808 MB, VmRSS 773 MB, retained image source bytes 0.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.17 |
+| Frame wall time (ms) | 9.33 |
+| M2 / R / M3 (ms) | 0.78 / 3.34 / 0.75 |
+| App GPU frame time, XR counter (ms) | 7.03 |
+| GPU utilization, XR counter (%) | 95.4 |
+| CPU utilization average / worst, XR counter (%) | 22.6 / 27.6 |
+| GPU pass Cull classification (ms) | 0.053 |
+| GPU pass Cull command generation (ms) | 0.110 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 |
+| GPU pass Light cluster binning Headset (ms) | 0.053 |
+| GPU pass XR multiview (ms) | 8.312 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.584 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.17 | 0 -> 0; 0 -> 0, step-downs 0 | 63.6 -> 63.7 | 64.1 -> 63.4 | 61.7 -> 61.4 | 38.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [2208..2362] cap 2362/2362 | 456 cap 456 | 95 | 21.3 |
+
+
+## 2026-11-07 06:30 - bistro_street_120, no configuration file
+
+- Runs: 3 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_063013_bistro_street_120_0.json`, `20261107_063013_bistro_street_120_1.json`, `20261107_063013_bistro_street_120_2.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (954b7fc44); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 4.78 s, idle 4.78 s).
+- Configuration calls: get_pvs_status (arguments in the result files' `host` block).
+- Scene (prepared assets D8 step 11, R13.4): the quest prepared asset that `scripts/prepared_asset_bistro_verify.py --keep-quest` makes from the erhe-saved Bistro source (import root rotated -90 X, LOD chains generated, export settings with the bake on, `instancing` `duplicate`, `pvs_mode` `rebake` over 2068 cells of 4 m): 10 Local-space mesh items, 3795 World-space mesh items, 3805 BVH items, 266 Texture items (ASTC 4x4), one PVS item and the Scene item, 7878 items, 1047 MB, run as a prepared run with no source on the device. The following entry is the prepared glTF file (`save_scene_for_quest`) of the same open scene after the same Export. Per run, listed / idle s, VmHWM MB, fps: 4.78 / 4.78, 832, 105.85; 4.69 / 4.69, 860, 105.23; 4.58 / 4.58, 864, 104.59 (median listed 4.69 s, VmHWM 860 MB); retained image source bytes 0; PVS `ready` with `bits_hash` `fd5d5edadffa53f7` after the load in every run. Between the MCP `load_scene` call and the parse the store open checks the format stamp of every item twice (MCP `load_scene` on the main thread, then the load task): 7878 `Asset_store::get_info` calls each, 0.87 - 1.0 s cold and 0.37 - 0.63 s warm on the device (temporary timing lines, not in this build), the cost the prepared glTF file does not have; with the item table's `payload` column moved after `info` the warm check took 0.17 s and the cold one 1.0 s (each lookup reads the row's leaf page, which holds the first 8 - 64 KiB of its payload).
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.23 [104.59..105.85] |
+| Frame wall time (ms) | 9.36 [9.32..9.44] |
+| M2 / R / M3 (ms) | 0.77 [0.77..0.78] / 3.33 [3.22..3.38] / 0.66 [0.65..0.67] |
+| App GPU frame time, XR counter (ms) | 6.70 [6.70..6.75] |
+| GPU utilization, XR counter (%) | 95.1 [95.1..95.4] |
+| CPU utilization average / worst, XR counter (%) | 23.0 [22.9..23.6] / 29.6 [29.6..30.8] |
+| GPU pass Cull classification (ms) | 0.053 [0.052..0.053] |
+| GPU pass Cull command generation (ms) | 0.127 [0.124..0.131] |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 [0.040..0.040] |
+| GPU pass Light cluster binning Headset (ms) | 0.053 [0.053..0.053] |
+| GPU pass XR multiview (ms) | 8.262 [8.228..8.288] |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.555 [8.509..8.581] |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.85 | 0 -> 0; 0 -> 0, step-downs 0 | 47.6 -> 49.6 | 48.2 -> 49.8 | 43.7 -> 45.6 | 29.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2054 [1920..2208] cap 2362/2362 | 456 cap 456 | 94 | 29.7 |
+| 1 | 105.23 | 0 -> 0; 0 -> 0, step-downs 0 | 53.6 -> 53.5 | 54.2 -> 53.6 | 50.8 -> 50.7 | 30.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1517 [1382..2362] cap 2362/2362 | 456 cap 456 | 95 | 28.3 |
+| 2 | 104.59 | 0 -> 0; 0 -> 0, step-downs 0 | 54.4 -> 54.9 | 54.9 -> 54.5 | 51.9 -> 51.9 | 30.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2054 [1920..2362] cap 2362/2362 | 456 cap 456 | 94 | 28.4 |
+
+
+## 2026-11-07 06:31 - bistro_street_120, no configuration file
+
+- Runs: 3 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_063150_bistro_street_120_0.json`, `20261107_063150_bistro_street_120_1.json`, `20261107_063150_bistro_street_120_2.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (954b7fc44); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src_quest.glb` (listed 4.48 s, idle 4.48 s).
+- Configuration calls: get_pvs_status (arguments in the result files' `host` block).
+- Scene: the prepared glTF file (`save_scene_for_quest`, 1094 MB, world-space form, PVS inline) of the open scene the previous entry's prepared asset was exported from, written after its Export with the same settings. Per run, listed / idle s, VmHWM MB, fps: 4.48 / 4.48, 819, 105.07; 4.33 / 4.64, 824, 105.49; 4.28 / 4.60, 826, 103.95 (median listed 4.33 s, idle 4.60 s, VmHWM 824 MB); PVS `ready`, `bits_hash` `fd5d5edadffa53f7`. Against the prepared asset (R13.4): the frame rate and the GPU times are the same within the runs' spread, the load is 0.36 s slower listed (0.09 s idle) and the peak 36 MB higher for the prepared asset, so R13.4 does not hold yet. `render_scene_image` on the device crashes in both (SIGSEGV in `Render_pass::start_render_pass` from `Shadow_renderer::draw`, the capture chain; pre-existing), so the images were not compared on the device; on the host the quest prepared run's PVS is `ready` with the same `bits_hash`.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.07 [103.95..105.49] |
+| Frame wall time (ms) | 9.33 [9.32..9.34] |
+| M2 / R / M3 (ms) | 0.78 [0.77..0.79] / 3.23 [3.22..3.23] / 0.66 [0.66..0.66] |
+| App GPU frame time, XR counter (ms) | 6.63 [6.61..6.86] |
+| GPU utilization, XR counter (%) | 95.0 [94.6..95.0] |
+| CPU utilization average / worst, XR counter (%) | 23.1 [21.9..23.6] / 29.3 [26.5..29.3] |
+| GPU pass Cull classification (ms) | 0.053 [0.052..0.053] |
+| GPU pass Cull command generation (ms) | 0.128 [0.120..0.130] |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 [0.040..0.040] |
+| GPU pass Light cluster binning Headset (ms) | 0.053 [0.053..0.053] |
+| GPU pass XR multiview (ms) | 8.267 [8.235..8.333] |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.555 [8.528..8.617] |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.07 | 0 -> 0; 0 -> 0, step-downs 0 | 53.2 -> 53.9 | 53.5 -> 53.6 | 50.2 -> 50.8 | 30.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2054 [1920..2208] cap 2362/2362 | 456 cap 456 | 94 | 23.6 |
+| 1 | 105.49 | 0 -> 0; 0 -> 0, step-downs 0 | 55.6 -> 55.7 | 56.1 -> 56.1 | 53.2 -> 53.2 | 31.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1651 [1651..2362] cap 2362/2362 | 456 cap 456 | 94 | 26.9 |
+| 2 | 103.95 | 0 -> 0; 0 -> 0, step-downs 0 | 57.1 -> 57.0 | 57.6 -> 57.4 | 54.7 -> 54.6 | 32.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1651 [1651..2362] cap 2362/2362 | 456 cap 456 | 94 | 32.3 |
+
+
+## 2026-11-07 07:47 - bistro_street_120, no configuration file
+
+- Runs: 4 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_074720_bistro_street_120_0.json`, `20261107_074808_bistro_street_120_0.json`, `20261107_074855_bistro_street_120_0.json`, `20261107_074943_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (ef887336b-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 4.48 s, idle 4.48 s).
+- Configuration calls: get_pvs_status (arguments in the result files' `host` block).
+- Scene (prepared assets D8 step 11 fix, R13.4): the quest prepared asset of the 2026-11-07 06:30 entry made again by `scripts/prepared_asset_bistro_verify.py --keep-quest` in container format version 2 (payloads in their own table, `doc/erhe/asset_store.md` "Container"), 7878 items, 1045 MB, with the APK of this tree: one format stamp check per open from one read of the item table (`get_item_headers()`; `resolve_prepared_open()` 150 - 250 ms on the device, was two checks of 0.87 - 1.0 s cold each), the Scene item parsed through a reader (JSON chunk, BIN chunk by range) in place of a whole copy in memory, read connections with a 1 MiB page cache freed after each read once the load closed its payload handles, and the covering index `item_location` for payload lookups. Runs alternated with the following entry's (store, glTF, store, ...). Per run, listed / idle s, VmHWM MB, build_imported_buffer_meshes ms, fps: 4.48 / 4.48, 799, 1722, 106.95; 4.54 / 4.85, 800, 2043, 104.88; 4.61 / 4.91, 799, 2087, 105.62; 4.53 / 4.83, 795, 2031, 104.55 (median listed 4.54 s, idle 4.84 s, VmHWM 799 MB, malloc in use 568 MB); retained image source bytes 0; PVS `ready`, `bits_hash` `fd5d5edadffa53f7` in every run.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.25 [104.55..106.95] |
+| Frame wall time (ms) | 9.25 [9.10..9.47] |
+| M2 / R / M3 (ms) | 0.83 [0.82..0.86] / 3.43 [3.38..3.46] / 0.68 [0.67..0.70] |
+| App GPU frame time, XR counter (ms) | 6.63 [6.41..6.88] |
+| GPU utilization, XR counter (%) | 94.9 [94.1..95.3] |
+| CPU utilization average / worst, XR counter (%) | 26.8 [25.0..29.3] / 30.8 [29.7..32.0] |
+| GPU pass Cull classification (ms) | 0.052 [0.052..0.053] |
+| GPU pass Cull command generation (ms) | 0.131 [0.124..0.134] |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 [0.040..0.040] |
+| GPU pass Light cluster binning Headset (ms) | 0.053 [0.053..0.053] |
+| GPU pass XR multiview (ms) | 8.268 [8.117..8.328] |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.566 [8.419..8.625] |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 106.95 | 0 -> 0; 0 -> 0, step-downs 0 | 55.6 -> 58.3 | 55.4 -> 57.2 | 51.6 -> 53.9 | 37.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1382..1920] cap 2362/2362 | 456 cap 456 | 94 | 30.5 |
+| 1 | 104.88 | 0 -> 0; 0 -> 0, step-downs 0 | 61.4 -> 61.8 | 61.7 -> 61.3 | 59.0 -> 59.0 | 38.0, 99 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 94 | 25.9 |
+| 2 | 105.62 | 0 -> 0; 0 -> 0, step-downs 0 | 64.1 -> 64.5 | 64.2 -> 63.6 | 61.6 -> 61.5 | 39.0, 99 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 95 | 33.5 |
+| 3 | 104.55 | 0 -> 0; 0 -> 0, step-downs 0 | 65.1 -> 65.6 | 65.6 -> 64.9 | 63.2 -> 62.9 | 40.0, 99 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 95 | 31.1 |
+
+
+## 2026-11-07 07:47 - bistro_street_120, no configuration file
+
+- Runs: 4 x 600 measured frames (warmup 1500), display 120.0 Hz, input_hash fccc71be85e379fd; results `20261107_074744_bistro_street_120_0.json`, `20261107_074832_bistro_street_120_0.json`, `20261107_074920_bistro_street_120_0.json`, `20261107_075008_bistro_street_120_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (ef887336b-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark config/editor/benchmark_bistro_street_120.json --no-scene`; scene `bistro_src_quest.glb` (listed 4.7 s, idle 4.7 s).
+- Configuration calls: get_pvs_status (arguments in the result files' `host` block).
+- Scene: the prepared glTF file of the 2026-11-07 06:31 entry (the same file on the device), alternated with the previous entry's runs, same APK. Per run, listed / idle s, VmHWM MB, build_imported_buffer_meshes ms, fps: 4.70 / 4.70, 788, 1821, 105.27; 4.66 / 4.66, 789, 1813, 105.12; 4.75 / 4.75, 782, 1821, 106.64; 4.33 / 4.64, 780, 1796, 107.20 (median listed 4.68 s, idle 4.68 s, VmHWM 785 MB, malloc in use 560 MB); PVS `ready`, `bits_hash` `fd5d5edadffa53f7`. Against the prepared asset (R13.4): the prepared asset is listed 0.14 s earlier and idle 0.16 s later; its peak is 14 MB higher (was 36 MB) and its steady heap 8 MB larger (the open store: eight read connections and one byte source per item buffer, 8099); its mesh build reads 0.22 s longer than the file's (2037 against 1817 ms median), the remaining load cost; frame rate equal within the spread.
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | automatic / clustered (Headset) |
+| Lights | point 33/33 shaded, 1 shadow-mapped (0 cached); spot 10/10 shaded, 2 shadow-mapped (2 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 1+4, spot 2+4, point 1+4 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, receiver_plane, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 105.95 [105.12..107.20] |
+| Frame wall time (ms) | 9.19 [9.09..9.35] |
+| M2 / R / M3 (ms) | 0.83 [0.81..0.85] / 3.42 [3.32..3.50] / 0.69 [0.67..0.70] |
+| App GPU frame time, XR counter (ms) | 6.75 [6.68..6.79] |
+| GPU utilization, XR counter (%) | 95.3 [94.1..95.4] |
+| CPU utilization average / worst, XR counter (%) | 25.8 [25.2..26.5] / 31.1 [27.3..32.0] |
+| GPU pass Cull classification (ms) | 0.052 [0.052..0.053] |
+| GPU pass Cull command generation (ms) | 0.126 [0.124..0.130] |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.040 [0.040..0.040] |
+| GPU pass Light cluster binning Headset (ms) | 0.053 [0.053..0.053] |
+| GPU pass XR multiview (ms) | 8.261 [8.212..8.295] |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 8.548 [8.504..8.584] |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 105.27 | 0 -> 0; 0 -> 0, step-downs 0 | 59.7 -> 60.4 | 60.2 -> 59.8 | 57.3 -> 57.5 | 38.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 95 | 29.6 |
+| 1 | 105.12 | 0 -> 0; 0 -> 0, step-downs 0 | 62.3 -> 63.0 | 62.9 -> 62.5 | 60.3 -> 60.2 | 38.0, 99 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [2208..2362] cap 2362/2362 | 456 cap 456 | 94 | 31.6 |
+| 2 | 106.64 | 0 -> 0; 0 -> 0, step-downs 0 | 64.1 -> 64.1 | 64.6 -> 64.1 | 62.3 -> 62.0 | 40.0, 99 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2362 [1920..2362] cap 2362/2362 | 456 cap 456 | 94 | 30.1 |
+| 3 | 107.20 | 0 -> 0; 0 -> 0, step-downs 0 | 65.4 -> 65.0 | 65.8 -> 65.3 | 63.5 -> 63.2 | 40.0, 99 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2208 [1920..2362] cap 2362/2362 | 456 cap 456 | 94 | 25.7 |
+

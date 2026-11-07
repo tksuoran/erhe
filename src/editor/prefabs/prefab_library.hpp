@@ -121,6 +121,8 @@ public:
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::shared_ptr<erhe::scene::Scene>                     holding_scene;
     std::shared_ptr<erhe::scene::Node>                      template_root; // parent of the template's scene roots
+    // The nested references of the template that did not resolve: its instances lack their content (R10.8).
+    std::vector<std::filesystem::path>                      unresolved_sources;
 
     [[nodiscard]] auto get_key() const -> Prefab_key { return Prefab_key{source_path, prim_path, variant_selections}; }
 };
@@ -346,13 +348,14 @@ void attach_prefab_instance(
 // Used by import_gltf / open_scene_gltf (destination scene's content layer
 // and library) and by Prefab_library itself when the loaded template
 // contains nested external assets (layer 0, null library; instances
-// retarget on instantiation).
-void resolve_external_assets(
+// retarget on instantiation). Returns the files of the references that did
+// not resolve (their carriers hold no content; R10.8).
+[[nodiscard]] auto resolve_external_assets(
     Prefab_library&                                prefab_library,
     const erhe::gltf::Gltf_data&                   gltf_data,
     erhe::scene::Layer_id                          content_layer_id,
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
     Content_library*                               content_library
-);
+) -> std::vector<std::filesystem::path>;
 
 }

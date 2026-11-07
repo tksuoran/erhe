@@ -53,36 +53,39 @@ auto get_effective_post_processing(const Editor_settings_config& editor_settings
     return overrides.post_processing.has_value() ? overrides.post_processing.value() : editor_settings.post_processing;
 }
 
-auto get_effective_export_lod(const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Lod_config&
-{
-    const Scene_export_settings& export_settings = scene_root.get_scene_settings().export_settings;
-    return export_settings.lod.has_value() ? export_settings.lod.value() : editor_settings.lod;
-}
-
 void migrate_scene_settings_json(nlohmann::json& settings)
 {
     if (!settings.is_object()) {
         return;
     }
     const int version = settings.value("_version", 1);
-    if (version >= 2) {
+    if (version >= 3) {
         return;
     }
-    nlohmann::json& export_settings = settings["export_settings"];
-    if (!export_settings.is_object()) {
-        export_settings = nlohmann::json::object();
-    }
-    for (const char* key : {"pvs_region_min", "pvs_region_max", "pvs_cell_size"}) {
-        const nlohmann::json::iterator i = settings.find(key);
-        if (i != settings.end()) {
-            export_settings[key] = std::move(*i);
-            settings.erase(i);
+    if (version < 2) {
+        // A v1 object without the PVS grid keys has no export settings.
+        nlohmann::json export_settings = nlohmann::json::object();
+        for (const char* key : {"pvs_region_min", "pvs_region_max", "pvs_cell_size"}) {
+            const nlohmann::json::iterator i = settings.find(key);
+            if (i != settings.end()) {
+                export_settings[key] = std::move(*i);
+                settings.erase(i);
+            }
+        }
+        if (!export_settings.empty()) {
+            export_settings["_version"] = 1;
+            settings["export_settings"] = std::move(export_settings);
         }
     }
-    if (!export_settings.contains("_version")) {
-        export_settings["_version"] = 1;
+    // Scene_export_settings v1: a null lod (the editor-global lod) reads as the Lod_config defaults.
+    const nlohmann::json::iterator export_settings = settings.find("export_settings");
+    if ((export_settings != settings.end()) && export_settings->is_object() && (export_settings->value("_version", 1) < 2)) {
+        const nlohmann::json::iterator lod = export_settings->find("lod");
+        if ((lod != export_settings->end()) && lod->is_null()) {
+            export_settings->erase(lod);
+        }
     }
-    settings["_version"] = 2;
+    settings["_version"] = 3;
 }
 
 } // namespace editor

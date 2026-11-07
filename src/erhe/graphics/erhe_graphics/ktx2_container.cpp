@@ -6,7 +6,9 @@
 #include <zstd/zstd.h>
 
 #include <algorithm>
+#include <array>
 #include <cstring>
+#include <fstream>
 
 namespace erhe::graphics {
 
@@ -388,7 +390,8 @@ auto transcode_ktx2_basis_to_raw_blocks(
     const std::span<const std::uint8_t> basis_ktx2,
     const Ktx2_block_target             target,
     const Ktx2_color_space              color_space,
-    const Ktx2_supercompression         supercompression
+    const Ktx2_supercompression         supercompression,
+    const Ktx2_normal_layout            normal_layout
 ) -> std::vector<std::uint8_t>
 {
     ERHE_PROFILE_FUNCTION();
@@ -401,6 +404,7 @@ auto transcode_ktx2_basis_to_raw_blocks(
     const Transcode_format_preference preference = (target == Ktx2_block_target::bc)
         ? Transcode_format_preference::bc7
         : Transcode_format_preference::astc_4x4;
+    loader.set_normal_layout(normal_layout);
     if (!loader.open(basis_ktx2, info, linear, preference)) {
         return {};
     }
@@ -443,6 +447,17 @@ auto is_ktx2_basis(const std::span<const std::uint8_t> file) -> bool
 auto is_ktx2_raw_blocks(const std::span<const std::uint8_t> file) -> bool
 {
     return Image_loader_ktx2::is_ktx2(file) && (file.size() >= c_header_byte_count) && (read_u32(file, 12) != ktx2_vk_format_undefined);
+}
+
+auto is_ktx2_raw_blocks_file(const std::filesystem::path& path) -> bool
+{
+    std::array<std::uint8_t, c_header_byte_count> header{};
+    std::ifstream file{path, std::ios::binary};
+    file.read(reinterpret_cast<char*>(header.data()), static_cast<std::streamsize>(header.size()));
+    if (!file) {
+        return false;
+    }
+    return is_ktx2_raw_blocks(std::span<const std::uint8_t>{header.data(), header.size()});
 }
 
 } // namespace erhe::graphics

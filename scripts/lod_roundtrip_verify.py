@@ -4,24 +4,29 @@ doc/gltf_extensions/ERHE_mesh_lod.md, doc/editor/lod.md "Verification").
 
 Launches the headless editor (doc/agents/editor_runs.md), writes a GLB with a
 torus and a capsule as plain triangle soups (no ERHE extensions), opens it,
-saves it once with prepared mesh data (A) and loads A, so both meshes are
-prepared primitives. Then:
+saves it once (A) and loads A, whose open loads both meshes from the mesh
+items it derives into A's editor asset (doc/editor/prepared_assets.md "The
+editor's own loading"), so both are prepared primitives. Then:
 
 1. generate_lods on the torus only and saves (B0): only the torus primitive
    carries ERHE_mesh_lod (chains are made on request only, D1), declared in
    extensionsUsed and not in extensionsRequired;
 2. generate_lods on the capsule too, records both chains (get_lod_info) and
    render_scene_image hashes at forced levels 0..5, at four automatic
-   selection distances and without Lod, and saves (B);
+   selection distances and without Lod, and saves (B): both primitives carry
+   their LOD request alone (no chain, R4.5);
 3. loads B: the chains are identical (levels, index and triangle counts,
    errors, settings; no level edge lines yet) and every image is identical;
    a selection queues the full builds, after which the level edge counts
    equal the ones before the save and the images are still identical;
-4. saves the loaded scene again (the stored chains are written back) and
-   saves it for Quest (Q), loads Q (stored vertex streams) and checks the
+4. saves the loaded scene again (the requests are written back alone),
+   Exports it for Quest without the world-space bake (doc/editor/
+   prepared_assets.md), opens the prepared asset as a prepared run with B
+   moved away (Q: mesh items with stored vertex streams) and checks the
    chains, the images and the edge counts after a selection the same way;
-5. requires that no LOD chain was generated after the two requests (the
-   "mesh lod" log lines of erhe::primitive's generation).
+5. requires that the LOD generation ran at most for the two requests and
+   not after the save of B (the "mesh lod" log lines of erhe::primitive's
+   generation; B's open derives its items once, into its editor asset).
 
 Usage: python3 scripts/lod_roundtrip_verify.py [--editor PATH] [--out DIR]
 Exit code 0 = pass.
@@ -165,6 +170,18 @@ def write_soup_glb(path):
         handle.write(binary)
 
 
+def glb_lod_requests(path):
+    """Per mesh, per primitive: True for an ERHE_mesh_lod request alone (settings, no chain)."""
+    with open(path, "rb") as handle:
+        data = handle.read()
+    length, = struct.unpack_from("<I", data, 12)
+    document = json.loads(data[20:20 + length])
+    def request_only(primitive):
+        lod = primitive.get("extensions", {}).get("ERHE_mesh_lod")
+        return (lod is not None) and ("settings" in lod) and ("levels" not in lod) and ("indices" not in lod)
+    return {mesh.get("name", "?"): [request_only(p) for p in mesh["primitives"]] for mesh in document["meshes"]}
+
+
 def glb_lod_primitives(path):
     with open(path, "rb") as handle:
         data = handle.read()
@@ -217,9 +234,10 @@ class Roundtrip:
         self.call("close_scene", {"scene_name": scene})
         self.wait_idle()
 
-    def save(self, tool, scene, path):
-        job = self.client.save(tool, {"scene_name": scene, "path": path})
-        check_true(f"{tool} {os.path.basename(path)}", job.get("state") == "done", json.dumps(job)[:300])
+    def save(self, tool, scene, path, extra=None):
+        arguments = {"scene_name": scene, "path": path} if path else {"scene_name": scene}
+        job = self.client.save(tool, dict(arguments, **(extra or {})))
+        check_true(f"{tool} {os.path.basename(path) if path else scene}", job.get("state") == "done", json.dumps(job)[:300])
         return job
 
     def node_id(self, scene, name):
@@ -326,26 +344,44 @@ class Roundtrip:
         images_before = self.images(scene_a, "before")
         check_true("negative control: forced levels 0 and 3 differ", images_before["forced level 0"] != images_before["forced level 3"])
         path_b = os.path.join(out, "lod_roundtrip_b.glb")
-        job = self.save("save_scene", scene_a, path_b)
-        check_true("B: 2 chains written", job.get("prepared", {}).get("lod_generated_count", 0) + job.get("prepared", {}).get("lod_stored_count", 0) == 2, json.dumps(job.get("prepared", {})))
+        self.save("save_scene", scene_a, path_b)
+        # R4.5, R8.4: a scene file holds the two requests alone; the chains are in the editor asset.
+        requests = glb_lod_requests(path_b)
+        check_true("B: both primitives carry their LOD request alone, no chain", requests == {name: [True] for name in MESHES}, f"{requests}")
         self.close(scene_a)
+        with open(LOG_PATH, "r", encoding="utf-8", errors="replace") as handle:
+            generations_before_b = sum(1 for line in handle if "mesh lod " in line)
 
         scene_b = self.load(path_b)
         self.check_reload(scene_b, "B", chains_before, images_before)
-        job = self.save("save_scene", scene_b, os.path.join(out, "lod_roundtrip_b2.glb"))
-        check_true("B2: the stored chains are written back", job.get("prepared", {}).get("lod_stored_count") == 2, json.dumps(job.get("prepared", {})))
-        path_q = os.path.join(out, "lod_roundtrip_q.glb")
-        job = self.save("save_scene_for_quest", scene_b, path_q)
-        check_true("Q: the stored chains are written back", job.get("prepared", {}).get("lod_stored_count") == 2, json.dumps(job.get("prepared", {})))
+        self.save("save_scene", scene_b, os.path.join(out, "lod_roundtrip_b2.glb"))
+        requests = glb_lod_requests(os.path.join(out, "lod_roundtrip_b2.glb"))
+        check_true("B2: the requests are written back alone", requests == {name: [True] for name in MESHES}, f"{requests}")
+        # Export reads the scene's export settings: a copy of the editor's defaults, the bake off so Q keeps the local-space meshes.
+        self.call("set_scene_settings", {"scene_name": scene_b, "merge": True, "settings": {"_version": 3, "export_settings": {"bake_static_to_world_space": False}}})
+        job = self.save("prepare_scene", scene_b, "", {"target": "quest"})
+        local_mesh = job.get("export", {}).get("counts", {}).get("local_mesh", {})
+        check_true("Q: the Export names the two mesh items", local_mesh.get("written") == 2, json.dumps(job.get("export", {}).get("counts", {})))
+        path_q = job.get("path", "")
         self.close(scene_b)
 
-        scene_q = self.load(path_q)
-        self.check_reload(scene_q, "Q", chains_before, images_before)
-        self.close(scene_q)
+        # A prepared run reads the prepared asset only while its source is unreadable (doc/editor/prepared_assets.md "Prepared run").
+        moved_b = path_b + ".moved"
+        os.replace(path_b, moved_b)
+        try:
+            scene_q = self.load(path_q)
+            self.check_reload(scene_q, "Q", chains_before, images_before)
+            self.close(scene_q)
+        finally:
+            os.replace(moved_b, path_b)
 
         with open(LOG_PATH, "r", encoding="utf-8", errors="replace") as handle:
             generations = sum(1 for line in handle if "mesh lod " in line)
-        check_true("only the two requests generated chains (no generation at load, save or full build)", generations == 2, f"{generations} 'mesh lod' lines")
+        # The requests generate at most once each (a request equal to the export settings' default
+        # LOD finds the chain the open of A stored); B's load derives its items once (into its editor
+        # asset, not through the LOD generation), and saves, full builds and Q generate none.
+        check_true("at most the two requests ran the LOD generation, none after the save of B (saves, full builds and Q generate nothing)",
+                   (generations_before_b <= 2) and (generations == generations_before_b), f"{generations_before_b} 'mesh lod' lines before B, {generations} at the end")
 
 
 def main():

@@ -1,6 +1,6 @@
 """Deterministic A/B screenshot capture through the editor's MCP server.
 
-    scripts/mesh_ab_capture.py <off|on|cache> <out.png>
+    scripts/mesh_ab_capture.py <off|on> <out.png>
     ERHE_SHOT_SCENE=<path|->      scene to load ("-" = default startup scene)
     ERHE_SHOT_EXPOSURE=<float>    camera exposure (default 1.0)
     ERHE_SHOT_EXE=<path>          editor build to run (default: ninja vulkan Debug)
@@ -203,8 +203,7 @@ def frame_scene(scene):
 if __name__ == "__main__":
     mode = sys.argv[1]
     out  = sys.argv[2]
-    set_optimize(mode in ("on", "cache"))
-    set_flag("mesh_optimize_cache", mode == "cache")
+    set_optimize(mode == "on")
     tgt = os.path.join(REPO, out)
     if os.path.exists(tgt):
         os.remove(tgt)

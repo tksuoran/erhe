@@ -79,7 +79,6 @@ target_link_libraries(
         erhe::profile
         glm::glm-header-only
     PRIVATE
-        erhe::file
         erhe::hash
         erhe::utility
         erhe::log

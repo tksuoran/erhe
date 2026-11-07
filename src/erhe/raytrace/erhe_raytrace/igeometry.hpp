@@ -82,7 +82,7 @@ public:
     // without it (embree, tinybvh, none) keep these defaults: nothing to
     // report, export and import not available.
 
-    // Content hash of the committed triangles (the cache/bvh key); empty
+    // Content hash of the committed triangles (Prebuilt_bvh::triangle_hash); empty
     // before a successful commit() or when the backend does not compute it.
     [[nodiscard]] virtual auto get_triangle_hash () const -> std::optional<uint64_t> { return {}; }
     // Triangle count of the last successful commit(), 0 otherwise.
@@ -91,7 +91,7 @@ public:
     // committed BVH or the backend cannot export one.
     [[nodiscard]] virtual auto export_bvh(Prebuilt_bvh& out) const -> bool { static_cast<void>(out); return false; }
     // Supplies a BVH for the next commit(). commit() validates it against the
-    // content and, when it is accepted, uses it instead of the cache or a
+    // content and, when it is accepted, uses it instead of a
     // build. A rejected BVH logs one warning and commit() continues as if
     // none was supplied. Returns false when the backend cannot import a BVH.
     [[nodiscard]] virtual auto set_prebuilt_bvh(Prebuilt_bvh&& prebuilt) -> bool { static_cast<void>(prebuilt); return false; }

@@ -124,11 +124,18 @@ to load (the file changed since the parse) builds nothing; the finalize pass
 reports the primitive. Without worker contexts the parse reads the payloads
 itself (`in_parse`).
 
+A scene open of a source asset (an erhe scene or a foreign glTF, not an
+import, a prefab template or a prepared run) runs each job through the
+file's editor asset (`run_editor_asset_job()` with `Editor_asset_load`): after
+step 1 the job keys the soup and builds its Local-space mesh item's core in
+place of the soup, from the editor asset or from the item it derives and
+stores (doc/editor/prepared_assets.md "The editor's own loading").
+
 ### Stored vertex streams
 
-A file written by "Save for Quest" stores each prepared primitive's GPU
-vertex streams (`ERHE_gpu_vertex_streams`,
-doc/gltf_extensions/ERHE_gpu_vertex_streams.md). With
+A mesh item stores each prepared
+primitive's GPU vertex streams (`ERHE_gpu_vertex_streams`,
+doc/erhe/gltf.md "GPU vertex streams on export"). With
 `load.use_gpu_vertex_streams` on (the default) and `load.cpu_mesh_data`
 release, the job first tries `Primitive::make_stored_meshes()`: when the
 stored signatures and encoding version equal the running `Mesh_memory`
@@ -276,8 +283,8 @@ byte budget - because content-library entries, `Gltf_source_reference` and
 `Gltf_data::images` all need real objects by then. Synchronous callers keep
 their behavior by calling `Gltf_image_residency::drain()`.
 
-A raw ASTC 4x4 KTX2 image ("Save for Quest",
-`doc/gltf_extensions/ERHE_texture_ktx2.md`) is not transcoded: on a device
+A raw ASTC 4x4 KTX2 image (a quest Scene item or Texture item;
+`doc/erhe/gltf.md` "Texture items") is not transcoded: on a device
 that samples ASTC its stored levels (inflated from Zstandard) are the
 decoded bytes; elsewhere mip level 0 is decoded to RGBA8 on the worker. The
 `async load '<file>' images:` line, logged next to the high-water line,
@@ -322,11 +329,11 @@ it replaces.
 | `deferred_edge_lines` | the load builds a fill-only buffer mesh straight from the triangle soup and a background task builds the `Geometry` (edges, smooth normals) and the full buffer mesh |
 | `parallel_gltf_parse` | image decode, mesh parse and animation parse run as parallel tasks inside `erhe::gltf::parse_gltf` (`Gltf_parse_arguments::parallel`) |
 
-`Load_config::use_prepared_mesh_data` (default on, added in v3) passes
-`Gltf_parse_arguments::prepared_mesh_data_use` to every editor glTF parse:
-on, the prepared mesh data a scene save writes (`doc/plans/gltf_fast_load.md`)
-is validated at parse and attached to the soup primitives; off, those files
-load as plain soups. It exists for A/B runs.
+Prepared mesh data (`doc/plans/gltf_fast_load.md`) comes from items alone: a
+file parse reads none (`Gltf_document::file`, doc/erhe/gltf.md "Notes"), the
+parse of a prepared run's Scene item reads it (`Gltf_document::item`), and the
+editor's own loading takes it from the editor asset's mesh items
+(doc/editor/prepared_assets.md "The editor's own loading").
 
 A primitive loaded with prepared mesh data (`Primitive::is_prepared()`)
 reaches its final load state in the build phase and has nothing deferred:
@@ -402,17 +409,13 @@ draws its source build. Every other primitive (eager mode, a `Geometry`
 restored from the ERHE_geometry extension with edges, no worker contexts) is
 optimized at load time, before its first draw list registration.
 
-Both optimizations of an imported mesh go through the mesh optimizer's
-filesystem cache when `mesh_optimize_cache` is on (the committed
-`config/editor/mesh_memory.json` turns it on):
-`get_import_mesh_optimize_cache_directory()` names `cache/mesh_optimizer`,
-`attach_optimized_render_shape` passes it to the soup path, and
-`Async_raytrace_kickoff_operation` puts it on the deferred task's
-`Buffer_info::mesh_optimize_cache_directory`, so a load of an asset that was
-loaded before (in this process or an earlier one) replays every
-geometry-path optimization from disk instead of running the meshoptimizer
-passes. The re-optimize that `kickoff_deferred_finalize` dispatches after an
-edit commit runs uncached: edited geometry is new content every time.
+Both optimizations run the passes at every load: the mesh optimizer keeps
+no disk cache. What a source open derives is stored in the file's editor
+asset and read by the next open (doc/editor/prepared_assets.md "The
+editor's own loading"); these two paths remain for primitives a build job
+does not take from items (geometry-normative primitives, loads without
+worker contexts) and for the re-optimize that `kickoff_deferred_finalize`
+dispatches after an edit commit.
 
 Two process-wide serialization points exist because the work is concurrent:
 the soup-to-`Geometry` conversion takes `erhe::geometry::geogram_lock()`

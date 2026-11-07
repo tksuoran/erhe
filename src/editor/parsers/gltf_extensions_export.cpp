@@ -392,10 +392,16 @@ void add_gltf_editor_state(
     erhe::gltf::Gltf_export_arguments& arguments,
     Scene_root&                        scene_root,
     const std::filesystem::path&       export_path,
-    const Physics_description_items&   physics_items
+    const Physics_description_items&   physics_items,
+    const Gltf_editor_state_scope      scope,
+    const std::string_view             editor_asset_record
 )
 {
-    add_material_asset_references(arguments, scene_root, scene_root.get_content_library(), export_path);
+    const bool scene_file = (scope == Gltf_editor_state_scope::scene_file);
+    // A Scene item is flat (R10.3): a material another container defines is written in full.
+    if (scene_file) {
+        add_material_asset_references(arguments, scene_root, scene_root.get_content_library(), export_path);
+    }
 
     const erhe::scene::Scene& scene = scene_root.get_scene();
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
@@ -415,8 +421,8 @@ void add_gltf_editor_state(
         if (node == scene_root_node) {
             return true; // the scene root itself is not a glTF node
         }
-        if ((node->get_flag_bits() & erhe::Item_flags::import_root) != 0) {
-            return true; // implicit containers are unwrapped by the exporter
+        if (erhe::gltf::is_transparent_import_root(node->get_flag_bits())) {
+            return true; // written as no node: the exporter writes its children in its place
         }
         if (is_inside_prefab_instance(node.get())) {
             return true;
@@ -427,8 +433,9 @@ void add_gltf_editor_state(
         // rebuilds on load.
         const Geometry_graph_mesh_entry* const graph_mesh_entry =
             scene_root.get_geometry_graph_mesh_system().find_entry(*node.get());
+        // A Scene item writes the graph's mesh as a mesh (its derived triangles).
         if (graph_mesh_entry != nullptr) {
-            if (graph_mesh_entry->mesh) {
+            if (graph_mesh_entry->mesh && scene_file) {
                 arguments.excluded_meshes.insert(graph_mesh_entry->mesh.get());
             }
             if (graph_mesh_entry->ghost_mesh) {
@@ -436,7 +443,7 @@ void add_gltf_editor_state(
             }
         }
         const std::optional<Geometry_graph_mesh_data> graph_mesh_data = read_geometry_graph_mesh(*node.get());
-        if (graph_mesh_data.has_value() && graph_mesh_data.value().graph_mesh) {
+        if (scene_file && graph_mesh_data.has_value() && graph_mesh_data.value().graph_mesh) {
             data->node_bindings.push_back(
                 Node_binding_record{
                     .node            = node.get(),
@@ -461,6 +468,9 @@ void add_gltf_editor_state(
             {"ambient_light",  json_vec4(glm::vec4{scene.get_ambient_light(), 0.0f})},
             {"enable_physics", scene_root.has_physics_world()},
         };
+        if (!editor_asset_record.empty()) {
+            scene_json["editor_asset"] = std::string{editor_asset_record};
+        }
         // The scene item's own local values next to the explicit field, and
         // the style it uses (doc/erhe/property_system.md section 4.20): the
         // map is the item's complete local set, so an ambient color a style
@@ -670,7 +680,7 @@ void add_gltf_editor_state(
     // meshes (ERHE_geometry path); the brush metadata references them by
     // mesh index via the builder below. The collision shape is rebuilt at
     // first instantiation (Brush::late_initialize), as today.
-    if (content_library) {
+    if (content_library && scene_file) {
         // Depth-first walk preserving the content-library folder hierarchy
         // (same traversal as save_scene's brush pass).
         const std::function<void(const erhe::Hierarchy&, const std::string&)> collect_brush_folder =
@@ -727,7 +737,7 @@ void add_gltf_editor_state(
             );
         }
     }
-    if (content_library) {
+    if (content_library && scene_file) {
         for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
             data->graph_meshes.push_back(
                 nlohmann::json{

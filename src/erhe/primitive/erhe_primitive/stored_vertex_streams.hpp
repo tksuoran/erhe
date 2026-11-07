@@ -18,7 +18,7 @@ class Prepared_primitive_data;
 
 // The layouts a loader asks a source for when it would take GPU-ready vertex
 // streams stored in the file (ERHE_gpu_vertex_streams,
-// doc/gltf_extensions/ERHE_gpu_vertex_streams.md): the running base and
+// doc/erhe/gltf.md "GPU vertex streams on export"): the running base and
 // optimized vertex formats, the index format and the encoder version. A
 // stored variant is used only when its signature
 // (erhe::dataformat::get_vertex_format_signature()) and encoding version

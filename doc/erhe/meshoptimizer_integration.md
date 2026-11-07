@@ -5,7 +5,7 @@ Stability: stable
 The mesh-optimization subsystem is built on
 [zeux/meshoptimizer](https://github.com/zeux/meshoptimizer) (vanilla
 upstream, pinned via CPM). `optimize_meshes` defaults to **true** in
-`config/editor/mesh_memory.json`, and so does `mesh_optimize_cache`.
+`config/editor/mesh_memory.json`.
 
 ## Requirements
 
@@ -19,9 +19,10 @@ User-confirmed; the first is a hard requirement.
    weld/remap, vertex-cache order, overdraw order, vertex-fetch order, with
    before/after `meshopt_analyze*` statistics. LOD chains are generated on
    request ("Level of detail" below); meshlets are future work.
-3. Config: `optimize_meshes` and `mesh_optimize_cache` in the code-generated
-   `Mesh_memory_config`. Both are on in the editor config. The filesystem
-   cache must work on Android/Quest.
+3. Config: `optimize_meshes` in the code-generated `Mesh_memory_config`, on
+   in the editor config. The optimizer keeps no persistent state of its
+   own: the editor asset's Local-space mesh items hold what the editor's
+   loads derive (doc/editor/prepared_assets.md "The editor's own loading").
 4. **Shared primitives are optimized once, as one** -- glTF import dedups
    `Primitive` slots and brushes share `Primitive` objects; instances reuse
    the shared variant.
@@ -135,8 +136,8 @@ so skinned meshes are automatically safe), `meshopt_optimizeVertexCache`,
 `meshopt_optimizeOverdraw` (threshold 1.05, float positions from a staging
 copy), `meshopt_optimizeVertexFetch`, analyze-after. The result carries the
 optimized soup plus the remap pair -- the triangle permutation and the
-**forward source-to-output vertex remap** -- which drives both the
-`Element_mappings` composition and the filesystem cache. The **soup path
+**forward source-to-output vertex remap** -- which drives the
+`Element_mappings` composition. The **soup path
 passes empty (`{}`) source mappings to `compose_element_mappings()`** (its
 remaps are not over the vertex buffer the source mappings index; contrast
 the geometry path below).
@@ -185,42 +186,12 @@ construction, which is where the headline numbers come from.
   route). The **geometry path passes the build's own mappings** to
   `compose_element_mappings()` -- same function as the soup path, opposite
   rule.
-- **The passes go through the filesystem cache** when the build's
-  `Buffer_info::mesh_optimize_cache_directory` is set
-  (`optimize_indexed_mesh_cached()`, below). The editor sets it for the
-  deferred finalize of an import only, so a reload of the same asset replays
-  every geometry-path optimization (Bistro: 3852 primitives, ~27
-  worker-seconds of passes replaced by ~1.7 worker-seconds of hashing, reading
-  and replay); procedural builds and edit re-optimizations run uncached.
 - Both entry points -- synchronous `make_buffer_mesh(Build_info)` and the
   deferred prepare/commit import flow -- build every variant the
   `Build_info` requests; the deferred flow prepares all variants on the
   worker and commits them in the one atomic swap. Tool / preview / hotbar
   builders that discard the shape on return do not build the variant at
   all.
-
-### The filesystem cache
-
-`optimize_indexed_mesh_cached()` is the cached form of the multi-stream core
-and serves both paths: the geometry path calls it with the staged streams,
-`optimize_triangle_soup_cached()` with the soup's single stream. Key is
-`erhe::hash::hash` (runtime FNV-1a -- NOT `erhe_hash/xxhash.hpp`, which is a
-compile-time string hash) over the vertex-format description + every
-stream's stride and bytes + the index data, and separately the options + a
-format-version constant; entries live in `cache/mesh_optimizer/` under the
-cwd (works on Quest via the Android chdir). An entry stores the **remap
-pair**, not the optimized streams -- the pair fully determines them (scatter
-each source vertex to the slot the forward remap names, rebuild indices as
-permutation-ordered source triples through the forward remap; exact because
-the reordering passes never rotate a triple and welded vertices are bitwise
-equal), so a hit runs no meshopt calls, yields the same bytes and the same
-pair feeds the mappings composition. Writes go to a per-thread temporary
-file renamed into place (concurrent loader workers store identical meshes
-under one key at the same moment); any mismatch, truncation or I/O error
-degrades to a miss -- **never a failed build**. Content addressing dedups
-identical geometry across distinct glTF meshes (a first Bistro load already
-replays ~600 of its 3852 primitives). Bistro's entries take ~62 MB.
-Unbounded growth is accepted for v1.
 
 ### The edit bracket (invalidate at start, hold, re-optimize at end)
 
@@ -279,9 +250,7 @@ finalize tasks, so no single log point has them all (the
 `finalize_imported_meshes` line is the soup-path picture only, and says
 so). ACMR and overdraw are averaged **triangle-weighted** (per-triangle
 costs; a per-primitive mean would weight a 4-triangle gizmo like a
-92k-triangle board). Cache hits contribute vertex counts but no
-ACMR/overdraw/fetch (they never ran `meshopt_analyze*`; the log says
-"replayed from cache" instead of printing zeroes).
+92k-triangle board).
 `fetch_bytes_before/_after` are **both in the optimized format's stride**,
 isolating what the passes did; the 4 bytes/vertex the format change saves
 is a separate, known figure.
@@ -356,7 +325,7 @@ variant on a worker and its main-thread commit publishes it through
 shares the primitive. Geometry-path primitives (and prepared primitives
 that had their full build) re-optimize from the `Geometry` as the edit
 re-optimization does (`prepare_geometry_buffer_mesh()` with
-`force_rebuild`, uncached), which rebuilds the identical base beside the
+`force_rebuild`), which rebuilds the identical base beside the
 variant. Prepared primitives (`make_prepared_meshes()` and the stored
 streams of `make_stored_meshes()`) repack their core soup with
 `Primitive::make_prepared_optimized_render_shape()`: both load paths build
@@ -403,15 +372,15 @@ Drawing reads level 0 unless the mesh's `Lod` properties force a level
   allocation the same way; `make_optimized_render_shape()` passes its
   `lod_settings` there (the import call site passes the `Primitive`'s,
   which is unset).
-- Prepared / stored path: the chain stored in the file, as it is (below);
+- Prepared / stored path: the chain stored in the mesh item, as it is (below);
   on-request generation repacks the core soup (above).
 
-**Stored chains.** A prepared save writes the chain of every prepared soup
-primitive with a request (`Primitive::lod_settings`) into the
-`ERHE_mesh_lod` glTF extension (`doc/gltf_extensions/ERHE_mesh_lod.md`,
+**Stored chains.** A prepared export (a mesh item, a Scene item; no file)
+writes the chain of every prepared soup primitive with a request
+(`Primitive::lod_settings`) into the `ERHE_mesh_lod` glTF extension (`doc/gltf_extensions/ERHE_mesh_lod.md`,
 `doc/erhe/gltf.md` "LOD chains"): the level indices over the core vertices,
-the per-level errors and the settings. Prepare (PC) and Prepare (Quest)
-request a chain for every prepared soup primitive without a request, with
+the per-level errors and the settings. An Export (doc/editor/prepared_assets.md)
+requests a chain for every prepared soup primitive without a request, with
 the scene's export settings LOD, else the editor config `lod` settings
 (`Gltf_export_arguments::default_lod_settings`;
 the live scene is not changed); a plain save stores the chains
@@ -471,7 +440,8 @@ request without a current stored chain). A load runs no simplification:
 Measured on Bistro (`pvs_bistro_quest_cell_4m`, headless Release, M4 Pro):
 the scene-wide request gives 2900 of 3852 primitives a chain (1.9 s of
 generation over the workers); the 952 others are small (median 37
-triangles) or stop at the first step. Save for Quest grows the file by
+triangles) or stop at the first step. The chains grew the prepared glTF file
+of that time (written by Save for Quest of an earlier build) by
 37.5 MB (1052.7 to 1090.2 MB); the load reads the levels in about 14 ms more
 (glTF loading to resident 0.443 to 0.457 s); the GPU index pool grows by
 36.2 MB (99.5 to 135.7 MB), the CPU by 36.2 MB with `keep` and by nothing
@@ -596,12 +566,9 @@ the optimized variant is selected and rendered.
   fill-only, no facet-id attribute; decoded int16 positions land inside
   the primitive AABB. The tools also make the variant invariants
   observable (fill-only index ranges, the facet-id-free stride).
-- **Cache**: baseline vs fully-cached, cold vs warm, and
-  deliberately-corrupted-entry runs all compare at the noise floor;
-  corrupted entries re-optimize. Content addressing dedups identical
-  geometry (15 primitives -> 8 entries on ABeautifulGame). Hit cost ~0 ms;
-  uncached optimize cost is ~30-190 ms per imported primitive, which is
-  what justifies the cache.
+- **Cost**: an optimize costs ~30-190 ms per imported primitive; the
+  editor asset's items keep a second load of the same asset from paying it
+  again (doc/editor/prepared_assets.md "The editor's own loading").
 - **Measured characteristics** (ABeautifulGame session aggregate): the
   corner-per-vertex geometry build welds ~-61% session-wide
   (2 138 692 -> 833 132 vertices; -81.7% on the chess pieces), ACMR
@@ -643,7 +610,7 @@ the optimized variant is selected and rendered.
 
 ### How to verify: the A/B screenshot harness
 
-`scripts/mesh_ab_capture.py <off|on|cache> <out.png>`; its docstring
+`scripts/mesh_ab_capture.py <off|on> <out.png>`; its docstring
 carries the full rationale. Every one of these matters:
 
 - MCP port is 3743, NOT 8080.
@@ -719,9 +686,6 @@ Each of these cost a review or debugging round. Do not rediscover them.
 - **The two snorm16 quantizers agree only inside [-1, 1]** -- their clamp
   orders differ; the encode sites' pre-clamp is what makes them
   bit-identical.
-- **A cache hit has no analyze statistics** -- do not read its zeroes as
-  "optimization achieved nothing"; `Mesh_optimize_statistics::measured`
-  and the log wording exist for this.
 - **Read the optimization aggregate from `get_memory_usage`, not the
   log** -- geometry-path optimizations land asynchronously; no log point
   has them all.
@@ -730,9 +694,6 @@ Each of these cost a review or debugging round. Do not rediscover them.
   it again; the weld+fetch-only run is pixel-exact. With quantization on,
   off-vs-on additionally carries the expected float-base-vs-snorm-optimized
   epsilon (see Verification).
-- **Enabling optimization reorders triangles, so the CPU BVH disk cache
-  (keyed on triangle positions) takes a one-time full miss/rebuild sweep
-  on first optimized load.** Expected; noted in logs.
 - **`get_mesh_attribute_values` reads SOURCE geometry, not GPU bytes** --
   buffer-level checks need `get_mesh_buffer_info` / `get_mesh_buffer_data`.
 - **OOM only, known**: a failed mid-transaction multi-pool allocation in

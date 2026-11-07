@@ -435,7 +435,7 @@ TEST_F(Mcp_test, list_scenes_returns_named_scenes)
     }
 }
 
-// save_scene and save_scene_for_quest are asynchronous: the call returns the
+// save_scene and prepare_scene are asynchronous: the call returns the
 // queued job, get_save_status reports it through done with the written
 // file's size. A save as an export leaves the scene's source binding alone.
 TEST_F(Mcp_test, save_scene_is_asynchronous_and_reports_through_get_save_status)
@@ -1833,7 +1833,7 @@ void advance_frames(Mcp_client& client, int frames)
     return false;
 }
 
-// save_scene / save_scene_for_quest are asynchronous: issue the save, then
+// save_scene / prepare_scene are asynchronous: issue the save, then
 // poll get_save_status for its job until it is done or failed. Returns the
 // final job object (state "done": saved true, path, file_bytes, ...), or the
 // save call's own error result.

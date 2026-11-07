@@ -29,6 +29,11 @@
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_save_service.hpp"
+#include "assets/prepared_status.hpp"
+#include "assets/prepared_keys.hpp"
+#include "erhe_asset_store/item_kind.hpp"
+#include "erhe_file/file.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/config_ui.hpp"
 #include "config/generated/lod_config_serialization.hpp"
@@ -430,36 +435,236 @@ void Properties::scene_override_properties(erhe::scene::Scene& scene)
     override_struct(scene_settings.shadow_frustum_fit, settings.shadow_frustum_fit, "Shadow Frustum Fit");
     override_struct(scene_settings.camera_controls,    settings.camera_controls,    "Camera Controls");
 
-    // What Prepare (PC / Quest) writes (doc/editor/world_space_bake.md).
-    Scene_export_settings& export_settings = scene_settings.export_settings;
+    // The scene's export settings, present or absent (doc/editor/prepared_assets.md "Export settings").
+    std::optional<Scene_export_settings>& optional_export_settings = scene_settings.export_settings;
     push_group("Export", ImGuiTreeNodeFlags_Framed);
-    override_struct(export_settings.lod, settings.lod, "LOD");
-    add_entry("Bake Static To World Space", [&export_settings]() {
-        ImGui::Checkbox("##", &export_settings.bake_static_to_world_space);
-    }, "Prepare writes the static mesh nodes with world-space vertices and identity transforms.");
-    add_entry("Instancing", [&export_settings]() {
-        imgui_enum_combo("##", export_settings.instancing);
+    if (!optional_export_settings.has_value()) {
+        add_entry("Export Settings", [&optional_export_settings, &settings, scene_root]() {
+            ImGui::TextUnformatted("none");
+            ImGui::SameLine();
+            if (ImGui::Button("Add Export Settings")) {
+                optional_export_settings = settings.export_settings;
+                scene_root->on_export_settings_changed();
+            }
+        }, "The scene has no export settings, and Export refuses it. Adding them copies the editor's default export settings into the scene.");
+        pop_group();
+        return;
+    }
+    Scene_export_settings& export_settings = optional_export_settings.value();
+    // The settings the World-space mesh keys and the bake's admission read (R8.6).
+    add_config_section(*this, show_developer, export_settings.lod, "LOD", [scene_root]() { scene_root->on_export_settings_changed(); });
+    add_entry("Bake Static To World Space", [&export_settings, scene_root]() {
+        if (ImGui::Checkbox("##", &export_settings.bake_static_to_world_space)) {
+            scene_root->on_export_settings_changed();
+        }
+    }, "Export writes the static mesh nodes under the World Space node with world-space vertices and identity transforms.");
+    add_entry("Instancing", [&export_settings, scene_root]() {
+        if (imgui_enum_combo("##", export_settings.instancing)) {
+            scene_root->on_export_settings_changed();
+        }
     }, "What the world-space bake does with a primitive several baked nodes share.");
     if (export_settings.instancing == Bake_instancing::duplicate_within_budget) {
-        add_entry("Instancing Budget (MiB)", [&export_settings]() {
+        add_entry("Instancing Budget (MiB)", [&export_settings, scene_root]() {
             ImGui::DragInt("##", &export_settings.instancing_budget_mib, 1.0f, 0, 4096);
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
+                scene_root->on_export_settings_changed();
+            }
         }, "Vertex and index bytes the bake may add by duplicating shared primitives.");
     }
-    add_entry("PVS Region Min", [&export_settings]() {
+    add_entry("PVS Region Min", [&export_settings, scene_root]() {
         ImGui::DragFloat3("##", &export_settings.pvs_region_min.x, 0.1f);
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            scene_root->on_export_settings_changed();
+        }
     }, "Minimum corner of the PVS bake region; both corners zero: the union of the baked entries' bounds.");
-    add_entry("PVS Region Max", [&export_settings]() {
+    add_entry("PVS Region Max", [&export_settings, scene_root]() {
         ImGui::DragFloat3("##", &export_settings.pvs_region_max.x, 0.1f);
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            scene_root->on_export_settings_changed();
+        }
     }, "Maximum corner of the PVS bake region.");
-    add_entry("PVS Cell Size", [&export_settings]() {
+    add_entry("PVS Cell Size", [&export_settings, scene_root]() {
         ImGui::DragFloat("##", &export_settings.pvs_cell_size, 0.05f, 0.05f, 100.0f, "%.2f m");
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            scene_root->on_export_settings_changed();
+        }
     }, "Edge length of one PVS bake grid cell.");
+    add_entry("Texture Supercompression", [&export_settings, scene_root]() {
+        if (imgui_enum_combo("##", export_settings.texture_supercompression)) {
+            scene_root->on_export_settings_changed();
+        }
+    }, "How the raw block images transcoded for a target are written: Zstandard supercompressed, or stored as they upload.");
+    add_entry("Texture Encoding", [&export_settings, scene_root]() {
+        if (imgui_enum_combo("##", export_settings.texture_encoding)) {
+            scene_root->on_export_settings_changed();
+        }
+    }, "What the Texture item of a PNG / JPEG image holds: target encodes it to the target's block format by way of a Basis texture item; source keeps the image bytes and the prepared run decodes them at load.");
+    add_entry("Raytrace BVH", [&export_settings, scene_root]() {
+        if (ImGui::Checkbox("##", &export_settings.raytrace_bvh)) {
+            scene_root->on_export_settings_changed();
+        }
+    }, "A prepared asset carries the Raytrace BVH of its meshes; off leaves it out and a prepared run builds it in memory.");
+    add_entry("PVS Mode", [&export_settings, scene_root]() {
+        if (imgui_enum_combo("##", export_settings.pvs_mode)) {
+            scene_root->on_export_settings_changed();
+        }
+    }, "What Export does about the PVS: off writes none; reuse copies the editor asset's PVS item as it is (unsafe: nothing checks it matches the exported geometry); rebake bakes it on the world-space form during every Export (needs the PVS region).");
+    // Last of the rows that read the settings: a removal leaves no later row reading them.
+    add_entry("Export Settings", [&optional_export_settings, scene_root]() {
+        if (ImGui::Button("Remove Export Settings")) {
+            optional_export_settings.reset();
+            scene_root->on_export_settings_changed();
+        }
+    }, "Removes the scene's export settings; Export then refuses the scene until they are added again.");
+    prepared_status_properties(*scene_root);
     pop_group();
 
     // Clear Color and Post Processing per-scene overrides are intentionally not
     // surfaced here for now (the Scene_settings fields remain and still
     // serialize). Re-add add_entry rows for scene_settings.clear_color /
     // .post_processing when their per-scene effect is wired up.
+}
+
+namespace {
+
+[[nodiscard]] auto format_bytes(const std::uint64_t bytes) -> std::string
+{
+    if (bytes >= (std::uint64_t{1} << 20)) {
+        return fmt::format("{:.2f} MiB", static_cast<double>(bytes) / static_cast<double>(1u << 20));
+    }
+    if (bytes >= (std::uint64_t{1} << 10)) {
+        return fmt::format("{:.1f} KiB", static_cast<double>(bytes) / static_cast<double>(1u << 10));
+    }
+    return fmt::format("{} B", bytes);
+}
+
+[[nodiscard]] auto get_drop_label(const Prepared_drop drop) -> const char*
+{
+    switch (drop) {
+        case Prepared_drop::unreferenced_items: return "Drop Unreferenced";
+        case Prepared_drop::target_items:       return "Drop PC Items";
+        case Prepared_drop::all_items:          return "Drop All Items";
+        case Prepared_drop::prepared_asset:     return "Delete Prepared Asset";
+        default:                                return "?";
+    }
+}
+
+} // anonymous namespace
+
+void Properties::prepared_status_properties(Scene_root& scene_root)
+{
+    // The status follows the change sites (Prepared_keys); the drops queue a status job.
+    if (
+        scene_root.get_source_path().empty() ||
+        scene_root.is_prepared_run() ||
+        (scene_root.get_source_format() == Scene_source_format::usd) ||
+        (m_context.scene_save_service == nullptr)
+    ) {
+        add_entry("Prepared Status", []() {
+            ImGui::TextUnformatted("no editor asset (save the scene; USD and prepared runs have none)");
+        }, "The editor asset lives beside the scene's source file.");
+        return;
+    }
+    const std::weak_ptr<Scene_root> weak_scene_root = scene_root.shared_from_this();
+    add_entry("Prepared Status", [this, weak_scene_root]() {
+        const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
+        if (!root) {
+            return;
+        }
+        const bool pending = root->is_prepared_status_pending();
+        ImGui::BeginDisabled(root->get_prepared_keys().is_job_pending());
+        if (ImGui::Button("Refresh")) {
+            refresh_prepared_status(m_context, *root);
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (pending) {
+            ImGui::TextUnformatted("checking...");
+        } else if (!root->get_prepared_status_error().empty()) {
+            ImGui::TextUnformatted(root->get_prepared_status_error().c_str());
+        } else if (root->get_prepared_status()) {
+            ImGui::TextUnformatted("current");
+        }
+    }, "The keys the scene asks for against the editor asset and the prepared asset (pc), computed again at every edit they depend on. Refresh lists the stores again, for a change another editor or a file copy made.");
+
+    const std::shared_ptr<const Prepared_status_report> status = scene_root.get_prepared_status();
+    if (status) {
+        add_entry("Prepared Asset Matches", [status]() {
+            if (status->matches) {
+                ImGui::TextUnformatted("yes");
+            } else {
+                ImGui::Text("no: %s", status->mismatch.c_str());
+            }
+        }, "Whether the prepared asset holds exactly the items Export would leave in it.");
+        add_entry("Editor Asset", [status]() {
+            ImGui::Text("%s (%s)", erhe::file::to_string(status->editor_asset_path).c_str(), format_bytes(status->editor_asset_bytes).c_str());
+        });
+        add_entry("Prepared Asset", [status]() {
+            if (status->prepared_asset_exists) {
+                ImGui::Text(
+                    "%s (%s, %llu items)",
+                    erhe::file::to_string(status->prepared_asset_path).c_str(),
+                    format_bytes(status->prepared_asset_bytes).c_str(),
+                    static_cast<unsigned long long>(status->prepared_item_count)
+                );
+            } else {
+                ImGui::Text("%s (absent)", erhe::file::to_string(status->prepared_asset_path).c_str());
+            }
+        });
+        for (const auto& [kind, kind_status] : status->kinds) {
+            const char* const kind_label =
+                (kind == erhe::asset_store::Item_kind::local_mesh)   ? "Mesh Items" :
+                (kind == erhe::asset_store::Item_kind::world_mesh)   ? "World-Space Mesh Items" :
+                (kind == erhe::asset_store::Item_kind::raytrace_bvh) ? "BVH Items" :
+                (kind == erhe::asset_store::Item_kind::texture)      ? "Texture Items" :
+                (kind == erhe::asset_store::Item_kind::basis_texture) ? "Basis Texture Items" :
+                (kind == erhe::asset_store::Item_kind::scene)        ? "Scene Items" : erhe::asset_store::c_str(kind);
+            add_entry(kind_label, [kind_status]() {
+                ImGui::Text(
+                    "present %zu, missing %zu; stored %llu (%s), unreferenced %llu (%s)",
+                    kind_status.present, kind_status.missing,
+                    static_cast<unsigned long long>(kind_status.stored_count), format_bytes(kind_status.stored_bytes).c_str(),
+                    static_cast<unsigned long long>(kind_status.unreferenced_count), format_bytes(kind_status.unreferenced_bytes).c_str()
+                );
+            }, "Present and missing: the keys the scene asks for, against the editor asset. Unreferenced: editor asset items the scene does not ask for.");
+        }
+    }
+
+    add_entry("Drop", [this, weak_scene_root]() {
+        const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
+        if (!root) {
+            return;
+        }
+        const bool armed = (m_armed_drop_scene.lock() == root) && (m_armed_drop != Prepared_drop::none);
+        if (armed) {
+            ImGui::Text("%s?", get_drop_label(m_armed_drop));
+            ImGui::SameLine();
+            if (ImGui::Button("Confirm")) {
+                request_prepared_status(m_context, root, Prepare_target::pc, std::filesystem::path{}, m_armed_drop, {}, {});
+                m_armed_drop = Prepared_drop::none;
+                m_armed_drop_scene.reset();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                m_armed_drop = Prepared_drop::none;
+                m_armed_drop_scene.reset();
+            }
+            return;
+        }
+        ImGui::BeginDisabled(root->get_prepared_keys().is_job_pending());
+        bool first = true;
+        for (const Prepared_drop drop : {Prepared_drop::unreferenced_items, Prepared_drop::target_items, Prepared_drop::all_items, Prepared_drop::prepared_asset}) {
+            if (!first) {
+                ImGui::SameLine();
+            }
+            first = false;
+            if (ImGui::Button(get_drop_label(drop))) {
+                m_armed_drop       = drop;
+                m_armed_drop_scene = root;
+            }
+        }
+        ImGui::EndDisabled();
+    }, "Removes items from the editor asset (then VACUUM), or deletes the prepared asset; Export makes them again (R8.13).");
 }
 
 void Properties::variant_properties(Scene_root& scene_root)

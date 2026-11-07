@@ -82,6 +82,12 @@ public:
     // (erhe::scene_renderer::Light_filter). Never serialized.
     static constexpr uint64_t light_muted               = erhe::Item_flags::application_bit(22);
     static constexpr uint64_t light_solo                = erhe::Item_flags::application_bit(23);
+    // The world-space form of a scene (doc/editor/world_space_bake.md "Two
+    // forms"): a render proxy drawn from a World-space mesh item, and the
+    // source mesh it stands in for. A viewport drawing source meshes leaves
+    // out world_space_form, one drawing world-space meshes world_space_source.
+    static constexpr uint64_t world_space_form          = erhe::Item_flags::application_bit(24);
+    static constexpr uint64_t world_space_source        = erhe::Item_flags::application_bit(25);
 
     // The bits register_editor_item_bits() reports as transient
     // (erhe::Item_flags::get_transient_bits()) and as purpose inputs
@@ -89,7 +95,7 @@ public:
     static constexpr uint64_t transient =
         hovered_in_viewport | hovered_in_item_tree | descendant_hovered_in_viewport |
         hovered_in_graph | child_hovered_in_graph | ancestor_hovered_in_graph |
-        affects_shadow | active_item | light_muted | light_solo;
+        affects_shadow | active_item | light_muted | light_solo | world_space_form | world_space_source;
     static constexpr uint64_t purpose_guide_when_set = tool | brush | controller | rendertarget;
     // Hover bits the renderers color an entry as hovered by
     // (erhe::scene_renderer::Primitive_interface_settings::hovered_flag_bits).

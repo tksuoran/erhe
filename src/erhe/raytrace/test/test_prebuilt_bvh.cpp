@@ -4,6 +4,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <bit>
@@ -194,11 +196,70 @@ auto expect_identical_hits(const Mesh_data& mesh, IGeometry* reference, IGeometr
     return hit_count;
 }
 
-auto nodes_identical(const std::vector<Bvh_node_record>& lhs, const std::vector<Bvh_node_record>& rhs) -> bool
+auto nodes_identical(const Prebuilt_bvh& lhs, const Prebuilt_bvh& rhs) -> bool
 {
-    return
-        (lhs.size() == rhs.size()) &&
-        (std::memcmp(lhs.data(), rhs.data(), lhs.size() * sizeof(Bvh_node_record)) == 0);
+    const std::span<const std::byte> a = get_prebuilt_bvh_node_bytes(lhs);
+    const std::span<const std::byte> b = get_prebuilt_bvh_node_bytes(rhs);
+    return (a.size() == b.size()) && (std::memcmp(a.data(), b.data(), a.size()) == 0);
+}
+
+// Node access in the layout of bvh.backend, so the rejection cases run on either backend.
+[[nodiscard]] auto is_tinybvh(const Prebuilt_bvh& bvh) -> bool
+{
+    return bvh.backend == "tinybvh";
+}
+
+[[nodiscard]] auto get_node_count(const Prebuilt_bvh& bvh) -> std::size_t
+{
+    return is_tinybvh(bvh) ? bvh.tinybvh_nodes.size() : bvh.nodes.size();
+}
+
+[[nodiscard]] auto is_leaf_node(const Prebuilt_bvh& bvh, const std::size_t n) -> bool
+{
+    return is_tinybvh(bvh) ? (bvh.tinybvh_nodes[n].tri_count != 0) : ((bvh.nodes[n].index & 0xfu) != 0);
+}
+
+[[nodiscard]] auto get_first(const Prebuilt_bvh& bvh, const std::size_t n) -> std::size_t
+{
+    return is_tinybvh(bvh) ? bvh.tinybvh_nodes[n].left_first : (bvh.nodes[n].index >> 4);
+}
+
+void set_inner_node(Prebuilt_bvh& bvh, const std::size_t n, const std::size_t first_child)
+{
+    if (is_tinybvh(bvh)) {
+        bvh.tinybvh_nodes[n].left_first = static_cast<uint32_t>(first_child);
+        bvh.tinybvh_nodes[n].tri_count  = 0;
+    } else {
+        bvh.nodes[n].index = static_cast<uint32_t>(first_child << 4);
+    }
+}
+
+void set_leaf_node(Prebuilt_bvh& bvh, const std::size_t n, const std::size_t first_slot, const uint32_t count)
+{
+    if (is_tinybvh(bvh)) {
+        bvh.tinybvh_nodes[n].left_first = static_cast<uint32_t>(first_slot);
+        bvh.tinybvh_nodes[n].tri_count  = count;
+    } else {
+        bvh.nodes[n].index = static_cast<uint32_t>((first_slot << 4) | count);
+    }
+}
+
+// The nodes reachable from the root, in walk order (tinybvh pools have unused nodes).
+[[nodiscard]] auto get_reachable_nodes(const Prebuilt_bvh& bvh) -> std::vector<std::size_t>
+{
+    std::vector<std::size_t> reachable;
+    std::vector<std::size_t> stack{0};
+    while (!stack.empty()) {
+        const std::size_t n = stack.back();
+        stack.pop_back();
+        reachable.push_back(n);
+        if (!is_leaf_node(bvh, n)) {
+            stack.push_back(get_first(bvh, n) + 1);
+            stack.push_back(get_first(bvh, n));
+        }
+    }
+    std::sort(reachable.begin(), reachable.end());
+    return reachable;
 }
 
 class Exported
@@ -233,16 +294,17 @@ void run_round_trip(Mesh_data&& mesh_data)
     ASSERT_NE(reference->get_bvh_source(), Bvh_source::prebuilt);
     ASSERT_TRUE(reference->get_triangle_hash().has_value());
     EXPECT_EQ(exported.bvh.backend, get_prebuilt_bvh_backend());
-    EXPECT_EQ(exported.bvh.backend, "bvh_v2");
+    EXPECT_TRUE((exported.bvh.backend == "bvh_v2") || (exported.bvh.backend == "tinybvh")) << exported.bvh.backend;
+    EXPECT_EQ(get_prebuilt_bvh_node_bytes(exported.bvh).size(), get_node_count(exported.bvh) * get_prebuilt_bvh_node_record_size(exported.bvh.backend));
     EXPECT_EQ(exported.bvh.library, get_prebuilt_bvh_library());
     EXPECT_EQ(exported.bvh.library.size(), 40u); // the pinned 40-digit commit id
     EXPECT_EQ(exported.bvh.triangle_hash, reference->get_triangle_hash().value());
     EXPECT_EQ(exported.bvh.triangle_count, mesh.triangles.size());
     EXPECT_EQ(reference->get_triangle_count(), mesh.triangles.size());
     EXPECT_EQ(exported.bvh.primitive_ids.size(), mesh.triangles.size());
-    EXPECT_GT(exported.bvh.nodes.size(), 1u);
+    EXPECT_GT(get_node_count(exported.bvh), 1u);
     EXPECT_EQ(
-        validate_prebuilt_bvh(exported.bvh, get_prebuilt_bvh_backend(), get_prebuilt_bvh_library(), exported.bvh.triangle_hash, mesh.triangles.size(), 64),
+        validate_prebuilt_bvh(exported.bvh, get_prebuilt_bvh_backend(), get_prebuilt_bvh_library(), exported.bvh.triangle_hash, mesh.triangles.size(), get_prebuilt_bvh_max_depth()),
         std::string{}
     );
 
@@ -260,7 +322,7 @@ void run_round_trip(Mesh_data&& mesh_data)
     EXPECT_EQ(round_trip.quality,        exported.bvh.quality);
     EXPECT_EQ(round_trip.triangle_hash,  exported.bvh.triangle_hash);
     EXPECT_EQ(round_trip.triangle_count, exported.bvh.triangle_count);
-    EXPECT_TRUE(nodes_identical(round_trip.nodes, exported.bvh.nodes));
+    EXPECT_TRUE(nodes_identical(round_trip, exported.bvh));
     EXPECT_EQ(round_trip.primitive_ids, exported.bvh.primitive_ids);
 
     const std::size_t hit_count = expect_identical_hits(mesh, reference, candidate.geometry.get(), c_ray_count);
@@ -284,15 +346,15 @@ TEST(Prebuilt_bvh, RoundTripSphereSoup)
 
 enum class Node_kind : unsigned int { inner, leaf };
 
+// The first reachable node of the kind at index first or later; get_node_count() when none.
 auto find_node(const Prebuilt_bvh& bvh, const Node_kind kind, const std::size_t first) -> std::size_t
 {
-    for (std::size_t n = first; n < bvh.nodes.size(); ++n) {
-        const bool is_leaf = (bvh.nodes[n].index & 0xfu) != 0;
-        if (is_leaf == (kind == Node_kind::leaf)) {
+    for (const std::size_t n : get_reachable_nodes(bvh)) {
+        if ((n >= first) && (is_leaf_node(bvh, n) == (kind == Node_kind::leaf))) {
             return n;
         }
     }
-    return bvh.nodes.size();
+    return get_node_count(bvh);
 }
 
 // Supplies a corrupted copy of the exported BVH; commit() must reject it,
@@ -311,7 +373,7 @@ void expect_rejected(const std::function<void(Prebuilt_bvh&)>& corrupt, const st
     candidate.geometry->commit();
 
     const Bvh_source source = candidate.geometry->get_bvh_source();
-    EXPECT_TRUE((source == Bvh_source::built) || (source == Bvh_source::cache)) << c_str(source);
+    EXPECT_EQ(source, Bvh_source::built) << c_str(source);
     const std::string reason{candidate.geometry->get_prebuilt_bvh_rejection()};
     EXPECT_NE(reason.find(reason_part), std::string::npos) << reason;
     EXPECT_EQ(candidate.geometry->get_triangle_count(), exported.mesh.triangles.size());
@@ -327,7 +389,7 @@ TEST(Prebuilt_bvh, RejectsWrongLibraryTag)
 
 TEST(Prebuilt_bvh, RejectsWrongBackend)
 {
-    expect_rejected([](Prebuilt_bvh& bvh) { bvh.backend = "tinybvh"; }, "backend");
+    expect_rejected([](Prebuilt_bvh& bvh) { bvh.backend = "embree"; }, "backend");
 }
 
 TEST(Prebuilt_bvh, RejectsWrongTriangleCount)
@@ -342,12 +404,20 @@ TEST(Prebuilt_bvh, RejectsWrongHash)
 
 TEST(Prebuilt_bvh, RejectsNoNodes)
 {
-    expect_rejected([](Prebuilt_bvh& bvh) { bvh.nodes.clear(); }, "no nodes");
+    expect_rejected([](Prebuilt_bvh& bvh) { bvh.nodes.clear(); bvh.tinybvh_nodes.clear(); }, "no nodes");
 }
 
 TEST(Prebuilt_bvh, RejectsTruncatedNodes)
 {
-    expect_rejected([](Prebuilt_bvh& bvh) { bvh.nodes.pop_back(); }, "references children");
+    // Cut the pool before its last reachable node: that node's parent references a child out of range.
+    expect_rejected(
+        [](Prebuilt_bvh& bvh) {
+            const std::size_t last = get_reachable_nodes(bvh).back();
+            bvh.nodes.resize(is_tinybvh(bvh) ? 0 : last);
+            bvh.tinybvh_nodes.resize(is_tinybvh(bvh) ? last : 0);
+        },
+        "references children"
+    );
 }
 
 TEST(Prebuilt_bvh, RejectsTruncatedPrimitiveIds)
@@ -360,8 +430,8 @@ TEST(Prebuilt_bvh, RejectsChildOutOfRange)
     expect_rejected(
         [](Prebuilt_bvh& bvh) {
             const std::size_t n = find_node(bvh, Node_kind::inner, 0);
-            ASSERT_LT(n, bvh.nodes.size());
-            bvh.nodes[n].index = static_cast<uint32_t>((bvh.nodes.size() - 1) << 4);
+            ASSERT_LT(n, get_node_count(bvh));
+            set_inner_node(bvh, n, get_node_count(bvh) - 1);
         },
         "references children"
     );
@@ -372,8 +442,8 @@ TEST(Prebuilt_bvh, RejectsPrimitiveSlotOutOfRange)
     expect_rejected(
         [](Prebuilt_bvh& bvh) {
             const std::size_t n = find_node(bvh, Node_kind::leaf, 0);
-            ASSERT_LT(n, bvh.nodes.size());
-            bvh.nodes[n].index = static_cast<uint32_t>((bvh.triangle_count << 4) | 1u);
+            ASSERT_LT(n, get_node_count(bvh));
+            set_leaf_node(bvh, n, bvh.triangle_count, 1u);
         },
         "references slots"
     );
@@ -385,8 +455,8 @@ TEST(Prebuilt_bvh, RejectsNodeReferencedTwice)
         [](Prebuilt_bvh& bvh) {
             // A second inner node pointing at the root's children
             const std::size_t n = find_node(bvh, Node_kind::inner, 1);
-            ASSERT_LT(n, bvh.nodes.size());
-            bvh.nodes[n].index = bvh.nodes[0].index;
+            ASSERT_LT(n, get_node_count(bvh));
+            set_inner_node(bvh, n, get_first(bvh, 0));
         },
         "more than one inner node"
     );
@@ -397,8 +467,8 @@ TEST(Prebuilt_bvh, RejectsCycleThroughRoot)
     expect_rejected(
         [](Prebuilt_bvh& bvh) {
             const std::size_t n = find_node(bvh, Node_kind::inner, 1);
-            ASSERT_LT(n, bvh.nodes.size());
-            bvh.nodes[n].index = 0u; // children 0 and 1: back to the root
+            ASSERT_LT(n, get_node_count(bvh));
+            set_inner_node(bvh, n, 0); // children 0 and 1: back to the root
         },
         "references the root"
     );
@@ -456,6 +526,31 @@ TEST(Prebuilt_bvh, ValidatorRejectsTooDeep)
     EXPECT_EQ(validate_prebuilt_bvh(bvh, "bvh_v2", "tag", 7, 1, depth), std::string{});
     const std::string reason = validate_prebuilt_bvh(bvh, "bvh_v2", "tag", 7, 1, depth - 1);
     EXPECT_NE(reason.find("depth"), std::string::npos) << reason;
+}
+
+// tinybvh pools leave node 1 (and, after a threaded build, other nodes) unused:
+// unreferenced nodes are accepted, a tree from the root is still required.
+TEST(Prebuilt_bvh, ValidatorAcceptsTinybvhUnusedNodes)
+{
+    Prebuilt_bvh bvh;
+    bvh.backend        = "tinybvh";
+    bvh.library        = "tag";
+    bvh.triangle_hash  = 7;
+    bvh.triangle_count = 2;
+    bvh.primitive_ids  = {1u, 0u};
+    bvh.tinybvh_nodes.resize(5);
+    bvh.tinybvh_nodes[0].left_first = 2; // inner, children 2 and 3
+    bvh.tinybvh_nodes[2].left_first = 0;
+    bvh.tinybvh_nodes[2].tri_count  = 1;
+    bvh.tinybvh_nodes[3].left_first = 1;
+    bvh.tinybvh_nodes[3].tri_count  = 1;
+    EXPECT_EQ(validate_prebuilt_bvh(bvh, "tinybvh", "tag", 7, 2, tinybvh_traversal_stack_size), std::string{});
+    bvh.tinybvh_nodes[3].tri_count = 2; // slots 1 and 2 of 2
+    const std::string reason = validate_prebuilt_bvh(bvh, "tinybvh", "tag", 7, 2, tinybvh_traversal_stack_size);
+    EXPECT_NE(reason.find("references slots"), std::string::npos) << reason;
+    EXPECT_EQ(get_prebuilt_bvh_node_record_size("tinybvh"), 32u);
+    EXPECT_EQ(get_prebuilt_bvh_node_record_size("bvh_v2"), 28u);
+    EXPECT_EQ(get_prebuilt_bvh_node_record_size("embree"), 0u);
 }
 
 TEST(Prebuilt_bvh, UnsupportedBackendReportsNotAvailable)

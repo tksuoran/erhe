@@ -68,6 +68,13 @@ void for_each_persistent_flag(F&& f)
 
 } // anonymous namespace
 
+auto is_transparent_import_root(const uint64_t flag_bits) -> bool
+{
+    return
+        ((flag_bits & erhe::Item_flags::import_root) != 0) &&
+        ((flag_bits & erhe::Item_flags::world_space) != 0);
+}
+
 auto persistent_item_flags_to_json(const uint64_t flag_bits) -> std::string
 {
     std::string out{"["};

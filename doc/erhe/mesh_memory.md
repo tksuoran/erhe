@@ -237,7 +237,6 @@ existing bucket whose `accept()` returns true or starts a new bucket.
 | `edge_line_vertex_pool_block_size_mb` | 8 | Currently unused -- the edge-line vertex pool is not implemented; the config key is reserved. |
 | `quantize_vertex_positions` | true | Store the optimized mesh variant's positions as snorm16x3 normalized into the primitive AABB (the base variant always stores float3; no effect unless `optimize_meshes` is on). Ignored on a device that cannot use snorm16x3 as vertex input. See `doc/erhe/vertex_position_quantization.md`. |
 | `optimize_meshes` | true | Build an additional meshoptimizer-optimized variant of every renderable mesh. See `doc/erhe/meshoptimizer_integration.md`. |
-| `mesh_optimize_cache` | true | Cache imported-mesh optimization results (soup path at load and geometry path in the deferred finalize) on disk under `cache/mesh_optimizer`. No effect unless `optimize_meshes` is on. |
 | `max_buffers_per_pool` | 64 | Hard cap. `Buffer_pool::create_new_block` aborts when exceeded. |
 
 ## Notes
@@ -246,7 +245,7 @@ existing bucket whose `accept()` returns true or starts a new bucket.
   (`Vertex format signatures (encoding version N): ...`,
   `erhe::dataformat::get_vertex_format_signature()` and
   `erhe::primitive::vertex_encoding_version`): the layouts GPU-ready vertex
-  streams of a file must match (`doc/gltf_extensions/ERHE_gpu_vertex_streams.md`).
+  streams of a mesh item must match (`doc/erhe/gltf.md` "GPU vertex streams on export").
 - Thread safety: `Buffer_pool` does not take a mutex internally. Build code
   serializes its own allocation flow.
 - `Buffer_mesh::edge_line_vertex_buffer_range` is populated by

@@ -6,6 +6,7 @@
 #include "erhe_gltf/gltf.hpp"
 
 #include "erhe_primitive/build_info.hpp"
+#include "erhe_primitive/lod.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -14,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <vector>
 
 namespace erhe::gltf {
@@ -26,6 +28,10 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
+class Editor_asset;
+class Editor_asset_load;
+class Item_catalog;
+class Prepared_open;
 class Scene_root;
 
 // Asynchronous open of an erhe-authored glTF scene
@@ -101,6 +107,9 @@ private:
         bool              is_erhe_scene{false};
         bool              ok{false};
         std::string       error;
+        // A .erhe_prepared request: the source it opens instead, or the prepared run.
+        std::filesystem::path          load_path;
+        std::shared_ptr<Prepared_open> prepared_open;
     };
 
     class Parse_result
@@ -111,6 +120,10 @@ private:
         std::shared_ptr<erhe::scene::Node> container_node;
         bool                               ok{false};
         std::string                        error;
+        // R8.1: the editor asset of a source open, opened (created when absent) after the parse.
+        std::shared_ptr<Editor_asset>       editor_asset;
+        std::shared_ptr<const Item_catalog> catalog;
+        std::optional<erhe::primitive::Lod_settings> default_lod_settings; // of the scene's export settings
     };
 
     // Worker-side Buffer_mesh build (phase 3a). Separate from Parse_result
@@ -137,6 +150,8 @@ private:
         bool                                  release_soups  {false}; // load.cpu_mesh_data release
         Stored_vertex_streams_use             stored_streams {Stored_vertex_streams_use::use}; // load.use_gpu_vertex_streams
         std::chrono::steady_clock::time_point start_time;
+        // A source open: the jobs read and store the items of the file's editor asset.
+        std::shared_ptr<Editor_asset_load>    editor_asset_load;
 
         // Guarded by mutex: written by the tasks, read by the main thread.
         std::mutex  mutex;
@@ -182,11 +197,16 @@ private:
     void notify_done();
     auto advance_residency(Asset_load_tick_context& tick_context) -> bool; // true when every image is resident (not yet bound)
     void log_staging_statistics(Asset_load_tick_context& tick_context) const;
+    // The editor's own loading (doc/editor/prepared_assets.md): the one line of what the jobs did with the editor asset.
+    void finish_editor_asset_load();
     // Sets the handle status from the build job and texture residency counts.
     void update_status();
 
     App_context&                                  m_context;
     Asset_load_request                            m_request;
+    // The file the task loads: the request's, or a prepared asset's source (R11.1).
+    std::filesystem::path                         m_load_path;
+    std::shared_ptr<Prepared_open>                m_prepared_open; // a prepared run, until publish
     // Resolved on the main thread at construction: an import uses the target
     // scene's content layer, an open uses the editor-wide constant (mesh
     // layer ids are editor-wide, so parsing before the scene exists is safe).

@@ -53,7 +53,7 @@ enum class Transcode_format_preference : unsigned int {
 };
 
 // Whether the device samples ASTC 4x4 images. A KTX2 file holding raw
-// ASTC 4x4 blocks (vkFormat ASTC, e.g. a "Save for Quest" glTF texture) is
+// ASTC 4x4 blocks (vkFormat ASTC, e.g. a quest Texture item) is
 // passed through as stored with native, and decoded to RGBA8 (mip level 0;
 // the GPU mipmap generation path rebuilds the chain) with decode_to_rgba8.
 enum class Astc_support : unsigned int

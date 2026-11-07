@@ -73,6 +73,7 @@ set_option(ERHE_USE_UBSAN                  "Enable UndefinedBehaviorSanitizer (C
 set_option(ERHE_USE_TSAN                   "Enable ThreadSanitizer (Clang / GCC / AppleClang; not with ASan)"                        "OFF"      "ON;OFF")
 set_option(ERHE_WARNINGS_AS_ERRORS         "Compile erhe targets with warnings as errors (MSVC /WX only)"               "ON"       "ON;OFF")
 set_option(ERHE_USE_FPNG                   "Build the fpng image writer (fast PNG save), independent of window lib"     "ON"       "ON;OFF")
+set_option(ERHE_BASIS_ENCODER              "Build the Basis Universal encoder (Export's Basis texture items); forced OFF on Android" "ON" "ON;OFF")
 set_option(ERHE_SPIRV                      "Enable SPIR-V"                                                              "OFF"      "ON;OFF")
 set_option(ERHE_BUILD_TESTS                "Build erhe unit tests"                                                      "OFF"      "ON;OFF")
 set_option(ERHE_GPU_TESTS_PER_PROCESS       "Register each case of the gpu-labelled test binaries as its own ctest process" "OFF"      "ON;OFF")
@@ -154,6 +155,8 @@ if (ERHE_TARGET_OS_ANDROID)
     set(ERHE_USE_ASAN         OFF       CACHE BOOL   "" FORCE)
     set(ERHE_USE_UBSAN        OFF       CACHE BOOL   "" FORCE)
     set(ERHE_USE_TSAN         OFF       CACHE BOOL   "" FORCE)
+    # The device never encodes: Export, which makes Basis texture items, runs on the desktop.
+    set(ERHE_BASIS_ENCODER    OFF       CACHE STRING "" FORCE)
 endif ()
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
@@ -833,6 +836,31 @@ if (ERHE_USE_FPNG)
     message(STATUS "Erhe configured to build the fpng image writer (fast PNG save).")
 endif ()
 
+# SQLite (https://sqlite.org, public domain) is the container of
+# erhe::asset_store. Fetched download-only as the official amalgamation;
+# sqlite3.c is compiled into erhe::asset_store directly (see
+# src/erhe/asset_store/CMakeLists.txt). The hash is the SHA3-256 the SQLite
+# download page publishes.
+CPMAddPackage(
+    NAME              sqlite3
+    VERSION           3.54.1
+    URL               https://www.sqlite.org/2026/sqlite-amalgamation-3540100.zip
+    URL_HASH          SHA3_256=92281c86e2957f9b9305890f9ac04204caa7b677cc868dc326d942689df28e30
+    DOWNLOAD_ONLY     YES
+)
+
+# xxHash (https://github.com/Cyan4973/xxHash, BSD-2-Clause) provides XXH3-128
+# for erhe::asset_store keys and content hashes. Fetched download-only;
+# xxhash.c is compiled into erhe::asset_store directly.
+CPMAddPackage(
+    NAME              xxhash
+    VERSION           0.8.3
+    GIT_TAG           v0.8.3
+    GIT_SHALLOW       TRUE
+    GITHUB_REPOSITORY Cyan4973/xxHash
+    DOWNLOAD_ONLY     YES
+)
+
 # One googletest for every test directory; each test CMakeLists links
 # GTest::gtest and calls include(GoogleTest) itself.
 if (${ERHE_BUILD_TESTS} STREQUAL "ON")
@@ -868,8 +896,9 @@ endif ()
 # XR_FB_render_model controller models). Fetched download-only; the
 # transcoder source (plus its bundled zstd, needed for zstd-supercompressed
 # KTX2 payloads) is compiled into erhe::graphics directly (see
-# src/erhe/graphics/CMakeLists.txt) - the repo's own CMake also builds the
-# encoder and tools, which erhe does not need.
+# src/erhe/graphics/CMakeLists.txt), and with ERHE_BASIS_ENCODER the encoder
+# sources too (Export's Basis texture items) - the repo's own CMake also
+# builds its tools, which erhe does not need.
 CPMAddPackage(
     NAME              basis_universal
     # v1_60 fails to compile on the NDK (ambiguous safe_shift_left overloads
@@ -1310,9 +1339,9 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_EMBREE)
     set(ERHE_RAYTRACE_TARGET embree)
 elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
-    # The pin is also the library tag of stored BVHs (ERHE_raytrace_bvh) and
-    # the cache/bvh directory key: erhe_raytrace receives it as the
-    # ERHE_BVH_LIBRARY_TAG compile definition (src/erhe/raytrace/CMakeLists.txt).
+    # The pin is also the library tag of stored BVHs (Raytrace BVH items):
+    # erhe_raytrace receives it as the ERHE_BVH_LIBRARY_TAG compile
+    # definition (src/erhe/raytrace/CMakeLists.txt).
     # At least ad9f7ee: ThreadPool::TaskGroup::remaining_ guarded by the pool
     # mutex (before it a worker read a waiter's returned stack TaskGroup).
     set(ERHE_BVH_GIT_TAG ad9f7ee3fa54014cef8e789a8d45a3c2e7a117d0)
@@ -1326,9 +1355,12 @@ elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_BVH)
     set(ERHE_RAYTRACE_TARGET bvh)
 elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "tinybvh")
+    # The pin is also the library tag of stored BVHs, as for bvh above
+    # (ERHE_TINYBVH_LIBRARY_TAG).
+    set(ERHE_TINYBVH_GIT_TAG 0e4584287823252cf83f0e9cd072848bec5f79c5)
     CPMAddPackage(
         NAME              tinybvh
-        GIT_TAG           0e4584287823252cf83f0e9cd072848bec5f79c5
+        GIT_TAG           ${ERHE_TINYBVH_GIT_TAG}
         GITHUB_REPOSITORY jbikker/tinybvh
         DOWNLOAD_ONLY     YES
     )
@@ -1354,17 +1386,6 @@ else()
     set(ERHE_BVH_GIT_COMMIT "unknown")
 endif()
 add_definitions(-DERHE_BVH_GIT_COMMIT="${ERHE_BVH_GIT_COMMIT}")
-if (tinybvh_SOURCE_DIR AND EXISTS "${tinybvh_SOURCE_DIR}/.git")
-    execute_process(
-        COMMAND git rev-parse HEAD
-        WORKING_DIRECTORY "${tinybvh_SOURCE_DIR}"
-        OUTPUT_VARIABLE ERHE_TINYBVH_GIT_COMMIT
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-else()
-    set(ERHE_TINYBVH_GIT_COMMIT "unknown")
-endif()
-add_definitions(-DERHE_TINYBVH_GIT_COMMIT="${ERHE_TINYBVH_GIT_COMMIT}")
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(

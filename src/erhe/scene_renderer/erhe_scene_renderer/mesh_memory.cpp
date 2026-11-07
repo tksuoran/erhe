@@ -480,7 +480,7 @@ Mesh_memory::Mesh_memory(
     m_vertex_input_entries_frozen = true;
 
     // The layouts GPU-ready vertex streams of a file must match to be used as
-    // stored (ERHE_gpu_vertex_streams `signature`, doc/gltf_extensions/ERHE_gpu_vertex_streams.md).
+    // stored (ERHE_gpu_vertex_streams `signature`, doc/erhe/gltf.md "GPU vertex streams on export").
     log_startup->info(
         "Vertex format signatures (encoding version {}): base {} / skinned {}; optimized {} / skinned {}",
         erhe::primitive::vertex_encoding_version,

@@ -9,6 +9,57 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::raytrace`: the `tinybvh` backend's `cache/tinybvh` disk cache (and
+  the `ERHE_TINYBVH_GIT_COMMIT` definition it was keyed by). Its BVHs are
+  exported and imported like the `bvh` backend's (`doc/erhe/raytrace.md`
+  "BVH sources").
+- `erhe::scene`: `Pvs_bits_source`, the `bits_source` argument of the
+  `Pvs_database` constructor, `Pvs_database::get_bits_source()`,
+  `release_bits()`, `make_bits_resident()`, `bits_source_references()`,
+  `has_resident_bits()` and `read_bits()`: a database holds its bits for its
+  life (`get_bits()`); `read_page_words()` and `read_cell_words()` copy from
+  them (`doc/erhe/scene.md` "Potentially visible sets").
+- `erhe::scene_renderer`: `Pvs_streaming_status::bits_in_memory`.
+
+- `erhe::raytrace`: the `cache/bvh` disk cache of the `bvh` backend and
+  `Bvh_source::cache` (`Bvh_source::prebuilt` is now 2). `commit()` uses a
+  supplied prebuilt BVH (`IGeometry::set_prebuilt_bvh()`) or builds one
+  (`doc/erhe/raytrace.md` "BVH sources").
+- `erhe::primitive`: the mesh optimizer's filesystem cache
+  (`cache/mesh_optimizer`): `optimize_indexed_mesh_cached()`,
+  `optimize_triangle_soup_cached()`, `Mesh_optimize_cache_access`,
+  `Buffer_info::mesh_optimize_cache_directory`,
+  `Buffer_info::mesh_optimize_cache_access`, the `cache_directory` parameter
+  of `make_optimized_render_shape()`, `Mesh_optimize_statistics::measured`,
+  `Mesh_optimize_totals::measured_count` and `replayed_count`.
+- `erhe::scene_renderer`: `Mesh_memory_config::mesh_optimize_cache` (mesh
+  memory config version 4; the key of an older file is ignored).
+- `erhe::gltf`: `Gltf_export_arguments::pvs_database` (`ERHE_pvs` with its
+  bytes in the document). `ERHE_pvs` is written against a PVS item alone
+  (`Gltf_export_arguments::pvs_item`).
+- `erhe::gltf`: `Gltf_content_hash_export`,
+  `Gltf_export_arguments::content_hash_export`,
+  `Gltf_export_prepared_statistics::source_content_hash_count` and the
+  `ERHE_mesh_optimized` `source_content_hash` field (neither written nor
+  read).
+- `erhe::gltf`: `Prepared_mesh_data_use` and
+  `Gltf_parse_arguments::prepared_mesh_data_use`, replaced by
+  `Gltf_document` and `Gltf_parse_arguments::document` (see "Changed").
+- `erhe::primitive`: `Prepared_primitive_data::source_content_hash` and
+  `Prepared_primitive_export::source_content_hash`.
+- `erhe::gltf`: `Gltf_texture_export::ktx2_bc` and `ktx2_bc_uncompressed`,
+  `is_astc_texture_export()`, `is_bc_texture_export()` and
+  `get_ktx2_block_target()`; `ktx2_astc_4x4` (the quest Scene item) is the
+  raw block export left.
+
+- `erhe::asset_store`: `Open_mode::prepared_read_write`. A prepared asset is
+  written once, as a new container (`Open_mode::prepared_create`, which
+  fails when the path exists), and read with `prepared_read_only`
+  (`doc/erhe/asset_store.md` "Public API").
+- `erhe::gltf`: `generate_gltf_uid()` (`gltf_uid.hpp`). The export assigns
+  no uids: every item has one from its creation (`erhe::make_random_gltf_uid()`),
+  and the parse derives one for an object the file gives none
+  (`erhe::gltf::make_derived_gltf_uid()`).
 - `erhe::scene_renderer`: `Forward_renderer::Render_parameters::color_blend_override`,
   `Forward_renderer::Draw_parameters::color_blend_override`,
   `Draw_list_renderer::Render_parameters::color_blend_override` and
@@ -40,8 +91,215 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   name draw records by `first_instance`, so shaders use
   `ERHE_PRIMITIVE_INDEX` (doc/erhe/graphics.md "Draw records").
 
+### Changed
+
+- `erhe::gltf`: `parse_gltf()` reads the derived-data extensions
+  (`ERHE_mesh_optimized`, `ERHE_mesh_topology`, `ERHE_raytrace_bvh`,
+  `ERHE_gpu_vertex_streams`, the chain of `ERHE_mesh_lod`,
+  `ERHE_texture_ktx2`, `ERHE_pvs`) only with
+  `Gltf_parse_arguments::document = Gltf_document::item` (a Scene item, a
+  mesh item document; `load_mesh_item_primitive()` passes it). The default
+  `Gltf_document::file` reads none of them - the primitives are plain soups
+  - and logs once the ones a file carries; the `ERHE_mesh_lod` request is
+  read in both (`doc/erhe/gltf.md` "Notes").
+- `erhe::gltf`: a file parse (`Gltf_document::file`) refuses a raw block KTX2
+  image as a texture source (logged; the image has no source and its texture
+  no image); an item parse accepts it. An export with
+  `Prepared_mesh_data::none` asserts (`ERHE_VERIFY`) that no source image is
+  a raw block KTX2 and that `texture_export` is not a raw block form
+  (`doc/erhe/gltf.md` "Authoring data").
+- `erhe::raytrace`: the `bvh` backend's `commit()` writes no `cache/bvh`
+  entry; it still reads entries written before (`doc/erhe/raytrace.md` "BVH
+  cache").
+- `erhe::gltf`: a raw export (`Prepared_mesh_data::none`) writes a shape's
+  authoring soup in place of its soup when it has one, the LOD request of a
+  soup primitive as `ERHE_mesh_lod` with `settings` alone, and records every
+  raw soup in `Gltf_export_written_layout::retained_primitives`;
+  `ERHE_mesh_optimized` / `ERHE_mesh_topology` are declared only when a
+  primitive carries them. `parse_gltf()` reads the `settings` of every
+  `ERHE_mesh_lod` into `Primitive::lod_settings`, with or without a chain
+  (`doc/erhe/gltf.md` "Authoring data").
+
+- `erhe::primitive`: `Primitive_shape::mark_prepared_data_stale()` also drops
+  the content hash of a shape without a soup; `prepare_primitive_for_export()`
+  sets the content hash of a soup shape that has none, from the soup it read.
+
+- `erhe::gltf`: `parse_gltf()` parents a node without the world-preserving
+  re-parent, so a node under a transformed parent no longer keeps a skew of
+  inverse(parent world) and its local matrix is the one its TRS composes.
+- `erhe::scene`: `Xformable::update_transform()` (the propagation pass) copies
+  the parent-from-node TRS under a parent whose world matrix is exactly the
+  identity, as `update_world_from_node()` does, so both give the same bits.
+- `erhe::item`: `Item_base` has a glTF uid from its creation, a copy / clone
+  included (a random one, `make_random_gltf_uid()`); `get_gltf_uid()` is
+  no longer empty until an import or export.
+- `erhe::gltf`: `export_gltf()` writes every node's local transform and
+  composes no import-root transform into its children: an `import_root` node
+  is written as no node only while it carries `Item_flags::world_space`, and
+  as a node with its transform otherwise. `parse_gltf()` gives an object
+  without a `uid` in the file one derived from the file name, the kind and
+  the index; `export_gltf()` writes the items' uids and stores none back.
+- `erhe::asset_store`: format version 2 (`Asset_store::format_version`):
+  payloads in a table of their own (`item_payload`), so a metadata read reads
+  no payload page; a container of format version 1 is recreated empty in the
+  writing modes and refused by `prepared_read_only`
+  (`doc/erhe/asset_store.md` "Container").
+- `erhe::asset_store`: read connections have a page cache of at most 1 MiB,
+  and a `prepared_read_only` store frees a read connection's page cache after
+  each read once `close_payload_handles()` was called (`doc/erhe/asset_store.md`
+  "Reading payloads").
+- `erhe::asset_store`: new containers have 64 KiB pages (existing ones
+  keep theirs; the format version is unchanged), and
+  `Asset_store::read_connection_count` is 8 (was 4).
+- `erhe::gltf`: an image in a named buffer (an item) is no longer read whole
+  at the parse: its `Gltf_image_source` reads the range through the
+  buffer's reader when it is decoded or exported. The raw block transcode of
+  a prepared save takes the color space and the two component layout from
+  the texture's properties, not from its pixel format.
+- `erhe::gltf`: a texture whose `generate_mipmaps` property is off is created
+  with the levels its image carries.
+- `erhe::gltf`: `write_mesh_item()` writes no BVH: the mesh item's payload
+  and meta carry no `ERHE_raytrace_bvh` (the BVH is a Raytrace BVH item of
+  its own, `write_raytrace_bvh_item()`). The prepared file export is
+  unchanged.
+
 ### Added
 
+- `erhe::raytrace`: Prebuilt BVH export and import for the `tinybvh` backend
+  (backend `tinybvh`, library tag `ERHE_TINYBVH_LIBRARY_TAG`):
+  `Tinybvh_node_record`, `Prebuilt_bvh::tinybvh_nodes`,
+  `get_prebuilt_bvh_node_record_size()`, `get_prebuilt_bvh_node_bytes()`,
+  `set_prebuilt_bvh_node_bytes()`, `tinybvh_traversal_stack_size` and
+  `get_prebuilt_bvh_max_depth()`; `validate_prebuilt_bvh()` checks the
+  `tinybvh` layout (unused pool nodes allowed).
+- `erhe::graphics`: `is_ktx2_raw_blocks_file(path)` (`ktx2_container.hpp`):
+  `is_ktx2_raw_blocks()` of a file's header.
+- `erhe::primitive`: `Primitive_shape::set_authoring_soup()`,
+  `has_authoring_soup()`, `get_authoring_triangle_soup()`,
+  `get_authoring_soup_source()` and `rebind_authoring_soup_source()`
+  (`doc/erhe/primitive.md` "Authoring soup"); `Mesh_optimize_cache_access`,
+  `Buffer_info::mesh_optimize_cache_access` and the `cache_access` argument
+  (default `read_write`) of `optimize_indexed_mesh_cached()` and
+  `optimize_triangle_soup_cached()`.
+- `erhe::gltf`: `load_mesh_item_primitive()` and
+  `Gltf_mesh_item_load_arguments` (one mesh item as a primitive);
+  `Gltf_written_soup` and `Gltf_export_written_primitive::soup`.
+- `erhe::asset_store`: `Open_mode::prepared_create`: a new rollback-journal
+  container; the open fails when anything is at the path.
+- `erhe::hash`: `content_hash.hpp` - `Content_hash` (a 128-bit XXH3-128 digest
+  with hex text) and `Xxh3_128_hasher` (streaming XXH3-128). `erhe::hash`
+  compiles xxHash in (namespaced `erhe_hash_`).
+- `erhe::primitive`: `compute_triangle_soup_content_hash()`,
+  `compute_derived_content_hash()` and `Derived_content_hash`;
+  `Primitive_shape::get_content_hash()` / `set_content_hash()`;
+  `Prepared_primitive_data::source_content_hash` and
+  `Prepared_primitive_export::source_content_hash`;
+  `Triangle_soup_source::load_content_hash()` (virtual, default none).
+  `erhe::hash` is now a public dependency of `erhe::primitive`.
+- `erhe::gltf`: `Gltf_content_hash_load` and `Gltf_parse_arguments::content_hashes`
+  (the parse hashes the soups and images it reads); `Gltf_content_hash_export`
+  and `Gltf_export_arguments::content_hash_export` (`ERHE_mesh_optimized`
+  `source_content_hash`); `Gltf_image_source::get_content_hash()` /
+  `set_content_hash()`; `Gltf_image_residency::content_hashes`;
+  `Gltf_export_prepared_statistics::source_content_hash_count`. `erhe::hash`
+  is now a public dependency of `erhe::gltf`.
+
+- `erhe::graphics`: `basis_encoder.hpp` - `encode_image_to_basis_ktx2()`,
+  `Basis_encode_settings`, `is_basis_encoder_available()` and
+  `get_basis_encoder_version()`: PNG / JPEG to UASTC Basis Universal KTX2,
+  built with the new CMake option `ERHE_BASIS_ENCODER` (forced off on Android).
+- `erhe::gltf`: `make_source_image_item_meta()`; a Texture item
+  (`Gltf_export_arguments::texture_item_provider`) may hold a PNG / JPEG image,
+  which the exporter writes as the texture's plain source image.
+
+- `erhe::gltf`: `write_pvs_item(database)` and `Gltf_pvs_item` (a PVS
+  database as one payload and a meta naming its columns by node uid), and
+  `Gltf_export_arguments::pvs_item`, which writes `ERHE_pvs` against such an
+  item's buffer in place of `pvs_database` (doc/erhe/gltf.md "PVS items").
+- `erhe::scene_renderer`: `Draw_list_scene::set_pvs_identity_function()`:
+  the uid the PVS columns name a mesh's entries by (empty: untracked);
+  without it the mesh's own glTF uid.
+
+- `erhe::gltf`: `Gltf_export_arguments::world_mesh_item_provider`: per
+  primitive of a `world_bake` mesh, the World-space mesh item it is written
+  against; a baked mesh with an item for every primitive prepares nothing
+  (`doc/erhe/gltf.md` "Mesh items").
+- `erhe::gltf`: `Gltf_export_arguments::mesh_item_document`: a document of one
+  node and mesh per mesh item reference in place of the node tree
+  (`doc/erhe/gltf.md` "Mesh item documents");
+  `Gltf_export_prepared_statistics::world_mesh_item_count`.
+- `erhe::gltf`: `Gltf_parse_arguments::glb_reader` and `glb_size`: a GLB
+  read through a `Gltf_buffer_reader` in place of the file at `path`, parsed
+  as a file is (the JSON chunk, the BIN chunk by range; `doc/erhe/gltf.md`
+  "Reading buffers by range").
+- `erhe::asset_store`: `Asset_store::get_item_headers()` (key, kind, target,
+  stamp and payload size of every item in one read of the item table) and
+  `Asset_store::open(path, mode, out_error)`, which hands the reason of a
+  failed open to the caller.
+- `erhe::asset_store`: `Write_transaction::set_info()` replaces the info of a
+  held item (`doc/erhe/asset_store.md`).
+- `erhe::item`: `make_random_gltf_uid()`.
+- `erhe::gltf`: `make_derived_gltf_uid(std::string_view seed)` (`gltf_uid.hpp`)
+  and `is_transparent_import_root(uint64_t flag_bits)` (`gltf_item_flags.hpp`).
+- `erhe::asset_store`: `Asset_store::close_payload_handles()`: a
+  `prepared_read_only` store keeps the payload each read connection read
+  last open between reads until this call (`doc/erhe/asset_store.md`
+  "Reading payloads").
+- `erhe::gltf`: `Gltf_buffer_reader::close()` (default: nothing), called
+  for each named buffer by `close_source_files()`.
+- `erhe::graphics`: texture properties (`doc/erhe/graphics.md` "Texture
+  properties"): `Texture_properties`, `Texture_transfer_function`,
+  `Texture_normal_encoding`, `Texture_use`, `Texture_use_slot`,
+  `derive_texture_properties()` and their text forms in
+  `texture_properties.hpp`; `Texture::transfer_function_property`,
+  `normal_encoding_property`, `generate_mipmaps_property`,
+  `wrap_u_property`, `wrap_v_property`, `get_texture_properties()` and
+  `set_texture_properties()`; `Ktx2_normal_layout` with
+  `Image_loader_ktx2::set_normal_layout()` and the `normal_layout` argument of
+  `transcode_ktx2_basis_to_raw_blocks()` (default `detect`, the behaviour
+  before).
+- `erhe::gltf`: `ERHE_texture_properties` read and written
+  (`Gltf_decoded_image::texture_properties`, `texture_properties_stored`);
+  Texture items (`doc/erhe/gltf.md` "Texture items"):
+  `Gltf_export_arguments::texture_item_provider`, `make_texture_item_meta()`,
+  `parse_texture_item_meta()`, `Gltf_texture_item_meta` and
+  `Gltf_export_texture_statistics::texture_item_count`; a reader-backed
+  `Gltf_image_source` (`reader`, `reader_offset`, `is_reader_backed()`).
+- `erhe::gltf`: Raytrace BVH items (`doc/erhe/gltf.md` "Raytrace BVH
+  items"): `write_raytrace_bvh_item()` and `Gltf_raytrace_bvh_item`,
+  `Gltf_item_reference` and `Gltf_mesh_item_reference::raytrace_bvh` (an
+  export writes a primitive's `ERHE_raytrace_bvh` against the BVH item's
+  buffer), and `Stored_bvh_use` / `Gltf_parse_arguments::stored_bvh_use`
+  (a parse that reads no `ERHE_raytrace_bvh`).
+- `erhe::primitive`: `derive_triangle_soup()` / `Derived_triangle_soup` (the
+  triangles a geometry-normative shape's content build derives with its
+  normal style) and `prepare_derived_primitive_for_export()` (the prepared
+  core of them; `doc/erhe/primitive.md` "Derived triangles").
+- `erhe::primitive`: a prepared core carries the anisotropy control stream
+  (`custom_attribute_aniso_control`) when its source does; derived
+  triangles always carry it and COLOR_0. `mesh_from_triangle_soup()` reads
+  the stream into `corner_aniso_control`.
+- `erhe::gltf`: the vertex attribute `_ANISO_CONTROL` is written and read as
+  `custom_attribute_aniso_control`.
+- `erhe::gltf`: `Gltf_export_arguments::mesh_item_provider` is asked for
+  geometry-normative primitives too; one written against an item carries no
+  `ERHE_geometry`.
+- `erhe::gltf`: mesh items (`doc/erhe/gltf.md` "Mesh items"):
+  `write_mesh_item()` and `Gltf_mesh_item` (one prepared primitive as a
+  payload plus a self-contained JSON meta), `Gltf_mesh_item_reference` and
+  `Gltf_export_arguments::mesh_item_provider` (an export writes a primitive
+  against an item buffer uri, with no bytes and no preparation;
+  `Gltf_export_prepared_statistics::mesh_item_count`), and
+  `Gltf_buffer_reader`, `Gltf_buffer_resolver` and
+  `Gltf_parse_arguments::buffer_resolver` (a parse, from a file or from
+  memory, reads named external buffers by range like buffer files). A GLB
+  without a BIN chunk now resolves its external buffers.
+- `erhe::asset_store`: new library (`doc/erhe/asset_store.md`): `Key`,
+  `Key_hash`, `Content_hasher` (XXH3-128), `Key_builder`, `Item_kind`,
+  `Item_data`, `Item_info`, `Source_record`, `Prepared_scene_record`,
+  `Asset_store` (`open()` with `Open_mode`, reads, `put()`, `remove()`,
+  `copy_item_to()`, `vacuum()`, records) and `Write_transaction`; SQLite and
+  xxHash become dependencies.
 - `erhe::item`: `Item_flags::world_space`, a derived and transient bit
   (not serialized; `set_flag_bits()` refuses it): every node from the scene
   root to the item has the identity transform. `erhe::scene::Xformable`
@@ -444,7 +702,7 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::gltf`: `Gltf_export_arguments::pvs_database` and
   `Gltf_data::pvs_database`: the exporter writes a ready database as the
   asset-root extension `ERHE_pvs` and the parser reads it back
-  (doc/gltf_extensions/ERHE_pvs.md).
+  (doc/erhe/gltf.md "PVS items").
 - `erhe::dataformat`: `convert()` writes `format_packed111110_vec3_unorm`
   (R in the low 11 bits) and `format_packed1010102_vec4_unorm`; converting to
   `format_8_vec4_srgb` writes the source alpha (it wrote blue).
@@ -1445,6 +1703,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `get_unbounded_flag(extent_x)`.
 
 ### Changed
+
+- `erhe::primitive`: `Primitive_render_shape::get_normal_style()` returns the
+  normal style of the shape's last Geometry build (it returned
+  `corner_normals` whatever the build used).
 
 - `erhe::graphics` (Vulkan): a `Buffer` whose required or preferred memory
   properties include `host_read` prefers host-cached memory, so CPU readbacks

@@ -46,10 +46,9 @@ public:
     // that has none) so they never leak into prefab instances.
     static constexpr uint64_t exclude_from_prefab       = (uint64_t{1} << 11);
     // Implicit container node created when a glTF file is opened/imported,
-    // holding the file's scene roots. Not part of the file content: glTF
-    // export writes its children in its place (composing its transform),
-    // and import re-creates it -- so open/save cycles do not nest one more
-    // wrapper node per cycle.
+    // holding the file's scene roots. Not serialized: on the identity path
+    // (world_space) a glTF save writes its children in its place, once
+    // transformed it is written as a node (doc/editor/scene_serialization.md).
     static constexpr uint64_t import_root               = (uint64_t{1} << 12);
     // Skeleton bone: authored and persistent (saved by name like the other
     // persistent flags; doc/plans/rigging/skeleton_editing.md R1). A Skin

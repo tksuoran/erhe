@@ -20,13 +20,9 @@ erhe_cmake_profiling.json
 *.pyo
 src/editor/user.ini
 src/editor/erhe_init_graph.dot
-src/editor/cache/bvh/*
-src/editor/cache/tinybvh/*
 src/editor/windows/IconsMaterialDesignIcons.h
 src/editor/res/fonts/materialdesignicons-webfont.ttf
 src/editor/res/fonts/materialdesignicons.css
-!src/editor/cache/bvh/keep
-!src/editor/cache/tinybvh/keep
 build
 cmake-build-*
 vscode-cmake-*
@@ -95,3 +91,10 @@ vk_layer_settings.txt
 
 # GPU test run output (erhe_graphics_gpu_tests results.json and artifacts)
 gpu_test_results/
+
+# Editor assets and prepared assets are build products (doc/editor/prepared_assets.md)
+*.erhe_editor
+*.erhe_editor-wal
+*.erhe_editor-shm
+*.erhe_prepared
+*.erhe_prepared-journal

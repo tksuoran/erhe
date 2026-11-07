@@ -506,13 +506,17 @@ void Xformable::update_transform(uint64_t serial)
 
     serial = std::max(serial, current_parent->node_data.transforms.parent_from_node_serial);
 
-    const glm::mat4 world_from_node = current_parent->world_from_node() * parent_from_node();
+    // Under an exact identity parent the copy update_world_from_node() makes,
+    // so both give the same bits (a product writes +0 where the TRS holds -0).
+    if (current_parent->world_from_node() == glm::mat4{1.0f}) {
+        node_data.transforms.world_from_node = node_data.transforms.parent_from_node;
+    } else {
+        node_data.transforms.world_from_node.set(current_parent->world_from_node() * parent_from_node());
+    }
     // Affine transform: det(mat4) == det(upper-left mat3), and the inverse
     // is deferred (set(matrix) leaves it to the first node_from_world()
     // read) - this loop runs for every node under a moving subtree.
-    const float determinant = glm::determinant(glm::mat3{world_from_node});
-
-    node_data.transforms.world_from_node.set(world_from_node);
+    const float determinant = glm::determinant(glm::mat3{node_data.transforms.world_from_node.get_matrix()});
 
     if (determinant < 0.0f) {
         enable_flag_bits(erhe::Item_flags::negative_determinant);

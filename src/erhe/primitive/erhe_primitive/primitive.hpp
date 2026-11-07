@@ -69,7 +69,7 @@ public:
     // backend before the commit (IGeometry::set_prebuilt_bvh()); whether it
     // was used is get_bvh_source(). The facet mapping is the identity
     // (triangle t is facet t), which holds for a prepared soup core
-    // (doc/gltf_extensions/ERHE_mesh_optimized.md contract item 5).
+    // (doc/erhe/gltf.md "Mesh items" contract item 5).
     Primitive_raytrace(const erhe::primitive::Triangle_soup& triangle_soup, std::unique_ptr<erhe::raytrace::Prebuilt_bvh> prebuilt);
     // The same raytrace from float positions (xyz per vertex) and uint32
     // triangle indices, the stored vertex stream build that has no soup
@@ -273,6 +273,17 @@ public:
     auto detach_triangle_soup_source() -> bool;
     // The resident soups of both shapes are the same object.
     [[nodiscard]] auto shares_resident_triangle_soup(const Primitive_shape& other) const -> bool;
+    // The authoring soup (doc/erhe/primitive.md "Authoring soup"): the source
+    // soup a shape whose own soup is a prepared core loaded in its place was
+    // prepared from, which a source save writes. `resident` when the soup has
+    // no source to read it back from, else null; set before the shape is shared.
+    void set_authoring_soup(std::shared_ptr<Triangle_soup> resident, std::shared_ptr<const Triangle_soup_source> source);
+    [[nodiscard]] auto has_authoring_soup() const -> bool;
+    // The authoring soup, read from its source when not resident; null without one or when the read fails.
+    [[nodiscard]] auto get_authoring_triangle_soup() const -> std::shared_ptr<Triangle_soup>;
+    [[nodiscard]] auto get_authoring_soup_source() const -> std::shared_ptr<const Triangle_soup_source>;
+    // A save rewrote the file the authoring source reads: the authoring soup is the new file's data at `source`.
+    void rebind_authoring_soup_source(std::shared_ptr<const Triangle_soup_source> source);
     // The validated prepared mesh data the shape was loaded with; null when
     // there is none. Immutable: set at construction, never replaced.
     [[nodiscard]] auto get_prepared_data           () const -> const std::shared_ptr<const Prepared_primitive_data>&;
@@ -293,9 +304,16 @@ public:
     // change the shape's data without a new shape, so the prepared data no
     // longer describes it. Marks it so; is_prepared_data_current() is then
     // false for the rest of the shape's life.
+    // An in-place edit also drops a content hash derived from the Geometry
+    // (a shape without a soup); a soup's hash stays, the soup is unchanged.
     void mark_prepared_data_stale();
     // Prepared data is present and no in-place edit has touched the shape.
     [[nodiscard]] auto is_prepared_data_current    () const -> bool;
+    // The content hash of the shape's source content (doc/erhe/primitive.md
+    // "Content hash"): the stored one of its prepared data, else the one its
+    // loader or a key computation set; nullopt until then. Thread-safe.
+    [[nodiscard]] auto get_content_hash            () const -> std::optional<erhe::hash::Content_hash>;
+    void set_content_hash(const erhe::hash::Content_hash& content_hash);
     // Mesh <-> vertex-buffer/triangle correspondence of THIS shape's
     // Buffer_mesh. The correspondence is order-dependent, so it lives in the
     // same object as the mesh it describes and the two can never disagree; a
@@ -340,6 +358,9 @@ protected:
     bool                                           m_payload_pending{false}; // under m_state_mutex; source constructor until load_payload()
     std::unique_ptr<erhe::raytrace::Prebuilt_bvh>  m_stored_bvh{};          // under m_build_mutex
     bool                                           m_prepared_data_stale{false}; // under m_state_mutex
+    std::optional<erhe::hash::Content_hash>        m_content_hash{};             // under m_state_mutex
+    std::shared_ptr<Triangle_soup>                 m_authoring_soup{};           // under m_state_mutex
+    std::shared_ptr<const Triangle_soup_source>    m_authoring_soup_source{};    // under m_state_mutex
     Primitive_raytrace                        m_raytrace{};
     mutable std::mutex                        m_build_mutex;
     mutable std::mutex                        m_reload_mutex;
@@ -400,7 +421,8 @@ public:
     // up, by picking the shape - see Primitive::get_resolved_renderable_mesh().
     [[nodiscard]] auto get_mutable_renderable_mesh() -> Buffer_mesh& { return m_renderable_mesh; }
     [[nodiscard]] auto get_renderable_mesh        () const -> const Buffer_mesh& { return m_renderable_mesh; }
-    [[nodiscard]] auto get_normal_style           () const -> Normal_style { return m_normal_style; }
+    // The normal style of the last Geometry build (corner_normals before one).
+    [[nodiscard]] auto get_normal_style           () const -> Normal_style;
 
     // Deferred edge-lines finalize (glTF import): the load path builds a
     // fill-only buffer mesh straight from the triangle soup; the deferred
@@ -473,7 +495,7 @@ private:
         std::shared_ptr<Primitive_render_shape> optimized_shape;
     };
 
-    Normal_style                         m_normal_style   {Normal_style::none};
+    Normal_style                         m_normal_style   {Normal_style::none}; // under m_state_mutex
     Buffer_mesh                          m_renderable_mesh{};
     bool                                 m_base_deferred  {false}; // under m_state_mutex; m_renderable_mesh is a descriptor
     bool                                 m_base_build_requested{false}; // under m_state_mutex
@@ -755,7 +777,7 @@ auto build_buffer_mesh_from_triangle_soup(
 // writes for `triangle_soup` in `vertex_format` / `index_type`, captured on
 // the CPU instead of uploaded, with the affines it encoded them with: the
 // bytes a loader's soup build uploads, written into a file as GPU-ready
-// streams (ERHE_gpu_vertex_streams, doc/gltf_extensions/ERHE_gpu_vertex_streams.md).
+// streams (ERHE_gpu_vertex_streams, doc/erhe/gltf.md "GPU vertex streams on export").
 class Packed_vertex_streams
 {
 public:

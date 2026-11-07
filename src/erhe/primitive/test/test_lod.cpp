@@ -605,7 +605,7 @@ TEST(Lod, soup_path_stores_levels_after_level_0)
     Cpu_build plain_build;
     const std::shared_ptr<erhe::primitive::Primitive_render_shape> plain = erhe::primitive::make_optimized_render_shape(
         *primitive.render_shape, erhe::primitive::Element_mappings{}, erhe::primitive::Mesh_optimize_options{},
-        plain_build.make_buffer_info(soup_format), std::filesystem::path{}, "plain"
+        plain_build.make_buffer_info(soup_format), "plain"
     );
     ASSERT_TRUE(plain);
     const erhe::primitive::Buffer_mesh& plain_mesh = plain->get_renderable_mesh();
@@ -616,7 +616,7 @@ TEST(Lod, soup_path_stores_levels_after_level_0)
     const Lod_settings settings{};
     const std::shared_ptr<erhe::primitive::Primitive_render_shape> with_lod = erhe::primitive::make_optimized_render_shape(
         *primitive.render_shape, erhe::primitive::Element_mappings{}, erhe::primitive::Mesh_optimize_options{},
-        lod_build.make_buffer_info(soup_format), std::filesystem::path{}, "lod", &settings
+        lod_build.make_buffer_info(soup_format), "lod", &settings
     );
     ASSERT_TRUE(with_lod);
     const erhe::primitive::Buffer_mesh& lod_mesh = with_lod->get_renderable_mesh();
@@ -978,7 +978,7 @@ TEST(Lod_edge_lines, soup_path_stores_level_edge_lines)
     const Lod_settings settings{};
     const std::shared_ptr<erhe::primitive::Primitive_render_shape> shape = erhe::primitive::make_optimized_render_shape(
         *primitive.render_shape, erhe::primitive::Element_mappings{}, erhe::primitive::Mesh_optimize_options{},
-        buffer_info, std::filesystem::path{}, "lod", &settings
+        buffer_info, "lod", &settings
     );
     ASSERT_TRUE(shape);
     expect_level_edge_lines(build.vertex_buffer, shape->get_renderable_mesh().lod_chain);
@@ -990,7 +990,7 @@ TEST(Lod_edge_lines, soup_path_stores_level_edge_lines)
     plain_info.edge_line_vertex_stream = &streams.vertices;
     const std::shared_ptr<erhe::primitive::Primitive_render_shape> plain = erhe::primitive::make_optimized_render_shape(
         *primitive.render_shape, erhe::primitive::Element_mappings{}, erhe::primitive::Mesh_optimize_options{},
-        plain_info, std::filesystem::path{}, "plain"
+        plain_info, "plain"
     );
     ASSERT_TRUE(plain);
     EXPECT_EQ(

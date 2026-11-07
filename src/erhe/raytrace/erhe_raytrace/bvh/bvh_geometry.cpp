@@ -7,7 +7,6 @@
 #include <fmt/chrono.h>
 
 #include "erhe_buffer/ibuffer.hpp"
-#include "erhe_file/file.hpp"
 #include "erhe_raytrace/bvh/bvh_geometry.hpp"
 #include "erhe_raytrace/bvh/bvh_instance.hpp"
 #include "erhe_raytrace/bvh/bvh_scene.hpp"
@@ -30,114 +29,10 @@
 #include <bvh/v2/thread_pool.h>
 
 #include <algorithm>
-#include <atomic>
-#include <fstream>
-#include <system_error>
 
 namespace erhe::raytrace {
 
 using Bvh = bvh::v2::Bvh<bvh::v2::Node<float, 3>>;
-
-[[nodiscard]] auto get_bvh_cache_path(const uint64_t hash_code) -> std::filesystem::path
-{
-    // Keyed by the pinned library tag (a build-time constant, the same on
-    // every platform), not by the checkout's git commit.
-    const std::filesystem::path bvh_cache_path =
-        std::filesystem::path{"cache"} / std::filesystem::path{"bvh"} / std::filesystem::path{ERHE_BVH_LIBRARY_TAG};
-    const bool directory_ok = erhe::file::ensure_directory_exists(bvh_cache_path);
-    if (!directory_ok) {
-        return {};
-    }
-    const std::string hash_string = fmt::format("{}", hash_code);
-    return bvh_cache_path / std::filesystem::path{hash_string};
-}
-
-// TODO Add versioning
-auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
-{
-    const std::filesystem::path cache_path = get_bvh_cache_path(hash_code);
-    if (cache_path.empty()) {
-        return false;
-    }
-
-    // Write to a process/thread unique temporary file and rename it in place, so that
-    // readers never observe a partially written cache entry. Multiple geometries with
-    // identical content hash to the same cache entry, and they can be committed
-    // concurrently from task workers.
-    static std::atomic<uint64_t> s_temp_counter{0};
-    const std::filesystem::path temp_path = cache_path.parent_path() / std::filesystem::path{
-        fmt::format("{}.{}.tmp", cache_path.filename().string(), s_temp_counter.fetch_add(1))
-    };
-
-    {
-        std::ofstream out{temp_path.string(), std::ofstream::binary};
-        if (!out) {
-            return false;
-        }
-        try {
-            bvh::v2::StdOutputStream stream{out};
-            bvh.serialize(stream);
-        } catch (...) {
-            out.close();
-            std::error_code discarded_error_code{};
-            std::filesystem::remove(temp_path, discarded_error_code);
-            return false;
-        }
-        out.close();
-        if (!out) {
-            std::error_code discarded_error_code{};
-            std::filesystem::remove(temp_path, discarded_error_code);
-            return false;
-        }
-    }
-
-    std::error_code error_code{};
-    std::filesystem::rename(temp_path, cache_path, error_code);
-    if (error_code) {
-        std::error_code discarded_error_code{};
-        std::filesystem::remove(temp_path, discarded_error_code);
-        return false;
-    }
-    return true;
-}
-
-// TODO Add versioning
-auto load_bvh(Bvh& bvh, const uint64_t hash_code, const std::size_t primitive_count) -> bool
-{
-    const std::filesystem::path cache_path = get_bvh_cache_path(hash_code);
-    const std::string file_name = cache_path.string();
-    if (file_name.empty()) {
-        return false;
-    }
-    std::ifstream in{file_name, std::ofstream::binary};
-    if (!in) {
-        return false;
-    }
-    Bvh loaded_bvh{};
-    try {
-        bvh::v2::StdInputStream stream{in};
-        loaded_bvh = Bvh::deserialize(stream);
-    } catch (...) {
-        return false;
-    }
-
-    // Bvh::deserialize() does not report short reads: a truncated or empty cache entry
-    // simply yields empty / partial node and primitive id arrays. Validate the result
-    // instead of trusting the file.
-    if (loaded_bvh.nodes.empty() || (loaded_bvh.prim_ids.size() != primitive_count)) {
-        log_geometry->warn("Ignoring invalid BVH cache entry {}", file_name);
-        return false;
-    }
-    for (const std::size_t prim_id : loaded_bvh.prim_ids) {
-        if (prim_id >= primitive_count) {
-            log_geometry->warn("Ignoring invalid BVH cache entry {}", file_name);
-            return false;
-        }
-    }
-
-    bvh = std::move(loaded_bvh);
-    return true;
-}
 
 auto IGeometry::create(const std::string_view debug_label, const Geometry_type geometry_type) -> IGeometry*
 {
@@ -329,13 +224,9 @@ void Bvh_geometry::commit()
         Executor_resources& executor_resources = Executor_resources::get_instance();
 
         const bool prebuilt_ok = prebuilt.has_value() && try_use_prebuilt_bvh(prebuilt.value(), hash_code, triangle_count);
-        const bool load_ok     = !prebuilt_ok && load_bvh(m_bvh, hash_code, triangle_count);
         if (prebuilt_ok) {
             m_bvh_source  = Bvh_source::prebuilt;
             m_bvh_quality = prebuilt.value().quality;
-        } else if (load_ok) {
-            m_bvh_source  = Bvh_source::cache;
-            m_bvh_quality = Bvh_build_quality::high; // cache entries are written by the build below
         } else {
             typename bvh::v2::DefaultBuilder<Node>::Config config;
             config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High; // TODO Low
@@ -359,10 +250,6 @@ void Bvh_geometry::commit()
                 log_geometry->info("BVH build {} in {} ms", debug_label(), time);
             }
 
-            const bool save_ok = save_bvh(m_bvh, hash_code);
-            if (!save_ok) {
-                log_geometry->error("BVH save failed, hash = {}", hash_code);
-            }
         }
 
         // This precomputes some data to speed up traversal further.

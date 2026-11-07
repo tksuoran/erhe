@@ -14,6 +14,7 @@ struct Graphics_preset_entry;
 
 namespace editor {
 
+class Prepared_open;
 class Scene_root;
 class Scene_view;
 
@@ -150,7 +151,8 @@ struct Scene_created_message
 
 struct Load_scene_file_message
 {
-    std::filesystem::path path{};
+    std::filesystem::path          path{};
+    std::shared_ptr<Prepared_open> prepared_open{}; // a .erhe_prepared open already checked (MCP load_scene)
 };
 
 // Published after a scene bundle (#241) has been written to disk, by both the

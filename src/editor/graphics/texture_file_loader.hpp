@@ -21,6 +21,15 @@ namespace editor {
 
 class App_context;
 
+// What a texture file load is for: a preview shows any file Image_loader
+// decodes; a source (an import into a content library) refuses raw block KTX2,
+// which is derived data (doc/editor/content_library.md "Importing texture files").
+enum class Texture_file_use : unsigned int
+{
+    preview = 0,
+    source
+};
+
 // True for the image file extensions erhe::graphics::Image_loader can decode:
 // PNG / JPEG (wuffs), KTX2 (Basis transcode) and DDS. Case-insensitive.
 [[nodiscard]] auto is_texture_file_extension(const std::filesystem::path& path) -> bool;
@@ -71,7 +80,7 @@ public:
 private:
     class Request;
 
-    [[nodiscard]] auto start_request(const std::filesystem::path& path) -> std::shared_ptr<Request>;
+    [[nodiscard]] auto start_request(const std::filesystem::path& path, Texture_file_use use) -> std::shared_ptr<Request>;
     void publish(Request& request, erhe::graphics::Command_buffer& command_buffer, std::size_t& remaining_budget_bytes);
     void evict_if_needed();
 

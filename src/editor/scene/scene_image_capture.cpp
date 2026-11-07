@@ -62,7 +62,8 @@ Scene_image_view::Scene_image_view(
     const erhe::scene_renderer::Shader_debug    shader_debug,
     const std::shared_ptr<erhe::scene::Light>&  shadow_debug_light,
     const Overdraw_frame&                       overdraw,
-    erhe::graphics::Gpu_timer* const            forward_pass_timer
+    erhe::graphics::Gpu_timer* const            forward_pass_timer,
+    const Mesh_form                             mesh_form
 )
     // No settings store: nothing about this view persists.
     : Scene_view{context, nullptr, "", viewport_config}
@@ -83,6 +84,7 @@ Scene_image_view::Scene_image_view(
     , m_overdraw    {overdraw}
     , m_shadow_debug_light_id{shadow_debug_light ? std::optional<std::size_t>{shadow_debug_light->get_id()} : std::nullopt}
     , m_forward_pass_timer{forward_pass_timer}
+    , m_mesh_form   {mesh_form}
 {
     set_scene_root(scene_root);
     // The content render target for the request's fixed size, here on the
@@ -162,7 +164,8 @@ void Scene_image_view::prepare_composition(const uint64_t frame_index, const std
         .shader_debug        = m_shader_debug,
         .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
         .overdraw            = to_overdraw_count(m_overdraw.mode),
-        .content             = m_content
+        .content             = m_content,
+        .mesh_form           = m_mesh_form
     };
     // Bucketing reads the meshes' Buffer_mesh variants, which a worker may
     // be replacing (commit_geometry_buffer_mesh, under this mutex).
@@ -318,7 +321,8 @@ void Scene_image_view::pre_execute_rendergraph_node(erhe::graphics::Command_buff
             .overdraw            = to_overdraw_count(m_overdraw.mode),
             .content             = m_content,
             // The composition the prepare phase decided for this frame.
-            .composer_prepared   = &prepared
+            .composer_prepared   = &prepared,
+            .mesh_form           = m_mesh_form
         }
     );
     m_context.app_rendering->add_composer_cull_views(m_frame_context.value(), prepared);
@@ -569,7 +573,8 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
         create_info.shader_debug,
         create_info.shadow_debug_light,
         create_info.overdraw,
-        create_info.forward_pass_timer
+        create_info.forward_pass_timer,
+        create_info.mesh_form
     );
 
     m_shadow_render_node = m_context.app_rendering->create_shadow_node_for_scene_view(

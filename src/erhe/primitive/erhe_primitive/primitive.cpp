@@ -794,6 +794,9 @@ Primitive_shape::Primitive_shape(Primitive_shape&& old) noexcept
     , m_payload_pending        {old.m_payload_pending}
     , m_stored_bvh             {std::move(old.m_stored_bvh)}
     , m_prepared_data_stale    {old.m_prepared_data_stale}
+    , m_content_hash           {old.m_content_hash}
+    , m_authoring_soup         {std::move(old.m_authoring_soup)}
+    , m_authoring_soup_source  {std::move(old.m_authoring_soup_source)}
     , m_raytrace               {std::move(old.m_raytrace)}
     , m_pending_raytrace       {std::move(old.m_pending_raytrace)}
     , m_retired_proxy_raytrace {std::move(old.m_retired_proxy_raytrace)}
@@ -818,6 +821,9 @@ Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept
         m_payload_pending        = old.m_payload_pending;
         m_stored_bvh             = std::move(old.m_stored_bvh);
         m_prepared_data_stale    = old.m_prepared_data_stale;
+        m_content_hash           = old.m_content_hash;
+        m_authoring_soup         = std::move(old.m_authoring_soup);
+        m_authoring_soup_source  = std::move(old.m_authoring_soup_source);
         m_raytrace               = std::move(old.m_raytrace);
         m_pending_raytrace       = std::move(old.m_pending_raytrace);
         m_retired_proxy_raytrace = std::move(old.m_retired_proxy_raytrace);
@@ -863,6 +869,11 @@ auto get_triangle_soup_reload_counter() -> Triangle_soup_reload_counter&
 Triangle_soup_source::~Triangle_soup_source() noexcept = default;
 
 auto Triangle_soup_source::load_prepared_data(const Triangle_soup&) const -> std::shared_ptr<Prepared_primitive_data>
+{
+    return {};
+}
+
+auto Triangle_soup_source::load_content_hash(const Triangle_soup&) const -> std::optional<erhe::hash::Content_hash>
 {
     return {};
 }
@@ -958,8 +969,12 @@ auto Primitive_shape::load_payload() -> bool
         m_stored_bvh = std::make_unique<erhe::raytrace::Prebuilt_bvh>(std::move(prepared_data->bvh.value()));
         prepared_data->bvh.reset();
     }
+    const std::optional<erhe::hash::Content_hash> stored_hash = source->load_content_hash(*soup);
     m_prepared_data = std::move(prepared_data);
     const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if (stored_hash.has_value()) {
+        m_content_hash = stored_hash;
+    }
     m_triangle_soup          = std::move(soup);
     m_triangle_soup_released = false;
     m_payload_pending        = false;
@@ -1285,6 +1300,59 @@ void Primitive_shape::mark_prepared_data_stale()
 {
     const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     m_prepared_data_stale = true;
+    if (!m_triangle_soup && !m_triangle_soup_source) {
+        m_content_hash.reset();
+    }
+}
+
+auto Primitive_shape::get_content_hash() const -> std::optional<erhe::hash::Content_hash>
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_content_hash;
+}
+
+void Primitive_shape::set_content_hash(const erhe::hash::Content_hash& content_hash)
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_content_hash = content_hash;
+}
+
+void Primitive_shape::set_authoring_soup(std::shared_ptr<Triangle_soup> resident, std::shared_ptr<const Triangle_soup_source> source)
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_authoring_soup        = std::move(resident);
+    m_authoring_soup_source = std::move(source);
+}
+
+auto Primitive_shape::has_authoring_soup() const -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_authoring_soup || m_authoring_soup_source;
+}
+
+auto Primitive_shape::get_authoring_triangle_soup() const -> std::shared_ptr<Triangle_soup>
+{
+    std::shared_ptr<const Triangle_soup_source> source;
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (m_authoring_soup) {
+            return m_authoring_soup;
+        }
+        source = m_authoring_soup_source;
+    }
+    return source ? source->load() : std::shared_ptr<Triangle_soup>{};
+}
+
+auto Primitive_shape::get_authoring_soup_source() const -> std::shared_ptr<const Triangle_soup_source>
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_authoring_soup_source;
+}
+
+void Primitive_shape::rebind_authoring_soup_source(std::shared_ptr<const Triangle_soup_source> source)
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_authoring_soup_source = std::move(source);
 }
 
 auto Primitive_shape::is_prepared_data_current() const -> bool
@@ -1788,7 +1856,14 @@ auto Primitive_render_shape::make_buffer_mesh_build_locked(
     m_renderable_mesh  = std::move(buffer_mesh);
     m_base_deferred    = false;
     m_element_mappings = std::move(element_mappings);
+    m_normal_style     = normal_style;
     return true;
+}
+
+auto Primitive_render_shape::get_normal_style() const -> Normal_style
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return m_normal_style;
 }
 
 auto Primitive_render_shape::make_buffer_mesh_build_locked(const Buffer_info& buffer_info, const Lod_settings* const lod_settings) -> bool
@@ -2403,6 +2478,7 @@ namespace {
 {
     return
         (bvh.nodes.capacity() * sizeof(erhe::raytrace::Bvh_node_record)) +
+        (bvh.tinybvh_nodes.capacity() * sizeof(erhe::raytrace::Tinybvh_node_record)) +
         (bvh.primitive_ids.capacity() * sizeof(uint32_t));
 }
 

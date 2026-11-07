@@ -190,10 +190,18 @@ TEST(ItemBase, Describe)
 
 // --- glTF uid ---
 
-TEST(ItemBase, GltfUidDefaultEmpty)
+// R6.2: an item has its uid from the moment it exists.
+TEST(ItemBase, GltfUidAssignedAtCreation)
 {
-    auto item = std::make_shared<Concrete_item>("test");
-    EXPECT_TRUE(item->get_gltf_uid().empty());
+    auto item_a = std::make_shared<Concrete_item>("test");
+    auto item_b = std::make_shared<Concrete_item>();
+    const std::string& uid = item_a->get_gltf_uid();
+    ASSERT_EQ(uid.size(), 16u);
+    for (const char c : uid) {
+        EXPECT_TRUE(((c >= '0') && (c <= '9')) || ((c >= 'A') && (c <= 'Z')) || ((c >= 'a') && (c <= 'z')));
+    }
+    EXPECT_EQ(item_b->get_gltf_uid().size(), 16u);
+    EXPECT_NE(item_a->get_gltf_uid(), item_b->get_gltf_uid());
 }
 
 TEST(ItemBase, SetGltfUid)
@@ -212,7 +220,8 @@ TEST(ItemBase, CopyDoesNotCopyGltfUid)
     original->set_gltf_uid("Ab12Cd34Ef56Gh78");
 
     auto copy = std::make_shared<Concrete_item>(*original);
-    EXPECT_TRUE(copy->get_gltf_uid().empty());
+    EXPECT_EQ(copy->get_gltf_uid().size(), 16u);
+    EXPECT_NE(copy->get_gltf_uid(), original->get_gltf_uid());
     EXPECT_EQ(original->get_gltf_uid(), "Ab12Cd34Ef56Gh78");
 }
 

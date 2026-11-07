@@ -1,7 +1,6 @@
 // erhe::scene::Pvs_database (doc/erhe/scene.md "Potentially visible sets"):
 // cell and page indexing, the identity-to-column lookup, the transform hash,
-// validation, the stale transition, and the bits released and read back
-// through a file source.
+// validation, the stale transition, and page and cell reads of the bits.
 
 #include "erhe_scene/pvs_database.hpp"
 
@@ -9,10 +8,7 @@
 
 #include <cmath>
 #include <cstring>
-#include <filesystem>
-#include <fstream>
 #include <memory>
-#include <random>
 #include <span>
 #include <string>
 #include <vector>
@@ -242,68 +238,11 @@ TEST(Pvs_database, mark_stale_transitions_once)
     EXPECT_EQ(database->get_state(), erhe::scene::Pvs_state::stale);
 }
 
-namespace {
-
-// A file holding the bits at a byte offset, between unrelated bytes, as a
-// .glb holds them; removed by the destructor.
-class Pvs_bits_file
+// Pages and cells read from the bits the database holds (the page streamer's reads).
+TEST(Pvs_database, reads_pages_and_cells_from_its_bits)
 {
-public:
-    explicit Pvs_bits_file(const std::vector<uint32_t>& bits, const std::string& name)
-    {
-        std::random_device random_device;
-        path = std::filesystem::temp_directory_path() / ("erhe_scene_tests_" + name + "_" + std::to_string(random_device()) + ".bin");
-        std::ofstream file{path, std::ios::binary};
-        const std::string prefix(37, 'p');
-        const std::string suffix(11, 's');
-        file.write(prefix.data(), static_cast<std::streamsize>(prefix.size()));
-        file.write(reinterpret_cast<const char*>(bits.data()), static_cast<std::streamsize>(bits.size() * sizeof(uint32_t)));
-        file.write(suffix.data(), static_cast<std::streamsize>(suffix.size()));
-        source = erhe::scene::Pvs_bits_source{
-            .path        = path,
-            .byte_offset = prefix.size(),
-            .byte_length = bits.size() * sizeof(uint32_t)
-        };
-    }
-    ~Pvs_bits_file() noexcept
-    {
-        std::error_code error;
-        std::filesystem::remove(path, error);
-    }
-    Pvs_bits_file(const Pvs_bits_file&)            = delete;
-    Pvs_bits_file& operator=(const Pvs_bits_file&) = delete;
-
-    std::filesystem::path        path;
-    erhe::scene::Pvs_bits_source source;
-};
-
-// make_database()'s data, with the bits also in a file.
-[[nodiscard]] auto make_database_with_source(const erhe::scene::Pvs_database& model, const erhe::scene::Pvs_bits_source& source) -> std::unique_ptr<erhe::scene::Pvs_database>
-{
-    return std::make_unique<erhe::scene::Pvs_database>(
-        model.get_header(), model.get_columns(), model.get_pages(), model.get_bits(), source
-    );
-}
-
-} // anonymous namespace
-
-TEST(Pvs_database, release_and_read_back_through_a_file_source)
-{
-    const std::unique_ptr<erhe::scene::Pvs_database> model = make_database();
-    const std::vector<uint32_t> bits = model->get_bits();
-    const Pvs_bits_file file{bits, "release"};
-    const std::unique_ptr<erhe::scene::Pvs_database> database = make_database_with_source(*model, file.source);
-    const uint64_t hash = database->get_bits_hash();
-    EXPECT_EQ(hash, model->get_bits_hash());
-    EXPECT_TRUE(database->bits_source_references(file.path));
-    EXPECT_TRUE(database->has_resident_bits());
-
-    // Released: nothing in memory, every read goes to the file.
-    ASSERT_TRUE(database->release_bits());
-    EXPECT_FALSE(database->has_resident_bits());
-    EXPECT_TRUE(database->get_bits().empty());
-    EXPECT_FALSE(database->release_bits()); // already released
-    EXPECT_EQ(database->get_bits_hash(), hash);
+    const std::unique_ptr<erhe::scene::Pvs_database> database = make_database();
+    const std::vector<uint32_t> bits = database->get_bits();
 
     std::vector<uint32_t> page_words(database->get_words_per_page(), 0u);
     ASSERT_TRUE(database->read_page_words(0, std::span<uint32_t>{page_words}));
@@ -325,37 +264,4 @@ TEST(Pvs_database, release_and_read_back_through_a_file_source)
             EXPECT_EQ(visible, database->has_cell_pvs(cell) ? is_expected_visible(cell, column) : true) << "cell " << cell << " column " << column;
         }
     }
-    std::vector<uint32_t> all_bits;
-    ASSERT_TRUE(database->read_bits(all_bits));
-    EXPECT_EQ(all_bits, bits);
-
-    // Resident again: the bits are in memory, the source is forgotten.
-    ASSERT_TRUE(database->make_bits_resident());
-    EXPECT_TRUE(database->has_resident_bits());
-    EXPECT_EQ(database->get_bits(), bits);
-    EXPECT_FALSE(database->get_bits_source().has_value());
-    EXPECT_FALSE(database->bits_source_references(file.path));
-    EXPECT_FALSE(database->release_bits()); // no source to read them back from
-    EXPECT_EQ(database->get_bits_hash(), hash);
-}
-
-TEST(Pvs_database, release_needs_a_source_and_a_short_file_fails_the_reads)
-{
-    const std::unique_ptr<erhe::scene::Pvs_database> model = make_database();
-    EXPECT_FALSE(model->release_bits()); // a bake's database: no source
-    EXPECT_TRUE(model->has_resident_bits());
-
-    // A source whose file ends before the bits do.
-    const std::vector<uint32_t> bits = model->get_bits();
-    const std::vector<uint32_t> short_bits{bits.begin(), bits.begin() + 4};
-    Pvs_bits_file file{short_bits, "short"};
-    file.source.byte_length = bits.size() * sizeof(uint32_t);
-    const std::unique_ptr<erhe::scene::Pvs_database> database = make_database_with_source(*model, file.source);
-    ASSERT_TRUE(database->release_bits());
-    std::vector<uint32_t> page_words(database->get_words_per_page(), 0u);
-    EXPECT_FALSE(database->read_page_words(0, std::span<uint32_t>{page_words}));
-    std::vector<uint32_t> all_bits;
-    EXPECT_FALSE(database->read_bits(all_bits));
-    EXPECT_FALSE(database->make_bits_resident());
-    EXPECT_FALSE(database->has_resident_bits());
 }

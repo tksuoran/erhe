@@ -59,6 +59,51 @@ public:
     return true;
 }
 
+enum class Aniso_control_stream : unsigned int { absent = 0, present };
+
+// The one interleaved stream of a core with these attribute sets.
+[[nodiscard]] auto make_core_format(
+    const std::array<bool, 3>&   texcoord,
+    const std::array<bool, 3>&   color,
+    const std::array<bool, 3>&   joints,
+    const std::array<bool, 3>&   weights,
+    const std::array<Format, 3>& joint_format,
+    const Aniso_control_stream   aniso_control
+) -> Vertex_format
+{
+    Vertex_stream stream{0};
+    stream.emplace_back(Format::format_32_vec3_float, Vertex_attribute_usage::position, 0);
+    stream.emplace_back(Format::format_32_vec3_float, Vertex_attribute_usage::normal,   0);
+    stream.emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::tangent,  0);
+    for (std::size_t i = 0; i < c_texcoord_set_count; ++i) {
+        if (texcoord[i]) {
+            stream.emplace_back(Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, i);
+        }
+    }
+    for (std::size_t i = 0; i < c_color_set_count; ++i) {
+        if (color[i]) {
+            stream.emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::color, i);
+        }
+    }
+    for (std::size_t i = 0; i < c_joint_set_count; ++i) {
+        if (joints[i]) {
+            stream.emplace_back(joint_format[i], Vertex_attribute_usage::joint_indices, i);
+        }
+    }
+    for (std::size_t i = 0; i < c_joint_set_count; ++i) {
+        if (weights[i]) {
+            stream.emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::joint_weights, i);
+        }
+    }
+    if (aniso_control == Aniso_control_stream::present) {
+        stream.emplace_back(Format::format_32_vec2_float, Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_aniso_control);
+    }
+    stream.finalize_stride();
+    Vertex_format format;
+    format.streams.push_back(std::move(stream));
+    return format;
+}
+
 [[nodiscard]] auto plan_core_format(const Triangle_soup& soup) -> Core_format_plan
 {
     Core_format_plan plan;
@@ -71,6 +116,7 @@ public:
     std::array<bool, 3> joints  {false, false, false};
     std::array<bool, 3> weights {false, false, false};
     std::array<Format, 3> joint_format{Format::format_undefined, Format::format_undefined, Format::format_undefined};
+    Aniso_control_stream  aniso_control{Aniso_control_stream::absent};
     bool has_position = false;
     for (const Vertex_attribute& attribute : soup.vertex_format.streams.front().attributes) {
         const std::size_t index = attribute.usage_index;
@@ -116,9 +162,17 @@ public:
                 weights[index] = true;
                 break;
             }
+            case Vertex_attribute_usage::custom: {
+                // The anisotropy control a material reads; other custom
+                // attributes are editor-only and not part of the core.
+                if (index == erhe::dataformat::custom_attribute_aniso_control) {
+                    aniso_control = Aniso_control_stream::present;
+                }
+                break;
+            }
             default: {
-                // NORMAL and TANGENT are always written; erhe-only attributes
-                // (bitangent, custom, smooth normal) are not part of the core.
+                // NORMAL and TANGENT are always written; bitangent and the
+                // smooth normal are not part of the core.
                 break;
             }
         }
@@ -137,32 +191,7 @@ public:
         return plan;
     }
 
-    Vertex_stream stream{0};
-    stream.emplace_back(Format::format_32_vec3_float, Vertex_attribute_usage::position, 0);
-    stream.emplace_back(Format::format_32_vec3_float, Vertex_attribute_usage::normal,   0);
-    stream.emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::tangent,  0);
-    for (std::size_t i = 0; i < c_texcoord_set_count; ++i) {
-        if (texcoord[i]) {
-            stream.emplace_back(Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, i);
-        }
-    }
-    for (std::size_t i = 0; i < c_color_set_count; ++i) {
-        if (color[i]) {
-            stream.emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::color, i);
-        }
-    }
-    for (std::size_t i = 0; i < c_joint_set_count; ++i) {
-        if (joints[i]) {
-            stream.emplace_back(joint_format[i], Vertex_attribute_usage::joint_indices, i);
-        }
-    }
-    for (std::size_t i = 0; i < c_joint_set_count; ++i) {
-        if (weights[i]) {
-            stream.emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::joint_weights, i);
-        }
-    }
-    stream.finalize_stride();
-    plan.format.streams.push_back(std::move(stream));
+    plan.format = make_core_format(texcoord, color, joints, weights, joint_format, aniso_control);
     return plan;
 }
 
@@ -279,7 +308,7 @@ public:
         erhe::raytrace::get_prebuilt_bvh_library(),
         bvh.triangle_hash,
         bvh.triangle_count,
-        erhe::raytrace::bvh_v2_traversal_stack_size
+        erhe::raytrace::get_prebuilt_bvh_max_depth()
     );
     if (!reason.empty()) {
         log_primitive->warn("prepare_primitive_for_export: remapped BVH rejected ({}), building a new one", reason);
@@ -593,59 +622,28 @@ namespace {
 
 } // anonymous namespace
 
-auto prepare_primitive_for_export(Primitive_shape& shape) -> Prepare_primitive_result
+namespace {
+
+// The content build of a Geometry into float CPU buffers: one vertex per
+// facet corner with the values the build writes for that corner, fill
+// triangles only (polygons fan-triangulated by the build).
+class Content_build
 {
-    ERHE_PROFILE_FUNCTION();
+public:
+    std::vector<uint8_t>  vertex_data;
+    std::vector<uint32_t> indices;
+    Element_mappings      element_mappings;
+    std::string           refusal;
+};
 
-    if (shape.is_prepared_data_current()) {
-        std::optional<Prepared_primitive_export> retained = retain_prepared_primitive(shape);
-        if (retained.has_value()) {
-            Prepare_primitive_result result{};
-            result.prepared = std::move(retained);
-            return result;
-        }
-    }
-
-    const std::shared_ptr<Triangle_soup>& soup = shape.get_triangle_soup();
-    if (!soup) {
-        return refuse("no triangle soup");
-    }
-    if (soup->primitive_type != Primitive_type::triangles) {
-        return refuse("not a triangle list");
-    }
-    Core_format_plan plan = plan_core_format(*soup);
-    if (!plan.refusal.empty()) {
-        return refuse(plan.refusal);
-    }
-
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape.get_geometry();
-    if (!geometry) {
-        return refuse("no geometry");
-    }
-    const GEO::Mesh& mesh = geometry->get_mesh();
-    const GEO::index_t facet_count = mesh.facets.nb();
-    if (facet_count == 0) {
-        return refuse("no facets");
-    }
-    for (GEO::index_t facet = 0; facet < facet_count; ++facet) {
-        if (mesh.facets.nb_vertices(facet) != 3) {
-            log_primitive->warn("prepare_primitive_for_export: facet {} has {} corners - not prepared", facet, mesh.facets.nb_vertices(facet));
-            return refuse("non-triangle facet");
-        }
-    }
-
-    // --- Content build into float CPU buffers ------------------------------
-    // One vertex per facet corner, with the values the content build writes
-    // for that corner (Normal_style::corner_normals, fill triangles only).
-    const Vertex_stream& stream       = plan.format.streams.front();
+[[nodiscard]] auto run_content_build(const GEO::Mesh& mesh, const Vertex_format& format, const Normal_style normal_style) -> Content_build
+{
+    Content_build out;
+    const Vertex_stream& stream       = format.streams.front();
     const std::size_t    stride       = stream.stride;
     const erhe::geometry::Mesh_info mesh_info = erhe::geometry::get_mesh_info(mesh);
     const std::size_t    corner_count = mesh_info.vertex_count_corners;
     const std::size_t    index_count  = mesh_info.index_count_fill_triangles;
-
-    std::vector<uint8_t>  corner_vertex_data;
-    std::vector<uint32_t> corner_indices;
-    Element_mappings      element_mappings;
     {
         // Buffers first: the Buffer_mesh allocations return their bytes to
         // them on destruction.
@@ -658,40 +656,122 @@ auto prepare_primitive_for_export(Primitive_shape& shape) -> Prepare_primitive_r
                 .fill_triangles = true,
             },
             .buffer_info = {
-                .normal_style       = Normal_style::corner_normals,
+                .normal_style       = normal_style,
                 .index_type         = Format::format_32_scalar_uint,
-                .vertex_format      = plan.format,
+                .vertex_format      = format,
                 .vertex_buffer_sink = vertex_sink,
                 .index_buffer_sink  = index_sink
             }
         };
         Buffer_mesh buffer_mesh;
-        if (!build_buffer_mesh(buffer_mesh, mesh, build_info, element_mappings, Normal_style::corner_normals)) {
-            return refuse("content build failed");
+        if (!build_buffer_mesh(buffer_mesh, mesh, build_info, out.element_mappings, normal_style)) {
+            out.refusal = "content build failed";
+            return out;
         }
         if (
             (buffer_mesh.vertex_buffer_ranges.size() != 1) ||
             (buffer_mesh.vertex_buffer_ranges.front().count != corner_count) ||
             (buffer_mesh.triangle_fill_indices.index_count != index_count) ||
-            (element_mappings.triangle_to_mesh_facet.size() != static_cast<std::size_t>(facet_count)) ||
-            (element_mappings.mesh_corner_to_vertex_buffer_index.size() != corner_count)
+            (out.element_mappings.triangle_to_mesh_facet.size() != (index_count / 3)) ||
+            (out.element_mappings.mesh_corner_to_vertex_buffer_index.size() != corner_count)
         ) {
-            return refuse("unexpected content build layout");
+            out.refusal = "unexpected content build layout";
+            return out;
         }
         const Buffer_range& vertex_range = buffer_mesh.vertex_buffer_ranges.front();
         const std::span<const std::byte> vertex_bytes = vertex_buffer.get_span().subspan(vertex_range.byte_offset, corner_count * stride);
-        corner_vertex_data.resize(vertex_bytes.size());
-        std::memcpy(corner_vertex_data.data(), vertex_bytes.data(), vertex_bytes.size());
+        out.vertex_data.resize(vertex_bytes.size());
+        std::memcpy(out.vertex_data.data(), vertex_bytes.data(), vertex_bytes.size());
 
         const Buffer_range& index_range = buffer_mesh.index_buffer_range;
         const std::size_t   first_index = buffer_mesh.triangle_fill_indices.first_index;
-        corner_indices.resize(index_count);
+        out.indices.resize(index_count);
         std::memcpy(
-            corner_indices.data(),
+            out.indices.data(),
             index_buffer.get_span().data() + index_range.byte_offset + (first_index * sizeof(uint32_t)),
             index_count * sizeof(uint32_t)
         );
     }
+    return out;
+}
+
+// The core format of the triangles derived from a Geometry: the attribute
+// sets the Geometry carries a value of, as plan_core_format() reads them off a soup.
+[[nodiscard]] auto plan_derived_core_format(erhe::geometry::Geometry& geometry) -> Core_format_plan
+{
+    const GEO::Mesh&                 mesh       = geometry.get_mesh();
+    erhe::geometry::Mesh_attributes& attributes = geometry.get_attributes();
+    const auto any_present = [](const auto& attribute, const GEO::index_t count) -> bool {
+        for (GEO::index_t i = 0; i < count; ++i) {
+            if (attribute.has(i)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    const GEO::index_t vertex_count = mesh.vertices.nb();
+    const GEO::index_t facet_count  = mesh.facets.nb();
+    const GEO::index_t corner_count = mesh.facet_corners.nb();
+    std::array<bool, 3> texcoord{false, false, false};
+    std::array<bool, 3> color   {false, false, false};
+    std::array<bool, 3> joints  {false, false, false};
+    std::array<bool, 3> weights {false, false, false};
+    for (std::size_t i = 0; i < c_texcoord_set_count; ++i) {
+        texcoord[i] =
+            any_present(attributes.corner_texcoord(i), corner_count) ||
+            any_present(attributes.vertex_texcoord(i), vertex_count);
+    }
+    for (std::size_t i = 0; i < c_color_set_count; ++i) {
+        color[i] =
+            any_present(attributes.corner_color(i), corner_count) ||
+            any_present(attributes.facet_color (i), facet_count)  ||
+            any_present(attributes.vertex_color(i), vertex_count);
+    }
+    for (std::size_t i = 0; i < c_joint_set_count; ++i) {
+        joints [i] = any_present(attributes.vertex_joint_indices(i), vertex_count);
+        weights[i] = any_present(attributes.vertex_joint_weights(i), vertex_count);
+    }
+    // The build writes COLOR_0 (the constant color where the Geometry has
+    // none) and marks the mesh vertex colored (Buffer_mesh::has_vertex_colors).
+    color[0] = true;
+    // A texcoord or color set below a present one is derived too: the build
+    // writes its fallback value there (facet texture coordinates go to set 1).
+    for (std::size_t i = c_texcoord_set_count; i > 1; --i) {
+        texcoord[i - 2] = texcoord[i - 2] || texcoord[i - 1];
+    }
+    for (std::size_t i = c_color_set_count; i > 1; --i) {
+        color[i - 2] = color[i - 2] || color[i - 1];
+    }
+    Core_format_plan plan;
+    if (
+        !is_prefix(texcoord, c_texcoord_set_count) ||
+        !is_prefix(color,    c_color_set_count)    ||
+        !is_prefix(joints,   c_joint_set_count)    ||
+        !is_prefix(weights,  c_joint_set_count)
+    ) {
+        plan.refusal = "attribute sets with a gap";
+        return plan;
+    }
+    // Geometry joint indices are 32-bit; the core stores them as uint16.
+    const std::array<Format, 3> joint_format{Format::format_16_vec4_uint, Format::format_16_vec4_uint, Format::format_16_vec4_uint};
+    // The build writes the anisotropy control (1, 1 where the Geometry has none).
+    plan.format = make_core_format(texcoord, color, joints, weights, joint_format, Aniso_control_stream::present);
+    return plan;
+}
+
+// Steps 3 - 6 of the preparation (doc/erhe/primitive.md "Export preparation")
+// over a content build of `mesh`, the shape's Geometry.
+[[nodiscard]] auto prepare_built_core(Primitive_shape& shape, const GEO::Mesh& mesh, const Vertex_format& format, Content_build&& build) -> Prepare_primitive_result
+{
+    const Vertex_stream&  stream             = format.streams.front();
+    const std::size_t     stride             = stream.stride;
+    const std::size_t     corner_count       = build.element_mappings.mesh_corner_to_vertex_buffer_index.size();
+    const std::size_t     index_count        = build.indices.size();
+    const GEO::index_t    facet_count        = mesh.facets.nb();
+    std::vector<uint8_t>  corner_vertex_data = std::move(build.vertex_data);
+    std::vector<uint32_t> corner_indices     = std::move(build.indices);
+    Element_mappings      element_mappings   = std::move(build.element_mappings);
+    const Core_format_plan plan{.format = format, .refusal = {}};
 
     // Corner of each built vertex, and so its geogram point.
     std::vector<GEO::index_t> point_from_built_vertex(corner_count, GEO::NO_INDEX);
@@ -827,6 +907,168 @@ auto prepare_primitive_for_export(Primitive_shape& shape) -> Prepare_primitive_r
     result.prepared = std::move(prepared);
     return result;
 }
+
+} // anonymous namespace
+
+namespace {
+
+[[nodiscard]] auto prepare_primitive_for_export_impl(Primitive_shape& shape) -> Prepare_primitive_result;
+
+}
+
+auto prepare_primitive_for_export(Primitive_shape& shape) -> Prepare_primitive_result
+{
+    Prepare_primitive_result result = prepare_primitive_for_export_impl(shape);
+    if (!result.prepared.has_value()) {
+        return result;
+    }
+    // A soup loaded without a content hash gets it here, from the soup the preparation read.
+    std::optional<erhe::hash::Content_hash> content_hash = shape.get_content_hash();
+    if (!content_hash.has_value()) {
+        const std::shared_ptr<Triangle_soup> soup = shape.get_triangle_soup();
+        if (soup) {
+            content_hash = compute_triangle_soup_content_hash(*soup);
+            shape.set_content_hash(content_hash.value());
+        }
+    }
+    return result;
+}
+
+namespace {
+
+auto prepare_primitive_for_export_impl(Primitive_shape& shape) -> Prepare_primitive_result
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (shape.is_prepared_data_current()) {
+        std::optional<Prepared_primitive_export> retained = retain_prepared_primitive(shape);
+        if (retained.has_value()) {
+            Prepare_primitive_result result{};
+            result.prepared = std::move(retained);
+            return result;
+        }
+    }
+
+    const std::shared_ptr<Triangle_soup>& soup = shape.get_triangle_soup();
+    if (!soup) {
+        return refuse("no triangle soup");
+    }
+    if (soup->primitive_type != Primitive_type::triangles) {
+        return refuse("not a triangle list");
+    }
+    Core_format_plan plan = plan_core_format(*soup);
+    if (!plan.refusal.empty()) {
+        return refuse(plan.refusal);
+    }
+
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape.get_geometry();
+    if (!geometry) {
+        return refuse("no geometry");
+    }
+    const GEO::Mesh& mesh = geometry->get_mesh();
+    const GEO::index_t facet_count = mesh.facets.nb();
+    if (facet_count == 0) {
+        return refuse("no facets");
+    }
+    for (GEO::index_t facet = 0; facet < facet_count; ++facet) {
+        if (mesh.facets.nb_vertices(facet) != 3) {
+            log_primitive->warn("prepare_primitive_for_export: facet {} has {} corners - not prepared", facet, mesh.facets.nb_vertices(facet));
+            return refuse("non-triangle facet");
+        }
+    }
+
+    Content_build build = run_content_build(mesh, plan.format, Normal_style::corner_normals);
+    if (!build.refusal.empty()) {
+        return refuse(build.refusal);
+    }
+    return prepare_built_core(shape, mesh, plan.format, std::move(build));
+}
+
+class Derived_build
+{
+public:
+    Core_format_plan plan;
+    Content_build    build;
+    const GEO::Mesh* mesh{nullptr};
+    std::string      refusal;
+};
+
+[[nodiscard]] auto run_derived_build(Primitive_render_shape& shape) -> Derived_build
+{
+    Derived_build out;
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape.get_geometry();
+    if (!geometry) {
+        out.refusal = "no geometry";
+        return out;
+    }
+    const GEO::Mesh& mesh = geometry->get_mesh();
+    if (mesh.facets.nb() == 0) {
+        out.refusal = "no facets";
+        return out;
+    }
+    out.plan = plan_derived_core_format(*geometry);
+    if (!out.plan.refusal.empty()) {
+        out.refusal = out.plan.refusal;
+        return out;
+    }
+    out.build = run_content_build(mesh, out.plan.format, shape.get_normal_style());
+    if (!out.build.refusal.empty()) {
+        out.refusal = out.build.refusal;
+        return out;
+    }
+    if (out.build.indices.empty()) {
+        out.refusal = "no fill triangles";
+        return out;
+    }
+    out.mesh = &mesh;
+    return out;
+}
+
+} // anonymous namespace
+
+auto derive_triangle_soup(Primitive_render_shape& shape) -> Derived_triangle_soup
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Derived_build derived = run_derived_build(shape);
+    Derived_triangle_soup result;
+    if (!derived.refusal.empty()) {
+        result.refusal = std::move(derived.refusal);
+        return result;
+    }
+    result.soup = std::make_shared<Triangle_soup>();
+    result.soup->vertex_format  = std::move(derived.plan.format);
+    result.soup->vertex_data    = std::move(derived.build.vertex_data);
+    result.soup->index_data     = std::move(derived.build.indices);
+    result.soup->primitive_type = Primitive_type::triangles;
+    return result;
+}
+
+auto prepare_derived_primitive_for_export(Primitive_render_shape& shape) -> Prepare_primitive_result
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Derived_build derived = run_derived_build(shape);
+    if (!derived.refusal.empty()) {
+        return refuse(derived.refusal);
+    }
+    return prepare_built_core(shape, *derived.mesh, derived.plan.format, std::move(derived.build));
+}
+
+auto compute_derived_content_hash(Primitive_render_shape& shape) -> Derived_content_hash
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Derived_triangle_soup derived = derive_triangle_soup(shape);
+    Derived_content_hash result;
+    if (!derived.soup) {
+        result.refusal = std::move(derived.refusal);
+        return result;
+    }
+    result.content_hash = compute_triangle_soup_content_hash(*derived.soup);
+    return result;
+}
+
 
 auto make_export_lod_chain(
     Prepared_primitive_export& prepared,

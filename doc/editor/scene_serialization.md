@@ -37,7 +37,7 @@ JSON, erhe state attaches at three levels:
 |---|---|
 | per object (node / camera / material / mesh primitive) | `ERHE_node`, `ERHE_camera`, `ERHE_light`, `ERHE_material`, `ERHE_geometry` |
 | the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, the scene item's local property values and style, enable_physics) |
-| asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, `ERHE_pvs` (the scene's potentially visible set database), plus the Khronos physics extensions' shape/material/filter tables |
+| asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, plus the Khronos physics extensions' shape/material/filter tables |
 
 A glTF node with a `mesh`, a `camera` or a `KHR_lights_punctual` light IS
 that prim - an `erhe::scene::Mesh`, `Camera` or `Light`
@@ -88,6 +88,51 @@ whose source of truth is an imported triangle soup exports the soup instead
 (full vertex attributes: TEXCOORD_n, JOINTS_n / WEIGHTS_n, COLOR_n) with no
 `ERHE_geometry` - its geometry is a derived artifact, re-derived on load.
 
+A scene file holds authoring data alone (R1.1 of doc/plans/prepared_assets.md):
+Save Scene writes each soup primitive as its raw soup
+(`Prepared_mesh_data::none`) - the soup it was imported or saved as, also for
+a primitive whose drawn data was loaded from a mesh item (its authoring soup,
+doc/erhe/primitive.md "Authoring soup") - with its LOD request alone in
+`ERHE_mesh_lod` (R4.5), each image as its source stream, and writes no
+`ERHE_mesh_optimized`, `ERHE_mesh_topology`, `ERHE_raytrace_bvh`,
+`ERHE_gpu_vertex_streams`, `ERHE_texture_ktx2`, `ERHE_pvs` or LOD chain
+(R12.2); no texture of a scene that can be saved has a raw block KTX2
+image (a file parse and the texture imports refuse one as a source). The
+derived data lives in the file's editor asset (doc/editor/prepared_assets.md
+"The editor's own loading"). A file parse reads none of those extensions
+(doc/erhe/gltf.md "Authoring data"): a file saved by an earlier build with
+them opens as a plain glTF file, its primitives built from their soups
+(logged once), and its next save writes authoring data.
+
+## Unique IDs
+
+Every node, and each other object that carries a glTF 2.1 `uid`, has its
+`uid` from the moment it exists, the same in every session for the same
+content (`doc/plans/prepared_assets.md` R6.2; the library rules are in
+`doc/erhe/gltf.md` and `doc/erhe/item.md`):
+
+- an object of a glTF file takes the file's `uid`, or, when the file states
+  none, one derived from the file name, its kind and its index, at the
+  parse;
+- the objects an import of a glTF adds take derived ones too, seeded with
+  the file name: the `import_root` node (`<file name>|import_root`) and the
+  default key and fill lights (`<file name>|default_key_light`,
+  `<file name>|default_fill_light`);
+- a node inside a prefab instance takes one derived from the `uid` of the
+  instance's carrier node and the `uid` of its template node
+  (`<carrier uid>|<template uid>`, `link_instance_to_template()` in
+  `prefabs/prefab_library.cpp`), so nested instances chain;
+- an object created in the editor takes a random one at creation (a copy or
+  clone included), which the next Save persists.
+
+A Save and an Export write the uids the items hold and assign none, as the
+PVS bake does, so the Scene item of an unchanged scene is the same in every
+session (`doc/editor/prepared_assets.md`). The one case a scene can hold one
+uid twice is the same source imported into it twice; the writer then writes
+the later one as a uid derived from it, with a warning. Asset keys of the
+`builtin` scope carry no uid: builtins are addressed by name, and their
+random uids differ per session.
+
 ## Native carriers
 
 Where a file format of its own already states a concept - the
@@ -116,13 +161,24 @@ section 4.23).
 Entry points: `editor::begin_scene_save_gltf()`, `write_scene_save_gltf()`
 and `finish_scene_save_gltf()` in `src/editor/parsers/gltf.cpp` (run by
 `Scene_save_service`, "Saving in the background" below), and the
-synchronous `save_scene_gltf()` / `save_scene_gltf_prepared()` that run the
-three on the calling thread. The save assembles one
+synchronous `save_scene_gltf()` that runs the three on the calling thread.
+The same functions write the Scene item of an Export
+(`Gltf_scene_save_kind::scene_item`, doc/editor/prepared_assets.md "Export"). The save assembles one
 `erhe::gltf::Gltf_export_arguments` and calls `erhe::gltf::export_gltf()`:
 
-1. **Root node** - the scene's root; export walks the node tree. Nodes
-   flagged `import_root` are transparent (their children are written in
-   their place), so open/save cycles do not nest wrappers.
+1. **Root node** - the scene's root; export walks the node tree and writes
+   every node's local transform as the node holds it, composing no
+   transform into another node's (`doc/plans/prepared_assets.md` R6.1). The
+   `import_root` node an open or import of a glTF creates is written as no
+   node while it carries `Item_flags::world_space` (its path from the scene
+   root is the identity), its children in its place, so open/save cycles do
+   not nest wrappers; once transformed it is scene content and is written as
+   a node with its transform (`import_root` itself is not serialized, so the
+   reopened node is a plain one). The flag is derived: a transform edit on
+   the root clears it at the edit and setting the identity back restores
+   it. Every world transform is therefore bit-identical before a Save and
+   after a reopen. A file saved before this rule, with the root's transform
+   composed into its children, opens as it was written.
 2. **Physics data** - `build_physics_description()`
    (`parsers/physics_export.cpp`, the builder the USD save uses too) converts the rigid-body values /
    `Joint` prims and the content library's physics materials,
@@ -146,13 +202,21 @@ three on the calling thread. The save assembles one
    composition arc and maps those nodes to glTF 2.1 `externalAssets` references
    (URIs relativized against the save directory); the instanced subtree is
    NOT flattened into the file. See
-   [`plans/gltf_prefabs.md`](../plans/gltf_prefabs.md).
+   [`plans/gltf_prefabs.md`](../plans/gltf_prefabs.md). The Scene item of
+   an Export is the one save that writes the instances' content as the open
+   scene holds it (`doc/editor/prepared_assets.md` "Several files").
 4. **Image sources** - `make_gltf_image_source_provider()` snapshots the
    content library's retained encoded source images (PNG/JPEG bytes kept
    from import time) so textures re-embed byte-identical; a fallback re-reads
    standalone source image files for textures imported before retention
    existed. Textures with no exportable source (e.g. graph-texture bakes)
    skip the slot - graph-baked slots are reconstructed by re-baking on load.
+   Every written image carries its texture's properties (transfer function,
+   normal encoding, mipmap generation, wrap modes) in the asset-root
+   `ERHE_texture_properties` ([spec](../gltf_extensions/ERHE_texture_properties.md));
+   an open takes them from there, an import of a file without them derives
+   them once from the material slots that use each image
+   (doc/editor/prepared_assets.md "Texture properties").
 5. **Animations** - `collect_gltf_export_animations()` exports every
    animation in the content library (samplers + channels, glTF-native).
 6. **Editor state** - `add_gltf_editor_state()`
@@ -205,12 +269,9 @@ three on the calling thread. The save assembles one
    The library-domain extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,
    `ERHE_material`, `ERHE_geometry`) are written by the exporter itself in
    `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp`.
-7. **PVS database** - `Scene_root::get_pvs_database()` goes into
-   `Gltf_export_arguments::pvs_database`; the exporter writes it as the
-   asset-root `ERHE_pvs` ([spec](../gltf_extensions/ERHE_pvs.md)) when it is
-   ready, mapping each column's node uid to the written node index, and
-   writes none for a stale database or one naming a node outside the
-   export. Prepare carries it the same way.
+7. **PVS database** - a scene file carries none: a bake stores it as the
+   PVS item of the editor asset, and a Scene item names that item
+   (doc/editor/prepared_assets.md "PVS"; doc/editor/pvs.md D1).
 8. `erhe::gltf::export_gltf()` produces the GLB/JSON string;
    `erhe::file::write_file()` writes it.
 
@@ -230,43 +291,34 @@ prefab source is Save Scene on the scene opened from that source.
   `Scene_saved_message` (Asset Browser rescan), and when the written file is
   a loaded prefab source the prefab is reloaded so every instance in every
   scene reflects the edit - the prefab editing round-trip is open the
-  source as a scene, edit, Save Scene.
-- **File > Prepare (Quest)** and **File > Prepare (PC)**
-  (`Operations::prepare_scene`, to
-  `res/editor/scenes/<scene name>_quest.glb` / `_pc.glb`) and **MCP
-  `prepare_scene`** (`target` `quest` or `pc`; `save_scene_for_quest` is
-  `prepare_scene` with `target` `quest`) run a prepared save
-  (`Gltf_scene_save_kind::prepared`): the same file, with every Basis
-  Universal KTX2 texture transcoded to a raw block KTX2 image
-  (`doc/gltf_extensions/ERHE_texture_ktx2.md`): ASTC 4x4 for Quest, BC7 (BC5
-  for a two component normal map) for PC; Zstandard supercompressed levels
-  unless the MCP call passes `texture_supercompression: "none"`. A device
-  of that family uploads the blocks with no transcode. Each prepared
-  primitive carries its GPU-ready vertex streams
-  (`doc/gltf_extensions/ERHE_gpu_vertex_streams.md`). Both targets also
-  write a LOD chain (`ERHE_mesh_lod`) for every primitive, generated with
-  the scene's export settings LOD (`export_settings.lod`, shown in the
-  scene's Properties "Export" group; else the editor config `lod`
-  settings) where the primitive has no LOD request (`doc/editor/lod.md`).
-  With the export
-  setting `bake_static_to_world_space` (on by default) every static mesh
-  is written under one "World Space" node at the scene root with the
-  identity transform and world-space vertices, its LOD chain generated in
-  world space; a transform-only node keeps a baked mesh's place when a
-  child stays there, and every other node is written as it is
-  (`doc/editor/world_space_bake.md`). It is an export: the scene's
-  source file binding and dirty state are not changed; only
-  `Scene_saved_message` is sent.
+  source as a scene, edit, Save Scene. The reload is the change site of the
+  keys of every scene it refreshes (`doc/editor/prepared_assets.md`
+  "Several files", R10.6).
+- **File > Export (PC)** and **File > Export (Quest)**
+  (`Operations::export_scene`) and **MCP `prepare_scene`** (`target` `pc`
+  or `quest`; `save_scene_for_quest` is `prepare_scene` with `target`
+  `quest`) run an Export into the scene's editor asset and the target's
+  prepared asset (doc/editor/prepared_assets.md "Export"); it is an
+  export: the scene's source file binding and dirty state are not changed.
+  The prepared asset is the only prepared format (R12.1 of
+  doc/plans/prepared_assets.md). A `<scene name>_quest.glb` or `_pc.glb`
+  that earlier builds wrote with Prepare (Quest) / Prepare (PC) - a glTF
+  file with raw block KTX2 images (`ERHE_texture_ktx2`) and GPU-ready
+  vertex streams - opens as a source like any other erhe glTF file, with
+  none of those extensions read (its raw block textures have no image); the
+  editor no longer writes one.
 - **MCP `export_gltf`** exports plain interchange (same call minus
   `add_gltf_editor_state` unless `editor_state: true` is passed) - use it
   for handing content to other tools, `save_scene` for full state.
 
 ### Saving in the background
 
-File > Save Scene, File > Prepare (PC) / Prepare (Quest) and the MCP save
+File > Save Scene, File > Export (PC) / Export (Quest) and the MCP save
 tools hand the save to `Scene_save_service` (`src/editor/scene/
 scene_save_service.hpp`), which runs one save at a time with the editor
-running:
+running. An Export into the store (doc/editor/prepared_assets.md) runs
+through the same steps, with `begin_scene_export()`, `run_scene_export()`
+and `finish_scene_export()` in place of the three glTF save functions:
 
 1. The request waits until the scene is quiescent: nothing queued on the
    `Operation_stack`, no async operation, scene commit or asset load in
@@ -287,14 +339,17 @@ the worker reads:
 
 - the `Operation_stack` holds queued operations (also `execute_now()`) until
   the save ends and declines undo / redo; scene commits, geometry graph
-  evaluation, lightmap and PVS bake steps, animation playback and transform
-  animations are held;
+  evaluation, lightmap and PVS bake steps (except the PVS bake an Export
+  with `pvs_mode` `rebake` runs, doc/editor/prepared_assets.md "PVS"),
+  animation playback and transform animations are held;
 - every ImGui window's contents and the main menu are disabled
   (`erhe::imgui::Imgui_windows::set_window_contents_disabled()`), hover and
   item-tree hover flags are not written;
-- the saved scene's physics does not step, its viewports take no pointer
-  input, the fly camera does not move a camera of that scene, and
-  `Scene_root::request_close()` refuses it;
+- the saved scene's physics does not step, its viewports find no hover
+  (the pointer reaches them, so camera navigation works), the fly camera
+  does not move a camera of that scene unless the camera node is
+  `session_only` (the editor's own viewport camera, which no save writes),
+  and `Scene_root::request_close()` refuses it;
 - MCP refuses every tool but the status and save tools
   (doc/agents/mcp_server_usage.md "Saving scenes").
 
@@ -313,15 +368,18 @@ primitives whose soup source references the target file
 (`Triangle_soup_source::references_file()`) and the content-library
 textures whose image source does (`erhe::gltf::is_same_file()`), and then:
 
-- refuses Prepare onto it (it rewrites the textures and is a
-  delivery format; decision D4 of doc/plans/gltf_fast_load.md item 9);
-- makes the soup of each such primitive that the export will not write from
-  its retained prepared core (its prepared data is stale after an edit)
-  resident and drops its source (`Primitive::detach_triangle_soup_source()`);
+- a scene file writes every soup as it is (`Gltf_written_soup::soup`, or
+  `authoring` for a primitive's authoring soup, whose source is the one that
+  references the file), so every such primitive is rebound below; a Scene
+  item makes the soup of each such primitive that the export will not write
+  from its retained prepared core (its prepared data is stale after an
+  edit) resident and drops its source
+  (`Primitive::detach_triangle_soup_source()`);
 - gives each such texture a resident copy of its stream for the export;
 - after the file is written, `erhe::gltf::rebind_sources_to_written_file()`
-  points the retained primitives (and their optimized variants sharing the
-  source) at their accessors in the new file and makes file-backed sources
+  points the written primitives (their soup source, or their authoring soup
+  source, and their optimized variants sharing the source) at their
+  accessors in the new file and makes file-backed sources
   for the images written unchanged, which replace the resident copies; an
   image the export did not write keeps its resident copy.
 
@@ -395,11 +453,8 @@ JSON-only, no buffer decode) and branches on
   8. Fill the scene's `Variant_table` from the asset's
      `KHR_materials_variants` list (one set named `materials`, carried by
      the scene's root prim) and apply the `ERHE_scene` selection.
-     The parse's `ERHE_pvs` database (`Gltf_data::pvs_database`, ready,
-     its columns resolved to the parsed nodes' uids and its bits' byte
-     range in the file recorded) becomes the scene's through
-     `Scene_root::set_pvs_database()`; a file without one opens with the
-     state `absent`.
+     A file carries no PVS: a scene opens with the PVS state `absent`
+     (the PVS item of the editor asset is not read at the open).
   9. Kick off `Async_raytrace_kickoff_operation` (BVH builds on worker
      threads, synchronized via the scene's `Item_host` mutex).
 - The handler then wires UI for the returned scene root: a browser window,
@@ -424,7 +479,7 @@ keep their state on import.
 | physics export / import | `src/editor/parsers/physics_export.cpp` / `physics_import.cpp` (`gltf_physics_import.cpp` = the glTF entry) | format-neutral physics description <-> erhe::physics |
 | `export_gltf`, `parse_gltf` + library `ERHE_*` writers/readers | `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp` | core glTF I/O (fastgltf fork: physics extensions, glTF 2.1 externalAssets, generic extension passthrough) |
 | prefab externalAssets | `src/editor/prefabs/prefab_library.cpp` | collect on save, resolve + instantiate on open |
-| `Scene_settings` / `Gltf_source_reference` codegen | `src/editor/scene/definitions/*.py` | per-scene overrides payload; content-library item -> source-file back-references |
+| `Scene_settings` / `Gltf_source_reference` codegen | `src/editor/scene/definitions/*.py` | per-scene overrides payload (its `Scene_export_settings` is in `src/editor/config/definitions/`); content-library item -> source-file back-references |
 | `Load_scene_file_message` handler | `src/editor/operations/operations_window.cpp` | single load entry, erhe-vs-foreign branch, UI wiring |
 | `Scene_open_operation` | `src/editor/operations/scene_open_operation.cpp` | undoable "open foreign glTF as new scene" |
 | MCP tools (`save_scene`, `load_scene`, `open_scene`, `export_gltf`, `import_gltf`) | `src/editor/mcp/mcp_server_file_io.cpp` | scripted access to the same paths |
@@ -590,7 +645,9 @@ the whole section skips when the editor was built with
 ## Future work
 
 - [plans/background_scene_save.md](../plans/background_scene_save.md) - open
-  items of the background save and Prepare.
+  items of the background save.
+- [plans/prepared_assets.md](../plans/prepared_assets.md) - requirements for
+  the source / editor / prepared asset split.
 - [plans/gltf.md](../plans/gltf.md) - open items of the persistence design,
   including the state listed under "What is not persisted".
 - [plans/gltf_prefabs.md](../plans/gltf_prefabs.md) - the remaining prefab phases.

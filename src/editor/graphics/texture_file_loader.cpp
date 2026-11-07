@@ -10,6 +10,7 @@
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
+#include "erhe_graphics/ktx2_container.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_task/task.hpp"
@@ -95,7 +96,7 @@ Texture_file_loader::Texture_file_loader(App_context& context)
 
 Texture_file_loader::~Texture_file_loader() noexcept = default;
 
-auto Texture_file_loader::start_request(const std::filesystem::path& path) -> std::shared_ptr<Request>
+auto Texture_file_loader::start_request(const std::filesystem::path& path, const Texture_file_use use) -> std::shared_ptr<Request>
 {
     auto request = std::make_shared<Request>();
     request->path = path;
@@ -109,8 +110,13 @@ auto Texture_file_loader::start_request(const std::filesystem::path& path) -> st
         transcode_format_preference = erhe::gltf::query_gltf_device_options(*m_context.graphics_device).transcode_format_preference;
     }
 
-    const auto decode = [request, transcode_format_preference]() {
+    const auto decode = [request, transcode_format_preference, use]() {
         ERHE_PROFILE_SCOPE("texture file decode");
+        if ((use == Texture_file_use::source) && erhe::graphics::is_ktx2_raw_blocks_file(request->path)) {
+            request->error = "a raw block KTX2 file is raw GPU block data, derived data that is not accepted as a texture source";
+            request->finished.store(true, std::memory_order_release);
+            return;
+        }
         erhe::graphics::Image_loader loader;
         // A standalone image file carries no usage information, so it is
         // decoded as sRGB color data - the common case for the textures a
@@ -180,7 +186,7 @@ auto Texture_file_loader::get_preview(const std::filesystem::path& path) -> Prev
     Cache_entry entry;
     entry.key      = key;
     entry.last_use = m_use_counter;
-    entry.request  = start_request(path);
+    entry.request  = start_request(path, Texture_file_use::preview);
     // Look the entry up by key at completion: m_cache reallocates.
     Texture_file_loader* self = this;
     entry.request->on_ready = [self, key](const std::shared_ptr<erhe::graphics::Texture>& texture, const std::string& error) {
@@ -203,7 +209,7 @@ void Texture_file_loader::load_async(
     std::function<void(const std::shared_ptr<erhe::graphics::Texture>&)> callback
 )
 {
-    std::shared_ptr<Request> request = start_request(path);
+    std::shared_ptr<Request> request = start_request(path, Texture_file_use::source);
     request->on_ready = [callback = std::move(callback)](
         const std::shared_ptr<erhe::graphics::Texture>& texture,
         const std::string&                             /*error*/
@@ -257,6 +263,11 @@ void Texture_file_loader::publish(
     texture->set_name(request.name);
     texture->set_source_path(request.path);
     texture->set_two_component_normal(info.two_component_normal);
+    // A standalone image states no properties: the decoded format's (R4.2).
+    texture->set_texture_properties(erhe::graphics::Texture_properties{
+        .transfer_function = erhe::dataformat::is_srgb(info.format) ? erhe::graphics::Texture_transfer_function::srgb : erhe::graphics::Texture_transfer_function::linear,
+        .normal_encoding   = info.two_component_normal ? erhe::graphics::Texture_normal_encoding::two_component : erhe::graphics::Texture_normal_encoding::none
+    });
 
     const erhe::gltf::Image_upload_result result = m_image_transfer->upload_into_frame(
         command_buffer,

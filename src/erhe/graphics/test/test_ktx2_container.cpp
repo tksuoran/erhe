@@ -12,6 +12,10 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <random>
+#include <string>
 #include <span>
 #include <vector>
 
@@ -251,7 +255,7 @@ TEST(Ktx2Container, zstd_supercompressed_round_trip)
     }
 }
 
-// BC7 / BC5 ("Prepare (PC)"): the container does not look into the blocks,
+// BC7 / BC5 (the pc block target): the container does not look into the blocks,
 // so the ASTC test image's 16-byte blocks serve as BC7 and BC5 blocks.
 TEST(Ktx2Container, raw_bc_round_trip)
 {
@@ -319,4 +323,28 @@ TEST(Ktx2Container, loader_refuses_raw_bc_without_bc_support)
     erhe::graphics::Image_loader_ktx2 loader;
     erhe::graphics::Image_info        info{};
     EXPECT_FALSE(loader.open(std::span<const std::uint8_t>{file.data(), file.size()}, info, false, erhe::graphics::Transcode_format_preference::astc_4x4, erhe::graphics::Astc_support::native));
+}
+
+// The editor's texture imports refuse a raw block KTX2 file by its header (doc/editor/content_library.md "Importing texture files").
+TEST(Ktx2Container, raw_blocks_file_is_told_by_its_header)
+{
+    const Test_image test_image;
+    const std::vector<std::uint8_t> file = erhe::graphics::write_ktx2_raw_blocks(test_image.make_input(Format::format_astc_4x4_srgb, Normal_marker::none));
+    ASSERT_FALSE(file.empty());
+    const std::filesystem::path directory = std::filesystem::temp_directory_path() / ("erhe_graphics_tests_raw_blocks_" + std::to_string(std::random_device{}()));
+    std::filesystem::create_directories(directory);
+    const std::filesystem::path raw_path = directory / "raw.ktx2";
+    const std::filesystem::path png_path = directory / "not_ktx2.png";
+    {
+        std::ofstream raw{raw_path, std::ios::binary};
+        raw.write(reinterpret_cast<const char*>(file.data()), static_cast<std::streamsize>(file.size()));
+        std::ofstream png{png_path, std::ios::binary};
+        const std::array<char, 8> signature{'\x89', 'P', 'N', 'G', '\r', '\n', '\x1a', '\n'};
+        png.write(signature.data(), static_cast<std::streamsize>(signature.size()));
+    }
+    EXPECT_TRUE (erhe::graphics::is_ktx2_raw_blocks_file(raw_path));
+    EXPECT_FALSE(erhe::graphics::is_ktx2_raw_blocks_file(png_path));
+    EXPECT_FALSE(erhe::graphics::is_ktx2_raw_blocks_file(directory / "missing.ktx2"));
+    std::error_code error;
+    std::filesystem::remove_all(directory, error);
 }

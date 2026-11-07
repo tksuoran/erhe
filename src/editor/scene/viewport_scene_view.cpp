@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "scene/viewport_scene_view.hpp"
+#include "scene/world_space_form.hpp"
 #include "editor_item_bits.hpp"
 
 #include "ImViewGuizmo.h"
@@ -69,6 +70,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <fmt/format.h>
 #include <glm/gtx/matrix_operation.hpp>
 
 #include <imgui/imgui.h>
@@ -192,6 +194,12 @@ void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_
     state.msaa_sample_count     = m_msaa_sample_count;
     state.shader_debug          = m_shader_debug;
     state.overdraw              = is_overdraw_supported() ? m_overdraw_mode : Overdraw_mode::off;
+    // The world-space form while the view asks for it and every admitted node's world-space mesh is valid (R8.8).
+    state.mesh_form             = (
+        (m_mesh_form == Mesh_form::world_space) &&
+        state.scene_root &&
+        state.scene_root->get_world_space_form().get_status().is_available()
+    ) ? Mesh_form::world_space : Mesh_form::source;
     state.overdraw_max_count    = m_overdraw_max_count;
     state.is_scene_view_hovered = m_is_scene_view_hovered;
     state.position_in_viewport  = m_position_in_viewport;
@@ -335,7 +343,8 @@ void Viewport_scene_view::prepare_composition(const uint64_t frame_index, const 
         .viewport            = state.projection_viewport,
         .shader_debug        = state.shader_debug,
         .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
-        .overdraw            = to_overdraw_count(state.overdraw)
+        .overdraw            = to_overdraw_count(state.overdraw),
+        .mesh_form           = state.mesh_form
     };
 
     // Bucketing reads the meshes' Buffer_mesh variants, which a worker may
@@ -404,7 +413,8 @@ void Viewport_scene_view::pre_execute_rendergraph_node(erhe::graphics::Command_b
             .views               = state.camera
                 ? std::span<const erhe::scene_renderer::Camera_view_input>(&m_frame_view_input, 1)
                 : std::span<const erhe::scene_renderer::Camera_view_input>{},
-            .overdraw            = to_overdraw_count(state.overdraw)
+            .overdraw            = to_overdraw_count(state.overdraw),
+            .mesh_form           = state.mesh_form
         }
     );
     // What the prepare phase decided for this view and frame (the
@@ -1315,8 +1325,48 @@ void Viewport_scene_view::viewport_toolbar()
             "Show/Hide Navigation Gizmo",
             m_show_navigation_gizmo
         );
+        mesh_form_toolbar_combo();
     }
     Scene_view::viewport_toolbar();
+}
+
+// R8.8: the world-space form is offered while every admitted node's world-space mesh is valid.
+void Viewport_scene_view::mesh_form_toolbar_combo()
+{
+    const std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    const World_space_form_status status = scene_root->get_world_space_form().get_status();
+    if (!status.baked) {
+        return;
+    }
+    const bool available = status.is_available();
+    const std::string world_label = available
+        ? std::string{"World-Space Meshes"}
+        : status.scene_changed
+            ? std::string{"World-Space Meshes (scene changed - bake again)"}
+            : status.settings_changed
+                ? std::string{"World-Space Meshes (settings changed - bake again)"}
+                : fmt::format("World-Space Meshes ({} of {} missing)", status.missing_count, status.admitted_count);
+    const bool world_drawn = (m_mesh_form == Mesh_form::world_space) && available;
+    const char* const preview = world_drawn ? "World-Space Meshes" : "Source Meshes";
+    ImGui::SameLine();
+    if (ImGui::BeginCombo("##ViewportMeshForm", preview, ImGuiComboFlags_WidthFitPreview)) {
+        if (ImGui::Selectable("Source Meshes", !world_drawn)) {
+            queue_mesh_form(Mesh_form::source);
+        }
+        ImGui::BeginDisabled(!available);
+        if (ImGui::Selectable(world_label.c_str(), world_drawn)) {
+            queue_mesh_form(Mesh_form::world_space);
+        }
+        ImGui::EndDisabled();
+        ImGui::EndCombo();
+    }
+    if (!available && (m_mesh_form == Mesh_form::world_space)) {
+        ImGui::SameLine();
+        ImGui::Text("%zu missing", status.missing_count);
+    }
 }
 
 void Viewport_scene_view::queue_overdraw_mode(const Overdraw_mode mode)
@@ -1341,6 +1391,29 @@ void Viewport_scene_view::set_shader_debug(erhe::scene_renderer::Shader_debug sh
 auto Viewport_scene_view::get_shader_debug() const -> erhe::scene_renderer::Shader_debug
 {
     return m_shader_debug;
+}
+
+void Viewport_scene_view::queue_mesh_form(const Mesh_form form)
+{
+    Scene_views* const               scene_views = m_context.scene_views;
+    const Viewport_scene_view* const view        = this;
+    m_context.imgui_windows->queue(
+        [scene_views, view, form]() {
+            if (scene_views != nullptr) {
+                scene_views->set_mesh_form(view, form);
+            }
+        }
+    );
+}
+
+void Viewport_scene_view::set_mesh_form(const Mesh_form form)
+{
+    m_mesh_form = form;
+}
+
+auto Viewport_scene_view::get_mesh_form() const -> Mesh_form
+{
+    return m_mesh_form;
 }
 
 void Viewport_scene_view::set_overdraw_mode(const Overdraw_mode mode)

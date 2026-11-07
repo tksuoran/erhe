@@ -1,5 +1,7 @@
 #pragma once
 
+#include "scene/mesh_form.hpp"
+
 #include "erhe_scene/pvs_database.hpp"
 #include "erhe_scene_renderer/pvs_disocclusion.hpp"
 
@@ -165,6 +167,21 @@ public:
     std::string path;     // the PNGs' path prefix
 };
 
+// Whether start_bake() runs Bake World-Space Meshes first (R8.9), or the
+// caller (an Export) installed the world-space form already.
+enum class Pvs_world_space_bake : unsigned int {
+    run_first = 0,
+    done
+};
+
+// What a running bake does: Bake World-Space Meshes, then the cells on the world-space form.
+enum class Pvs_bake_stage : unsigned int {
+    world_space_meshes = 0,
+    cells
+};
+
+[[nodiscard]] auto c_str(Pvs_bake_stage stage) -> const char*;
+
 enum class Pvs_bake_state : unsigned int {
     idle = 0,  // no bake has run
     running,
@@ -180,8 +197,13 @@ class Pvs_bake_status
 {
 public:
     Pvs_bake_state               state             {Pvs_bake_state::idle};
+    Pvs_bake_stage               stage             {Pvs_bake_stage::cells};
     std::string                  scene_name;
     std::string                  error;
+    // done: the PVS item the bake stored in the scene's editor asset (R4.10), and whether it was new.
+    std::string                  pvs_item_key;
+    bool                         pvs_item_made     {false};
+    uint64_t                     pvs_item_bytes    {0};
     erhe::scene::Pvs_bake_method method            {erhe::scene::Pvs_bake_method::sampled};
     glm::vec3                    grid_origin       {0.0f};
     float                        cell_size         {0.0f};
@@ -194,8 +216,6 @@ public:
     uint64_t                     captures_done     {0};
     // Captured entries that name no column (not in the static set).
     uint64_t                     unmatched_entries {0};
-    // Mesh nodes the bake gave a glTF uid (doc/editor/scene_serialization.md).
-    uint32_t                     uids_assigned     {0};
     float                        seconds_elapsed   {0.0f};
     float                        seconds_remaining {0.0f}; // estimate, 0 when unknown
     // The cells the bake gave a PVS.
@@ -266,6 +286,7 @@ class Pvs_bake_summary
 {
 public:
     Pvs_bake_state           state                     {Pvs_bake_state::idle};
+    Pvs_bake_stage           stage                     {Pvs_bake_stage::cells};
     erhe::scene::Pvs_bake_method method                {erhe::scene::Pvs_bake_method::sampled};
     uint32_t                 cell_count                {0};
     uint32_t                 cells_done                {0};
@@ -289,8 +310,16 @@ public:
 
     // Main thread (M2). Empty on success, else why the bake was refused: a
     // bake is running or still releasing its captures, the method is not
-    // built, a parameter is out of range, or the scene has no static entry.
-    [[nodiscard]] auto start_bake(const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request) -> std::string;
+    // built, a parameter is out of range, the scene has no editor asset or
+    // export settings (get_export_refusal()). With run_first the bake queues
+    // Bake World-Space Meshes and bakes its cells on the world-space form
+    // once that job ended; a refusal found then (no static entry, a region
+    // that does not fit) fails the bake (doc/editor/pvs.md "Bake").
+    [[nodiscard]] auto start_bake(
+        const std::shared_ptr<Scene_root>& scene_root,
+        const Pvs_bake_request&            request,
+        Pvs_world_space_bake               world_space_bake = Pvs_world_space_bake::run_first
+    ) -> std::string;
     // Main thread (M2): the pvs_debug_face job (Pvs_debug_face_request) with
     // the grid and parameters of request (method disocclusion); reported by
     // get_status() like a bake. Empty on success, else why it was refused.
@@ -341,6 +370,12 @@ private:
     // start_bake() / start_debug_face(): the checks, the grid, the static
     // set's columns and the state both methods start from.
     [[nodiscard]] auto begin            (const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request, Bake_mode mode) -> std::string;
+    // The checks of the request alone (begin() runs them too).
+    [[nodiscard]] auto check_request    (const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request, Bake_mode mode) const -> std::string;
+    // The world-space stage: Bake World-Space Meshes ended (tick(), M2).
+    void finish_world_space_stage();
+    // The finished database as the scene's PVS item (R4.10).
+    void store_pvs_item(Scene_root& scene_root, const erhe::scene::Pvs_database& database);
     void stop             (Pvs_bake_state state, const std::string& error);
     void release_captures ();
     // disocclusion: the sample point of a cell, if it has a free one.
@@ -398,6 +433,9 @@ private:
     std::vector<Capture_slot>                 m_captures;
 
     Bake_mode                                 m_mode{Bake_mode::bake};
+    // The world-space stage's job result, set by its on_finished (main thread).
+    std::optional<std::string>                m_world_space_bake_error;
+    bool                                      m_world_space_bake_ended{false};
     Pvs_debug_face_request                    m_debug;
     // Per cell: 1 when the bake gave it a PVS.
     std::vector<uint8_t>                      m_cell_has_pvs;
@@ -425,6 +463,7 @@ private:
     // bake, and the database it replaced.
     std::shared_ptr<erhe::scene::Pvs_database> m_columns_database;
     std::shared_ptr<erhe::scene::Pvs_database> m_restore_database;
+    Mesh_form                                  m_restore_form{Mesh_form::source};
 };
 
 } // namespace editor

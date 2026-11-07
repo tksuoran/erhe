@@ -334,9 +334,6 @@ public:
     uint64_t                               applied_uploads      {0};
     uint64_t                               nonresident_views    {0};
     uint64_t                               nonresident_culled   {0};
-    // The database holds its bits in memory (Pvs_database::
-    // has_resident_bits()); false after an open released them.
-    bool                                   bits_in_memory       {false};
     std::vector<Pvs_streaming_view_status> views;
 };
 
@@ -932,6 +929,10 @@ public:
     // database stale (the Draw_list_scene holds it const); the next publish
     // then records Pvs_culling::off. Called once per database.
     void set_pvs_stale_callback(std::function<void()> callback);
+    // The glTF uid the database's columns name a mesh's entries by (empty:
+    // untracked); without a function the mesh's own uid. Read at each
+    // column lookup (registration, set_pvs_database()). Main thread.
+    void set_pvs_identity_function(std::function<std::string_view(const erhe::scene::Mesh&)> function);
     // Main thread: the owner is going away (a scene close). Drops the
     // database, the stale callback and any queued set_pvs_database(), so the
     // unregistrations of the teardown see no database: entries leaving with
@@ -2191,6 +2192,7 @@ private:
     // naming it, the columns whose count dropped to 0 in the current flush,
     // the staleness callback and whether it was called for this database.
     std::shared_ptr<const erhe::scene::Pvs_database>                 m_pvs_database;
+    std::function<std::string_view(const erhe::scene::Mesh&)>       m_pvs_identity_function;
     std::vector<uint32_t>                                            m_pvs_column_entry_counts;
     std::vector<uint32_t>                                            m_pvs_dropped_columns;
     std::function<void()>                                            m_pvs_stale_callback;

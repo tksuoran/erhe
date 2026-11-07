@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Mesh_memory_config",
     reflect=True,
-    version=3,
+    version=4,
     short_desc="Mesh Memory",
     long_desc="",
     developer=False,
@@ -61,16 +61,11 @@ struct("Mesh_memory_config",
             visible=True,
             developer=True
         ),
-        field(
-            "mesh_optimize_cache",
-            Bool,
-            added_in=3,
-            default="false",
-            short_desc="Mesh Optimization Cache",
-            long_desc="Cache mesh optimization results on disk (cache/mesh_optimizer), keyed by source content hash, so repeated loads of the same asset skip the optimization passes. Applies to imported meshes: their optimization at load and the one in the deferred finalize that follows; procedural and edited geometry is not cached. No effect unless Optimize Meshes is enabled.",
-            visible=True,
-            developer=True
-        ),
+        # mesh_optimize_cache (v3) cached optimizer results in cache/mesh_optimizer
+        # until the editor asset's items became the only persistent derived data in
+        # v4 (doc/plans/prepared_assets_design.md D8 step 15); an older file's key is
+        # ignored on load. (Deleted rather than marked removed_in, as in the editor's
+        # load_config.py.)
         field(
             "max_buffers_per_pool",
             Int,

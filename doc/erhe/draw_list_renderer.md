@@ -1425,9 +1425,8 @@ Drawing:
   at a time, which drains the queued requests; it touches no scene or GPU
   state and holds the queue state and the databases by `shared_ptr`, so it
   may outlive the streamer; without an executor the reads run inline)
-  reads one requested page at a time with `Pvs_database::read_page_words()` (from the scene
-  file by range after an open released the bits, from memory after a bake)
-  into pooled word buffers and hands it back through a mutex-protected
+  reads one requested page at a time with `Pvs_database::read_page_words()` (a
+  copy out of the bits the database holds) into pooled word buffers and hands it back through a mutex-protected
   queue. Each `publish()` takes at most one finished read and reserves its
   slot (`Pvs_residency::place()`): a free slot, else the slot of the
   resident page farthest from every active view, only when that page is

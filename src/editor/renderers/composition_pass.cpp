@@ -326,7 +326,7 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
             .blending_mode_policy                  = data.blending_mode_policy,
             .primitive_mode                        = data.primitive_mode,
             .primitive_settings                    = out.primitive_settings,
-            .filter                                = data.filter,
+            .filter                                = get_view_filter(data.filter, context.mesh_form),
             .shader_debug                          = effective_shader_debug,
             // Shader Debug override visualization applies to content meshes only; brush,
             // tool, controller and rendertarget meshes (no content flag) render normally.
@@ -676,7 +676,7 @@ void Composition_pass::render(const Render_context& context, const Composition_p
                 .layers                = data.mesh_layers,
                 .blending              = blending,
                 .primitive_settings    = prepared.primitive_settings,
-                .filter                = data.filter,
+                .filter                = get_view_filter(data.filter, context.mesh_form),
                 .shadow_filter         = static_cast<uint32_t>(context.app_context.render_settings->graphics_preset.shadow_filter),
                 .shadow_bias           = static_cast<uint32_t>(context.app_context.render_settings->graphics_preset.shadow_bias),
                 .shadow_technique      = static_cast<uint32_t>(context.app_context.render_settings->graphics_preset.shadow_technique),

@@ -61,7 +61,7 @@ class McpClient:
             return {"text": text}
 
     def save(self, tool: str, arguments: dict, timeout_s: float = 900.0) -> dict:
-        """save_scene / save_scene_for_quest: queue the save and wait for its job."""
+        """save_scene / prepare_scene: queue the save or Export and wait for its job."""
         return wait_for_save(self.call, self.call(tool, arguments), timeout_s)
 
     def tool_names(self) -> set[str]:
@@ -70,7 +70,7 @@ class McpClient:
 
 
 def wait_for_save(call, job, timeout_s: float = 900.0) -> dict:
-    """Poll get_save_status for the job a save_scene / save_scene_for_quest
+    """Poll get_save_status for the job a save_scene / prepare_scene
     call returned (the saves are asynchronous) and return the final job
     object: state "done" (saved true, path, file_bytes, ...) or "failed"
     (error). 'call(tool, arguments)' is the caller's MCP call returning the

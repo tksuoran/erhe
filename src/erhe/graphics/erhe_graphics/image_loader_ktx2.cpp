@@ -347,6 +347,9 @@ auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, I
     if (!two_component_normal && linear && (transcoder.get_has_alpha() != 0u)) {
         two_component_normal = sniff_two_component_normal(transcoder);
     }
+    if (m_normal_layout != Ktx2_normal_layout::detect) {
+        two_component_normal = (m_normal_layout == Ktx2_normal_layout::two_component);
+    }
 
     switch (transcode_format_preference) {
         case Transcode_format_preference::bc7: {
@@ -492,6 +495,11 @@ auto Image_loader_ktx2::load(std::span<std::uint8_t> transfer_buffer) -> bool
         write_offset += level_byte_count;
     }
     return true;
+}
+
+void Image_loader_ktx2::set_normal_layout(const Ktx2_normal_layout normal_layout)
+{
+    m_normal_layout = normal_layout;
 }
 
 void Image_loader_ktx2::close()

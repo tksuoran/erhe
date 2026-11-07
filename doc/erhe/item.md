@@ -37,7 +37,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `is_lock_edit()` / `set_lock_edit()` - the `lock_edit` flag is the property-store seal (`Dependency_object::seal`, D24): while set, every local property write is refused (`set_value` returns false, logged); `is_sealed()` agrees with the flag, including after a copy
 - `add_tag()`, `remove_tag()`, `has_tag()`, `get_tags()`, `clear_tags()`
 - `set_source_path()`, `get_source_path()`
-- `set_gltf_uid()`, `get_gltf_uid()` - glTF 2.1 unique ID (persistent file-scoped identity; assigned once at import or first export by `erhe::gltf`, never changed afterwards, NOT copied by copy/clone)
+- `set_gltf_uid()`, `get_gltf_uid()` - glTF 2.1 unique ID (persistent file-scoped identity). Every item has one from its creation: `make_random_gltf_uid()` (16 characters of `[0-9A-Za-z]`) in the constructors, a copy / clone included (a clone is a new object); an import or a prefab instantiation replaces it (`doc/editor/scene_serialization.md` "Unique IDs").
 - `clone()` - polymorphic deep copy via CRTP
 - `get_type()`, `get_type_name()` - virtual, overridden by CRTP `Item<>`
 

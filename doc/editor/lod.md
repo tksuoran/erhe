@@ -35,10 +35,9 @@ queued, unchanged, held, not optimized).
 mesh of the active scene's content layer (`request_scene_lod_generation()`;
 MCP `generate_lods` with `scope` `scene`): the explicit request for a scene
 to profile with LODs everywhere. A save stores the
-chains that exist and generates none; Prepare (PC) and Prepare (Quest) also
-generate a chain,
-into the file only, with the scene's export settings LOD (`Scene_settings`
-`export_settings.lod`, else the `lod` config settings) for every primitive
+chains that exist and generates none; an Export (File > Export (PC) /
+Export (Quest)) also generates a chain, into its mesh items only, with the scene's export settings LOD (`Scene_settings`
+`export_settings.lod`; a scene gets its export settings as a copy of the editor's defaults, doc/editor/prepared_assets.md "Export settings") for every primitive
 without a request (`doc/erhe/meshoptimizer_integration.md`
 "Level of detail", "Stored chains"); a load of a file with stored chains
 restores them, and their requests, with no simplification. Like the
@@ -332,7 +331,8 @@ frames, with the classification check under gpu at every hold.
 `scripts/lod_roundtrip_verify.py` checks the stored chains (`ERHE_mesh_lod`,
 `doc/erhe/meshoptimizer_integration.md` "Stored chains"): a soup torus and
 capsule made prepared by a save, chains generated, saved and loaded back,
-saved again and saved for Quest and loaded back: only the requested
+saved again, Exported for quest and opened as a prepared run with the
+source moved away: only the requested
 primitive carries a chain, the chains are identical (errors bit for bit),
 `render_scene_image` is identical at forced levels 0..5, at four automatic
 distances and without `Lod`, the level edge counts match after the full

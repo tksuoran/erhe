@@ -97,6 +97,9 @@ public:
     auto get_property_owner_type() const -> erhe::property::Owner_type override { return Self::property_owner_type(); }
 };
 
+// A new random glTF 2.1 uid: 16 characters of [0-9A-Za-z] (about 95 bits).
+[[nodiscard]] auto make_random_gltf_uid() -> std::string;
+
 class Item_base
     : public std::enable_shared_from_this<Item_base>
     , public Clonable_base<Item_base>
@@ -352,14 +355,10 @@ protected:
     std::string                            m_name       {};
     erhe::utility::Debug_label             m_debug_label{};
     std::unique_ptr<std::filesystem::path> m_source_path{};
-    // glTF 2.1 unique ID (KhronosGroup/glTF#2597): the item's persistent
-    // file-scoped identity. Empty until assigned - at import when the
-    // source file carries one, or generated exactly once at first export
-    // (see erhe::gltf) - and never changed afterwards, so external
-    // references to the item stay valid across re-saves. Not copied by
-    // copy / clone: a clone is a new object and must not claim the
-    // original's identity (uids are unique within a file).
-    std::string                            m_gltf_uid   {};
+    // glTF 2.1 unique ID (KhronosGroup/glTF#2597), random from creation; an import or
+    // a prefab instantiation replaces it (doc/editor/scene_serialization.md "Unique IDs").
+    // A copy / clone takes a new one.
+    std::string                            m_gltf_uid   {make_random_gltf_uid()};
     std::set<std::string>                  m_tags       {};
 };
 

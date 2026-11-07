@@ -322,9 +322,7 @@ void Lod_window::generate_imgui(const std::shared_ptr<Scene_root>& scene_root)
     ImGui::SameLine();
     const bool clear    = ImGui::Button("Clear for selection");
     ImGui::EndDisabled();
-    // The explicit scene-wide request: every content mesh of the active scene
-    // (for example before a Save for Quest, which stores the chains that
-    // exist and generates none).
+    // The explicit scene-wide request: every content mesh of the active scene.
     ImGui::BeginDisabled(!scene_root || (m_context.imgui_windows == nullptr));
     const bool generate_scene = ImGui::Button("Generate for scene");
     ImGui::SameLine();

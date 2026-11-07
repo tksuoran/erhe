@@ -308,6 +308,16 @@ What each gate checks and the current results are in
   after `sampled` in the same run; `--trace` buckets the misses with the
   bake trace). They launch their own editor and restore the editor config
   files a run may write.
+
+## Prepared asset verification
+
+`py -3 scripts/prepared_asset_verify.py --editor <headless editor>` launches
+its own headless editors and checks Export, the prepared run and Exports
+killed during Ensure and Copy on hand-written scenes in a temporary
+directory; what it checks is in
+[`editor/prepared_assets.md`](editor/prepared_assets.md) "Verification".
+Unit tests: `erhe_asset_store_tests` and `editor_asset_tests`.
+
 ## Shader fp16 verification
 
 What is measured (paths, boundaries, gates G-display / G-finite / G-dark /

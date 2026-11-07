@@ -4,10 +4,19 @@
 #include "assets/load_memory_budget.hpp"
 #include "assets/asset_load_tick_context.hpp"
 #include "assets/asset_manager.hpp"
+#include "assets/asset_paths.hpp"
+#include "assets/editor_asset.hpp"
+#include "assets/editor_asset_load.hpp"
+#include "assets/prepared_asset.hpp"
+#include "assets/scene_export.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 #include "parsers/gltf.hpp"
+#include "parsers/gltf_extensions_import.hpp"
+#include "scene/generated/scene_settings.hpp"
+#include "scene/generated/scene_settings_serialization.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_save_service.hpp"
 
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
@@ -16,6 +25,7 @@
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_primitive/build_info.hpp"
+#include "erhe_raytrace/prebuilt_bvh.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_task/task.hpp"
 #include "erhe_scene/node.hpp"
@@ -32,6 +42,56 @@
 
 namespace editor {
 
+namespace {
+
+// One build job of a source open (doc/editor/prepared_assets.md "The editor's
+// own loading"): from its items, from items it derives and stores, or as
+// run_imported_build_job() builds it.
+auto run_editor_asset_job(
+    Editor_asset_load&              load,
+    const Imported_build_job&       job,
+    erhe::graphics::Device&         graphics_device,
+    const bool                      release_soups,
+    const Stored_vertex_streams_use stored_streams
+) -> Imported_build_result
+{
+    class Finish
+    {
+    public:
+        explicit Finish(Editor_asset_load& load_in) : m_load{load_in} {}
+        ~Finish() noexcept { m_load.finish_job(); }
+        Finish(const Finish&) = delete;
+        auto operator=(const Finish&) -> Finish& = delete;
+    private:
+        Editor_asset_load& m_load;
+    };
+    const Finish finish{load};
+
+    const Editor_asset_job asset_job = load.prepare_job(*job.primitive);
+    switch (asset_job.kind) {
+        case Editor_asset_job_kind::item: {
+            const Imported_build_job item_job{
+                .primitive          = asset_job.item_primitive.get(),
+                .build_info         = job.build_info,
+                .mesh               = job.mesh,
+                .base_mesh_build    = job.base_mesh_build,
+                .upload_byte_count  = job.upload_byte_count,
+                .payload_byte_count = job.payload_byte_count
+            };
+            const Imported_build_result result = run_imported_build_job(item_job, graphics_device, release_soups, stored_streams);
+            load.install(*job.primitive, asset_job);
+            return result;
+        }
+        case Editor_asset_job_kind::as_before:
+        default: {
+            load.count_as_before(asset_job.reason);
+            return run_imported_build_job(job, graphics_device, release_soups, stored_streams);
+        }
+    }
+}
+
+} // anonymous namespace
+
 Gltf_load_task::Gltf_load_task(
     App_context&                                  context,
     Asset_load_request                            request,
@@ -41,6 +101,7 @@ Gltf_load_task::Gltf_load_task(
     : Asset_load_task{std::move(handle)}
     , m_context      {context}
     , m_request      {std::move(request)}
+    , m_load_path    {m_handle->get_path()}
     , m_on_done      {std::move(on_done)}
 {
     const std::shared_ptr<Scene_root> import_target = m_request.import_target.lock();
@@ -98,11 +159,37 @@ void Gltf_load_task::start_scan(Asset_load_tick_context& tick_context)
     auto scan_result = std::make_shared<Scan_result>();
     const std::filesystem::path path = m_handle->get_path();
     m_scan_result = scan_result;
+    Prepared_build_formats build_formats = is_prepared_asset_path(path) ? get_prepared_build_formats(m_context) : Prepared_build_formats{};
     erhe::task::spawn(
         tick_context.executor,
-        [scan_result, path]() {
+        [scan_result, path, build_formats = std::move(build_formats), checked_open = std::move(m_request.prepared_open)]() mutable {
             try {
-                const Gltf_scan_summary summary = editor::scan_gltf(path);
+                std::filesystem::path scan_path = path;
+                if (is_prepared_asset_path(path)) {
+                    // R11.1: the source when it is readable, else a prepared run; checked once per open.
+                    std::shared_ptr<Prepared_open> prepared_open = std::move(checked_open);
+                    if (!prepared_open) {
+                        prepared_open = std::make_shared<Prepared_open>(resolve_prepared_open(path, build_formats));
+                    }
+                    if (prepared_open->kind == Prepared_open_kind::failed) {
+                        scan_result->ok    = false;
+                        scan_result->error = prepared_open->error;
+                        scan_result->finished.store(true, std::memory_order_release);
+                        return;
+                    }
+                    log_prepared_open(path, *prepared_open);
+                    if (prepared_open->kind == Prepared_open_kind::open_source) {
+                        scan_path              = prepared_open->source_path;
+                        scan_result->load_path = scan_path;
+                    } else {
+                        scan_result->prepared_open = std::move(prepared_open);
+                        scan_result->is_erhe_scene = true;
+                        scan_result->ok            = true;
+                        scan_result->finished.store(true, std::memory_order_release);
+                        return;
+                    }
+                }
+                const Gltf_scan_summary summary = editor::scan_gltf(scan_path);
                 scan_result->is_erhe_scene = is_erhe_scene(summary.extensions_used);
                 scan_result->ok            = summary.errors.empty();
                 if (!summary.errors.empty()) {
@@ -173,6 +260,22 @@ void Gltf_load_task::start_build(Asset_load_tick_context& tick_context)
         build_state->stored_streams = ((m_context.editor_settings == nullptr) || m_context.editor_settings->load.use_gpu_vertex_streams)
             ? Stored_vertex_streams_use::use
             : Stored_vertex_streams_use::ignore;
+        // R8.1 - R8.3: a source open reads its primitives from the file's editor asset and stores what it derives.
+        if (m_parse_result->editor_asset && !build_state->jobs.empty()) {
+            erhe::gltf::Gltf_gpu_vertex_formats gpu_vertex_formats = make_gltf_gpu_vertex_formats(*mesh_memory);
+            const std::string mesh_stamp = make_running_mesh_stamp(&gpu_vertex_formats);
+            build_state->editor_asset_load = std::make_shared<Editor_asset_load>(Editor_asset_load_create_info{
+                .editor_asset         = m_parse_result->editor_asset,
+                .catalog              = m_parse_result->catalog,
+                .gpu_vertex_formats   = gpu_vertex_formats,
+                .mesh_stamp           = mesh_stamp,
+                .bvh_stamp            = make_running_bvh_stamp(),
+                .bvh_items            = !erhe::raytrace::get_prebuilt_bvh_backend().empty(),
+                .executor             = &tick_context.executor,
+                .job_count            = build_state->jobs.size(),
+                .default_lod_settings = m_parse_result->default_lod_settings
+            });
+        }
     }
     m_build_state = build_state;
 }
@@ -210,10 +313,12 @@ void Gltf_load_task::dispatch_build_jobs(Asset_load_tick_context& tick_context)
         }
         erhe::task::spawn(
             tick_context.executor,
-            [build_state = m_build_state, job_index, payload_lease, lease, mesh_memory, graphics_device, path = m_handle->get_path()]() {
+            [build_state = m_build_state, job_index, payload_lease, lease, mesh_memory, graphics_device, path = m_load_path]() {
                 Imported_build_result result{};
                 try {
-                    result = run_imported_build_job(build_state->jobs[job_index], *graphics_device, build_state->release_soups, build_state->stored_streams);
+                    result = build_state->editor_asset_load
+                        ? run_editor_asset_job(*build_state->editor_asset_load, build_state->jobs[job_index], *graphics_device, build_state->release_soups, build_state->stored_streams)
+                        : run_imported_build_job(build_state->jobs[job_index], *graphics_device, build_state->release_soups, build_state->stored_streams);
                 } catch (const std::exception& e) {
                     // A primitive without buffer meshes is built by the
                     // main-thread finalize pass instead.
@@ -244,7 +349,7 @@ void Gltf_load_task::dispatch_build_jobs(Asset_load_tick_context& tick_context)
 
 void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
 {
-    const std::filesystem::path path = m_handle->get_path();
+    const std::filesystem::path path = m_load_path;
 
     // Unhosted container root: the parse must not touch a live Scene from a
     // worker. This is the same shape the Asset_manager container loader and
@@ -281,7 +386,10 @@ void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
         .path            = path,
         .parallel        = (m_context.editor_settings == nullptr) || m_context.editor_settings->load.parallel_gltf_parse,
         .fix_spot_lights = m_context.fix_gltf_spot_lights,
-        .prepared_mesh_data_use = get_prepared_mesh_data_use(m_context),
+        // A prepared run reads its Scene item, a document of derived data; a file holds authoring data alone.
+        .document               = m_prepared_open ? erhe::gltf::Gltf_document::item : erhe::gltf::Gltf_document::file,
+        // R3.5; a prepared run is never exported (R11.2), so it computes none.
+        .content_hashes         = m_prepared_open ? erhe::gltf::Gltf_content_hash_load::none : erhe::gltf::Gltf_content_hash_load::compute,
         .triangle_soup_reload   = get_triangle_soup_reload(m_context),
         // The build jobs read the mesh payloads, in parallel under the load
         // memory budget - only where workers may build (worker contexts).
@@ -289,12 +397,35 @@ void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
             ? erhe::gltf::Mesh_payload_load::deferred
             : erhe::gltf::Mesh_payload_load::in_parse
     };
+    // A prepared run reads its Scene item and the items it names from the
+    // prepared asset by range, as a file's (on the workers too).
+    const std::shared_ptr<const Prepared_open> prepared_open = m_prepared_open;
+    if (prepared_open) {
+        parse_arguments.glb_reader      = make_scene_item_reader(*prepared_open);
+        parse_arguments.glb_size        = prepared_open->scene_item_size;
+        parse_arguments.buffer_resolver = make_prepared_buffer_resolver(prepared_open->prepared_asset);
+        parse_arguments.stored_bvh_use  = get_stored_bvh_use(prepared_open->format_check);
+    }
     m_mesh_payload_deferred = (parse_arguments.mesh_payload == erhe::gltf::Mesh_payload_load::deferred);
+
+    // R8.1: a scene open of a source asset uses its editor asset. Imports and
+    // prefab templates do not (their items belong to the files Export assigns
+    // them to), nor a prepared run or a load without build jobs.
+    Editor_asset_registry* const editor_asset_registry =
+        (!prepared_open && ((m_mode == Mode::open_erhe_scene) || (m_mode == Mode::open_foreign_gltf)) && (parse_arguments.mesh_payload == erhe::gltf::Mesh_payload_load::deferred))
+            ? m_context.editor_asset_registry
+            : nullptr;
+
+    // An erhe scene without export settings opens with a copy of the editor's defaults (finish_open_scene_gltf()).
+    std::optional<Scene_export_settings> editor_export_settings;
+    if ((editor_asset_registry != nullptr) && (m_context.editor_settings != nullptr)) {
+        editor_export_settings = m_context.editor_settings->export_settings;
+    }
 
     m_parse_result = parse_result;
     erhe::task::spawn(
         tick_context.executor,
-        [parse_result, parse_arguments, path]() mutable {
+        [parse_result, parse_arguments, path, prepared_open, editor_asset_registry, editor_export_settings]() mutable {
             const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
             try {
                 parse_result->gltf_data = erhe::gltf::parse_gltf(parse_arguments);
@@ -311,6 +442,48 @@ void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
                 erhe::file::to_string(path.filename()),
                 std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count()
             );
+            if (parse_result->ok && (editor_asset_registry != nullptr)) {
+                const std::chrono::steady_clock::time_point asset_start_time = std::chrono::steady_clock::now();
+                // R2.2: the editor asset the file records, else the default location (R2.4), else the fallback (R2.5).
+                const std::optional<Gltf_scene_state> scene_state = parse_gltf_scene_state(parse_result->gltf_data);
+                const std::filesystem::path record_path = (scene_state.has_value() && !scene_state->editor_asset.empty())
+                    ? normalize_asset_path(path.parent_path() / scene_state->editor_asset)
+                    : std::filesystem::path{};
+                std::error_code error_code;
+                const std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
+                parse_result->editor_asset = editor_asset_registry->get(error_code ? path : canonical_path, record_path);
+                // The LOD request Export asks for a primitive without its own (the scene's export settings).
+                if (scene_state.has_value()) {
+                    Scene_settings settings{};
+                    if (!scene_state->settings_json.empty()) {
+                        simdjson::ondemand::parser   settings_parser;
+                        simdjson::padded_string      settings_padded{scene_state->settings_json};
+                        simdjson::ondemand::document settings_document;
+                        simdjson::ondemand::object   settings_object;
+                        if (
+                            (settings_parser.iterate(settings_padded).get(settings_document) != simdjson::SUCCESS) ||
+                            (settings_document.get_object().get(settings_object) != simdjson::SUCCESS) ||
+                            (deserialize(settings_object, settings) != simdjson::SUCCESS)
+                        ) {
+                            settings = Scene_settings{};
+                        }
+                    }
+                    const std::optional<Scene_export_settings>& export_settings = settings.export_settings.has_value() ? settings.export_settings : editor_export_settings;
+                    if (export_settings.has_value()) {
+                        parse_result->default_lod_settings = get_export_lod_settings(export_settings.value());
+                    }
+                }
+                if (parse_result->editor_asset) {
+                    parse_result->catalog = parse_result->editor_asset->get_item_catalog();
+                    log_parsers->info(
+                        "Open '{}': editor asset '{}' ({} items), {} ms",
+                        erhe::file::to_string(path.filename()),
+                        erhe::file::to_string(parse_result->editor_asset->get_asset_path()),
+                        parse_result->catalog ? parse_result->catalog->items.size() : std::size_t{0},
+                        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - asset_start_time).count()
+                    );
+                }
+            }
             // Release-store last: everything above must be visible to the
             // main thread before it observes `finished`.
             parse_result->finished.store(true, std::memory_order_release);
@@ -390,6 +563,40 @@ void Gltf_load_task::update_status()
     }
 }
 
+void Gltf_load_task::finish_editor_asset_load()
+{
+    const std::shared_ptr<Editor_asset_load>& load = m_build_state->editor_asset_load;
+    if (!load) {
+        return;
+    }
+    load->share_replaced_shapes(m_parse_result->gltf_data);
+    const Editor_asset_load_counts counts = load->get_counts();
+    log_parsers->info(
+        "{}: {} primitives from items, {} derived and stored, {} BVH from items, {} built and stored, {} ms",
+        erhe::file::to_string(m_load_path.filename()),
+        counts.from_items,
+        counts.derived_stored,
+        counts.bvh_from_items,
+        counts.bvh_built_stored,
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_build_state->start_time).count()
+    );
+    std::string reasons;
+    for (const auto& [reason, count] : counts.reasons) {
+        reasons += fmt::format("{}{}: {}", reasons.empty() ? "" : ", ", reason, count);
+    }
+    log_parsers->info(
+        "{}: editor asset '{}': {} items stored ({} bytes, {} transactions); {} built without items{}{}{}",
+        erhe::file::to_string(m_load_path.filename()),
+        erhe::file::to_string(load->get_editor_asset()->get_asset_path()),
+        counts.items_written, counts.bytes_written, counts.transactions,
+        counts.built_as_before,
+        reasons.empty() ? "" : " (", reasons, reasons.empty() ? "" : ")"
+    );
+    if ((counts.items_written > 0) && (m_context.scene_save_service != nullptr)) {
+        m_context.scene_save_service->notify_stores_changed();
+    }
+}
+
 void Gltf_load_task::log_staging_statistics(Asset_load_tick_context& tick_context) const
 {
     const erhe::gltf::Gltf_image_residency& residency = m_parse_result->gltf_data.image_residency;
@@ -406,7 +613,7 @@ void Gltf_load_task::log_staging_statistics(Asset_load_tick_context& tick_contex
         "decoded pixels high-water {} bytes; "
         "upload staging high-water {} of {} bytes cap (device lifetime), {} waits, {} oversize; "
         "upload budget {} bytes per frame",
-        erhe::file::to_string(m_handle->get_path().filename()),
+        erhe::file::to_string(m_load_path.filename()),
         budget.high_water_byte_count,
         budget.capacity_byte_count,
         budget.high_water_by_kind[mesh],
@@ -426,7 +633,7 @@ void Gltf_load_task::log_staging_statistics(Asset_load_tick_context& tick_contex
     log_parsers->info(
         "async load '{}' images: {} Basis KTX2 transcoded, {} raw block KTX2 uploaded as stored, "
         "{} raw ASTC KTX2 decoded to RGBA8 (device lacks ASTC), {} decoded (PNG / JPEG / DDS), {} failed",
-        erhe::file::to_string(m_handle->get_path().filename()),
+        erhe::file::to_string(m_load_path.filename()),
         paths.basis_transcoded,
         paths.raw_blocks,
         paths.raw_blocks_decoded,
@@ -446,7 +653,7 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
     ) {
         log_parsers->info(
             "async import '{}': destination scene closed - cancelling",
-            erhe::file::to_string(m_handle->get_path())
+            erhe::file::to_string(m_load_path)
         );
         m_handle->request_cancel();
     }
@@ -455,7 +662,7 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
         // detached result, which dies with the task once is_worker_idle().
         m_phase = Phase::settled;
         m_handle->set_state(Asset_load_state::cancelled);
-        log_parsers->info("async load cancelled: '{}'", erhe::file::to_string(m_handle->get_path()));
+        log_parsers->info("async load cancelled: '{}'", erhe::file::to_string(m_load_path));
         notify_done();
         return Asset_load_state::cancelled;
     }
@@ -486,17 +693,23 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
             if (!m_scan_result->ok) {
                 m_phase = Phase::settled;
                 m_handle->set_failed(m_scan_result->error.empty() ? std::string{"scan failed"} : m_scan_result->error);
+                log_parsers->error("Open '{}' failed: {}", erhe::file::to_string(m_handle->get_path()), m_handle->get_error());
                 notify_done();
                 return Asset_load_state::failed;
             }
+            if (!m_scan_result->load_path.empty()) {
+                m_load_path = m_scan_result->load_path;
+            }
+            m_prepared_open = std::move(m_scan_result->prepared_open);
+            // A prepared run is always opened as the scene it holds.
             const bool open_as_erhe_scene =
                 m_scan_result->is_erhe_scene &&
-                (m_request.erhe_scene_open == Erhe_scene_open::full_scene);
+                ((m_request.erhe_scene_open == Erhe_scene_open::full_scene) || m_prepared_open);
             m_mode = open_as_erhe_scene ? Mode::open_erhe_scene : Mode::open_foreign_gltf;
             if (m_mode == Mode::open_foreign_gltf) {
                 log_parsers->info(
                     "async load '{}': {} - loading for import",
-                    erhe::file::to_string(m_handle->get_path()),
+                    erhe::file::to_string(m_load_path),
                     m_scan_result->is_erhe_scene
                         ? "erhe-authored scene opened as foreign glTF"
                         : "not an erhe-authored scene"
@@ -507,12 +720,13 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
             // Record adoption (plan 2.8): nothing to parse, and the adopt
             // path needs the record intact.
             const bool adoptable =
+                !m_prepared_open &&
                 (m_context.asset_manager != nullptr) &&
-                static_cast<bool>(m_context.asset_manager->find_adoptable_container(m_handle->get_path()));
+                static_cast<bool>(m_context.asset_manager->find_adoptable_container(m_load_path));
             if (adoptable) {
                 log_parsers->info(
                     "async load '{}': adopting a loaded container record - completing inline",
-                    erhe::file::to_string(m_handle->get_path())
+                    erhe::file::to_string(m_load_path)
                 );
                 m_phase = Phase::settled;
                 if (m_mode == Mode::open_foreign_gltf) {
@@ -526,7 +740,7 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
                 }
                 // Re-validated by open_scene_gltf itself, which looks the
                 // record up again and falls back to a fresh parse.
-                m_scene_root = open_scene_gltf(m_context, m_handle->get_path());
+                m_scene_root = open_scene_gltf(m_context, m_load_path);
                 if (m_scene_root) {
                     m_handle->set_progress(1.0f);
                     m_handle->set_state(Asset_load_state::done);
@@ -596,15 +810,16 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
                 if ((m_build_state->stored_count > 0) || (portable_count > no_streams)) {
                     log_parsers->info(
                         "gpu vertex streams: {} stored, {} portable ({}) in '{}'",
-                        m_build_state->stored_count, portable_count, reasons, erhe::file::to_string(m_handle->get_path())
+                        m_build_state->stored_count, portable_count, reasons, erhe::file::to_string(m_load_path)
                     );
                 }
             }
+            finish_editor_asset_load();
             if (m_mesh_payload_deferred) {
                 // The jobs validated the prepared mesh data: the per-file
                 // summary. Every payload is read: the shared read handles
                 // close (a save may now replace the file).
-                erhe::gltf::finish_prepared_mesh_statistics(m_parse_result->gltf_data, m_handle->get_path());
+                erhe::gltf::finish_prepared_mesh_statistics(m_parse_result->gltf_data, m_load_path);
                 erhe::gltf::close_source_files(m_parse_result->gltf_data);
             }
             // Everything the build enqueued has a ticket at or below this.
@@ -665,11 +880,13 @@ auto Gltf_load_task::tick(Asset_load_tick_context& tick_context) -> Asset_load_s
             }
             m_scene_root = finish_open_scene_gltf(
                 m_context,
-                m_handle->get_path(),
+                m_load_path,
                 m_parse_result->gltf_data,
                 m_parse_result->container_node,
-                false
+                false,
+                m_prepared_open ? m_prepared_open->prepared_asset : std::shared_ptr<Prepared_asset>{}
             );
+            m_prepared_open.reset(); // the scene holds the prepared asset
             if (!m_scene_root) {
                 m_handle->set_failed("no ERHE_scene payload");
                 notify_done();

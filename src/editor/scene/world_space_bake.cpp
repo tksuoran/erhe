@@ -1,10 +1,11 @@
 #include "scene/world_space_bake.hpp"
 
 #include "content_library/content_library.hpp"
-#include "scene/generated/scene_export_settings.hpp"
+#include "config/generated/scene_export_settings.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_item/item_flags.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_profile/profile.hpp"
@@ -124,6 +125,9 @@ private:
         if ((mesh.get_flag_bits() & erhe::Item_flags::content) == 0) {
             return keep("not content");
         }
+        if ((mesh.get_flag_bits() & erhe::Item_flags::render_proxy) != 0) {
+            return false; // derived data (the world-space form, lightmap pieces), not part of the scene
+        }
         if (mesh.skin) {
             return keep("skinned");
         }
@@ -143,13 +147,9 @@ private:
                 continue;
             }
             const erhe::primitive::Primitive_render_shape& shape = *mesh_primitive.primitive->render_shape;
-            if (!shape.has_triangle_soup()) {
-                return keep("authored geometry primitive"); // written as ERHE_geometry, not prepared
-            }
             const auto users = m_shape_users.find(&shape);
             if ((users != m_shape_users.end()) && (users->second > 1)) {
-                const erhe::primitive::Triangle_soup_counts counts = shape.get_triangle_soup_counts();
-                shared_bytes += (counts.vertex_count * c_estimated_core_vertex_bytes) + (counts.index_count * sizeof(uint32_t));
+                shared_bytes += estimate_core_bytes(shape);
             }
         }
         if (shared_bytes > 0) {
@@ -173,6 +173,23 @@ private:
         }
         out_duplicated_bytes = shared_bytes;
         return true;
+    }
+
+    // A geometry-normative shape: one core vertex per facet corner, fan triangles.
+    [[nodiscard]] static auto estimate_core_bytes(const erhe::primitive::Primitive_render_shape& shape) -> std::size_t
+    {
+        if (shape.has_triangle_soup()) {
+            const erhe::primitive::Triangle_soup_counts counts = shape.get_triangle_soup_counts();
+            return (counts.vertex_count * c_estimated_core_vertex_bytes) + (counts.index_count * sizeof(uint32_t));
+        }
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape.get_geometry_const();
+        if (!geometry) {
+            return 0;
+        }
+        const std::size_t corner_count   = geometry->get_mesh().facet_corners.nb();
+        const std::size_t facet_count    = geometry->get_mesh().facets.nb();
+        const std::size_t triangle_count = (corner_count > (2 * facet_count)) ? (corner_count - (2 * facet_count)) : 0;
+        return (corner_count * c_estimated_core_vertex_bytes) + (3 * triangle_count * sizeof(uint32_t));
     }
 
     const Scene_export_settings&                                     m_settings;

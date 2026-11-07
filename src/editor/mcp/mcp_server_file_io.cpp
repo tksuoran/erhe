@@ -3,7 +3,14 @@
 
 #include "mcp/mcp_server.hpp"
 #include "scene/scene_save_service.hpp"
-#include "scene/generated/scene_export_settings_serialization.hpp"
+#include "scene/world_space_form.hpp"
+#include "assets/editor_asset.hpp"
+#include "assets/prepared_asset.hpp"
+#include "assets/prepared_status.hpp"
+#include "assets/prepared_keys.hpp"
+#include "assets/scene_export.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "erhe_asset_store/item_kind.hpp"
 
 #include <simdjson.h>
 #include "editor_item_bits.hpp"
@@ -95,12 +102,7 @@ namespace {
     return {};
 }
 
-enum class Save_report_textures : unsigned int {
-    omit,
-    include
-};
-
-[[nodiscard]] auto make_save_report_json(const Gltf_scene_save_report& report, const Save_report_textures textures) -> json
+[[nodiscard]] auto make_save_report_json(const Gltf_scene_save_report& report) -> json
 {
     json skip_reasons = json::object();
     for (const auto& [reason, count] : report.prepared.skip_reasons) {
@@ -138,18 +140,119 @@ enum class Save_report_textures : unsigned int {
             {"rebound_image_count",      report.rebound_image_count}
         }}
     };
-    if (textures == Save_report_textures::include) {
-        result["textures"] = {
-            {"image_count",            report.textures.image_count},
-            {"transcoded_count",       report.textures.transcoded_count},
-            {"transcode_failed_count", report.textures.transcode_failed_count},
-            {"raw_ktx2_count",         report.textures.raw_ktx2_count},
-            {"source_byte_count",      report.textures.source_byte_count},
-            {"transcoded_byte_count",  report.textures.transcoded_byte_count},
-            {"transcode_ms",           report.textures.transcode_ms}
+    return result;
+}
+
+// The counts of an Export into the store (doc/editor/prepared_assets.md "Export").
+[[nodiscard]] auto make_export_report_json(const Scene_export_report& report) -> json
+{
+    json counts = json::object();
+    for (const auto& [kind, kind_counts] : report.counts) {
+        counts[erhe::asset_store::c_str(kind)] = {
+            {"made",    kind_counts.made},
+            {"present", kind_counts.present},
+            {"written", kind_counts.written}
         };
     }
-    return result;
+    json files = json::array();
+    for (const Scene_export_file_report& file : report.files) {
+        json file_counts = json::object();
+        for (const auto& [kind, kind_counts] : file.counts) {
+            file_counts[erhe::asset_store::c_str(kind)] = {{"made", kind_counts.made}, {"present", kind_counts.present}};
+        }
+        files.push_back({
+            {"source",       file.source_path.string()},
+            {"editor_asset", file.editor_asset_path.string()},
+            {"role",         c_str(file.role)},
+            {"depth",        file.depth},
+            {"location",     file.location},
+            {"counts",       file_counts}
+        });
+    }
+    return json{
+        {"export", {
+            {"files",                  files},
+            {"target",                 report.target},
+            {"editor_asset",           report.editor_asset_path.string()},
+            {"prepared_asset",         report.prepared_asset_path.string()},
+            {"scene_key",              report.scene_key},
+            {"counts",                 counts},
+            {"inline_primitive_count", report.inline_primitive_count},
+            {"inline_image_count",     report.inline_image_count},
+            {"world_mesh_node_count",  report.world_mesh_node_count},
+            {"world_form_mesh_count",  report.world_form_mesh_count},
+            {"prepared_item_count",    report.prepared_item_count},
+            {"prepared_asset_bytes",   report.prepared_asset_bytes},
+            {"ensure_ms",              report.ensure_ms},
+            {"scene_ms",               report.scene_ms},
+            {"copy_ms",                report.copy_ms},
+            {"pvs_ms",                 report.pvs_ms},
+            {"pvs_cell_count",         report.pvs_cell_count}
+        }}
+    };
+}
+
+// A status job's report (doc/editor/prepared_assets.md "Status").
+[[nodiscard]] auto make_prepared_status_json(const Prepared_status_report& status) -> json
+{
+    json kinds = json::object();
+    for (const auto& [kind, kind_status] : status.kinds) {
+        kinds[erhe::asset_store::c_str(kind)] = {
+            {"present",            kind_status.present},
+            {"missing",            kind_status.missing},
+            {"stored_count",       kind_status.stored_count},
+            {"stored_bytes",       kind_status.stored_bytes},
+            {"unreferenced_count", kind_status.unreferenced_count},
+            {"unreferenced_bytes", kind_status.unreferenced_bytes}
+        };
+    }
+    json files = json::array();
+    for (const Prepared_file_status& file : status.files) {
+        files.push_back({
+            {"source",             file.source_path.string()},
+            {"editor_asset",       file.editor_asset_path.string()},
+            {"role",               file.role},
+            {"depth",              file.depth},
+            {"location",           file.location},
+            {"editor_asset_bytes", file.editor_asset_bytes}
+        });
+    }
+    return json{
+        {"files",                  files},
+        {"scene_name",             status.scene_name},
+        {"target",                 status.target},
+        {"editor_asset",           status.editor_asset_path.string()},
+        {"editor_asset_bytes",     status.editor_asset_bytes},
+        {"prepared_asset",         status.prepared_asset_path.string()},
+        {"prepared_asset_exists",  status.prepared_asset_exists},
+        {"prepared_asset_bytes",   status.prepared_asset_bytes},
+        {"prepared_item_count",    status.prepared_item_count},
+        {"scene_key",              status.scene_key},
+        {"prepared_scene_key",     status.prepared_scene_key},
+        {"matches",                status.matches},
+        {"mismatch",               status.mismatch},
+        {"kinds",                  kinds},
+        {"inline_primitive_count", status.inline_primitive_count},
+        {"asked_key_count",        status.asked_key_count},
+        {"computed_hash_count",    status.computed_hash_count},
+        {"drop",                   c_str(status.drop)},
+        {"dropped_count",          status.dropped_count},
+        {"bytes_before_drop",      status.bytes_before_drop},
+        {"compute_ms",             status.compute_ms}
+    };
+}
+
+
+// A prepared asset's format check before its open is queued (doc/editor/prepared_assets.md
+// "Format stamps"), with its notices; the queued load takes the result and does not check again.
+[[nodiscard]] auto check_prepared_load(const App_context& context, const std::filesystem::path& path, json& out_notices) -> std::shared_ptr<Prepared_open>
+{
+    std::shared_ptr<Prepared_open> check = std::make_shared<Prepared_open>(resolve_prepared_open(path, get_prepared_build_formats(context)));
+    out_notices = json::array();
+    for (const std::string& notice : check->format_check.notices) {
+        out_notices.push_back(notice);
+    }
+    return check;
 }
 
 } // anonymous namespace
@@ -158,37 +261,6 @@ enum class Save_report_textures : unsigned int {
 // once (state "pending"); Scene_save_service runs it, and get_save_status
 // reports its progress and result (doc/agents/mcp_server_usage.md "Saving
 // scenes").
-// The scene's export settings, with the fields an `export_settings` object of
-// args names merged over them (RFC 7386). Returns an error message, empty on success.
-auto Mcp_server::resolve_export_settings(const json& args, const Scene_root& scene_root, const char* const tool, Scene_export_settings& out) -> std::string
-{
-    out = scene_root.get_scene_settings().export_settings;
-    const json::const_iterator export_settings_it = args.find("export_settings");
-    if (export_settings_it == args.end()) {
-        return {};
-    }
-    if (!export_settings_it->is_object()) {
-        return fmt::format("{}: export_settings must be an object (Scene_export_settings shape)", tool);
-    }
-    json merged = json::parse(serialize(out, 0), nullptr, false);
-    merged.merge_patch(*export_settings_it);
-    const std::string            text = merged.dump();
-    simdjson::ondemand::parser   parser;
-    simdjson::padded_string      padded{text};
-    simdjson::ondemand::document document;
-    simdjson::ondemand::object   object;
-    Scene_export_settings        parsed{};
-    const bool ok =
-        (parser.iterate(padded).get(document) == simdjson::SUCCESS) &&
-        (document.get_object().get(object) == simdjson::SUCCESS) &&
-        (deserialize(object, parsed) == simdjson::SUCCESS);
-    if (!ok) {
-        return fmt::format("{}: export_settings did not deserialize as Scene_export_settings", tool);
-    }
-    out = std::move(parsed);
-    return {};
-}
-
 auto Mcp_server::queue_prepare(const json& args, const Prepare_target target, const char* const tool) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
@@ -197,28 +269,259 @@ auto Mcp_server::queue_prepare(const json& args, const Prepare_target target, co
     if (!scene_root) {
         return make_error_content("Scene not found: " + scene_name);
     }
-    if (scene_root->get_source_format() == Scene_source_format::usd) {
-        return make_error_content(fmt::format("{}: '{}' is a USD-backed scene; Prepare writes glTF only", tool, scene_name));
+    // The scene's export settings are the only settings input (R7.2, R12.4).
+    for (const char* const removed : {"export_settings", "texture_supercompression"}) {
+        if (args.contains(removed)) {
+            return make_error_content(fmt::format(
+                "{}: '{}' is not an argument - Export reads the scene's export settings; change them with set_scene_settings before the call",
+                tool, removed
+            ));
+        }
     }
-    std::filesystem::path path = path_str.empty()
-        ? editor::default_prepared_scene_path(*scene_root, target)
-        : std::filesystem::path{path_str};
-    if ((path.extension() != std::filesystem::path{".glb"}) && (path.extension() != std::filesystem::path{".gltf"})) {
-        path = std::filesystem::path{path.string() + ".glb"};
+    // The store is the only prepared format (R12.1): the gltf / store choice is gone.
+    if (args.contains("container")) {
+        return make_error_content(fmt::format("{}: 'container' is not an argument - an Export always writes the editor asset and the prepared asset", tool));
     }
-    // Decision D3: the raw block levels Zstandard supercompressed ("zstd") or
-    // stored as they upload ("none").
-    const std::string supercompression = args.value("texture_supercompression", "zstd");
-    if ((supercompression != "zstd") && (supercompression != "none")) {
-        return make_error_content(fmt::format("{}: texture_supercompression must be \"zstd\" or \"none\"", tool));
+    const std::string refusal = get_export_refusal(*scene_root, "Export");
+    if (!refusal.empty()) {
+        return make_error_content(fmt::format("{}: {}", tool, refusal));
     }
-    const erhe::gltf::Gltf_texture_export texture_export = get_prepare_texture_export(target, supercompression == "zstd");
-    Scene_export_settings export_settings{};
-    const std::string settings_error = resolve_export_settings(args, *scene_root, tool, export_settings);
-    if (!settings_error.empty()) {
-        return make_error_content(settings_error);
+    // Empty: <source stem>.<target>.erhe_prepared beside the source file.
+    std::filesystem::path path;
+    if (!path_str.empty()) {
+        path = std::filesystem::path{path_str};
+        if (path.extension() != std::filesystem::path{".erhe_prepared"}) {
+            path = std::filesystem::path{path.string() + ".erhe_prepared"};
+        }
     }
-    return make_json_content(queue_save(Gltf_scene_save_kind::prepared, tool, scene_root, path, Scene_save_source_binding::keep, texture_export, export_settings)).dump();
+    return make_json_content(queue_save(Scene_save_job::store, tool, scene_root, path, Scene_save_source_binding::keep, target)).dump();
+}
+
+auto Mcp_server::queue_prepared_status(const json& args, const Prepared_drop drop, const char* const tool) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::shared_ptr<Scene_root> scene_root = find_scene_root_shared(m_context, find_scene(scene_name));
+    if (!scene_root) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::string target_name = args.value("target", std::string{"pc"});
+    if ((target_name != "pc") && (target_name != "quest")) {
+        return make_error_content(fmt::format("{}: target must be \"pc\" or \"quest\"", tool));
+    }
+    const Prepare_target target = (target_name == "pc") ? Prepare_target::pc : Prepare_target::quest;
+    const std::string refusal = get_export_refusal(*scene_root, "Status");
+    if (!refusal.empty()) {
+        return make_error_content(fmt::format("{}: {}", tool, refusal));
+    }
+    std::filesystem::path path;
+    const std::string path_str = args.value("path", "");
+    if (!path_str.empty()) {
+        path = std::filesystem::path{path_str};
+        if (path.extension() != std::filesystem::path{".erhe_prepared"}) {
+            path = std::filesystem::path{path.string() + ".erhe_prepared"};
+        }
+    }
+    const std::filesystem::path shown_path = path.empty() ? get_default_prepared_asset_path(scene_root->get_source_path(), target_name) : path;
+    json job;
+    {
+        std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+        const std::uint64_t job_id = m_next_save_job_id++;
+        job = json{
+            {"job_id",     job_id},
+            {"tool",       tool},
+            {"scene_name", scene_root->get_name()},
+            {"path",       shown_path.string()},
+            {"format",     "store"},
+            {"drop",       c_str(drop)},
+            {"state",      "pending"},
+            {"saved",      false}
+        };
+        m_save_jobs.push_back(job);
+        while (m_save_jobs.size() > k_max_save_jobs) {
+            m_save_jobs.pop_front();
+        }
+    }
+    const std::uint64_t job_id = job["job_id"].get<std::uint64_t>();
+    scene_root->get_prepared_keys().set_target(target_name, path);
+    request_prepared_status(
+        m_context, scene_root, target, path, drop,
+        [this, job_id](const std::shared_ptr<const Scene_export>& running_export) {
+            update_save_job(job_id, json{{"state", "running"}});
+            if (running_export) {
+                std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+                m_running_exports[job_id] = running_export;
+            }
+        },
+        [this, job_id](const Scene_save_result& result) {
+            std::shared_ptr<const Scene_export> finished_export; // released outside the lock
+            {
+                std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+                const auto running_export = m_running_exports.find(job_id);
+                if (running_export != m_running_exports.end()) {
+                    finished_export = std::move(running_export->second);
+                    m_running_exports.erase(running_export);
+                }
+            }
+            if (!result.saved || !result.status_report.has_value()) {
+                update_save_job(job_id, json{{"state", "failed"}, {"save_ms", result.save_ms}, {"error", result.error}});
+                log_mcp->warn("MCP server: status job {} failed: {}", job_id, result.error);
+                return;
+            }
+            update_save_job(job_id, json{
+                {"state",           "done"},
+                {"saved",           true},
+                {"save_ms",         result.save_ms},
+                {"prepared_status", make_prepared_status_json(result.status_report.value())}
+            });
+            log_mcp->info("MCP server: status job {} done in {:.1f} ms", job_id, result.save_ms);
+        }
+    );
+    log_mcp->info("MCP server: {} job {} queued for '{}' (drop {})", tool, job_id, scene_root->get_name(), c_str(drop));
+    job["message"] = "queued - poll get_save_status {job_id} until state is done or failed";
+    return make_json_content(job).dump();
+}
+
+// Bake World-Space Meshes (doc/editor/world_space_bake.md): a job reported like an Export.
+auto Mcp_server::action_bake_world_space_meshes(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::shared_ptr<Scene_root> scene_root = find_scene_root_shared(m_context, find_scene(scene_name));
+    if (!scene_root) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    if (args.contains("export_settings")) {
+        return make_error_content("bake_world_space_meshes: 'export_settings' is not an argument - the bake reads the scene's export settings; change them with set_scene_settings before the call");
+    }
+    const std::string refusal = get_export_refusal(*scene_root, get_export_action(Scene_export_mode::bake_world_meshes));
+    if (!refusal.empty()) {
+        return make_error_content("bake_world_space_meshes: " + refusal);
+    }
+    json job;
+    {
+        std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+        const std::uint64_t job_id = m_next_save_job_id++;
+        job = json{
+            {"job_id",     job_id},
+            {"tool",       "bake_world_space_meshes"},
+            {"scene_name", scene_root->get_name()},
+            {"path",       get_default_editor_asset_path(scene_root->get_source_path()).string()},
+            {"format",     "store"},
+            {"state",      "pending"},
+            {"saved",      false}
+        };
+        m_save_jobs.push_back(job);
+        while (m_save_jobs.size() > k_max_save_jobs) {
+            m_save_jobs.pop_front();
+        }
+    }
+    const std::uint64_t job_id = job["job_id"].get<std::uint64_t>();
+    request_world_space_bake(
+        m_context, scene_root,
+        [this, job_id](const std::shared_ptr<const Scene_export>& running_export) {
+            update_save_job(job_id, json{{"state", "running"}});
+            if (running_export) {
+                std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+                m_running_exports[job_id] = running_export;
+            }
+        },
+        [this, job_id](const Scene_save_result& result) {
+            std::shared_ptr<const Scene_export> finished_export; // released outside the lock
+            {
+                std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+                const auto running_export = m_running_exports.find(job_id);
+                if (running_export != m_running_exports.end()) {
+                    finished_export = std::move(running_export->second);
+                    m_running_exports.erase(running_export);
+                }
+            }
+            if (!result.saved || !result.export_report.has_value()) {
+                update_save_job(job_id, json{{"state", "failed"}, {"save_ms", result.save_ms}, {"error", result.error}});
+                log_mcp->warn("MCP server: bake job {} failed: {}", job_id, result.error);
+                return;
+            }
+            json fields = make_export_report_json(result.export_report.value());
+            fields["state"]   = "done";
+            fields["saved"]   = true;
+            fields["save_ms"] = result.save_ms;
+            update_save_job(job_id, fields);
+            log_mcp->info("MCP server: bake job {} done in {:.1f} ms", job_id, result.save_ms);
+        }
+    );
+    log_mcp->info("MCP server: bake_world_space_meshes job {} queued for '{}'", job_id, scene_root->get_name());
+    job["message"] = "queued - poll get_save_status {job_id} until state is done or failed";
+    return make_json_content(job).dump();
+}
+
+auto Mcp_server::query_world_space_meshes(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const World_space_form_status status = scene_root->get_world_space_form().get_status();
+    return make_json_content(json{
+        {"scene_name",       scene_root->get_name()},
+        {"baked",            status.baked},
+        {"admitted_count",   status.admitted_count},
+        {"valid_count",      status.valid_count},
+        {"missing_count",    status.missing_count},
+        {"scene_changed",    status.scene_changed},
+        {"settings_changed", status.settings_changed},
+        {"available",        status.is_available()}
+    }).dump();
+}
+
+// The status Prepared_keys keeps current (doc/editor/prepared_assets.md "Status"); answered at once.
+auto Mcp_server::action_get_prepared_status(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::shared_ptr<Scene_root> scene_root = find_scene_root_shared(m_context, find_scene(scene_name));
+    if (!scene_root) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::string target_name = args.value("target", std::string{"pc"});
+    if ((target_name != "pc") && (target_name != "quest")) {
+        return make_error_content("get_prepared_status: target must be \"pc\" or \"quest\"");
+    }
+    const std::string refusal = get_export_refusal(*scene_root, "Status");
+    if (!refusal.empty()) {
+        return make_error_content(fmt::format("get_prepared_status: {}", refusal));
+    }
+    std::filesystem::path path;
+    const std::string path_str = args.value("path", "");
+    if (!path_str.empty()) {
+        path = std::filesystem::path{path_str};
+        if (path.extension() != std::filesystem::path{".erhe_prepared"}) {
+            path = std::filesystem::path{path.string() + ".erhe_prepared"};
+        }
+    }
+    Prepared_keys& keys = scene_root->get_prepared_keys();
+    keys.set_target(target_name, path);
+    if (args.value("refresh", false)) {
+        refresh_prepared_status(m_context, *scene_root);
+    }
+    const bool pending = scene_root->is_prepared_status_pending();
+    json reply{
+        {"scene_name", scene_root->get_name()},
+        {"target",     target_name},
+        {"pending",    pending},
+        {"error",      keys.get_error()}
+    };
+    const std::shared_ptr<const Prepared_status_report>& status = keys.get_status();
+    if (!pending && status) {
+        reply["prepared_status"] = make_prepared_status_json(*status);
+    }
+    return make_json_content(reply).dump();
+}
+
+auto Mcp_server::action_drop_prepared_items(const json& args) -> std::string
+{
+    Prepared_drop drop{Prepared_drop::none};
+    if (!prepared_drop_from_string(args.value("drop", ""), drop) || (drop == Prepared_drop::none)) {
+        return make_error_content("drop_prepared_items: drop must be \"unreferenced\", \"target\", \"all\" or \"prepared_asset\"");
+    }
+    return queue_prepared_status(args, drop, "drop_prepared_items");
 }
 
 auto Mcp_server::action_save_scene_for_quest(const json& args) -> std::string
@@ -242,6 +545,10 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
     const std::shared_ptr<Scene_root> scene_root = find_scene_root_shared(m_context, find_scene(scene_name));
     if (!scene_root) {
         return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::string refusal = get_prepared_run_refusal(*scene_root, "Save");
+    if (!refusal.empty()) {
+        return make_error_content("save_scene: " + refusal);
     }
     // Save follows the scene's own format, the way File > Save Scene does
     // (doc/erhe/usd_compatibility_design.md E1): a USD-backed scene writes a USDA
@@ -278,21 +585,20 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
     const Scene_save_source_binding source_binding = (set_as_source || (path_str.empty() && scene_root->get_source_path().empty()))
         ? Scene_save_source_binding::set_source
         : Scene_save_source_binding::keep;
-    return make_json_content(queue_save(Gltf_scene_save_kind::scene, "save_scene", scene_root, path, source_binding)).dump();
+    return make_json_content(queue_save(Scene_save_job::save_scene, "save_scene", scene_root, path, source_binding)).dump();
 }
 
 auto Mcp_server::queue_save(
-    const Gltf_scene_save_kind            kind,
+    const Scene_save_job                  save_job,
     const char* const                     tool,
     const std::shared_ptr<Scene_root>&    scene_root,
     const std::filesystem::path&          path,
     const Scene_save_source_binding       source_binding,
-    const erhe::gltf::Gltf_texture_export texture_export,
-    const std::optional<Scene_export_settings>& export_settings
+    const Prepare_target                  target
 ) -> json
 {
-    const bool        prepared = (kind == Gltf_scene_save_kind::prepared);
-    const char* const format   = prepared ? c_str(Scene_source_format::gltf) : c_str(scene_root->get_source_format());
+    const bool        store  = (save_job == Scene_save_job::store);
+    const char* const format = store ? "store" : c_str(scene_root->get_source_format());
     json job;
     {
         std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
@@ -316,17 +622,40 @@ auto Mcp_server::queue_save(
         Scene_save_request{
             .scene_root     = scene_root,
             .path           = path,
-            .kind           = kind,
-            .texture_export = prepared ? texture_export : erhe::gltf::Gltf_texture_export::source,
+            .job            = save_job,
             .source_binding = source_binding,
-            .export_settings = export_settings,
-            .on_started     = [this, job_id]() {
+            .target         = target,
+            .on_started     = [this, job_id](const std::shared_ptr<const Scene_export>& running_export) {
                 update_save_job(job_id, json{{"state", "running"}});
+                if (running_export) {
+                    std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+                    m_running_exports[job_id] = running_export;
+                }
             },
-            .on_finished    = [this, job_id, kind, path](const Scene_save_result& result) {
+            .on_finished    = [this, job_id, path](const Scene_save_result& result) {
+                std::shared_ptr<const Scene_export> finished_export; // released outside the lock
+                {
+                    std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
+                    const auto running_export = m_running_exports.find(job_id);
+                    if (running_export != m_running_exports.end()) {
+                        finished_export = std::move(running_export->second);
+                        m_running_exports.erase(running_export);
+                    }
+                }
                 if (!result.saved) {
                     update_save_job(job_id, json{{"state", "failed"}, {"save_ms", result.save_ms}, {"error", result.error}});
                     log_mcp->warn("MCP server: save job {} failed: {}", job_id, result.error);
+                    return;
+                }
+                if (result.export_report.has_value()) {
+                    json fields = make_export_report_json(result.export_report.value());
+                    fields["state"]      = "done";
+                    fields["saved"]      = true;
+                    fields["save_ms"]    = result.save_ms;
+                    fields["path"]       = result.export_report->prepared_asset_path.string();
+                    fields["file_bytes"] = result.file_bytes;
+                    update_save_job(job_id, fields);
+                    log_mcp->info("MCP server: export job {} done: '{}' in {:.1f} ms", job_id, result.export_report->prepared_asset_path.string(), result.save_ms);
                     return;
                 }
                 std::error_code error_code;
@@ -339,10 +668,7 @@ auto Mcp_server::queue_save(
                     {"file_bytes", file_bytes}
                 };
                 if (!result.usd) {
-                    const Save_report_textures textures = (kind == Gltf_scene_save_kind::prepared)
-                        ? Save_report_textures::include
-                        : Save_report_textures::omit;
-                    const json report_json = make_save_report_json(result.report, textures);
+                    const json report_json = make_save_report_json(result.report);
                     for (const auto& [key, value] : report_json.items()) {
                         fields[key] = value;
                     }
@@ -377,7 +703,14 @@ auto Mcp_server::query_save_status(const json& args) -> std::string
         const std::uint64_t job_id = args.value("job_id", std::uint64_t{0});
         for (const json& job : m_save_jobs) {
             if (job.value("job_id", std::uint64_t{0}) == job_id) {
-                return make_json_content(job).dump();
+                const auto running_export = m_running_exports.find(job_id);
+                if (running_export == m_running_exports.end()) {
+                    return make_json_content(job).dump();
+                }
+                const Scene_export_progress_state progress = get_scene_export_progress(*running_export->second);
+                json running_job = job;
+                running_job["progress"] = json{{"stage", c_str(progress.stage)}, {"done", progress.done}, {"total", progress.total}};
+                return make_json_content(running_job).dump();
             }
         }
         return make_error_content(
@@ -586,16 +919,31 @@ auto Mcp_server::action_load_scene(const json& args) -> std::string
     // as a USD-backed scene, and routes a foreign glTF to
     // Scene_open_operation. Queued so the window setup runs from the message
     // pump on a following frame, outside ImGui iteration.
+    json                           format_notices = json::array();
+    std::shared_ptr<Prepared_open> prepared_open;
+    std::string                    scene_name     = erhe::file::to_string(path.stem());
+    if (is_prepared_asset_path(path)) {
+        prepared_open = check_prepared_load(m_context, path, format_notices);
+        if (prepared_open->kind == Prepared_open_kind::failed) {
+            return make_error_content("load_scene: " + prepared_open->error);
+        }
+        scene_name = get_prepared_open_scene_name(path, *prepared_open);
+    }
     m_context.app_message_bus->load_scene_file.queue_message(
         Load_scene_file_message{
-            .path = path
+            .path          = path,
+            .prepared_open = std::move(prepared_open)
         }
     );
-    return make_json_content({
+    json reply{
         {"queued",     true},
         {"path",       path_str},
-        {"scene_name", erhe::file::to_string(path.stem())}
-    }).dump();
+        {"scene_name", scene_name}
+    };
+    if (!format_notices.empty()) {
+        reply["format_notices"] = std::move(format_notices);
+    }
+    return make_json_content(reply).dump();
 }
 
 auto Mcp_server::action_open_scene(const json& args) -> std::string
@@ -613,21 +961,38 @@ auto Mcp_server::action_open_scene(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    // A USD file has no undoable open path of its own: it takes the same
-    // route File > Load Scene takes, which builds the USD-backed scene
-    // (doc/erhe/usd_compatibility_design.md E1).
-    if (editor::is_usd_file_extension(path)) {
+    // A USD file and a prepared asset have no undoable open path of their own:
+    // they take the route File > Load Scene takes, which builds the USD-backed
+    // scene (doc/erhe/usd_compatibility_design.md E1) or opens the prepared
+    // asset (doc/editor/prepared_assets.md "Prepared run").
+    const bool prepared = is_prepared_asset_path(path);
+    if (editor::is_usd_file_extension(path) || prepared) {
+        json                           format_notices = json::array();
+        std::shared_ptr<Prepared_open> prepared_open;
+        std::string                    scene_name     = erhe::file::to_string(path.stem());
+        if (prepared) {
+            prepared_open = check_prepared_load(m_context, path, format_notices);
+            if (prepared_open->kind == Prepared_open_kind::failed) {
+                return make_error_content("open_scene: " + prepared_open->error);
+            }
+            scene_name = get_prepared_open_scene_name(path, *prepared_open);
+        }
         m_context.app_message_bus->load_scene_file.queue_message(
             Load_scene_file_message{
-                .path = path
+                .path          = path,
+                .prepared_open = std::move(prepared_open)
             }
         );
-        return make_json_content({
+        json reply{
             {"queued",     true},
             {"path",       path_str},
-            {"scene_name", erhe::file::to_string(path.stem())},
-            {"format",     "usd"}
-        }).dump();
+            {"scene_name", scene_name},
+            {"format",     prepared ? "prepared" : "usd"}
+        };
+        if (!format_notices.empty()) {
+            reply["format_notices"] = std::move(format_notices);
+        }
+        return make_json_content(reply).dump();
     }
     // Same path as the Asset Browser's "Load" context menu entry: the file is
     // scanned and parsed asynchronously, then a Scene_open_operation (new
@@ -659,6 +1024,10 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
+    const std::string refusal = get_prepared_run_refusal(*sr, "glTF export");
+    if (!refusal.empty()) {
+        return make_error_content("export_gltf: " + refusal);
+    }
     std::shared_ptr<erhe::scene::Node> root_node = sr->get_scene().get_root_node();
     if (!root_node) {
         json r = make_text_content("Scene has no root node: " + scene_name);
@@ -686,7 +1055,7 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         // Full scene persistence: editor-domain ERHE_* extensions + baked
         // graph-mesh exclusion (doc/editor/gltf_scene_roundtrip.md phase 3).
         // The default export stays plain interchange.
-        add_gltf_editor_state(export_arguments, *sr, export_path, physics_items);
+        add_gltf_editor_state(export_arguments, *sr, export_path, physics_items, Gltf_editor_state_scope::scene_file);
     }
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
     if (gltf.empty()) {
@@ -1670,6 +2039,17 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
     if (has_camera_node == has_camera) {
         return make_error_content("render_scene_image: give exactly one of 'camera' {eye, target, ...} and 'camera_node' (camera name or id)");
     }
+    // The world-space form (doc/editor/world_space_bake.md "Two forms"): drawn only while it is available.
+    Mesh_form mesh_form{Mesh_form::source};
+    const std::string mesh_form_name = args.value("mesh_form", std::string{"source"});
+    if (mesh_form_name == "world_space") {
+        if (!scene_root->get_world_space_form().get_status().is_available()) {
+            return make_error_content("render_scene_image: the world-space form of the scene is not available (bake it; get_world_space_meshes says why)");
+        }
+        mesh_form = Mesh_form::world_space;
+    } else if (mesh_form_name != "source") {
+        return make_error_content("render_scene_image: mesh_form must be \"source\" or \"world_space\"");
+    }
     if (has_camera_node) {
         const json& selector = args["camera_node"];
         for (const std::shared_ptr<erhe::scene::Camera>& candidate : scene_root->get_scene().get_cameras()) {
@@ -1771,7 +2151,8 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             .shader_debug      = static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_value),
             .shadow_debug_light = shadow_debug_light,
             .overdraw           = overdraw,
-            .forward_pass_timer = m_scene_image_forward_timer.get()
+            .forward_pass_timer = m_scene_image_forward_timer.get(),
+            .mesh_form          = mesh_form
         }
     );
     m_scene_image_header = json{

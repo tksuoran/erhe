@@ -19,6 +19,7 @@
 
 namespace erhe::primitive {
 
+class Primitive_render_shape;
 class Primitive_shape;
 
 // How the BVH of a Prepared_primitive_export was obtained.
@@ -34,7 +35,7 @@ enum class Prepared_bvh_source : unsigned int {
 // A soup primitive prepared for export with the ERHE_mesh_optimized,
 // ERHE_mesh_topology and ERHE_raytrace_bvh glTF extensions
 // (doc/plans/gltf_fast_load.md "Saved core primitive",
-// doc/gltf_extensions/ERHE_mesh_optimized.md): the core accessors and the
+// doc/erhe/gltf.md "Mesh items"): the core accessors and the
 // three payloads.
 class Prepared_primitive_export
 {
@@ -43,7 +44,8 @@ public:
     // vertex stream holding POSITION (vec3 float), NORMAL (vec3 float),
     // TANGENT (vec4 float), and, as the source soup carries them,
     // TEXCOORD_0..2 (vec2 float), COLOR_0..1 (vec4 float), JOINTS_0..1
-    // (vec4 uint8 / uint16, the soup's width) and WEIGHTS_0..1 (vec4 float).
+    // (vec4 uint8 / uint16, the soup's width), WEIGHTS_0..1 (vec4 float) and
+    // the anisotropy control (custom_attribute_aniso_control, vec2 float).
     // Every value is what erhe's content build writes for the corner (the
     // Normal_style::corner_normals build of the shape's Geometry): positions
     // are the Geometry's colocated point positions, tangents include the ones
@@ -145,6 +147,39 @@ public:
 // of the Geometry, as every build does).
 [[nodiscard]] auto prepare_primitive_for_export(Primitive_shape& shape) -> Prepare_primitive_result;
 
+class Derived_triangle_soup
+{
+public:
+    std::shared_ptr<Triangle_soup> soup;
+    // Why there is no soup; empty when there is one.
+    std::string                    refusal;
+};
+
+// The triangles the editor derives from the Geometry of a geometry-normative
+// shape (doc/erhe/primitive.md "Derived triangles"): the content build with
+// the shape's normal style, one vertex per facet corner, polygons
+// fan-triangulated. Refuses a shape without Geometry, facets or fill
+// triangles, or with attribute sets the core cannot carry.
+[[nodiscard]] auto derive_triangle_soup(Primitive_render_shape& shape) -> Derived_triangle_soup;
+
+class Derived_content_hash
+{
+public:
+    std::optional<erhe::hash::Content_hash> content_hash;
+    // Why there is none; empty when there is one.
+    std::string                             refusal;
+};
+
+// The content hash of a geometry-normative shape (doc/erhe/primitive.md
+// "Content hash"): compute_triangle_soup_content_hash() of the triangles
+// derive_triangle_soup() returns. One build of the Geometry at a time.
+[[nodiscard]] auto compute_derived_content_hash(Primitive_render_shape& shape) -> Derived_content_hash;
+
+// prepare_primitive_for_export() over the triangles derive_triangle_soup()
+// returns: the core is welded and optimized from them, vertex_points name
+// the Geometry's points, and the BVH is taken or built as for a soup.
+[[nodiscard]] auto prepare_derived_primitive_for_export(Primitive_render_shape& shape) -> Prepare_primitive_result;
+
 // The core to write: retained_core when set, otherwise core.
 [[nodiscard]] auto get_export_core(const Prepared_primitive_export& prepared) -> const Triangle_soup&;
 
@@ -220,7 +255,7 @@ public:
 };
 
 // The ERHE_mesh_optimized checks on the core content
-// (doc/gltf_extensions/ERHE_mesh_optimized.md "Validation / fallback"): the
+// (doc/erhe/gltf.md "Mesh items"): the
 // index count is a multiple of 3, every index is below the vertex count
 // (positions_xyz.size() / 3), every vertex is referenced, no triangle has two
 // corners with bitwise-identical positions, and the content hash over
@@ -233,7 +268,7 @@ public:
     uint64_t                  content_hash
 ) -> std::string;
 
-// The ERHE_mesh_topology checks (doc/gltf_extensions/ERHE_mesh_topology.md
+// The ERHE_mesh_topology checks (doc/erhe/gltf.md "Mesh items"
 // "Validation / fallback") on a vertex_points payload already known to hold
 // one value per core vertex: first-reference order, the distinct id count
 // equals point_count, and every vertex has the bitwise-identical position of

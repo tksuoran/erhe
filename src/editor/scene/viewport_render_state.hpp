@@ -1,5 +1,7 @@
 #pragma once
 
+#include "scene/mesh_form.hpp"
+
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
@@ -89,6 +91,7 @@ public:
     int                                  msaa_sample_count    {0};
     erhe::scene_renderer::Shader_debug   shader_debug         {erhe::scene_renderer::Shader_debug::none};
     Overdraw_mode                        overdraw             {Overdraw_mode::off};
+    Mesh_form                            mesh_form            {Mesh_form::source}; // what the view draws (Viewport_scene_view::get_mesh_form() when available)
     uint32_t                             overdraw_max_count   {8};
     // The hover flag and pointer position (the ID pass), and whether the
     // pick probe fires this frame.

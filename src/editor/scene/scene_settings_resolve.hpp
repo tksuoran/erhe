@@ -11,7 +11,6 @@ struct Grid_config;
 struct Physics_config;
 struct Shadow_frustum_fit_config;
 struct Camera_controls_config;
-struct Lod_config;
 
 namespace editor {
 
@@ -28,12 +27,10 @@ class Scene_root;
 [[nodiscard]] auto get_effective_camera_controls   (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Camera_controls_config&;
 [[nodiscard]] auto get_effective_clear_color       (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const glm::vec4&;
 [[nodiscard]] auto get_effective_post_processing   (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> bool;
-// The LOD request Prepare generates chains with (Scene_export_settings::lod).
-[[nodiscard]] auto get_effective_export_lod        (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Lod_config&;
-
 // Rewrites a serialized Scene_settings object of an older schema in place
-// before it is deserialized: v1 kept the PVS bake grid at the top level,
-// v2 keeps it in export_settings.
+// before it is deserialized: v1 kept the PVS bake grid at the top level (v2
+// keeps it in export_settings), v2 had export settings always and v3 has
+// them or not (doc/editor/prepared_assets.md "Export settings").
 void migrate_scene_settings_json(nlohmann::json& settings);
 
 } // namespace editor

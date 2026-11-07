@@ -1,10 +1,13 @@
 #pragma once
 
+#include "operations/mesh_operation.hpp"
+#include "operations/mesh_primitive_swap.hpp"
 #include "operations/operation.hpp"
 
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/enums.hpp"
 
+#include <geogram/basic/geometry.h>
 #include <geogram/basic/numeric.h>
 #include <glm/glm.hpp>
 
@@ -33,17 +36,31 @@ public:
     glm::vec2     after {0.0f};
 };
 
-// Undo-able edit that moves a set of geometry vertices of a single mesh primitive
-// (and, for a slide, re-interpolated corner texcoords of the facets around them).
-//
-// Unlike Mesh_operation, this mutates and reuses the *same* Geometry object (it does
-// not allocate a fresh one) so that the Mesh_component_selection - which keys its
-// component indices on the Geometry pointer - survives the edit and undo/redo. The
-// vertex move does not change topology, so only smooth vertex normals are recomputed
-// (no process_flag_connect, which would renumber corners and invalidate the stored
-// component indices). The renderable mesh and raytrace acceleration structure are
-// rebuilt and re-attached via the same parent-detach / set_primitives / re-attach
-// sequence Mesh_operation uses, so picking keeps working after the move.
+// The normal attributes a vertex move recomputes, element by element as
+// stored (value and present flag), so undo puts them back bit for bit.
+class Geometry_normals_snapshot
+{
+public:
+    void capture(const erhe::geometry::Geometry& geometry);
+    void restore(erhe::geometry::Geometry& geometry) const;
+    void clear  ();
+
+private:
+    std::vector<GEO::vec3f> m_facet_normal;
+    std::vector<bool>       m_facet_normal_present;
+    std::vector<GEO::vec3f> m_vertex_normal;
+    std::vector<bool>       m_vertex_normal_present;
+    std::vector<GEO::vec3f> m_vertex_normal_smooth;
+    std::vector<bool>       m_vertex_normal_smooth_present;
+    std::vector<GEO::vec3f> m_corner_normal;
+    std::vector<bool>       m_corner_normal_present;
+};
+
+// Undo-able edit that moves a set of geometry vertices of a single mesh
+// primitive (and, for a slide, re-interpolated corner texcoords of the facets
+// around them). It edits the same Geometry object in place (doc/editor/
+// operations.md "In-place vertex edits"); undo restores the primitives every
+// sharing mesh held before it (doc/editor/operations.md "Undo of an in-place edit").
 class Move_mesh_vertices_operation : public Operation
 {
 public:
@@ -72,9 +89,14 @@ public:
 
 private:
     enum class State : unsigned int { before = 0, after = 1 };
-    void apply(App_context& context, State state);
+    // Writes the positions and texcoords of `state` into the Geometry; the caller holds the item host mutex.
+    void write_geometry(State state);
 
     Parameters m_parameters;
+    // Held from execute to undo: what the edit replaced.
+    Geometry_normals_snapshot                    m_before_normals;
+    std::vector<Retained_mesh_primitives>        m_before_primitives;
+    std::vector<Mesh_operation::Entry::Version>  m_before_physics; // parallel to m_before_primitives
 };
 
 }

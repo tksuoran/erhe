@@ -849,6 +849,9 @@ void Mesh_component_transform::commit(App_context& context)
                 collect_corrected_texcoords(group, corner_texcoords);
                 description = (m_scalar_kind == Scalar_edit_kind::edge_slide) ? "Edge Slide" : "Vertex Slide";
             }
+            // The operation applies the move; its undo restores the primitive
+            // as it was before the drag, so the drag's writes into it go back first.
+            revert_live_writes(context, group);
             operations.push_back(
                 std::make_shared<Move_mesh_vertices_operation>(
                     Move_mesh_vertices_operation::Parameters{
@@ -2504,21 +2507,7 @@ void Mesh_component_transform::cancel(App_context& context)
                 swap_mesh_primitives(mesh, primitives);
             }
         } else if (mesh && group.geometry && (group.before_local.size() == group.vertices.size())) {
-            for (std::size_t i = 0, end = group.vertices.size(); i < end; ++i) {
-                write_vertex(context, group, group.vertices[i], group.before_local[i]);
-            }
-            update_group_normals(context, group, Normal_source::stored_attributes);
-            // The in-place edit's primitive stays: its box and its per-joint
-            // boxes, grown by the drag, go back to what they were at begin();
-            // the bounds notification below carries the change to the draw
-            // lists (and the shadow map cache's posed bounds).
-            const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
-            if ((group.primitive_index < primitives.size()) && primitives[group.primitive_index].primitive && primitives[group.primitive_index].primitive->render_shape) {
-                erhe::primitive::Buffer_mesh& buffer_mesh = primitives[group.primitive_index].primitive->render_shape->get_mutable_renderable_mesh();
-                buffer_mesh.bounding_box = group.before_bounding_box;
-                buffer_mesh.joint_bounding_boxes.assign(group.before_joint_bounding_boxes.begin(), group.before_joint_bounding_boxes.end());
-            }
-            notify_group_bounds(group);
+            revert_live_writes(context, group);
         }
 
         // Release the hold begin() took (transferred by fork / extrude). The
@@ -2551,6 +2540,28 @@ void Mesh_component_transform::cancel(App_context& context)
     if (topology_step && (context.mesh_component_selection != nullptr)) {
         context.mesh_component_selection->set_mode(m_topology_mode_before);
     }
+}
+
+void Mesh_component_transform::revert_live_writes(App_context& context, Group& group)
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+    if (!mesh) {
+        return;
+    }
+    for (std::size_t i = 0, end = group.vertices.size(); i < end; ++i) {
+        write_vertex(context, group, group.vertices[i], group.before_local[i]);
+    }
+    update_group_normals(context, group, Normal_source::stored_attributes);
+    // The primitive's box and its per-joint boxes, grown by the drag, go back
+    // to what they were at begin(); the bounds notification carries the
+    // change to the draw lists (and the shadow map cache's posed bounds).
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if ((group.primitive_index < primitives.size()) && primitives[group.primitive_index].primitive && primitives[group.primitive_index].primitive->render_shape) {
+        erhe::primitive::Buffer_mesh& buffer_mesh = primitives[group.primitive_index].primitive->render_shape->get_mutable_renderable_mesh();
+        buffer_mesh.bounding_box = group.before_bounding_box;
+        buffer_mesh.joint_bounding_boxes.assign(group.before_joint_bounding_boxes.begin(), group.before_joint_bounding_boxes.end());
+    }
+    notify_group_bounds(group);
 }
 
 auto Mesh_component_transform::has_moved_vertex(const Group& group) const -> bool

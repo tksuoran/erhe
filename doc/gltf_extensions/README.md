@@ -25,14 +25,18 @@ Presence of `ERHE_scene` in `extensionsUsed` marks a file as an
 erhe-authored scene (the editor opens it as a full scene instead of
 importing it as an asset).
 
+A scene file carries authoring data alone (R1.1 of
+`../plans/prepared_assets.md`). The derived data of a scene - prepared mesh
+cores, their colocation, GPU vertex streams, raytrace BVHs, LOD chains, raw
+block textures, the potentially visible set - is held in the items of its
+editor asset and prepared assets, whose formats `../erhe/gltf.md` describes
+("Mesh items" and the sections after it); they are not glTF file extensions,
+and a glTF file parse reads none of them.
+
 | Extension | Attaches to | Carries |
 |---|---|---|
 | [`ERHE_geometry`](ERHE_geometry.md) | mesh primitive | polygon rings + full geogram attribute dump (bit-exact geometry) |
-| [`ERHE_mesh_optimized`](ERHE_mesh_optimized.md) | mesh primitive | marker: the core is welded, colocated and in meshoptimizer order (prepared for fast load) |
-| [`ERHE_mesh_topology`](ERHE_mesh_topology.md) | mesh primitive | stored vertex-to-point colocation (replaces `colocate()` at load) |
-| [`ERHE_mesh_lod`](ERHE_mesh_lod.md) | mesh primitive | draft: stored LOD chain (level index lists, errors, the settings that made them; no simplification at load) |
-| [`ERHE_raytrace_bvh`](ERHE_raytrace_bvh.md) | mesh primitive | prebuilt raytrace BVH over the core triangles |
-| [`ERHE_gpu_vertex_streams`](ERHE_gpu_vertex_streams.md) | mesh primitive | draft: vertex streams in erhe GPU layout + explicit attribute scale / offset ("Save for Quest") |
+| [`ERHE_mesh_lod`](ERHE_mesh_lod.md) | mesh primitive | draft: the primitive's LOD request (the settings of the chain to generate) |
 | [`ERHE_node`](ERHE_node.md) | node | node Item flags, mesh-prim Item flags |
 | [`ERHE_camera`](ERHE_camera.md) | camera | full erhe projection, exposure, shadow range, Item flags |
 | [`ERHE_light`](ERHE_light.md) | node (light-carrying) | cast_shadow, infinite_range, Item flags |
@@ -42,8 +46,7 @@ importing it as an asset).
 | [`ERHE_brushes`](ERHE_brushes.md) | asset root | brush library (geometry via unreferenced meshes) |
 | [`ERHE_node_graphs`](ERHE_node_graphs.md) | asset root | procedural texture / mesh node graphs + bindings |
 | [`ERHE_collections`](ERHE_collections.md) | asset root | named node collections (item tags) |
-| [`ERHE_texture_ktx2`](ERHE_texture_ktx2.md) | asset root | per-texture raw block KTX2 image (ASTC 4x4 / BC7 / BC5, Prepare (Quest) / Prepare (PC)) |
-| [`ERHE_pvs`](ERHE_pvs.md) | asset root | draft: the scene's potentially visible set database (paged cell grid, one bit per baked entry) |
+| [`ERHE_texture_properties`](ERHE_texture_properties.md) | asset root | draft: per-image texture properties (transfer function, normal encoding, mipmap generation, wrap) |
 | [`ERHE_asset_reference`](ERHE_asset_reference.md) | top-level object (materials first) | proxy for a definition in another glTF file ({file, uid}) |
 
 JSON schemas live in [`schema/`](schema/); each `*.schema.json` validates
@@ -53,7 +56,7 @@ the extension's JSON value (the object stored under the extension name in
 Writer / reader: `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp` (library-domain
 extensions: geometry, node, camera, light, material, the prepared mesh data
 (including the LOD chains),
-texture_ktx2, pvs) and
+texture_ktx2, texture_properties, pvs) and
 `src/editor/parsers/gltf_extensions_export.cpp` /
 `gltf_extensions_import.cpp` (editor-domain extensions: physics, scene,
 layout, rig, brushes, node_graphs, collections). Legacy carriers (`erhe_flags`

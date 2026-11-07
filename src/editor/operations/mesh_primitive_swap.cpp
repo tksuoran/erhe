@@ -39,7 +39,8 @@ void share_rebuilt_primitive(
     const std::shared_ptr<erhe::scene::Mesh>&          mesh,
     const erhe::geometry::Geometry*                    geometry,
     const std::shared_ptr<erhe::primitive::Primitive>& new_primitive,
-    const std::function<void(erhe::scene::Mesh&)>&     after_swap
+    const std::function<void(erhe::scene::Mesh&)>&     after_swap,
+    std::vector<Retained_mesh_primitives>* const       out_retained
 )
 {
     Scene_root* const scene_root = static_cast<Scene_root*>(mesh->get_item_host());
@@ -62,7 +63,14 @@ void share_rebuilt_primitive(
         }
     }
 
+    if (out_retained != nullptr) {
+        out_retained->clear();
+        out_retained->reserve(referers.size());
+    }
     for (const std::shared_ptr<erhe::scene::Mesh>& referer : referers) {
+        if (out_retained != nullptr) {
+            out_retained->push_back(Retained_mesh_primitives{.mesh = referer, .primitives = referer->get_primitives()});
+        }
         std::vector<erhe::scene::Mesh_primitive> new_primitives = referer->get_primitives();
         for (erhe::scene::Mesh_primitive& mesh_primitive : new_primitives) {
             if (references_geometry(mesh_primitive, geometry)) {
@@ -75,6 +83,24 @@ void share_rebuilt_primitive(
         }
         context.app_message_bus->mesh_geometry_changed.send_message(
             Mesh_geometry_changed_message{.mesh = referer}
+        );
+    }
+}
+
+void restore_mesh_primitives(
+    App_context&                                                 context,
+    const std::vector<Retained_mesh_primitives>&                 retained,
+    const std::function<void(erhe::scene::Mesh&, std::size_t)>& after_swap
+)
+{
+    for (std::size_t i = 0, end = retained.size(); i < end; ++i) {
+        const Retained_mesh_primitives& entry = retained[i];
+        swap_mesh_primitives(entry.mesh, entry.primitives);
+        if (after_swap) {
+            after_swap(*entry.mesh, i);
+        }
+        context.app_message_bus->mesh_geometry_changed.send_message(
+            Mesh_geometry_changed_message{.mesh = entry.mesh}
         );
     }
 }

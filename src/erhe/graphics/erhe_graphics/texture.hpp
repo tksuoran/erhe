@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/enums.hpp"
+#include "erhe_graphics/texture_properties.hpp"
 #include "erhe_graphics/texture_reference.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_item/item.hpp"
@@ -80,6 +81,13 @@ public:
     static const erhe::property::Property<int>         width_property;
     static const erhe::property::Property<int>         height_property;
     static const erhe::property::Property<std::string> pixelformat_property;
+    // Authoring properties of a source texture (Texture_properties; R4.2), in
+    // the "Texture" group; a loader sets them, and conversion reads them.
+    static const erhe::property::Property<Texture_transfer_function> transfer_function_property;
+    static const erhe::property::Property<Texture_normal_encoding>   normal_encoding_property;
+    static const erhe::property::Property<bool>                      generate_mipmaps_property;
+    static const erhe::property::Property<Sampler_address_mode>      wrap_u_property;
+    static const erhe::property::Property<Sampler_address_mode>      wrap_v_property;
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::texture | erhe::Item_type::texture_reference; }
 
     // Overrides erhe::Typed: the class fixes the token. USD has no prim
@@ -144,6 +152,10 @@ public:
     // a material normal slot.
     void               set_two_component_normal(bool value) { m_two_component_normal = value; }
     [[nodiscard]] auto is_two_component_normal () const -> bool { return m_two_component_normal; }
+
+    [[nodiscard]] auto get_texture_properties() const -> Texture_properties;
+    // Sets every field as a local value; before the texture is published, or as an edit.
+    void set_texture_properties(const Texture_properties& properties);
     // The bytes this texture counts into get_memory_statistics() (estimated
     // from the create info); 0 for views and wrapped images.
     [[nodiscard]] auto get_estimated_byte_count() const -> std::size_t { return m_estimated_byte_count; }

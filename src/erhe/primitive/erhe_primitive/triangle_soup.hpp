@@ -1,11 +1,13 @@
 #pragma once
 
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_hash/content_hash.hpp"
 #include "erhe_primitive/enums.hpp"
 
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -69,6 +71,11 @@ public:
     // Primitive_shape::load_payload()); null otherwise and when it is
     // rejected (the primitive then loads as a plain soup).
     [[nodiscard]] virtual auto load_prepared_data(const Triangle_soup& soup) const -> std::shared_ptr<Prepared_primitive_data>;
+    // The content hash a deferred load gives `soup` (the soup load() just
+    // returned) when its prepared data stores none
+    // (compute_triangle_soup_content_hash(), or nullopt when the loader
+    // computes none; doc/erhe/primitive.md "Content hash"). The default computes none.
+    [[nodiscard]] virtual auto load_content_hash(const Triangle_soup& soup) const -> std::optional<erhe::hash::Content_hash>;
     // The GPU-ready vertex streams the source stores for the soup in the
     // requested layouts (ERHE_gpu_vertex_streams), read and validated with
     // the prepared mesh data now, without building the soup; null, with
@@ -112,7 +119,7 @@ public:
 // vertex_points[v] is the point of soup vertex v, for every vertex of the
 // soup (Triangle_soup::get_vertex_count()). A vertex no index references
 // has no point and carries no_point. This is the payload of the
-// ERHE_mesh_topology glTF extension (doc/gltf_extensions/ERHE_mesh_topology.md).
+// ERHE_mesh_topology glTF extension (doc/erhe/gltf.md "Mesh items").
 class Vertex_colocation
 {
 public:
@@ -160,5 +167,10 @@ void mesh_from_triangle_soup(
     GEO::Mesh&                      mesh,
     Element_mappings&               element_mappings
 ) -> bool;
+
+// The content hash of a soup (doc/erhe/primitive.md "Content hash"): XXH3-128
+// over its primitive type, its indices and, per attribute in layout order, the
+// attribute's usage, usage index and format and every vertex's bytes of it.
+[[nodiscard]] auto compute_triangle_soup_content_hash(const Triangle_soup& triangle_soup) -> erhe::hash::Content_hash;
 
 } // namespace erhe::primitive

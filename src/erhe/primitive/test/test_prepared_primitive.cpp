@@ -460,7 +460,7 @@ TEST(Prepared_primitive, attribute_set_gap_is_refused)
 }
 
 // Load-side checks of ERHE_mesh_optimized and ERHE_mesh_topology
-// (doc/gltf_extensions/ERHE_mesh_optimized.md, ERHE_mesh_topology.md
+// (doc/erhe/gltf.md "Mesh items", ERHE_mesh_topology.md
 // "Validation / fallback").
 TEST(Prepared_primitive, load_validation_of_core_and_vertex_points)
 {

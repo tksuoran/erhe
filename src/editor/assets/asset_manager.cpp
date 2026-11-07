@@ -855,7 +855,9 @@ auto Asset_manager::make_key(const erhe::Item_base& item) const -> Asset_key
     for (const auto& [type, by_name] : m_builtins) {
         for (const auto& [name, builtin_item] : by_name) {
             if (builtin_item.get() == &item) {
+                // Builtins are addressed by name; their uids are random per session.
                 key.scope = Asset_scope::builtin;
+                key.uid.clear();
                 return key;
             }
         }
@@ -1228,7 +1230,7 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
         .mesh_layer_id   = 0,
         .path            = canonical_path,
         .fix_spot_lights = m_context.fix_gltf_spot_lights,
-        .prepared_mesh_data_use = get_prepared_mesh_data_use(m_context),
+        .content_hashes         = erhe::gltf::Gltf_content_hash_load::compute,
         .triangle_soup_reload   = get_triangle_soup_reload(m_context)
     };
     record->gltf_data = erhe::gltf::parse_gltf(parse_arguments);
@@ -1917,7 +1919,6 @@ auto Asset_manager::inspect_assets() const -> std::vector<Asset_info>
             Asset_info info;
             info.key.scope   = Asset_scope::builtin;
             info.key.type    = type;
-            info.key.uid     = item->get_gltf_uid();
             info.key.name    = name;
             info.user_labels = user_labels_of(item.get());
             covered.emplace(item.get(), true);
@@ -2109,6 +2110,49 @@ auto Asset_manager::find_defining_record(const erhe::Item_base& item) const -> s
         }
     }
     return {};
+}
+
+auto Asset_manager::get_defining_container_path(const erhe::Item_base& item) const -> std::filesystem::path
+{
+    const Asset_type type = asset_type_from_item(item);
+    if (!is_manager_owned_asset_type(type)) {
+        return {};
+    }
+    for (const auto& [container_id, record] : m_containers) {
+        static_cast<void>(container_id);
+        const std::vector<std::shared_ptr<erhe::Item_base>>* items = nullptr;
+        if (record->is_scene_record()) {
+            const Asset_container_record::Scene_entries* entries = record->get_scene_entries(type);
+            items = (entries != nullptr) ? &entries->items : nullptr;
+        } else {
+            const Asset_container_record::Type_entries* entries = record->get_type_entries(type);
+            items = (entries != nullptr) ? &entries->items : nullptr;
+        }
+        if (items == nullptr) {
+            continue;
+        }
+        for (const std::shared_ptr<erhe::Item_base>& entry : *items) {
+            if (entry.get() == &item) {
+                return record->canonical_path;
+            }
+        }
+    }
+    return {};
+}
+
+void Asset_manager::collect_container_image_sources(
+    std::unordered_map<const erhe::graphics::Texture*, std::shared_ptr<const erhe::gltf::Gltf_image_source>>& out_sources
+) const
+{
+    for (const auto& [container_id, record] : m_containers) {
+        static_cast<void>(container_id);
+        const erhe::gltf::Gltf_data& gltf_data = record->gltf_data;
+        for (std::size_t i = 0, end = std::min(gltf_data.images.size(), gltf_data.image_sources.size()); i < end; ++i) {
+            if (gltf_data.images[i] && gltf_data.image_sources[i]) {
+                out_sources.try_emplace(gltf_data.images[i].get(), gltf_data.image_sources[i]);
+            }
+        }
+    }
 }
 
 auto Asset_manager::get_defining_scene_root(const erhe::Item_base& item) const -> std::shared_ptr<Scene_root>

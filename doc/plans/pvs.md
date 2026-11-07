@@ -38,7 +38,7 @@ they cite the documents directly ("Open" below), the sections are:
 - D1 to D7, "Why ...", "Terms", "Bake" 1 to 7 and "Verification":
   `doc/editor/pvs.md`, same labels.
 - "Database": `doc/erhe/scene.md` "Potentially visible sets" and
-  `doc/gltf_extensions/ERHE_pvs.md`.
+  `doc/erhe/gltf.md` "PVS items".
 - "Runtime consumption": `doc/erhe/draw_list_renderer.md` Q6 "PVS" and
   `doc/editor/rendering.md`.
 - "Residency and streaming": `doc/erhe/draw_list_renderer.md` Q6 "PVS
@@ -50,7 +50,7 @@ they cite the documents directly ("Open" below), the sections are:
 ## Build order
 
 1. Database, persistence and the id capture (a1eb7cf57, c0c027750,
-   1be73c5c4): `doc/erhe/scene.md`, `doc/gltf_extensions/ERHE_pvs.md`,
+   1be73c5c4): `doc/erhe/scene.md`, `doc/erhe/gltf.md` "PVS items",
    `doc/editor/editor.md` "Whole-image id capture".
 2. Sampled bake (5dacbfd5a): `Pvs_baker` in `doc/editor/renderers.md`.
 3. Consumer (5fc6a519d): `doc/erhe/draw_list_renderer.md` Q6 "PVS",
@@ -270,10 +270,11 @@ device); every needed page was resident before the measured window.
   went" names, then drop that section.
 - Adaptive cells (an octree over the region, subdividing cells with a
   non-free center or a PVS much larger than their neighbours').
-- Peak memory at open: the parser still copies the whole bit array out of
-  the file before the open releases it (`Pvs_database::release_bits()`), so
-  the peak includes the bits once. Making the parser record only the bits
-  source, without the copy, is future work.
+- Bits on disk: a database holds its whole bit array in memory (a bake,
+  or the PVS item a Scene item names); the page streamer pages the GPU
+  resident set from it. Reading pages from the PVS item by range instead
+  (the item reader of the prepared asset) would keep the CPU heap free of
+  the bits for a large grid; not built.
 - Hysteresis alternative: evict only pages farther than radius + 1 from
   every active view. It keeps a view's whole neighbourhood when it moves by
   one page, at a capacity of (2r + 3)^3 pages; worth it if a capacity below

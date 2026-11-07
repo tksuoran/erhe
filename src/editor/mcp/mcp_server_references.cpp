@@ -350,8 +350,6 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
         const erhe::primitive::Mesh_optimize_totals totals = erhe::primitive::get_mesh_optimize_totals();
         result["mesh_optimization"] = {
             {"primitive_count",     totals.primitive_count},
-            {"measured_count",      totals.measured_count},
-            {"replayed_count",      totals.replayed_count},
             {"vertex_count_before", totals.vertex_count_before},
             {"vertex_count_after",  totals.vertex_count_after},
             {"triangle_count",      totals.triangle_count},

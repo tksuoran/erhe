@@ -1112,6 +1112,59 @@ the key and the file name (MCP `get_frame_pacing_status`
   identity (vendor and model 0: virtual, Sidecar and AirPlay displays) or
   without a readable display mode.
 
+## Texture properties
+
+`Texture_properties` (`erhe_graphics/texture_properties.hpp`) are the
+authoring properties of a source texture that its conversion reads
+(`doc/plans/prepared_assets.md` R4.2, R4.3): `transfer_function` (sRGB or
+linear), `normal_encoding` (not a normal map, three component, two
+component), `generate_mipmaps` and the edge wrap modes `wrap_u` / `wrap_v`.
+`Texture` registers each as a value property in the "Texture" group
+(`transfer_function_property`, ...), so the Properties window shows them and
+MCP `set_item_property` edits them; `get_texture_properties()` /
+`set_texture_properties()` read and write all five. A loader sets them on
+the textures it creates: the glTF parse from the file or from the uses
+(`doc/erhe/gltf.md` "Texture properties"), a standalone image file from its
+decoded format. `derive_texture_properties()` is the derivation from uses: the
+first use decides (base color, emissive and other color slots sRGB; every
+other slot linear; a normal slot three component), and the later uses that
+would decide otherwise are counted. Tests: `erhe_graphics_tests`
+`Texture_properties.*`.
+
+What reads them: the glTF decode takes the transfer function for the color
+space of the decoded format and skips mipmap generation when
+`generate_mipmaps` is off; `transcode_ktx2_basis_to_raw_blocks()` takes the
+color space and, through `Ktx2_normal_layout` (`Image_loader_ktx2::set_normal_layout()`),
+the two component layout instead of detecting it. An edit takes effect at
+the next load or conversion; the loaded texture is not converted again.
+The Basis Universal encoder (below) reads all five.
+
+## Basis Universal encoder
+
+`encode_image_to_basis_ktx2()` (`erhe_graphics/basis_encoder.hpp`) turns a
+PNG / JPEG image into a Basis Universal KTX2 file: the editor's Basis texture
+items (`doc/editor/prepared_assets.md` "Export"). It decodes the image with
+`Image_loader` to RGBA8 with alpha premultiplied - the pixels a load of the
+image uploads - and encodes UASTC LDR 4x4 with basisu's `basis_compressor`,
+single threaded (the caller runs one encode per image in parallel), Zstandard
+supercompressed. The texture properties decide the rest: the transfer
+function the perceptual metrics, mip filtering and KTX2 transfer function;
+`generate_mipmaps` the mip chain (basisu's default kaiser filter), wrapping
+at the edges unless both wrap modes clamp; a three component normal map has
+its mip normals renormalized, a two component one is stored X in RGB, Y in A
+with the `--normal-mode` marker (`is_ktx2_two_component_normal()`), the layout
+`transcode_ktx2_basis_to_raw_blocks()` reads. `Basis_encode_settings` holds
+the UASTC pack level (default 2, basisu's default) and the Zstandard level
+(default 6). The output is deterministic. A KTX2 input is refused.
+
+The encoder sources come from the same download-only `basis_universal`
+package as the transcoder and are compiled into the interface target with
+`ERHE_BASIS_ENCODER` (default `ON`, forced `OFF` on Android: the device never
+encodes), scalar (no SSE 4.1, OpenCL or astcenc inside basisu). Without it
+`basis_encoder_none.cpp` is compiled: `is_basis_encoder_available()` is false,
+`get_basis_encoder_version()` empty and the encode returns nothing (logged).
+Tests: `erhe_graphics_tests` `Basis_encoder.*`.
+
 ## Dependencies
 - **erhe libraries (interface target, public):** `erhe::circular_ring_buffer`, `erhe::dataformat`, `erhe::frame_pacing`, `erhe::item`, `erhe::math`
 - **erhe libraries (backend target):** `erhe::window` (public; the surface and swapchain backends), `erhe::gl` (private, OpenGL backend only)

@@ -7,7 +7,7 @@ A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see 
 
 ## Key Types
 - `Scene` -- Top-level container owning the root node, flat node list, mesh layers, light layers, cameras, and skins. Provides `update_node_transforms()` and lookup by ID.
-- `Xformable` (`Node`) -- The transform level of the prim class hierarchy, see "Prim levels". Holds `Node_transforms` (parent-from-node and world-from-node `Trs_transform`) and a `Scene_host` pointer. Supports cloning. Registers `translation`, `rotation` and `scale` as erhe::property properties bridged onto the parent-from-node `Trs_transform` (`Node::translation_property` etc.; writes run the same world-transform update as `set_parent_from_node`), so the editor's generic property rows, undo and MCP reach the transform without a second copy of it (doc/erhe/property_system.md section 4.2). `world_translation_property` / `world_rotation_property` / `world_scale_property` are computed properties (D26) reading `world_from_node_transform()`; `handle_transform_update` pushes them to expressions, so a descendant's values follow a parent move when `Scene::update_node_transforms` recomputes it.
+- `Xformable` (`Node`) -- The transform level of the prim class hierarchy, see "Prim levels". Holds `Node_transforms` (parent-from-node and world-from-node `Trs_transform`) and a `Scene_host` pointer. Supports cloning. Registers `translation`, `rotation` and `scale` as erhe::property properties bridged onto the parent-from-node `Trs_transform` (`Node::translation_property` etc.; writes run the same world-transform update as `set_parent_from_node`), so the editor's generic property rows, undo and MCP reach the transform without a second copy of it (doc/erhe/property_system.md section 4.2). `world_translation_property` / `world_rotation_property` / `world_scale_property` are computed properties (D26) reading `world_from_node_transform()`; `handle_transform_update` pushes them to expressions, so a descendant's values follow a parent move when `Scene::update_node_transforms` recomputes it. Under a parent whose world matrix is exactly the identity both world updates (`update_world_from_node`, `update_transform` of the propagation pass) copy the parent-from-node TRS, so a node's world bits do not depend on which of them ran last (a product with the identity turns the `-0` terms of a mirrored TRS into `+0`); a world-space key or a round-trip comparison of world transforms relies on that.
 - `Imageable` / `Xform` / `Boundable` / `Gprim` -- The other prim levels this library owns, see "Prim levels".
 - `Mesh_primitive` -- Primitive + Material pair, a `Dependency_object` with its own owner type: `material` is an object property (`Mesh_primitive::material_property`, `register_member` over the member, `doc/erhe/property_system.md` D28 / section 4.9) whose `after_set` notifies the owning mesh's scene host; `Mesh::set_primitive_material` writes it and is the one writer; `primitive` and `material` are still public members, and a direct member write bypasses the host notification. Carries an owner link (mesh, index) the mesh stamps after every primitive-list change. Registers member-backed properties only and is never observed: the mesh holds primitives by value, and a vector reallocation copy-constructs the base.
 - `Mesh` -- A geometric prim (`Gprim`, see "Prim levels") holding a vector of `Mesh_primitive`: an `Xformable` with its own transform, name and children, a child prim of its parent, and a parent holds any number of them. Its override of the item-host hook registers it with the scene's mesh layers on top of the node registration the base does, and its override of `handle_transform_update` mirrors the world transform into the raytrace instances, the negative-determinant flag and the computed world bounds. Addresses its primitives as property sub-objects (D29: `get_property_sub_object_count` / `get_property_sub_object` / `get_property_sub_object_label`). Supports raytrace primitives for CPU-side picking. `get_aabb_world()` returns POSED world bounds for a skinned mesh: it unions the primitives' per-joint rest boxes (`Buffer_mesh::joint_bounding_boxes`) transformed by `world_from_bind` (`get_skinned_aabb_world()`), and does NOT apply the mesh's own transform, which skinning ignores. Correct because a skinned position is a convex combination of its per-joint images, so it lies inside the union. Uncached - joints move every frame and primitives can be rebuilt behind the Mesh's back, so there is no reliable invalidation signal. `world_bounds_min_property` / `world_bounds_max_property` are computed properties (D26) reading `get_aabb_world()` (zero for an invalid box), pushed to expressions from `handle_transform_update` and the primitive changes.
@@ -434,9 +434,9 @@ readers and the editor's export builder need it and `erhe::usd` does not link
 potentially visible set (PVS) database of a scene (`doc/editor/pvs.md`): which baked draw entries can be seen from each cell of a
 uniform grid. It holds no GPU objects and has no per-frame API; its GPU
 copy and its consumer live in `erhe::scene_renderer`. It is in
-`erhe::scene` because `erhe::gltf` persists it (the asset-root extension
-`ERHE_pvs`, `doc/gltf_extensions/ERHE_pvs.md`) and already links this
-library.
+`erhe::scene` because `erhe::gltf` reads and writes it (the asset-root
+extension `ERHE_pvs` of a Scene item, `doc/erhe/gltf.md` "PVS items", and
+the PVS item) and already links this library.
 
 - `Pvs_header`: `version`, the scene's `scene_id`, the grid (`grid_origin`,
   `cell_size`, `cell_counts`), `page_size` (cells per page axis, 1 to 4,
@@ -468,26 +468,16 @@ library.
   true for a cell without a PVS, in a page that is not stored, or outside
   the grid. `has_cell_pvs()` and `is_page_stored()` read the page table;
   `get_page_words()`, `get_cell_words()`, `is_column_visible()` and
-  `get_cell_pvs_size()` read the in-memory copy of the bits (main thread;
-  empty or meaningless after `release_bits()`), `count_pvs_words()` counts
-  a cell's words.
-- Bits in memory and on disk: a bake's database holds its bits in memory
-  only. A database read from a file also records `Pvs_bits_source`, the
-  absolute byte range of the `bits` bufferView in the file;
-  `release_bits()` drops the in-memory copy when that source exists (the
-  editor does it after an open: the pages stream from the file, so the
-  heap holds no bits), `has_resident_bits()` tells which, and
-  `make_bits_resident()` reads them back and forgets the source (the editor
-  does it before a save replaces that file, `bits_source_references()`).
-  `read_page_words()`, `read_cell_words()` and `read_bits()` read from the
-  in-memory copy or else by range from the source (an
-  `erhe::file::Positional_file_reader` opened per read); they are callable
-  from any thread (the PVS page streamer's worker) and hold the bits mutex
-  across the read, so a read never straddles a release or a
-  `make_bits_resident()`; `has_resident_bits()` takes only a state mutex
-  and never waits for a read. `get_bits_hash()` is the bits' FNV-1a, computed
-  once by the constructor (the bits are in memory then). The glTF writer and
-  the MCP cell diagnostics read through them.
+  `get_cell_pvs_size()` read the bits, `count_pvs_words()` counts a cell's
+  words.
+- The bits: a database holds them for its life, unchanged after the
+  constructor (from a bake, or from the PVS item a Scene item names), so
+  every read is a plain copy from any thread with no lock.
+  `read_page_words()` and `read_cell_words()` copy one stored page's or
+  cell's words (the PVS page streamer's worker uploads pages with the
+  former); `get_bits()` is the whole array. `get_bits_hash()` is the bits'
+  FNV-1a, computed once by the constructor. The glTF writer (the PVS item)
+  and the MCP cell diagnostics read through them.
 - `find_column(uid, primitive_index)`: the identity-to-column lookup, a hash
   map built once by the constructor; `untracked_column` for an identity the
   bake did not see.

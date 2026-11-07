@@ -1,5 +1,6 @@
 #pragma once
 
+#include "operations/mesh_primitive_swap.hpp"
 #include "operations/operation.hpp"
 
 #include "erhe_primitive/build_info.hpp"
@@ -70,7 +71,8 @@ public:
 // Geometry. Like Paint_colors_operation it writes into the same Geometry
 // object (Mesh_component_selection entries keyed on it survive), rebuilds one
 // Primitive and shares it across every mesh that references the Geometry, and
-// announces Mesh_geometry_changed_message. edge_sharpness feeds no render
+// announces Mesh_geometry_changed_message; undo writes the values back and
+// restores the primitives the meshes held before. edge_sharpness feeds no render
 // stream (doc/erhe/subdivision_crease_edges.md), so its edit skips the
 // rebuild and only announces the change.
 class Set_geometry_attribute_operation : public Operation
@@ -97,9 +99,12 @@ public:
     void undo   (App_context& context) override;
 
 private:
-    void apply(App_context& context, const std::vector<Geometry_attribute_value>& values);
+    enum class Step : unsigned int { edit = 0, undo };
+    void apply(App_context& context, const std::vector<Geometry_attribute_value>& values, Step step);
 
-    Parameters m_parameters;
+    Parameters                            m_parameters;
+    // Held from execute to undo: the primitives the rebuild replaced.
+    std::vector<Retained_mesh_primitives> m_before_primitives;
 };
 
 } // namespace editor

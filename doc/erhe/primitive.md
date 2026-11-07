@@ -23,10 +23,10 @@ volume computation, and PBR material definitions.
 - `Triangle_soup_source` -- where a released soup is read back from ("Releasing the triangle soup" below); `Triangle_soup_counts` -- the vertex and index count a shape records for its soup
 - `Vertex_colocation` -- per-soup-vertex point ids plus point count: the colocation of a soup's vertices into mesh points
 - `Vertex_buffer_writer` / `Index_buffer_writer` -- write vertex attributes and indices to byte buffers; on destruction they call `vertex_writer_ready` / `index_writer_ready` on the owning sink.
-- `mesh_optimizer.hpp` -- `optimize_triangle_soup()` / `optimize_triangle_soup_cached()`:
+- `mesh_optimizer.hpp` -- `optimize_triangle_soup()` / `optimize_indexed_mesh()`:
   meshoptimizer passes (vertex weld/remap, vertex-cache order, overdraw order,
-  vertex-fetch order) over a copy of a `Triangle_soup`, plus the disk cache for
-  import-time results. `meshoptimizer.h` stays private to this target.
+  vertex-fetch order) over a copy of a `Triangle_soup` or over staged vertex
+  streams. `meshoptimizer.h` stays private to this target.
 - `Index_range` -- offset and count for a specific primitive type within the index buffer
 - `Buffer_range` -- byte offset, element count, and element size within a buffer; identifies the owning pool via `{pool_id, buffer_id}`.
 - Enums: `Normal_style`, `Primitive_mode`, `Primitive_type`, `Blending_class` ("Blending classes" below)
@@ -145,7 +145,8 @@ halves:
   (`triangle_to_mesh_facet` holds `GEO::NO_INDEX` for it). Per-point
   attributes (position, joints) take the value of the point's last
   referenced vertex; per-corner attributes (normal, tangent, texcoord,
-  color) are copied per corner.
+  color, the anisotropy control into `corner_aniso_control`) are copied per
+  corner.
 
 The colocation comes from one of two sources, and the build is the same
 code for both:
@@ -159,7 +160,7 @@ code for both:
   parameter also returns the colocation it used.
 - `mesh_from_triangle_soup(soup, vertex_points, point_count, mesh, mappings)`
   takes the colocation from the caller (the `ERHE_mesh_topology` glTF
-  payload, `doc/gltf_extensions/ERHE_mesh_topology.md`). It takes no
+  payload, `doc/erhe/gltf.md` "Mesh items"). It takes no
   geogram lock and runs no geogram algorithm, so conversions of different
   soups run fully in parallel. It validates before it builds:
   `vertex_points` has one entry per soup vertex; every index is below the
@@ -179,8 +180,9 @@ identical edges and smooth vertex normals
 ## Export preparation
 
 `prepare_primitive_for_export(shape)` (`prepared_primitive.hpp`) turns a
-soup primitive into the saved core of `doc/plans/gltf_fast_load.md` ("Saved
-core primitive") plus the payloads of `ERHE_mesh_optimized`,
+soup primitive into the prepared core of a mesh item or a Scene item
+(doc/erhe/gltf.md "Mesh items"; `doc/plans/gltf_fast_load.md` "Saved core
+primitive") plus the payloads of `ERHE_mesh_optimized`,
 `ERHE_mesh_topology` and `ERHE_raytrace_bvh`, as a
 `Prepared_primitive_export`:
 
@@ -189,8 +191,10 @@ core primitive") plus the payloads of `ERHE_mesh_optimized`,
 2. Runs the content build (`build_buffer_mesh()`,
    `Normal_style::corner_normals`, fill triangles) into CPU buffers with a
    float vertex format: POSITION, NORMAL, TANGENT always, TEXCOORD_0..2,
-   COLOR_0..1, JOINTS_0..1 (the soup's uint8 / uint16 width) and
-   WEIGHTS_0..1 as the soup carries them. Every corner therefore carries
+   COLOR_0..1, JOINTS_0..1 (the soup's uint8 / uint16 width), WEIGHTS_0..1
+   and the anisotropy control (`custom_attribute_aniso_control`, vec2) as
+   the soup carries them; the soup's other custom attributes (facet id,
+   valency, wireframe) are editor data, not core. Every corner therefore carries
    exactly what the build writes: the colocated point position, the
    tangent computed when the soup had none, normalized WEIGHTS_0. A soup
    with a set the build does not write (TEXCOORD_3, COLOR_2, JOINTS_2, a
@@ -216,6 +220,85 @@ core primitive") plus the payloads of `ERHE_mesh_optimized`,
 
 Shapes are prepared in parallel; one shape by one caller at a time. Tests:
 `src/erhe/primitive/test/test_prepared_primitive.cpp`.
+
+## Derived triangles
+
+A geometry-normative shape (built from a `Geometry`, no soup) has no soup to
+prepare; its triangles are the ones its content build derives:
+
+- `derive_triangle_soup(render_shape)` runs the content build of step 2
+  over the shape's `Geometry` with the shape's normal style
+  (`Primitive_render_shape::get_normal_style()`, the style of its last
+  Geometry build), one vertex per facet corner and polygons
+  fan-triangulated, and returns the vertices and fill indices as a
+  `Triangle_soup` (`Derived_triangle_soup::soup`, or `refusal`: no
+  Geometry, no facets, no fill triangles, attribute sets the core cannot
+  carry). The format is the core's: POSITION, NORMAL, TANGENT, and every
+  TEXCOORD / COLOR set the Geometry holds a value of (corner, facet or
+  vertex attribute), with the sets below a present one included (the build
+  writes their fallback value), COLOR_0 always (the build writes the
+  constant color and marks the mesh vertex colored), JOINTS_n as uint16,
+  WEIGHTS_n, and the anisotropy control always (corner, facet or vertex
+  `aniso_control`, else 1, 1). These are every stream of the build a
+  material reads (`res/shaders/standard.vert` inputs); the facet id, valency
+  and solid-wireframe streams feed editor passes only. The same
+  Geometry derives the same bytes every time.
+- `prepare_derived_primitive_for_export(render_shape)` is
+  `prepare_primitive_for_export()` from step 3 on over those triangles:
+  degenerate triangles dropped, the meshoptimizer passes, `vertex_points`
+  naming the Geometry's points, the content hash, bounds and the BVH (the
+  committed one remapped when every facet is a triangle and it maps 1:1,
+  else built over the core). `mesh_from_triangle_soup()` over the core and
+  its `vertex_points` builds the triangulated mesh, facet `t` being core
+  triangle `t`.
+
+Both run a content build, which writes the Geometry's facet ids: one caller
+per Geometry at a time. Tests: `src/erhe/primitive/test/test_derived_triangles.cpp`.
+
+## Content hash
+
+A shape carries the content hash of its source content as loaded state
+(`Primitive_shape::get_content_hash()` / `set_content_hash()`, an
+`erhe::hash::Content_hash`, XXH3-128; R3.5 of `doc/plans/prepared_assets.md`).
+The content is the source soup: `compute_triangle_soup_content_hash(soup)`
+hashes the soup's primitive type, its indices and, per attribute in layout
+order, the attribute's usage, usage index and format followed by every
+vertex's bytes of it (padding between attributes is not read). A
+geometry-normative shape (no soup) hashes the triangles its Geometry derives
+(`compute_derived_content_hash()` = that hash of `derive_triangle_soup()`; one
+build of the Geometry at a time, since the build writes its facet ids).
+
+- A shape whose soup is a prepared core loaded in place of its source
+  content (the editor's own loading) is given its source's hash
+  (`set_content_hash()`, "Authoring soup"), so a shape hashes the same
+  whether it was loaded from the soup or from a core derived from it; no
+  document stores a hash.
+- A deferred payload asks its source
+  (`Triangle_soup_source::load_content_hash()`, which erhe::gltf answers when
+  its parse computes hashes) while the soup is in memory.
+- `prepare_primitive_for_export()` sets a missing hash of a soup shape from
+  the soup it read.
+- `mark_prepared_data_stale()` (an in-place edit) drops a hash of a shape
+  without a soup; a soup's hash stays, since the soup is unchanged. An edit
+  that replaces content makes a new shape, so the hash is never recomputed on
+  a shape: an undo that restores the earlier shape restores its hash.
+
+## Authoring soup
+
+A shape whose soup is a prepared core loaded in place of its source content
+(the editor's own loading puts a Local-space mesh item's core where the
+imported soup was, doc/editor/prepared_assets.md "The editor's own loading")
+keeps that source content as its authoring soup:
+`set_authoring_soup(resident, source)` (before the shape is shared; `source`
+when the soup reads back from a file, else the soup itself as `resident`),
+`has_authoring_soup()`, `get_authoring_triangle_soup()` (the resident one or
+a read of the source, null when the read fails), `get_authoring_soup_source()`
+and `rebind_authoring_soup_source()` (a save rewrote the file it reads). The
+shape's content hash is the authoring soup's. A raw export
+(`erhe::gltf::Prepared_mesh_data::none`, the editor's Save Scene) writes the
+authoring soup in place of the core (doc/erhe/gltf.md "Authoring data"), so a
+saved file holds the source soup and keys as it; everything else - the
+buffers, the raytrace, the Geometry, a prepared export - reads the core.
 
 ## Source file replaced
 
@@ -349,6 +432,7 @@ raytraces nothing:
 - `erhe::raytrace` -- `IGeometry` (for raytrace mesh)
 - `erhe::buffer` -- `Cpu_buffer`
 - `erhe::profile` -- profiling mutex
+- `erhe::hash` -- `Content_hash`, `Xxh3_128_hasher` (public: the shape's content hash)
 - External: Geogram (GEO::Mesh), glm
 
 ## Notes

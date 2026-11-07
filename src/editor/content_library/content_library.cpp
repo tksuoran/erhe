@@ -479,7 +479,15 @@ void Content_library::set_gltf_source(const std::shared_ptr<erhe::Item_base>& it
 
 void Content_library::set_image_source(const std::shared_ptr<erhe::Item_base>& item, const std::shared_ptr<erhe::gltf::Gltf_image_source>& image_source)
 {
-    metadata_entry(item).image_source = image_source;
+    Resource_metadata& metadata = metadata_entry(item);
+    // A replacement source holds the same stream elsewhere (a resident copy, the written file): its content hash carries over.
+    if (metadata.image_source && image_source && !image_source->get_content_hash().has_value()) {
+        const std::optional<erhe::hash::Content_hash> content_hash = metadata.image_source->get_content_hash();
+        if (content_hash.has_value()) {
+            image_source->set_content_hash(content_hash.value());
+        }
+    }
+    metadata.image_source = image_source;
 }
 
 void Content_library::set_asset_key(const std::shared_ptr<erhe::Item_base>& item, const Asset_key& asset_key)

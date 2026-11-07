@@ -152,6 +152,8 @@ Decoding and uploading go through `Texture_file_loader` (`graphics/texture_file_
 
 A standalone image file carries no usage information, so it is decoded as **sRGB**. A normal / ORM map imported this way is decoded as color data.
 
+A KTX2 file of raw GPU blocks (a non-zero `vkFormat`: ASTC, BC7, BC5) is derived data - a transcode for one GPU family, which an Export makes as a Texture item (`doc/editor/prepared_assets.md`) - and is not accepted as a texture source: the import logs "a raw block KTX2 file is raw GPU block data, derived data that is not accepted as a texture source" and adds nothing (R1.1 of `doc/plans/prepared_assets.md`). A Basis Universal KTX2 file imports as any other image. The Asset Browser's hover preview shows either kind (`Texture_file_use::preview`).
+
 ## Public API / Integration Points
 
 - `Content_library::add<T>()` / `make<T>()` -- place a resource prim under its kind scope

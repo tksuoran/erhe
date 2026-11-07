@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <mutex>
+#include <random>
 #include <sstream>
 
 namespace erhe {
@@ -19,6 +20,19 @@ namespace {
 // thread polls the serial, so the counter is mutex-protected.
 std::mutex s_item_mutation_serial_mutex;
 uint64_t   s_item_mutation_serial{0};
+}
+
+auto make_random_gltf_uid() -> std::string
+{
+    // One generator per thread: items are created on workers too.
+    thread_local std::mt19937_64 rng{std::random_device{}()};
+    constexpr char alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    std::uniform_int_distribution<std::size_t> pick_char{0, sizeof(alphabet) - 2};
+    std::string uid(16, '0');
+    for (char& c : uid) {
+        c = alphabet[pick_char(rng)];
+    }
+    return uid;
 }
 
 auto get_item_mutation_serial() -> uint64_t
@@ -424,8 +438,7 @@ Item_base::Item_base(const std::string_view name)
 
 // Copies (clones) keep the source name; call sites that want a distinct
 // name for a duplicate (e.g. clipboard paste) rename the clone themselves.
-// m_gltf_uid is intentionally NOT copied (see its declaration): a clone is
-// a new object and gets its own uid at first export.
+// m_gltf_uid is not copied: a clone is a new object with a uid of its own.
 Item_base::Item_base(const Item_base& other)
     : enable_shared_from_this{other}
     , erhe::property::Dependency_object{other}

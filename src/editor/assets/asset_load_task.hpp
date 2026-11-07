@@ -72,6 +72,7 @@ private:
 };
 
 class Prepared_gltf_parse;
+class Prepared_open;
 class Scene_root;
 
 // What a finished load produced. Handed to the completion callback on the
@@ -144,6 +145,10 @@ public:
 
     // Node name for the parse root. Empty picks a default per mode.
     std::string root_node_name{};
+
+    // A .erhe_prepared open checked before the request (MCP load_scene): the
+    // scan completes it instead of opening and checking the asset again.
+    std::shared_ptr<Prepared_open> prepared_open{};
 };
 
 // One unit of asynchronous loading, owned by Asset_manager and advanced a

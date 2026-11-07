@@ -37,6 +37,11 @@ public:
 // ["visible","content"].
 [[nodiscard]] auto persistent_item_flags_to_json(uint64_t flag_bits) -> std::string;
 
+// True for an import root (Item_flags::import_root) on the identity path from
+// the scene root (Item_flags::world_space): a save writes it as no node and
+// its children in its place (R6.1, doc/editor/scene_serialization.md).
+[[nodiscard]] auto is_transparent_import_root(uint64_t flag_bits) -> bool;
+
 // The flag bit for a serialized name; 0 when the name is unknown.
 [[nodiscard]] auto persistent_item_flag_from_name(std::string_view name) -> uint64_t;
 

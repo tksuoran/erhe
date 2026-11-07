@@ -53,17 +53,6 @@ Async_raytrace_kickoff_operation::~Async_raytrace_kickoff_operation() noexcept =
 
 namespace {
 
-// Whether the geometry-path optimizer passes of a deferred finalize go through
-// the import mesh optimizer cache (get_import_mesh_optimize_cache_directory()).
-// An import's finalize does: the same asset loads again and replays. The edit
-// commits' re-optimize does not: every edited mesh is new content that would
-// only grow the cache.
-enum class Mesh_optimize_cache_use : unsigned int
-{
-    uncached = 0,
-    import_cache
-};
-
 // Deferred per-mesh finalize, running on a tf::Executor worker
 // (doc/editor/async_asset_loading.md): builds the Geometry (edges, smooth
 // normals), the real triangle raytrace and - when the load path deferred it -
@@ -103,7 +92,6 @@ enum class Lod_rebuild : unsigned int {
 void deferred_finalize_mesh_items(
     Mesh_operation_parameters&&                                     parameters,
     const std::shared_ptr<Scene_root>&                              scene_root,
-    const Mesh_optimize_cache_use                                   cache_use,
     const Prepared_full_build                                       prepared_full_build,
     const std::vector<std::shared_ptr<erhe::primitive::Primitive>>& lod_primitives = {}
 )
@@ -112,10 +100,6 @@ void deferred_finalize_mesh_items(
 
     App_context& context = parameters.context;
     ERHE_VERIFY(context.scene_commit_queue != nullptr);
-
-    if (cache_use == Mesh_optimize_cache_use::import_cache) {
-        parameters.build_info.buffer_info.mesh_optimize_cache_directory = get_import_mesh_optimize_cache_directory(context);
-    }
 
     // Same Build_info variant selection as finalize_imported_meshes():
     // skinned meshes need joint attributes in the GPU vertex buffer.
@@ -128,7 +112,6 @@ void deferred_finalize_mesh_items(
         .vertex_id_vec3  = parameters.build_info.vertex_id_vec3,
         .autocolor       = parameters.build_info.autocolor
     };
-    skinned_build_info.buffer_info.mesh_optimize_cache_directory = parameters.build_info.buffer_info.mesh_optimize_cache_directory;
 
     for (const std::shared_ptr<erhe::Item_base>& item : parameters.items) {
         std::shared_ptr<erhe::scene::Mesh> scene_mesh = erhe::scene::get_mesh(item);
@@ -498,7 +481,6 @@ class Pending_finalize
 public:
     std::weak_ptr<Scene_root>      scene_root;
     std::weak_ptr<erhe::Item_base> item;
-    Mesh_optimize_cache_use        cache_use;
     Prepared_full_build            prepared_full_build;
     std::size_t                    byte_count;
 };
@@ -552,7 +534,6 @@ void start_finalize(
     App_context&                        context,
     const std::shared_ptr<Scene_root>&  scene_root,
     std::shared_ptr<erhe::Item_base>    item,
-    const Mesh_optimize_cache_use       cache_use,
     const Prepared_full_build           prepared_full_build,
     erhe::utility::Memory_budget_lease  lease
 )
@@ -562,10 +543,10 @@ void start_finalize(
     async_for_nodes_with_mesh(
         context,
         single_item,
-        [&context, scene_root, cache_use, prepared_full_build, held_lease](Mesh_operation_parameters&& mesh_operation_parameters)
+        [&context, scene_root, prepared_full_build, held_lease](Mesh_operation_parameters&& mesh_operation_parameters)
         {
             const Finalize_completion completion{context, std::move(*held_lease)};
-            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, cache_use, prepared_full_build);
+            deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, prepared_full_build);
         },
         // The finalize manages its own narrow worker-context scope.
         /*op_builds_gpu_meshes=*/false
@@ -593,10 +574,9 @@ void pump_finalizes(App_context& context)
                 return;
             }
         }
-        const Mesh_optimize_cache_use cache_use           = pending.cache_use;
-        const Prepared_full_build     prepared_full_build = pending.prepared_full_build;
+        const Prepared_full_build prepared_full_build = pending.prepared_full_build;
         s_pending_finalizes.pop_front();
-        start_finalize(context, scene_root, std::move(item), cache_use, prepared_full_build, std::move(lease));
+        start_finalize(context, scene_root, std::move(item), prepared_full_build, std::move(lease));
     }
 }
 
@@ -604,7 +584,6 @@ void queue_finalize(
     App_context&                                context,
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::Item_base>&     item,
-    const Mesh_optimize_cache_use               cache_use,
     const Prepared_full_build                   prepared_full_build
 )
 {
@@ -613,7 +592,6 @@ void queue_finalize(
         Pending_finalize{
             .scene_root          = scene_root,
             .item                = item,
-            .cache_use           = cache_use,
             .prepared_full_build = prepared_full_build,
             .byte_count          = mesh ? estimate_finalize_byte_count(*mesh) : 1
         }
@@ -649,7 +627,7 @@ void Async_raytrace_kickoff_operation::execute(App_context& context)
             continue;
         }
         ++queued_count;
-        queue_finalize(context, scene_root, item, Mesh_optimize_cache_use::import_cache, prepared_full_build);
+        queue_finalize(context, scene_root, item, prepared_full_build);
     }
     std::size_t estimated_byte_count = 0;
     for (const Pending_finalize& pending : s_pending_finalizes) {
@@ -683,7 +661,7 @@ void kickoff_deferred_finalize(App_context& context, const std::shared_ptr<erhe:
         return;
     }
     const std::shared_ptr<Scene_root> scene_root = static_cast<Scene_root*>(item_host)->shared_from_this();
-    queue_finalize(context, scene_root, node->shared_from_this(), Mesh_optimize_cache_use::uncached, Prepared_full_build::skip);
+    queue_finalize(context, scene_root, node->shared_from_this(), Prepared_full_build::skip);
     pump_finalizes(context);
 }
 
@@ -714,7 +692,7 @@ void queue_prepared_full_build(
         return;
     }
     const std::shared_ptr<Scene_root>                   scene_root = host->shared_from_this();
-    queue_finalize(context, scene_root, mesh->shared_from_this(), Mesh_optimize_cache_use::import_cache, mode);
+    queue_finalize(context, scene_root, mesh->shared_from_this(), mode);
     pump_finalizes(context);
     ++queued_count;
 }
@@ -942,7 +920,7 @@ auto request_lod_generation(
                 // Uncached like the edit re-optimization: the cache stores
                 // the optimizer remaps, not the levels, and a procedural or
                 // edited mesh would only grow it.
-                deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Mesh_optimize_cache_use::uncached, Prepared_full_build::skip, lod_primitives);
+                deferred_finalize_mesh_items(std::move(mesh_operation_parameters), scene_root, Prepared_full_build::skip, lod_primitives);
             },
             // The finalize manages its own narrow worker-context scope.
             /*op_builds_gpu_meshes=*/false

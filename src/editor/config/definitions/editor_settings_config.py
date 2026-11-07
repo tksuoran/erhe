@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=14,
+    version=17,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -56,6 +56,9 @@ struct("Editor_settings_config",
         field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
         # Generation defaults of the LOD window (doc/editor/lod.md).
         field("lod",                  StructRef("Lod_config"),             added_in=11),
+        # The default export settings that adding a scene's export settings
+        # copies (doc/editor/prepared_assets.md "Export settings").
+        field("export_settings",      StructRef("Scene_export_settings"),  added_in=16),
         # glTF import/open performance options (doc/editor/async_asset_loading.md).
         field("load",                 StructRef("Load_config"),            added_in=1),
         field("network",              StructRef("Network_config"),         added_in=1),
@@ -240,6 +243,10 @@ struct("Editor_settings_config",
             visible=True,
             developer=True
         ),
+        # export_container (v15, v16) chose between the prepared glTF file and
+        # the store until the store became the only prepared format in v17
+        # (doc/plans/prepared_assets_design.md D8 step 13); an older file's key is
+        # ignored on load. (Deleted rather than marked removed_in, as in load_config.py.)
         field(
             "quit_after_frames",
             Int,

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "scene/mesh_form.hpp"
+
+#include "erhe_item/item_flags.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
@@ -123,7 +126,12 @@ public:
     // occlusion test pass with its entry's occlusion view. Empty: the
     // immediate_cull_view rule above.
     std::span<const Composition_pass_views> immediate_pass_views{};
-
+    // The form of the world-space bake's mesh nodes the view draws (get_view_filter()).
+    Mesh_form                               mesh_form{Mesh_form::source};
 };
+
+// A content pass filter of the view: the source meshes or their world-space
+// form (doc/editor/world_space_bake.md "Two forms").
+[[nodiscard]] auto get_view_filter(const erhe::Item_filter& filter, Mesh_form mesh_form) -> erhe::Item_filter;
 
 }

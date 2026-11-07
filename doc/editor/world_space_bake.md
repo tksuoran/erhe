@@ -3,33 +3,34 @@
 Stability: experimental
 
 A static mesh node's vertices can be transformed into world space and the
-node moved under one "World Space" node at the scene root with the identity
-transform, so level of detail selection (`doc/editor/lod.md`) and the
-renderers see no node scale. Prepare (PC / Quest) does it at export time
-(the live scene stays as it is); the undoable Bake Static To World Space
-operation does it on the live scene. Both share the plan and the vertex
-transform, and both read the scene's export settings.
+node written under one "World Space" node at the scene root with the
+identity transform, so level of detail selection (`doc/editor/lod.md`) and
+the renderers see no node scale. The live node tree stays as authored: the
+bake makes World-space mesh items in the scene's editor asset
+(`doc/editor/prepared_assets.md`), an open scene draws either its source
+meshes or its world-space form loaded from those items, and the Scene item
+an Export writes holds the World Space node with its meshes naming the
+items. The requirements are `doc/plans/prepared_assets.md` R4.6 - R4.8 and
+R8.5 - R8.8.
 
 ## Export settings
 
-`Scene_export_settings` (scene codegen unit,
-`src/editor/scene/definitions/scene_export_settings.py`) is the field
-`export_settings` of `Scene_settings` (v2), saved through `ERHE_scene`
-(`doc/gltf_extensions/ERHE_scene.md`) and shown in the scene's Properties
-"Export" group:
+`Scene_export_settings` (editor config codegen unit,
+`src/editor/config/definitions/scene_export_settings.py`) is the field
+`export_settings` of `Scene_settings`, present or absent, saved through
+`ERHE_scene` (`doc/gltf_extensions/ERHE_scene.md`) and shown in the scene's
+Properties "Export" group; how a scene gets them, the fields Export reads
+and the refusals are `doc/editor/prepared_assets.md` "Export settings". The
+fields the bake reads:
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `lod` | `Optional(Lod_config)` | null | LOD request Prepare generates chains with for primitives without one; null: the editor config `lod` |
-| `bake_static_to_world_space` | `Bool` | true | Prepare writes static mesh nodes in world space |
-| `instancing` | `Bake_instancing` | `duplicate` | What happens to a primitive shared by several baked meshes (below) |
+| `lod` | `Lod_config` | the `Lod_config` defaults | LOD request the chains are generated with for primitives without one |
+| `bake_static_to_world_space` | `Bool` | true | Export writes the admitted mesh nodes under the World Space node |
+| `instancing` | `Bake_instancing` | `duplicate_within_budget` | What happens to a primitive shared by several admitted meshes (below) |
 | `instancing_budget_mib` | `Int` | 256 | Budget of `duplicate_within_budget` |
 | `pvs_region_min`, `pvs_region_max`, `pvs_cell_size` | | | PVS bake grid (`doc/editor/pvs.md`) |
-
-A v1 settings object (an `ERHE_scene` file, USD `customLayerData`, MCP
-`set_scene_settings`) carries the PVS fields at the top level;
-`migrate_scene_settings_json()` (`scene/scene_settings_resolve.cpp`) moves
-them into `export_settings` before the codegen parse.
+| `pvs_mode` | `Pvs_mode` | `off` | What Export does about the PVS (`doc/editor/prepared_assets.md` "PVS") |
 
 `Bake_instancing`:
 
@@ -44,18 +45,18 @@ them into `export_settings` before the codegen parse.
 `plan_world_space_bake()` (`src/editor/scene/world_space_bake.{hpp,cpp}`)
 admits a mesh that:
 
-- is content, not skinned, not a skin joint and carries no physics (collider
-  shapes live in the node's space);
+- is content, not a render proxy, not skinned, not a skin joint and carries
+  no physics (collider shapes live in the node's space);
 - has no ancestor (itself included) that is an animation target, moved by a
   rigid body of a motion mode other than none or static, or written as an
   external asset reference;
-- has only soup-backed primitives (a primitive with authored geometry is
-  written as `ERHE_geometry`, not prepared);
+- has soup-backed, geometry-normative or graph-made primitives (R4.6); the
+  duplicated bytes of the latter are estimated from their facet corners;
 - is admitted by the instancing setting.
 
-The plan carries per baked mesh its world transform relative to the root
-node, and `kept_reasons` (reason -> count) for the rest; the save logs them
-and the operation reports them.
+The plan carries per baked mesh its world transform relative to the scene's
+root node (`inverse(root.world_from_node) * world_from_node`), and
+`kept_reasons` (reason -> count) for the rest; the logs name them.
 
 ## Baking a primitive
 
@@ -65,101 +66,206 @@ determinant is negative. Bounds, content hash and BVH are rebuilt from the
 baked data, and the LOD chain is generated in world space (a stored chain is
 object space and is not reused). Triangles that become degenerate (positions
 bitwise equal after the transform) are dropped, as the content build drops
-them. Prepared data: `erhe::primitive::bake_prepared_primitive_transform()`;
-a soup: `erhe::primitive::transform_triangle_soup()`.
+them. Prepared data: `erhe::primitive::bake_prepared_primitive_transform()`.
 
-## Flags of a baked mesh
+## World-space mesh items
+
+A World-space mesh item (kind `world_mesh`) holds one primitive of one
+admitted mesh node in world space, in the form of a mesh item
+(`doc/erhe/gltf.md` "Mesh items": `write_mesh_item()` of the baked
+prepared primitive, its stamp the mesh item stamp), with a Raytrace BVH item
+of its own while `raytrace_bvh` is on (`doc/editor/prepared_assets.md`
+"Keys").
+
+- Key (`make_world_mesh_key`, `src/editor/assets/item_keys`, R4.7): kind,
+  code version `c_world_mesh_code_version`, the mesh item stamp, the key of
+  the primitive's Local-space mesh item (its content hash, LOD request and
+  optimizer options) and the plan's transform as text
+  (`format_transform_hexfloat`: the 16 floats as `%a`, so every bit counts).
+  It names no node: two nodes placing one mesh at one transform share an
+  item, and moving the scene root moves every key.
+- Info (R4.8): `{"nodes":[{"path":[names],"uids":[uids]}, ...]}`, the nodes
+  from the scene root down that the item was last made or looked up for; a
+  lookup that finds other nodes rewrites it (`Write_transaction::set_info`).
+
+`Scene_export::Impl::ensure_world_mesh_items()` (`src/editor/assets/scene_export`)
+makes the missing ones: per shape one preparation (`prepare_primitive_for_export()`
+or `prepare_derived_primitive_for_export()`), then per missing key a copy
+baked with the key's transform, its LOD chain generated and the item and BVH
+item `put`, one executor task per shape. A shape that does not prepare gets
+no World-space mesh item (logged); its mesh is written by the exporter's own
+bake (a soup) or unbaked, and counted as `inline_primitive_count`.
+
+## Bake World-Space Meshes
+
+Mesh > Bake World-Space Meshes and MCP `bake_world_space_meshes`
+(`doc/agents/mcp_server_usage.md`) queue a job of `Scene_save_service`
+(`request_world_space_bake()`, `Scene_export_mode::bake_world_meshes`) with an
+Export's staging: the scene is read-only while it runs, the status line shows
+"Baking '<scene>': <stage>". It is refused as an Export is (a scene without
+export settings or a source file, a USD-backed scene, a prepared run;
+`get_export_refusal()`) and plans the bake whatever
+`bake_static_to_world_space` says.
+
+1. On the worker: the editor asset's source record, the Local-space mesh
+   keys (`compute_mesh_keys()`), the World-space mesh keys and the missing
+   items (above).
+2. The world-space form is loaded from the items: one document naming every
+   World-space mesh item (`Gltf_export_arguments::mesh_item_document`,
+   `doc/erhe/gltf.md` "Mesh item documents") is parsed with a resolver over
+   the editor asset, and each primitive is built by `run_imported_build_job()`
+   from its stored GPU vertex streams, the uploads going through the loader
+   queue.
+3. On the main thread, once the loader watermark has passed the build's
+   last ticket (`is_scene_export_ready()`), `World_space_form::install()`
+   replaces the scene's form.
+
+The job reports `export{counts{world_mesh, raytrace_bvh}, world_mesh_node_count,
+world_form_mesh_count, ensure_ms, scene_ms}` through `get_save_status`
+(`scene_ms` is the form load). It changes neither the node tree nor the undo
+stack; a second bake of an unchanged scene makes nothing.
+
+## Two forms
+
+An open scene holds both forms of every admitted mesh node (R8.5):
+
+- the source mesh, drawn through the node's transform;
+- the world-space form (`src/editor/scene/world_space_form`): per admitted
+  node whose primitives all have items, a render proxy mesh with the item's
+  primitives and the source's materials, under the node "World Space Form"
+  at the scene root (`content | render_proxy | session_only |
+  no_transform_update`). Its identity path gives the proxies
+  `Item_flags::world_space`, so they draw with the `WORLD_SPACE_VERTICES`
+  variants (`doc/erhe/shader_variants.md` "World-space vertices"). The
+  proxies carry `Editor_item_flags::world_space_form` and their sources
+  `world_space_source`.
+
+The proxies are derived data: no export, save or item tree shows them, they
+take no part in the ID pass or ray queries (picking, selection and editing
+act on the sources), and they cast no shadows - the sources cast the shadows
+of both forms. The PVS bake renders this form (R8.9): a proxy's PVS columns
+name its source node (`World_space_form::find_source()`), and a PVS baked on
+the form culls only in a view that draws it (R8.10, `doc/editor/pvs.md` D5).
+
+What a view draws: `get_view_filter()` (`renderers/render_context`) leaves
+`world_space_form` out of every content pass of a view that draws source
+meshes and `world_space_source` out of one that draws the world-space form
+(`Render_context::mesh_form`). The viewport toolbar combo of a scene that has
+a form chooses Source Meshes or World-Space Meshes
+(`Viewport_scene_view::queue_mesh_form()`); the world-space entry is enabled
+while the form is available and otherwise names why ("<n> of <m> missing",
+"scene changed", "settings changed"), and a view that asked for it draws
+source meshes meanwhile (R8.8). `Viewport_scene_view::prepare_render()`
+copies the drawn form into the frame's `Viewport_render_state::mesh_form`.
+MCP `render_scene_image` takes `mesh_form` (`source` or `world_space`,
+refused while the form is unavailable), and `get_world_space_meshes`
+reports the form's state.
+
+## Validity
+
+A node's world-space mesh is valid while the item of its current key is the
+one the bake loaded (R8.6). `World_space_validity`
+(`src/editor/scene/world_space_validity`) keeps per admitted node what the
+bake keyed - its root-relative transform and its primitives' render shapes -
+and follows the Scene_host hooks of `Scene_root`, change-driven:
+
+- `on_mesh_transform_changed`: the node's root-relative transform, computed
+  as the plan computes it, compared bit for bit with the keyed one;
+- `on_mesh_primitives_changed`: its render shapes compared with the keyed
+  ones (an edit swaps in a new primitive, its undo restores the original,
+  `doc/editor/operations.md` "Undo of an in-place edit");
+- `register_mesh` / `unregister_mesh` of a content mesh that is not a proxy:
+  a node the bake did not key entered the scene, or an admitted node left it
+  ("scene changed"); the node leaving again, or entering again (an undo of the
+  add or the removal), ends it;
+- `Scene_root::on_export_settings_changed()`, called by the scene's
+  Properties "Export" rows and by MCP `set_scene_settings` when the export
+  settings change: the settings the keys and the admission read (the LOD
+  request, `instancing`, `instancing_budget_mib`;
+  `make_world_space_settings_signature()`) compared with the ones the bake
+  keyed with ("settings changed" while they differ, so setting a value back
+  ends it).
+
+So moving a node, editing its mesh, adding or removing a mesh or editing a
+setting invalidates it at the edit, and the undo makes it valid again
+(R3.3); nothing is compared per frame. The form is available when every
+admitted node is valid and neither the scene nor the settings changed since
+the bake. A new bake makes the missing items and reinstalls the form. The
+status of `doc/editor/prepared_assets.md` "Status" follows the same change
+sites and counts the World-space mesh items present and missing.
+
+## Export (the Scene item)
+
+With `bake_static_to_world_space` on, an Export (`doc/editor/prepared_assets.md`
+"Export") plans the bake with geometry-normative primitives admitted and makes
+the missing World-space mesh items in its Ensure step, before the Local-space
+mesh items; a Local-space mesh item is asked for only where a mesh the bake
+does not admit draws the shape (R9.3). The exporter
+(`Gltf_export_arguments::world_bake` and `world_mesh_item_provider`) writes
+each baked mesh under the World Space node with a glTF mesh of its own whose
+primitives read its World-space mesh items, and nothing is prepared for it.
+A baked mesh moves out of its parent; every other node stays where it is
+with its transform. When something stays below the baked mesh - a child that
+is not baked, or a baked child that leaves a placeholder itself - a
+transform-only node with the mesh's name and transform takes its place and
+holds those children; a baked mesh whose children are all baked leaves
+nothing behind. The walk visits the node tree in child order, so the result
+does not depend on the order of the source file's node array.
 
 A baked mesh and the World Space node carry the transform channel locks
-(`lock_translation_*`, `lock_rotation_*`, `lock_scale_*`), persistent flags
-written by name in `ERHE_node`, so interactive editing does not move them.
-The baked mesh's path from the scene root is the identity, so it carries
-the derived `Item_flags::world_space` and draws with the
-`WORLD_SPACE_VERTICES` shader variants (`doc/erhe/shader_variants.md`
-"World-space vertices"); a mesh moved anyway (locks cleared) draws through
-its node transform, and a reset back to the identity draws it as
-world-space again.
+(`lock_translation_*`, `lock_rotation_*`, `lock_scale_*`), written by name in
+`ERHE_node`. The baked node keeps its glTF uid, so PVS columns
+(`doc/editor/pvs.md` "Terms") follow it. Names are not identities: siblings
+that share a name under the World Space node are renamed by the load
+(`<name>_1`, ...).
 
-## Placeholders
-
-A baked mesh moves out of its parent; every other node stays where it is
-with its transform. When something stays below the baked mesh - a child
-that is not baked, or a baked child that leaves a placeholder itself - a
-transform-only node with the mesh's name and transform takes the mesh's
-place and holds those children. A baked mesh whose children are all baked
-leaves nothing behind (Bistro: 2670 baked meshes, 0 placeholders).
-
-## Prepare (export)
-
-`Gltf_export_arguments::world_bake` (`Gltf_export_world_bake`) carries the
-plan. The exporter prepares each shape once, then per baked mesh primitive
-bakes a copy of the prepared core, generates its LOD chain and packs its GPU
-streams (`prepare_world_baked_primitives()`). The node pass writes each baked
-mesh under the World Space node with a glTF mesh of its own, and a
-placeholder only when a child is written under it, with the locks of
-"Flags of a baked mesh" on the baked meshes and the World Space node; a
-mesh whose primitives did not all prepare is written unbaked in place. The MCP save status
-`prepared` block reports `world_bake_mesh_count`,
-`world_bake_placeholder_count`, `world_bake_primitive_count` and
-`world_bake_failed_count`. The baked node keeps its glTF uid, so PVS columns
-(`doc/editor/pvs.md` "Terms") follow it.
-
-Names: the export writes the baked meshes under the World Space node with
-the names they have; siblings that share a name there are renamed by the
-load (`<name>_1`, ...), as the operation renames them. Names are not
-identities (the uid is), so the export does not rename them itself.
-
-## Bake Static To World Space operation
-
-`Bake_world_space_operation` (`src/editor/operations/
-bake_world_space_operation.{hpp,cpp}`), Mesh > Bake Static To World Space
-(the scene's export settings) and MCP `bake_static_to_world_space` (an
-`export_settings` object merged over them for the call;
-`doc/agents/mcp_server_usage.md`).
-
-- The constructor plans and records the entries, sorted parents first; the
-  first `execute()` builds the world-space primitives, one executor task per
-  mesh (each copy is a new shape; distinct shapes build concurrently, as in
-  `doc/editor/async_asset_loading.md`). A mesh whose copy cannot be built
-  keeps its transform (logged, in `kept_reasons`). Bistro, Release: about
-  1.7 s from the request to the operation done.
-- `execute()`, per entry, parents first: the mesh moves under World Space
-  (world transform kept, children riding along), the placeholder takes its
-  place in its parent, the children move into the placeholder keeping their
-  local transforms, and the mesh's transform becomes the identity. A baked
-  child is therefore taken from its parent's placeholder. The World Space
-  node is created when the root has no identity Xform of that name, and
-  the locks of "Flags of a baked mesh" are set.
-- `undo()` runs the inverse of each step in reverse order: primitives,
-  parent and position the step recorded, transform, the placeholder's
-  children back into the mesh, the placeholder removed, the name restored
-  (renamed beside a sibling of the same name), and the locks the bake set
-  cleared. The tree and the locks are restored exactly.
-- A mesh that carries `Item_flags::world_space` (its path is the identity
-  already) is not planned.
+A prepared run (`doc/editor/prepared_assets.md` "Prepared run") loads the
+World Space node and its meshes like any other: the Scene item names the
+World-space mesh items as `erhe-item:` buffers, and Copy brings each baked
+node's World-space mesh item alone into the prepared asset.
 
 ## Verification
 
-Headless Release editor (`doc/agents/editor_runs.md`):
+`scripts/prepared_asset_verify.py` ("World-space meshes"; `--only-world`
+runs these checks alone) writes the hand-written scene - a mirrored node
+(scale -1.5, 1, 0.7), a mirrored parent (1, -1.2, 1) holding a mesh, a baked
+mesh with a baked child and a non-mesh child holding a baked mesh, three
+nodes sharing one mesh, a floor - and the same scene with every child listed
+before its parent, opens each as a foreign glTF, saves it and reloads the
+erhe-saved file:
 
-- Bistro (`res/editor/assets/bistro_lights_compressed/bistro_lights_c.gltf`,
-  `load_scene`): `bake_static_to_world_space` plans 2670 meshes (13
-  animated kept); `render_scene_image` before, after the bake and after
-  `undo` from one camera: after differs only by rounding (max 2 / 255),
-  after undo identical; `get_node_details` `max_axis_scale` 0.016 -> 1.0.
-  `prepare_scene` `target` `pc` writes the same bake; the loaded file
-  renders within float noise of the source scene.
-- A hand-written glTF (no `ERHE_geometry`, so the primitives are
-  soup-backed) with a mirrored node (scale -1.5, 1, 0.7), a mirrored parent
-  (1, -1.2, 1), a baked mesh with a baked child and a non-mesh child holding
-  a baked mesh, three nodes sharing one mesh, and the same scene with a
-  child listed before its parent: every instancing mode, bake / undo / redo
-  with the node tree (names, parents, local transforms) restored exactly,
-  and Prepare (PC) with the loaded file compared to the source render.
-- Debug (GCC, windowed Vulkan): Bistro bake, undo and redo run without a
-  VERIFY or error log; the redone node tree matches the baked one.
+- added export settings have `instancing` `duplicate_within_budget`;
+- Bake World-Space Meshes makes nine World-space mesh items and nine BVH
+  items, every item records its node's path and uids, the node tree is as
+  before, all nine nodes are valid; `render_scene_image` of the world-space
+  form differs from the source meshes' in at most 0.5 % of the pixels by
+  more than 2/255 (the rounding of the baked vertices: a level or two of
+  shading over up to about 1 % of the pixels on Bistro, more at single
+  silhouette pixels); a second bake makes nothing;
+- Export makes no item, copies the nine World-space mesh items and asks for
+  no Local-space mesh item; the Scene item holds the nine nodes under World
+  Space, the placeholder `parent_mesh` holding `holder`, and every World
+  Space mesh reads a World-space mesh item;
+- moving a baked node makes one world-space mesh missing (the form
+  unavailable, `render_scene_image` `world_space` refused, the status
+  counting one World-space mesh item and one BVH item missing with as many
+  keys asked as before); undo makes it valid and the status matches with the
+  Export's Scene key again; removing a baked mesh ends the form's
+  availability and undoing the removal restores it; a bake
+  after the move makes one item; instancing `skip` makes one Local-space mesh
+  item for the shared mesh and drops the three shared World-space mesh items
+  from the prepared asset;
+- a second Export in a new process makes nothing (and writes the prepared asset anew); with the source
+  moved away the prepared run holds the World Space node and renders, within
+  the same bound, as the open scene's world-space form and as the source
+  meshes.
+
+Bistro: `res/editor/assets/bistro_lights_compressed/bistro_lights_c.gltf`,
+headless Release, Export with the bake on (counts, times and the prepared
+run's image against the source scene's are in `doc/editor/prepared_assets.md`
+"Verification").
 
 ## Not verified
 
-- The menu command interactively; the MSVC build.
-- Prepare (Quest) with the bake on the headset.
+- The viewport toolbar combo interactively; the MSVC build.
+- Export (Quest) with the bake on the headset.

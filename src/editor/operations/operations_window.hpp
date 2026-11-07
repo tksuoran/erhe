@@ -333,15 +333,12 @@ public:
     // instance in every scene refreshes); a scene with no source file saves
     // to res/editor/scenes/<scene name>.glb, confirming overwrite.
     void save_scene();
-    // File > Prepare (Quest) / Prepare (PC): writes the target glTF scene to
-    // res/editor/scenes/<scene name>_<quest|pc>.glb with
-    // save_scene_gltf_prepared() (Basis KTX2 textures transcoded to raw ASTC
-    // 4x4 / BC KTX2). An export: the scene's source binding is unchanged; an
-    // existing file is replaced.
-    void prepare_scene(Prepare_target target);
-    // Mesh > Bake Static To World Space: Bake_world_space_operation on the
-    // target scene with its export settings (doc/editor/world_space_bake.md).
-    void bake_static_to_world_space();
+    // File > Export (Quest) / Export (PC): an Export of the target scene into its
+    // editor asset and the target's prepared asset at the default location
+    // (doc/editor/prepared_assets.md). The scene's source binding is unchanged.
+    void export_scene(Prepare_target target);
+    // Mesh > Bake World-Space Meshes: the bake job of the target scene (doc/editor/world_space_bake.md).
+    void bake_world_space_meshes();
     // Renders pending modal confirmation dialogs (the File > Save glTF (erhe)
     // overwrite prompt). Called once per frame from App_windows::viewport_menu
     // -- the imgui-host begin callback -- so the modal shows regardless of the
@@ -602,9 +599,9 @@ private:
 
     erhe::commands::Lambda_command m_export_gltf_command;
     erhe::commands::Lambda_command m_save_scene_command;
-    erhe::commands::Lambda_command m_prepare_scene_quest_command;
-    erhe::commands::Lambda_command m_prepare_scene_pc_command;
-    erhe::commands::Lambda_command m_bake_static_to_world_space_command;
+    erhe::commands::Lambda_command m_export_scene_quest_command;
+    erhe::commands::Lambda_command m_export_scene_pc_command;
+    erhe::commands::Lambda_command m_bake_world_space_meshes_command;
     erhe::commands::Lambda_command m_load_scene_command;
 
     erhe::commands::Lambda_command m_create_material;

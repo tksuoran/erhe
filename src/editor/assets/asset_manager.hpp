@@ -393,6 +393,13 @@ public:
     // hosted, so "the scene that owns this asset" is the manager's recorded
     // fact - the scene whose container record holds the item.
     [[nodiscard]] auto get_defining_scene_root(const erhe::Item_base& item) const -> std::shared_ptr<Scene_root>;
+    // The file of the container record that defines the item (a scene's or a
+    // loaded container's); empty when no path-bound record defines it.
+    [[nodiscard]] auto get_defining_container_path(const erhe::Item_base& item) const -> std::filesystem::path;
+    // The retained source image of every texture a loaded container's parse holds.
+    void collect_container_image_sources(
+        std::unordered_map<const erhe::graphics::Texture*, std::shared_ptr<const erhe::gltf::Gltf_image_source>>& out_sources
+    ) const;
     // True when the item's defining container record is the scene identified
     // by host (identity compare - stays valid through the whole close_scene
     // dispatch regardless of subscription order).

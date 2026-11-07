@@ -163,7 +163,7 @@ auto Asset_reference::resolve(Asset_manager& manager) -> const std::shared_ptr<e
     manager.register_user(this);
     // Self-heal upward: a key resolved via name learns the asset's uid, so
     // content migrates to uid addressing organically on each save.
-    if (m_key.uid.empty() && !item->get_gltf_uid().empty()) {
+    if (m_key.uid.empty() && (m_key.scope != Asset_scope::builtin) && !item->get_gltf_uid().empty()) {
         m_key.uid = item->get_gltf_uid();
     }
     return m_resolved;

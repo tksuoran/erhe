@@ -145,6 +145,22 @@ erhe_target_sources_grouped(
     assets/asset_reference_config.hpp
     assets/asset_workflow.cpp
     assets/asset_workflow.hpp
+    assets/editor_asset.cpp
+    assets/editor_asset.hpp
+    assets/item_keys.cpp
+    assets/item_keys.hpp
+    assets/local_mesh_items.cpp
+    assets/local_mesh_items.hpp
+    assets/editor_asset_load.cpp
+    assets/editor_asset_load.hpp
+    assets/scene_export.cpp
+    assets/scene_export.hpp
+    assets/prepared_asset.cpp
+    assets/prepared_asset.hpp
+    assets/prepared_keys.cpp
+    assets/prepared_keys.hpp
+    assets/prepared_status.cpp
+    assets/prepared_status.hpp
     assets/load_memory_budget.cpp
     assets/load_memory_budget.hpp
     assets/gltf_load_task.cpp
@@ -423,8 +439,6 @@ erhe_target_sources_grouped(
     operations/scene_builder_viewport_resources_operation.hpp
     operations/merge_operation.cpp
     operations/merge_operation.hpp
-    operations/bake_world_space_operation.cpp
-    operations/bake_world_space_operation.hpp
     operations/merge_static_subtree_operation.cpp
     operations/merge_static_subtree_operation.hpp
     operations/mesh_primitive_swap.cpp
@@ -682,6 +696,11 @@ erhe_target_sources_grouped(
     scene/scene_settings_resolve.cpp
     scene/world_space_bake.cpp
     scene/world_space_bake.hpp
+    scene/mesh_form.hpp
+    scene/world_space_form.cpp
+    scene/world_space_form.hpp
+    scene/world_space_validity.cpp
+    scene/world_space_validity.hpp
     scene/scene_settings_resolve.hpp
     scene/variant_table.cpp
     scene/variant_table.hpp
@@ -970,11 +989,6 @@ set(_codegen_sources
     ${_codegen_out}/variant_selection.hpp
     ${_codegen_out}/variant_selection_serialization.hpp
     ${_codegen_out}/variant_selection.cpp
-    ${_codegen_out}/bake_instancing.hpp
-    ${_codegen_out}/bake_instancing.cpp
-    ${_codegen_out}/scene_export_settings.hpp
-    ${_codegen_out}/scene_export_settings_serialization.hpp
-    ${_codegen_out}/scene_export_settings.cpp
     ${_codegen_out}/scene_settings.hpp
     ${_codegen_out}/scene_settings_serialization.hpp
     ${_codegen_out}/scene_settings.cpp
@@ -994,8 +1008,6 @@ erhe_codegen_generate(
         "${_codegen_defs}/gltf_source_reference.py"
         "${_codegen_defs}/lightmap_tile_override.py"
         "${_codegen_defs}/variant_selection.py"
-        "${_codegen_defs}/bake_instancing.py"
-        "${_codegen_defs}/scene_export_settings.py"
         "${_codegen_defs}/scene_settings.py"
 )
 erhe_codegen_source_settings(${_codegen_sources})
@@ -1064,6 +1076,17 @@ set(_config_sources
     ${_config_out}/indirect_diffuse_source.cpp
     ${_config_out}/culling_classification.hpp
     ${_config_out}/culling_classification.cpp
+    ${_config_out}/bake_instancing.hpp
+    ${_config_out}/bake_instancing.cpp
+    ${_config_out}/texture_supercompression.hpp
+    ${_config_out}/texture_supercompression.cpp
+    ${_config_out}/texture_encoding.hpp
+    ${_config_out}/texture_encoding.cpp
+    ${_config_out}/pvs_mode.hpp
+    ${_config_out}/pvs_mode.cpp
+    ${_config_out}/scene_export_settings.hpp
+    ${_config_out}/scene_export_settings_serialization.hpp
+    ${_config_out}/scene_export_settings.cpp
     ${_config_out}/light_cluster_binning.hpp
     ${_config_out}/light_cluster_binning.cpp
     ${_config_out}/radiance_cascades_merge_mode.hpp
@@ -1317,6 +1340,7 @@ source_group("codegen generated/xr" FILES ${_xr_ser_sources})
 target_link_libraries(
     ${_target}
     PRIVATE
+        erhe::asset_store
         erhe::codegen
         erhe::utility
         erhe::commands

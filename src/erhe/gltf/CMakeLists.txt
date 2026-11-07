@@ -45,13 +45,14 @@ target_link_libraries(${_target}
         erhe::math
         # erhe::scene types appear in the public API (Gltf_data, Physics_description)
         erhe::scene
+        # erhe::hash::Content_hash appears in the public API (Gltf_image_source::get_content_hash)
+        erhe::hash
     PRIVATE
         fmt::fmt
         simdjson::simdjson
         Taskflow
         erhe::task
         erhe::file
-        erhe::hash
         erhe::profile
         erhe::geometry
         erhe::graphics

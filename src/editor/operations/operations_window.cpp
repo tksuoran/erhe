@@ -1,9 +1,9 @@
-#include "operations/bake_world_space_operation.hpp"
 #include "operations/operations_window.hpp"
 #include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
 #include "scene/scene_save_service.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "app_scenes.hpp"
 #include "app_message_bus.hpp"
 #include "assets/asset_load_task.hpp"
@@ -807,9 +807,9 @@ Operations::Operations(
 
     , m_export_gltf_command       {commands, "File.SaveGltfStandard",              [this]() -> bool { export_gltf            (); return true; } }
     , m_save_scene_command        {commands, "File.SaveGltfErhe",                  [this]() -> bool { save_scene             (); return true; } }
-    , m_prepare_scene_quest_command {commands, "File.PrepareQuest",                [this]() -> bool { prepare_scene(Prepare_target::quest); return true; } }
-    , m_prepare_scene_pc_command    {commands, "File.PreparePc",                   [this]() -> bool { prepare_scene(Prepare_target::pc);    return true; } }
-    , m_bake_static_to_world_space_command{commands, "Mesh.BakeStaticToWorldSpace", [this]() -> bool { bake_static_to_world_space(); return true; } }
+    , m_export_scene_quest_command  {commands, "File.ExportQuest",                 [this]() -> bool { export_scene(Prepare_target::quest);  return true; } }
+    , m_export_scene_pc_command     {commands, "File.ExportPc",                    [this]() -> bool { export_scene(Prepare_target::pc);     return true; } }
+    , m_bake_world_space_meshes_command{commands, "Mesh.BakeWorldSpaceMeshes", [this]() -> bool { bake_world_space_meshes(); return true; } }
     , m_load_scene_command        {commands, "File.LoadScene",                     [this]() -> bool { load_scene             (); return true; } }
     , m_create_material           {commands, "Create.Material",                    [this]() -> bool { create_material        (); return true; } }
     , m_create_brush              {commands, "Create.Brush",                       [this]() -> bool { create_brush           (); return true; } }
@@ -887,9 +887,9 @@ Operations::Operations(
 
     commands.register_command(&m_export_gltf_command);
     commands.register_command(&m_save_scene_command);
-    commands.register_command(&m_prepare_scene_quest_command);
-    commands.register_command(&m_prepare_scene_pc_command);
-    commands.register_command(&m_bake_static_to_world_space_command);
+    commands.register_command(&m_export_scene_quest_command);
+    commands.register_command(&m_export_scene_pc_command);
+    commands.register_command(&m_bake_world_space_meshes_command);
     commands.register_command(&m_load_scene_command);
     commands.register_command(&m_create_material);
     commands.register_command(&m_create_brush);
@@ -967,12 +967,12 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_generate_frame_field_tangents_command, "Geometry.Generate Frame Field Tangents");
     commands.bind_command_to_menu(&m_make_geometry_command,     "Mesh.Make Geometry");
     commands.bind_command_to_menu(&m_make_raytrace_command,     "Mesh.Make Raytrace");
-    commands.bind_command_to_menu(&m_bake_static_to_world_space_command, "Mesh.Bake Static To World Space");
+    commands.bind_command_to_menu(&m_bake_world_space_meshes_command, "Mesh.Bake World-Space Meshes");
 
     commands.bind_command_to_menu(&m_export_gltf_command,     "File.Save glTF (standard)");
     commands.bind_command_to_menu(&m_save_scene_command,      "File.Save glTF (erhe)");
-    commands.bind_command_to_menu(&m_prepare_scene_quest_command, "File.Prepare (Quest)");
-    commands.bind_command_to_menu(&m_prepare_scene_pc_command,    "File.Prepare (PC)");
+    commands.bind_command_to_menu(&m_export_scene_quest_command,  "File.Export (Quest)");
+    commands.bind_command_to_menu(&m_export_scene_pc_command,     "File.Export (PC)");
     commands.bind_command_to_menu(&m_load_scene_command,      "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,         "Create.Material");
     commands.bind_command_to_menu(&m_create_brush,            "Create.Brush from Selection");
@@ -1086,7 +1086,8 @@ Operations::Operations(
                     Erhe_scene_open::full_scene,
                     [this](const std::shared_ptr<Scene_root>& scene_root) {
                         on_scene_opened(scene_root);
-                    }
+                    },
+                    std::move(message.prepared_open)
                 );
             } catch (...) {
                 log_operations->error("exception: load scene");
@@ -3623,6 +3624,11 @@ void Operations::export_callback(const char* const* filelist, int filter)
     if (!scene_root) {
         return;
     }
+    const std::string refusal = get_prepared_run_refusal(*scene_root, "glTF export");
+    if (!refusal.empty()) {
+        log_operations->warn("{}", refusal);
+        return;
+    }
 
     const erhe::scene::Scene& scene = scene_root->get_scene();
     std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
@@ -3706,6 +3712,11 @@ void Operations::save_scene()
         log_operations->warn("save_scene: no scene to save");
         return;
     }
+    const std::string refusal = get_prepared_run_refusal(*scene_root, "Save");
+    if (!refusal.empty()) {
+        log_operations->warn("{}", refusal);
+        return;
+    }
     const std::filesystem::path path = resolve_scene_save_path(*scene_root);
     if (scene_root->get_source_path().empty()) {
         std::error_code ec;
@@ -3720,53 +3731,43 @@ void Operations::save_scene()
     save_scene_to_file(*scene_root, path);
 }
 
-void Operations::bake_static_to_world_space()
+void Operations::bake_world_space_meshes()
 {
     const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
-        log_operations->warn("bake_static_to_world_space: no scene");
+        log_operations->warn("Bake World-Space Meshes: no scene");
         return;
     }
-    const std::shared_ptr<Bake_world_space_operation> op = std::make_shared<Bake_world_space_operation>(
-        Bake_world_space_operation::Parameters{
-            .context    = m_context,
-            .build_info = mesh_context().build_info,
-            .scene_root = scene_root,
-            .settings   = scene_root->get_scene_settings().export_settings
-        }
-    );
-    for (const auto& [reason, count] : op->get_kept_reasons()) {
-        log_operations->info("bake_static_to_world_space: {} mesh(es) kept: {}", count, reason);
-    }
-    if (op->get_baked_count() == 0) {
-        log_operations->info("bake_static_to_world_space: nothing to bake in '{}'", scene_root->get_name());
+    const std::string refusal = get_export_refusal(*scene_root, get_export_action(Scene_export_mode::bake_world_meshes));
+    if (!refusal.empty()) {
+        log_operations->warn("{}", refusal);
         return;
     }
-    m_context.operation_stack->queue(op);
+    request_world_space_bake(m_context, scene_root, {}, {});
 }
 
-void Operations::prepare_scene(const Prepare_target target)
+void Operations::export_scene(const Prepare_target target)
 {
     const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
-        log_operations->warn("prepare_scene: no scene to prepare");
+        log_operations->warn("export_scene: no scene to export");
         return;
     }
-    if (scene_root->get_source_format() == Scene_source_format::usd) {
-        log_operations->warn("prepare_scene: '{}' is a USD-backed scene; Prepare writes glTF only", scene_root->get_name());
+    const std::string refusal = get_export_refusal(*scene_root, "Export");
+    if (!refusal.empty()) {
+        log_operations->warn("{}", refusal);
         return;
     }
-    const std::filesystem::path path = default_prepared_scene_path(*scene_root, target);
+    // An empty path: the default prepared asset location (R2.4).
     m_context.scene_save_service->request(
         Scene_save_request{
             .scene_root     = scene_root,
-            .path           = path,
-            .kind           = Gltf_scene_save_kind::prepared,
-            .texture_export = get_prepare_texture_export(target, true),
-            .export_settings = scene_root->get_scene_settings().export_settings,
-            .on_finished    = [name = scene_root->get_name(), target, path](const Scene_save_result& result) {
-                if (result.saved) {
-                    log_operations->info("Scene '{}' prepared ({}) to '{}'", name, c_str(target), erhe::file::to_string(path));
+            .path           = {},
+            .job            = Scene_save_job::store,
+            .target         = target,
+            .on_finished    = [name = scene_root->get_name(), target](const Scene_save_result& result) {
+                if (result.saved && result.export_report.has_value()) {
+                    log_operations->info("Scene '{}' exported ({}) to '{}'", name, c_str(target), erhe::file::to_string(result.export_report->prepared_asset_path));
                 }
             }
         }
@@ -3787,7 +3788,7 @@ void Operations::save_scene_to_file(Scene_root& scene_root, const std::filesyste
         Scene_save_request{
             .scene_root     = scene_root.shared_from_this(),
             .path           = path,
-            .kind           = Gltf_scene_save_kind::scene,
+            .job            = Scene_save_job::save_scene,
             .source_binding = source_binding,
             .on_finished    = [name = scene_root.get_name(), path](const Scene_save_result& result) {
                 if (result.saved) {
@@ -3881,14 +3882,16 @@ void Operations::load_scene()
     // load_scene_callback(); the native Windows fallback (select_file_for_read)
     // is used for non-SDL Windows builds.
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
-    SDL_DialogFileFilter filters[2];
-    filters[0].name    = "glTF files";
-    filters[0].pattern = "glb;gltf";
-    filters[1].name    = "All files";
-    filters[1].pattern = "*";
+    SDL_DialogFileFilter filters[3];
+    filters[0].name    = "Scene files";
+    filters[0].pattern = "glb;gltf;erhe_prepared";
+    filters[1].name    = "Prepared assets";
+    filters[1].pattern = "erhe_prepared";
+    filters[2].name    = "All files";
+    filters[2].pattern = "*";
     const std::string default_location = erhe::file::to_string(default_scene_dir());
     SDL_Window* window = static_cast<SDL_Window*>(m_context.context_window->get_sdl_window());
-    SDL_ShowOpenFileDialog(s_load_scene_callback, this, window, filters, 2, default_location.c_str(), false);
+    SDL_ShowOpenFileDialog(s_load_scene_callback, this, window, filters, 3, default_location.c_str(), false);
 #elif defined(ERHE_OS_WINDOWS)
     try {
         std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_read();

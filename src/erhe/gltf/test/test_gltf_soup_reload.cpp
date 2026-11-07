@@ -322,6 +322,74 @@ TEST(Gltf_soup_reload, glb_file_parse_equals_memory_parse)
     expect_same_content(file_data, memory_data);
 }
 
+// A GLB held in memory and read only through a Gltf_buffer_reader (a container item).
+class Glb_bytes_reader : public erhe::gltf::Gltf_buffer_reader
+{
+public:
+    explicit Glb_bytes_reader(std::vector<std::byte> bytes) : m_bytes{std::move(bytes)} {}
+
+    auto read_at(const std::uint64_t offset, const std::span<std::byte> out) const -> bool override
+    {
+        if ((offset > m_bytes.size()) || (out.size() > (m_bytes.size() - offset))) {
+            return false;
+        }
+        std::memcpy(out.data(), m_bytes.data() + offset, out.size());
+        return true;
+    }
+
+private:
+    std::vector<std::byte> m_bytes;
+};
+
+// The GLB through a reader parses as the file does: the soups by range from
+// the BIN chunk (released soups read back through the reader), the animation view whole.
+TEST(Gltf_soup_reload, glb_reader_parse_equals_file_parse)
+{
+    erhe::scene::Scene          file_scene{"file", nullptr};
+    const erhe::gltf::Gltf_data file_data = erhe_gltf_test::parse_file(write_glb("by_reader_glb"), file_scene);
+    const std::vector<std::byte> glb = make_glb();
+    erhe::scene::Scene          reader_scene{"reader", nullptr};
+    tf::Executor                executor{1};
+    const std::shared_ptr<erhe::scene::Node> root_node = reader_scene.get_root_node();
+    const erhe::gltf::Gltf_data reader_data = erhe::gltf::parse_gltf(
+        erhe::gltf::Gltf_parse_arguments{
+            .executor             = executor,
+            .root_node            = root_node,
+            .path                 = "item.glb",
+            .parallel             = false,
+            .glb_reader           = std::make_shared<Glb_bytes_reader>(glb),
+            .glb_size             = glb.size(),
+            .triangle_soup_reload = erhe::gltf::Triangle_soup_reload::record
+        }
+    );
+    ASSERT_TRUE(reader_data.errors.empty());
+    expect_same_content(file_data, reader_data);
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : reader_data.meshes[0]->get_primitives()) {
+        erhe::primitive::Primitive& primitive = *mesh_primitive.primitive;
+        ASSERT_TRUE(primitive.render_shape->get_triangle_soup_source());
+        const Triangle_soup original = *primitive.render_shape->get_triangle_soup();
+        ASSERT_TRUE(primitive.release_triangle_soup());
+        const std::shared_ptr<Triangle_soup> reloaded = primitive.render_shape->get_triangle_soup();
+        ASSERT_TRUE(reloaded);
+        expect_bit_identical(original, *reloaded);
+    }
+
+    // A reader that fails the reads fails the parse.
+    erhe::scene::Scene          short_scene{"short", nullptr};
+    const std::shared_ptr<erhe::scene::Node> short_root = short_scene.get_root_node();
+    const erhe::gltf::Gltf_data short_data = erhe::gltf::parse_gltf(
+        erhe::gltf::Gltf_parse_arguments{
+            .executor   = executor,
+            .root_node  = short_root,
+            .path       = "short.glb",
+            .parallel   = false,
+            .glb_reader = std::make_shared<Glb_bytes_reader>(std::vector<std::byte>{glb.begin(), glb.begin() + 40}),
+            .glb_size   = glb.size()
+        }
+    );
+    EXPECT_FALSE(short_data.errors.empty());
+}
+
 TEST(Gltf_soup_reload, external_bin_parse_equals_data_uri_parse)
 {
     erhe::scene::Scene          file_scene{"file", nullptr};

@@ -1,0 +1,26 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_texture_properties.schema.json",
+    "title": "ERHE_texture_properties glTF asset root extension",
+    "type": "object",
+    "properties": {
+        "version": {"type": "integer", "const": 1},
+        "images": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "image":             {"type": "integer", "minimum": 0, "description": "index into images"},
+                    "transfer_function": {"enum": ["srgb", "linear"]},
+                    "normal_encoding":   {"enum": ["none", "three_component", "two_component"]},
+                    "generate_mipmaps":  {"type": "boolean"},
+                    "wrap_u":            {"enum": ["repeat", "clamp_to_edge", "mirrored_repeat"]},
+                    "wrap_v":            {"enum": ["repeat", "clamp_to_edge", "mirrored_repeat"]}
+                },
+                "required": ["image", "transfer_function", "normal_encoding", "generate_mipmaps", "wrap_u", "wrap_v"]
+            }
+        }
+    },
+    "required": ["version", "images"]
+}

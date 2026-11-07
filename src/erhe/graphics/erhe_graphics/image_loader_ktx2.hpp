@@ -15,9 +15,18 @@ namespace erhe::graphics {
 
 class Image_loader_ktx2_impl_state;
 
+// Whether a Basis Universal image is read as a two component X+Y normal map:
+// as its marker or content says, or as a caller states (a texture property).
+enum class Ktx2_normal_layout : unsigned int
+{
+    detect = 0,
+    standard,
+    two_component
+};
+
 // Raw block KTX2 files (non-zero vkFormat, no supercompression; ASTC 4x4
-// today - the "Save for Quest" glTF textures,
-// doc/gltf_extensions/ERHE_texture_ktx2.md) are not transcoded: with
+// today - the quest Texture items and Scene items,
+// doc/erhe/gltf.md "Texture items") are not transcoded: with
 // Astc_support::native the stored levels are passed through as-is, otherwise
 // mip level 0 is decoded to RGBA8 with the ARM astc-encoder decoder and the
 // GPU mipmap generation path rebuilds the chain. The file's vkFormat decides
@@ -50,6 +59,8 @@ public:
     [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8, Astc_support astc_support = Astc_support::decode_to_rgba8) -> bool;
     [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8, Astc_support astc_support = Astc_support::decode_to_rgba8) -> bool;
     [[nodiscard]] auto load(std::span<std::uint8_t> transfer_buffer) -> bool;
+    // For the next open() of a Basis Universal image; detect by default.
+    void set_normal_layout(Ktx2_normal_layout normal_layout);
     void close();
 
     // True when the buffer starts with the KTX2 container identifier.
@@ -57,6 +68,7 @@ public:
 
 private:
     std::unique_ptr<Image_loader_ktx2_impl_state> m_state;
+    Ktx2_normal_layout                            m_normal_layout{Ktx2_normal_layout::detect};
 };
 
 } // namespace erhe::graphics

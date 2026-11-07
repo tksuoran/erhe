@@ -64,6 +64,7 @@
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/world_space_form.hpp"
 #include "scene/variant_table.hpp"
 #include "scene/scene_commit_queue.hpp"
 #include "scene/shadow_fit_debug.hpp"
@@ -786,6 +787,41 @@ auto Mcp_server::action_set_viewport_style(const json& args) -> std::string
     }).dump();
 }
 
+// The viewport toolbar's Source Meshes / World-Space Meshes choice (R8.8) for
+// every viewport scene view of a scene; a view that asks for an unavailable
+// form draws source meshes meanwhile.
+auto Mcp_server::action_set_viewport_mesh_form(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", std::string{});
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("set_viewport_mesh_form: scene not found: " + scene_name);
+    }
+    const std::string form_name = args.value("mesh_form", std::string{});
+    if ((form_name != "source") && (form_name != "world_space")) {
+        return make_error_content("set_viewport_mesh_form: 'mesh_form' must be \"source\" or \"world_space\"");
+    }
+    const Mesh_form form = (form_name == "world_space") ? Mesh_form::world_space : Mesh_form::source;
+    if (m_context.scene_views == nullptr) {
+        return make_error_content("set_viewport_mesh_form: no viewport scene views");
+    }
+    json views = json::array();
+    for (const std::shared_ptr<Viewport_scene_view>& scene_view : m_context.scene_views->get_viewport_scene_views()) {
+        if (!scene_view || (scene_view->get_scene_root().get() != scene_root)) {
+            continue;
+        }
+        m_context.scene_views->set_mesh_form(scene_view.get(), form);
+        views.push_back(scene_view->get_settings_key());
+    }
+    const World_space_form_status status = scene_root->get_world_space_form().get_status();
+    return make_json_content(json{
+        {"scene_name", scene_root->get_name()},
+        {"mesh_form",  c_str(form)},
+        {"views",      views},
+        {"world_space_form_available", status.is_available()}
+    }).dump();
+}
+
 // The scene's potentially visible set database (doc/plans/pvs.md "Editor";
 // erhe::scene::Pvs_database): its state, grid, pages and size, and where the
 // camera of the first viewport showing the scene is in the grid.
@@ -800,7 +836,9 @@ auto Mcp_server::query_pvs_status(const json& args) -> std::string
     const erhe::scene::Pvs_state                     state    = sr->get_pvs_state();
     json result = {
         {"scene_name", sr->get_name()},
-        {"state",      erhe::scene::c_str(state)}
+        {"state",      erhe::scene::c_str(state)},
+        // R8.10: the views that draw this form get PVS culling.
+        {"form",       c_str(sr->get_pvs_form())}
     };
 
     // The consumer (doc/plans/pvs.md "Runtime consumption"): the setting,
@@ -901,7 +939,6 @@ auto Mcp_server::query_pvs_status(const json& args) -> std::string
     // reload) can be compared.
     // Cached by the database (computed when the bits were in memory).
     result["bits_hash"] = fmt::format("{:016x}", database->get_bits_hash());
-    result["bits_in_memory"] = database->has_resident_bits();
     result["bake"] = {
         {"method",           erhe::scene::c_str(header.bake_parameters.method)},
         {"face_resolution",  header.bake_parameters.face_resolution},
@@ -912,14 +949,6 @@ auto Mcp_server::query_pvs_status(const json& args) -> std::string
         {"silhouette_tests", header.bake_parameters.silhouette_tests},
         {"duration_seconds", header.bake_duration_seconds}
     };
-    const std::optional<erhe::scene::Pvs_bits_source>& bits_source = database->get_bits_source();
-    if (bits_source.has_value()) {
-        result["bits_source"] = {
-            {"path",        erhe::file::to_string(bits_source->path)},
-            {"byte_offset", bits_source->byte_offset},
-            {"byte_length", bits_source->byte_length}
-        };
-    }
     if (camera) {
         const std::optional<uint32_t> cell = database->find_cell(camera_position);
         if (!cell.has_value()) {
@@ -1002,7 +1031,6 @@ auto Mcp_server::make_pvs_streaming_json(Scene_root& scene_root) -> json
         {"applied_uploads",       status.applied_uploads},
         {"nonresident_views",     status.nonresident_views},
         {"nonresident_culled",    status.nonresident_culled},
-        {"bits_in_memory",        status.bits_in_memory},
         {"views",                 std::move(views)}
     };
 }
@@ -1444,6 +1472,8 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
                 {"active",      prim->is_active()},
                 {"content",     (prim->get_flag_bits() & erhe::Item_flags::content) != 0},
                 {"import_root", (prim->get_flag_bits() & erhe::Item_flags::import_root) != 0},
+                {"render_proxy", (prim->get_flag_bits() & erhe::Item_flags::render_proxy) != 0},
+                {"gltf_uid",    prim->get_gltf_uid()},
                 {"tags",        tags_arr}
             };
 
@@ -1461,6 +1491,15 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
                 entry["position"]      = {t.x, t.y, t.z};
                 entry["rotation_xyzw"]   = {r.x, r.y, r.z, r.w};
                 entry["scale"]           = {s.x, s.y, s.z};
+                // Bit-exact for round-trip comparisons: hexfloats, column-major.
+                const glm::mat4 world_from_node = node->world_from_node();
+                json world_hex = json::array();
+                for (int column = 0; column < 4; ++column) {
+                    for (int row = 0; row < 4; ++row) {
+                        world_hex.push_back(fmt::format("{:a}", world_from_node[column][row]));
+                    }
+                }
+                entry["world_from_node_hex"] = std::move(world_hex);
             }
 
             nodes.push_back(entry);

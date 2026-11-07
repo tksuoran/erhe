@@ -37,6 +37,7 @@
 namespace {
 
 using erhe_gltf_test::data_path;
+using erhe_gltf_test::make_test_gpu_formats;
 using erhe_gltf_test::parse_file;
 using erhe_gltf_test::write_temporary_file;
 
@@ -408,7 +409,7 @@ public:
     const std::string&                       glb,
     const std::string_view                   file_name,
     erhe::scene::Scene&                      scene,
-    const erhe::gltf::Prepared_mesh_data_use use
+    const erhe::gltf::Gltf_document          document
 ) -> erhe::gltf::Gltf_data
 {
     tf::Executor executor{1};
@@ -419,7 +420,7 @@ public:
             .root_node              = root_node,
             .path                   = write_temporary_file(file_name, glb),
             .parallel               = false,
-            .prepared_mesh_data_use = use
+            .document               = document
         }
     );
 }
@@ -497,7 +498,7 @@ TEST(Gltf_roundtrip, deferred_mesh_payload_loads_like_the_parse)
     const bool has_bvh_backend = !erhe::raytrace::get_prebuilt_bvh_backend().empty();
 
     erhe::scene::Scene          reference_scene{"reference", nullptr};
-    const erhe::gltf::Gltf_data reference = parse_glb(glb, "deferred_reference.glb", reference_scene, erhe::gltf::Prepared_mesh_data_use::use);
+    const erhe::gltf::Gltf_data reference = parse_glb(glb, "deferred_reference.glb", reference_scene, erhe::gltf::Gltf_document::item);
     const std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>> reference_shapes = get_panel_shapes(reference);
     ASSERT_EQ(reference_shapes.size(), 2u);
 
@@ -510,6 +511,7 @@ TEST(Gltf_roundtrip, deferred_mesh_payload_loads_like_the_parse)
                 .root_node    = root_node,
                 .path         = path,
                 .parallel     = false,
+                .document     = erhe::gltf::Gltf_document::item,
                 .mesh_payload = erhe::gltf::Mesh_payload_load::deferred
             }
         );
@@ -597,6 +599,7 @@ TEST(Gltf_roundtrip, save_onto_source_rebinds_released_soups)
             .root_node            = root_node,
             .path                 = path,
             .parallel             = false,
+            .document             = erhe::gltf::Gltf_document::item,
             .triangle_soup_reload = erhe::gltf::Triangle_soup_reload::record
         }
     );
@@ -644,52 +647,8 @@ TEST(Gltf_roundtrip, save_onto_source_rebinds_released_soups)
     EXPECT_EQ(resident->vertex_data, originals[1].vertex_data);
 }
 
-// The vertex layouts Mesh_memory derives on a device with position
-// quantization and unorm16x3 vertex input (doc/gltf_extensions/ERHE_gpu_vertex_streams.md
-// "Signature"), built here without a device.
-[[nodiscard]] auto make_test_gpu_formats() -> std::pair<erhe::dataformat::Vertex_format, erhe::dataformat::Vertex_format>
-{
-    using erhe::dataformat::Format;
-    using erhe::dataformat::Vertex_attribute_usage;
-    erhe::dataformat::Vertex_format base{
-        {
-            {0, {{Format::format_32_vec3_float, Vertex_attribute_usage::position, 0}}},
-            {1, {
-                {Format::format_32_vec3_float, Vertex_attribute_usage::normal,    erhe::dataformat::normal_attribute},
-                {Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
-                {Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
-                {Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
-                {Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 2},
-                {Format::format_32_vec4_float, Vertex_attribute_usage::color,     0}
-            }},
-            {2, {
-                {Format::format_32_vec3_float, Vertex_attribute_usage::normal, erhe::dataformat::normal_attribute_smooth},
-                {Format::format_8_vec2_unorm,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_aniso_control},
-                {Format::format_16_vec2_uint,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_valency_edge_count},
-                {Format::format_8_vec4_unorm,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_id}
-            }}
-        }
-    };
-    erhe::dataformat::Vertex_format optimized{
-        {
-            {0, {{Format::format_16_vec3_snorm, Vertex_attribute_usage::position, 0}}},
-            {1, {
-                {Format::format_16_vec4_sint,  Vertex_attribute_usage::tangent,   0},
-                {Format::format_16_vec2_unorm, Vertex_attribute_usage::tex_coord, 0},
-                {Format::format_16_vec2_unorm, Vertex_attribute_usage::tex_coord, 1},
-                {Format::format_16_vec2_unorm, Vertex_attribute_usage::tex_coord, 2},
-                {Format::format_8_vec4_unorm,  Vertex_attribute_usage::color,     0}
-            }},
-            {2, {{Format::format_8_vec2_unorm, Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_aniso_control}}}
-        }
-    };
-    const erhe::dataformat::Vertex_stream_packing packing{.min_attribute_alignment = 1, .min_stride_alignment = 4};
-    base.repack(packing);
-    optimized.repack(packing);
-    return {std::move(base), std::move(optimized)};
-}
 
-// "Save for Quest" GPU vertex streams: each prepared primitive's base
+// GPU vertex streams of a derived document: each prepared primitive's base
 // streams are its core accessors and its optimized streams are named by
 // ERHE_gpu_vertex_streams; the stored optimized bytes are exactly what the
 // loader's pack of the core writes, and a loader that ignores the extension
@@ -723,9 +682,9 @@ TEST(Gltf_roundtrip, gpu_vertex_streams_hold_the_loader_pack)
     // A loader that ignores the extension reads the same soups as from a plain
     // prepared save.
     erhe::scene::Scene          plain_scene{"plain", nullptr};
-    const erhe::gltf::Gltf_data plain = parse_glb(make_prepared_glb(), "gpu_streams_plain.glb", plain_scene, erhe::gltf::Prepared_mesh_data_use::use);
+    const erhe::gltf::Gltf_data plain = parse_glb(make_prepared_glb(), "gpu_streams_plain.glb", plain_scene, erhe::gltf::Gltf_document::item);
     erhe::scene::Scene          gpu_scene{"gpu", nullptr};
-    const erhe::gltf::Gltf_data gpu = parse_glb(glb, "gpu_streams.glb", gpu_scene, erhe::gltf::Prepared_mesh_data_use::use);
+    const erhe::gltf::Gltf_data gpu = parse_glb(glb, "gpu_streams.glb", gpu_scene, erhe::gltf::Gltf_document::item);
     EXPECT_EQ(gpu.prepared_mesh_statistics.used_count, 2u);
     const std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>> plain_shapes = get_panel_shapes(plain);
     const std::vector<std::shared_ptr<erhe::primitive::Primitive_render_shape>> gpu_shapes   = get_panel_shapes(gpu);
@@ -905,6 +864,7 @@ TEST(Gltf_roundtrip, stored_vertex_streams_build_like_the_soup)
                 .root_node    = scene.get_root_node(),
                 .path         = path,
                 .parallel     = false,
+                .document     = erhe::gltf::Gltf_document::item,
                 .mesh_payload = erhe::gltf::Mesh_payload_load::deferred
             }
         );
@@ -1041,6 +1001,7 @@ TEST(Gltf_roundtrip, deferred_base_variant_builds_on_demand_like_at_load)
                 .root_node    = scene.get_root_node(),
                 .path         = path,
                 .parallel     = false,
+                .document     = erhe::gltf::Gltf_document::item,
                 .mesh_payload = erhe::gltf::Mesh_payload_load::deferred
             }
         );
@@ -1121,7 +1082,7 @@ TEST(Gltf_roundtrip, prepared_mesh_data_parse_accepts_own_output)
     const bool has_bvh_backend = !erhe::raytrace::get_prebuilt_bvh_backend().empty();
 
     erhe::scene::Scene          loaded{"loaded", nullptr};
-    const erhe::gltf::Gltf_data data = parse_glb(glb, "prepared_parse.glb", loaded, erhe::gltf::Prepared_mesh_data_use::use);
+    const erhe::gltf::Gltf_data data = parse_glb(glb, "prepared_parse.glb", loaded, erhe::gltf::Gltf_document::item);
     const erhe::gltf::Gltf_prepared_mesh_statistics& statistics = data.prepared_mesh_statistics;
     EXPECT_EQ(statistics.used_count,          2u);
     EXPECT_EQ(statistics.rejected_count,      0u);
@@ -1147,7 +1108,7 @@ TEST(Gltf_roundtrip, prepared_mesh_data_parse_accepts_own_output)
     }
 
     erhe::scene::Scene          ignored{"ignored", nullptr};
-    const erhe::gltf::Gltf_data ignored_data = parse_glb(glb, "prepared_ignored.glb", ignored, erhe::gltf::Prepared_mesh_data_use::ignore);
+    const erhe::gltf::Gltf_data ignored_data = parse_glb(glb, "prepared_ignored.glb", ignored, erhe::gltf::Gltf_document::file);
     EXPECT_EQ(ignored_data.prepared_mesh_statistics.ignored_count, 2u);
     EXPECT_EQ(ignored_data.prepared_mesh_statistics.used_count,    0u);
     for (const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape : get_panel_shapes(ignored_data)) {
@@ -1170,7 +1131,7 @@ void expect_one_rejected(const std::string& glb, const std::string_view file_nam
 {
     const bool has_bvh_backend = !erhe::raytrace::get_prebuilt_bvh_backend().empty();
     erhe::scene::Scene          loaded{"loaded", nullptr};
-    const erhe::gltf::Gltf_data data = parse_glb(glb, file_name, loaded, erhe::gltf::Prepared_mesh_data_use::use);
+    const erhe::gltf::Gltf_data data = parse_glb(glb, file_name, loaded, erhe::gltf::Gltf_document::item);
     const erhe::gltf::Gltf_prepared_mesh_statistics& statistics = data.prepared_mesh_statistics;
     EXPECT_EQ(statistics.used_count,     1u) << file_name;
     EXPECT_EQ(statistics.rejected_count, 1u) << file_name;
@@ -1389,7 +1350,7 @@ TEST(Gltf_roundtrip, mesh_lod_round_trips)
     }
 
     erhe::scene::Scene          loaded_scene{"loaded", nullptr};
-    const erhe::gltf::Gltf_data loaded = parse_glb(glb, "mesh_lod.glb", loaded_scene, erhe::gltf::Prepared_mesh_data_use::use);
+    const erhe::gltf::Gltf_data loaded = parse_glb(glb, "mesh_lod.glb", loaded_scene, erhe::gltf::Gltf_document::item);
     EXPECT_EQ(loaded.prepared_mesh_statistics.used_count,     2u);
     EXPECT_EQ(loaded.prepared_mesh_statistics.rejected_count, 0u);
     EXPECT_EQ(loaded.prepared_mesh_statistics.lod_used_count, 1u);
@@ -1454,7 +1415,7 @@ TEST(Gltf_roundtrip, mesh_lod_round_trips)
         const std::size_t value_end   = chunks.json.find('"', value_begin);
         chunks.json.replace(value_begin, value_end - value_begin, "0x1p+10"); // larger than the next level's
         erhe::scene::Scene          tampered_scene{"tampered", nullptr};
-        const erhe::gltf::Gltf_data tampered = parse_glb(join_glb(chunks), "mesh_lod_tampered.glb", tampered_scene, erhe::gltf::Prepared_mesh_data_use::use);
+        const erhe::gltf::Gltf_data tampered = parse_glb(join_glb(chunks), "mesh_lod_tampered.glb", tampered_scene, erhe::gltf::Gltf_document::item);
         EXPECT_EQ(tampered.prepared_mesh_statistics.rejected_count, 1u);
         EXPECT_EQ(tampered.prepared_mesh_statistics.lod_used_count, 0u);
         ASSERT_EQ(tampered.prepared_mesh_statistics.rejection_reasons.size(), 1u);
@@ -1469,7 +1430,7 @@ TEST(Gltf_roundtrip, mesh_lod_round_trips)
     }
 }
 
-// The stored vertex streams path ("Save for Quest") builds the optimized
+// The stored vertex streams path (mesh items) builds the optimized
 // variant with the stored chain; a malformed ERHE_mesh_lod drops only the
 // chain there too: the stored streams still load, without a chain and
 // without a request.
@@ -1517,6 +1478,7 @@ TEST(Gltf_roundtrip, mesh_lod_on_stored_vertex_streams)
                 .root_node    = scene.get_root_node(),
                 .path         = write_temporary_file(file_name, file_bytes),
                 .parallel     = false,
+                .document     = erhe::gltf::Gltf_document::item,
                 .mesh_payload = erhe::gltf::Mesh_payload_load::deferred
             }
         );
@@ -1555,7 +1517,8 @@ TEST(Gltf_roundtrip, mesh_lod_on_stored_vertex_streams)
     const std::shared_ptr<erhe::primitive::Primitive> bad = build_chained(tampered_glb, "mesh_lod_stored_tampered.glb", bad_scene);
     ASSERT_TRUE(bad && bad->optimized_render_shape);
     EXPECT_TRUE(bad->optimized_render_shape->get_renderable_mesh().lod_chain.is_empty());
-    EXPECT_FALSE(bad->lod_settings.has_value());
+    // The rejected chain leaves the request (R4.5: authoring data, read with or without a chain).
+    EXPECT_EQ(bad->lod_settings, std::optional<erhe::primitive::Lod_settings>{settings});
     const std::shared_ptr<const erhe::primitive::Prepared_primitive_data>& bad_prepared = bad->render_shape->get_prepared_data();
     ASSERT_TRUE(bad_prepared);
     EXPECT_TRUE(bad_prepared->colocation.has_value());

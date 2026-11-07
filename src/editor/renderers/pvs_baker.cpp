@@ -1,15 +1,18 @@
 #include "renderers/pvs_baker.hpp"
+#include "assets/prepared_keys.hpp"
 #include "renderers/pvs_bake_node.hpp"
 
 #include "app_context.hpp"
+#include "assets/scene_export.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/scene_id_capture.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_save_service.hpp"
+#include "scene/world_space_form.hpp"
 
-#include "erhe_gltf/gltf_uid.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_writer.hpp"
@@ -122,6 +125,15 @@ constexpr uint64_t c_max_cell_count = uint64_t{1} << 24;
 
 } // anonymous namespace
 
+auto c_str(const Pvs_bake_stage stage) -> const char*
+{
+    switch (stage) {
+        case Pvs_bake_stage::world_space_meshes: return "baking world-space meshes";
+        case Pvs_bake_stage::cells:              return "baking cells";
+        default:                                 return "?";
+    }
+}
+
 auto c_str(const Pvs_bake_state state) -> const char*
 {
     switch (state) {
@@ -150,6 +162,7 @@ auto Pvs_baker::get_summary() const -> Pvs_bake_summary
 {
     Pvs_bake_summary summary{
         .state                      = m_status.state,
+        .stage                      = m_status.stage,
         .method                     = m_status.method,
         .cell_count                 = m_status.cell_count,
         .cells_done                 = m_status.cells_done,
@@ -189,9 +202,100 @@ auto Pvs_baker::get_status() const -> Pvs_bake_status
     return status;
 }
 
-auto Pvs_baker::start_bake(const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request) -> std::string
+auto Pvs_baker::start_bake(
+    const std::shared_ptr<Scene_root>& scene_root,
+    const Pvs_bake_request&            request,
+    const Pvs_world_space_bake         world_space_bake
+) -> std::string
 {
-    return begin(scene_root, request, Bake_mode::bake);
+    if (world_space_bake == Pvs_world_space_bake::done) {
+        return begin(scene_root, request, Bake_mode::bake);
+    }
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    if (m_status.state == Pvs_bake_state::running) {
+        return fmt::format("a bake of scene '{}' is running", m_status.scene_name);
+    }
+    if (!m_captures.empty() || m_retiring_node) {
+        return "the previous bake is still releasing its GPU work; try again in a few frames";
+    }
+    const std::string error = check_request(scene_root, request, Bake_mode::bake);
+    if (!error.empty()) {
+        return error;
+    }
+    // R8.9: the bake renders the world-space form, which Bake World-Space Meshes installs (it needs the editor asset).
+    const std::string refusal = get_export_refusal(*scene_root, "PVS bake");
+    if (!refusal.empty()) {
+        return refusal;
+    }
+    ERHE_VERIFY(m_context.scene_save_service != nullptr);
+    m_request    = request;
+    m_scene_root = scene_root;
+    m_start_time = std::chrono::steady_clock::now();
+    m_status     = Pvs_bake_status{
+        .state          = Pvs_bake_state::running,
+        .stage          = Pvs_bake_stage::world_space_meshes,
+        .scene_name     = scene_root->get_name(),
+        .error          = {},
+        .pvs_item_key   = {},
+        .pvs_item_made  = false,
+        .pvs_item_bytes = 0,
+        .method         = request.method
+    };
+    m_world_space_bake_ended = false;
+    m_world_space_bake_error.reset();
+    App_context& context = m_context;
+    request_world_space_bake(
+        context,
+        scene_root,
+        {},
+        [&context](const Scene_save_result& result) {
+            // Read by tick() in the next prepare phase (this may run at shutdown).
+            if (context.pvs_baker != nullptr) {
+                context.pvs_baker->m_world_space_bake_ended = true;
+                if (!result.saved) {
+                    context.pvs_baker->m_world_space_bake_error = result.error.empty() ? std::string{"Bake World-Space Meshes failed"} : result.error;
+                }
+            }
+        }
+    );
+    log_pvs->info("PVS bake of '{}': Bake World-Space Meshes first, then the cells on the world-space form", m_status.scene_name);
+    return {};
+}
+
+void Pvs_baker::finish_world_space_stage()
+{
+    m_world_space_bake_ended = false;
+    std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
+    if (!scene_root) {
+        stop(Pvs_bake_state::failed, "the scene was closed");
+        return;
+    }
+    if (m_world_space_bake_error.has_value()) {
+        const std::string error = "Bake World-Space Meshes failed: " + m_world_space_bake_error.value();
+        m_world_space_bake_error.reset();
+        stop(Pvs_bake_state::failed, error);
+        return;
+    }
+    const World_space_form_status form = scene_root->get_world_space_form().get_status();
+    if (!form.is_available()) {
+        stop(
+            Pvs_bake_state::failed,
+            fmt::format("the world-space form is not available after Bake World-Space Meshes: {} of {} admitted mesh node(s) missing", form.missing_count, form.admitted_count)
+        );
+        return;
+    }
+    // begin() starts from idle; its refusal fails the bake.
+    const std::chrono::steady_clock::time_point start_time = m_start_time;
+    const Pvs_bake_request                      request    = m_request;
+    m_status.state = Pvs_bake_state::idle;
+    const std::string error = begin(scene_root, request, Bake_mode::bake);
+    if (!error.empty()) {
+        m_status.state = Pvs_bake_state::running;
+        m_scene_root   = scene_root;
+        stop(Pvs_bake_state::failed, error);
+        return;
+    }
+    m_start_time = start_time;
 }
 
 auto Pvs_baker::start_debug_face(
@@ -216,17 +320,8 @@ auto Pvs_baker::start_debug_face(
     return begin(scene_root, request, Bake_mode::debug_face);
 }
 
-auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request, const Bake_mode mode) -> std::string
+auto Pvs_baker::check_request(const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request, const Bake_mode mode) const -> std::string
 {
-    ERHE_PROFILE_FUNCTION();
-    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
-
-    if (m_status.state == Pvs_bake_state::running) {
-        return fmt::format("a bake of scene '{}' is running", m_status.scene_name);
-    }
-    if (!m_captures.empty() || m_retiring_node) {
-        return "the previous bake is still releasing its GPU work; try again in a few frames";
-    }
     if (!scene_root) {
         return "no scene";
     }
@@ -278,11 +373,36 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
         return "the debug face is a disocclusion face";
     }
 
-    const Scene_settings& settings  = scene_root->get_scene_settings();
-    const float           cell_size = request.cell_size.value_or(settings.export_settings.pvs_cell_size);
+    // A bake of R8 reads the scene's export settings (R7.3).
+    const std::string settings_refusal = get_export_settings_refusal(*scene_root, "PVS bake");
+    if (!settings_refusal.empty()) {
+        return settings_refusal;
+    }
+    const Scene_export_settings& export_settings = scene_root->get_scene_settings().export_settings.value();
+    const float                  cell_size       = request.cell_size.value_or(export_settings.pvs_cell_size);
     if (!std::isfinite(cell_size) || !(cell_size > 0.0f)) {
         return "cell size must be positive and finite";
     }
+    return {};
+}
+
+auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_bake_request& request, const Bake_mode mode) -> std::string
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
+    if (m_status.state == Pvs_bake_state::running) {
+        return fmt::format("a bake of scene '{}' is running", m_status.scene_name);
+    }
+    if (!m_captures.empty() || m_retiring_node) {
+        return "the previous bake is still releasing its GPU work; try again in a few frames";
+    }
+    const std::string request_error = check_request(scene_root, request, mode);
+    if (!request_error.empty()) {
+        return request_error;
+    }
+    const bool                   disocclusion    = (request.method == erhe::scene::Pvs_bake_method::disocclusion);
+    const Scene_export_settings& export_settings = scene_root->get_scene_settings().export_settings.value();
+    const float                  cell_size       = request.cell_size.value_or(export_settings.pvs_cell_size);
 
     // The targets of every animation of the scene, before the scene walk
     // (the content library has its own mutex).
@@ -305,30 +425,31 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
     std::vector<Column_source>                             column_sources;
     std::unordered_map<std::string, std::vector<uint32_t>> columns_by_uid;
     erhe::math::Aabb                                       static_bounds{};
-    uint32_t                                               uids_assigned{0};
     // Every static mesh has raytrace geometry (the free sample point test,
     // doc/plans/pvs.md "Bake" 1, sees every static entry).
     bool                                                   all_raytraced{true};
     {
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{scene_root->item_host_mutex};
 
-        // Identifiers a generated uid must not collide with: the uids and
-        // names of every node (the rule of the glTF writer's uid pass).
-        std::unordered_set<std::string> used_identifiers;
-        scene_root->get_scene().for_each_node(
-            [&used_identifiers](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
-                if (!node->get_gltf_uid().empty()) {
-                    used_identifiers.insert(node->get_gltf_uid());
-                }
-                used_identifiers.insert(node->get_name());
-                return true;
-            }
-        );
-        std::mt19937_64 uid_rng{std::random_device{}()};
 
+        // The bake renders the world-space form (R8.9): the form's render
+        // proxies are named by their source node (Scene_root::get_pvs_identity()),
+        // their sources are not baked, and every other mesh stands for itself.
+        const World_space_form& form = scene_root->get_world_space_form();
         for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root->layers().content()->meshes) {
             if ((mesh->get_flag_bits() & erhe::Item_flags::content) == 0) {
                 continue;
+            }
+            if ((mesh->get_flag_bits() & Editor_item_flags::world_space_source) != 0) {
+                continue;
+            }
+            // The mesh the id pass and the ray queries see at the entry's place.
+            std::shared_ptr<erhe::scene::Mesh> identity_mesh = mesh;
+            if ((mesh->get_flag_bits() & Editor_item_flags::world_space_form) != 0) {
+                identity_mesh = form.find_source(*mesh);
+                if (!identity_mesh) {
+                    continue;
+                }
             }
             // Visible at bake time: the mesh's visible flag bit is its
             // effective visibility (an ancestor's hide reaches it through
@@ -365,24 +486,15 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
                 primitive_columns[primitive_index] = static_cast<uint32_t>(columns.size());
                 any_column = true;
                 columns.push_back(erhe::scene::Pvs_column{.primitive_index = static_cast<uint32_t>(primitive_index)});
-                column_sources.push_back(Column_source{.mesh = mesh});
+                column_sources.push_back(Column_source{.mesh = identity_mesh});
             }
             if (!any_column) {
                 continue;
             }
 
-            // Columns are keyed by the node's glTF uid; a node without one
-            // gets it now, as its first export would.
-            if (mesh->get_gltf_uid().empty()) {
-                std::string uid;
-                do {
-                    uid = erhe::gltf::generate_gltf_uid(uid_rng);
-                } while (used_identifiers.contains(uid));
-                used_identifiers.insert(uid);
-                mesh->set_gltf_uid(uid);
-                ++uids_assigned;
-            }
-            const std::string& uid = mesh->get_gltf_uid();
+            // Columns are keyed by the node's glTF uid, which every item has from its creation (R6.2).
+            const std::string& uid = identity_mesh->get_gltf_uid();
+            ERHE_VERIFY(!uid.empty());
 
             // The extraction the staleness rule compares with
             // (Draw_list_scene, doc/plans/pvs.md D4).
@@ -400,7 +512,7 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
                 column.transform_hash  = transform_hash;
             }
             static_bounds.include(world_aabb);
-            if ((mesh->get_rt_scene() == nullptr) || mesh->get_rt_primitives().empty()) {
+            if ((identity_mesh->get_rt_scene() == nullptr) || identity_mesh->get_rt_primitives().empty()) {
                 all_raytraced = false;
             }
             const auto [it, inserted] = columns_by_uid.emplace(uid, std::move(primitive_columns));
@@ -417,8 +529,8 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
 
     // The region: the request, else the scene settings, else (both corners
     // zero = unset) the union of the static entries' world bounds.
-    glm::vec3 region_min = request.region_min.value_or(settings.export_settings.pvs_region_min);
-    glm::vec3 region_max = request.region_max.value_or(settings.export_settings.pvs_region_max);
+    glm::vec3 region_min = request.region_min.value_or(export_settings.pvs_region_min);
+    glm::vec3 region_max = request.region_max.value_or(export_settings.pvs_region_max);
     if (!request.region_min.has_value() && !request.region_max.has_value() && (region_min == glm::vec3{0.0f}) && (region_max == glm::vec3{0.0f})) {
         region_min = static_bounds.min;
         region_max = static_bounds.max;
@@ -461,7 +573,8 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
     m_scene_root     = scene_root;
     m_start_time     = std::chrono::steady_clock::now();
     m_header         = erhe::scene::Pvs_header{};
-    m_header.scene_id    = scene_root->get_scene_id();
+    // As stored: get_scene_id() would generate one, changing the scene and its Scene item.
+    m_header.scene_id    = scene_root->get_scene_settings().scene_id;
     m_header.grid_origin = region_min;
     m_header.cell_size   = cell_size;
     m_header.cell_counts = cell_counts;
@@ -497,8 +610,12 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
 
     m_status = Pvs_bake_status{
         .state         = Pvs_bake_state::running,
+        .stage         = Pvs_bake_stage::cells,
         .scene_name    = scene_root->get_name(),
         .error         = {},
+        .pvs_item_key  = {},
+        .pvs_item_made = false,
+        .pvs_item_bytes = 0,
         .method        = request.method,
         .grid_origin   = region_min,
         .cell_size     = cell_size,
@@ -508,8 +625,7 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
         .capture_count =
             (mode == Bake_mode::debug_face) ? uint64_t{1} :
             (request.trace_scope == Pvs_trace_scope::traced_cell_only) ? uint64_t{passes_per_cell} :
-            (cell_count * uint64_t{passes_per_cell}),
-        .uids_assigned = uids_assigned
+            (cell_count * uint64_t{passes_per_cell})
     };
     m_status.sample_point_test = m_sample_point_test;
     if (request.trace_cell.has_value()) {
@@ -552,7 +668,8 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
         }
         m_columns_database = std::make_shared<erhe::scene::Pvs_database>(m_header, std::move(columns_copy), std::move(no_pages), std::vector<uint32_t>{});
         m_restore_database = scene_root->get_pvs_database();
-        scene_root->set_pvs_database(m_columns_database);
+        m_restore_form     = scene_root->get_pvs_form();
+        scene_root->set_pvs_database(m_columns_database, Mesh_form::world_space);
         // The columns' world bounds, two vec4 each, for the bounds vote.
         std::vector<glm::vec4> column_bounds;
         column_bounds.reserve(2u * m_columns.size());
@@ -578,11 +695,11 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
     }
 
     log_pvs->info(
-        "PVS {} of '{}' started: method {}, {} x {} x {} cells of {} m from ({}, {}, {}), {} columns, {} {}, {} uids assigned{}",
+        "PVS {} of '{}' started: method {}, {} x {} x {} cells of {} m from ({}, {}, {}), {} columns, {} {}{}",
         (mode == Bake_mode::debug_face) ? "debug face" : "bake",
         m_status.scene_name, erhe::scene::c_str(request.method), cell_counts.x, cell_counts.y, cell_counts.z, cell_size,
         region_min.x, region_min.y, region_min.z, m_columns.size(), m_status.capture_count,
-        disocclusion ? "cell jobs" : "captures", uids_assigned,
+        disocclusion ? "cell jobs" : "captures",
         (disocclusion && !m_sample_point_test) ? "; some static entry has no raytrace geometry: every cell samples from its center" : ""
     );
     return {};
@@ -665,7 +782,7 @@ void Pvs_baker::restore_database()
     // A database set on the scene since (pvs_clear, a finished bake) stays.
     std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
     if (scene_root && (scene_root->get_pvs_database() == m_columns_database)) {
-        scene_root->set_pvs_database(m_restore_database);
+        scene_root->set_pvs_database(m_restore_database, m_restore_form);
     }
     m_columns_database.reset();
     m_restore_database.reset();
@@ -704,6 +821,12 @@ void Pvs_baker::tick()
     ERHE_PROFILE_FUNCTION();
     erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
 
+    if (m_status.stage == Pvs_bake_stage::world_space_meshes) {
+        if (m_world_space_bake_ended) {
+            finish_world_space_stage();
+        }
+        return;
+    }
     std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
     if (!scene_root) {
         stop(Pvs_bake_state::failed, "the scene was closed");
@@ -1695,8 +1818,11 @@ void Pvs_baker::finish(Scene_root& scene_root)
     // is not put back.
     m_columns_database.reset();
     m_restore_database.reset();
-    scene_root.set_pvs_database(database);
+    scene_root.set_pvs_database(database, Mesh_form::world_space);
     m_status.cells_with_pvs = database->get_cells_with_pvs();
+    if (m_mode == Bake_mode::bake) {
+        store_pvs_item(scene_root, *database);
+    }
     log_pvs->info(
         "PVS bake of '{}' done in {} s: {} cells, {} with a PVS, {} columns, {} stored pages, {} captures, {} unmatched entries",
         m_status.scene_name, m_header.bake_duration_seconds, database->get_cell_count(), database->get_cells_with_pvs(),
@@ -1704,6 +1830,20 @@ void Pvs_baker::finish(Scene_root& scene_root)
     );
     stop(Pvs_bake_state::done, {});
     m_status.seconds_elapsed = m_header.bake_duration_seconds;
+}
+
+void Pvs_baker::store_pvs_item(Scene_root& scene_root, const erhe::scene::Pvs_database& database)
+{
+    const std::optional<Stored_pvs_item> stored = editor::store_pvs_item(m_context, scene_root, database);
+    if (!stored.has_value()) {
+        log_pvs->error("PVS bake of '{}': the PVS item was not stored in the editor asset", m_status.scene_name);
+        return;
+    }
+    m_status.pvs_item_key   = stored->key.to_hex();
+    m_status.pvs_item_made  = stored->made;
+    m_status.pvs_item_bytes = stored->payload_bytes;
+    // The PVS item a status asks for (pvs_mode reuse, rebake) is the last bake's.
+    scene_root.get_prepared_keys().on_change(Prepared_key_change::stores);
 }
 
 } // namespace editor

@@ -304,7 +304,6 @@ void Draw_list_scene::get_pvs_streaming_status(Pvs_streaming_status& out) const
         out.page_count     = m_pvs_database->get_page_count();
         out.stored_pages   = m_pvs_database->get_stored_page_count();
         out.words_per_page = m_pvs_database->get_words_per_page();
-        out.bits_in_memory = m_pvs_database->has_resident_bits();
     }
     if (!m_pvs_residency) {
         return;

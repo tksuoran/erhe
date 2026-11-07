@@ -19,6 +19,7 @@ add_executable(${_target}
     test_mesh_prims.cpp
     test_node_computed.cpp
     test_node_expressions.cpp
+    test_node_identity.cpp
     test_node_properties.cpp
     test_node_systems.cpp
     test_optimized_variant_invalidation.cpp

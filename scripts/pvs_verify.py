@@ -22,11 +22,21 @@ pvs_bake method=sampled over a 12 x 4 x 8 m region in front of the wall with
   CPU and GPU PVS culled counts; the viewport region of capture_screenshot and
   a render_scene_image from the camera's pose are byte-identical with
   pvs_culling on and off;
-- after save_scene and load_scene of the scene, the loaded scene's
-  get_pvs_status reports ready with the same bits_hash, column_count and
-  cells_with_pvs;
-- moving a box in front of the wall makes the database stale: the next
-  frames publish the rule off and the viewport view culls nothing.
+- the bake renders the world-space form (doc/editor/pvs.md "Bake"): the
+  scene is saved to logs/pvs_verify_scene.glb first (its editor asset is made
+  beside it, both removed at the end), the database's form is world_space,
+  the editor asset holds one PVS item and a second bake finds the same one,
+  a viewport drawing source meshes tests no entry, and the consumer checks
+  run with the viewport drawing the world-space form;
+- a scene save writes no PVS baked on the world-space form: the reloaded
+  file's scene has none;
+- moving a box in front of the wall makes the database stale, or (a box the
+  world-space bake admits) leaves the form unavailable, and the viewport view
+  culls nothing.
+
+The streaming section loads a scene file that carries the bake, which a
+scene save no longer writes (the PVS is the editor asset's PVS item); it is
+not converted yet.
 
 Section "wall" (after "sampled", in the same editor): the disocclusion bake
 (pvs_bake method=disocclusion) of the same grid, with a 6 m box (inside of
@@ -51,7 +61,7 @@ order 6): the baked Bistro saved with its PVS to a scratch file under logs/
 (by the bistro section when both run, else by bake_streaming_scene() with
 the bistro section's region and bake; or --streaming-scene reused with
 --keep-streaming-scene) loaded in a fresh
-editor (load_scene: the bits are released, the pages stream from the file),
+editor (load_scene; a saved scene carries no PVS since D8 step 15, so this section is not converted yet),
 framed (frame_scene: the saved scene has no camera), with pvs_resident_pages
 --resident-pages (default 4, below the page count; MCP set_pvs_streaming)
 and the GPU classification; along a camera path of cells with a PVS two
@@ -114,13 +124,58 @@ REGION_MIN   = [-6.0, 0.2, -1.5]
 REGION_MAX   = [ 6.0, 4.2,  6.5]
 CELL_SIZE    = 2.0
 SAVE_PATH    = os.path.join("logs", "pvs_verify_scene.glb")
+EDITOR_ASSET_PATH = os.path.join("logs", "pvs_verify_scene.erhe_editor")
 # The consumer's camera: inside the region (cell (3, 0, 3)), looking down
 # -Z at the wall with the identity rotation.
 CONSUMER_EYE = [0.5, 1.3, 5.0]
 SHOT_DIR     = os.path.join("logs", "pvs_verify_shots")
 
 
+def give_source(port, scene):
+    """The bake renders the world-space form (doc/editor/pvs.md "Bake"), which
+    Bake World-Space Meshes makes in the scene's editor asset: the scene needs
+    a source file, saved under logs/ with its editor asset beside it."""
+    add_export_settings(port, scene)
+    for leftover in (SAVE_PATH, EDITOR_ASSET_PATH):
+        if os.path.isfile(os.path.join(REPO, leftover)):
+            os.remove(os.path.join(REPO, leftover))
+    save_to(port, scene, SAVE_PATH, set_as_source=True)
+
+
+def save_to(port, scene, path, set_as_source=False):
+    job = mcp(port, "save_scene", {"scene_name": scene, "path": path, "set_as_source": set_as_source})
+    if not isinstance(job, dict) or "job_id" not in job:
+        raise RuntimeError(f"save_scene: {str(job)[:500]}")
+    deadline = time.monotonic() + 300.0
+    while True:
+        save = mcp(port, "get_save_status", {"job_id": job["job_id"]})
+        if isinstance(save, dict) and save.get("state") in ("done", "failed"):
+            break
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"save did not finish: {save}")
+        time.sleep(0.2)
+    if save.get("state") != "done":
+        raise RuntimeError(f"save failed: {save.get('error', save)}")
+
+
+def editor_asset_pvs_keys():
+    """The keys of the PVS items (kind 7) of the scene's editor asset."""
+    import sqlite3
+    connection = sqlite3.connect(f"file:{os.path.join(REPO, EDITOR_ASSET_PATH)}?mode=ro", uri=True)
+    try:
+        return sorted(bytes(row[0]).hex() for row in connection.execute("SELECT key FROM item WHERE kind = 7"))
+    finally:
+        connection.close()
+
+
+def add_export_settings(port, scene):
+    """A bake reads the scene's export settings: add them (a copy of the editor's
+    defaults) when the scene has none; a scene that has them keeps them."""
+    call(port, "set_scene_settings", {"scene_name": scene, "merge": True, "settings": {"_version": 3, "export_settings": {}}})
+
+
 def bake(port, scene, samples_per_cell, timeout_s):
+    add_export_settings(port, scene)
     started = mcp(port, "pvs_bake", {
         "scene_name": scene, "method": "sampled", "cell_size": CELL_SIZE,
         "region_min": REGION_MIN, "region_max": REGION_MAX, "samples_per_cell": samples_per_cell
@@ -268,6 +323,7 @@ def stale_check(port, scene, failures):
     viewport = isolate_viewport(lambda tool, arguments: mcp(port, tool, arguments), scene_name=scene)
     hide_pvs_window(port)
     mcp(port, "set_node_transform", {"scene_name": scene, "node_name": viewport["camera"], "translation": CONSUMER_EYE, "rotation_xyzw": [0, 0, 0, 1], "space": "world"})
+    mcp(port, "set_viewport_mesh_form", {"scene_name": scene, "mesh_form": "world_space"})
     time.sleep(1.5)
     before = pvs_status(port, scene).get("views", [])
     print(f"stale: before the move, views {before}")
@@ -277,10 +333,13 @@ def stale_check(port, scene, failures):
     time.sleep(1.5)
     status = pvs_status(port, scene)
     views = status.get("views", [])
-    print(f"stale: state {status.get('state')}, frame_culling_active {status.get('frame_culling_active')}, views {views}")
-    if status.get("state") != "stale":
-        failures.append(f"after moving {FRONT_NAMES[0]}: state {status.get('state')}, expected stale")
-    if status.get("frame_culling_active"):
+    form = mcp(port, "get_world_space_meshes", {"scene_name": scene})
+    print(f"stale: state {status.get('state')}, frame_culling_active {status.get('frame_culling_active')}, views {views}, world-space form available {form.get('available')}")
+    # A box the world-space bake admits leaves the form unavailable (the view draws source meshes);
+    # a box it keeps is a baked entry of its own and stales the database.
+    if (status.get("state") != "stale") and form.get("available"):
+        failures.append(f"after moving {FRONT_NAMES[0]}: state {status.get('state')} with the form available, expected stale or the form unavailable")
+    if (status.get("state") == "stale") and status.get("frame_culling_active"):
         failures.append("after the stale mark: frame_culling_active still true")
     if (len(views) != 1) or (views[0].get("culled") != 0):
         failures.append(f"after the stale mark: views {views}, expected one view culling 0")
@@ -299,11 +358,12 @@ def run(port, scene, samples_per_cell, modes):
     for name, p in zip(FRONT_NAMES, FRONT):
         box(port, scene, name, p, [0.4, 0.4, 0.4])
     time.sleep(1.0)  # the inserts land on the next frames
+    give_source(port, scene)
 
     started, done = bake(port, scene, samples_per_cell, timeout_s=1800.0)
     print(
-        f"bake 1: {started['cell_counts']} = {started['cell_count']} cells of {started['cell_size']} m from {started['grid_origin']}, "
-        f"{started['column_count']} columns, {started['capture_count']} captures, {started['uids_assigned']} uids assigned; "
+        f"bake 1: {done['cell_counts']} = {done['cell_count']} cells of {done['cell_size']} m from {done['grid_origin']}, "
+        f"{done['column_count']} columns, {done['capture_count']} captures; "
         f"{done['seconds_elapsed']:.2f} s, unmatched entries {done['unmatched_entries']}"
     )
     status = pvs_status(port, scene)
@@ -341,32 +401,34 @@ def run(port, scene, samples_per_cell, modes):
     print(f"bake 2: {done_2['seconds_elapsed']:.2f} s, bits_hash {status_2.get('bits_hash')}")
     if status_2.get("bits_hash") != status.get("bits_hash"):
         failures.append(f"second bake bits_hash {status_2.get('bits_hash')} != {status.get('bits_hash')}")
+    # R4.10: the bake replaces the PVS item of the editor asset; an equal bake finds the same item.
+    pvs_keys = editor_asset_pvs_keys()
+    print(f"PVS item: {done_2.get('pvs_item')}, editor asset PVS items {pvs_keys}")
+    if (pvs_keys != [done.get("pvs_item", {}).get("key")]) or (done_2.get("pvs_item", {}).get("key") != done.get("pvs_item", {}).get("key")):
+        failures.append(f"editor asset PVS items {pvs_keys}, bakes {done.get('pvs_item')} / {done_2.get('pvs_item')}")
+    if status_2.get("form") != "world_space":
+        failures.append(f"the database is baked on the {status_2.get('form')} form, expected world_space")
 
     # The consumer: the viewport camera in a cell in front of the wall.
     viewport = isolate_viewport(lambda tool, arguments: mcp(port, tool, arguments), scene_name=scene)
     hide_pvs_window(port)
     mcp(port, "set_node_transform", {"scene_name": scene, "node_name": viewport["camera"], "translation": CONSUMER_EYE, "rotation_xyzw": [0, 0, 0, 1], "space": "world"})
+    # R8.10: the PVS culls in a viewport drawing the world-space form, nothing in one drawing source meshes.
+    mcp(port, "set_viewport_mesh_form", {"scene_name": scene, "mesh_form": "source"})
+    time.sleep(1.5)
+    source_views = pvs_status(port, scene).get("views", [])
+    print(f"source form: views {source_views}")
+    if any(view.get("tested", 0) != 0 for view in source_views):
+        failures.append(f"a viewport drawing source meshes tested PVS entries: {source_views}")
+    mcp(port, "set_viewport_mesh_form", {"scene_name": scene, "mesh_form": "world_space"})
     for mode in modes:
         consumer(port, scene, viewport, mode, failures)
 
-    save_path = os.path.join(REPO, SAVE_PATH)
-    if os.path.isfile(save_path):
-        os.remove(save_path)
-    job = mcp(port, "save_scene", {"scene_name": scene, "path": SAVE_PATH})
-    if not isinstance(job, dict) or "job_id" not in job:
-        raise RuntimeError(f"save_scene: {str(job)[:500]}")
-    deadline = time.monotonic() + 300.0
-    while True:
-        save = mcp(port, "get_save_status", {"job_id": job["job_id"]})
-        if isinstance(save, dict) and save.get("state") in ("done", "failed"):
-            break
-        if time.monotonic() > deadline:
-            raise RuntimeError(f"save did not finish: {save}")
-        time.sleep(0.2)
-    if save.get("state") != "done":
-        raise RuntimeError(f"save failed: {save.get('error', save)}")
+    # A scene save writes no PVS baked on the world-space form (it is the editor asset's PVS item).
+    reload_path = os.path.join("logs", "pvs_verify_reload.glb")
+    save_to(port, scene, reload_path)
     before = set(scene_names(port))
-    mcp(port, "load_scene", {"path": SAVE_PATH})
+    mcp(port, "load_scene", {"path": reload_path})
     loaded = None
     deadline = time.monotonic() + 120.0
     while (loaded is None) and (time.monotonic() < deadline):
@@ -378,17 +440,14 @@ def run(port, scene, samples_per_cell, modes):
     if loaded is None:
         raise RuntimeError("load_scene: no new scene appeared")
     reloaded = pvs_status(port, loaded)
-    print(
-        f"reload '{loaded}': state {reloaded.get('state')}, bits_hash {reloaded.get('bits_hash')}, "
-        f"columns {reloaded.get('column_count')}, cells_with_pvs {reloaded.get('cells_with_pvs')}"
-    )
-    if reloaded.get("state") != "ready":
-        failures.append(f"reloaded state {reloaded.get('state')}")
-    for key in ("bits_hash", "column_count", "cells_with_pvs"):
-        if reloaded.get(key) != status_2.get(key):
-            failures.append(f"reloaded {key} {reloaded.get(key)} != {status_2.get(key)}")
-    if os.path.isfile(save_path):
-        os.remove(save_path)
+    print(f"reload '{loaded}': state {reloaded.get('state')} (the scene file carries no PVS)")
+    if reloaded.get("state") != "absent":
+        failures.append(f"reloaded state {reloaded.get('state')}, expected absent")
+    mcp(port, "close_scene", {"scene_name": loaded})
+    time.sleep(1.0)
+    for leftover in (reload_path, os.path.join("logs", "pvs_verify_reload.erhe_editor")):
+        if os.path.isfile(os.path.join(REPO, leftover)):
+            os.remove(os.path.join(REPO, leftover))
 
     stale_check(port, scene, failures)
     return failures
@@ -422,6 +481,7 @@ def call(port, tool, arguments):
 
 def bake_disocclusion(port, scene, arguments, timeout_s):
     request = dict({"scene_name": scene, "method": "disocclusion"}, **arguments)
+    add_export_settings(port, scene)
     started = call(port, "pvs_bake", request)
     if not isinstance(started, dict) or started.get("state") != "running":
         raise RuntimeError(f"pvs_bake: {str(started)[:500]}")
@@ -440,7 +500,8 @@ def bake_disocclusion(port, scene, arguments, timeout_s):
         time.sleep(1.0)
     if status["state"] != "done":
         raise RuntimeError(f"the disocclusion bake ended {status['state']}: {status.get('error', '')}")
-    return started, status
+    # pvs_bake returns in its world-space stage, before the grid: the done status has it.
+    return status, status
 
 
 def report_bake(label, started, done, status):
@@ -655,7 +716,18 @@ def launch_with(editor, extra_args):
 def content_bounds(port, scene, cell_size):
     """The static entries' bounds, as a bake without a region sees them
     (started and cancelled at once: the region defaults to them)."""
-    started = call(port, "pvs_bake", {"scene_name": scene, "method": "disocclusion", "cell_size": cell_size, "face_resolution": 64, "tile_size": 8, "layer_count": 8})
+    add_export_settings(port, scene)
+    call(port, "pvs_bake", {"scene_name": scene, "method": "disocclusion", "cell_size": cell_size, "face_resolution": 64, "tile_size": 8, "layer_count": 8})
+    # The grid is known once the cells start (after Bake World-Space Meshes).
+    deadline = time.monotonic() + 1800.0
+    started = call(port, "get_pvs_bake_status", {})
+    while (started.get("state") == "running") and (started.get("stage") != "baking cells"):
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"content_bounds: the bake did not reach its cells: {started}")
+        time.sleep(0.2)
+        started = call(port, "get_pvs_bake_status", {})
+    if started.get("stage") != "baking cells":
+        raise RuntimeError(f"content_bounds: the bake ended {started.get('state')}: {started.get('error', '')}")
     call(port, "pvs_cancel", {})
     time.sleep(2.0)  # the cancelled bake's node retires
     origin = started["grid_origin"]
@@ -803,6 +875,7 @@ def run_heavy(args, failures):
                 # a node without a rigid body
         print(f"[heavy] {made_static} of {len(node_list)} nodes' bodies made static")
         time.sleep(3.0)
+        give_source(port, scene)
         bounds_min, bounds_max = content_bounds(port, scene, 4.0)
         print(f"[heavy] content bounds {bounds_min} .. {bounds_max}")
         # Above the floor slab (y -1 .. 0): a viewpoint inside it sees
@@ -878,6 +951,7 @@ def run_bistro(args, failures, save_for_streaming):
         # The open is listed before its content is: wait until the loads
         # settled, so a bake sees the whole static set.
         wait_async_idle(port, "bistro", 600.0)
+        give_source(port, BISTRO_SCENE)
         bounds_min, bounds_max = content_bounds(port, BISTRO_SCENE, 4.0)
         print(f"[bistro] content bounds {bounds_min} .. {bounds_max}")
         region_min = [bounds_min[0], BISTRO_Y[0], bounds_min[2]]
@@ -885,6 +959,7 @@ def run_bistro(args, failures, save_for_streaming):
         rng = random.Random(1234)
         started, missed = run_large(port, BISTRO_SCENE, "bistro", region_min, region_max, args, failures, rng)
         cells = sorted(rng.sample(range(started["cell_count"]), min(4, started["cell_count"])))
+        mcp(port, "set_viewport_mesh_form", {"scene_name": BISTRO_SCENE, "mesh_form": "world_space"})
         bistro_images(port, BISTRO_SCENE, cells, failures)
         if save_for_streaming:
             # The streaming section loads this bake (no second Bistro bake).
@@ -1063,14 +1138,11 @@ def run_streaming(args, failures):
         streaming = status.get("streaming", {})
         print(
             f"[streaming] opened {save_path} as {scene!r}: state {status.get('state')}, pages {status.get('page_count')} "
-            f"({status.get('stored_pages')} stored, dims {status.get('page_dims')}), bits_in_memory {status.get('bits_in_memory')}, "
-            f"bits_source {status.get('bits_source')}, bits_hash {status.get('bits_hash')}"
+            f"({status.get('stored_pages')} stored, dims {status.get('page_dims')}), bits_hash {status.get('bits_hash')}"
         )
         if status.get("state") != "ready":
             failures.append(f"[streaming] state {status.get('state')} after the load")
             return
-        if status.get("bits_in_memory"):
-            failures.append("[streaming] the opened database kept its bits in memory (expected released: they stream from the file)")
         capacity = args.resident_pages
         if capacity >= status.get("stored_pages", 0):
             failures.append(f"[streaming] resident_pages {capacity} is not below the stored page count {status.get('stored_pages')}")
@@ -1243,6 +1315,9 @@ def main():
         failures.append(f"exception: {error}")
     finally:
         backup.restore()
+        for leftover in (SAVE_PATH, EDITOR_ASSET_PATH, EDITOR_ASSET_PATH + "-wal", EDITOR_ASSET_PATH + "-shm"):
+            if os.path.isfile(os.path.join(REPO, leftover)):
+                os.remove(os.path.join(REPO, leftover))
     print("PASS" if not failures else "FAIL: " + "; ".join(failures))
     return 0 if not failures else 1
 

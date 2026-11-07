@@ -7,7 +7,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -44,13 +43,6 @@ public:
 class Mesh_optimize_statistics
 {
 public:
-    // False when the ACMR / overdraw / fetch figures below were never taken -
-    // a cache hit replays the derivation without running meshopt_analyze*(),
-    // which costs a pass of its own and exists only for the log line. Without
-    // this flag a hit is indistinguishable from an optimization that achieved
-    // nothing at all.
-    bool measured{false};
-
     std::size_t vertex_count_before{0};
     std::size_t vertex_count_after {0};
     std::size_t triangle_count     {0};
@@ -132,51 +124,9 @@ public:
     Mesh_optimize_result&                  result
 ) -> bool;
 
-// optimize_indexed_mesh() through a filesystem cache keyed by the source
-// content (every stream's stride and bytes, the indices, the vertex format and
-// the options). Optimizing a large primitive costs on the order of 100 ms, and
-// an import re-does that on every load of the same asset, so the derivation is
-// stored and replayed instead.
-//
-// What is stored is the two REMAPS, not the optimized streams: they fully
-// determine them (scatter every source vertex to the slot the forward remap
-// names, rebuild indices as permutation-ordered source triples mapped through
-// it) and they are what Element_mappings composition needs anyway. A hit
-// therefore rewrites `streams` and `indices` to the bytes optimize_indexed_mesh()
-// would have produced and fills `result` with the same remaps, without calling
-// meshoptimizer at all; the entry stays small - two uint32 tables rather than
-// whole vertex data. A hit's statistics have measured == false and carry the
-// replay's elapsed time.
-//
-// The cache never fails a build. A missing, corrupt, truncated, mismatched or
-// unwritable entry degrades to a plain optimize (and a rewrite attempt).
-// `cache_directory` is created if needed; pass an empty path to bypass the
-// cache entirely. Input optimize_indexed_mesh() refuses is never looked up.
-//
-// Concurrency: loader workers can race on the same entry. Writes go to a
-// temporary file that is renamed into place, so a reader sees either the old
-// entry or the new one, never a half-written one.
-[[nodiscard]] auto optimize_indexed_mesh_cached(
-    std::vector<Mesh_optimize_stream>&     streams,
-    std::vector<uint32_t>&                 indices,
-    const erhe::dataformat::Vertex_format& vertex_format,
-    const Mesh_optimize_options&           options,
-    const std::filesystem::path&           cache_directory,
-    Mesh_optimize_result&                  result
-) -> bool;
-
 [[nodiscard]] auto optimize_triangle_soup(
     const Triangle_soup&         source,
     const Mesh_optimize_options& options
-) -> Mesh_optimize_result;
-
-// optimize_triangle_soup() through the cache of optimize_indexed_mesh_cached(),
-// with the soup's single stream as the one stream. Empty `cache_directory`
-// bypasses the cache.
-[[nodiscard]] auto optimize_triangle_soup_cached(
-    const Triangle_soup&         source,
-    const Mesh_optimize_options& options,
-    const std::filesystem::path& cache_directory
 ) -> Mesh_optimize_result;
 
 // Rewrites `source` - which describes the ORDER of the soup that was optimized -
@@ -233,9 +183,6 @@ public:
 // site the shape has had no such build, and its mappings are empty until the
 // deferred geometry finalize anyway.
 //
-// `cache_directory` is forwarded to optimize_triangle_soup_cached(); empty
-// bypasses the cache.
-//
 // `source_shape` is only read from. `name` appears in the statistics log line.
 //
 // A non-null `lod_settings` also builds the variant's LOD chain
@@ -245,7 +192,6 @@ public:
     const Element_mappings&       source_mappings,
     const Mesh_optimize_options&  options,
     const Buffer_info&            buffer_info,
-    const std::filesystem::path&  cache_directory,
     std::string_view              name,
     const Lod_settings*           lod_settings = nullptr
 ) -> std::shared_ptr<Primitive_render_shape>;
@@ -274,9 +220,6 @@ public:
 // `source_buffer_mesh` supplies the bounding volumes and the per-joint bounding
 // boxes. Reordering and welding move no vertex, so they are the same for both
 // builds and are copied rather than recomputed.
-//
-// The passes go through optimize_indexed_mesh_cached() with
-// buffer_info.mesh_optimize_cache_directory (empty: uncached).
 //
 // With a non-null `lod_settings` the variant also gets a LOD chain
 // (Buffer_mesh::lod_chain): generate_lod_chain() runs on the optimized
@@ -331,7 +274,7 @@ public:
 // roundings): bumped whenever one of them writes different bits for the same
 // vertex format. GPU-ready vertex streams of a file are used as stored only
 // when their ERHE_gpu_vertex_streams `encoding_version` equals it
-// (doc/gltf_extensions/ERHE_gpu_vertex_streams.md).
+// (doc/erhe/gltf.md "GPU vertex streams on export").
 static constexpr int vertex_encoding_version = 1;
 
 // One vertex's skinning influences, sorted so the SMALLEST weight is last.
@@ -372,11 +315,9 @@ class Mesh_optimize_totals
 {
 public:
     std::size_t primitive_count      {0}; // primitives optimized
-    std::size_t measured_count       {0}; // of those, ones that ran the analysis
-    std::size_t replayed_count       {0}; // of those, cache hits (no figures)
     std::size_t vertex_count_before  {0};
     std::size_t vertex_count_after   {0};
-    std::size_t triangle_count       {0}; // over measured primitives only
+    std::size_t triangle_count       {0};
     std::size_t fetch_bytes_before   {0};
     std::size_t fetch_bytes_after    {0};
     double      acmr_before_weighted {0.0}; // sum of acmr * triangle_count

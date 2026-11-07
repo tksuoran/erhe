@@ -1,4 +1,7 @@
 #include "scene/scene_root.hpp"
+#include "assets/prepared_keys.hpp"
+#include "assets/asset_paths.hpp"
+#include "scene/world_space_form.hpp"
 #include "renderers/ray_trace_scene.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "editor_item_bits.hpp"
@@ -17,6 +20,7 @@
 #include "asset_browser/asset_browser.hpp"
 #include "assets/asset_manager.hpp"
 #include "assets/asset_workflow.hpp"
+#include "assets/prepared_asset.hpp"
 #include "graphics/texture_file_loader.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
@@ -181,7 +185,9 @@ Scene_root::Scene_root(
 )
     : m_app_message_bus{app_message_bus}
     , m_content_library{content_library}
+    , m_world_space_form{std::make_unique<World_space_form>()}
     , m_material_set{material_set_create_info}
+    , m_prepared_keys{std::make_unique<Prepared_keys>()}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -206,6 +212,11 @@ Scene_root::Scene_root(
         m_draw_list_scene->set_pvs_stale_callback(
             [this]() {
                 mark_pvs_stale();
+            }
+        );
+        m_draw_list_scene->set_pvs_identity_function(
+            [this](const erhe::scene::Mesh& mesh) -> std::string_view {
+                return get_pvs_identity(mesh);
             }
         );
     }
@@ -1685,6 +1696,17 @@ void Scene_root::collect_meshes_sharing_primitives(
     }
 }
 
+namespace {
+
+// The meshes whose primitives the keys of a scene are computed from (derived meshes, such as the world-space form's proxies, are not).
+[[nodiscard]] auto is_prepared_key_input(const erhe::scene::Mesh& mesh) -> bool
+{
+    const uint64_t flags = mesh.get_flag_bits();
+    return ((flags & erhe::Item_flags::content) != 0) && ((flags & erhe::Item_flags::render_proxy) == 0);
+}
+
+} // anonymous namespace
+
 void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
@@ -1692,6 +1714,10 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     log_scene->debug("Registering Mesh '{}' into scene", mesh->get_name());
 
     index_mesh_primitives(mesh);
+    m_world_space_form->get_validity().on_mesh_registered(*mesh);
+    if (is_prepared_key_input(*mesh)) {
+        m_prepared_keys->on_change(Prepared_key_change::mesh_set);
+    }
 
     mesh->attach_rt_to_scene(m_raytrace_scene.get());
     mesh->set_rt_mask(get_mesh_rt_mask(mesh.get())); // TODO If scene changes, the mesh/node masks need to be updated somehow
@@ -1808,6 +1834,10 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     log_scene->debug("Unregistering Mesh '{}' from scene", mesh->get_name());
 
     unindex_mesh_primitives(mesh.get());
+    m_world_space_form->get_validity().on_mesh_unregistered(*mesh);
+    if (is_prepared_key_input(*mesh)) {
+        m_prepared_keys->on_change(Prepared_key_change::mesh_set);
+    }
 
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_unregister(mesh);
@@ -1928,11 +1958,12 @@ void Scene_root::on_light_changed(const std::shared_ptr<erhe::scene::Light>& lig
     invalidate_light_sets();
 }
 
-void Scene_root::set_pvs_database(std::shared_ptr<erhe::scene::Pvs_database> database)
+void Scene_root::set_pvs_database(std::shared_ptr<erhe::scene::Pvs_database> database, const Mesh_form form)
 {
     {
         const std::lock_guard<std::mutex> lock{m_pvs_mutex};
         m_pvs_database = database;
+        m_pvs_form     = form;
     }
     // The draw lists' consumer side (column lookup, staleness, the
     // classification's database), at their next flush.
@@ -1950,6 +1981,29 @@ auto Scene_root::get_pvs_database() const -> std::shared_ptr<erhe::scene::Pvs_da
     return m_pvs_database;
 }
 
+auto Scene_root::get_pvs_form() const -> Mesh_form
+{
+    const std::lock_guard<std::mutex> lock{m_pvs_mutex};
+    return m_pvs_form;
+}
+
+auto Scene_root::get_pvs_identity(const erhe::scene::Mesh& mesh) const -> std::string_view
+{
+    const uint64_t flag_bits = mesh.get_flag_bits();
+    if (get_pvs_form() == Mesh_form::source) {
+        return ((flag_bits & Editor_item_flags::world_space_form) != 0) ? std::string_view{} : std::string_view{mesh.get_gltf_uid()};
+    }
+    if ((flag_bits & Editor_item_flags::world_space_source) != 0) {
+        return {};
+    }
+    if ((flag_bits & Editor_item_flags::world_space_form) != 0) {
+        const std::shared_ptr<erhe::scene::Mesh> source = m_world_space_form ? m_world_space_form->find_source(mesh) : std::shared_ptr<erhe::scene::Mesh>{};
+        // The source is held by the scene while its proxy is registered.
+        return source ? std::string_view{source->get_gltf_uid()} : std::string_view{};
+    }
+    return mesh.get_gltf_uid();
+}
+
 auto Scene_root::get_pvs_state() const -> erhe::scene::Pvs_state
 {
     const std::shared_ptr<erhe::scene::Pvs_database> database = get_pvs_database();
@@ -1959,6 +2013,11 @@ auto Scene_root::get_pvs_state() const -> erhe::scene::Pvs_state
 void Scene_root::mark_pvs_stale()
 {
     const std::shared_ptr<erhe::scene::Pvs_database> database = get_pvs_database();
+    // The draw lists judge the database they hold: one set_pvs_database() replaced, its
+    // replacement still queued for their next flush, is not this one.
+    if (m_draw_list_scene && (m_draw_list_scene->get_pvs_database().get() != database.get())) {
+        return;
+    }
     if (!database || !database->mark_stale()) {
         return;
     }
@@ -2048,6 +2107,12 @@ void Scene_root::on_mesh_primitives_changed(const std::shared_ptr<erhe::scene::M
     // rebuilt for this one mesh here - the third and last change site.
     index_mesh_primitives(mesh);
     enqueue_mesh_materials(mesh);
+    if (mesh) {
+        m_world_space_form->get_validity().on_mesh_primitives_changed(*mesh);
+        if (is_prepared_key_input(*mesh)) {
+            m_prepared_keys->on_change(Prepared_key_change::content);
+        }
+    }
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_reregister(mesh);
     }
@@ -2088,6 +2153,10 @@ void Scene_root::on_mesh_flags_changed(const std::shared_ptr<erhe::scene::Mesh>&
 
 void Scene_root::on_mesh_transform_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
+    if (mesh) {
+        m_world_space_form->get_validity().on_mesh_transform_changed(*mesh);
+        m_prepared_keys->on_mesh_transform_changed(*mesh);
+    }
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_transform_update(mesh);
     }
@@ -2600,6 +2669,10 @@ void Scene_root::set_usd_time_codes(const Usd_time_code_record& time_codes)
 
 void Scene_root::set_source_path(const std::filesystem::path& path, const Scene_source_format format)
 {
+    // R2.2: the record belongs to the source file it was read from or written into.
+    if (normalize_asset_path(path) != normalize_asset_path(m_source_path)) {
+        m_editor_asset_record.clear();
+    }
     m_source_path   = path;
     m_source_format = format;
     // R5.3: the scene's container record follows the source path (first
@@ -2609,6 +2682,129 @@ void Scene_root::set_source_path(const std::filesystem::path& path, const Scene_
     if (m_is_registered && (m_app_scenes != nullptr)) {
         m_app_scenes->notify_scene_source_path_changed(*this);
     }
+}
+
+void Scene_root::set_prepared_asset(const std::shared_ptr<Prepared_asset>& prepared_asset)
+{
+    m_prepared_asset = prepared_asset;
+}
+
+auto Scene_root::get_prepared_asset() const -> const std::shared_ptr<Prepared_asset>&
+{
+    return m_prepared_asset;
+}
+
+auto Scene_root::is_prepared_run() const -> bool
+{
+    return static_cast<bool>(m_prepared_asset);
+}
+
+void Scene_root::set_editor_asset_record(const std::filesystem::path& path)
+{
+    m_editor_asset_record = path;
+}
+
+auto Scene_root::get_editor_asset_record() const -> const std::filesystem::path&
+{
+    return m_editor_asset_record;
+}
+
+void Scene_root::add_unresolved_source(const std::filesystem::path& path)
+{
+    if (std::find(m_unresolved_sources.begin(), m_unresolved_sources.end(), path) == m_unresolved_sources.end()) {
+        m_unresolved_sources.push_back(path);
+    }
+}
+
+auto Scene_root::get_unresolved_sources() const -> const std::vector<std::filesystem::path>&
+{
+    return m_unresolved_sources;
+}
+
+void Scene_root::set_prepared_status(const std::shared_ptr<const Prepared_status_report>& status, const std::string& error)
+{
+    m_prepared_keys->on_status_job_finished(status, error);
+}
+
+void Scene_root::mark_prepared_status_pending()
+{
+    m_prepared_keys->on_status_job_queued();
+}
+
+auto Scene_root::get_prepared_status() const -> const std::shared_ptr<const Prepared_status_report>&
+{
+    return m_prepared_keys->get_status();
+}
+
+auto Scene_root::get_prepared_status_error() const -> const std::string&
+{
+    return m_prepared_keys->get_error();
+}
+
+auto Scene_root::is_prepared_status_pending() const -> bool
+{
+    return m_prepared_keys->is_pending();
+}
+
+auto Scene_root::get_prepared_keys() -> Prepared_keys&
+{
+    return *m_prepared_keys;
+}
+
+auto Scene_root::get_world_space_form() -> World_space_form&
+{
+    return *m_world_space_form;
+}
+
+auto Scene_root::get_world_space_form() const -> const World_space_form&
+{
+    return *m_world_space_form;
+}
+
+void Scene_root::on_export_settings_changed()
+{
+    m_world_space_form->get_validity().on_export_settings_changed(make_world_space_settings_signature(m_scene_settings.export_settings));
+    m_prepared_keys->on_change(Prepared_key_change::settings);
+}
+
+auto get_prepared_run_refusal(const Scene_root& scene_root, const std::string_view action) -> std::string
+{
+    if (!scene_root.is_prepared_run()) {
+        return {};
+    }
+    return fmt::format(
+        "{} of '{}' refused: the scene is a prepared run of '{}', which holds no source data; edits last for this session only (open the source asset to save or export)",
+        action,
+        scene_root.get_name(),
+        erhe::file::to_string(scene_root.get_prepared_asset()->get_path())
+    );
+}
+
+auto get_export_settings_refusal(const Scene_root& scene_root, const std::string_view action) -> std::string
+{
+    if (scene_root.get_scene_settings().export_settings.has_value()) {
+        return {};
+    }
+    return fmt::format(
+        "{} of '{}' refused: the scene has no export settings - add them (Properties > Export > Add Export Settings, or MCP set_scene_settings with an export_settings object)",
+        action,
+        scene_root.get_name()
+    );
+}
+
+auto get_export_refusal(const Scene_root& scene_root, const std::string_view action) -> std::string
+{
+    const std::string prepared_run_refusal = get_prepared_run_refusal(scene_root, action);
+    if (!prepared_run_refusal.empty()) {
+        return prepared_run_refusal;
+    }
+    if (scene_root.get_source_format() == Scene_source_format::usd) {
+        return fmt::format("{} of '{}' refused: the scene is USD-backed, and Export covers glTF-backed scenes only (it has no editor asset)", action, scene_root.get_name());
+    }
+    if (scene_root.get_source_path().empty()) {
+        return fmt::format("{} of '{}' refused: the scene has no source file yet - save it first (its editor asset is made beside the file)", action, scene_root.get_name());
+    }
+    return get_export_settings_refusal(scene_root, action);
 }
 
 auto Scene_root::get_scene_settings() -> Scene_settings&

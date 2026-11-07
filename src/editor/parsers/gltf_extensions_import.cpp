@@ -162,6 +162,9 @@ auto parse_gltf_scene_state(const erhe::gltf::Gltf_data& gltf_data) -> std::opti
     if (payload.contains("style") && payload["style"].is_string()) {
         state.style_name = payload["style"].get<std::string>();
     }
+    if (payload.contains("editor_asset") && payload["editor_asset"].is_string()) {
+        state.editor_asset = payload["editor_asset"].get<std::string>();
+    }
     return state;
 }
 

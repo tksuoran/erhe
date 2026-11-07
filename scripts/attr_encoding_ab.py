@@ -95,7 +95,6 @@ def capture(name, optimize, quantize, buffer_report):
         os.remove(target)
 
     cap.set_flag("optimize_meshes", optimize)
-    cap.set_flag("mesh_optimize_cache", False)
     cap.set_flag("quantize_vertex_positions", quantize)
 
     # The editor rewrites its window layout on exit and a different layout moves

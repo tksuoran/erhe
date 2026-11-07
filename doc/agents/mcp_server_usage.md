@@ -116,9 +116,10 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_nodes","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{nodes: [{name, id, type, parent, parent_id, locked, active, import_root, tags}]}`,
-each transformable prim additionally carrying `position`, `rotation_xyzw`
-and `scale`. `type` is the prim's class name (`Xform`, `Mesh`, `Camera`,
+Returns: `{nodes: [{name, id, type, parent, parent_id, locked, active, import_root, gltf_uid, tags}]}`,
+each transformable prim additionally carrying `position`, `rotation_xyzw`,
+`scale` and `world_from_node_hex` (its world matrix as 16 hexfloat strings,
+column-major, for bit-exact comparisons). `type` is the prim's class name (`Xform`, `Mesh`, `Camera`,
 `Light`, `Scope`, ...); a prim outside `Xformable` - a `Scope` - has no
 transform, and the prims below it are listed with it as their `parent`.
 
@@ -277,8 +278,9 @@ binning <view>`, latest completed measurement).
 ### get_pvs_status
 
 The scene's potentially visible set database
-([pvs.md](../editor/pvs.md); `erhe::scene::Pvs_database`, saved as
-[`ERHE_pvs`](../gltf_extensions/ERHE_pvs.md)).
+([pvs.md](../editor/pvs.md); `erhe::scene::Pvs_database`, stored as the
+PVS item of the editor asset and named by a Scene item's
+`ERHE_pvs` (`doc/erhe/gltf.md` "PVS items"); a scene save writes none).
 
 Returns: `{scene_name, state, camera}`, `state` one of `absent` (no
 database), `ready`, `stale`; `camera` is `{viewport, camera, position}` of
@@ -287,13 +289,11 @@ scene_id, grid_origin, cell_size, cell_counts, cell_count, page_size,
 page_dims, page_count, stored_pages, column_count, words_per_cell,
 cells_with_pvs, bytes {columns, pages, bits, total}, bake {method,
 face_resolution, tile_size, layer_count, face_fov, samples_per_face,
-silhouette_tests, duration_seconds}`,
-`bits_source {path, byte_offset, byte_length}` for a database read from a
-file, and in `camera`: `cell` (`"outside"` outside the grid), `page`,
+silhouette_tests, duration_seconds}`, and in `camera`: `cell` (`"outside"` outside the grid), `page`,
 `local_cell`, `page_stored`, `has_pvs`, `pvs_size`. `bake` includes
 `method` (`sampled` or `disocclusion`); `bits_hash` is the 64-bit FNV-1a of
-the bits as 16 hex digits, equal for two equal bakes and across a save and
-reload. The consumer ([pvs.md](../editor/pvs.md)):
+the bits as 16 hex digits, equal for two equal bakes and across an Export
+and its prepared run. The consumer ([pvs.md](../editor/pvs.md)):
 `culling_enabled` (the `pvs_culling` setting), `frame_culling_active` (the
 scene's draw lists published the last frame with the rule on: the setting on
 and the database ready) and `views: [{view, tested, culled}]`, per viewport
@@ -301,9 +301,7 @@ of the scene drawn in the last rendered frame (`view` its settings key):
 the entries the rule tested (inside the frustum, with bounds and a baked
 column) and those it culled. `bits_hash` is computed once when the
 database is made (`Pvs_database::get_bits_hash()`), the camera's `pvs_size`
-reads the one cell (from the scene file when an open released the bits);
-`bits_in_memory` tells whether the database holds them in memory (after a
-bake, or a save onto its own file).
+reads the one cell.
 
 `streaming` is the PVS page streaming ([draw_list_renderer.md](../erhe/draw_list_renderer.md)
 Q6 "PVS resident set and page table"; `Draw_list_scene::get_pvs_streaming_status()`):
@@ -319,8 +317,7 @@ new one per database or settings change), `page_count`, `stored_pages`,
 `failed_pages`, `applied_uploads` (pages the render phase wrote into their
 slots), the residency check `nonresident_views` and `nonresident_culled`
 (views of a frame whose PVS rule read a cell whose page table slot did not
-hold that page, and the entries they culled: 0 is the gate),
-`bits_in_memory`, and `views: [{view, active, last_frame, page_min,
+hold that page, and the entries they culled: 0 is the gate), and `views: [{view, active, last_frame, page_min,
 page_max, wanted_pages, resident_pages, box_resident}]`, per view
 registering a query box: its page box, the stored pages within the stream
 radius of it and how many are resident, and whether every stored page the
@@ -336,14 +333,20 @@ python3 scripts/mcp_call.py get_pvs_status '{"scene_name":"Default Scene"}'
 
 The PVS bake (`Pvs_baker`, [renderers.md](../editor/renderers.md);
 [pvs.md](../editor/pvs.md) "Bake"). `pvs_bake` starts a bake and returns at
-once; the bake runs over frames and sets the database on the scene when
-its last cell is done.
+once: it queues Bake World-Space Meshes first (stage `baking world-space
+meshes`; the scene is read-only meanwhile, and `get_pvs_bake_status` is
+answered during it), then bakes the cells on the world-space form over
+frames (stage `baking cells`), sets the database on the scene when its last
+cell is done and stores it as the PVS item of the scene's editor asset. It
+is refused like an Export for a scene without a source file or export
+settings; the grid fields of the reply are known once the cells start.
 
 Arguments of `pvs_bake`: `scene_name`, `method` (`"sampled"`, the default,
 or `"disocclusion"`), `cell_size`, `region_min` and `region_max` (both or
 neither; they override the scene's `Scene_settings` `export_settings`
 `pvs_cell_size` and `pvs_region_min` / `pvs_region_max` for this bake, and an unset region,
-both corners zero, is the union of the static entries' world bounds),
+both corners zero, is the union of the static entries' world bounds; a
+scene without export settings is refused),
 `face_resolution` (512 sampled, 1024 disocclusion), `face_fov_degrees`
 (120); sampled: `samples_per_cell` (9), `captures_in_flight` (8);
 disocclusion: `layer_count` (64, at most 64), `tile_size` (8, a divisor of
@@ -408,8 +411,10 @@ the scene's database back. When done, `get_pvs_bake_status` adds
 
 `get_pvs_bake_status` returns `{state, scene_name, method, grid_origin,
 cell_size, cell_counts, cell_count, column_count, cells_done, capture_count,
-captures_done, unmatched_entries, uids_assigned, cells_with_pvs,
-seconds_elapsed, seconds_remaining, debug_face, error}`, and for the
+captures_done, unmatched_entries, cells_with_pvs,
+seconds_elapsed, seconds_remaining, debug_face, error, stage}`, after a done
+bake `pvs_item {key, made, bytes}` (the PVS item it stored; `made` false
+when the editor asset held it), and for the
 disocclusion method `sample_point_test` (false: some static entry has no
 raytrace geometry and every cell samples from its center),
 `cells_without_sample_point` and `gpu_ms {cell, depth_pass, id_pass,
@@ -792,17 +797,19 @@ Returns: `{queued, active_item: {name, type, id}}`
 
 ## Action Tools
 
-### Saving scenes: save_scene, save_scene_for_quest, get_save_status
+### Saving scenes: save_scene, prepare_scene, get_save_status
 
-Both save tools are asynchronous. The tool validates its arguments (unknown
-scene, a USD-backed scene for Save for Quest), queues the save and returns
+The save tools (`save_scene`, `prepare_scene`, `save_scene_for_quest`) are
+asynchronous. The tool validates its arguments (unknown scene, a USD-backed
+scene for an Export), queues the save and returns
 the job at once: `{job_id, tool, scene_name, path, format, state: "pending",
 saved: false, message}`. The save runs in the editor's scene save service,
 as File > Save does (doc/editor/scene_serialization.md "Saving in the
 background"): `running` once the queued operations have drained, on a worker
 thread while the editor keeps rendering. While a save runs every tool except
 `get_save_status`, `get_async_status`, `get_viewports`, `list_scenes`,
-`capture_screenshot` and the save tools themselves is refused with an error
+`capture_screenshot` and the save tools themselves (with
+`get_prepared_status` and `drop_prepared_items`) is refused with an error
 naming the running save; `get_save_status` is answered by the server thread
 directly from the job table. Poll `get_save_status {job_id}` until `state` is
 `done` or `failed` before reading the file or issuing other tools.
@@ -815,10 +822,8 @@ bvh_rebuilt_count, bvh_stored_count, bvh_none_count,
 dropped_degenerate_triangles, preparation_ms}` and `sources{overwrote_sources,
 rebound_primitive_count, detached_primitive_count, rebound_image_count}`
 (a save onto the scene's own source file, doc/editor/scene_serialization.md
-"Saving onto the source file"); Save for Quest adds
-`textures{image_count, transcoded_count, transcode_failed_count,
-raw_ktx2_count, source_byte_count, transcoded_byte_count, transcode_ms}`. A
-failed job carries `error` (a scene closed before its save ran, a write
+"Saving onto the source file"); an Export job is described with
+`prepare_scene` below. A failed job carries `error` (a scene closed before its save ran, a write
 failure; details in `logs/log.txt`). Without `job_id` the tool returns
 `{jobs: [...]}`, the most recent 64 jobs.
 
@@ -831,55 +836,109 @@ old file untouched.
 path, File > Save Scene); `set_as_source` binds the scene to `path` once the
 save succeeds.
 
-`prepare_scene` (File > Prepare (Quest) / Prepare (PC); `target` `quest`
-or `pc`) and `save_scene_for_quest` (`prepare_scene` with `target` `quest`)
-write a glTF scene like `save_scene` (prepared mesh data, editor state),
-but every Basis Universal KTX2 texture is transcoded at save time to a raw
-block KTX2 image (ASTC 4x4 for `quest`, BC7 / BC5 for `pc`) referenced
-through `ERHE_texture_ktx2`
-(`doc/gltf_extensions/ERHE_texture_ktx2.md`; levels Zstandard
-supercompressed, or stored as they upload with
-`"texture_supercompression": "none"`), and each prepared primitive carries
-its GPU-ready vertex streams (`ERHE_gpu_vertex_streams`); PNG / JPEG images
-are written as they are. The save status reports the streams in
-`prepared` (`gpu_vertex_stream_count`, `gpu_vertex_stream_skipped`,
-`gpu_vertex_stream_ms`). Prepare writes with the scene's export settings
-(`Scene_settings` `export_settings`, `doc/gltf_extensions/ERHE_scene.md`);
-an `export_settings` object (`Scene_export_settings` shape, for example
-`{"lod": {"_version": 1, "level_count": 4}}`) is merged over them (RFC
-7386) for this call only. With `bake_static_to_world_space` the static
-meshes are written in world space under a "World Space" node; the status
-`prepared` reports `world_bake_mesh_count`, `world_bake_placeholder_count`,
-`world_bake_primitive_count` and `world_bake_failed_count`, and the log
-names why the other meshes kept their transforms. An export: the scene's
-source binding and dirty state stay. A USD-backed scene is refused. `path` defaults to
-`res/editor/scenes/<scene name>_<target>.glb`; `.glb` is appended when the
-extension is neither `.glb` nor `.gltf`.
+`prepare_scene` (File > Export (Quest) / Export (PC); `target` `quest` or
+`pc`) and `save_scene_for_quest` (`prepare_scene` with `target` `quest`)
+run an Export into the scene's editor asset `<stem>.erhe_editor` and the
+target's prepared asset `<stem>.<target>.erhe_prepared` beside the source
+file (`path` names another prepared asset; `.erhe_prepared` is appended
+when missing; doc/editor/prepared_assets.md "Export"). The prepared asset
+is the only prepared format: the editor writes no `<scene name>_quest.glb`
+/ `_pc.glb` any more (one written by an earlier build opens as a source,
+doc/editor/scene_serialization.md "Save pipeline"). The Export reads the
+scene's export settings (`Scene_settings` `export_settings`,
+`doc/gltf_extensions/ERHE_scene.md`), its only settings input:
+`export_settings`, `texture_supercompression` and `container` are not
+arguments, and a call that names one is refused. A scene without export
+settings, without a source file, or USD-backed is refused with a message
+saying what to do (`doc/editor/prepared_assets.md` "Export settings").
+Adding or changing them is `set_scene_settings` with an `export_settings`
+object (fields merge over the scene's export settings, or over a copy of
+the editor's defaults when it has none; `_version` optional):
 
 ```bash
-py -3 scripts/mcp_call.py save_scene_for_quest '{"scene_name":"bistro_lights_c.gltf","path":"logs/bistro_quest.glb"}'
-# -> {"job_id": 1, "state": "pending", ...}
-py -3 scripts/mcp_call.py get_save_status '{"job_id":1}'
-# -> {"job_id": 1, "state": "done", "file_bytes": ..., "textures": {...}, ...}
+py -3 scripts/mcp_call.py set_scene_settings '{"scene_name":"small","merge":true,"settings":{"_version":3,"export_settings":{"raytrace_bvh":false}}}'
 ```
 
-### bake_static_to_world_space
+With `bake_static_to_world_space` the Scene item holds the static meshes
+under a "World Space" node against World-space mesh items, which the Export
+makes when missing (`doc/editor/world_space_bake.md`). An export: the
+scene's source binding and dirty state stay. Its job has `format:
+"store"`, and a done job carries `path` (the prepared asset), `file_bytes`,
+`save_ms` and `export{files[{source, editor_asset, role, depth, location,
+counts}], target, editor_asset, prepared_asset, scene_key,
+counts{<kind>{made, present, written}}, inline_primitive_count,
+prepared_item_count, prepared_asset_bytes, ensure_ms, scene_ms, copy_ms}`
+(doc/editor/prepared_assets.md "MCP"); an Export of an unchanged scene
+reports `made` 0 for every kind, and `written` counts every item of the
+prepared asset, which each Export writes anew. A running Export job also
+carries `progress{stage, done, total}`, `stage` being `computing mesh
+keys`, `making world-space mesh items`, `making mesh items`, `computing
+texture keys`, `encoding basis texture items`, `making texture items`,
+`writing scene item` or `copying items`.
 
-Mesh > Bake Static To World Space on a scene: an undoable operation that
-moves the static meshes under the scene's "World Space" node with the
-identity transform and world-space primitives
-(`doc/editor/world_space_bake.md`). The scene's export settings choose the
-instancing; an `export_settings` object is merged over them (RFC 7386) for
-this call. The reply is the plan: `planned_meshes`, `placeholders`, `kept`
-(reason -> count) and `queued`. The primitives are built when the operation
-executes on the operation stack (Bistro Release: about 1.7 s); poll
-`get_async_status` until `queued_operations` is 0. The log line
-"Bake to World Space: N meshes, M placeholders" names the result; `undo`
-restores the tree.
+`get_prepared_status` (`scene_name`; `target` `pc` (default) or `quest`; `path` as for
+`prepare_scene`; `refresh`) answers at once with the status the editor keeps
+current: `{scene_name, target, pending, error, prepared_status{files[{source,
+editor_asset, role, depth, location, editor_asset_bytes}], scene_name, target,
+editor_asset, editor_asset_bytes, prepared_asset, prepared_asset_exists,
+prepared_asset_bytes, prepared_item_count, scene_key, prepared_scene_key,
+matches, mismatch, kinds{<kind>{present, missing, stored_count,
+stored_bytes, unreferenced_count, unreferenced_bytes}},
+inline_primitive_count, asked_key_count, computed_hash_count, drop,
+dropped_count, bytes_before_drop, compute_ms}}` (doc/editor/prepared_assets.md
+"Status"). Poll it after an edit until `pending` is false (`prepared_status` is
+absent while it is true); `refresh: true` lists the stores again for a change
+another process made. `drop_prepared_items` (the same arguments plus `drop`:
+`unreferenced`, `target`, `all` or `prepared_asset`) queues a status job of the
+store container in the scene save service and returns its job at once; the
+scene is read-only while it runs (a drop removes what it names; a drop changes
+the scene's own editor asset only), a done job carries the `prepared_status`
+measured after the drop, a running one `progress` with the extra stages
+`checking items` and `dropping items`. Both are refused for a scene without a
+source file, a USD-backed scene and a prepared run. While a status job the
+editor queued on its own runs (the Scene key of a scene whose items are all
+present), a request the read-only scene would refuse waits for it instead.
+
+`load_scene` (and `open_scene`, which routes it there) opens a prepared
+asset: its source when that file is readable, else a prepared run named
+`<stem>.<target>`; the reply's `scene_name` names the scene that opens.
+The format stamps are checked before the open is queued: a prepared asset
+this build cannot run is refused with the error, and the reply's
+`format_notices` list the stamps rebuilt in memory and another target
+(doc/editor/prepared_assets.md "Format stamps"). For the prepared run `save_scene`, `prepare_scene`,
+`save_scene_for_quest` and `export_gltf` return an error naming the
+prepared asset (doc/editor/prepared_assets.md "Prepared run").
 
 ```bash
-py -3 scripts/mcp_call.py bake_static_to_world_space '{"scene_name":"bistro_lights_c.gltf","export_settings":{"instancing":"skip"}}'
-# -> {"planned_meshes": 2670, "placeholders": 0, "kept": {"animated (or under an animated node)": 13}, "queued": true, ...}
+py -3 scripts/mcp_call.py prepare_scene '{"scene_name":"bistro_src.glb","target":"quest"}'
+# -> {"job_id": 1, "state": "pending", "format": "store", ...}
+py -3 scripts/mcp_call.py get_save_status '{"job_id":1}'
+# -> {"job_id": 1, "state": "done", "path": ".../bistro_src.quest.erhe_prepared", "export": {...}, ...}
+```
+
+### bake_world_space_meshes
+
+Mesh > Bake World-Space Meshes on a scene (`doc/editor/world_space_bake.md`):
+a job of the scene save service that makes the scene's missing World-space
+mesh items in its editor asset and then loads the scene's world-space form
+from them; the node tree and the undo stack stay as they are. The scene's
+export settings choose the instancing and the LOD request; it is refused as
+Export is (no export settings, no source file, USD-backed, a prepared run),
+and so is an `export_settings` argument. The reply is the job (poll
+`get_save_status`); a done job carries `export{counts{world_mesh,
+raytrace_bvh}, world_mesh_node_count, world_form_mesh_count, ensure_ms,
+scene_ms}`. `get_world_space_meshes {scene_name}` then reports `baked`,
+`admitted_count`, `valid_count`, `missing_count`, `scene_changed`,
+`settings_changed` and `available` (a viewport, and `render_scene_image`
+with `mesh_form: "world_space"`, can draw the world-space form). Moving a
+baked node or editing its mesh makes it missing at the edit; the undo makes
+it valid again.
+
+```bash
+py -3 scripts/mcp_call.py bake_world_space_meshes '{"scene_name":"bistro_lights_c"}'
+# -> {"job_id": 3, "state": "pending", ...}
+py -3 scripts/mcp_call.py get_world_space_meshes '{"scene_name":"bistro_lights_c"}'
+# -> {"admitted_count": 2670, "valid_count": 2670, "missing_count": 0, "available": true, ...}
 ```
 
 ### create_node
@@ -1115,6 +1174,17 @@ capturing. `render_scene_image` draws no edge lines; capture them with
 
 Returns: `{style, polygon_fill, edge_lines, corner_points, polygon_centroids, solid_wireframe, full_builds_queued}`.
 
+### set_viewport_mesh_form
+
+Choose the form every viewport scene view of `scene_name` draws, as the
+viewport toolbar combo does (doc/editor/world_space_bake.md "Two forms"):
+`mesh_form` `source` or `world_space`. A view that asks for the world-space
+form while it is unavailable draws source meshes until it is available. PVS
+culling applies in the views that draw the form the scene's PVS was baked on
+(`get_pvs_status` `form`; doc/editor/pvs.md D5).
+
+Returns: `{scene_name, mesh_form, views, world_space_form_available}`.
+
 ### set_headset_scene
 
 Home the global tools (Hud, Hotbar and, under OpenXR, the headset view) in
@@ -1299,9 +1369,10 @@ arguments), plus either `settings` (the
 `border` `free` / `locked`, `seams` `keep` / `permissive`, `fallback` `none`
 / `sloppy`, `normal_merge_angle`; omitted fields take the defaults) or
 `clear: true`. It sets the request on every distinct primitive of the meshes
-and queues the rebuild of their optimized variants. A Save for Quest
-(`save_scene_for_quest`) stores the chains that exist and generates none, so a
-scene to profile with LODs everywhere takes `scope: "scene"` first. Returns
+and queues the rebuild of their optimized variants. A save
+(`save_scene`) stores the chains that exist and generates none (an Export
+generates chains with the export settings `lod` for primitives without one),
+so a scene to profile with LODs everywhere takes `scope: "scene"` first. Returns
 `{mode, scope, settings,
 mesh_count, primitive_count, queued_count, task_count, unchanged_count,
 held_count, not_optimized_count}`; poll `get_async_status` until `idle`.

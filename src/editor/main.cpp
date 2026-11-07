@@ -73,7 +73,7 @@ auto main(int argc, char** argv) -> int
         cxxopts::Options options{"editor", "erhe editor"};
         options.add_options()
             ("commands", "Startup commands script (scene setup) JSON path", cxxopts::value<std::string>()->default_value("config/editor/commands.json"))
-            ("scene",    "Scene file (.glb / .gltf) to load on startup instead of building the default scene", cxxopts::value<std::string>()->default_value(""))
+            ("scene",    "Scene file (.glb / .gltf / .erhe_prepared) to load on startup instead of building the default scene", cxxopts::value<std::string>()->default_value(""))
             ("no-scene", "Start with an empty scene (default camera only): no procedural default scene and no scene load (overrides --scene)")
             ("no-post-processing", "Force viewport post processing off for this session, overriding editor_settings.json (the stored setting is not modified)")
             ("benchmark", "Benchmark file (JSON): run it, log the result, write logs/benchmark_<name>.json and exit", cxxopts::value<std::string>()->default_value(""))

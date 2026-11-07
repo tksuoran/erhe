@@ -236,15 +236,15 @@ Set_geometry_attribute_operation::Set_geometry_attribute_operation(Parameters&& 
 
 void Set_geometry_attribute_operation::execute(App_context& context)
 {
-    apply(context, m_parameters.after_values);
+    apply(context, m_parameters.after_values, Step::edit);
 }
 
 void Set_geometry_attribute_operation::undo(App_context& context)
 {
-    apply(context, m_parameters.before_values);
+    apply(context, m_parameters.before_values, Step::undo);
 }
 
-void Set_geometry_attribute_operation::apply(App_context& context, const std::vector<Geometry_attribute_value>& values)
+void Set_geometry_attribute_operation::apply(App_context& context, const std::vector<Geometry_attribute_value>& values, const Step step)
 {
     if (!m_parameters.mesh || !m_parameters.geometry) {
         set_error("Set_geometry_attribute_operation: mesh or geometry is null");
@@ -295,6 +295,13 @@ void Set_geometry_attribute_operation::apply(App_context& context, const std::ve
         return;
     }
 
+    // Undo: the meshes take back the primitives they held before the edit.
+    if (step == Step::undo) {
+        restore_mesh_primitives(context, m_before_primitives);
+        m_before_primitives.clear();
+        return;
+    }
+
     // Rebuild one Primitive for the (unchanged) Geometry and share it across
     // every mesh that references the Geometry, as Paint_colors_operation does.
     erhe::primitive::Build_info build_info = m_parameters.build_info;
@@ -314,7 +321,7 @@ void Set_geometry_attribute_operation::apply(App_context& context, const std::ve
 
     // No physics rebuild: positions are unchanged (position edits are
     // Move_mesh_vertices_operation).
-    share_rebuilt_primitive(context, m_parameters.mesh, m_parameters.geometry.get(), new_primitive);
+    share_rebuilt_primitive(context, m_parameters.mesh, m_parameters.geometry.get(), new_primitive, {}, &m_before_primitives);
 
     scene_lock.unlock();
     if (background_optimize) {

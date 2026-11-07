@@ -57,6 +57,7 @@ erhe_target_sources_grouped(
     erhe_graphics/graphics_log.hpp
     erhe_graphics/image_loader.hpp
     erhe_graphics/image_loader_dds.cpp
+    erhe_graphics/basis_encoder.hpp
     erhe_graphics/image_encoder.cpp
     erhe_graphics/image_encoder.hpp
     erhe_graphics/image_loader_dds.hpp
@@ -123,6 +124,8 @@ erhe_target_sources_grouped(
     erhe_graphics/swapchain.hpp
     erhe_graphics/texture.hpp
     erhe_graphics/texture_heap.hpp
+    erhe_graphics/texture_properties.cpp
+    erhe_graphics/texture_properties.hpp
     erhe_graphics/texture_reference.hpp
 )
 
@@ -289,6 +292,68 @@ if (MSVC)
     set_source_files_properties(${_bc7e_source} PROPERTIES COMPILE_OPTIONS "/WX-;/W0")
 else ()
     set_source_files_properties(${_bc7e_source} PROPERTIES COMPILE_OPTIONS "-Wno-error;-w")
+endif ()
+
+# Basis Universal encoder (basis_encoder: Export's Basis texture items,
+# doc/erhe/graphics.md "Basis Universal encoder"), from the same download as
+# the transcoder above, which it links against; bc7e_scalar is listed above.
+# Without ERHE_BASIS_ENCODER (Android) basis_encoder_none.cpp reports it absent.
+if (ERHE_BASIS_ENCODER)
+    set(_basisu_encoder_sources
+        basisu_astc_hdr_6x6_enc.cpp
+        basisu_astc_hdr_common.cpp
+        basisu_astc_ldr_common.cpp
+        basisu_astc_ldr_encode.cpp
+        basisu_astc_ldr_fencode.cpp
+        basisu_backend.cpp
+        basisu_basis_file.cpp
+        basisu_bc15_spmd.cpp
+        basisu_bc15_spmd_sse.cpp
+        basisu_bc7enc.cpp
+        basisu_comp.cpp
+        basisu_dds_export.cpp
+        basisu_enc.cpp
+        basisu_etc.cpp
+        basisu_frontend.cpp
+        basisu_gpu_texture.cpp
+        basisu_kernels_sse.cpp
+        basisu_opencl.cpp
+        basisu_pvrtc1_4.cpp
+        basisu_resample_filters.cpp
+        basisu_resampler.cpp
+        basisu_ssim.cpp
+        basisu_tinyexr.cpp
+        basisu_uastc_enc.cpp
+        basisu_uastc_hdr_4x4_enc.cpp
+        basisu_xbc7_encode.cpp
+        jpgd.cpp
+        pvpngreader.cpp
+        3rdparty/android_astc_decomp.cpp
+    )
+    list(TRANSFORM _basisu_encoder_sources PREPEND "${basis_universal_SOURCE_DIR}/encoder/")
+    target_sources(${_interface_target} PRIVATE ${_basisu_encoder_sources})
+    erhe_target_sources_grouped(
+        ${_interface_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/basis_encoder.cpp
+    )
+    # The scalar paths: no SSE 4.1 baseline is assumed, no OpenCL, no astcenc inside basisu.
+    set(_basisu_encoder_definitions "BASISU_SUPPORT_SSE=0;BASISU_SUPPORT_OPENCL=0;BASISU_SUPPORT_ASTCENC=0")
+    set_source_files_properties(
+        ${_basisu_encoder_sources} erhe_graphics/basis_encoder.cpp
+        PROPERTIES COMPILE_DEFINITIONS "${_basisu_encoder_definitions}"
+    )
+    set_source_files_properties(${_basisu_encoder_sources} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+    if (MSVC)
+        set_source_files_properties(${_basisu_encoder_sources} PROPERTIES COMPILE_OPTIONS "/WX-;/W0")
+        set_source_files_properties(erhe_graphics/basis_encoder.cpp PROPERTIES COMPILE_OPTIONS "/wd4828")
+    else ()
+        set_source_files_properties(${_basisu_encoder_sources} PROPERTIES COMPILE_OPTIONS "-Wno-error;-w")
+    endif ()
+else ()
+    erhe_target_sources_grouped(
+        ${_interface_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/basis_encoder_none.cpp
+    )
 endif ()
 
 # DDS reader (image_loader_dds): header-only dds_image package fetched

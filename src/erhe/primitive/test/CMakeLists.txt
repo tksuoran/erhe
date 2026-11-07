@@ -12,6 +12,7 @@ add_executable(${_target}
     test_lod.cpp
     test_stored_colocation.cpp
     test_prepared_primitive.cpp
+    test_derived_triangles.cpp
     test_bake_transform.cpp
     test_triangle_soup_release.cpp
     mesh_compare.hpp

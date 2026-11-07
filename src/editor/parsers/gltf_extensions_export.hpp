@@ -5,6 +5,7 @@
 #include "erhe_gltf/gltf.hpp"
 
 #include <filesystem>
+#include <string_view>
 
 namespace editor {
 
@@ -42,11 +43,24 @@ class Scene_root;
 // with the library items build_physics_description recorded, so the ERHE_scene
 // physics_materials and physics_joints entries carry each item's name and its
 // complete local value set.
+// What the editor state is written for: a scene file (the source asset), or
+// the Scene item of an Export, which carries no brushes and no geometry
+// graphs and writes graph-made meshes as meshes (R4.9 of
+// doc/plans/prepared_assets.md; doc/editor/prepared_assets.md), and names no
+// other file: its materials are written in full (R10.3).
+enum class Gltf_editor_state_scope : unsigned int
+{
+    scene_file = 0,
+    scene_item
+};
+
 void add_gltf_editor_state(
     erhe::gltf::Gltf_export_arguments& arguments,
     Scene_root&                        scene_root,
     const std::filesystem::path&       export_path,
-    const Physics_description_items&   physics_items
+    const Physics_description_items&   physics_items,
+    Gltf_editor_state_scope            scope,
+    std::string_view                   editor_asset_record = {} // R2.2: ERHE_scene editor_asset, empty for none
 );
 
 }

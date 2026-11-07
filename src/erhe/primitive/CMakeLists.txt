@@ -28,7 +28,6 @@ erhe_target_sources_grouped(
     erhe_primitive/material.hpp
     erhe_primitive/mesh_optimizer.cpp
     erhe_primitive/mesh_optimizer.hpp
-    erhe_primitive/mesh_optimizer_cache.cpp
     erhe_primitive/prepared_primitive.cpp
     erhe_primitive/prepared_primitive.hpp
     erhe_primitive/primitive_builder.cpp
@@ -59,9 +58,10 @@ target_link_libraries(${_target}
         # Material_sampler_state names the erhe::graphics sampler enums in
         # the public header.
         erhe::graphics
+        # erhe::hash::Content_hash is in the public headers (Primitive_shape::get_content_hash()).
+        erhe::hash
     PRIVATE
         erhe::file
-        erhe::hash
         erhe::log
         erhe::profile
         erhe::verify

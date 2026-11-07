@@ -1,11 +1,16 @@
-# Phantom shadow caster in prepared scene files
+# Phantom shadow caster with stored vertex streams
 
 Status: in progress
 
-A scene file written by Prepare (PC) or Prepare (Quest) (MCP `prepare_scene`,
-`doc/editor/scene_serialization.md`) renders Bistro with a wrong shadow: one
-spot light shades a region of the cafe terrace that a plain `save_scene` of
-the same scene lights correctly. This document holds what is established, the
+Bistro loaded from stored GPU vertex streams (`ERHE_gpu_vertex_streams`: the
+mesh items of a prepared run, doc/editor/prepared_assets.md "Prepared run")
+renders with a wrong shadow on the Intel ICD: one spot light shades a region
+of the cafe terrace that the same scene loaded from its soups lights
+correctly. The findings below were made with the prepared glTF files that
+Prepare (PC) / Prepare (Quest) of earlier builds wrote, which carried the
+same streams inline; the editor writes no such file now, and the
+reproduction is the prepared run that reads them from mesh items (not yet
+re-run in that form). This document holds what is established, the
 reproduction, and the open hypotheses.
 
 ## Reproduction
@@ -23,14 +28,18 @@ deterministic: 12593 pixels differ on every run.
 
 1. `open_scene` `res/editor/assets/bistro_lights_compressed/bistro_lights_c.gltf`,
    wait for `get_async_status` idle.
-2. `save_scene` to `<scratch>/bistro_plain.glb`, and `prepare_scene`
-   (`target` `pc`) to `<scratch>/bistro_pc.glb` (poll `get_save_status`).
-3. Open both files in one session (`open_scene`, wait idle).
-4. `render_scene_image` of each, `scene` the file name, camera
+2. `save_scene` to `<scratch>/bistro_plain.glb`, add export settings
+   (`set_scene_settings`) and `prepare_scene` (`target` `pc`; poll
+   `get_save_status`): `<scratch>/bistro_plain.pc.erhe_prepared`.
+3. Move `bistro_plain.glb` and its editor asset away, open the prepared asset
+   (a prepared run, `load.cpu_mesh_data` `release` so its primitives load
+   their stored streams), and open the moved `bistro_plain.glb` in the same
+   session (`open_scene`, wait idle).
+4. `render_scene_image` of each, `scene` the scene name, camera
    `{"eye":[-20,10,25],"target":[0,5,0],"up":[0,0,1],"fov_y_degrees":60,"near":0.1,"far":1000}`,
    960 x 540, `shader_debug` 30, `shadow_debug_light` `Spot.002`,
-   `msaa_samples` 0. The plain file shows a slatted (lattice) shadow on the
-   terrace; the PC file shows a solid quad there (about 12600 pixels differ).
+   `msaa_samples` 0. The plain file showed a slatted (lattice) shadow on the
+   terrace; the prepared file a solid quad there (about 12600 pixels differ).
 
 ## Established
 

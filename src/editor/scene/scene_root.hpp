@@ -2,6 +2,7 @@
 
 #include "app_message.hpp"
 #include "editor_item_bits.hpp"
+#include "scene/mesh_form.hpp"
 #include "scene/generated/scene_settings.hpp"
 #include "renderers/render_settings.hpp"
 
@@ -112,6 +113,11 @@ enum class Scene_source_format : unsigned int {
 };
 
 [[nodiscard]] auto c_str(Scene_source_format format) -> const char*;
+
+class Prepared_asset;
+class Prepared_keys;
+class Prepared_status_report;
+class World_space_form;
 
 // One `DomeLight` prim a USD-backed scene was opened from authored. erhe has
 // no environment map, so a dome is read as the scene's ambient light
@@ -487,6 +493,36 @@ public:
     void set_source_path(const std::filesystem::path& path, Scene_source_format format);
     [[nodiscard]] auto get_source_format () const -> Scene_source_format;
 
+    // A prepared run (doc/editor/prepared_assets.md "Prepared run"): the
+    // scene runs from this prepared asset, which stays open while the scene
+    // lives; Save and Export refuse the scene (get_prepared_run_refusal).
+    void set_prepared_asset(const std::shared_ptr<Prepared_asset>& prepared_asset);
+    [[nodiscard]] auto get_prepared_asset() const -> const std::shared_ptr<Prepared_asset>&;
+    [[nodiscard]] auto is_prepared_run   () const -> bool;
+
+    // R2.2: the editor asset the source file records (ERHE_scene editor_asset), absolute; empty for none.
+    void set_editor_asset_record(const std::filesystem::path& path);
+    [[nodiscard]] auto get_editor_asset_record() const -> const std::filesystem::path&;
+    // Prefab sources and material containers the open could not read: the scene lacks their content (R10.8).
+    void add_unresolved_source(const std::filesystem::path& path);
+    [[nodiscard]] auto get_unresolved_sources() const -> const std::vector<std::filesystem::path>&;
+
+    // The status of the scene's stores, kept current by Prepared_keys from the
+    // change sites (doc/editor/prepared_assets.md "Status"). set_prepared_status
+    // and mark_prepared_status_pending: a Scene_save_service status job; main thread only.
+    void set_prepared_status        (const std::shared_ptr<const Prepared_status_report>& status, const std::string& error);
+    void mark_prepared_status_pending();
+    [[nodiscard]] auto get_prepared_status        () const -> const std::shared_ptr<const Prepared_status_report>&;
+    [[nodiscard]] auto get_prepared_status_error  () const -> const std::string&;
+    [[nodiscard]] auto is_prepared_status_pending () const -> bool;
+    [[nodiscard]] auto get_prepared_keys() -> Prepared_keys&;
+
+    // The world-space form of the scene (doc/editor/world_space_bake.md "Two forms").
+    [[nodiscard]] auto get_world_space_form() -> World_space_form&;
+    [[nodiscard]] auto get_world_space_form() const -> const World_space_form&;
+    // The change site of every edit of the scene's export settings (Properties, MCP set_scene_settings).
+    void on_export_settings_changed();
+
     // The `DomeLight` prims the opened USD file authored, in file order (see
     // Usd_dome_light_record). Empty for every scene that was not opened from
     // a USD file holding one.
@@ -601,9 +637,18 @@ public:
     // erhe::scene::Pvs_database), null when it has none. Saved with the
     // scene as ERHE_pvs and read back by the open. set_pvs_database() and a
     // mark_pvs_stale() that turns a ready database stale queue
-    // Pvs_state_changed_message. Any thread.
-    void set_pvs_database(std::shared_ptr<erhe::scene::Pvs_database> database);
+    // Pvs_state_changed_message. Any thread. form: what the database was
+    // baked on - a bake renders the world-space form (R8.9), a file's
+    // database names the file's own nodes (source); PVS culling applies in
+    // the views that draw that form (R8.10).
+    void set_pvs_database(std::shared_ptr<erhe::scene::Pvs_database> database, Mesh_form form);
     [[nodiscard]] auto get_pvs_database() const -> std::shared_ptr<erhe::scene::Pvs_database>;
+    [[nodiscard]] auto get_pvs_form    () const -> Mesh_form;
+    // The uid the database's columns name the mesh's entries by (empty:
+    // untracked): with a world-space database a render proxy of the form is
+    // its source's node and the source is untracked; with a source database
+    // the proxies are untracked. Main thread.
+    [[nodiscard]] auto get_pvs_identity(const erhe::scene::Mesh& mesh) const -> std::string_view;
     // absent without a database, else the database's state.
     [[nodiscard]] auto get_pvs_state() const -> erhe::scene::Pvs_state;
     // The stale mark of doc/plans/pvs.md D4, routed through the scene root
@@ -697,6 +742,7 @@ private:
     App_message_bus*                                m_app_message_bus{nullptr};
     mutable std::mutex                              m_pvs_mutex;
     std::shared_ptr<erhe::scene::Pvs_database>      m_pvs_database;
+    Mesh_form                                       m_pvs_form{Mesh_form::source};
     App_scenes*                                     m_app_scenes{nullptr};
     // Set at registration and kept after unregistration: the destructor
     // hands the mesh payload to it (scene/scene_payload_release.hpp). It
@@ -705,6 +751,10 @@ private:
     std::shared_ptr<Content_library>                m_content_library;
     std::filesystem::path                           m_source_path;
     Scene_source_format                             m_source_format{Scene_source_format::none};
+    std::shared_ptr<Prepared_asset>                 m_prepared_asset;
+    std::filesystem::path                           m_editor_asset_record;
+    std::vector<std::filesystem::path>              m_unresolved_sources;
+    std::unique_ptr<World_space_form>               m_world_space_form;
     std::vector<Usd_dome_light_record>              m_usd_dome_lights;
     std::vector<std::string>                        m_usd_sublayers;
     Usd_time_code_record                            m_usd_time_codes;
@@ -802,6 +852,9 @@ private:
     Variant_table                                   m_variant_table;
 
     std::shared_ptr<Item_tree_window>               m_node_tree_window;
+
+    // Last: destroyed first, joining a running key check before the members it reads go.
+    std::unique_ptr<Prepared_keys>                  m_prepared_keys;
 };
 
 // Cameras offered for user camera selection (the "Scene and Camera" dialog
@@ -820,5 +873,14 @@ private:
 // any library, or a shared prefab template resource (reference entries are
 // deliberately non-hosted).
 [[nodiscard]] auto get_hosting_scene_root(const erhe::Item_base* item) -> std::shared_ptr<Scene_root>;
+
+// Empty when the scene may be saved and exported; for a prepared run the
+// message that refuses `action` (R11.2).
+[[nodiscard]] auto get_prepared_run_refusal(const Scene_root& scene_root, std::string_view action) -> std::string;
+// Empty when the scene has export settings; else the message that refuses `action` (R7.3).
+[[nodiscard]] auto get_export_settings_refusal(const Scene_root& scene_root, std::string_view action) -> std::string;
+// Empty when the scene may be exported; else the message that refuses `action`:
+// a prepared run, a USD-backed scene (R1.7), no source file (R2.7), no export settings (R7.3).
+[[nodiscard]] auto get_export_refusal(const Scene_root& scene_root, std::string_view action) -> std::string;
 
 }

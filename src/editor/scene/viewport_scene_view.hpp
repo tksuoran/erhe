@@ -191,6 +191,7 @@ public:
     void request_cursor_relative_hold(bool relative_hold_enable);
     
     void viewport_toolbar            () override;
+    void mesh_form_toolbar_combo     ();
     
     void set_shader_debug            (erhe::scene_renderer::Shader_debug shader_debug) override;
     auto get_shader_debug            () const -> erhe::scene_renderer::Shader_debug override;
@@ -202,6 +203,10 @@ public:
     [[nodiscard]] auto get_overdraw_mode() const -> Overdraw_mode override;
     [[nodiscard]] auto is_overdraw_supported() const -> bool override;
     void queue_overdraw_mode(Overdraw_mode mode) override;
+    // The form of the world-space bake's mesh nodes the view asks for (doc/editor/world_space_bake.md "Two forms").
+    void queue_mesh_form(Mesh_form form);
+    void set_mesh_form  (Mesh_form form);
+    [[nodiscard]] auto get_mesh_form() const -> Mesh_form;
     // Any thread: the overdraw statistics of the newest retired frame the
     // view counted (not valid before one retired, nor after the mode turned
     // off).
@@ -281,6 +286,7 @@ private:
 
     erhe::scene_renderer::Shader_debug m_shader_debug                   {erhe::scene_renderer::Shader_debug::none};
     Overdraw_mode                      m_overdraw_mode                  {Overdraw_mode::off};
+    Mesh_form                          m_mesh_form                      {Mesh_form::source};
     uint32_t                           m_overdraw_max_count             {8};
     Renderer_choice                    m_renderer_choice                {Renderer_choice::forward};
     bool                               m_is_scene_view_hovered          {false};

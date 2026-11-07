@@ -10,6 +10,8 @@
 #include "app_settings.hpp"
 #include "brushes/brush.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/lod_config_serialization.hpp"
+#include "config/generated/scene_export_settings_serialization.hpp"
 #include "config/generated/shadow_bias_mode.hpp"
 #include "config/generated/shadow_cull_mode.hpp"
 #include "config/generated/shadow_filter_mode.hpp"
@@ -31,7 +33,6 @@
 #include "operations/geometry_operations.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
-#include "operations/bake_world_space_operation.hpp"
 #include "operations/merge_static_subtree_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation.hpp"
@@ -409,8 +410,9 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
         // treats a missing _version as version 1 and SILENTLY drops every
         // added_in > 1 field (e.g. a versionless sky object loses
         // "enabled"). Hand-written MCP input must say which version it is.
+        // export_settings is exempt: its fields merge over a complete object below.
         for (const auto& [key, sub] : value.items()) {
-            if (sub.is_object() && !sub.empty() && !sub.contains("_version")) {
+            if ((key != "export_settings") && sub.is_object() && !sub.empty() && !sub.contains("_version")) {
                 json r = make_text_content(
                     "settings." + key + " has no _version; a versionless object deserializes as "
                     "version 1 and silently drops newer fields - add the config's current _version"
@@ -427,6 +429,16 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
         // null deletes an override - no client-side accumulator needed.
         json settings_value = value;
         migrate_scene_settings_json(settings_value);
+        // Adding export settings copies the editor's defaults (R7.1): a given
+        // export_settings object merges over the scene's own, else over that copy.
+        const json::iterator given_export_settings = settings_value.find("export_settings");
+        if ((given_export_settings != settings_value.end()) && given_export_settings->is_object()) {
+            const std::optional<Scene_export_settings>& current = sr->get_scene_settings().export_settings;
+            const Scene_export_settings& base = current.has_value() ? current.value() : m_context.editor_settings->export_settings;
+            json merged_export_settings = json::parse(serialize(base, 0), nullptr, false);
+            merged_export_settings.merge_patch(*given_export_settings);
+            *given_export_settings = std::move(merged_export_settings);
+        }
         if (args.value("merge", false)) {
             json current = json::parse(serialize(sr->get_scene_settings(), 0), nullptr, false);
             if (current.is_object()) {
@@ -449,7 +461,15 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
             r["isError"] = true;
             return r.dump();
         }
+        // The change site of the export settings (R3.7): any field the keys or the bake read.
+        const auto export_text = [](const std::optional<Scene_export_settings>& export_settings) -> std::string {
+            return export_settings.has_value() ? serialize(export_settings.value(), 0) : std::string{};
+        };
+        const bool export_settings_changed = (export_text(sr->get_scene_settings().export_settings) != export_text(new_settings.export_settings));
         sr->get_scene_settings() = new_settings;
+        if (export_settings_changed) {
+            sr->on_export_settings_changed();
+        }
         changed = true;
     }
     return make_json_content({
@@ -3993,58 +4013,6 @@ auto Mcp_server::action_merge_static_subtree(const json& args) -> std::string
         {"merged_nodes", merged},
         {"queued",       true},
         {"message",      "executes on the operation stack - poll get_async_status until queued_operations == 0"}
-    }).dump();
-}
-
-// Bake_world_space_operation (doc/editor/world_space_bake.md "Bake Static To World Space operation"):
-// the static meshes of the scene into world space under its "World Space"
-// node, undoable. The instancing comes from the scene's export settings, with
-// an `export_settings` object merged over them.
-auto Mcp_server::action_bake_static_to_world_space(const json& args) -> std::string
-{
-    const std::string scene_name = args.value("scene_name", "");
-    Scene_root* const sr = find_scene(scene_name);
-    if (sr == nullptr) {
-        return make_error_content("Scene not found: " + scene_name);
-    }
-    Scene_export_settings settings{};
-    const std::string settings_error = resolve_export_settings(args, *sr, "bake_static_to_world_space", settings);
-    if (!settings_error.empty()) {
-        return make_error_content(settings_error);
-    }
-    // The primitives are built in the constructor (main thread, MCP
-    // dispatch); the structural change executes on the operation stack.
-    const std::shared_ptr<Bake_world_space_operation> op = std::make_shared<Bake_world_space_operation>(
-        Bake_world_space_operation::Parameters{
-            .context    = m_context,
-            .build_info = erhe::primitive::Build_info{
-                .primitive_types = {
-                    .fill_triangles          = true,
-                    .fill_triangles_expanded = true,
-                    .edge_lines              = true,
-                    .corner_points           = true,
-                    .centroid_points         = true
-                },
-                .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
-            },
-            .scene_root = sr->shared_from_this(),
-            .settings   = settings
-        }
-    );
-    json kept = json::object();
-    for (const auto& [reason, count] : op->get_kept_reasons()) {
-        kept[reason] = count;
-    }
-    if (op->get_baked_count() > 0) {
-        m_context.operation_stack->queue(op);
-    }
-    return make_json_content({
-        {"scene_name",   sr->get_name()},
-        {"planned_meshes", op->get_baked_count()},
-        {"placeholders", op->get_placeholder_count()},
-        {"kept",         kept},
-        {"queued",       op->get_baked_count() > 0},
-        {"message",      "builds and executes on the operation stack - poll get_async_status until queued_operations == 0; the log names the result"}
     }).dump();
 }
 

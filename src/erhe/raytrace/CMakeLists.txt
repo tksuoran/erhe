@@ -26,6 +26,7 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "tinybvh")
         erhe_raytrace/tinybvh/tinybvh_scene.hpp
     )
     set(impl_link_libraries tinybvh)
+    target_compile_definitions(${_target} PRIVATE ERHE_TINYBVH_LIBRARY_TAG="${ERHE_TINYBVH_GIT_TAG}")
 endif ()
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
     erhe_target_sources_grouped(

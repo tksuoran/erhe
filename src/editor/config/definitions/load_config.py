@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Load_config",
     reflect=True,
-    version=10,
+    version=11,
     short_desc="Loading",
     long_desc="glTF import/open performance options.",
     developer=False,
@@ -27,23 +27,19 @@ struct("Load_config",
             visible=True,
             developer=False
         ),
-        field(
-            "use_prepared_mesh_data",
-            Bool,
-            added_in=3,
-            default="true",
-            short_desc="Use Prepared Mesh Data",
-            long_desc="Read the prepared mesh data a scene save writes into glTF files (ERHE_mesh_optimized, ERHE_mesh_topology and ERHE_raytrace_bvh: optimized vertex order, stored colocation and stored BVH) and use what validates. Disable to load such files as plain triangle soups, as files without the extensions.",
-            visible=True,
-            developer=True
-        ),
+        # use_prepared_mesh_data (v3 - v10) chose whether glTF parses read the
+        # prepared mesh data of files; since v11 a file holds authoring data
+        # alone and only Scene items and mesh items carry prepared data, which
+        # are always read (doc/plans/prepared_assets_design.md D8 step 15). An
+        # older file's key is ignored on load. (Deleted rather than marked
+        # removed_in, as max_decoded_bytes_in_flight below.)
         field(
             "use_gpu_vertex_streams",
             Bool,
             added_in=8,
             default="true",
             short_desc="Use GPU Vertex Streams",
-            long_desc="Upload the GPU-ready vertex streams a Save for Quest writes into glTF files (ERHE_gpu_vertex_streams) as they are, when their layout matches this device's, with no vertex packing at load. Applies to primitives loaded with prepared mesh data while CPU Mesh Data is release. Disable to build the vertex buffers from the triangle soup, as for files without the extension.",
+            long_desc="Upload the GPU-ready vertex streams of mesh items (prepared runs and the editor's own loading) as they are, when their layout matches this device's, with no vertex packing at load. Applies to primitives loaded with prepared mesh data while CPU Mesh Data is release. Disable to build the vertex buffers from the triangle soup.",
             visible=True,
             developer=True
         ),
@@ -53,7 +49,7 @@ struct("Load_config",
             added_in=5,
             default="Cpu_mesh_data_retention::platform_default",
             short_desc="CPU Mesh Data",
-            long_desc="What a glTF load does with a primitive's CPU triangle soup once its GPU buffers and raytrace are built. release frees it and reads it back from the source file on demand (export, Geometry builds, display color rebuilds) - this saves the soup memory (hundreds of MB for large scenes); keep holds it. Only primitives loaded with prepared mesh data from a file are released. platform_default keeps on desktop and releases in OpenXR.",
+            long_desc="What a glTF load does with a primitive's CPU triangle soup once its GPU buffers and raytrace are built. release frees it and reads it back from the source file on demand (export, Geometry builds, display color rebuilds) - this saves the soup memory (hundreds of MB for large scenes); keep holds it. Only primitives loaded with prepared mesh data (from a mesh item or a Scene item) are released. platform_default keeps on desktop and releases in OpenXR.",
             visible=True,
             developer=True
         ),

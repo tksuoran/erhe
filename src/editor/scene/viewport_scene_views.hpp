@@ -205,6 +205,7 @@ public:
     // that is no longer one of the tracked views (closed before a queued
     // call ran) is left alone.
     void set_overdraw_mode(const Viewport_scene_view* viewport_scene_view, Overdraw_mode mode);
+    void set_mesh_form    (const Viewport_scene_view* viewport_scene_view, Mesh_form form);
     [[nodiscard]] auto get_viewport_windows() const -> const std::vector<std::shared_ptr<Viewport_window>>&;
     // All live viewport scene views. Used by the Visual Style shadow-mode <->
     // Lightmap window render-with-lightmaps mirror (Viewport_config_window).
@@ -224,7 +225,7 @@ private:
     void handle_active_scene_changed(const std::shared_ptr<Scene_root>& scene_root);
 
     void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
-    [[nodiscard]] auto is_input_blocked(const Viewport_window& window) const -> bool;
+    [[nodiscard]] auto is_hover_blocked(const Viewport_window& window) const -> bool;
 
     erhe::message_bus::Subscription<Graphics_settings_message>    m_graphics_settings_subscription;
     erhe::message_bus::Subscription<Active_scene_changed_message> m_active_scene_subscription;

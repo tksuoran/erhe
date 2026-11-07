@@ -1484,12 +1484,16 @@ void Fly_camera_tool::check_camera_node_roll()
 
 auto Fly_camera_tool::is_camera_read_only() const -> bool
 {
-    // The camera node is scene content: frozen while its scene is saved.
+    // A camera node of the scene is content: frozen while its scene is
+    // saved; the editor's session-only viewport camera is not saved and moves (R9.6).
     if ((m_context.scene_save_service == nullptr) || !m_context.scene_save_service->is_active() || !m_camera_controller) {
         return false;
     }
     const erhe::scene::Node* const node = m_camera_controller->get_node();
-    return (node != nullptr) && m_context.scene_save_service->is_read_only(node->get_item_host());
+    if ((node == nullptr) || ((node->get_flag_bits() & erhe::Item_flags::session_only) != 0)) {
+        return false;
+    }
+    return m_context.scene_save_service->is_read_only(node->get_item_host());
 }
 
 void Fly_camera_tool::on_frame_begin()

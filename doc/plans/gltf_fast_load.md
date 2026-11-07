@@ -74,7 +74,7 @@ It remains a plain TRIANGLES primitive.
 
 This is the marker and the contract that the core is in that form. The format
 contract, including the exact `content_hash` byte sequence, is
-`doc/gltf_extensions/ERHE_mesh_optimized.md`:
+`doc/erhe/gltf.md` "Mesh items":
 
 ```json
 "ERHE_mesh_optimized": {
@@ -105,7 +105,7 @@ contract, including the exact `content_hash` byte sequence, is
 point of each core vertex, in first-reference order (the colocate path's
 order). It is a raw bufferView because glTF allows UNSIGNED_INT accessors
 only for primitive indices. Format contract:
-`doc/gltf_extensions/ERHE_mesh_topology.md`.
+`doc/erhe/gltf.md` "Mesh items".
 
 - It replaces `colocate()`. Building a `Geometry` from the soup then needs no
   kd-tree and no global lock, and the point order is deterministic.
@@ -126,7 +126,7 @@ only for primitive indices. Format contract:
   packed uint32 per 28-byte record, in a raw bufferView (no valid glTF
   accessor describes the record). The bvh::v2 stream format is not used,
   because it serializes `size_t`. Format contract:
-  `doc/gltf_extensions/ERHE_raytrace_bvh.md`.
+  `doc/erhe/gltf.md` "Raytrace BVH items".
 - The loader compares three things: the triangle hash it computes anyway,
   the triangle count, and the backend/library tag. On any mismatch it
   rebuilds.
@@ -449,7 +449,7 @@ byte-for-byte against the foreign Bistro at idle.
    texture's format, two component normal maps kept as X in RGB / Y in A
    with the `--normal-mode` marker, Zstandard supercompressed through the
    zstd already bundled with basis_universal), carried by the asset-root
-   `ERHE_texture_ktx2` extension (`doc/gltf_extensions/ERHE_texture_ktx2.md`;
+   `ERHE_texture_ktx2` extension (`doc/erhe/gltf.md` "Texture items";
    `extensionsUsed` only, because fastgltf rejects unknown required
    extensions and has no texture extension passthrough). PNG / JPEG images
    are written as they are. The loader uploads the stored blocks when the
@@ -730,7 +730,7 @@ streams and its index buffer exactly in the running `Mesh_memory` layout.
 The base streams are the core primitive's accessors, so the file stays a
 valid glTF 2.0 that stock viewers render with no extension required; the
 optimized streams are reachable only from the extension. Spec skeleton:
-`doc/gltf_extensions/ERHE_gpu_vertex_streams.md` (draft).
+`doc/erhe/gltf.md` "GPU vertex streams on export" (draft).
 
 Layout per primitive: one contiguous region `[indices][base s0][base
 s1][optimized s0][optimized s1]`, so the loader reads a primitive with one
@@ -1100,7 +1100,7 @@ automated, `--no-scene` + `load_scene bistro_quest.glb`, 3 runs, VmHWM.
    `get_vertex_format_signature()`. Gates: `check_doc_links.py`; signature
    unit test.
 
-   Result (2026-10-25): `doc/gltf_extensions/ERHE_gpu_vertex_streams.md`
+   Result (2026-10-25): `doc/erhe/gltf.md` "GPU vertex streams on export"
    finished (core-primitive contract, attribute names and encodings,
    signature grammar with today's four layouts, JSON, validation) with
    `schema/ERHE_gpu_vertex_streams.schema.json`; the signature is

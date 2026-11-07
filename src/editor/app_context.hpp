@@ -149,6 +149,7 @@ class Texture_file_loader;
 class Thumbnails;
 class Time;
 class Scene_save_service;
+class Editor_asset_registry;
 class Tools;
 class Transform_tool;
 class Transform_update_stats_tracker;
@@ -372,6 +373,7 @@ public:
     Geometry_spreadsheet_window*       geometry_spreadsheet_window{nullptr};
     Operation_stack*                   operation_stack      {nullptr};
     Scene_save_service*                scene_save_service   {nullptr};
+    Editor_asset_registry*             editor_asset_registry{nullptr};
     Operations*                        operations           {nullptr};
     Properties*                        properties           {nullptr}; // the primary Properties window
     Paint_tool*                        paint_tool           {nullptr};

@@ -44,6 +44,8 @@ public:
     // complete local set; a file without it leaves `ambient_light` local.
     std::optional<std::vector<std::pair<std::string, std::string>>> properties;
     std::string                                                     style_name;
+    // R2.2: the editor asset the file records, relative to the file; empty for none.
+    std::string                                                     editor_asset;
 };
 
 [[nodiscard]] auto parse_gltf_scene_state(const erhe::gltf::Gltf_data& gltf_data) -> std::optional<Gltf_scene_state>;

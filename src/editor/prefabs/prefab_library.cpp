@@ -20,8 +20,10 @@
 #include "prefabs/instance_structure.hpp"
 #include "scene/generated/gltf_source_reference.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_save_service.hpp"
 
 #include "erhe_file/file.hpp"
+#include "erhe_gltf/gltf_uid.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item_host.hpp"
@@ -189,6 +191,35 @@ void link_instance_to_template(
         }
         ERHE_VERIFY(clone_index < clone_children.size());
         link_instance_to_template(clone_children[clone_index], template_child);
+        ++clone_index;
+    }
+    ERHE_VERIFY(clone_index == clone_children.size());
+}
+
+// Give one cloned instance item, and in lockstep its children (the walk of
+// link_instance_to_template), the uid derived from the carrier's and the
+// template item's (R6.2); runs before the clone enters a scene.
+void derive_instance_uids(
+    erhe::Item_base&       clone,
+    const erhe::Item_base& template_item,
+    const std::string&     carrier_uid
+)
+{
+    clone.set_gltf_uid(erhe::gltf::make_derived_gltf_uid(fmt::format("{}|{}", carrier_uid, template_item.get_gltf_uid())));
+
+    const erhe::Hierarchy* template_hierarchy = dynamic_cast<const erhe::Hierarchy*>(&template_item);
+    const erhe::Hierarchy* clone_hierarchy    = dynamic_cast<const erhe::Hierarchy*>(&clone);
+    if ((template_hierarchy == nullptr) || (clone_hierarchy == nullptr)) {
+        return;
+    }
+    const std::vector<std::shared_ptr<erhe::Hierarchy>>& clone_children = clone_hierarchy->get_children();
+    std::size_t clone_index = 0;
+    for (const std::shared_ptr<erhe::Hierarchy>& template_child : template_hierarchy->get_children()) {
+        if (!template_child->is_clonable()) {
+            continue;
+        }
+        ERHE_VERIFY(clone_index < clone_children.size());
+        derive_instance_uids(*clone_children[clone_index], *template_child, carrier_uid);
         ++clone_index;
     }
     ERHE_VERIFY(clone_index == clone_children.size());
@@ -547,6 +578,7 @@ auto Prefab_library::load_template(Prefab& prefab) -> bool
         .mesh_layer_id   = 0, // instances are retargeted to the destination scene's content layer
         .path            = prefab.source_path,
         .fix_spot_lights = m_context.fix_gltf_spot_lights,
+        .content_hashes  = erhe::gltf::Gltf_content_hash_load::compute,
         .triangle_soup_reload = get_triangle_soup_reload(m_context)
     };
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
@@ -627,7 +659,7 @@ auto Prefab_library::finish_load_template(
     // get_or_load are detected.
     // Nested prefab templates: the holding scene has no content library
     // (templates host nothing), so no reference entries to add.
-    resolve_external_assets(*this, prefab.gltf_data, 0, nullptr, nullptr);
+    prefab.unresolved_sources = resolve_external_assets(*this, prefab.gltf_data, 0, nullptr, nullptr);
 
     m_active_load_stack.pop_back();
 
@@ -892,14 +924,15 @@ auto collect_prefab_external_assets(
     return result;
 }
 
-void resolve_external_assets(
+auto resolve_external_assets(
     Prefab_library&                                prefab_library,
     const erhe::gltf::Gltf_data&                   gltf_data,
     const erhe::scene::Layer_id                    content_layer_id,
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
     Content_library*                               content_library
-)
+) -> std::vector<std::filesystem::path>
 {
+    std::vector<std::filesystem::path> unresolved;
     for (std::size_t node_index = 0, end = gltf_data.node_external_assets.size(); node_index < end; ++node_index) {
         const std::optional<std::size_t>& external_asset_index_opt = gltf_data.node_external_assets[node_index];
         if (!external_asset_index_opt.has_value()) {
@@ -932,6 +965,7 @@ void resolve_external_assets(
                 "glTF external asset '{}': embedded or unresolved file references are not supported yet",
                 external_asset.name
             );
+            unresolved.push_back(std::filesystem::path{file.name});
             continue;
         }
         const std::shared_ptr<Prefab> prefab = prefab_library.get_or_load(file.resolved_path);
@@ -940,6 +974,7 @@ void resolve_external_assets(
                 "glTF external asset '{}': failed to load {} (missing file, no nodes, or reference cycle - see log)",
                 external_asset.name, erhe::file::to_string(file.resolved_path)
             );
+            unresolved.push_back(file.resolved_path);
             continue;
         }
         // The template owns its textures and materials: the instancing scene
@@ -958,6 +993,7 @@ void resolve_external_assets(
             (overrides_it != gltf_data.node_instance_overrides.end()) ? &overrides_it->second : nullptr;
         attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items, erhe::Composition_arc_kind::reference, overrides);
     }
+    return unresolved;
 }
 
 // Pair a carrier prim with the prim its arc named, so the values the carrier
@@ -1054,6 +1090,7 @@ void attach_prefab_instance(
             log_parsers->warn("Prefab '{}': template child '{}' could not be cloned", prefab->name, child->get_name());
             continue;
         }
+        derive_instance_uids(*clone_prim, *child, node->get_gltf_uid());
         // Retarget meshes BEFORE parenting: node may already be hosted in a
         // live scene, and parenting registers meshes into
         // the scene by their layer_id at that moment (Scene::register_mesh).
@@ -1227,6 +1264,7 @@ void Prefab_library::refresh_instances(const std::vector<Prefab_key>& rebuilt_ke
             continue;
         }
         log_parsers->info("Prefab reload: refreshed {} prefab(s) in scene '{}'", refreshed_keys.size(), scene_root->get_name());
+        on_prefab_instances_reloaded(m_context, scene_root);
 
         // Build raytrace primitives for the fresh clones (outside the scene
         // lock: the kickoff's async tasks take it themselves).

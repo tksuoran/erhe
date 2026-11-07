@@ -2,6 +2,7 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -246,7 +247,7 @@ private:
         // non-increasing links to the slot that maps to itself. Sorting the
         // representatives ascending therefore numbers the points in the order
         // of their first reference by ascending used slot, which is ascending
-        // soup vertex index (doc/gltf_extensions/ERHE_mesh_topology.md).
+        // soup vertex index (doc/erhe/gltf.md "Mesh items").
         const std::size_t used_count = m_used_indices.size();
         GEO::vector<GEO::index_t> old_to_new(static_cast<GEO::index_t>(used_count), GEO::NO_INDEX);
         const double tolerance = 0.00001; // 0.01mm if node has scale = 1.0, 1mm if node scale is 100.0
@@ -535,6 +536,11 @@ private:
                 m_attributes.corner_color(attribute.usage_index).set(corner, GEO::vec4f{value[0], value[1], value[2], value[3]});
                 break;
             }
+            case erhe::dataformat::Vertex_attribute_usage::custom: {
+                geo_assert(attribute.usage_index == erhe::dataformat::custom_attribute_aniso_control);
+                m_attributes.corner_aniso_control.set(corner, GEO::vec2f{value[0], value[1]});
+                break;
+            }
             default: {
                 geo_assert(false);
                 break;
@@ -663,6 +669,38 @@ auto mesh_from_triangle_soup(
     // only geogram algorithm this conversion runs.
     Mesh_from_triangle_soup builder{mesh, triangle_soup, element_mappings};
     return builder.build_from_vertex_points(vertex_points, point_count);
+}
+
+auto compute_triangle_soup_content_hash(const Triangle_soup& triangle_soup) -> erhe::hash::Content_hash
+{
+    ERHE_PROFILE_FUNCTION();
+    erhe::hash::Xxh3_128_hasher hasher;
+    hasher.update_u64_le(static_cast<std::uint64_t>(triangle_soup.primitive_type));
+    hasher.update_u64_le(triangle_soup.index_data.size());
+    hasher.update(std::as_bytes(std::span<const uint32_t>{triangle_soup.index_data}));
+
+    hasher.update_u64_le(triangle_soup.vertex_format.streams.size());
+    if (triangle_soup.vertex_format.streams.empty()) {
+        return hasher.finish();
+    }
+    const std::span<const uint8_t> vertex_data{triangle_soup.vertex_data};
+    const std::size_t vertex_count = triangle_soup.get_vertex_count();
+    hasher.update_u64_le(vertex_count);
+    // A soup holds one stream (get_vertex_count()); attribute bytes are hashed
+    // per vertex, so padding between attributes is not read.
+    const erhe::dataformat::Vertex_stream& stream = triangle_soup.vertex_format.streams.front();
+    hasher.update_u64_le(stream.attributes.size());
+    for (const erhe::dataformat::Vertex_attribute& attribute : stream.attributes) {
+        hasher.update_u64_le(static_cast<std::uint64_t>(attribute.usage_type));
+        hasher.update_u64_le(attribute.usage_index);
+        hasher.update_u64_le(static_cast<std::uint64_t>(attribute.format));
+        const std::size_t size = erhe::dataformat::get_format_size_bytes(attribute.format);
+        for (std::size_t vertex = 0; vertex < vertex_count; ++vertex) {
+            const std::size_t offset = (vertex * stream.stride) + attribute.offset;
+            hasher.update(std::as_bytes(vertex_data.subspan(offset, size)));
+        }
+    }
+    return hasher.finish();
 }
 
 } // amespace erhe::primitive

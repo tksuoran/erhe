@@ -18,6 +18,8 @@
 #include "assets/asset_load_task.hpp"
 #include "assets/asset_manager.hpp"
 #include "assets/asset_paths.hpp"
+#include "assets/editor_asset.hpp"
+#include "assets/prepared_asset.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
@@ -47,6 +49,7 @@
 #include "erhe_graphics/scoped_worker_context.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_gltf/gltf_uid.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -615,22 +618,6 @@ constexpr float c_default_camera_fov_y = glm::radians(35.0f);
 
 }
 
-auto get_import_mesh_optimize_cache_directory(const App_context& context) -> std::filesystem::path
-{
-    if ((context.mesh_memory_config == nullptr) || !context.mesh_memory_config->mesh_optimize_cache) {
-        return {};
-    }
-    return std::filesystem::path{"cache"} / "mesh_optimizer";
-}
-
-auto get_prepared_mesh_data_use(const App_context& context) -> erhe::gltf::Prepared_mesh_data_use
-{
-    if ((context.editor_settings != nullptr) && !context.editor_settings->load.use_prepared_mesh_data) {
-        return erhe::gltf::Prepared_mesh_data_use::ignore;
-    }
-    return erhe::gltf::Prepared_mesh_data_use::use;
-}
-
 auto get_cpu_mesh_data_retention(const App_context& context) -> Cpu_mesh_data_retention
 {
     const Cpu_mesh_data_retention configured = (context.editor_settings != nullptr)
@@ -1017,8 +1004,6 @@ void attach_optimized_render_shape(
     }
     ERHE_PROFILE_FUNCTION();
 
-    const std::filesystem::path cache_directory = get_import_mesh_optimize_cache_directory(context);
-
     // The variant is a second build of the same data, so it takes the same
     // buffer_info - and therefore the same vertex format - as the source
     // build, or a skinned mesh would draw without its joints.
@@ -1028,7 +1013,6 @@ void attach_optimized_render_shape(
             erhe::primitive::Element_mappings{},
             erhe::primitive::Mesh_optimize_options{},
             build_info.buffer_info,
-            cache_directory,
             label,
             primitive.lod_settings.has_value() ? &primitive.lod_settings.value() : nullptr
         );
@@ -1380,7 +1364,7 @@ auto make_import_gltf_operation(
             .path            = path,
             .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
             .fix_spot_lights = context.fix_gltf_spot_lights,
-            .prepared_mesh_data_use = get_prepared_mesh_data_use(context),
+            .content_hashes         = erhe::gltf::Gltf_content_hash_load::compute,
             .triangle_soup_reload   = get_triangle_soup_reload(context)
         };
         const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
@@ -1402,6 +1386,10 @@ auto make_import_gltf_operation(
         // scene_root_node on execute().
         root_node->set_parent({});
     }
+
+    // The objects the import adds take uids derived from the file name (doc/editor/scene_serialization.md "Unique IDs").
+    const std::string uid_seed = erhe::file::to_string(path.filename());
+    root_node->set_gltf_uid(erhe::gltf::make_derived_gltf_uid(fmt::format("{}|import_root", uid_seed)));
 
     // ERHE_asset_reference proxies (R6): substitute manager-acquired
     // objects for reference stubs before anything consumes the materials;
@@ -1462,7 +1450,9 @@ auto make_import_gltf_operation(
     // scene's content library receives the template resources as reference
     // entries, like the interactive instantiate_prefab.
     if (context.prefab_library != nullptr) {
-        resolve_external_assets(*context.prefab_library, gltf_data, scene_root->layers().content()->id, &mesh_node_items, scene_root->get_content_library().get());
+        for (const std::filesystem::path& unresolved : resolve_external_assets(*context.prefab_library, gltf_data, scene_root->layers().content()->id, &mesh_node_items, scene_root->get_content_library().get())) {
+            scene_root->add_unresolved_source(unresolved);
+        }
     }
 
     // Content extent of the file, used below to size the view (camera depth
@@ -1585,6 +1575,7 @@ auto make_import_gltf_operation(
     if (add_default_light) {
         // A Light is a prim (C5): it carries its own transform.
         std::shared_ptr<erhe::scene::Light> key_light = std::make_shared<erhe::scene::Light>("Key Light");
+        key_light->set_gltf_uid(erhe::gltf::make_derived_gltf_uid(fmt::format("{}|default_key_light", uid_seed)));
         default_key_light_node = key_light;
         key_light->set_light_type(erhe::scene::Light::Type::directional);
         key_light->set_color(glm::vec3{1.0f, 1.0f, 1.0});
@@ -1596,6 +1587,7 @@ auto make_import_gltf_operation(
         default_key_light_node->set_parent_from_node(glm::mat4{key_quat});
 
         std::shared_ptr<erhe::scene::Light> fill_light = std::make_shared<erhe::scene::Light>("Fill Light");
+        fill_light->set_gltf_uid(erhe::gltf::make_derived_gltf_uid(fmt::format("{}|default_fill_light", uid_seed)));
         default_fill_light_node = fill_light;
         fill_light->set_light_type(erhe::scene::Light::Type::directional);
         fill_light->set_color(glm::vec3{1.0f, 1.0f, 1.0});
@@ -1917,7 +1909,8 @@ public:
                         continue;
                     }
                     const std::shared_ptr<const erhe::primitive::Triangle_soup_source> source = primitive->render_shape->get_triangle_soup_source();
-                    if (source && source->references_file(path)) {
+                    const std::shared_ptr<const erhe::primitive::Triangle_soup_source> authoring = primitive->render_shape->get_authoring_soup_source();
+                    if ((source && source->references_file(path)) || (authoring && authoring->references_file(path))) {
                         result.primitives.push_back(primitive);
                     }
                 }
@@ -1964,6 +1957,7 @@ public:
     World_space_bake_plan                               world_space_bake;
     std::optional<erhe::gltf::Gltf_export_arguments>    export_arguments;
     Overwritten_sources                                 overwritten;
+    std::string                                         editor_asset_record; // R2.2, relative to the written file
     std::size_t                                         detached_primitive_count{0};
     double                                              export_ms {0.0};
     std::size_t                                         file_bytes{0};
@@ -1981,7 +1975,14 @@ auto begin_scene_save_gltf(
     const Scene_export_settings*                        export_settings
 ) -> std::unique_ptr<Gltf_scene_save>
 {
-    ERHE_VERIFY((kind == Gltf_scene_save_kind::prepared) == erhe::gltf::is_raw_block_texture_export(texture_export));
+    // A scene file writes its source images; a Scene item the target's.
+    ERHE_VERIFY((kind == Gltf_scene_save_kind::scene_item) || !erhe::gltf::is_raw_block_texture_export(texture_export));
+    const bool gpu_streams = (kind == Gltf_scene_save_kind::scene_item);
+    const std::string refusal = get_prepared_run_refusal(scene_root, (kind == Gltf_scene_save_kind::scene) ? "Save" : "Export");
+    if (!refusal.empty()) {
+        log_parsers->warn("{}", refusal);
+        return {};
+    }
     const erhe::scene::Scene& scene = scene_root.get_scene();
     const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
     if (!root_node) {
@@ -1994,18 +1995,10 @@ auto begin_scene_save_gltf(
     impl.path           = path;
     impl.kind           = kind;
     impl.texture_export = texture_export;
-    // A prepared file carries GPU-ready vertex streams in the running
+    // A Scene item carries GPU-ready vertex streams in the running
     // device's vertex layouts (ERHE_gpu_vertex_streams).
-    if ((kind == Gltf_scene_save_kind::prepared) && (context.mesh_memory != nullptr)) {
-        const erhe::scene_renderer::Mesh_memory& mesh_memory = *context.mesh_memory;
-        impl.gpu_vertex_formats = erhe::gltf::Gltf_gpu_vertex_formats{
-            .base              = &mesh_memory.vertex_format_not_skinned,
-            .base_skinned      = &mesh_memory.vertex_format_skinned,
-            .optimized         = &mesh_memory.vertex_format_not_skinned_optimized,
-            .optimized_skinned = &mesh_memory.vertex_format_skinned_optimized,
-            .index_type        = erhe::dataformat::Format::format_32_scalar_uint,
-            .encoding_version  = erhe::primitive::vertex_encoding_version
-        };
+    if (gpu_streams && (context.mesh_memory != nullptr)) {
+        impl.gpu_vertex_formats = make_gltf_gpu_vertex_formats(*context.mesh_memory);
     }
 
     impl.physics_data = build_physics_description(scene, scene_root.get_content_library().get(), &impl.physics_items);
@@ -2013,16 +2006,22 @@ auto begin_scene_save_gltf(
         .root_node             = *root_node,
         .binary                = path.extension() != std::filesystem::path{".gltf"},
         .physics_data          = &impl.physics_data,
-        .external_assets       = collect_prefab_external_assets(*root_node, path.parent_path()),
+        // A Scene item carries the prefab instances' content as the open scene holds it (R10.3, R10.9).
+        .external_assets       = (kind == Gltf_scene_save_kind::scene_item)
+            ? std::map<const erhe::scene::Node*, erhe::gltf::Gltf_export_external_asset>{}
+            : collect_prefab_external_assets(*root_node, path.parent_path()),
         .image_source_provider = make_gltf_image_source_provider(scene_root.get_content_library()),
         .animations            = collect_gltf_export_animations(scene_root.get_content_library()),
         .excluded_item_flag_bits = Editor_item_flags::rendertarget,
         .excluded_item_type_bits = Editor_item_types::joint
     });
     erhe::gltf::Gltf_export_arguments& export_arguments = impl.export_arguments.value();
-    // A scene save always writes prepared mesh data (doc/plans/gltf_fast_load.md
-    // decision 4).
-    export_arguments.prepared_mesh_data  = erhe::gltf::Prepared_mesh_data::write;
+    // R1.1, R8.4: a scene file holds authoring data alone - raw soups (a core
+    // loaded from an item writes its authoring soup) and LOD requests; the
+    // derived data is in the editor asset. A Scene item holds prepared mesh data.
+    export_arguments.prepared_mesh_data = (kind == Gltf_scene_save_kind::scene_item)
+        ? erhe::gltf::Prepared_mesh_data::write
+        : erhe::gltf::Prepared_mesh_data::none;
     export_arguments.executor            = context.executor;
     export_arguments.prepared_statistics = &impl.prepared_statistics;
     export_arguments.texture_export      = texture_export;
@@ -2030,13 +2029,14 @@ auto begin_scene_save_gltf(
     export_arguments.gpu_vertex_formats  = impl.gpu_vertex_formats.has_value() ? &impl.gpu_vertex_formats.value() : nullptr;
     export_arguments.progress            = &impl.progress;
     if (export_settings != nullptr) {
-        export_arguments.default_lod_settings = get_export_lod_settings(context, *export_settings);
+        export_arguments.default_lod_settings = get_export_lod_settings(*export_settings);
         if (export_settings->bake_static_to_world_space) {
             std::unordered_set<const erhe::scene::Node*> external_asset_nodes;
             for (const auto& [node, external_asset] : export_arguments.external_assets) {
                 static_cast<void>(external_asset);
                 external_asset_nodes.insert(node);
             }
+            // A Scene item's baked meshes are World-space mesh items, made from geometry-normative primitives too (R4.6).
             impl.world_space_bake = plan_world_space_bake(scene_root, *export_settings, external_asset_nodes);
             export_arguments.world_bake = &impl.world_space_bake.bake;
             log_parsers->info(
@@ -2050,33 +2050,37 @@ auto begin_scene_save_gltf(
             }
         }
     }
-    // The scene's PVS database rides the file as ERHE_pvs when it is ready
-    // (doc/gltf_extensions/ERHE_pvs.md).
-    export_arguments.pvs_database        = scene_root.get_pvs_database();
+    // R1.1: a scene file carries no PVS; a bake stores it as the editor asset's PVS item (doc/editor/pvs.md D1).
+    const std::shared_ptr<erhe::scene::Pvs_database> pvs_database = scene_root.get_pvs_database();
+    if ((kind == Gltf_scene_save_kind::scene) && pvs_database) {
+        log_parsers->info("save_scene_gltf: the PVS of '{}' is in the editor asset, not the scene file", scene_root.get_name());
+    }
+    // R2.2: a scene file records its editor asset; a Scene item does not.
+    if (kind == Gltf_scene_save_kind::scene) {
+        impl.editor_asset_record = make_editor_asset_record(
+            context.editor_asset_registry, path, scene_root.get_source_path(), scene_root.get_editor_asset_record()
+        );
+    }
     // Editor-domain ERHE_* extensions + baked graph-mesh exclusion: this is
     // what makes the file a full scene save instead of an interchange export
     // (ERHE_scene in extensionsUsed is the erhe-authored marker).
-    add_gltf_editor_state(export_arguments, scene_root, path, impl.physics_items);
+    add_gltf_editor_state(
+        export_arguments, scene_root, path, impl.physics_items,
+        (kind == Gltf_scene_save_kind::scene_item) ? Gltf_editor_state_scope::scene_item : Gltf_editor_state_scope::scene_file,
+        impl.editor_asset_record
+    );
 
     // Saving onto the file the scene's soups and images read from: the save
     // replaces it, so every source over it must point at the written file
     // afterwards or its data must be in memory.
     impl.overwritten = find_overwritten_sources(scene_root, path);
     if (!impl.overwritten.empty()) {
-        if (erhe::gltf::is_raw_block_texture_export(texture_export)) {
-            // Decision D4 (doc/plans/gltf_fast_load.md item 9): a prepared file
-            // rewrites textures and is a delivery format, not the scene's source.
-            log_parsers->error(
-                "save_scene_gltf: Prepare onto '{}', the file the scene was loaded from, is refused - save it under another name",
-                erhe::file::to_string(path)
-            );
-            return {};
-        }
-        // A primitive the export does not write from its retained core (its
-        // prepared data no longer describes it) is not reproduced by the new
-        // file: its soup becomes resident and it drops the source.
+        // A scene file writes every soup as it is (its authoring soup when it
+        // has one), so the rebind after the write finds each one in the new
+        // file. A Scene item does not reproduce a soup whose prepared data no
+        // longer describes it: that soup becomes resident and drops the source.
         for (const std::shared_ptr<erhe::primitive::Primitive>& primitive : impl.overwritten.primitives) {
-            if (primitive->render_shape->is_prepared_data_current()) {
+            if ((kind == Gltf_scene_save_kind::scene) || primitive->render_shape->is_prepared_data_current()) {
                 continue;
             }
             if (!primitive->detach_triangle_soup_source()) {
@@ -2110,26 +2114,31 @@ auto begin_scene_save_gltf(
         export_arguments.image_source_provider = make_gltf_image_source_provider(content_library);
         export_arguments.written_layout        = &impl.written_layout;
     }
-    // The PVS bits stream from their file (doc/plans/pvs.md "Residency and
-    // streaming"): saving onto it (not refused above) makes them resident first, and the
-    // database keeps them in memory afterwards.
-    if (export_arguments.pvs_database) {
-        const std::shared_ptr<erhe::scene::Pvs_database> pvs_database = scene_root.get_pvs_database();
-        if (pvs_database && pvs_database->bits_source_references(path) && !pvs_database->make_bits_resident()) {
-            log_parsers->error("save_scene_gltf: the PVS bits cannot be read from '{}' - nothing written", erhe::file::to_string(path));
-            return {};
-        }
-    }
     return save;
+}
+
+auto get_scene_save_export_arguments(Gltf_scene_save& save) -> erhe::gltf::Gltf_export_arguments&
+{
+    return save.impl->export_arguments.value();
+}
+
+auto export_scene_save_gltf(Gltf_scene_save& save) -> std::string
+{
+    ERHE_PROFILE_FUNCTION();
+    Gltf_scene_save::Impl& impl = *save.impl;
+    const std::chrono::steady_clock::time_point export_start = std::chrono::steady_clock::now();
+    std::string gltf = erhe::gltf::export_gltf(impl.export_arguments.value());
+    impl.export_ms  = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - export_start).count();
+    impl.file_bytes = gltf.size();
+    return gltf;
 }
 
 auto write_scene_save_gltf(Gltf_scene_save& save) -> bool
 {
     ERHE_PROFILE_FUNCTION();
     Gltf_scene_save::Impl& impl = *save.impl;
-    const std::chrono::steady_clock::time_point export_start = std::chrono::steady_clock::now();
-    const std::string gltf = erhe::gltf::export_gltf(impl.export_arguments.value());
-    impl.export_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - export_start).count();
+    const std::string gltf = export_scene_save_gltf(save);
+    impl.file_bytes = 0;
     if (gltf.empty()) {
         // An image source that changed on disk since the load (logged by the
         // exporter): nothing is written, the old file stays as it was.
@@ -2224,7 +2233,7 @@ void finish_scene_save_gltf(App_context& context, Gltf_scene_save& save, Gltf_sc
             erhe::file::to_string(path),
             texture_statistics.image_count,
             texture_statistics.transcoded_count,
-            erhe::gltf::is_bc_texture_export(impl.texture_export) ? "BC7 / BC5" : "ASTC 4x4",
+            "ASTC 4x4",
             texture_statistics.source_byte_count,
             texture_statistics.transcoded_byte_count,
             texture_statistics.transcode_ms,
@@ -2243,6 +2252,9 @@ void finish_scene_save_gltf(App_context& context, Gltf_scene_save& save, Gltf_sc
         report->rebound_image_count      = rebind_result.image_sources.size();
     }
 
+    if ((impl.kind == Gltf_scene_save_kind::scene) && (normalize_asset_path(path) == normalize_asset_path(scene_root.get_source_path()))) {
+        scene_root.set_editor_asset_record(normalize_asset_path(path.parent_path() / impl.editor_asset_record));
+    }
     if (impl.kind == Gltf_scene_save_kind::scene) {
         // R5.8: a successful save clears the scene's container record dirty flag
         // (the file now matches the live asset state).
@@ -2288,44 +2300,33 @@ namespace {
 
 } // anonymous namespace
 
+auto make_gltf_gpu_vertex_formats(const erhe::scene_renderer::Mesh_memory& mesh_memory) -> erhe::gltf::Gltf_gpu_vertex_formats
+{
+    return erhe::gltf::Gltf_gpu_vertex_formats{
+        .base              = &mesh_memory.vertex_format_not_skinned,
+        .base_skinned      = &mesh_memory.vertex_format_skinned,
+        .optimized         = &mesh_memory.vertex_format_not_skinned_optimized,
+        .optimized_skinned = &mesh_memory.vertex_format_skinned_optimized,
+        .index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+        .encoding_version  = erhe::primitive::vertex_encoding_version
+    };
+}
+
 auto c_str(const Prepare_target target) -> const char*
 {
     return (target == Prepare_target::pc) ? "pc" : "quest";
 }
 
-auto get_prepare_texture_export(const Prepare_target target, const bool zstd_supercompression) -> erhe::gltf::Gltf_texture_export
+auto get_quest_scene_item_texture_export(const Texture_supercompression supercompression) -> erhe::gltf::Gltf_texture_export
 {
-    if (target == Prepare_target::pc) {
-        return zstd_supercompression ? erhe::gltf::Gltf_texture_export::ktx2_bc : erhe::gltf::Gltf_texture_export::ktx2_bc_uncompressed;
-    }
-    return zstd_supercompression ? erhe::gltf::Gltf_texture_export::ktx2_astc_4x4 : erhe::gltf::Gltf_texture_export::ktx2_astc_4x4_uncompressed;
+    return (supercompression == Texture_supercompression::zstd)
+        ? erhe::gltf::Gltf_texture_export::ktx2_astc_4x4
+        : erhe::gltf::Gltf_texture_export::ktx2_astc_4x4_uncompressed;
 }
 
-auto get_export_lod_settings(const App_context& context, const Scene_export_settings& export_settings) -> std::optional<erhe::primitive::Lod_settings>
+auto get_export_lod_settings(const Scene_export_settings& export_settings) -> erhe::primitive::Lod_settings
 {
-    if (export_settings.lod.has_value()) {
-        return to_lod_settings(export_settings.lod.value());
-    }
-    if (context.editor_settings == nullptr) {
-        return std::nullopt;
-    }
-    return to_lod_settings(context.editor_settings->lod);
-}
-
-auto default_prepared_scene_path(const Scene_root& scene_root, const Prepare_target target) -> std::filesystem::path
-{
-    return default_scene_dir() / fmt::format("{}_{}.glb", scene_root.get_name(), c_str(target));
-}
-
-auto save_scene_gltf_prepared(
-    App_context&                          context,
-    Scene_root&                           scene_root,
-    const std::filesystem::path&          path,
-    const erhe::gltf::Gltf_texture_export texture_export,
-    Gltf_scene_save_report* const         report
-) -> bool
-{
-    return save_scene_gltf_now(context, scene_root, path, Gltf_scene_save_kind::prepared, texture_export, report);
+    return to_lod_settings(export_settings.lod);
 }
 
 auto save_scene_gltf(
@@ -2366,7 +2367,8 @@ auto finish_open_scene_gltf(
     const std::filesystem::path&              path,
     erhe::gltf::Gltf_data&                    gltf_data,
     const std::shared_ptr<erhe::scene::Node>& container_node,
-    const bool                                adopted
+    const bool                                adopted,
+    const std::shared_ptr<Prepared_asset>&    prepared_asset
 ) -> std::shared_ptr<Scene_root>
 {
     ERHE_VERIFY(context.current_command_buffer != nullptr);
@@ -2398,6 +2400,10 @@ auto finish_open_scene_gltf(
         const std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
         scene_root->set_source_path(error_code ? path : canonical_path, Scene_source_format::gltf);
     }
+    scene_root->set_prepared_asset(prepared_asset);
+    if (!scene_state->editor_asset.empty() && !prepared_asset) {
+        scene_root->set_editor_asset_record(normalize_asset_path(path.parent_path() / scene_state->editor_asset));
+    }
 
     // Apply the ERHE_scene payload - the one thing the import path
     // deliberately leaves alone (importing an asset must not clobber the
@@ -2425,6 +2431,13 @@ auto finish_open_scene_gltf(
             log_parsers->error("open_scene_gltf: failed to deserialize ERHE_scene settings payload");
         }
     }
+    // An erhe scene saved without export settings (every setting at its default
+    // wrote none) gets a copy of the editor's defaults, as Add Export Settings
+    // does; only the next Save writes them (doc/editor/prepared_assets.md "Export settings").
+    if (!scene_root->get_scene_settings().export_settings.has_value() && (context.editor_settings != nullptr)) {
+        scene_root->get_scene_settings().export_settings = context.editor_settings->export_settings;
+        log_parsers->info("open_scene_gltf: '{}' has no export settings - added a copy of the editor's defaults", erhe::file::to_string(path));
+    }
 
     scene_root->register_to_editor_scenes(*context.app_scenes);
 
@@ -2446,7 +2459,9 @@ auto finish_open_scene_gltf(
     // unhosted template materials as scene-owned when the nodes move under
     // the scene root below.
     if (context.prefab_library != nullptr) {
-        resolve_external_assets(*context.prefab_library, gltf_data, scene_root->layers().content()->id, &mesh_node_items, content_library.get());
+        for (const std::filesystem::path& unresolved : resolve_external_assets(*context.prefab_library, gltf_data, scene_root->layers().content()->id, &mesh_node_items, content_library.get())) {
+            scene_root->add_unresolved_source(unresolved);
+        }
     }
 
     // Content-library attaches (textures / materials / skins / animations),
@@ -2507,17 +2522,7 @@ auto finish_open_scene_gltf(
                 erhe::file::to_string(path), gltf_data.pvs_database->get_header().scene_id, scene_root->get_scene_id()
             );
         }
-        // The bits stream from the file by page (doc/plans/pvs.md
-        // "Residency and streaming"): the parsed copy is released once the
-        // file is known to hold them.
-        const std::shared_ptr<erhe::scene::Pvs_database> database = std::move(gltf_data.pvs_database);
-        if (database->release_bits()) {
-            log_parsers->info(
-                "open_scene_gltf: the PVS bits of '{}' stream from the file ({} stored pages)",
-                erhe::file::to_string(path), database->get_stored_page_count()
-            );
-        }
-        scene_root->set_pvs_database(database);
+        scene_root->set_pvs_database(std::move(gltf_data.pvs_database), Mesh_form::source);
     }
     scene_root->apply_variant_selections(context);
 
@@ -2569,7 +2574,8 @@ auto make_default_camera_for_content(App_context& context, erhe::Hierarchy& cont
 
 auto open_scene_gltf(
     App_context&                 context,
-    const std::filesystem::path& path
+    const std::filesystem::path& path,
+    const Prepared_open* const   prepared_open
 ) -> std::shared_ptr<Scene_root>
 {
     ERHE_VERIFY(context.current_command_buffer != nullptr);
@@ -2582,7 +2588,7 @@ auto open_scene_gltf(
     // once the open succeeded. Until then the record stays intact, so a
     // failed open leaves the loaded container exactly as it was.
     std::shared_ptr<Asset_container_record> adoptable_record;
-    if (context.asset_manager != nullptr) {
+    if ((context.asset_manager != nullptr) && (prepared_open == nullptr)) {
         adoptable_record = context.asset_manager->find_adoptable_container(path);
     }
 
@@ -2609,9 +2615,16 @@ auto open_scene_gltf(
             .path            = path,
             .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
             .fix_spot_lights = context.fix_gltf_spot_lights,
-            .prepared_mesh_data_use = get_prepared_mesh_data_use(context),
+            .content_hashes         = (prepared_open != nullptr) ? erhe::gltf::Gltf_content_hash_load::none : erhe::gltf::Gltf_content_hash_load::compute,
             .triangle_soup_reload   = get_triangle_soup_reload(context)
         };
+        if (prepared_open != nullptr) {
+            parse_arguments.glb_reader      = make_scene_item_reader(*prepared_open);
+            parse_arguments.glb_size        = prepared_open->scene_item_size;
+            parse_arguments.buffer_resolver = make_prepared_buffer_resolver(prepared_open->prepared_asset);
+            parse_arguments.stored_bvh_use  = get_stored_bvh_use(prepared_open->format_check);
+            parse_arguments.document        = erhe::gltf::Gltf_document::item;
+        }
         const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         parsed_gltf_data = erhe::gltf::parse_gltf(parse_arguments);
         // See the note at the other parse_gltf call: residency is a separate
@@ -2651,7 +2664,8 @@ auto open_scene_gltf(
     // builds Buffer_meshes and mutates the scene, so it may only run on the
     // main thread with a live command buffer.
     std::shared_ptr<Scene_root> scene_root = finish_open_scene_gltf(
-        context, path, gltf_data, container_node, adoptable_record ? true : false
+        context, path, gltf_data, container_node, adoptable_record ? true : false,
+        (prepared_open != nullptr) ? prepared_open->prepared_asset : std::shared_ptr<Prepared_asset>{}
     );
     return scene_root;
 }

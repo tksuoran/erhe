@@ -81,6 +81,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
+#include "erhe_graphics/ktx2_container.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/typed.hpp"
 #include "erhe_log/log.hpp"
@@ -146,6 +147,15 @@ namespace {
     std::error_code error_code;
     if (!packed && (image.path.empty() || !std::filesystem::exists(image.path, error_code))) {
         log_parsers->warn("USD image '{}' not found", image.path.generic_string());
+        return {};
+    }
+
+    // R1.1: raw GPU blocks are derived data, not a texture source (doc/editor/content_library.md "Importing texture files").
+    const bool raw_blocks = packed
+        ? erhe::graphics::is_ktx2_raw_blocks(std::span<const std::uint8_t>{image.bytes.data(), image.bytes.size()})
+        : erhe::graphics::is_ktx2_raw_blocks_file(image.path);
+    if (raw_blocks) {
+        log_parsers->error("USD image '{}': a raw block KTX2 image is raw GPU block data, derived data that is not accepted as a source - the texture has no image", image.path.generic_string());
         return {};
     }
 
@@ -219,6 +229,11 @@ namespace {
     texture->set_name(image.name);
     texture->set_source_path(image.path);
     texture->set_two_component_normal(info.two_component_normal);
+    // A standalone image states no properties: the decoded format's (R4.2).
+    texture->set_texture_properties(erhe::graphics::Texture_properties{
+        .transfer_function = erhe::dataformat::is_srgb(info.format) ? erhe::graphics::Texture_transfer_function::srgb : erhe::graphics::Texture_transfer_function::linear,
+        .normal_encoding   = info.two_component_normal ? erhe::graphics::Texture_normal_encoding::two_component : erhe::graphics::Texture_normal_encoding::none
+    });
     image_transfer.upload(
         info,
         std::span<const std::uint8_t>{pixels.data(), pixels.size()},

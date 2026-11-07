@@ -393,16 +393,35 @@ auto optimize_indexed_mesh(
         }
     }
 
-    result.statistics.measured        = true;
     result.statistics.elapsed_seconds = std::chrono::duration<float>{std::chrono::steady_clock::now() - start_time}.count();
     return true;
 }
 
 auto optimize_triangle_soup(const Triangle_soup& source, const Mesh_optimize_options& options) -> Mesh_optimize_result
 {
-    // An empty cache directory bypasses the cache; the soup wrapping (one
-    // stream bound at 0, triangles only) lives in optimize_triangle_soup_cached().
-    return optimize_triangle_soup_cached(source, options, std::filesystem::path{});
+    ERHE_PROFILE_FUNCTION();
+
+    // A soup has exactly one stream, bound at 0, and only triangles are optimized.
+    const erhe::dataformat::Vertex_stream* stream = source.vertex_format.get_stream(0);
+    if ((source.vertex_format.streams.size() != 1) || (stream == nullptr) || (source.primitive_type != Primitive_type::triangles)) {
+        return Mesh_optimize_result{};
+    }
+
+    Mesh_optimize_result              result{};
+    std::vector<Mesh_optimize_stream> streams;
+    streams.push_back(Mesh_optimize_stream{.data = source.vertex_data, .stride = stream->stride});
+    std::vector<uint32_t> indices = source.index_data;
+    if (!optimize_indexed_mesh(streams, indices, source.vertex_format, options, result)) {
+        return Mesh_optimize_result{};
+    }
+
+    std::shared_ptr<Triangle_soup> optimized = std::make_shared<Triangle_soup>();
+    optimized->vertex_format  = source.vertex_format;
+    optimized->primitive_type = source.primitive_type;
+    optimized->vertex_data    = std::move(streams.front().data);
+    optimized->index_data     = std::move(indices);
+    result.triangle_soup      = std::move(optimized);
+    return result;
 }
 
 namespace {
@@ -474,7 +493,6 @@ auto make_optimized_render_shape(
     const Element_mappings&       source_mappings,
     const Mesh_optimize_options&  options,
     const Buffer_info&            buffer_info,
-    const std::filesystem::path&  cache_directory,
     const std::string_view        name,
     const Lod_settings* const     lod_settings
 ) -> std::shared_ptr<Primitive_render_shape>
@@ -510,7 +528,7 @@ auto make_optimized_render_shape(
         .edge_line_joint_stream  = (lod_settings != nullptr) ? buffer_info.edge_line_joint_stream  : nullptr
     };
 
-    Mesh_optimize_result optimization = optimize_triangle_soup_cached(*source_soup.get(), options, cache_directory);
+    Mesh_optimize_result optimization = optimize_triangle_soup(*source_soup.get(), options);
     if (!optimization.triangle_soup) {
         return {};
     }
@@ -596,12 +614,11 @@ auto make_optimized_render_shape_from_staged_build(
 
     Mesh_optimize_result optimization{};
     if (
-        !optimize_indexed_mesh_cached(
+        !optimize_indexed_mesh(
             streams,
             fill_indices,
             vertex_format,
             buffer_info.mesh_optimize_options,
-            buffer_info.mesh_optimize_cache_directory,
             optimization
         )
     ) {
@@ -907,12 +924,10 @@ void log_mesh_optimize_totals()
         return;
     }
     log_primitive->info(
-        "mesh optimize totals: {} primitives ({} measured, {} replayed from cache), "
+        "mesh optimize totals: {} primitives, "
         "vertices {} -> {} ({:+.1f}%), {} triangles, ACMR {:.3f} -> {:.3f}, overdraw {:.3f} -> {:.3f}, "
         "fetch {} -> {} bytes ({:+.1f}%), {:.1f} ms total",
         totals.primitive_count,
-        totals.measured_count,
-        totals.replayed_count,
         totals.vertex_count_before,
         totals.vertex_count_after,
         (totals.vertex_count_before > 0)
@@ -939,43 +954,17 @@ void log_mesh_optimize_statistics(const std::string_view name, const Mesh_optimi
         ++g_totals.primitive_count;
         g_totals.vertex_count_before += statistics.vertex_count_before;
         g_totals.vertex_count_after  += statistics.vertex_count_after;
-        if (statistics.measured) {
-            // A cache hit contributes its vertex counts (the derivation is the
-            // same one) but no ACMR / overdraw / fetch figures - it never ran
-            // meshopt_analyze*(). Folding zeroes in would drag the weighted
-            // means towards nothing.
-            ++g_totals.measured_count;
-            g_totals.triangle_count           += statistics.triangle_count;
-            g_totals.fetch_bytes_before       += statistics.fetch_bytes_before;
-            g_totals.fetch_bytes_after        += statistics.fetch_bytes_after;
-            const double triangles = static_cast<double>(statistics.triangle_count);
-            g_totals.acmr_before_weighted     += static_cast<double>(statistics.acmr_before)     * triangles;
-            g_totals.acmr_after_weighted      += static_cast<double>(statistics.acmr_after)      * triangles;
-            g_totals.overdraw_before_weighted += static_cast<double>(statistics.overdraw_before) * triangles;
-            g_totals.overdraw_after_weighted  += static_cast<double>(statistics.overdraw_after)  * triangles;
-            g_totals.elapsed_seconds          += static_cast<double>(statistics.elapsed_seconds);
-        } else {
-            ++g_totals.replayed_count;
-        }
+        g_totals.triangle_count           += statistics.triangle_count;
+        g_totals.fetch_bytes_before       += statistics.fetch_bytes_before;
+        g_totals.fetch_bytes_after        += statistics.fetch_bytes_after;
+        const double triangles = static_cast<double>(statistics.triangle_count);
+        g_totals.acmr_before_weighted     += static_cast<double>(statistics.acmr_before)     * triangles;
+        g_totals.acmr_after_weighted      += static_cast<double>(statistics.acmr_after)      * triangles;
+        g_totals.overdraw_before_weighted += static_cast<double>(statistics.overdraw_before) * triangles;
+        g_totals.overdraw_after_weighted  += static_cast<double>(statistics.overdraw_after)  * triangles;
+        g_totals.elapsed_seconds          += static_cast<double>(statistics.elapsed_seconds);
     }
 
-    if (!statistics.measured) {
-        // Cache hit: the derivation was replayed, so there are no before/after
-        // figures to report. Saying so beats printing zeroes that read like an
-        // optimization that did nothing.
-        log_primitive->info(
-            "mesh optimize {}: {} triangles, vertices {} -> {} ({:+.1f}%), replayed from cache in {:.1f} ms",
-            name,
-            statistics.triangle_count,
-            statistics.vertex_count_before,
-            statistics.vertex_count_after,
-            (statistics.vertex_count_before > 0)
-                ? 100.0f * (static_cast<float>(statistics.vertex_count_after) - static_cast<float>(statistics.vertex_count_before)) / static_cast<float>(statistics.vertex_count_before)
-                : 0.0f,
-            1000.0f * statistics.elapsed_seconds
-        );
-        return;
-    }
     log_primitive->info(
         "mesh optimize {}: {} triangles, vertices {} -> {} ({:+.1f}%), ACMR {:.3f} -> {:.3f}, "
         "overdraw {:.3f} -> {:.3f}, fetch {} -> {} bytes, {:.1f} ms",

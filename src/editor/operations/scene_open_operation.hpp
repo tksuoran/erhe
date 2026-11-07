@@ -12,6 +12,7 @@ namespace editor {
 class App_context;
 class Content_library;
 class Prepared_gltf_parse;
+class Prepared_open;
 class Scene_root;
 
 // Opens a glTF file as a new scene: creates the Scene_root + content
@@ -59,7 +60,8 @@ void queue_open_scene_gltf(
     App_context&                                            context,
     const std::filesystem::path&                            path,
     Erhe_scene_open                                         erhe_scene_open,
-    std::function<void(const std::shared_ptr<Scene_root>&)> on_erhe_scene_opened = {}
+    std::function<void(const std::shared_ptr<Scene_root>&)> on_erhe_scene_opened = {},
+    std::shared_ptr<Prepared_open>                          prepared_open        = {} // a checked .erhe_prepared open (check_prepared_open())
 );
 
 }

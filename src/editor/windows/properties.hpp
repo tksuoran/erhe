@@ -50,6 +50,7 @@ class App_message_bus;
 class Joint;
 class Rendertarget_mesh;
 class Scene_root;
+enum class Prepared_drop : unsigned int; // assets/prepared_status.hpp
 
 class Properties : public erhe::imgui::Imgui_window, public Property_editor
 {
@@ -141,6 +142,8 @@ private:
     void item_flags                   (const std::shared_ptr<erhe::Item_base>& item);
     void item_properties              (const std::shared_ptr<erhe::Item_base>& item);
     void item_diagnostics             (const std::shared_ptr<erhe::Item_base>& item);
+    // The status rows and drop controls of the scene's Export group (doc/editor/prepared_assets.md "Status").
+    void prepared_status_properties   (Scene_root& scene_root);
 
     // Scene-hosted references (see doc/editor/coding_rules.md "Scene-hosted references in
     // editor parts"): drop the pinned target and the material-edit latch
@@ -156,6 +159,10 @@ private:
     Dependency_property_rows m_dependency_rows;
 
     Selection_mode                     m_selection_mode{Selection_mode::combined};
+
+    // A drop button clicked once waits here for Confirm.
+    std::weak_ptr<Scene_root>          m_armed_drop_scene;
+    Prepared_drop                      m_armed_drop{};
 
     erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;

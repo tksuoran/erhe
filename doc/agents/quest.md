@@ -68,18 +68,18 @@ The Quest's Bistro file is prepared on the desktop with the headless editor
    import root's transform into its children.
 2. `generate_lods` with `scope: "scene"` (default settings), wait for
    `get_async_status` idle, `save_scene` to a scratch file.
-3. Open that file, run `bake_static_to_world_space` on it (or set the
-   scene's `export_settings.bake_static_to_world_space` false for a
-   node-space file; `set_scene_settings` needs `"_version": 2` on the
-   settings object, else `export_settings` is dropped), bake the PVS there
-   (`pvs_bake`, cell size 4 m, the street slab region: content bounds in x
-   and z, y 0.6 - 4.6), then `save_scene_for_quest`. A bake made before the
-   save reloads stale (the save folds the import root rotation into the
-   children's TRS, so the reloaded bounds differ by rounding from the baked
-   ones), and so does a PVS of meshes that Prepare world-bakes itself (the
-   columns keep the unbaked transforms and bounds): bake to world space
-   before the PVS bake.
-4. Reload the result and check `get_pvs_status` state `ready`.
+3. Open that file, add its export settings (`set_scene_settings` with
+   `merge: true` and `{"_version": 3, "export_settings": {}}`, a copy of
+   the editor's defaults; doc/editor/prepared_assets.md "Export settings"),
+   and set the PVS grid the same way: cell size 4 m, the street slab region
+   (content bounds in x and z, y 0.6 - 4.6). The PVS is baked on the
+   world-space form (doc/editor/pvs.md "Bake"), so the device's PVS comes
+   with a prepared asset: Export it for quest with `pvs_mode` `rebake`
+   ("Prepared assets on the device" below). The Quest gets the prepared
+   asset; the editor writes no prepared glTF file any more
+   (doc/editor/scene_serialization.md "Save pipeline").
+4. Open the result (the prepared asset with the source moved away, a
+   prepared run) and check `get_pvs_status` state `ready`.
 5. Push it into the app's external files directory
    (`/sdcard/Android/data/org.libsdl.app.quest/files/bistro/`). The editor
    creates that directory, owned by the app, at its first start
@@ -87,7 +87,9 @@ The Quest's Bistro file is prepared on the desktop with the headless editor
    install, launch once before pushing (a directory adb creates first is
    owned by the shell user, and the editor cannot open the files in it).
 
-The current files (2026-11-06, Linux headless Release on NVIDIA) are
+The current files are prepared glTF files of earlier builds (Prepare
+(Quest), which the prepared asset replaced; they open as sources). Those of
+2026-11-06 (Linux headless Release on NVIDIA) are
 `bistro_quest_lod_cell_4m_v4_ws.glb` (static meshes in world space, PVS
 `bits_hash` `76620449951931a4`) and `bistro_quest_lod_cell_4m_v4_node.glb`
 (the same in node space, `56f7c094d19a1f1b`), both 2068 cells and LOD
@@ -100,6 +102,50 @@ does that with the current APK. The older
 `pvs_bistro_*cell_*m.glb` and `bistro_quest_lod_cell_4m.glb` files were
 baked with the city on its side, and `config/editor/benchmark_bistro*.json`
 poses are in that frame: re-pose the benchmarks before comparing runs.
+
+## Prepared assets on the device
+
+A prepared asset of target `quest` (doc/editor/prepared_assets.md
+"Targets") is made on the desktop from an erhe-saved source and run on the
+headset as a prepared run:
+
+1. On the desktop (headless editor), load the erhe-saved source, add its
+   export settings when it has none (`set_scene_settings`, step 3 above),
+   and Export it for quest: MCP `prepare_scene` with `target: "quest"` (or
+   File > Export (Quest)). It writes `<stem>.quest.erhe_prepared`
+   beside the source. For a PVS set `export_settings.pvs_mode` to `rebake`
+   first (with the region of step 3 above): the Export bakes it on the
+   world-space form and the prepared asset carries its PVS item
+   (doc/editor/prepared_assets.md "PVS"). For the Bistro, the source is the file of steps 1 - 2
+   of "Bistro scene data on the device" (import root rotated, LOD chains
+   generated, `save_scene`). `scripts/prepared_asset_bistro_verify.py
+   --keep-quest <dir>` runs the whole Bistro recipe with the PVS
+   (doc/editor/prepared_assets.md "Verification") and leaves
+   `bistro_src.quest.erhe_prepared` and a copy of its source asset,
+   `bistro_src.glb`, in `<dir>`. The source is the baseline to compare the
+   prepared run with: push it into another device directory than the
+   prepared asset, because a prepared asset whose source is readable opens
+   the source (the 2026-11-07 runs of `doc/reference/quest_bench_runs.md`
+   compared the prepared asset with a prepared glTF file of earlier builds,
+   `bistro_src_quest.glb`; PVS `bits_hash` `fd5d5edadffa53f7`).
+2. Push the prepared asset alone into a directory of the app's external
+   files directory the app created (the ownership rule of step 5 above):
+   `adb push <stem>.quest.erhe_prepared /sdcard/Android/data/org.libsdl.app.quest/files/<dir>/`.
+   The device has no source file, so it runs the scene from the prepared
+   asset (R11.1); one file holds every item, nothing else is pushed.
+3. Open it with the launch argument `--scene <device path>` (`--es args
+   '--scene /sdcard/Android/data/org.libsdl.app.quest/files/<dir>/<stem>.quest.erhe_prepared'`
+   on the `am start` of "Off-head runs", or `quest_bench.py run
+   --editor-args=--no-scene --load-scene <device path>`, which opens it
+   with MCP `load_scene`).
+4. Readiness in the logcat capture: "Prepared run of '<path>' (target
+   quest): its source ... cannot be read", then "open_scene_gltf: opened
+   scene '<stem>.quest'" (`quest_bench.py` reports it as listed / idle);
+   a format stamp the build cannot read fails the
+   open with "Open '<path>' failed: prepared asset '<path>' of target quest
+   is not compatible with this build: ..." (doc/editor/prepared_assets.md "Format
+   stamps"). The scene is named `<stem>.quest`; `set_headset_scene` with
+   that name shows it in the headset when it was opened over MCP.
 
 ## Benchmark runs
 

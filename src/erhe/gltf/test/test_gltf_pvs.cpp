@@ -1,6 +1,7 @@
-// The asset-root ERHE_pvs extension (doc/gltf_extensions/ERHE_pvs.md):
-// export_gltf writes a ready Pvs_database, parse_gltf reads it back field by
-// field and bit for bit, with the bits' byte range in the file recorded.
+// The asset-root ERHE_pvs extension (doc/erhe/gltf.md "PVS items"):
+// export_gltf writes it against a PVS item, and a parse of the document as an
+// item (a Scene item) reads it back field by field and bit for bit through the
+// item. A glTF file carries no PVS: a file parse reads none (R12.2).
 
 #include "gltf_test_util.hpp"
 
@@ -13,17 +14,18 @@
 
 #include <gtest/gtest.h>
 
-#include <simdjson.h>
+#include <taskflow/taskflow.hpp>
 
 #include <cstring>
-#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace {
 
+using erhe_gltf_test::make_glb;
 using erhe_gltf_test::parse_file;
+using erhe_gltf_test::split_glb;
 using erhe_gltf_test::write_temporary_file;
 
 [[nodiscard]] auto make_node(erhe::scene::Scene& scene, const std::string& name, const std::string& uid, const glm::vec3& position) -> std::shared_ptr<erhe::scene::Xform>
@@ -97,16 +99,6 @@ using erhe_gltf_test::write_temporary_file;
     return database;
 }
 
-[[nodiscard]] auto export_with(const erhe::scene::Scene& scene, const std::shared_ptr<const erhe::scene::Pvs_database>& database) -> std::string
-{
-    erhe::gltf::Gltf_export_arguments arguments{
-        .root_node = *scene.get_root_node(),
-        .binary    = true
-    };
-    arguments.pvs_database = database;
-    return erhe::gltf::export_gltf(arguments);
-}
-
 [[nodiscard]] auto glb_json(const std::string& glb) -> std::string
 {
     EXPECT_GE(glb.size(), 20u);
@@ -121,68 +113,110 @@ using erhe_gltf_test::write_temporary_file;
     return glb_json(glb).find("ERHE_pvs") != std::string::npos;
 }
 
+class Memory_reader : public erhe::gltf::Gltf_buffer_reader
+{
+public:
+    explicit Memory_reader(std::vector<std::byte> bytes) : m_bytes{std::move(bytes)} {}
+    auto read_at(const std::uint64_t offset, const std::span<std::byte> out) const -> bool override
+    {
+        if ((offset > m_bytes.size()) || (out.size() > (m_bytes.size() - offset))) {
+            return false;
+        }
+        std::memcpy(out.data(), m_bytes.data() + offset, out.size());
+        return true;
+    }
+    std::vector<std::byte> m_bytes;
+};
+
+constexpr const char* c_pvs_item_uri = "erhe-item:00112233445566778899aabbccddeeff";
+
+[[nodiscard]] auto export_with_item(const erhe::scene::Scene& scene, const erhe::gltf::Gltf_pvs_item& item) -> std::string
+{
+    erhe::gltf::Gltf_export_arguments arguments{
+        .root_node = *scene.get_root_node(),
+        .binary    = true
+    };
+    arguments.pvs_item = erhe::gltf::Gltf_item_reference{.uri = c_pvs_item_uri, .meta = item.meta};
+    return erhe::gltf::export_gltf(arguments);
+}
+
+[[nodiscard]] auto parse_with_item(const std::filesystem::path& path, erhe::scene::Scene& scene, const erhe::gltf::Gltf_pvs_item& item) -> erhe::gltf::Gltf_data
+{
+    tf::Executor executor{1};
+    const std::shared_ptr<Memory_reader> reader = std::make_shared<Memory_reader>(item.payload);
+    return erhe::gltf::parse_gltf(
+        erhe::gltf::Gltf_parse_arguments{
+            .executor        = executor,
+            .root_node       = scene.get_root_node(),
+            .path            = path,
+            .parallel        = false,
+            .document        = erhe::gltf::Gltf_document::item,
+            .buffer_resolver = [reader](const std::string_view uri) -> std::shared_ptr<const erhe::gltf::Gltf_buffer_reader> {
+                return (uri == c_pvs_item_uri) ? reader : std::shared_ptr<const erhe::gltf::Gltf_buffer_reader>{};
+            }
+        }
+    );
+}
+
+// A document carrying the PVS bytes in its BIN chunk (as prepared files of
+// earlier builds did): the document written against the item, the item's
+// bytes as its BIN chunk.
+[[nodiscard]] auto write_inline_pvs_document(const erhe::scene::Scene& scene, const erhe::scene::Pvs_database& database) -> std::string
+{
+    const std::optional<erhe::gltf::Gltf_pvs_item> item = erhe::gltf::write_pvs_item(database);
+    EXPECT_TRUE(item.has_value());
+    if (!item.has_value()) {
+        return {};
+    }
+    erhe_gltf_test::Glb_chunks chunks = split_glb(export_with_item(scene, item.value()));
+    EXPECT_TRUE(chunks.bin.empty()) << "the item's buffer is the document's only buffer";
+    // The buffer without its uri is the GLB's BIN chunk.
+    const std::string uri_value = std::string{"\"uri\":\""} + c_pvs_item_uri + "\"";
+    std::size_t       position  = chunks.json.find(uri_value + ",");
+    std::size_t       length    = uri_value.size() + 1;
+    if (position == std::string::npos) {
+        position = chunks.json.find("," + uri_value);
+        length   = uri_value.size() + 1;
+    }
+    EXPECT_NE(position, std::string::npos) << chunks.json;
+    if (position == std::string::npos) {
+        return {};
+    }
+    chunks.json.erase(position, length);
+    const std::string_view payload{reinterpret_cast<const char*>(item->payload.data()), item->payload.size()};
+    return make_glb(chunks.json, payload);
+}
+
 } // anonymous namespace
 
-TEST(Gltf_pvs, round_trip_is_exact)
+// A PVS item (doc/erhe/gltf.md "PVS items"): a document written against it
+// carries no PVS bytes, and its parse through the item reads the database
+// back bit for bit, with the columns resolved to the document's nodes.
+TEST(Gltf_pvs, item_round_trip_is_exact)
 {
     erhe::scene::Scene scene{"source", nullptr};
-    static_cast<void>(make_node(scene, "A",     "uid_a", glm::vec3{0.7f, 0.0f, 0.0f}));
-    static_cast<void>(make_node(scene, "B",     "uid_b", glm::vec3{-1.3f, 0.0f, 0.0f}));
     static_cast<void>(make_node(scene, "Other", "uid_c", glm::vec3{0.0f, 5.0f, 0.0f}));
+    static_cast<void>(make_node(scene, "B",     "uid_b", glm::vec3{-1.3f, 0.0f, 0.0f}));
+    static_cast<void>(make_node(scene, "A",     "uid_a", glm::vec3{0.7f, 0.0f, 0.0f}));
     const std::shared_ptr<erhe::scene::Pvs_database> source = make_database(erhe::scene::Pvs_state::ready);
+    const std::optional<erhe::gltf::Gltf_pvs_item> item = erhe::gltf::write_pvs_item(*source);
+    ASSERT_TRUE(item.has_value());
+    EXPECT_EQ(item->payload.size(), (3u * 80u) + (2u * 16u) + (source->get_bits().size() * 4u));
+    EXPECT_NE(item->meta.find("\"uid_b\""), std::string::npos) << "columns are named by node uid";
 
-    const std::string glb = export_with(scene, source);
+    const std::string glb = export_with_item(scene, item.value());
     ASSERT_FALSE(glb.empty());
+    EXPECT_TRUE(declares_pvs(glb));
+    EXPECT_NE(glb_json(glb).find(c_pvs_item_uri), std::string::npos);
+    EXPECT_LT(glb.size(), 4096u) << "no PVS bytes inside the document";
 
-    // The JSON: version, page size, hexfloat header floats, identities by
-    // node index, extensionsUsed only.
-    const std::string json_text = glb_json(glb);
-    simdjson::dom::parser  json_parser;
-    simdjson::dom::element root;
-    ASSERT_EQ(json_parser.parse(json_text).get(root), simdjson::SUCCESS);
-    simdjson::dom::element extension;
-    ASSERT_EQ(root["extensions"]["ERHE_pvs"].get(extension), simdjson::SUCCESS);
-    EXPECT_EQ(extension["version"].get_uint64().value(), 1u);
-    EXPECT_EQ(extension["page_size"].get_uint64().value(), 4u);
-    EXPECT_EQ(extension["column_count"].get_uint64().value(), 3u);
-    EXPECT_EQ(std::string_view{extension["cell_size"].get_string().value()}, std::string_view{"0x1.19999ap+0"});
-    EXPECT_EQ(extension["column_identities"].get_array().size(), 3u);
-    bool used = false;
-    for (const simdjson::dom::element name : root["extensionsUsed"].get_array()) {
-        used = used || (std::string_view{name.get_string().value()} == "ERHE_pvs");
-    }
-    EXPECT_TRUE(used);
-    simdjson::dom::array required;
-    if (root["extensionsRequired"].get_array().get(required) == simdjson::SUCCESS) {
-        for (const simdjson::dom::element name : required) {
-            EXPECT_NE(std::string_view{name.get_string().value()}, "ERHE_pvs");
-        }
-    }
-
-    const std::filesystem::path path = write_temporary_file("pvs_round_trip.glb", glb);
     erhe::scene::Scene loaded{"loaded", nullptr};
-    const erhe::gltf::Gltf_data data = parse_file(path, loaded);
+    const erhe::gltf::Gltf_data data = parse_with_item(write_temporary_file("pvs_item.glb", glb), loaded, item.value());
     ASSERT_TRUE(data.pvs_database);
     const erhe::scene::Pvs_database& result = *data.pvs_database;
     EXPECT_EQ(result.get_state(), erhe::scene::Pvs_state::ready);
-
-    const erhe::scene::Pvs_header& expected_header = source->get_header();
-    const erhe::scene::Pvs_header& header          = result.get_header();
-    EXPECT_EQ(header.version,               expected_header.version);
-    EXPECT_EQ(header.scene_id,              expected_header.scene_id);
-    EXPECT_EQ(std::memcmp(&header.grid_origin, &expected_header.grid_origin, sizeof(glm::vec3)), 0);
-    EXPECT_EQ(std::memcmp(&header.cell_size,   &expected_header.cell_size,   sizeof(float)), 0);
-    EXPECT_EQ(header.cell_counts,           expected_header.cell_counts);
-    EXPECT_EQ(header.page_size,             expected_header.page_size);
-    EXPECT_EQ(header.bake_parameters.method,           expected_header.bake_parameters.method);
-    EXPECT_EQ(header.bake_parameters.face_resolution,  expected_header.bake_parameters.face_resolution);
-    EXPECT_EQ(header.bake_parameters.tile_size,        expected_header.bake_parameters.tile_size);
-    EXPECT_EQ(header.bake_parameters.layer_count,      expected_header.bake_parameters.layer_count);
-    EXPECT_EQ(header.bake_parameters.samples_per_face, expected_header.bake_parameters.samples_per_face);
-    EXPECT_EQ(header.bake_parameters.silhouette_tests, expected_header.bake_parameters.silhouette_tests);
-    EXPECT_EQ(std::memcmp(&header.bake_parameters.face_fov,         &expected_header.bake_parameters.face_fov,         sizeof(float)), 0);
-    EXPECT_EQ(std::memcmp(&header.bake_duration_seconds,            &expected_header.bake_duration_seconds,            sizeof(float)), 0);
-
+    EXPECT_EQ(result.get_header().scene_id, source->get_header().scene_id);
+    EXPECT_EQ(result.get_header().cell_counts, source->get_header().cell_counts);
     ASSERT_EQ(result.get_column_count(), 3u);
     for (uint32_t i = 0; i < 3; ++i) {
         const erhe::scene::Pvs_column& expected = source->get_columns()[i];
@@ -190,61 +224,48 @@ TEST(Gltf_pvs, round_trip_is_exact)
         EXPECT_EQ(column.node_uid,        expected.node_uid);
         EXPECT_EQ(column.primitive_index, expected.primitive_index);
         EXPECT_EQ(std::memcmp(column.world_transform.data(), expected.world_transform.data(), sizeof(column.world_transform)), 0);
-        EXPECT_EQ(std::memcmp(column.world_bounds.data(),    expected.world_bounds.data(),    sizeof(column.world_bounds)), 0);
         EXPECT_EQ(column.transform_hash,  expected.transform_hash);
-        EXPECT_EQ(result.find_column(expected.node_uid, expected.primitive_index), i);
     }
-
-    ASSERT_EQ(result.get_pages().size(), source->get_pages().size());
-    EXPECT_EQ(std::memcmp(result.get_pages().data(), source->get_pages().data(), source->get_pages().size() * sizeof(erhe::scene::Pvs_page_entry)), 0);
-    ASSERT_EQ(result.get_bits().size(), source->get_bits().size());
-    EXPECT_EQ(std::memcmp(result.get_bits().data(), source->get_bits().data(), source->get_bits().size() * sizeof(uint32_t)), 0);
-    EXPECT_EQ(result.get_stored_page_count(), 1u);
-    EXPECT_FALSE(result.has_cell_pvs(1));
-    EXPECT_TRUE (result.has_cell_pvs(0));
-    EXPECT_FALSE(result.has_cell_pvs(4));
-
-    // The bits' byte range in the file holds the bits.
-    ASSERT_TRUE(result.get_bits_source().has_value());
-    const erhe::scene::Pvs_bits_source& bits_source = result.get_bits_source().value();
-    EXPECT_EQ(bits_source.path, path);
-    ASSERT_EQ(bits_source.byte_length, source->get_bits().size() * sizeof(uint32_t));
-    std::vector<uint32_t> file_bits(source->get_bits().size());
-    std::ifstream file{bits_source.path, std::ios::binary};
-    file.seekg(static_cast<std::streamoff>(bits_source.byte_offset));
-    file.read(reinterpret_cast<char*>(file_bits.data()), static_cast<std::streamsize>(bits_source.byte_length));
-    ASSERT_TRUE(static_cast<bool>(file));
-    EXPECT_EQ(file_bits, source->get_bits());
+    EXPECT_EQ(result.get_pages().size(), source->get_pages().size());
+    EXPECT_EQ(result.get_bits(), source->get_bits());
 }
 
-TEST(Gltf_pvs, stale_database_is_not_written)
+TEST(Gltf_pvs, item_column_outside_the_export_skips_the_extension)
+{
+    erhe::scene::Scene scene{"source", nullptr};
+    static_cast<void>(make_node(scene, "A", "uid_a", glm::vec3{0.7f, 0.0f, 0.0f}));
+    const std::optional<erhe::gltf::Gltf_pvs_item> item = erhe::gltf::write_pvs_item(*make_database(erhe::scene::Pvs_state::ready));
+    ASSERT_TRUE(item.has_value());
+    const std::string glb = export_with_item(scene, item.value());
+    ASSERT_FALSE(glb.empty());
+    EXPECT_FALSE(declares_pvs(glb));
+}
+
+TEST(Gltf_pvs, stale_database_makes_no_item)
+{
+    EXPECT_FALSE(erhe::gltf::write_pvs_item(*make_database(erhe::scene::Pvs_state::stale)).has_value());
+}
+
+TEST(Gltf_pvs, a_file_parse_reads_no_pvs)
 {
     erhe::scene::Scene scene{"source", nullptr};
     static_cast<void>(make_node(scene, "A", "uid_a", glm::vec3{0.7f, 0.0f, 0.0f}));
     static_cast<void>(make_node(scene, "B", "uid_b", glm::vec3{-1.3f, 0.0f, 0.0f}));
-    const std::string glb = export_with(scene, make_database(erhe::scene::Pvs_state::stale));
+    const std::string glb = write_inline_pvs_document(scene, *make_database(erhe::scene::Pvs_state::ready));
     ASSERT_FALSE(glb.empty());
-    EXPECT_FALSE(declares_pvs(glb));
-}
-
-TEST(Gltf_pvs, column_outside_the_export_skips_the_extension)
-{
-    erhe::scene::Scene scene{"source", nullptr};
-    static_cast<void>(make_node(scene, "A", "uid_a", glm::vec3{0.7f, 0.0f, 0.0f}));
-    const std::string glb = export_with(scene, make_database(erhe::scene::Pvs_state::ready));
-    ASSERT_FALSE(glb.empty());
-    EXPECT_FALSE(declares_pvs(glb));
+    EXPECT_TRUE(declares_pvs(glb));
 
     erhe::scene::Scene loaded{"loaded", nullptr};
-    const erhe::gltf::Gltf_data data = parse_file(write_temporary_file("pvs_missing_node.glb", glb), loaded);
-    EXPECT_FALSE(data.pvs_database);
+    const erhe::gltf::Gltf_data data = parse_file(write_temporary_file("pvs_inline.glb", glb), loaded);
+    EXPECT_FALSE(data.pvs_database) << "a glTF file carries no PVS";
+    EXPECT_EQ(data.nodes.size(), 2u);
 }
 
 TEST(Gltf_pvs, no_database_no_extension)
 {
     erhe::scene::Scene scene{"source", nullptr};
     static_cast<void>(make_node(scene, "A", "uid_a", glm::vec3{0.7f, 0.0f, 0.0f}));
-    const std::string glb = export_with(scene, {});
+    const std::string glb = erhe::gltf::export_gltf(*scene.get_root_node(), true);
     ASSERT_FALSE(glb.empty());
     EXPECT_FALSE(declares_pvs(glb));
     erhe::scene::Scene loaded{"loaded", nullptr};

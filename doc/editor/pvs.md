@@ -8,8 +8,10 @@ some point of the cell. The editor bakes it offline with the disocclusion
 buffer method of Kuenzel et al., "Potentially Visible Set Generation with
 the Disocclusion Buffer", SIGGRAPH Asia 2025
 (https://doi.org/10.1145/3757377.3763981; the reference implementation is
-the DaRUS dataset https://doi.org/10.18419/DARUS-5385), stores it in the
-scene file, and the frame's culling classification reads it (on the GPU,
+the DaRUS dataset https://doi.org/10.18419/DARUS-5385) on the world-space
+form of the open scene (`doc/editor/world_space_bake.md` "Two forms"), stores
+it as the PVS item of the scene's editor asset, an Export puts it into the
+prepared asset, and the frame's culling classification reads it (on the GPU,
 and on the CPU lanes that check the GPU) to clear a viewport view's mask
 bit of every baked entry outside the PVS of the cells around the camera.
 The CPU does no per-entry work per frame.
@@ -19,7 +21,7 @@ comments) and its verification. The parts are described where their code
 lives:
 
 - The database: `doc/erhe/scene.md` "Potentially visible sets"; its file
-  format: [`ERHE_pvs`](../gltf_extensions/ERHE_pvs.md); its save and open:
+  format: `ERHE_pvs` (`doc/erhe/gltf.md` "PVS items"); its save and open:
   `doc/editor/scene_serialization.md`.
 - The classification rule and the staleness mechanism:
   `doc/erhe/draw_list_renderer.md` Q6 "PVS"; the resident pages and their
@@ -67,12 +69,14 @@ viewpoints is not conservative; it stays the verification oracle (the
   At runtime every entry maps to its column or to "untracked" (never
   culled by the PVS).
 - Identity of a baked entry: the mesh node's glTF uid
-  (`Item::get_gltf_uid()`, assigned once and never changed,
-  `doc/editor/scene_serialization.md`) and the mesh primitive index. A bake
-  gives every mesh node it bakes that has no uid one
-  (`erhe::gltf::generate_gltf_uid()`). A mesh baked into world space
-  (`doc/editor/world_space_bake.md`) keeps its node and uid, so its
-  columns follow it.
+  (`Item::get_gltf_uid()`, which every item has from its creation,
+  `doc/editor/scene_serialization.md` "Unique IDs") and the mesh primitive
+  index; the bake assigns none. The bake renders the world-space form, whose
+  render proxies stand for their source nodes: a proxy's columns carry its
+  source node's uid (`Scene_root::get_pvs_identity()`, which the draw lists
+  read through `Draw_list_scene::set_pvs_identity_function()`), and the
+  Scene item writes that node, keeping its uid, under the World Space node,
+  so the columns name the Scene item's nodes (R4.10).
 - Cell: one axis-aligned box of the bake grid, the paper's viewcell. The
   PVS of a cell is one bit per column. Page: `page_size`^3 cells, the unit
   of storage, GPU residency and streaming.
@@ -84,17 +88,21 @@ viewpoints is not conservative; it stays the verification oracle (the
 
 ## Rules
 
-- D1 Storage. The database is the asset-root glTF extension `ERHE_pvs` of
-  the scene file, written by the save pipeline from the scene's in-memory
-  database and read by the open pipeline, like `ERHE_raytrace_bvh` and
-  `ERHE_gpu_vertex_streams`, so it travels in the one `.glb` that "Save
-  for Quest" produces. A PVS is small and baked whole, so it lives in the
-  scene file; a sidecar directory (`<scene>.lightmap/`) is for the large,
-  partially baked lightmap tiles.
+- D1 Storage. A bake stores the database as the PVS item of the scene's
+  editor asset (kind `pvs`, `doc/editor/prepared_assets.md` "PVS"), the last
+  bake replacing the previous item (R4.10); a Scene item names it as the
+  `erhe-item:` buffer of its asset-root `ERHE_pvs` extension
+  (`doc/erhe/gltf.md` "PVS items"), so a prepared run reads it with the
+  Scene item. A glTF file carries no PVS (R12.2): a scene save writes no
+  `ERHE_pvs` and a file parse reads none (a file of an earlier build that
+  carries one opens without its PVS; bake again). A PVS is
+  small and baked whole; a sidecar directory
+  (`<scene>.lightmap/`) is for the large, partially baked lightmap tiles.
 - D2 Bake region. A box and a cell size in the scene's export settings
   (`Scene_settings` `export_settings`: `pvs_region_min`, `pvs_region_max`,
   `pvs_cell_size`, saved through `ERHE_scene`, also shown in the scene's
-  Properties), edited in the PVS window ("Fit to content bounds" sets the
+  Properties; a scene without export settings is not baked,
+  doc/editor/prepared_assets.md "Export settings"), edited in the PVS window ("Fit to content bounds" sets the
   box to the static content's bounds). The cells are a uniform grid over
   the box (`Pvs_baker` in `doc/editor/renderers.md` computes it).
 - D3 Static set. The bake gives a column to the entries that are content,
@@ -118,7 +126,12 @@ viewpoints is not conservative; it stays the verification oracle (the
   `Pvs_state_changed_message`, and the PVS window shows a warning line. An
   edit that would stale the database fails a running bake.
 - D5 Views. The viewport scene views with a perspective camera (four view
-  included) get PVS culling, the same set as the occlusion views; previews,
+  included) that draw the form the database was baked on get PVS culling
+  (`Scene_root::get_pvs_form()`: `world_space` for a bake, `source` for a
+  database a file carries; R8.10), the same set as the occlusion views; a
+  viewport that draws source meshes registers no query box for a bake's
+  database (`Composer::prepare_pvs_query()`), and the headset, which draws
+  source meshes, none either; previews,
   thumbnails, scene image captures, the id pass and the shadow passes get
   none. Which render contexts register a query box:
   `doc/editor/rendering.md`. The headset's multiview pass registers the
@@ -142,6 +155,22 @@ viewpoints is not conservative; it stays the verification oracle (the
   runs on the headset.
 
 ## Bake
+
+The PVS window and MCP `pvs_bake` (`Pvs_baker::start_bake()`) first queue
+Bake World-Space Meshes (`doc/editor/world_space_bake.md`), which makes the
+missing World-space mesh items and installs the world-space form; when that
+job ends the cells are baked on the form, refused (the bake fails) when the
+form is not available. Stage `baking world-space meshes`, then `baking
+cells`, in `get_pvs_bake_status`. The static set (D3) is then the form's
+render proxies, named by their source nodes, and the meshes the form does
+not replace; the sources of the proxies get no column, and a proxy's
+raytrace test (step 1) reads its source's raytrace geometry, which lies at
+the same place. The live node tree stays as it is and no second scene is
+loaded (R8.9). An Export with `pvs_mode` `rebake` runs the cells inside its
+own job, on the form it loads itself (`doc/editor/prepared_assets.md`
+"PVS"). The finished database is set on the scene (form `world_space`) and
+stored as the scene's PVS item (`store_pvs_item()`; `get_pvs_bake_status`
+`pvs_item {key, made, bytes}`).
 
 Per cell, in the order of the cell index, one cell per frame (D6), with the
 scene's draw lists published for the frame as every other pass sees them.
@@ -270,10 +299,14 @@ MoltenVK runs the windowed `build_xcode_vulkan`).
   `scripts/occlusion_wall_check.py`, with the expected boxes, and the id
   pass covers what the color pass draws (alpha-tested and double-sided
   materials).
-- `scripts/pvs_verify.py` (usage in its docstring), by section: `sampled`
+- `scripts/pvs_verify.py` (usage in its docstring) saves each scene to a
+  file under `logs/` (with its editor asset beside it) before it bakes, since
+  the bake renders the world-space form; the consumer checks run with the
+  viewport drawing the world-space form, and a viewport drawing source meshes
+  tests no entry (R8.10). By section: `sampled`
   (the sampled bake of the wall scene: every cell keeps the wall and drops
-  the six boxes behind it, a second bake gives the same `bits_hash`, a save
-  and load reload the same database; the consumer culls the six boxes in
+  the six boxes behind it, a second bake gives the same `bits_hash` and the same PVS item, a scene save
+  writes no PVS (the reload has none); the consumer culls the six boxes in
   both classification modes with 0 classification mismatches and images
   identical with `pvs_culling` on and off; moving a front box stales the
   database); `wall` (the disocclusion bake of the same grid: every cell
@@ -283,7 +316,7 @@ MoltenVK runs the windowed `build_xcode_vulkan`).
   `heavy` and `bistro` (a disocclusion bake with 4 m cells and the
   zero-misses check over 20 random cells; bistro also compares images with
   the rule on and off from street-level poses); `streaming` (the baked
-  Bistro saved and reloaded so the bits stream from the file, a capacity
+  Bistro reloaded with its PVS (not converted: a saved scene carries none), a capacity
   below the page count, a camera path of poses two pages apart: images
   identical with the rule on and off, 0 classification mismatches, resident
   pages never above the capacity, at most one upload per frame, residency
@@ -303,7 +336,16 @@ the wall; misses / false-positive ratio):
 | heavy  | 0 / 2.208        | 0 / 2.208        | 0 / 2.208         |
 | Bistro | 0 / 7.715        | not measured     | 0 / 7.705         |
 
-The wall bake's `bits_hash` is the same on all three; a run's ratio can
+Since the bake renders the world-space form (D8 step 9 of
+`doc/plans/prepared_assets_design.md`) the columns are numbered in the
+form's order, so the `bits_hash` values of `doc/plans/pvs.md`
+"Verification" are those of the node-space bake: on Linux headless NVIDIA
+the sampled bake is `eb0aa3903eb78865` (was `c80c51abedaed3c5`) and the wall
+bake `23b23844bb191325` (was `4fe439f63f8d385d`), with the same PVS sizes
+(wall 0 misses, 1.241). The `streaming` section loads a scene file that
+carries the bake, which a scene save no longer writes (R12.2); it is not
+converted yet (a prepared run's PVS is read whole from its item). The wall bake's
+`bits_hash` is the same on all three; a run's ratio can
 differ in the third decimal through the oracle's random samples (the PVS
 sizes are equal). 12 of the 48 wall cells keep a box behind the wall (false
 positives: `doc/plans/pvs.md` "Open"). Images are identical with

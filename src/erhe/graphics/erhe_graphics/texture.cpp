@@ -60,6 +60,71 @@ const erhe::property::Property<std::string> Texture::pixelformat_property = erhe
     }
 );
 
+namespace {
+
+auto texture_property_ui(const std::string_view label, const std::string_view tooltip) -> erhe::property::Property_ui
+{
+    return erhe::property::Property_ui{.group = "Texture", .tooltip = tooltip, .label = label};
+}
+
+} // anonymous namespace
+
+const erhe::property::Property<Texture_transfer_function> Texture::transfer_function_property = erhe::property::Property<Texture_transfer_function>::register_property(
+    "transfer_function", Texture::property_owner_type(), c_texture_transfer_function_enum_info,
+    erhe::property::Property_metadata{
+        .default_value = erhe::property::make_value(Texture_transfer_function::srgb),
+        .ui            = texture_property_ui("Transfer Function", "sRGB for color data, linear for data textures; read at load and by conversion")
+    }
+);
+const erhe::property::Property<Texture_normal_encoding> Texture::normal_encoding_property = erhe::property::Property<Texture_normal_encoding>::register_property(
+    "normal_encoding", Texture::property_owner_type(), c_texture_normal_encoding_enum_info,
+    erhe::property::Property_metadata{
+        .default_value = erhe::property::make_value(Texture_normal_encoding::none),
+        .ui            = texture_property_ui("Normal Encoding", "Not a normal map, or a normal map with three or two stored components; read by conversion")
+    }
+);
+const erhe::property::Property<bool> Texture::generate_mipmaps_property = erhe::property::Property<bool>::register_property(
+    "generate_mipmaps", Texture::property_owner_type(),
+    erhe::property::Property_metadata{
+        .default_value = true,
+        .ui            = texture_property_ui("Generate Mipmaps", "Make the mip levels an image does not carry; read at load")
+    }
+);
+const erhe::property::Property<Sampler_address_mode> Texture::wrap_u_property = erhe::property::Property<Sampler_address_mode>::register_property(
+    "wrap_u", Texture::property_owner_type(), c_texture_wrap_enum_info,
+    erhe::property::Property_metadata{
+        .default_value = erhe::property::make_value(Sampler_address_mode::repeat),
+        .ui            = texture_property_ui("Wrap U", "The wrap mode mipmap generation filters with at the image's edges in u")
+    }
+);
+const erhe::property::Property<Sampler_address_mode> Texture::wrap_v_property = erhe::property::Property<Sampler_address_mode>::register_property(
+    "wrap_v", Texture::property_owner_type(), c_texture_wrap_enum_info,
+    erhe::property::Property_metadata{
+        .default_value = erhe::property::make_value(Sampler_address_mode::repeat),
+        .ui            = texture_property_ui("Wrap V", "The wrap mode mipmap generation filters with at the image's edges in v")
+    }
+);
+
+auto Texture::get_texture_properties() const -> Texture_properties
+{
+    return Texture_properties{
+        .transfer_function = get_value(transfer_function_property),
+        .normal_encoding   = get_value(normal_encoding_property),
+        .generate_mipmaps  = get_value(generate_mipmaps_property),
+        .wrap_u            = get_value(wrap_u_property),
+        .wrap_v            = get_value(wrap_v_property)
+    };
+}
+
+void Texture::set_texture_properties(const Texture_properties& properties)
+{
+    set_value(transfer_function_property, properties.transfer_function);
+    set_value(normal_encoding_property,   properties.normal_encoding);
+    set_value(generate_mipmaps_property,  properties.generate_mipmaps);
+    set_value(wrap_u_property,            properties.wrap_u);
+    set_value(wrap_v_property,            properties.wrap_v);
+}
+
 Texture_reference_user::~Texture_reference_user() noexcept = default;
 
 Texture_reference::~Texture_reference() noexcept = default;
