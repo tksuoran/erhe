@@ -487,6 +487,7 @@ flowchart TD
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
 - [plans/quest_performance.md](plans/quest_performance.md) (proposed): Quest 3 performance: baseline, ranking, items
+- [plans/open_items.md](plans/open_items.md) (in progress): Open items across subsystems without a plan of their own: defects found in passing, unverified paths, user checks and decisions
 - [plans/overdraw_visualization.md](plans/overdraw_visualization.md) (in progress): Overdraw visualization
 - [plans/parallel_editor_init.md](plans/parallel_editor_init.md) (proposed): Parallel editor initialization: a Taskflow graph over the init steps
 - [plans/physics.md](plans/physics.md) (in progress): Physics: outstanding work

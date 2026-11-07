@@ -3,6 +3,7 @@
 [FOCUS]
 @prepared-assets::IN-PROGRESS-2026-11-06{M1-M5+D8-steps-1-15-DONE-2026-11-07;requirements=doc/plans/prepared_assets.md(R1-R14);design+per-step-state+open=doc/plans/prepared_assets_design.md(D1-D9);behavior=doc/editor/prepared_assets.md;NOW=Quest-testing(progress.md[TASK::prepared-assets]);FOUND:PVS-item-empty-scene-id(fix-at-Export-bake);NEXT=R13.4-Quest-remeasure(memory-gap-14MB)->PVS-scene-id-fix->©User-rulings-on-coder-decisions(design-doc-steps-12/14/15)->other-tree-builds(GL/Metal/Windows/Android);git-stash-ERHE_pvs-column-rewrite=superseded(drop-when-©User-agrees);doc/plans/prepare_pvs_export.md=superseded-except-Established}
 NEXT=prompt_queue.txt{UNTRACKED-per-machine;holds-the-ordered-outstanding-items}
+!open-items::doc/plans/open_items.md{defects-found-in-passing+unverified-paths+user-checks+user-decisions;add-there¬memory-bank}
 >archived-2026-11-07::DONE|paused|user-gated-FOCUS-entries->topics/<topic>.md[FOCUS_ARCHIVE_2026-11-07](read-when-resuming-that-work)
 [TOPICS]{memory-bank/topics/<name>.md;¬auto-loaded;read-the-ones-matching-the-session;DONE-work+traps+open-items-per-topic}
 usd::USD compatibility: LightUSD fork, import/export, composition arcs, DrawModes, USD physics/animation, WG asset survey
