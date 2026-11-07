@@ -29,7 +29,8 @@ public:
 
 // Texel data in a buffer: the source or destination of a copy between a
 // buffer and a texture. bytes_per_row / bytes_per_image give the row and
-// image pitch of the data in the buffer.
+// image pitch of the data in the buffer; for a block-compressed texture the
+// data is tightly packed and every backend derives the pitches (both are ignored).
 class Buffer_texel_location
 {
 public:

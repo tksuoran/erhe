@@ -48,7 +48,6 @@ ask the user which to pick.
   `config/editor/benchmark_bistro_street.json` for the upright Bistro (the
   source rotated -90 degrees about X); `benchmark_bistro_street_120.json`
   is already in that frame.
-- Textures look blotchy on the Mac (plant leaves).
 - The loading screen shows a generic reason after a fast failure (the load
   handle is reaped before the screen reads it).
 - Metal counts overdraw per sample under MSAA

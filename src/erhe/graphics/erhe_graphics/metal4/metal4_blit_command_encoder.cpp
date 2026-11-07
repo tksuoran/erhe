@@ -13,6 +13,7 @@
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/scoped_transient_object_pool.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Metal/Metal.hpp>
@@ -74,6 +75,29 @@ public:
     Blit_access                  m_access;
     MTL4::ComputeCommandEncoder* m_encoder{nullptr};
 };
+
+// A block-compressed texture's buffer data is tightly packed, so its pitches
+// are derived here (the Vulkan backend does the same); Metal reads 0 literally.
+class Texel_pitch
+{
+public:
+    std::uintptr_t bytes_per_row;
+    std::uintptr_t bytes_per_image;
+};
+
+auto get_texel_pitch(const Texture& texture, const Buffer_texel_location& location, const glm::ivec3 size) -> Texel_pitch
+{
+    const erhe::dataformat::Format format = texture.get_pixelformat();
+    if (!erhe::dataformat::is_block_compressed(format)) {
+        return Texel_pitch{.bytes_per_row = location.bytes_per_row, .bytes_per_image = location.bytes_per_image};
+    }
+    const std::uintptr_t block_extent  = erhe::dataformat::get_block_extent(format);
+    const std::uintptr_t block_bytes   = erhe::dataformat::get_block_size_bytes(format);
+    const std::uintptr_t blocks_x      = (static_cast<std::uintptr_t>(size.x) + block_extent - 1) / block_extent;
+    const std::uintptr_t blocks_y      = (static_cast<std::uintptr_t>(size.y) + block_extent - 1) / block_extent;
+    const std::uintptr_t bytes_per_row = blocks_x * block_bytes;
+    return Texel_pitch{.bytes_per_row = bytes_per_row, .bytes_per_image = bytes_per_row * blocks_y};
+}
 
 } // namespace
 
@@ -286,8 +310,6 @@ void Blit_command_encoder_impl::copy_from_buffer(const Buffer_texel_location& so
     Scoped_transient_object_pool object_pool{}; // drains the encoder and other autoreleased objects created here
     const Buffer* const  source_buffer          = source.buffer;
     const std::uintptr_t source_offset          = source.offset;
-    const std::uintptr_t source_bytes_per_row   = source.bytes_per_row;
-    const std::uintptr_t source_bytes_per_image = source.bytes_per_image;
     const Texture* const destination_texture    = destination.texture;
     const std::uintptr_t destination_slice      = destination.slice;
     const std::uintptr_t destination_level      = destination.level;
@@ -295,6 +317,9 @@ void Blit_command_encoder_impl::copy_from_buffer(const Buffer_texel_location& so
     if ((source_buffer == nullptr) || (destination_texture == nullptr)) {
         return;
     }
+    const Texel_pitch    source_pitch           = get_texel_pitch(*destination_texture, source, source_size);
+    const std::uintptr_t source_bytes_per_row   = source_pitch.bytes_per_row;
+    const std::uintptr_t source_bytes_per_image = source_pitch.bytes_per_image;
     MTL::Buffer*  mtl_buffer  = source_buffer->get_impl().get_mtl_buffer();
     MTL::Texture* mtl_texture = destination_texture->get_impl().get_mtl_texture();
     if ((mtl_buffer == nullptr) || (mtl_texture == nullptr)) {
@@ -335,11 +360,12 @@ void Blit_command_encoder_impl::copy_from_texture(const Texture_location& source
     const glm::ivec3     source_origin               = source.origin;
     const Buffer* const  destination_buffer          = destination.buffer;
     const std::uintptr_t destination_offset          = destination.offset;
-    const std::uintptr_t destination_bytes_per_row   = destination.bytes_per_row;
-    const std::uintptr_t destination_bytes_per_image = destination.bytes_per_image;
     if ((source_texture == nullptr) || (destination_buffer == nullptr)) {
         return;
     }
+    const Texel_pitch    destination_pitch           = get_texel_pitch(*source_texture, destination, source_size);
+    const std::uintptr_t destination_bytes_per_row   = destination_pitch.bytes_per_row;
+    const std::uintptr_t destination_bytes_per_image = destination_pitch.bytes_per_image;
     MTL::Texture* mtl_texture = source_texture->get_impl().get_mtl_texture();
     MTL::Buffer*  mtl_buffer  = destination_buffer->get_impl().get_mtl_buffer();
     if ((mtl_texture == nullptr) || (mtl_buffer == nullptr)) {

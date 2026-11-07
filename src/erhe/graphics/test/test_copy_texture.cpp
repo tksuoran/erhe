@@ -597,4 +597,89 @@ TEST_F(Texture_copy_test, copy_texture_to_texture_slice)
     run_texture_to_texture(Copy_kind::slice, "copy_texture_to_texture_slice");
 }
 
+namespace {
+
+class Block_copy_test : public Gpu_test
+{
+protected:
+    // Uploads tightly packed blocks with bytes_per_row 0 (the block-compressed
+    // contract of Buffer_texel_location) and reads them back the same way; a
+    // 16x12 surface has unequal block rows and columns.
+    void expect_round_trip(const erhe::dataformat::Format format);
+};
+
+void Block_copy_test::expect_round_trip(const erhe::dataformat::Format format)
+{
+    erhe::graphics::Device& graphics_device = device();
+    if (!graphics_device.get_format_properties(format).supported) {
+        GTEST_SKIP() << erhe::dataformat::c_str(format) << " is not supported";
+    }
+    constexpr int     width      = 16;
+    constexpr int     height     = 12;
+    const std::size_t byte_count = erhe::dataformat::get_image_level_size_bytes(format, width, height);
+    std::vector<uint8_t> blocks(byte_count);
+    for (std::size_t i = 0; i < byte_count; ++i) {
+        blocks[i] = static_cast<uint8_t>(((i * 37u) + (i / 16u) * 11u + 3u) & 0xffu);
+    }
+
+    const std::shared_ptr<erhe::graphics::Buffer> staging = make_host_buffer(byte_count, erhe::graphics::Buffer_usage::transfer_src, "block upload staging");
+    {
+        const std::span<std::byte> mapped = staging->map_bytes(0, byte_count);
+        std::memcpy(mapped.data(), blocks.data(), byte_count);
+        staging->unmap();
+    }
+    const std::shared_ptr<erhe::graphics::Buffer>  readback = make_readback_buffer(byte_count, "block readback");
+    const std::shared_ptr<erhe::graphics::Texture> texture  = std::make_shared<erhe::graphics::Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device      = graphics_device,
+            .usage_mask  =
+                erhe::graphics::Image_usage_flag_bit_mask::sampled      |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+            .type        = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat = format,
+            .width       = width,
+            .height      = height,
+            .debug_label = erhe::utility::Debug_label{"block round trip"}
+        }
+    );
+
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
+            blit.copy_from_buffer(
+                erhe::graphics::Buffer_texel_location{.buffer = staging.get(), .offset = 0, .bytes_per_row = 0, .bytes_per_image = 0},
+                glm::ivec3{width, height, 1},
+                erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}}
+            );
+            command_buffer.transition_texture_layout(*texture, erhe::graphics::Image_layout::transfer_src_optimal);
+            blit.copy_from_texture(
+                erhe::graphics::Texture_location{.texture = texture.get(), .slice = 0, .level = 0, .origin = glm::ivec3{0, 0, 0}},
+                glm::ivec3{width, height, 1},
+                erhe::graphics::Buffer_texel_location{.buffer = readback.get(), .offset = 0, .bytes_per_row = 0, .bytes_per_image = 0}
+            );
+        }
+    );
+
+    const std::vector<std::byte> raw = read_buffer(*readback, byte_count);
+    std::vector<uint8_t> actual(byte_count);
+    std::memcpy(actual.data(), raw.data(), byte_count);
+    expect_bytes_equal(actual, blocks, erhe::dataformat::c_str(format));
+}
+
+} // namespace
+
+// Block-compressed buffer <-> texture copies with tightly packed data: every
+// backend derives the pitches, so the blocks round-trip byte for byte.
+TEST_F(Block_copy_test, bc7_round_trip)
+{
+    expect_round_trip(erhe::dataformat::Format::format_bc7_srgb);
+}
+
+TEST_F(Block_copy_test, bc5_round_trip)
+{
+    expect_round_trip(erhe::dataformat::Format::format_bc5_unorm);
+}
+
 } // namespace erhe::graphics::test
