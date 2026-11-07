@@ -120,6 +120,10 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
     # Ad-hoc code signing so that all executables can run without manual codesign
     set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO")
     set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "")
+    # Xcode defaults -O0 to libc++ hardening "debug", whose tree invariant walk
+    # on every std::set / std::map insert and erase makes Debug builds unusably
+    # slow (SPIR-V optimizer: minutes per module); "extensive" keeps the checks.
+    set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_STANDARD_LIBRARY_HARDENING[variant=Debug] "extensive")
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Android")
     message("Detected Android platform")
     set(ERHE_TARGET_OS_ANDROID TRUE)
