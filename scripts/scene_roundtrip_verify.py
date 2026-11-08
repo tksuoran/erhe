@@ -22,7 +22,9 @@ verification of doc/editor/gltf_scene_roundtrip.md:
 3. Loads the saved scene back and diffs the MCP-visible state: node set
    (name / parent / TRS / tags / locked), per-node
    physics and joint fields, materials, animations (channel-level), the
-   brush library, and graph assets. Captures screenshots before and after.
+   brush library, and graph assets. Saves the reloaded scene again and
+   compares every node transform of the two files bit for bit. Captures
+   screenshots before and after.
 4. Round-trips a prefab scene ("res/editor/scenes/Prefab test.glb") when
    present (untracked user scene; the section is skipped when absent).
 5. Optional foreign-tool checks: the Khronos glTF validator
@@ -756,6 +758,7 @@ def compare_screenshots(section, before_path, after_path):
 E2E_GLB = pathlib.Path("res/editor/scenes/phase6_roundtrip.glb")
 FOREIGN_GLB = pathlib.Path("res/editor/scenes/phase6_foreign.glb")
 PREFAB_RESAVE_GLB = pathlib.Path("res/editor/scenes/phase6_prefab_resave.glb")
+E2E_RESAVE_GLB = pathlib.Path("res/editor/scenes/phase6_roundtrip_resave.glb")
 # .glb: text .gltf saves do not write their external buffer payload (a
 # pre-existing exporter limitation unrelated to R6); read_glb_json gives the
 # same JSON view.
@@ -1280,6 +1283,26 @@ def section_reload_and_diff():
         check(S, f"round-trip diff: {key} identical", not mismatches, f"{len(mismatches)} mismatches")
         for mismatch in mismatches[:10]:
             print(f"       {mismatch}")
+
+    # Save -> load -> save writes every node transform bit for bit
+    # (doc/erhe/gltf.md): Python's float() of the shortest-round-trip text is
+    # the float's exact value, so == is a bit comparison.
+    resaved = wait_for_save(call, mutate("save_scene", {"scene_name": loaded_scene, "path": str(E2E_RESAVE_GLB)}))
+    check(S, "re-save of the reloaded scene", bool(resaved) and resaved.get("saved"), str(resaved))
+    if E2E_RESAVE_GLB.is_file():
+        def node_transforms(gltf_doc):
+            return [
+                (n.get("name"), n.get("translation"), n.get("rotation"), n.get("scale"), n.get("matrix"))
+                for n in gltf_doc.get("nodes", [])
+            ]
+        first_transforms  = node_transforms(read_glb_json(E2E_GLB))
+        second_transforms = node_transforms(read_glb_json(E2E_RESAVE_GLB))
+        drifted = [
+            f"{a} -> {b}" for a, b in zip(first_transforms, second_transforms) if a != b
+        ]
+        check(S, "re-save writes every node transform bit-identically",
+              (len(first_transforms) > 0) and (len(first_transforms) == len(second_transforms)) and not drifted,
+              f"{len(first_transforms)} vs {len(second_transforms)} nodes; first drift: {drifted[:1]}")
 
     # Resource placement (C5): every resource is back under the prim it was
     # saved under, and the mesh-bound one is still bound.
@@ -2966,11 +2989,11 @@ def main():
         print(f"  FAIL {section}: {name} -- {detail}")
 
     if not failed and not arguments.keep_files:
-        for artifact in [E2E_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF,
+        for artifact in [E2E_GLB, E2E_RESAVE_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF,
                          GLTF_VARIANTS_SAVE, AMBIENT_LOCAL_GLB, AMBIENT_STYLE_GLB] + USD_ARTIFACTS:
             artifact.unlink(missing_ok=True)
     elif arguments.keep_files:
-        print(f"(kept {E2E_GLB}, {FOREIGN_GLB}, {PREFAB_RESAVE_GLB}, {R6_GLTF} and {R6_RESAVE_GLTF})")
+        print(f"(kept {E2E_GLB}, {E2E_RESAVE_GLB}, {FOREIGN_GLB}, {PREFAB_RESAVE_GLB}, {R6_GLTF} and {R6_RESAVE_GLTF})")
     return 1 if failed else 0
 
 

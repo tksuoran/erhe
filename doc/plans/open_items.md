@@ -112,7 +112,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   chain), also with a plain glb.
 - Quest: the device's writable `mcp_tools.json` is the copy made at first
   install and goes stale.
-- TRS values drift in float precision on re-save.
 - Three Scene Hierarchy MCP tests failed on one machine (suspected: the
   ini's Scene Hierarchy height 37); `ctest -L editor` passes in full on
   macOS at 3b181b4f4; re-check on Windows.

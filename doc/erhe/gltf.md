@@ -91,6 +91,13 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   the scene root keeping their local transforms. Saving a loaded scene
   again therefore writes identical node transforms, and every world
   transform after a reopen is bit-identical to the one before the save.
+  The JSON writer prints each float in its shortest round-trip form, so the
+  text carries the exact bits. A node the file gives as a `matrix` is
+  decomposed once (at the latest at its first save) and written as TRS from
+  then on.
+  `Gltf_roundtrip.node_trs_bit_exact` and the reload-diff leg of
+  `scripts/scene_roundtrip_verify.py` (save, load, save again, compare)
+  check it.
 - Import restores the authored / default distinction: after the core glTF
   fields and the legacy extras have been replayed - which makes every field
   a local value - `parse_gltf` runs
