@@ -890,14 +890,12 @@ void collect_prefab_external_assets_visit(
         const std::filesystem::path& source_path = arc->source_path;
         std::error_code error_code;
         const std::filesystem::path relative_path = std::filesystem::relative(source_path, export_directory, error_code);
-        const std::string uri = (error_code || relative_path.empty())
-            ? source_path.generic_string()
-            : relative_path.generic_string();
+        const std::filesystem::path& file_path = (error_code || relative_path.empty()) ? source_path : relative_path;
         const bool is_binary = source_path.extension() == std::filesystem::path{".glb"};
         result.emplace(
             &node,
             erhe::gltf::Gltf_export_external_asset{
-                .uri       = uri,
+                .path      = file_path,
                 .mime_type = is_binary ? "model/gltf-binary" : "model/gltf+json",
                 .name      = arc->name
             }

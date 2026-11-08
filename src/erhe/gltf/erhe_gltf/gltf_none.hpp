@@ -325,17 +325,17 @@ struct Gltf_parse_arguments
 class Gltf_export_external_asset
 {
 public:
-    std::string uri;
-    std::string mime_type;
-    std::string name;
+    std::filesystem::path path;
+    std::string           mime_type;
+    std::string           name;
 };
 
 class Gltf_export_asset_reference
 {
 public:
-    std::string uri;
-    std::string mime_type;
-    std::string uid;
+    std::filesystem::path path;
+    std::string           mime_type;
+    std::string           uid;
 };
 
 class Gltf_export_extension_payloads

@@ -106,10 +106,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
-- glTF load: image and file URIs (`gltf_fastgltf.cpp`, the `files` entries
-  and `sources::URI` images read through `uri.fspath()`) still go through
-  fastgltf's decode-then-split, so an external image named with `#` or `?`
-  misresolves; buffer URIs split before decoding (`resolve_gltf_buffer_origins`).
 - Quest: a launch with no scene aborts in `scene_view.cpp:332`.
 - Quest: `render_scene_image` crashes (SIGSEGV in
   `Render_pass::start_render_pass` from `Shadow_renderer::draw` in the capture

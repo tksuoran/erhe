@@ -717,9 +717,9 @@ void close_source_files(Gltf_data& data);
 class Gltf_export_external_asset
 {
 public:
-    std::string uri;       // written into the files array as-is
-    std::string mime_type; // "model/gltf+json" or "model/gltf-binary"
-    std::string name;      // externalAssets entry name
+    std::filesystem::path path;      // relative to the exported file, or absolute; written percent-encoded (doc/erhe/gltf.md "File uris")
+    std::string           mime_type; // "model/gltf+json" or "model/gltf-binary"
+    std::string           name;      // externalAssets entry name
 };
 
 // A cross-container asset reference to write on export
@@ -734,9 +734,9 @@ public:
 class Gltf_export_asset_reference
 {
 public:
-    std::string uri;       // written into the files array as-is
-    std::string mime_type; // "model/gltf+json" or "model/gltf-binary"
-    std::string uid;       // target uid within the container; empty = name fallback
+    std::filesystem::path path;      // relative to the exported file, or absolute; written percent-encoded (doc/erhe/gltf.md "File uris")
+    std::string           mime_type; // "model/gltf+json" or "model/gltf-binary"
+    std::string           uid;       // target uid within the container; empty = name fallback
 };
 
 // Raw JSON members to splice into exported objects' "extensions" objects

@@ -4,6 +4,7 @@
 #include "gltf_item_flags.hpp"
 #include "gltf_log.hpp"
 #include "gltf_uid.hpp"
+#include "gltf_uri.hpp"
 #include "image_reduction_cache.hpp"
 #include "image_transfer.hpp"
 
@@ -1735,6 +1736,14 @@ private:
     bool                                                             m_closed{false};      // under m_mutex
 };
 
+// The image and file uris of a glTF JSON as written (still percent-encoded); empty: no uri.
+class Gltf_json_uris
+{
+public:
+    std::vector<std::string> images; // per glTF image
+    std::vector<std::string> files;  // per glTF 2.1 files entry
+};
+
 // The buffer origins of one parsed file, shared by the triangle soup sources
 // of all its primitives.
 class Gltf_buffer_origins
@@ -1744,6 +1753,7 @@ public:
     std::vector<Gltf_byte_source>                  sources;
     std::vector<std::optional<Gltf_buffer_origin>> buffers;     // per glTF buffer; nullopt: in memory (data URI, a parse from memory)
     std::vector<Gltf_view_place>                   view_places; // per glTF bufferView, as the file has it
+    Gltf_json_uris                                 json_uris;   // moved into the parser by parse_gltf()
 
     void make_source_files()
     {
@@ -1768,6 +1778,36 @@ namespace {
         (static_cast<uint32_t>(bytes[3]) << 24);
 }
 
+// fastgltf::URI decodes its argument once and writes what it holds: encoded twice, it writes `encoded_uri`.
+[[nodiscard]] auto make_fastgltf_uri(const std::string_view encoded_uri) -> fastgltf::URI
+{
+    return fastgltf::URI{std::string_view{percent_encode_uri_segment(encoded_uri)}};
+}
+
+void read_json_uris(const simdjson::dom::element& root, const char* const key, std::vector<std::string>& out)
+{
+    simdjson::dom::array array;
+    if (root[key].get_array().get(array) != simdjson::SUCCESS) {
+        return;
+    }
+    for (simdjson::dom::element element : array) {
+        std::string_view uri_string;
+        if (element["uri"].get_string().get(uri_string) == simdjson::SUCCESS) {
+            out.emplace_back(uri_string);
+        } else {
+            out.emplace_back();
+        }
+    }
+}
+
+[[nodiscard]] auto read_gltf_json_uris(const simdjson::dom::element& root) -> Gltf_json_uris
+{
+    Gltf_json_uris uris;
+    read_json_uris(root, "images", uris.images);
+    read_json_uris(root, "files",  uris.files);
+    return uris;
+}
+
 } // anonymous namespace
 
 // The byte source of each glTF buffer `json_text` names: the BIN chunk, a
@@ -1789,6 +1829,7 @@ namespace {
     }
     std::shared_ptr<Gltf_buffer_origins> origins = std::make_shared<Gltf_buffer_origins>();
     origins->buffers.resize(buffer_count);
+    origins->json_uris = read_gltf_json_uris(root);
     simdjson::dom::array buffers;
     if (root["buffers"].get_array().get(buffers) != simdjson::SUCCESS) {
         return origins;
@@ -1827,15 +1868,12 @@ namespace {
                 continue;
             }
         }
-        // The components split before the path is decoded: "%23" in a file name is not a fragment.
-        const fastgltf::URIView uri{uri_string};
-        if (!uri.valid() || uri.isDataUri() || !uri.isLocalPath()) {
+        const std::optional<std::filesystem::path> file_path = gltf_uri_to_file_path(uri_string);
+        if (!file_path.has_value()) {
             continue;
         }
-        std::string decoded_path{uri.path()};
-        fastgltf::URI::decodePercents(decoded_path);
         Gltf_byte_source source_file;
-        if (stamp_source_file(base_directory / erhe::file::from_string(decoded_path), source_file)) {
+        if (stamp_source_file(base_directory / file_path.value(), source_file)) {
             origins->sources.push_back(std::move(source_file));
             origins->buffers[this_index] = Gltf_buffer_origin{.source_index = origins->sources.size() - 1, .source_offset = 0};
         }
@@ -1906,6 +1944,24 @@ constexpr uint32_t glb_chunk_bin  = 0x004E4942u; // "BIN\0"
     return make_buffer_origins(json_text, bin_chunk_offset, path, {}, path.parent_path(), buffer_count, resolver);
 }
 
+// The JSON of a glTF in memory: the JSON chunk of a GLB, or the whole text; nullopt for a bad GLB.
+[[nodiscard]] auto get_gltf_json_text_in_memory(const std::span<const std::byte> glb_data) -> std::optional<std::string>
+{
+    const auto read_word = [glb_data](const std::size_t offset) -> uint32_t {
+        std::array<unsigned char, 4> word{};
+        std::memcpy(word.data(), glb_data.data() + offset, 4);
+        return read_u32_le(word);
+    };
+    if ((glb_data.size() >= 20) && (read_word(0) == glb_magic)) {
+        const std::size_t json_length = read_word(12);
+        if ((read_word(16) != glb_chunk_json) || ((glb_data.size() - 20) < json_length)) {
+            return std::nullopt;
+        }
+        return std::string{reinterpret_cast<const char*>(glb_data.data() + 20), json_length};
+    }
+    return std::string{reinterpret_cast<const char*>(glb_data.data()), glb_data.size()};
+}
+
 // The same for a glTF parsed from memory: its BIN chunk is resident, so only
 // external buffers get an origin.
 [[nodiscard]] auto resolve_gltf_buffer_origins_in_memory(
@@ -1915,22 +1971,26 @@ constexpr uint32_t glb_chunk_bin  = 0x004E4942u; // "BIN\0"
     const Gltf_buffer_resolver&      resolver
 ) -> std::shared_ptr<const Gltf_buffer_origins>
 {
-    const auto read_word = [glb_data](const std::size_t offset) -> uint32_t {
-        std::array<unsigned char, 4> word{};
-        std::memcpy(word.data(), glb_data.data() + offset, 4);
-        return read_u32_le(word);
-    };
-    std::string json_text;
-    if ((glb_data.size() >= 20) && (read_word(0) == glb_magic)) {
-        const std::size_t json_length = read_word(12);
-        if ((read_word(16) != glb_chunk_json) || ((glb_data.size() - 20) < json_length)) {
-            return {};
-        }
-        json_text.assign(reinterpret_cast<const char*>(glb_data.data() + 20), json_length);
-    } else {
-        json_text.assign(reinterpret_cast<const char*>(glb_data.data()), glb_data.size());
+    const std::optional<std::string> json_text = get_gltf_json_text_in_memory(glb_data);
+    if (!json_text.has_value()) {
+        return {};
     }
-    return make_buffer_origins(json_text, std::nullopt, {}, {}, base_directory, buffer_count, resolver);
+    return make_buffer_origins(json_text.value(), std::nullopt, {}, {}, base_directory, buffer_count, resolver);
+}
+
+// The image and file uris of a glTF in memory whose buffers need no origins.
+[[nodiscard]] auto read_gltf_json_uris_in_memory(const std::span<const std::byte> glb_data) -> Gltf_json_uris
+{
+    const std::optional<std::string> json_text = get_gltf_json_text_in_memory(glb_data);
+    if (!json_text.has_value()) {
+        return {};
+    }
+    simdjson::dom::parser  parser;
+    simdjson::dom::element root;
+    if (parser.parse(simdjson::padded_string{json_text.value()}).get(root) != simdjson::SUCCESS) {
+        return {};
+    }
+    return read_gltf_json_uris(root);
 }
 
 // The same for a GLB read through a Gltf_buffer_reader: the JSON chunk read
@@ -4049,6 +4109,15 @@ public:
     }
 
 private:
+    // fastgltf::URI decodes before it splits, so the path comes from the uri as the JSON has it.
+    [[nodiscard]] static auto get_json_file_path(const std::vector<std::string>& uris, const std::size_t index) -> std::optional<std::filesystem::path>
+    {
+        if (index >= uris.size()) {
+            return std::nullopt;
+        }
+        return gltf_uri_to_file_path(uris[index]);
+    }
+
     // glTF 2.1: top-level "files" and "externalAssets" arrays. File entries
     // with a URI are resolved against the glTF directory; entries whose bytes
     // travel inside the asset (data URIs, GLB-packed payloads) are marked
@@ -4065,9 +4134,13 @@ private:
             out_file.name      = safe_resource_name(file.name, "file", i);
             out_file.uid       = std::string{file.uid};
             out_file.mime_type = std::string{file.mimeType};
-            if (const fastgltf::sources::URI* uri = std::get_if<fastgltf::sources::URI>(&file.data)) {
-                const std::filesystem::path uri_path = uri->uri.fspath();
-                out_file.resolved_path = uri_path.is_absolute() ? uri_path : (base_directory / uri_path);
+            if (std::holds_alternative<fastgltf::sources::URI>(file.data)) {
+                const std::optional<std::filesystem::path> uri_path = get_json_file_path(m_json_uris.files, i);
+                if (uri_path.has_value()) {
+                    out_file.resolved_path = uri_path->is_absolute() ? uri_path.value() : (base_directory / uri_path.value());
+                } else {
+                    log_gltf->error("File '{}': uri is not a local file path", out_file.name);
+                }
             } else if (!std::holds_alternative<std::monostate>(file.data)) {
                 out_file.embedded = true;
             }
@@ -4322,13 +4395,17 @@ private:
                     prepared.source->file_size       = file.size;
                     prepared.source->file_write_time = file.write_time;
                 },
-                [&](const fastgltf::sources::URI& uri) {
+                [&](const fastgltf::sources::URI&) {
+                    const std::optional<std::filesystem::path> relative_path = get_json_file_path(m_json_uris.images, image_index);
+                    if (!relative_path.has_value()) {
+                        log_gltf->error("Image '{}': uri is not a local file path", prepared.name);
+                        return;
+                    }
                     // Resolve on a copy: replace_filename() mutates in place,
                     // and m_arguments.path must keep naming the glTF file
                     // (source paths of nodes parsed later, resource names).
-                    std::filesystem::path relative_path = uri.uri.fspath();
-                    std::filesystem::path image_path    = m_arguments.path;
-                    image_path.replace_filename(relative_path);
+                    std::filesystem::path image_path = m_arguments.path;
+                    image_path.replace_filename(relative_path.value());
                     const bool file_is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::prepare_image", image_path);
                     if (!file_is_ok) {
                         return;
@@ -5096,9 +5173,14 @@ public:
         m_buffer_origins      = std::move(buffer_origins);
         m_record_soup_sources = (record_soup_sources == Triangle_soup_reload::record);
     }
+    void set_json_uris(Gltf_json_uris&& json_uris)
+    {
+        m_json_uris = std::move(json_uris);
+    }
 private:
     std::shared_ptr<const Gltf_buffer_origins> m_buffer_origins;
     bool                                       m_record_soup_sources{false};
+    Gltf_json_uris                             m_json_uris;
     // The prepared mesh data counts of this parse, shared with the payloads.
     std::shared_ptr<Gltf_prepared_statistics>  m_prepared_statistics{std::make_shared<Gltf_prepared_statistics>()};
 public:
@@ -8037,6 +8119,11 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     // Only a primitive with a byte source defers its payload.
     const bool payloads_read_in_parse = (arguments.mesh_payload != Mesh_payload_load::deferred) || (!arguments.glb_data.empty() && !buffer_origins);
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
+    if (buffer_origins) {
+        erhe_parser.set_json_uris(std::move(buffer_origins->json_uris));
+    } else if (!arguments.glb_data.empty()) {
+        erhe_parser.set_json_uris(read_gltf_json_uris_in_memory(arguments.glb_data));
+    }
     erhe_parser.set_buffer_origins(std::move(buffer_origins), arguments.triangle_soup_reload);
 
     // R12.2: a file holds authoring data alone; the derived-data extensions an earlier build wrote into one are not read.
@@ -9943,25 +10030,6 @@ namespace {
 
 namespace {
 
-// RFC 3986 relative-path reference of a file name: every byte but the unreserved ones percent-encoded.
-[[nodiscard]] auto percent_encode_uri_path(const std::string_view text) -> std::string
-{
-    std::string encoded;
-    encoded.reserve(text.size());
-    for (const char c : text) {
-        const unsigned char byte = static_cast<unsigned char>(c);
-        const bool unreserved =
-            ((byte >= 'A') && (byte <= 'Z')) || ((byte >= 'a') && (byte <= 'z')) || ((byte >= '0') && (byte <= '9')) ||
-            (byte == '-') || (byte == '.') || (byte == '_') || (byte == '~');
-        if (unreserved) {
-            encoded.push_back(c);
-        } else {
-            encoded += fmt::format("%{:02X}", static_cast<unsigned int>(byte));
-        }
-    }
-    return encoded;
-}
-
 } // anonymous namespace
 
 class Gltf_exporter : public Gltf_primitive_writer
@@ -11098,7 +11166,7 @@ private:
             stub_material.name = FASTGLTF_STD_PMR_NS::string{material->get_name()};
             const std::size_t stub_material_index = m_gltf_asset.materials.size();
             m_gltf_asset.materials.push_back(std::move(stub_material));
-            const std::size_t file_index = get_file_index(reference.uri, reference.mime_type);
+            const std::size_t file_index = get_file_index(reference.path, reference.mime_type);
             std::string extension_members = fmt::format("\"ERHE_asset_reference\":{{\"file\":{}", file_index);
             if (!reference.uid.empty()) {
                 extension_members += fmt::format(",\"uid\":\"{}\"", reference.uid);
@@ -12505,8 +12573,9 @@ private:
     // Emits a deduplicated glTF 2.1 "files" entry and returns its index.
     // Shared by externalAsset instancing and ERHE_asset_reference proxies:
     // one uri = one files entry, whichever mechanism (or both) uses it.
-    auto get_file_index(const std::string& uri, const std::string& mime_type) -> std::size_t
+    auto get_file_index(const std::filesystem::path& path, const std::string& mime_type) -> std::size_t
     {
+        const std::string uri = make_gltf_file_uri(path);
         const auto existing = m_uri_to_file_index.find(uri);
         if (existing != m_uri_to_file_index.end()) {
             return existing->second;
@@ -12514,7 +12583,7 @@ private:
         fastgltf::File file{};
         file.data = fastgltf::sources::URI{
             .fileByteOffset = 0,
-            .uri            = fastgltf::URI{uri},
+            .uri            = make_fastgltf_uri(uri),
             .mimeType       = fastgltf::MimeType::None
         };
         file.mimeType = mime_type;
@@ -12528,12 +12597,13 @@ private:
     // an external-asset reference and returns the externalAssets index.
     auto get_external_asset_index(const Gltf_export_external_asset& external_asset) -> std::size_t
     {
-        const auto existing = m_uri_to_external_asset_index.find(external_asset.uri);
+        const std::string uri      = make_gltf_file_uri(external_asset.path);
+        const auto        existing = m_uri_to_external_asset_index.find(uri);
         if (existing != m_uri_to_external_asset_index.end()) {
             return existing->second;
         }
 
-        const std::size_t file_index = get_file_index(external_asset.uri, external_asset.mime_type);
+        const std::size_t file_index = get_file_index(external_asset.path, external_asset.mime_type);
 
         fastgltf::ExternalAsset gltf_external_asset{};
         gltf_external_asset.fileIndex = file_index;
@@ -12541,7 +12611,7 @@ private:
         const std::size_t external_asset_index = m_gltf_asset.externalAssets.size();
         m_gltf_asset.externalAssets.emplace_back(std::move(gltf_external_asset));
 
-        m_uri_to_external_asset_index.emplace(external_asset.uri, external_asset_index);
+        m_uri_to_external_asset_index.emplace(uri, external_asset_index);
         return external_asset_index;
     }
 
@@ -13410,9 +13480,8 @@ private:
                 return false;
             }
             const std::string file_name = m_buffer_file_stem + ".bin";
-            const std::string uri       = percent_encode_uri_path(file_name);
-            // fastgltf::URI decodes its argument once: encoded twice, it holds and writes the encoded form.
-            buffer.data = fastgltf::sources::URI{.fileByteOffset = 0, .uri = fastgltf::URI{std::string_view{percent_encode_uri_path(uri)}}, .mimeType = fastgltf::MimeType::None};
+            const std::string uri       = percent_encode_uri_segment(file_name);
+            buffer.data = fastgltf::sources::URI{.fileByteOffset = 0, .uri = make_fastgltf_uri(uri), .mimeType = fastgltf::MimeType::None};
             out_files.push_back(Gltf_export_file{.uri = uri, .file_name = file_name, .bytes = std::move(bytes)});
         }
         return true;

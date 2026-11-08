@@ -287,9 +287,7 @@ void add_material_asset_references(
             }
             std::error_code error_code;
             const std::filesystem::path relative_path = std::filesystem::relative(container_path, export_directory, error_code);
-            const std::string uri = (error_code || relative_path.empty())
-                ? container_path.generic_string()
-                : relative_path.generic_string();
+            const std::filesystem::path& file_path = (error_code || relative_path.empty()) ? container_path : relative_path;
             const bool is_binary = container_path.extension() == std::filesystem::path{".glb"};
             // Self-heal upward: the container's object gives its live uid,
             // so name-resolved references migrate to uid addressing on save;
@@ -307,7 +305,7 @@ void add_material_asset_references(
             arguments.material_asset_references.emplace(
                 material.get(),
                 erhe::gltf::Gltf_export_asset_reference{
-                    .uri       = uri,
+                    .path      = file_path,
                     .mime_type = is_binary ? "model/gltf-binary" : "model/gltf+json",
                     .uid       = uid,
                 }

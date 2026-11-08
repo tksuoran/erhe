@@ -11,6 +11,8 @@ erhe_target_sources_grouped(
     erhe_gltf/gltf_log.hpp
     erhe_gltf/gltf_uid.cpp
     erhe_gltf/gltf_uid.hpp
+    erhe_gltf/gltf_uri.cpp
+    erhe_gltf/gltf_uri.hpp
     erhe_gltf/image_reduction_cache.cpp
     erhe_gltf/image_reduction_cache.hpp
     erhe_gltf/image_transfer.cpp

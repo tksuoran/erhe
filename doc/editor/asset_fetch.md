@@ -27,11 +27,13 @@ archives, and optionally a host file. Each `Asset_fetch_archive` has:
   entries below it are considered, with the prefix stripped);
 - a `gltf_path` the archive must contain;
 - a selection: `all_entries`, or `gltf_dependencies` - the glTF, every
-  relative buffer and image URI it names (percent-decoded, resolved against
-  the glTF's directory), and `extra_paths`. A dependency the archive lacks
-  fails the fetch. The Sponza base archive unpacks to 6.7 GB in 156 entries;
-  its glTF needs 74 of them (2.2 GB) - the 3ds Max / FBX / USD variants,
-  unreferenced texture maps and the HDR environment map are not extracted;
+  relative buffer and image URI it names (read with
+  `erhe::gltf::gltf_uri_to_file_path()`, doc/erhe/gltf.md "File uris", and
+  resolved against the glTF's directory), and `extra_paths`. A dependency
+  the archive lacks fails the fetch. The Sponza base archive unpacks to
+  6.7 GB in 156 entries; its glTF needs 74 of them (2.2 GB) - the 3ds Max /
+  FBX / USD variants, unreferenced texture maps and the HDR environment map
+  are not extracted;
 - a `destination` directory relative to the root.
 
 ## Host file

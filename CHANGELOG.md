@@ -100,6 +100,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   percent-decoded after its components are split (`%23` in a file name is no
   fragment).
 
+- `erhe::gltf`: `parse_gltf()` resolves an image `uri` (`Gltf_image_source::file_path`)
+  and a glTF 2.1 `files` entry (`Gltf_file_reference::resolved_path`) the way
+  it resolves a buffer `uri`: split first, the path percent-decoded after, so
+  an image or file named with `#` or `?` is found.
+
+- `erhe::gltf`: `Gltf_export_external_asset::uri` and
+  `Gltf_export_asset_reference::uri` (written as-is) are replaced by `path`
+  (`std::filesystem::path`, relative to the exported file or absolute), which
+  the export writes percent-encoded with `make_gltf_file_uri()`.
+
 - `erhe::primitive`: `build_buffer_mesh_from_triangle_soup()` and the build
   from stored GPU vertex streams (`Primitive::make_stored_meshes()`) fill
   `Buffer_mesh::joint_bounding_boxes` from the joint attributes, with the
@@ -203,6 +213,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   unchanged.
 
 ### Added
+
+- `erhe::gltf`: `gltf_uri.hpp` with `gltf_uri_to_file_path()` (split a uri,
+  then percent-decode its path), `make_gltf_file_uri()` and
+  `percent_encode_uri_segment()`, in both glTF backends.
 
 - `erhe::gltf`: `Gltf_export_document`, `Gltf_export_file`,
   `export_gltf_document()`, `write_gltf_document()` and

@@ -22,7 +22,7 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
 ## Public API
 - `parse_gltf(arguments)` -- Load a glTF file and return populated `Gltf_data`.
 - `scan_gltf(path)` -- Quick scan returning asset names without full parse.
-- `export_gltf(Gltf_export_arguments)` -- Export a scene subtree to glTF/GLB string. The optional `erhe::scene::Physics_description` (built by the editor's `build_gltf_physics_data()`) adds the physics extension content and extensionsUsed entries. `external_assets` maps nodes to glTF 2.1 externalAsset references (deduplicated `files` entries; such nodes are written without children, and the asset version becomes 2.1 + minVersion 2.1). A `(root_node, binary, physics_data)` convenience overload exports plain glTF 2.0. A text export that holds buffer data fails here (logged, empty string): it needs `export_gltf_document()`.
+- `export_gltf(Gltf_export_arguments)` -- Export a scene subtree to glTF/GLB string. The optional `erhe::scene::Physics_description` (built by the editor's `build_gltf_physics_data()`) adds the physics extension content and extensionsUsed entries. `external_assets` maps nodes to glTF 2.1 externalAsset references (deduplicated `files` entries, uris from "File uris"; such nodes are written without children, and the asset version becomes 2.1 + minVersion 2.1). A `(root_node, binary, physics_data)` convenience overload exports plain glTF 2.0. A text export that holds buffer data fails here (logged, empty string): it needs `export_gltf_document()`.
 - `export_gltf_document(arguments, path)` / `write_gltf_document(path, document)` / `get_gltf_buffer_file_path(path)` -- The export as a `Gltf_export_document` (the .glb or .gltf bytes plus, for a text .gltf, its buffer files) and its write next to `path` (see "Text glTF files").
 - `Image_transfer(device)` / `Image_transfer(device, mode, staging_capacity_byte_count)` -- Create image upload manager.
 - `Image_transfer::upload(image_info, pixels, texture, gen_mipmap)` -- Stage pixel data (full tightly packed mip chain) and record the per-level copies. `blocking_drain` mode only.
@@ -746,6 +746,41 @@ by `load_stored_vertex_streams()` into `Stored_vertex_streams::lod_indices`.
 primitive carries the chain, the parse reads it back bit for bit, a re-export
 writes the stored chain back, a tampered level table is rejected alone).
 
+## File uris
+
+`gltf_uri.hpp` holds the uri helpers every glTF reader and writer in erhe
+uses (the parse, the export, the editor's asset fetch), in both the fastgltf
+and the none backend:
+
+- `gltf_uri_to_file_path(uri)` -- the file path a uri names, relative as the
+  uri is. The uri splits into scheme, authority, path, query and fragment
+  first and only the path is percent-decoded after, so `%23` or `%3F` in a
+  file name is part of the name, not a fragment or a query. A `file:` uri
+  with an empty host or `localhost` names its path (`file:///C:/a.glb` names
+  `C:/a.glb`); with another host it names the UNC path `//host/path` on
+  Windows and no file elsewhere. A data uri or another scheme names no file.
+  A one-letter scheme is a drive letter.
+- `make_gltf_file_uri(path)` -- the uri of a file path: each `/`-separated
+  segment of the UTF-8 generic form with every byte but RFC 3986's
+  unreserved ones percent-encoded (`percent_encode_uri_segment()`). An
+  absolute path is a `file:` uri that reads back as the same path: `/x` is
+  `file:///x`, `C:/x` is `file:///C:/x` (the drive's `:` kept) and
+  `//srv/share/x` is `file://srv/share/x`.
+
+The parse resolves buffer, image and glTF 2.1 `files` uris from the strings
+as the JSON holds them, read with the buffer origins from the same JSON read:
+`fastgltf::URI` decodes before it splits, so its `fspath()` is never used
+for a file. fastgltf opens no external file itself (the parse passes no
+`Options::LoadExternalBuffers` or `Options::LoadExternalImages`). The export
+writes the `path` of a `Gltf_export_external_asset` or
+`Gltf_export_asset_reference` (relative to the exported file, or absolute)
+and the text export's buffer file name through `make_gltf_file_uri()`;
+`fastgltf::URI` decodes its argument once and writes what it holds, so the
+exporter hands it the uri encoded a second time. Tests:
+`Gltf_parse.uri_to_file_path`,
+`Gltf_parse.image_and_file_uris_decode_after_the_split`,
+`Gltf_roundtrip.referenced_file_names_survive_the_uri`.
+
 ## Text glTF files
 
 A text export (`Gltf_export_arguments::binary` false) is a .gltf and one
@@ -761,9 +796,7 @@ An in-memory buffer past buffer 0, or a JSON that would name any other file
 with no bytes behind it, refuses the export (logged, empty).
 `write_gltf_document(path, document)` writes the .bin and then the .gltf
 through `erhe::file::write_files_via_temp()`, all or none (doc/erhe/file.md
-"Writing several files"). The parse resolves a buffer `uri` by splitting it
-into its components first and percent-decoding the path after, so `%23` in a
-file name is not read as a fragment.
+"Writing several files"). The parse reads the `uri` back as "File uris" says.
 `get_gltf_buffer_file_path(path)` is the `<stem>.bin` a text save to `path`
 writes (empty for a .glb). Tests: `Gltf_roundtrip.text_gltf_writes_its_buffer_file`
 (the string API refuses, a stem with a space, `%`, `#` and `?` gets its

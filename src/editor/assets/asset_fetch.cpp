@@ -7,6 +7,7 @@
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
+#include "erhe_gltf/gltf_uri.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include <fmt/format.h>
@@ -38,28 +39,6 @@ constexpr const char* c_sponza_base_entry_prefix = "main_sponza";
 constexpr const char* c_sponza_base_gltf         = "NewSponza_Main_glTF_003.gltf";
 constexpr const char* c_sponza_base_license      = "credits_license.txt";
 
-auto percent_encode(const std::string& text) -> std::string
-{
-    static constexpr const char* hex = "0123456789ABCDEF";
-    std::string result;
-    for (const char c : text) {
-        const unsigned char u = static_cast<unsigned char>(c);
-        const bool unreserved =
-            ((u >= 'a') && (u <= 'z')) ||
-            ((u >= 'A') && (u <= 'Z')) ||
-            ((u >= '0') && (u <= '9')) ||
-            (u == '-') || (u == '_') || (u == '.') || (u == '~');
-        if (unreserved) {
-            result.push_back(c);
-        } else {
-            result.push_back('%');
-            result.push_back(hex[(u >> 4) & 0xfu]);
-            result.push_back(hex[u & 0xfu]);
-        }
-    }
-    return result;
-}
-
 #if defined(__ANDROID__)
 // httplib's CA search covers desktop Linux paths; Android keeps its own.
 auto get_android_ca_directory() -> std::string
@@ -87,24 +66,6 @@ auto to_safe_relative_path(const char* entry_name) -> std::filesystem::path
     return path;
 }
 
-auto percent_decode(const std::string& text) -> std::string
-{
-    std::string result;
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        if ((text[i] == '%') && ((i + 2) < text.size())) {
-            const std::string hex{text.substr(i + 1, 2)};
-            char* end = nullptr;
-            const long value = std::strtol(hex.c_str(), &end, 16);
-            if (end == (hex.c_str() + 2)) {
-                result.push_back(static_cast<char>(value));
-                i += 2;
-                continue;
-            }
-        }
-        result.push_back(text[i]);
-    }
-    return result;
-}
 
 // The part of path below prefix, or nothing when path is not under prefix.
 auto strip_prefix(const std::filesystem::path& path, const std::filesystem::path& prefix) -> std::optional<std::filesystem::path>
@@ -145,27 +106,11 @@ auto get_gltf_dependencies(const std::string& gltf_text, std::string& error) -> 
             if ((uri == item.end()) || !uri->is_string()) {
                 continue;
             }
-            const std::string uri_text = uri->get<std::string>();
-            if (uri_text.starts_with("data:")) {
-                continue;
+            const std::optional<std::filesystem::path> path = erhe::gltf::gltf_uri_to_file_path(uri->get<std::string>());
+            if (path.has_value()) {
+                result.push_back(path.value());
             }
-            const std::string decoded = percent_decode(uri_text);
-            result.push_back(std::filesystem::path{std::u8string{reinterpret_cast<const char8_t*>(decoded.c_str())}});
         }
-    }
-    return result;
-}
-
-// Percent-encodes each segment of a relative path for a glTF URI.
-auto to_uri(const std::filesystem::path& path) -> std::string
-{
-    std::string result;
-    for (const std::filesystem::path& part : path) {
-        if (!result.empty()) {
-            result.push_back('/');
-        }
-        const std::u8string u8_part = part.u8string();
-        result += percent_encode(std::string{u8_part.begin(), u8_part.end()});
     }
     return result;
 }
@@ -179,7 +124,7 @@ auto make_host_gltf(const Asset_fetch_source& source) -> std::string
     nlohmann::json scene_nodes      = nlohmann::json::array();
     for (std::size_t i = 0, end = source.host_instances.size(); i < end; ++i) {
         const Asset_fetch_host_instance& instance = source.host_instances[i];
-        files.push_back({{"uri", to_uri(instance.path.lexically_relative(host_directory))}, {"mimeType", "model/gltf+json"}});
+        files.push_back({{"uri", erhe::gltf::make_gltf_file_uri(instance.path.lexically_relative(host_directory))}, {"mimeType", "model/gltf+json"}});
         external_assets.push_back({{"file", i}, {"name", instance.name}});
         nodes.push_back({{"name", instance.name}, {"externalAsset", i}});
         scene_nodes.push_back(i);
@@ -517,7 +462,7 @@ auto Asset_fetch::download_archive(const Asset_fetch_archive& archive, const std
 auto Asset_fetch::download_google_drive_file(const std::string& file_id, const std::filesystem::path& target_path) -> std::string
 {
     std::string html_page;
-    const std::string url = fmt::format("https://drive.google.com/uc?export=download&id={}", percent_encode(file_id));
+    const std::string url = fmt::format("https://drive.google.com/uc?export=download&id={}", erhe::gltf::percent_encode_uri_segment(file_id));
     std::string error = download_url(url, target_path, html_page);
     if (!error.empty() || html_page.empty()) {
         return error;
@@ -535,7 +480,7 @@ auto Asset_fetch::download_google_drive_file(const std::string& file_id, const s
         const std::string name  = (*i)[1].str();
         const std::string value = (*i)[2].str();
         has_confirm = has_confirm || (name == "confirm");
-        confirm_url += fmt::format("{}{}={}", separator, percent_encode(name), percent_encode(value));
+        confirm_url += fmt::format("{}{}={}", separator, erhe::gltf::percent_encode_uri_segment(name), erhe::gltf::percent_encode_uri_segment(value));
         separator = '&';
     }
     if (!has_confirm) {

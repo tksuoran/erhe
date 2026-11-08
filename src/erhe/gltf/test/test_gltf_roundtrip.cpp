@@ -4,6 +4,8 @@
 
 #include "gltf_test_util.hpp"
 
+#include "erhe_gltf/gltf_uri.hpp"
+
 #include "erhe_item/item.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -678,15 +680,22 @@ TEST(Gltf_roundtrip, text_gltf_writes_its_buffer_file)
     EXPECT_TRUE(erhe::gltf::export_gltf(arguments).empty());
 
     // A stem with the characters a URI reserves: the uri percent-encodes them.
-    const std::filesystem::path path = erhe_gltf_test::process_temporary_directory() / "text save %1#2?.gltf";
+#if defined(_WIN32) // '?' is no file name character on Windows
+    const std::string stem     = "text save %1#2";
+    const std::string uri_stem = "text%20save%20%251%232";
+#else
+    const std::string stem     = "text save %1#2?";
+    const std::string uri_stem = "text%20save%20%251%232%3F";
+#endif
+    const std::filesystem::path path = erhe_gltf_test::process_temporary_directory() / (stem + ".gltf");
     const erhe::gltf::Gltf_export_document document = erhe::gltf::export_gltf_document(arguments, path);
     ASSERT_FALSE(document.empty());
     ASSERT_EQ(document.external_files.size(), 1u);
-    EXPECT_EQ(document.external_files.front().uri, "text%20save%20%251%232%3F.bin");
-    EXPECT_EQ(document.external_files.front().file_name, "text save %1#2?.bin");
-    EXPECT_NE(document.bytes.find("\"uri\":\"text%20save%20%251%232%3F.bin\""), std::string::npos);
+    EXPECT_EQ(document.external_files.front().uri, uri_stem + ".bin");
+    EXPECT_EQ(document.external_files.front().file_name, stem + ".bin");
+    EXPECT_NE(document.bytes.find("\"uri\":\"" + uri_stem + ".bin\""), std::string::npos);
     ASSERT_TRUE(erhe::gltf::write_gltf_document(path, document));
-    const std::filesystem::path buffer_path = path.parent_path() / "text save %1#2?.bin";
+    const std::filesystem::path buffer_path = path.parent_path() / (stem + ".bin");
     EXPECT_EQ(erhe::gltf::get_gltf_buffer_file_path(path), buffer_path);
     EXPECT_EQ(std::filesystem::file_size(buffer_path), document.external_files.front().bytes.size());
 
@@ -699,6 +708,68 @@ TEST(Gltf_roundtrip, text_gltf_writes_its_buffer_file)
         EXPECT_EQ(loaded_soups[i].vertex_data, source_soups[i].vertex_data);
         EXPECT_EQ(loaded_soups[i].index_data,  source_soups[i].index_data);
     }
+}
+
+// The files an export references (an external asset, an asset reference)
+// are written percent-encoded and resolve on reload, for names with the
+// characters a URI reserves (doc/erhe/gltf.md "File uris").
+TEST(Gltf_roundtrip, referenced_file_names_survive_the_uri)
+{
+#if defined(_WIN32) // '?' is no file name character on Windows
+    const std::string reserved = " %1#2";
+#else
+    const std::string reserved = " %1#2?";
+#endif
+    const std::filesystem::path directory    = erhe_gltf_test::process_temporary_directory();
+    const std::filesystem::path external_rel = std::filesystem::path{"refs"} / ("ext" + reserved + ".gltf");
+    const std::filesystem::path library_rel  = std::filesystem::path{"refs"} / ("lib" + reserved + ".gltf");
+    std::filesystem::create_directories(directory / "refs");
+    std::filesystem::copy_file(data_path("variants.gltf"), directory / external_rel, std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::copy_file(data_path("variants.gltf"), directory / library_rel,  std::filesystem::copy_options::overwrite_existing);
+
+    erhe::scene::Scene          source_scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = parse_file(data_path("variants.gltf"), source_scene);
+    const std::shared_ptr<erhe::scene::Node> panel = find_by_name(source.nodes, "Panel");
+    ASSERT_TRUE(panel);
+    const std::shared_ptr<erhe::primitive::Material> material = erhe::scene::get_mesh(panel.get())->get_primitives().at(0).material;
+    ASSERT_TRUE(material);
+
+    // The host instances the external asset; the uri keeps '/' and encodes the rest.
+    erhe::gltf::Gltf_export_arguments external_arguments{.root_node = *source_scene.get_root_node(), .binary = true};
+    external_arguments.external_assets.emplace(panel.get(), erhe::gltf::Gltf_export_external_asset{.path = external_rel, .mime_type = "model/gltf+json", .name = "ext"});
+    const std::string external_glb = erhe::gltf::export_gltf(external_arguments);
+    ASSERT_FALSE(external_glb.empty());
+    EXPECT_NE(external_glb.find("\"uri\":\"refs/" + erhe::gltf::percent_encode_uri_segment("ext" + reserved) + ".gltf\""), std::string::npos);
+
+    // The second host references the panel's material in the library file.
+    erhe::gltf::Gltf_export_arguments reference_arguments{.root_node = *source_scene.get_root_node(), .binary = true};
+    reference_arguments.material_asset_references.emplace(material.get(), erhe::gltf::Gltf_export_asset_reference{.path = library_rel, .mime_type = "model/gltf+json", .uid = {}});
+    const std::string reference_glb = erhe::gltf::export_gltf(reference_arguments);
+    ASSERT_FALSE(reference_glb.empty());
+
+    const auto reload_files = [&](const std::string& name, const std::string& glb, erhe::scene::Scene& scene) -> erhe::gltf::Gltf_data {
+        erhe::gltf::Gltf_data loaded = parse_file(write_temporary_file(name + reserved + ".glb", glb), scene);
+        EXPECT_TRUE(loaded.errors.empty());
+        return loaded;
+    };
+    erhe::scene::Scene          external_scene{"external", nullptr};
+    const erhe::gltf::Gltf_data external_host = reload_files("external host", external_glb, external_scene);
+    ASSERT_EQ(external_host.files.size(), 1u);
+    ASSERT_EQ(external_host.external_assets.size(), 1u);
+    const erhe::gltf::Gltf_file_reference& external_file = external_host.files.at(external_host.external_assets[0].file_index);
+    ASSERT_TRUE(std::filesystem::exists(external_file.resolved_path));
+    EXPECT_TRUE(std::filesystem::equivalent(external_file.resolved_path, directory / external_rel));
+
+    erhe::scene::Scene          reference_scene{"reference", nullptr};
+    const erhe::gltf::Gltf_data reference_host = reload_files("reference host", reference_glb, reference_scene);
+    ASSERT_EQ(reference_host.files.size(), 1u);
+    ASSERT_TRUE(std::filesystem::exists(reference_host.files[0].resolved_path));
+    EXPECT_TRUE(std::filesystem::equivalent(reference_host.files[0].resolved_path, directory / library_rel));
+
+    erhe::scene::Scene          referenced_scene{"referenced", nullptr};
+    const erhe::gltf::Gltf_data referenced = parse_file(external_file.resolved_path, referenced_scene);
+    EXPECT_TRUE(referenced.errors.empty());
+    EXPECT_TRUE(find_by_name(referenced.nodes, "Panel"));
 }
 
 // A text .gltf saved onto itself replaces its buffer file too: the soups the
