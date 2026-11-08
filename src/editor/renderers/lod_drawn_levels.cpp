@@ -1,5 +1,7 @@
 #include "renderers/lod_drawn_levels.hpp"
 
+#include "app_scenes.hpp"
+
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "scene/scene_root.hpp"
@@ -44,7 +46,7 @@ void Lod_drawn_levels::request(
     }
 }
 
-void Lod_drawn_levels::prepare(const uint64_t frame_index)
+void Lod_drawn_levels::prepare(const uint64_t frame_index, App_scenes& app_scenes)
 {
     ERHE_PROFILE_FUNCTION();
     erhe::utility::Thread_roles::assert_main_thread_in_phase(erhe::utility::Frame_phase::m2_prepare);
@@ -59,7 +61,8 @@ void Lod_drawn_levels::prepare(const uint64_t frame_index)
         request.pending            = false;
         request.served_frame_index = frame_index;
         const std::shared_ptr<Scene_root> scene_root = request.scene_root.lock();
-        if (!scene_root) {
+        // A scene closed after the request published no lists this frame.
+        if (!scene_root || !app_scenes.is_host_registered(scene_root.get())) {
             continue;
         }
         const erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root->get_draw_list_scene();

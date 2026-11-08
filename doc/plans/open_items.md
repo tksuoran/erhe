@@ -116,9 +116,11 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
-- Closing a scene while a mesh is selected fires the VERIFY in
-  `draw_list_scene.cpp` `get_published_slot` (via
-  `Lod_drawn_levels::prepare`); reproduces with a plain `.glb`.
+- `reset_editor_state` (Mac headless Metal Debug, the
+  `Mcp_test.reset_editor_state_clears_scenes_selection_and_history` case)
+  segfaults in the next frame join: `Performance_window::sample_gpu_timers()`
+  -> `Gpu_timer_plot::refresh_label()` reads a `Gpu_timer` whose impl is null
+  (`metal_gpu_timer.cpp` `Gpu_timer_impl::label`).
 - Undo of `delete_nodes` on a mesh under a holder node restores a different
   world transform.
 - `Lattice_tool::update_active_lattice` walks every node of the active scene

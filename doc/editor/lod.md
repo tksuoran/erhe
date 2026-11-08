@@ -96,7 +96,10 @@ window, MCP `get_lod_info`) names meshes of one scene (`request()`,
 one-shot); the next prepare phase resolves them, after the draw lists were
 published, to their primitives' color entries in the frame's published
 lists (`Draw_list_scene::find_published_color_entry()`) into the frame's
-query slot; in the render phase each viewport (in its rendergraph node's
+query slot. It serves only requests whose scene is registered in
+`App_scenes` at that point - exactly the scenes that published lists for the
+frame - so a request made before the scene closed in the same frame is
+dropped; in the render phase each viewport (in its rendergraph node's
 execute, after the frame's culling classification) and the headset record
 the level each entry draws in their color culling view
 (`Draw_list_scene::get_published_entry_lod_level()`) into a

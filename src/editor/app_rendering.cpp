@@ -921,7 +921,8 @@ void App_rendering::prepare_composition(const uint64_t frame_index, const std::s
 
     // The requested meshes' color entries in the lists published for this
     // frame, whose drawn levels the views record in the render phase.
-    m_lod_drawn_levels.prepare(frame_index);
+    ERHE_VERIFY(m_context.app_scenes != nullptr);
+    m_lod_drawn_levels.prepare(frame_index, *m_context.app_scenes);
 
     if (m_context.scene_views != nullptr) {
         for (const std::shared_ptr<Viewport_scene_view>& viewport_scene_view : m_context.scene_views->get_viewport_scene_views()) {

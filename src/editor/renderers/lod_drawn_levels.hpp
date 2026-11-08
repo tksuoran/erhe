@@ -22,6 +22,7 @@ namespace erhe::scene_renderer {
 
 namespace editor {
 
+class App_scenes;
 class Scene_root;
 class Scene_view;
 
@@ -90,7 +91,7 @@ public:
         const std::shared_ptr<Scene_root>&                scene_root,
         std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes
     );
-    void prepare(uint64_t frame_index);
+    void prepare(uint64_t frame_index, App_scenes& app_scenes);
     void record_view(
         uint64_t                                     frame_index,
         const Scene_view&                            scene_view,

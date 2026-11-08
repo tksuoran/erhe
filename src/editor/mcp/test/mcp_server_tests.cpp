@@ -680,6 +680,47 @@ TEST_F(Mcp_test, reset_editor_state_clears_scenes_selection_and_history)
     EXPECT_FALSE(history_after.payload.value("can_redo", true));
 }
 
+// The LOD window requests the drawn levels of the selected meshes in every
+// draw; the request of the frame a scene closes in must not be served
+// against the closed scene, which published no draw lists that frame.
+TEST_F(Mcp_test, close_scene_with_selected_mesh_and_lod_window_open)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    Mcp_client::Tool_result shown = client.call_tool("set_window_visibility", json{
+        {"title",   "LOD"},
+        {"visible", true},
+        {"focus",   true}
+    });
+    ASSERT_FALSE(shown.is_error) << shown.text;
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        "lod close test box"},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    advance_frames(client, 2);
+    Mcp_client::Tool_result select = client.call_tool("select_items", json{
+        {"scene_name", env.scene_name()},
+        {"paths",      json::array({"lod close test box"})}
+    });
+    ASSERT_FALSE(select.is_error) << select.text;
+    advance_frames(client, 3);
+
+    Mcp_client::Tool_result close = client.call_tool("close_scene", json{{"scene_name", env.scene_name()}});
+    ASSERT_FALSE(close.is_error) << close.text;
+    advance_frames(client, 6);
+
+    // The editor survived the close and the scene is gone.
+    const std::vector<std::string> names = scene_names(client);
+    EXPECT_EQ(std::find(names.begin(), names.end(), env.scene_name()), names.end());
+    Mcp_client::Tool_result selection = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(selection.is_error) << selection.text;
+    EXPECT_TRUE(selection.payload["items"].empty()) << selection.text;
+}
+
 // The active item (doc/editor/active_item.md): the last item a select_items
 // call lists becomes it, it survives the selection being cleared (reported
 // with selected: false), set_active_item names an unselected item, and
