@@ -189,6 +189,7 @@ public:
     bool                               decoded  {false}; // decode finished: info, pixels and ok are valid
     bool                               resident {false}; // texture created and upload recorded
     bool                               ok       {false}; // decode succeeded (valid once decoded)
+    bool                               header_malformed{false}; // the texture plan's header probe rejected it (logged there); the decode skips the open
     erhe::graphics::Image_info         info{};
     erhe::graphics::Image_reduction    reduction{};      // from the texture plan, applied by the decode
     std::vector<std::uint8_t>          pixels;           // held from decode until resident

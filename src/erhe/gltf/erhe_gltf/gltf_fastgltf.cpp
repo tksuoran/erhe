@@ -6765,6 +6765,12 @@ void apply_image_reduction(const erhe::graphics::Image_reduction& reduction, erh
 // pixels are allocated only once the decoded plus the encoded size fits the
 // budget - otherwise the slot goes back to waiting with that size known, and
 // schedule_decodes() restarts it when there is room.
+enum class Gltf_image_header : unsigned int
+{
+    unchecked = 0,
+    malformed
+};
+
 void run_image_decode(
     const std::shared_ptr<Gltf_image_decode_queue>& queue,
     const std::size_t                               image_index,
@@ -6775,7 +6781,8 @@ void run_image_decode(
     const erhe::graphics::Image_reduction           reduction,
     const std::filesystem::path&                    cache_directory,
     const std::string&                              name,
-    const Gltf_content_hash_load                    content_hashes
+    const Gltf_content_hash_load                    content_hashes,
+    const Gltf_image_header                         header
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -6795,7 +6802,7 @@ void run_image_decode(
         reinterpret_cast<const std::uint8_t*>(encoded_bytes.data()),
         encoded_bytes.size()
     };
-    bool ok = read_ok && loader.open(encoded, info, linear, transcode_format_preference, erhe::graphics::Alpha_mode::premultiplied, astc_support);
+    bool ok = read_ok && (header != Gltf_image_header::malformed) && loader.open(encoded, info, linear, transcode_format_preference, erhe::graphics::Alpha_mode::premultiplied, astc_support);
     // The lease covers the decoded pixels plus the encoded stream (dropped
     // after the decode; the lease goes at the upload).
     const std::size_t pixel_byte_count = ok ? get_decoded_pixel_byte_count(info) : 0;
@@ -7100,38 +7107,28 @@ void Gltf_image_residency::plan_textures()
     std::vector<std::optional<erhe::graphics::Image_info>> infos(decoded_images.size());
     std::vector<std::byte> bytes;
     for (std::size_t i = 0, end = decoded_images.size(); i < end; ++i) {
-        const Gltf_decoded_image& decoded = decoded_images[i];
+        Gltf_decoded_image& decoded = decoded_images[i];
         if (!decoded.requested || !decoded.source) {
             continue;
         }
-        for (const std::size_t prefix : {header_prefix_byte_count, decoded.source->get_byte_count()}) {
-            if (!decoded.source->read_prefix(prefix, bytes)) {
-                break;
-            }
+        erhe::graphics::Image_loader loader;
+        erhe::graphics::Image_info   info{};
+        erhe::graphics::Image_prefix_result result = erhe::graphics::Image_prefix_result::needs_more;
+        if (decoded.source->read_prefix(header_prefix_byte_count, bytes)) {
             const std::span<const std::uint8_t> span{reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()};
-            // A KTX2 opens only with all of its level data; a prefix short of it reads the whole stream.
-            if (erhe::graphics::Image_loader_ktx2::is_ktx2(span) && (prefix < decoded.source->get_byte_count())) {
-                erhe::graphics::Ktx2_container container;
-                const erhe::graphics::Ktx2_prefix_result result = erhe::graphics::parse_ktx2_prefix(span, container);
-                if (result == erhe::graphics::Ktx2_prefix_result::malformed) {
-                    break;
-                }
-                if (result != erhe::graphics::Ktx2_prefix_result::complete) {
-                    continue;
-                }
-            }
-            erhe::graphics::Image_loader loader;
-            erhe::graphics::Image_info   info{};
-            const bool open_ok = loader.open(span, info, decoded.linear, transcode_format_preference, erhe::graphics::Alpha_mode::premultiplied, astc_support);
-            loader.close();
-            if (open_ok) {
-                infos[i] = info;
-                break;
-            }
-            if (prefix >= decoded.source->get_byte_count()) {
-                break;
-            }
+            result = loader.probe_prefix(span, info, decoded.linear, transcode_format_preference, astc_support);
         }
+        if ((result == erhe::graphics::Image_prefix_result::needs_more) && decoded.source->read_prefix(decoded.source->get_byte_count(), bytes)) {
+            const std::span<const std::uint8_t> span{reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()};
+            result = loader.open(span, info, decoded.linear, transcode_format_preference, erhe::graphics::Alpha_mode::premultiplied, astc_support)
+                ? erhe::graphics::Image_prefix_result::complete
+                : erhe::graphics::Image_prefix_result::malformed;
+            loader.close();
+        }
+        if (result == erhe::graphics::Image_prefix_result::complete) {
+            infos[i] = info;
+        }
+        decoded.header_malformed = (result == erhe::graphics::Image_prefix_result::malformed);
     }
     bytes = std::vector<std::byte>{};
 
@@ -7256,8 +7253,8 @@ void Gltf_image_residency::schedule_decodes(const std::size_t max_decoded_bytes_
         ++queue->m_running_count;
         erhe::task::spawn(
             *decode_executor,
-            [queue, i, source = decoded.source, linear = decoded.linear, preference = transcode_format_preference, astc = astc_support, reduction = decoded.reduction, cache = reduction_cache_directory, name = decoded.name, hashes = content_hashes]() {
-                run_image_decode(queue, i, source, linear, preference, astc, reduction, cache, name, hashes);
+            [queue, i, source = decoded.source, linear = decoded.linear, preference = transcode_format_preference, astc = astc_support, reduction = decoded.reduction, cache = reduction_cache_directory, name = decoded.name, hashes = content_hashes, header = decoded.header_malformed ? Gltf_image_header::malformed : Gltf_image_header::unchecked]() {
+                run_image_decode(queue, i, source, linear, preference, astc, reduction, cache, name, hashes, header);
             }
         );
     }
@@ -7308,7 +7305,7 @@ void Gltf_image_residency::decode_inline(const std::size_t image_index)
     const Gltf_decoded_image& decoded = decoded_images[image_index];
     // Inline decodes run one at a time with nothing else in flight, so the
     // reservation always fits and the task never gives its turn back.
-    run_image_decode(queue, image_index, decoded.source, decoded.linear, transcode_format_preference, astc_support, decoded.reduction, reduction_cache_directory, decoded.name, content_hashes);
+    run_image_decode(queue, image_index, decoded.source, decoded.linear, transcode_format_preference, astc_support, decoded.reduction, reduction_cache_directory, decoded.name, content_hashes, decoded.header_malformed ? Gltf_image_header::malformed : Gltf_image_header::unchecked);
     collect_decoded();
 }
 

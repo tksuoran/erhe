@@ -74,6 +74,14 @@ enum class Alpha_mode : unsigned int
     straight
 };
 
+// Result of Image_loader::probe_prefix(): whether the first bytes of a file hold its header.
+enum class Image_prefix_result : unsigned int
+{
+    complete   = 0, // header read; Image_info filled
+    needs_more = 1, // the header (or, for KTX2 / DDS, the data open() checks) ends past the bytes
+    malformed  = 2  // not a supported image, or an invalid header (logged)
+};
+
 class Image_loader_impl;
 class Image_loader_ktx2;
 class Image_loader_dds;
@@ -90,6 +98,8 @@ public:
 
     [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8, Alpha_mode alpha_mode = Alpha_mode::premultiplied, Astc_support astc_support = Astc_support::decode_to_rgba8) -> bool;
     [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8, Alpha_mode alpha_mode = Alpha_mode::premultiplied, Astc_support astc_support = Astc_support::decode_to_rgba8) -> bool;
+    // open() of the first bytes of a file for its Image_info; running out of bytes is not logged. Leaves nothing open.
+    [[nodiscard]] auto probe_prefix(const std::span<const std::uint8_t>& prefix, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8, Astc_support astc_support = Astc_support::decode_to_rgba8) -> Image_prefix_result;
     [[nodiscard]] auto load(std::span<std::uint8_t> transfer_buffer) -> bool;
     void close();
 

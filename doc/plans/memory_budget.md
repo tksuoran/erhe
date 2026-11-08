@@ -119,6 +119,10 @@ build of every mesh, not the BVH, dominates what a load keeps.
    largest planned texture is halved repeatedly (ties: lowest image index)
    while it stays at least 256 texels on its short side; containers with mips
    drop top levels instead. The plan is logged ("Texture plan: ...").
+   It reads each image's size with `Image_loader::probe_prefix()` on the
+   first 64 KiB, and the whole stream only when the header ends past them;
+   an image whose header is malformed is logged once and the decode skips it
+   (`Gltf_decoded_image::header_malformed`).
    Sponza base scene: 72 images, 6144 MiB as loaded, budget 3072 MiB ->
    72 encoded to BC7, 0 downscaled, 1536 MiB.
 6. **Encoders.** Built: `erhe::graphics::reduce_rgba8_image()`

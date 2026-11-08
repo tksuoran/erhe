@@ -111,7 +111,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   chain), also with a plain glb.
 - Quest: the device's writable `mcp_tools.json` is the copy made at first
   install and goes stale.
-- A malformed PNG fires a VERIFY in the wuffs decoder path.
 - TRS values drift in float precision on re-save.
 - Three Scene Hierarchy MCP tests fail locally (suspected: the ini's Scene
   Hierarchy height 37; unverified at HEAD).

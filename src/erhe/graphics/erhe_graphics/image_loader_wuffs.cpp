@@ -1,6 +1,8 @@
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/image_loader_dds.hpp"
 #include "erhe_graphics/image_loader_ktx2.hpp"
+#include "erhe_graphics/ktx2_container.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -109,6 +111,13 @@ const char* c_str(wuffs_base__pixel_format pixel_format)
 
 namespace erhe::graphics {
 
+// Whether the bytes given to the wuffs path are the whole file or its first bytes.
+enum class Image_bytes : unsigned int
+{
+    whole_file = 0,
+    prefix
+};
+
 class Image_loader_impl
 {
 public:
@@ -121,6 +130,7 @@ public:
 
     [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, const bool linear, Alpha_mode alpha_mode) -> bool;
     [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear, Alpha_mode alpha_mode) -> bool;
+    [[nodiscard]] auto open_bytes(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, bool linear, Alpha_mode alpha_mode, Image_bytes image_bytes) -> Image_prefix_result;
 
     [[nodiscard]] auto load(std::span<std::uint8_t> transfer_buffer) -> bool;
 
@@ -181,19 +191,35 @@ auto Image_loader_impl::open(const std::filesystem::path& path, Image_info& info
 
 auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, Image_info& info, const bool linear, const Alpha_mode alpha_mode) -> bool
 {
+    return open_bytes(buffer_view, info, linear, alpha_mode, Image_bytes::whole_file) == Image_prefix_result::complete;
+}
+
+auto Image_loader_impl::open_bytes(
+    const std::span<const std::uint8_t>& buffer_view,
+    Image_info&                          info,
+    const bool                           linear,
+    const Alpha_mode                     alpha_mode,
+    const Image_bytes                    image_bytes
+) -> Image_prefix_result
+{
     ERHE_PROFILE_FUNCTION();
 
-    m_alpha_mode = alpha_mode;
+    const bool closed = (image_bytes == Image_bytes::whole_file);
+    m_alpha_mode    = alpha_mode;
+    m_image_decoder = nullptr;
 
     wuffs_base__slice_u8 file_data{
         .ptr = const_cast<uint8_t*>(buffer_view.data()),
         .len = buffer_view.size()
     };
 
-    m_io_buffer_meta = wuffs_base__make_io_buffer_meta(file_data.len, 0, 0, true);
+    m_io_buffer_meta = wuffs_base__make_io_buffer_meta(file_data.len, 0, 0, closed);
     m_io_buffer = wuffs_base__make_io_buffer(file_data, m_io_buffer_meta);
 
-    int32_t fourcc = wuffs_base__magic_number_guess_fourcc(file_data, true);
+    int32_t fourcc = wuffs_base__magic_number_guess_fourcc(file_data, closed);
+    if (fourcc < 0) {
+        return Image_prefix_result::needs_more; // only returned when not closed
+    }
 
     switch (fourcc) {
 #if defined(WUFFS_CONFIG__MODULE__JPEG)
@@ -236,24 +262,34 @@ auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, I
         }
 #endif
         default: {
-            return false;
+            log_texture->warn("Image: unrecognized image format ({} bytes)", buffer_view.size());
+            return Image_prefix_result::malformed;
         }
     }
 
-    ERHE_VERIFY(m_image_decoder != nullptr); // Paranoid. This should? never happen
+    ERHE_VERIFY(m_image_decoder != nullptr);
     wuffs_base__status config_status = wuffs_base__image_decoder__decode_image_config(
         m_image_decoder,
         &m_image_config,
         &m_io_buffer
     );
-    ERHE_VERIFY(wuffs_base__status__is_ok(&config_status));
+    if (!wuffs_base__status__is_ok(&config_status)) {
+        m_image_decoder = nullptr;
+        if (wuffs_base__status__is_suspension(&config_status)) {
+            return Image_prefix_result::needs_more; // the header continues past a prefix
+        }
+        log_texture->warn("Image: header decode failed: {}", wuffs_base__status__message(&config_status));
+        return Image_prefix_result::malformed;
+    }
 
-    // Read the dimensions.
     constexpr uint32_t max_dimension = 65535;
     uint32_t width = wuffs_base__pixel_config__width(&m_image_config.pixcfg);
     uint32_t height = wuffs_base__pixel_config__height(&m_image_config.pixcfg);
-    ERHE_VERIFY(width <= max_dimension);
-    ERHE_VERIFY(height <= max_dimension);
+    if ((width == 0) || (height == 0) || (width > max_dimension) || (height > max_dimension)) {
+        log_texture->warn("Image: unsupported dimensions {}x{} (1..{} supported)", width, height, max_dimension);
+        m_image_decoder = nullptr;
+        return Image_prefix_result::malformed;
+    }
 
     wuffs_base__pixel_format pixel_format = wuffs_base__pixel_config__pixel_format(&m_image_config.pixcfg);
     const char* format_name = c_str(pixel_format);
@@ -305,13 +341,14 @@ auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, I
 
     info = m_info;
 
-    return true;
+    return Image_prefix_result::complete;
 }
 
 auto Image_loader_impl::load(std::span<std::uint8_t> destination) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
+    ERHE_VERIFY(m_image_decoder != nullptr); // load() follows a successful open()
     uint32_t width = wuffs_base__pixel_config__width(&m_image_config.pixcfg);
     uint32_t height = wuffs_base__pixel_config__height(&m_image_config.pixcfg);
 
@@ -323,12 +360,14 @@ auto Image_loader_impl::load(std::span<std::uint8_t> destination) -> bool
     //uint64_t pixel_count = static_cast<uint64_t>(m_info.width) * static_cast<uint64_t>(m_info.height);
     uint64_t pixel_buffer_length = wuffs_base__pixel_config__pixbuf_len(&m_image_config.pixcfg);
     if (destination.size() < pixel_buffer_length) {
-        return false; // TODO
+        log_texture->warn("Image: transfer buffer too small: {} < {}", destination.size(), pixel_buffer_length);
+        return false;
     }
 
     wuffs_base__status frame_config_status = wuffs_base__image_decoder__decode_frame_config(m_image_decoder, &m_frame_config, &m_io_buffer);
     if (!wuffs_base__status__is_ok(&frame_config_status)) {
-        return false; // TODO
+        log_texture->warn("Image: frame header decode failed: {}", wuffs_base__status__message(&frame_config_status));
+        return false;
     }
 
     uint64_t workbuf_len = wuffs_base__image_decoder__workbuf_len(m_image_decoder).max_incl;
@@ -341,7 +380,8 @@ auto Image_loader_impl::load(std::span<std::uint8_t> destination) -> bool
 
     wuffs_base__status pixel_buffer_status = wuffs_base__pixel_buffer__set_from_slice(&m_pixel_buffer, &m_image_config.pixcfg, pixbuf_slice);
     if (!wuffs_base__status__is_ok(&pixel_buffer_status)) {
-        return false; // TODO
+        log_texture->warn("Image: pixel buffer setup failed: {}", wuffs_base__status__message(&pixel_buffer_status));
+        return false;
     }
 
     m_pixel_buffer_table = wuffs_base__pixel_buffer__plane(&m_pixel_buffer, 0);
@@ -357,6 +397,7 @@ auto Image_loader_impl::load(std::span<std::uint8_t> destination) -> bool
             nullptr
         );
         if (!wuffs_base__status__is_ok(&decode_frame_status)) {
+            log_texture->warn("Image: pixel decode failed: {}", wuffs_base__status__message(&decode_frame_status));
             return false;
         }
     }
@@ -366,6 +407,7 @@ auto Image_loader_impl::load(std::span<std::uint8_t> destination) -> bool
 void Image_loader_impl::close()
 {
     m_file.reset();
+    m_image_decoder = nullptr;
 }
 
 ///////////////
@@ -418,6 +460,32 @@ auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_
         return m_dds->open(buffer_view, image_info, linear);
     }
     return m_impl->open(buffer_view, image_info, linear, alpha_mode);
+}
+
+auto Image_loader::probe_prefix(const std::span<const std::uint8_t>& prefix, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference, const Astc_support astc_support) -> Image_prefix_result
+{
+    m_use_ktx2 = false;
+    m_use_dds  = false;
+    Image_prefix_result result = Image_prefix_result::needs_more;
+    if (Image_loader_ktx2::is_ktx2(prefix)) {
+        Ktx2_container container;
+        const Ktx2_prefix_result ktx2_result = parse_ktx2_prefix(prefix, container);
+        if (ktx2_result == Ktx2_prefix_result::malformed) {
+            result = Image_prefix_result::malformed;
+        } else if (ktx2_result == Ktx2_prefix_result::complete) {
+            if (!m_ktx2) {
+                m_ktx2 = std::make_unique<Image_loader_ktx2>();
+            }
+            result = m_ktx2->open(prefix, image_info, linear, transcode_format_preference, astc_support)
+                ? Image_prefix_result::complete
+                : Image_prefix_result::malformed;
+            m_ktx2->close();
+        }
+    } else if (!Image_loader_dds::is_dds(prefix)) { // a DDS opens only with all of its level data
+        result = m_impl->open_bytes(prefix, image_info, linear, Alpha_mode::premultiplied, Image_bytes::prefix);
+    }
+    m_impl->close();
+    return result;
 }
 
 auto Image_loader::load(std::span<std::uint8_t> transfer_buffer) -> bool

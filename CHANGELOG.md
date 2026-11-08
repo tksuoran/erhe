@@ -187,6 +187,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `Image_loader::probe_prefix()` and `Image_prefix_result`:
+  reads an image's `Image_info` from the first bytes of a file and reports,
+  without logging, when the header ends past them (`needs_more`);
+  `malformed` is logged once. `erhe::gltf`: `Gltf_decoded_image::header_malformed`
+  (set by the texture plan's probe; the decode skips such an image).
+  Malformed PNG / JPEG input now fails `Image_loader::open()` with a warning
+  instead of aborting (`doc/erhe/graphics.md` "Key Types").
+
 - `erhe::rendergraph`: `Rendergraph_node::post_execute_rendergraph_node()`,
   a render phase hook `Rendergraph::execute()` calls for every node active
   in the frame after the frame's last execute (`doc/erhe/rendergraph.md`

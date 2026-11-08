@@ -9,6 +9,7 @@ add_executable(${_deviceless_target}
     test_basis_encoder.cpp
     test_display_refresh_resolver.cpp
     test_image_encoder.cpp
+    test_image_loader_malformed.cpp
     test_ktx2_container.cpp
     test_present_calibration_cache.cpp
     test_present_calibration_runner.cpp
