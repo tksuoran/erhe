@@ -59,8 +59,7 @@ void make_content(erhe::Item_base& item)
     item.enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
 }
 
-// Exports `scene` as GLB (a .gltf export names an external buffer file the
-// string API does not write) and parses the file back into `out_scene`.
+// Exports `scene` as GLB and parses the file back into `out_scene`.
 [[nodiscard]] auto round_trip(const erhe::scene::Scene& scene, const std::string_view file_name, erhe::scene::Scene& out_scene) -> erhe::gltf::Gltf_data
 {
     const std::string text = erhe::gltf::export_gltf(*scene.get_root_node(), true);
@@ -647,6 +646,111 @@ TEST(Gltf_roundtrip, save_onto_source_rebinds_released_soups)
     const std::shared_ptr<erhe::primitive::Triangle_soup> resident = mesh_primitives[1].primitive->render_shape->get_triangle_soup();
     ASSERT_TRUE(resident);
     EXPECT_EQ(resident->vertex_data, originals[1].vertex_data);
+}
+
+// The soups of the "Panel" mesh of a parsed variants.gltf copy, in primitive order.
+[[nodiscard]] auto get_panel_soups(const erhe::gltf::Gltf_data& data) -> std::vector<erhe::primitive::Triangle_soup>
+{
+    std::vector<erhe::primitive::Triangle_soup> soups;
+    for (const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape : get_panel_shapes(data)) {
+        const std::shared_ptr<erhe::primitive::Triangle_soup> soup = shape->get_triangle_soup();
+        if (soup) {
+            soups.push_back(*soup);
+        }
+    }
+    return soups;
+}
+
+// A text .gltf export writes its buffer next to it as "<stem>.bin", and the
+// files open again (doc/erhe/gltf.md "Text glTF files").
+TEST(Gltf_roundtrip, text_gltf_writes_its_buffer_file)
+{
+    erhe::scene::Scene          source_scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = parse_file(data_path("variants.gltf"), source_scene);
+    const std::vector<erhe::primitive::Triangle_soup> source_soups = get_panel_soups(source);
+    ASSERT_EQ(source_soups.size(), 2u);
+
+    const erhe::gltf::Gltf_export_arguments arguments{
+        .root_node = *source_scene.get_root_node(),
+        .binary    = false
+    };
+    // The string API cannot carry the buffer file: it refuses.
+    EXPECT_TRUE(erhe::gltf::export_gltf(arguments).empty());
+
+    // A stem with the characters a URI reserves: the uri percent-encodes them.
+    const std::filesystem::path path = erhe_gltf_test::process_temporary_directory() / "text save %1#2?.gltf";
+    const erhe::gltf::Gltf_export_document document = erhe::gltf::export_gltf_document(arguments, path);
+    ASSERT_FALSE(document.empty());
+    ASSERT_EQ(document.external_files.size(), 1u);
+    EXPECT_EQ(document.external_files.front().uri, "text%20save%20%251%232%3F.bin");
+    EXPECT_EQ(document.external_files.front().file_name, "text save %1#2?.bin");
+    EXPECT_NE(document.bytes.find("\"uri\":\"text%20save%20%251%232%3F.bin\""), std::string::npos);
+    ASSERT_TRUE(erhe::gltf::write_gltf_document(path, document));
+    const std::filesystem::path buffer_path = path.parent_path() / "text save %1#2?.bin";
+    EXPECT_EQ(erhe::gltf::get_gltf_buffer_file_path(path), buffer_path);
+    EXPECT_EQ(std::filesystem::file_size(buffer_path), document.external_files.front().bytes.size());
+
+    erhe::scene::Scene          loaded_scene{"loaded", nullptr};
+    const erhe::gltf::Gltf_data loaded = parse_file(path, loaded_scene);
+    EXPECT_TRUE(loaded.errors.empty());
+    const std::vector<erhe::primitive::Triangle_soup> loaded_soups = get_panel_soups(loaded);
+    ASSERT_EQ(loaded_soups.size(), source_soups.size());
+    for (std::size_t i = 0, end = source_soups.size(); i < end; ++i) {
+        EXPECT_EQ(loaded_soups[i].vertex_data, source_soups[i].vertex_data);
+        EXPECT_EQ(loaded_soups[i].index_data,  source_soups[i].index_data);
+    }
+}
+
+// A text .gltf saved onto itself replaces its buffer file too: the soups the
+// old buffer file held read from the new one after the rebind.
+TEST(Gltf_roundtrip, text_gltf_save_onto_source_rebinds_released_soups)
+{
+    const std::filesystem::path path = erhe_gltf_test::process_temporary_directory() / "text_rebind.gltf";
+    {
+        erhe::scene::Scene          source_scene{"source", nullptr};
+        const erhe::gltf::Gltf_data source = parse_file(data_path("variants.gltf"), source_scene);
+        const erhe::gltf::Gltf_export_arguments arguments{.root_node = *source_scene.get_root_node(), .binary = false};
+        ASSERT_TRUE(erhe::gltf::write_gltf_document(path, erhe::gltf::export_gltf_document(arguments, path)));
+    }
+
+    erhe::scene::Scene scene{"rebind", nullptr};
+    tf::Executor executor{1};
+    const erhe::gltf::Gltf_data data = erhe::gltf::parse_gltf(
+        erhe::gltf::Gltf_parse_arguments{
+            .executor             = executor,
+            .root_node            = scene.get_root_node(),
+            .path                 = path,
+            .parallel             = false,
+            .triangle_soup_reload = erhe::gltf::Triangle_soup_reload::record
+        }
+    );
+    const std::vector<erhe::primitive::Triangle_soup> originals = get_panel_soups(data);
+    ASSERT_EQ(originals.size(), 2u);
+    const std::shared_ptr<erhe::scene::Node> panel = find_by_name(data.nodes, "Panel");
+    ASSERT_TRUE(panel);
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = erhe::scene::get_mesh(panel.get())->get_primitives();
+    const std::filesystem::path buffer_path = erhe::gltf::get_gltf_buffer_file_path(path);
+    EXPECT_TRUE(mesh_primitives[0].primitive->render_shape->get_triangle_soup_source()->references_file(buffer_path));
+    ASSERT_TRUE(mesh_primitives[0].primitive->release_triangle_soup());
+
+    erhe::gltf::Gltf_export_written_layout layout;
+    erhe::gltf::Gltf_export_arguments arguments{.root_node = *scene.get_root_node(), .binary = false};
+    arguments.written_layout = &layout;
+    const erhe::gltf::Gltf_export_document document = erhe::gltf::export_gltf_document(arguments, path);
+    ASSERT_FALSE(document.empty());
+    const std::filesystem::file_time_type old_time = std::filesystem::last_write_time(buffer_path);
+    ASSERT_TRUE(erhe::gltf::write_gltf_document(path, document));
+    std::filesystem::last_write_time(buffer_path, old_time + std::chrono::seconds{2});
+    EXPECT_FALSE(mesh_primitives[0].primitive->render_shape->get_triangle_soup()); // refused: file changed
+    EXPECT_GE(layout.retained_primitives.size(), 1u);
+
+    const erhe::gltf::Gltf_rebind_result result = erhe::gltf::rebind_sources_to_written_file(path, layout);
+    EXPECT_GE(result.primitive_count, 1u);
+    EXPECT_EQ(result.failed_count, 0u);
+    const std::shared_ptr<erhe::primitive::Triangle_soup> reloaded = mesh_primitives[0].primitive->render_shape->get_triangle_soup();
+    ASSERT_TRUE(reloaded);
+    EXPECT_EQ(reloaded->vertex_data, originals[0].vertex_data);
+    EXPECT_EQ(reloaded->index_data,  originals[0].index_data);
 }
 
 

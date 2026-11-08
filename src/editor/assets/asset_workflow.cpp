@@ -45,12 +45,12 @@ auto write_material_container_file(
         .excluded_item_type_bits = Editor_item_types::joint,
         .extra_materials       = materials,
     };
-    const std::string gltf = erhe::gltf::export_gltf(export_arguments);
-    if (gltf.empty()) {
+    const erhe::gltf::Gltf_export_document document = erhe::gltf::export_gltf_document(export_arguments, path);
+    if (document.empty()) {
         out_error = fmt::format("material container export produced no data for '{}'", erhe::file::to_string(path));
         return false;
     }
-    if (!erhe::file::write_file_via_temp(path, gltf)) {
+    if (!erhe::gltf::write_gltf_document(path, document)) {
         out_error = fmt::format("failed to write material container '{}'", erhe::file::to_string(path));
         return false;
     }

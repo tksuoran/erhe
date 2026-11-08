@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <mutex>
 #include <system_error>
+#include <vector>
 
 #if defined(ERHE_OS_WINDOWS)
 #   include <Windows.h>
@@ -576,19 +577,18 @@ void remove_temp(const std::filesystem::path& temp_path)
     }
 }
 
-} // anonymous namespace
-
-auto write_file_via_temp(const std::filesystem::path& path, const std::function<bool(std::FILE*)>& write) -> bool
+// Fills a new temporary next to 'path'; empty when it could not be written (logged, removed).
+[[nodiscard]] auto write_temp(const std::filesystem::path& path, const std::function<bool(std::FILE*)>& write) -> std::filesystem::path
 {
     if (path.empty()) {
         if (log_file) log_file->error("write_file_via_temp(): path is empty");
-        return false;
+        return {};
     }
     const std::filesystem::path temp_path = make_temp_path(path);
     std::FILE* const file = open_for_write(temp_path);
     if (file == nullptr) {
         if (log_file) log_file->error("write_file_via_temp(): failed to open temporary file '{}' for writing; '{}' is unchanged", temp_path, path);
-        return false;
+        return {};
     }
     const bool written = write(file);
     const bool flushed = written && (std::fflush(file) == 0);
@@ -603,35 +603,145 @@ auto write_file_via_temp(const std::filesystem::path& path, const std::function<
             );
         }
         remove_temp(temp_path);
+        return {};
+    }
+    return temp_path;
+}
+
+// Moves 'temp_path' over 'path' in one rename; on failure the temporary is removed (logged).
+[[nodiscard]] auto replace_with_temp(const std::filesystem::path& temp_path, const std::filesystem::path& path) -> bool
+{
+    if (!rename_file(temp_path, path)) {
+        if (log_file) log_file->error("write_file_via_temp(): '{}' is unchanged", path);
+        remove_temp(temp_path);
         return false;
     }
+    return true;
+}
+
+} // anonymous namespace
+
+auto write_file_via_temp(const std::filesystem::path& path, const std::function<bool(std::FILE*)>& write) -> bool
+{
+    const std::filesystem::path temp_path = write_temp(path, write);
+    if (temp_path.empty()) {
+        return false;
+    }
+    return replace_with_temp(temp_path, path);
+}
+
+auto rename_file(const std::filesystem::path& from, const std::filesystem::path& to) -> bool
+{
 #if defined(ERHE_OS_WINDOWS)
-    const BOOL moved = MoveFileExW(temp_path.wstring().c_str(), path.wstring().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
-    if (moved == 0) {
+    if (MoveFileExW(from.wstring().c_str(), to.wstring().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0) {
         const DWORD error = GetLastError();
-        if (log_file) {
-            log_file->error(
-                "write_file_via_temp(): replacing '{}' with '{}' failed: {}; '{}' is unchanged",
-                path, temp_path, std::system_category().message(static_cast<int>(error)), path
-            );
-        }
-        remove_temp(temp_path);
+        if (log_file) log_file->error("rename_file(): moving '{}' to '{}' failed: {}", from, to, std::system_category().message(static_cast<int>(error)));
         return false;
     }
 #else
     std::error_code error_code;
-    std::filesystem::rename(temp_path, path, error_code);
+    std::filesystem::rename(from, to, error_code);
     if (error_code) {
-        if (log_file) {
-            log_file->error(
-                "write_file_via_temp(): replacing '{}' with '{}' failed: {}; '{}' is unchanged",
-                path, temp_path, error_code.message(), path
-            );
-        }
-        remove_temp(temp_path);
+        if (log_file) log_file->error("rename_file(): moving '{}' to '{}' failed: {}", from, to, error_code.message());
         return false;
     }
 #endif
+    return true;
+}
+
+auto write_files_via_temp(const std::span<const File_write> files) -> bool
+{
+    return write_files_via_temp(files, rename_file);
+}
+
+auto write_files_via_temp(const std::span<const File_write> files, const Rename_function& rename) -> bool
+{
+    const std::size_t count = files.size();
+    for (const File_write& file_write : files) {
+        std::error_code error_code;
+        const std::filesystem::file_status status = std::filesystem::status(file_write.path, error_code);
+        if (std::filesystem::exists(status) && !std::filesystem::is_regular_file(status)) {
+            if (log_file) log_file->error("write_files_via_temp(): '{}' exists and is not a regular file; no file is replaced", file_write.path);
+            return false;
+        }
+    }
+    std::vector<std::filesystem::path> temp_paths;
+    temp_paths.reserve(count);
+    for (const File_write& file_write : files) {
+        const std::span<const std::byte> bytes = file_write.bytes;
+        const std::filesystem::path temp_path = write_temp(
+            file_write.path,
+            [bytes](std::FILE* const file) -> bool {
+                return std::fwrite(bytes.data(), 1, bytes.size(), file) == bytes.size();
+            }
+        );
+        if (temp_path.empty()) {
+            for (const std::filesystem::path& written_temp_path : temp_paths) {
+                remove_temp(written_temp_path);
+            }
+            return false;
+        }
+        temp_paths.push_back(temp_path);
+    }
+
+    // One file: one rename over the target, which is never absent.
+    if (count == 1) {
+        if (!rename(temp_paths[0], files[0].path)) {
+            remove_temp(temp_paths[0]);
+            return false;
+        }
+        return true;
+    }
+
+    // Empty: the target did not exist.
+    std::vector<std::filesystem::path> old_paths(count);
+    const auto restore_old_files = [&files, &old_paths, &rename]() {
+        for (std::size_t i = 0, end = old_paths.size(); i < end; ++i) {
+            if (!old_paths[i].empty() && !rename(old_paths[i], files[i].path)) {
+                if (log_file) log_file->error("write_files_via_temp(): restoring '{}' failed; its old content is in '{}'", files[i].path, old_paths[i]);
+            }
+        }
+    };
+    const auto remove_temps_from = [&temp_paths](const std::size_t first) {
+        for (std::size_t i = first, end = temp_paths.size(); i < end; ++i) {
+            remove_temp(temp_paths[i]);
+        }
+    };
+
+    // Every old file moves aside before any new one moves in: a target that
+    // cannot be renamed (Windows: held open) fails here, with nothing replaced.
+    for (std::size_t i = 0; i < count; ++i) {
+        std::error_code error_code;
+        if (!std::filesystem::exists(files[i].path, error_code)) {
+            continue;
+        }
+        const std::filesystem::path old_path = make_temp_path(files[i].path);
+        if (!rename(files[i].path, old_path)) {
+            if (log_file) log_file->error("write_files_via_temp(): moving '{}' aside failed; no file is replaced", files[i].path);
+            restore_old_files();
+            remove_temps_from(0);
+            return false;
+        }
+        old_paths[i] = old_path;
+    }
+
+    for (std::size_t i = 0; i < count; ++i) {
+        if (!rename(temp_paths[i], files[i].path)) {
+            if (log_file) log_file->error("write_files_via_temp(): moving '{}' in failed; the old files are restored", files[i].path);
+            for (std::size_t j = 0; j < i; ++j) {
+                remove_temp(files[j].path);
+            }
+            remove_temps_from(i);
+            restore_old_files();
+            return false;
+        }
+    }
+
+    for (const std::filesystem::path& old_path : old_paths) {
+        if (!old_path.empty()) {
+            remove_temp(old_path);
+        }
+    }
     return true;
 }
 

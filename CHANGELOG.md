@@ -93,6 +93,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::gltf`: `export_gltf()` of a text export holding buffer data fails
+  (logged, empty string) instead of returning JSON that names a buffer file
+  nothing writes; `rebind_sources_to_written_file()` also rebinds soups that
+  read from the written document's buffer files; a buffer `uri` is
+  percent-decoded after its components are split (`%23` in a file name is no
+  fragment).
+
 - `erhe::primitive`: `build_buffer_mesh_from_triangle_soup()` and the build
   from stored GPU vertex streams (`Primitive::make_stored_meshes()`) fill
   `Buffer_mesh::joint_bounding_boxes` from the joint attributes, with the
@@ -196,6 +203,15 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   unchanged.
 
 ### Added
+
+- `erhe::gltf`: `Gltf_export_document`, `Gltf_export_file`,
+  `export_gltf_document()`, `write_gltf_document()` and
+  `get_gltf_buffer_file_path()`: a text (.gltf) export writes its buffer as
+  `<stem>.bin` next to the .gltf (`doc/erhe/gltf.md` "Text glTF files").
+- `erhe::file`: `File_write`, `write_files_via_temp()` (several files
+  replaced all or none: old files moved aside, restored when a rename fails),
+  `Rename_function` and `rename_file()` (`doc/erhe/file.md` "Writing several
+  files").
 
 - `erhe::graphics`: `Image_loader::probe_prefix()` and `Image_prefix_result`:
   reads an image's `Image_info` from the first bytes of a file and reports,

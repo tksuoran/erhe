@@ -200,8 +200,10 @@ def skip(section, name, reason):
 # --------------------------------------------------------------------------
 
 def read_glb_json(path):
-    """Parse the JSON chunk of a .glb file."""
+    """Parse the JSON chunk of a .glb file, or the JSON of a text .gltf."""
     blob = pathlib.Path(path).read_bytes()
+    if pathlib.Path(path).suffix == ".gltf":
+        return json.loads(blob.decode("utf-8"))
     if blob[0:4] != b"glTF":
         raise RuntimeError(f"not a GLB file: {path}")
     offset = 12
@@ -759,11 +761,10 @@ E2E_GLB = pathlib.Path("res/editor/scenes/phase6_roundtrip.glb")
 FOREIGN_GLB = pathlib.Path("res/editor/scenes/phase6_foreign.glb")
 PREFAB_RESAVE_GLB = pathlib.Path("res/editor/scenes/phase6_prefab_resave.glb")
 E2E_RESAVE_GLB = pathlib.Path("res/editor/scenes/phase6_roundtrip_resave.glb")
-# .glb: text .gltf saves do not write their external buffer payload (a
-# pre-existing exporter limitation unrelated to R6); read_glb_json gives the
-# same JSON view.
-R6_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference.glb")
-R6_RESAVE_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference_resave.glb")
+# Text .gltf: these legs also cover a save that writes its buffer to <stem>.bin.
+R6_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference.gltf")
+R6_RESAVE_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference_resave.gltf")
+R6_BUFFERS = [R6_GLTF.with_suffix(".bin"), R6_RESAVE_GLTF.with_suffix(".bin")]
 DECCER_GLB = "res/editor/assets/SM_Deccer_Cubes_Textured.glb"
 RIGGED_GLB = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
 # The bone of RIGGED_GLB that carries the Ik.* values.
@@ -1492,6 +1493,9 @@ def section_asset_references():
         check(S, "saved reference file exists", False, str(R6_GLTF))
         return
     doc = read_glb_json(R6_GLTF)
+    buffer_uris = [b.get("uri") for b in doc.get("buffers", [])]
+    check(S, "text .gltf save writes its buffer file next to it",
+          buffer_uris == [R6_BUFFERS[0].name] and R6_BUFFERS[0].is_file(), str(buffer_uris))
     proxy = next(
         (m for m in doc.get("materials", [])
          if (m.get("name") == material_name) and ("ERHE_asset_reference" in m.get("extensions", {}))),
@@ -2990,7 +2994,7 @@ def main():
 
     if not failed and not arguments.keep_files:
         for artifact in [E2E_GLB, E2E_RESAVE_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF,
-                         GLTF_VARIANTS_SAVE, AMBIENT_LOCAL_GLB, AMBIENT_STYLE_GLB] + USD_ARTIFACTS:
+                         GLTF_VARIANTS_SAVE, AMBIENT_LOCAL_GLB, AMBIENT_STYLE_GLB] + R6_BUFFERS + USD_ARTIFACTS:
             artifact.unlink(missing_ok=True)
     elif arguments.keep_files:
         print(f"(kept {E2E_GLB}, {E2E_RESAVE_GLB}, {FOREIGN_GLB}, {PREFAB_RESAVE_GLB}, {R6_GLTF} and {R6_RESAVE_GLTF})")

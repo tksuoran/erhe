@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdio>
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -30,6 +32,23 @@ auto write_file(std::filesystem::path path, const std::string& text) -> bool;
 // (with the failure logged).
 [[nodiscard]] auto write_file_via_temp(const std::filesystem::path& path, const std::function<bool(std::FILE*)>& write) -> bool;
 [[nodiscard]] auto write_file_via_temp(const std::filesystem::path& path, std::string_view text) -> bool;
+
+class File_write
+{
+public:
+    std::filesystem::path      path;
+    std::span<const std::byte> bytes;
+};
+
+// Moves 'from' over 'to' in one rename (logged on failure).
+[[nodiscard]] auto rename_file(const std::filesystem::path& from, const std::filesystem::path& to) -> bool;
+
+// Writes several files through temporaries, all or none (doc/erhe/file.md
+// "Writing several files"); the order given is the order they move in.
+[[nodiscard]] auto write_files_via_temp(std::span<const File_write> files) -> bool;
+// The same with every rename through 'rename' (a test seam for failures).
+using Rename_function = std::function<bool(const std::filesystem::path& from, const std::filesystem::path& to)>;
+[[nodiscard]] auto write_files_via_temp(std::span<const File_write> files, const Rename_function& rename) -> bool;
 
 // TODO open, save, ...
 [[nodiscard]] auto select_file_for_read() -> std::optional<std::filesystem::path>;

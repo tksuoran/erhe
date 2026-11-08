@@ -364,8 +364,9 @@ A scene loaded from a file keeps reading from it: released triangle soups
 read back their byte ranges, and image sources are byte ranges of it
 (doc/erhe/gltf.md "Image source streams"). A save onto that file replaces it
 (through a temporary file), so `save_scene_gltf()` first finds the scene's
-primitives whose soup source references the target file
-(`Triangle_soup_source::references_file()`) and the content-library
+primitives whose soup source references the target file, or for a text
+.gltf its buffer file (`erhe::gltf::get_gltf_buffer_file_path()`)
+(`Triangle_soup_source::references_file()`), and the content-library
 textures whose image source does (`erhe::gltf::is_same_file()`), and then:
 
 - a scene file writes every soup as it is (`Gltf_written_soup::soup`, or

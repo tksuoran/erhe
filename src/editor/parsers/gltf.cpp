@@ -1891,10 +1891,33 @@ public:
 [[nodiscard]] auto find_overwritten_sources(Scene_root& scene_root, const std::filesystem::path& path) -> Overwritten_sources
 {
     Overwritten_sources result;
-    std::error_code error;
-    if (!std::filesystem::exists(path, error)) {
+    // A text .gltf save replaces its buffer file too.
+    std::vector<std::filesystem::path> written_paths;
+    for (const std::filesystem::path& written_path : {path, erhe::gltf::get_gltf_buffer_file_path(path)}) {
+        std::error_code error;
+        if (!written_path.empty() && std::filesystem::exists(written_path, error)) {
+            written_paths.push_back(written_path);
+        }
+    }
+    if (written_paths.empty()) {
         return result;
     }
+    const auto references_written_file = [&written_paths](const erhe::primitive::Triangle_soup_source& source) -> bool {
+        for (const std::filesystem::path& written_path : written_paths) {
+            if (source.references_file(written_path)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    const auto is_written_file = [&written_paths](const std::filesystem::path& file_path) -> bool {
+        for (const std::filesystem::path& written_path : written_paths) {
+            if (erhe::gltf::is_same_file(file_path, written_path)) {
+                return true;
+            }
+        }
+        return false;
+    };
     {
         std::unordered_set<const erhe::primitive::Primitive*> seen;
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
@@ -1910,7 +1933,7 @@ public:
                     }
                     const std::shared_ptr<const erhe::primitive::Triangle_soup_source> source = primitive->render_shape->get_triangle_soup_source();
                     const std::shared_ptr<const erhe::primitive::Triangle_soup_source> authoring = primitive->render_shape->get_authoring_soup_source();
-                    if ((source && source->references_file(path)) || (authoring && authoring->references_file(path))) {
+                    if ((source && references_written_file(*source)) || (authoring && references_written_file(*authoring))) {
                         result.primitives.push_back(primitive);
                     }
                 }
@@ -1922,7 +1945,7 @@ public:
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
         for (const std::shared_ptr<erhe::graphics::Texture>& texture : content_library->get_all<erhe::graphics::Texture>()) {
             const Resource_metadata* const metadata = content_library->find_metadata(*texture);
-            if ((metadata != nullptr) && metadata->image_source && metadata->image_source->is_file_backed() && erhe::gltf::is_same_file(metadata->image_source->file_path, path)) {
+            if ((metadata != nullptr) && metadata->image_source && metadata->image_source->is_file_backed() && is_written_file(metadata->image_source->file_path)) {
                 result.textures.push_back(texture);
             }
         }
@@ -2137,22 +2160,24 @@ auto write_scene_save_gltf(Gltf_scene_save& save) -> bool
 {
     ERHE_PROFILE_FUNCTION();
     Gltf_scene_save::Impl& impl = *save.impl;
-    const std::string gltf = export_scene_save_gltf(save);
+    const std::chrono::steady_clock::time_point export_start = std::chrono::steady_clock::now();
+    const erhe::gltf::Gltf_export_document document = erhe::gltf::export_gltf_document(impl.export_arguments.value(), impl.path);
+    impl.export_ms  = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - export_start).count();
     impl.file_bytes = 0;
-    if (gltf.empty()) {
+    if (document.empty()) {
         // An image source that changed on disk since the load (logged by the
         // exporter): nothing is written, the old file stays as it was.
         log_parsers->error("save_scene_gltf: export of '{}' failed - nothing written", erhe::file::to_string(impl.path));
         return false;
     }
-    // Through a temporary file: saving onto the scene's own source keeps the
-    // old file readable (CPU soups reload from it) until the new one is
-    // complete, and a failed save leaves the old file as it was.
-    if (!erhe::file::write_file_via_temp(impl.path, gltf)) {
+    // Through temporary files: saving onto the scene's own source keeps the
+    // old files readable (CPU soups reload from them) until the new ones are
+    // complete, and a failed save leaves the old files as they were.
+    if (!erhe::gltf::write_gltf_document(impl.path, document)) {
         log_parsers->error("save_scene_gltf: failed to write '{}'", erhe::file::to_string(impl.path));
         return false;
     }
-    impl.file_bytes = gltf.size();
+    impl.file_bytes = document.get_byte_count();
     return true;
 }
 

@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <system_error>
 
@@ -126,3 +127,121 @@ TEST_F(Write_file_via_temp_test, a_failed_replace_keeps_the_old_file)
     EXPECT_EQ(entry_count(), 1u) << "the temporary file is removed";
 }
 #endif
+
+// write_files_via_temp(): a file that cannot be written replaces none of the
+// others, and no temporary stays behind; a complete set replaces them all.
+TEST_F(Write_file_via_temp_test, files_are_replaced_only_when_all_are_written)
+{
+    const std::filesystem::path buffer_path = m_directory / "scene.bin";
+    ASSERT_TRUE(erhe::file::write_file_via_temp(buffer_path, std::string_view{"old buffer"}));
+    ASSERT_TRUE(erhe::file::write_file_via_temp(m_path, std::string_view{"old document"}));
+    const std::string new_buffer   = "new buffer";
+    const std::string new_document = "new document";
+    const std::span<const std::byte> buffer_bytes   = std::as_bytes(std::span<const char>{new_buffer});
+    const std::span<const std::byte> document_bytes = std::as_bytes(std::span<const char>{new_document});
+
+    const erhe::file::File_write failing[] = {
+        {.path = buffer_path,                           .bytes = buffer_bytes},
+        {.path = m_directory / "missing" / "scene.glb", .bytes = document_bytes}
+    };
+    EXPECT_FALSE(erhe::file::write_files_via_temp(failing));
+    EXPECT_EQ(erhe::file::read("test", buffer_path).value_or(std::string{}), "old buffer");
+    EXPECT_EQ(entry_count(), 2u) << "no temporary file stays";
+
+    const erhe::file::File_write complete[] = {
+        {.path = buffer_path, .bytes = buffer_bytes},
+        {.path = m_path,      .bytes = document_bytes}
+    };
+    EXPECT_TRUE(erhe::file::write_files_via_temp(complete));
+    EXPECT_EQ(erhe::file::read("test", buffer_path).value_or(std::string{}), "new buffer");
+    EXPECT_EQ(read_back(), "new document");
+    EXPECT_EQ(entry_count(), 2u);
+}
+
+namespace {
+
+// The platform rename, failing at call number 'fail_at' (0-based).
+[[nodiscard]] auto make_failing_rename(std::size_t& call_count, const std::size_t fail_at) -> erhe::file::Rename_function
+{
+    return [&call_count, fail_at](const std::filesystem::path& from, const std::filesystem::path& to) -> bool {
+        const std::size_t call = call_count++;
+        return (call != fail_at) && erhe::file::rename_file(from, to);
+    };
+}
+
+} // anonymous namespace
+
+// Every rename of a two-file replace failing in turn: the old files come back
+// byte-identical, the new ones vanish and no temporary stays. Renames:
+// 0, 1 move the old files aside, 2, 3 move the new ones in.
+TEST_F(Write_file_via_temp_test, a_failed_rename_restores_every_old_file)
+{
+    const std::filesystem::path buffer_path = m_directory / "scene.bin";
+    const std::string new_buffer   = "new buffer";
+    const std::string new_document = "new document";
+    const erhe::file::File_write files[] = {
+        {.path = buffer_path, .bytes = std::as_bytes(std::span<const char>{new_buffer})},
+        {.path = m_path,      .bytes = std::as_bytes(std::span<const char>{new_document})}
+    };
+    for (std::size_t fail_at = 0; fail_at < 4; ++fail_at) {
+        ASSERT_TRUE(erhe::file::write_file_via_temp(buffer_path, std::string_view{"old buffer"}));
+        ASSERT_TRUE(erhe::file::write_file_via_temp(m_path, std::string_view{"old document"}));
+        std::size_t call_count = 0;
+        EXPECT_FALSE(erhe::file::write_files_via_temp(files, make_failing_rename(call_count, fail_at))) << fail_at;
+        EXPECT_EQ(erhe::file::read("test", buffer_path).value_or(std::string{}), "old buffer") << fail_at;
+        EXPECT_EQ(read_back(), "old document") << fail_at;
+        EXPECT_EQ(entry_count(), 2u) << "no temporary file stays, rename " << fail_at;
+    }
+}
+
+// A set whose second target is new: a failed move-in removes the first new file
+// and restores its old one, and leaves the second target absent.
+TEST_F(Write_file_via_temp_test, a_failed_rename_removes_a_new_target)
+{
+    const std::filesystem::path buffer_path = m_directory / "scene.bin";
+    ASSERT_TRUE(erhe::file::write_file_via_temp(buffer_path, std::string_view{"old buffer"}));
+    const std::string new_buffer   = "new buffer";
+    const std::string new_document = "new document";
+    const erhe::file::File_write files[] = {
+        {.path = buffer_path, .bytes = std::as_bytes(std::span<const char>{new_buffer})},
+        {.path = m_path,      .bytes = std::as_bytes(std::span<const char>{new_document})}
+    };
+    std::size_t call_count = 0;
+    // Renames: 0 moves the old buffer aside, 1 moves the new buffer in, 2 fails the document.
+    EXPECT_FALSE(erhe::file::write_files_via_temp(files, make_failing_rename(call_count, 2)));
+    EXPECT_EQ(erhe::file::read("test", buffer_path).value_or(std::string{}), "old buffer");
+    EXPECT_FALSE(std::filesystem::exists(m_path));
+    EXPECT_EQ(entry_count(), 1u);
+}
+
+// A target that is a directory refuses the set before anything is written.
+TEST_F(Write_file_via_temp_test, a_target_that_is_not_a_file_is_refused)
+{
+    const std::filesystem::path buffer_path = m_directory / "scene.bin";
+    ASSERT_TRUE(erhe::file::write_file_via_temp(buffer_path, std::string_view{"old buffer"}));
+    ASSERT_TRUE(std::filesystem::create_directory(m_path));
+    const std::string new_bytes = "new";
+    const erhe::file::File_write files[] = {
+        {.path = buffer_path, .bytes = std::as_bytes(std::span<const char>{new_bytes})},
+        {.path = m_path,      .bytes = std::as_bytes(std::span<const char>{new_bytes})}
+    };
+    EXPECT_FALSE(erhe::file::write_files_via_temp(files));
+    EXPECT_EQ(erhe::file::read("test", buffer_path).value_or(std::string{}), "old buffer");
+    EXPECT_TRUE(std::filesystem::is_directory(m_path));
+    EXPECT_EQ(entry_count(), 2u);
+}
+
+// One file: a failed rename leaves the old target in place (never absent).
+TEST_F(Write_file_via_temp_test, a_single_file_is_one_rename_over_the_target)
+{
+    ASSERT_TRUE(erhe::file::write_file_via_temp(m_path, std::string_view{"old"}));
+    const std::string new_bytes = "new";
+    const erhe::file::File_write files[] = {{.path = m_path, .bytes = std::as_bytes(std::span<const char>{new_bytes})}};
+    std::size_t call_count = 0;
+    EXPECT_FALSE(erhe::file::write_files_via_temp(files, make_failing_rename(call_count, 0)));
+    EXPECT_EQ(call_count, 1u) << "no move aside";
+    EXPECT_EQ(read_back(), "old");
+    EXPECT_EQ(entry_count(), 1u);
+    EXPECT_TRUE(erhe::file::write_files_via_temp(files));
+    EXPECT_EQ(read_back(), "new");
+}

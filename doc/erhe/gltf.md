@@ -22,7 +22,8 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
 ## Public API
 - `parse_gltf(arguments)` -- Load a glTF file and return populated `Gltf_data`.
 - `scan_gltf(path)` -- Quick scan returning asset names without full parse.
-- `export_gltf(Gltf_export_arguments)` -- Export a scene subtree to glTF/GLB string. The optional `erhe::scene::Physics_description` (built by the editor's `build_gltf_physics_data()`) adds the physics extension content and extensionsUsed entries. `external_assets` maps nodes to glTF 2.1 externalAsset references (deduplicated `files` entries; such nodes are written without children, and the asset version becomes 2.1 + minVersion 2.1). A `(root_node, binary, physics_data)` convenience overload exports plain glTF 2.0.
+- `export_gltf(Gltf_export_arguments)` -- Export a scene subtree to glTF/GLB string. The optional `erhe::scene::Physics_description` (built by the editor's `build_gltf_physics_data()`) adds the physics extension content and extensionsUsed entries. `external_assets` maps nodes to glTF 2.1 externalAsset references (deduplicated `files` entries; such nodes are written without children, and the asset version becomes 2.1 + minVersion 2.1). A `(root_node, binary, physics_data)` convenience overload exports plain glTF 2.0. A text export that holds buffer data fails here (logged, empty string): it needs `export_gltf_document()`.
+- `export_gltf_document(arguments, path)` / `write_gltf_document(path, document)` / `get_gltf_buffer_file_path(path)` -- The export as a `Gltf_export_document` (the .glb or .gltf bytes plus, for a text .gltf, its buffer files) and its write next to `path` (see "Text glTF files").
 - `Image_transfer(device)` / `Image_transfer(device, mode, staging_capacity_byte_count)` -- Create image upload manager.
 - `Image_transfer::upload(image_info, pixels, texture, gen_mipmap)` -- Stage pixel data (full tightly packed mip chain) and record the per-level copies. `blocking_drain` mode only.
 - `Image_transfer::upload_into_frame(command_buffer, ..., remaining_budget_bytes)` -- Same, into the frame's command buffer, decrementing the caller's per-frame byte budget; nothing is recorded (`budget_exhausted`) when the budget is spent or the capped upload staging has no room. `frame_recording` mode only.
@@ -206,8 +207,6 @@ performs all mapping to/from erhe::physics (see `doc/erhe/khr_physics_rigid_bodi
   Primitives sharing accessors share one validation only when their payloads
   are identical; geometry-normative (`ERHE_geometry`) primitives are not
   checked.
-- The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
-  for round-trips and .gltf for JSON inspection.
 - A primitive with an index at or past its vertex count (invalid glTF) is skipped with an
   error, like a primitive with an unsupported attribute format.
 - Tests: `erhe_gltf_tests` (`src/erhe/gltf/test/`, fastgltf backend, no graphics device):
@@ -747,6 +746,29 @@ by `load_stored_vertex_streams()` into `Stored_vertex_streams::lod_indices`.
 primitive carries the chain, the parse reads it back bit for bit, a re-export
 writes the stored chain back, a tampered level table is rejected alone).
 
+## Text glTF files
+
+A text export (`Gltf_export_arguments::binary` false) is a .gltf and one
+buffer file, `<stem of path>.bin`, next to it. The export holds at most one
+in-memory buffer: buffer 0, into which `combine_memory_buffers()` folds every
+other. `export_gltf_document(arguments, path)` moves it out of the asset into
+a `Gltf_export_file` (`file_name` the UTF-8 file name, `uri` the same name
+percent-encoded: every byte but RFC 3986's unreserved ones, so a space, `%`,
+`#` or `?` in the stem survives) and writes `uri` as the buffer's `uri`,
+relative to the .gltf. Buffers that already name a URI (mesh items, external
+files) stay as they are; images live in buffer views, so the .bin holds them.
+An in-memory buffer past buffer 0, or a JSON that would name any other file
+with no bytes behind it, refuses the export (logged, empty).
+`write_gltf_document(path, document)` writes the .bin and then the .gltf
+through `erhe::file::write_files_via_temp()`, all or none (doc/erhe/file.md
+"Writing several files"). The parse resolves a buffer `uri` by splitting it
+into its components first and percent-decoding the path after, so `%23` in a
+file name is not read as a fragment.
+`get_gltf_buffer_file_path(path)` is the `<stem>.bin` a text save to `path`
+writes (empty for a .glb). Tests: `Gltf_roundtrip.text_gltf_writes_its_buffer_file`
+(the string API refuses, a stem with a space, `%`, `#` and `?` gets its
+encoded `uri`, the files reopen with the source soups) and `Gltf_roundtrip.text_gltf_save_onto_source_rebinds_released_soups`.
+
 ## Rebinding after a save
 
 `Gltf_export_arguments::written_layout` receives where an export wrote the
@@ -756,7 +778,8 @@ index) and the images it wrote from their source stream unchanged
 (`Gltf_export_written_image`). After the file is written,
 `rebind_sources_to_written_file(path, layout)` reads the written file's JSON
 (the BIN chunk skipped) and its buffer origins, gives each retained
-primitive whose soup source references `path` a new
+primitive whose soup source references `path` or a file the written document
+reads its buffers from (a text .gltf's `<stem>.bin`) a new
 `Gltf_triangle_soup_source` over its accessors in the written file (the same
 `make_gltf_triangle_soup_source()` the parse uses, the old source's tangent
 mode) through `Primitive::rebind_triangle_soup_source()`, and returns a

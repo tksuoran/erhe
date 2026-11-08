@@ -480,6 +480,39 @@ public:
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;
 
+// The buffer file a text (.gltf) export references.
+class Gltf_export_file
+{
+public:
+    std::string            uri;       // relative to the .gltf, percent-encoded
+    std::string            file_name; // UTF-8, next to the .gltf
+    std::vector<std::byte> bytes;
+};
+
+// The files of one export (doc/erhe/gltf.md "Text glTF files"): the .glb or
+// .gltf bytes, and for a .gltf the buffer files its JSON references.
+class Gltf_export_document
+{
+public:
+    std::string                   bytes;
+    std::vector<Gltf_export_file> external_files;
+
+    [[nodiscard]] auto empty         () const -> bool { return bytes.empty(); }
+    [[nodiscard]] auto get_byte_count() const -> std::size_t;
+};
+
+// The export to be written at `path`: a text export (binary false) names its
+// buffer file "<stem of path>.bin". Empty when the export failed, as export_gltf().
+[[nodiscard]] auto export_gltf_document(const Gltf_export_arguments& arguments, const std::filesystem::path& path) -> Gltf_export_document;
+
+// Writes `document` at `path` and its external files next to it, every file
+// through a temporary (erhe::file::write_files_via_temp()); false writes nothing.
+[[nodiscard]] auto write_gltf_document(const std::filesystem::path& path, const Gltf_export_document& document) -> bool;
+
+// The buffer file a text export to `path` writes; empty for a .glb.
+[[nodiscard]] auto get_gltf_buffer_file_path(const std::filesystem::path& path) -> std::filesystem::path;
+
+
 [[nodiscard]] auto export_gltf(
     const erhe::scene::Node&                root_node,
     bool                                    binary,

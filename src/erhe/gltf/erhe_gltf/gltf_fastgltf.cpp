@@ -1827,12 +1827,15 @@ namespace {
                 continue;
             }
         }
-        const fastgltf::URI uri{uri_string};
+        // The components split before the path is decoded: "%23" in a file name is not a fragment.
+        const fastgltf::URIView uri{uri_string};
         if (!uri.valid() || uri.isDataUri() || !uri.isLocalPath()) {
             continue;
         }
+        std::string decoded_path{uri.path()};
+        fastgltf::URI::decodePercents(decoded_path);
         Gltf_byte_source source_file;
-        if (stamp_source_file(base_directory / uri.fspath(), source_file)) {
+        if (stamp_source_file(base_directory / erhe::file::from_string(decoded_path), source_file)) {
             origins->sources.push_back(std::move(source_file));
             origins->buffers[this_index] = Gltf_buffer_origin{.source_index = origins->sources.size() - 1, .source_offset = 0};
         }
@@ -7578,6 +7581,18 @@ auto rebind_sources_to_written_file(const std::filesystem::path& path, const Glt
     }
     origins->make_source_files();
     origins->source_files->close(); // reads open the file per read: no handle stays open
+    // A text .gltf's buffer file was replaced with it.
+    const auto references_written_file = [&path, &origins](const erhe::primitive::Triangle_soup_source& source) -> bool {
+        if (source.references_file(path)) {
+            return true;
+        }
+        for (const Gltf_byte_source& byte_source : origins->sources) {
+            if (!byte_source.is_named_buffer() && source.references_file(byte_source.path)) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     for (const Gltf_export_written_primitive& written : layout.retained_primitives) {
         const std::shared_ptr<erhe::primitive::Primitive>& primitive = written.primitive;
@@ -7588,7 +7603,7 @@ auto rebind_sources_to_written_file(const std::filesystem::path& path, const Glt
         const std::shared_ptr<const erhe::primitive::Triangle_soup_source> old_source = authoring
             ? primitive->render_shape->get_authoring_soup_source()
             : primitive->render_shape->get_triangle_soup_source();
-        if (!old_source || !old_source->references_file(path)) {
+        if (!old_source || !references_written_file(*old_source)) {
             continue; // its file was not replaced
         }
         if ((written.mesh_index >= asset.get().meshes.size()) || (written.primitive_index >= asset.get().meshes[written.mesh_index].primitives.size())) {
@@ -9926,16 +9941,40 @@ namespace {
 
 } // anonymous namespace
 
+namespace {
+
+// RFC 3986 relative-path reference of a file name: every byte but the unreserved ones percent-encoded.
+[[nodiscard]] auto percent_encode_uri_path(const std::string_view text) -> std::string
+{
+    std::string encoded;
+    encoded.reserve(text.size());
+    for (const char c : text) {
+        const unsigned char byte = static_cast<unsigned char>(c);
+        const bool unreserved =
+            ((byte >= 'A') && (byte <= 'Z')) || ((byte >= 'a') && (byte <= 'z')) || ((byte >= '0') && (byte <= '9')) ||
+            (byte == '-') || (byte == '.') || (byte == '_') || (byte == '~');
+        if (unreserved) {
+            encoded.push_back(c);
+        } else {
+            encoded += fmt::format("%{:02X}", static_cast<unsigned int>(byte));
+        }
+    }
+    return encoded;
+}
+
+} // anonymous namespace
+
 class Gltf_exporter : public Gltf_primitive_writer
 {
 public:
-    explicit Gltf_exporter(const Gltf_export_arguments& arguments)
+    Gltf_exporter(const Gltf_export_arguments& arguments, std::string buffer_file_stem)
         : Gltf_primitive_writer{arguments.gpu_vertex_formats}
-        , m_arguments{arguments}
+        , m_arguments       {arguments}
+        , m_buffer_file_stem{std::move(buffer_file_stem)}
     {
     }
 
-    [[nodiscard]] auto export_gltf() -> std::string;
+    [[nodiscard]] auto export_gltf() -> Gltf_export_document;
 
 private:
     [[nodiscard]] static auto from_erhe(const erhe::scene::Trs_transform& erhe_trs_transform) -> fastgltf::TRS
@@ -13352,8 +13391,36 @@ private:
         validate_buffers();
     }
 
+    // Text export: the in-memory buffer (buffer 0; combine_buffers() folds every
+    // other into it) becomes "<stem>.bin" next to the .gltf. False: a second one.
+    [[nodiscard]] auto move_buffer_to_external_file(std::vector<Gltf_export_file>& out_files) -> bool
+    {
+        for (std::size_t i = 0, end = m_gltf_asset.buffers.size(); i < end; ++i) {
+            fastgltf::Buffer& buffer = m_gltf_asset.buffers[i];
+            std::vector<std::byte> bytes;
+            if (fastgltf::sources::Vector* vector = std::get_if<fastgltf::sources::Vector>(&buffer.data)) {
+                bytes = std::move(vector->bytes);
+            } else if (const fastgltf::sources::Array* array = std::get_if<fastgltf::sources::Array>(&buffer.data)) {
+                bytes.assign(array->bytes.begin(), array->bytes.end());
+            } else {
+                continue;
+            }
+            if (i != 0) {
+                log_gltf->error("glTF export: buffer {} holds data in memory - only buffer 0 can be written as the .bin", i);
+                return false;
+            }
+            const std::string file_name = m_buffer_file_stem + ".bin";
+            const std::string uri       = percent_encode_uri_path(file_name);
+            // fastgltf::URI decodes its argument once: encoded twice, it holds and writes the encoded form.
+            buffer.data = fastgltf::sources::URI{.fileByteOffset = 0, .uri = fastgltf::URI{std::string_view{percent_encode_uri_path(uri)}}, .mimeType = fastgltf::MimeType::None};
+            out_files.push_back(Gltf_export_file{.uri = uri, .file_name = file_name, .bytes = std::move(bytes)});
+        }
+        return true;
+    }
+
 private:
     const Gltf_export_arguments& m_arguments;
+    std::string                  m_buffer_file_stem;
     std::map<std::string, std::size_t> m_uri_to_external_asset_index;
     std::map<std::string, std::size_t> m_uri_to_file_index;
     // ERHE_asset_reference extension members per emitted proxy material
@@ -13412,7 +13479,7 @@ private:
     }
 };
 
-auto Gltf_exporter::export_gltf() -> std::string
+auto Gltf_exporter::export_gltf() -> Gltf_export_document
 {
     m_gltf_asset.assetInfo = fastgltf::AssetInfo{
         .gltfVersion = "2.0",
@@ -13841,35 +13908,91 @@ auto Gltf_exporter::export_gltf() -> std::string
         *m_arguments.prepared_statistics = m_prepared_statistics;
     }
 
-    if (m_arguments.binary)
-    {
+    if (m_arguments.binary) {
         auto expected_result = exporter.writeGltfBinary(m_gltf_asset, fastgltf::ExportOptions::ValidateAsset);
         auto* result = expected_result.get_if();
         if (result == nullptr) {
+            log_gltf->error("glTF export: fastgltf writeGltfBinary failed: {}", fastgltf::getErrorMessage(expected_result.error()));
             return {};
         }
-        return std::string(
-            reinterpret_cast<const char*>(result->output.data()),
-            result->output.size()
-        );
-    } 
-    else
-    {
-        auto expected_result = exporter.writeGltfJson(m_gltf_asset, 
-            fastgltf::ExportOptions::ValidateAsset |
-            fastgltf::ExportOptions::PrettyPrintJson);
-        auto* result = expected_result.get_if();
-        if (result == nullptr) {
-            return {};
-        }
-        return result->output;
+        return Gltf_export_document{
+            .bytes = std::string(reinterpret_cast<const char*>(result->output.data()), result->output.size())
+        };
     }
+    Gltf_export_document document{};
+    if (!move_buffer_to_external_file(document.external_files)) {
+        return {};
+    }
+    auto expected_result = exporter.writeGltfJson(
+        m_gltf_asset,
+        fastgltf::ExportOptions::ValidateAsset | fastgltf::ExportOptions::PrettyPrintJson
+    );
+    auto* result = expected_result.get_if();
+    if (result == nullptr) {
+        log_gltf->error("glTF export: fastgltf writeGltfJson failed: {}", fastgltf::getErrorMessage(expected_result.error()));
+        return {};
+    }
+    // Any file fastgltf names itself would be written by no one.
+    const auto names_file = [](const std::vector<std::optional<std::filesystem::path>>& paths) -> bool {
+        return std::any_of(paths.begin(), paths.end(), [](const std::optional<std::filesystem::path>& path) -> bool { return path.has_value(); });
+    };
+    if (names_file(result->bufferPaths) || names_file(result->imagePaths) || names_file(result->filePaths)) {
+        log_gltf->error("glTF export: the text document references a file with no bytes to write - nothing exported");
+        return {};
+    }
+    document.bytes = std::move(result->output);
+    return document;
+}
+
+auto Gltf_export_document::get_byte_count() const -> std::size_t
+{
+    std::size_t byte_count = bytes.size();
+    for (const Gltf_export_file& file : external_files) {
+        byte_count += file.bytes.size();
+    }
+    return byte_count;
+}
+
+auto export_gltf_document(const Gltf_export_arguments& arguments, const std::filesystem::path& path) -> Gltf_export_document
+{
+    Gltf_exporter exporter{arguments, erhe::file::to_string(path.stem())};
+    return exporter.export_gltf();
+}
+
+auto write_gltf_document(const std::filesystem::path& path, const Gltf_export_document& document) -> bool
+{
+    if (document.empty()) {
+        return false;
+    }
+    std::vector<erhe::file::File_write> files;
+    files.reserve(document.external_files.size() + 1);
+    for (const Gltf_export_file& file : document.external_files) {
+        files.push_back(erhe::file::File_write{.path = path.parent_path() / erhe::file::from_string(file.file_name), .bytes = std::span<const std::byte>{file.bytes}});
+    }
+    // Last: the document replaces its old version after the files it references.
+    files.push_back(erhe::file::File_write{.path = path, .bytes = std::as_bytes(std::span<const char>{document.bytes.data(), document.bytes.size()})});
+    return erhe::file::write_files_via_temp(files);
+}
+
+auto get_gltf_buffer_file_path(const std::filesystem::path& path) -> std::filesystem::path
+{
+    if (path.extension() != std::filesystem::path{".gltf"}) {
+        return {};
+    }
+    std::filesystem::path buffer_path = path;
+    buffer_path.replace_extension(".bin");
+    return buffer_path;
 }
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string
 {
-    Gltf_exporter exporter{arguments};
-    return exporter.export_gltf();
+    Gltf_exporter exporter{arguments, "buffer"};
+    Gltf_export_document document = exporter.export_gltf();
+    if (!document.external_files.empty()) {
+        log_gltf->error("export_gltf(): the text document references buffer files - use export_gltf_document() + write_gltf_document()");
+        return {};
+    }
+    return std::move(document.bytes);
 }
 
 [[nodiscard]] auto export_gltf(const erhe::scene::Node& root_node, bool binary, const erhe::scene::Physics_description* physics_data) -> std::string

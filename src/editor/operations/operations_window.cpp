@@ -3637,11 +3637,12 @@ void Operations::export_callback(const char* const* filelist, int filter)
     }
 
     if (path.has_value()) {
-        const bool binary = true;
+        // A .gltf is text with its buffer in <stem>.bin; anything else a .glb.
+        const bool binary = path.value().extension() != std::filesystem::path{".gltf"};
         const erhe::scene::Physics_description physics_data = build_physics_description(scene, scene_root->get_content_library().get());
         // Prefab instances export as glTF 2.1 externalAsset references
         // instead of flattened content.
-        std::string gltf = erhe::gltf::export_gltf(
+        const erhe::gltf::Gltf_export_document document = erhe::gltf::export_gltf_document(
             erhe::gltf::Gltf_export_arguments{
                 .root_node             = *root_node.get(),
                 .binary                = binary,
@@ -3651,11 +3652,12 @@ void Operations::export_callback(const char* const* filelist, int filter)
                 .animations            = collect_gltf_export_animations(scene_root->get_content_library()),
                 .excluded_item_flag_bits = Editor_item_flags::rendertarget,
                 .excluded_item_type_bits = Editor_item_types::joint
-            }
+            },
+            path.value()
         );
-        if (gltf.empty()) {
+        if (document.empty()) {
             log_operations->error("glTF export of '{}' failed - nothing written", erhe::file::to_string(path.value()));
-        } else if (!erhe::file::write_file_via_temp(path.value(), gltf)) {
+        } else if (!erhe::gltf::write_gltf_document(path.value(), document)) {
             log_operations->error("glTF export: writing '{}' failed", erhe::file::to_string(path.value()));
         }
     }

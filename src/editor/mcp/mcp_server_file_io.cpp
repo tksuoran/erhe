@@ -1062,13 +1062,13 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         // The default export stays plain interchange.
         add_gltf_editor_state(export_arguments, *sr, export_path, physics_items, Gltf_editor_state_scope::scene_file);
     }
-    const std::string gltf = erhe::gltf::export_gltf(export_arguments);
-    if (gltf.empty()) {
+    const erhe::gltf::Gltf_export_document document = erhe::gltf::export_gltf_document(export_arguments, export_path);
+    if (document.empty()) {
         json r = make_text_content("Export failed (a source image cannot be read; see logs/log.txt): " + path_str);
         r["isError"] = true;
         return r.dump();
     }
-    if (!erhe::file::write_file_via_temp(std::filesystem::path{path_str}, gltf)) {
+    if (!erhe::gltf::write_gltf_document(export_path, document)) {
         json r = make_text_content("Failed to write file: " + path_str);
         r["isError"] = true;
         return r.dump();
@@ -1076,7 +1076,7 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
     return make_json_content({
         {"exported", true},
         {"path",     path_str},
-        {"bytes",    gltf.size()}
+        {"bytes",    document.get_byte_count()}
     }).dump();
 }
 
