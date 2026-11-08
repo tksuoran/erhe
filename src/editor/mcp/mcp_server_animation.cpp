@@ -422,6 +422,157 @@ auto Mcp_server::action_animation_delete_key(const json& args) -> std::string
     return make_json_content({{"deleted", true}, {"time", time}}).dump();
 }
 
+namespace {
+
+// The animation an edit tool acts on: the named one, else the Animation
+// window's target. Empty with the error text set when there is none.
+auto resolve_edit_animation(App_context& context, const json& args, std::string& out_error) -> std::shared_ptr<erhe::scene::Animation>
+{
+    const std::string name = args.value("animation", "");
+    std::shared_ptr<erhe::scene::Animation> animation;
+    if (!name.empty()) {
+        animation = find_animation_in_scenes(context.app_scenes, name, args.value("scene_name", ""));
+        if (!animation) {
+            out_error = "Animation not found: " + name;
+            return {};
+        }
+    } else if (context.animation_window != nullptr) {
+        animation = context.animation_window->get_animation();
+    }
+    if (!animation) {
+        out_error = "No animation targeted; pass 'animation' or call set_animation_target first";
+    }
+    return animation;
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_animation_set_interpolation(const json& args) -> std::string
+{
+    if (m_context.operation_stack == nullptr) {
+        return make_error_content("Operation stack not available");
+    }
+    std::string error;
+    const std::shared_ptr<erhe::scene::Animation> animation = resolve_edit_animation(m_context, args, error);
+    if (!animation) {
+        return make_error_content(error);
+    }
+    if (!args.contains("channel_index") || !args["channel_index"].is_number_integer()) {
+        return make_error_content("Missing required 'channel_index'");
+    }
+    const std::size_t channel_index = static_cast<std::size_t>(args["channel_index"].get<int>());
+    if (channel_index >= animation->channels.size()) {
+        return make_error_content("channel_index out of range");
+    }
+    const std::string mode_name = args.value("mode", "");
+    erhe::scene::Animation_interpolation_mode mode{};
+    if (mode_name == "step") {
+        mode = erhe::scene::Animation_interpolation_mode::STEP;
+    } else if (mode_name == "linear") {
+        mode = erhe::scene::Animation_interpolation_mode::LINEAR;
+    } else if (mode_name == "cubicspline") {
+        mode = erhe::scene::Animation_interpolation_mode::CUBICSPLINE;
+    } else {
+        return make_error_content("Unknown mode: '" + mode_name + "' (use step, linear or cubicspline)");
+    }
+    const std::size_t sampler_index = animation->channels.at(channel_index).sampler_index;
+    std::vector<Animation_sampler_state> before;
+    before.push_back(capture_sampler_state(*animation.get(), sampler_index));
+    const bool changed = set_sampler_interpolation_mode(*animation.get(), sampler_index, mode);
+    if (changed) {
+        std::vector<Animation_sampler_state> after;
+        after.push_back(capture_sampler_state(*animation.get(), sampler_index));
+        m_context.operation_stack->execute_now(
+            std::make_shared<Animation_edit_operation>(
+                "MCP set interpolation " + mode_name,
+                animation,
+                std::move(before),
+                std::move(after)
+            )
+        );
+    }
+    json result;
+    result["channel_index"] = channel_index;
+    result["sampler_index"] = sampler_index;
+    result["interpolation"] = erhe::scene::c_str(animation->samplers.at(sampler_index).interpolation_mode);
+    result["changed"]       = changed;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_animation_set_tangents(const json& args) -> std::string
+{
+    if (m_context.operation_stack == nullptr) {
+        return make_error_content("Operation stack not available");
+    }
+    std::string error;
+    const std::shared_ptr<erhe::scene::Animation> animation = resolve_edit_animation(m_context, args, error);
+    if (!animation) {
+        return make_error_content(error);
+    }
+    if (!args.contains("channel_index") || !args["channel_index"].is_number_integer()) {
+        return make_error_content("Missing required 'channel_index'");
+    }
+    const std::size_t channel_index = static_cast<std::size_t>(args["channel_index"].get<int>());
+    if (channel_index >= animation->channels.size()) {
+        return make_error_content("channel_index out of range");
+    }
+    const erhe::scene::Animation_channel& channel       = animation->channels.at(channel_index);
+    const std::size_t                     sampler_index = channel.sampler_index;
+    if (animation->samplers.at(sampler_index).interpolation_mode != erhe::scene::Animation_interpolation_mode::CUBICSPLINE) {
+        return make_error_content("The channel's sampler is not cubicspline (animation_set_interpolation first)");
+    }
+    const std::size_t key_count = animation->samplers.at(sampler_index).timestamps.size();
+    std::vector<Animation_sampler_state> before;
+    before.push_back(capture_sampler_state(*animation.get(), sampler_index));
+    json result;
+    if (args.value("smooth", false)) {
+        recompute_sampler_tangents(*animation.get(), sampler_index);
+        result["smooth"] = true;
+    } else {
+        if (!args.contains("key_index") || !args["key_index"].is_number_integer()) {
+            return make_error_content("Missing required 'key_index' (or pass smooth: true)");
+        }
+        if (!args.contains("component") || !args["component"].is_number_integer()) {
+            return make_error_content("Missing required 'component'");
+        }
+        const std::size_t key_index = static_cast<std::size_t>(args["key_index"].get<int>());
+        const std::size_t component = static_cast<std::size_t>(args["component"].get<int>());
+        if (key_index >= key_count) {
+            return make_error_content("key_index out of range");
+        }
+        if (component >= erhe::scene::get_component_count(channel)) {
+            return make_error_content("component out of range for channel path");
+        }
+        if (args.contains("in_tangent") && args["in_tangent"].is_number()) {
+            set_keyframe_tangent(*animation.get(), channel_index, key_index, component, Tangent_side::in, args["in_tangent"].get<float>());
+        }
+        if (args.contains("out_tangent") && args["out_tangent"].is_number()) {
+            set_keyframe_tangent(*animation.get(), channel_index, key_index, component, Tangent_side::out, args["out_tangent"].get<float>());
+        }
+        result["key_index"]   = key_index;
+        result["component"]   = component;
+        result["in_tangent"]  = get_keyframe_tangent(*animation.get(), channel_index, key_index, component, Tangent_side::in);
+        result["out_tangent"] = get_keyframe_tangent(*animation.get(), channel_index, key_index, component, Tangent_side::out);
+    }
+    std::vector<Animation_sampler_state> after;
+    after.push_back(capture_sampler_state(*animation.get(), sampler_index));
+    // A read (no tangent given) changes nothing and records no undo entry.
+    const bool changed = after.front().data != before.front().data;
+    if (changed) {
+        m_context.operation_stack->execute_now(
+            std::make_shared<Animation_edit_operation>(
+                "MCP set tangents",
+                animation,
+                std::move(before),
+                std::move(after)
+            )
+        );
+    }
+    result["changed"]       = changed;
+    result["channel_index"] = channel_index;
+    return make_json_content(result).dump();
+}
+
 auto Mcp_server::action_animation_edit_keyframe(const json& args) -> std::string
 {
     if (m_context.operation_stack == nullptr) {

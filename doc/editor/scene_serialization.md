@@ -348,7 +348,9 @@ the worker reads:
 - the saved scene's physics does not step, its viewports find no hover
   (the pointer reaches them, so camera navigation works), the fly camera
   does not move a camera of that scene unless the camera node is
-  `session_only` (the editor's own viewport camera, which no save writes),
+  `session_only` (the editor's own viewport camera, which no save writes
+  until the camera is keyed: keying clears `session_only`, so an animated
+  default camera and its animation are saved),
   and `Scene_root::request_close()` refuses it;
 - MCP refuses every tool but the status and save tools
   (doc/agents/mcp_server_usage.md "Saving scenes").

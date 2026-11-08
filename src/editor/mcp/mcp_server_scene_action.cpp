@@ -2,6 +2,8 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "animation/animation_keying.hpp"
+#include "animation/animation_player.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "editor_item_bits.hpp"
 #include "mcp/mcp_server_shared.hpp"
@@ -2012,6 +2014,14 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
     // provided components replace those of the node's current transform in
     // the requested space, in ONE call, without touching the selection (no
     // gizmo rebind, no kinematic hold on selected dynamic bodies).
+    // A paused playback pose becomes the pose the edit starts from, as the
+    // gizmo does (adopt_playback_pose); a playing animation keeps its pose.
+    {
+        const Animation_player* const player = m_context.animation_player;
+        if ((player == nullptr) || !player->is_playing()) {
+            static_cast<void>(adopt_playback_pose(*node));
+        }
+    }
     const erhe::scene::Trs_transform parent_from_node_before = node->parent_from_node_transform();
     const std::optional<erhe::scene::Xform_op_stack> xform_op_stack_before = node->copy_xform_op_stack();
     erhe::scene::Trs_transform trs = world ? node->world_from_node_transform() : parent_from_node_before;

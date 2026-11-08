@@ -5,6 +5,7 @@
 #include "config/generated/debug_visualizations_style.hpp"
 #include "config/generated/editor_settings_config.hpp"
 
+#include "animation/animation_player.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
@@ -49,6 +50,7 @@
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
+#include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/layout.hpp"
 #include "erhe_scene/light.hpp"
@@ -1688,6 +1690,123 @@ private:
 
 } // anonymous namespace
 
+void Debug_visualizations::animation_paths_visualization(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const Animation_player* const player = context.app_context.animation_player;
+    if (player == nullptr) {
+        return;
+    }
+    const std::shared_ptr<erhe::scene::Animation>& animation = player->get_animation();
+    if (!animation || animation->channels.empty()) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    const erhe::scene::Scene* const view_scene = scene_root->get_hosted_scene();
+    const float first_time = animation->get_first_time();
+    const float last_time  = animation->get_last_time();
+    if (last_time < first_time) {
+        return;
+    }
+    const float interval = std::max(m_settings.animation_path_interval, 0.001f);
+    const float now      = player->get_time();
+
+    constexpr glm::vec4 cyan   {0.0f, 1.0f, 1.0f, 1.0f};
+    constexpr glm::vec4 magenta{1.0f, 0.0f, 1.0f, 1.0f};
+    constexpr glm::vec4 red    {1.0f, 0.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 green  {0.0f, 1.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 blue   {0.0f, 0.0f, 1.0f, 1.0f};
+    const float path_width = m_selection_node_axis_width;
+
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+
+    // One pass per distinct target node: the node's first channel owns it,
+    // and its translation / rotation / scale channels are looked up from
+    // there, so a node with several channels is drawn once.
+    const std::size_t channel_count = animation->channels.size();
+    for (std::size_t owner_index = 0; owner_index < channel_count; ++owner_index) {
+        erhe::scene::Animation_channel& owner_channel = animation->channels[owner_index];
+        const std::shared_ptr<erhe::scene::Node> node = erhe::scene::get_target_node(owner_channel);
+        if (!node || (node->get_scene() != view_scene)) {
+            continue;
+        }
+        bool first_channel_of_node = true;
+        for (std::size_t j = 0; j < owner_index; ++j) {
+            if (erhe::scene::get_target_node(animation->channels[j]) == node) {
+                first_channel_of_node = false;
+                break;
+            }
+        }
+        if (!first_channel_of_node || !should_visualize(m_settings.animation_paths, node)) {
+            continue;
+        }
+
+        erhe::scene::Animation_channel* translation_channel = nullptr;
+        erhe::scene::Animation_channel* rotation_channel    = nullptr;
+        erhe::scene::Animation_channel* scale_channel       = nullptr;
+        for (std::size_t j = owner_index; j < channel_count; ++j) {
+            erhe::scene::Animation_channel& channel = animation->channels[j];
+            if (erhe::scene::get_target_node(channel) != node) {
+                continue;
+            }
+            switch (erhe::scene::get_animation_path(channel)) {
+                case erhe::scene::Animation_path::TRANSLATION: translation_channel = &channel; break;
+                case erhe::scene::Animation_path::ROTATION:    rotation_channel    = &channel; break;
+                case erhe::scene::Animation_path::SCALE:       scale_channel       = &channel; break;
+                default: break;
+            }
+        }
+        if ((translation_channel == nullptr) && (rotation_channel == nullptr) && (scale_channel == nullptr)) {
+            continue;
+        }
+
+        // The sampled local transform at a time: the authored transform with
+        // the animated components replaced, in the parent's current frame.
+        const erhe::scene::Trs_transform authored = node->authored_parent_from_node_transform();
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        const glm::mat4 world_from_parent = parent ? parent->world_from_node() : glm::mat4{1.0f};
+        const auto sample = [&](const float time) -> erhe::scene::Trs_transform {
+            glm::vec3 translation = authored.get_translation();
+            glm::quat rotation    = authored.get_rotation();
+            glm::vec3 scale       = authored.get_scale();
+            if (translation_channel != nullptr) {
+                translation = glm::vec3{animation->samplers.at(translation_channel->sampler_index).evaluate(*translation_channel, time)};
+            }
+            if (rotation_channel != nullptr) {
+                const glm::vec4 q = animation->samplers.at(rotation_channel->sampler_index).evaluate(*rotation_channel, time);
+                rotation = glm::normalize(glm::quat{q.w, q.x, q.y, q.z});
+            }
+            if (scale_channel != nullptr) {
+                scale = glm::vec3{animation->samplers.at(scale_channel->sampler_index).evaluate(*scale_channel, time)};
+            }
+            return erhe::scene::Trs_transform{translation, rotation, scale};
+        };
+
+        if (translation_channel != nullptr) {
+            glm::vec3 previous = glm::vec3{world_from_parent * glm::vec4{sample(first_time).get_translation(), 1.0f}};
+            bool      odd      = false;
+            for (float time = first_time + interval; time < last_time + (0.5f * interval); time += interval) {
+                const float     clamped = std::min(time, last_time);
+                const glm::vec3 current = glm::vec3{world_from_parent * glm::vec4{sample(clamped).get_translation(), 1.0f}};
+                const glm::vec4& color = odd ? magenta : cyan;
+                line_renderer.add_line(color, path_width, previous, color, path_width, current);
+                previous = current;
+                odd      = !odd;
+            }
+        }
+
+        const glm::mat4 world_from_node_now = world_from_parent * sample(now).get_matrix();
+        line_renderer.set_thickness(m_selection_node_axis_width);
+        line_renderer.add_lines(world_from_node_now, red,   {{ O, axis_x }});
+        line_renderer.add_lines(world_from_node_now, green, {{ O, axis_y }});
+        line_renderer.add_lines(world_from_node_now, blue,  {{ O, axis_z }});
+    }
+}
+
 void Debug_visualizations::physics_nodes_visualization(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
@@ -2181,6 +2300,10 @@ void Debug_visualizations::render(const Render_context& context)
         return true;
     });
 
+    if (m_settings.animation_paths != Visualization_mode::off) {
+        animation_paths_visualization(context);
+    }
+
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
         for (const auto& mesh : layer->meshes) {
             mesh_labels(context, mesh.get());
@@ -2629,6 +2752,29 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
 
     p.reset();
     p.add_entry("Node Axises", [this](){ make_combo("##", m_settings.node_axises); });
+    p.add_entry("Animation Paths", [this](){
+        // The targeted animation's paths: no hovered mode, a path is per
+        // target node and hover picks meshes.
+        static constexpr const char* c_animation_path_mode_strings[] = { "Off", "Selected", "All" };
+        static constexpr Visualization_mode c_animation_path_modes[] = { Visualization_mode::off, Visualization_mode::selected, Visualization_mode::all };
+        int index = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (c_animation_path_modes[i] == m_settings.animation_paths) {
+                index = i;
+            }
+        }
+        if (ImGui::Combo("##", &index, c_animation_path_mode_strings, 3)) {
+            m_settings.animation_paths = c_animation_path_modes[index];
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Paths of the animation targeted in the Animation window:\n"
+                "translation sampled at Path Interval (cyan / magenta segments)\n"
+                "and the node axes at the current time."
+            );
+        }
+    });
+    p.add_entry("Path Interval", [this](){ ImGui::DragFloat("##", &m_settings.animation_path_interval, 0.01f, 0.001f, 10.0f, "%.3f s"); });
     p.add_entry("Physics",     [this](){ make_combo("##", m_settings.physics  ); });
     p.add_entry("Raytrace",    [this](){ make_combo("##", m_settings.raytrace ); });
     // Joint constraints (doc/editor/tools.md "Debug_visualizations"):

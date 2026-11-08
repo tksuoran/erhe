@@ -9,6 +9,7 @@ erhe_target_sources_grouped(
     erhe_math/box_hull.cpp
     erhe_math/box_hull.hpp
     erhe_math/euler_angles.hpp
+    erhe_math/hermite.hpp
     erhe_math/input_axis.cpp
     erhe_math/input_axis.hpp
     erhe_math/math_log.cpp

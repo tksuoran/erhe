@@ -734,6 +734,14 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         }
 
         ++node_count;
+        // A paused playback pose becomes the authored pose the drag starts
+        // from, so the drag shows (adopt_playback_pose); a playing animation
+        // keeps its pose and the drag edits the base under it.
+        const Animation_player* player = m_context.animation_player;
+        const bool animation_playing = (player != nullptr) && player->is_playing();
+        if (!animation_playing && ((node_filter == nullptr) || (node.get() == node_filter) || node->is_ancestor(node_filter))) {
+            static_cast<void>(adopt_playback_pose(*node));
+        }
         if (node_filter == nullptr) {
             shared.entries.push_back(
                 Transform_entry{

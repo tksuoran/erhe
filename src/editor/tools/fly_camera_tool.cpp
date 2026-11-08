@@ -1,6 +1,7 @@
 
 #include "tools/fly_camera_tool.hpp"
 
+#include "animation/animation_player.hpp"
 #include "scene/scene_save_service.hpp"
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -764,6 +765,12 @@ Fly_camera_tool::Fly_camera_tool(
     }
 
     m_camera_controller = std::make_unique<Frame_controller>();
+    m_camera_controller->set_animation_playing_query(
+        [this]() -> bool {
+            const Animation_player* player = m_context.animation_player;
+            return (player != nullptr) && player->is_playing();
+        }
+    );
 
     m_camera_controller->get_variable(Variable::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_variable(Variable::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);

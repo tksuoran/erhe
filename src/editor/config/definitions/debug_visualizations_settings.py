@@ -8,7 +8,7 @@ from erhe_codegen import *
 # Debug_visualizations_config, the per-viewport light/camera visualization
 # modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
-    version=3,
+    version=4,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
@@ -19,6 +19,11 @@ struct("Debug_visualizations_settings",
         field("layouts",                     EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Layouts"),
         field("skins",                       EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Skins"),
         field("node_axises",                 EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Node Axises"),
+        # Transform animation paths (doc/editor/tools.md "Debug_visualizations"):
+        # the active animation's translation of each target node sampled at
+        # animation_path_interval, and the node axes at the playhead time.
+        field("animation_paths",             EnumRef("Visualization_mode"), added_in=4, default="Visualization_mode::off", short_desc="Animation Paths", long_desc="Paths of the targeted animation's nodes: off, the selected nodes, or all target nodes"),
+        field("animation_path_interval",     Float, added_in=4, default="0.1f", short_desc="Path Interval", long_desc="Seconds between the sampled points of an animation path"),
         field("physics",                     EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Physics"),
         field("raytrace",                    EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Raytrace"),
         field("vertex_labels",               EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Show Vertices"),

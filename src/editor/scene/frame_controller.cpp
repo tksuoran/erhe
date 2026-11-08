@@ -1,5 +1,6 @@
 #include "scene/frame_controller.hpp"
 
+#include "animation/animation_keying.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_scene/node.hpp"
@@ -136,6 +137,7 @@ auto Frame_controller::get_variable(const Variable control) -> erhe::math::Input
 void Frame_controller::set_position(const vec3 position)
 {
     m_position = position;
+    m_user_motion = true;
     update();
 }
 
@@ -143,6 +145,7 @@ void Frame_controller::set_orientation(const glm::quat& orientation)
 {
     ERHE_CAMERA_ROLL_SCOPE(m_roll_monitor, "Frame_controller::set_orientation", m_orientation);
     m_orientation = glm::normalize(orientation);
+    m_user_motion = true;
     update();
 }
 
@@ -238,6 +241,13 @@ void Frame_controller::update()
 #endif
 
     m_transform_update = true;
+    if (m_user_motion) {
+        m_user_motion = false;
+        const bool playing = m_animation_playing_query && m_animation_playing_query();
+        if (!playing) {
+            static_cast<void>(adopt_playback_pose(*node));
+        }
+    }
     node->set_world_from_node(erhe::scene::Trs_transform{m_position, m_orientation});
     const glm::vec4 direction_in_world = node->direction_in_world();
     // log_input_frame->info("Frame_controller::update() direction_in_world = {}", glm::vec3{direction_in_world});
@@ -347,9 +357,17 @@ void Frame_controller::update_fixed_step()
 
     float rx = rotate_x.current_value() + active_rotate_x;
     float ry = rotate_y.current_value() + active_rotate_y;
+    if ((tx != 0.0f) || (ty != 0.0f) || (tz != 0.0f) || (tzoom != 0.0f)) {
+        m_user_motion = true;
+    }
     apply_rotation(rx, ry, 0.0f);
 
     update();
+}
+
+void Frame_controller::set_animation_playing_query(std::function<bool()> query)
+{
+    m_animation_playing_query = std::move(query);
 }
 
 void Frame_controller::apply_rotation(float rx, float ry, float rz)
@@ -366,6 +384,9 @@ void Frame_controller::apply_rotation(float rx, float ry, float rz)
     );
 #endif
 
+    if ((rx != 0.0f) || (ry != 0.0f) || (rz != 0.0f)) {
+        m_user_motion = true;
+    }
     m_orientation = compose_rotation(m_orientation, rx, ry, rz);
     update();
 }
@@ -410,6 +431,7 @@ void Frame_controller::apply_tumble(glm::vec3 pivot, float rx, float ry, float r
         m_position = pivot + (new_orientation * direction_in_view);
     }
     m_orientation = new_orientation;
+    m_user_motion = true;
     update();
 }
 

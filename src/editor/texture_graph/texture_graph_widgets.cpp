@@ -6,6 +6,8 @@
 
 #include "graph_editor/graph_editor_widgets.hpp" // imgui_enum_combo, imgui_color_edit
 
+#include "erhe_math/hermite.hpp"
+
 #include <imgui/imgui.h>
 
 #include <algorithm>
@@ -88,36 +90,25 @@ constexpr float pi = 3.14159265359f;
     if (d < 1.0e-8f) {
         return a.y;
     }
-    const float t    = (x - a.x) / d;
-    const float omt  = 1.0f - t;
-    const float omt2 = omt * omt;
-    const float omt3 = omt2 * omt;
-    const float t2   = t * t;
-    const float t3   = t2 * t;
-    d /= 3.0f;
-    const float y1  = a.y;
-    const float yac = a.y + (d * a.right_slope);
-    const float ybc = b.y - (d * b.left_slope);
-    const float y2  = b.y;
-    return (y1 * omt3) + (yac * omt2 * t * 3.0f) + (ybc * omt * t2 * 3.0f) + (y2 * t3);
+    const float t = (x - a.x) / d;
+    return erhe::math::hermite(t, d, a.y, a.right_slope, b.y, b.left_slope);
 }
 
 // Recomputes each point's tangent slopes from its neighbors (Catmull-Rom finite
 // difference) so an edited curve stays smooth without tangent-handle editing.
 void recompute_curve_slopes(std::vector<Curve_point>& points)
 {
-    const std::size_t n = points.size();
-    for (std::size_t i = 0; i < n; ++i) {
-        float slope = 0.0f;
-        if (n >= 2) {
-            if (i == 0) {
-                slope = (points[1].y - points[0].y) / std::max(1.0e-5f, points[1].x - points[0].x);
-            } else if (i == (n - 1)) {
-                slope = (points[i].y - points[i - 1].y) / std::max(1.0e-5f, points[i].x - points[i - 1].x);
-            } else {
-                slope = (points[i + 1].y - points[i - 1].y) / std::max(1.0e-5f, points[i + 1].x - points[i - 1].x);
-            }
-        }
+    // Scratch: the point coordinates as the shared slope helper reads them.
+    static thread_local std::vector<float> xs;
+    static thread_local std::vector<float> ys;
+    xs.clear();
+    ys.clear();
+    for (const Curve_point& point : points) {
+        xs.push_back(point.x);
+        ys.push_back(point.y);
+    }
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        const float slope = erhe::math::catmull_rom_slope(xs, ys, i);
         points[i].left_slope  = slope;
         points[i].right_slope = slope;
     }

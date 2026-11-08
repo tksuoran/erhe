@@ -1,5 +1,6 @@
 #include "animation/animation_edit.hpp"
 
+#include "erhe_math/hermite.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
@@ -34,17 +35,26 @@ auto capture_sampler_state(const erhe::scene::Animation& animation, const std::s
 {
     const erhe::scene::Animation_sampler& sampler = animation.samplers.at(sampler_index);
     return Animation_sampler_state{
-        .sampler_index = sampler_index,
-        .timestamps    = sampler.timestamps,
-        .data          = sampler.data
+        .sampler_index      = sampler_index,
+        .interpolation_mode = sampler.interpolation_mode,
+        .timestamps         = sampler.timestamps,
+        .data               = sampler.data
     };
 }
 
 void restore_sampler_state(erhe::scene::Animation& animation, const Animation_sampler_state& state)
 {
     erhe::scene::Animation_sampler& sampler = animation.samplers.at(state.sampler_index);
-    sampler.timestamps = state.timestamps;
-    sampler.data       = state.data;
+    sampler.interpolation_mode = state.interpolation_mode;
+    sampler.timestamps         = state.timestamps;
+    sampler.data               = state.data;
+    // The value element sits after the in-tangent block in a CUBICSPLINE key.
+    const bool cubic = state.interpolation_mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE;
+    for (erhe::scene::Animation_channel& channel : animation.channels) {
+        if (channel.sampler_index == state.sampler_index) {
+            channel.value_offset = cubic ? erhe::scene::get_component_count(channel) : 0;
+        }
+    }
     reset_channel_seek_state(animation);
 }
 
@@ -209,6 +219,131 @@ auto delete_keyframe(
     );
     reset_channel_seek_state(animation);
     return true;
+}
+
+auto set_sampler_interpolation_mode(
+    erhe::scene::Animation&                         animation,
+    const std::size_t                               sampler_index,
+    const erhe::scene::Animation_interpolation_mode mode
+) -> bool
+{
+    erhe::scene::Animation_sampler& sampler = animation.samplers.at(sampler_index);
+    if (sampler.interpolation_mode == mode) {
+        return false;
+    }
+    const std::size_t key_count = sampler.timestamps.size();
+    const bool        was_cubic = sampler.interpolation_mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE;
+    const bool        is_cubic  = mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE;
+    if ((was_cubic != is_cubic) && (key_count > 0)) {
+        // Components per key: the value stride of the old layout divided by
+        // its blocks per key.
+        const std::size_t old_stride      = get_sampler_value_stride(sampler);
+        const std::size_t component_count = old_stride / get_key_value_count(sampler.interpolation_mode);
+        std::vector<float> converted;
+        if (is_cubic) {
+            converted.resize(key_count * component_count * 3, 0.0f);
+            for (std::size_t key = 0; key < key_count; ++key) {
+                for (std::size_t c = 0; c < component_count; ++c) {
+                    converted[(key * component_count * 3) + component_count + c] = sampler.data[(key * component_count) + c];
+                }
+            }
+        } else {
+            converted.resize(key_count * component_count, 0.0f);
+            for (std::size_t key = 0; key < key_count; ++key) {
+                for (std::size_t c = 0; c < component_count; ++c) {
+                    converted[(key * component_count) + c] = sampler.data[(key * component_count * 3) + component_count + c];
+                }
+            }
+        }
+        sampler.data = std::move(converted);
+        for (erhe::scene::Animation_channel& channel : animation.channels) {
+            if (channel.sampler_index == sampler_index) {
+                channel.value_offset = is_cubic ? erhe::scene::get_component_count(channel) : 0;
+            }
+        }
+    }
+    sampler.interpolation_mode = mode;
+    if (is_cubic && !was_cubic) {
+        recompute_sampler_tangents(animation, sampler_index);
+    }
+    reset_channel_seek_state(animation);
+    return true;
+}
+
+void recompute_sampler_tangents(erhe::scene::Animation& animation, const std::size_t sampler_index)
+{
+    erhe::scene::Animation_sampler& sampler = animation.samplers.at(sampler_index);
+    if (sampler.interpolation_mode != erhe::scene::Animation_interpolation_mode::CUBICSPLINE) {
+        return;
+    }
+    const std::size_t key_count = sampler.timestamps.size();
+    const std::size_t stride    = get_sampler_value_stride(sampler);
+    if ((key_count == 0) || (stride == 0)) {
+        return;
+    }
+    const std::size_t component_count = stride / 3;
+    // Scratch: one component curve at a time
+    static thread_local std::vector<float> values;
+    values.resize(key_count);
+    for (std::size_t c = 0; c < component_count; ++c) {
+        for (std::size_t key = 0; key < key_count; ++key) {
+            values[key] = sampler.data[(key * stride) + component_count + c];
+        }
+        for (std::size_t key = 0; key < key_count; ++key) {
+            const float slope = erhe::math::catmull_rom_slope(sampler.timestamps, values, key, c_min_key_separation);
+            sampler.data[(key * stride) + c]                           = slope; // in
+            sampler.data[(key * stride) + (2 * component_count) + c]   = slope; // out
+        }
+    }
+    reset_channel_seek_state(animation);
+}
+
+namespace {
+
+[[nodiscard]] auto get_key_tangent_index(
+    const erhe::scene::Animation& animation,
+    const std::size_t             channel_index,
+    const std::size_t             key_index,
+    const std::size_t             component,
+    const Tangent_side            side
+) -> std::size_t
+{
+    const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
+    const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+    ERHE_VERIFY(sampler.interpolation_mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE);
+    const std::size_t component_count = erhe::scene::get_component_count(channel);
+    const std::size_t stride          = component_count * 3;
+    const std::size_t block           = (side == Tangent_side::in) ? 0 : (2 * component_count);
+    return (key_index * stride) + block + component;
+}
+
+} // anonymous namespace
+
+auto get_keyframe_tangent(
+    const erhe::scene::Animation& animation,
+    const std::size_t             channel_index,
+    const std::size_t             key_index,
+    const std::size_t             component,
+    const Tangent_side            side
+) -> float
+{
+    const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
+    const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+    return sampler.data.at(get_key_tangent_index(animation, channel_index, key_index, component, side));
+}
+
+void set_keyframe_tangent(
+    erhe::scene::Animation& animation,
+    const std::size_t       channel_index,
+    const std::size_t       key_index,
+    const std::size_t       component,
+    const Tangent_side      side,
+    const float             tangent
+)
+{
+    const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
+    erhe::scene::Animation_sampler&       sampler = animation.samplers.at(channel.sampler_index);
+    sampler.data.at(get_key_tangent_index(animation, channel_index, key_index, component, side)) = tangent;
 }
 
 void reset_channel_seek_state(erhe::scene::Animation& animation)

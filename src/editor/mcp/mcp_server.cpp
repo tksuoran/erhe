@@ -969,6 +969,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_animation_target",           &Mcp_server::action_set_animation_target          },
         { "animation_playback",             &Mcp_server::action_animation_playback            },
         { "animation_edit_keyframe",        &Mcp_server::action_animation_edit_keyframe       },
+        { "animation_set_interpolation",    &Mcp_server::action_animation_set_interpolation   },
+        { "animation_set_tangents",         &Mcp_server::action_animation_set_tangents        },
         { "animation_create_key",           &Mcp_server::action_animation_create_key          },
         { "animation_delete_key",           &Mcp_server::action_animation_delete_key          },
         { "get_item_properties",            &Mcp_server::query_item_properties                },

@@ -88,7 +88,19 @@ private:
         pan,
         scrub,
         box_select,
-        move_keys
+        move_keys,
+        move_handle
+    };
+
+    // A tangent handle of a selected key on a CUBICSPLINE curve, as drawn
+    // this frame (Blender-style: handles show on selected keys only).
+    class Tangent_handle
+    {
+    public:
+        Curve_point  point;
+        Tangent_side side{Tangent_side::out};
+        ImVec2       px     {0.0f, 0.0f}; // handle end
+        ImVec2       key_px {0.0f, 0.0f}; // the key it belongs to
     };
 
     // What the timeline strip's key markers show.
@@ -116,6 +128,10 @@ private:
     void create_key_for_selection();
     void delete_key_for_selection();
     void collect_key_marker_times();
+    // Seeks to the nearest key time before / after the current time among
+    // the strip's marker source (collect_key_marker_times); no-op at the ends.
+    enum class Key_step { previous, next };
+    void seek_to_adjacent_key(Key_step step);
     void collect_selected_nodes  (std::vector<std::shared_ptr<erhe::scene::Node>>& out_nodes) const;
 
     [[nodiscard]] auto channel_label        (std::size_t channel_index) const -> std::string;
@@ -126,8 +142,21 @@ private:
     void compute_frame_all_view (float canvas_height_px);
     void apply_key_drag         (float time_delta, float value_delta);
     void finish_key_drag        (bool moved);
+    // Interpolation mode of the channel's sampler, as one undo entry; a
+    // CUBICSPLINE sampler can also have its tangents reset to the smooth
+    // default.
+    void set_channel_interpolation(std::size_t channel_index, erhe::scene::Animation_interpolation_mode mode);
+    void smooth_channel_tangents  (std::size_t channel_index);
+    // Handles of the selected CUBICSPLINE keys for this frame's view.
+    void build_tangent_handles  ();
+    void apply_handle_drag      (ImVec2 mouse_px);
+    void finish_handle_drag     (bool moved);
     void delete_selected_keys   ();
     void insert_key_at          (float time, ImVec2 mouse_px);
+    // Blender's I: a key at the playhead on the channels of the selected
+    // keys (or, with none selected, every shown channel), with the curve's
+    // own value so the animation does not change; one undo entry.
+    void insert_keys_at_current_time();
 
     [[nodiscard]] auto is_point_selected   (const Curve_point& point) const -> bool;
     [[nodiscard]] auto is_component_visible(std::size_t channel_index, std::size_t component) const -> bool;
@@ -197,6 +226,12 @@ private:
 
     // Undo snapshots of the samplers affected by the current gesture.
     std::vector<Animation_sampler_state> m_edit_before;
+
+    // Tangent handles of the selected cubic keys (rebuilt each frame,
+    // capacity kept) and the one a move_handle drag holds.
+    std::vector<Tangent_handle> m_tangent_handles;
+    int                         m_hovered_handle{-1}; // index into m_tangent_handles, -1 = none
+    Tangent_handle              m_dragged_handle{};
 
     // Scratch: all visible curve points of the current frame and their pixel
     // positions (rebuilt each frame, capacity kept).

@@ -66,23 +66,16 @@ channel re-pointing (the whole-animation `Animation_state` already does).
 
 ### 3. Interpolation mode editing
 
-- `set_interpolation_mode(mode)` converting the data layout: LINEAR / STEP to
-  CUBICSPLINE grows each key to a triplet with tangents synthesized from
-  finite differences; CUBICSPLINE to LINEAR / STEP drops the tangents.
-- Per-sampler mode combo in the channel list row (the row already shows the
-  mode and key count as text).
-- MCP `animation_set_interpolation`; gtest conversion round-trips.
+Built: the channel row context menu and `animation_set_interpolation`
+(`doc/editor/editor.md` "Animation window and playback"). Open: the gtest
+conversion round-trip (the editor has no test target; the conversion is
+checked through MCP).
 
 ### 4. CUBICSPLINE tangent handles
 
-- Curves tab: Blender-style handle lines + dots on selected CUBICSPLINE keys;
-  dragging a handle edits the in / out tangent as one undo entry (same gesture
-  pattern as key drags: snapshot on press, live edit, one operation on
-  release).
-- Tessellate cubic segments by screen-space length instead of the fixed step
-  count.
-- MCP `animation_set_tangents`; exit criterion: evaluation after a tangent
-  edit matches the expected hexfloat value.
+Built: handles on selected cubic keys, Alt for one side, Smooth Tangents and
+`animation_set_tangents`. Open: tessellating cubic segments by screen-space
+length instead of the fixed step count.
 
 ### 5. Dope Sheet tab
 

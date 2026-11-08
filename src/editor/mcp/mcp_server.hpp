@@ -626,6 +626,8 @@ private:
     auto action_set_animation_target          (const nlohmann::json& args) -> std::string;
     auto action_animation_playback            (const nlohmann::json& args) -> std::string;
     auto action_animation_edit_keyframe       (const nlohmann::json& args) -> std::string;
+    auto action_animation_set_interpolation   (const nlohmann::json& args) -> std::string;
+    auto action_animation_set_tangents        (const nlohmann::json& args) -> std::string;
     auto action_animation_create_key          (const nlohmann::json& args) -> std::string;
     auto action_animation_delete_key          (const nlohmann::json& args) -> std::string;
     auto action_set_ray_trace                 (const nlohmann::json& args) -> std::string;

@@ -27,9 +27,10 @@ namespace editor {
 class Animation_sampler_state
 {
 public:
-    std::size_t        sampler_index{0};
-    std::vector<float> timestamps;
-    std::vector<float> data;
+    std::size_t                              sampler_index{0};
+    erhe::scene::Animation_interpolation_mode interpolation_mode{erhe::scene::Animation_interpolation_mode::LINEAR};
+    std::vector<float>                       timestamps;
+    std::vector<float>                       data;
 };
 
 [[nodiscard]] auto capture_sampler_state(const erhe::scene::Animation& animation, std::size_t sampler_index) -> Animation_sampler_state;
@@ -88,6 +89,46 @@ auto delete_keyframe(
     std::size_t             sampler_index,
     std::size_t             key_index
 ) -> bool;
+
+// Changes a sampler's interpolation mode, converting its data layout: to
+// CUBICSPLINE each key grows to [in_tangent, value, out_tangent] with the
+// tangents synthesized by recompute_sampler_tangents(); from CUBICSPLINE the
+// tangents are dropped. The value_offset of every channel reading the
+// sampler follows the layout. Returns false when the mode is already set.
+auto set_sampler_interpolation_mode(
+    erhe::scene::Animation&                   animation,
+    std::size_t                               sampler_index,
+    erhe::scene::Animation_interpolation_mode mode
+) -> bool;
+
+// Sets every CUBICSPLINE tangent of the sampler to the Catmull-Rom slope of
+// its component curve (erhe::math::catmull_rom_slope), the smooth default.
+// No-op for other interpolation modes.
+void recompute_sampler_tangents(erhe::scene::Animation& animation, std::size_t sampler_index);
+
+enum class Tangent_side : int {
+    in  = 0, // arriving at the key
+    out = 1  // leaving the key
+};
+
+// The in / out tangent (value units per second) of one key component of a
+// CUBICSPLINE sampler; the sampler must be CUBICSPLINE.
+[[nodiscard]] auto get_keyframe_tangent(
+    const erhe::scene::Animation& animation,
+    std::size_t                   channel_index,
+    std::size_t                   key_index,
+    std::size_t                   component,
+    Tangent_side                  side
+) -> float;
+
+void set_keyframe_tangent(
+    erhe::scene::Animation& animation,
+    std::size_t             channel_index,
+    std::size_t             key_index,
+    std::size_t             component,
+    Tangent_side            side,
+    float                   tangent
+);
 
 // Resets the cached seek position of every channel; must be called after any
 // edit that changes key count or ordering.

@@ -161,6 +161,11 @@ private:
     void camera_visualization            (const Render_context& render_context, const erhe::scene::Camera* camera);
     void layout_visualization            (const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout_data& layout);
     void selection_visualization         (const Render_context& context);
+    // The targeted animation's transform paths (doc/editor/tools.md
+    // "Debug_visualizations"): each target node's translation sampled at
+    // animation_path_interval as a polyline of alternating cyan and magenta
+    // segments, and the node's axes at the playhead time.
+    void animation_paths_visualization   (const Render_context& context);
     void physics_nodes_visualization     (const Render_context& context);
     void raytrace_nodes_visualization    (const Render_context& context);
     // Spatial lightmap tiles (Lightmap_baker::get_show_tile_bounds): x-ray

@@ -20,6 +20,17 @@ auto c_str(const Autokey_mode mode) -> const char*
     }
 }
 
+auto adopt_playback_pose(erhe::scene::Node& node) -> bool
+{
+    if (!node.is_local_transform_animated()) {
+        return false;
+    }
+    const erhe::scene::Trs_transform pose = node.parent_from_node_transform();
+    node.clear_animated_local_transform();
+    node.set_parent_from_node(pose);
+    return true;
+}
+
 auto key_nodes(
     const std::shared_ptr<erhe::scene::Animation>& animation,
     const std::vector<Keying_request>&             requests,
@@ -46,6 +57,12 @@ auto key_nodes(
     for (const Keying_request& request : requests) {
         if (!request.node) {
             continue;
+        }
+        // A keyed node is authored content: the editor's injected default
+        // camera stops being session_only (which no save writes) the moment
+        // it gets a key, so the camera and its animation reach the file.
+        if ((request.node->get_flag_bits() & erhe::Item_flags::session_only) != 0) {
+            request.node->disable_flag_bits(erhe::Item_flags::session_only);
         }
         const erhe::scene::Animation_path paths[3] = {
             erhe::scene::Animation_path::TRANSLATION,

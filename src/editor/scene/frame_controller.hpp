@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <functional>
 #include <memory>
 
 namespace erhe::scene { class Xformable; using Node = Xformable; }
@@ -75,6 +76,12 @@ public:
     void apply_tumble            (glm::vec3 pivot, float rx, float ry, float rz);
     void set_active_control_value(Variable variable, float value);
 
+    // Answers whether an animation is playing on the node. While it is, the
+    // controller's writes stay under the playback pose; while it is paused,
+    // the controller's own motion adopts the pose (adopt_playback_pose) so
+    // the camera moves from where the playhead put it.
+    void set_animation_playing_query(std::function<bool()> query);
+
     [[nodiscard]] auto get_position            () const -> glm::vec3;
     [[nodiscard]] auto get_orientation         () const -> glm::quat;
     [[nodiscard]] auto get_orientation_matrix  () const -> glm::mat4;
@@ -137,6 +144,10 @@ private:
     glm::vec3 m_zoom_direction{0.0f, 0.0f, -1.0f};
     Zoom_direction_space m_zoom_direction_space{Zoom_direction_space::view};
     bool      m_transform_update{false};
+    // Set by the controller's own motion (not by a readback), consumed by the
+    // next update(): only that write may adopt a paused playback pose.
+    bool      m_user_motion{false};
+    std::function<bool()> m_animation_playing_query;
 #if ERHE_CAMERA_ROLL_DIAGNOSTICS
     Camera_roll_monitor m_roll_monitor;
     // Drift watchdog. With a normalized quaternion this should never fire; it

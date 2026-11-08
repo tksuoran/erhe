@@ -25,6 +25,8 @@
 #define ICON_MDI_SKIP_NEXT           "\xf3\xb0\x92\xad" // U+F04AD
 #define ICON_MDI_SKIP_PREVIOUS       "\xf3\xb0\x92\xae" // U+F04AE
 #define ICON_MDI_STOP                "\xf3\xb0\x93\x9b" // U+F04DB
+#define ICON_MDI_CHEVRON_LEFT        "\xf3\xb0\x85\x81" // U+F0141
+#define ICON_MDI_CHEVRON_RIGHT       "\xf3\xb0\x85\x82" // U+F0142
 #define ICON_MDI_FIT_TO_PAGE_OUTLINE "\xf3\xb0\xbb\xb6" // U+F0EF6
 
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -389,6 +391,11 @@ void Animation_window::transport_toolbar()
     }
 
     ImGui::SameLine();
+    if (icon_button(ICON_MDI_CHEVRON_LEFT, "Previous key (Down arrow)")) {
+        seek_to_adjacent_key(Key_step::previous);
+    }
+
+    ImGui::SameLine();
     if (player->is_playing()) {
         if (icon_button(ICON_MDI_PAUSE, "Pause")) {
             player->pause();
@@ -402,6 +409,11 @@ void Animation_window::transport_toolbar()
     ImGui::SameLine();
     if (icon_button(ICON_MDI_STOP, "Stop (seek to start)")) {
         player->stop();
+    }
+
+    ImGui::SameLine();
+    if (icon_button(ICON_MDI_CHEVRON_RIGHT, "Next key (Up arrow)")) {
+        seek_to_adjacent_key(Key_step::next);
     }
 
     ImGui::SameLine();
@@ -516,6 +528,17 @@ void Animation_window::keying_toolbar()
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Delete the selected objects' keys at the current time");
     }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Insert Key")) {
+        insert_keys_at_current_time();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Insert a key at the current time on the channels of the selected keys\n"
+            "(or on every shown channel), with the curve's own value, so the\n"
+            "animation does not change (I)."
+        );
+    }
 
     // Key marker source for the timeline strip
     ImGui::SameLine(0.0f, 12.0f);
@@ -583,6 +606,40 @@ void Animation_window::collect_key_marker_times()
         m_marker_times.insert(m_marker_times.end(), sampler.timestamps.begin(), sampler.timestamps.end());
     }
     std::sort(m_marker_times.begin(), m_marker_times.end());
+}
+
+void Animation_window::seek_to_adjacent_key(const Key_step step)
+{
+    Animation_player* player = m_context.animation_player;
+    if ((player == nullptr) || !m_animation) {
+        return;
+    }
+    collect_key_marker_times();
+    // Keys closer than this to the current time count as the current key.
+    constexpr float epsilon = 1.0e-4f;
+    const float now = player->get_time();
+    bool  found  = false;
+    float target = now;
+    if (step == Key_step::next) {
+        for (const float time : m_marker_times) {
+            if (time > now + epsilon) {
+                target = time;
+                found  = true;
+                break;
+            }
+        }
+    } else {
+        for (auto it = m_marker_times.rbegin(); it != m_marker_times.rend(); ++it) {
+            if (*it < now - epsilon) {
+                target = *it;
+                found  = true;
+                break;
+            }
+        }
+    }
+    if (found) {
+        player->seek(target);
+    }
 }
 
 void Animation_window::timeline_strip()
@@ -894,6 +951,33 @@ void Animation_window::channel_row(const std::size_t channel_index)
         if (ImGui::MenuItem("Hide", nullptr, false, any_visible)) {
             m_channel_visibility[channel_index] = 0u;
         }
+        ImGui::Separator();
+        {
+            // The sampler's interpolation mode; channels sharing the sampler
+            // change together, as every sampler edit does.
+            const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+            const erhe::scene::Animation_interpolation_mode current = sampler.interpolation_mode;
+            if (ImGui::BeginMenu("Interpolation")) {
+                const erhe::scene::Animation_interpolation_mode modes[3] = {
+                    erhe::scene::Animation_interpolation_mode::STEP,
+                    erhe::scene::Animation_interpolation_mode::LINEAR,
+                    erhe::scene::Animation_interpolation_mode::CUBICSPLINE
+                };
+                for (const erhe::scene::Animation_interpolation_mode mode : modes) {
+                    if (ImGui::MenuItem(erhe::scene::c_str(mode), nullptr, mode == current)) {
+                        set_channel_interpolation(channel_index, mode);
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            const bool cubic = current == erhe::scene::Animation_interpolation_mode::CUBICSPLINE;
+            if (ImGui::MenuItem("Smooth Tangents", nullptr, false, cubic)) {
+                smooth_channel_tangents(channel_index);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Reset every tangent of the curve to the smooth (Catmull-Rom) slope");
+            }
+        }
         ImGui::EndPopup();
     } else if (hovered) {
         const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
@@ -1061,6 +1145,162 @@ void Animation_window::apply_key_drag(const float time_delta, const float value_
     }
 }
 
+void Animation_window::set_channel_interpolation(const std::size_t channel_index, const erhe::scene::Animation_interpolation_mode mode)
+{
+    if (!m_animation || (m_context.operation_stack == nullptr)) {
+        return;
+    }
+    erhe::scene::Animation& animation = *m_animation.get();
+    const std::size_t sampler_index = animation.channels.at(channel_index).sampler_index;
+    std::vector<Animation_sampler_state> before;
+    before.push_back(capture_sampler_state(animation, sampler_index));
+    if (!set_sampler_interpolation_mode(animation, sampler_index, mode)) {
+        return;
+    }
+    std::vector<Animation_sampler_state> after;
+    after.push_back(capture_sampler_state(animation, sampler_index));
+    m_context.operation_stack->queue(
+        std::make_shared<Animation_edit_operation>(
+            fmt::format("Set interpolation {}", erhe::scene::c_str(mode)),
+            m_animation,
+            std::move(before),
+            std::move(after)
+        )
+    );
+    if (m_context.animation_player != nullptr) {
+        m_context.animation_player->on_animation_edited(m_animation);
+    }
+}
+
+void Animation_window::smooth_channel_tangents(const std::size_t channel_index)
+{
+    if (!m_animation || (m_context.operation_stack == nullptr)) {
+        return;
+    }
+    erhe::scene::Animation& animation = *m_animation.get();
+    const std::size_t sampler_index = animation.channels.at(channel_index).sampler_index;
+    std::vector<Animation_sampler_state> before;
+    before.push_back(capture_sampler_state(animation, sampler_index));
+    recompute_sampler_tangents(animation, sampler_index);
+    std::vector<Animation_sampler_state> after;
+    after.push_back(capture_sampler_state(animation, sampler_index));
+    m_context.operation_stack->queue(
+        std::make_shared<Animation_edit_operation>(
+            "Smooth tangents",
+            m_animation,
+            std::move(before),
+            std::move(after)
+        )
+    );
+    if (m_context.animation_player != nullptr) {
+        m_context.animation_player->on_animation_edited(m_animation);
+    }
+}
+
+void Animation_window::build_tangent_handles()
+{
+    m_tangent_handles.clear();
+    if (!m_animation) {
+        return;
+    }
+    const erhe::scene::Animation& animation = *m_animation.get();
+    // A handle reaches a third of the way to the neighbor key (Blender's
+    // auto handle length); at the curve ends it uses the other side's span.
+    for (const Curve_point& point : m_selection) {
+        const erhe::scene::Animation_channel& channel = animation.channels.at(point.channel_index);
+        const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+        if (sampler.interpolation_mode != erhe::scene::Animation_interpolation_mode::CUBICSPLINE) {
+            continue;
+        }
+        if (!is_component_visible(point.channel_index, point.component)) {
+            continue;
+        }
+        const std::size_t key_count = sampler.timestamps.size();
+        if (point.key_index >= key_count) {
+            continue;
+        }
+        const float time  = sampler.timestamps[point.key_index];
+        const float value = get_keyframe_value(animation, point.channel_index, point.key_index, point.component);
+        const float span_before = (point.key_index > 0) ? (time - sampler.timestamps[point.key_index - 1]) : 0.0f;
+        const float span_after  = ((point.key_index + 1) < key_count) ? (sampler.timestamps[point.key_index + 1] - time) : 0.0f;
+        const float fallback    = 0.1f * (m_view_time_max - m_view_time_min);
+        const float reach_in    = ((span_before > 0.0f) ? span_before : ((span_after > 0.0f) ? span_after : fallback)) / 3.0f;
+        const float reach_out   = ((span_after  > 0.0f) ? span_after  : ((span_before > 0.0f) ? span_before : fallback)) / 3.0f;
+        const float in_tangent  = get_keyframe_tangent(animation, point.channel_index, point.key_index, point.component, Tangent_side::in);
+        const float out_tangent = get_keyframe_tangent(animation, point.channel_index, point.key_index, point.component, Tangent_side::out);
+        const ImVec2 key_px{time_to_x(time), value_to_y(value)};
+        m_tangent_handles.push_back(
+            Tangent_handle{
+                .point  = point,
+                .side   = Tangent_side::in,
+                .px     = ImVec2{time_to_x(time - reach_in), value_to_y(value - (in_tangent * reach_in))},
+                .key_px = key_px
+            }
+        );
+        m_tangent_handles.push_back(
+            Tangent_handle{
+                .point  = point,
+                .side   = Tangent_side::out,
+                .px     = ImVec2{time_to_x(time + reach_out), value_to_y(value + (out_tangent * reach_out))},
+                .key_px = key_px
+            }
+        );
+    }
+}
+
+void Animation_window::apply_handle_drag(const ImVec2 mouse_px)
+{
+    if (!m_animation) {
+        return;
+    }
+    erhe::scene::Animation& animation = *m_animation.get();
+    const Curve_point& point = m_dragged_handle.point;
+    const erhe::scene::Animation_channel& channel = animation.channels.at(point.channel_index);
+    const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+    if ((sampler.interpolation_mode != erhe::scene::Animation_interpolation_mode::CUBICSPLINE) || (point.key_index >= sampler.timestamps.size())) {
+        return;
+    }
+    const float key_time   = sampler.timestamps[point.key_index];
+    const float key_value  = get_keyframe_value(animation, point.channel_index, point.key_index, point.component);
+    const float dt         = x_to_time(mouse_px.x) - key_time;
+    const float dv         = y_to_value(mouse_px.y) - key_value;
+    // The handle stays on its side of the key: an in handle before it, an
+    // out handle after it, so the slope keeps its sign convention.
+    const float side_dt = (m_dragged_handle.side == Tangent_side::in) ? std::min(dt, -1.0e-4f) : std::max(dt, 1.0e-4f);
+    const float slope   = dv / side_dt;
+    // Aligned by default (both tangents follow); Alt frees the dragged side.
+    const bool free_side = ImGui::GetIO().KeyAlt;
+    if (free_side) {
+        set_keyframe_tangent(animation, point.channel_index, point.key_index, point.component, m_dragged_handle.side, slope);
+    } else {
+        set_keyframe_tangent(animation, point.channel_index, point.key_index, point.component, Tangent_side::in,  slope);
+        set_keyframe_tangent(animation, point.channel_index, point.key_index, point.component, Tangent_side::out, slope);
+    }
+    if (m_context.animation_player != nullptr) {
+        m_context.animation_player->on_animation_edited(m_animation);
+    }
+}
+
+void Animation_window::finish_handle_drag(const bool moved)
+{
+    if (moved && m_animation && !m_edit_before.empty() && (m_context.operation_stack != nullptr)) {
+        std::vector<Animation_sampler_state> after;
+        after.reserve(m_edit_before.size());
+        for (const Animation_sampler_state& state : m_edit_before) {
+            after.push_back(capture_sampler_state(*m_animation.get(), state.sampler_index));
+        }
+        m_context.operation_stack->queue(
+            std::make_shared<Animation_edit_operation>(
+                "Edit tangent",
+                m_animation,
+                std::move(m_edit_before),
+                std::move(after)
+            )
+        );
+    }
+    m_edit_before.clear();
+}
+
 void Animation_window::finish_key_drag(const bool moved)
 {
     if (moved && m_animation && !m_edit_before.empty() && (m_context.operation_stack != nullptr)) {
@@ -1182,6 +1422,74 @@ void Animation_window::insert_key_at(const float time, const ImVec2 mouse_px)
     }
 }
 
+void Animation_window::insert_keys_at_current_time()
+{
+    Animation_player* player = m_context.animation_player;
+    if (!m_animation || (player == nullptr) || (m_context.operation_stack == nullptr)) {
+        return;
+    }
+    erhe::scene::Animation& animation = *m_animation.get();
+    const float time = player->get_time();
+
+    // Samplers to key: those of the selected keys' channels, else of the
+    // shown channels. A sampler shared by channels is keyed once.
+    static thread_local std::vector<std::size_t> sampler_indices;
+    sampler_indices.clear();
+    const auto add_channel_sampler = [&](const std::size_t channel_index) {
+        const std::size_t sampler_index = animation.channels.at(channel_index).sampler_index;
+        if (std::find(sampler_indices.begin(), sampler_indices.end(), sampler_index) == sampler_indices.end()) {
+            sampler_indices.push_back(sampler_index);
+        }
+    };
+    if (!m_selection.empty()) {
+        for (const Curve_point& point : m_selection) {
+            add_channel_sampler(point.channel_index);
+        }
+    } else {
+        for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
+            const std::size_t component_count = erhe::scene::get_component_count(animation.channels[channel_index]);
+            for (std::size_t component = 0; component < component_count; ++component) {
+                if (is_component_visible(channel_index, component)) {
+                    add_channel_sampler(channel_index);
+                    break;
+                }
+            }
+        }
+    }
+    if (sampler_indices.empty()) {
+        return;
+    }
+
+    std::vector<Animation_sampler_state> before;
+    std::vector<Animation_sampler_state> after;
+    for (const std::size_t sampler_index : sampler_indices) {
+        before.push_back(capture_sampler_state(animation, sampler_index));
+    }
+    bool inserted = false;
+    for (const std::size_t sampler_index : sampler_indices) {
+        const std::size_t key_count_before = animation.samplers.at(sampler_index).timestamps.size();
+        static_cast<void>(insert_keyframe(animation, sampler_index, time));
+        inserted = inserted || (animation.samplers.at(sampler_index).timestamps.size() != key_count_before);
+    }
+    if (!inserted) {
+        return; // every sampler already had a key at this time
+    }
+    for (const std::size_t sampler_index : sampler_indices) {
+        after.push_back(capture_sampler_state(animation, sampler_index));
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Animation_edit_operation>(
+            "Insert keys at current time",
+            m_animation,
+            std::move(before),
+            std::move(after)
+        )
+    );
+    // Key indices shifted: the selection names keys by index.
+    m_selection.clear();
+    player->on_animation_edited(m_animation);
+}
+
 auto Animation_window::find_curve_near(
     const ImVec2 mouse_px,
     const float  max_distance_px,
@@ -1281,6 +1589,18 @@ void Animation_window::curve_canvas()
     if ((canvas_hovered || ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) && ImGui::IsKeyPressed(ImGuiKey_Home)) {
         compute_frame_all_view(canvas_size.y);
     }
+    // Blender's keyframe jump defaults: Up = next key, Down = previous key.
+    if (canvas_hovered || ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+            seek_to_adjacent_key(Key_step::next);
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+            seek_to_adjacent_key(Key_step::previous);
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_I)) {
+            insert_keys_at_current_time();
+        }
+    }
 
     // -----------------------------------------------------------------
     // Build visible key points (pixel positions reflect this frame's view)
@@ -1307,9 +1627,25 @@ void Animation_window::curve_canvas()
         }
     }
 
+    // Tangent handles of the selected cubic keys; a hovered handle takes
+    // precedence over a hovered key.
+    build_tangent_handles();
+    m_hovered_handle = -1;
+    if (canvas_hovered && (m_drag_mode == Drag_mode::none)) {
+        float best = c_key_hit_radius_px;
+        for (std::size_t i = 0; i < m_tangent_handles.size(); ++i) {
+            const ImVec2 p = m_tangent_handles[i].px;
+            const float distance = std::max(std::abs(p.x - io.MousePos.x), std::abs(p.y - io.MousePos.y));
+            if (distance <= best) {
+                best = distance;
+                m_hovered_handle = static_cast<int>(i);
+            }
+        }
+    }
+
     // Hovered key
     m_hovered_point = -1;
-    if (canvas_hovered && (m_drag_mode == Drag_mode::none)) {
+    if (canvas_hovered && (m_drag_mode == Drag_mode::none) && (m_hovered_handle < 0)) {
         float best = c_key_hit_radius_px;
         for (std::size_t i = 0; i < m_visible_point_px.size(); ++i) {
             const ImVec2 p = m_visible_point_px[i];
@@ -1331,6 +1667,16 @@ void Animation_window::curve_canvas()
             if (m_context.animation_player != nullptr) {
                 m_context.animation_player->seek(x_to_time(io.MousePos.x));
             }
+        } else if (m_hovered_handle >= 0) {
+            m_dragged_handle = m_tangent_handles[static_cast<std::size_t>(m_hovered_handle)];
+            m_edit_before.clear();
+            if (m_animation) {
+                const erhe::scene::Animation_channel& channel = m_animation->channels.at(m_dragged_handle.point.channel_index);
+                m_edit_before.push_back(capture_sampler_state(*m_animation.get(), channel.sampler_index));
+            }
+            m_drag_mode     = Drag_mode::move_handle;
+            m_drag_start_px = io.MousePos;
+            m_drag_moved    = false;
         } else if (m_hovered_point >= 0) {
             const Curve_point pressed = m_visible_points[static_cast<std::size_t>(m_hovered_point)];
             m_pressed_point              = pressed;
@@ -1396,7 +1742,14 @@ void Animation_window::curve_canvas()
             if (m_drag_moved) {
                 const float time_per_px  = (m_view_time_max - m_view_time_min) / std::max(canvas_size.x, 1.0f);
                 const float value_per_px = (m_view_value_max - m_view_value_min) / std::max(canvas_size.y - m_ruler_height, 1.0f);
-                apply_key_drag(delta_px.x * time_per_px, -delta_px.y * value_per_px);
+                // Axis locks, read every frame so they can be toggled mid-drag:
+                // Shift moves in time only, Shift+Alt in value only.
+                const bool lock_value = io.KeyShift && !io.KeyAlt;
+                const bool lock_time  = io.KeyShift && io.KeyAlt;
+                apply_key_drag(
+                    lock_time  ? 0.0f : delta_px.x * time_per_px,
+                    lock_value ? 0.0f : -delta_px.y * value_per_px
+                );
             }
         } else {
             if (!m_drag_moved) {
@@ -1415,6 +1768,21 @@ void Animation_window::curve_canvas()
                 }
             }
             finish_key_drag(m_drag_moved);
+            m_drag_mode = Drag_mode::none;
+        }
+    }
+
+    if (m_drag_mode == Drag_mode::move_handle) {
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            const ImVec2 delta_px{io.MousePos.x - m_drag_start_px.x, io.MousePos.y - m_drag_start_px.y};
+            if (!m_drag_moved && ((std::abs(delta_px.x) > c_drag_threshold_px) || (std::abs(delta_px.y) > c_drag_threshold_px))) {
+                m_drag_moved = true;
+            }
+            if (m_drag_moved) {
+                apply_handle_drag(io.MousePos);
+            }
+        } else {
+            finish_handle_drag(m_drag_moved);
             m_drag_mode = Drag_mode::none;
         }
     }
@@ -1590,6 +1958,19 @@ void Animation_window::curve_canvas()
                 draw_list->PathStroke(color, 1.25f, ImDrawFlags_None);
             }
         }
+    }
+
+    // Tangent handles of the selected cubic keys (rebuilt here so a drag in
+    // progress shows this frame's slopes)
+    build_tangent_handles();
+    for (std::size_t i = 0; i < m_tangent_handles.size(); ++i) {
+        const Tangent_handle& handle  = m_tangent_handles[i];
+        const bool            hovered = (static_cast<int>(i) == m_hovered_handle) ||
+            ((m_drag_mode == Drag_mode::move_handle) && (handle.point == m_dragged_handle.point) && (handle.side == m_dragged_handle.side));
+        const ImU32 line_color   = IM_COL32(200, 200, 200, 160);
+        const ImU32 handle_color = hovered ? IM_COL32(255, 255, 255, 255) : get_component_color(handle.point.component);
+        draw_list->AddLine(handle.key_px, handle.px, line_color, 1.0f);
+        draw_list->AddCircleFilled(handle.px, hovered ? 4.5f : 3.5f, handle_color);
     }
 
     // Keyframe points

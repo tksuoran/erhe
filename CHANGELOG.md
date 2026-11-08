@@ -227,6 +227,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Rename_function` and `rename_file()` (`doc/erhe/file.md` "Writing several
   files").
 
+- `erhe::math`: `hermite()` (cubic Hermite segment with per-x-unit end
+  slopes, the glTF 2.0 cubic spline form) and `catmull_rom_slope()`
+  (central finite difference slope, one-sided at the ends) in
+  `erhe_math/hermite.hpp`; shared by the animation curve editor and the
+  texture graph curve widget.
 - `erhe::graphics`: `Glsl_type::float16_`, `float16_vec2`, `float16_vec4`
   with `Shader_resource::add_float16()`, `add_f16vec2()`, `add_f16vec4()`
   (std430 alignment 2, 4, 8); `Graphics_config::material_record_half`

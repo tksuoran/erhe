@@ -49,6 +49,12 @@ public:
     float                                          time
 ) -> std::shared_ptr<Operation>;
 
+// An interactive edit (fly camera, gizmo drag) of a node that holds a paused
+// playback pose: the pose becomes the node's authored transform and the
+// animated layer is dropped, so the edit shows; the next seek, play or key
+// edit samples the pose again. Returns false when the node holds no pose.
+auto adopt_playback_pose(erhe::scene::Node& node) -> bool;
+
 // Deletes the keys at (approximately) `time` from every channel of
 // `animation` that targets one of `nodes`. Same immediate-apply +
 // snapshot-operation contract as key_nodes(); returns nullptr when no key
