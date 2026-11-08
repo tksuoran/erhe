@@ -187,6 +187,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::rendergraph`: `Rendergraph_node::post_execute_rendergraph_node()`,
+  a render phase hook `Rendergraph::execute()` calls for every node active
+  in the frame after the frame's last execute (`doc/erhe/rendergraph.md`
+  "Post-execute hook").
+
 - `erhe::graphics`: `parse_ktx2_prefix()` and `Ktx2_prefix_result`: parses
   the first bytes of a KTX2 file and reports, without logging, when the
   header, indices or level data end past them (`complete`, `index_beyond`,

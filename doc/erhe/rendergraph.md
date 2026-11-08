@@ -25,8 +25,9 @@ such as shadow maps, viewport rendering, post-processing, and GUI compositing.
   record per frame in flight; "Per-frame copies" below), a pure virtual
   `execute_rendergraph_node()`, a virtual `prepare_rendergraph_node()`
   hook, a virtual `pre_execute_rendergraph_node()` hook ("Pre-execute
-  hook" below) and a virtual `on_released()` hook. Created only through
-  `make_rendergraph_node<T>(...)`.
+  hook" below), a virtual `post_execute_rendergraph_node()` hook
+  ("Post-execute hook" below) and a virtual `on_released()` hook. Created
+  only through `make_rendergraph_node<T>(...)`.
 
 - `Render_target` -- Composable helper that manages a color texture (possibly
   multisampled), depth/stencil texture, and `Render_pass` lifecycle. Nodes
@@ -89,7 +90,7 @@ rendergraph.connect(Rendergraph_node_key::viewport_texture, viewport.get(),    p
 
 // Each frame
 rendergraph.prepare_frame(); // sorts if needed, evaluates and copies the node list, active flags, connections (and node parameters) into the frame
-rendergraph.execute(command_buffer); // the frame's active nodes: every pre-execute hook, the callback, then every execute, in order
+rendergraph.execute(command_buffer); // the frame's active nodes: every pre-execute hook, the callback, every execute, then every post-execute hook, in order
 ```
 
 ### Implementing a Node
@@ -254,6 +255,21 @@ its compute dispatch there (doc/erhe/draw_list_renderer.md Q6,
 doc/plans/culling.md phase 6a). The default hook does nothing.
 `erhe_rendergraph_gpu_tests` checks the order.
 
+### Post-execute hook
+
+After the last `execute_rendergraph_node()` of the frame, `execute()` calls
+`post_execute_rendergraph_node()` of the same nodes in the same order. A
+node releases there what its pre-execute hook took for the frame, so
+nothing a frame used stays owned by the node into frames the node is
+inactive in (an inactive node gets no hooks). The editor's
+`Viewport_scene_view`, `Scene_image_view` and `Shadow_render_node` drop
+their frame's render context or passes there, which hold the frame's
+`Scene_root`: the main thread's per-frame copy of the scene root then
+outlives every render phase reference, so a closed scene is destroyed on
+the main thread and also when its viewport is hidden
+(`doc/editor/render_thread.md`). The default hook does nothing.
+`erhe_rendergraph_gpu_tests` checks the order.
+
 ### Resizing from the Prepare Phase
 
 A `Texture_rendergraph_node` whose size the main thread decides takes the
@@ -395,13 +411,13 @@ records, so disabling a sink switches off its whole upstream chain from the
 next prepared frame on, and a producer that feeds two consumers keeps
 running while either one runs. `is_active()` (main thread) reports the last
 evaluation, `is_active_in_frame(frame_index)` (render phase) the frame's
-copy. An inactive node gets neither `pre_execute_rendergraph_node()` nor
-`execute_rendergraph_node()` in that frame; a producer that publishes
-per-frame results publishes none for it (the editor's `Shadow_render_node`
-has no `Shadow_frame_result` for a frame it did not execute). The editor's
-Viewport window disables its `Viewport_scene_view` while hidden, and this
-rule is what then keeps the view's shadow node from rendering shadow maps
-nothing samples.
+copy. An inactive node gets none of `pre_execute_rendergraph_node()`,
+`execute_rendergraph_node()` and `post_execute_rendergraph_node()` in that
+frame; a producer that publishes per-frame results publishes none for it
+(the editor's `Shadow_render_node` has no `Shadow_frame_result` for a frame
+it did not execute). The editor's Viewport window disables its
+`Viewport_scene_view` while hidden, and this rule is what then keeps the
+view's shadow node from rendering shadow maps nothing samples.
 
 ### Inputs and Outputs Allowed
 

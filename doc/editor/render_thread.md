@@ -275,6 +275,14 @@ new code.
   counterpart of `Render_frame_results`). A list or record set is published
   into a slot only when its change serial moved since that slot's last
   publish, so the steady state copies nothing.
+- **The scene root dies on the main thread.** R holds a `Scene_root` only
+  for the frame it renders: the nodes that take one in their pre-execute
+  hook drop it in their post-execute hook (`doc/erhe/rendergraph.md`
+  "Post-execute hook"). The frame's slot (`Viewport_render_state`,
+  `Scene_view::Render_view`) keeps the root until M2 of a later frame
+  overwrites it, which runs after the main thread joined that frame's R
+  in both schedules, so the last reference to a closed scene drops in M2
+  and `~Scene_root` runs on the main thread.
 - **The last M2 step reads the scene.** The composition prepare
   (`App_rendering::prepare_composition`: pass gating, bucketing into
   complete primitive records, the id pass, the edge-line feed, the shadow

@@ -144,6 +144,9 @@ protected:
     // phase 6a) - does it here. Default: nothing.
     virtual void pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer);
 
+    // Render phase, after the frame's last execute (doc/erhe/rendergraph.md "Post-execute hook").
+    virtual void post_execute_rendergraph_node();
+
     // Release hook (Rendergraph_node_deleter, on the releasing thread): the
     // last owner released the node, which the rendergraph unregisters next
     // and then destroys, or retires while a frame still to be rendered

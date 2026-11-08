@@ -300,7 +300,6 @@ void Scene_image_view::pre_execute_rendergraph_node(erhe::graphics::Command_buff
     erhe::utility::Thread_roles::assert_render_thread();
     erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
     const uint64_t frame_index = m_rendergraph.get_graphics_device().get_frame_index();
-    m_frame_context.reset();
     m_frame_context_frame_index = frame_index;
     // The scene root and camera as this frame's render view copy
     // (prepare_composition()); the gates execute_rendergraph_node() renders
@@ -341,6 +340,12 @@ void Scene_image_view::pre_execute_rendergraph_node(erhe::graphics::Command_buff
         }
     );
     m_context.app_rendering->add_composer_cull_views(m_frame_context.value(), prepared);
+}
+
+void Scene_image_view::post_execute_rendergraph_node()
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    m_frame_context.reset();
 }
 
 void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)

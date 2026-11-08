@@ -35,6 +35,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <optional>
@@ -877,6 +878,58 @@ TEST_F(Mcp_test, close_scene_with_selected_mesh_and_lod_window_open)
     Mcp_client::Tool_result selection = client.call_tool("get_selection", json::object());
     ASSERT_FALSE(selection.is_error) << selection.text;
     EXPECT_TRUE(selection.payload["items"].empty()) << selection.text;
+}
+
+// A scene closed while its viewport is hidden (rendergraph nodes inactive)
+// is released; the verdict is the scene-close watchdog's log line
+// (doc/erhe/rendergraph.md "Post-execute hook").
+TEST_F(Mcp_test, close_scene_with_hidden_viewport_releases_the_scene)
+{
+    Mcp_env&          env    = Mcp_env::get();
+    Mcp_client&       client = env.client();
+    const std::string scene  = env.scene_name();
+
+    // The window titles are listed by a lookup that names no window.
+    Mcp_client::Tool_result listing = client.call_tool("set_window_visibility", json{{"title", ""}, {"visible", true}});
+    std::string viewport_title;
+    for (const json& title : listing.payload.value("titles", json::array())) {
+        const std::string text = title.get<std::string>();
+        if (text.starts_with(scene + "###Viewport_window")) {
+            viewport_title = text;
+        }
+    }
+    ASSERT_FALSE(viewport_title.empty()) << "no viewport window for '" << scene << "': " << listing.text;
+
+    Mcp_client::Tool_result hidden = client.call_tool("set_window_visibility", json{
+        {"title",   viewport_title},
+        {"visible", false}
+    });
+    ASSERT_FALSE(hidden.is_error) << hidden.text;
+    advance_frames(client, 4);
+
+    const std::filesystem::path log_path = std::filesystem::path{ERHE_MCP_TEST_REPO_ROOT} / "logs" / "log.txt";
+    std::error_code size_error;
+    const std::uintmax_t log_offset = std::filesystem::file_size(log_path, size_error);
+    ASSERT_FALSE(size_error) << "cannot read " << log_path.string();
+
+    Mcp_client::Tool_result close = client.call_tool("close_scene", json{{"scene_name", scene}});
+    ASSERT_FALSE(close.is_error) << close.text;
+
+    // The watchdog checks 60 frames after the close.
+    const std::string released_line = "tracked items of closed scene '" + scene + "' released";
+    const std::string leak_line     = "scene-close leak: Scene_root '" + scene + "'";
+    std::string       log_tail;
+    for (int attempt = 0; attempt < 400; ++attempt) {
+        advance_frames(client, 1);
+        std::ifstream log_file{log_path, std::ios::binary};
+        log_file.seekg(static_cast<std::streamoff>(log_offset));
+        log_tail.assign(std::istreambuf_iterator<char>{log_file}, std::istreambuf_iterator<char>{});
+        if ((log_tail.find(released_line) != std::string::npos) || (log_tail.find(leak_line) != std::string::npos)) {
+            break;
+        }
+    }
+    EXPECT_EQ(log_tail.find(leak_line), std::string::npos) << "the closed scene's Scene_root outlived the close (" << log_path.string() << ")";
+    EXPECT_NE(log_tail.find(released_line), std::string::npos) << "no scene-close check line for '" << scene << "' in " << log_path.string();
 }
 
 // The active item (doc/editor/active_item.md): the last item a select_items

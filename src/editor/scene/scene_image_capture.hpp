@@ -151,6 +151,8 @@ public:
     // with) and adds the color culling views of the view's draw-list passes
     // from it (Composer::add_cull_views(); doc/plans/culling.md phase 6a).
     void pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
+    // Releases the frame's render context: it holds the frame's scene root.
+    void post_execute_rendergraph_node() override;
 
     // M2, the last step (App_rendering::prepare_composition, which lists this
     // view while it exists): prepares the composition the render phase draws

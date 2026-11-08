@@ -160,6 +160,8 @@ public:
     // the view's draw-list passes from it (Composer::add_cull_views();
     // doc/plans/culling.md phase 6a).
     void pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
+    // Releases the frame's render context: it holds the frame's scene root.
+    void post_execute_rendergraph_node() override;
 
     // Post-processing overlay pass (issue #230). Called by Viewport_overlay_node
     // AFTER the post-processing node when post-processing is enabled. Draws the

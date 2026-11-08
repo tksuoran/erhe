@@ -586,8 +586,6 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
     result.texel_visualization       = false;
     // Execute draws only what this hook fitted for this frame.
     m_frame_passes.frame_index = frame_index;
-    m_frame_passes.parameters.reset();
-    m_frame_passes.scene_root.reset();
 
     // The frame's CPU time: this hook and execute_rendergraph_node() add
     // into it.
@@ -933,6 +931,13 @@ void Shadow_render_node::write_light_view(Shadow_frame_result& result, erhe::gra
     }
 }
 
+void Shadow_render_node::post_execute_rendergraph_node()
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    m_frame_passes.parameters.reset();
+    m_frame_passes.scene_root.reset();
+}
+
 void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
@@ -993,10 +998,6 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             result.texel_visualization       = true;
         }
     }
-    // The frame's parameters and scene root go with the frame.
-    m_frame_passes.parameters.reset();
-    m_frame_passes.scene_root.reset();
-
     // The render phase's running totals, with this frame's time (hook and
     // execute).
     m_total_cpu_time_us += result.cpu_time_us;

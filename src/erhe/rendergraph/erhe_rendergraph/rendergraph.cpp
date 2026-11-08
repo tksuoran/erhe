@@ -238,6 +238,13 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
             }
         }
 
+        for (Rendergraph_node* node : slot.nodes) {
+            if (node->is_active_in_frame(frame_index)) {
+                erhe::log::set_breadcrumb(node->get_name());
+                node->post_execute_rendergraph_node();
+            }
+        }
+
         // Release deferred resources now that all nodes have completed execution.
         // Nodes may defer resource destruction during execute when old resources
         // are still referenced by nodes that execute later in the same frame.

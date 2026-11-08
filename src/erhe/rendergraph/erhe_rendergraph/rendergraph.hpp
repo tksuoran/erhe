@@ -51,7 +51,8 @@ public:
     // (prepare_frame() of the same frame filled it; verified) that are
     // active in it: first every node's pre_execute_rendergraph_node() hook
     // in execution order, then the pre-execute callback, then every node's
-    // execute_rendergraph_node() in execution order. Never takes m_mutex: it
+    // execute_rendergraph_node() in execution order, then every node's
+    // post_execute_rendergraph_node() hook. Never takes m_mutex: it
     // reads only the slot and the nodes' records of its frame.
     void execute        (erhe::graphics::Command_buffer& command_buffer);
     // Main thread, before the first prepare_frame() (verified): the step execute() runs after

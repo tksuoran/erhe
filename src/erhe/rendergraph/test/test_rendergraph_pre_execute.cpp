@@ -1,7 +1,8 @@
 // Rendergraph::execute() runs every enabled node's pre-execute hook, in
 // execution order, then the pre-execute callback, before the first node
 // executes (doc/erhe/rendergraph.md "Pre-execute hook"; doc/plans/culling.md
-// phase 6a, which classifies every culling view of the frame there).
+// phase 6a, which classifies every culling view of the frame there), and
+// every post-execute hook after the last execute ("Post-execute hook").
 
 #include "gpu_test_fixture.hpp"
 
@@ -51,6 +52,11 @@ protected:
         m_log.push_back("pre_execute " + m_name);
     }
 
+    void post_execute_rendergraph_node() override
+    {
+        m_log.push_back("post_execute " + m_name);
+    }
+
 private:
     std::string               m_name;
     std::vector<std::string>& m_log;
@@ -93,7 +99,7 @@ TEST_F(Rendergraph_pre_execute_test, hooks_run_for_every_enabled_node_before_any
         const std::shared_ptr<Recording_node> node_b = make_rendergraph_node<Recording_node>(rendergraph, "b", log);
         const std::shared_ptr<Recording_node> node_c = make_rendergraph_node<Recording_node>(rendergraph, "c", log);
         const std::shared_ptr<Recording_node> node_d = make_rendergraph_node<Recording_node>(rendergraph, "d", log);
-        // A node disabled in the frame gets neither call.
+        // A node disabled in the frame gets none of the calls.
         node_c->set_enabled(false);
         rendergraph.set_pre_execute_callback(
             [&log](erhe::graphics::Command_buffer& command_buffer) {
@@ -124,6 +130,11 @@ TEST_F(Rendergraph_pre_execute_test, hooks_run_for_every_enabled_node_before_any
                 expected.push_back("execute " + node->get_name());
             }
         }
+        for (const Rendergraph_node* node : nodes) {
+            if (node != node_c.get()) {
+                expected.push_back("post_execute " + node->get_name());
+            }
+        }
         EXPECT_EQ(log, expected);
     }
 }
@@ -143,11 +154,13 @@ TEST_F(Rendergraph_pre_execute_test, execute_without_callback_runs_hooks_then_ex
             }
         );
 
-        ASSERT_EQ(log.size(), 4u);
+        ASSERT_EQ(log.size(), 6u);
         EXPECT_EQ(log[0].rfind("pre_execute ", 0), 0u);
         EXPECT_EQ(log[1].rfind("pre_execute ", 0), 0u);
         EXPECT_EQ(log[2].rfind("execute ", 0), 0u);
         EXPECT_EQ(log[3].rfind("execute ", 0), 0u);
+        EXPECT_EQ(log[4].rfind("post_execute ", 0), 0u);
+        EXPECT_EQ(log[5].rfind("post_execute ", 0), 0u);
     }
 }
 

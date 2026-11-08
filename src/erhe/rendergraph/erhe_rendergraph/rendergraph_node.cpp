@@ -254,6 +254,10 @@ void Rendergraph_node::pre_execute_rendergraph_node(erhe::graphics::Command_buff
     static_cast<void>(command_buffer);
 }
 
+void Rendergraph_node::post_execute_rendergraph_node()
+{
+}
+
 void Rendergraph_node::on_released()
 {
 }

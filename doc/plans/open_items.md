@@ -105,10 +105,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
-- Unverified: `Viewport_scene_view::m_frame_context` keeps its `Scene_root`
-  until the view's next `pre_execute_rendergraph_node()`, which an inactive
-  node skips, so a scene closed while its viewport is inactive may outlive the
-  close and be destroyed on the render thread.
 - Quest: a launch with no scene aborts in `scene_view.cpp:332`.
 - Quest: `render_scene_image` crashes (SIGSEGV in
   `Render_pass::start_render_pass` from `Shadow_renderer::draw` in the capture

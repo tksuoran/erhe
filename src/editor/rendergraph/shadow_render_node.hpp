@@ -129,6 +129,8 @@ public:
     // phase 6a); execute_rendergraph_node() draws the passes
     // (Shadow_renderer::draw()).
     void pre_execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
+    // Releases the frame's passes: they hold the frame's scene root.
+    void post_execute_rendergraph_node() override;
 
     auto get_producer_output_texture (int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
     auto inputs_allowed() const -> bool override;
@@ -208,7 +210,7 @@ private:
     public:
         uint64_t                                                                frame_index{std::numeric_limits<uint64_t>::max()};
         // Keeps the frame's scene root (the parameters' joint poses,
-        // material set and draw list scene) alive until execute drew.
+        // material set and draw list scene) alive until the post-execute hook.
         std::shared_ptr<Scene_root>                                             scene_root {};
         // Empty: the frame has no shadow passes (execute draws nothing).
         std::optional<erhe::scene_renderer::Shadow_renderer::Render_parameters> parameters{};

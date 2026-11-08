@@ -370,7 +370,6 @@ void Viewport_scene_view::pre_execute_rendergraph_node(erhe::graphics::Command_b
     erhe::utility::Thread_roles::assert_frame_phase(erhe::utility::Frame_phase::r_render);
     const uint64_t               frame_index = m_rendergraph.get_graphics_device().get_frame_index();
     const Viewport_render_state& state       = get_render_state(frame_index);
-    m_frame_context.reset();
     m_frame_context_frame_index = frame_index;
     // The gates execute_rendergraph_node() renders under.
     if (!state.node_enabled) {
@@ -421,6 +420,12 @@ void Viewport_scene_view::pre_execute_rendergraph_node(erhe::graphics::Command_b
         m_context.app_rendering->add_composer_cull_views(m_frame_context.value(), prepared);
         m_frame_context->composer_prepared = &prepared;
     }
+}
+
+void Viewport_scene_view::post_execute_rendergraph_node()
+{
+    erhe::utility::Thread_roles::assert_render_thread();
+    m_frame_context.reset();
 }
 
 void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
