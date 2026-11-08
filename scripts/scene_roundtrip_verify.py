@@ -220,7 +220,7 @@ KNOWN_KEYWORDS = {
     "$schema", "$id", "$defs", "$ref", "title", "description",
     "type", "properties", "required", "enum", "items",
     "minItems", "maxItems", "minimum", "maximum", "anyOf",
-    "additionalProperties", "default",
+    "additionalProperties", "default", "const",
 }
 
 TYPE_CHECKS = {
@@ -261,6 +261,9 @@ def schema_validate(instance, schema, root_schema, path, errors):
 
     if "enum" in schema and instance not in schema["enum"]:
         errors.append(f"{path}: value {instance!r} not in enum {schema['enum']}")
+
+    if ("const" in schema) and (instance != schema["const"]):
+        errors.append(f"{path}: value {instance!r} != const {schema['const']!r}")
 
     if isinstance(instance, (int, float)) and not isinstance(instance, bool):
         if ("minimum" in schema) and (instance < schema["minimum"]):
@@ -2045,6 +2048,10 @@ def usd_round_trip_leg(S, source_file, scene_name, edits, extra_keys):
     first_save = USD_SAVE_DIR / f"usd_roundtrip_{scene_name}.usda"
     if not usd_save_scene(S, scene_name, first_save):
         return
+    # An image file the source binds is written back (the open has to find it).
+    if "asset inputs:file" in source.read_text(encoding="utf-8"):
+        check(S, f"{scene_name}: the first save writes the source's image file",
+              "asset inputs:file" in first_save.read_text(encoding="utf-8"), "no image file in the saved file")
     usd_close_scene(S, scene_name)
 
     reloaded_name = first_save.stem

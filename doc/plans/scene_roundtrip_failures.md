@@ -1,12 +1,13 @@
-# Scene round-trip verification: the three failing checks
+# Scene round-trip verification: the failing check
 
 Status: in progress
 
 `scripts/scene_roundtrip_verify.py` (`doc/editor/scene_serialization.md`,
-run-book) failed three checks. Found while verifying audit item 11; recorded
-first in `doc/plans/audit_2026_09_30_followups.md` "Follow-ups found by
-review". This document holds the state of each; `doc/plans/open_items.md`
-"Work order" points here.
+run-book) fails one check, `VK_ERROR_DEVICE_LOST` on the draw-list path on an
+NVIDIA GPU (Vulkan). Found while verifying audit item 11; recorded first in
+`doc/plans/audit_2026_09_30_followups.md` "Follow-ups found by review". This
+document holds its state; `doc/plans/open_items.md` "Work order" points here.
+On macOS (Metal headless, glTF and USD legs) the script passes every check.
 
 ## How the runs are made
 
@@ -14,23 +15,21 @@ review". This document holds the state of each; `doc/plans/open_items.md`
   tests on). Launch with `ERHE_AI_DRIVER=1` from the repo root, then
   `py -3 scripts/scene_roundtrip_verify.py` (port 3743; `--port` selects
   another). One fresh editor per run; the run takes about three minutes.
+- macOS: the headless Metal editor (`build_xcode_metal_headless`, Debug)
+  from the repo root with `ERHE_AI_DRIVER=1`, then
+  `python3 scripts/scene_roundtrip_verify.py`. The macOS configure scripts
+  pass `ERHE_USD_LIBRARY=none` (the Windows ones `lightusd`), which skips the
+  USD leg; a tree configured with `-DERHE_USD_LIBRARY=lightusd` runs it.
 - The draw-list path is the default (`editor_settings.json`
   `use_draw_lists: true`); the MCP tool `set_draw_lists_enabled`
   (`{"enabled": false}`) turns it off for the session.
-- Short device-loss repro (item 2), about one minute:
+- Short device-loss repro, about one minute:
   `py -3 scripts/device_loss_repro.py --editor build_ninja_win_vulkan/bin/editor.exe`
   (opens `authored.usda` over MCP under the Crash Diagnostic Layer and prints
   `scripts/gpu_fault_report.py`). Pass `--layer-settings` a file with the
   layer options of `doc/agents/debugging.md` "GPU faults".
 
-## 1. `reload-diff: round-trip diff: nodes identical` - FIXED
-
-The fixture's dynamic bodies fell between the snapshot and the reload.
-`section_build_scene` now pauses physics (`toggle_physics` enabled=false)
-before the bodies exist and `section_prefab_scene` resumes it; the check
-passes (verified in several full runs).
-
-## 2. `VK_ERROR_DEVICE_LOST` on the draw-list path - OPEN
+## `VK_ERROR_DEVICE_LOST` on the draw-list path
 
 ### Facts established
 
@@ -130,56 +129,10 @@ passes (verified in several full runs).
 4. Consider reporting the driver behaviour to NVIDIA with the short repro
    (RTX 50 laptop, driver 0x94004000 / 580 series, Vulkan SDK 1.4.363).
 
-## 3. Two USD checks
-
-### 3a. `textured round-trip diff: local_property_names identical` - OPEN
-
-- The script's `diff_json` printed its sides inverted (`only in loaded` /
-  `only in original` and `only-original=` / `only-loaded=` were swapped).
-  Fixed: the parameters are now `loaded, original` and every message names
-  the side correctly. The first session's reading of this failure was
-  therefore backwards: the ORIGINAL `Gridded` material has the two wrap
-  locals (`base_color_texture_wrap_u` / `_v`, 18 names) and the RELOADED one
-  lacks them (16 names).
-- Why: the importer sets the wrap mode as a local value whenever USD's
-  effective wrap (`useMetadata` default = `clamp_to_edge`) differs from
-  erhe's default `repeat` (`doc/erhe/usd.md`, deliberate), and the writer
-  authors `wrapS` / `wrapT` on every bound texture with a file, so the wrap
-  path round-trips. The reloaded material lacks the locals because the saved
-  `logs/usd_roundtrip_textured.usda` holds NO `UsdUVTexture` shader at all:
-  the save dropped the texture (`Gridded` was written with a plain
-  `inputs:diffuseColor`). Every saved file of that run lacked textures,
-  including `usd_roundtrip_open_pbr.usda` whose source binds
-  `images/auto_rgba.png`.
-- Two candidate mechanisms, one log line decides (run the USD leg, or open
-  and save `textured.usda` over MCP, and grep `logs/log.txt`): (H1) the
-  image never loaded in the original (`[editor.parsers] USD image '...' not
-  found` / `could not be decoded` / `is empty`, `src/editor/parsers/usd.cpp`
-  `load_usd_image`); (H2) it loaded but the save could not resolve its file
-  (`save_scene_usd '...': material 'Gridded' slot 'base_color' has no source
-  image file - the slot is not written`, `usd.cpp` `save_scene_usd`, and the
-  writer's `has no source file` warning in `usd_export.cpp`). H1 is
-  consistent with the `textures` key not having failed. Fix at the named
-  function; then add a regression check (assert `UsdUVTexture` in the first
-  save when the source has one, in `usd_round_trip_leg` or an `Mcp_test`).
-- The wrap import / export logic and `test_usd_texture_inputs.cpp` need no
-  change.
-
-### 3b. `references_override: the def below a carrier authored nothing` - FIXED (script)
-
-A typeless `def` below a reference carrier IS an override since ca9b2b651
-(unit test `Override_import.a_typed_def_below_a_carrier_is_dropped_and_a_typeless_def_is_an_override`;
-`doc/erhe/usd_compatibility_design.md` X2 and "Out of scope"). The script
-asserted the older rule. It now checks that the typed `def` added no prim,
-that the typeless `def` is the override of `arm` (`visible` local, active),
-that nothing else below `DefCarrier` authored a value, and that this
-survives save and reload. `doc/erhe/usd.md` says the same. Not yet seen
-passing at runtime: the USD leg has not run past item 2.
-
 ## Done when
 
 `py -3 scripts/scene_roundtrip_verify.py` exits 0 on the draw-list path
-against a fresh editor, with the checks passing for the right reason (not
+against a fresh editor on the NVIDIA machine, with the USD leg run (not
 skipped), `doc/plans/audit_2026_09_30_followups.md` "Follow-ups found by
-review" no longer lists them, and the item-2 trigger is recorded in
+review" no longer lists it, and the device-loss trigger is recorded in
 `doc/erhe/shadows.md`. Delete this document then.

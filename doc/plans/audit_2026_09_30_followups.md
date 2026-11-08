@@ -99,21 +99,11 @@ and each commit gets a Fable review at medium effort.
 
 ## Follow-ups found by review
 
-`scripts/scene_roundtrip_verify.py` (run 2026-10-04 for item 11, against the
-windowed Vulkan editor) fails three checks on 7c7c0c0bf; state and findings
-in `doc/plans/scene_roundtrip_failures.md` ((a) fixed, (b) open with the
-trigger isolated, (c) one fixed in the script, one open):
-(a) `reload-diff: nodes identical` -
-the dynamic bodies `P6 Box` / `P6 Sphere` keep falling between the snapshot
-and the reload; the glTF leg does not pause physics before its snapshot the
-way the USD leg does (`toggle_physics`); (b) `VK_ERROR_DEVICE_LOST` with a
-`VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID` fault on the first frame after
-the USD leg opens `authored.usda` (one point light with shadow) following
-the glTF leg, on the draw-list path only (with `set_draw_lists_enabled`
-false the run completes); (c) with draw lists off, two USD checks:
-`textured round-trip diff: local_property_names` (the reloaded `Gridded`
-material carries `base_color_texture_wrap_u` / `_v` locally) and
-`references_override: the def below a carrier authored nothing`.
+`scripts/scene_roundtrip_verify.py` (run for item 11 against the windowed
+Vulkan editor on an NVIDIA GPU) fails one check: `VK_ERROR_DEVICE_LOST` with a
+`VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID` fault after the USD leg opens
+`authored.usda` (one point light with shadow), on the draw-list path only;
+state and findings in `doc/plans/scene_roundtrip_failures.md`.
 
 The three latent layout-tracking defects of 4fc17d988 (clearing a texture
 view cleared the whole image, a stencil-only multisample resolve recorded

@@ -33,7 +33,8 @@ ask the user which to pick.
    MoltenVK fullscreen (`doc/plans/frame_pacing_adaptive_sync.md`
    "Verification").
 7. Quest 3 performance (needs the headset): `doc/plans/quest_performance.md`.
-8. Scene round-trip failures: `doc/plans/scene_roundtrip_failures.md`.
+8. Scene round-trip device loss (needs the NVIDIA GPU):
+   `doc/plans/scene_roundtrip_failures.md`.
 9. Audit follow-ups: `doc/plans/audit_2026_09_30_followups.md`.
 10. Bistro load decisions (step 5 KTX2, step 7c lazy attribute stores,
     geogram colocate serialization, worker release reopen cost):
@@ -112,11 +113,13 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 - Quest: the device's writable `mcp_tools.json` is the copy made at first
   install and goes stale.
 - TRS values drift in float precision on re-save.
-- Three Scene Hierarchy MCP tests fail locally (suspected: the ini's Scene
-  Hierarchy height 37; unverified at HEAD).
-- `scene_roundtrip_verify.py` failures: a `Graph_texture` is destroyed on the
-  render thread (`asset_manager.cpp:343`); see
-  `doc/plans/scene_roundtrip_failures.md`.
+- Three Scene Hierarchy MCP tests failed on one machine (suspected: the
+  ini's Scene Hierarchy height 37); `ctest -L editor` passes in full on
+  macOS at 3b181b4f4; re-check on Windows.
+- A `Graph_texture` destroyed on the render thread (the main-thread VERIFY of
+  `Asset_manager`, seen in a `scene_roundtrip_verify.py` run on Windows) does
+  not reproduce on macOS (Metal headless, glTF + USD legs, editor exit);
+  re-check on Windows.
 - The id renderer's region-scan readback sometimes returns 0 entries
   (`gate_id.py` JSON varies run to run).
 - macOS: with the Vulkan SDK `setup-env.sh` sourced, SDL's Cocoa surface
