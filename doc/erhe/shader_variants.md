@@ -478,3 +478,6 @@ which made material edits appear to do nothing.
 
 - [plans/shader_fp16.md](../plans/shader_fp16.md): switchable fp16 paths
   through the standard shader, each with a boundary statement and a gate.
+- [plans/quest_fragment_shader.md](../plans/quest_fragment_shader.md): the
+  mobile shading variant for the headset (mobile shadow bias axis value,
+  identity texture transform axis, the mobile fp16 bit).

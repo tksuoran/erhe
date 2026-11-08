@@ -486,6 +486,7 @@ flowchart TD
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
+- [plans/quest_fragment_shader.md](plans/quest_fragment_shader.md) (proposed): Quest fragment shader: the mobile shading variant (mobile shadow lookup, fp16 chain, 16-bit material record, measured Adreno 740 costs)
 - [plans/quest_performance.md](plans/quest_performance.md) (proposed): Quest 3 performance: baseline, ranking, items
 - [plans/open_items.md](plans/open_items.md) (in progress): Open items across subsystems without a plan of their own: defects found in passing, unverified paths, user checks and decisions
 - [plans/overdraw_visualization.md](plans/overdraw_visualization.md) (in progress): Overdraw visualization

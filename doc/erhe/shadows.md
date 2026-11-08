@@ -1717,3 +1717,4 @@ minimum).
 
 - [plans/shadow_robustness.md](../plans/shadow_robustness.md) - Metal verification of the shadow path; profiling and optimizing the forward pass cost of the hardened path.
 - [plans/shadows.md](../plans/shadows.md) - remaining fit and point-shadow performance candidates.
+- [plans/quest_fragment_shader.md](../plans/quest_fragment_shader.md) - the mobile shadow lookup (normal offset bias, one compare fetch) for the headset.

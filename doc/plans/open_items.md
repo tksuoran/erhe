@@ -11,7 +11,7 @@ into its subsystem's plan (or is fixed) and its line here is removed.
 ## Work order
 
 The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
-"Session handoff"). Items 1 and 2 come first; items 3 - 10 each need a user
+"Session handoff"). Items 1 and 2 come first; items 3 - 13 each need a user
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick.
 
@@ -32,11 +32,20 @@ ask the user which to pick.
 6. Frame pacing re-gates: fixed 60 Hz, the display's update granularity,
    MoltenVK fullscreen (`doc/plans/frame_pacing_adaptive_sync.md`
    "Verification").
-7. Quest 3 performance (needs the headset): `doc/plans/quest_performance.md`.
-8. Scene round-trip device loss (needs the NVIDIA GPU):
-   `doc/plans/scene_roundtrip_failures.md`.
-9. Audit follow-ups: `doc/plans/audit_2026_09_30_followups.md`.
-10. Bistro load decisions (step 5 KTX2, step 7c lazy attribute stores,
+7. Quest 3 performance (needs the headset): `doc/plans/quest_performance.md`;
+   the Bistro configuration sweep continues its "Next configurations" list.
+8. Quest fragment shader, the mobile shading variant (needs the headset
+   for the device gates; the desktop gates run headless):
+   `doc/plans/quest_fragment_shader.md` "Build order".
+9. Prepared scene phantom shadow (Intel ANV ring-mode indirect draws;
+   user deferred the minimal repro, start only when asked):
+   `doc/plans/prepared_scene_shadow_phantom.md`.
+10. Background scene save follow-ups: `doc/plans/background_scene_save.md`,
+    then `doc/editor/scene_serialization.md` "Saving in the background".
+11. Scene round-trip device loss (needs the NVIDIA GPU):
+    `doc/plans/scene_roundtrip_failures.md`.
+12. Audit follow-ups: `doc/plans/audit_2026_09_30_followups.md`.
+13. Bistro load decisions (step 5 KTX2, step 7c lazy attribute stores,
     geogram colocate serialization, worker release reopen cost):
     `doc/plans/bistro_load_profiling.md` "Status".
 
