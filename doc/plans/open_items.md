@@ -59,10 +59,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 `doc/plans/prepared_assets.md` (R numbers). Behavior:
 `doc/editor/prepared_assets.md`.
 
-- Texture planning logs "KTX2: level 0 outside the file" once per raw block
-  KTX2 image larger than 64 KiB (307 on the Bistro prepared run):
-  `Gltf_image_residency::plan_textures()` opens a 64 KiB prefix first and
-  `parse_ktx2()` warns before the whole-stream retry succeeds.
 - `scripts/prepared_asset_bistro_verify.py` compares its images with the
   editor's LOD preset (2 of 32 fail on the Mac's Medium preset, LOD on):
   turn LOD off for its images as `prepared_asset_verify.py` does.

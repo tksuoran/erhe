@@ -9,6 +9,7 @@
 #include <array>
 #include <cstring>
 #include <fstream>
+#include <limits>
 
 namespace erhe::graphics {
 
@@ -164,53 +165,90 @@ auto Ktx2_container::read_level(const std::span<const std::uint8_t> file, const 
     }
 }
 
-auto parse_ktx2(const std::span<const std::uint8_t> file, Ktx2_container& container) -> bool
+auto parse_ktx2_prefix(const std::span<const std::uint8_t> prefix, Ktx2_container& container) -> Ktx2_prefix_result
 {
-    if ((file.size() < c_header_byte_count) || (std::memcmp(file.data(), c_ktx2_identifier, sizeof(c_ktx2_identifier)) != 0)) {
+    const std::size_t identifier_byte_count = sizeof(c_ktx2_identifier);
+    if ((prefix.size() < identifier_byte_count) || (std::memcmp(prefix.data(), c_ktx2_identifier, identifier_byte_count) != 0)) {
         log_texture->warn("KTX2: not a KTX2 file");
-        return false;
+        return Ktx2_prefix_result::malformed;
     }
-    container.vk_format               = read_u32(file, 12);
-    container.type_size               = read_u32(file, 16);
-    container.width                   = read_u32(file, 20);
-    container.height                  = read_u32(file, 24);
-    container.depth                   = read_u32(file, 28);
-    container.layer_count             = read_u32(file, 32);
-    container.face_count              = read_u32(file, 36);
-    container.level_count             = read_u32(file, 40);
-    container.supercompression_scheme = read_u32(file, 44);
-    const std::uint32_t dfd_offset    = read_u32(file, 48);
-    const std::uint32_t dfd_length    = read_u32(file, 52);
-    const std::uint32_t kvd_offset    = read_u32(file, 56);
-    const std::uint32_t kvd_length    = read_u32(file, 60);
+    if (prefix.size() < c_header_byte_count) {
+        return Ktx2_prefix_result::index_beyond;
+    }
+    container.vk_format               = read_u32(prefix, 12);
+    container.type_size               = read_u32(prefix, 16);
+    container.width                   = read_u32(prefix, 20);
+    container.height                  = read_u32(prefix, 24);
+    container.depth                   = read_u32(prefix, 28);
+    container.layer_count             = read_u32(prefix, 32);
+    container.face_count              = read_u32(prefix, 36);
+    container.level_count             = read_u32(prefix, 40);
+    container.supercompression_scheme = read_u32(prefix, 44);
+    const std::uint32_t dfd_offset    = read_u32(prefix, 48);
+    const std::uint32_t dfd_length    = read_u32(prefix, 52);
+    const std::uint32_t kvd_offset    = read_u32(prefix, 56);
+    const std::uint32_t kvd_length    = read_u32(prefix, 60);
+    container.dfd = {};
+    container.kvd = {};
+    container.levels.clear();
 
     const std::uint32_t stored_level_count = std::max(container.level_count, 1u);
     const std::uint64_t level_index_end    = c_header_byte_count + (static_cast<std::uint64_t>(stored_level_count) * c_level_index_byte_count);
-    if (level_index_end > file.size()) {
-        log_texture->warn("KTX2: level index outside the file");
-        return false;
+    if (
+        (level_index_end > prefix.size()) ||
+        !region_fits(prefix.size(), dfd_offset, dfd_length) ||
+        !region_fits(prefix.size(), kvd_offset, kvd_length)
+    ) {
+        return Ktx2_prefix_result::index_beyond;
     }
-    if (!region_fits(file.size(), dfd_offset, dfd_length) || !region_fits(file.size(), kvd_offset, kvd_length)) {
-        log_texture->warn("KTX2: data format descriptor or key/value data outside the file");
-        return false;
-    }
-    container.dfd = file.subspan(dfd_offset, dfd_length);
-    container.kvd = file.subspan(kvd_offset, kvd_length);
-    container.levels.clear();
+    container.dfd = prefix.subspan(dfd_offset, dfd_length);
+    container.kvd = prefix.subspan(kvd_offset, kvd_length);
+    Ktx2_prefix_result result = Ktx2_prefix_result::complete;
     for (std::uint32_t level = 0; level < stored_level_count; ++level) {
         const std::size_t entry_offset = c_header_byte_count + (static_cast<std::size_t>(level) * c_level_index_byte_count);
         const Ktx2_level entry{
-            .byte_offset              = read_u64(file, entry_offset),
-            .byte_length              = read_u64(file, entry_offset + 8),
-            .uncompressed_byte_length = read_u64(file, entry_offset + 16)
+            .byte_offset              = read_u64(prefix, entry_offset),
+            .byte_length              = read_u64(prefix, entry_offset + 8),
+            .uncompressed_byte_length = read_u64(prefix, entry_offset + 16)
         };
-        if (!region_fits(file.size(), entry.byte_offset, entry.byte_length)) {
-            log_texture->warn("KTX2: level {} outside the file", level);
-            return false;
+        if (entry.byte_length > (std::numeric_limits<std::uint64_t>::max() - entry.byte_offset)) {
+            log_texture->warn("KTX2: level {} range overflows", level);
+            container.levels.clear();
+            return Ktx2_prefix_result::malformed;
+        }
+        if (!region_fits(prefix.size(), entry.byte_offset, entry.byte_length)) {
+            result = Ktx2_prefix_result::levels_beyond;
         }
         container.levels.push_back(entry);
     }
-    return true;
+    return result;
+}
+
+auto parse_ktx2(const std::span<const std::uint8_t> file, Ktx2_container& container) -> bool
+{
+    switch (parse_ktx2_prefix(file, container)) {
+        case Ktx2_prefix_result::complete: {
+            return true;
+        }
+        case Ktx2_prefix_result::index_beyond: {
+            log_texture->warn("KTX2: header, level index, data format descriptor or key/value data outside the file");
+            break;
+        }
+        case Ktx2_prefix_result::levels_beyond: {
+            for (std::size_t level = 0, end = container.levels.size(); level < end; ++level) {
+                if (!region_fits(file.size(), container.levels[level].byte_offset, container.levels[level].byte_length)) {
+                    log_texture->warn("KTX2: level {} outside the file", level);
+                    break;
+                }
+            }
+            break;
+        }
+        case Ktx2_prefix_result::malformed: {
+            break; // logged by parse_ktx2_prefix()
+        }
+    }
+    container.levels.clear();
+    return false;
 }
 
 auto get_ktx2_raw_block_format(const std::uint32_t vk_format) -> erhe::dataformat::Format

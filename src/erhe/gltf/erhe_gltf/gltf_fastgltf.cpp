@@ -7108,9 +7108,20 @@ void Gltf_image_residency::plan_textures()
             if (!decoded.source->read_prefix(prefix, bytes)) {
                 break;
             }
+            const std::span<const std::uint8_t> span{reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()};
+            // A KTX2 opens only with all of its level data; a prefix short of it reads the whole stream.
+            if (erhe::graphics::Image_loader_ktx2::is_ktx2(span) && (prefix < decoded.source->get_byte_count())) {
+                erhe::graphics::Ktx2_container container;
+                const erhe::graphics::Ktx2_prefix_result result = erhe::graphics::parse_ktx2_prefix(span, container);
+                if (result == erhe::graphics::Ktx2_prefix_result::malformed) {
+                    break;
+                }
+                if (result != erhe::graphics::Ktx2_prefix_result::complete) {
+                    continue;
+                }
+            }
             erhe::graphics::Image_loader loader;
             erhe::graphics::Image_info   info{};
-            const std::span<const std::uint8_t> span{reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()};
             const bool open_ok = loader.open(span, info, decoded.linear, transcode_format_preference, erhe::graphics::Alpha_mode::premultiplied, astc_support);
             loader.close();
             if (open_ok) {

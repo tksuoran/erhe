@@ -4,16 +4,21 @@
 // load with native ASTC support, and the astcenc CPU decode for a device
 // without it. Deviceless.
 
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/image_loader_ktx2.hpp"
 #include "erhe_graphics/ktx2_container.hpp"
 
 #include <gtest/gtest.h>
+#include <spdlog/sinks/base_sink.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <memory>
+#include <mutex>
 #include <random>
 #include <string>
 #include <span>
@@ -85,6 +90,45 @@ public:
     }
 
     std::array<std::vector<std::uint8_t>, 4> levels;
+};
+
+// Counts log_texture warnings (level lowered to warn) while alive.
+class Texture_warning_counter : public spdlog::sinks::base_sink<std::mutex>
+{
+public:
+    std::size_t count{0};
+
+protected:
+    void sink_it_(const spdlog::details::log_msg& message) override
+    {
+        if (message.level >= spdlog::level::warn) {
+            ++count;
+        }
+    }
+    void flush_() override {}
+};
+
+class Scoped_texture_warning_counter
+{
+public:
+    Scoped_texture_warning_counter()
+        : m_counter{std::make_shared<Texture_warning_counter>()}
+        , m_level  {erhe::graphics::log_texture->level()}
+    {
+        erhe::graphics::log_texture->sinks().push_back(m_counter);
+        erhe::graphics::log_texture->set_level(spdlog::level::warn);
+    }
+    ~Scoped_texture_warning_counter() noexcept
+    {
+        erhe::graphics::log_texture->set_level(m_level);
+        std::vector<spdlog::sink_ptr>& sinks = erhe::graphics::log_texture->sinks();
+        sinks.erase(std::remove(sinks.begin(), sinks.end(), m_counter), sinks.end());
+    }
+    [[nodiscard]] auto get_count() const -> std::size_t { return m_counter->count; }
+
+private:
+    std::shared_ptr<Texture_warning_counter> m_counter;
+    spdlog::level::level_enum                m_level;
 };
 
 } // anonymous namespace
@@ -347,4 +391,71 @@ TEST(Ktx2Container, raw_blocks_file_is_told_by_its_header)
     EXPECT_FALSE(erhe::graphics::is_ktx2_raw_blocks_file(directory / "missing.ktx2"));
     std::error_code error;
     std::filesystem::remove_all(directory, error);
+}
+
+// A prefix of the file (the texture planner's header probe) is a defined
+// result, not logged; a corrupt file still fails and warns.
+TEST(Ktx2Container, prefix_short_of_level_data)
+{
+    const Test_image test_image;
+    const std::vector<std::uint8_t> file = erhe::graphics::write_ktx2_raw_blocks(test_image.make_input(Format::format_astc_4x4_srgb, Normal_marker::none));
+    ASSERT_FALSE(file.empty());
+    const std::span<const std::uint8_t> file_view{file.data(), file.size()};
+
+    erhe::graphics::Ktx2_container full;
+    ASSERT_TRUE(erhe::graphics::parse_ktx2(file_view, full));
+    ASSERT_EQ(full.levels.size(), 4u);
+    // Level 0 (largest) is stored last.
+    const std::size_t level_0_offset = static_cast<std::size_t>(full.levels[0].byte_offset);
+    ASSERT_EQ(level_0_offset + full.levels[0].byte_length, file.size());
+
+    {
+        const Scoped_texture_warning_counter warnings;
+        erhe::graphics::Ktx2_container container;
+        EXPECT_EQ(erhe::graphics::parse_ktx2_prefix(file_view, container), erhe::graphics::Ktx2_prefix_result::complete);
+
+        const std::span<const std::uint8_t> short_of_level_0 = file_view.first(level_0_offset + 1);
+        EXPECT_EQ(erhe::graphics::parse_ktx2_prefix(short_of_level_0, container), erhe::graphics::Ktx2_prefix_result::levels_beyond);
+        EXPECT_EQ(container.width, 12u);
+        EXPECT_EQ(container.height, 8u);
+        EXPECT_EQ(container.vk_format, erhe::graphics::ktx2_vk_format_astc_4x4_srgb);
+        ASSERT_EQ(container.levels.size(), 4u);
+        EXPECT_EQ(container.levels[0].byte_offset, full.levels[0].byte_offset);
+        EXPECT_EQ(container.find_value("KTXwriter"), "erhe");
+
+        EXPECT_EQ(erhe::graphics::parse_ktx2_prefix(file_view.first(40), container), erhe::graphics::Ktx2_prefix_result::index_beyond);
+        EXPECT_EQ(warnings.get_count(), 0u);
+    }
+
+    {
+        // The same bytes as a whole file are truncated: parse_ktx2() fails and warns.
+        const Scoped_texture_warning_counter warnings;
+        erhe::graphics::Ktx2_container container;
+        EXPECT_FALSE(erhe::graphics::parse_ktx2(file_view.first(level_0_offset + 1), container));
+        EXPECT_EQ(warnings.get_count(), 1u);
+    }
+
+    {
+        // A corrupt identifier is malformed in either form.
+        std::vector<std::uint8_t> corrupt = file;
+        corrupt[1] = 0u;
+        const std::span<const std::uint8_t> corrupt_view{corrupt.data(), corrupt.size()};
+        const Scoped_texture_warning_counter warnings;
+        erhe::graphics::Ktx2_container container;
+        EXPECT_EQ(erhe::graphics::parse_ktx2_prefix(corrupt_view.first(level_0_offset + 1), container), erhe::graphics::Ktx2_prefix_result::malformed);
+        EXPECT_FALSE(erhe::graphics::parse_ktx2(corrupt_view, container));
+        EXPECT_EQ(warnings.get_count(), 2u);
+    }
+
+    {
+        // A level range that overflows is malformed.
+        std::vector<std::uint8_t> corrupt = file;
+        for (std::size_t i = 0; i < 8; ++i) {
+            corrupt[80 + 8 + i] = 0xFFu; // level 0 byteLength
+        }
+        const Scoped_texture_warning_counter warnings;
+        erhe::graphics::Ktx2_container container;
+        EXPECT_EQ(erhe::graphics::parse_ktx2_prefix(std::span<const std::uint8_t>{corrupt.data(), corrupt.size()}, container), erhe::graphics::Ktx2_prefix_result::malformed);
+        EXPECT_EQ(warnings.get_count(), 1u);
+    }
 }

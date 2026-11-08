@@ -25,15 +25,10 @@ every prepared primitive (`doc/editor/lod.md`). This plan lists what remains.
    frame. Check it against the commit before the background save and with a
    clean `config/editor/desktop_windows.json` (the user's session copy is
    modified) before treating it as a defect.
-3. **KTX2 warnings at load.** Opening the Bistro source glTF and the PC file
-   logs about 300 `KTX2: level 0 outside the file` / `KTX2: container parse
-   failed` warnings, while the load reports every texture loaded. Find which
-   reader produces them (the load-time encoded texture disk cache is a
-   candidate) and fix the cause.
-4. **Synchronous saves left.** `Asset_manager::save_container` of a scene
+3. **Synchronous saves left.** `Asset_manager::save_container` of a scene
    record calls the synchronous `save_scene_gltf()`, and a USD-backed scene
    saves on the main thread inside `Scene_save_service::start()`. Move both
    onto the worker path.
-5. **Scene close leak warnings.** Closing Bistro logs `scene-close leak:
+4. **Scene close leak warnings.** Closing Bistro logs `scene-close leak:
    Animation '...' of closed scene ... is still alive 60 frames after close
    (3 holder(s))` for its animations; find the holders.

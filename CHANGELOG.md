@@ -187,6 +187,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graphics`: `parse_ktx2_prefix()` and `Ktx2_prefix_result`: parses
+  the first bytes of a KTX2 file and reports, without logging, when the
+  header, indices or level data end past them (`complete`, `index_beyond`,
+  `levels_beyond`; `malformed` is logged). `parse_ktx2()` is built on it.
+
 - `erhe::raytrace`: Prebuilt BVH export and import for the `tinybvh` backend
   (backend `tinybvh`, library tag `ERHE_TINYBVH_LIBRARY_TAG`):
   `Tinybvh_node_record`, `Prebuilt_bvh::tinybvh_nodes`,

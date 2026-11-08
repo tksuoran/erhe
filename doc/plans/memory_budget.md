@@ -105,7 +105,9 @@ build of every mesh, not the BVH, dominates what a load keeps.
    limits; both 0 = unlimited. MiB, not bytes: the codegen `Int` is 32 bit.
 4. **Estimate.** Textures built: `Gltf_image_residency::plan_textures()` reads
    each requested image's header (a 64 KiB prefix, the whole stream when the
-   prefix does not hold it) before the first decode and sums the texture bytes
+   prefix does not hold it; a KTX2 whose level data ends past the prefix, as
+   `erhe::graphics::parse_ktx2_prefix()` reports, is opened from the whole
+   stream only) before the first decode and sums the texture bytes
    as loaded (single-level RGBA8 with its generated mip chain; containers as
    stored). A load plans against the texture budget minus the content textures
    already resident: `Texture_create_info::memory_class`

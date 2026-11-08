@@ -19,7 +19,7 @@ OpenSceneGltfDefaultCamera{7acfc3c5e}::finish_open_scene_gltf-injects-session_on
 [TRAPS]
 ✓variants.gltf-"invalid vector subscript"::diagnosed-2026-10-03{fixture-primitive-1-indices-4..7-into-4-vertex-accessor(invalid-glTF)+Triangle_soup->Geometry-assumed-indices-start-at-0;fixed-both+importer-skips-out-of-range-indices;regression=erhe_gltf_tests{out_of_range_indices.gltf}}
 !known-2026-10-04::scene_roundtrip_verify.py-fails-3-on-baseline-7c7c0c0bf{reload-diff-dynamic-bodies-keep-falling(glTF-leg-no-toggle_physics);DEVICE_LOST-write-fault-on-authored.usda-after-glTF-leg(draw-list-path-only);USD-textured-local_property_names+references_override}->doc/plans/audit_2026_09_30_followups.md"Follow-ups found by review"
-!background-save-open::doc/plans/background_scene_save.md{disabled-windows-not-dimmed(input-blocked-verified);Mcp_test.property_row_is_addressable_by_its_label-fails(unverified-vs-HEAD~;user-config-modified);KTX2-level-0-outside-the-file-warnings-at-Bistro-load;Quest-LOD-decision(user);save_container+USD-still-main-thread;Bistro-animation-close-leak}
+!background-save-open::doc/plans/background_scene_save.md{disabled-windows-not-dimmed(input-blocked-verified);Mcp_test.property_row_is_addressable_by_its_label-fails(unverified-vs-HEAD~;user-config-modified);Quest-LOD-decision(user);save_container+USD-still-main-thread;Bistro-animation-close-leak}
 !mcp-readiness-trap::wait-for-"listening on 127.0.0.1:3743 (pid <pid>"-of-THIS-run{logs/log.txt-holds-previous-run-until-rewritten}+stop-own-editor-by-launch-pid-only(AGENTS.md"Stopping-processes")
 
 [FOCUS_ARCHIVE_2026-11-07]{compacted-pointers;moved-from-activeContext.md}

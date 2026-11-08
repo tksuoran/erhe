@@ -79,6 +79,19 @@ public:
 // the buffer. Returns false (and logs) on a malformed file.
 [[nodiscard]] auto parse_ktx2(std::span<const std::uint8_t> file, Ktx2_container& container) -> bool;
 
+// Result of parse_ktx2_prefix(): how much of the file the bytes hold.
+enum class Ktx2_prefix_result : unsigned int
+{
+    complete       = 0, // every region inside the bytes; as parse_ktx2() returning true
+    index_beyond   = 1, // the header, level index, DFD or key/value data end past the bytes
+    levels_beyond  = 2, // header and indices parsed; a level's data ends past the bytes
+    malformed      = 3  // not a KTX2 file, or a region whose end overflows (logged)
+};
+
+// parse_ktx2() of the first bytes of a file; running out of bytes is a result, not logged.
+// levels_beyond sets the header, dfd, kvd and level index; level data needs the whole file.
+[[nodiscard]] auto parse_ktx2_prefix(std::span<const std::uint8_t> prefix, Ktx2_container& container) -> Ktx2_prefix_result;
+
 // The erhe format for a raw-block vkFormat, or format_undefined when the
 // vkFormat is not one the raw path handles.
 [[nodiscard]] auto get_ktx2_raw_block_format(std::uint32_t vk_format) -> erhe::dataformat::Format;
