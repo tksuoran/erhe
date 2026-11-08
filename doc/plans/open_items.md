@@ -15,9 +15,7 @@ The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick.
 
-0. CI: check that the `build` and `tests` workflows of `e15ff8aca` are green
-   (`gh run list`); the GCC weld test item under "Prepared assets" below.
-   Then the user rulings on the D8 coder decisions ("Prepared assets" below,
+0. The user rulings on the D8 coder decisions ("Prepared assets" below,
    `doc/plans/prepared_assets_design.md` D8).
 1. Quest session follow-ups: "Quest session follow-ups" below
    (`doc/agents/quest.md` "Bistro scene data on the device").
@@ -61,11 +59,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 `doc/plans/prepared_assets.md` (R numbers). Behavior:
 `doc/editor/prepared_assets.md`.
 
-- Confirm on CI that `-ffp-contract=off` for GCC (`doc/cmake_conventions.md`)
-  fixes `Editor_asset_load_test.first_open_derives_and_stores_the_second_loads`
-  on the GCC Linux jobs (the welded core had more vertices than the
-  authoring soup: 23 vs 16, 48 vs 36); if not, the weld path has another
-  platform-dependent rounding.
 - Texture planning logs "KTX2: level 0 outside the file" once per raw block
   KTX2 image larger than 64 KiB (307 on the Bistro prepared run):
   `Gltf_image_residency::plan_textures()` opens a 64 KiB prefix first and
@@ -123,9 +116,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   (`metal_gpu_timer.cpp` `Gpu_timer_impl::label`).
 - Undo of `delete_nodes` on a mesh under a holder node restores a different
   world transform.
-- `Lattice_tool::update_active_lattice` walks every node of the active scene
-  per frame per view (from `Transform_tool::update_for_view`, about 6.5 ms per
-  frame in Debug Bistro); make it change-driven.
 - Scene close in Release stalls about 10 s in `Hierarchy::set_parent`
   (about 2800 calls from the `Scene_root` destructor inside
   `Viewport_scene_view::prepare_render`).
