@@ -274,3 +274,12 @@ none
 >session-programs::9d45f8f0e+596e2a9d4{window-without-recording;background-module-stats;resizable-columns}✓
 >in-editor-analysis::02e468e3a+d5b0cada8{analyze_program_stages;MCP-analyze_shader_programs;status-refresh}✓
 >results::148-programs-analyzed~63s-2-jobs;444-blocks-equal-to-script-except-PowerVR-vertex
+
+[2026-11-07..08]
+>fixed::PVS-scene-id-warning{802820c69;check-compared-generated-id}✓
+>measured::Quest-R13.4{Mac-release-APK;prepared-4.66s/800MB;old-glb-untextured(R12.2)->comparison-dropped©User}✓
+>changed::prepared-status-computes-on-request{84cfd0ed1;Update/Refresh+MCP-update}✓
+>added::render_scene_image-lod_nodes{6a3463923;frame-exact-LOD-capture}✓
+>fixed::world-space-form-shadows{33e8660cd;per-view-caster-filter+caster-LOD-keys+per-filter-shadow-bounds;Fable-review}✓
+>fixed::CI-all-platforms-build{basis-fork+MSVC-C4458/C4099/C4100+SPIR-V-guards+near-macro+hexfloat-keys+GCC-ffp-contract-off}✓
+

@@ -15,8 +15,10 @@ The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick.
 
-0. Prepared assets: the user rulings on the D8 coder decisions.
-   Read "Prepared assets" below and `doc/plans/prepared_assets_design.md` D8.
+0. CI: check that the `build` and `tests` workflows of `e15ff8aca` are green
+   (`gh run list`); the GCC weld test item under "Prepared assets" below.
+   Then the user rulings on the D8 coder decisions ("Prepared assets" below,
+   `doc/plans/prepared_assets_design.md` D8).
 1. Quest session follow-ups: "Quest session follow-ups" below
    (`doc/agents/quest.md` "Bistro scene data on the device").
 2. LOD follow-ups: `doc/plans/lod_gpu_selection.md` step 6 "Results" and
