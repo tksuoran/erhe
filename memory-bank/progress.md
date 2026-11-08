@@ -10,3 +10,11 @@
 ✓CI-e15ff8aca+3b181b4f4-green(GCC-weld-test-passes)
 ✓session-2026-11-08b-open-items-sweep{see-activeContext}
 ?then{CI-check-3458ea70f+707b1fcb6(Windows-'?'/UNC-paths;OpenXR-headset_view-first-compile-on-Android)+©User-rulings(remaining-D8-decisions)+prepared_asset_bistro_verify.py-LOD-off-for-images+mcp_server_tests-unrun(windowed)}
+
+[TASK::quest-fragment-shader]{started-2026-11-08;branch=main;doc/plans/quest_fragment_shader.md}
+✓plan{faf8033cc;shadow-lookup=60%-of-headset-lit-shader}
+✓M1/M2-normal_offset{aaab0b1e2;offsets-1.0/1.0;shadow_verify-core-16bit:G1-0-acne,G3<=1.25t,G4-pass,G5<=1t(spot-2.5);G2=hardware-filter-softening}
+✓M5-identity-texture-transform+OpenXR-preset{4be47d3c5}
+?device-bench{APK-11:39+rebuild-pending;install-blocked:adb-uninstall-refused-by-classifier->©User;then-quest_bench-orbit+bistro-street-receiver_plane-vs-normal_offset;then-fp16-mask-1}
+?M4-16bit-material-record{after-bench}
+
