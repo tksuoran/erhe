@@ -167,6 +167,11 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     include(JoltPhysicsCompatibility)
 endif ()
 
+# GCC fuses multiply-adds across statements by default; float results must match the other compilers (doc/cmake_conventions.md).
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(-ffp-contract=off)
+endif ()
+
 # Every executable and shared library of the build, erhe's and the
 # dependencies', lands in one directory: <build>/bin, plus a <Config>
 # subdirectory under multi-config generators (Visual Studio, Xcode). Windows

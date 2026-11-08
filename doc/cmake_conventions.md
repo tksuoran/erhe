@@ -26,6 +26,12 @@ dependencies. The configure options themselves are tabulated in
   XR).
 - A new test target registers with the `erhe_tests` aggregate target
   (`doc/testing.md`).
+- GCC builds with `-ffp-contract=off` (root `CMakeLists.txt`): its default
+  `fast` fuses multiply-adds across statements (with the global `-mfma` of
+  `cmake/JoltPhysicsCompatibility.cmake` on x86-64), so values meant to be
+  bit-equal - welded vertices, content hashes, keys - would differ from the
+  Clang and MSVC builds. Geogram gets the same flag on every non-MSVC
+  compiler (`doc/erhe/geogram.md`).
 
 ## Dependencies
 

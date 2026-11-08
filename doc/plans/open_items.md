@@ -59,12 +59,11 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 `doc/plans/prepared_assets.md` (R numbers). Behavior:
 `doc/editor/prepared_assets.md`.
 
-- `Editor_asset_load_test.first_open_derives_and_stores_the_second_loads`
-  fails on the GCC Linux CI jobs only (the welded core has more vertices
-  than the authoring soup: 23 vs 16, 48 vs 36). Likely cause: GCC's default
-  `-ffp-contract=fast` with the global `-mfma` of
-  `cmake/JoltPhysicsCompatibility.cmake` rounds values that should weld
-  differently; a global `-ffp-contract=off` is a user decision.
+- Confirm on CI that `-ffp-contract=off` for GCC (`doc/cmake_conventions.md`)
+  fixes `Editor_asset_load_test.first_open_derives_and_stores_the_second_loads`
+  on the GCC Linux jobs (the welded core had more vertices than the
+  authoring soup: 23 vs 16, 48 vs 36); if not, the weld path has another
+  platform-dependent rounding.
 - Texture planning logs "KTX2: level 0 outside the file" once per raw block
   KTX2 image larger than 64 KiB (307 on the Bistro prepared run):
   `Gltf_image_residency::plan_textures()` opens a 64 KiB prefix first and
