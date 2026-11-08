@@ -15,6 +15,7 @@
             "shadow_depth_bits": 16,
             "shadow_filter": "hard",
             "shadow_bias": "normal_offset",
+            "shader_fp16_paths": 1,
             "shadow_depth_bias_constant": 0,
             "shadow_depth_bias_slope": 0,
             "shadow_cull_mode": "cull_back",

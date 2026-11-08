@@ -173,7 +173,12 @@ and the hardware filter's partial values just inside shadow edges (G2,
 0.01 - 1.2 % of the pixels), the mode's softening. Smaller offsets were
 measured too: 1.0 / 0.25 shows 0.4 - 0.6 % acne on the head-on floors
 and 0.5 / 0 shows 58 - 66 %, so the constant offset is what the head-on
-receiver needs (its sine term is zero there). The design:
+receiver needs (its sine term is zero there). On the Quest 3 (release APK
+of 2026-11-08, off head, 120 Hz, `doc/reference/quest_bench_runs.md`):
+Bistro street with the single directional light and GPU occlusion culling
+goes from 58.7 to 108 fps, app GPU frame 11.6 to 6.4 ms, XR multiview
+pass 8.45 to 6.86 ms; the default scene's app GPU frame from 5.45 to
+4.69 ms (it holds 120 fps either way). The design:
 
 1. the receiver point moved along the interpolated shading normal N by
    `k_offset * texel_world * (1 - N.L)` (normal offset shadows), where
@@ -236,8 +241,10 @@ the mobile textured variant the material path alone (mask 1) takes 13
 full registers to 11 (+22 instructions) and the occupancy from 75 % to
 100 %, where M5 could not (the shadow lookup is already one fetch, and
 the remaining registers hold the frame, the view vector and the
-accumulated color). The step therefore is: `shader_fp16_paths` 1 in the
-OpenXR preset once the device bench shows it level or better; its
+accumulated color). The device bench of mask 1 on top of `normal_offset`: the default
+scene's XR multiview pass 6.20 to 5.67 ms (medians of two; spreads 20 and
+7 %), Bistro street level (108 against 107 fps, app GPU 6.35 against
+6.46 ms), so the OpenXR preset carries `shader_fp16_paths` 1 (done); its
 rendering difference is the fp16 plan's P1 boundary (roughness floor
 0.09, 8-bit inputs exact). The whole-chain design below stays as the
 fallback if a later device measurement shows the fragment ALU bound:
@@ -335,9 +342,7 @@ ALU-bound.
 
 ## Build order
 
-0. **Device baseline of the existing fp16 paths** (done; the M1 device
-   bench waits for the APK reinstall, the installed APK carries another
-   machine's signing key):
+0. **Device baseline of the existing fp16 paths** (done):
    `shader_fp16_paths` 0 against 31 with the release APK of 2026-11-07,
    off head, 120 Hz. Default scene (`benchmark_orbit`, two runs each): mask
    31 is slower, the XR multiview pass 7.96 ms against 7.28 ms (medians;
@@ -349,17 +354,16 @@ ALU-bound.
    every path boundary costs more on Adreno than its 16-bit rate returns,
    and M3's chain has to be whole (vectors, lookup and accumulation in
    fp16 with one conversion at the texture fetches and one at the output).
-1. **M1** (done but for the device bench): the axis value, the record
-   field, the lookup, the preset fields, the desktop gates.
+1. **M1** (done): the axis value, the record field, the lookup, the
+   preset fields, the desktop gates, the device bench.
 2. **M2** (done with M1) point lights, the same gates.
 3. **M5** (done) identity texture transform (exact, every platform).
-4. **M3** as reduced above: P1 in the OpenXR preset after its device
-   bench.
+4. **M3** (done) as reduced above: P1 in the OpenXR preset.
 5. **M4** the 16-bit material record, the device bench decides.
 6. **M6** if the eye pass is still ALU-bound.
-7. **Preset**: `graphics_presets_openxr.json` carries `shadow_bias`
-   `normal_offset` (done) and takes `shader_fp16_paths` 1 after its
-   bench; the desktop presets are unchanged.
+7. **Preset** (done): `graphics_presets_openxr.json` carries `shadow_bias`
+   `normal_offset` and `shader_fp16_paths` 1; the desktop presets are
+   unchanged.
 
 ## Open
 
