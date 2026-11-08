@@ -255,9 +255,13 @@ TEST(Gltf_parse, uri_to_file_path)
     EXPECT_EQ(round_trip("/x/a #1.gltf"), "/x/a #1.gltf");
     EXPECT_EQ(erhe::gltf::make_gltf_file_uri(erhe::file::from_string("C:/x/lib #1.gltf")), "file:///C:/x/lib%20%231.gltf");
     EXPECT_EQ(round_trip("C:/x/lib #1.gltf"), "C:/x/lib #1.gltf");
-    EXPECT_EQ(erhe::gltf::make_gltf_file_uri(erhe::file::from_string("//srv/share/x #1.gltf")), "file://srv/share/x%20%231.gltf");
 #if defined(_WIN32)
+    EXPECT_EQ(erhe::gltf::make_gltf_file_uri(erhe::file::from_string("//srv/share/x #1.gltf")), "file://srv/share/x%20%231.gltf");
     EXPECT_EQ(round_trip("//srv/share/x #1.gltf"), "//srv/share/x #1.gltf");
+#else
+    // POSIX: a leading "//" is the root directory, not a server.
+    EXPECT_EQ(erhe::gltf::make_gltf_file_uri(erhe::file::from_string("//srv/share/x #1.gltf")), "file:///srv/share/x%20%231.gltf");
+    EXPECT_EQ(round_trip("//srv/share/x #1.gltf"), "/srv/share/x #1.gltf");
 #endif
 }
 

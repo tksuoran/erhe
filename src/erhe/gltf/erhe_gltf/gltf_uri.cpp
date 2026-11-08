@@ -136,11 +136,16 @@ namespace {
 auto make_gltf_file_uri(const std::filesystem::path& path) -> std::string
 {
     const std::u8string u8_text = path.generic_u8string();
-    const std::string_view text{reinterpret_cast<const char*>(u8_text.data()), u8_text.size()};
+    std::string_view text{reinterpret_cast<const char*>(u8_text.data()), u8_text.size()};
+#if defined(_WIN32)
     if (text.starts_with("//")) { // UNC: the server is the host
         return "file:" + encode_segments(text);
     }
+#endif
     if (text.starts_with("/")) {
+        // POSIX: "//x" names "/x"; libstdc++ folds the slashes, libc++ keeps them.
+        const std::size_t first_name = text.find_first_not_of('/');
+        text = (first_name == std::string_view::npos) ? text.substr(0, 1) : text.substr(first_name - 1);
         return "file://" + encode_segments(text);
     }
     if (is_drive_prefix(text)) {
