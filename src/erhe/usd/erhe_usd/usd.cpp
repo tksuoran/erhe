@@ -623,14 +623,7 @@ void collect_variant_set_specs(
     const std::string base_dir = path.has_parent_path() ? path.parent_path().generic_string() : std::string{"."};
 
     lightusd::AssetResolutionResolver resolver;
-    resolver.set_current_working_path(base_dir);
-    resolver.set_search_paths(std::vector<std::string>{base_dir});
-    resolver.set_allow_parent_relative_paths(true);
-    lightusd::AssetResolutionHandler asset_handler{};
-    asset_handler.resolve_fun = &resolve_asset_handler;
-    asset_handler.size_fun    = &asset_size_handler;
-    asset_handler.read_fun    = &read_asset_handler;
-    resolver.register_wildcard_asset_resolution_handler(asset_handler);
+    configure_file_asset_resolver(resolver, base_dir);
 
     std::string load_warning;
     std::string load_error;
@@ -860,6 +853,18 @@ void collect_primvar_reader_inputs(
 }
 
 } // anonymous namespace
+
+void configure_file_asset_resolver(lightusd::AssetResolutionResolver& resolver, const std::string& base_dir)
+{
+    resolver.set_current_working_path(base_dir);
+    resolver.set_search_paths(std::vector<std::string>{base_dir});
+    resolver.set_allow_parent_relative_paths(true);
+    lightusd::AssetResolutionHandler asset_handler{};
+    asset_handler.resolve_fun = &resolve_asset_handler;
+    asset_handler.size_fun    = &asset_size_handler;
+    asset_handler.read_fun    = &read_asset_handler;
+    resolver.register_wildcard_asset_resolution_handler(asset_handler);
+}
 
 auto node_graph_node_id_prefix(std::string_view format) -> std::string_view
 {

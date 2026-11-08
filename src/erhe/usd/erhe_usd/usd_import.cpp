@@ -858,11 +858,10 @@ public:
         env.timecode = m_has_time_samples
             ? m_import_time_code
             : lightusd::value::TimeCode::Default();
-        // The search path for texture assets is the file's own directory.
+        // Texture assets resolve against the file's own directory, by the
+        // resolver the sublayer walk uses (parent-relative paths included).
         const std::string directory = m_arguments.path.parent_path().generic_string();
-        if (!directory.empty()) {
-            env.set_search_paths({directory});
-        }
+        configure_file_asset_resolver(env.asset_resolver, directory.empty() ? std::string{"."} : directory);
         // The converter runs metadata-only for textures: it resolves each
         // image's path and color space and reads no texel. erhe decodes the
         // image itself (convert_images / Usd_image), and Tydra's decode would
@@ -2976,10 +2975,10 @@ private:
         for (const lightusd::tydra::TextureImage& image : m_scene->images) {
             Usd_image usd_image{};
             usd_image.bytes = usdz_entry_bytes(image.asset_identifier);
-            // The asset identifier is the authored one: LightUSD resolves an
-            // asset path only when it opens the asset, and its image loaders
-            // are off. A relative path is resolved here, against the stage
-            // file's own directory, so the caller receives a path it can open.
+            // Tydra's metadata-only conversion hands over the resolved,
+            // absolute path, or the authored one when resolution failed; a
+            // relative one is joined with the stage file's own directory, so
+            // the caller receives the path the file would have.
             std::filesystem::path image_path{image.asset_identifier};
             if (image_path.is_relative() && !directory.empty()) {
                 image_path = (directory / image_path).lexically_normal();

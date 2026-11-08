@@ -8,6 +8,7 @@
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/xform_op.hpp"
 
+#include "asset-resolution.hh"
 #include "layer.hh"
 #include "stage.hh"
 
@@ -20,6 +21,11 @@
 #include <vector>
 
 namespace erhe::usd {
+
+// A resolver that opens local files by the file system's rules, `..`
+// segments included, searching `base_dir` (see resolve_asset_file in usd.cpp).
+// A resolved asset path is absolute.
+void configure_file_asset_resolver(lightusd::AssetResolutionResolver& resolver, const std::string& base_dir);
 
 // How an OpenPBR network travels in a USD file
 // (doc/erhe/usd_compatibility_design.md E2). A `Material` prim offers it beside its

@@ -150,3 +150,25 @@ TEST(Image_header_probe, an_auto_color_space_is_resolved_from_the_image)
     EXPECT_EQ(srgb_count, 1u);
     EXPECT_EQ(raw_count,  1u);
 }
+
+// A stage opened by a relative path: each image path names the file (the
+// texture search path and the join of an unresolved path agree).
+TEST(Image_header_probe, image_paths_of_a_relatively_opened_stage_name_the_files)
+{
+    const std::filesystem::path absolute_stage = std::filesystem::absolute(test_data_path("color_space_auto.usda"));
+    const std::filesystem::path relative_stage = std::filesystem::relative(absolute_stage, std::filesystem::current_path());
+    ASSERT_FALSE(relative_stage.empty());
+    ASSERT_TRUE(relative_stage.is_relative());
+    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("import_root");
+    const erhe::usd::Usd_load_arguments arguments{
+        .path          = relative_stage,
+        .root_node     = root,
+        .mesh_layer_id = 0
+    };
+    const erhe::usd::Usd_load_result result = erhe::usd::load_usd(arguments);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_FALSE(result.data.images.empty());
+    for (const erhe::usd::Usd_image& image : result.data.images) {
+        EXPECT_TRUE(std::filesystem::exists(image.path)) << image.path.generic_string();
+    }
+}

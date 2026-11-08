@@ -205,7 +205,11 @@ translation units.
   its facets uses it.
 - The render-scene converter runs with `load_texture_assets` off, so an
   image arrives as a resolved file path (`Usd_image`) with no texel read,
-  and the caller decodes it with erhe's own image loading. (The
+  and the caller decodes it with erhe's own image loading. The converter
+  resolves image asset paths with the same erhe asset-resolution handler the
+  sublayer walk uses (`configure_file_asset_resolver()`), so a `..` segment
+  resolves and the path is absolute; an asset path that does not resolve is
+  reported joined with the stage file's directory. (The
   `LIGHTUSD_WITH_BUILTIN_IMAGE_LOADER` option does not compile Tydra's
   decoder out; the flag is what keeps it idle.) `erhe::usd` creates no GPU
   object at all, which is what lets the conversion run off the main thread.

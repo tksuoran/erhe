@@ -99,6 +99,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   rule of `include_vertex_in_joint_bounding_boxes()`; before, only the
   geometry build did. `include_joint_influences_in_bounding_boxes()`
   (`primitive_builder.hpp`) is that rule, shared by all three builds.
+- `erhe::usd`: `load_usd()` resolves image asset paths with the resolver the
+  sublayer walk uses (`..` segments included), so `Usd_image::path` of a
+  resolved image is absolute and names the file also for a stage opened by
+  a relative path.
 - `erhe::scene_renderer`: shadow passes take their casters per caller:
   `Shadow_renderer::Render_parameters::caster_filter` and
   `Prepare_parameters::caster_filter` (default `shadow_caster_filter`), the
