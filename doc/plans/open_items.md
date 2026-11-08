@@ -57,9 +57,14 @@ ask the user which to pick.
   source rotated -90 degrees about X); the street benchmarks follow the
   scene's camera animation and need no pose of their own.
 - The Bistro street path (`benchmark_bistro_street_90.json`) runs GPU-bound
-  at about 34 fps on the Quest (multiview pass 22 ms median): profile the
-  heavy middle section of the path or shorten it before using it as the
-  shader gate.
+  at about 36 fps on the Quest with the headlamp as the only light (eye pass
+  22 ms median, 36 ms in its heaviest second at 2 - 3 s): the heavy section
+  is fragment work from overdraw at the bistro corner (desktop count: 8.3
+  rasterized and 2.7 shaded fragments per covered pixel against 2.4 / 1.5 in
+  the light section; 114k alpha-tested triangles in view), with the shader
+  ALUs 30 % utilized and a 45 % vertex fetch stall. Candidates: front-to-back
+  opaque order, less alpha-tested foliage in view, or a path that keeps the
+  camera out of the corner.
 - Metal counts overdraw per sample under MSAA
   (`doc/plans/overdraw_visualization.md`).
 - The right trigger still selects while travelling.

@@ -2961,3 +2961,95 @@ Quest state per run (temperatures: thermal HAL maximum per type at the start of 
 |---|---|---|---|---|---|---|---|---|---|---|
 | 0 | 34.44 | 0 -> 0; 0 -> 0, step-downs 0 | 59.3 -> 58.0 | 59.3 -> 57.6 | 57.6 -> 56.6 | 35.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1920 [1651..2362] cap 2362/2362 | 456 cap 456 | 97 | 20.9 |
 
+
+## 2026-11-08 17:24 - bistro_street_90, headlamp_loops_gpu_occlusion
+
+Headlamp spot light with shadow as the only shaded light, loops shading, culling classification gpu and occlusion culling on.
+
+- Runs: 1 x 720 measured frames (warmup 1500), display 90.0 Hz, input_hash 7206fef49d8db945; results `20261108_172449_bistro_street_90_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (f340a4241-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_90.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 4.55 s, idle 4.55 s).
+- Configuration calls: set_culling_classification, set_occlusion_culling, set_graphics_preset, set_graphics_preset (arguments in the result files' `host` block).
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | loops / loops (Headset) |
+| Lights | point 0/33 shaded, 0 shadow-mapped (0 cached); spot 1/11 shaded, 1 shadow-mapped (0 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 0+0, spot 1+0, point 0+0 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, normal_offset, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 36.58 |
+| Frame wall time (ms) | 25.72 |
+| M2 / R / M3 (ms) | 0.78 / 3.47 / 0.38 |
+| App GPU frame time, XR counter (ms) | 23.05 |
+| GPU utilization, XR counter (%) | 97.9 |
+| CPU utilization average / worst, XR counter (%) | 12.6 / 15.0 |
+| GPU pass Cull classification (ms) | 0.073 |
+| GPU pass Cull command generation (ms) | 0.105 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.041 |
+| GPU pass Shadow 0 (ms) | 2.170 |
+| GPU pass XR multiview (ms) | 22.369 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 25.186 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 36.58 | 0 -> 0; 0 -> 0, step-downs 0 | 55.9 -> 57.4 | 56.0 -> 56.8 | 54.0 -> 55.2 | 38.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 2054 [1651..2362] cap 2362/2362 | 456 cap 456 | 98 | 20.4 |
+
+
+## 2026-11-08 17:25 - bistro_street_90, headlamp_loops_gpu_occlusion
+
+Headlamp spot light with shadow as the only shaded light, loops shading, culling classification gpu and occlusion culling on.
+
+- Runs: 1 x 720 measured frames (warmup 1500), display 90.0 Hz, input_hash 7206fef49d8db945; results `20261108_172532_bistro_street_90_0.json` (`memory-bank/local/quest_runs/`, per machine).
+- Build: erhe 1.0 (f340a4241-dirty); Quest 3, OS UP1A.231005.007.A1; performance levels CPU e_unset / GPU e_unset.
+- Launch: `--benchmark /sdcard/Android/data/org.libsdl.app.quest/files/bench/benchmark_bistro_street_90.json --no-scene`; scene `bistro_src.quest.erhe_prepared` (listed 4.65 s, idle 4.65 s).
+- Configuration calls: set_culling_classification, set_occlusion_culling, set_graphics_preset, set_graphics_preset (arguments in the result files' `host` block).
+
+| Configuration | |
+|---|---|
+| Light shading (setting / in effect) | loops / loops (Headset) |
+| Lights | point 0/33 shaded, 0 shadow-mapped (0 cached); spot 1/11 shaded, 1 shadow-mapped (0 cached) (cached: the shadow map cache reused the map in the measured window, no shadow pass drawn) |
+| Light limits shadow+unshadowed | directional 0+0, spot 1+0, point 0+0 |
+| Shadows | on; 1024 px, point 512 px, format_d16_unorm (16 bits), depth, hard, normal_offset, cull_back |
+| Light cluster binning | gpu |
+| Culling classification | gpu (gpu supported) |
+| Occlusion culling | on (gpu supported) |
+| Content draws | all |
+| Draw lists | on |
+| Specular anti-aliasing | normal_kernel |
+| Preset | OpenXR |
+
+| Result (median [min..max] of the runs' medians) | |
+|---|---|
+| Frames per second | 36.42 |
+| Frame wall time (ms) | 25.69 |
+| M2 / R / M3 (ms) | 0.85 / 3.70 / 0.38 |
+| App GPU frame time, XR counter (ms) | 22.82 |
+| GPU utilization, XR counter (%) | 98.0 |
+| CPU utilization average / worst, XR counter (%) | 13.1 / 14.9 |
+| GPU pass Cull classification (ms) | 0.075 |
+| GPU pass Cull command generation (ms) | 0.104 |
+| GPU pass ImGui Hotbar imgui host (ms) | 0.041 |
+| GPU pass Shadow 0 (ms) | 2.177 |
+| GPU pass XR multiview (ms) | 22.437 |
+| GPU pass XR multiview line compute (ms) | 0.001 |
+| GPU pass (total) (ms) | 25.295 |
+
+Quest state per run (temperatures: thermal HAL maximum per type at the start of the measured window -> at the result line, deg C; clocks: median [min..max] over the measured window, MHz, with the scaling cap; usage: /proc/stat over the window).
+
+| Run | fps | Thermal status (service; editor) | CPU C | GPU C | Skin C | Battery C, level | CPU clocks | GPU clock | GPU busy % | CPU usage % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 36.42 | 0 -> 0; 0 -> 0, step-downs 0 | 59.7 -> 59.7 | 59.5 -> 59.0 | 57.6 -> 57.6 | 38.0, 100 % | cpu 0 1: 1920 cap 1920/2054; cpu 2 3 4 5: 1987 [1651..2362] cap 2362/2362 | 456 cap 456 | 98 | 23.9 |
+

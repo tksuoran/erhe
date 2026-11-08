@@ -218,8 +218,11 @@ A configuration under test (lighting, culling, draw lists) is a file in
 `TOOL[=JSON]` strings, made before the command line's calls of the same
 kind. `bistro_single_directional.json` adds one shadow-mapped directional
 light to the Bistro, sets the preset's spot and point limits to 0 and
-`light_shading` to `loops` (no clustering). A new light configuration is a
-new file; `set_graphics_preset` (light limits, `light_shading`, shadows,
+`light_shading` to `loops` (no clustering);
+`bistro_headlamp_gpu_occlusion.json` makes the headset's own headlamp (the
+shadow-mapped spot light on the camera node that every headset scene has)
+the only shaded light, with GPU culling and occlusion culling. A new light
+configuration is a new file; `set_graphics_preset` (light limits, `light_shading`, shadows,
 `use_draw_lists`), `set_culling_classification`, `set_occlusion_culling`,
 `set_light_cluster_binning`, `set_content_draws` (`opaque_only` leaves out
 the alpha-tested and translucent draws), `create_light` and `edit_light`
