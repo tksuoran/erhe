@@ -3,6 +3,8 @@
 
 #include "erhe_file/file.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_scene/animation.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_version/version.hpp"
 
 #include <fmt/format.h>
@@ -166,6 +168,51 @@ auto Benchmark_camera_path::evaluate(const int64_t frame) const -> Benchmark_pos
         return pose;
     }
 
+    if (type == Benchmark_camera_path_type::animation) {
+        if (!animation || !node || animation->channels.empty()) {
+            return pose;
+        }
+        const float  first    = animation->get_first_time();
+        const float  last     = animation->get_last_time();
+        const double duration = static_cast<double>(last) - static_cast<double>(first);
+        double offset = static_cast<double>(frame) * frame_dt_s;
+        if (duration > 0.0) {
+            offset = std::fmod(offset, duration);
+            if (offset < 0.0) {
+                offset += duration;
+            }
+        } else {
+            offset = 0.0;
+        }
+        const float time = first + static_cast<float>(offset);
+        // The node's local transform at `time`: the authored transform with
+        // the animated components replaced, then the parent's current frame.
+        const erhe::scene::Trs_transform authored = node->authored_parent_from_node_transform();
+        glm::vec3 translation = authored.get_translation();
+        glm::quat rotation    = authored.get_rotation();
+        for (erhe::scene::Animation_channel& channel : animation->channels) {
+            if (erhe::scene::get_target_node(channel) != node) {
+                continue;
+            }
+            const glm::vec4 value = animation->samplers.at(channel.sampler_index).evaluate(channel, time);
+            switch (erhe::scene::get_animation_path(channel)) {
+                case erhe::scene::Animation_path::TRANSLATION: translation = glm::vec3{value}; break;
+                case erhe::scene::Animation_path::ROTATION:    rotation    = glm::normalize(glm::quat{value.w, value.x, value.y, value.z}); break;
+                default: break;
+            }
+        }
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        if (parent) {
+            const erhe::scene::Trs_transform& world_from_parent = parent->world_from_node_transform();
+            pose.position    = glm::vec3{world_from_parent.get_matrix() * glm::vec4{translation, 1.0f}};
+            pose.orientation = glm::normalize(world_from_parent.get_rotation() * rotation);
+        } else {
+            pose.position    = translation;
+            pose.orientation = rotation;
+        }
+        return pose;
+    }
+
     if (keyframes.empty()) {
         return pose;
     }
@@ -312,8 +359,17 @@ auto Benchmark_driver::load(const std::string& path) -> std::unique_ptr<Benchmar
             }
             out_path.keyframes.push_back(keyframe);
         }
+    } else if (path_type == "animation") {
+        out_path.type           = Benchmark_camera_path_type::animation;
+        out_path.animation_name = camera_path.value("animation", std::string{});
+        out_path.node_name      = camera_path.value("node", std::string{});
+        out_path.frame_dt_s     = static_cast<double>(driver->m_frame_dt_ns) * 1.0e-9;
+        if (out_path.animation_name.empty() || out_path.node_name.empty()) {
+            log_startup->error("Benchmark failed {}: animation path needs 'animation' and 'node' names", path);
+            return {};
+        }
     } else {
-        log_startup->error("Benchmark failed {}: camera_path 'type' must be 'orbit' or 'keyframes'", path);
+        log_startup->error("Benchmark failed {}: camera_path 'type' must be 'orbit', 'keyframes' or 'animation'", path);
         return {};
     }
 
@@ -353,6 +409,27 @@ auto Benchmark_driver::get_frame_advance_ns() const -> int64_t
 auto Benchmark_driver::get_head_pose() const -> Benchmark_pose
 {
     return m_camera_path.evaluate(m_path_frame);
+}
+
+auto Benchmark_driver::needs_animation_source() const -> bool
+{
+    return (m_camera_path.type == Benchmark_camera_path_type::animation) && (!m_camera_path.animation || !m_camera_path.node);
+}
+
+auto Benchmark_driver::get_camera_path() const -> const Benchmark_camera_path&
+{
+    return m_camera_path;
+}
+
+void Benchmark_driver::set_animation_source(const std::shared_ptr<erhe::scene::Animation>& animation, const std::shared_ptr<erhe::scene::Node>& node)
+{
+    m_camera_path.animation = animation;
+    m_camera_path.node      = node;
+    log_startup->info(
+        "Benchmark '{}': camera path animation '{}' on node '{}' resolved, {} to {} s",
+        m_name, m_camera_path.animation_name, m_camera_path.node_name,
+        animation ? animation->get_first_time() : 0.0f, animation ? animation->get_last_time() : 0.0f
+    );
 }
 
 auto Benchmark_driver::is_waiting_for_settle() const -> bool

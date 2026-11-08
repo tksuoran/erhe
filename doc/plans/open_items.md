@@ -53,10 +53,13 @@ ask the user which to pick.
 
 - `origin/lod` is stale after its rebase onto `main`: force-push or delete
   (user decision).
-- Re-pose `config/editor/benchmark_bistro.json` and
-  `config/editor/benchmark_bistro_street.json` for the upright Bistro (the
-  source rotated -90 degrees about X); `benchmark_bistro_street_120.json`
-  is already in that frame.
+- Re-pose `config/editor/benchmark_bistro.json` for the upright Bistro (the
+  source rotated -90 degrees about X); the street benchmarks follow the
+  scene's camera animation and need no pose of their own.
+- The Bistro street path (`benchmark_bistro_street_90.json`) runs GPU-bound
+  at about 34 fps on the Quest (multiview pass 22 ms median): profile the
+  heavy middle section of the path or shorten it before using it as the
+  shader gate.
 - Metal counts overdraw per sample under MSAA
   (`doc/plans/overdraw_visualization.md`).
 - The right trigger still selects while travelling.

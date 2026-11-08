@@ -394,7 +394,14 @@ time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
   interpolated linearly, looped with the last keyframe's frame as the
   loop length, so a seamless loop repeats the first keyframe last;
   orientation = yaw about +Y * pitch about +X * roll about +Z, identity
-  looking down -Z; a single keyframe is a fixed pose).
+  looking down -Z; a single keyframe is a fixed pose) or
+  `{"type":"animation","animation":"<name>","node":"<node name>"}`
+  (a transform animation of the loaded scene, authored in the Animation
+  window and saved with the scene: the pose of frame f is the node's world
+  pose with the animation sampled at first key + f * frame_dt, looped over
+  the key range, so cubic curves play as authored; the scene does not count
+  as settled until an open scene holds the named animation and a channel of
+  it targets the named node, and the pose is identity before that).
   `benchmark_orbit.json` orbits the default OpenXR room at 1.6 m height,
   radius 2 m, looking at (0, 1, 0), period 720 frames, at 120 Hz;
   `benchmark_static.json` holds one pose at the display's own rate; both

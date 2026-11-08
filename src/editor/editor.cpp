@@ -48,6 +48,7 @@
 #include "app_settings.hpp"
 #include "app_windows.hpp"
 #include "content_library/content_library.hpp"
+#include "erhe_scene/animation.hpp"
 #include "content_library/material_library.hpp"
 #include "init_status_display.hpp"
 #include "windows/status_line.hpp"
@@ -590,6 +591,29 @@ public:
     Phase_timing                          m_benchmark_phase_timing{}; // m_phase_timing at the previous frame's end
     std::chrono::steady_clock::time_point m_benchmark_clock_origin{std::chrono::steady_clock::now()};
 
+    void resolve_benchmark_animation_source()
+    {
+        const Benchmark_camera_path& path = m_benchmark_driver->get_camera_path();
+        for (const std::shared_ptr<Scene_root>& scene_root : m_app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library>& library = scene_root->get_content_library();
+            if (!library) {
+                continue;
+            }
+            for (const std::shared_ptr<erhe::scene::Animation>& animation : library->get_all<erhe::scene::Animation>()) {
+                if (animation->get_name() != path.animation_name) {
+                    continue;
+                }
+                for (const erhe::scene::Animation_channel& channel : animation->channels) {
+                    const std::shared_ptr<erhe::scene::Node> node = erhe::scene::get_target_node(channel);
+                    if (node && (node->get_name() == path.node_name)) {
+                        m_benchmark_driver->set_animation_source(animation, node);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     void hand_off_benchmark_frame(const std::chrono::steady_clock::time_point tick_end)
     {
         const Phase_timing& now  = m_phase_timing;
@@ -634,6 +658,13 @@ public:
             inputs.scene_settled =
                 !m_app_context.is_scene_load_in_flight() &&
                 (!m_scene_builder || m_scene_builder->is_brush_geometry_idle());
+            // An animation camera path settles once its animation and node
+            // are found in an open scene (polled here with the other settle
+            // inputs; the scene load has no notification for them).
+            if (m_benchmark_driver->needs_animation_source()) {
+                resolve_benchmark_animation_source();
+                inputs.scene_settled = inputs.scene_settled && !m_benchmark_driver->needs_animation_source();
+            }
             inputs.display_refresh_hz = get_benchmark_display_refresh_hz();
             const std::optional<float> requested_refresh_hz = m_benchmark_driver->get_display_refresh_rate_hz();
             inputs.refresh_rate_settled =

@@ -18,3 +18,10 @@
 ✓device-bench{2026-11-08-12:04..12:08;Bistro-street-58.7->108fps,app-GPU-11.6->6.35ms;default-app-GPU-5.45->4.69ms;fp16-mask-1-level-on-Bistro,-8%-multiview-default->OpenXR-preset-shader_fp16_paths=1}
 ✓M4-16bit-material-record{23a32cc1d;material_record_half=auto(on-Android);320->192B;Adreno-13->12-regs,100%-occupancy;device-level(Bistro-105.8fps)}
 
+[TASK::animation-editing]{started-2026-11-08;branch=main;doc/editor/editor.md"Animation window and playback"+doc/plans/timeline_editor.md}
+✓paused-pose-edits{fly-camera+gizmo+MCP-set_node_transform-adopt-a-paused-playback-pose(adopt_playback_pose);keying-clears-session_only(default-camera-saves)}
+✓animation-paths-debug-visualization{Debug-Visualization-popup:Animation-Paths-off/selected/all+Path-Interval;cyan/magenta-polyline+triad-at-playhead}
+✓curve-editing{interpolation-menu(Step/Linear/Cubic)+Smooth-Tangents+handles(Alt=one-side)+Shift/Shift+Alt-drag-locks+prev/next-key(Up/Down)+Insert-Key(I);erhe_math/hermite.hpp-shared-with-texture-curve-widget;MCP-animation_set_interpolation+animation_set_tangents}
+✓benchmark-animation-camera-path{camera_path.type=animation(animation+node-names;resolved-at-settle);benchmark_bistro_street(_90).json;Bistro-camera-animation-saved-in-logs/quest_bistro/2026-11-07/bistro_src.glb+quest-prepared-asset-re-exported(PVS-2068-cells)+pushed;device:90Hz-34.4fps-GPU-bound(multiview-22ms-median;first-run-after-install-11fps=one-off)}
+?open{Properties-window-transform-edits-still-write-under-a-paused-pose;undo-of-keying-keeps-session_only-cleared;device-migrated-config-is-stale-after-install(fp16-preset-set-via-MCP)}
+

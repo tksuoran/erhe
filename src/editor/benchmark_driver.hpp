@@ -11,6 +11,11 @@
 #include <string_view>
 #include <vector>
 
+namespace erhe::scene {
+    class Animation;
+    class Xformable; using Node = Xformable;
+}
+
 namespace editor {
 
 // The head pose a benchmark frame renders from (stage space).
@@ -33,7 +38,8 @@ public:
 enum class Benchmark_camera_path_type : int
 {
     orbit     = 0,
-    keyframes = 1
+    keyframes = 1,
+    animation = 2
 };
 
 // The benchmark file's "passthrough" field: in benchmark mode the headset
@@ -61,6 +67,16 @@ public:
     glm::vec3                       look_at      {0.0f, 1.0f, 0.0f};
     // keyframes (sorted by frame, frame of the first is 0)
     std::vector<Benchmark_keyframe> keyframes;
+    // animation: a transform animation of the scene, named in the file with
+    // the node it drives; the editor resolves both once the scene is open
+    // (Benchmark_driver::set_animation_source). The pose at frame f is the
+    // node's world pose sampled at first key time + (f * frame_dt) looped
+    // over the animation's key range; identity until resolved.
+    std::string                              animation_name;
+    std::string                              node_name;
+    double                                   frame_dt_s{1.0 / 72.0};
+    std::shared_ptr<erhe::scene::Animation>  animation;
+    std::shared_ptr<erhe::scene::Node>       node;
 };
 
 // Per-frame inputs of Benchmark_driver::on_frame_end(), all from the main
@@ -139,6 +155,12 @@ public:
     [[nodiscard]] auto is_done                 () const -> bool;
 
     void set_run_identity     (const Benchmark_run_identity& identity);
+    // An animation camera path waits for its scene objects: the editor
+    // resolves them by name once a scene holds them, and the scene does not
+    // count as settled before.
+    [[nodiscard]] auto needs_animation_source() const -> bool;
+    [[nodiscard]] auto get_camera_path       () const -> const Benchmark_camera_path&;
+    void set_animation_source (const std::shared_ptr<erhe::scene::Animation>& animation, const std::shared_ptr<erhe::scene::Node>& node);
     // M1: the XR predicted display period of the frame being started.
     void set_xr_display_period(uint64_t predicted_display_period_ns);
     // M2: one XR_META_performance_metrics counter value of this frame. The
