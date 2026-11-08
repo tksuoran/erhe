@@ -291,10 +291,19 @@ void add_material_asset_references(
                 ? container_path.generic_string()
                 : relative_path.generic_string();
             const bool is_binary = container_path.extension() == std::filesystem::path{".glb"};
-            // Self-heal upward: prefer the live item's uid (learned at
-            // resolve) over the key's, so name-resolved references migrate
-            // to uid addressing on save.
-            const std::string& uid = !material->get_gltf_uid().empty() ? material->get_gltf_uid() : key.uid;
+            // Self-heal upward: the container's object gives its live uid,
+            // so name-resolved references migrate to uid addressing on save;
+            // an unresolved stub keeps the key's uid (its own is not the target's).
+            std::string uid = key.uid;
+            if (asset_manager != nullptr) {
+                const Asset_key live_key = asset_manager->make_key(*material);
+                const bool is_container_object =
+                    (live_key.scope == Asset_scope::file) &&
+                    (normalize_asset_path(std::filesystem::path{live_key.path}) == normalize_asset_path(container_path));
+                if (is_container_object && !material->get_gltf_uid().empty()) {
+                    uid = material->get_gltf_uid();
+                }
+            }
             arguments.material_asset_references.emplace(
                 material.get(),
                 erhe::gltf::Gltf_export_asset_reference{
