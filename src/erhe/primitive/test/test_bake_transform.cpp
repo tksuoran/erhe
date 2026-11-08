@@ -53,7 +53,7 @@ public:
     return vertex;
 }
 
-[[nodiscard]] auto near(const glm::vec3& a, const glm::vec3& b) -> bool
+[[nodiscard]] auto is_near(const glm::vec3& a, const glm::vec3& b) -> bool
 {
     return glm::length(a - b) < 1.0e-5f;
 }
@@ -79,14 +79,14 @@ TEST(Bake_transform, mirrored_scale_moves_positions_normals_tangents_and_flips_w
     EXPECT_EQ(prepared.core.index_data[1], 2u);
     EXPECT_EQ(prepared.core.index_data[2], 1u);
     const Vertex v1 = read_vertex(prepared.core, 1);
-    EXPECT_TRUE(near(v1.position, glm::vec3{8.0f, 0.0f, 0.0f}));
-    EXPECT_TRUE(near(v1.normal,   glm::vec3{0.0f, 0.0f, 1.0f}));
-    EXPECT_TRUE(near(glm::vec3{v1.tangent}, glm::vec3{-1.0f, 0.0f, 0.0f}));
+    EXPECT_TRUE(is_near(v1.position, glm::vec3{8.0f, 0.0f, 0.0f}));
+    EXPECT_TRUE(is_near(v1.normal,   glm::vec3{0.0f, 0.0f, 1.0f}));
+    EXPECT_TRUE(is_near(glm::vec3{v1.tangent}, glm::vec3{-1.0f, 0.0f, 0.0f}));
     EXPECT_FLOAT_EQ(v1.tangent.w, -1.0f);
     const Vertex v2 = read_vertex(prepared.core, 2);
-    EXPECT_TRUE(near(v2.position, glm::vec3{10.0f, 3.0f, 0.0f}));
-    EXPECT_TRUE(near(prepared.bounding_box.min, glm::vec3{8.0f, 0.0f, 0.0f}));
-    EXPECT_TRUE(near(prepared.bounding_box.max, glm::vec3{10.0f, 3.0f, 0.0f}));
+    EXPECT_TRUE(is_near(v2.position, glm::vec3{10.0f, 3.0f, 0.0f}));
+    EXPECT_TRUE(is_near(prepared.bounding_box.min, glm::vec3{8.0f, 0.0f, 0.0f}));
+    EXPECT_TRUE(is_near(prepared.bounding_box.max, glm::vec3{10.0f, 3.0f, 0.0f}));
     const std::vector<float> positions = erhe::primitive::get_float_positions(prepared.core);
     EXPECT_EQ(prepared.content_hash, erhe::primitive::compute_mesh_content_hash(prepared.core.index_data, positions));
 }
