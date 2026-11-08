@@ -66,6 +66,14 @@ headless)` job builds the editor and the test targets with
 `ERHE_GRAPHICS_API=none`, so the interface compiles against the null backend
 on every push.
 
+The null backend (`erhe_graphics/null/`, `ERHE_GRAPHICS_API=none`) is
+compile-only: it exists so that the interface and its consumers build without
+a graphics API, and it is not a runtime backend. Its device returns empty ring
+buffer ranges and records nothing, so nothing that renders runs on it; the
+editor built with it logs a critical message on `editor.startup` and exits with
+a failure status before it creates a device. A headless run uses the Vulkan or
+Metal backend with `ERHE_WINDOW_LIBRARY=none` (see `Notes`).
+
 ## Key Types
 - `Device` -- Central graphics device. Creates command encoders, manages ring buffers, queries capabilities, handles frame lifecycle (`wait_for_frame_start`/`acquire_frame_slot`/`wait_frame`/`end_frame`).
 - `Device_info` -- GPU capability queries: GLSL version, limits, feature flags (bindless textures, sparse textures, persistent buffers, compute shaders, multi-draw indirect). `texture_heap_path` selects which of the four sampler-binding strategies the backend uses (see below).
@@ -1174,7 +1182,7 @@ Tests: `erhe_graphics_tests` `Basis_encoder.*`.
 - **External:** glm, fmt, mango, concurrentqueue, nlohmann_json (private) and glslang (with `ERHE_SPIRV`) on the interface target; SPIRV-Tools (private, with `ERHE_SPIRV`; the optimizer) on the backend target; volk and VMA (Vulkan), metal-cpp and SPIRV-Cross (Metal) on the backend target, selected at CMake time
 
 ## Notes
-- All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. Backend implementations live in `gl/` (OpenGL), `vulkan/` (Vulkan), `metal/` (Metal), `metal4/` (Metal 4, `doc/erhe/metal4_backend.md`), and `null/` (headless).
+- All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. Backend implementations live in `gl/` (OpenGL), `vulkan/` (Vulkan), `metal/` (Metal), `metal4/` (Metal 4, `doc/erhe/metal4_backend.md`), and `null/` (compile-only, "Interface and backend targets").
 - `ERHE_WINDOW_LIBRARY=none` is a separate axis from the graphics API: the Vulkan and Metal backends both run surfaceless, rendering into an emulated swapchain of offscreen images (`vulkan/vulkan_emulated_swapchain.*`, the ring inside `metal/metal_swapchain.*`) that `Device::capture_last_frame` reads back synchronously.
 - The OpenGL backend requires OpenGL 4.5 with direct state access (DSA) as a hard minimum; device creation fails on older contexts, and there are no non-DSA or GL 4.1 fallback paths.
 - `Shader_resource` is used to programmatically build GLSL interface declarations from C++, keeping shader sources and C++ code in sync without reflection. For sampler declarations it is an implementation detail of `Bind_group_layout`.

@@ -119,8 +119,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   `doc/plans/scene_roundtrip_failures.md`.
 - The id renderer's region-scan readback sometimes returns 0 entries
   (`gate_id.py` JSON varies run to run).
-- The null-backend editor crashes in the `get_command_buffer` stub
-  (`doc/plans/audit_2026_09_30_followups.md`).
 - macOS: with the Vulkan SDK `setup-env.sh` sourced, SDL's Cocoa surface
   creation gets MoltenVK's `vkGetInstanceProcAddr` and every GPU test and the
   editor segfault (not fixed in code). Measure the editor's SIGTERM exit on

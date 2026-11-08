@@ -139,7 +139,7 @@ attempt and the launch must be retried.
 
 | Option | Description | Recognized values | Default |
 | :--- | :--- | :--- | :--- |
-| `ERHE_GRAPHICS_API` | Graphics backend | `opengl` (not on Apple platforms), `vulkan`, `metal` (macOS only), `metal4` (macOS only; Metal 4 backend in progress), `none` (headless) | `vulkan` |
+| `ERHE_GRAPHICS_API` | Graphics backend | `opengl` (not on Apple platforms), `vulkan`, `metal` (macOS only), `metal4` (macOS only; Metal 4 backend in progress), `none` (compile-only; the editor exits at startup, `doc/erhe/graphics.md` "Interface and backend targets") | `vulkan` |
 | `ERHE_WINDOW_LIBRARY` | Window library | `sdl`, `glfw` (deprecated), `none` (headless) | `sdl` |
 | `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `box3d`, `none` | `jolt` |
 | `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` | `bvh` |

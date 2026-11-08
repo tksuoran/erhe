@@ -6052,6 +6052,13 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         log_startup->info("{}; geogram {}; bvh {}", erhe::version::get_description(), ERHE_GEOGRAM_GIT_COMMIT, ERHE_BVH_GIT_COMMIT);
     }
 
+#if defined(ERHE_GRAPHICS_API_NONE)
+    // Compile-only backend (doc/erhe/graphics.md "Interface and backend targets").
+    log_startup->critical("ERHE_GRAPHICS_API=none is a compile-only configuration; the editor does not run on it. Use a Vulkan, Metal or OpenGL build.");
+    log_startup->flush();
+    std::exit(EXIT_FAILURE);
+#endif
+
     // Descriptor-driven property registrations (texture graph node
     // parameters): the descriptors are function-local statics, so this
     // cannot ride C++ static initialization; here we are still

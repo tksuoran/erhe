@@ -127,10 +127,8 @@ older than the pinned Vulkan headers (an unknown `sType` in the device create
 `pNext` chain); that is a machine setup issue (`doc/agents/linux.md`), not a
 code defect.
 
-The null backend builds but the editor does not run on it: the null
-`Device_impl::get_command_buffer()` is a stub that returns a dereferenced
-null pointer (`null_device.cpp`, "iteration target"), and the editor
-constructor calls `begin()` on the result. The CI headless job builds that
-configuration and runs no editor, so this is an open item of the null
-backend, found while verifying the interface / backend split on a Linux
-`ERHE_GRAPHICS_API=none` tree.
+The null backend is compile-only (user ruling 2026-11-08; contract in
+`doc/erhe/graphics.md` "Interface and backend targets"): the editor built
+with `ERHE_GRAPHICS_API=none` exits at startup with a critical log message
+instead of running, so the null device's stubs (empty ring buffer ranges,
+no-op command buffers) need no completion as run-time support.
