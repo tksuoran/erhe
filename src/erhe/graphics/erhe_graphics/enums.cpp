@@ -103,6 +103,9 @@ auto glsl_type_c_str(const Glsl_type type) -> const char*
         case Glsl_type::float_vec2:                                  return "vec2 ";
         case Glsl_type::float_vec3:                                  return "vec3 ";
         case Glsl_type::float_vec4:                                  return "vec4 ";
+        case Glsl_type::float16_:                                    return "float16_t";
+        case Glsl_type::float16_vec2:                                return "f16vec2";
+        case Glsl_type::float16_vec4:                                return "f16vec4";
         case Glsl_type::bool_:                                       return "bool ";
         case Glsl_type::int_:                                        return "int  ";
         case Glsl_type::int_vec2:                                    return "ivec2";
@@ -168,6 +171,9 @@ auto get_dimension(const Glsl_type type) -> std::size_t
         case Glsl_type::float_vec2:                                  return 2;
         case Glsl_type::float_vec3:                                  return 3;
         case Glsl_type::float_vec4:                                  return 4;
+        case Glsl_type::float16_:                                    return 1;
+        case Glsl_type::float16_vec2:                                return 2;
+        case Glsl_type::float16_vec4:                                return 4;
         case Glsl_type::bool_:                                       return 1;
         case Glsl_type::int_:                                        return 1;
         case Glsl_type::int_vec2:                                    return 2;

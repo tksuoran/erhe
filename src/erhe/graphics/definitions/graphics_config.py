@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Graphics_config",
     reflect=True,
-    version=6,
+    version=7,
     short_desc="Graphics Settings",
     long_desc="",
     developer=False,
@@ -174,6 +174,16 @@ struct("Graphics_config",
             default='"auto"',
             short_desc="SPIR-V Cache Records",
             long_desc="Keep beside each SPIR-V cache entry what shader analysis needs (doc/erhe/graphics.md 'SPIR-V cache records'): the stage's sources as parsed, its preamble, its includes and, when the cached module is the optimized one, the unoptimized module. 'auto' is on except on Android, 'on' and 'off' force it. With records on, a cached entry without a record compiles once to gain one. Change requires restart.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "material_record_half",
+            String,
+            added_in=7,
+            default='"auto"',
+            short_desc="Half Material Records",
+            long_desc="Store the material records' float fields as 16-bit floats (doc/erhe/scene_renderer.md 'Material records'): 'auto' is on for Android and off elsewhere, 'on' and 'off' force it; a device without 16-bit storage buffer access and shader float16 keeps the 32-bit layout. Change requires restart.",
             visible=True,
             developer=False
         ),

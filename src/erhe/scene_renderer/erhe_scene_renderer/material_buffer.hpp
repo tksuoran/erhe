@@ -176,6 +176,13 @@ private:
 // Material_set::vertex_colored_default_material_slot_index carries.
 [[nodiscard]] auto get_vertex_colored_default_material_record_inputs() -> Material_record_inputs;
 
+// Whether this device's material records store their float fields as 16-bit
+// floats (Graphics_config::material_record_half; doc/erhe/scene_renderer.md
+// "Material records"): the setting, gated on the device's 16-bit storage
+// buffer access and shader float16. The shaders read every float field
+// through a conversion, so both layouts compile from the same sources.
+[[nodiscard]] auto use_half_material_records(const erhe::graphics::Device& graphics_device) -> bool;
+
 class Material_interface
 {
 public:
@@ -185,6 +192,8 @@ public:
     erhe::graphics::Shader_resource material_struct;
     Material_struct                 offsets;
     std::size_t                     max_material_count;
+    // The float fields are 16-bit (use_half_material_records()).
+    bool                            half_records;
 };
 
 // Writes material records. Owned by a Material_set, which owns the storage it

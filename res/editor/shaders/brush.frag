@@ -21,6 +21,6 @@ void main() {
     float N_dot_V = dot(N, V);
 
     Material material = material.materials[v_material_index];
-    out_color.rgb = srgb_to_linear(0.5 * vec3(N_dot_V) * material.base_color.rgb * material.opacity);
-    out_color.a = 0.5 * material.opacity;
+    out_color.rgb = srgb_to_linear(0.5 * vec3(N_dot_V) * vec3(material.base_color.rgb) * float(material.opacity));
+    out_color.a = 0.5 * float(material.opacity);
 }

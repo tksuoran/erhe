@@ -136,6 +136,27 @@ The reserved record is written once per buffer update, not per primitive; the
 set holds no `Material` object for it, so it costs one record and no
 membership.
 
+### Material records
+
+`Material_interface` builds the `Material` struct of `material_block`
+(`material.materials[]`, binding 0, std430) at startup in one of two
+layouts with the same member names and order: every float field as a
+32-bit float (320 bytes per record), or as a 16-bit float (`float16_t`,
+`f16vec2`, `f16vec4`; 192 bytes) when `use_half_material_records()` holds
+(`Material_interface::half_records`): the device reports
+`storage_buffer_16bit_access` and `shader_float16`, and
+`Graphics_config::material_record_half` is `on`, or `auto` on Android. The
+texture handles, the channel selectors, the input sources and the BxDF
+model stay 32-bit in both. `Material_buffer::write_record()` packs the
+float fields with `glm::packHalf1x16` for the half layout; every shader
+reads a float field through a conversion (`float(material.metallic)`,
+`vec4(material.base_color)`), the identity on the 32-bit layout, so both
+layouts compile from the same sources. The half layout rounds each field
+to 2^-11 of its magnitude: texture offsets and scales to that fraction of
+a texture (within the fp16 texcoord bound of 2048 texels), colors below
+8-bit quantization, emissive to 65504 at most. The startup log line
+"Material records: ..." names the layout in effect.
+
 ### Where a material record's base color and alpha come from
 
 A material record carries `uvec2 input_sources` -

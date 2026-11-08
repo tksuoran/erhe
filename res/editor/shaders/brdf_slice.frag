@@ -76,11 +76,11 @@ void main() {
     vec2 kernel_roughness = specular_aa_kernel_from_footprint(fwidth(shading_frame_half_vector(TBN_t, V, L).xy));
 
     vec3 b = anisotropic_brdf(
-        material.base_color.rgb,
-        material.roughness.x,
-        material.roughness.y,
-        material.metallic,
-        material.reflectance,
+        vec3(material.base_color.rgb),
+        float(material.roughness.x),
+        float(material.roughness.y),
+        float(material.metallic),
+        float(material.reflectance),
         L,
         V,
         tangent,

@@ -300,12 +300,12 @@ vec3 surface_base_color(Hit_surface surface, Material m)
     if (m.input_sources.x == ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR) {
         return surface.vertex_color.rgb;
     }
-    vec3 base_color = m.base_color.rgb * surface.vertex_color.rgb;
+    vec3 base_color = vec3(m.base_color.rgb) * surface.vertex_color.rgb;
     base_color *= sample_texture_lod0(
         m.base_color_texture,
         surface.texcoord,
-        m.base_color_rotation_scale,
-        m.base_color_offset
+        vec4(m.base_color_rotation_scale),
+        vec2(m.base_color_offset)
     ).rgb;
     return base_color;
 }
@@ -318,15 +318,15 @@ vec3 evaluate_bxdf(Hit_surface surface, Material m, vec3 base_color, float rough
     if ((m.bxdf_model == 2u) || (m.bxdf_model == 4u)) { // anisotropic_brdf / anisotropic_engine_ready
         vec3 T = normalize(surface.tangent.xyz);
         vec3 B = normalize(cross(N, T)) * surface.tangent.w;
-        return anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, m.reflectance, L, V, T, B, N, vec2(0.0)); // no specular anti-aliasing (no derivatives in compute)
+        return anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, float(m.reflectance), L, V, T, B, N, vec2(0.0)); // no specular anti-aliasing (no derivatives in compute)
     }
     if (m.bxdf_model == 3u) { // anisotropic_slope
         vec3 T     = normalize(surface.tangent.xyz);
         vec3 B     = normalize(cross(N, T)) * surface.tangent.w;
         mat3 TBN_t = transpose(mat3(T, B, N));
-        return slope_brdf(base_color, roughness_x, roughness_y, metallic, m.reflectance, TBN_t, L, V, T, B, N);
+        return slope_brdf(base_color, roughness_x, roughness_y, metallic, float(m.reflectance), TBN_t, L, V, T, B, N);
     }
-    return isotropic_brdf(base_color, roughness_x, metallic, m.reflectance, L, V, N);
+    return isotropic_brdf(base_color, roughness_x, metallic, float(m.reflectance), L, V, N);
 }
 
 // Direct lighting at an opaque surface: ambient + emissive + per-light BxDF
@@ -342,15 +342,15 @@ vec3 shade_surface(Hit_surface surface, vec3 V)
     }
 
     vec3  N           = surface.shading_normal;
-    float metallic    = m.metallic;
-    float roughness_x = max(m.roughness.x, 1e-4);
-    float roughness_y = max(m.roughness.y, 1e-4);
+    float metallic    = float(m.metallic);
+    float roughness_x = max(float(m.roughness.x), 1e-4);
+    float roughness_y = max(float(m.roughness.y), 1e-4);
 
     vec4 metallic_roughness = sample_texture_lod0(
         m.metallic_roughness_texture,
         surface.texcoord,
-        m.metallic_roughness_rotation_scale,
-        m.metallic_roughness_offset
+        vec4(m.metallic_roughness_rotation_scale),
+        vec2(m.metallic_roughness_offset)
     );
     // m.texture_channels: the component index of (metallic, roughness,
     // occlusion, opacity); see standard.frag. The index 4 is the input that
@@ -366,7 +366,7 @@ vec3 shade_surface(Hit_surface surface, vec3 V)
 #else
     vec3 color = light_block.ambient_light.rgb * base_color;
 #endif
-    color += m.emissive.rgb;
+    color += vec3(m.emissive.rgb);
 
     uint light_offset = 0u;
 

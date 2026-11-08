@@ -44,6 +44,12 @@ enum class Glsl_type
     float_vec2,
     float_vec3,
     float_vec4,
+    // 16-bit floats (GL_EXT_shader_explicit_arithmetic_types_float16 and
+    // GL_EXT_shader_16bit_storage): buffer members of the half material
+    // record layout (doc/erhe/scene_renderer.md "Material records").
+    float16_,
+    float16_vec2,
+    float16_vec4,
     bool_,
     int_,
     int_vec2,

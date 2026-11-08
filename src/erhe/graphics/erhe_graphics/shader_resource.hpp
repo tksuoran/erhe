@@ -243,6 +243,24 @@ public:
         std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
+    // 16-bit float members (Glsl_type::float16_*): the block's shader needs
+    // GL_EXT_shader_16bit_storage and the float16 arithmetic types
+    // (Device_info::storage_buffer_16bit_access and shader_float16).
+    auto add_float16(
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
+    ) -> Shader_resource*;
+
+    auto add_f16vec2(
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
+    ) -> Shader_resource*;
+
+    auto add_f16vec4(
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
+    ) -> Shader_resource*;
+
     auto add_vec3(
         std::string_view           name,
         std::optional<std::size_t> array_size = {}

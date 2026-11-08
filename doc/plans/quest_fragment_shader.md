@@ -266,33 +266,30 @@ not change.
 
 ### M4 fp16 material record storage
 
-The Quest reports `storageBuffer16BitAccess` and not
-`uniformAndStorageBuffer16BitAccess`, so 16-bit members are legal in the
-storage blocks (the material block, the shadowed light array) and not in
-the uniform blocks (lights, camera). `Shader_resource` gains the member
-types `float16_t`, `f16vec2` and `f16vec4` (std430 alignment 2, 4 and 8
-bytes) behind `Device_info::storage_buffer_16bit_access`, and
-`Material_interface` builds one of two layouts at startup from that flag
-(one layout per device, no runtime branch): the 16-bit `Material` packs
-roughness.xy, metallic and reflectance into one `f16vec4`; base color,
-emissive (HDR, below 65504), the four scalar inputs (opacity, normal scale,
-alpha cutoff, occlusion strength), ior and transmission, the five rotation /
-scale vec4 and the two decode vec4 as halves, the five offsets as `f16vec2`;
-the handles, the channel selectors, the input sources and the BxDF model
-stay 32-bit. The record goes from 304 to about 176 bytes and the untextured
-variant's record reads from 3 to 2, the textured one's from about 12 to 7.
-The writer packs with `glm::packHalf1x16`; every reader of
-`material.materials[]` (`standard.frag`, `brdf_slice.frag`, the ray trace
-compute shaders, `textured.vert`) reads through the `mat_*` types so the
-16-bit layout needs no shader change beyond the struct. Boundary: texture
-offsets and scales round to 2^-11 of their magnitude, within the P8 texcoord
-bound; the desktop keeps the fp32 layout.
+Built (`doc/erhe/scene_renderer.md` "Material records"): `Shader_resource`
+gained the member types `float16_t`, `f16vec2` and `f16vec4` (std430
+alignment 2, 4 and 8 bytes), and `Material_interface` builds one of two
+`Material` layouts at startup from `Graphics_config::material_record_half`
+(`auto`: on for Android, off elsewhere; `on` / `off`), gated on the device's
+`storage_buffer_16bit_access` and `shader_float16` (the Quest reports both;
+`uniformAndStorageBuffer16BitAccess` is false there, so only the storage
+blocks can carry halves). The half layout keeps the member names and order
+and packs every float field as a 16-bit float; the handles, the channel
+selectors, the input sources and the BxDF model stay 32-bit: 320 to 192
+bytes per record. The writer packs with `glm::packHalf1x16`; every shader
+reads a float field through a conversion that is the identity on the
+32-bit layout, so one source serves both. Boundary: 2^-11 relative
+rounding of every field; texture offsets and scales within the P8 texcoord
+bound. Desktop headless A/B (Intel, `on` against `off`): the default scene
+and the textured cube scene differ by at most 1/255.
 
-This is the smallest item of the plan by the static count (about 5
-memory instructions of 772 on the textured variant) and the device bench
-decides whether it stays; it is kept in the order because the textured
-record's transform fields are what it shrinks, and Bistro's materials all
-carry textures.
+Measured on the Adreno 740 (base-color textured mobile variant, one
+shadowed directional light): the half record alone takes 13 full registers
+to 12 and the occupancy from 75 % to 100 % (+11 instructions; the record
+reads stay 16 - 17, a 16-bit load is a load), the same register result as
+the fp16 material path; both together stay at 11 registers. So its gain on
+the device is the record bandwidth (40 % less per material fetch) and the
+occupancy where the fp16 paths are off; it ships as `auto` (on for Android).
 
 ### M5 Identity texture transform axis
 
@@ -359,7 +356,7 @@ ALU-bound.
 2. **M2** (done with M1) point lights, the same gates.
 3. **M5** (done) identity texture transform (exact, every platform).
 4. **M3** (done) as reduced above: P1 in the OpenXR preset.
-5. **M4** the 16-bit material record, the device bench decides.
+5. **M4** (done) the 16-bit material record, `auto` on Android.
 6. **M6** if the eye pass is still ALU-bound.
 7. **Preset** (done): `graphics_presets_openxr.json` carries `shadow_bias`
    `normal_offset` and `shader_fp16_paths` 1; the desktop presets are

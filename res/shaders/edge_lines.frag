@@ -11,7 +11,7 @@ void main()
     );
     float d = distance(view_position_in_world, v_position);
 
-    vec4 base_color = material.materials[v_material_index].base_color;
+    vec4 base_color = vec4(material.materials[v_material_index].base_color);
     //out_color.rgb = vec3(0.0, 0.0, 1.0);
     //out_color.a = 1.0;
     float thickness = 6.0;

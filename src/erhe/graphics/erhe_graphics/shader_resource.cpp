@@ -79,6 +79,9 @@ auto get_type_details(const Glsl_type type) -> Type_details
         case Glsl_type::float_vec2:                                  return Type_details(type, Glsl_type::float_,             2);
         case Glsl_type::float_vec3:                                  return Type_details(type, Glsl_type::float_,             3);
         case Glsl_type::float_vec4:                                  return Type_details(type, Glsl_type::float_,             4);
+        case Glsl_type::float16_:                                    return Type_details(type, Glsl_type::float16_,           1);
+        case Glsl_type::float16_vec2:                                return Type_details(type, Glsl_type::float16_,           2);
+        case Glsl_type::float16_vec4:                                return Type_details(type, Glsl_type::float16_,           4);
         case Glsl_type::float_mat_2x2:                               return Type_details(type, Glsl_type::float_vec2,         2);
         case Glsl_type::float_mat_3x3:                               return Type_details(type, Glsl_type::float_vec3,         3);
         case Glsl_type::float_mat_4x4:                               return Type_details(type, Glsl_type::float_vec4,         4);
@@ -146,6 +149,7 @@ auto get_type_size(const Glsl_type type) -> std::size_t
         case Glsl_type::unsigned_int:       return 4;
         //case Glsl_type::unsigned_int64_arb: return 8;
         case Glsl_type::float_:             return 4;
+        case Glsl_type::float16_:           return 2;
         //case Glsl_type::double_:            return 8;
         default: {
             auto type_details = get_type_details(type);
@@ -608,15 +612,17 @@ auto Shader_resource::get_base_alignment(const Layout layout) const -> std::size
             // round-up) per GLSL spec rule 5, but no add_mat2 helper
             // exists in this code base, so the single mat2 outcome is
             // moot today; leave the std140 round-up to be handled at
-            // the struct level via glsl_struct_base_alignment.
+            // the struct level via glsl_struct_base_alignment. Scaled by
+            // the scalar size: a 16-bit float vector aligns to 2, 4 or 8.
             const std::size_t component_count = td.component_count;
+            const std::size_t scalar_size     = (td.basic_type == Glsl_type::float16_) ? 2 : 4;
             if (component_count >= 3) {
-                return 16;
+                return 4 * scalar_size;
             }
             if (component_count == 2) {
-                return 8;
+                return 2 * scalar_size;
             }
-            return 4;
+            return scalar_size;
         }
         case Type::struct_type:
         case Type::uniform_block:
@@ -1049,6 +1055,45 @@ auto Shader_resource::add_float(const std::string_view name, const std::optional
     m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 4);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_device, name, Glsl_type::float_, array_size, this)
+    ).get();
+    m_offset += new_member->get_size_bytes(get_block_layout());
+    return new_member;
+}
+
+auto Shader_resource::add_float16(const std::string_view name, const std::optional<std::size_t> array_size) -> Shader_resource*
+{
+    ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
+    align_offset_to(2);
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 2);
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(m_device, name, Glsl_type::float16_, array_size, this)
+    ).get();
+    m_offset += new_member->get_size_bytes(get_block_layout());
+    return new_member;
+}
+
+auto Shader_resource::add_f16vec2(const std::string_view name, const std::optional<std::size_t> array_size) -> Shader_resource*
+{
+    ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
+    align_offset_to(4);
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 4);
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(m_device, name, Glsl_type::float16_vec2, array_size, this)
+    ).get();
+    m_offset += new_member->get_size_bytes(get_block_layout());
+    return new_member;
+}
+
+auto Shader_resource::add_f16vec4(const std::string_view name, const std::optional<std::size_t> array_size) -> Shader_resource*
+{
+    ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
+    align_offset_to(8);
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 8);
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(m_device, name, Glsl_type::float16_vec4, array_size, this)
     ).get();
     m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;

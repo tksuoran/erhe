@@ -227,6 +227,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Rename_function` and `rename_file()` (`doc/erhe/file.md` "Writing several
   files").
 
+- `erhe::graphics`: `Glsl_type::float16_`, `float16_vec2`, `float16_vec4`
+  with `Shader_resource::add_float16()`, `add_f16vec2()`, `add_f16vec4()`
+  (std430 alignment 2, 4, 8); `Graphics_config::material_record_half`
+  (`auto` / `on` / `off`, config version 7).
+- `erhe::scene_renderer`: `use_half_material_records()` and
+  `Material_interface::half_records`: the material record's float fields
+  as 16-bit floats (`doc/erhe/scene_renderer.md` "Material records").
 - `erhe::scene_renderer`: `Shader_bool::IDENTITY_TEXTURE_TRANSFORM`, set by
   `Shader_key::derive` when every bound material sampler has the identity
   UV transform; `Shadow_bias_mode` value `normal_offset` (`ERHE_SHADOW_BIAS`

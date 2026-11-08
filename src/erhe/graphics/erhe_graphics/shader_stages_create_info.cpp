@@ -34,6 +34,9 @@ auto glsl_token(const Glsl_type attribute_type) -> const char*
         case Glsl_type::float_vec2:        return "vec2     ";
         case Glsl_type::float_vec3:        return "vec3     ";
         case Glsl_type::float_vec4:        return "vec4     ";
+        case Glsl_type::float16_:          return "float16_t";
+        case Glsl_type::float16_vec2:      return "f16vec2  ";
+        case Glsl_type::float16_vec4:      return "f16vec4  ";
         case Glsl_type::bool_:             return "bool     ";
         case Glsl_type::int_:              return "int      ";
         case Glsl_type::int_vec2:          return "ivec2    ";

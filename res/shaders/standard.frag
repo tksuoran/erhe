@@ -542,7 +542,7 @@ void main()
 
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
     uvec2 base_color_texture = material.base_color_texture;
-    vec4  base_color_sample  = ERHE_SAMPLE_MATERIAL_TEXTURE(base_color_texture, ERHE_SELECT_TEXCOORD(ERHE_BASE_COLOR_TEXGEN_MODE), material.base_color_rotation_scale, material.base_color_offset);
+    vec4  base_color_sample  = ERHE_SAMPLE_MATERIAL_TEXTURE(base_color_texture, ERHE_SELECT_TEXCOORD(ERHE_BASE_COLOR_TEXGEN_MODE), vec4(material.base_color_rotation_scale), vec2(material.base_color_offset));
 #endif
 
     // material.input_sources.x names where the base color comes from. With
@@ -560,7 +560,7 @@ void main()
     if (material.input_sources.x == ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR) {
         base_color = mat_vec3(v_color.rgb);
     } else {
-        base_color = mat_vec3(material.base_color.rgb);
+        base_color = mat_vec3(vec3(material.base_color.rgb));
 #ifdef ERHE_USE_VERTEX_VARYING_COLOR
         base_color *= mat_vec3(v_color.rgb);
 #endif
@@ -582,7 +582,7 @@ void main()
     if (material.input_sources.y == ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR) {
         sampled_alpha = v_color.a;
     } else {
-        sampled_alpha = material.opacity;
+        sampled_alpha = float(material.opacity);
 #ifdef ERHE_USE_VERTEX_VARYING_COLOR
         sampled_alpha *= v_color.a;
 #endif
@@ -721,7 +721,7 @@ void main()
     const float c_roughness_floor = 1e-4;
 #  endif
 #  ifdef ERHE_USE_METALLIC_ROUGHNESS_TEXTURE
-    vec4 metallic_roughness = ERHE_SAMPLE_MATERIAL_TEXTURE(material.metallic_roughness_texture, ERHE_SELECT_TEXCOORD(ERHE_METALLIC_ROUGHNESS_TEXGEN_MODE), material.metallic_roughness_rotation_scale, material.metallic_roughness_offset);
+    vec4 metallic_roughness = ERHE_SAMPLE_MATERIAL_TEXTURE(material.metallic_roughness_texture, ERHE_SELECT_TEXCOORD(ERHE_METALLIC_ROUGHNESS_TEXGEN_MODE), vec4(material.metallic_roughness_rotation_scale), vec2(material.metallic_roughness_offset));
     // material.texture_channels holds the component index each scalar input
     // reads: (metallic, roughness, occlusion, opacity). glTF's fixed packing
     // is the default (metallic in B, roughness in G); a UsdPreviewSurface
@@ -732,16 +732,16 @@ void main()
     // multiplied by one and keeps its factor.
     float mr_metallic  = texture_channel_value(metallic_roughness, material.texture_channels.x);
     float mr_roughness = texture_channel_value(metallic_roughness, material.texture_channels.y);
-    mat_float metallic    = mat_float(material.metallic * mr_metallic);
-    mat_float roughness_x = max(mat_float(material.roughness.x * mr_roughness), mat_float(c_roughness_floor));
-    mat_float roughness_y = max(mat_float(material.roughness.y * mr_roughness), mat_float(c_roughness_floor));
+    mat_float metallic    = mat_float(float(material.metallic) * mr_metallic);
+    mat_float roughness_x = max(mat_float(float(material.roughness.x) * mr_roughness), mat_float(c_roughness_floor));
+    mat_float roughness_y = max(mat_float(float(material.roughness.y) * mr_roughness), mat_float(c_roughness_floor));
 #  else
-    mat_float metallic    = mat_float(material.metallic);
+    mat_float metallic    = mat_float(float(material.metallic));
     // Apply the same floor on the no-texture path so the BRDF
     // math (which divides by roughness terms) does not explode
     // at 0.
-    mat_float roughness_x = max(mat_float(material.roughness.x), mat_float(c_roughness_floor));
-    mat_float roughness_y = max(mat_float(material.roughness.y), mat_float(c_roughness_floor));
+    mat_float roughness_x = max(mat_float(float(material.roughness.x)), mat_float(c_roughness_floor));
+    mat_float roughness_y = max(mat_float(float(material.roughness.y)), mat_float(c_roughness_floor));
 #  endif
     // B6: collapse roughness_y to roughness_x when anisotropy_strength
     // drops to 0 (the circular-brush singularity falls back to
@@ -768,18 +768,18 @@ void main()
         // flip Y.
 #    if ERHE_NORMALMAP_IS_TWO_CHANNEL(ERHE_NORMAL_TEXTURE_ENCODING)
 #      if ERHE_NORMALMAP_IS_XY_IN_RG(ERHE_NORMAL_TEXTURE_ENCODING)
-        vec2 nxy = ERHE_SAMPLE_MATERIAL_TEXTURE(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE), material.normal_rotation_scale, material.normal_offset).rg * material.normal_texture_decode_scale.xy + material.normal_texture_decode_bias.xy;
+        vec2 nxy = ERHE_SAMPLE_MATERIAL_TEXTURE(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE), vec4(material.normal_rotation_scale), vec2(material.normal_offset)).rg * vec2(material.normal_texture_decode_scale.xy) + vec2(material.normal_texture_decode_bias.xy);
 #      else
-        vec2 nxy = ERHE_SAMPLE_MATERIAL_TEXTURE(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE), material.normal_rotation_scale, material.normal_offset).ga * material.normal_texture_decode_scale.xy + material.normal_texture_decode_bias.xy;
+        vec2 nxy = ERHE_SAMPLE_MATERIAL_TEXTURE(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE), vec4(material.normal_rotation_scale), vec2(material.normal_offset)).ga * vec2(material.normal_texture_decode_scale.xy) + vec2(material.normal_texture_decode_bias.xy);
 #      endif
         vec3 ntex = vec3(nxy, sqrt(max(1.0 - dot(nxy, nxy), 0.0)));
 #    else
-        vec3 ntex = ERHE_SAMPLE_MATERIAL_TEXTURE(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE), material.normal_rotation_scale, material.normal_offset).xyz * material.normal_texture_decode_scale.xyz + material.normal_texture_decode_bias.xyz;
+        vec3 ntex = ERHE_SAMPLE_MATERIAL_TEXTURE(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE), vec4(material.normal_rotation_scale), vec2(material.normal_offset)).xyz * vec3(material.normal_texture_decode_scale.xyz) + vec3(material.normal_texture_decode_bias.xyz);
 #    endif
 #    if ERHE_NORMALMAP_IS_LEFT_HANDED(ERHE_NORMAL_TEXTURE_ENCODING)
         ntex.y  = -ntex.y;
 #    endif
-        ntex.xy = ntex.xy * material.normal_texture_scale;
+        ntex.xy = ntex.xy * float(material.normal_texture_scale);
         ntex    = normalize(ntex);
 #    if defined(ERHE_USE_VERTEX_VARYING_NORMAL) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
         N       = normalize(mat3(T, B, N) * ntex);
@@ -798,14 +798,14 @@ void main()
     // re-export materials should keep this in mind; the linear
     // semantic is intentional and matches glTF
     // KHR_materials_emissive_strength.
-    vec3 emissive = material.emissive.rgb;
+    vec3 emissive = vec3(material.emissive.rgb);
 #  ifdef ERHE_USE_EMISSION_TEXTURE
-    emissive *= ERHE_SAMPLE_MATERIAL_TEXTURE(material.emissive_texture, ERHE_SELECT_TEXCOORD(ERHE_EMISSIVE_TEXGEN_MODE), material.emissive_rotation_scale, material.emissive_offset).rgb;
+    emissive *= ERHE_SAMPLE_MATERIAL_TEXTURE(material.emissive_texture, ERHE_SELECT_TEXCOORD(ERHE_EMISSIVE_TEXGEN_MODE), vec4(material.emissive_rotation_scale), vec2(material.emissive_offset)).rgb;
 #  endif
 
 #  ifdef ERHE_USE_OCCLUSION_TEXTURE
     mat_float occlusion = mat_float(texture_channel_value(
-        ERHE_SAMPLE_MATERIAL_TEXTURE(material.occlusion_texture, ERHE_SELECT_TEXCOORD(ERHE_OCCLUSION_TEXGEN_MODE), material.occlusion_rotation_scale, material.occlusion_offset),
+        ERHE_SAMPLE_MATERIAL_TEXTURE(material.occlusion_texture, ERHE_SELECT_TEXCOORD(ERHE_OCCLUSION_TEXGEN_MODE), vec4(material.occlusion_rotation_scale), vec2(material.occlusion_offset)),
         material.texture_channels.z
     ));
 #  else
@@ -849,7 +849,7 @@ void main()
     // flow; the ambient / light terms below take no derivatives: the
     // lightmap, DDGI and shadow-map reads there select level 0 explicitly.
 #if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST
-    if (sampled_alpha < material.alpha_cutoff) {
+    if (sampled_alpha < float(material.alpha_cutoff)) {
         discard;
     }
 #elif ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR
@@ -939,7 +939,7 @@ void main()
         brdf_vec3  brdf_base_color  = brdf_vec3(base_color);
         brdf_float brdf_roughness   = brdf_float(roughness_x);
         brdf_float brdf_metallic    = brdf_float(metallic);
-        brdf_float brdf_reflectance = brdf_float(material.reflectance);
+        brdf_float brdf_reflectance = brdf_float(float(material.reflectance));
 #    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) isotropic_brdf(brdf_base_color, brdf_roughness, brdf_metallic, brdf_reflectance, L_arg, V, N)
 #  endif
 

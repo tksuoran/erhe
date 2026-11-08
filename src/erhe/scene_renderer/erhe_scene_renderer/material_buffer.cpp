@@ -6,6 +6,7 @@
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -13,6 +14,10 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_profile/profile.hpp"
+
+#include <glm/gtc/packing.hpp>
+
+#include <cstring>
 #include "erhe_verify/verify.hpp"
 
 #include <cmath>
@@ -31,13 +36,22 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         }
     }
     , material_struct{graphics_device, "Material"}
-    , offsets        {
-        .roughness                  = material_struct.add_vec2 ("roughness"                 )->get_offset_in_parent(),
-        .metallic                   = material_struct.add_float("metallic"                  )->get_offset_in_parent(),
-        .reflectance                = material_struct.add_float("reflectance"               )->get_offset_in_parent(),
+    , max_material_count{static_cast<std::size_t>(max_material_count)}
+    , half_records{use_half_material_records(graphics_device)}
+{
+    // The float fields take the half layout's types when the device stores
+    // them as 16-bit floats (half_records); the member names and order are
+    // the same in both layouts.
+    const auto add_f1 = [this](const char* name) { return half_records ? material_struct.add_float16(name) : material_struct.add_float(name); };
+    const auto add_f2 = [this](const char* name) { return half_records ? material_struct.add_f16vec2(name) : material_struct.add_vec2 (name); };
+    const auto add_f4 = [this](const char* name) { return half_records ? material_struct.add_f16vec4(name) : material_struct.add_vec4 (name); };
+    offsets = Material_struct{
+        .roughness                  = add_f2("roughness"                 )->get_offset_in_parent(),
+        .metallic                   = add_f1("metallic"                  )->get_offset_in_parent(),
+        .reflectance                = add_f1("reflectance"               )->get_offset_in_parent(),
 
-        .base_color                 = material_struct.add_vec4 ("base_color"                )->get_offset_in_parent(),
-        .emissive                   = material_struct.add_vec4 ("emissive"                  )->get_offset_in_parent(),
+        .base_color                 = add_f4("base_color"                )->get_offset_in_parent(),
+        .emissive                   = add_f4("emissive"                  )->get_offset_in_parent(),
 
         .base_color_texture         = material_struct.add_uvec2("base_color_texture"        )->get_offset_in_parent(),
         .metallic_roughness_texture = material_struct.add_uvec2("metallic_roughness_texture")->get_offset_in_parent(),
@@ -46,34 +60,34 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         .occlusion_texture          = material_struct.add_uvec2("occlusion_texture"         )->get_offset_in_parent(),
 
         .emissive_texture           = material_struct.add_uvec2("emissive_texture"          )->get_offset_in_parent(),
-        .opacity                    = material_struct.add_float("opacity"                   )->get_offset_in_parent(),
-        .normal_texture_scale       = material_struct.add_float("normal_texture_scale"      )->get_offset_in_parent(),
-        .alpha_cutoff               = material_struct.add_float("alpha_cutoff"              )->get_offset_in_parent(),
+        .opacity                    = add_f1("opacity"                   )->get_offset_in_parent(),
+        .normal_texture_scale       = add_f1("normal_texture_scale"      )->get_offset_in_parent(),
+        .alpha_cutoff               = add_f1("alpha_cutoff"              )->get_offset_in_parent(),
 
-        .base_color_rotation_scale         = material_struct.add_vec4("base_color_rotation_scale"        )->get_offset_in_parent(),
-        .metallic_roughness_rotation_scale = material_struct.add_vec4("metallic_roughness_rotation_scale")->get_offset_in_parent(),
-        .normal_rotation_scale             = material_struct.add_vec4("normal_rotation_scale"            )->get_offset_in_parent(),
-        .occlusion_rotation_scale          = material_struct.add_vec4("occlusion_rotation_scale"         )->get_offset_in_parent(),
-        .emissive_rotation_scale           = material_struct.add_vec4("emissive_rotation_scale"          )->get_offset_in_parent(),
-        .base_color_offset                 = material_struct.add_vec2("base_color_offset"                )->get_offset_in_parent(),
-        .metallic_roughness_offset         = material_struct.add_vec2("metallic_roughness_offset"        )->get_offset_in_parent(),
-        .normal_offset                     = material_struct.add_vec2("normal_offset"                    )->get_offset_in_parent(),
-        .occlusion_offset                  = material_struct.add_vec2("occlusion_offset"                 )->get_offset_in_parent(),
-        .emissive_offset                   = material_struct.add_vec2("emissive_offset"                  )->get_offset_in_parent(),
+        .base_color_rotation_scale         = add_f4("base_color_rotation_scale"        )->get_offset_in_parent(),
+        .metallic_roughness_rotation_scale = add_f4("metallic_roughness_rotation_scale")->get_offset_in_parent(),
+        .normal_rotation_scale             = add_f4("normal_rotation_scale"            )->get_offset_in_parent(),
+        .occlusion_rotation_scale          = add_f4("occlusion_rotation_scale"         )->get_offset_in_parent(),
+        .emissive_rotation_scale           = add_f4("emissive_rotation_scale"          )->get_offset_in_parent(),
+        .base_color_offset                 = add_f2("base_color_offset"                )->get_offset_in_parent(),
+        .metallic_roughness_offset         = add_f2("metallic_roughness_offset"        )->get_offset_in_parent(),
+        .normal_offset                     = add_f2("normal_offset"                    )->get_offset_in_parent(),
+        .occlusion_offset                  = add_f2("occlusion_offset"                 )->get_offset_in_parent(),
+        .emissive_offset                   = add_f2("emissive_offset"                  )->get_offset_in_parent(),
 
-        .occlusion_texture_strength = material_struct.add_float("occlusion_texture_strength")->get_offset_in_parent(),
+        .occlusion_texture_strength = add_f1("occlusion_texture_strength")->get_offset_in_parent(),
 
         // occlusion_texture_strength leaves the struct at a vec2-aligned
         // tail; ior + transmission + bxdf_model fill it to the next
         // 16-byte boundary.
-        .ior                        = material_struct.add_float("ior"                       )->get_offset_in_parent(),
-        .transmission               = material_struct.add_float("transmission"              )->get_offset_in_parent(),
+        .ior                        = add_f1("ior"                       )->get_offset_in_parent(),
+        .transmission               = add_f1("transmission"              )->get_offset_in_parent(),
         .bxdf_model                 = material_struct.add_uint ("bxdf_model"                )->get_offset_in_parent(),
 
         // The normal texture decode: `texel * scale + bias`, both vec4 and
         // vec4-aligned, so the struct size stays a multiple of 16 bytes.
-        .normal_texture_decode_scale = material_struct.add_vec4 ("normal_texture_decode_scale")->get_offset_in_parent(),
-        .normal_texture_decode_bias  = material_struct.add_vec4 ("normal_texture_decode_bias" )->get_offset_in_parent(),
+        .normal_texture_decode_scale = add_f4("normal_texture_decode_scale")->get_offset_in_parent(),
+        .normal_texture_decode_bias  = add_f4("normal_texture_decode_bias" )->get_offset_in_parent(),
 
         // The channel each scalar input reads out of its slot's texture:
         // (metallic, roughness, occlusion, opacity). uvec4, vec4-aligned.
@@ -84,10 +98,36 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         // The padding after it keeps the struct size a multiple of 16 bytes.
         .input_sources               = material_struct.add_uvec2("input_sources"              )->get_offset_in_parent(),
         .input_sources_padding       = material_struct.add_uvec2("input_sources_padding"      )->get_offset_in_parent(),
-    }
-    , max_material_count{static_cast<std::size_t>(max_material_count)}
-{
+    };
     material_block.add_struct("materials", &material_struct, erhe::graphics::Shader_resource::unsized_array);
+    log_startup->info(
+        "Material records: {} float fields, {} bytes per record (material_record_half '{}', storage_buffer_16bit_access {}, shader_float16 {})",
+        half_records ? "16-bit" : "32-bit",
+        material_struct.get_size_bytes(),
+        graphics_device.get_graphics_config().material_record_half,
+        graphics_device.get_info().storage_buffer_16bit_access,
+        graphics_device.get_info().shader_float16
+    );
+}
+
+auto use_half_material_records(const erhe::graphics::Device& graphics_device) -> bool
+{
+    const erhe::graphics::Device_info& info = graphics_device.get_info();
+    if (!info.storage_buffer_16bit_access || !info.shader_float16) {
+        return false;
+    }
+    const std::string& setting = graphics_device.get_graphics_config().material_record_half;
+    if (setting == "on") {
+        return true;
+    }
+    if (setting == "off") {
+        return false;
+    }
+#if defined(ERHE_OS_ANDROID)
+    return true;
+#else
+    return false;
+#endif
 }
 
 Material_sampler_cache::Material_sampler_cache(erhe::graphics::Device& graphics_device)
@@ -256,12 +296,27 @@ void Material_buffer::write_record(
     const uint64_t occlusion_handle          = shader_handle(inputs.occlusion_texture);
     const uint64_t emissive_handle           = shader_handle(inputs.emissive_texture);
 
-    write(gpu_data, write_offset + offsets.roughness  ,                as_span(inputs.roughness  ));
-    write(gpu_data, write_offset + offsets.metallic   ,                as_span(inputs.metallic   ));
-    write(gpu_data, write_offset + offsets.reflectance,                as_span(inputs.reflectance));
+    // The float fields, as 32-bit floats or as 16-bit floats in the half
+    // layout (Material_interface::half_records).
+    const bool half = m_material_interface.half_records;
+    const auto write_floats = [&](const std::size_t field_offset, const float* values, const std::size_t count) {
+        std::byte* const destination = gpu_data.data() + write_offset + field_offset;
+        if (half) {
+            for (std::size_t i = 0; i < count; ++i) {
+                const uint16_t packed = glm::packHalf1x16(values[i]);
+                std::memcpy(destination + (2 * i), &packed, sizeof(packed));
+            }
+        } else {
+            std::memcpy(destination, values, count * sizeof(float));
+        }
+    };
 
-    write(gpu_data, write_offset + offsets.base_color ,                as_span(inputs.base_color ));
-    write(gpu_data, write_offset + offsets.emissive   ,                as_span(inputs.emissive   ));
+    write_floats(offsets.roughness,   &inputs.roughness.x,   2);
+    write_floats(offsets.metallic,    &inputs.metallic,      1);
+    write_floats(offsets.reflectance, &inputs.reflectance,   1);
+
+    write_floats(offsets.base_color,  &inputs.base_color.x,  3);
+    write_floats(offsets.emissive,    &inputs.emissive.x,    3);
 
     write(gpu_data, write_offset + offsets.base_color_texture,         as_span(base_color_handle));
     write(gpu_data, write_offset + offsets.metallic_roughness_texture, as_span(metallic_roughness_handle));
@@ -270,29 +325,28 @@ void Material_buffer::write_record(
     write(gpu_data, write_offset + offsets.occlusion_texture,          as_span(occlusion_handle));
 
     write(gpu_data, write_offset + offsets.emissive_texture,           as_span(emissive_handle));
-    write(gpu_data, write_offset + offsets.opacity,                    as_span(inputs.opacity));
-    write(gpu_data, write_offset + offsets.normal_texture_scale,       as_span(inputs.normal_texture_scale));
-    write(gpu_data, write_offset + offsets.alpha_cutoff,               as_span(inputs.alpha_cutoff));
+    write_floats(offsets.opacity,              &inputs.opacity,              1);
+    write_floats(offsets.normal_texture_scale, &inputs.normal_texture_scale, 1);
+    write_floats(offsets.alpha_cutoff,         &inputs.alpha_cutoff,         1);
 
-    write(gpu_data, write_offset + offsets.base_color_rotation_scale,         as_span(inputs.base_color_texture        .rotation_scale)); // uvec4
-    write(gpu_data, write_offset + offsets.metallic_roughness_rotation_scale, as_span(inputs.metallic_roughness_texture.rotation_scale)); // uvec4
-    write(gpu_data, write_offset + offsets.normal_rotation_scale,             as_span(inputs.normal_texture            .rotation_scale)); // uvec4
-    write(gpu_data, write_offset + offsets.occlusion_rotation_scale,          as_span(inputs.occlusion_texture         .rotation_scale)); // uvec4
-    write(gpu_data, write_offset + offsets.emissive_rotation_scale,           as_span(inputs.emissive_texture          .rotation_scale)); // uvec4
+    write_floats(offsets.base_color_rotation_scale,         inputs.base_color_texture        .rotation_scale, 4);
+    write_floats(offsets.metallic_roughness_rotation_scale, inputs.metallic_roughness_texture.rotation_scale, 4);
+    write_floats(offsets.normal_rotation_scale,             inputs.normal_texture            .rotation_scale, 4);
+    write_floats(offsets.occlusion_rotation_scale,          inputs.occlusion_texture         .rotation_scale, 4);
+    write_floats(offsets.emissive_rotation_scale,           inputs.emissive_texture          .rotation_scale, 4);
 
-    write(gpu_data, write_offset + offsets.base_color_offset,                 as_span(inputs.base_color_texture        .offset));         // uvec2
-    write(gpu_data, write_offset + offsets.metallic_roughness_offset,         as_span(inputs.metallic_roughness_texture.offset));         // uvec2
+    write_floats(offsets.base_color_offset,                 inputs.base_color_texture        .offset, 2);
+    write_floats(offsets.metallic_roughness_offset,         inputs.metallic_roughness_texture.offset, 2);
+    write_floats(offsets.normal_offset,                     inputs.normal_texture            .offset, 2);
+    write_floats(offsets.occlusion_offset,                  inputs.occlusion_texture         .offset, 2);
+    write_floats(offsets.emissive_offset,                   inputs.emissive_texture          .offset, 2);
 
-    write(gpu_data, write_offset + offsets.normal_offset,                     as_span(inputs.normal_texture            .offset));         // uvec2
-    write(gpu_data, write_offset + offsets.occlusion_offset,                  as_span(inputs.occlusion_texture         .offset));         // uvec2
-
-    write(gpu_data, write_offset + offsets.emissive_offset,                   as_span(inputs.emissive_texture          .offset));         // uvec2
-    write(gpu_data, write_offset + offsets.occlusion_texture_strength,        as_span(inputs.occlusion_texture_strength));
-    write(gpu_data, write_offset + offsets.ior,                               as_span(inputs.ior));
-    write(gpu_data, write_offset + offsets.transmission,                      as_span(inputs.transmission));
+    write_floats(offsets.occlusion_texture_strength, &inputs.occlusion_texture_strength, 1);
+    write_floats(offsets.ior,                        &inputs.ior,                        1);
+    write_floats(offsets.transmission,               &inputs.transmission,               1);
     write(gpu_data, write_offset + offsets.bxdf_model,                        as_span(inputs.bxdf_model));
-    write(gpu_data, write_offset + offsets.normal_texture_decode_scale,       as_span(inputs.normal_texture_decode_scale));
-    write(gpu_data, write_offset + offsets.normal_texture_decode_bias,        as_span(inputs.normal_texture_decode_bias));
+    write_floats(offsets.normal_texture_decode_scale, &inputs.normal_texture_decode_scale.x, 4);
+    write_floats(offsets.normal_texture_decode_bias,  &inputs.normal_texture_decode_bias.x,  4);
     write(gpu_data, write_offset + offsets.texture_channels,                  as_span(inputs.texture_channels));
     write(gpu_data, write_offset + offsets.input_sources,                     as_span(inputs.input_sources));
 }

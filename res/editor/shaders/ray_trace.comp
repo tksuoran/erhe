@@ -127,7 +127,7 @@ void main()
         }
 
         Material m = material.materials[surface.material_index];
-        if ((m.transmission <= 0.0) || (ray.depth >= ray_trace_control.max_bounces)) {
+        if ((float(m.transmission) <= 0.0) || (ray.depth >= ray_trace_control.max_bounces)) {
             // Opaque hit, or the branch's depth budget is spent: shade as
             // opaque so every branch terminates with a contribution.
             color += ray.throughput * shade_surface(surface, -ray.direction);
@@ -137,14 +137,14 @@ void main()
         // Transmissive interface. Normals face the incoming ray; backface
         // means the ray is exiting the volume.
         bool  entering  = !surface.backface;
-        float eta       = entering ? (1.0 / m.ior) : m.ior;
+        float eta       = entering ? (1.0 / float(m.ior)) : float(m.ior);
         vec3  N         = surface.shading_normal;
         float cos_i     = clamp(dot(-ray.direction, N), 0.0, 1.0);
         vec3  refracted = refract(ray.direction, N, eta);
         vec3  reflected = reflect(ray.direction, N);
         bool  tir       = dot(refracted, refracted) < 1e-6;
 
-        float f0_sqrt = (m.ior - 1.0) / (m.ior + 1.0);
+        float f0_sqrt = (float(m.ior) - 1.0) / (float(m.ior) + 1.0);
         float f0      = f0_sqrt * f0_sqrt;
         float fresnel = tir ? 1.0 : (f0 + (1.0 - f0) * pow(1.0 - cos_i, 5.0));
 
@@ -163,7 +163,7 @@ void main()
 
         if (!tir) {
             // Refraction branch, tinted by the glass color.
-            vec3 glass_tint          = mix(vec3(1.0), surface_base_color(surface, m), m.transmission);
+            vec3 glass_tint          = mix(vec3(1.0), surface_base_color(surface, m), float(m.transmission));
             vec3 refract_throughput = ray.throughput * (1.0 - fresnel) * glass_tint;
             if ((max(refract_throughput.r, max(refract_throughput.g, refract_throughput.b)) > c_throughput_cutoff) && (stack_size < c_max_stack)) {
                 stack[stack_size++] = Pending_ray(
