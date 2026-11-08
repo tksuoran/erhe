@@ -524,6 +524,77 @@ TEST_F(Mcp_test, get_node_details_finds_a_node_by_id)
     EXPECT_TRUE(missing.is_error) << "an unknown id was answered with a node";
 }
 
+// Undo of a delete or a reparent puts back the exact transforms (the scene
+// operations of doc/editor/operations.md): a mesh under a rotated, scaled
+// holder node, deleted with its child, then the child moved.
+TEST_F(Mcp_test, undo_of_delete_and_reparent_restores_exact_transforms)
+{
+    Mcp_env&          env    = Mcp_env::get();
+    Mcp_client&       client = env.client();
+    const std::string scene  = env.scene_name();
+
+    const auto transforms = [&client, &scene](const std::string& name) -> json {
+        Mcp_client::Tool_result r = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", name}});
+        EXPECT_FALSE(r.is_error) << name << ": " << r.text;
+        if (r.is_error) {
+            return json{};
+        }
+        return json{
+            {"parent", r.payload.value("parent", "")},
+            {"local",  r.payload.value("local_transform", json{})},
+            {"world",  r.payload.value("world_transform", json{})}
+        };
+    };
+
+    ASSERT_FALSE(client.call_tool("create_node", json{{"scene_name", scene}, {"name", "undo_xf_holder"}, {"position", {0.9, 2.0, -3.0}}}).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 10000));
+    ASSERT_FALSE(client.call_tool("set_node_transform", json{
+        {"scene_name", scene}, {"node_name", "undo_xf_holder"},
+        {"rotation_xyzw", {0.0, 0.3826834, 0.0, 0.9238795}}, {"scale", {2.0, 1.3, 2.0}}
+    }).is_error);
+    ASSERT_FALSE(client.call_tool("create_shape", json{
+        {"scene_name", scene}, {"shape", "box"}, {"name", "undo_xf_mesh"}, {"parent_node_name", "undo_xf_holder"},
+        {"position", {4.0, 0.5, 1.0}}, {"rotation_xyzw", {0.258819, 0.0, 0.0, 0.9659258}}, {"motion_mode", "none"}
+    }).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 10000));
+    Mcp_client::Tool_result child = client.call_tool("create_node", json{
+        {"scene_name", scene}, {"name", "undo_xf_child"}, {"parent_node_name", "undo_xf_mesh"}, {"position", {4.5, 1.0, 1.25}}
+    });
+    ASSERT_FALSE(child.is_error) << child.text;
+    ASSERT_TRUE(wait_until_idle(client, 10000));
+
+    const json mesh_before  = transforms("undo_xf_mesh");
+    const json child_before = transforms("undo_xf_child");
+    ASSERT_EQ(mesh_before.at("parent"), "undo_xf_holder");
+    ASSERT_EQ(child_before.at("parent"), "undo_xf_mesh");
+
+    for (int cycle = 0; cycle < 2; ++cycle) {
+        if (cycle == 0) {
+            ASSERT_FALSE(client.call_tool("delete_nodes", json{{"scene_name", scene}, {"names", {"undo_xf_mesh"}}}).is_error);
+        } else {
+            ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
+        }
+        ASSERT_TRUE(wait_until_idle(client, 10000));
+        EXPECT_TRUE(client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", "undo_xf_child"}}).is_error)
+            << "the delete left the child of the deleted mesh in the scene, cycle " << cycle;
+        ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+        ASSERT_TRUE(wait_until_idle(client, 10000));
+        EXPECT_EQ(transforms("undo_xf_mesh").dump(),  mesh_before.dump())  << "cycle " << cycle;
+        EXPECT_EQ(transforms("undo_xf_child").dump(), child_before.dump()) << "cycle " << cycle;
+    }
+
+    // A reparent keeps the world transform; its undo puts back the local one.
+    ASSERT_FALSE(client.call_tool("reparent_item", json{{"scene_name", scene}, {"item_name", "undo_xf_child"}, {"parent_name", "undo_xf_holder"}}).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 10000));
+    EXPECT_EQ(transforms("undo_xf_child").at("parent"), "undo_xf_holder");
+    ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
+    ASSERT_TRUE(wait_until_idle(client, 10000));
+    EXPECT_EQ(transforms("undo_xf_child").dump(), child_before.dump()) << "reparent undo";
+
+    client.call_tool("delete_nodes", json{{"scene_name", scene}, {"names", {"undo_xf_holder"}}});
+    ASSERT_TRUE(wait_until_idle(client, 10000));
+}
+
 // Mesh component selection commands (doc/editor/mesh_component_selection.md):
 // selecting a facet flushes to its edges and vertices, switching to vertex
 // mode keeps the vertices and derives the rest, and select all fills the box.

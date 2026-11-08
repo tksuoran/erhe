@@ -4,6 +4,7 @@
 #include "editor_log.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace editor {
@@ -44,6 +45,10 @@ void Item_parent_change_operation::execute(App_context& context)
     ERHE_VERIFY(m_child->get_parent().lock() == m_parent_before);
 
     m_parent_before_index = m_child->get_index_in_parent();
+    const std::shared_ptr<erhe::scene::Xformable> xformable = std::dynamic_pointer_cast<erhe::scene::Xformable>(m_child);
+    if (xformable) {
+        m_local_before = xformable->authored_parent_from_node_transform();
+    }
     if (m_parent_after) {
         m_parent_after_index = m_place_before
             ? m_place_before->get_index_in_parent()
@@ -69,7 +74,12 @@ void Item_parent_change_operation::undo(App_context& context)
     ERHE_VERIFY(m_child->get_parent().lock() == m_parent_after);
 
     if (m_parent_before) {
-        m_child->set_parent(m_parent_before, m_parent_before_index);
+        // Keeps the local transform; Xformable::set_parent would re-derive it through the parent inverse.
+        m_child->erhe::Hierarchy::set_parent(m_parent_before, m_parent_before_index);
+        const std::shared_ptr<erhe::scene::Xformable> xformable = std::dynamic_pointer_cast<erhe::scene::Xformable>(m_child);
+        if (xformable && m_local_before.has_value()) {
+            xformable->set_parent_from_node(m_local_before.value());
+        }
     } else if (m_parent_after) {
         m_child->set_parent({});
     }

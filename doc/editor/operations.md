@@ -103,8 +103,8 @@ Implements the undo/redo operation system and all concrete editor operations.
 - **Binary operations** (extend `Compound_operation`): `Union`, `Intersection`, `Difference` -- CSG operations.
 
 - **Scene operations**:
-  - `Item_insert_remove_operation` -- insert/remove prims from the scene tree; also how a content-library resource enters and leaves a scene (`make_library_attach_operation` / `make_resource_insert_operation`, `operations/library_attach_operation.hpp`, which place the resource prim under an explicit prim or, without one, under its kind `Scope`; the attach form also records the library's per-resource bookkeeping)
-  - `Item_parent_change_operation` -- reparent any `erhe::Hierarchy`: scene nodes, content-library resource prims and folder `Scope`s alike (the Hierarchy drag and MCP `reparent_item`)
+  - `Item_insert_remove_operation` -- insert/remove prims from the scene tree; also how a content-library resource enters and leaves a scene (`make_library_attach_operation` / `make_resource_insert_operation`, `operations/library_attach_operation.hpp`, which place the resource prim under an explicit prim or, without one, under its kind `Scope`; the attach form also records the library's per-resource bookkeeping). The first insert keeps the world transform the caller gave the detached prim (`Xformable::set_parent`); a redo of the insert and an undo of a remove put the prim back with the local transform it kept while detached, so its transforms come back bit for bit
+  - `Item_parent_change_operation` -- reparent any `erhe::Hierarchy`: scene nodes, content-library resource prims and folder `Scope`s alike (the Hierarchy drag and MCP `reparent_item`). Execute keeps the world transform; undo puts back the authored local transform from before it, bit for bit
   - `Item_reposition_in_parent_operation` -- reorder siblings
   - `Node_transform_operation` -- undo/redo node transforms. Reset Transform
     (`Geometry.ResetTransform`, the Operations window and the Geometry menu)

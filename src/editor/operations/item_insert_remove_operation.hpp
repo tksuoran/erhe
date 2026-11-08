@@ -59,6 +59,7 @@ private:
     std::vector<std::shared_ptr<Item_parent_change_operation>> m_parent_changes;
     std::size_t                                                m_index_in_parent{};
     std::size_t                                                m_index_in_parent_insert{};
+    bool                                                       m_inserted_once{false};
 
     erhe::Item_host*                              m_scene_host{nullptr};
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection_before;

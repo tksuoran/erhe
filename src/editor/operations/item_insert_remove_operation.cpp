@@ -37,6 +37,16 @@ void note_subtree_removed(App_context& context, const std::shared_ptr<erhe::Hier
     }
 }
 
+// Keeps the local transform; Xformable::set_parent would re-derive it through the parent inverse.
+void reattach_keeping_local_transform(
+    const std::shared_ptr<erhe::Hierarchy>& item,
+    const std::shared_ptr<erhe::Hierarchy>& parent,
+    const std::size_t                       index_in_parent
+)
+{
+    item->erhe::Hierarchy::set_parent(parent, index_in_parent);
+}
+
 } // anonymous namespace
 
 auto c_str(Item_insert_remove_operation::Mode mode) -> const char*
@@ -161,7 +171,17 @@ void Item_insert_remove_operation::execute(App_context& context)
         note_subtree_removed(context, m_item);
     }
 
-    m_item->set_parent(m_after_parent, m_index_in_parent);
+    if ((m_mode == Mode::insert) && m_inserted_once) {
+        // A redo: the item kept the local transform the first insert gave it.
+        reattach_keeping_local_transform(m_item, m_after_parent, m_index_in_parent);
+    } else {
+        // The first insert keeps the world transform the caller placed the
+        // detached item at.
+        m_item->set_parent(m_after_parent, m_index_in_parent);
+    }
+    if (m_mode == Mode::insert) {
+        m_inserted_once = true;
+    }
 
     context.selection->set_selection(m_selection_after, m_active_item_after.lock());
 }
@@ -182,7 +202,11 @@ void Item_insert_remove_operation::undo(App_context& context)
         note_subtree_removed(context, m_item);
     }
 
-    m_item->set_parent(m_before_parent, m_index_in_parent);
+    if (m_mode == Mode::remove) {
+        reattach_keeping_local_transform(m_item, m_before_parent, m_index_in_parent);
+    } else {
+        m_item->set_parent(m_before_parent, m_index_in_parent);
+    }
 
     for (auto i = rbegin(m_parent_changes), end = rend(m_parent_changes); i < end; ++i) {
         auto& child_parent_change = *i;

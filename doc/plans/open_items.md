@@ -105,8 +105,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
-- Undo of `delete_nodes` on a mesh under a holder node restores a different
-  world transform.
 - Scene close in Release stalls about 10 s in `Hierarchy::set_parent`
   (about 2800 calls from the `Scene_root` destructor inside
   `Viewport_scene_view::prepare_render`).

@@ -2,7 +2,10 @@
 
 #include "operations/operation.hpp"
 
+#include "erhe_scene/trs_transform.hpp"
+
 #include <memory>
+#include <optional>
 
 namespace erhe { class Hierarchy; }
 
@@ -31,6 +34,9 @@ private:
     std::size_t                      m_parent_after_index {0};
     std::shared_ptr<erhe::Hierarchy> m_place_before       {};
     std::shared_ptr<erhe::Hierarchy> m_place_after        {};
+    // The child's authored local transform before execute; empty
+    // for a child that carries no transform.
+    std::optional<erhe::scene::Trs_transform> m_local_before{};
 };
 
 }
