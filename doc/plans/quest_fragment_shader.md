@@ -290,6 +290,10 @@ reads stay 16 - 17, a 16-bit load is a load), the same register result as
 the fp16 material path; both together stay at 11 registers. So its gain on
 the device is the record bandwidth (40 % less per material fetch) and the
 occupancy where the fp16 paths are off; it ships as `auto` (on for Android).
+On the Quest 3 (release APK of 2026-11-08 12:31, `normal_offset` and the
+fp16 material path, the 16-bit records in effect per the startup log) the
+frame is level with the 32-bit records: Bistro street 105.8 against 107
+fps, the default scene's app GPU frame 4.67 against 4.71 ms.
 
 ### M5 Identity texture transform axis
 

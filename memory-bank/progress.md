@@ -16,5 +16,5 @@
 ✓M1/M2-normal_offset{aaab0b1e2;offsets-1.0/1.0;shadow_verify-core-16bit:G1-0-acne,G3<=1.25t,G4-pass,G5<=1t(spot-2.5);G2=hardware-filter-softening}
 ✓M5-identity-texture-transform+OpenXR-preset{4be47d3c5}
 ✓device-bench{2026-11-08-12:04..12:08;Bistro-street-58.7->108fps,app-GPU-11.6->6.35ms;default-app-GPU-5.45->4.69ms;fp16-mask-1-level-on-Bistro,-8%-multiview-default->OpenXR-preset-shader_fp16_paths=1}
-?M4-16bit-material-record{expected-small:5-mem-reads-of-388;decide-with-©User}
+✓M4-16bit-material-record{23a32cc1d;material_record_half=auto(on-Android);320->192B;Adreno-13->12-regs,100%-occupancy;device-level(Bistro-105.8fps)}
 
