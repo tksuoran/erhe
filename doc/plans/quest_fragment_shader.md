@@ -1,6 +1,6 @@
 # Quest fragment shader: the mobile shading variant
 
-Status: proposed
+Status: in progress
 
 Extends `doc/erhe/shader_variants.md` (the `Shader_key` axes) and
 `doc/erhe/shadows.md` (the shadow lookup); continues
@@ -158,9 +158,22 @@ graphics preset selects the mobile values (`doc/erhe/shader_variants.md`
 
 ### M1 Mobile shadow lookup: directional and spot lights
 
-A third `Shadow_bias_mode`, `normal_offset`, selected by the preset's
-`shadow_bias` field (compile-time axis `ERHE_SHADOW_BIAS`). Under it
-`sample_light_visibility()` is:
+Built (`doc/erhe/shadows.md` "Normal offset bias"): the third
+`Shadow_bias_mode`, `normal_offset`, selected by the preset's `shadow_bias`
+field (compile-time axis `ERHE_SHADOW_BIAS`), the OpenXR preset's value.
+Measured on the Adreno 740 (hard filter, 16-bit depth, one shadowed
+directional light, isotropic, untextured): 637 to 367 instructions, 17 to
+12 registers, 62 % to 100 % occupancy; the shadowed spot 430 and point 358
+(were 694 and 748); the base-color textured variant 664 to 392, 17 to 13
+registers, 50 % to 75 % occupancy; directional + spot + point 1617 to 893.
+Desktop gates at 16-bit depth with the offsets 1.0 / 1.0: no acne on any
+station or light type (G1), contact attached within 0.08 - 1.25 texels
+(G3), thin walls pass (G4), edges within a texel (G5; the spot up to 2.5),
+and the hardware filter's partial values just inside shadow edges (G2,
+0.01 - 1.2 % of the pixels), the mode's softening. Smaller offsets were
+measured too: 1.0 / 0.25 shows 0.4 - 0.6 % acne on the head-on floors
+and 0.5 / 0 shows 58 - 66 %, so the constant offset is what the head-on
+receiver needs (its sine term is zero there). The design:
 
 1. the receiver point moved along the interpolated shading normal N by
    `k_offset * texel_world * (1 - N.L)` (normal offset shadows), where
@@ -215,11 +228,19 @@ checks which and sizes the bias in that unit. Expected: the point row from
 
 ### M3 The fp16 chain of the mobile variant
 
-Step 0 of the build order measures what the existing paths P1 - P5 buy on
-the device (nothing in the static count; the 16-bit ALU rate is the gain).
-The mobile variant then takes one more bit, `ERHE_FP16_PATH_MOBILE`
-(`Fp16_path::mobile`), live only with `ERHE_SHADOW_BIAS` `normal_offset`,
-that completes the chain where P1 - P5 stopped by design:
+Step 0 measured the existing paths P1 - P5 on the device: slower on the
+default scene, level on Bistro street, so the 16-bit ALU rate does not pay
+for the boundary conversions on this GPU, and a whole fp16 chain has no
+measured case for it. What fp16 does buy is full-precision registers: on
+the mobile textured variant the material path alone (mask 1) takes 13
+full registers to 11 (+22 instructions) and the occupancy from 75 % to
+100 %, where M5 could not (the shadow lookup is already one fetch, and
+the remaining registers hold the frame, the view vector and the
+accumulated color). The step therefore is: `shader_fp16_paths` 1 in the
+OpenXR preset once the device bench shows it level or better; its
+rendering difference is the fp16 plan's P1 boundary (roughness floor
+0.09, 8-bit inputs exact). The whole-chain design below stays as the
+fallback if a later device measurement shows the fragment ALU bound:
 
 - the vectors N, V, L and H in fp16 after their fp32 normalization (the
   2^-11 angular error that P2 excluded on the desktop; the roughness floor
@@ -268,12 +289,16 @@ carry textures.
 
 ### M5 Identity texture transform axis
 
-A material sub-key boolean, `IDENTITY_TEXTURE_TRANSFORM`, set by
-`Shader_key` when every texture slot of the material has rotation 0, scale
-1 and offset 0 (glTF without `KHR_texture_transform`); the shader then
-calls the untransformed `sample_texture()` overload and the record's
-transform fields are not read. 12 instructions, 4 reads and 2 registers
-per textured variant on every platform, exact result.
+Built: the material sub-key boolean `IDENTITY_TEXTURE_TRANSFORM`
+(`doc/erhe/shader_variants.md` "Material sub-key"), set when every bound
+sampler has rotation 0, scale 1 and offset 0 (glTF without
+`KHR_texture_transform`); `ERHE_SAMPLE_MATERIAL_TEXTURE` in `standard.frag`
+then calls the untransformed `sample_texture()` overload and the record's
+transform fields are not read. Exact on every platform. Measured on the
+base-color textured mobile variant: 4 instructions and 2 record reads, no
+register (13 stays 13; the receiver-plane estimate of 12 instructions, 4
+reads and 2 registers came from a normal-mapped variant with two textured
+slots, where the saving is per slot).
 
 ### M6 The slides' BRDF
 
@@ -310,7 +335,9 @@ ALU-bound.
 
 ## Build order
 
-0. **Device baseline of the existing fp16 paths** (done):
+0. **Device baseline of the existing fp16 paths** (done; the M1 device
+   bench waits for the APK reinstall, the installed APK carries another
+   machine's signing key):
    `shader_fp16_paths` 0 against 31 with the release APK of 2026-11-07,
    off head, 120 Hz. Default scene (`benchmark_orbit`, two runs each): mask
    31 is slower, the XR multiview pass 7.96 ms against 7.28 ms (medians;
@@ -322,17 +349,17 @@ ALU-bound.
    every path boundary costs more on Adreno than its 16-bit rate returns,
    and M3's chain has to be whole (vectors, lookup and accumulation in
    fp16 with one conversion at the texture fetches and one at the output).
-1. **M1** (the largest item): the axis value, the record field, the
-   lookup, the preset fields, the desktop gates, the device bench.
-2. **M2** point lights, the same gates.
-3. **M5** identity texture transform (exact, every platform).
-4. **M3** the fp16 chain of the mobile variant, the station matrix at the
-   mobile tolerance, the device bench.
+1. **M1** (done but for the device bench): the axis value, the record
+   field, the lookup, the preset fields, the desktop gates.
+2. **M2** (done with M1) point lights, the same gates.
+3. **M5** (done) identity texture transform (exact, every platform).
+4. **M3** as reduced above: P1 in the OpenXR preset after its device
+   bench.
 5. **M4** the 16-bit material record, the device bench decides.
 6. **M6** if the eye pass is still ALU-bound.
-7. **Preset**: `graphics_presets_openxr.json` takes the mobile values
-   (`shadow_bias` `normal_offset`, `shader_fp16_paths` with the mobile
-   bit, the sampler decision); the desktop presets are unchanged.
+7. **Preset**: `graphics_presets_openxr.json` carries `shadow_bias`
+   `normal_offset` (done) and takes `shader_fp16_paths` 1 after its
+   bench; the desktop presets are unchanged.
 
 ## Open
 

@@ -122,6 +122,7 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(USE_OCCLUSION_TEXTURE)            \
     X(USE_EMISSION_TEXTURE)             \
     X(USE_CIRCULAR_BRUSHED_METAL)       \
+    X(IDENTITY_TEXTURE_TRANSFORM)       \
     X(USE_SKINNING)                     \
     X(WORLD_SPACE_VERTICES)             \
     X(USE_VERTEX_VARYING_NORMAL)        \

@@ -1,7 +1,7 @@
 {
     "presets": [
         {
-            "_version": 9,
+            "_version": 10,
             "name": "OpenXR",
             "msaa_sample_count": 1,
             "bindless_textures": false,
@@ -14,7 +14,7 @@
             "point_unshadowed_light_count": 4,
             "shadow_depth_bits": 16,
             "shadow_filter": "hard",
-            "shadow_bias": "receiver_plane",
+            "shadow_bias": "normal_offset",
             "shadow_depth_bias_constant": 0,
             "shadow_depth_bias_slope": 0,
             "shadow_cull_mode": "cull_back",

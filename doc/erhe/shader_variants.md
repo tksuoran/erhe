@@ -49,6 +49,7 @@ and flags:
 | `ERHE_USE_OCCLUSION_TEXTURE` | same for `occlusion` |
 | `ERHE_USE_EMISSION_TEXTURE` | same for `emissive` |
 | `ERHE_USE_CIRCULAR_BRUSHED_METAL` | `material.use_circular_brushed_metal` |
+| `ERHE_IDENTITY_TEXTURE_TRANSFORM` | every bound sampler has rotation 0, scale 1, offset 0; the fetches skip the UV transform and its record fields (`ERHE_SAMPLE_MATERIAL_TEXTURE`) |
 
 `ERHE_BXDF_MODEL` (integer axis) is the cast of
 `erhe::primitive::Bxdf_model` (`unlit`, `isotropic_brdf`,

@@ -124,6 +124,15 @@ cd erhe
 scripts\build_android.bat
 ```
 
+The wrapper runs `android-project/gradlew`; on Linux and macOS run it
+directly with `ANDROID_HOME` and `JAVA_HOME` set:
+`android-project/gradlew -p android-project --no-daemon assembleQuestRelease`.
+Gradle properties the build reads: `-PnativeCompileJobs=N` and
+`-PnativeLinkJobs=N` cap the native compile and link jobs (CMake job
+pools), and `-PcmakeExtraArgs="-D... -D..."` appends CMake cache arguments,
+for example `-DFETCHCONTENT_SOURCE_DIR_ZSTD=<an existing _deps/zstd-src>`
+when the zstd release download is unavailable.
+
 Important: when launching the editor on a Quest device over adb,
 run the install step first (`scripts\install_android.bat quest`)
 while the user can keep their hands free. **Only after the APK is on

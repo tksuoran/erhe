@@ -79,6 +79,14 @@ android {
                     }
                     cmakeArgs << "-DCMAKE_JOB_POOLS=${pools.join(';')}"
                 }
+                // Extra CMake arguments from the command line
+                // (-PcmakeExtraArgs="-DFETCHCONTENT_SOURCE_DIR_ZSTD=<dir> ..."):
+                // a dependency source already on disk when its download
+                // fails, a cache variable the wrappers do not set.
+                def extraArgs = project.findProperty("cmakeExtraArgs")
+                if (extraArgs != null) {
+                    extraArgs.toString().trim().split(/\s+/).each { cmakeArgs << it }
+                }
                 arguments cmakeArgs as String[]
                 abiFilters 'arm64-v8a'
             }

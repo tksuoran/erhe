@@ -227,6 +227,14 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Rename_function` and `rename_file()` (`doc/erhe/file.md` "Writing several
   files").
 
+- `erhe::scene_renderer`: `Shader_bool::IDENTITY_TEXTURE_TRANSFORM`, set by
+  `Shader_key::derive` when every bound material sampler has the identity
+  UV transform; `Shadow_bias_mode` value `normal_offset` (`ERHE_SHADOW_BIAS`
+  2) with the `Light_shadowed` record field `mobile_bias`, the light block
+  field `shadow_normal_offset`, `Light_interface::shadow_sampler_compare_linear`
+  (binding `s_shadow_compare_linear`) and the `Shadow_renderer::Render_parameters`
+  fields `shadow_normal_offset_texels` / `shadow_constant_bias_texels`
+  (`doc/erhe/shadows.md` "Normal offset bias").
 - `erhe::graphics`: `Image_loader::probe_prefix()` and `Image_prefix_result`:
   reads an image's `Image_info` from the first bytes of a file and reports,
   without logging, when the header ends past them (`needs_more`);

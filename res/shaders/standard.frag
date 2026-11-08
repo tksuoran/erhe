@@ -531,14 +531,18 @@ void main()
 #if !defined(ERHE_VARIANT_POSITION_PASS)
     Material material = material.materials[v_material_index];
 
+    // A material texture fetch. Under IDENTITY_TEXTURE_TRANSFORM (every bound
+    // sampler of the material has rotation 0, scale 1, offset 0) the
+    // transform fields are not read and the texcoord is used as is.
+#ifdef ERHE_IDENTITY_TEXTURE_TRANSFORM
+#  define ERHE_SAMPLE_MATERIAL_TEXTURE(HANDLE, TEXCOORD, ROTATION_SCALE, OFFSET) sample_texture((HANDLE), (TEXCOORD))
+#else
+#  define ERHE_SAMPLE_MATERIAL_TEXTURE(HANDLE, TEXCOORD, ROTATION_SCALE, OFFSET) sample_texture((HANDLE), (TEXCOORD), (ROTATION_SCALE), (OFFSET))
+#endif
+
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
     uvec2 base_color_texture = material.base_color_texture;
-    vec4  base_color_sample  = sample_texture(
-        base_color_texture,
-        ERHE_SELECT_TEXCOORD(ERHE_BASE_COLOR_TEXGEN_MODE),
-        material.base_color_rotation_scale,
-        material.base_color_offset
-    );
+    vec4  base_color_sample  = ERHE_SAMPLE_MATERIAL_TEXTURE(base_color_texture, ERHE_SELECT_TEXCOORD(ERHE_BASE_COLOR_TEXGEN_MODE), material.base_color_rotation_scale, material.base_color_offset);
 #endif
 
     // material.input_sources.x names where the base color comes from. With
@@ -717,12 +721,7 @@ void main()
     const float c_roughness_floor = 1e-4;
 #  endif
 #  ifdef ERHE_USE_METALLIC_ROUGHNESS_TEXTURE
-    vec4 metallic_roughness = sample_texture(
-        material.metallic_roughness_texture,
-        ERHE_SELECT_TEXCOORD(ERHE_METALLIC_ROUGHNESS_TEXGEN_MODE),
-        material.metallic_roughness_rotation_scale,
-        material.metallic_roughness_offset
-    );
+    vec4 metallic_roughness = ERHE_SAMPLE_MATERIAL_TEXTURE(material.metallic_roughness_texture, ERHE_SELECT_TEXCOORD(ERHE_METALLIC_ROUGHNESS_TEXGEN_MODE), material.metallic_roughness_rotation_scale, material.metallic_roughness_offset);
     // material.texture_channels holds the component index each scalar input
     // reads: (metallic, roughness, occlusion, opacity). glTF's fixed packing
     // is the default (metallic in B, roughness in G); a UsdPreviewSurface
@@ -769,28 +768,13 @@ void main()
         // flip Y.
 #    if ERHE_NORMALMAP_IS_TWO_CHANNEL(ERHE_NORMAL_TEXTURE_ENCODING)
 #      if ERHE_NORMALMAP_IS_XY_IN_RG(ERHE_NORMAL_TEXTURE_ENCODING)
-        vec2 nxy = sample_texture(
-            material.normal_texture,
-            ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE),
-            material.normal_rotation_scale,
-            material.normal_offset
-        ).rg * material.normal_texture_decode_scale.xy + material.normal_texture_decode_bias.xy;
+        vec2 nxy = ERHE_SAMPLE_MATERIAL_TEXTURE(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE), material.normal_rotation_scale, material.normal_offset).rg * material.normal_texture_decode_scale.xy + material.normal_texture_decode_bias.xy;
 #      else
-        vec2 nxy = sample_texture(
-            material.normal_texture,
-            ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE),
-            material.normal_rotation_scale,
-            material.normal_offset
-        ).ga * material.normal_texture_decode_scale.xy + material.normal_texture_decode_bias.xy;
+        vec2 nxy = ERHE_SAMPLE_MATERIAL_TEXTURE(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE), material.normal_rotation_scale, material.normal_offset).ga * material.normal_texture_decode_scale.xy + material.normal_texture_decode_bias.xy;
 #      endif
         vec3 ntex = vec3(nxy, sqrt(max(1.0 - dot(nxy, nxy), 0.0)));
 #    else
-        vec3 ntex = sample_texture(
-            material.normal_texture,
-            ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE),
-            material.normal_rotation_scale,
-            material.normal_offset
-        ).xyz * material.normal_texture_decode_scale.xyz + material.normal_texture_decode_bias.xyz;
+        vec3 ntex = ERHE_SAMPLE_MATERIAL_TEXTURE(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE), material.normal_rotation_scale, material.normal_offset).xyz * material.normal_texture_decode_scale.xyz + material.normal_texture_decode_bias.xyz;
 #    endif
 #    if ERHE_NORMALMAP_IS_LEFT_HANDED(ERHE_NORMAL_TEXTURE_ENCODING)
         ntex.y  = -ntex.y;
@@ -816,22 +800,12 @@ void main()
     // KHR_materials_emissive_strength.
     vec3 emissive = material.emissive.rgb;
 #  ifdef ERHE_USE_EMISSION_TEXTURE
-    emissive *= sample_texture(
-        material.emissive_texture,
-        ERHE_SELECT_TEXCOORD(ERHE_EMISSIVE_TEXGEN_MODE),
-        material.emissive_rotation_scale,
-        material.emissive_offset
-    ).rgb;
+    emissive *= ERHE_SAMPLE_MATERIAL_TEXTURE(material.emissive_texture, ERHE_SELECT_TEXCOORD(ERHE_EMISSIVE_TEXGEN_MODE), material.emissive_rotation_scale, material.emissive_offset).rgb;
 #  endif
 
 #  ifdef ERHE_USE_OCCLUSION_TEXTURE
     mat_float occlusion = mat_float(texture_channel_value(
-        sample_texture(
-            material.occlusion_texture,
-            ERHE_SELECT_TEXCOORD(ERHE_OCCLUSION_TEXGEN_MODE),
-            material.occlusion_rotation_scale,
-            material.occlusion_offset
-        ),
+        ERHE_SAMPLE_MATERIAL_TEXTURE(material.occlusion_texture, ERHE_SELECT_TEXCOORD(ERHE_OCCLUSION_TEXGEN_MODE), material.occlusion_rotation_scale, material.occlusion_offset),
         material.texture_channels.z
     ));
 #  else

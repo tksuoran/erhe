@@ -300,6 +300,14 @@ namespace {
     return static_cast<bool>(s.texture_reference);
 }
 
+// The sampler applies no UV transform: rotation 0, scale 1, offset 0 (glTF
+// without KHR_texture_transform). An unbound sampler counts as identity.
+[[nodiscard]] auto sampler_has_identity_transform(const erhe::primitive::Material_texture_sampler& s) -> bool
+{
+    return !sampler_is_bound(s) ||
+        ((s.rotation == 0.0f) && (s.scale == glm::vec2{1.0f, 1.0f}) && (s.offset == glm::vec2{0.0f, 0.0f}));
+}
+
 [[nodiscard]] auto any_sampler_uses_texgen(const erhe::primitive::Material_texture_samplers& s, const erhe::primitive::Texgen_mode texgen_mode) -> bool
 {
     auto uses = [texgen_mode](const erhe::primitive::Material_texture_sampler& sampler) {
@@ -409,6 +417,19 @@ auto Shader_key::derive(
 
         // Material booleans -- set per bound sampler.
         if (sampler_is_bound(samplers.base_color))        { key.set(Shader_bool::USE_BASE_COLOR_TEXTURE,         true); }
+        // Every bound sampler reads its texture at the untransformed
+        // texcoord: the shader skips the rotation / scale / offset and
+        // does not read those record fields (ERHE_SAMPLE_MATERIAL_TEXTURE
+        // in standard.frag). Exact, so every platform takes it.
+        if (
+            sampler_has_identity_transform(samplers.base_color)         &&
+            sampler_has_identity_transform(samplers.metallic_roughness) &&
+            sampler_has_identity_transform(samplers.normal)             &&
+            sampler_has_identity_transform(samplers.occlusion)          &&
+            sampler_has_identity_transform(samplers.emissive)
+        ) {
+            key.set(Shader_bool::IDENTITY_TEXTURE_TRANSFORM, true);
+        }
         if (sampler_is_bound(samplers.metallic_roughness)){ key.set(Shader_bool::USE_METALLIC_ROUGHNESS_TEXTURE, true); }
         if (sampler_is_bound(samplers.normal))            {
             key.set(Shader_bool::USE_NORMAL_TEXTURE, true);
