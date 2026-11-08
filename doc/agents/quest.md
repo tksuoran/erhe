@@ -221,7 +221,9 @@ light to the Bistro, sets the preset's spot and point limits to 0 and
 `light_shading` to `loops` (no clustering);
 `bistro_headlamp_gpu_occlusion.json` makes the headset's own headlamp (the
 shadow-mapped spot light on the camera node that every headset scene has)
-the only shaded light, with GPU culling and occlusion culling. A new light
+the only shaded light, with GPU culling and occlusion culling, and
+`bistro_headlamp_gpu_occlusion_opaque_only.json` is the same with the
+content draws limited to the opaque passes. A new light
 configuration is a new file; `set_graphics_preset` (light limits, `light_shading`, shadows,
 `use_draw_lists`), `set_culling_classification`, `set_occlusion_culling`,
 `set_light_cluster_binning`, `set_content_draws` (`opaque_only` leaves out
