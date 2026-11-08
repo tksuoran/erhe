@@ -116,9 +116,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   (`metal_gpu_timer.cpp` `Gpu_timer_impl::label`).
 - Undo of `delete_nodes` on a mesh under a holder node restores a different
   world transform.
-- `Lattice_tool::update_active_lattice` walks every node of the active scene
-  per frame per view (from `Transform_tool::update_for_view`, about 6.5 ms per
-  frame in Debug Bistro); make it change-driven.
 - Scene close in Release stalls about 10 s in `Hierarchy::set_parent`
   (about 2800 calls from the `Scene_root` destructor inside
   `Viewport_scene_view::prepare_render`).

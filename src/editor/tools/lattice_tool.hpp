@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app_message.hpp"
 #include "tools/tool.hpp"
 
 #include "erhe_commands/command.hpp"
@@ -19,6 +20,7 @@ namespace editor {
 
 class App_message_bus;
 class Lattice_node;
+class Scene_root;
 class Scene_view;
 class Tools;
 class Viewport_scene_view;
@@ -73,11 +75,12 @@ public:
         std::shared_ptr<erhe::scene::Node> bound_node;
     };
 
-    // Re-scans the active scene (unless a gizmo edit is in progress) and
-    // returns the current target. Called by Transform_tool::update_for_view
-    // each idle frame; tool_render reuses the result.
+    // Returns the current target, re-scanning the active scene first when a
+    // change it depends on was reported (never during a gizmo edit). Called by
+    // Transform_tool::update_for_view each idle frame; tool_render reuses it.
     auto update_active_lattice() -> const Active_lattice&;
     [[nodiscard]] auto get_active_lattice() const -> const Active_lattice&;
+    void on_items_removed(const Removed_items& removed);
 
     // Commands
     [[nodiscard]] auto try_ready() -> bool;
@@ -87,9 +90,14 @@ private:
     [[nodiscard]] auto pick_control_point(Scene_view& scene_view) const -> std::optional<glm::ivec3>;
     void append_point_quad(const glm::vec3& position_in_world, const glm::vec3& camera_right, const glm::vec3& camera_up, float half_size);
 
-    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Hover_scene_view_message>           m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Graph_mesh_binding_changed_message> m_graph_mesh_binding_changed_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>                m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message>              m_items_removed_subscription;
     Lattice_select_command    m_select_command;
     Active_lattice            m_active;
+    bool                      m_active_stale{true};
+    std::weak_ptr<Scene_root> m_active_scene_root; // the scene m_active was scanned from
     std::optional<glm::ivec3> m_pick_point; // armed by try_ready(), consumed by on_select()
 
     // Scratch for billboard quads (cleared per use, capacity kept)

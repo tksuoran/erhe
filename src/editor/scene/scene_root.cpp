@@ -241,7 +241,7 @@ Scene_root::Scene_root(
     // (doc/erhe/scene.md "Node systems").
     m_draw_mode_system = std::make_unique<Draw_mode_system>();
     m_scene->add_node_system(*m_draw_mode_system.get());
-    m_geometry_graph_mesh_system = std::make_unique<Geometry_graph_mesh_system>();
+    m_geometry_graph_mesh_system = std::make_unique<Geometry_graph_mesh_system>(m_app_message_bus);
     m_scene->add_node_system(*m_geometry_graph_mesh_system.get());
     m_node_physics_system = std::make_unique<Node_physics_system>(*this);
     m_scene->add_node_system(*m_node_physics_system.get());

@@ -29,6 +29,7 @@
 #include "create/create.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/graph_mesh.hpp"
+#include "geometry_graph/nodes/lattice_node.hpp"
 #include "grid/grid.hpp"
 #include "grid/grid_tool.hpp"
 #include "operations/operation_stack.hpp"
@@ -43,6 +44,7 @@
 #include "erhe_scene/scene.hpp"
 #include "texture_graph/texture_graph_window.hpp"
 #include "texture_graph/graph_texture.hpp"
+#include "tools/lattice_tool.hpp"
 #include "tools/material_paint_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "transform/handle_enums.hpp"
@@ -170,6 +172,13 @@ auto Mcp_server::query_editor_references(const json& args) -> std::string
     result["create_brush"] = (m_context.create != nullptr)
         ? reference_json(m_context.create->get_brush())
         : json{nullptr};
+    json lattice_tool = json::object();
+    if (m_context.lattice_tool != nullptr) {
+        const Lattice_tool::Active_lattice& active = m_context.lattice_tool->get_active_lattice();
+        lattice_tool["bound_node"] = reference_json(active.bound_node.get());
+        lattice_tool["lattice"]    = reference_json(active.lattice.get());
+    }
+    result["lattice_tool"] = lattice_tool;
     result["physics_tool_last_target_mesh"] = (m_context.physics_tool != nullptr)
         ? reference_json(m_context.physics_tool->get_last_target_mesh())
         : json{nullptr};

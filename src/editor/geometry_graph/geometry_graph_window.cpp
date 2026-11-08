@@ -15,6 +15,7 @@
 #include "geometry_graph/nodes/group_nodes.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
 #include "app_scenes.hpp"
 #include "config/generated/editor_settings_config.hpp"
@@ -191,6 +192,7 @@ void Geometry_graph_window::insert_node(Graph_mesh& graph_mesh, const std::share
     // on removal (undo restore): the output node has to recreate its
     // scene mesh, released in on_removed_from_graph().
     node->mark_dirty();
+    report_graph_mesh_binding_changed();
 }
 
 void Geometry_graph_window::erase_node(Graph_mesh& graph_mesh, const std::shared_ptr<Geometry_graph_node>& node)
@@ -220,6 +222,14 @@ void Geometry_graph_window::erase_node(Graph_mesh& graph_mesh, const std::shared
     // scene falls back to the wired input; the designation id is kept so an
     // undo of this erase (same node object, same id) self-heals it.
     graph_mesh.graph().handle_designated_node_removed(node->get_id());
+    report_graph_mesh_binding_changed();
+}
+
+void Geometry_graph_window::report_graph_mesh_binding_changed()
+{
+    if (m_app_context.app_message_bus != nullptr) {
+        m_app_context.app_message_bus->graph_mesh_binding_changed.queue_message(Graph_mesh_binding_changed_message{});
+    }
 }
 
 auto Geometry_graph_window::connect_pins(Graph_mesh& graph_mesh, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool

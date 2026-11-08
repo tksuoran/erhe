@@ -1,4 +1,5 @@
 #include "geometry_graph/geometry_graph_mesh_system.hpp"
+#include "app_message_bus.hpp"
 #include "editor_item_bits.hpp"
 
 #include "content_library/content_library.hpp"
@@ -20,6 +21,11 @@
 
 namespace editor {
 
+Geometry_graph_mesh_system::Geometry_graph_mesh_system(App_message_bus* const app_message_bus)
+    : m_app_message_bus{app_message_bus}
+{
+}
+
 Geometry_graph_mesh_system::~Geometry_graph_mesh_system() noexcept
 {
     // Scene_root::sever_host() unregisters every node before this runs, so
@@ -38,6 +44,7 @@ void Geometry_graph_mesh_system::on_node_registered(erhe::scene::Node& node)
         return;
     }
     m_entries.emplace(&node, Geometry_graph_mesh_entry{});
+    report_binding_changed();
     // Applying inline would deadlock - the caller may hold item_host_mutex -
     // so a node entering a scene with a bake waiting asks the evaluation
     // engine for a push instead. A never-baked graph needs no request: it is
@@ -56,6 +63,7 @@ void Geometry_graph_mesh_system::on_node_unregistered(erhe::scene::Node& node)
     release_rigid_body(&node, i->second);
     release(i->second);
     m_entries.erase(i);
+    report_binding_changed();
 }
 
 void Geometry_graph_mesh_system::on_values_changed(
@@ -70,6 +78,9 @@ void Geometry_graph_mesh_system::on_values_changed(
     // once: a rebind target may never publish a bake, and a stale mesh must
     // not linger.
     const std::unordered_map<erhe::scene::Node*, Geometry_graph_mesh_entry>::iterator i = m_entries.find(&node);
+    if ((i != m_entries.end()) || carries_geometry_graph_mesh(node)) {
+        report_binding_changed();
+    }
     if (i != m_entries.end()) {
         release_rigid_body(&node, i->second);
         release(i->second);
@@ -93,6 +104,13 @@ void Geometry_graph_mesh_system::on_node_active_changed(erhe::scene::Node& node)
     // The controlled products are ordinary prims below the node, so the
     // derived active bit reaches them the way it reaches any other child.
     static_cast<void>(node);
+}
+
+void Geometry_graph_mesh_system::report_binding_changed()
+{
+    if (m_app_message_bus != nullptr) {
+        m_app_message_bus->graph_mesh_binding_changed.queue_message(Graph_mesh_binding_changed_message{});
+    }
 }
 
 auto Geometry_graph_mesh_system::find_entry(erhe::scene::Node& node) const -> const Geometry_graph_mesh_entry*

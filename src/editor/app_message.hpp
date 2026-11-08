@@ -140,6 +140,11 @@ public:
     const Scene_root* scene_root{nullptr};
 };
 
+// A geometry-graph binding, designation or node set changed (doc/editor/geometry_graph_mesh.md).
+class Graph_mesh_binding_changed_message
+{
+};
+
 // Published when a scene_root is first created and registered -- by the
 // scene.create startup command, or by loading a scene file. Global editor tools
 // that must live inside a scene (Hud, Hotbar, the OpenXR Headset_view) build

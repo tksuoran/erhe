@@ -188,7 +188,8 @@ material), `Item_tree` (hovered and popup item plus the cached rows),
 extras), `Brush_tool`, `Material_paint_tool`, `Material_preview`,
 `Brush_preview`, `Brdf_slice`, `Operations`, `Create`, `Physics_tool`,
 `Thumbnails`, `Scene_root` (a brush's material), `Variant_table`,
-`Transform_tool`, `Physics_driven_drag` and `Selection`.
+`Transform_tool`, `Physics_driven_drag`, `Lattice_tool` (its bound node,
+lattice node and that node's `Graph_mesh`) and `Selection`.
 
 `Item_tree`'s hovered and popup items pin specifically in the
 hover-then-stop-rendering case: a rendering tree resets both every frame, and
