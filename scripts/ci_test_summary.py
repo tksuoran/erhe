@@ -6,7 +6,8 @@ with --output-junit and uploads the XML as an artifact; the tests workflow
 downloads them all into one directory and runs this script on it. The
 script prints a per-configuration table (to stdout, and to the job summary
 when GITHUB_STEP_SUMMARY is set), lists every failed test with its output,
-and exits non-zero when any test failed, when a result file is malformed, or
+and exits non-zero when any test failed or ctest could not start
+it (status "notrun" without a skip message), when a result file is malformed, or
 when the directory holds no result files at all (a configuration whose
 build failed uploads nothing, and no results must never read as green).
 
@@ -29,6 +30,12 @@ class Suite:
         self.failures: list[tuple[str, str]] = []
 
 
+def is_test_skip(case: ET.Element) -> bool:
+    skipped = case.find("skipped")
+    message = (skipped.get("message", "") or "") if skipped is not None else ""
+    return message.startswith(("SKIP_REGULAR_EXPRESSION_MATCHED", "SKIP_RETURN_CODE"))
+
+
 def parse_junit(path: Path) -> Suite:
     suite = Suite(path.stem)
     root = ET.parse(path).getroot()
@@ -39,15 +46,19 @@ def parse_junit(path: Path) -> Suite:
         failure = case.find("failure")
         if failure is None:
             failure = case.find("error")
+        status = case.get("status", "run")
+        system_out = case.find("system-out")
+        output = (system_out.text or "") if system_out is not None else ""
         if failure is not None:
             suite.failed += 1
-            system_out = case.find("system-out")
-            output = (system_out.text or "") if system_out is not None else ""
             message = failure.get("message", "") or ""
             suite.failures.append((name, (message + "\n" + output).strip()))
-        elif (case.find("skipped") is not None) or (case.get("status", "run") != "run"):
-            # ctest writes status="disabled" for gtest DISABLED_ cases and
-            # status="notrun" for tests it could not start; neither passed.
+        elif (status == "notrun") and not is_test_skip(case):
+            # ctest could not start the test (e.g. its binary was not built).
+            suite.failed += 1
+            suite.failures.append((name, ("Not run\n" + output).strip()))
+        elif (case.find("skipped") is not None) or (status != "run"):
+            # status="disabled" (gtest DISABLED_) or a notrun skip (GTEST_SKIP).
             suite.skipped += 1
         else:
             suite.passed += 1
@@ -73,7 +84,7 @@ def main(argv: list[str]) -> int:
             lines.append(f"Malformed result file `{path}`: {error}")
             exit_code = 1
 
-    lines.append("| Configuration | Tests | Passed | Failed | Not run | Time |")
+    lines.append("| Configuration | Tests | Passed | Failed | Skipped | Time |")
     lines.append("| :--- | ---: | ---: | ---: | ---: | ---: |")
     for suite in suites:
         marker = "FAIL" if suite.failed else "ok"

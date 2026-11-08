@@ -209,11 +209,10 @@ jobs:
           if-no-files-found: ignore
 
   # GPU tests on a software Vulkan (doc/testing.md "CI"): the tests labeled
-  # "gpu" (erhe_graphics_gpu_tests, erhe_renderer_gpu_tests,
-  # erhe_scene_renderer_gpu_tests) on Mesa lavapipe, from the headless Vulkan
+  # "gpu" (the five erhe_*_gpu_tests targets) on Mesa lavapipe, from the headless Vulkan
   # tree (ERHE_WINDOW_LIBRARY=none, so no display is needed), under the
   # validation layer of the latest LunarG Vulkan SDK. The GPU test fixture
-  # turns every validation error into a test failure. Only the three test
+  # turns every validation error into a test failure. Only the gpu test
   # targets are built, not the editor. Like the matrix jobs, the ctest step
   # does not fail the job; the uploaded JUnit file joins the others in the
   # tests workflow.
@@ -301,7 +300,7 @@ jobs:
         run: bash scripts/configure_ninja_linux_vulkan_headless.sh -DERHE_BUILD_TESTS=ON
 
       - name: Build GPU tests
-        run: cmake --build "$BUILD_DIR" --target erhe_graphics_gpu_tests erhe_renderer_gpu_tests erhe_scene_renderer_gpu_tests --parallel
+        run: cmake --build "$BUILD_DIR" --target erhe_graphics_gpu_tests erhe_gltf_gpu_tests erhe_renderer_gpu_tests erhe_rendergraph_gpu_tests erhe_scene_renderer_gpu_tests --parallel
 
       # The bounds of the matrix jobs' test step apply: the slowest GPU test
       # takes about 15 s on lavapipe and the whole label a few minutes.

@@ -196,13 +196,14 @@ does not fail its job, so the build badge stays a build verdict: the JUnit
 files are uploaded as `test-results-*` artifacts and
 `.github/workflows/tests.yml` (triggered when a build run completes)
 summarizes them with `scripts/ci_test_summary.py` and gives the tests badge in
-README.md. A build run that did not succeed fails the tests workflow too.
+README.md. A failed test, a test not run because ctest could not start it
+(for example its binary was not built) and a build run that did not succeed each
+fail the tests workflow; disabled and gtest-skipped cases count as skipped.
 
 The `gpu` tests run in a job of their own, "Linux (Vulkan headless /
 lavapipe GPU tests)": the headless Vulkan tree
 (`scripts/configure_ninja_linux_vulkan_headless.sh`, `ERHE_WINDOW_LIBRARY=none`,
-so no display) builds only `erhe_graphics_gpu_tests`, `erhe_renderer_gpu_tests`
-and `erhe_scene_renderer_gpu_tests`, and runs them on Mesa lavapipe
+so no display) builds only the `gpu` test binaries listed above, and runs them on Mesa lavapipe
 (`mesa-vulkan-drivers`, `VK_DRIVER_FILES` pointing at its ICD) with
 `scripts/ci_run_tests.py --label gpu`. The Vulkan loader and
 `VK_LAYER_KHRONOS_validation` come from the latest LunarG Vulkan SDK
