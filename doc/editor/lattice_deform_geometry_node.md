@@ -133,13 +133,7 @@ graph's output is bound to a scene node through that node's
   selected), and consumes a left click that lands on a control point (a 12 px
   screen-space pick) to select it. The selection is the node's own
   `m_selected_point`, so the viewport and the node UI's offset editor stay in
-  sync. The target is found by a scan of the active scene that runs only
-  after a change it depends on: `Graph_mesh_binding_changed_message`
-  (queued by `Geometry_graph_mesh_system` when a bound node enters or leaves
-  the scene or its binding is written, by the display / ghost designation
-  operation, and by `Geometry_graph_window` node inserts and erases), a scene
-  close (which also drops the cached target), or a different effective active
-  scene. A scan never runs during a gizmo edit.
+  sync.
 - `Lattice_point_transform` drives the standard transform gizmo, mirroring
   `Mesh_component_transform`: `update_anchor()` places the gizmo at the
   selected point's deformed world position each idle frame

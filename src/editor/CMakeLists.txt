@@ -268,7 +268,6 @@ erhe_target_sources_grouped(
     geometry_graph/geometry_graph_node.hpp
     geometry_graph/geometry_graph_node_factory.cpp
     geometry_graph/geometry_graph_node_factory.hpp
-    geometry_graph/geometry_graph_operations.cpp
     geometry_graph/geometry_graph_operations.hpp
     geometry_graph/geometry_graph_window.cpp
     geometry_graph/geometry_graph_window.hpp

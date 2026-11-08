@@ -57,11 +57,15 @@ public:
     }
 
     // Implements Operation
-    void execute(App_context& context) override { apply(context, m_after_display_id,  m_after_ghost_id);  }
-    void undo   (App_context& context) override { apply(context, m_before_display_id, m_before_ghost_id); }
+    void execute(App_context&) override { apply(m_after_display_id,  m_after_ghost_id);  }
+    void undo   (App_context&) override { apply(m_before_display_id, m_before_ghost_id); }
 
 private:
-    void apply(App_context& context, std::size_t display_id, std::size_t ghost_id);
+    void apply(const std::size_t display_id, const std::size_t ghost_id)
+    {
+        m_graph_mesh->graph().set_display_node_id(display_id);
+        m_graph_mesh->graph().set_ghost_node_id(ghost_id);
+    }
 
     std::shared_ptr<Graph_mesh> m_graph_mesh;
     std::size_t                 m_before_display_id;

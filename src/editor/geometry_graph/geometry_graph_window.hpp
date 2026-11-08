@@ -192,8 +192,6 @@ public:
     [[nodiscard]] auto find_graph_editor_node(std::size_t node_id) -> std::shared_ptr<Graph_editor_node> override;
 
 private:
-    // A node set change can make a designation (Lattice_tool target) resolve differently.
-    void report_graph_mesh_binding_changed();
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>;
     // Implements Graph_editor_window_base: fills the palette with the geometry
     // node set, and spawns a chosen type through the factory + undoable insert.

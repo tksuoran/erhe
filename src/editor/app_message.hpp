@@ -140,15 +140,6 @@ public:
     const Scene_root* scene_root{nullptr};
 };
 
-// What a scene shows of a geometry graph changed: a node bound to a Graph_mesh
-// entered or left a scene or had its binding written, or a Graph_mesh's
-// display / ghost designation or node set changed (Lattice_tool rescans on
-// it). Queued, because a binding write may come from a load thread;
-// delivered on the main thread by App_message_bus::update().
-class Graph_mesh_binding_changed_message
-{
-};
-
 // Published when a scene_root is first created and registered -- by the
 // scene.create startup command, or by loading a scene file. Global editor tools
 // that must live inside a scene (Hud, Hotbar, the OpenXR Headset_view) build

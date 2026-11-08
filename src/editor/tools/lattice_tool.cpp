@@ -101,19 +101,6 @@ Lattice_tool::Lattice_tool(
             Tool::on_message(message);
         }
     );
-    m_graph_mesh_binding_changed_subscription = app_message_bus.graph_mesh_binding_changed.subscribe(
-        [this](Graph_mesh_binding_changed_message&) {
-            m_active_stale = true;
-        }
-    );
-    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
-        [this](Close_scene_message&) {
-            // Drop the closing scene's node and graph now (doc/editor/coding_rules.md "Scene-hosted references").
-            m_active = {};
-            m_active_scene_root.reset();
-            m_active_stale = true;
-        }
-    );
 }
 
 auto Lattice_tool::update_active_lattice() -> const Active_lattice&
@@ -124,20 +111,10 @@ auto Lattice_tool::update_active_lattice() -> const Active_lattice&
         return m_active;
     }
 
+    m_active = {};
     const std::shared_ptr<Scene_root> scene_root = (m_context.selection != nullptr)
         ? m_context.selection->get_active_scene_root()
         : std::shared_ptr<Scene_root>{};
-    // The effective active scene (Selection fallbacks: last hovered viewport,
-    // single open scene) publishes no change message, so its identity is compared.
-    if (scene_root != m_active_scene_root.lock()) {
-        m_active_stale = true;
-    }
-    if (!m_active_stale) {
-        return m_active;
-    }
-    m_active_stale      = false;
-    m_active_scene_root = scene_root;
-    m_active            = {};
     if (!scene_root) {
         return m_active;
     }

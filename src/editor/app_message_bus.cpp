@@ -22,7 +22,6 @@ void App_message_bus::update()
     mesh_component_selection_changed.update();
     scene_lighting_changed.update();
     pvs_state_changed.update();
-    graph_mesh_binding_changed.update();
 }
 
 }

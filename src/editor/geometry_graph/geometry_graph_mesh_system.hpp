@@ -10,7 +10,6 @@ namespace erhe::scene { class Mesh; }
 
 namespace editor {
 
-class App_message_bus;
 class Graph_mesh;
 
 // The runtime state one node's geometry-graph binding implies: the products
@@ -55,7 +54,6 @@ public:
 class Geometry_graph_mesh_system : public erhe::scene::INode_system
 {
 public:
-    explicit Geometry_graph_mesh_system(App_message_bus* app_message_bus);
     ~Geometry_graph_mesh_system() noexcept override;
 
     // Implements INode_system
@@ -87,10 +85,6 @@ private:
     // Detaches the products from the node that holds them and drops them.
     void release(Geometry_graph_mesh_entry& entry);
 
-    // Queues Graph_mesh_binding_changed_message (bindings may change on a load thread).
-    void report_binding_changed();
-
-    App_message_bus*                                                  m_app_message_bus{nullptr};
     std::unordered_map<erhe::scene::Node*, Geometry_graph_mesh_entry> m_entries;
 };
 

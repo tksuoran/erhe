@@ -66,10 +66,6 @@ per bound node, keyed by a raw `Node*`:
 - **`on_node_unregistered`** releases the products and erases the entry, so a
   scene close keeps nothing of it alive.
 
-Each of the three that adds, erases or rewrites an entry queues a
-`Graph_mesh_binding_changed_message` (Lattice_tool re-resolves its target on
-it; `doc/editor/lattice_deform_geometry_node.md` "Viewport editing").
-
 The renderer keeps rendering a perfectly ordinary `erhe::scene::Mesh`: the
 system creates that child `Mesh` prim (or ADOPTS a pre-existing one, so a
 graph dropped onto a mesh node takes it over instead of adding a duplicate),
