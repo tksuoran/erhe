@@ -60,7 +60,9 @@ layout(location = 0) out vec4      v_position;
 // (get_vertex_position_rounding(), erhe_position_rounding.glsl), interpolated
 // to the fragment for the shadow receiver's minimum bias.
 layout(location = 17) out vec3     v_view_relative_position;
+#if !defined(ERHE_SHADOW_NORMAL_OFFSET)
 layout(location = 18) out float    v_position_rounding;
+#endif
 #endif
 
 // TODO In the future we might have alpha test which would need texcoord
@@ -312,7 +314,9 @@ void main()
     // Shadow_renderer point-cube pass.
     v_position               = position;
     v_view_relative_position = view_relative_position.xyz;
+#   if !defined(ERHE_SHADOW_NORMAL_OFFSET)
     v_position_rounding      = position_rounding;
+#   endif
 #endif
 
 #if defined(ERHE_VARIANT_PVS)
@@ -473,7 +477,9 @@ void main()
 #   endif
     v_position               = position;
     v_view_relative_position = view_relative_position.xyz;
+#   if !defined(ERHE_SHADOW_NORMAL_OFFSET)
     v_position_rounding      = position_rounding;
+#   endif
 
     v_material_index = primitive.primitives[ERHE_PRIMITIVE_INDEX].material_index;
 

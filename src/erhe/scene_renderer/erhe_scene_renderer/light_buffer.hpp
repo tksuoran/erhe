@@ -47,7 +47,7 @@ public:
 };
 
 // Hot record of a shadow-mapped light (light_shadowed_array_block, GLSL
-// struct Light_shadowed, 208 bytes): the shading fields and everything the
+// struct Light_shadowed, 224 bytes): the shading fields and everything the
 // fragment's shadow lookup reads, so a shadow-mapped light's loop iteration
 // reads one contiguous record. Indexed by shadow record index: 2D shadow map
 // layer i for i < Light_projections::shadow_map_2d_slots.size(), else point
@@ -81,6 +81,12 @@ public:
     // the same bits. Identity for point lights, which read none of them.
     std::size_t texture_from_view_relative;     // mat4
     std::size_t view_relative_from_texture;     // mat4
+    // The normal-offset lookup's per-light constants (Shadow_bias_mode::
+    // normal_offset, doc/erhe/shadows.md "Normal offset bias"): x the world
+    // size of one shadow texel at unit depth (the texel size for a
+    // directional light; times the light distance for a perspective one),
+    // y 1 for a perspective light (spot, point), 0 for a directional light.
+    std::size_t mobile_bias;                    // vec4 (texel size at unit depth, perspective, 0, 0)
 };
 
 // Cold record of a shadow-mapped light (light_shadow_world_array_block, GLSL
@@ -123,6 +129,10 @@ public:
     // y = shadow_bias_origin_scale (the fp32 projection, position and raster
     // terms). From Light_projections.
     std::size_t  shadow_bias_scales;           // vec2
+    // The normal-offset lookup's offsets in shadow texels at the receiver
+    // (Shadow_bias_mode::normal_offset): x along the geometric normal (times
+    // sin of the light angle), y toward the light. From Light_projections.
+    std::size_t  shadow_normal_offset;         // vec2
 
     // Dynamic diffuse global illumination (doc/editor/ddgi.md phase 6). The
     // probe volume rides in this block rather than a binding point of its
@@ -188,6 +198,12 @@ static constexpr uint32_t c_texture_heap_slot_lightmap        {4};
 static constexpr uint32_t c_texture_heap_slot_ddgi_irradiance{5};
 static constexpr uint32_t c_texture_heap_slot_ddgi_distance  {6};
 static constexpr uint32_t c_texture_heap_slot_ddgi_probe_data{7};
+// Depth-aspect compare binding of the 2D shadow map with the linear compare
+// sampler: the hardware's 2x2 percentage-closer filter in one fetch, read by
+// the normal-offset lookup (Shadow_bias_mode::normal_offset). The nearest
+// compare sampler above stays for the derived-bound lookups, whose texel
+// selection must be exact.
+static constexpr uint32_t c_texture_heap_slot_shadow_compare_linear{8};
 
 class Light_interface
 {
@@ -229,6 +245,7 @@ public:
     std::size_t                     shadow_map_resolution_offset;
     erhe::graphics::Sampler         shadow_sampler_compare;
     erhe::graphics::Sampler         shadow_sampler_no_compare;
+    erhe::graphics::Sampler         shadow_sampler_compare_linear;
     // Bilinear clamp sampler for the baked lightmap atlas (immutable in the
     // descriptor set layout, like the shadow samplers).
     erhe::graphics::Sampler         lightmap_sampler;
@@ -513,6 +530,14 @@ public:
     // Light_buffer::update(). 1 is the derived bound.
     float                                                 shadow_bias_texel_scale {1.0f};
     float                                                 shadow_bias_origin_scale{1.0f};
+
+    // The normal-offset lookup's offsets in shadow texels (Shadow_bias_mode::
+    // normal_offset; light_block.shadow_normal_offset) and the point shadow
+    // cube face resolution its texel size derives from; set by
+    // Shadow_renderer::render() from its Render_parameters.
+    float                                                 shadow_normal_offset_texels{1.0f};
+    float                                                 shadow_constant_bias_texels{1.0f};
+    int                                                   point_shadow_resolution{0};
 
     // TODO A bit hacky injection of these parameters..
     // This frame's light array and cluster lists of the view, when

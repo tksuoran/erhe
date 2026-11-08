@@ -23,12 +23,16 @@
 // of width K is fetched with (K/2)^2 textureGather() calls.
 #define ERHE_SHADOW_FILTER_HARD 0
 
-// Depth-bias method for the wide-kernel (>= 4) PCF path, selected by the
-// ERHE_SHADOW_BIAS compile-time variant axis (set from the graphics preset's
-// Shadow_bias_mode enum). Exposed for live comparison; the hard and 2x2 paths
-// always use their own fixed bias and ignore this axis.
+// Depth-bias method, selected by the ERHE_SHADOW_BIAS compile-time variant
+// axis (set from the graphics preset's Shadow_bias_mode enum). slope_scaled
+// and receiver_plane differ only on the wide-kernel (>= 4) PCF path; the
+// hard and 2x2 paths use their own fixed bias. normal_offset replaces the
+// whole derived-bound lookup with the normal-offset lookup below
+// (sample_light_visibility_normal_offset(); doc/erhe/shadows.md "Normal
+// offset bias").
 #define ERHE_SHADOW_BIAS_SLOPE_SCALED   0
 #define ERHE_SHADOW_BIAS_RECEIVER_PLANE 1
+#define ERHE_SHADOW_BIAS_NORMAL_OFFSET  2
 
 // Shadow technique (ERHE_SHADOW_TECHNIQUE compile-time axis, from the graphics
 // preset's Shadow_technique_mode), for directional and spot lights (point
@@ -894,6 +898,61 @@ float sample_point_light_visibility(vec3 view_relative_position, float vertex_ro
 
     // A reference no farther from the light than the stored distance is lit.
     return ((reference - snap_bias - minimum_bias) > stored) ? 0.0 : 1.0;
+#else
+    return 1.0;
+#endif
+}
+
+// Normal-offset lookups (ERHE_SHADOW_BIAS_NORMAL_OFFSET; doc/erhe/shadows.md
+// "Normal offset bias"). The receiver point moves along its geometric normal
+// by normal_texels * texel * sin(theta) and toward the light by
+// constant_texels * texel, where texel is the world size of one shadow texel
+// at the receiver (light.mobile_bias.x at unit depth, times the light
+// distance for a perspective light) and theta the angle between the normal
+// and the light; then one fetch. No receiver plane, no derived bounds: the
+// bias is the preset's choice (light_block.shadow_normal_offset), and the
+// result may differ from the derived-bound lookups by that offset.
+float sample_light_visibility_normal_offset(vec3 view_relative_position, vec3 geometric_normal, uint shadow_record) {
+#if defined(ERHE_SHADOW_MAPS)
+    if (light_block.shadow_texture_compare.x == max_u32) {
+        return 1.0;
+    }
+    Light_shadowed light = light_shadowed_array.lights[shadow_record];
+    vec3  receiver_point = get_light_relative_position(view_relative_position, light.view_origin.xyz);
+    bool  perspective    = light.mobile_bias.y != 0.0;
+    float light_distance = perspective ? length(receiver_point) : 1.0;
+    vec3  to_light       = perspective ? (-receiver_point / light_distance) : light.direction_and_outer_spot_cos.xyz;
+    float texel          = light.mobile_bias.x * light_distance;
+    vec2  texels         = light_block.shadow_normal_offset;
+    float n_dot_l        = clamp(dot(geometric_normal, to_light), 0.0, 1.0);
+    float sin_theta      = sqrt(1.0 - (n_dot_l * n_dot_l));
+    receiver_point      += (geometric_normal * (texels.x * texel * sin_theta)) + (to_light * (texels.y * texel));
+    vec4  h              = light.texture_from_view_relative * vec4(receiver_point, 1.0);
+    vec3  p              = h.xyz / h.w;
+    // The linear compare sampler: the hardware's 2x2 percentage-closer filter
+    // in one fetch. The reference clamps as the derived lookups do (receivers
+    // past the fitted far plane compare against the far clear value).
+    return texture(s_shadow_compare_linear, vec4(p.xy, light.shadow_params.y, clamp(p.z, 0.0, 1.0)));
+#else
+    return 1.0;
+#endif
+}
+
+// The point light cube: the same offsets, the stored radial distance compared
+// against the offset receiver's own distance (doc/erhe/point_light_shadows.md).
+float sample_point_light_visibility_normal_offset(vec3 view_relative_position, vec3 geometric_normal, uint shadow_record) {
+#if defined(ERHE_SHADOW_MAPS)
+    Light_shadowed light    = light_shadowed_array.lights[shadow_record];
+    vec3  light_to_receiver = get_light_relative_position(view_relative_position, light.view_origin.xyz);
+    float light_distance    = length(light_to_receiver);
+    vec3  to_light          = -light_to_receiver / light_distance;
+    float texel             = light.mobile_bias.x * light_distance;
+    vec2  texels            = light_block.shadow_normal_offset;
+    float n_dot_l           = clamp(dot(geometric_normal, to_light), 0.0, 1.0);
+    float sin_theta         = sqrt(1.0 - (n_dot_l * n_dot_l));
+    light_to_receiver      += (geometric_normal * (texels.x * texel * sin_theta)) + (to_light * (texels.y * texel));
+    float stored            = textureLod(s_shadow_cube, vec4(light_to_receiver, light.shadow_params.z), 0.0).r;
+    return (length(light_to_receiver) > stored) ? 0.0 : 1.0;
 #else
     return 1.0;
 #endif

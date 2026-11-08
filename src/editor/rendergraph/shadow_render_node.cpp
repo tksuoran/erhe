@@ -754,6 +754,8 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
     float depth_bias_slope    = 0.0f;
     float bias_texel_scale    = 1.0f;
     float bias_origin_scale   = 1.0f;
+    float normal_offset_texels = 1.0f;
+    float constant_bias_texels = 1.0f;
     erhe::scene_renderer::Shadow_cull_mode cull_mode = erhe::scene_renderer::Shadow_cull_mode::cull_back;
     bool  use_distance        = false;
     // The forward pass samples these maps with the preset's filter, whose
@@ -765,6 +767,8 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
         depth_bias_slope    = preset.shadow_depth_bias_slope;
         bias_texel_scale    = preset.shadow_bias_texel_scale;
         bias_origin_scale   = preset.shadow_bias_origin_scale;
+        normal_offset_texels = preset.shadow_normal_offset_texels;
+        constant_bias_texels = preset.shadow_constant_bias_texels;
         cull_mode           = static_cast<erhe::scene_renderer::Shadow_cull_mode>(preset.shadow_cull_mode);
         use_distance        = (preset.shadow_technique == Shadow_technique_mode::distance) && static_cast<bool>(m_distance_texture);
         shadow_map_footprint   = erhe::scene::Shadow_map_footprint::from_kernel_width(static_cast<unsigned int>(preset.shadow_filter));
@@ -841,6 +845,8 @@ void Shadow_render_node::pre_execute_rendergraph_node(erhe::graphics::Command_bu
             .depth_bias_slope      = depth_bias_slope,
             .shadow_bias_texel_scale  = bias_texel_scale,
             .shadow_bias_origin_scale = bias_origin_scale,
+            .shadow_normal_offset_texels = normal_offset_texels,
+            .shadow_constant_bias_texels = constant_bias_texels,
             .cull_mode             = cull_mode,
             .distance_texture      = use_distance ? m_distance_texture : std::shared_ptr<erhe::graphics::Texture>{},
             .use_distance          = use_distance,

@@ -159,7 +159,8 @@ namespace {
         case Shader_int::SHADOW_BIAS: {
             return make({
                 {"ERHE_SHADOW_BIAS_SLOPE_SCALED",   0u},
-                {"ERHE_SHADOW_BIAS_RECEIVER_PLANE", 1u}
+                {"ERHE_SHADOW_BIAS_RECEIVER_PLANE", 1u},
+                {"ERHE_SHADOW_BIAS_NORMAL_OFFSET",  2u}
             });
         }
         case Shader_int::SHADOW_TECHNIQUE: {

@@ -11012,7 +11012,7 @@
           "type": "string"
         },
         "shadow_bias": {
-          "description": "Shadow_bias_mode: slope_scaled, receiver_plane",
+          "description": "Shadow_bias_mode: slope_scaled, receiver_plane, normal_offset",
           "type": "string"
         },
         "shadow_technique": {
@@ -11085,6 +11085,14 @@
         },
         "shadow_bias_origin_scale": {
           "description": "Scale (>= 0, 1 = the derived bound) of the receiver minimum shadow bias terms for fp32 projection, world position and rasterizer depth interpolation rounding",
+          "type": "number"
+        },
+        "shadow_normal_offset_texels": {
+          "description": "normal_offset bias mode: receiver offset along the geometric normal in shadow texels at the receiver (>= 0, times the sine of the light angle)",
+          "type": "number"
+        },
+        "shadow_constant_bias_texels": {
+          "description": "normal_offset bias mode: receiver offset toward the light in shadow texels at the receiver (>= 0)",
           "type": "number"
         },
         "point_shadow_resolution": {

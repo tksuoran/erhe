@@ -190,7 +190,7 @@ what only the debug views read (cold):
 | record | block, binding | index | members | bytes |
 |---|---|---|---|---|
 | shading, every shaded light | `light_array.lights[]`, 9 | slot | `position_and_inner_spot_cos`, `direction_and_outer_spot_cos`, `radiance_and_range` (vec4 each) | 48 |
-| hot shadowed, every shadow-mapped light | `light_shadowed_array.lights[]`, 11 | shadow record | the three shading vec4s, `view_origin` (xyz, raster vertex depth bound), `shadow_params` (caster vertex rounding, 2D layer, cube index, distance rays valid 1 / 0), `texture_from_view_relative`, `view_relative_from_texture` (mat4 each) | 208 |
+| hot shadowed, every shadow-mapped light | `light_shadowed_array.lights[]`, 11 | shadow record | the three shading vec4s, `view_origin` (xyz, raster vertex depth bound), `shadow_params` (caster vertex rounding, 2D layer, cube index, distance rays valid 1 / 0), `texture_from_view_relative`, `view_relative_from_texture` (mat4 each), `mobile_bias` (texel size at unit depth, perspective flag; the normal offset lookup, `doc/erhe/shadows.md` "Normal offset bias") | 224 |
 | cold, every shadow-mapped light | `light_shadow_world_array.transforms[]`, 12 | shadow record | `texture_from_world`, `world_from_texture` (mat4 each) | 128 |
 
 A shadow-mapped light's loop iteration reads its hot record only: the

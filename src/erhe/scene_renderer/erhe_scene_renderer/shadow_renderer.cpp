@@ -844,6 +844,9 @@ void Shadow_renderer::fit(const Render_parameters& parameters, Cull_views& cull_
     // The receiver-side minimum bias scales go with the shadow maps they bias.
     parameters.light_projections.shadow_bias_texel_scale  = parameters.shadow_bias_texel_scale;
     parameters.light_projections.shadow_bias_origin_scale = parameters.shadow_bias_origin_scale;
+    parameters.light_projections.shadow_normal_offset_texels = parameters.shadow_normal_offset_texels;
+    parameters.light_projections.shadow_constant_bias_texels = parameters.shadow_constant_bias_texels;
+    parameters.light_projections.point_shadow_resolution     = std::min(parameters.point_shadow_viewport.width, parameters.point_shadow_viewport.height);
 
     cull_views.views_2d.clear();
     cull_views.views_cube.clear();

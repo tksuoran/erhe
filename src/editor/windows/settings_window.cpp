@@ -443,6 +443,19 @@ void Settings_window::imgui()
                 on_graphics_preset_edited();
             }
         });
+        // The normal_offset bias mode's offsets in shadow texels.
+        add_entry("Shadow Normal Offset (texels)", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            if (ImGui::DragFloat("##", &graphics_preset.shadow_normal_offset_texels, 0.01f, 0.0f, 16.0f, "%.2f")) {
+                on_graphics_preset_edited();
+            }
+        });
+        add_entry("Shadow Constant Bias (texels)", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            if (ImGui::DragFloat("##", &graphics_preset.shadow_constant_bias_texels, 0.01f, 0.0f, 16.0f, "%.2f")) {
+                on_graphics_preset_edited();
+            }
+        });
         add_entry("Shadow Resolution", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             const int   shadow_resolution_values[] = {  256, 512, 1024, 1024 * 2, 1024 * 3, 1024 * 4, 1024 * 5, 1024 * 6, 1024 * 7, 1024 * 8 };

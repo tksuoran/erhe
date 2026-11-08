@@ -130,6 +130,14 @@
 // position-pass gate above, which they read.
 #include "erhe_fp16_paths.glsl"
 
+// ERHE_SHADOW_NORMAL_OFFSET is a derived gate: the ERHE_SHADOW_BIAS axis at
+// its normal_offset value (erhe_light.glsl). The receiver then carries no
+// position rounding varying and builds no receiver plane: the lookup is
+// sample_light_visibility_normal_offset() on the geometric normal.
+#if defined(ERHE_SHADOW_BIAS) && (ERHE_SHADOW_BIAS == 2)
+#  define ERHE_SHADOW_NORMAL_OFFSET 1
+#endif
+
 // ERHE_USE_LIGHTMAP_SAMPLING is a derived gate: the scene-level
 // ERHE_USE_LIGHTMAP axis (a lightmap atlas is bound) on a lit variant whose
 // vertex format carries the lightmap UVs (channel 2). Only then are the

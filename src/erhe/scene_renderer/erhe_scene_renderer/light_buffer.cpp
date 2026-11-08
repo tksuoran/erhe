@@ -90,6 +90,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
         .shadow_debug_light_index  = light_block.add_uint ("shadow_debug_light_index" )->get_offset_in_parent(),
         .ambient_light             = light_block.add_vec4 ("ambient_light"            )->get_offset_in_parent(),
         .shadow_bias_scales        = light_block.add_vec2 ("shadow_bias_scales"       )->get_offset_in_parent(),
+        .shadow_normal_offset      = light_block.add_vec2 ("shadow_normal_offset"     )->get_offset_in_parent(),
 
         .ddgi_grid_origin          = light_block.add_vec4 ("ddgi_grid_origin"         )->get_offset_in_parent(),
         .ddgi_grid_spacing         = light_block.add_vec4 ("ddgi_grid_spacing"        )->get_offset_in_parent(),
@@ -115,7 +116,8 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             .view_origin                  = light_shadowed_struct.add_vec4("view_origin"                 )->get_offset_in_parent(),
             .shadow_params                = light_shadowed_struct.add_vec4("shadow_params"               )->get_offset_in_parent(),
             .texture_from_view_relative   = light_shadowed_struct.add_mat4("texture_from_view_relative"  )->get_offset_in_parent(),
-            .view_relative_from_texture   = light_shadowed_struct.add_mat4("view_relative_from_texture"  )->get_offset_in_parent()
+            .view_relative_from_texture   = light_shadowed_struct.add_mat4("view_relative_from_texture"  )->get_offset_in_parent(),
+            .mobile_bias                  = light_shadowed_struct.add_vec4("mobile_bias"                 )->get_offset_in_parent()
         },
         .shadow_world = {
             .texture_from_world = light_shadow_world_struct.add_mat4("texture_from_world")->get_offset_in_parent(),
@@ -171,6 +173,27 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             .debug_label    = "Light_interface::shadow_sampler_no_compare"
         }
     }
+    , shadow_sampler_compare_linear{
+        graphics_device,
+        erhe::graphics::Sampler_create_info{
+            .min_filter        = erhe::graphics::Filter::linear,
+            .mag_filter        = erhe::graphics::Filter::linear,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode      = {
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge
+            },
+            .compare_enable    = true,
+            .compare_operation = graphics_device.get_reverse_depth()
+                ? erhe::graphics::Compare_operation::greater_or_equal
+                : erhe::graphics::Compare_operation::less_or_equal,
+            .lod_bias     = 0.0f,
+            .max_lod      = 0.0f,
+            .min_lod      = 0.0f,
+            .debug_label  = "Light_interface::shadow_sampler_compare_linear"
+        }
+    }
     , lightmap_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -214,7 +237,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
     // The std430 record sizes the shaders index with (doc/erhe/scene_renderer.md
     // "Light records"): every member is a vec4 or mat4, so no padding.
     ERHE_VERIFY(light_struct.get_size_bytes()              == 48);
-    ERHE_VERIFY(light_shadowed_struct.get_size_bytes()     == 208);
+    ERHE_VERIFY(light_shadowed_struct.get_size_bytes()     == 224);
     ERHE_VERIFY(light_shadow_world_struct.get_size_bytes() == 128);
 }
 
@@ -987,6 +1010,18 @@ void Light_buffer::write_light_records(
             to_float_index(light_projection_transforms.point_shadow_index),
             limits.distance_rays_valid ? 1.0f : 0.0f
         };
+        // The normal-offset lookup's texel size at unit depth: a texel spans
+        // 2 / (P[0][0] * resolution) of the light camera's x axis at unit
+        // depth for an orthographic and a perspective projection alike (a cube
+        // face is a 90 degree perspective, P[0][0] = 1).
+        const erhe::scene::Light_type light_type       = light->get_light_type();
+        const bool                    perspective      = (light_type != erhe::scene::Light_type::directional);
+        const float                   projection_scale = std::abs(light_projection_transforms.clip_from_light_camera.get_matrix()[0][0]);
+        const float                   resolution       = (light_type == erhe::scene::Light_type::point)
+            ? static_cast<float>(light_projections->point_shadow_resolution)
+            : static_cast<float>(std::min(light_projections->parameters.shadow_map_viewport.width, light_projections->parameters.shadow_map_viewport.height));
+        const float texel_at_unit_depth = ((projection_scale > 0.0f) && (resolution > 0.0f)) ? (2.0f / (projection_scale * resolution)) : 0.0f;
+        const vec4  mobile_bias         = vec4{texel_at_unit_depth, perspective ? 1.0f : 0.0f, 0.0f, 0.0f};
         const std::size_t shadowed_offset = offsets.shadowed_struct + (record * shadowed_record.get_size_bytes());
         write(shadowed, shadowed_offset + offsets.shadowed.position_and_inner_spot_cos,  as_span(position_inner_spot));
         write(shadowed, shadowed_offset + offsets.shadowed.direction_and_outer_spot_cos, as_span(direction_outer_spot));
@@ -995,6 +1030,7 @@ void Light_buffer::write_light_records(
         write(shadowed, shadowed_offset + offsets.shadowed.shadow_params,                as_span(shadow_params));
         write(shadowed, shadowed_offset + offsets.shadowed.texture_from_view_relative,   as_span(view_relative.texture_from_view_relative));
         write(shadowed, shadowed_offset + offsets.shadowed.view_relative_from_texture,   as_span(view_relative.view_relative_from_texture));
+        write(shadowed, shadowed_offset + offsets.shadowed.mobile_bias,                  as_span(mobile_bias));
 
         const mat4 texture_from_world = light_projection_transforms.texture_from_world.get_matrix();
         const mat4 world_from_texture = light_projection_transforms.texture_from_world.get_inverse_matrix();
@@ -1190,6 +1226,9 @@ auto Light_buffer::update(
     const glm::vec2 shadow_bias_scales    = (light_projections != nullptr)
         ? glm::vec2{light_projections->shadow_bias_texel_scale, light_projections->shadow_bias_origin_scale}
         : glm::vec2{1.0f, 1.0f};
+    const glm::vec2 shadow_normal_offset  = (light_projections != nullptr)
+        ? glm::vec2{light_projections->shadow_normal_offset_texels, light_projections->shadow_constant_bias_texels}
+        : glm::vec2{1.0f, 1.0f};
 
     // The header: shadow map sentinels, light counts, ambient, DDGI volume
     write(header_gpu_data, common_offset + offsets.shadow_texture_compare,    as_span(shadow_map_texture_handle_compare));
@@ -1210,6 +1249,7 @@ auto Light_buffer::update(
 
     write(header_gpu_data, common_offset + offsets.ambient_light,             as_span(ambient_light)          );
     write(header_gpu_data, common_offset + offsets.shadow_bias_scales,        as_span(shadow_bias_scales)     );
+    write(header_gpu_data, common_offset + offsets.shadow_normal_offset,      as_span(shadow_normal_offset)   );
 
     // DDGI probe volume (doc/editor/ddgi.md phase 6). ddgi_counts.w is the
     // gate the fragment shader reads: 0 = no volume, keep the flat ambient.
@@ -1285,6 +1325,7 @@ void Light_buffer::bind_shadow_samplers(
     // dedicated (non-texture-heap) samplers.
     encoder.set_sampled_image(c_texture_heap_slot_shadow_compare,    *shadow_map_texture, *compare_sampler);
     encoder.set_sampled_image(c_texture_heap_slot_shadow_no_compare, *shadow_map_texture, *no_compare_sampler);
+    encoder.set_sampled_image(c_texture_heap_slot_shadow_compare_linear, *shadow_map_texture, m_light_interface.shadow_sampler_compare_linear);
 
     // Distance map (Shadow_technique_mode::distance) -> s_shadow_distance. Falls
     // back to the 1x1 R32F texture when no distance map is active (depth

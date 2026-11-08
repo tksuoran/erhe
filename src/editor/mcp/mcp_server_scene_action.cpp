@@ -264,6 +264,8 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         check(read_float_argument(args, "shadow_depth_bias_slope",    preset.shadow_depth_bias_slope))    &&
         check(read_non_negative_float_argument(args, "shadow_bias_texel_scale",  preset.shadow_bias_texel_scale))  &&
         check(read_non_negative_float_argument(args, "shadow_bias_origin_scale", preset.shadow_bias_origin_scale)) &&
+        check(read_non_negative_float_argument(args, "shadow_normal_offset_texels", preset.shadow_normal_offset_texels)) &&
+        check(read_non_negative_float_argument(args, "shadow_constant_bias_texels", preset.shadow_constant_bias_texels)) &&
         check(read_non_negative_float_argument(args, "lod_threshold_pixels",     preset.lod_threshold_pixels))     &&
         check(read_non_negative_float_argument(args, "lod_hysteresis_band",      preset.lod_hysteresis_band))      &&
         check(read_int_argument  (args, "lod_bias",                         -7, preset.lod_bias))                         &&
@@ -342,6 +344,8 @@ auto Mcp_server::action_set_graphics_preset(const json& args) -> std::string
         {"shadow_depth_bias_slope",    in_effect.shadow_depth_bias_slope},
         {"shadow_bias_texel_scale",    in_effect.shadow_bias_texel_scale},
         {"shadow_bias_origin_scale",   in_effect.shadow_bias_origin_scale},
+        {"shadow_normal_offset_texels", in_effect.shadow_normal_offset_texels},
+        {"shadow_constant_bias_texels", in_effect.shadow_constant_bias_texels},
         {"point_shadow_resolution",    in_effect.point_shadow_resolution},
         {"directional_shadow_light_count",     in_effect.directional_shadow_light_count},
         {"directional_unshadowed_light_count", in_effect.directional_unshadowed_light_count},

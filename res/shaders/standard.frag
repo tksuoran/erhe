@@ -155,7 +155,9 @@ layout(location = 0) in vec4      v_position;
 // bound on its vertices' fp32 rounding (erhe_position_rounding.glsl), which
 // the shadow receiver's minimum bias reads.
 layout(location = 17) in vec3     v_view_relative_position;
+#if !defined(ERHE_SHADOW_NORMAL_OFFSET)
 layout(location = 18) in float    v_position_rounding;
+#endif
 #endif
 
 // TODO In the future we might have alpha test which would need texcoord
@@ -594,34 +596,6 @@ void main()
 
     vec3 V = normalize(view_position_in_world - v_position.xyz);
 
-    // Receiver plane for the shadow depth bias (sample_light_visibility()):
-    // geometric normal and its error bound, taken here in uniform control
-    // flow, ahead of the per-light branches, from the view-relative position
-    // (its rounding scales with the distance from the camera).
-    vec4 shadow_receiver_plane = get_receiver_geometric_normal(v_view_relative_position, v_position_rounding);
-
-    // Visibility phase (doc/plans/shader_fp16.md R1): the loop path looks up
-    // every shadow-mapped light here, before the material and BRDF state is live.
-#  if !defined(ERHE_LIGHT_SHADING_CLUSTERED)
-#    define ERHE_SHADOW_RECORD_COUNT (ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED)
-#    if ERHE_SHADOW_RECORD_COUNT > 0
-    float shadow_visibility[ERHE_SHADOW_RECORD_COUNT];
-    for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED); ++i) {
-        shadow_visibility[i] = sample_light_visibility(v_view_relative_position, v_position_rounding, i, i, shadow_receiver_plane);
-    }
-    for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED); ++i) {
-        uint light_index   = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED) + i;
-        uint shadow_record = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED) + i;
-        shadow_visibility[shadow_record] = sample_light_visibility(v_view_relative_position, v_position_rounding, light_index, shadow_record, shadow_receiver_plane);
-    }
-    for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED); ++i) {
-        uint           shadow_record = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED) + i;
-        Light_shadowed light         = light_shadowed_array.lights[shadow_record];
-        shadow_visibility[shadow_record] = sample_point_light_visibility(v_view_relative_position, v_position_rounding, light.view_origin.xyz, light.shadow_params.z, light.shadow_params.x, shadow_receiver_plane);
-    }
-#    endif
-#  endif
-
 #  ifdef ERHE_USE_VERTEX_VARYING_TANGENT
     vec3 T = normalize(v_T);
 #  else
@@ -637,6 +611,44 @@ void main()
     vec3 N = normalize(v_N);
 #  else
     vec3 N = vec3(0.0, 1.0, 0.0);
+#  endif
+
+    // The shadow lookup of every path (ERHE_SAMPLE_LIGHT_VISIBILITY /
+    // ERHE_SAMPLE_POINT_LIGHT_VISIBILITY): the normal-offset lookup takes the
+    // geometric normal (the interpolated normal before the normal map); the
+    // derived-bound lookups take the receiver plane, taken here in uniform
+    // control flow, ahead of the per-light branches, from the view-relative
+    // position (its rounding scales with the distance from the camera).
+#  if defined(ERHE_SHADOW_NORMAL_OFFSET)
+    vec3 shadow_normal = N;
+#    define ERHE_SAMPLE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) sample_light_visibility_normal_offset(v_view_relative_position, shadow_normal, (SHADOW_RECORD))
+#    define ERHE_SAMPLE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) sample_point_light_visibility_normal_offset(v_view_relative_position, shadow_normal, (SHADOW_RECORD))
+#  else
+    vec4 shadow_receiver_plane = get_receiver_geometric_normal(v_view_relative_position, v_position_rounding);
+#    define ERHE_SAMPLE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) sample_light_visibility(v_view_relative_position, v_position_rounding, (LIGHT_INDEX), (SHADOW_RECORD), shadow_receiver_plane)
+#    define ERHE_SAMPLE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) sample_point_light_visibility(v_view_relative_position, v_position_rounding, (LIGHT).view_origin.xyz, (LIGHT).shadow_params.z, (LIGHT).shadow_params.x, shadow_receiver_plane)
+#  endif
+
+    // Visibility phase (doc/plans/shader_fp16.md R1): the loop path looks up
+    // every shadow-mapped light here, before the material and BRDF state is live.
+#  if !defined(ERHE_LIGHT_SHADING_CLUSTERED)
+#    define ERHE_SHADOW_RECORD_COUNT (ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED)
+#    if ERHE_SHADOW_RECORD_COUNT > 0
+    float shadow_visibility[ERHE_SHADOW_RECORD_COUNT];
+    for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED); ++i) {
+        shadow_visibility[i] = ERHE_SAMPLE_LIGHT_VISIBILITY(i, i);
+    }
+    for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED); ++i) {
+        uint light_index   = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED) + i;
+        uint shadow_record = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED) + i;
+        shadow_visibility[shadow_record] = ERHE_SAMPLE_LIGHT_VISIBILITY(light_index, shadow_record);
+    }
+    for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED); ++i) {
+        uint           shadow_record = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED) + i;
+        Light_shadowed light         = light_shadowed_array.lights[shadow_record];
+        shadow_visibility[shadow_record] = ERHE_SAMPLE_POINT_LIGHT_VISIBILITY(shadow_record, light);
+    }
+#    endif
 #  endif
 
     // anisotropy_strength is 1.0 (fully anisotropic / honor
@@ -1021,8 +1033,8 @@ void main()
         // The shadow-mapped light's visibility: the loop path's visibility
         // phase computed it (R1); the clustered path looks it up here.
 #  if defined(ERHE_LIGHT_SHADING_CLUSTERED)
-#    define ERHE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) sample_light_visibility(v_view_relative_position, v_position_rounding, (LIGHT_INDEX), (SHADOW_RECORD), shadow_receiver_plane)
-#    define ERHE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) sample_point_light_visibility(v_view_relative_position, v_position_rounding, (LIGHT).view_origin.xyz, (LIGHT).shadow_params.z, (LIGHT).shadow_params.x, shadow_receiver_plane)
+#    define ERHE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) ERHE_SAMPLE_LIGHT_VISIBILITY((LIGHT_INDEX), (SHADOW_RECORD))
+#    define ERHE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) ERHE_SAMPLE_POINT_LIGHT_VISIBILITY((SHADOW_RECORD), LIGHT)
 #  elif ERHE_SHADOW_RECORD_COUNT > 0
 #    define ERHE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) shadow_visibility[(SHADOW_RECORD)]
 #    define ERHE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) shadow_visibility[(SHADOW_RECORD)]
@@ -1446,32 +1458,32 @@ void main()
             const uint dbg_spot_shadowed_begin  = light_block.directional_light_count;
             const uint dbg_point_shadowed_begin = dbg_spot_shadowed_begin + light_block.spot_light_count;
             if (dbg_light_index < light_block.directional_shadow_count) {
-                dbg_visibility = sample_light_visibility(v_view_relative_position, v_position_rounding, dbg_light_index, erhe_light_shadow_record(dbg_light_index), shadow_receiver_plane);
+                dbg_visibility = ERHE_SAMPLE_LIGHT_VISIBILITY(dbg_light_index, erhe_light_shadow_record(dbg_light_index));
             }
             if ((dbg_light_index >= dbg_spot_shadowed_begin) && (dbg_light_index < (dbg_spot_shadowed_begin + light_block.spot_shadow_count))) {
-                dbg_visibility = sample_light_visibility(v_view_relative_position, v_position_rounding, dbg_light_index, erhe_light_shadow_record(dbg_light_index), shadow_receiver_plane);
+                dbg_visibility = ERHE_SAMPLE_LIGHT_VISIBILITY(dbg_light_index, erhe_light_shadow_record(dbg_light_index));
             }
             if ((dbg_light_index >= dbg_point_shadowed_begin) && (dbg_light_index < (dbg_point_shadowed_begin + light_block.point_shadow_count))) {
                 Light_shadowed dbg_light = light_shadowed_array.lights[erhe_light_shadow_record(dbg_light_index)];
-                dbg_visibility = sample_point_light_visibility(v_view_relative_position, v_position_rounding, dbg_light.view_origin.xyz, dbg_light.shadow_params.z, dbg_light.shadow_params.x, shadow_receiver_plane);
+                dbg_visibility = ERHE_SAMPLE_POINT_LIGHT_VISIBILITY(erhe_light_shadow_record(dbg_light_index), dbg_light);
             }
 #    else
             const uint dbg_spot_shadowed_begin  = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED);
             const uint dbg_point_shadowed_begin = dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED + ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED);
 #    if ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED > 0
             if (dbg_light_index < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)) {
-                dbg_visibility = sample_light_visibility(v_view_relative_position, v_position_rounding, dbg_light_index, erhe_light_shadow_record(dbg_light_index), shadow_receiver_plane);
+                dbg_visibility = ERHE_SAMPLE_LIGHT_VISIBILITY(dbg_light_index, erhe_light_shadow_record(dbg_light_index));
             }
 #    endif
 #    if ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED > 0
             if ((dbg_light_index >= dbg_spot_shadowed_begin) && (dbg_light_index < (dbg_spot_shadowed_begin + uint(ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED)))) {
-                dbg_visibility = sample_light_visibility(v_view_relative_position, v_position_rounding, dbg_light_index, erhe_light_shadow_record(dbg_light_index), shadow_receiver_plane);
+                dbg_visibility = ERHE_SAMPLE_LIGHT_VISIBILITY(dbg_light_index, erhe_light_shadow_record(dbg_light_index));
             }
 #    endif
 #    if ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED > 0
             if ((dbg_light_index >= dbg_point_shadowed_begin) && (dbg_light_index < (dbg_point_shadowed_begin + uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED)))) {
                 Light_shadowed dbg_light = light_shadowed_array.lights[erhe_light_shadow_record(dbg_light_index)];
-                dbg_visibility = sample_point_light_visibility(v_view_relative_position, v_position_rounding, dbg_light.view_origin.xyz, dbg_light.shadow_params.z, dbg_light.shadow_params.x, shadow_receiver_plane);
+                dbg_visibility = ERHE_SAMPLE_POINT_LIGHT_VISIBILITY(erhe_light_shadow_record(dbg_light_index), dbg_light);
             }
 #    endif
 #    endif
@@ -1553,3 +1565,8 @@ void main()
 #endif // !ERHE_VARIANT_ID_RENDER && !ERHE_VARIANT_PVS && !ERHE_VARIANT_DEPTH_ONLY
 #endif
 }
+
+#if defined(ERHE_SAMPLE_LIGHT_VISIBILITY)
+#  undef ERHE_SAMPLE_LIGHT_VISIBILITY
+#  undef ERHE_SAMPLE_POINT_LIGHT_VISIBILITY
+#endif

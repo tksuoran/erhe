@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_preset_entry",
-    version=9,
+    version=10,
     short_desc="Graphics quality preset",
     long_desc="",
     developer=False,
@@ -23,6 +23,12 @@ struct("Graphics_preset_entry",
         # and rasterizer interpolation terms.
         field("shadow_bias_texel_scale",    Float,                       added_in=3, default="1.0f", short_desc="Shadow Bias Texel Scale"),
         field("shadow_bias_origin_scale",   Float,                       added_in=3, default="1.0f", short_desc="Shadow Bias Origin Scale"),
+        # The normal_offset bias mode's offsets (v10; doc/erhe/shadows.md
+        # "Normal offset bias"), in shadow texels at the receiver: along the
+        # geometric normal (times the sine of the light angle) and toward the
+        # light. Older presets read the defaults.
+        field("shadow_normal_offset_texels", Float,                      added_in=10, default="1.0f", short_desc="Shadow Normal Offset (texels)"),
+        field("shadow_constant_bias_texels", Float,                      added_in=10, default="1.0f", short_desc="Shadow Constant Bias (texels)"),
         field("shadow_cull_mode",           EnumRef("Shadow_cull_mode"), added_in=1, default="Shadow_cull_mode::cull_back",       short_desc="Shadow Cull Mode"),
         field("shadow_technique",           EnumRef("Shadow_technique_mode"), added_in=1, default="Shadow_technique_mode::depth", short_desc="Shadow Technique"),
         # Point lights cast omnidirectional shadows into an R32F cube-map array

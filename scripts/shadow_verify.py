@@ -256,10 +256,12 @@ LIGHT_TYPES = ["directional", "spot", "point"]
 
 PRESET_FIELDS = ["shadow_filter", "shadow_bias", "shadow_technique", "shadow_cull_mode", "shadow_depth_bits",
                  "shadow_resolution", "point_shadow_resolution", "shadow_depth_bias_constant",
-                 "shadow_depth_bias_slope", "shadow_bias_texel_scale", "shadow_bias_origin_scale"]
+                 "shadow_depth_bias_slope", "shadow_bias_texel_scale", "shadow_bias_origin_scale",
+                 "shadow_normal_offset_texels", "shadow_constant_bias_texels"]
 # Values of the preset fields a graphics_presets.json entry may leave out
 # (fields added after the shipped presets were written).
-PRESET_FIELD_DEFAULTS = {"shadow_bias_texel_scale": 1.0, "shadow_bias_origin_scale": 1.0}
+PRESET_FIELD_DEFAULTS = {"shadow_bias_texel_scale": 1.0, "shadow_bias_origin_scale": 1.0,
+                         "shadow_normal_offset_texels": 1.0, "shadow_constant_bias_texels": 1.0}
 # The directional shadow frustum fit every config runs with, set explicitly
 # per station scene with set_scene_settings (a session-only per-scene
 # override; the editor-global editor_settings.json is left alone): the

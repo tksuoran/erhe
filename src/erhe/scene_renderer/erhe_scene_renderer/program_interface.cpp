@@ -134,6 +134,19 @@ Program_interface::Program_interface(
                 .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
             },
             {
+                // The same map with the linear compare sampler (the hardware's
+                // 2x2 percentage-closer filter), read by the normal-offset
+                // lookup (Shadow_bias_mode::normal_offset).
+                .binding_point     = c_texture_heap_slot_shadow_compare_linear,
+                .type              = erhe::graphics::Binding_type::combined_image_sampler,
+                .sampler_aspect    = erhe::graphics::Sampler_aspect::depth,
+                .name              = "s_shadow_compare_linear",
+                .glsl_type         = erhe::graphics::Glsl_type::sampler_2d_array_shadow,
+                .is_texture_heap   = false,
+                .immutable_sampler = &light_interface.shadow_sampler_compare_linear,
+                .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
+            },
+            {
                 .binding_point     = c_texture_heap_slot_shadow_no_compare,
                 .type              = erhe::graphics::Binding_type::combined_image_sampler,
                 .sampler_aspect    = erhe::graphics::Sampler_aspect::depth,

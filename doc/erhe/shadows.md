@@ -694,7 +694,8 @@ geometric normal (`get_receiver_geometric_normal()`). 1.0 = lit.
   `pcf_2x2` one `textureGather` with bilinear weights; `pcf_4x4` / `pcf_6x6`
   `(K/2)^2` gathers, averaged, with the `ERHE_SHADOW_BIAS` axis
   (`receiver_plane` or `slope_scaled`) choosing signed or one-sided tap
-  offsets.
+  offsets. The axis's third value, `normal_offset`, is a different lookup
+  ("Normal offset bias").
 - **Depth format.** The `ERHE_SHADOW_DEPTH_BITS` variant axis is
   `get_shadow_depth_bits_axis()` (`shader_key.hpp`) of the shadow map
   texture's actual format: 16 or 24 for a UNORM map, 32 for a float map
@@ -715,6 +716,39 @@ geometric normal (`get_receiver_geometric_normal()`). 1.0 = lit.
   from the preset's `shadow_technique`) the same filters and texel selection
   read the R32F distance map `s_shadow_distance` and compare plane distances
   on the texel rays instead of depths ("The distance technique").
+
+### Normal offset bias
+
+`Shadow_bias_mode::normal_offset` (`ERHE_SHADOW_BIAS` 2) replaces the lookup
+above with `sample_light_visibility_normal_offset()` and, for point lights,
+`sample_point_light_visibility_normal_offset()`: the headset's shadow
+lookup (`doc/plans/quest_fragment_shader.md` M1 and M2), one fetch, no
+receiver plane and no derived bounds. The receiver point moves along its
+geometric normal (the interpolated vertex normal before the normal map) by
+`shadow_normal_offset_texels * texel * sin(theta)` and toward the light by
+`shadow_constant_bias_texels * texel`, where `theta` is the angle between
+the normal and the light direction and `texel` the world size of one
+shadow texel at the receiver: the hot record's `mobile_bias.x`, the texel
+size at unit depth `2 / (P[0][0] * resolution)` of the light's projection
+(`Light_buffer::write_light_records()`), times the light distance when
+`mobile_bias.y` marks the light perspective (spot, point; a cube face is a
+90 degree perspective). The offset point projects through
+`texture_from_view_relative` and one `texture()` through
+`s_shadow_compare_linear`, the linear compare sampler, returns the
+hardware's 2x2 percentage-closer filter; the reference clamps to [0, 1] as
+above. The point light compares the offset point's own distance against
+the stored radial distance of its cube texel. The two offsets are the
+graphics preset's `shadow_normal_offset_texels` (1.0) and
+`shadow_constant_bias_texels` (1.0), carried in
+`light_block.shadow_normal_offset`.
+
+What this mode gives up: the offsets are tuned constants, so a contact
+shadow detaches by up to the normal offset, a wall thinner than it at its
+distance leaks, and a receiver at a steeper angle than the offset covers
+shows acne. The `ERHE_SHADOW_FILTER` and `ERHE_SHADOW_TECHNIQUE` axes do not
+apply to it. On this mode the receiver carries no `v_position_rounding`
+varying and `standard.frag` builds no receiver plane
+(`ERHE_SHADOW_NORMAL_OFFSET`, `erhe_standard_variant.glsl`).
 
 ### Shadow visibility debug view
 
@@ -1560,7 +1594,8 @@ Every gate is the worst value over all poses, views and runs:
 ### Matrices
 
 The axes: light type; `shadow_filter` (hard, `pcf_2x2`, `pcf_4x4`,
-`pcf_6x6`); `shadow_bias` (`receiver_plane`, `slope_scaled`; wide filters);
+`pcf_6x6`); `shadow_bias` (`receiver_plane`, `slope_scaled`; wide filters;
+`normal_offset` is its own lookup, gated with its own tolerances);
 `shadow_technique` (depth, distance; directional and spot);
 `shadow_depth_bits` (each size the device offers); `shadow_cull_mode`;
 depth convention (reverse-Z, forward-Z via `ERHE_FORCE_DISABLE_REVERSE_DEPTH`);

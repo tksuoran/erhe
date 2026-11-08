@@ -344,6 +344,12 @@ public:
         float                                                              shadow_bias_texel_scale{1.0f};
         float                                                              shadow_bias_origin_scale{1.0f};
 
+        // The normal-offset lookup's offsets in shadow texels at the receiver
+        // (Shadow_bias_mode::normal_offset, doc/erhe/shadows.md "Normal
+        // offset bias"): along the geometric normal, and toward the light.
+        float                                                              shadow_normal_offset_texels{1.0f};
+        float                                                              shadow_constant_bias_texels{1.0f};
+
         // Face culling for the shadow caster pass; selects one of the
         // per-cull-mode pipelines. Defaults to cull_back (front faces only).
         Shadow_cull_mode                                                   cull_mode{Shadow_cull_mode::cull_back};
