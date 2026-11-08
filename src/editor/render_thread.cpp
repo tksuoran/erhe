@@ -65,32 +65,21 @@ auto Render_thread::take_result(
     return result;
 }
 
-auto Render_thread::kick(const Frame_packet& packet) -> std::optional<Frame_result>
+void Render_thread::kick(const Frame_packet& packet)
 {
     ERHE_PROFILE_FUNCTION();
-    std::optional<Frame_result> joined{};
     if (m_mode == Render_thread_mode::inline_main_thread) {
-        if (m_state == State::done) {
-            const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-            joined = take_result(now, now);
-        }
         ERHE_VERIFY(m_state == State::idle);
         m_result = Frame_result{};
         m_state  = State::running;
         m_render_phase(packet, m_result);
         m_state  = State::done;
-        return joined;
+        return;
     }
 
     {
-        std::unique_lock<std::mutex> lock{m_mutex};
-        if ((m_state == State::running) || (m_state == State::done)) {
-            // The outstanding frame: the render phase must finish it before
-            // the next packet replaces m_packet (the queue has depth one).
-            const std::chrono::steady_clock::time_point wait_begin = std::chrono::steady_clock::now();
-            m_done_cv.wait(lock, [this]{ return m_state == State::done; });
-            joined = take_result(wait_begin, std::chrono::steady_clock::now());
-        }
+        std::lock_guard<std::mutex> lock{m_mutex};
+        // The previous frame was joined (join()): the queue has depth one.
         ERHE_VERIFY(m_state == State::idle);
         m_packet    = packet; // fixed-size copy, no allocation
         m_result    = Frame_result{};
@@ -98,7 +87,6 @@ auto Render_thread::kick(const Frame_packet& packet) -> std::optional<Frame_resu
         m_kick_time = std::chrono::steady_clock::now();
     }
     m_kick_cv.notify_one();
-    return joined;
 }
 
 auto Render_thread::join() -> Frame_result
@@ -187,8 +175,8 @@ void Render_thread::thread_main()
 
         // m_packet and m_result belong to this thread while the state is
         // running: the main thread touches them only with the state idle
-        // (kick() writing the next packet) or done (the join in join() or
-        // kick() reading the result).
+        // (kick() writing the next packet) or done (join() reading the
+        // result).
         m_result.kick_latency_us = std::chrono::duration<double, std::micro>{std::chrono::steady_clock::now() - m_kick_time}.count();
         try {
             // Drains what this frame's render phase autoreleased (Metal; a

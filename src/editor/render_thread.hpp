@@ -12,7 +12,6 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <thread>
 
 namespace erhe::graphics {
@@ -60,8 +59,7 @@ public:
 };
 
 // What the render phase reports back to the main thread through
-// Render_thread::join() or, with frame pipelining, through the next
-// Render_thread::kick(). The timings are added into the editor's phase
+// Render_thread::join(). The timings are added into the editor's phase
 // timing accumulators by the main thread, so those accumulators are
 // touched by the main thread only.
 class Frame_result
@@ -85,8 +83,7 @@ public:
     // end and the start of the main thread's wait to the join's return.
     double       kick_latency_us   {0.0};
     double       join_latency_us   {0.0};
-    // Written by the main thread at the join (join(), or the kick() that
-    // joined the frame): the main thread's wait for the render phase to
+    // Written by the main thread at the join (join()): the main thread's wait for the render phase to
     // finish (equal when it had finished already). The phase timing log's
     // join_wait and the frame time record's join_wait pair.
     std::chrono::steady_clock::time_point join_wait_begin{};
@@ -102,10 +99,9 @@ public:
 // (doc/editor/render_thread.md section 2.5, doc/editor/editor.md "Frame
 // phases and the render thread"). The main thread fills a Frame_packet at
 // the end of the prepare phase and calls kick(); the frame is joined
-// (its Frame_result returned once its render phase is done) either by
-// join(), called by the main thread before the next prepare phase (the
-// serial schedule), or by the next kick(), which joins the outstanding
-// frame before it hands over the new one (frame pipelining: the main
+// (its Frame_result returned once its render phase is done) by join(),
+// called by the main thread before the next prepare phase (the serial
+// schedule) or right before the next kick() (frame pipelining: the main
 // thread prepares frame N+1 while the render phase renders frame N). At
 // most one frame is outstanding.
 //
@@ -130,17 +126,15 @@ public:
     Render_thread(Render_thread&&)                 = delete;
     Render_thread& operator=(Render_thread&&)      = delete;
 
-    // Main thread, end of the prepare phase. Joins the outstanding frame
-    // first, waiting for its render phase to finish, and returns its
-    // result (nothing when no frame was outstanding: the first frame, or
-    // join() joined it already), then hands the packet to the render
-    // phase.
-    [[nodiscard]] auto kick(const Frame_packet& packet) -> std::optional<Frame_result>;
+    // Main thread, end of the prepare phase: hands the packet to the
+    // render phase. No frame may be outstanding (join() joined it).
+    void kick(const Frame_packet& packet);
 
     // Main thread: waits for the outstanding frame to finish and returns
     // its result (the caller tracks whether a frame was kicked and not
     // joined). The serial schedule calls it at the end of the overlap phase
-    // of the next frame; both schedules after the frame loop.
+    // of the next frame, frame pipelining right before the next kick();
+    // both schedules after the frame loop.
     [[nodiscard]] auto join() -> Frame_result;
 
     // The ImGui draw data handoff (doc/editor/render_thread.md section 2.5):

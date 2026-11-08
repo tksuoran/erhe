@@ -527,7 +527,7 @@ public:
         double m2_scene_us         {0.0}; // mesh memory flush, layout, transforms, hotbar, draw list flush, material sets, lightmap prepare
         double render_us           {0.0}; // R render
         double swapchain_us        {0.0}; // wait_for_swapchain + begin_swapchain (both part of R)
-        double join_wait_us        {0.0}; // main thread blocked joining the previous frame's R (Render_thread::join() in M1, or in Render_thread::kick() with frame pipelining); R minus join_wait = overlapped R
+        double join_wait_us        {0.0}; // main thread blocked joining the previous frame's R (Render_thread::join() in M1, or before the kick with frame pipelining); R minus join_wait = overlapped R
         double full_tick_us        {0.0}; // start_frame() begin to frame() end: frame start wait + poll + frame()
         unsigned int frame_count   {0};
     };
@@ -724,9 +724,9 @@ public:
     //   at the end of M1. R(N) runs while run() polls window events and
     //   M1(N+1) advances the clock, waits for the OpenXR frame and steps
     //   physics; M2 and R never overlap.
-    // - pipelined: in Render_thread::kick() of the next frame. M1, M2 (and
-    //   M3) of frame N+1 run while R(N) renders; kick(N+1) waits for R(N),
-    //   then hands over N+1. What the join publishes (the last rendered
+    // - pipelined: at the kick of the next frame. M1, M2 (and M3) of frame
+    //   N+1 run while R(N) renders; kick_frame(N+1) joins R(N), then hands
+    //   over N+1. What the join publishes (the last rendered
     //   frame, the sky LUT readiness, the frame log entries, the phase
     //   timings) reaches the main thread one frame later than in the
     //   serial schedule.
@@ -802,24 +802,24 @@ public:
     }
 
     // Main thread: hands the packet to the render phase. With frame
-    // pipelining the kick first joins the frame kicked by the previous
-    // frame() (Render_thread::kick() waits for its R), so that frame's
-    // result is accounted here, one frame later than the serial schedule's
-    // join at the end of M1; the wait lies inside this frame's CPU slot and
-    // is stamped as its join_wait pair.
+    // pipelining it first joins the frame kicked by the previous frame()
+    // and accounts it (on_frame_joined()) before R of this frame starts, so
+    // the join reads R's objects (the GPU timers) while no render phase
+    // runs. That frame's result is accounted here, one frame later than the
+    // serial schedule's join at the end of M1; the wait lies inside this
+    // frame's CPU slot and is stamped as its join_wait pair.
     void kick_frame(const Frame_packet& packet)
     {
-        erhe::log::set_breadcrumb("tick: kick");
-        const std::optional<Frame_result> joined = m_render_thread->kick(packet);
-        if (joined.has_value()) {
+        std::optional<Frame_result> joined{};
+        if (m_frame_outstanding) {
             // The serial schedule joined in M1 (nothing left to join here).
             ERHE_VERIFY(m_frame_pipelining);
-            ERHE_VERIFY(m_frame_outstanding);
-            m_frame_outstanding = false;
-            on_frame_joined(joined.value());
+            erhe::log::set_breadcrumb("tick: join previous frame at kick");
+            joined = join_outstanding_frame();
             record_join_wait(packet.device_frame_id, joined.value());
         }
-        ERHE_VERIFY(!m_frame_outstanding);
+        erhe::log::set_breadcrumb("tick: kick");
+        m_render_thread->kick(packet);
         m_frame_outstanding = true;
         if (joined.has_value() && joined.value().no_swapchain) {
             sleep_after_no_swapchain();
@@ -902,8 +902,9 @@ public:
     // (nothing when that frame kicked none: the first frame) and accounts
     // its Frame_result (on_frame_joined()). Returns the joined result (a
     // default one when nothing was outstanding). Called at the end of M1 in
-    // the serial schedule, after the frame loop ends (run()) and by ~Editor
-    // before the render thread is stopped.
+    // the serial schedule, before the kick with frame pipelining, after the
+    // frame loop ends (run()) and by ~Editor before the render thread is
+    // stopped.
     auto join_outstanding_frame() -> Frame_result
     {
         if (!m_frame_outstanding) {
@@ -932,8 +933,8 @@ public:
         static_cast<void>(join_outstanding_frame());
     }
 
-    // Main thread, at the join of a frame (join_outstanding_frame(), or the
-    // kick that joined it with frame pipelining): adds its Frame_result
+    // Main thread, at the join of a frame (join_outstanding_frame()), while
+    // no render phase runs: adds its Frame_result
     // into the phase timing and publishes what its render phase left for
     // the main thread.
     void on_frame_joined(const Frame_result& result)

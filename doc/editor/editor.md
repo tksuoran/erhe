@@ -118,23 +118,25 @@ ones make their own.
 **`frame()`** runs M1, then (serial) joins the frame kicked by the previous
 `frame()`, runs M2, then kicks R and runs M3 (the ImGui overlap) or runs M3
 and kicks R, publishing M3's draw data either way. With pipelining the kick
-(`kick_frame()`, `Render_thread::kick()`) joins the previous frame first:
-it waits for R(N), takes its `Frame_result` and only then hands over N+1.
+(`kick_frame()`) joins the previous frame first: it waits for R(N)
+(`Render_thread::join()`), accounts its `Frame_result` (`on_frame_joined()`)
+and only then hands over N+1 (`Render_thread::kick()`), so what the join
+reads (the GPU timers, the frame log store) is never touched by a running R.
 There is nothing to join on the first frame; when the joined frame reports
 `no_swapchain`, `frame()` sleeps 50 ms so the loop does not spin on a surface
-that is not ready. The join wait, measured by `Render_thread` (in `join()`
-or in `kick()`), is stamped into the time record of the frame being prepared
-as its `join_wait` pair, an involuntary wait inside the CPU slot
+that is not ready. The join wait, measured by `Render_thread::join()`, is
+stamped into the time record of the frame being prepared as its `join_wait`
+pair, an involuntary wait inside the CPU slot
 (`doc/frame_pacing/inputs.md` 3.2). At the join, `on_frame_joined()` adds R's
 timings into the phase timing, publishes the joined frame's device frame id
 as `App_context::last_rendered_frame_index` (below) and the sky LUT readiness
 R reported, and hands the frame's log entries (the frame store both threads
 logged into) to the Frame log window (`Frame_log_window::on_frame_end`), so
 the window reads main-thread state only. With pipelining all of this
-happens at the kick of the next frame, one frame later than the serial
-join at the end of M1: M2 of N+1 sees N-1 as the last rendered frame (N in
-the serial schedule), M3 of N+1 sees N when it runs after the kick (the
-ImGui overlap) and N-1 when it runs before it.
+happens right before the kick of the next frame, one frame later than the
+serial join at the end of M1: M2 of N+1 sees N-1 as the last rendered frame
+(N in the serial schedule), M3 of N+1 sees N when it runs after the kick
+(the ImGui overlap) and N-1 when it runs before it.
 
 **What R writes for the main thread.** Results the render phase produces
 and the main thread reads are per frame in flight
@@ -618,8 +620,8 @@ atlas binding, which R hands to the forward renderer
 buffer, and the ray trace switch (`Ray_trace_renderer::set_render_enabled`).
 `kick()` copies it, so the next frame rewrites the editor's copy while
 R renders. The `Frame_result` of a frame comes back at its join, from
-`join()` (serial, and after the frame loop) or from the next `kick()`
-(pipelining; nothing on the first frame): the device frame id R
+`join()` (serial: at the end of M1; pipelining: right before the next
+`kick()`; both after the frame loop): the device frame id R
 rendered, R's duration, its
 `wait_for_swapchain` and `begin_swapchain` times, its draw data wait, the
 handoff latencies (kick to R's start; the later of R's end and the start of

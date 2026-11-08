@@ -3648,17 +3648,20 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
 // Every live erhe::graphics::Gpu_timer and its last completed measurement,
 // the MCP twin of the Performance window's GPU plots. A result lands one or
 // more frames after the frame that recorded it; 0 = no result yet.
+// Runs in M2, possibly while R destroys timers: walk under the registry lock.
 auto Mcp_server::query_gpu_timers(const json& args) -> std::string
 {
     static_cast<void>(args);
     json timers = json::array();
-    for (erhe::graphics::Gpu_timer* timer : erhe::graphics::Gpu_timer::all_gpu_timers()) {
-        const uint64_t nanoseconds = timer->last_result();
-        timers.push_back(json{
-            {"label", timer->label()},
-            {"ms",    static_cast<double>(nanoseconds) / 1.0e6}
-        });
-    }
+    erhe::graphics::Gpu_timer::for_each_gpu_timer(
+        [&timers](erhe::graphics::Gpu_timer& timer) {
+            const uint64_t nanoseconds = timer.last_result();
+            timers.push_back(json{
+                {"label", timer.label()},
+                {"ms",    static_cast<double>(nanoseconds) / 1.0e6}
+            });
+        }
+    );
     json result;
     result["timers"] = std::move(timers);
     return make_json_content(result).dump();

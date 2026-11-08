@@ -223,11 +223,13 @@ constructed after the parts it drives:
   `no_swapchain`, and the sky LUT readiness. The main thread adds the
   timings into its phase timing and publishes the frame id as
   `App_context::last_rendered_frame_index` (section 2.6).
-- `kick(const Frame_packet&) -> optional<Frame_result>`: the main thread's
-  handover at the end of M2. With pipelining it first joins the frame
-  kicked by the previous `frame()` and returns its result; the serial
-  schedule has joined already (`join()` at the end of M1) and gets nothing.
-  In inline mode `kick()` runs R on the calling thread.
+- `kick(const Frame_packet&)`: the main thread's handover at the end of
+  M2; no frame is outstanding. The serial schedule has joined at the end of
+  M1; with pipelining `Editor::kick_frame()` first joins the frame kicked by
+  the previous `frame()` (`join()`) and accounts it (`on_frame_joined()`),
+  so the join reads R's objects (the GPU timers the Performance window
+  samples) while no R runs. In inline mode `kick()` runs R on the calling
+  thread.
 - `publish_draw_data(frame_number)` / `wait_for_draw_data(frame_number)`:
   the ImGui handoff. M3 publishes once every host's draw data is copied
   (`Imgui_windows::end_frame`); each ImGui host node in R waits, through
@@ -402,8 +404,9 @@ Every 60 frames `editor.frame` logs the per-frame averages of M1 (with
 `frame_start_wait`), M2 (with `slot_acquire` and its six consecutive
 sub-terms), M3, R, `swapchain`, `draw_data_wait`, `join_wait` (the main
 thread blocked on the previous frame's R: in `join()` at the end of M1, or
-inside the kick with pipelining; R minus `join_wait` is the overlapped part
-of R), the kick and join handoff latencies, and the full tick. With
+right before the kick with pipelining; R minus `join_wait` is the
+overlapped part of R), the kick and join handoff latencies, and the full
+tick. With
 pipelining the R terms of a line belong to the frames joined in that
 interval. The terms are defined in `doc/editor/editor.md` "Phase timing".
 

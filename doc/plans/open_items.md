@@ -105,11 +105,6 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
-- `reset_editor_state` (Mac headless Metal Debug, the
-  `Mcp_test.reset_editor_state_clears_scenes_selection_and_history` case)
-  segfaults in the next frame join: `Performance_window::sample_gpu_timers()`
-  -> `Gpu_timer_plot::refresh_label()` reads a `Gpu_timer` whose impl is null
-  (`metal_gpu_timer.cpp` `Gpu_timer_impl::label`).
 - Undo of `delete_nodes` on a mesh under a holder node restores a different
   world transform.
 - Scene close in Release stalls about 10 s in `Hierarchy::set_parent`
