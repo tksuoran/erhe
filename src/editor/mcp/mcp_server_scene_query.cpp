@@ -3492,6 +3492,14 @@ auto Mcp_server::query_async_status(const json& args) -> std::string
         {"asset_loads",           (m_context.asset_manager      != nullptr) ? m_context.asset_manager->get_load_task_count()    : 0u},
         {"idle",                  !m_context.is_scene_load_in_flight()}
     };
+    // Recent failed loads, kept after their tasks are reaped.
+    json failed_loads = json::array();
+    if (m_context.asset_manager != nullptr) {
+        for (const Asset_load_failure& failure : m_context.asset_manager->get_failed_loads()) {
+            failed_loads.push_back({{"path", erhe::file::to_string(failure.path)}, {"error", failure.error}});
+        }
+    }
+    result["failed_loads"] = std::move(failed_loads);
     if (m_context.lightmap_partitioner != nullptr) {
         const Lightmap_partitioner::Prepare_progress progress    = m_context.lightmap_partitioner->get_prepare_progress();
         const Lightmap_partitioner::Prepare_result&  last_result = m_context.lightmap_partitioner->get_last_prepare_result();

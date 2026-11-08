@@ -4279,7 +4279,7 @@ public:
             init_status_display_ptr->set_line(1, "");
             init_status_display_ptr->set_line(2, "");
             init_status_display_ptr->pump();
-            m_headset_view->set_loading_screen(std::move(init_status_display_ptr), file_name);
+            m_headset_view->set_loading_screen(std::move(init_status_display_ptr), file_name, *m_app_message_bus);
         }
 #endif
 

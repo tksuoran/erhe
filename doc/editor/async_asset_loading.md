@@ -506,6 +506,25 @@ tool. The scene is settled only when `pending`, `running`, `queued_operations`,
 The Operations window shows a progress bar per live load with its state and a
 Cancel button.
 
+### Failed loads
+
+A failed load's task is reaped in the same tick it fails, and its handle
+leaves `get_load_handles()` with it, so a reader of the live handles never
+sees a fast failure. The reap is where the outcome is handed on:
+`Asset_manager::tick()` records each failed load (path and error) in
+`get_failed_loads()` (the most recent eight, oldest first, kept until
+`clear_failed_loads()`), and after the reap sends `Asset_load_failed_message`
+synchronously on `App_message_bus::asset_load_failed`, before the frame's
+prepare phase. Readers:
+
+- The Operations window lists the failed loads under its progress bars, with
+  a "Clear failed loads" button.
+- MCP `get_async_status` reports them as `failed_loads`; `reset_editor_state`
+  clears them.
+- The OpenXR loading screen (`doc/editor/editor.md` "Initialization Order")
+  subscribes while it is up and shows the error of the failed load of its
+  file.
+
 ## API surface
 
 ```cpp

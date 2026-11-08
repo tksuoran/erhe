@@ -1355,7 +1355,10 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_async_status","arguments":{}}}'
 ```
 
-Returns: `{pending, running, queued_operations, pending_scene_commits, asset_loads, lightmap_prepare?}`
+Returns: `{pending, running, queued_operations, pending_scene_commits, asset_loads, failed_loads, lightmap_prepare?}`.
+`failed_loads` lists the most recent failed asset loads as `{path, error}`
+(`doc/editor/async_asset_loading.md` "Failed loads"); `reset_editor_state`
+clears it.
 
 ### generate_lods / get_lod_info
 

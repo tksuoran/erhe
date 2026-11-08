@@ -1,6 +1,7 @@
 #pragma once
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+#include "app_message.hpp"
 #include "renderers/programs.hpp"
 #include "scene/headlamp.hpp"
 #include "scene/scene_view.hpp"
@@ -16,6 +17,7 @@
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_math/input_axis.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_renderer/view.hpp"
 #include "erhe_scene/camera_snapshot.hpp"
@@ -355,10 +357,10 @@ public:
     // render phase renders it (Init_status_display::render_xr_multiview())
     // instead of an empty frame; homing the headset in a scene
     // (attach_to_scene()) releases it once the frames in flight completed.
-    // file_name names the scene being loaded; when no load is in flight any
-    // more and the headset still has no scene, the screen reports that the
-    // file could not be loaded instead.
-    void set_loading_screen    (std::unique_ptr<Init_status_display> loading_screen, std::string_view file_name);
+    // file_name names the scene being loaded; a failed load of it
+    // (Asset_load_failed_message), or no load in flight and still no scene,
+    // turns the screen into the could-not-load report.
+    void set_loading_screen    (std::unique_ptr<Init_status_display> loading_screen, std::string_view file_name, App_message_bus& app_message_bus);
     // Any thread: the newest retired counted frame's statistics; height is
     // the views' rows together (view count x eye image height).
     [[nodiscard]] auto get_overdraw_statistics() const -> erhe::scene_renderer::Overdraw_statistics override;
@@ -422,9 +424,10 @@ private:
     // scene the headset renders.
     auto resolve_pending_scene_and_camera() -> bool override;
     void setup_root_camera();
-    // Prepare phase: the loading screen's lines from the startup load's
-    // handle (status and percentage, or the error when it failed).
+    // Prepare phase: the loading screen's progress line from the startup
+    // load's live handle.
     void update_loading_screen();
+    void show_loading_failure(const std::string& reason);
     void setup_pointer_pick_camera();
     void update_camera_node();
     void update_pointer_context_from_controller();
@@ -577,6 +580,7 @@ private:
     bool                                                 m_loading_failed_shown{false};
     uint64_t                                             m_loading_screen_frame_count{0}; // prepare phases since set_loading_screen()
     std::string                                          m_loading_status_line;           // the status line shown, to set it on change only
+    erhe::message_bus::Subscription<Asset_load_failed_message> m_asset_load_failed_subscription; // while the loading screen is up
     // Carried by the root camera (head space), 15 cm above the eye midpoint.
     Headlamp                                             m_headlamp{m_app_context};
     bool                                                 m_default_headlamp_applied{false};

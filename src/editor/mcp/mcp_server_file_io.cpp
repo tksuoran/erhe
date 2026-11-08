@@ -4,6 +4,7 @@
 #include "mcp/mcp_server.hpp"
 #include "scene/scene_save_service.hpp"
 #include "scene/world_space_form.hpp"
+#include "assets/asset_manager.hpp"
 #include "assets/editor_asset.hpp"
 #include "assets/prepared_asset.hpp"
 #include "assets/prepared_status.hpp"
@@ -829,6 +830,9 @@ auto Mcp_server::action_reset_editor_state(const json& args) -> std::string
         m_context.operation_stack->clear_history();
     }
     m_shader_debug_stack.clear();
+    if (m_context.asset_manager != nullptr) {
+        m_context.asset_manager->clear_failed_loads();
+    }
     // Thumbnail slots: pending render callbacks own the item they would
     // render, and a slot keeps showing its last image for a reused id.
     if (m_context.thumbnails != nullptr) {

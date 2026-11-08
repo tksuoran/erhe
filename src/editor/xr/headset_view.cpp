@@ -411,7 +411,8 @@ void Headset_view::update_loading_screen()
     }
     ++m_loading_screen_frame_count;
 
-    // The startup load's handle (load-time only: the handle list is a copy).
+    // The startup load's live handle; a failed load is reported by
+    // Asset_load_failed_message, as its handle is gone once reaped.
     std::shared_ptr<Asset_load_handle> handle;
     if (m_app_context.asset_manager != nullptr) {
         for (const std::shared_ptr<Asset_load_handle>& candidate : m_app_context.asset_manager->get_load_handles()) {
@@ -421,25 +422,11 @@ void Headset_view::update_loading_screen()
         }
     }
 
-    const auto show_failure = [this](const std::string& reason) {
-        m_loading_failed_shown = true;
-        m_loading_screen->set_line(0, fmt::format("Could not load \"{}\"", m_loading_file_name));
-        m_loading_screen->set_line(1, reason);
-        m_loading_screen->set_line(2, "");
-        log_xr->warn("Headset loading screen: could not load '{}': {}", m_loading_file_name, reason);
-    };
-
-    if (handle && (handle->get_state() == Asset_load_state::failed)) {
-        const std::string error = handle->get_error();
-        show_failure(error.empty() ? std::string{"see the editor log"} : error);
-        return;
-    }
-
     // No load in flight and still no scene for the headset (the open failed
     // after the load, or the load never started): the open is queued in the
     // first frames, so this waits 30 frames.
     if (!get_scene_root() && (m_loading_screen_frame_count > 30) && !m_app_context.is_scene_load_in_flight()) {
-        show_failure("no scene was opened; see the editor log");
+        show_loading_failure("no scene was opened; see the editor log");
         return;
     }
 
@@ -456,13 +443,37 @@ void Headset_view::update_loading_screen()
     }
 }
 
-void Headset_view::set_loading_screen(std::unique_ptr<Init_status_display> loading_screen, const std::string_view file_name)
+void Headset_view::show_loading_failure(const std::string& reason)
+{
+    m_loading_failed_shown = true;
+    m_asset_load_failed_subscription = {};
+    m_loading_screen->set_line(0, fmt::format("Could not load \"{}\"", m_loading_file_name));
+    m_loading_screen->set_line(1, reason);
+    m_loading_screen->set_line(2, "");
+    log_xr->warn("Headset loading screen: could not load '{}': {}", m_loading_file_name, reason);
+}
+
+void Headset_view::set_loading_screen(
+    std::unique_ptr<Init_status_display> loading_screen,
+    const std::string_view               file_name,
+    App_message_bus&                     app_message_bus
+)
 {
     m_loading_screen = std::move(loading_screen);
     m_loading_screen_release_frame.reset();
     m_loading_file_name    = std::string{file_name};
     m_loading_failed_shown = false;
     m_loading_screen_frame_count = 0;
+    m_asset_load_failed_subscription = app_message_bus.asset_load_failed.subscribe(
+        [this](Asset_load_failed_message& message) {
+            if (!m_loading_screen || m_loading_screen_release_frame.has_value() || m_loading_failed_shown) {
+                return;
+            }
+            if (message.path.filename().string() == m_loading_file_name) {
+                show_loading_failure(message.error);
+            }
+        }
+    );
 }
 
 auto Headset_view::resolve_pending_scene_and_camera() -> bool
@@ -2193,6 +2204,7 @@ void Headset_view::prepare_render_view()
     if (m_loading_screen_release_frame.has_value() && (frame_index >= m_loading_screen_release_frame.value())) {
         m_loading_screen.reset();
         m_loading_screen_release_frame.reset();
+        m_asset_load_failed_subscription = {};
         log_xr->info("Headset loading screen released");
     }
     update_loading_screen();

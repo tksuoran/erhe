@@ -29,6 +29,7 @@ public:
     erhe::message_bus::Message_bus<Scene_created_message,         sync>  scene_created;
     erhe::message_bus::Message_bus<Load_scene_file_message,       queue> load_scene_file;
     erhe::message_bus::Message_bus<Scene_saved_message,           sync>  scene_saved;
+    erhe::message_bus::Message_bus<Asset_load_failed_message,     sync>  asset_load_failed;
     erhe::message_bus::Message_bus<Create_scene_message,           queue> create_scene;
     erhe::message_bus::Message_bus<Close_scene_message,            queue> close_scene;
     erhe::message_bus::Message_bus<Home_tools_message,             queue> home_tools;

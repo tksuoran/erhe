@@ -229,6 +229,14 @@ public:
     std::string                      error;                                // populated when failed
 };
 
+// A load that settled as failed, kept after its task is reaped.
+class Asset_load_failure
+{
+public:
+    std::filesystem::path path;
+    std::string           error;
+};
+
 class Asset_manager
 {
 public:
@@ -300,6 +308,11 @@ public:
     // for loading (plan 2.12). Atomic: the idle accounting is read from
     // stale-data guards that do not all run on the main thread.
     [[nodiscard]] auto get_load_task_count() const -> std::size_t;
+
+    // The most recent failed loads (oldest first, at most
+    // c_max_failed_loads), recorded when their tasks are reaped.
+    [[nodiscard]] auto get_failed_loads() const -> const std::vector<Asset_load_failure>&;
+    void clear_failed_loads();
 
     // This frame's GPU upload allowance for the asynchronous loads
     // (doc/editor/async_asset_loading.md "Upload budget while loading"):
@@ -555,6 +568,7 @@ private:
     // Cancels every live load task and BLOCKS until their workers are idle.
     // Called from the destructor; see the definition for why it must block.
     void cancel_and_reap_load_tasks();
+    void record_failed_load(const Asset_load_handle& handle);
 
     // Live Asset_load_task count (plan 2.12). Mirrors m_load_tasks, kept as
     // an atomic because the idle accounting is read from stale-data guards
@@ -564,6 +578,9 @@ private:
     // Owned by the manager, advanced from tick(), reaped once settled AND
     // their workers are idle (plan 2.3 invariant 4).
     std::vector<std::unique_ptr<Asset_load_task>> m_load_tasks;
+
+    static constexpr std::size_t    c_max_failed_loads{8};
+    std::vector<Asset_load_failure> m_failed_loads;
 
     // Whether any load task is live, switched by set_upload_phase() when the
     // first task is queued and when the last one is reaped (main thread).

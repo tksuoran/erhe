@@ -482,6 +482,54 @@ TEST_F(Mcp_test, save_scene_is_asynchronous_and_reports_through_get_save_status)
     std::filesystem::remove(path, ignored);
 }
 
+// A load that fails at once (its task is reaped the tick it fails) still
+// reports its reason: get_async_status lists it under failed_loads.
+TEST_F(Mcp_test, fast_failing_load_reports_its_reason_in_failed_loads)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::filesystem::path directory = std::filesystem::temp_directory_path();
+    const std::filesystem::path truncated = directory / "erhe_mcp_truncated.glb";
+    const std::filesystem::path bad_magic = directory / "erhe_mcp_bad_magic.glb";
+    {
+        std::ofstream file{truncated, std::ios::binary | std::ios::trunc};
+        file.write("glTF\x02\x00\x00\x00", 8);
+    }
+    {
+        std::ofstream file{bad_magic, std::ios::binary | std::ios::trunc};
+        file.write("NOPE\x02\x00\x00\x00\x40\x00\x00\x00", 12);
+    }
+
+    for (const std::filesystem::path& path : {truncated, bad_magic}) {
+        Mcp_client::Tool_result queued = client.call_tool("load_scene", json{{"path", path.string()}});
+        ASSERT_FALSE(queued.is_error) << queued.text;
+        ASSERT_TRUE(wait_until_idle(client, 30000));
+
+        Mcp_client::Tool_result status = client.call_tool("get_async_status", json::object());
+        ASSERT_FALSE(status.is_error) << status.text;
+        ASSERT_TRUE(status.payload.contains("failed_loads") && status.payload["failed_loads"].is_array()) << status.text;
+        bool found = false;
+        for (const json& failure : status.payload["failed_loads"]) {
+            if (std::filesystem::path{failure.value("path", "")}.filename() == path.filename()) {
+                found = true;
+                EXPECT_FALSE(failure.value("error", "").empty()) << status.text;
+                EXPECT_NE(failure.value("error", ""), "failed") << "a generic reason: " << status.text;
+            }
+        }
+        EXPECT_TRUE(found) << path.filename().string() << " missing from failed_loads: " << status.text;
+    }
+
+    // reset_editor_state forgets them.
+    client.call_tool("reset_editor_state", json::object());
+    Mcp_client::Tool_result cleared = client.call_tool("get_async_status", json::object());
+    ASSERT_FALSE(cleared.is_error) << cleared.text;
+    EXPECT_TRUE(cleared.payload.value("failed_loads", json::array()).empty()) << cleared.text;
+
+    std::error_code ignored;
+    std::filesystem::remove(truncated, ignored);
+    std::filesystem::remove(bad_magic, ignored);
+}
+
 // get_node_details addresses a prim by its id as readily as by its name: the
 // ids get_scene_nodes hands out are what a caller holds after a walk of the
 // tree, and a name may repeat between subtrees.

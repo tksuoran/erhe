@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -158,6 +159,15 @@ struct Load_scene_file_message
 {
     std::filesystem::path          path{};
     std::shared_ptr<Prepared_open> prepared_open{}; // a .erhe_prepared open already checked (MCP load_scene)
+};
+
+// Sent by Asset_manager::tick() when it reaps a failed load task: the
+// outcome outlives the task's handle (doc/editor/async_asset_loading.md "Failed loads").
+class Asset_load_failed_message
+{
+public:
+    std::filesystem::path path{};
+    std::string           error{};
 };
 
 // Published after a scene bundle (#241) has been written to disk, by both the

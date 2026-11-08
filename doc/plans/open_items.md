@@ -48,8 +48,6 @@ ask the user which to pick.
   `config/editor/benchmark_bistro_street.json` for the upright Bistro (the
   source rotated -90 degrees about X); `benchmark_bistro_street_120.json`
   is already in that frame.
-- The loading screen shows a generic reason after a fast failure (the load
-  handle is reaped before the screen reads it).
 - Metal counts overdraw per sample under MSAA
   (`doc/plans/overdraw_visualization.md`).
 - The right trigger still selects while travelling.
@@ -106,6 +104,9 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- With `load.async_gltf_load` off, a failed synchronous load is not
+  recorded in `Asset_manager::get_failed_loads()` (Operations and MCP
+  `get_async_status` report nothing for it).
 - Quest: a launch with no scene aborts in `scene_view.cpp:332`.
 - Quest: `render_scene_image` crashes (SIGSEGV in
   `Render_pass::start_render_pass` from `Shadow_renderer::draw` in the capture

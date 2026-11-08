@@ -388,6 +388,29 @@ auto Asset_manager::get_load_handles() const -> std::vector<std::shared_ptr<Asse
     return handles;
 }
 
+auto Asset_manager::get_failed_loads() const -> const std::vector<Asset_load_failure>&
+{
+    return m_failed_loads;
+}
+
+void Asset_manager::clear_failed_loads()
+{
+    verify_main_thread();
+    m_failed_loads.clear();
+}
+
+void Asset_manager::record_failed_load(const Asset_load_handle& handle)
+{
+    std::string error = handle.get_error();
+    if (error.empty()) {
+        error = "failed";
+    }
+    if (m_failed_loads.size() >= c_max_failed_loads) {
+        m_failed_loads.erase(m_failed_loads.begin());
+    }
+    m_failed_loads.push_back(Asset_load_failure{.path = handle.get_path(), .error = std::move(error)});
+}
+
 void Asset_manager::cancel_loads_for_scene(const Scene_root* const scene_root)
 {
     verify_main_thread();
@@ -447,14 +470,29 @@ void Asset_manager::tick(Asset_load_tick_context& tick_context)
     }
 
     // Reap: settled AND no worker still writing into the task's result
-    // (plan 2.3 invariant 4).
+    // (plan 2.3 invariant 4). A failed load's outcome is recorded here, as
+    // its handle leaves get_load_handles() with the task.
     const std::size_t before = m_load_tasks.size();
+    std::size_t       failed_count = 0;
     std::erase_if(
         m_load_tasks,
-        [](const std::unique_ptr<Asset_load_task>& task) {
-            return editor::is_settled(task->get_state()) && task->is_worker_idle();
+        [this, &failed_count](const std::unique_ptr<Asset_load_task>& task) {
+            if (!editor::is_settled(task->get_state()) || !task->is_worker_idle()) {
+                return false;
+            }
+            if (task->get_state() == Asset_load_state::failed) {
+                record_failed_load(*task->get_handle());
+                ++failed_count;
+            }
+            return true;
         }
     );
+    // Sent after the reap: a subscriber may queue another load.
+    for (std::size_t i = m_failed_loads.size() - std::min(failed_count, m_failed_loads.size()); i < m_failed_loads.size(); ++i) {
+        m_app_message_bus.asset_load_failed.send_message(
+            Asset_load_failed_message{.path = m_failed_loads[i].path, .error = m_failed_loads[i].error}
+        );
+    }
     if (m_load_tasks.size() != before) {
         m_load_task_count.store(m_load_tasks.size(), std::memory_order_relaxed);
         if (m_load_tasks.empty()) {

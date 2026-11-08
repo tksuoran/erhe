@@ -1152,7 +1152,8 @@ void Operations::imgui_asset_loads()
         return;
     }
     const std::vector<std::shared_ptr<Asset_load_handle>> handles = m_context.asset_manager->get_load_handles();
-    if (handles.empty()) {
+    const std::vector<Asset_load_failure>&                failures = m_context.asset_manager->get_failed_loads();
+    if (handles.empty() && failures.empty()) {
         return;
     }
     if (!ImGui::CollapsingHeader("Loading", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1178,6 +1179,13 @@ void Operations::imgui_asset_loads()
         if (!error.empty()) {
             ImGui::TextUnformatted(error.c_str());
         }
+    }
+    // A failed load's task is reaped the tick it fails; its outcome stays here.
+    for (const Asset_load_failure& failure : failures) {
+        ImGui::TextUnformatted(fmt::format("{} - failed: {}", erhe::file::to_string(failure.path.filename()), failure.error).c_str());
+    }
+    if (!failures.empty() && ImGui::SmallButton("Clear failed loads")) {
+        m_context.asset_manager->clear_failed_loads();
     }
 }
 
