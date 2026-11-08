@@ -6,13 +6,16 @@
 #include "erhe_gltf/gltf_fastgltf.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_scene/pvs_database.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <nlohmann/json.hpp>
 #include <simdjson.h>
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstdio>
+#include <system_error>
 
 namespace editor {
 
@@ -137,10 +140,19 @@ auto format_transform_hexfloat(const glm::mat4& transform) -> std::string
             if (!text.empty()) {
                 text.push_back(' ');
             }
-            // %a: exact bits (fmt writes zero with the minimum double exponent).
+            // glibc's %a on every platform (MSVC's %a pads the mantissa): sign, "0x", shortest exact hex.
             std::array<char, 32> buffer{};
-            const int length = std::snprintf(buffer.data(), buffer.size(), "%a", static_cast<double>(transform[column][row]));
-            text.append(buffer.data(), static_cast<std::size_t>(std::max(length, 0)));
+            const std::to_chars_result result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), static_cast<double>(transform[column][row]), std::chars_format::hex);
+            ERHE_VERIFY(result.ec == std::errc{});
+            const char* digits = buffer.data();
+            if (*digits == '-') {
+                text.push_back('-');
+                ++digits;
+            }
+            if ((*digits != 'i') && (*digits != 'n')) { // inf and nan as glibc writes them
+                text.append("0x");
+            }
+            text.append(digits, static_cast<std::size_t>(result.ptr - digits));
         }
     }
     return text;

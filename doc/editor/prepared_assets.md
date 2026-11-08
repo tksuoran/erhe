@@ -125,7 +125,9 @@ Records (`doc/erhe/asset_store.md` "Container"):
 - World-space mesh key (`make_world_mesh_key`, R4.7): kind, code version
   `c_world_mesh_code_version`, the mesh item stamp, the Local-space mesh key
   of the primitive and the node's transform relative to the scene root as
-  `%a` text of its 16 floats (`doc/editor/world_space_bake.md` "World-space
+  `%a` text of its 16 floats in glibc's form on every platform
+  (`format_transform_hexfloat()`: `std::to_chars` hex after the sign and
+  `0x`; MSVC's own `%a` pads the mantissa) (`doc/editor/world_space_bake.md` "World-space
   mesh items").
 - Raytrace BVH key (`make_raytrace_bvh_key`): kind, code version
   `c_raytrace_bvh_code_version`, the format stamp and the key of its mesh
