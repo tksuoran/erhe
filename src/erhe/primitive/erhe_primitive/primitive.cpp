@@ -18,8 +18,11 @@
 #include <fmt/format.h>
 #include <meshoptimizer.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <span>
+#include <vector>
 
 namespace erhe::primitive {
 
@@ -2058,6 +2061,66 @@ namespace {
     return true;
 }
 
+// Buffer_mesh::joint_bounding_boxes from the JOINTS_n / WEIGHTS_n of vertex
+// data in `format` (one byte pointer per stream), by
+// include_joint_influences_in_bounding_boxes(); position_at(vertex) gives
+// the vertex's bind-space position. Nothing without JOINTS_0 / WEIGHTS_0.
+template <typename Position_at>
+void calculate_vertex_data_joint_bounding_boxes(
+    const erhe::dataformat::Vertex_format& format,
+    const std::span<const uint8_t* const>  stream_data,
+    const std::size_t                      vertex_count,
+    const Position_at&                     position_at,
+    std::vector<erhe::math::Aabb>&         out_boxes
+)
+{
+    out_boxes.clear();
+    using erhe::dataformat::Vertex_attribute_usage;
+    const erhe::dataformat::Attribute_stream joints_0  = format.find_attribute(Vertex_attribute_usage::joint_indices, 0);
+    const erhe::dataformat::Attribute_stream weights_0 = format.find_attribute(Vertex_attribute_usage::joint_weights, 0);
+    const erhe::dataformat::Attribute_stream joints_1  = format.find_attribute(Vertex_attribute_usage::joint_indices, 1);
+    const erhe::dataformat::Attribute_stream weights_1 = format.find_attribute(Vertex_attribute_usage::joint_weights, 1);
+    if ((joints_0.attribute == nullptr) || (weights_0.attribute == nullptr)) {
+        return;
+    }
+    const bool has_set_1    = (joints_1.attribute != nullptr) && (weights_1.attribute != nullptr);
+    const bool implicit_sum =
+        erhe::dataformat::get_vertex_joint_weights_encoding(&format) == erhe::dataformat::Vertex_joint_weights_encoding::unorm16x3_implicit_sum;
+    const auto read = [&format, stream_data](const erhe::dataformat::Attribute_stream& attribute, const std::size_t vertex) -> glm::vec4 {
+        const std::size_t stream_index = static_cast<std::size_t>(attribute.stream - format.streams.data());
+        const uint8_t*    source       = stream_data[stream_index] + attribute.attribute->offset + (vertex * attribute.stream->stride);
+        float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        erhe::dataformat::convert(source, attribute.attribute->format, &value[0], erhe::dataformat::Format::format_32_vec4_float, 1.0f);
+        return glm::vec4{value[0], value[1], value[2], value[3]};
+    };
+    // Joint index formats are unsigned integers, so the float holds the value exactly.
+    const auto to_joints = [](const glm::vec4& v) -> GEO::vec4u {
+        return GEO::vec4u{static_cast<GEO::index_t>(v.x), static_cast<GEO::index_t>(v.y), static_cast<GEO::index_t>(v.z), static_cast<GEO::index_t>(v.w)};
+    };
+    for (std::size_t vertex = 0; vertex < vertex_count; ++vertex) {
+        const glm::vec4 j0 = read(joints_0, vertex);
+        glm::vec4       w0 = read(weights_0, vertex);
+        if (implicit_sum) {
+            w0.w = std::max(0.0f, 1.0f - (w0.x + w0.y + w0.z));
+        }
+        const GEO::vec4u joints_0_value  = to_joints(j0);
+        const GEO::vec4f weights_0_value{w0.x, w0.y, w0.z, w0.w};
+        GEO::vec4u joints_1_value {0, 0, 0, 0};
+        GEO::vec4f weights_1_value{0.0f, 0.0f, 0.0f, 0.0f};
+        if (has_set_1) {
+            const glm::vec4 j1 = read(joints_1, vertex);
+            const glm::vec4 w1 = read(weights_1, vertex);
+            joints_1_value  = to_joints(j1);
+            weights_1_value = GEO::vec4f{w1.x, w1.y, w1.z, w1.w};
+        }
+        include_joint_influences_in_bounding_boxes(
+            out_boxes, position_at(vertex), joints_0_value, weights_0_value,
+            has_set_1 ? &joints_1_value  : nullptr,
+            has_set_1 ? &weights_1_value : nullptr
+        );
+    }
+}
+
 // The soup build with the LOD levels (and their edge-line data) already in
 // `lod_indices` (empty: no chain).
 [[nodiscard]] auto build_soup_buffer_mesh(
@@ -2142,6 +2205,16 @@ namespace {
         }
     }
     erhe::math::calculate_bounding_volume(positions, buffer_mesh.bounding_box, buffer_mesh.bounding_sphere);
+    if (position.attribute != nullptr) {
+        const uint8_t* const soup_stream_data[1] = { triangle_soup.vertex_data.data() };
+        const auto position_at = [&triangle_soup, &position](const std::size_t vertex_index) -> glm::vec3 {
+            const uint8_t* src = triangle_soup.vertex_data.data() + position.attribute->offset + (vertex_index * position.stream->stride);
+            float pos[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            erhe::dataformat::convert(src, position.attribute->format, &pos[0], erhe::dataformat::Format::format_32_vec4_float, 1.0f);
+            return glm::vec3{pos[0], pos[1], pos[2]};
+        };
+        calculate_vertex_data_joint_bounding_boxes(triangle_soup.vertex_format, soup_stream_data, vertex_count, position_at, buffer_mesh.joint_bounding_boxes);
+    }
 
     // UV ranges of the affine texcoord channels, for the same reason and in the
     // same order as the bounding volume above: the sink encoding is derived from
@@ -2825,9 +2898,10 @@ namespace {
     std::vector<uint8_t>&&       indices,
     const Stored_vertex_streams& stored,
     const erhe::math::Aabb&      bounding_box,
-    const erhe::math::Sphere&    bounding_sphere,
-    const Buffer_info&           buffer_info,
-    const Lod_chain_indices*     lod_indices
+    const erhe::math::Sphere&            bounding_sphere,
+    const std::vector<erhe::math::Aabb>& joint_bounding_boxes,
+    const Buffer_info&                   buffer_info,
+    const Lod_chain_indices*             lod_indices
 ) -> std::optional<Buffer_mesh>
 {
     if (variant.streams.size() != buffer_info.vertex_format.streams.size()) {
@@ -2875,6 +2949,7 @@ namespace {
     buffer_mesh.has_vertex_colors     = stored.has_vertex_colors;
     buffer_mesh.bounding_box          = bounding_box;
     buffer_mesh.bounding_sphere       = bounding_sphere;
+    buffer_mesh.joint_bounding_boxes  = joint_bounding_boxes;
     buffer_mesh.position_quantization = stored.position_quantization;
     buffer_mesh.texcoord_quantization = stored.texcoord_quantization;
     buffer_info.index_buffer_sink.enqueue_index_data(buffer_mesh.index_buffer_range, std::move(indices));
@@ -2895,6 +2970,7 @@ namespace {
     Buffer_mesh descriptor;
     descriptor.bounding_box          = optimized.bounding_box;
     descriptor.bounding_sphere       = optimized.bounding_sphere;
+    descriptor.joint_bounding_boxes  = optimized.joint_bounding_boxes;
     descriptor.texcoord_ranges       = optimized.texcoord_ranges;
     descriptor.position_quantization = optimized.position_quantization;
     descriptor.texcoord_quantization = optimized.texcoord_quantization;
@@ -2944,6 +3020,22 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, const Base_mesh
     erhe::math::Aabb   bounding_box{};
     erhe::math::Sphere bounding_sphere{};
     erhe::math::calculate_bounding_volume(positions, bounding_box, bounding_sphere);
+    // The joint bounds the soup build computes: weights and joints from the
+    // base streams (read also when the base variant stays deferred).
+    std::vector<erhe::math::Aabb> joint_bounding_boxes;
+    {
+        std::vector<const uint8_t*> base_stream_data;
+        for (const std::vector<uint8_t>& stream : stored->base.streams) {
+            base_stream_data.push_back(stream.data());
+        }
+        if (base_stream_data.size() == buffer_info.vertex_format.streams.size()) {
+            const std::vector<float>& positions_xyz = stored->positions_xyz;
+            const auto position_at = [&positions_xyz](const std::size_t vertex) -> glm::vec3 {
+                return glm::vec3{positions_xyz[(3 * vertex) + 0], positions_xyz[(3 * vertex) + 1], positions_xyz[(3 * vertex) + 2]};
+            };
+            calculate_vertex_data_joint_bounding_boxes(buffer_info.vertex_format, base_stream_data, stored->vertex_count, position_at, joint_bounding_boxes);
+        }
+    }
 
     // The raytrace before the indices move into the sinks.
     std::optional<Primitive_raytrace>        raytrace;
@@ -2976,7 +3068,7 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, const Base_mesh
         const std::optional<Stored_lod_chain> stored_chain = make_stored_lod_chain(prepared_data.get(), stored->lod_indices, stored->vertex_count);
         std::vector<uint8_t> optimized_indices = stored->indices; // both variants upload the shared indices
         optimized_mesh = build_stored_buffer_mesh(
-            std::move(stored->optimized.value()), std::move(optimized_indices), *stored, bounding_box, bounding_sphere, optimized_buffer_info,
+            std::move(stored->optimized.value()), std::move(optimized_indices), *stored, bounding_box, bounding_sphere, joint_bounding_boxes, optimized_buffer_info,
             stored_chain.has_value() ? &stored_chain->chain : nullptr
         );
         if (!optimized_mesh.has_value()) {
@@ -2990,7 +3082,7 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, const Base_mesh
         : Base_mesh_build::at_load;
     std::optional<Buffer_mesh> base_mesh = (base_build == Base_mesh_build::deferred)
         ? std::optional<Buffer_mesh>{make_base_descriptor(optimized_mesh.value(), buffer_info.vertex_input_key)}
-        : build_stored_buffer_mesh(std::move(stored->base), std::move(stored->indices), *stored, bounding_box, bounding_sphere, buffer_info, nullptr);
+        : build_stored_buffer_mesh(std::move(stored->base), std::move(stored->indices), *stored, bounding_box, bounding_sphere, joint_bounding_boxes, buffer_info, nullptr);
     if (!base_mesh.has_value()) {
         return Stored_build_result::failed;
     }

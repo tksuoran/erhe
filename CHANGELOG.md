@@ -93,6 +93,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::primitive`: `build_buffer_mesh_from_triangle_soup()` and the build
+  from stored GPU vertex streams (`Primitive::make_stored_meshes()`) fill
+  `Buffer_mesh::joint_bounding_boxes` from the joint attributes, with the
+  rule of `include_vertex_in_joint_bounding_boxes()`; before, only the
+  geometry build did. `include_joint_influences_in_bounding_boxes()`
+  (`primitive_builder.hpp`) is that rule, shared by all three builds.
 - `erhe::scene_renderer`: shadow passes take their casters per caller:
   `Shadow_renderer::Render_parameters::caster_filter` and
   `Prepare_parameters::caster_filter` (default `shadow_caster_filter`), the

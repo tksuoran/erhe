@@ -57,7 +57,12 @@ joints' posed images, which `Buffer_mesh::joint_bounding_boxes` relies on:
 `include_vertex_in_joint_bounding_boxes()` adds a vertex to the box of
 every joint the normalized weights give a positive weight (and, for the
 boxes' other consumers, every positive `WEIGHTS_1` joint), at the build and
-from in-place vertex edits. Storage keeps the sum exact: unorm8 weights
+from in-place vertex edits. The triangle-soup build and the build from
+stored GPU vertex streams apply the same rule to the soup's or the base
+variant's joint attributes (all three call
+`include_joint_influences_in_bounding_boxes()`), so a mesh has the same boxes whichever path
+built it (the default bone tails, `src/editor/rig/bone_tail.hpp`, size leaf
+bones from them). Storage keeps the sum exact: unorm8 weights
 are rounded to sum to exactly 255 (`quantize_joint_weights_unorm8()`, largest
 remainder; a zero weight stays zero), and the unorm16 implicit-sum encoding
 (`encode_implicit_sum_joint_weights()`) of a vertex with fewer than four

@@ -5,6 +5,8 @@
 #include "gltf_test_util.hpp"
 
 #include "erhe_item/item.hpp"
+#include "erhe_math/aabb.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/mesh_optimizer.hpp"
@@ -964,6 +966,121 @@ TEST(Gltf_roundtrip, stored_vertex_streams_build_like_the_soup)
     EXPECT_TRUE(other_primitives[0]->render_shape->is_payload_pending());
     ASSERT_TRUE(other_primitives[0]->load_payload());
     EXPECT_TRUE(other_primitives[0]->make_prepared_meshes(other_build_info));
+}
+
+// A skinned mesh built from stored GPU vertex streams has the joint boxes the
+// geometry build of the same mesh has (bone tails and skinned bounds read them).
+TEST(Gltf_roundtrip, stored_vertex_streams_fill_the_geometry_joint_boxes)
+{
+    const std::filesystem::path rigged = (std::filesystem::path{ERHE_GLTF_TEST_DATA_DIR} / "../../../../../res/editor/assets/RiggedFigure/RiggedFigure.glb").lexically_normal();
+    ASSERT_TRUE(std::filesystem::exists(rigged)) << rigged.generic_string();
+    erhe::scene::Scene          source_scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = erhe_gltf_test::parse_file(rigged, source_scene);
+    static_cast<void>(source);
+
+    auto [base_format, optimized_format] = make_test_gpu_formats();
+    using erhe::dataformat::Format;
+    using erhe::dataformat::Vertex_attribute_usage;
+    const erhe::dataformat::Vertex_stream joint_stream{3, {
+        {Format::format_8_vec4_uint,  Vertex_attribute_usage::joint_indices, 0},
+        {Format::format_8_vec4_unorm, Vertex_attribute_usage::joint_weights, 0}
+    }};
+    erhe::dataformat::Vertex_format base_skinned      = base_format;
+    erhe::dataformat::Vertex_format optimized_skinned = optimized_format;
+    base_skinned.streams.push_back(joint_stream);
+    optimized_skinned.streams.push_back(joint_stream);
+    const erhe::dataformat::Vertex_stream_packing packing{.min_attribute_alignment = 1, .min_stride_alignment = 4};
+    base_skinned.repack(packing);
+    optimized_skinned.repack(packing);
+    const erhe::gltf::Gltf_gpu_vertex_formats formats{
+        .base              = &base_format,
+        .base_skinned      = &base_skinned,
+        .optimized         = &optimized_format,
+        .optimized_skinned = &optimized_skinned,
+        .index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+        .encoding_version  = erhe::primitive::vertex_encoding_version
+    };
+    erhe::gltf::Gltf_export_arguments arguments{
+        .root_node          = *source_scene.get_root_node(),
+        .binary             = true,
+        .prepared_mesh_data = erhe::gltf::Prepared_mesh_data::write
+    };
+    arguments.gpu_vertex_formats = &formats;
+    const std::string glb = erhe::gltf::export_gltf(arguments);
+    ASSERT_FALSE(glb.empty());
+    const std::filesystem::path path = write_temporary_file("stored_skinned.glb", glb);
+
+    const auto skinned_primitive = [](const erhe::gltf::Gltf_data& data) -> std::shared_ptr<erhe::primitive::Primitive> {
+        for (const std::shared_ptr<erhe::scene::Node>& node : data.nodes) {
+            const std::shared_ptr<erhe::scene::Mesh> mesh = node ? erhe::scene::get_mesh(node.get()) : std::shared_ptr<erhe::scene::Mesh>{};
+            if (mesh && mesh->skin && !mesh->get_primitives().empty()) {
+                return mesh->get_primitives().front().primitive;
+            }
+        }
+        return {};
+    };
+    const auto make_build_info = [&](Recording_buffer_sink& sink) -> erhe::primitive::Build_info {
+        erhe::primitive::Build_info build_info{
+            .primitive_types = {.fill_triangles = true},
+            .buffer_info     = {
+                .normal_style       = erhe::primitive::Normal_style::corner_normals,
+                .index_type         = erhe::dataformat::Format::format_32_scalar_uint,
+                .vertex_format      = base_skinned,
+                .vertex_buffer_sink = sink,
+                .index_buffer_sink  = sink,
+                .vertex_input_key   = 1
+            }
+        };
+        build_info.buffer_info.optimize_meshes            = true;
+        build_info.buffer_info.optimized_vertex_format    = &optimized_skinned;
+        build_info.buffer_info.optimized_vertex_input_key = 2;
+        return build_info;
+    };
+
+    // Stored-stream build.
+    erhe::scene::Scene    stored_scene{"stored", nullptr};
+    tf::Executor          executor{1};
+    erhe::gltf::Gltf_data stored_data = erhe::gltf::parse_gltf(
+        erhe::gltf::Gltf_parse_arguments{
+            .executor     = executor,
+            .root_node    = stored_scene.get_root_node(),
+            .path         = path,
+            .parallel     = false,
+            .document     = erhe::gltf::Gltf_document::item,
+            .mesh_payload = erhe::gltf::Mesh_payload_load::deferred
+        }
+    );
+    const std::shared_ptr<erhe::primitive::Primitive> stored = skinned_primitive(stored_data);
+    ASSERT_TRUE(stored);
+    Recording_buffer_sink stored_sink;
+    std::string           reason;
+    ASSERT_EQ(stored->make_stored_meshes(make_build_info(stored_sink), erhe::primitive::Base_mesh_build::at_load, reason), erhe::primitive::Primitive::Stored_build_result::built) << reason;
+
+    // Geometry build of the source mesh.
+    const std::shared_ptr<erhe::primitive::Primitive> source_primitive = skinned_primitive(source);
+    ASSERT_TRUE(source_primitive);
+    ASSERT_TRUE(source_primitive->make_geometry());
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = source_primitive->render_shape->get_geometry();
+    ASSERT_TRUE(geometry);
+    erhe::primitive::Primitive geometry_primitive{geometry};
+    Recording_buffer_sink      geometry_sink;
+    ASSERT_TRUE(geometry_primitive.make_renderable_mesh(make_build_info(geometry_sink), erhe::primitive::Normal_style::corner_normals));
+
+    const std::vector<erhe::math::Aabb>& stored_boxes   = stored->render_shape->get_renderable_mesh().joint_bounding_boxes;
+    const std::vector<erhe::math::Aabb>& optimized_boxes = stored->optimized_render_shape->get_renderable_mesh().joint_bounding_boxes;
+    const std::vector<erhe::math::Aabb>& geometry_boxes = geometry_primitive.render_shape->get_renderable_mesh().joint_bounding_boxes;
+    ASSERT_FALSE(geometry_boxes.empty());
+    ASSERT_EQ(stored_boxes.size(), geometry_boxes.size());
+    ASSERT_EQ(optimized_boxes.size(), geometry_boxes.size());
+    for (std::size_t i = 0; i < geometry_boxes.size(); ++i) {
+        EXPECT_EQ(stored_boxes[i].is_valid_3d(), geometry_boxes[i].is_valid_3d()) << "joint " << i;
+        if (geometry_boxes[i].is_valid_3d()) {
+            EXPECT_EQ(stored_boxes[i].min, geometry_boxes[i].min) << "joint " << i;
+            EXPECT_EQ(stored_boxes[i].max, geometry_boxes[i].max) << "joint " << i;
+            EXPECT_EQ(optimized_boxes[i].min, geometry_boxes[i].min) << "joint " << i;
+            EXPECT_EQ(optimized_boxes[i].max, geometry_boxes[i].max) << "joint " << i;
+        }
+    }
 }
 
 // A deferred base variant (Base_mesh_build::deferred, doc/plans/gltf_fast_load.md

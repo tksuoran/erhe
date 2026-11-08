@@ -422,7 +422,9 @@ built mesh: it normalizes the weights the shader reads (`WEIGHTS_0`,
 doc/erhe/primitive.md "Skinning weights"), and
 `erhe::primitive::include_vertex_in_joint_bounding_boxes()` builds the boxes
 from the same normalized weights (a vertex without joint values goes to
-joint 0, the built default). The storage rounding leaves no weight on a
+joint 0, the built default). The triangle-soup build and the build from
+stored GPU vertex streams fill the boxes by the same rule from the soup's or
+the base variant's `JOINTS_n` / `WEIGHTS_n`. The storage rounding leaves no weight on a
 joint outside the boxes: unorm8 weights sum to exactly 255, and the unorm16
 implicit-sum encoding of a vertex with fewer than four influences
 reconstructs a fourth weight of exactly zero in exact arithmetic. What
@@ -432,9 +434,8 @@ posed position itself (the float precision it has anyway), and the
 implicit-sum fourth weight `max(0, 1 - sum)` can be a few ulp on an unused
 slot's joint, an offset of a few ulp times the distance between that
 joint's and the vertex's posed images - both orders below a texel. A
-primitive without joint boxes (built without joint attributes, or through
-the triangle-soup path, so every pose change of such a mesh forgets every
-pass), an import's frames before its geometry is built, or a box naming a
+primitive without joint boxes (built without joint attributes, so every pose
+change of such a mesh forgets every pass), an import's frames before its geometry is built, or a box naming a
 joint the skin does not have give the no-bounds sentinel. Adding, removing, moving in a list or reflagging a
 skinned object records the bounds of its last published pose; a geometry
 change (`write_object_bounds`: a rebuilt primitive, the bounds op of a

@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <memory>
 #include <string_view>
+#include <vector>
 
 namespace erhe::primitive {
 
@@ -299,6 +300,18 @@ auto build_buffer_mesh(
 // rounded so that they sum to exactly 255 (largest remainder): the shader's
 // decode then sums to one up to float rounding, and a zero weight stays zero.
 [[nodiscard]] auto quantize_joint_weights_unorm8(const GEO::vec4f& normalized_weights) -> std::array<uint8_t, 4>;
+
+// The joint-box inclusion rule every build applies: `position` joins the box
+// of each joint the normalized set 0 weights (normalize_joint_weights()) give
+// a positive weight and of each positive set 1 weight (null: no set 1).
+void include_joint_influences_in_bounding_boxes(
+    std::vector<erhe::math::Aabb>& boxes,
+    const glm::vec3&               position,
+    const GEO::vec4u&              joints_0,
+    const GEO::vec4f&              weights_0,
+    const GEO::vec4u*              joints_1,
+    const GEO::vec4f*              weights_1
+);
 
 // Adds a vertex at its bind-space position to buffer_mesh.joint_bounding_boxes
 // the way the build skins it: the joints that the built JOINTS_0 / WEIGHTS_0

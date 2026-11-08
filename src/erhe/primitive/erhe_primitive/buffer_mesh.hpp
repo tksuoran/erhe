@@ -141,11 +141,10 @@ public:
     // whole-mesh bounding_box above is the REST pose and (per glTF) is not
     // transformed by the mesh node, so it cannot bound a skinned mesh.
     //
-    // Empty when the source geometry has no joint attributes.
-    // Conservative for every mesh the primitive builder builds: it
-    // normalizes WEIGHTS_0 (normalize_joint_weights()), so every skinned
-    // vertex is a convex combination. Meshes built without joint attributes
-    // (and the triangle-soup path) have none.
+    // Empty when the source geometry has no joint attributes. Both the
+    // primitive builder and the triangle-soup path fill it; it is
+    // conservative when the weights sum to one (the builder normalizes
+    // WEIGHTS_0, normalize_joint_weights()).
     std::vector<erhe::math::Aabb> joint_bounding_boxes;
 
     Index_range               triangle_fill_indices   {};

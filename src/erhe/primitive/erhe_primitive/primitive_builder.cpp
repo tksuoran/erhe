@@ -450,6 +450,38 @@ void Build_context_root::calculate_joint_bounding_volumes(erhe::geometry::Mesh_a
     }
 }
 
+void include_joint_influences_in_bounding_boxes(
+    std::vector<erhe::math::Aabb>& boxes,
+    const glm::vec3&               position,
+    const GEO::vec4u&              joints_0,
+    const GEO::vec4f&              weights_0,
+    const GEO::vec4u* const        joints_1,
+    const GEO::vec4f* const        weights_1
+)
+{
+    const auto include = [&boxes, &position](const uint32_t joint_index) {
+        if (joint_index >= boxes.size()) {
+            boxes.resize(joint_index + 1);
+        }
+        boxes[joint_index].include(position);
+    };
+    // A zero weight contributes nothing to the posed position, so that joint
+    // must not be allowed to inflate the bound.
+    const GEO::vec4f normalized = normalize_joint_weights(weights_0);
+    for (GEO::index_t i = 0; i < 4; ++i) {
+        if (normalized[i] > 0.0f) {
+            include(joints_0[i]);
+        }
+    }
+    if ((joints_1 != nullptr) && (weights_1 != nullptr)) {
+        for (GEO::index_t i = 0; i < 4; ++i) {
+            if ((*weights_1)[i] > 0.0f) {
+                include((*joints_1)[i]);
+            }
+        }
+    }
+}
+
 void include_vertex_in_joint_bounding_boxes(
     Buffer_mesh&                     buffer_mesh,
     erhe::geometry::Mesh_attributes& mesh_attributes,
@@ -457,38 +489,20 @@ void include_vertex_in_joint_bounding_boxes(
     const glm::vec3&                 position
 )
 {
-    const auto include = [&buffer_mesh, &position](const uint32_t joint_index) {
-        if (joint_index >= buffer_mesh.joint_bounding_boxes.size()) {
-            buffer_mesh.joint_bounding_boxes.resize(joint_index + 1);
-        }
-        buffer_mesh.joint_bounding_boxes[joint_index].include(position);
-    };
     // JOINTS_0 / WEIGHTS_0 exactly as Build_context writes them
     // (build_vertex_joint_indices(), build_vertex_joint_weights()).
-    {
-        const std::optional<GEO::vec4u> joint_indices = mesh_attributes.vertex_joint_indices(0).try_get(vertex);
-        const std::optional<GEO::vec4f> joint_weights = mesh_attributes.vertex_joint_weights(0).try_get(vertex);
-        const GEO::vec4u indices = joint_indices.has_value() ? joint_indices.value() : GEO::vec4u{0, 0, 0, 0};
-        const GEO::vec4f weights = normalize_joint_weights(joint_weights.has_value() ? joint_weights.value() : GEO::vec4f{1.0f, 0.0f, 0.0f, 0.0f});
-        for (GEO::index_t i = 0; i < 4; ++i) {
-            // A zero weight contributes nothing to the posed position, so
-            // that joint must not be allowed to inflate the bound.
-            if (weights[i] > 0.0f) {
-                include(indices[i]);
-            }
-        }
-    }
-    {
-        const std::optional<GEO::vec4u> joint_indices = mesh_attributes.vertex_joint_indices(1).try_get(vertex);
-        const std::optional<GEO::vec4f> joint_weights = mesh_attributes.vertex_joint_weights(1).try_get(vertex);
-        if (joint_indices.has_value() && joint_weights.has_value()) {
-            for (GEO::index_t i = 0; i < 4; ++i) {
-                if (joint_weights.value()[i] > 0.0f) {
-                    include(joint_indices.value()[i]);
-                }
-            }
-        }
-    }
+    const std::optional<GEO::vec4u> joints_0  = mesh_attributes.vertex_joint_indices(0).try_get(vertex);
+    const std::optional<GEO::vec4f> weights_0 = mesh_attributes.vertex_joint_weights(0).try_get(vertex);
+    const std::optional<GEO::vec4u> joints_1  = mesh_attributes.vertex_joint_indices(1).try_get(vertex);
+    const std::optional<GEO::vec4f> weights_1 = mesh_attributes.vertex_joint_weights(1).try_get(vertex);
+    include_joint_influences_in_bounding_boxes(
+        buffer_mesh.joint_bounding_boxes,
+        position,
+        joints_0.has_value()  ? joints_0.value()  : GEO::vec4u{0, 0, 0, 0},
+        weights_0.has_value() ? weights_0.value() : GEO::vec4f{1.0f, 0.0f, 0.0f, 0.0f},
+        joints_1.has_value()  ? &joints_1.value()  : nullptr,
+        weights_1.has_value() ? &weights_1.value() : nullptr
+    );
 }
 
 auto normalize_joint_weights(const GEO::vec4f& weights) -> GEO::vec4f

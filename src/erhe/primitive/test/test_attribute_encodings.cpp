@@ -4,6 +4,7 @@
 #include "erhe_primitive/mesh_optimizer.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_primitive/triangle_soup.hpp"
 
 #include "erhe_buffer/ibuffer.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
@@ -146,6 +147,56 @@ TEST(AttributeEncodings, joint_bounding_boxes_follow_skinning)
 
 // Build-time weight normalization: negative and non-finite weights drop,
 // the rest sum to one, an all-zero vertex takes its first influence.
+// The triangle-soup build fills the joint boxes with the same rule as the
+// geometry path (a glTF scene load builds skinned meshes from the soup).
+TEST(AttributeEncodings, soup_build_fills_joint_bounding_boxes)
+{
+    const Vertex_format soup_format{
+        Vertex_stream{0, {
+            {Format::format_32_vec3_float, Vertex_attribute_usage::position,      0},
+            {Format::format_8_vec4_uint,   Vertex_attribute_usage::joint_indices, 0},
+            {Format::format_32_vec4_float, Vertex_attribute_usage::joint_weights, 0}
+        }}
+    };
+    const std::array<glm::vec3, 3>                 positions{glm::vec3{1.0f, 2.0f, 3.0f}, glm::vec3{-1.0f, 0.0f, 0.5f}, glm::vec3{4.0f, 4.0f, 4.0f}};
+    const std::array<std::array<uint8_t, 4>, 3>    joints   {{{2, 1, 0, 0}, {1, 0, 0, 0}, {2, 1, 0, 0}}};
+    // Vertex 2: no positive weight, so weight one on its first influence.
+    const std::array<std::array<float, 4>, 3>      weights  {{{0.75f, 0.25f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}}};
+    erhe::primitive::Triangle_soup soup{};
+    soup.vertex_format = soup_format;
+    soup.index_data    = {0, 1, 2};
+    const std::size_t stride = soup_format.streams.front().stride;
+    ASSERT_EQ(stride, 32u);
+    soup.vertex_data.assign(positions.size() * stride, uint8_t{0});
+    for (std::size_t vertex = 0; vertex < positions.size(); ++vertex) {
+        uint8_t* const destination = soup.vertex_data.data() + (vertex * stride);
+        std::memcpy(destination + 0,  &positions[vertex], 3 * sizeof(float));
+        std::memcpy(destination + 12, joints[vertex].data(), 4);
+        std::memcpy(destination + 16, weights[vertex].data(), 4 * sizeof(float));
+    }
+
+    erhe::buffer::Cpu_buffer                vertex_buffer{"test_vertex", 1024 * 1024};
+    erhe::buffer::Cpu_buffer                index_buffer {"test_index",  1024 * 1024};
+    erhe::primitive::Cpu_vertex_buffer_sink vertex_buffer_sink{{&vertex_buffer}};
+    erhe::primitive::Cpu_index_buffer_sink  index_buffer_sink {index_buffer};
+    const erhe::primitive::Buffer_info buffer_info{
+        .normal_style       = erhe::primitive::Normal_style::corner_normals,
+        .index_type         = Format::format_32_scalar_uint,
+        .vertex_format      = soup_format,
+        .vertex_buffer_sink = vertex_buffer_sink,
+        .index_buffer_sink  = index_buffer_sink
+    };
+    const std::optional<erhe::primitive::Buffer_mesh> buffer_mesh = erhe::primitive::build_buffer_mesh_from_triangle_soup(soup, buffer_info);
+    ASSERT_TRUE(buffer_mesh.has_value());
+    const std::vector<erhe::math::Aabb>& boxes = buffer_mesh->joint_bounding_boxes;
+    ASSERT_EQ(boxes.size(), 3u);
+    EXPECT_FALSE(boxes[0].is_valid_3d());
+    EXPECT_EQ(boxes[1].min, glm::min(positions[0], positions[1]));
+    EXPECT_EQ(boxes[1].max, glm::max(positions[0], positions[1]));
+    EXPECT_EQ(boxes[2].min, glm::min(positions[0], positions[2]));
+    EXPECT_EQ(boxes[2].max, glm::max(positions[0], positions[2]));
+}
+
 TEST(AttributeEncodings, joint_weights_are_normalized)
 {
     using erhe::primitive::normalize_joint_weights;
