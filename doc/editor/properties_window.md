@@ -33,6 +33,13 @@ migrated" table lists the hand-written rows that are authored state; section
    `texture_properties`, ...) add the read-only diagnostics, the actions
    and the R5 list editors per item. `material_properties` draws the
    material preview and the BRDF slice for a selected material.
+3. Hand-written groups (`Property_group_rows`, registered in the
+   `Properties` constructor) draw rows inside a named property group: the
+   read-back state of a "Rigid Body", a scene's "Scene Overrides" and
+   "Variants", a mesh's "Skin" and "Primitives", and a kit piece's "Kit Piece"
+   group, whose parameter rows stand for the developer-only raw record
+   (`doc/editor/level_tools.md` "Parameter rows"). The editing ones are the R5
+   exception.
 
 ## 2. Requirements
 
@@ -89,7 +96,9 @@ migrated" table lists the hand-written rows that are authored state; section
 - R5 List-valued state with no `Property_value` form (the record list
   editors: samplers, animation channels and samplers) and the
   scene's settings-override block keep their hand-written editor, drawn per
-  item, and are the documented exception. A list of scalars has a form: it
+  item, and are the documented exception. So do a kit piece's parameter rows:
+  the parameters are one canonical text value, and each row commits through
+  `Level_kits::set_parameters()`, which swaps the piece's mesh with it. A list of scalars has a form: it
   is one array property drawn by the generic row
   (`doc/erhe/property_system.md` D34 and D35 - the layout grid track extents
   and the collision filter's three system lists). A fixed set of records has

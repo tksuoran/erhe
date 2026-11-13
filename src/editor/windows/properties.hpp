@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "level/kit_parameter_rows.hpp"
 #include "windows/property_editor.hpp"
 #include "windows/dependency_property_rows.hpp"
 
@@ -121,6 +122,7 @@ private:
     void mesh_primitive_properties    (erhe::scene::Mesh& mesh);
     void mesh_raytrace_properties     (erhe::scene::Mesh& mesh);
     void texture_properties           (const std::shared_ptr<erhe::graphics::Texture>& texture);
+    void kit_piece_properties         (const std::shared_ptr<erhe::scene::Mesh>& piece);
     void brush_placement_properties   (const erhe::scene::Node& node);
 
     void animation_properties         (const std::shared_ptr<erhe::scene::Animation>& animation);
@@ -170,6 +172,12 @@ private:
 
     erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
+    erhe::message_bus::Subscription<Selection_message>             m_selection_subscription;
+    erhe::message_bus::Subscription<Active_item_changed_message>   m_active_item_subscription;
+    erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
+
+    // The "Kit Piece" group of a single selected kit piece (doc/editor/level_tools.md "Parameter rows").
+    Kit_piece_editor m_kit_piece_editor;
 
     // Issue #252: the explicit pinned target (weak_ptr so a deleted item
     // reverts the window to selection mode), and the reused single-element

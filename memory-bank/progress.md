@@ -44,3 +44,8 @@
 ✓steps-1-8{core+settings+seeds+job+staleness+visualization+Export-stage+editor-asset-item(Item_kind::navigation_mesh=9-on-main)}
 !traps{Recast-target-built-without--fno-rtti(editor-subclasses-rcContext)+hollow-closed-mesh-gets-inner-walkable-floor(unreachable)+Recast-DebugUtils-fails--Werror-on-GCC->build-named-targets}
 ?next{open-items-in-doc/plans/navigation_mesh.md|triangle-classification-plan-needs-triangle-visibility(branch-triangle-visibility)}
+
+[TASK::level-tools]{started-2026-11-13;branch=main;doc/plans/level_tools_implementation.md(steps)+topics/level_tools.md(state)}
+✓requirements+design+steps-1-7e{see-topics/level_tools.md[BUILT]}
+⚡step-7f{windowed-parameter-row-drag-freeze;kitdrag-diagnostics-in-working-tree(uncommitted);next=©User-reproduces-once->grep-"kitdrag:"-logs/log.txt->root-cause->fix->remove-diagnostics}
+?next{step-8-region-contents+height-map+support-report}

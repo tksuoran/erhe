@@ -147,6 +147,14 @@ auto Imgui_windows::get_persistent_window_open(std::string_view ini_label) const
     return true;
 }
 
+auto Imgui_windows::has_persistent_window_state(std::string_view ini_label) const -> bool
+{
+    if (m_config_path.empty()) {
+        return false;
+    }
+    return get_windows_config().windows.contains(std::string{ini_label});
+}
+
 auto Imgui_windows::get_persistent_open_window_labels() const -> std::vector<std::string>
 {
     std::vector<std::string> labels;

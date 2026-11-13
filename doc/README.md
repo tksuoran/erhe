@@ -333,6 +333,7 @@ flowchart TD
 - [editor/import_undo_reference_clearing.md](editor/import_undo_reference_clearing.md) (mostly stable): Clearing stale editor references after an undo removes imported content
 - [editor/input_bindings.md](editor/input_bindings.md) (mostly stable): User-editable input bindings: Input Bindings window, persistence in input_bindings.json, MCP tools
 - [editor/lattice_deform_geometry_node.md](editor/lattice_deform_geometry_node.md) (mostly stable): Lattice free-form deformation geometry-graph node
+- [editor/level_tools.md](editor/level_tools.md) (experimental): Level kit-bashing: kit shapes, pieces sharing one mesh per parameter values, placement as one undo entry, parameter changes, surface placement, brush cache lifetime, level settings, MCP level_get_kits / level_place_pieces / level_get_pieces / level_set_piece_parameters / level_snap_to_surface
 - [editor/lightmap_baking.md](editor/lightmap_baking.md) (experimental): Interactive lightmap baker: architecture, texel density, bake and sampling features
 - [editor/lightmap_texture_viewer.md](editor/lightmap_texture_viewer.md) (stable): Lightmap Texture viewer window: atlas display, edge and hover overlays
 - [editor/light_mixer.md](editor/light_mixer.md) (experimental): Light Mixer window: per-light table of the active scene with mute / solo, intensity, color, range and spot cone angles
@@ -486,6 +487,9 @@ flowchart TD
 - [plans/mesh_modeling.md](plans/mesh_modeling.md) (in progress): Blender-style mesh modeling operations: remaining work
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
+- [plans/level_tools.md](plans/level_tools.md) (proposed): Level tools: requirements (kit-bashing shape kits, basic and parametric shapes, placement tools, walkable area reads and spatial queries over UI and MCP)
+- [plans/level_tools_design.md](plans/level_tools_design.md) (in progress): Level tools: design (shape definitions, pieces as brush placements with a saved record, MCP and UI exposure, walkable area reads, spatial tools)
+- [plans/level_tools_implementation.md](plans/level_tools_implementation.md) (in progress): Level tools: implementation steps (the steps after the first testable version)
 - [plans/navigation_mesh.md](plans/navigation_mesh.md) (in progress): Navigation mesh: outstanding work (triangle classification from walkable sample points, open items, unverified paths)
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
 - [plans/quest_fragment_shader.md](plans/quest_fragment_shader.md) (proposed): Quest fragment shader: the mobile shading variant (mobile shadow lookup, fp16 chain, 16-bit material record, measured Adreno 740 costs)

@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "parsers/gltf.hpp"
+#include "level/level_kits.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "scene/world_space_bake.hpp"
 #include "windows/lod_window.hpp"
@@ -2559,6 +2560,12 @@ auto finish_open_scene_gltf(
         scene_root->set_pvs_database(std::move(gltf_data.pvs_database), Mesh_form::source);
     }
     scene_root->apply_variant_selections(context);
+
+    // Kit pieces take their kit brushes (doc/editor/level_tools.md "Persistence"), before the
+    // navigation item's input check; a prepared run keeps the meshes it was built with.
+    if (!prepared_asset && (context.level_kits != nullptr)) {
+        static_cast<void>(context.level_kits->refresh_scene(*scene_root));
+    }
 
     // Editor-only state from the editor asset; a prepared run has none.
     if (!prepared_asset) {

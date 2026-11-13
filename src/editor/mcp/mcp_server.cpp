@@ -457,9 +457,12 @@ namespace {
 
 [[nodiscard]] auto is_allowed_during_scene_save(const std::string& tool_name) -> bool
 {
-    static constexpr std::array<std::string_view, 11> allowed{
+    static constexpr std::array<std::string_view, 14> allowed{
         "get_async_status",
         "get_navigation_status",
+        "get_navigation_summary",
+        "navigation_find_point",
+        "navigation_find_path",
         "get_pvs_bake_status",
         "get_viewports",
         "list_scenes",
@@ -695,7 +698,18 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "navigation_clear",               &Mcp_server::action_navigation_clear              },
         { "navigation_set_visualization",   &Mcp_server::action_navigation_set_visualization  },
         { "get_navigation_mesh",            &Mcp_server::query_navigation_mesh                },
+        { "get_navigation_summary",         &Mcp_server::query_navigation_summary             },
+        { "navigation_find_point",          &Mcp_server::query_navigation_find_point          },
+        { "navigation_find_path",           &Mcp_server::query_navigation_find_path           },
 #endif
+        { "level_get_kits",                 &Mcp_server::query_level_kits                     },
+        { "level_place_pieces",             &Mcp_server::action_level_place_pieces            },
+        { "level_get_pieces",               &Mcp_server::query_level_pieces                   },
+        { "level_set_piece_parameters",     &Mcp_server::action_level_set_piece_parameters    },
+        { "level_snap_to_surface",          &Mcp_server::action_level_snap_to_surface         },
+        { "level_get_placement_preview",    &Mcp_server::query_level_placement_preview        },
+        { "get_surface_snap_settings",      &Mcp_server::query_surface_snap_settings          },
+        { "set_surface_snap_settings",      &Mcp_server::action_set_surface_snap_settings     },
         { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
         { "raycast",                        &Mcp_server::query_raycast                        },
         { "geometry_query",                 &Mcp_server::query_geometry_batch                 },

@@ -20,7 +20,7 @@ Implements the brush system for placing parametric mesh shapes onto surfaces.
   - Preview mesh display (translucent ghost of the brush at the placement position)
   - Snapping to hovered polygon face or grid
   - Scale-to-match (match face size of target)
-  - Insert operation (creates an `Item_insert_remove_operation` via `Operation_stack`)
+  - Insert operation (creates an `Item_insert_remove_operation` via `Operation_stack`), on a right press with no modifier key held - a right press with a modifier belongs to the camera (Alt + right drag tumbles)
   - Brush rotation (cycle through face offsets)
   - Brush picking (select brush from hovered mesh)
   - Drag-and-drop brush placement from content library
@@ -130,6 +130,21 @@ something needs it.
   caller places the square itself rather than at the ImGui cursor - and act on
   the `Brush_thumbnail_result` it returns: draw the site's own icon for `icon`,
   and nothing further for `thumbnail` or `spinner`.
+
+## Kit mode
+
+Choosing a shape in the Level Kit window hands `Brush_tool` a level kit brush
+(`set_kit_brush()`) and makes it the active tool; the tool is then in kit mode
+(`doc/editor/level_tools.md` "Level Kit window"). Kit mode keeps the hover,
+preview, grid snap and insert machinery and changes two places: the placement
+transform, which comes from `Level_kits::make_placement_pose()` for the preview
+and the insert alike (`update_kit_preview_transform()`), and the insert, which
+is one `Level_kits::place()` at the preview's transform (`try_insert_kit_piece()`).
+The rotate commands turn the next piece about the up axis by the rotation step.
+Choosing a palette brush - `set_active_brush()` (hotbar, `set_tool_asset`), a
+drag-and-drop preview or selecting a brush in a content library - or another
+tool leaves kit mode (`leave_kit_mode()`). `level_get_placement_preview` reads
+the kit mode state over MCP.
 
 ## Public API / Integration Points
 

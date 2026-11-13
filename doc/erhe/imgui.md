@@ -13,7 +13,7 @@ management system that tracks, registers, and dispatches input events to ImGui w
 - `Imgui_host` -- abstract base (also a `Rendergraph_node` + `Input_event_handler`): hosts an ImGui context; subclassed by `Window_imgui_host` and editor's `Rendertarget_imgui_host`
 - `Window_imgui_host` -- concrete host that renders ImGui into the main OS window via swapchain
 - `Imgui_window` -- base class for individual ImGui windows; override `imgui()` to draw content
-- `Imgui_windows` -- registry/manager: registers windows, dispatches input events, persists visibility state, provides menu entries
+- `Imgui_windows` -- registry/manager: registers windows, dispatches input events, persists visibility state, provides menu entries. A window the persisted state has no entry for is visible unless its constructor calls `Imgui_window::set_default_visibility(Window_visibility::hidden)`
 - `Imgui_settings` -- font paths, sizes, scale factor configuration
 - `Scoped_imgui_context` -- RAII guard for switching the active ImGui context
 - `File_dialog_window` -- simple file browser dialog window

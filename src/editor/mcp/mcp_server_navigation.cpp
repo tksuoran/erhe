@@ -15,6 +15,9 @@
 #   include "assets/navigation_item.hpp"
 #   include "config/generated/debug_visualizations_settings.hpp"
 #   include "config/generated/navigation_mesh_visualization.hpp"
+#   include "config/generated/navigation_settings.hpp"
+#   include "config/generated/scene_export_settings.hpp"
+#   include "navigation/make_navigation_build_settings.hpp"
 #   include "navigation/navigation_mesh.hpp"
 #   include "scene/scene_navigation.hpp"
 #   include "scene/viewport_scene_view.hpp"
@@ -30,8 +33,11 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -134,6 +140,8 @@ namespace {
         {"stale_reasons",           stale_reasons},
         {"polygon_count",           status.totals.polygon_count},
         {"reachable_polygon_count", status.totals.reachable_polygon_count},
+        {"island_count",            status.totals.island_count},
+        {"reachable_island_count",  status.totals.reachable_island_count},
         {"total_area",              status.totals.total_area},
         {"reachable_area",          status.totals.reachable_area},
         {"tile_count",              status.statistics.tile_count},
@@ -152,6 +160,67 @@ namespace {
             : json(nullptr)},
         {"status_text",             navigation.get_status_text()}
     };
+}
+
+// A three-number argument; false with out_error when it is present and not one.
+[[nodiscard]] auto read_vec3_argument(const json& args, const char* key, glm::vec3& out_value, std::string& out_error) -> bool
+{
+    const json& value = args.at(key);
+    if (!value.is_array() || (value.size() != 3) || !std::all_of(value.begin(), value.end(), [](const json& v) { return v.is_number(); })) {
+        out_error = fmt::format("'{}' must be an array of three numbers [x, y, z]", key);
+        return false;
+    }
+    out_value = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+    if (!std::isfinite(out_value.x) || !std::isfinite(out_value.y) || !std::isfinite(out_value.z)) {
+        out_error = fmt::format("'{}' must be finite", key);
+        return false;
+    }
+    return true;
+}
+
+// search_extents, or the scene's seed search extents (the installed mesh's without export settings).
+[[nodiscard]] auto read_search_extents(const json& args, const Scene_root& scene_root, glm::vec3& out_extents, std::string& out_error) -> bool
+{
+    if (args.contains("search_extents")) {
+        if (!read_vec3_argument(args, "search_extents", out_extents, out_error)) {
+            return false;
+        }
+        if ((out_extents.x <= 0.0f) || (out_extents.y <= 0.0f) || (out_extents.z <= 0.0f)) {
+            out_error = fmt::format("'search_extents' must be positive half extents; got [{}, {}, {}]", out_extents.x, out_extents.y, out_extents.z);
+            return false;
+        }
+        return true;
+    }
+    const std::optional<Scene_export_settings>& export_settings = scene_root.get_scene_settings().export_settings;
+    out_extents = export_settings.has_value()
+        ? make_navigation_build_settings(export_settings->navigation).get_seed_search_half_extents()
+        : scene_root.get_navigation().get_settings().get_seed_search_half_extents();
+    return true;
+}
+
+[[nodiscard]] auto make_point_result_json(const glm::vec3& position, const Navigation_point_result& result) -> json
+{
+    json reply{{"position", make_vec3_json(position)}, {"found", result.found}};
+    if (result.found) {
+        reply["point"]     = make_vec3_json(result.point);
+        reply["distance"]  = glm::distance(position, result.point);
+        reply["polygon"]   = result.polygon;
+        reply["island"]    = result.island;
+        reply["reachable"] = result.reachable;
+    }
+    return reply;
+}
+
+[[nodiscard]] auto get_failure_reason(const Navigation_path_failure failure) -> const char*
+{
+    switch (failure) {
+        case Navigation_path_failure::none:              return "";
+        case Navigation_path_failure::no_start_polygon:  return "no polygon near start";
+        case Navigation_path_failure::no_end_polygon:    return "no polygon near end";
+        case Navigation_path_failure::different_islands: return "different islands";
+        case Navigation_path_failure::search_failed:     return "path search failed";
+        default:                                         return "?";
+    }
 }
 #endif
 
@@ -345,6 +414,170 @@ auto Mcp_server::action_navigation_set_visualization(const json& args) -> std::s
     }
     log_mcp->info("navigation_set_visualization: {} in {} viewport(s)", to_string(mode), viewports.size());
     return make_json_content(json{{"viewports", viewports}}).dump();
+}
+
+// doc/editor/navigation.md "MCP": the walkable area sized for an agent's context.
+auto Mcp_server::query_navigation_summary(const json& args) -> std::string
+{
+    std::string error;
+    const std::shared_ptr<Scene_root> scene_root = find_unique_scene(m_context, args.value("scene_name", ""), error);
+    if (!scene_root) {
+        return make_error_content(error);
+    }
+    if (args.contains("max_islands") && !args.at("max_islands").is_number_unsigned()) {
+        return make_error_content("'max_islands' must be a non-negative integer");
+    }
+    const std::size_t max_islands = args.value("max_islands", std::size_t{32});
+    const Scene_navigation&                navigation = scene_root->get_navigation();
+    const std::shared_ptr<Navigation_mesh> mesh       = navigation.get_mesh();
+    if (!mesh) {
+        return make_json_content(json{{"scene_name", scene_root->get_name()}, {"available", false}}).dump();
+    }
+    const Navigation_status                   status  = navigation.get_status();
+    const std::span<const Navigation_island> islands = mesh->get_islands();
+    std::vector<uint32_t> order(islands.size());
+    for (uint32_t i = 0; i < order.size(); ++i) {
+        order[i] = i;
+    }
+    std::stable_sort(order.begin(), order.end(), [&islands](const uint32_t lhs, const uint32_t rhs) {
+        return islands[lhs].area > islands[rhs].area;
+    });
+    json islands_json = json::array();
+    for (std::size_t i = 0, end = std::min(max_islands, order.size()); i < end; ++i) {
+        const Navigation_island& island = islands[order[i]];
+        islands_json.push_back(json{
+            {"id",            order[i]},
+            {"area",          island.area},
+            {"polygon_count", island.polygon_count},
+            {"bounds_min",    make_vec3_json(island.bounds_min)},
+            {"bounds_max",    make_vec3_json(island.bounds_max)},
+            {"reachable",     island.reachable},
+            {"point",         make_vec3_json(island.point)}
+        });
+    }
+    std::vector<Navigation_seed>        seeds;
+    std::vector<Navigation_seed_result> results;
+    navigation.get_seeds(seeds);
+    navigation.get_seed_results(results);
+    json failed_seeds = json::array();
+    for (std::size_t i = 0, end = std::min(seeds.size(), results.size()); i < end; ++i) {
+        if (!results[i].found) {
+            failed_seeds.push_back(json{{"node", seeds[i].name}, {"point", make_vec3_json(seeds[i].point)}, {"reason", results[i].reason}});
+        }
+    }
+    return make_json_content(json{
+        {"scene_name",             scene_root->get_name()},
+        {"available",              true},
+        {"stale",                  status.staleness.is_stale()},
+        {"total_area",             status.totals.total_area},
+        {"reachable_area",         status.totals.reachable_area},
+        {"polygon_count",          status.totals.polygon_count},
+        {"island_count",           islands.size()},
+        {"reachable_island_count", mesh->get_reachable_island_count()},
+        {"returned_island_count",  islands_json.size()},
+        {"truncated",              islands_json.size() < islands.size()},
+        {"islands",                islands_json},
+        {"failed_seeds",           failed_seeds}
+    }).dump();
+}
+
+auto Mcp_server::query_navigation_find_point(const json& args) -> std::string
+{
+    std::string error;
+    const std::shared_ptr<Scene_root> scene_root = find_unique_scene(m_context, args.value("scene_name", ""), error);
+    if (!scene_root) {
+        return make_error_content(error);
+    }
+    const bool by_position = args.contains("position");
+    const bool by_node     = args.contains("node_id") || args.contains("node");
+    if (by_position == by_node) {
+        return make_error_content("give either 'position' or 'node_id' / 'node'");
+    }
+    glm::vec3   position{0.0f};
+    std::string node_name;
+    if (by_position) {
+        if (!read_vec3_argument(args, "position", position, error)) {
+            return make_error_content(error);
+        }
+    } else {
+        const std::shared_ptr<erhe::Hierarchy> prim = find_unique_prim_in_scene(*scene_root, args, "node_id", "node", "Node", Absent_prim::error, error);
+        if (!prim) {
+            return make_error_content(error);
+        }
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(prim);
+        if (!node) {
+            return make_error_content("'" + prim->get_name() + "' is not a node (a prim without a transform has no position)");
+        }
+        position  = get_navigation_seed_point(*scene_root, *node);
+        node_name = node->get_name();
+    }
+    glm::vec3 extents{0.0f};
+    if (!read_search_extents(args, *scene_root, extents, error)) {
+        return make_error_content(error);
+    }
+    Scene_navigation&                      navigation = scene_root->get_navigation();
+    const std::shared_ptr<Navigation_mesh> mesh       = navigation.get_mesh();
+    if (!mesh) {
+        return make_json_content(json{{"scene_name", scene_root->get_name()}, {"available", false}, {"found", false}}).dump();
+    }
+    json reply = make_point_result_json(position, mesh->find_nearest_point(position, extents));
+    reply["scene_name"]     = scene_root->get_name();
+    reply["available"]      = true;
+    reply["stale"]          = navigation.get_status().staleness.is_stale();
+    reply["search_extents"] = make_vec3_json(extents);
+    if (!node_name.empty()) {
+        reply["node"] = node_name;
+    }
+    return make_json_content(reply).dump();
+}
+
+auto Mcp_server::query_navigation_find_path(const json& args) -> std::string
+{
+    std::string error;
+    const std::shared_ptr<Scene_root> scene_root = find_unique_scene(m_context, args.value("scene_name", ""), error);
+    if (!scene_root) {
+        return make_error_content(error);
+    }
+    if (!args.contains("start") || !args.contains("end")) {
+        return make_error_content("'start' and 'end' are required");
+    }
+    glm::vec3 start{0.0f};
+    glm::vec3 end{0.0f};
+    glm::vec3 extents{0.0f};
+    if (
+        !read_vec3_argument(args, "start", start, error) ||
+        !read_vec3_argument(args, "end", end, error) ||
+        !read_search_extents(args, *scene_root, extents, error)
+    ) {
+        return make_error_content(error);
+    }
+    Scene_navigation&                      navigation = scene_root->get_navigation();
+    const std::shared_ptr<Navigation_mesh> mesh       = navigation.get_mesh();
+    if (!mesh) {
+        return make_json_content(json{{"scene_name", scene_root->get_name()}, {"available", false}, {"found", false}}).dump();
+    }
+    Navigation_path_result path;
+    mesh->find_path(start, end, extents, path);
+    json corners = json::array();
+    for (const glm::vec3& corner : path.corners) {
+        corners.push_back(make_vec3_json(corner));
+    }
+    json reply{
+        {"scene_name",     scene_root->get_name()},
+        {"available",      true},
+        {"stale",          navigation.get_status().staleness.is_stale()},
+        {"search_extents", make_vec3_json(extents)},
+        {"start",          make_point_result_json(start, path.start)},
+        {"end",            make_point_result_json(end, path.end)},
+        {"found",          path.found},
+        {"complete",       path.complete},
+        {"length",         path.length},
+        {"corners",        corners}
+    };
+    if (!path.found) {
+        reply["reason"] = get_failure_reason(path.failure);
+    }
+    return make_json_content(reply).dump();
 }
 
 auto Mcp_server::query_navigation_mesh(const json& args) -> std::string

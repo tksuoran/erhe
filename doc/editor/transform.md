@@ -156,6 +156,23 @@ the first step that moves a vertex, as for a move.
   `flipped`, `clamp`, `direction` for vertex slide) runs begin, one step and
   commit through `Transform_tool::run_scalar_edit()`.
 
+## Surface settings
+
+With Snap To Surface or Orient To Surface on (the viewport toolbar, the Move
+tool group of the Transform window, the Level Kit window), a translate drag of
+the gizmo rests each moved mesh on the surface under it at every step;
+`transform_selection` and `drag_selection` do so with their `surface_snap` /
+`surface_orient` arguments. The rules (the axis rule, rotate and scale left
+alone, the anchor, undo) are in `doc/editor/level_tools.md` "Surface settings".
+
+## Rigid descendants
+
+A translate step (`Transform_tool::adjust_translation()`) does not write a
+target whose ancestor is also a target the drag moves
+(`has_moved_ancestor_entry()`; a locked ancestor does not count): it rides on
+the ancestor, so a parent and child selected together move rigidly whatever
+the order of the targets.
+
 ## Snap to vertices / edges
 
 The viewport toolbar's "Snap to vertices / edges" checkbox (shown in the

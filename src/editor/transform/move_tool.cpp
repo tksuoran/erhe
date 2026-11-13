@@ -6,6 +6,7 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/mesh_transform_mode.hpp"
 #include "input_state.hpp"
+#include "level/surface_settings_ui.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -49,6 +50,10 @@ void Move_tool::imgui(Property_editor& property_editor)
     p.reset();
     p.push_group("Move tool", ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.translate_snap_enable); });
+    if (m_context.level_kits != nullptr) {
+        p.add_entry("Snap To Surface",   [this]() { surface_snap_checkbox  (*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry("Orient To Surface", [this]() { surface_orient_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
+    }
     p.add_entry("Bone IK", [this]() {
         ImGui::Checkbox("##", &get_shared().settings.translate_ik_enable);
         if (ImGui::IsItemHovered()) {

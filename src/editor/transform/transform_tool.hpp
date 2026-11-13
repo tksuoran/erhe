@@ -8,6 +8,7 @@
 #include "transform/mesh_component_transform.hpp"
 #include "transform/physics_driven_drag.hpp"
 #include "transform/rotation_inspector.hpp"
+#include "level/level_queries.hpp"
 #include "scene/analytic_hover_provider.hpp"
 #include "tools/tool.hpp"
 
@@ -29,6 +30,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace erhe::imgui {
     class Value_edit_state;
@@ -125,6 +127,8 @@ public:
     erhe::scene::Trs_transform                world_from_node_before;
     std::optional<erhe::physics::Motion_mode> original_motion_mode;
     erhe::physics::Motion_mode                motion_mode{erhe::physics::Motion_mode::e_none};
+    // Whether the last surface step rested this node on a surface (D4.6).
+    bool                                      surface_found{false};
 };
 
 class Transform_tool_shared
@@ -328,12 +332,17 @@ public:
     // undoable operation and releases the bodies like a gizmo release.
     // Refused while a pointer drag, a scripted drag or a component selection
     // is active, or when nothing is selected.
-    auto begin_scripted_drag(Transform_drag_kind kind) -> bool;
+    // A translate drag rests the moved meshes on the surface with `surface` (D4.6).
+    auto begin_scripted_drag(Transform_drag_kind kind, const Surface_options& surface) -> bool;
     void end_scripted_drag  ();
     [[nodiscard]] auto is_scripted_drag_active() const -> bool;
     // True while the current drag pulls the node's jointed dynamic body
     // through physics instead of writing the node transform.
     [[nodiscard]] auto is_node_pulled_through_physics(const erhe::scene::Node* node) const -> bool;
+
+    // D4.6 (doc/editor/level_tools.md "Transform tool"): rests each moved mesh of the selection on
+    // the surface under it, all moved meshes excluded from the rays; returns how many found one.
+    auto rest_on_surface(const Surface_options& options) -> std::size_t;
 
     // Create a real, undoable scene Node at the current gizmo anchor frame.
     void create_node_from_anchor();
@@ -521,6 +530,11 @@ private:
     // Physics_driven_drag). Started with the node drag, ended at release.
     Physics_driven_drag                 m_physics_drag;
     bool                                m_scripted_drag_active{false};
+    // The surface options of the running translate drag (D4.6); off outside one.
+    Surface_options                     m_drag_surface{};
+    // Scratch of rest_on_surface(): the moved meshes and their descendants, and per entry the move.
+    std::vector<const erhe::scene::Mesh*> m_surface_excluded;
+    std::vector<glm::vec3>                m_surface_deltas;
     Rotation_inspector                  m_rotation;
 
     Property_editor                     m_property_editor;
@@ -576,6 +590,13 @@ private:
     // IK branch of adjust_translation(): returns true when an IK chain drag
     // consumed the translation (FK translation must not run).
     auto try_translate_ik(glm::vec3 translation) -> bool;
+
+    // The surface step of a translate drag (D4.6), after the tool wrote the step's transforms.
+    void apply_drag_surface_step();
+    // True when an ancestor of the node is a target the drag moves: the node rides along rigidly.
+    [[nodiscard]] auto has_moved_ancestor_entry(const erhe::scene::Node& node) const -> bool;
+    // A pointer drag whose only free axis is the surface direction's axis lifts off the surface.
+    [[nodiscard]] auto is_surface_axis_drag(const glm::vec3& direction) const -> bool;
     // Ends the IK part of a drag (pointer or scripted), after its operation
     // was recorded.
     void end_ik_drag();

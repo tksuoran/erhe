@@ -521,7 +521,7 @@ auto Brush::get_bounding_box() -> erhe::math::Aabb
     return m_primitive->get_bounding_box();
 }
 
-auto place_brush_in_scene(
+auto make_brush_instance_insert(
     App_context&                                      context,
     Brush&                                            brush,
     Scene_root&                                       scene_root,
@@ -532,7 +532,7 @@ auto place_brush_in_scene(
     std::shared_ptr<erhe::Hierarchy>                  parent,
     std::size_t                                       index_in_parent,
     std::optional<float>                              mass_override
-) -> std::shared_ptr<erhe::scene::Node>
+) -> Brush_instance_insert
 {
     constexpr uint64_t mesh_flags =
         erhe::Item_flags::content     |
@@ -554,20 +554,20 @@ auto place_brush_in_scene(
         .mass_override   = mass_override,
     };
 
-    auto instance_node = brush.make_instance(create_info);
+    std::shared_ptr<erhe::scene::Node> instance_node = brush.make_instance(create_info);
     if (!instance_node) {
         // make_instance() has already named the brush in the log.
         return {};
     }
 
-    auto shared_brush = std::dynamic_pointer_cast<Brush>(brush.shared_from_this());
+    std::shared_ptr<Brush> shared_brush = std::dynamic_pointer_cast<Brush>(brush.shared_from_this());
     set_brush_placement(*instance_node.get(), shared_brush, GEO::NO_FACET, GEO::NO_CORNER);
 
     if (!parent) {
         parent = scene_root.get_scene().get_root_node();
     }
 
-    auto op = std::make_shared<Item_insert_remove_operation>(
+    std::shared_ptr<Operation> operation = std::make_shared<Item_insert_remove_operation>(
         Item_insert_remove_operation::Parameters{
             .context         = context,
             .item            = instance_node,
@@ -576,9 +576,30 @@ auto place_brush_in_scene(
             .index_in_parent = index_in_parent
         }
     );
-    context.operation_stack->queue(op);
+    return Brush_instance_insert{.node = instance_node, .operation = operation};
+}
 
-    return instance_node;
+auto place_brush_in_scene(
+    App_context&                                      context,
+    Brush&                                            brush,
+    Scene_root&                                       scene_root,
+    const glm::mat4&                                  world_from_node,
+    const std::shared_ptr<erhe::primitive::Material>& material,
+    double                                            scale,
+    erhe::physics::Motion_mode                        motion_mode,
+    std::shared_ptr<erhe::Hierarchy>                  parent,
+    std::size_t                                       index_in_parent,
+    std::optional<float>                              mass_override
+) -> std::shared_ptr<erhe::scene::Node>
+{
+    const Brush_instance_insert insert = make_brush_instance_insert(
+        context, brush, scene_root, world_from_node, material, scale, motion_mode, parent, index_in_parent, mass_override
+    );
+    if (!insert.node) {
+        return {};
+    }
+    context.operation_stack->queue(insert.operation);
+    return insert.node;
 }
 
 }

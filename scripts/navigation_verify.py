@@ -27,6 +27,11 @@ settings, marks a seed on the floor and checks over MCP:
   ray and a save (the glTF file) leave it out; a build with it present reads the same input (the
   flood alone runs); navigation_clear removes it; navigation_set_visualization sets the viewports;
   closing the scene leaves nothing alive;
+- the walkable area reads: get_navigation_summary lists two islands (the floor with the ramp, reachable; the
+  platform's top, not) largest first with bounds and points, matching get_navigation_status's counts;
+  navigation_find_point by position and by node, over the platform and out of reach (and in wider search_extents);
+  navigation_find_path around the wall and up the ramp (found, complete, corners and length agree), to the platform
+  (different islands) and off the mesh (no polygon near end); a stale mesh answers with stale true;
 - get_save_status reports the stage of a running build (informational);
 - saving (doc/editor/navigation.md "Saving"), on the scene saved as an erhe scene in the work directory: a
   build stores the item (made, key, bytes) and the record, an unchanged build finds it (same key, not made);
@@ -315,6 +320,95 @@ def check_visualization(editor, navigation, scene, work, status):
     editor.call("navigation_set_visualization", {"mode": "reachable"})
 
 
+def distance(a, b):
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+
+
+def check_reads(editor, navigation, scene, status):
+    """The walkable area reads (doc/editor/navigation.md "Islands", "MCP"): summary, nearest point, path."""
+    tool_names = editor.client.tool_names()
+    check("the read tools are listed", {"get_navigation_summary", "navigation_find_point", "navigation_find_path"} <= tool_names)
+    summary = editor.call("get_navigation_summary", {"scene_name": scene})
+    islands = summary.get("islands", [])
+    print(f"INFO: islands {json.dumps(islands)}", flush=True)
+    check("the summary: two islands (the floor with the ramp, the platform's top), one reachable, as the status counts",
+          summary.get("available") and not summary.get("stale") and (summary.get("island_count") == 2) and (summary.get("reachable_island_count") == 1)
+          and (status.get("island_count") == 2) and (status.get("reachable_island_count") == 1) and (len(islands) == 2) and not summary.get("truncated"),
+          f"summary {summary.get('island_count')} / {summary.get('reachable_island_count')}, status {status.get('island_count')} / {status.get('reachable_island_count')}")
+    check("the summary lists the islands largest first, their areas adding up to the total, no failed seed",
+          all(islands[i]["area"] >= islands[i + 1]["area"] for i in range(len(islands) - 1))
+          and (abs(sum(i["area"] for i in islands) - summary.get("total_area", 0.0)) < 0.01)
+          and (abs(summary.get("reachable_area", 0.0) - status.get("reachable_area", -1.0)) < 1.0e-6) and (summary.get("failed_seeds") == []),
+          f"areas {[round(i['area'], 2) for i in islands]}, total {summary.get('total_area')}, failed seeds {summary.get('failed_seeds')}")
+    (px0, _, pz0), (px1, py1, pz1) = PLATFORM
+    platform = next((i for i in islands if not i["reachable"]), None)
+    check("the platform island: unreachable, its bounds over the platform's top, its point on it",
+          (platform is not None) and (px0 <= platform["bounds_min"][0]) and (platform["bounds_max"][0] <= px1)
+          and (pz0 <= platform["bounds_min"][2]) and (platform["bounds_max"][2] <= pz1)
+          and (abs(platform["bounds_min"][1] - py1) < 0.3) and (abs(platform["bounds_max"][1] - py1) < 0.3)
+          and (px0 < platform["point"][0] < px1) and (pz0 < platform["point"][2] < pz1),
+          json.dumps(platform))
+    floor_island = next((i for i in islands if i["reachable"]), None)
+    check("the reachable island spans the floor and the ramp (height range 0 to about 1 m)",
+          (floor_island is not None) and (floor_island["bounds_min"][1] < 0.3) and (0.7 < floor_island["bounds_max"][1] < 1.3),
+          json.dumps(floor_island))
+
+    point = editor.call("navigation_find_point", {"scene_name": scene, "position": [-8.0, 1.0, 2.0]})
+    check("navigation_find_point snaps a point 1 m above the floor onto it: reachable, on the floor island, distance as reported",
+          point.get("found") and point.get("reachable") and (abs(point["point"][1]) < 0.3) and (abs(point["point"][0] + 8.0) < 1.0e-3)
+          and (abs(point["distance"] - distance(point["point"], [-8.0, 1.0, 2.0])) < 1.0e-4)
+          and (floor_island is not None) and (point.get("island") == floor_island["id"]) and (point.get("search_extents") == [1.0, 3.0, 1.0]),
+          json.dumps(point))
+    by_node = editor.call("navigation_find_point", {"scene_name": scene, "node": "seed"})
+    check("navigation_find_point of the seed node: its origin, found and reachable",
+          by_node.get("found") and by_node.get("reachable") and (by_node.get("node") == "seed") and (distance(by_node["position"], SEED) < 1.0e-4),
+          json.dumps(by_node))
+    on_platform = editor.call("navigation_find_point", {"scene_name": scene, "position": [5.0, 1.5, -5.0]})
+    check("navigation_find_point over the platform: found, not reachable, on the platform island",
+          on_platform.get("found") and not on_platform.get("reachable") and (platform is not None) and (on_platform.get("island") == platform["id"]),
+          json.dumps(on_platform))
+    nothing = editor.call("navigation_find_point", {"scene_name": scene, "position": [-8.0, 20.0, 2.0]})
+    wide = editor.call("navigation_find_point", {"scene_name": scene, "position": [-8.0, 20.0, 2.0], "search_extents": [1.0, 25.0, 1.0]})
+    check("navigation_find_point 20 m up finds nothing in the default extents and the floor with search_extents 25 m high",
+          (not nothing.get("found")) and wide.get("found") and (wide.get("search_extents") == [1.0, 25.0, 1.0]),
+          f"{json.dumps(nothing)} / {json.dumps(wide)}")
+    error = editor.refusal("navigation_find_point", {"scene_name": scene, "position": [0.0, 0.0, 0.0], "node": "seed"})
+    check("navigation_find_point with both position and node is an error", error is not None, error or "accepted")
+
+    start, end = [-8.0, 0.0, -1.0], [8.0, 0.0, 8.0]
+    path = editor.call("navigation_find_path", {"scene_name": scene, "start": start, "end": end})
+    corners = path.get("corners", [])
+    check("navigation_find_path around the wall: found, complete, from start to end, longer than the straight line",
+          path.get("found") and path.get("complete") and (len(corners) >= 3) and (distance(corners[0], path["start"]["point"]) < 1.0e-4)
+          and (distance(corners[-1], path["end"]["point"]) < 1.0e-4) and (path["length"] > distance(start, end))
+          and (abs(path["length"] - sum(distance(corners[i], corners[i + 1]) for i in range(len(corners) - 1))) < 1.0e-3),
+          f"found {path.get('found')}, complete {path.get('complete')}, length {path.get('length')}, {len(corners)} corners")
+    ramp_path = editor.call("navigation_find_path", {"scene_name": scene, "start": start, "end": [-3.0, 0.9, 2.5]})
+    check("navigation_find_path up the ramp: found and complete",
+          ramp_path.get("found") and ramp_path.get("complete") and (ramp_path["end"]["point"][1] > 0.5), json.dumps(ramp_path)[:400])
+    blocked = editor.call("navigation_find_path", {"scene_name": scene, "start": start, "end": [5.0, 1.0, -5.0]})
+    check("navigation_find_path to the platform: not found, reason 'different islands', both ends snapped",
+          (not blocked.get("found")) and (blocked.get("reason") == "different islands") and blocked["start"]["found"] and blocked["end"]["found"]
+          and (blocked.get("corners") == []),
+          json.dumps(blocked)[:400])
+    off = editor.call("navigation_find_path", {"scene_name": scene, "start": start, "end": [50.0, 0.0, 0.0]})
+    check("navigation_find_path to a point off the mesh: reason 'no polygon near end'",
+          (not off.get("found")) and (off.get("reason") == "no polygon near end"), json.dumps(off)[:300])
+
+    # A stale mesh still answers, saying so.
+    editor.call("set_node_transform", {"scene_name": scene, "node_name": "pillar_a", "space": "local", "translation": [-6.0, 0.0, -7.0]})
+    editor.wait_idle()
+    stale_point = editor.call("navigation_find_point", {"scene_name": scene, "position": [-8.0, 1.0, 2.0]})
+    stale_path  = editor.call("navigation_find_path", {"scene_name": scene, "start": start, "end": end})
+    stale_summary = editor.call("get_navigation_summary", {"scene_name": scene})
+    editor.call("undo")
+    editor.wait_idle()
+    check("a stale mesh still answers the reads with stale true",
+          stale_point.get("stale") and stale_point.get("found") and stale_path.get("stale") and stale_path.get("found") and stale_summary.get("stale"),
+          f"point {stale_point.get('stale')}, path {stale_path.get('stale')}, summary {stale_summary.get('stale')}")
+    check("the undo of the move makes the reads current again", not editor.call("get_navigation_summary", {"scene_name": scene}).get("stale"))
+
+
 def undo_stack(editor):
     return json.dumps(editor.call("get_undo_redo_stack"), sort_keys=True)
 
@@ -393,6 +487,7 @@ def run(editor, work):
           reachable_mesh.get("returned_count") == status.get("reachable_polygon_count"),
           f"{reachable_mesh.get('returned_count')} vs {status.get('reachable_polygon_count')}")
 
+    check_reads(editor, navigation, scene, status)
     check_visualization(editor, navigation, scene, work, status)
 
     # A second build of the same scene: clear, then build again.

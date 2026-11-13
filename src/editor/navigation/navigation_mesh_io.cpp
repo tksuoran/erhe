@@ -425,10 +425,11 @@ auto read_navigation_mesh(
             return fail(out_error, "truncated detail triangle vertices");
         }
     }
-    const std::span<Navigation_polygon> polygons = navigation_mesh->get_polygons();
+    const std::span<const Navigation_polygon> polygons = navigation_mesh->get_polygons();
     if (!reader.read(count) || (count != polygons.size())) {
         return fail(out_error, "polygon count does not match the tiles");
     }
+    std::vector<uint8_t> reachable_flags(count, uint8_t{0});
     for (uint32_t i = 0; i < count; ++i) {
         Navigation_polygon stored{};
         uint8_t            reachable = 0;
@@ -445,7 +446,7 @@ auto read_navigation_mesh(
         if (!ok) {
             return fail(out_error, "truncated polygons");
         }
-        Navigation_polygon& polygon = polygons[i];
+        const Navigation_polygon& polygon = polygons[i];
         if (
             (stored.tile                  != polygon.tile)                  ||
             (stored.first_vertex          != polygon.first_vertex)          ||
@@ -457,8 +458,9 @@ auto read_navigation_mesh(
         ) {
             return fail(out_error, fmt::format("polygon {} does not match the tiles", i));
         }
-        polygon.reachable = (reachable != 0);
+        reachable_flags[i] = (reachable != 0) ? uint8_t{1} : uint8_t{0};
     }
+    navigation_mesh->set_reachable(reachable_flags); // keeps the islands' reachable flags current
     if (!read_record(reader, out_record)) {
         return fail(out_error, "truncated build record");
     }

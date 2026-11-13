@@ -23,6 +23,7 @@
 #include "developer/nsight_graphics.hpp"
 #include "erhe_primitive/lod.hpp"
 #include "erhe_window/window_event_handler.hpp"
+#include "level/level_queries.hpp"
 
 #include <optional>
 
@@ -271,7 +272,19 @@ private:
     auto action_navigation_clear              (const nlohmann::json& args) -> std::string;
     auto action_navigation_set_visualization  (const nlohmann::json& args) -> std::string;
     auto query_navigation_mesh                (const nlohmann::json& args) -> std::string;
+    auto query_navigation_summary             (const nlohmann::json& args) -> std::string;
+    auto query_navigation_find_point          (const nlohmann::json& args) -> std::string;
+    auto query_navigation_find_path           (const nlohmann::json& args) -> std::string;
 #endif
+    // Level kit tools (mcp_server_level.cpp, doc/editor/level_tools.md "MCP").
+    auto query_level_kits                     (const nlohmann::json& args) -> std::string;
+    auto action_level_place_pieces            (const nlohmann::json& args) -> std::string;
+    auto query_level_pieces                   (const nlohmann::json& args) -> std::string;
+    auto action_level_set_piece_parameters    (const nlohmann::json& args) -> std::string;
+    auto action_level_snap_to_surface         (const nlohmann::json& args) -> std::string;
+    auto query_level_placement_preview        (const nlohmann::json& args) -> std::string;
+    auto query_surface_snap_settings          (const nlohmann::json& args) -> std::string;
+    auto action_set_surface_snap_settings     (const nlohmann::json& args) -> std::string;
     auto action_merge_static_subtree(const nlohmann::json& args) -> std::string;
     auto query_shadow_fit_debug (const nlohmann::json& args) -> std::string;
     auto query_raycast          (const nlohmann::json& args) -> std::string;
@@ -750,6 +763,7 @@ private:
         int                   frame_count    {1};
         int                   frame          {0};
         bool                  release        {true};
+        Surface_options       surface        {}; // translate drags only (D4.6)
     };
     std::optional<Selection_drag_steps>              m_selection_drag_steps;
     // The deltas of the held drag_selection drag (release=false), which

@@ -102,6 +102,7 @@ class Item_tree_state_store;
 class Input_bindings_window;
 class Input_state;
 class Lattice_tool;
+class Level_kits;
 class Material_paint_tool;
 class Material_preview;
 class Mesh_component_selection;
@@ -361,6 +362,7 @@ public:
     Input_state*                       input_state          {nullptr};
     Inventory_window*                  inventory_window     {nullptr};
     Lattice_tool*                      lattice_tool         {nullptr};
+    Level_kits*                        level_kits           {nullptr};
     Material_paint_tool*               material_paint_tool  {nullptr};
     Material_preview*                  material_preview     {nullptr};
     Brush_preview*                     brush_preview        {nullptr};

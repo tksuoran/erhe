@@ -15,6 +15,11 @@ class Imgui_renderer;
 class Imgui_host;
 class Imgui_windows;
 
+enum class Window_visibility : unsigned int {
+    visible = 0,
+    hidden
+};
+
 // Wrapper for ImGui window.
 //
 // Each Imgui_window must be hosted in exactly one Imgui_host.
@@ -55,6 +60,9 @@ public:
         float            fallback_height_ratio
     );
     void set_show_in_menu        (bool show);
+    // The visibility of a window the persisted window-state config has no entry for (visible
+    // unless set); call it from the derived window's constructor.
+    void set_default_visibility  (Window_visibility visibility);
 
     // Request ImGui focus for this window, applied once on its next begin()
     // and then cleared. Focusing selects the window's tab when it is docked

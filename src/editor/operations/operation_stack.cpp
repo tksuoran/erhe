@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
+#include "level/level_kits.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation.hpp"
 #include "scene/scene_save_service.hpp"
@@ -304,6 +305,10 @@ void Operation_stack::undo()
         log_operations->info("Undo declined: {}", reason);
         return;
     }
+    // A live kit parameter drag ends first, so the operation finds the piece's committed state (D3.6).
+    if (m_context.level_kits != nullptr) {
+        m_context.level_kits->cancel_parameter_preview();
+    }
     auto operation = m_executed.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_executed.pop_back();
     m_executing = true;
@@ -408,6 +413,10 @@ void Operation_stack::redo()
     if (const char* const reason = get_undo_block_reason(); reason != nullptr) {
         log_operations->info("Redo declined: {}", reason);
         return;
+    }
+    // A live kit parameter drag ends first, so the operation finds the piece's committed state (D3.6).
+    if (m_context.level_kits != nullptr) {
+        m_context.level_kits->cancel_parameter_preview();
     }
     auto operation = m_undone.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_undone.pop_back();

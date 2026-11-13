@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::imgui`: `Window_visibility`, `Imgui_window::set_default_visibility()`
+  and `Imgui_windows::has_persistent_window_state()`: a window the persisted
+  window-state config has no entry for can start hidden.
 - `erhe::asset_store`: `Item_kind::navigation_mesh` (10): a scene's navigation
   mesh in the editor asset, kept while the record `navigation.key` names it
   (`doc/editor/navigation.md` "Saving").
@@ -117,6 +120,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::geometry`: `make_convex_hull()` winds every hull triangle
+  counter-clockwise seen from outside and returns an identical mesh for
+  equal points (each triangle from its lowest vertex, triangles sorted).
 - `erhe::scene_renderer`: content wide lines expand each edge in the vertex
   shader (`content_line_ribbon.vert`) from the edge-line vertex buffer instead
   of a compute pre-pass into a per-frame triangle buffer:

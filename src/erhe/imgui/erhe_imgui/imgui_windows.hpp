@@ -85,6 +85,8 @@ public:
     [[nodiscard]] auto want_capture_keyboard     () const -> bool;
     [[nodiscard]] auto want_capture_mouse        () const -> bool;
     [[nodiscard]] auto get_persistent_window_open(std::string_view ini_label) const -> bool;
+    // Whether the persisted window-state config has an entry for the label.
+    [[nodiscard]] auto has_persistent_window_state(std::string_view ini_label) const -> bool;
 
     // Ini labels recorded as open in the persisted window-state config, i.e.
     // the windows that were open when the previous run last saved its state.

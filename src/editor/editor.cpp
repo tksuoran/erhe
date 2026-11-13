@@ -63,6 +63,8 @@
 #include "asset_browser/asset_browser.hpp"
 #include "assets/asset_load_tick_context.hpp"
 #include "assets/asset_fetch.hpp"
+#include "level/level_kit_window.hpp"
+#include "level/level_kits.hpp"
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/brdf_slice.hpp"
@@ -3526,6 +3528,7 @@ public:
                 m_editor_asset_registry  = std::make_unique<Editor_asset_registry           >(std::filesystem::path{"cache"} / "editor_assets");
                 m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), *m_executor.get());
                 m_asset_fetch            = std::make_unique<Asset_fetch                     >(m_app_context, *m_asset_browser.get());
+                m_level_kits             = std::make_unique<Level_kits                      >(m_app_context, *m_app_message_bus.get());
                 m_composer_window        = std::make_unique<Composer_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_selection_window       = std::make_unique<Selection_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_settings_window        = std::make_unique<Settings_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
@@ -3560,6 +3563,7 @@ public:
                 m_app_context.lightmap_texture_window = m_lightmap_texture_window.get();
                 m_app_context.lightmap_window         = m_lightmap_window.get();
                 m_lod_window             = std::make_unique<Lod_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), m_editor_settings.lod);
+                m_level_kit_window       = std::make_unique<Level_kit_window                >(*m_commands.get(), *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_light_mixer_window     = std::make_unique<Light_mixer_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_pvs_window             = std::make_unique<Pvs_window                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_app_context.pvs_window              = m_pvs_window.get();
@@ -4474,6 +4478,7 @@ public:
         m_app_context.app_scenes               = m_app_scenes            .get();
         m_app_context.asset_manager            = m_asset_manager         .get();
         m_app_context.asset_fetch              = m_asset_fetch           .get();
+        m_app_context.level_kits               = m_level_kits            .get();
         m_app_context.app_settings             = &m_app_settings;
         m_app_context.developer_config         = &m_editor_settings.developer;
         m_app_context.graphics_config          = &m_graphics_config;
@@ -5793,6 +5798,8 @@ public:
 
     std::unique_ptr<Asset_browser                   >        m_asset_browser;
     std::unique_ptr<Asset_fetch                     >        m_asset_fetch;
+    // Its kit brushes hold GPU buffers of m_mesh_memory, which is declared earlier.
+    std::unique_ptr<Level_kits                      >        m_level_kits;
     std::unique_ptr<Icon_set                        >        m_icon_set;
     std::unique_ptr<Post_processing                 >        m_post_processing;
     std::unique_ptr<Sky_renderer                    >        m_sky_renderer;
@@ -5852,6 +5859,7 @@ public:
     std::unique_ptr<Controller_inputs_window        >        m_controller_inputs_window;
     std::unique_ptr<Lightmap_window                 >        m_lightmap_window;
     std::unique_ptr<Lod_window                      >        m_lod_window;
+    std::unique_ptr<Level_kit_window                >        m_level_kit_window;
     std::unique_ptr<Light_mixer_window              >        m_light_mixer_window;
     std::unique_ptr<Pvs_window                      >        m_pvs_window;
 #if defined(ERHE_SPIRV)

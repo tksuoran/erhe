@@ -108,6 +108,12 @@ struct Mesh_geometry_changed_message
     std::shared_ptr<erhe::scene::Mesh> mesh{};
 };
 
+// The Brush tool's kit values changed without the Level Kit window's rows: it took the next seed after a placed piece
+// ("New Seed Per Piece", doc/editor/level_tools.md). Brush_tool::get_kit_values() holds them.
+class Kit_values_changed_message
+{
+};
+
 // A COMMITTED change of a scene's light transport: a content-layer mesh or
 // a light entered or left the scene (Scene_root::register_mesh() and
 // friends), a Node_transform_operation moved content or a light (execute,

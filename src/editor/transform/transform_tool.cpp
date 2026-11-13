@@ -12,6 +12,9 @@
 #include "app_settings.hpp"
 #include "editor_log.hpp"
 #include "input_state.hpp"
+#include "level/level_kits.hpp"
+#include "level/level_queries.hpp"
+#include "level/surface_settings_ui.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_transform_operation.hpp"
@@ -35,10 +38,12 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/transform_tool_config.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_math/euler_angles.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
@@ -63,6 +68,8 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <bit>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <limits>
@@ -379,6 +386,14 @@ void Transform_tool::viewport_toolbar()
         return;
     }
     visualizations->viewport_toolbar();
+    if (m_context.level_kits != nullptr) {
+        ImGui::SameLine();
+        surface_settings_toolbar_buttons(
+            *m_context.level_kits,
+            m_context.imgui_renderer->material_design_font(),
+            m_context.imgui_renderer->get_imgui_settings().scale_factor * m_context.imgui_renderer->get_imgui_settings().material_design_font_size
+        );
+    }
 }
 
 auto Transform_tool::is_transform_tool_active() const -> bool
@@ -886,8 +901,8 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
             continue;
         }
         const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform);
-        if (node_lock_viewport_transform) {
-            continue;
+        if (node_lock_viewport_transform || has_moved_ancestor_entry(*node)) {
+            continue; // locked, or carried rigidly by a moved ancestor
         }
 
         const Trs_transform updated_world_from_node = erhe::scene::translate(entry.world_from_node_before, translation);
@@ -898,7 +913,153 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
         enforce_channel_locks(*node, entry.parent_from_node_before);
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
+    apply_drag_surface_step();
     update_transforms();
+}
+
+void Transform_tool::apply_drag_surface_step()
+{
+    if (!any_surface_option(m_drag_surface)) {
+        return;
+    }
+    if (is_surface_axis_drag(m_drag_surface.direction)) {
+        for (Transform_entry& entry : shared.entries) {
+            entry.surface_found = false;
+        }
+        return;
+    }
+    static_cast<void>(rest_on_surface(m_drag_surface));
+}
+
+auto Transform_tool::has_moved_ancestor_entry(const erhe::scene::Node& node) const -> bool
+{
+    for (const Transform_entry& other : shared.entries) {
+        if (
+            other.node &&
+            (other.node.get() != &node) &&
+            !erhe::utility::test_bit_set(other.node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform) &&
+            node.is_ancestor(other.node.get())
+        ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+auto Transform_tool::is_surface_axis_drag(const glm::vec3& direction) const -> bool
+{
+    // A scripted drag has no handle constraint.
+    if ((m_active_handle == Handle::e_handle_none) || (m_active_tool == nullptr)) {
+        return false;
+    }
+    const unsigned int mask = m_active_tool->get_axis_mask() & Axis_mask::xyz;
+    if (std::popcount(mask) != 1) {
+        return false;
+    }
+    const int       axis   = (mask == Axis_mask::x) ? 0 : (mask == Axis_mask::y) ? 1 : 2;
+    const glm::mat3 basis  = m_active_tool->get_basis();
+    constexpr float c_parallel_cos = 0.999f;
+    return std::abs(glm::dot(glm::normalize(basis[axis]), direction)) > c_parallel_cos;
+}
+
+auto Transform_tool::rest_on_surface(const Surface_options& options) -> std::size_t
+{
+    ERHE_PROFILE_FUNCTION();
+
+    for (Transform_entry& entry : shared.entries) {
+        entry.surface_found = false;
+    }
+    if (!any_surface_option(options) || shared.component_mode || shared.entries.empty()) {
+        return 0;
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return 0;
+    }
+    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+
+    // Moved meshes (and what moves with them) are no surface for each other.
+    m_surface_excluded.clear();
+    for (const Transform_entry& entry : shared.entries) {
+        if (!entry.node) {
+            continue;
+        }
+        static_cast<void>(
+            entry.node->for_each_const<erhe::scene::Mesh>(
+                [this](const erhe::scene::Mesh& mesh) -> bool {
+                    m_surface_excluded.push_back(&mesh);
+                    return true;
+                }
+            )
+        );
+    }
+    erhe::raytrace::IScene& rt_scene = scene_root->get_raytrace_scene();
+    rt_scene.commit();
+
+    m_surface_deltas.clear();
+    m_surface_deltas.resize(shared.entries.size(), glm::vec3{0.0f});
+    std::size_t found_count = 0;
+    for (std::size_t i = 0, end = shared.entries.size(); i < end; ++i) {
+        Transform_entry& entry = shared.entries[i];
+        erhe::scene::Node* const node = entry.node.get();
+        if (
+            (node == nullptr) ||
+            !erhe::utility::test_all_rhs_bits_set(node->get_type(), erhe::scene::Mesh::get_static_type()) ||
+            erhe::utility::test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform) ||
+            m_physics_drag.is_spring_driven(node) ||
+            has_moved_ancestor_entry(*node) // moves rigidly with its ancestor
+        ) {
+            continue;
+        }
+        const erhe::scene::Mesh&   mesh  = static_cast<const erhe::scene::Mesh&>(*node);
+        const Trs_transform        world = node->world_from_node_transform();
+        const Surface_placement    placement = find_surface_placement(
+            rt_scene,
+            mesh_local_bounds(mesh),
+            Surface_pose{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()},
+            options,
+            m_surface_excluded
+        );
+        if (!placement.surface_found) {
+            continue;
+        }
+        Trs_transform rested = world;
+        rested.set_translation_and_rotation(placement.pose.position, placement.pose.rotation);
+        node->set_world_from_node(rested);
+        enforce_channel_locks(*node, entry.parent_from_node_before);
+        m_surface_deltas[i] = glm::vec3{node->world_from_node_transform().get_translation()} - glm::vec3{world.get_translation()};
+        entry.surface_found = true;
+        ++found_count;
+    }
+    log_trs_tool->trace(
+        "surface step: {} entries, {} rested: {:.3f} ms", shared.entries.size(), found_count,
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count()
+    );
+    if (found_count == 0) {
+        return 0;
+    }
+
+    // The anchor is an average over the entries: it moves by their average move, an entry below a
+    // rested one moving with it.
+    glm::vec3 delta_sum{0.0f};
+    for (std::size_t i = 0, end = shared.entries.size(); i < end; ++i) {
+        const Transform_entry& entry = shared.entries[i];
+        if (entry.surface_found || !entry.node) {
+            delta_sum += m_surface_deltas[i];
+            continue;
+        }
+        for (std::size_t j = 0; j < end; ++j) {
+            const Transform_entry& other = shared.entries[j];
+            if (other.surface_found && entry.node->is_ancestor(other.node.get())) {
+                delta_sum += m_surface_deltas[j];
+                break;
+            }
+        }
+    }
+    shared.world_from_anchor.set_translation(
+        glm::vec3{shared.world_from_anchor.get_translation()} + (delta_sum / static_cast<float>(shared.entries.size()))
+    );
+    return found_count;
 }
 
 auto Transform_tool::try_translate_ik(const glm::vec3 translation) -> bool
@@ -1516,6 +1677,10 @@ auto Transform_tool::on_drag_ready() -> bool
             (m_active_tool == m_rotate_subtool) ? Transform_drag_kind::rotate :
                                                   Transform_drag_kind::translate;
         m_physics_drag.begin(m_context, shared.entries, kind);
+        m_drag_surface =
+            ((kind == Transform_drag_kind::translate) && (m_context.level_kits != nullptr))
+                ? m_context.level_kits->get_surface_settings()
+                : Surface_options{};
     }
     if (started && shared.component_mode) {
         begin_component_edit();
@@ -1544,6 +1709,7 @@ void Transform_tool::end_drag()
     m_active_handle   = Handle::e_handle_none;
     m_active_tool     = nullptr;
     m_drag_scene_view = nullptr;
+    m_drag_surface    = Surface_options{};
     shared.initial_drag_position_distance_to_camera = 0.0;
 
     end_ik_drag();
@@ -2854,7 +3020,7 @@ void Transform_tool::record_transform_operation()
     );
 }
 
-auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind) -> bool
+auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind, const Surface_options& surface) -> bool
 {
     if ((m_active_handle != Handle::e_handle_none) || m_scripted_drag_active) {
         return false;
@@ -2873,6 +3039,7 @@ auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind) -> bool
         (kind == Transform_drag_kind::rotate) ? static_cast<Subtool*>(m_context.rotate_tool) :
                                                 static_cast<Subtool*>(m_context.move_tool);
     m_physics_drag.begin(m_context, shared.entries, kind);
+    m_drag_surface = (kind == Transform_drag_kind::translate) ? surface : Surface_options{};
     return true;
 }
 
@@ -2885,6 +3052,7 @@ void Transform_tool::end_scripted_drag()
     m_physics_drag.end();
     m_scripted_drag_active = false;
     m_active_tool          = nullptr;
+    m_drag_surface         = Surface_options{};
     end_ik_drag();
 }
 

@@ -43,6 +43,8 @@
 #include "erhe_asset_store/item_kind.hpp"
 #include "erhe_file/file.hpp"
 #include "tools/selection_tool.hpp"
+#include "level/kit_piece.hpp"
+#include "level/kit_shape.hpp"
 #include "windows/config_ui.hpp"
 #include "config/generated/lod_config_serialization.hpp"
 #include "config/generated/navigation_settings_serialization.hpp"
@@ -119,6 +121,7 @@ Properties::Properties(
     : Imgui_window{imgui_renderer, imgui_windows, title, ini_label}
     , m_context   {app_context}
     , m_dependency_rows{app_context}
+    , m_kit_piece_editor{app_context}
 {
     // Below the Rest Rotation row of a bone's "IK" group
     // (doc/plans/rigging/ik_settings.md section 5): the same undoable write the
@@ -252,6 +255,22 @@ Properties::Properties(
             }
         }
     );
+    // A kit piece's "Kit Piece" group: one row per parameter in place of the
+    // record's developer-only raw rows, each commit one undo entry.
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Kit Piece",
+            .applies  = [single](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                const erhe::scene::Mesh* const mesh = dynamic_cast<const erhe::scene::Mesh*>(single(items));
+                return (mesh != nullptr) && (mesh->get_item_host() != nullptr) && carries_kit_piece(*mesh);
+            },
+            .add_rows = [this, single](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                if (single(items) != nullptr) {
+                    kit_piece_properties(std::dynamic_pointer_cast<erhe::scene::Mesh>(items.front()));
+                }
+            }
+        }
+    );
 #if 0
     m_dependency_rows.add_group_rows(
         Property_group_rows{
@@ -317,6 +336,23 @@ Properties::Properties(
             }
         );
     }
+
+    // The kit piece rows read the piece's record again on these (Kit_piece_editor).
+    m_selection_subscription = app_message_bus.selection.subscribe(
+        [this](Selection_message&) {
+            m_kit_piece_editor.mark_dirty();
+        }
+    );
+    m_active_item_subscription = app_message_bus.active_item.subscribe(
+        [this](Active_item_changed_message&) {
+            m_kit_piece_editor.mark_dirty();
+        }
+    );
+    m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
+        [this](Mesh_geometry_changed_message&) {
+            m_kit_piece_editor.mark_dirty();
+        }
+    );
 
     m_close_scene_subscription = app_message_bus.close_scene.subscribe(
         [this](Close_scene_message& message) {
@@ -1106,6 +1142,39 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
     }
 }
 
+void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& piece)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!piece || !carries_kit_piece(*piece)) {
+        return;
+    }
+    m_kit_piece_editor.update(piece);
+    add_entry("Shape", [this]() {
+        ImGui::TextUnformatted(m_kit_piece_editor.get_shape_text().c_str());
+        const Kit_shape_definition* const shape = m_kit_piece_editor.get_shape();
+        if ((shape != nullptr) && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s\n%s", shape->id.c_str(), shape->description.c_str());
+        }
+    });
+    const Kit_shape_definition* const shape = m_kit_piece_editor.get_shape();
+    if (shape == nullptr) {
+        add_entry("Problem", [this]() { kit_message_line(m_kit_piece_editor.get_problem()); });
+        return;
+    }
+    for (std::size_t i = 0, end = shape->parameters.size(); i < end; ++i) {
+        add_entry(std::string{shape->parameters[i].name}, [this, i]() {
+            m_kit_piece_editor.on_edit(kit_parameter_row(m_kit_piece_editor.get_values(), i, Kit_row_label::recorded, m_kit_piece_editor.get_lengths()));
+        });
+    }
+    if (shape->id == "basic.stairs") {
+        add_entry("Layout", [this]() { kit_stairs_line(m_kit_piece_editor.get_values()); });
+    }
+    if (!m_kit_piece_editor.get_message().empty()) {
+        add_entry("Message", [this]() { kit_message_line(m_kit_piece_editor.get_message()); });
+    }
+}
+
 void Properties::brush_placement_properties(const erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION();
@@ -1272,7 +1341,7 @@ void Properties::navigation_mesh_properties(Scene_root& scene_root)
             return;
         }
         ImGui::TextWrapped("%s", root->get_navigation().get_status_text().c_str());
-    }, "The scene's navigation mesh: polygons, reachable area, tiles and build time, and why it is stale.");
+    }, "The scene's navigation mesh: polygons, islands, reachable area, tiles and build time, and why it is stale.");
     add_entry("Navigation Build", [this, weak_scene_root]() {
         const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
         if (!root) {

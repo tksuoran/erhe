@@ -375,6 +375,32 @@ erhe_target_sources_grouped(
     items.hpp
     ImViewGuizmo.cpp
     ImViewGuizmo.h
+    level/kit_mesh_builder.cpp
+    level/kit_mesh_builder.hpp
+    level/kit_parameter_rows.cpp
+    level/kit_parameter_rows.hpp
+    level/kit_piece.cpp
+    level/kit_piece.hpp
+    level/kit_piece_operation.cpp
+    level/kit_piece_operation.hpp
+    level/kit_shape.cpp
+    level/kit_shape.hpp
+    level/kit_shape_checks.cpp
+    level/kit_shape_checks.hpp
+    level/kit_shape_library.cpp
+    level/kit_shape_library.hpp
+    level/kit_shapes.hpp
+    level/kit_shapes_architecture.cpp
+    level/kit_shapes_basic.cpp
+    level/kit_shapes_nature.cpp
+    level/level_kit_window.cpp
+    level/level_kit_window.hpp
+    level/level_kits.cpp
+    level/level_kits.hpp
+    level/level_queries.cpp
+    level/level_queries.hpp
+    level/surface_settings_ui.cpp
+    level/surface_settings_ui.hpp
     main.cpp
     mcp/mcp_server.cpp
     mcp/mcp_server.hpp
@@ -386,6 +412,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server_material.cpp
     mcp/mcp_server_properties.cpp
     mcp/mcp_server_pvs.cpp
+    mcp/mcp_server_level.cpp
     mcp/mcp_server_lod.cpp
     mcp/mcp_server_mesh_components.cpp
     mcp/mcp_server_navigation.cpp
@@ -1032,6 +1059,9 @@ set(_codegen_sources
     ${_codegen_out}/variant_selection.hpp
     ${_codegen_out}/variant_selection_serialization.hpp
     ${_codegen_out}/variant_selection.cpp
+    ${_codegen_out}/level_settings.hpp
+    ${_codegen_out}/level_settings_serialization.hpp
+    ${_codegen_out}/level_settings.cpp
     ${_codegen_out}/scene_settings.hpp
     ${_codegen_out}/scene_settings_serialization.hpp
     ${_codegen_out}/scene_settings.cpp
@@ -1051,6 +1081,7 @@ erhe_codegen_generate(
         "${_codegen_defs}/gltf_source_reference.py"
         "${_codegen_defs}/lightmap_tile_override.py"
         "${_codegen_defs}/variant_selection.py"
+        "${_codegen_defs}/level_settings.py"
         "${_codegen_defs}/scene_settings.py"
 )
 erhe_codegen_source_settings(${_codegen_sources})
@@ -1158,6 +1189,12 @@ set(_config_sources
     ${_config_out}/lod_seam_mode.cpp
     ${_config_out}/lod_fallback_mode.hpp
     ${_config_out}/lod_fallback_mode.cpp
+    ${_config_out}/level_kit_config.hpp
+    ${_config_out}/level_kit_config_serialization.hpp
+    ${_config_out}/level_kit_config.cpp
+    ${_config_out}/surface_snap_config.hpp
+    ${_config_out}/surface_snap_config_serialization.hpp
+    ${_config_out}/surface_snap_config.cpp
     ${_config_out}/lod_config.hpp
     ${_config_out}/lod_config_serialization.hpp
     ${_config_out}/lod_config.cpp
@@ -1558,6 +1595,7 @@ endif ()
 if (${ERHE_BUILD_TESTS})
     add_subdirectory(assets/test)
     add_subdirectory(brushes/test)
+    add_subdirectory(level/test)
     add_subdirectory(mcp/test)
     if (ERHE_USE_RECAST)
         add_subdirectory(navigation/test)

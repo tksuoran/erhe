@@ -670,7 +670,7 @@
     "name": "navigation_set_seed"
   },
   {
-    "description": "The navigation state of a scene (doc/editor/navigation.md \"MCP\"): available (a navigation mesh is installed), pending (a navigation_build of the scene is queued or running), stale and stale_reasons (\"geometry changed\": an input mesh moved, changed its primitives or left, or a candidate mesh entered; \"settings changed\": a build setting differs from the built ones - the seed search extents alone do not count; \"seeds changed\": the seed set or a seed point differs; each ends when an undo makes the values equal again), the totals (polygon_count, reachable_polygon_count, total_area, reachable_area in square meters), tile_count, input_mesh_count, input_shape_count (a primitive several nodes share counts once), input_triangle_count, skipped_mesh_count and skipped_meshes (input meshes that yielded no triangles), build_ms, flood_ms, build_count and flood_count (installed since the scene opened; a flood-only build adds to flood_count alone), built_seeds (per seed of the build: node, uid, point and result {found, polygon, snapped_point} or {found: false, reason}), status_text, seed_count and seeds (the current seed nodes: node name, id, uid and point - the node's origin in the scene root's space). Answered while a scene save or build runs.",
+    "description": "The navigation state of a scene (doc/editor/navigation.md \"MCP\"): available (a navigation mesh is installed), pending (a navigation_build of the scene is queued or running), stale and stale_reasons (\"geometry changed\": an input mesh moved, changed its primitives or left, or a candidate mesh entered; \"settings changed\": a build setting differs from the built ones - the seed search extents alone do not count; \"seeds changed\": the seed set or a seed point differs; each ends when an undo makes the values equal again), the totals (polygon_count, reachable_polygon_count, island_count and reachable_island_count - sets of polygons joined by neighbour links, see get_navigation_summary - total_area, reachable_area in square meters), tile_count, input_mesh_count, input_shape_count (a primitive several nodes share counts once), input_triangle_count, skipped_mesh_count and skipped_meshes (input meshes that yielded no triangles), build_ms, flood_ms, build_count and flood_count (installed since the scene opened; a flood-only build adds to flood_count alone), built_seeds (per seed of the build: node, uid, point and result {found, polygon, snapped_point} or {found: false, reason}), status_text, seed_count and seeds (the current seed nodes: node name, id, uid and point - the node's origin in the scene root's space). Answered while a scene save or build runs.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -765,6 +765,113 @@
       "type": "object"
     },
     "name": "get_navigation_mesh"
+  },
+  {
+    "description": "Compact description of a scene's walkable area (doc/editor/navigation.md \"MCP\"), in the scene root's space: available, stale (the mesh still answers when stale), total_area and reachable_area (square meters), polygon_count, island_count and reachable_island_count, the islands largest first [{id, area, polygon_count, bounds_min, bounds_max (over the detail surface, so their y is the height range), reachable, point (centroid of the island's largest polygon)}] up to max_islands (returned_island_count, truncated), and failed_seeds [{node, point, reason}] of the last flood. get_navigation_mesh is the detailed read. Answered while a scene save or build runs.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "max_islands": {
+          "description": "At most this many islands are listed (default 32)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_navigation_summary"
+  },
+  {
+    "description": "The walkable point nearest to a position or to a node's origin (doc/editor/navigation.md \"MCP\"), in the scene root's space, searched within search_extents: available, stale, found, position (the queried one), node (when given), search_extents, and when found point, distance (from position, meters), polygon, island (the id of get_navigation_summary) and reachable. found false is no error. Answered while a scene save or build runs.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "position": {
+          "description": "Position [x, y, z] in the scene root's space (alternative to node_id / node)",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "node_id": {
+          "description": "Node id: its origin is the position",
+          "type": "integer"
+        },
+        "node": {
+          "description": "Node name, or a path when it holds '/' (alternative to node_id)",
+          "type": "string"
+        },
+        "search_extents": {
+          "description": "Search half extents [x, y, z] in meters around each position (default: the scene's seed_search_radius, seed_search_height, seed_search_radius)",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "navigation_find_point"
+  },
+  {
+    "description": "Whether a walkable path joins two positions (doc/editor/navigation.md \"MCP\"), in the scene root's space: available, stale, search_extents, start and end (each {position, found, point, distance, polygon, island, reachable} of its nearest walkable point), found (both ends on one island and a path returned), complete (the path reaches the end's polygon), length (meters, along the corners), corners [[x, y, z], ...] (start and end included) and, when not found, reason (\"no polygon near start\", \"no polygon near end\", \"different islands\" or \"path search failed\"). Answered while a scene save or build runs.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "start": {
+          "description": "Start position [x, y, z]",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "end": {
+          "description": "End position [x, y, z]",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "search_extents": {
+          "description": "Search half extents [x, y, z] in meters around each position (default: the scene's seed_search_radius, seed_search_height, seed_search_radius)",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "scene_name",
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "name": "navigation_find_path"
   },
   {
     "description": "Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.",
@@ -954,7 +1061,7 @@
     "name": "set_active_scene"
   },
   {
-    "description": "Apply a Transform tool edit (translation / rotation / scale / skew) to the currently selected node(s), through the same code path as the Transform window numeric entry. space=local applies values in parent space (requires exactly one selected node); space=global applies in world (anchor) space. end_edit=true (default) records an undo operation and refreshes the edit baselines; end_edit=false keeps the edit session open like an active drag, so repeated calls re-apply against the same initial state.",
+    "description": "Apply a Transform tool edit (translation / rotation / scale / skew) to the currently selected node(s), through the same code path as the Transform window numeric entry. space=local applies values in parent space (requires exactly one selected node); space=global applies in world (anchor) space. end_edit=true (default) records an undo operation and refreshes the edit baselines; end_edit=false keeps the edit session open like an active drag, so repeated calls re-apply against the same initial state. surface_snap / surface_orient (default false, never the UI's Snap To Surface / Orient To Surface) rest each moved mesh of the selection on the surface under it after the call's edits (doc/editor/level_tools.md \"Transform tool\"); they need a translation. The reply echoes surface_snap, surface_orient and surface_found_count, and per node surface_found.",
     "inputSchema": {
       "properties": {
         "end_edit": {
@@ -992,6 +1099,14 @@
           "description": "Edit space: 'local' or 'global' (default 'global')",
           "type": "string"
         },
+        "surface_orient": {
+          "description": "Turn each moved mesh's up axis to the surface normal under it, keeping its heading, and rest it there (default false)",
+          "type": "boolean"
+        },
+        "surface_snap": {
+          "description": "Rest the base of each moved mesh on the highest surface under it (default false)",
+          "type": "boolean"
+        },
         "translation": {
           "description": "Translation [x, y, z]",
           "items": {
@@ -1007,7 +1122,7 @@
     "name": "transform_selection"
   },
   {
-    "description": "Drag the currently selected node(s) through the Transform tool's drag path - the same one a gizmo mouse drag takes - spread over real editor frames: the drag starts like a gizmo press on a handle of that kind (the Move / Rotate / Scale tool is the active subtool, so a translate drag of one selected bone solves its IK chain when Bone IK is on, drawing the chain visualization), the target moves linearly from the start pose to the full delta over `frames` frames (one step per frame, the call returns when the last step is applied), and with release=true it ends like a gizmo release (one undoable operation). Give exactly one of translation, rotation_axis + rotation_angle_deg, or scale. A dynamic rigid body held by a live joint is pulled toward the target by a spring and moved by the physics simulation (the joints keep holding; release keeps its velocity); other dynamic bodies are held kinematic for the drag. With release=false the drag stays held after the last step (query the scene mid-drag); end it with action='release'. Keep frames small enough for the steps to finish inside the MCP request timeout (5 s); an expired call leaves the drag held.",
+    "description": "Drag the currently selected node(s) through the Transform tool's drag path - the same one a gizmo mouse drag takes - spread over real editor frames: the drag starts like a gizmo press on a handle of that kind (the Move / Rotate / Scale tool is the active subtool, so a translate drag of one selected bone solves its IK chain when Bone IK is on, drawing the chain visualization), the target moves linearly from the start pose to the full delta over `frames` frames (one step per frame, the call returns when the last step is applied), and with release=true it ends like a gizmo release (one undoable operation). Give exactly one of translation, rotation_axis + rotation_angle_deg, or scale. A dynamic rigid body held by a live joint is pulled toward the target by a spring and moved by the physics simulation (the joints keep holding; release keeps its velocity); other dynamic bodies are held kinematic for the drag. With release=false the drag stays held after the last step (query the scene mid-drag); end it with action='release'. Keep frames small enough for the steps to finish inside the MCP request timeout (5 s); an expired call leaves the drag held. A translate drag with surface_snap / surface_orient (default false, never the UI's settings) rests each moved mesh on the surface under it at every step, all moved meshes excluded from the rays (doc/editor/level_tools.md \"Transform tool\"); the reply echoes both and per node surface_found and world_rotation_xyzw.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -1052,6 +1167,14 @@
           "maxItems": 3,
           "minItems": 3,
           "type": "array"
+        },
+        "surface_orient": {
+          "description": "Translate drags only: turn each moved mesh's up axis to the surface normal under it at every step, keeping its heading (default false; read when the drag starts)",
+          "type": "boolean"
+        },
+        "surface_snap": {
+          "description": "Translate drags only: rest the base of each moved mesh on the highest surface under it at every step (default false; read when the drag starts)",
+          "type": "boolean"
         },
         "translation": {
           "description": "World translation delta [x, y, z] of a translate drag",
@@ -1232,6 +1355,245 @@
       "type": "object"
     },
     "name": "place_brush_instances"
+  },
+  {
+    "description": "The level kit catalog (doc/editor/level_tools.md \"MCP\"): the kits (name, display_name, triangle_ceiling, shape ids) and per shape its id (<kit>.<shape>), kit, name, kind, description, tags, parameters (name, description, type float|int|enum, unit, default, min, max; a float default resolved against the scene's level settings, with its default_scale meters|modules|wall_heights and default_factor; an enum's values; derive fixed|derivable, default_derived (in the shape's default mask) and for a derivable float or int derive_min and derive_max (a float's in meters, resolved against the level settings, with its derive_step); an enum derives over all its values), default_derive (the default mask's parameter names), default_size and default_bounds (the mesh at the defaults, meters), material_slots (slot and default palette material), connectors (none yet), normal_style, triangle_budget and collision (convex_hull | triangle_mesh). Also the scene's level {module, wall_height}, shape_count and the palette (slot, material name, linear base_color, roughness). cached_brush_count: the kit brushes alive in the cache (held by a piece or an undo entry; doc/editor/level_tools.md \"Kit brushes\").",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "level_get_kits"
+  },
+  {
+    "description": "Place kit pieces (doc/editor/level_tools.md \"Placing\") as ONE undo entry. Each piece is a mesh node sharing the mesh of every piece of the same shape and parameter values, with its kit record (Kit_piece.shape, Kit_piece.parameters), the default palette material of its shape's slot unless 'material' names one, and a static physics body (convex hull, or a triangle mesh for stairs, door wall, arch, land mass and tree). Parameters not given take their defaults at the scene's level settings (set_scene_settings settings.level). Derive from seed (doc/editor/level_tools.md \"Derive from seed\"): the parameters named in parameters.derive (default: the shape's default mask) take values derived from the seed and their derive range; giving a value for such a parameter is an error naming it. Every piece is checked before any is placed: an unknown key, an unknown shape or parameter, a value outside its range (the message names the parameter and its range), a bad rotation or a missing material fails the call naming the piece index, and nothing is placed. Positions and rotations are in the scene root's space (meters). The module snap applies first, then the surface options (doc/editor/level_tools.md \"Surface placement\"): rays start one piece height back against surface_direction, so a piece rests on the highest surface within its own height above its base or anywhere below (a sunk piece rises); surface_snap rests the piece's base on the highest such surface under its base center and corners; surface_orient tilts the piece's up axis to the surface normal under its base center (heading kept) and rests the base center there; both = orient. Pieces of the same call are not surfaces for each other. No surface found: the piece stays at the given point and reports surface_found false. Returns scene_name, snap, level {module, wall_height}, count and per piece id, name, shape, parameters (effective values and derive, the derived names), position and rotation_xyzw (after snapping and the surface options), surface_found (false also when no surface option applied), world_aabb {min, max}, triangle_count, material, brush_id (pieces with equal brush_id share one mesh) and mesh_key (shape id + canonical parameter text).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "snap": {
+          "description": "\"none\" (default) or \"module\": every position rounds to a multiple of the scene's module",
+          "enum": [
+            "none",
+            "module"
+          ],
+          "type": "string"
+        },
+        "surface_snap": {
+          "description": "Rest each piece's base on the surface found along surface_direction (default false); a piece may override it",
+          "type": "boolean"
+        },
+        "surface_orient": {
+          "description": "Tilt each piece's up axis to the surface normal under its base center and rest it there, keeping its heading (default false); a piece may override it",
+          "type": "boolean"
+        },
+        "surface_direction": {
+          "description": "Direction of the surface rays, default [0, -1, 0]; normalized",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "pieces": {
+          "description": "Pieces to place, in order",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "shape": {
+                "description": "Shape id, for example basic.block (level_get_kits lists them)",
+                "type": "string"
+              },
+              "parameters": {
+                "description": "Parameter name to value: a number for a float, an integer for an int, a value name for an enum; omitted parameters take their defaults. derive: the parameter names derived from the seed (replaces the shape's default mask); a derived parameter takes no value",
+                "type": "object"
+              },
+              "position": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array",
+                "description": "Position of the piece's origin (the center of its base), default [0, 0, 0]"
+              },
+              "rotation_xyzw": {
+                "description": "Unit quaternion [x, y, z, w], default identity",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+              },
+              "name": {
+                "description": "Node name, default the shape's name",
+                "type": "string"
+              },
+              "material": {
+                "description": "Name of a material of the scene; default the palette material of the shape's slot, added to the scene the first time it is needed",
+                "type": "string"
+              },
+              "parent_id": {
+                "description": "Id of the prim to parent the piece under (default the scene root); the piece keeps the given world transform",
+                "type": "integer"
+              },
+              "parent_index": {
+                "description": "Index of an earlier piece of this call to parent the piece under (instead of parent_id)",
+                "type": "integer"
+              },
+              "surface_snap": {
+                "description": "This piece's surface_snap, overriding the call's",
+                "type": "boolean"
+              },
+              "surface_orient": {
+                "description": "This piece's surface_orient, overriding the call's",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "shape"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "scene_name",
+        "pieces"
+      ],
+      "type": "object"
+    },
+    "name": "level_place_pieces"
+  },
+  {
+    "description": "Every kit piece of a scene (nodes carrying Kit_piece), in node id order: id, name, shape, known_shape, parameters (the values and derive, the names derived from the seed) and parameters_text (the saved canonical text with hexadecimal floats), mesh_key, position and rotation_xyzw (world), world_aabb {min, max}, material, brush_id (equal ids share one mesh), shares_brush_primitive (the node's mesh primitive is its brush's), follows_kit (the piece's mesh and collision shape are its kit brush's: true for every placed piece and for a loaded piece the load refreshed) and problem (why it does not follow: an unknown shape or parameter values that do not read or are out of range - such a piece keeps the mesh the file holds; empty when it follows) and physics {motion_mode, collision_shape, has_body}.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "level_get_pieces"
+  },
+  {
+    "description": "Change a kit piece's parameter values (doc/editor/level_tools.md \"Parameter changes\") as ONE undo entry: the given parameters merge over the piece's current values (derive, when given, replaces the mask; a value for a derived parameter is an error naming it; a changed seed or mask derives the masked values again, otherwise the saved values stand), and the piece takes the mesh and collision shape of the kit brush for the new values (shared with every piece of equal values), keeping its id, name, transform, children, material and static body. An unknown key or parameter, a value of the wrong type or outside its range (the message names the parameter and its range), or a node that is not a kit piece fails the call and nothing changes. Values equal to the current ones change nothing and record no undo entry. Returns scene_name, id, name, shape, changed, parameters (effective values and derive), mesh_key, brush_id, world_aabb {min, max} and triangle_count.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_id": {
+          "description": "Id of the piece's node",
+          "type": "integer"
+        },
+        "parameters": {
+          "description": "Parameter name to value (number for a float, integer for an int, value name for an enum); parameters not given keep their current values. derive: the parameter names derived from the seed, replacing the piece's mask",
+          "type": "object"
+        }
+      },
+      "required": [
+        "scene_name",
+        "node_id",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "name": "level_set_piece_parameters"
+  },
+  {
+    "description": "Snap mesh nodes (kit pieces or any other mesh) to the surface along a direction (doc/editor/level_tools.md \"Surface placement\") as ONE undo entry for all of them. Rays start one piece height back against direction (the top plane of the mesh bounds), so a node rests on the highest surface within its own height above its base or anywhere below, and distance (measured from the base) is negative when it rises. Without orient each node moves along direction by the smallest such distance over its base center and base corners; with orient its up axis turns by the shortest rotation to the normal under its base center (heading kept) and its base center rests on that hit. The listed nodes are not surfaces for each other. A node with no surface keeps its transform and reports surface_found false. query_only returns the resting transforms and changes nothing. Returns scene_name, orient, direction, query_only, moved_count and per node id, name, position and rotation_xyzw (the resting world transform), distance and surface_found. Positions are in the scene root's space.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_ids": {
+          "description": "Ids of the mesh nodes to snap",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "orient": {
+          "description": "Also tilt the up axis to the surface normal (default false)",
+          "type": "boolean"
+        },
+        "direction": {
+          "description": "Direction of the surface rays, default [0, -1, 0]; normalized",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "query_only": {
+          "description": "Return the resting transforms without moving anything (default false)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scene_name",
+        "node_ids"
+      ],
+      "type": "object"
+    },
+    "name": "level_snap_to_surface"
+  },
+  {
+    "description": "Read the Brush tool's kit mode placement preview (doc/editor/level_tools.md \"Level Kit window\", doc/editor/brushes.md \"Kit mode\"). Read-only. Returns active (kit mode on: a shape chosen in the Level Kit window and the Brush tool not left since), tool_active (the Brush tool is the priority tool), rotation_step_degrees, yaw_steps, hover_position (the world point the Brush tool hovers, null without a hover) and visible (a preview is shown). In kit mode also shape, parameters (the values of the kit brush), mesh_key, brush_id and bounds {min, max} (the brush's mesh bounds in its own space); with a visible preview also position, rotation_xyzw, surface_found and world_aabb: the transform a click in the viewport places the next piece at, in the scene root's space.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "level_get_placement_preview"
+  },
+  {
+    "description": "Read the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"): snap (Snap To Surface) and orient (Orient To Surface), the pair the Level Kit window, the viewport toolbar buttons and the Transform window's Move tool rows show, which kit placement in the viewport and the Transform tool's gizmo translate drags follow. Read-only.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_surface_snap_settings"
+  },
+  {
+    "description": "Set the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"), editor state saved to editor_settings.json, not a document edit (no undo entry). Omitted arguments keep their value. Returns snap and orient in effect. MCP placement and transform tools never read them: they take their own surface arguments.",
+    "inputSchema": {
+      "properties": {
+        "orient": {
+          "description": "Orient To Surface",
+          "type": "boolean"
+        },
+        "snap": {
+          "description": "Snap To Surface",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_surface_snap_settings"
   },
   {
     "description": "Create a parametric shape using the erhe geometry generators, then place an instance in the scene and/or add the brush to the content library. Shape parameters: box (size [x,y,z], steps [x,y,z], power), uv_sphere (radius, slice_count, stack_count), cone (height, bottom_radius, top_radius, use_top, use_bottom, slice_count, stack_count), capsule (length, bottom_radius, top_radius, slice_count, stack_count; tapered when the radii differ, which requires length > |bottom_radius - top_radius|), torus (major_radius, minor_radius, major_steps, minor_steps), disc (outer_radius, inner_radius, slice_count, stack_count; annulus when inner_radius > 0; flat in the XY plane facing +/-Z), triangle (radius; flat XY), quad (edge; flat XY, double sided), rectangle (width, height, front_face, back_face; flat XY), regular_polyhedron (kind = tetrahedron / cube / octahedron / dodecahedron / icosahedron / cuboctahedron, radius; watertight - good CSG inputs), convex_hull (points = [[x,y,z], ...] in node-local space, >= 4 non-coplanar; watertight hull - THE way to get authored silhouettes like ship hulls; good CSG input). Flat shapes get a thin box collision shape - prefer motion_mode none for them. STRICT arguments: keys not in the placement set or the chosen shape's parameter set are REJECTED (e.g. 'radius' on a capsule - capsules take bottom_radius/top_radius), never silently ignored.",
@@ -3597,7 +3959,7 @@
           "type": "string"
         },
         "settings": {
-          "description": "Scene_settings object (same shape get_scene_settings returns): optional sky, grid, physics, shadow_frustum_fit, camera_controls, clear_color ([r,g,b,a]), post_processing (bool), export_settings (the scene's export settings, present or absent: an object - _version optional - merges over the scene's export settings, or, when the scene has none, over a copy of the editor's default export settings (adding them); null or, without merge, omitting it leaves the scene without export settings)",
+          "description": "Scene_settings object (same shape get_scene_settings returns): optional sky, grid, physics, shadow_frustum_fit, camera_controls, clear_color ([r,g,b,a]), post_processing (bool), level ({_version: 1, module, wall_height}: the level's lengths in meters, defaults 1 and 3, that kit shape defaults resolve against; doc/editor/level_tools.md 'Level settings'; the settings object needs _version 4 for it), export_settings (the scene's export settings, present or absent: an object - _version optional - merges over the scene's export settings, or, when the scene has none, over a copy of the editor's default export settings (adding them); null or, without merge, omitting it leaves the scene without export settings)",
           "type": "object"
         }
       },

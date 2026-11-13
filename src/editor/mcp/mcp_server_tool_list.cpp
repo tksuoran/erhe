@@ -97,6 +97,9 @@ void remove_absent_navigation_tools(std::vector<Mcp_tool_info>& tools)
 #   if !defined(ERHE_USE_DETOUR)
     absent.push_back("navigation_clear");
     absent.push_back("get_navigation_mesh");
+    absent.push_back("get_navigation_summary");
+    absent.push_back("navigation_find_point");
+    absent.push_back("navigation_find_path");
 #   endif
     std::erase_if(tools, [&absent](const Mcp_tool_info& tool) {
         return std::find(absent.begin(), absent.end(), std::string_view{tool.name}) != absent.end();

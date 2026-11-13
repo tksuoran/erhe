@@ -445,3 +445,160 @@ TEST(Navigation, empty_bounds_return_null_with_reason)
     EXPECT_FALSE(mesh);
     EXPECT_NE(error.find("empty"), std::string::npos) << error;
 }
+
+namespace {
+
+// Floor at y 0 (x -10..0), stairs of 10 steps of 0.2 m (treads 0.3 m) rising along +x, an upper floor at y 2
+// (x 3..13), and a separate platform at y 0.9 (x 20..26) that no step reaches.
+class Two_floors_and_platform
+{
+public:
+    static constexpr float upper_y    = 2.0f;
+    static constexpr float platform_y = 0.9f;
+
+    Two_floors_and_platform()
+    {
+        Test_geometry geometry;
+        geometry.add_floor(-10.0f, -3.0f, 0.0f, 3.0f, 0.0f);
+        for (int i = 0; i < 10; ++i) {
+            const float x0 = 0.3f * static_cast<float>(i);
+            geometry.add_box({x0, 0.0f, -3.0f}, {x0 + 0.3f, 0.2f * static_cast<float>(i + 1), 3.0f});
+        }
+        geometry.add_box({3.0f, 0.0f, -3.0f}, {13.0f, upper_y, 3.0f});
+        geometry.add_box({20.0f, 0.0f, -3.0f}, {26.0f, platform_y, 3.0f});
+        mesh = build(geometry, settings);
+        if (mesh) {
+            const std::vector<glm::vec3>        seeds{glm::vec3{-5.0f, 0.0f, 0.0f}};
+            std::vector<Navigation_seed_result> results;
+            EXPECT_TRUE(mesh->mark_reachable(seeds, settings.get_seed_search_half_extents(), results));
+        }
+    }
+
+    Navigation_build_settings        settings{};
+    std::unique_ptr<Navigation_mesh> mesh;
+};
+
+} // anonymous namespace
+
+TEST(Navigation, islands_of_two_floors_joined_by_stairs_and_a_separate_platform)
+{
+    Two_floors_and_platform level;
+    ASSERT_TRUE(level.mesh);
+    const std::span<const editor::Navigation_island> islands = level.mesh->get_islands();
+    ASSERT_EQ(islands.size(), 2u);
+    EXPECT_EQ(level.mesh->get_reachable_island_count(), 1u);
+    const editor::Navigation_totals totals = level.mesh->get_totals();
+    EXPECT_EQ(totals.island_count, 2u);
+    EXPECT_EQ(totals.reachable_island_count, 1u);
+
+    // Every polygon's island id matches its island's reachable flag, and the islands' counts and areas add up.
+    std::size_t polygon_sum = 0;
+    double      area_sum    = 0.0;
+    for (const editor::Navigation_island& island : islands) {
+        polygon_sum += island.polygon_count;
+        area_sum    += island.area;
+    }
+    EXPECT_EQ(polygon_sum, totals.polygon_count);
+    EXPECT_NEAR(area_sum, totals.total_area, 1.0e-3);
+    for (const Navigation_polygon& polygon : level.mesh->get_polygons()) {
+        ASSERT_LT(polygon.island, islands.size());
+        EXPECT_EQ(polygon.reachable, islands[polygon.island].reachable);
+    }
+
+    // Recast lifts the surface by up to two cell heights plus the detail error.
+    const float height_tolerance = (2.0f * level.settings.cell_height) + level.settings.detail_sample_max_error;
+    const editor::Navigation_island& walkable = islands[0].reachable ? islands[0] : islands[1];
+    const editor::Navigation_island& platform = islands[0].reachable ? islands[1] : islands[0];
+    EXPECT_NEAR(walkable.bounds_min.y, 0.0f, height_tolerance);
+    EXPECT_NEAR(walkable.bounds_max.y, Two_floors_and_platform::upper_y, height_tolerance);
+    EXPECT_GT(walkable.bounds_max.x, 12.0f);
+    EXPECT_NEAR(platform.bounds_min.y, Two_floors_and_platform::platform_y, height_tolerance);
+    EXPECT_NEAR(platform.bounds_max.y, Two_floors_and_platform::platform_y, height_tolerance);
+    EXPECT_GT(platform.point.x, 20.0f);
+    EXPECT_LT(platform.point.x, 26.0f);
+    EXPECT_GT(walkable.area, platform.area);
+
+    // The flags follow clear_reachable() and set_reachable().
+    level.mesh->clear_reachable();
+    EXPECT_EQ(level.mesh->get_reachable_island_count(), 0u);
+    std::vector<uint8_t> all(level.mesh->get_polygons().size(), uint8_t{1});
+    level.mesh->set_reachable(all);
+    EXPECT_EQ(level.mesh->get_reachable_island_count(), 2u);
+}
+
+TEST(Navigation, nearest_point_snaps_onto_the_floor_and_names_its_island)
+{
+    Two_floors_and_platform level;
+    ASSERT_TRUE(level.mesh);
+    const glm::vec3 half_extents = level.settings.get_seed_search_half_extents();
+
+    const editor::Navigation_point_result floor = level.mesh->find_nearest_point({-5.0f, 0.7f, 1.0f}, half_extents);
+    ASSERT_TRUE(floor.found);
+    EXPECT_NEAR(floor.point.x, -5.0f, 1.0e-3f);
+    EXPECT_NEAR(floor.point.z, 1.0f, 1.0e-3f);
+    EXPECT_NEAR(floor.point.y, 0.0f, 0.2f);
+    EXPECT_TRUE(floor.reachable);
+    EXPECT_EQ(floor.island, level.mesh->get_polygons()[floor.polygon].island);
+
+    const editor::Navigation_point_result platform = level.mesh->find_nearest_point({23.0f, 1.5f, 0.0f}, half_extents);
+    ASSERT_TRUE(platform.found);
+    EXPECT_NEAR(platform.point.y, Two_floors_and_platform::platform_y, 0.2f);
+    EXPECT_FALSE(platform.reachable);
+    EXPECT_NE(platform.island, floor.island);
+
+    // The polygon reference maps back to the polygon index.
+    uint32_t index = 0;
+    ASSERT_TRUE(level.mesh->find_polygon_index(level.mesh->get_polygon_ref(platform.polygon), index));
+    EXPECT_EQ(index, platform.polygon);
+
+    EXPECT_FALSE(level.mesh->find_nearest_point({-5.0f, 20.0f, 0.0f}, half_extents).found);
+}
+
+TEST(Navigation, path_climbs_the_stairs_and_none_reaches_the_platform)
+{
+    Two_floors_and_platform level;
+    ASSERT_TRUE(level.mesh);
+    const glm::vec3 half_extents = level.settings.get_seed_search_half_extents();
+
+    editor::Navigation_path_result path;
+    level.mesh->find_path({-5.0f, 0.0f, 0.0f}, {8.0f, Two_floors_and_platform::upper_y, 0.0f}, half_extents, path);
+    EXPECT_TRUE(path.found);
+    EXPECT_TRUE(path.complete);
+    EXPECT_EQ(path.failure, editor::Navigation_path_failure::none);
+    ASSERT_GE(path.corners.size(), 2u);
+    EXPECT_NEAR(path.corners.front().x, -5.0f, 1.0e-3f);
+    EXPECT_NEAR(path.corners.back().x, 8.0f, 1.0e-3f);
+    EXPECT_NEAR(path.corners.back().y, Two_floors_and_platform::upper_y, 0.2f);
+    // At least the horizontal 13 m, at most a few meters more for the climb.
+    EXPECT_GE(path.length, 13.0f);
+    EXPECT_LE(path.length, 16.0f);
+
+    level.mesh->find_path({-5.0f, 0.0f, 0.0f}, {23.0f, Two_floors_and_platform::platform_y, 0.0f}, half_extents, path);
+    EXPECT_FALSE(path.found);
+    EXPECT_FALSE(path.complete);
+    EXPECT_EQ(path.failure, editor::Navigation_path_failure::different_islands);
+    EXPECT_TRUE(path.start.found);
+    EXPECT_TRUE(path.end.found);
+    EXPECT_TRUE(path.corners.empty());
+
+    level.mesh->find_path({-5.0f, 0.0f, 0.0f}, {50.0f, 0.0f, 0.0f}, half_extents, path);
+    EXPECT_FALSE(path.found);
+    EXPECT_EQ(path.failure, editor::Navigation_path_failure::no_end_polygon);
+}
+
+TEST(Navigation, read_back_mesh_keeps_islands_and_answers_queries)
+{
+    Two_floors_and_platform level;
+    ASSERT_TRUE(level.mesh);
+    const std::vector<uint8_t> bytes = editor::write_navigation_mesh(*level.mesh, editor::Navigation_build_record{});
+    editor::Navigation_build_record record;
+    std::string                     error;
+    std::unique_ptr<Navigation_mesh> read_back = editor::read_navigation_mesh(bytes, record, error);
+    ASSERT_TRUE(read_back) << error;
+    EXPECT_EQ(read_back->get_islands().size(), 2u);
+    EXPECT_EQ(read_back->get_reachable_island_count(), 1u);
+    editor::Navigation_path_result path;
+    read_back->find_path({-5.0f, 0.0f, 0.0f}, {8.0f, Two_floors_and_platform::upper_y, 0.0f}, level.settings.get_seed_search_half_extents(), path);
+    EXPECT_TRUE(path.found);
+    EXPECT_TRUE(path.complete);
+}

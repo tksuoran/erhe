@@ -172,6 +172,32 @@ private:
     GEO::index_t                                      m_max_corner_count{0};
 };
 
+class Operation;
+
+// The node of one brush placement and its insert operation, not yet queued.
+class Brush_instance_insert
+{
+public:
+    std::shared_ptr<erhe::scene::Node> node;
+    std::shared_ptr<Operation>         operation;
+};
+
+// The node and insert operation place_brush_in_scene() queues, for a caller
+// that groups several placements into one operation. Empty when the brush
+// has no geometry.
+auto make_brush_instance_insert(
+    App_context&                                      context,
+    Brush&                                            brush,
+    Scene_root&                                       scene_root,
+    const glm::mat4&                                  world_from_node,
+    const std::shared_ptr<erhe::primitive::Material>& material,
+    double                                            scale           = 1.0,
+    erhe::physics::Motion_mode                        motion_mode     = erhe::physics::Motion_mode::e_dynamic,
+    std::shared_ptr<erhe::Hierarchy>                  parent          = {},
+    std::size_t                                       index_in_parent = 0,
+    std::optional<float>                              mass_override   = {}
+) -> Brush_instance_insert;
+
 // Place a brush in a scene with undo support. Usable from both
 // interactive UI (Brush_tool) and programmatic paths (MCP, Scene_builder).
 // The instance node is inserted under `parent`, any prim (the scene root node

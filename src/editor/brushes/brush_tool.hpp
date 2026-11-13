@@ -3,6 +3,8 @@
 #include "tools/tool.hpp"
 #include "assets/asset_reference.hpp"
 #include "brushes/reference_frame.hpp"
+#include "level/kit_shape.hpp"
+#include "level/level_kits.hpp"
 #include "scene/scene_view.hpp"
 #include "erhe_commands/command.hpp"
 #include "erhe_geometry/types.hpp"
@@ -25,6 +27,7 @@ class Content_library;
 class App_message_bus;
 struct Hover_scene_view_message;
 struct Hover_mesh_message;
+struct Selection_message;
 class App_scenes;
 class Icon_set;
 class Item_tree;
@@ -115,6 +118,20 @@ public:
 
     [[nodiscard]] auto get_hover_brush() const -> std::shared_ptr<Brush>;
 
+    // Kit mode (doc/editor/brushes.md "Kit mode", D4.4): places the kit brush of the values
+    // through Level_kits::place(). A different shape resets the rotation steps.
+    void set_kit_brush (const Kit_parameter_values& values, const std::shared_ptr<Brush>& brush);
+    void leave_kit_mode();
+    [[nodiscard]] auto is_kit_mode         () const -> bool;
+    // The shape of kit mode; null outside it.
+    [[nodiscard]] auto get_kit_shape       () const -> const Kit_shape_definition*;
+    [[nodiscard]] auto get_kit_values      () const -> const Kit_parameter_values&;
+    [[nodiscard]] auto get_kit_brush       () const -> const std::shared_ptr<Brush>&;
+    [[nodiscard]] auto get_kit_yaw_steps   () const -> int;
+    // The pose the preview shows and a click places; none while there is no preview.
+    [[nodiscard]] auto get_kit_pose        () const -> std::optional<Kit_placement_pose>;
+    [[nodiscard]] auto get_hover_world_position() const -> std::optional<glm::vec3>;
+
 private:
     void on_hover_scene_view               (Hover_scene_view_message& message);
     void on_hover_mesh                     (Hover_mesh_message& message);
@@ -131,6 +148,11 @@ private:
     // Content removed without a scene closing (undo of a glTF import):
     // drop the reference when it names one of the removed items.
     void on_items_removed(const Removed_items& removed);
+    // Choosing a palette brush in a content library leaves kit mode.
+    void on_selection(const Selection_message& message);
+    [[nodiscard]] auto try_insert_kit_piece() -> bool;
+    void take_next_kit_seed(const Scene_root& scene_root);
+    void update_kit_preview_transform(Brush& brush);
     void update_preview_mesh               ();
     void do_insert_operation               (Brush& brush);
     void add_preview_mesh                  (Brush& brush);
@@ -153,6 +175,7 @@ private:
     erhe::message_bus::Subscription<Hover_mesh_message>       m_hover_mesh_subscription;
     erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
+    erhe::message_bus::Subscription<Selection_message>     m_selection_subscription;
     Brush_preview_command                   m_preview_command;
     Brush_insert_command                    m_insert_command;
     Brush_pick_command                      m_pick_command;
@@ -195,6 +218,14 @@ private:
     std::optional<Reference_frame>     m_brush_placement_frame;
     std::optional<glm::mat4>           m_hover_transform;
     std::optional<glm::mat4>           m_align_transform;
+    std::optional<glm::vec3>           m_hover_world_position;
+
+    // Kit mode: active while m_kit_brush is set.
+    Kit_parameter_values                       m_kit_values;
+    std::shared_ptr<Brush>                     m_kit_brush;
+    std::shared_ptr<erhe::primitive::Material> m_kit_material;
+    int                                        m_kit_yaw_steps{0};
+    std::optional<Kit_placement_pose>          m_kit_pose;
     ///std::unique_ptr<Item_tree>         m_brush_item_tree;
 };
 

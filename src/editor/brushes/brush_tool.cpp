@@ -7,6 +7,8 @@
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
+#include "editor_log.hpp"
+#include "level/level_kits.hpp"
 #include "graphics/icon_set.hpp"
 #include "grid/grid.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -45,8 +47,11 @@
 
 #include <glm/glm.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <optional>
+#include <span>
 #include <vector>
 
 using erhe::geometry::to_glm_mat4;
@@ -161,7 +166,8 @@ Brush_tool::Brush_tool(
     commands.register_command(&m_rotate_ccw_command);
     commands.register_command(&m_toggle_brush_preview_command);
     commands.bind_command_to_update      (&m_preview_command);
-    commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right, erhe::commands::Button_trigger::Button_pressed);
+    // Plain right press only: a right press with a modifier belongs to the camera (Alt + right drag tumbles).
+    commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right, erhe::commands::Button_trigger::Button_pressed, 0);
     //commands.bind_command_to_mouse_button(&m_rotate_cw_command,  erhe::window::Mouse_button_x1,    true);
     //commands.bind_command_to_mouse_button(&m_rotate_ccw_command, erhe::window::Mouse_button_x2,    true);
     commands.bind_command_to_key(&m_rotate_cw_command,            erhe::window::Key_z);
@@ -201,6 +207,11 @@ Brush_tool::Brush_tool(
             on_items_removed(*message.removed.get());
         }
     );
+    m_selection_subscription = app_message_bus.selection.subscribe(
+        [this](Selection_message& message) {
+            on_selection(message);
+        }
+    );
 
     m_grid_scale = scene_config.object_scale;
 
@@ -217,7 +228,84 @@ Brush_tool::Brush_tool(
 
 void Brush_tool::set_active_brush(const std::shared_ptr<Brush>& brush)
 {
+    leave_kit_mode();
     m_active_brush.adopt(*m_context.asset_manager, brush);
+}
+
+void Brush_tool::set_kit_brush(const Kit_parameter_values& values, const std::shared_ptr<Brush>& brush)
+{
+    const Kit_shape_definition* const shape = values.get_shape();
+    if (!brush || (shape == nullptr)) {
+        return;
+    }
+    if (get_kit_shape() != shape) {
+        m_kit_yaw_steps = 0;
+    }
+    m_kit_values   = values;
+    m_kit_brush    = brush;
+    m_kit_material = m_context.level_kits->get_preview_material(*shape);
+    // The preview takes the new brush's primitive and material when it is made again.
+    remove_preview_mesh();
+    on_motion();
+}
+
+void Brush_tool::leave_kit_mode()
+{
+    if (!m_kit_brush) {
+        return;
+    }
+    m_kit_brush.reset();
+    m_kit_material.reset();
+    m_kit_pose.reset();
+    remove_preview_mesh();
+}
+
+auto Brush_tool::is_kit_mode() const -> bool
+{
+    return static_cast<bool>(m_kit_brush);
+}
+
+auto Brush_tool::get_kit_shape() const -> const Kit_shape_definition*
+{
+    return m_kit_brush ? m_kit_values.get_shape() : nullptr;
+}
+
+auto Brush_tool::get_kit_values() const -> const Kit_parameter_values&
+{
+    return m_kit_values;
+}
+
+auto Brush_tool::get_kit_brush() const -> const std::shared_ptr<Brush>&
+{
+    return m_kit_brush;
+}
+
+auto Brush_tool::get_kit_yaw_steps() const -> int
+{
+    return m_kit_yaw_steps;
+}
+
+auto Brush_tool::get_kit_pose() const -> std::optional<Kit_placement_pose>
+{
+    return (m_kit_brush && m_preview_node) ? m_kit_pose : std::optional<Kit_placement_pose>{};
+}
+
+auto Brush_tool::get_hover_world_position() const -> std::optional<glm::vec3>
+{
+    return m_hover_world_position;
+}
+
+void Brush_tool::on_selection(const Selection_message& message)
+{
+    if (!m_kit_brush) {
+        return;
+    }
+    for (const std::shared_ptr<erhe::Item_base>& item : message.selection_change.newly_selected) {
+        if (std::dynamic_pointer_cast<Brush>(item)) {
+            leave_kit_mode();
+            return;
+        }
+    }
 }
 
 void Brush_tool::clear_active_brush()
@@ -229,6 +317,9 @@ auto Brush_tool::get_effective_brush() const -> std::shared_ptr<Brush>
 {
     if (m_drag_and_drop_brush) {
         return m_drag_and_drop_brush;
+    }
+    if (m_kit_brush) {
+        return m_kit_brush;
     }
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
     if (active_brush) {
@@ -307,6 +398,8 @@ void Brush_tool::handle_priority_update(int old_priority, int new_priority)
         disable_command_host();
         m_preview_command.set_inactive();
         m_hover = Hover_entry{};
+        m_hover_world_position.reset();
+        leave_kit_mode();
         remove_preview_mesh();
         clear_active_brush();
     }
@@ -335,6 +428,14 @@ void Brush_tool::remove_preview_mesh()
 
 auto Brush_tool::try_rotate(int direction) -> bool
 {
+    if (m_kit_brush) {
+        // Kit mode turns the next piece about the up axis; seen from above, rotate_cw turns clockwise.
+        const Kit_placement_settings settings  = m_context.level_kits->get_placement_settings();
+        const int                    per_turn  = std::max(1, static_cast<int>(std::lround(360.0f / std::max(1.0f, settings.rotation_step_degrees))));
+        m_kit_yaw_steps = (((m_kit_yaw_steps - direction) % per_turn) + per_turn) % per_turn;
+        update_preview_mesh();
+        return true;
+    }
     //remove_preview_mesh();
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
     if (!hover_scene_mesh) {
@@ -442,6 +543,9 @@ auto Brush_tool::try_pick() -> bool
 
 auto Brush_tool::try_insert(Brush* brush) -> bool
 {
+    if ((brush == nullptr) && m_kit_brush) {
+        return try_insert_kit_piece();
+    }
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
     if (brush == nullptr) {
         if (active_brush) {
@@ -479,6 +583,47 @@ auto Brush_tool::try_insert(Brush* brush) -> bool
     return true;
 }
 
+auto Brush_tool::try_insert_kit_piece() -> bool
+{
+    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
+    if (!scene_root || !m_preview_node || !m_kit_pose.has_value()) {
+        return false;
+    }
+    // The pose is final: the preview already applied the module snap and the surface options.
+    Kit_placement placement;
+    placement.shape    = m_kit_values.get_shape();
+    placement.values   = m_kit_values;
+    placement.position = m_kit_pose.value().position;
+    placement.rotation = m_kit_pose.value().rotation;
+    Level_kits& level_kits = *m_context.level_kits;
+    const Kit_place_result result = level_kits.place(*scene_root, std::span<const Kit_placement>{&placement, 1}, Kit_snap::none);
+    if (!result.error.empty()) {
+        log_scene->warn("Brush tool: kit piece placement failed: {}", result.error);
+        return false;
+    }
+    if (level_kits.get_placement_settings().seed_per_piece == Kit_seed_per_piece::next) {
+        take_next_kit_seed(*scene_root);
+    }
+    return true;
+}
+
+void Brush_tool::take_next_kit_seed(const Scene_root& scene_root)
+{
+    // The next piece derives its masked values from the next seed at the scene's lengths (D4.5).
+    Level_kits&          level_kits  = *m_context.level_kits;
+    Kit_parameter_values next_values = m_kit_values;
+    static_cast<void>(next_values.set_int("seed", kit_next_seed(next_values.get_seed())));
+    const Kit_lengths lengths = level_kits.get_lengths(scene_root);
+    next_values.resolve_derived(lengths.module, lengths.wall_height);
+    const std::shared_ptr<Brush> brush = level_kits.get_brush(next_values);
+    if (!brush) {
+        log_scene->warn("Brush tool: the kit shape made no geometry for {}", next_values.to_canonical_text());
+        return;
+    }
+    set_kit_brush(next_values, brush);
+    m_context.app_message_bus->kit_values_changed.send_message(Kit_values_changed_message{});
+}
+
 void Brush_tool::on_motion()
 {
     auto* scene_view = get_hover_scene_view();
@@ -499,10 +644,12 @@ void Brush_tool::on_motion()
         // the insert command cannot consume the XR button events the quad's
         // ImGui host needs for its click handling.
         m_hover = Hover_entry{};
+        m_hover_world_position.reset();
         remove_preview_mesh();
         return;
     }
     m_hover = *nearest_hover;
+    m_hover_world_position = nearest_hover->position;
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
     if (hover_scene_mesh) {
@@ -520,6 +667,7 @@ void Brush_tool::on_motion()
 void Brush_tool::preview_drag_and_drop(std::shared_ptr<Brush> brush)
 {
     if (brush) {
+        leave_kit_mode();
         m_show_preview = true;
     }
     m_drag_and_drop_brush = brush;
@@ -687,7 +835,11 @@ void Brush_tool::update_preview_mesh_node_transform()
         return;
     }
 
-    Brush&     brush          = *shared_brush.get();
+    Brush& brush = *shared_brush.get();
+    if (m_kit_brush && (shared_brush == m_kit_brush)) {
+        update_kit_preview_transform(brush);
+        return;
+    }
     const bool brush_frame_ok = update_brush_frame(brush);
     if (!brush_frame_ok || !m_align_transform.has_value()) {
         return;
@@ -723,6 +875,28 @@ void Brush_tool::update_preview_mesh_node_transform()
         m_preview_node->set_parent_from_node(transform);
     }
     m_preview_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
+}
+
+void Brush_tool::update_kit_preview_transform(Brush& brush)
+{
+    m_kit_pose.reset();
+    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
+    if (!scene_root || !m_hover_world_position.has_value()) {
+        return;
+    }
+    // On content the hovered point; on the grid the grid-snapped point, as the face-aligned placement.
+    const glm::vec3 point = (m_hover.slot == Hover_entry::grid_slot)
+        ? glm::vec3{get_world_from_grid_hover_point()[3]}
+        : m_hover_world_position.value();
+    Level_kits& level_kits = *m_context.level_kits;
+    m_kit_pose = level_kits.make_placement_pose(
+        *scene_root, brush.get_bounding_box(), point, m_kit_yaw_steps, level_kits.get_placement_settings()
+    );
+    // add_preview_mesh() gave the preview the kit brush's primitive at scale 1 under the scene root;
+    // a new kit brush makes a new preview, so only the transform changes here.
+    m_preview_node->set_parent_from_node(
+        erhe::math::create_translation<float>(m_kit_pose.value().position) * glm::mat4_cast(m_kit_pose.value().rotation)
+    );
 }
 
 void Brush_tool::do_insert_operation(Brush& brush)
@@ -788,8 +962,11 @@ void Brush_tool::do_insert_operation(Brush& brush)
 void Brush_tool::add_preview_mesh(Brush& brush)
 {
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
-    const auto material =
-        (active_brush && active_brush->get_material()) ? active_brush->get_material() : get_material();
+    const bool kit_preview = m_kit_brush && (&brush == m_kit_brush.get());
+    const std::shared_ptr<erhe::primitive::Material> material =
+        (kit_preview && m_kit_material)                    ? m_kit_material :
+        (active_brush && active_brush->get_material())     ? active_brush->get_material() :
+                                                             get_material();
     auto* scene_view = get_hover_scene_view();
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
@@ -803,7 +980,7 @@ void Brush_tool::add_preview_mesh(Brush& brush)
     ERHE_VERIFY(scene_root);
 
     brush.late_initialize();
-    const Brush::Scaled* brush_scaled_pointer = brush.get_scaled(m_transform_scale);
+    const Brush::Scaled* brush_scaled_pointer = brush.get_scaled(kit_preview ? 1.0f : m_transform_scale);
     if (brush_scaled_pointer == nullptr) {
         // get_scaled() has already named the brush in the log.
         return;
@@ -867,6 +1044,11 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& /*imgui_window*/)
 
     const std::shared_ptr<Brush> last_selected_brush = m_context.selection->get_last_selected<Brush>();
     const std::shared_ptr<Brush> hover_brush = get_hover_brush();
+
+    const Kit_shape_definition* const kit_shape = get_kit_shape();
+    if (kit_shape != nullptr) {
+        ImGui::Text("Kit mode: %s (Level Kit window)", kit_shape->display_name.c_str());
+    }
 
     ImGui::Checkbox("Parent to Active",   &m_parent_to_active        );
     ImGui::Checkbox("Parent to Scene",    &m_parent_to_scene_root    );

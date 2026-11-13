@@ -11,7 +11,7 @@ with no `erhe::` library around them.
 
 | Option | Default | Effect |
 |---|---|---|
-| `ERHE_USE_DETOUR` | `ON`, forced `OFF` on Android | The editor links `RecastNavigation::Detour` and compiles the navigation mesh, its byte form, the reachability flood, the scene state (`Scene_navigation`), its visualization and its item (`assets/navigation_item`), with the Properties status row, the Clear button, the Debug Visualization popup's "Navigation Mesh" combo, the navigation composition passes and MCP `navigation_clear` / `get_navigation_mesh` / `navigation_set_visualization`; definition `ERHE_USE_DETOUR` |
+| `ERHE_USE_DETOUR` | `ON`, forced `OFF` on Android | The editor links `RecastNavigation::Detour` and compiles the navigation mesh, its byte form, the reachability flood, the scene state (`Scene_navigation`), its visualization and its item (`assets/navigation_item`), with the Properties status row, the Clear button, the Debug Visualization popup's "Navigation Mesh" combo, the navigation composition passes and MCP `navigation_clear` / `get_navigation_mesh` / `navigation_set_visualization` / `get_navigation_summary` / `navigation_find_point` / `navigation_find_path`; definition `ERHE_USE_DETOUR` |
 | `ERHE_USE_RECAST` | `ON`, forced `OFF` on Android | The editor links `RecastNavigation::Recast` and compiles the build and its job, Mesh > Build Navigation Mesh, the Build button, MCP `navigation_build` and the build of the Export's navigation stage; definition `ERHE_USE_RECAST`. Needs `ERHE_USE_DETOUR` (a configure error states it) |
 
 The package is fetched when either option is on. The settings ("Settings")
@@ -48,13 +48,16 @@ and the editor log only, so `editor_navigation_tests`
 - `Navigation_mesh` (`navigation_mesh.hpp`): owns the Detour navigation mesh
   and, filled from it in tile grid order, the vertices, polygons (vertex
   indices, neighbours across tiles, detail triangles, area in square meters,
-  `reachable` flag), the bounds and the totals.
+  island, `reachable` flag), the bounds, the totals, the islands and one
+  Detour query ("Islands and queries"). `fill_from_detour()` fills them; the
+  build and the read of the byte form call it.
   `mark_reachable()` finds per seed the nearest polygon within the seed
   search extents and floods from the found polygons across the Detour
   links; a seed without a polygon is reported with its reason in its
   `Navigation_seed_result`, and the call fails when every seed failed.
   `find_reachable()` is the same flood into a flag array without writing
-  the polygons, `set_reachable()` writes such an array.
+  the polygons, with a Detour query of its own, since the job floods the
+  installed mesh on a worker; `set_reachable()` writes such an array.
 - `write_navigation_mesh()` / `read_navigation_mesh()`
   (`navigation_mesh_io.hpp`): the versioned byte form
   (`c_navigation_mesh_format_version`, 2) - the settings the build ran with,
@@ -63,6 +66,38 @@ and the editor log only, so `editor_navigation_tests`
   bit for bit; a read refuses any other version, a polygon array that does not
   match the tiles and trailing bytes, and returns the reason for its caller to
   log.
+
+## Islands and queries
+
+An island is a set of polygons joined by neighbour links: a walkable area
+reaches every point of its island and no point of another. `fill_from_detour()`
+joins the polygons across their neighbour links (both directions, so a link
+only one side holds still joins) and numbers the islands in the order of their
+first polygons; each polygon holds its island's id. A `Navigation_island` holds
+its polygon count, area, bounds over its detail triangles (their y is its
+height range), the centroid of its largest polygon as its representative
+point, and `reachable`: whether one of its polygons is reachable.
+`set_reachable()`, `mark_reachable()` and `clear_reachable()` keep that flag and
+`get_reachable_island_count()` current, and the totals carry `island_count`
+and `reachable_island_count`.
+
+`fill_from_detour()` also creates the mesh's Detour query (4096 search nodes)
+with the path buffers it uses, and keeps each polygon's `dtPolyRef`:
+`get_polygon_ref()` maps a polygon index to it and `find_polygon_index()` back.
+The queries run on the main thread, in the scene root's space:
+
+- `find_nearest_point(position, half_extents)` returns a
+  `Navigation_point_result`: `found`, the nearest `point` on the nearest
+  polygon within the half extents, its `polygon`, `island` and `reachable`.
+- `find_path(start, end, half_extents, out_result)` fills a caller-owned
+  `Navigation_path_result`: both ends' point results; when they lie on one
+  island, Detour's `findPath` (at most 2048 polygons) and
+  `findStraightPath`: `found`, `complete` (the path reaches the end's polygon;
+  a partial path ends at the point of its last polygon nearest to the end),
+  `length` along the corners and the `corners`, start and end included;
+  otherwise `failure` (`no_start_polygon`, `no_end_polygon`,
+  `different_islands`, `search_failed`). The corners vector is cleared and
+  refilled, so a reused result allocates nothing once it has grown.
 
 ## Settings
 
@@ -272,8 +307,9 @@ item. A scene opens with the mesh its item holds; `build_count` and
 `flood_count` count from the open.
 
 The Properties "Navigation" group shows the status text in its "Navigation
-Mesh" row: polygons and reachable polygons, reachable and total area, tiles,
-time, skipped meshes and, when stale, the reasons.
+Mesh" row: polygons and reachable polygons, islands and reachable islands,
+reachable and total area, tiles, time, skipped meshes and, when stale, the
+reasons. The text is made at each install and staleness change, not per frame.
 
 ## Staleness
 
@@ -431,7 +467,8 @@ about it runs per frame.
   it), `seed_count` and `seeds` (per current
   seed node: `node`, `id`, `uid` - the glTF uid - and `point`, in the scene
   root's space); with `ERHE_USE_DETOUR` also `stale`, `stale_reasons`,
-  `polygon_count`, `reachable_polygon_count`, `total_area`,
+  `polygon_count`, `reachable_polygon_count`, `island_count`,
+  `reachable_island_count`, `total_area`,
   `reachable_area`, `tile_count`, `input_mesh_count`, `input_shape_count`,
   `input_triangle_count`, `skipped_mesh_count`, `skipped_meshes`,
   `build_ms`, `flood_ms`, `build_count`, `flood_count`, `built_seeds` (per
@@ -443,13 +480,36 @@ about it runs per frame.
   (`ERHE_USE_DETOUR`): `available`, `bounds_min`, `bounds_max`,
   `polygon_count`, `matching_count`, `returned_count`, `truncated` and
   `polygons` (`index`, `tile`, `vertices`, `area`, `reachable`).
+- `get_navigation_summary {scene_name, max_islands}` (`ERHE_USE_DETOUR`):
+  `available`, `stale`, `total_area`, `reachable_area`, `polygon_count`,
+  `island_count`, `reachable_island_count`, the islands largest first, at most
+  `max_islands` (default 32; `returned_island_count`, `truncated`), each with
+  `id`, `area`, `polygon_count`, `bounds_min`, `bounds_max`, `reachable` and
+  `point`, and `failed_seeds` (`node`, `point`, `reason`) of the last flood.
+- `navigation_find_point {scene_name, position | node_id | node,
+  search_extents}` (`ERHE_USE_DETOUR`): `find_nearest_point()` for the
+  position or the node's origin in the scene root's space; returns
+  `available`, `stale`, `position`, `node` (when given), `search_extents`,
+  `found` and, when found, `point`, `distance` (from the position), `polygon`,
+  `island` and `reachable`.
+- `navigation_find_path {scene_name, start, end, search_extents}`
+  (`ERHE_USE_DETOUR`): `find_path()`; returns `available`, `stale`,
+  `search_extents`, `start` and `end` (each a `navigation_find_point` result
+  without the scene fields), `found`, `complete`, `length`, `corners` and,
+  when not found, `reason` ("no polygon near start", "no polygon near end",
+  "different islands" or "path search failed").
 - `navigation_clear {scene_name}` (`ERHE_USE_DETOUR`): removes the mesh, its
   visualization node and its item; returns `{scene_name, cleared}`.
 - `navigation_set_visualization {mode, viewport}` (`ERHE_USE_DETOUR`): sets
   the Navigation Mesh mode (`off`, `reachable`, `all`) of every viewport, or
   of the one titled `viewport`; returns `{viewports: [{viewport, mode}]}`.
 
-A scene name that matches no or several open scenes, and a node name that
+`search_extents` are half extents `[x, y, z]` in meters, by default the
+scene's `seed_search_radius`, `seed_search_height`, `seed_search_radius` (the
+installed mesh's without export settings). The three reads, like
+`get_navigation_status`, are answered while a save or build runs, and a stale
+mesh answers them with `stale` true; without a mesh they return `available`
+false. A scene name that matches no or several open scenes, and a node name that
 matches no or several prims of the scene, are errors.
 
 ## Verification
@@ -459,7 +519,13 @@ headless tree's editor when it is built, else the Linux Debug tree's) writes a s
 platform, a wall, three pillar nodes sharing one mesh and a seed node,
 launches an editor with `ERHE_AI_DRIVER=1`, and checks the refusals, the
 reachable area against the hand-computed one (within 5 %), the ramp reachable
-and the platform present and unreachable, a second build equal to the first,
+and the platform present and unreachable, the reads of "Islands and
+queries" (two islands - the floor with the ramp, reachable, and the platform's
+top - largest first with bounds and points and the status's counts; the
+nearest point by position and by node, over the platform, out of reach and
+within wider `search_extents`; a path around the wall and one up the ramp,
+none to the platform (different islands) or off the mesh; `stale` true on a
+stale mesh), a second build equal to the first,
 each staleness reason raised by its edit and ended by its undo (a hide of a
 mesh and of its parent, and the show of a mesh hidden at build time,
 included), the flood

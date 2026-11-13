@@ -13,7 +13,7 @@ from erhe_codegen import *
 # the scene codegen unit and references them across units via the scene
 # erhe_codegen_generate() EXTRA_DEFINITIONS_DIRS entry (config/generated/).
 struct("Scene_settings",
-    version=3,
+    version=4,
     short_desc="Per-scene setting overrides",
     long_desc="Each field left null means: use the editor-global default.",
     fields=[
@@ -30,6 +30,7 @@ struct("Scene_settings",
         # export_settings in v2; v3 made it optional. migrate_scene_settings_json
         # rewrites older objects before they deserialize.
         field("export_settings", Optional(StructRef("Scene_export_settings")), added_in=2, short_desc="Export", long_desc="The scene's export settings, present or absent (doc/editor/prepared_assets.md 'Export settings'). Null: the scene has none, and Export refuses it; adding them copies the editor's default export settings."),
+        field("level", Optional(StructRef("Level_settings")), added_in=4, short_desc="Level", long_desc="The level's module and wall height (doc/editor/level_tools.md 'Level settings'). Null: the defaults, module 1 m and wall height 3 m."),
         field("variant_selections", Vector(StructRef("Variant_selection")), added_in=1, short_desc="Variant set selections", long_desc="Which variant each variant set of this scene has selected, one entry per set the user switched (doc/erhe/usd_compatibility_design.md X4). A set without an entry keeps the selection the file authored. Managed by Scene_root::select_variant / the Properties window / the MCP select_variant tool; not intended for hand editing."),
     ],
 )

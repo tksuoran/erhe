@@ -20,6 +20,8 @@ ImGui window implementations for the editor UI, including viewport display, prop
 
 - **`Lod_window`** (`lod_window.{hpp,cpp}`, "LOD") -- mesh level of detail for the selected meshes of the active scene (`doc/editor/lod.md`): generation settings (defaults from the `lod` config section), Generate / Clear for selection (queued), a chain table per distinct primitive (triangles, ratio, object space and pixel error, the drawn level), and a forced level slider plus Release that write the `Lod` properties as one undoable compound operation per edit.
 
+- **`Level_kit_window`** (`level/level_kit_window.{hpp,cpp}`, "Level Kit") -- kit shapes to place, the level lengths, the placement settings and the selected piece's parameters (`doc/editor/level_tools.md` "Level Kit window").
+
 - **`Viewport_config_window`** -- Configures rendering options for a viewport (grid, shadows, selection outline, etc.).
 
 - **`Scene_view_config_window`** -- Configures scene view settings.

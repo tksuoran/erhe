@@ -1,0 +1,79 @@
+#pragma once
+
+#include "level/kit_shape.hpp"
+
+#include <cstddef>
+#include <memory>
+#include <string>
+
+namespace erhe::scene { class Mesh; }
+
+namespace editor {
+
+class App_context;
+
+enum class Kit_row_edit : unsigned int {
+    none = 0,
+    cancelled, // an edit ended without a change (Escape in a typed value, a click without a drag)
+    changed,   // a value changed this frame (also during a drag)
+    committed // an edit ended: a drag released, a typed value entered or a combo entry chosen
+};
+
+enum class Kit_row_label : unsigned int {
+    beside = 0, // the parameter name after the widget (Level Kit window)
+    recorded    // the widget fills its cell; the name is the row's label (Properties window)
+};
+
+[[nodiscard]] auto merge(Kit_row_edit lhs, Kit_row_edit rhs) -> Kit_row_edit;
+
+// The widget of one parameter of the values' shape: a drag per float (range, unit) or integer, a combo per enum;
+// a derivable parameter has a "from seed" toggle in front, its masked value shown disabled, and the seed a New button
+// (D4.5). A seed or mask change derives the masked values again, ranges resolved against the lengths.
+[[nodiscard]] auto kit_parameter_row(Kit_parameter_values& values, std::size_t index, Kit_row_label label, const Kit_lengths& lengths) -> Kit_row_edit;
+
+// kit_parameter_row() for every parameter, names beside the widgets.
+[[nodiscard]] auto kit_parameter_rows(Kit_parameter_values& values, const Kit_lengths& lengths) -> Kit_row_edit;
+
+// The read-only line of what stairs values produce (R3.5); nothing for other shapes.
+void kit_stairs_line(const Kit_parameter_values& values);
+
+// A validate() or record problem message in red; nothing when empty.
+void kit_message_line(const std::string& message);
+
+// The parameter rows of one placed piece (doc/editor/level_tools.md "Parameter rows"): the values
+// read from its record, and an edit that ends with valid values queued as one set_parameters().
+class Kit_piece_editor
+{
+public:
+    explicit Kit_piece_editor(App_context& context);
+
+    // The record is read again at the next update(); on selection and mesh geometry messages.
+    void mark_dirty();
+
+    // Reads the record when another piece is given or after mark_dirty(), not while a drag previews it.
+    void update(const std::shared_ptr<erhe::scene::Mesh>& piece);
+
+    // Validates after an edit; a valid change previews (Level_kits::preview_parameters()), an edit that
+    // ends with valid values sets them (one undo entry), with refused values or cancelled restores (D3.6).
+    void on_edit(Kit_row_edit edit);
+
+    [[nodiscard]] auto get_shape     () const -> const Kit_shape_definition*; // null when the record does not read
+    [[nodiscard]] auto get_shape_text() const -> const std::string&;          // the display name, else the record's id
+    [[nodiscard]] auto get_problem   () const -> const std::string&;          // why the record does not read
+    [[nodiscard]] auto get_message   () const -> const std::string&;          // validate() of the last edit
+    [[nodiscard]] auto get_values    () -> Kit_parameter_values&;
+    [[nodiscard]] auto get_lengths   () const -> const Kit_lengths&;          // of the piece's scene, read with the record
+
+private:
+    App_context&                     m_context;
+    std::weak_ptr<erhe::scene::Mesh> m_piece;
+    std::size_t                      m_piece_id{0};
+    bool                             m_dirty{true};
+    std::string                      m_shape_text;
+    std::string                      m_problem;
+    Kit_parameter_values             m_values;
+    Kit_lengths                      m_lengths;
+    std::string                      m_message;
+};
+
+} // namespace editor

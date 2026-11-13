@@ -95,6 +95,14 @@ void Imgui_window::toggle_window_visibility()
     set_window_visibility(!m_is_visible);
 }
 
+void Imgui_window::set_default_visibility(const Window_visibility visibility)
+{
+    // Assigned without save_window_state(): the windows constructed later are not registered yet.
+    if (!m_ini_label.empty() && !m_imgui_windows.has_persistent_window_state(m_ini_label)) {
+        m_is_visible = (visibility == Window_visibility::visible);
+    }
+}
+
 auto Imgui_window::show_in_menu() const -> bool
 {
     return m_show_in_menu;

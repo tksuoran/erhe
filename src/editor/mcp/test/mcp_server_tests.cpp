@@ -1523,6 +1523,32 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
     check_one_entry("edit_material", json{{"scene_name", scene}, {"material_name", env.material_name()}, {"metallic", 0.25}});
     check_one_entry("lightmap_subdivide_tile", json{{"level", 0}, {"ix", 0}, {"iz", 0}});
     check_one_entry("lightmap_merge_tile",     json{{"level", 1}, {"ix", 0}, {"iz", 0}});
+    // Two pieces and the palette material they add are one entry.
+    check_one_entry(
+        "level_place_pieces",
+        json{
+            {"scene_name", scene},
+            {"pieces", json::array({
+                json{{"shape", "basic.block"},  {"position", {20.0, 0.0, 20.0}}},
+                json{{"shape", "nature.bush"},  {"position", {22.0, 0.0, 20.0}}},
+                json{{"shape", "basic.block"},  {"position", {20.0, 5.0, 20.0}}, {"name", "undo test raised block"}}
+            })}
+        }
+    );
+    {
+        const Mcp_client::Tool_result level_pieces = client.call_tool("level_get_pieces", json{{"scene_name", scene}});
+        ASSERT_FALSE(level_pieces.is_error) << level_pieces.text;
+        std::size_t raised_id = 0;
+        for (const json& piece : level_pieces.payload.at("pieces")) {
+            if (piece.at("name").get<std::string>() == "undo test raised block") {
+                raised_id = piece.at("id").get<std::size_t>();
+            }
+        }
+        ASSERT_NE(raised_id, 0u);
+        check_one_entry("level_set_piece_parameters", json{{"scene_name", scene}, {"node_id", raised_id}, {"parameters", {{"width", 1.5}}}});
+        // The raised block comes to rest on the block below it.
+        check_one_entry("level_snap_to_surface", json{{"scene_name", scene}, {"node_ids", json::array({raised_id})}});
+    }
 
     const Mcp_client::Tool_result cameras = client.call_tool("get_scene_cameras", json{{"scene_name", scene}});
     ASSERT_FALSE(cameras.is_error) << cameras.text;

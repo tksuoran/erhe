@@ -2,6 +2,7 @@
 
 #include <memory>
 
+namespace GEO           { class Mesh; }
 namespace erhe::physics { class ICollision_shape; }
 namespace erhe::scene   { class Mesh; class Xformable; using Node = Xformable; }
 
@@ -18,6 +19,12 @@ namespace editor {
 [[nodiscard]] auto build_shape_from_mesh(
     const erhe::scene::Mesh* mesh,
     bool                     convex_hull
+) -> std::shared_ptr<erhe::physics::ICollision_shape>;
+
+// A triangle mesh shape of the fan-triangulated facets, positions times scale; null without facets.
+[[nodiscard]] auto build_triangle_mesh_shape(
+    const GEO::Mesh& geo_mesh,
+    float            scale
 ) -> std::shared_ptr<erhe::physics::ICollision_shape>;
 
 // Convenience wrapper: builds from the Mesh prim of a node.

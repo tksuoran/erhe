@@ -1474,6 +1474,25 @@ auto Mcp_server::action_set_active_scene(const json& args) -> std::string
     return make_json_content({{"active_scene", sr->get_name()}}).dump();
 }
 
+namespace {
+
+// The optional surface_snap / surface_orient arguments (D4.6): off unless the call states them.
+[[nodiscard]] auto read_surface_arguments(const json& args, Surface_options& out_options, std::string& out_error) -> bool
+{
+    out_options = Surface_options{};
+    for (const char* key : {"surface_snap", "surface_orient"}) {
+        if (args.contains(key) && !args.at(key).is_boolean()) {
+            out_error = std::string{key} + " must be a boolean, not " + args.at(key).dump();
+            return false;
+        }
+    }
+    out_options.snap   = args.value("surface_snap",   false) ? Surface_snap::on   : Surface_snap::off;
+    out_options.orient = args.value("surface_orient", false) ? Surface_orient::on : Surface_orient::off;
+    return true;
+}
+
+} // anonymous namespace
+
 auto Mcp_server::action_transform_selection(const json& args) -> std::string
 {
     Transform_tool* transform_tool = m_context.transform_tool;
@@ -1546,6 +1565,13 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
+    Surface_options surface;
+    if (!read_surface_arguments(args, surface, parse_error)) {
+        return make_error_content("transform_selection: " + parse_error);
+    }
+    if (any_surface_option(surface) && (!translation.has_value() || shared.component_mode)) {
+        return make_error_content("transform_selection: surface_snap and surface_orient rest moved meshes; they need a translation of a node selection");
+    }
 
     json applied = json::object();
     if (translation.has_value()) {
@@ -1564,6 +1590,8 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         transform_tool->apply_skew_edit(skew.value(), local);
         applied["skew"] = {skew->x, skew->y, skew->z};
     }
+    // After every edit of the call, so the rested transform is the one recorded.
+    const std::size_t surface_found_count = transform_tool->rest_on_surface(surface);
 
     const bool end_edit = args.value("end_edit", true);
     if (end_edit) {
@@ -1601,15 +1629,19 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
             {"name",            entry.node->get_name()},
             {"id",              entry.node->get_id()},
             {"local_transform", trs_to_json(entry.node->parent_from_node_transform())},
-            {"world_transform", trs_to_json(entry.node->world_from_node_transform())}
+            {"world_transform", trs_to_json(entry.node->world_from_node_transform())},
+            {"surface_found",   entry.surface_found}
         });
     }
 
     return make_json_content({
-        {"space",    space},
-        {"applied",  applied},
-        {"end_edit", end_edit},
-        {"nodes",    nodes}
+        {"space",               space},
+        {"applied",             applied},
+        {"end_edit",            end_edit},
+        {"surface_snap",        surface.snap == Surface_snap::on},
+        {"surface_orient",      surface.orient == Surface_orient::on},
+        {"surface_found_count", surface_found_count},
+        {"nodes",               nodes}
     }).dump();
 }
 
@@ -1628,11 +1660,14 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
                 continue;
             }
             const glm::vec3 t = entry.node->world_from_node_transform().get_translation();
+            const glm::quat r = entry.node->world_from_node_transform().get_rotation();
             nodes.push_back({
                 {"name",                   entry.node->get_name()},
                 {"id",                     entry.node->get_id()},
                 {"world_translation",      {t.x, t.y, t.z}},
-                {"pulled_through_physics", transform_tool->is_node_pulled_through_physics(entry.node.get())}
+                {"world_rotation_xyzw",    {r.x, r.y, r.z, r.w}},
+                {"pulled_through_physics", transform_tool->is_node_pulled_through_physics(entry.node.get())},
+                {"surface_found",          entry.surface_found}
             });
         }
         return nodes;
@@ -1756,6 +1791,12 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
             return make_error_content("frames must be at least 1");
         }
         steps.release = args.value("release", true);
+        if (!read_surface_arguments(args, steps.surface, parse_error)) {
+            return make_error_content("drag_selection: " + parse_error);
+        }
+        if (any_surface_option(steps.surface) && (steps.kind != Transform_drag_kind::translate)) {
+            return make_error_content("drag_selection: surface_snap and surface_orient apply to translate drags only");
+        }
 
         if (shared.component_mode) {
             return make_error_content("drag_selection drags node selections; a mesh component selection is active");
@@ -1766,7 +1807,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         if (!has_center) {
             steps.center = shared.world_from_anchor_initial_state.get_translation();
         }
-        if (!transform_tool->begin_scripted_drag(steps.kind)) {
+        if (!transform_tool->begin_scripted_drag(steps.kind, steps.surface)) {
             return make_error_content("Drag refused: a pointer drag is active");
         }
         steps.request = m_current_request;
@@ -1791,9 +1832,11 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         m_held_selection_drag = finished;
     }
     return make_json_content({
-        {"frames",   finished.frame_count},
-        {"released", finished.release},
-        {"nodes",    nodes}
+        {"frames",         finished.frame_count},
+        {"released",       finished.release},
+        {"surface_snap",   finished.surface.snap == Surface_snap::on},
+        {"surface_orient", finished.surface.orient == Surface_orient::on},
+        {"nodes",          nodes}
     }).dump();
 }
 

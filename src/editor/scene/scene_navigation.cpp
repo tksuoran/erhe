@@ -521,8 +521,8 @@ void Scene_navigation::update_status_text_locked()
     }
     const Navigation_totals totals = m_mesh->get_totals();
     m_status_text = fmt::format(
-        "{} polygons ({} reachable), {:.1f} of {:.1f} m2 reachable, {} tiles, {:.0f} ms",
-        totals.polygon_count, totals.reachable_polygon_count, totals.reachable_area, totals.total_area,
+        "{} polygons ({} reachable), {} islands ({} reachable), {:.1f} of {:.1f} m2 reachable, {} tiles, {:.0f} ms",
+        totals.polygon_count, totals.reachable_polygon_count, totals.island_count, totals.reachable_island_count, totals.reachable_area, totals.total_area,
         m_statistics.tile_count, m_statistics.build_ms + m_statistics.flood_ms
     );
     if (m_statistics.skipped_mesh_count > 0) {

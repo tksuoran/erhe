@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=18,
+    version=20,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -55,6 +55,11 @@ struct("Editor_settings_config",
         field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
         # Generation defaults of the LOD window (doc/editor/lod.md).
         field("lod",                  StructRef("Lod_config"),             added_in=11),
+        # Placement settings of the Level Kit window (doc/editor/level_tools.md).
+        field("level_kit",            StructRef("Level_kit_config"),       added_in=19),
+        # Snap To Surface and Orient To Surface, shared by kit placement and the
+        # Transform tool (doc/editor/level_tools.md "Surface settings").
+        field("surface_snap",         StructRef("Surface_snap_config"),    added_in=20),
         # The default export settings that adding a scene's export settings
         # copies (doc/editor/prepared_assets.md "Export settings").
         field("export_settings",      StructRef("Scene_export_settings"),  added_in=16),

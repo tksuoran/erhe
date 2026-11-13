@@ -70,6 +70,7 @@
 
 #include <geogram/mesh/mesh_reorder.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -930,13 +931,43 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
         // which a single precision destination (every erhe Geometry mesh is
         // one) refuses with a geo_assert.
         destination.vertices.set_double_precision();
+        // Each infinite cell's finite triangle, wound outward by where the infinite vertex sits
+        // (geogram's own compute_convex_hull_3d()).
         GEO::vector<GEO::index_t> triangles_indices;
+        const auto add_triangle = [&triangles_indices](const GEO::index_t a, const GEO::index_t b, const GEO::index_t c) {
+            triangles_indices.push_back(a);
+            triangles_indices.push_back(b);
+            triangles_indices.push_back(c);
+        };
         for (GEO::index_t t = delaunay->nb_finite_cells(); t < delaunay->nb_cells(); ++t) {
-            for (GEO::index_t lv = 0; lv < 4; ++lv) {
-                GEO::signed_index_t v = delaunay->cell_vertex(t, lv);
-                if (v != GEO::NO_INDEX) {
-                    triangles_indices.push_back(GEO::index_t(v));
-                }
+            const GEO::index_t v0 = delaunay->cell_vertex(t, 0);
+            const GEO::index_t v1 = delaunay->cell_vertex(t, 1);
+            const GEO::index_t v2 = delaunay->cell_vertex(t, 2);
+            const GEO::index_t v3 = delaunay->cell_vertex(t, 3);
+            if (v0 == GEO::NO_INDEX) {
+                add_triangle(v3, v2, v1);
+            } else if (v1 == GEO::NO_INDEX) {
+                add_triangle(v0, v2, v3);
+            } else if (v2 == GEO::NO_INDEX) {
+                add_triangle(v0, v3, v1);
+            } else if (v3 == GEO::NO_INDEX) {
+                add_triangle(v0, v1, v2);
+            }
+        }
+        // Delaunay inserts in an order drawn from geogram's global random state; the hull of
+        // equal points is one mesh: each triangle from its lowest vertex, triangles sorted.
+        std::vector<std::array<GEO::index_t, 3>> triangles(triangles_indices.size() / 3);
+        for (GEO::index_t i = 0, end = static_cast<GEO::index_t>(triangles.size()); i < end; ++i) {
+            std::array<GEO::index_t, 3> triangle{triangles_indices[3 * i], triangles_indices[(3 * i) + 1], triangles_indices[(3 * i) + 2]};
+            while ((triangle[0] > triangle[1]) || (triangle[0] > triangle[2])) {
+                triangle = std::array<GEO::index_t, 3>{triangle[1], triangle[2], triangle[0]};
+            }
+            triangles[i] = triangle;
+        }
+        std::sort(triangles.begin(), triangles.end());
+        for (GEO::index_t i = 0, end = static_cast<GEO::index_t>(triangles.size()); i < end; ++i) {
+            for (GEO::index_t j = 0; j < 3; ++j) {
+                triangles_indices[(3 * i) + j] = triangles[i][j];
             }
         }
         destination.facets.assign_triangle_mesh(3, points, triangles_indices, true);
