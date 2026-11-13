@@ -131,6 +131,26 @@ auto make_local_mesh_key(const Local_mesh_key_inputs& inputs) -> erhe::asset_sto
     return builder.finish();
 }
 
+// glibc's %a on every platform (MSVC's %a pads the mantissa): sign, "0x",
+// shortest exact hex.
+[[nodiscard]] auto format_hexfloat(const double value) -> std::string
+{
+    std::array<char, 32> buffer{};
+    const std::to_chars_result result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value, std::chars_format::hex);
+    ERHE_VERIFY(result.ec == std::errc{});
+    std::string text;
+    const char* digits = buffer.data();
+    if (*digits == '-') {
+        text.push_back('-');
+        ++digits;
+    }
+    if ((*digits != 'i') && (*digits != 'n')) { // inf and nan as glibc writes them
+        text.append("0x");
+    }
+    text.append(digits, static_cast<std::size_t>(result.ptr - digits));
+    return text;
+}
+
 auto format_transform_hexfloat(const glm::mat4& transform) -> std::string
 {
     std::string text;
@@ -140,19 +160,7 @@ auto format_transform_hexfloat(const glm::mat4& transform) -> std::string
             if (!text.empty()) {
                 text.push_back(' ');
             }
-            // glibc's %a on every platform (MSVC's %a pads the mantissa): sign, "0x", shortest exact hex.
-            std::array<char, 32> buffer{};
-            const std::to_chars_result result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), static_cast<double>(transform[column][row]), std::chars_format::hex);
-            ERHE_VERIFY(result.ec == std::errc{});
-            const char* digits = buffer.data();
-            if (*digits == '-') {
-                text.push_back('-');
-                ++digits;
-            }
-            if ((*digits != 'i') && (*digits != 'n')) { // inf and nan as glibc writes them
-                text.append("0x");
-            }
-            text.append(digits, static_cast<std::size_t>(result.ptr - digits));
+            text += format_hexfloat(static_cast<double>(transform[column][row]));
         }
     }
     return text;
@@ -165,6 +173,9 @@ auto make_world_mesh_key(const World_mesh_key_inputs& inputs) -> erhe::asset_sto
     builder.add_format_stamp(inputs.stamp);
     builder.add_key(inputs.local_mesh_key);
     builder.add_text_setting("world_from_node", format_transform_hexfloat(inputs.world_from_node));
+    if (inputs.piece_extent > 0.0f) {
+        builder.add_text_setting("piece_extent", format_hexfloat(static_cast<double>(inputs.piece_extent)));
+    }
     return builder.finish();
 }
 

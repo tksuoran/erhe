@@ -10,6 +10,7 @@ add_executable(${_target}
     test_optimized_variant_build.cpp
     test_empty_geometry_build.cpp
     test_lod.cpp
+    test_mesh_pieces.cpp
     test_stored_colocation.cpp
     test_prepared_primitive.cpp
     test_derived_triangles.cpp

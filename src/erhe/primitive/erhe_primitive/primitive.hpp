@@ -771,7 +771,7 @@ auto build_buffer_mesh_from_triangle_soup(
 // generate_lod_chain() over a soup's own vertices and indices, without edge
 // lines: the chain build_buffer_mesh_from_triangle_soup() makes with
 // `settings`.
-[[nodiscard]] auto generate_soup_lod_chain(const Triangle_soup& triangle_soup, const Lod_settings& settings) -> Lod_chain_indices;
+[[nodiscard]] auto generate_soup_lod_chain(const Triangle_soup& triangle_soup, const Lod_settings& settings, const Piece_partition* partition = nullptr, Mesh_pieces* pieces = nullptr) -> Lod_chain_indices;
 
 // The GPU vertex streams and index buffer build_buffer_mesh_from_triangle_soup()
 // writes for `triangle_soup` in `vertex_format` / `index_type`, captured on

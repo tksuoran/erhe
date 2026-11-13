@@ -7,6 +7,22 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ## [Unreleased]
 
+### Added
+
+- `erhe::primitive`: `mesh_pieces.hpp` - `Mesh_pieces`, `Piece_span`,
+  `Piece_partition`, `partition_triangles()`, `order_level_by_pieces()`,
+  `validate_mesh_pieces()`; `split_prepared_primitive_pieces()`,
+  `Prepared_primitive_export::pieces`, `Prepared_primitive_data::pieces`,
+  the `partition` argument of `make_export_lod_chain()`, the `partition` and
+  `pieces` arguments of `generate_lod_chain()` and `generate_soup_lod_chain()`,
+  `Buffer_mesh_piece`, `Buffer_mesh::pieces` and `apply_mesh_pieces()`: the
+  world-space bake splits a primitive's triangles into spatial pieces
+  (export setting `world_piece_extent`; the `pieces` member of
+  `ERHE_mesh_optimized`), the LOD chain locks the piece borders, and a
+  draw-list entry per piece (`Draw_list_entry::piece_index`) culls and
+  selects its level by the piece's box (`doc/erhe/primitive.md`
+  "Pieces").
+
 ### Removed
 
 - `erhe::raytrace`: the `tinybvh` backend's `cache/tinybvh` disk cache (and

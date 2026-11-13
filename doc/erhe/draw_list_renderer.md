@@ -908,6 +908,17 @@ Drawing:
   indirection on the hot path. References to cold / owning data (the
   `Draw_list_object`) go through indices, not pointers that the hot path must
   dereference.
+- R16a (pieces): a primitive whose optimized fill carries pieces
+  (`erhe::primitive::Buffer_mesh::pieces`, `doc/erhe/primitive.md`
+  "Pieces") registers one entry per piece (`piece_index`), each with the
+  piece's index range per level in the level table and the piece's box
+  under the node's transform as its culling bounds
+  (`Draw_list_scene::get_entry_world_aabb()`); the pieces of a primitive
+  share its PVS column. Every other entry draws the whole range with the
+  mesh's world box. Measured 2026-11-08 on Bistro at the street path's
+  corner (world-space form, desktop): opaque pass triangles 267k whole ->
+  71k at 8 m and 65k at 5 m pieces, rasterized fragments per covered pixel
+  6.75 -> 6.16 / 5.89, shaded unchanged.
 
 ## 6. Correctness requirements
 

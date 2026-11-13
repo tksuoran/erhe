@@ -203,6 +203,29 @@ public:
     return chain.levels[chain.get_clamped_level(level)].index_range;
 }
 
+// The pieces an entry of this classification draws one of (doc/erhe/
+// primitive.md "Pieces"): the optimized variant's fill pieces; empty for
+// the other modes and variants (one entry draws the whole range).
+[[nodiscard]] auto get_entry_pieces(const Primitive_classification& classification, const erhe::primitive::Primitive_mode primitive_mode) -> std::span<const erhe::primitive::Buffer_mesh_piece>
+{
+    if (
+        (primitive_mode != erhe::primitive::Primitive_mode::polygon_fill) ||
+        (classification.variant != erhe::primitive::Mesh_variant::optimized) ||
+        (classification.buffer_mesh == nullptr)
+    ) {
+        return {};
+    }
+    return std::span<const erhe::primitive::Buffer_mesh_piece>{classification.buffer_mesh->pieces};
+}
+
+// select_lod_index_range() of one piece: the piece's range at the chain's
+// clamped level (level 0 without a chain).
+[[nodiscard]] auto select_piece_index_range(const Primitive_classification& classification, const erhe::primitive::Buffer_mesh_piece& piece, const std::size_t level) -> erhe::primitive::Index_range
+{
+    const erhe::primitive::Lod_chain& chain = classification.buffer_mesh->lod_chain;
+    return piece.levels[chain.get_clamped_level(level)];
+}
+
 // The level count of the chain an entry of this classification draws from:
 // the optimized variant's chain, 0 for a variant without one and for the
 // base variant (doc/plans/lod_gpu_selection.md section 3).
@@ -493,58 +516,71 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
             Draw_list&     draw_list       = edit_draw_list(draw_list_index);
 
             const erhe::primitive::Buffer_mesh& buffer_mesh = *classification.buffer_mesh;
-            const erhe::primitive::Index_range  index_range = select_lod_index_range(classification, forced_lod_level);
-            Draw_list_entry entry{};
-            entry.object_index         = object_index;
-            entry.mesh_primitive_index = static_cast<uint16_t>(i);
-            entry.variant              = classification.variant;
-            entry.flag_bits            = object.flag_bits;
-            entry.index_count          = static_cast<uint32_t>(index_range.index_count);
-            entry.first_index          = static_cast<uint32_t>(index_range.first_index) + buffer_mesh.base_index();
-            entry.base_vertex          = (primitive_mode == erhe::primitive::Primitive_mode::solid_wireframe)
-                ? buffer_mesh.expanded_base_vertex()
-                : buffer_mesh.base_vertex();
-            // world_aabb: write_object_bounds() below, once per object.
-            // The entry's chain in the level table and its packed Lod record
-            // (doc/plans/lod_gpu_selection.md section 3).
-            const std::size_t lod_level_count = get_lod_level_count(classification);
-            if (lod_level_count > 0) {
-                ERHE_VERIFY(lod_level_count <= lod_rows.size());
-                for (std::size_t level = 0; level < lod_level_count; ++level) {
-                    const erhe::primitive::Index_range level_range = select_lod_index_range(classification, level);
-                    lod_rows[level] = glm::uvec4{
-                        static_cast<uint32_t>(level_range.index_count),
-                        static_cast<uint32_t>(level_range.first_index) + buffer_mesh.base_index(),
-                        std::bit_cast<uint32_t>(classification.buffer_mesh->lod_chain.levels[level].error),
-                        0u
-                    };
+            // One entry per piece of a split fill (doc/erhe/primitive.md
+            // "Pieces"), each with the piece's ranges and, from
+            // write_object_bounds(), its box; one entry otherwise.
+            const std::span<const erhe::primitive::Buffer_mesh_piece> pieces = get_entry_pieces(classification, primitive_mode);
+            const std::size_t entry_count = pieces.empty() ? 1 : pieces.size();
+            for (std::size_t piece_index = 0; piece_index < entry_count; ++piece_index) {
+                const erhe::primitive::Buffer_mesh_piece* const piece = pieces.empty() ? nullptr : &pieces[piece_index];
+                const auto range_of = [&](const std::size_t level) -> erhe::primitive::Index_range {
+                    return (piece != nullptr) ? select_piece_index_range(classification, *piece, level) : select_lod_index_range(classification, level);
+                };
+                const erhe::primitive::Index_range index_range = range_of(forced_lod_level);
+                Draw_list_entry entry{};
+                entry.object_index         = object_index;
+                entry.mesh_primitive_index = static_cast<uint16_t>(i);
+                entry.variant              = classification.variant;
+                entry.flag_bits            = object.flag_bits;
+                entry.index_count          = static_cast<uint32_t>(index_range.index_count);
+                entry.first_index          = static_cast<uint32_t>(index_range.first_index) + buffer_mesh.base_index();
+                entry.base_vertex          = (primitive_mode == erhe::primitive::Primitive_mode::solid_wireframe)
+                    ? buffer_mesh.expanded_base_vertex()
+                    : buffer_mesh.base_vertex();
+                entry.piece_index          = (piece != nullptr) ? static_cast<uint32_t>(piece_index) : piece_index_none;
+                // world_aabb: write_object_bounds() below, once per object.
+                // The entry's chain in the level table and its packed Lod record
+                // (doc/plans/lod_gpu_selection.md section 3).
+                const std::size_t lod_level_count = get_lod_level_count(classification);
+                if (lod_level_count > 0) {
+                    ERHE_VERIFY(lod_level_count <= lod_rows.size());
+                    for (std::size_t level = 0; level < lod_level_count; ++level) {
+                        const erhe::primitive::Index_range level_range = range_of(level);
+                        lod_rows[level] = glm::uvec4{
+                            static_cast<uint32_t>(level_range.index_count),
+                            static_cast<uint32_t>(level_range.first_index) + buffer_mesh.base_index(),
+                            std::bit_cast<uint32_t>(classification.buffer_mesh->lod_chain.levels[level].error),
+                            0u
+                        };
+                    }
+                    entry.lod_table_index = acquire_lod_table_block(std::span<const glm::uvec4>{lod_rows.data(), lod_level_count});
+                    ++m_lod_chain_entry_count;
                 }
-                entry.lod_table_index = acquire_lod_table_block(std::span<const glm::uvec4>{lod_rows.data(), lod_level_count});
-                ++m_lod_chain_entry_count;
-            }
-            entry.lod_word = make_lod_word(lod, lod_level_count);
+                entry.lod_word = make_lod_word(lod, lod_level_count);
 
-            object.locations.push_back(
-                Draw_list_entry_location{
-                    .draw_list_index = draw_list_index,
-                    .entry_index     = static_cast<uint32_t>(draw_list.entries.size())
-                }
-            );
-            draw_list.entries.push_back(entry);
-            // The entry's PVS column (doc/plans/pvs.md "Runtime
-            // consumption"), looked up once, at registration.
-            const uint32_t pvs_column = find_pvs_column(object, static_cast<uint32_t>(i));
-            draw_list.pvs_columns.push_back(pvs_column);
-            add_pvs_column_entry(pvs_column);
-            ERHE_VERIFY(draw_list.pvs_columns.size() == draw_list.entries.size());
-            ERHE_VERIFY(draw_list.primitive_records.size() == (draw_list.entries.size() - 1) * m_primitive_record_stride);
-            draw_list.primitive_records.resize(draw_list.entries.size() * m_primitive_record_stride);
-            // The bounds: write_object_bounds() below, as for world_aabb.
-            draw_list.bounds.resize(draw_list.entries.size());
-            write_entry_record(object, entry, get_record(object.locations.back()));
-            // The shader stages resolve in the render phase, at the list's
-            // first draw (R17): the color environment they combine with is
-            // the render phase's.
+                object.locations.push_back(
+                    Draw_list_entry_location{
+                        .draw_list_index = draw_list_index,
+                        .entry_index     = static_cast<uint32_t>(draw_list.entries.size())
+                    }
+                );
+                draw_list.entries.push_back(entry);
+                // The entry's PVS column (doc/plans/pvs.md "Runtime
+                // consumption"), looked up once, at registration; the pieces
+                // of a primitive share its column.
+                const uint32_t pvs_column = find_pvs_column(object, static_cast<uint32_t>(i));
+                draw_list.pvs_columns.push_back(pvs_column);
+                add_pvs_column_entry(pvs_column);
+                ERHE_VERIFY(draw_list.pvs_columns.size() == draw_list.entries.size());
+                ERHE_VERIFY(draw_list.primitive_records.size() == (draw_list.entries.size() - 1) * m_primitive_record_stride);
+                draw_list.primitive_records.resize(draw_list.entries.size() * m_primitive_record_stride);
+                // The bounds: write_object_bounds() below, as for world_aabb.
+                draw_list.bounds.resize(draw_list.entries.size());
+                write_entry_record(object, entry, get_record(object.locations.back()));
+                // The shader stages resolve in the render phase, at the list's
+                // first draw (R17): the color environment they combine with is
+                // the render phase's.
+            }
         }
     }
     write_object_bounds(object_index);
@@ -737,6 +773,25 @@ void Draw_list_scene::write_entry_record(const Draw_list_object& object, const D
     write_position_quantization_fields(record, offsets, buffer_mesh);
 }
 
+// The culling box of one entry: its piece's box under the node's transform
+// (doc/erhe/primitive.md "Pieces"), the mesh's world box for an entry
+// drawing a whole primitive (and every skinned entry, which carries none).
+auto Draw_list_scene::get_entry_world_aabb(const Draw_list_object& object, const Draw_list_entry& entry, const erhe::math::Aabb& mesh_world_aabb) const -> erhe::math::Aabb
+{
+    if ((entry.piece_index == piece_index_none) || (object.mobility == Draw_mobility::skinned)) {
+        return mesh_world_aabb;
+    }
+    const erhe::scene::Mesh* mesh = object.info.mesh.get();
+    ERHE_VERIFY(mesh != nullptr);
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+    ERHE_VERIFY(entry.mesh_primitive_index < mesh_primitives.size());
+    const erhe::primitive::Primitive* const primitive = mesh_primitives[entry.mesh_primitive_index].primitive.get();
+    ERHE_VERIFY(primitive != nullptr);
+    const erhe::primitive::Buffer_mesh* const buffer_mesh = primitive->get_renderable_mesh(entry.variant);
+    ERHE_VERIFY((buffer_mesh != nullptr) && (entry.piece_index < buffer_mesh->pieces.size()));
+    return buffer_mesh->pieces[entry.piece_index].bounding_box.transformed_by(mesh->world_from_node());
+}
+
 void Draw_list_scene::write_object_bounds(const uint32_t object_index)
 {
     Draw_list_object&        object = m_objects[object_index];
@@ -762,9 +817,11 @@ void Draw_list_scene::write_object_bounds(const uint32_t object_index)
     }
     const float max_axis_scale = get_max_axis_scale(*mesh);
     for (const Draw_list_entry_location& location : object.locations) {
-        Draw_list& draw_list = edit_draw_list(location.draw_list_index);
-        draw_list.entries[location.entry_index].world_aabb = world_aabb;
-        draw_list.bounds.set(location.entry_index, world_aabb);
+        Draw_list&             draw_list  = edit_draw_list(location.draw_list_index);
+        Draw_list_entry&       entry      = draw_list.entries[location.entry_index];
+        const erhe::math::Aabb entry_aabb = get_entry_world_aabb(object, entry, world_aabb);
+        entry.world_aabb = entry_aabb;
+        draw_list.bounds.set(location.entry_index, entry_aabb);
         draw_list.bounds.set_max_axis_scale(location.entry_index, max_axis_scale);
     }
     object.world_aabb     = world_aabb;
@@ -980,9 +1037,11 @@ void Draw_list_scene::write_object_transform(const uint32_t object_index)
     const float max_axis_scale = get_max_axis_scale(*node);
     for (const Draw_list_entry_location& location : object.locations) {
         write_transform_fields(get_record(location), offsets, *node);
-        Draw_list& draw_list = edit_draw_list(location.draw_list_index);
-        draw_list.entries[location.entry_index].world_aabb = world_aabb;
-        draw_list.bounds.set(location.entry_index, world_aabb);
+        Draw_list&             draw_list  = edit_draw_list(location.draw_list_index);
+        Draw_list_entry&       entry      = draw_list.entries[location.entry_index];
+        const erhe::math::Aabb entry_aabb = get_entry_world_aabb(object, entry, world_aabb);
+        entry.world_aabb = entry_aabb;
+        draw_list.bounds.set(location.entry_index, entry_aabb);
         draw_list.bounds.set_max_axis_scale(location.entry_index, max_axis_scale);
     }
     check_pvs_object(object, world_aabb);

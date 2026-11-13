@@ -6,7 +6,7 @@ from erhe_codegen import *
 # (present or absent) and, as the editor's defaults that adding them copies,
 # of Editor_settings_config.
 struct("Scene_export_settings",
-    version=4,
+    version=5,
     short_desc="Export",
     long_desc="Settings Export and Prepare (PC / Quest) write the scene with.",
     fields=[
@@ -22,6 +22,7 @@ struct("Scene_export_settings",
         field("texture_supercompression", EnumRef("Texture_supercompression"), added_in=2, default="Texture_supercompression::zstd", short_desc="Texture Supercompression", long_desc="How the raw block images transcoded for a target are written: Zstandard supercompressed, or stored as they upload."),
         field("raytrace_bvh", Bool, added_in=2, default="true", short_desc="Raytrace BVH", long_desc="A prepared asset carries the Raytrace BVH of its meshes; off leaves it out and a prepared run builds it in memory."),
         field("pvs_mode", EnumRef("Pvs_mode"), added_in=3, default="Pvs_mode::off", short_desc="PVS Mode", long_desc="What Export does about the potentially visible set: off writes none; reuse copies the PVS item the editor asset holds as it is, unsafe: nothing checks that it matches the exported geometry; rebake bakes a new PVS on the world-space form during every Export (needs the PVS region and Bake Static To World Space)."),
+        field("world_piece_extent", Float, added_in=5, default="0.0f", short_desc="World Piece Extent (m)", long_desc="The world-space bake splits each baked primitive into spatial pieces no wider than this on any axis (doc/erhe/primitive.md 'Pieces'): one draw-list entry per piece, so frustum, occlusion and PVS culling work per piece. 0 keeps every primitive whole.", ui_min="0.0", ui_max="64.0", hard_min="0.0"),
         field("texture_encoding", EnumRef("Texture_encoding"), added_in=4, default="Texture_encoding::target", short_desc="Texture Encoding", long_desc="What the Texture item of a PNG / JPEG image holds: target encodes it to the target's block format by way of a Basis Universal texture item of the editor asset; source keeps the image bytes as they are and the prepared run decodes them at load. A Basis Universal image is transcoded either way."),
     ],
 )

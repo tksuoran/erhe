@@ -579,7 +579,53 @@ auto bake_prepared_primitive_transform(Prepared_primitive_export& prepared, cons
         }
     }
     prepared.lod.reset();
+    prepared.pieces.reset();
     return result;
+}
+
+auto split_prepared_primitive_pieces(Prepared_primitive_export& prepared, const float max_extent) -> std::optional<Piece_partition>
+{
+    ERHE_PROFILE_FUNCTION();
+    ERHE_VERIFY(!prepared.retained_core); // bake_prepared_primitive_transform() copies a retained core first
+    prepared.pieces.reset();
+    Triangle_soup&           core      = prepared.core;
+    const std::vector<float> positions = get_float_positions(core);
+    if (core.index_data.empty() || positions.empty() || !(max_extent > 0.0f)) {
+        return std::nullopt;
+    }
+    Piece_partition partition = partition_triangles(positions, core.index_data, max_extent, max_piece_triangles);
+    if (partition.piece_count < 2) {
+        return std::nullopt;
+    }
+    Mesh_pieces pieces{};
+    pieces.bounding_boxes.assign(partition.piece_count, erhe::math::Aabb{});
+    pieces.max_extent = max_extent;
+    std::vector<Piece_span> spans;
+    order_level_by_pieces(partition, positions, core.index_data, spans, pieces.bounding_boxes);
+    pieces.spans       = std::move(spans);
+    pieces.level_count = 1;
+    // The triangle order changed: the hash is over indices and positions,
+    // the BVH's primitive ids are triangle ids.
+    prepared.content_hash = compute_mesh_content_hash(core.index_data, positions);
+    if (prepared.bvh.has_value()) {
+        prepared.bvh.reset();
+        prepared.bvh_source = Prepared_bvh_source::none;
+        if (!erhe::raytrace::get_prebuilt_bvh_backend().empty()) {
+            prepared.bvh = build_core_bvh(core.index_data, positions);
+            if (prepared.bvh.has_value()) {
+                prepared.bvh_source = Prepared_bvh_source::rebuilt;
+            }
+        }
+    }
+    // The partition's triangle pieces name the reordered triangles.
+    std::vector<uint32_t> ordered_pieces;
+    ordered_pieces.reserve(partition.triangle_piece.size());
+    for (std::size_t piece = 0; piece < partition.piece_count; ++piece) {
+        ordered_pieces.insert(ordered_pieces.end(), pieces.spans[piece].index_count / 3u, static_cast<uint32_t>(piece));
+    }
+    partition.triangle_piece = std::move(ordered_pieces);
+    prepared.pieces = std::move(pieces);
+    return partition;
 }
 
 namespace {
@@ -1073,12 +1119,20 @@ auto compute_derived_content_hash(Primitive_render_shape& shape) -> Derived_cont
 auto make_export_lod_chain(
     Prepared_primitive_export& prepared,
     const Primitive_shape&     shape,
-    const Lod_settings&        settings
+    const Lod_settings&        settings,
+    const Piece_partition*     partition
 ) -> Export_lod_source
 {
     ERHE_PROFILE_FUNCTION();
 
     prepared.lod.reset();
+    // A chain over pieces is generated over the pieces' order (below); a
+    // stored chain describes the unsplit core.
+    ERHE_VERIFY((partition == nullptr) == !prepared.pieces.has_value());
+    if (prepared.pieces.has_value()) {
+        prepared.pieces->spans.resize(prepared.pieces->get_piece_count());
+        prepared.pieces->level_count = 1;
+    }
     // A retained core is the file's core, which a stored chain describes.
     const std::shared_ptr<const Prepared_primitive_data>& data = shape.get_prepared_data();
     if (prepared.retained_core && data && data->lod.has_value() && (data->lod->settings == settings)) {
@@ -1092,7 +1146,7 @@ auto make_export_lod_chain(
     if (core.index_data.empty() || core.vertex_data.empty()) {
         return Export_lod_source::none;
     }
-    Lod_chain_indices chain = generate_soup_lod_chain(core, settings);
+    Lod_chain_indices chain = generate_soup_lod_chain(core, settings, partition, prepared.pieces.has_value() ? &prepared.pieces.value() : nullptr);
     if (chain.is_empty()) {
         return Export_lod_source::none;
     }

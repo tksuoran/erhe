@@ -13,6 +13,8 @@ namespace erhe::scene_renderer {
 // Draw_list_entry::lod_table_index of an entry whose variant has no LOD
 // chain (doc/plans/lod_gpu_selection.md section 3).
 constexpr uint32_t lod_table_index_none{0xffffffffu};
+// An entry drawing its whole primitive (one without pieces).
+constexpr uint32_t piece_index_none{0xffffffffu};
 
 // The packed effective Lod record of an entry (Draw_list_entry::lod_word,
 // doc/plans/lod_gpu_selection.md section 3), the form the culling
@@ -86,6 +88,11 @@ public:
     // registration; an effective-record change rewrites lod_word.
     uint32_t         lod_table_index     {lod_table_index_none};
     uint32_t         lod_word            {0};
+    // The piece of the primitive's fill this entry draws
+    // (erhe::primitive::Buffer_mesh::pieces; doc/erhe/primitive.md
+    // "Pieces"): its ranges and its box, piece_index_none for an entry
+    // drawing the whole primitive.
+    uint32_t         piece_index         {piece_index_none};
 };
 
 } // namespace erhe::scene_renderer

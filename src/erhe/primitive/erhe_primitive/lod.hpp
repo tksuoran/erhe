@@ -2,6 +2,7 @@
 
 #include "erhe_primitive/buffer_range.hpp"
 #include "erhe_primitive/index_range.hpp"
+#include "erhe_primitive/mesh_pieces.hpp"
 
 #include <algorithm>
 #include <array>
@@ -220,14 +221,21 @@ public:
 // so errors grow strictly. Generation stops when a step keeps 75% or more of
 // its input triangles, or once 24 or fewer indices remain. With joints
 // present, vertices whose joint set differs from a neighbour's are locked, so
-// a collapse never blends influences.
+// a collapse never blends influences. With a piece partition of the input
+// triangles (doc/erhe/primitive.md "Pieces"), every vertex shared by
+// triangles of two pieces is locked too, so each piece's levels meet their
+// neighbours' without cracks, and each level's triangles are reordered piece
+// by piece (order_level_by_pieces()): `pieces` gains the level's spans and
+// its boxes grow by the level's triangles (level_count follows).
 //
 // Empty for an input it cannot simplify: no vertices, an index count that is
 // not a multiple of 3 or an index out of range.
 [[nodiscard]] auto generate_lod_chain(
     const Lod_vertex_input&   vertices,
     std::span<const uint32_t> indices,
-    const Lod_settings&       settings
+    const Lod_settings&       settings,
+    const Piece_partition*    partition = nullptr,
+    Mesh_pieces*              pieces    = nullptr
 ) -> Lod_chain_indices;
 
 // Builds the edge lines of every level of `lod_indices` from the level's
@@ -308,6 +316,13 @@ void enqueue_lod_edge_lines(
     const Buffer_range&      edge_line_vertices,
     const Buffer_range&      edge_line_joints
 ) -> Lod_chain;
+
+// Sets buffer_mesh.pieces from `pieces` (doc/erhe/primitive.md "Pieces"):
+// per piece its box and, per level of the mesh's chain (level 0 alone for a
+// mesh without one), its index range from the level's range and the piece's
+// span. pieces.level_count equals the chain's level count (1 without a
+// chain), verified: a loaded Mesh_pieces is validated against the levels.
+void apply_mesh_pieces(Buffer_mesh& buffer_mesh, const Mesh_pieces& pieces);
 
 // Running totals over every chain log_lod_chain() has been called for.
 class Lod_totals

@@ -65,6 +65,28 @@ ask the user which to pick.
   ALUs 30 % utilized and a 45 % vertex fetch stall. Candidates: front-to-back
   opaque order, less alpha-tested foliage in view, or a path that keeps the
   camera out of the corner.
+- World-space pieces are built (`world_piece_extent`, commit of
+  2026-11-08 evening): Bistro corner pose, world-space form, opaque pass
+  triangles 267k (whole primitives) -> 71k (8 m) and 65k (5 m), rasterized
+  fragments per covered pixel 6.75 -> 6.16 / 5.89, shaded unchanged (2.4),
+  cull check 0 mismatches, no visible cracks at the corner (screenshots of
+  the three extents differ in under 0.1 % of pixels;
+  `doc/erhe/primitive.md` "Pieces"). Left to do: measure on the Quest with
+  the three exported assets
+  `res/editor/assets/bistro_lights_compressed/bistro_pieces{0,5,8}.quest.erhe_prepared`
+  (pushed to the device's `files/bistro/`). Every street run on them
+  (2026-11-08 20:23 - 20:30, logs `logs/quest_20261108_2023*.log` ..
+  `2030*.log`) failed with "Benchmark failed bistro_street_90: scene did
+  not settle" while the editor ran at 90 Hz for the whole settle timeout.
+  Two suspects, in order: the exports reported the Scene item present (not
+  remade) after the camera animation was recreated with
+  animation_create_key, so the assets may lack "Animation" on "Camera" or
+  carry the first run's linear one (open one with load_scene on the desktop
+  and list its animations; a Scene item key that does not change with a
+  scene edit is a bug of its own); and the user wore the headset during
+  these runs and suspects the benchmark still takes the head pose into
+  account, which a timedemo must not (check what the settle gate waits for
+  and what the camera path applies when a head pose is tracked).
 - Metal counts overdraw per sample under MSAA
   (`doc/plans/overdraw_visualization.md`).
 - The right trigger still selects while travelling.

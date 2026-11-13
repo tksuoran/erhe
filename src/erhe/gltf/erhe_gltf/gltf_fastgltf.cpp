@@ -2348,6 +2348,7 @@ public:
         bool bvh_used      = false;
         bool lod_used      = false;
         bool lod_rejected  = false;
+        bool pieces_rejected = false;
         Gltf_prepared_read_storage storage;
 
         std::string optimized_reason = marker_reason;
@@ -2397,6 +2398,23 @@ public:
                     lod_used = true;
                 }
             }
+            // The pieces tile level 0 and the accepted chain's levels
+            // (doc/erhe/primitive.md "Pieces"); a rejected chain leaves
+            // the pieces nothing to describe past level 0.
+            if (data->pieces.has_value()) {
+                std::vector<std::size_t> level_index_counts{indices.size()};
+                if (data->lod.has_value()) {
+                    for (const erhe::primitive::Lod_chain_indices::Level& level : data->lod->chain.levels) {
+                        level_index_counts.push_back(level.index_count);
+                    }
+                }
+                const std::string reason = erhe::primitive::validate_mesh_pieces(data->pieces.value(), level_index_counts);
+                if (!reason.empty()) {
+                    reject("ERHE_mesh_optimized pieces", reason, {});
+                    data->pieces.reset();
+                    pieces_rejected = true;
+                }
+            }
         }
 
         // A stored-streams load falls back to the soup path (which counts) for
@@ -2404,7 +2422,8 @@ public:
         // ERHE_mesh_lod drops only the chain (doc/gltf_extensions/ERHE_mesh_lod.md
         // "Validation / fallback"): the stored streams load without it and the
         // rejection is counted here, logged once by reject() above.
-        const bool only_lod_rejected = (rejections.size() == 1) && lod_rejected;
+        // A rejected pieces member drops the pieces the same way.
+        const bool only_lod_rejected = (rejections.size() == (static_cast<std::size_t>(lod_rejected) + static_cast<std::size_t>(pieces_rejected))) && (lod_rejected || pieces_rejected);
         if ((counting == Validation_counting::accepted_only) && !rejections.empty() && !only_lod_rejected) {
             return {};
         }
@@ -5642,6 +5661,62 @@ private:
             center[static_cast<glm::vec3::length_type>(i)] = static_cast<float>(value);
         }
 
+        // pieces (doc/erhe/primitive.md "Pieces"): read here, checked
+        // against the levels in validate().
+        std::optional<erhe::primitive::Mesh_pieces> pieces;
+        simdjson::dom::object pieces_object;
+        if (extension_object.at_key("pieces").get_object().get(pieces_object) == simdjson::SUCCESS) {
+            erhe::primitive::Mesh_pieces read{};
+            std::string_view      max_extent_text;
+            std::uint64_t         level_count{0};
+            simdjson::dom::array  boxes;
+            simdjson::dom::array  spans;
+            if (
+                (pieces_object.at_key("max_extent").get_string().get(max_extent_text) != simdjson::SUCCESS) ||
+                !parse_hex_float(max_extent_text, read.max_extent) ||
+                (pieces_object.at_key("level_count").get_uint64().get(level_count) != simdjson::SUCCESS) ||
+                (level_count == 0) || (level_count > erhe::primitive::max_lod_levels) ||
+                (pieces_object.at_key("boxes").get_array().get(boxes) != simdjson::SUCCESS) ||
+                (pieces_object.at_key("spans").get_array().get(spans) != simdjson::SUCCESS) ||
+                ((boxes.size() % 6) != 0) || (boxes.size() == 0) ||
+                (spans.size() != (2 * level_count * (boxes.size() / 6)))
+            ) {
+                return "malformed pieces";
+            }
+            read.level_count = static_cast<std::size_t>(level_count);
+            std::vector<float> box_values;
+            box_values.reserve(boxes.size());
+            for (const simdjson::dom::element item : boxes) {
+                std::string_view text;
+                float            value{0.0f};
+                if ((item.get_string().get(text) != simdjson::SUCCESS) || !parse_hex_float(text, value)) {
+                    return "malformed pieces";
+                }
+                box_values.push_back(value);
+            }
+            for (std::size_t i = 0, end = box_values.size() / 6; i < end; ++i) {
+                read.bounding_boxes.push_back(
+                    erhe::math::Aabb{
+                        .min = glm::vec3{box_values[(6 * i) + 0], box_values[(6 * i) + 1], box_values[(6 * i) + 2]},
+                        .max = glm::vec3{box_values[(6 * i) + 3], box_values[(6 * i) + 4], box_values[(6 * i) + 5]}
+                    }
+                );
+            }
+            std::vector<std::uint64_t> span_values;
+            span_values.reserve(spans.size());
+            for (const simdjson::dom::element item : spans) {
+                std::uint64_t value{0};
+                if ((item.get_uint64().get(value) != simdjson::SUCCESS) || (value > std::numeric_limits<uint32_t>::max())) {
+                    return "malformed pieces";
+                }
+                span_values.push_back(value);
+            }
+            for (std::size_t i = 0, end = span_values.size() / 2; i < end; ++i) {
+                read.spans.push_back(erhe::primitive::Piece_span{.first_index = static_cast<uint32_t>(span_values[2 * i]), .index_count = static_cast<uint32_t>(span_values[(2 * i) + 1])});
+            }
+            pieces = std::move(read);
+        }
+
         // Contract items 1 and 2: TRIANGLES with indices, no morph targets,
         // float POSITION / NORMAL / TANGENT, one count for every attribute.
         if ((primitive.type != fastgltf::PrimitiveType::Triangles) || !primitive.indicesAccessor.has_value() || !primitive.targets.empty()) {
@@ -5690,6 +5765,7 @@ private:
         out_data.bounding_box.min = glm::vec3{bounds_component(*position_accessor.min, 0), bounds_component(*position_accessor.min, 1), bounds_component(*position_accessor.min, 2)};
         out_data.bounding_box.max = glm::vec3{bounds_component(*position_accessor.max, 0), bounds_component(*position_accessor.max, 1), bounds_component(*position_accessor.max, 2)};
         out_data.bounding_sphere  = erhe::math::Sphere{.center = center, .radius = static_cast<float>(radius)};
+        out_data.pieces           = std::move(pieces);
         return {};
     }
 
@@ -9601,11 +9677,12 @@ public:
         const glm::vec3& center = prepared.bounding_sphere.center;
         std::string members = fmt::format(
             "\"ERHE_mesh_optimized\":{{\"version\":1,\"passes\":[{}]{},\"content_hash\":\"{:016x}\","
-            "\"bounding_sphere\":{{\"center\":[{},{},{}],\"radius\":{}}}}}",
+            "\"bounding_sphere\":{{\"center\":[{},{},{}],\"radius\":{}}}{}}}",
             passes,
             prepared.options.overdraw ? fmt::format(",\"overdraw_threshold\":{}", prepared.options.overdraw_threshold) : std::string{},
             prepared.content_hash,
-            center.x, center.y, center.z, prepared.bounding_sphere.radius
+            center.x, center.y, center.z, prepared.bounding_sphere.radius,
+            (prepared.pieces.has_value() && !prepared.pieces->is_empty()) ? write_mesh_pieces(prepared.pieces.value()) : std::string{}
         );
 
         const std::span<const uint32_t> vertex_points{prepared.vertex_points};
@@ -9628,6 +9705,29 @@ public:
         }
         entry.prepared_extensions = std::move(members);
         m_uses_mesh_optimized     = true;
+    }
+
+    // The `pieces` member of ERHE_mesh_optimized (doc/erhe/gltf.md "Mesh
+    // items", doc/erhe/primitive.md "Pieces"): the boxes as six hexadecimal
+    // floats per piece (min xyz, max xyz) and the spans as first index and
+    // index count pairs, level-major.
+    [[nodiscard]] static auto write_mesh_pieces(const erhe::primitive::Mesh_pieces& pieces) -> std::string
+    {
+        std::string boxes;
+        for (const erhe::math::Aabb& box : pieces.bounding_boxes) {
+            boxes += fmt::format(
+                "{}\"{:a}\",\"{:a}\",\"{:a}\",\"{:a}\",\"{:a}\",\"{:a}\"",
+                boxes.empty() ? "" : ",", box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z
+            );
+        }
+        std::string spans;
+        for (const erhe::primitive::Piece_span& span : pieces.spans) {
+            spans += fmt::format("{}{},{}", spans.empty() ? "" : ",", span.first_index, span.index_count);
+        }
+        return fmt::format(
+            ",\"pieces\":{{\"max_extent\":\"{:a}\",\"level_count\":{},\"boxes\":[{}],\"spans\":[{}]}}",
+            pieces.max_extent, pieces.level_count, boxes, spans
+        );
     }
 
     // The ERHE_raytrace_bvh JSON value of a BVH, its nodes and primitive ids in raw bufferViews.

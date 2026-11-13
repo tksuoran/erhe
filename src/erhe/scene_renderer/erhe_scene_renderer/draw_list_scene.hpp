@@ -1601,6 +1601,7 @@ private:
     // world AABB alone (write_object_transform): the node extent does not
     // move with the node.
     void write_object_bounds(uint32_t object_index);
+    [[nodiscard]] auto get_entry_world_aabb(const Draw_list_object& object, const Draw_list_entry& entry, const erhe::math::Aabb& mesh_world_aabb) const -> erhe::math::Aabb;
     // --- Potentially visible sets (prepare phase) ---
     // The column of an entry of the object (untracked without a database).
     [[nodiscard]] auto find_pvs_column(const Draw_list_object& object, uint32_t mesh_primitive_index) const -> uint32_t;

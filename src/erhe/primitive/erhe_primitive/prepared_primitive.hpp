@@ -85,6 +85,12 @@ public:
     // set by make_export_lod_chain() for a primitive with a requested chain
     // (Primitive::lod_settings). Empty: no chain is written.
     std::optional<Stored_lod_chain> lod;
+
+    // ERHE_mesh_optimized `pieces` (doc/erhe/primitive.md "Pieces"): the
+    // core's triangles ordered piece by piece, set by
+    // split_prepared_primitive_pieces(); its levels after level 0 are added
+    // by make_export_lod_chain(). Empty: no pieces are written.
+    std::optional<Mesh_pieces>      pieces;
 };
 
 // How make_export_lod_chain() obtained the chain.
@@ -112,8 +118,20 @@ enum class Export_lod_source : unsigned int {
 auto make_export_lod_chain(
     Prepared_primitive_export& prepared,
     const Primitive_shape&     shape,
-    const Lod_settings&        settings
+    const Lod_settings&        settings,
+    const Piece_partition*     partition = nullptr
 ) -> Export_lod_source;
+
+// Splits the export's core into spatial pieces (doc/erhe/primitive.md
+// "Pieces"): partition_triangles() of the core triangles with max_extent
+// (in the core's space) and max_piece_triangles, the core's triangles
+// reordered piece by piece, prepared.pieces set with level 0's spans and
+// boxes, the content hash recomputed and the BVH rebuilt over the new
+// order. Returns the partition for make_export_lod_chain(); empty when the
+// core makes one piece only (prepared.pieces then stays empty). Run after
+// bake_prepared_primitive_transform() and before make_export_lod_chain().
+constexpr std::size_t max_piece_triangles{32768};
+[[nodiscard]] auto split_prepared_primitive_pieces(Prepared_primitive_export& prepared, float max_extent) -> std::optional<Piece_partition>;
 
 class Prepare_primitive_result
 {
@@ -252,6 +270,10 @@ public:
     // (Triangle_soup::lod_index_data), released and read back with it;
     // Primitive_shape::load_stored_lod_chain() joins the two.
     std::optional<Stored_lod_chain> lod;
+    // ERHE_mesh_optimized `pieces`: the spatial pieces of the core's
+    // triangles over level 0 and the stored chain's levels
+    // (doc/erhe/primitive.md "Pieces"), validated against both.
+    std::optional<Mesh_pieces>      pieces;
 };
 
 // The ERHE_mesh_optimized checks on the core content

@@ -23,6 +23,8 @@ erhe_target_sources_grouped(
     erhe_primitive/index_range.cpp
     erhe_primitive/index_range.hpp
     erhe_primitive/lod.cpp
+    erhe_primitive/mesh_pieces.cpp
+    erhe_primitive/mesh_pieces.hpp
     erhe_primitive/lod.hpp
     erhe_primitive/material.cpp
     erhe_primitive/material.hpp

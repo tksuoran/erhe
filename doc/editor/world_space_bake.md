@@ -31,6 +31,7 @@ fields the bake reads:
 | `instancing_budget_mib` | `Int` | 256 | Budget of `duplicate_within_budget` |
 | `pvs_region_min`, `pvs_region_max`, `pvs_cell_size` | | | PVS bake grid (`doc/editor/pvs.md`) |
 | `pvs_mode` | `Pvs_mode` | `off` | What Export does about the PVS (`doc/editor/prepared_assets.md` "PVS") |
+| `world_piece_extent` | `Float` | 0 | The bake splits each baked primitive into spatial pieces no wider than this (meters, world space; `doc/erhe/primitive.md` "Pieces"); 0 keeps every primitive whole. Part of the World-space mesh key when set |
 
 `Bake_instancing`:
 
@@ -67,6 +68,9 @@ baked data, and the LOD chain is generated in world space (a stored chain is
 object space and is not reused). Triangles that become degenerate (positions
 bitwise equal after the transform) are dropped, as the content build drops
 them. Prepared data: `erhe::primitive::bake_prepared_primitive_transform()`.
+With `world_piece_extent` set, the baked core is then cut into pieces
+(`erhe::primitive::split_prepared_primitive_pieces()`) and the chain is
+generated over them (`doc/erhe/primitive.md` "Pieces").
 
 ## World-space mesh items
 

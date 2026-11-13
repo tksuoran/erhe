@@ -1143,7 +1143,8 @@ void Scene_export::Impl::compute_world_keys()
         entry.key = make_world_mesh_key(World_mesh_key_inputs{
             .local_mesh_key  = shape.key,
             .world_from_node = entry.world_from_node,
-            .stamp           = mesh_stamp
+            .stamp           = mesh_stamp,
+            .piece_extent    = settings.world_piece_extent
         });
         entry.bvh_key = make_raytrace_bvh_key(entry.key, bvh_stamp);
         world_primitives_by_key[entry.key].push_back(i);
@@ -1269,9 +1270,19 @@ auto Scene_export::Impl::ensure_world_mesh_items() -> bool
             erhe::primitive::Prepared_primitive_export baked = result.prepared.value();
             static_cast<void>(erhe::primitive::bake_prepared_primitive_transform(baked, world_primitives[indices.front()].world_from_node));
             if (missing_key.mesh) {
-                // The chain is generated in world space: a stored chain is in object space.
+                // The pieces are cut in world space (doc/erhe/primitive.md
+                // "Pieces"); the chain is generated in world space over
+                // them: a stored chain is in object space.
+                const std::optional<erhe::primitive::Piece_partition> partition = (settings.world_piece_extent > 0.0f)
+                    ? erhe::primitive::split_prepared_primitive_pieces(baked, settings.world_piece_extent)
+                    : std::optional<erhe::primitive::Piece_partition>{};
                 if (shape.lod_settings.has_value()) {
-                    static_cast<void>(erhe::primitive::make_export_lod_chain(baked, authoring_shape.has_value() ? authoring_shape.value() : *shape.shape, shape.lod_settings.value()));
+                    static_cast<void>(
+                        erhe::primitive::make_export_lod_chain(
+                            baked, authoring_shape.has_value() ? authoring_shape.value() : *shape.shape, shape.lod_settings.value(),
+                            partition.has_value() ? &partition.value() : nullptr
+                        )
+                    );
                 }
                 const erhe::gltf::Gltf_mesh_item item = erhe::gltf::write_mesh_item(baked, gpu_vertex_formats);
                 const bool stored = store.put(erhe::asset_store::Item_data{

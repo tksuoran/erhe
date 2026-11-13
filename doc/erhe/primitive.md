@@ -226,6 +226,53 @@ primitive") plus the payloads of `ERHE_mesh_optimized`,
 Shapes are prepared in parallel; one shape by one caller at a time. Tests:
 `src/erhe/primitive/test/test_prepared_primitive.cpp`.
 
+## Pieces
+
+A prepared primitive's triangles can be split into spatial pieces
+(`mesh_pieces.hpp`), so that the draw lists cull and select a level per
+piece instead of per primitive (`doc/erhe/draw_list_renderer.md` 5.4): a
+street or facade mesh is otherwise one entry whose box always reaches the
+view. The world-space bake cuts them
+(`doc/editor/world_space_bake.md` "Export settings", `world_piece_extent`);
+a live or imported primitive has none.
+
+- `partition_triangles(positions, indices, max_extent, max_triangles)`
+  splits the triangle centroids' box at the median centroid along its
+  longest axis, recursively, until a piece's centroid box is at most
+  `max_extent` on every axis and holds at most `max_triangles` triangles
+  (`max_piece_triangles`, 32768). Pieces are numbered depth first, so
+  neighbours in number are neighbours in space. A triangle belongs whole
+  to the piece of its centroid: the pieces' triangle boxes overlap along
+  their borders. `Piece_partition::find_piece()` assigns any other
+  triangle over the same vertices (a LOD level's) by the same tree.
+- `split_prepared_primitive_pieces(prepared, max_extent)` runs it on a
+  baked export core, reorders the core piece by piece
+  (`order_level_by_pieces()`, stable within a piece), sets
+  `Prepared_primitive_export::pieces` with level 0's spans and boxes,
+  recomputes the content hash and rebuilds the BVH (both follow the
+  triangle order). A core that makes one piece gets none.
+- `make_export_lod_chain()` with the partition generates the chain over
+  the pieces (`generate_lod_chain()`): every simplification vertex that
+  triangles of two pieces share is locked, so a piece's levels meet its
+  neighbours' at the shared vertices whatever level each draws (no cracks
+  at a level change between pieces, at the price of less simplification
+  along the borders), and each level's triangles are ordered by piece,
+  the spans appended to the pieces and the boxes grown by the level's
+  triangles.
+- `Mesh_pieces`: per piece its box over every level and, level-major,
+  each level's spans (`Piece_span`, relative to the level). It is the
+  `pieces` member of `ERHE_mesh_optimized` (`doc/erhe/gltf.md` "Mesh
+  items"); `validate_mesh_pieces()` checks on load that the spans tile
+  level 0 and the stored chain's levels exactly.
+- `Buffer_mesh::pieces` (`Buffer_mesh_piece`: the box and an `Index_range`
+  per level of the mesh's chain) is set by `apply_mesh_pieces()` on the
+  optimized variant a prepared primitive builds from its stored streams,
+  its stored chain or without a chain (`Prepared_primitive_data::pieces`);
+  a variant whose chain is generated at load gets none, since the spans
+  describe the stored levels.
+
+Tests: `src/erhe/primitive/test/test_mesh_pieces.cpp`.
+
 ## Derived triangles
 
 A geometry-normative shape (built from a `Geometry`, no soup) has no soup to

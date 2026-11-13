@@ -87,6 +87,17 @@ public:
 // else is acquired while it is held.
 [[nodiscard]] auto buffer_mesh_allocation_mutex() -> std::mutex&;
 
+// One spatial piece of a Buffer_mesh's fill triangles: its bounding box in
+// the mesh's space over every level, and its index range at each level of
+// the mesh's chain (level 0 within triangle_fill_indices; levels past the
+// chain's count unused), in the mesh's index allocation like the chain's.
+class Buffer_mesh_piece
+{
+public:
+    erhe::math::Aabb                        bounding_box{};
+    std::array<Index_range, max_lod_levels> levels{};
+};
+
 class Buffer_mesh
 {
 public:
@@ -160,6 +171,10 @@ public:
     // levels after it follow level 0 directly in index_allocation. Empty
     // otherwise - one implicit level, the fill range.
     Lod_chain                 lod_chain{};
+    // The spatial pieces of the fill triangles (doc/erhe/primitive.md
+    // "Pieces"; apply_mesh_pieces()): a prepared optimized variant whose
+    // data carries them. Empty otherwise - the fill is one piece.
+    std::vector<Buffer_mesh_piece> pieces{};
 
     std::vector<Buffer_range> vertex_buffer_ranges{}; // per stream
     Buffer_range              index_buffer_range  {};

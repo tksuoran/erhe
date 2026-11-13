@@ -528,6 +528,7 @@ The fields beside the world-space bake's (`doc/editor/world_space_bake.md`
 |---|---|---|---|
 | `texture_encoding` | `Texture_encoding` | `target` | What the Texture item of a PNG / JPEG image holds (R7.5): `target` - the image encoded to the target's block format by way of its Basis texture item ("Export" step 3); `source` - the image bytes as they are, which the prepared run decodes at load. A Basis Universal image is transcoded either way |
 | `texture_supercompression` | `Texture_supercompression` | `zstd` | The raw block images a target transcodes (the images the quest Scene item carries itself): Zstandard supercompressed (`zstd`) or stored as they upload (`none`) |
+| `world_piece_extent` | `Float` | 0 | The world-space bake's piece extent (`doc/editor/world_space_bake.md` "Export settings", `doc/erhe/primitive.md` "Pieces"); a World-space mesh key input when set |
 | `raytrace_bvh` | `Bool` | true | Each mesh item has a Raytrace BVH item, which the Scene item names and Copy puts into the prepared asset; off makes no BVH items and names none, and a prepared run builds the BVHs in memory ("Format stamps") |
 
 `raytrace_bvh` is no key input: turning it off or on exports the same mesh

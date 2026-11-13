@@ -90,6 +90,9 @@ public:
     erhe::asset_store::Key local_mesh_key;
     glm::mat4              world_from_node{1.0f};
     std::string            stamp;
+    // Scene_export_settings::world_piece_extent (doc/erhe/primitive.md
+    // "Pieces"); 0, no pieces, adds nothing to the key.
+    float                  piece_extent{0.0f};
 };
 
 [[nodiscard]] auto make_world_mesh_key(const World_mesh_key_inputs& inputs) -> erhe::asset_store::Key;

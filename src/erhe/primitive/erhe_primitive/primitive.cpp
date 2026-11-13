@@ -2485,10 +2485,10 @@ auto extract_soup_lod_vertex_data(const Triangle_soup& triangle_soup) -> Lod_ver
     );
 }
 
-auto generate_soup_lod_chain(const Triangle_soup& triangle_soup, const Lod_settings& settings) -> Lod_chain_indices
+auto generate_soup_lod_chain(const Triangle_soup& triangle_soup, const Lod_settings& settings, const Piece_partition* const partition, Mesh_pieces* const pieces) -> Lod_chain_indices
 {
     const Lod_vertex_data lod_vertices = extract_soup_lod_vertex_data(triangle_soup);
-    return generate_lod_chain(lod_vertices.get_input(), triangle_soup.index_data, settings);
+    return generate_lod_chain(lod_vertices.get_input(), triangle_soup.index_data, settings, partition, pieces);
 }
 
 auto build_buffer_mesh_from_triangle_soup(
@@ -2864,9 +2864,15 @@ auto Primitive::make_prepared_optimized_render_shape(const Buffer_info& buffer_i
         render_shape->is_prepared_data_current() &&
         (prepared_data->lod->settings == *requested_lod_settings);
     std::optional<Stored_lod_chain> stored_chain = use_stored_chain ? render_shape->load_stored_lod_chain() : std::optional<Stored_lod_chain>{};
+    // The pieces describe the stored core and its stored chain: applied with
+    // that chain, or without one when none is generated over the core.
+    const bool apply_pieces = prepared_data && prepared_data->pieces.has_value() && render_shape->is_prepared_data_current();
     if (stored_chain.has_value()) {
         if (!optimized->make_buffer_mesh(optimized_buffer_info, std::move(stored_chain->chain))) {
             return {};
+        }
+        if (apply_pieces) {
+            apply_mesh_pieces(optimized->get_mutable_renderable_mesh(), prepared_data->pieces.value());
         }
     } else {
         // A stored chain that does not read back builds no chain rather than
@@ -2878,6 +2884,8 @@ auto Primitive::make_prepared_optimized_render_shape(const Buffer_info& buffer_i
         }
         if (generate_settings != nullptr) {
             log_lod_chain(get_name(), optimized->get_renderable_mesh().lod_chain);
+        } else if (apply_pieces && !prepared_data->lod.has_value()) {
+            apply_mesh_pieces(optimized->get_mutable_renderable_mesh(), prepared_data->pieces.value());
         }
     }
     if (released && source) {
@@ -2901,7 +2909,8 @@ namespace {
     const erhe::math::Sphere&            bounding_sphere,
     const std::vector<erhe::math::Aabb>& joint_bounding_boxes,
     const Buffer_info&                   buffer_info,
-    const Lod_chain_indices*             lod_indices
+    const Lod_chain_indices*             lod_indices,
+    const Mesh_pieces*                   pieces
 ) -> std::optional<Buffer_mesh>
 {
     if (variant.streams.size() != buffer_info.vertex_format.streams.size()) {
@@ -2952,6 +2961,9 @@ namespace {
     buffer_mesh.joint_bounding_boxes  = joint_bounding_boxes;
     buffer_mesh.position_quantization = stored.position_quantization;
     buffer_mesh.texcoord_quantization = stored.texcoord_quantization;
+    if (pieces != nullptr) {
+        apply_mesh_pieces(buffer_mesh, *pieces);
+    }
     buffer_info.index_buffer_sink.enqueue_index_data(buffer_mesh.index_buffer_range, std::move(indices));
     for (std::size_t i = 0, end = variant.streams.size(); i < end; ++i) {
         buffer_info.vertex_buffer_sink.enqueue_vertex_data(buffer_mesh.vertex_buffer_ranges[i], std::move(variant.streams[i]));
@@ -3069,7 +3081,8 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, const Base_mesh
         std::vector<uint8_t> optimized_indices = stored->indices; // both variants upload the shared indices
         optimized_mesh = build_stored_buffer_mesh(
             std::move(stored->optimized.value()), std::move(optimized_indices), *stored, bounding_box, bounding_sphere, joint_bounding_boxes, optimized_buffer_info,
-            stored_chain.has_value() ? &stored_chain->chain : nullptr
+            stored_chain.has_value() ? &stored_chain->chain : nullptr,
+            (prepared_data && prepared_data->pieces.has_value()) ? &prepared_data->pieces.value() : nullptr
         );
         if (!optimized_mesh.has_value()) {
             return Stored_build_result::failed;
@@ -3082,7 +3095,7 @@ auto Primitive::make_stored_meshes(const Build_info& build_info, const Base_mesh
         : Base_mesh_build::at_load;
     std::optional<Buffer_mesh> base_mesh = (base_build == Base_mesh_build::deferred)
         ? std::optional<Buffer_mesh>{make_base_descriptor(optimized_mesh.value(), buffer_info.vertex_input_key)}
-        : build_stored_buffer_mesh(std::move(stored->base), std::move(stored->indices), *stored, bounding_box, bounding_sphere, joint_bounding_boxes, buffer_info, nullptr);
+        : build_stored_buffer_mesh(std::move(stored->base), std::move(stored->indices), *stored, bounding_box, bounding_sphere, joint_bounding_boxes, buffer_info, nullptr, nullptr);
     if (!base_mesh.has_value()) {
         return Stored_build_result::failed;
     }
@@ -3120,14 +3133,23 @@ auto Primitive::make_prepared_optimized_buffer_mesh(Primitive_render_shape& opti
     // only; the file carries the request with it).
     const std::shared_ptr<const Prepared_primitive_data>& prepared_data = render_shape->get_prepared_data();
     if (!prepared_data || !prepared_data->lod.has_value()) {
-        return optimized.make_buffer_mesh(optimized_buffer_info);
+        if (!optimized.make_buffer_mesh(optimized_buffer_info)) {
+            return false;
+        }
+        if (prepared_data && prepared_data->pieces.has_value()) {
+            apply_mesh_pieces(optimized.get_mutable_renderable_mesh(), prepared_data->pieces.value());
+        }
+        return true;
     }
     std::optional<Stored_lod_chain> stored_chain = render_shape->load_stored_lod_chain();
     if (!stored_chain.has_value()) {
-        return optimized.make_buffer_mesh(optimized_buffer_info); // load_stored_lod_chain() logged why
+        return optimized.make_buffer_mesh(optimized_buffer_info); // load_stored_lod_chain() logged why; the pieces describe the chain's levels
     }
     if (!optimized.make_buffer_mesh(optimized_buffer_info, std::move(stored_chain->chain))) {
         return false;
+    }
+    if (prepared_data->pieces.has_value()) {
+        apply_mesh_pieces(optimized.get_mutable_renderable_mesh(), prepared_data->pieces.value());
     }
     // lod_settings is main-thread state (no lock); written here on a loader
     // worker because the load builds the primitive before it is shared: the

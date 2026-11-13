@@ -25,6 +25,12 @@
 ✓benchmark-animation-camera-path{camera_path.type=animation(animation+node-names;resolved-at-settle);benchmark_bistro_street(_90).json;Bistro-camera-animation-saved-in-logs/quest_bistro/2026-11-07/bistro_src.glb+quest-prepared-asset-re-exported(PVS-2068-cells)+pushed;device:90Hz-34.4fps-GPU-bound(multiview-22ms-median;first-run-after-install-11fps=one-off)}
 ?open{Properties-window-transform-edits-still-write-under-a-paused-pose;undo-of-keying-keeps-session_only-cleared;device-migrated-config-is-stale-after-install(fp16-preset-set-via-MCP)}
 
+[TASK::world-space-pieces]{started-2026-11-08;branch=main;commit-735bfac9e;doc/erhe/primitive.md"Pieces";scripts(scratchpad,not-committed):pieces_bench.py/pieces_lists.py/quest_export.py/quest_pieces.sh}
+✓split+lod-border-locks+gltf-member+buffer-mesh-pieces+entries-per-piece+setting+key+unit-test+docs
+✓desktop-measured{corner-pose,world-space-form:tris-267k->71k(8m)/65k(5m);raster-6.75->6.16/5.89;shaded-2.4-level;0-mismatches;screenshots-differ<0.1%}
+✗quest-runs-fail{"scene did not settle"x7;editor-at-90Hz-whole-timeout;suspects:exported-Scene-item-reused(animation-missing/linear)|head-pose-applied-while-worn(©User)}
+?next{load_scene-one-asset-on-desktop->get_scene_animations|animation_playback;read-benchmark_driver.cpp-settle-gate+camera_path=animation-resolution;fix;rerun-quest_pieces.sh(alternating-0/5/8,--record)}
+
 [TASK::bistro-quest-benchmark]{started-2026-11-08;branch=main;doc/reference/quest_bench_runs.md(17:12..17:37-entries)+doc/plans/open_items.md"Quest session follow-ups"}
 ✓run-cmd{python3 scripts/quest_bench.py run --bench config/editor/benchmark_bistro_street_90.json --bench-to-device --editor-args=--no-scene --config scripts/quest_bench_configs/bistro_headlamp_gpu_occlusion.json --mcp 'set_graphics_preset={"shadow_bias":"normal_offset","shader_fp16_paths":1}' --load-scene /sdcard/Android/data/org.libsdl.app.quest/files/bistro/bistro_src.quest.erhe_prepared --mcp-measure get_lod_stats --record;off-head;add---perfetto|--gpu-metrics-for-counters(exclusive)}
 ✓findings{first-run-after-APK-install-11fps=one-off(repeat-33-34fps);LOD-threshold-64-active(levels-0-5-in-use);eye-pass-fragment-bound-by-overdraw-at-bistro-corner(t2-3s);alpha-tested+translucent=4ms/frame-of-22;opaque-alone-18.4ms(458k-tris,613-entries)}

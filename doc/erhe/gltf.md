@@ -359,7 +359,14 @@ when the view or accessor has them; bounds are integers for integer bounds
 and decimals otherwise (doubles, exact). `extensions` holds the primitive's
 `ERHE_mesh_optimized`, `ERHE_mesh_topology`, `ERHE_gpu_vertex_streams` and
 `ERHE_mesh_lod` members as a `write` export writes them inline, their
-bufferView and accessor indices into the meta's arrays. A primitive a
+bufferView and accessor indices into the meta's arrays. A core cut into
+pieces (`doc/erhe/primitive.md` "Pieces") carries them as the `pieces`
+member of `ERHE_mesh_optimized`: `max_extent` (hexadecimal float),
+`level_count`, `boxes` (six hexadecimal floats per piece, min xyz then max
+xyz) and `spans` (first index and index count pairs, level-major, relative
+to each level's indices); the loader rejects the member alone, keeping the
+rest, when the spans do not tile level 0 and the chain's levels
+(`validate_mesh_pieces()`). A primitive a
 Scene item writes inline (no item for it) carries its BVH inside the document.
 
 Export with items: `Gltf_export_arguments::mesh_item_provider` is asked once

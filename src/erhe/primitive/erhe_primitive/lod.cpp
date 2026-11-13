@@ -326,7 +326,9 @@ auto remap_lod_vertex_data(
 auto generate_lod_chain(
     const Lod_vertex_input&         vertices,
     const std::span<const uint32_t> indices,
-    const Lod_settings&             settings
+    const Lod_settings&             settings,
+    const Piece_partition* const    partition,
+    Mesh_pieces* const              pieces
 ) -> Lod_chain_indices
 {
     ERHE_PROFILE_FUNCTION();
@@ -509,6 +511,28 @@ auto generate_lod_chain(
         }
     }
 
+    // Pieces: lock every simplification vertex that triangles of two pieces
+    // share, so a piece's levels meet its neighbours' at their shared
+    // vertices whatever level each draws.
+    if ((partition != nullptr) && (partition->piece_count > 1)) {
+        ERHE_VERIFY(partition->triangle_piece.size() == (current.size() / 3));
+        if (vertex_lock.empty()) {
+            vertex_lock.assign(weld_count, 0);
+        }
+        std::vector<uint32_t> first_piece(weld_count, no_vertex);
+        for (std::size_t triangle = 0, end = current.size() / 3; triangle < end; ++triangle) {
+            const uint32_t piece = partition->triangle_piece[triangle];
+            for (std::size_t corner = 0; corner < 3; ++corner) {
+                const uint32_t weld = current[(3 * triangle) + corner];
+                if (first_piece[weld] == no_vertex) {
+                    first_piece[weld] = piece;
+                } else if (first_piece[weld] != piece) {
+                    vertex_lock[weld] = meshopt_SimplifyVertex_Lock;
+                }
+            }
+        }
+    }
+
     unsigned int options = 0;
     if (settings.border == Lod_border::locked) {
         options |= meshopt_SimplifyLockBorder;
@@ -623,6 +647,25 @@ auto generate_lod_chain(
         );
         previous_relative_error = relative_error;
         std::swap(current, destination);
+    }
+
+    // Pieces: each level's triangles piece by piece, the spans and the boxes
+    // appended to the pieces after level 0's.
+    if ((partition != nullptr) && (pieces != nullptr) && (partition->piece_count > 1)) {
+        ERHE_VERIFY(pieces->get_piece_count() == partition->piece_count);
+        ERHE_VERIFY(pieces->level_count == 1);
+        std::vector<Piece_span> level_spans;
+        for (const Lod_chain_indices::Level& level : result.levels) {
+            order_level_by_pieces(
+                *partition,
+                vertices.positions,
+                std::span<uint32_t>{result.indices.data() + level.first_index, level.index_count},
+                level_spans,
+                pieces->bounding_boxes
+            );
+            pieces->spans.insert(pieces->spans.end(), level_spans.begin(), level_spans.end());
+            ++pieces->level_count;
+        }
     }
 
     if (result.levels.empty()) {
@@ -899,6 +942,32 @@ void enqueue_lod_edge_lines(
     }
     if (joints.count > 0) {
         buffer_info.vertex_buffer_sink.enqueue_vertex_data(joints, std::move(lod_indices.edge_line_joint_data));
+    }
+}
+
+void apply_mesh_pieces(Buffer_mesh& buffer_mesh, const Mesh_pieces& pieces)
+{
+    buffer_mesh.pieces.clear();
+    if (pieces.is_empty()) {
+        return;
+    }
+    const std::size_t level_count = buffer_mesh.lod_chain.is_empty() ? 1 : buffer_mesh.lod_chain.level_count;
+    ERHE_VERIFY(pieces.level_count == level_count);
+    const std::size_t piece_count = pieces.get_piece_count();
+    buffer_mesh.pieces.resize(piece_count);
+    for (std::size_t piece = 0; piece < piece_count; ++piece) {
+        Buffer_mesh_piece& out = buffer_mesh.pieces[piece];
+        out.bounding_box = pieces.bounding_boxes[piece];
+        for (std::size_t level = 0; level < level_count; ++level) {
+            const Index_range level_range = (level == 0) ? buffer_mesh.triangle_fill_indices : buffer_mesh.lod_chain.levels[level].index_range;
+            const Piece_span  span        = pieces.get_span(level, piece);
+            ERHE_VERIFY((static_cast<std::size_t>(span.first_index) + span.index_count) <= level_range.index_count);
+            out.levels[level] = Index_range{
+                .primitive_type = Primitive_type::triangles,
+                .first_index    = level_range.first_index + span.first_index,
+                .index_count    = span.index_count
+            };
+        }
     }
 }
 
