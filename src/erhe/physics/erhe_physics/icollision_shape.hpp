@@ -78,6 +78,7 @@ public:
     [[nodiscard]] static auto create_cone_shape_shared           (Axis axis, float base_radius, float height) -> std::shared_ptr<ICollision_shape>;
 #endif
 
+    // Null when the backend refuses the points (Jolt: a hull thinner than its tolerance), logged.
     [[nodiscard]] static auto create_convex_hull_shape           (const float* points, int point_count, int stride) -> ICollision_shape*;
     [[nodiscard]] static auto create_convex_hull_shape_shared    (const float* points, int point_count, int stride) -> std::shared_ptr<ICollision_shape>;
 

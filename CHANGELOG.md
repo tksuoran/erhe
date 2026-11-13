@@ -109,6 +109,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::physics`: `ICollision_shape::create_convex_hull_shape()` and
+  `create_convex_hull_shape_shared()` return null (logged) for a point set the
+  Jolt backend refuses, such as a hull thinner than Jolt's tolerance; they
+  aborted before.
+
 - `erhe::gltf`: `export_gltf()` of a text export holding buffer data fails
   (logged, empty string) instead of returning JSON that names a buffer file
   nothing writes; `rebind_sources_to_written_file()` also rebinds soups that

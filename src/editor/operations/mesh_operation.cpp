@@ -316,11 +316,12 @@ void Mesh_operation::make_entries(
                     );
                 }
 
-                if (m_parameters.context.editor_settings->physics.static_enable) {
-                    // A result geometry with no volume has no convex hull and
-                    // the result mesh is left without a rigid body.
+                // Only a mesh that has a body gets its shape rebuilt; a mesh
+                // without one gets none. A result with no hull leaves it without.
+                const bool has_body = (motion_mode != erhe::physics::Motion_mode::e_none) && entry.before.collision_shape;
+                if (has_body && m_parameters.context.editor_settings->physics.static_enable) {
                     std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = make_convex_hull_collision_shape(*after_geometry);
-                    if (collision_shape && (motion_mode != erhe::physics::Motion_mode::e_none)) {
+                    if (collision_shape) {
                         entry.after.collision_shape = collision_shape;
                         entry.after.motion_mode     = motion_mode;
                     }

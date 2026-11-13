@@ -13,7 +13,7 @@ add_executable(${_target}
 
 # The limits each backend enforces (erhe::physics::get_enforced_joint_limits).
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
-    target_sources(${_target} PRIVATE test_enforced_joint_limits_jolt.cpp)
+    target_sources(${_target} PRIVATE test_convex_hull_jolt.cpp test_enforced_joint_limits_jolt.cpp)
 endif ()
 
 # Box3d_world internals (collision filter interning, hull point generation,

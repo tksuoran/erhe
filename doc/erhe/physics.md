@@ -120,6 +120,9 @@ a specific engine.
 - `IWorld::add_rigid_body()`, `remove_rigid_body()`, `update_fixed_step(dt)`
 - `IRigid_body::set_world_transform()`, `teleport()`, `set_linear_velocity()`, `set_motion_mode()`
 - `ICollision_shape` static factories for all primitive shapes plus convex hull and compound
+- The convex hull factories return null for a point set the backend refuses (Jolt: an initial
+  triangle too small, a hull error beyond its tolerance), with the backend's reason logged;
+  callers leave the body without that shape (`test/test_convex_hull_jolt.cpp`)
 - `initialize_physics_system()` -- one-time initialization
 
 ## Dependencies

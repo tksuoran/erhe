@@ -10,7 +10,8 @@ namespace erhe::physics {
 class Jolt_convex_hull_collision_shape : public Jolt_collision_shape
 {
 public:
-    Jolt_convex_hull_collision_shape(const float* points, int point_count, int stride);
+    // The shape Jolt built from settings (create_convex_hull_shape() refuses a point set Jolt does not take).
+    Jolt_convex_hull_collision_shape(JPH::Ref<JPH::ConvexHullShapeSettings> settings, JPH::RefConst<JPH::Shape> shape);
 
     [[nodiscard]] auto get_shape_settings() -> JPH::ShapeSettings&         override;
     [[nodiscard]] auto describe          () const -> std::string            override;
