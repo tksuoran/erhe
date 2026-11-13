@@ -340,6 +340,82 @@ void apply_head_pose_override(XrView* views, const uint32_t view_count, const Po
 
 } // anonymous namespace
 
+auto Xr_session::locate_xr_views(const XrTime display_time, const std::optional<Pose>& head_pose_override, uint32_t& out_view_count) -> bool
+{
+    out_view_count = 0;
+    if (!head_pose_override.has_value()) {
+        XrViewState view_state{
+            .type           = XR_TYPE_VIEW_STATE,
+            .next           = nullptr,
+            .viewStateFlags = 0
+        };
+        const XrViewLocateInfo view_locate_info{
+            .type                  = XR_TYPE_VIEW_LOCATE_INFO,
+            .next                  = nullptr,
+            .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
+            .displayTime           = display_time,
+            .space                 = m_xr_reference_space_stage
+        };
+        return check(
+            xrLocateViews(
+                m_xr_session, &view_locate_info, &view_state,
+                static_cast<uint32_t>(m_xr_views.size()), &out_view_count, m_xr_views.data()
+            )
+        );
+    }
+
+    // Overridden head: the eye views relative to the head are located once
+    // and reused, so no tracked view reaches a frame.
+    {
+        std::lock_guard<std::mutex> lock{m_override_eye_views_mutex};
+        if (m_override_eye_views.empty()) {
+            std::vector<XrView> eye_views(m_xr_views.size(), XrView{.type = XR_TYPE_VIEW, .next = nullptr});
+            XrViewState view_state{
+                .type           = XR_TYPE_VIEW_STATE,
+                .next           = nullptr,
+                .viewStateFlags = 0
+            };
+            const XrViewLocateInfo view_locate_info{
+                .type                  = XR_TYPE_VIEW_LOCATE_INFO,
+                .next                  = nullptr,
+                .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
+                .displayTime           = display_time,
+                .space                 = m_xr_reference_space_view
+            };
+            uint32_t eye_view_count = 0;
+            if (!check(
+                xrLocateViews(
+                    m_xr_session, &view_locate_info, &view_state,
+                    static_cast<uint32_t>(eye_views.size()), &eye_view_count, eye_views.data()
+                )
+            )) {
+                return false;
+            }
+            constexpr XrViewStateFlags required_flags = XR_VIEW_STATE_ORIENTATION_VALID_BIT | XR_VIEW_STATE_POSITION_VALID_BIT;
+            if (((view_state.viewStateFlags & required_flags) != required_flags) || (eye_view_count != eye_views.size())) {
+                return false; // not latched: located again next frame
+            }
+            m_override_eye_views = std::move(eye_views);
+            log_xr->info("Head pose override: eye views latched ({} views)", eye_view_count);
+        }
+        std::copy(m_override_eye_views.begin(), m_override_eye_views.end(), m_xr_views.begin());
+        out_view_count = static_cast<uint32_t>(m_override_eye_views.size());
+    }
+    apply_head_pose_override(m_xr_views.data(), out_view_count, head_pose_override.value());
+    return true;
+}
+
+auto Xr_session::get_layer_view_pose(const uint32_t view_index, const std::optional<Pose>& head_pose_override) const -> XrPosef
+{
+    if (!head_pose_override.has_value()) {
+        return m_xr_views[view_index].pose;
+    }
+    // The override layer is submitted in the view space (head-locked), so
+    // the compositor does not reproject it to the tracked head.
+    std::lock_guard<std::mutex> lock{m_override_eye_views_mutex};
+    return m_override_eye_views[view_index].pose;
+}
+
 // Get model properties for a path, acknowledging both FB support levels
 // (SUBSET_1: single mesh / single texture / no transparency / unlit,
 // SUBSET_2: adds multiple meshes / textures / transparency). Both levels
@@ -1804,41 +1880,9 @@ auto Xr_session::locate_views(std::vector<Render_view>& out_views) -> bool
         return false;
     }
 
-    // Standalone locate, independent of the render-frame locate (which
-    // re-locates into m_xr_views during render_frame / render_frame_multiview).
-    // Intentionally not factored together with those, so the render path stays
-    // untouched. xrLocateViews is a pure query keyed on the predicted display
-    // time and may be called more than once per frame.
-    XrViewState view_state{
-        .type           = XR_TYPE_VIEW_STATE,
-        .next           = nullptr,
-        .viewStateFlags = 0
-    };
-    const uint32_t view_capacity_input{static_cast<uint32_t>(m_xr_views.size())};
-    uint32_t       view_count_output  {0};
-
-    const XrViewLocateInfo view_locate_info{
-        .type                  = XR_TYPE_VIEW_LOCATE_INFO,
-        .next                  = nullptr,
-        .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
-        .displayTime           = m_xr_frame_state.predictedDisplayTime,
-        .space                 = m_head_pose_override.has_value() ? m_xr_reference_space_view : m_xr_reference_space_stage
-    };
-
-    if (!check(
-        xrLocateViews(
-            m_xr_session,
-            &view_locate_info,
-            &view_state,
-            view_capacity_input,
-            &view_count_output,
-            m_xr_views.data()
-        )
-    )) {
+    uint32_t view_count_output{0};
+    if (!locate_xr_views(m_xr_frame_state.predictedDisplayTime, m_head_pose_override, view_count_output)) {
         return false;
-    }
-    if (m_head_pose_override.has_value()) {
-        apply_head_pose_override(m_xr_views.data(), view_count_output, m_head_pose_override.value());
     }
 
     out_views.reserve(view_count_output);
@@ -1882,36 +1926,10 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
     {
         ERHE_PROFILE_SCOPE("xrLocateViews");
 
-        XrViewState view_state{
-            .type           = XR_TYPE_VIEW_STATE,
-            .next           = nullptr,
-            .viewStateFlags = 0
-        };
-        uint32_t view_capacity_input{static_cast<uint32_t>(m_xr_views.size())};
-
-        const XrViewLocateInfo view_locate_info{
-            .type                  = XR_TYPE_VIEW_LOCATE_INFO,
-            .next                  = nullptr,
-            .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
-            .displayTime           = m_render_display_time,
-            //.space                 = m_xr_reference_space_local
-            .space                 = m_render_head_pose_override.has_value() ? m_xr_reference_space_view : m_xr_reference_space_stage
-        };
-
-        ERHE_XR_CHECK(
-            xrLocateViews(
-                m_xr_session,
-                &view_locate_info,
-                &view_state,
-                view_capacity_input,
-                &view_count_output,
-                m_xr_views.data()
-            )
-        );
-        ERHE_VERIFY(view_count_output == view_capacity_input);
-        if (m_render_head_pose_override.has_value()) {
-            apply_head_pose_override(m_xr_views.data(), view_count_output, m_render_head_pose_override.value());
+        if (!locate_xr_views(m_render_display_time, m_render_head_pose_override, view_count_output)) {
+            return false;
         }
+        ERHE_VERIFY(view_count_output == m_xr_views.size());
     }
 
     const auto& view_configuration_views = m_instance.get_xr_view_configuration_views();
@@ -2078,7 +2096,7 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
         m_xr_composition_layer_projection_views[i] = {
             .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
             .next = use_depth_image ? &m_xr_composition_layer_depth_infos[i] : nullptr,
-            .pose = m_xr_views[i].pose,
+            .pose = get_layer_view_pose(i, m_render_head_pose_override),
             .fov  = m_xr_views[i].fov,
             .subImage = {
                 .swapchain = swapchains.color_swapchain.get_xr_swapchain(),
@@ -2149,35 +2167,10 @@ auto Xr_session::render_frame_multiview(
     {
         ERHE_PROFILE_SCOPE("xrLocateViews");
 
-        XrViewState view_state{
-            .type           = XR_TYPE_VIEW_STATE,
-            .next           = nullptr,
-            .viewStateFlags = 0
-        };
-        const uint32_t view_capacity_input{static_cast<uint32_t>(m_xr_views.size())};
-
-        const XrViewLocateInfo view_locate_info{
-            .type                  = XR_TYPE_VIEW_LOCATE_INFO,
-            .next                  = nullptr,
-            .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
-            .displayTime           = m_render_display_time,
-            .space                 = m_render_head_pose_override.has_value() ? m_xr_reference_space_view : m_xr_reference_space_stage
-        };
-
-        ERHE_XR_CHECK(
-            xrLocateViews(
-                m_xr_session,
-                &view_locate_info,
-                &view_state,
-                view_capacity_input,
-                &view_count_output,
-                m_xr_views.data()
-            )
-        );
-        ERHE_VERIFY(view_count_output == view_capacity_input);
-        if (m_render_head_pose_override.has_value()) {
-            apply_head_pose_override(m_xr_views.data(), view_count_output, m_render_head_pose_override.value());
+        if (!locate_xr_views(m_render_display_time, m_render_head_pose_override, view_count_output)) {
+            return false;
         }
+        ERHE_VERIFY(view_count_output == m_xr_views.size());
     }
 
     const auto& view_configuration_views = m_instance.get_xr_view_configuration_views();
@@ -2327,7 +2320,7 @@ auto Xr_session::render_frame_multiview(
         m_xr_composition_layer_projection_views[i] = {
             .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
             .next = m_projection_depth_submitted ? &m_xr_composition_layer_depth_infos[i] : nullptr,
-            .pose = m_xr_views[i].pose,
+            .pose = get_layer_view_pose(i, m_render_head_pose_override),
             .fov  = m_xr_views[i].fov,
             .subImage = {
                 .swapchain = m_shared_color_swapchain->get_xr_swapchain(),
@@ -2492,8 +2485,7 @@ auto Xr_session::end_frame(const bool rendered) -> bool
         .type       = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
         .next       = nullptr,
         .layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-        //.space      = m_xr_reference_space_local,
-        .space      = m_xr_reference_space_stage,
+        .space      = m_render_head_pose_override.has_value() ? m_xr_reference_space_view : m_xr_reference_space_stage,
         .viewCount  = static_cast<uint32_t>(m_xr_views.size()),
         .views      = m_xr_composition_layer_projection_views.data()
     };

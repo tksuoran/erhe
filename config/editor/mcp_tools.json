@@ -9131,6 +9131,10 @@
           },
           "type": "array"
         },
+        "scene_name": {
+          "description": "Scene the named nodes are in (needed when a node name is in several open scenes)",
+          "type": "string"
+        },
         "time": {
           "description": "Key time in seconds (default: current play position)",
           "type": "number"
@@ -9150,6 +9154,10 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "scene_name": {
+          "description": "Scene the named nodes are in (needed when a node name is in several open scenes)",
+          "type": "string"
         },
         "time": {
           "description": "Key time in seconds (default: current play position)",

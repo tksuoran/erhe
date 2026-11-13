@@ -71,22 +71,15 @@ ask the user which to pick.
   fragments per covered pixel 6.75 -> 6.16 / 5.89, shaded unchanged (2.4),
   cull check 0 mismatches, no visible cracks at the corner (screenshots of
   the three extents differ in under 0.1 % of pixels;
-  `doc/erhe/primitive.md` "Pieces"). Left to do: measure on the Quest with
-  the three exported assets
-  `res/editor/assets/bistro_lights_compressed/bistro_pieces{0,5,8}.quest.erhe_prepared`
-  (pushed to the device's `files/bistro/`). Every street run on them
-  (2026-11-08 20:23 - 20:30, logs `logs/quest_20261108_2023*.log` ..
-  `2030*.log`) failed with "Benchmark failed bistro_street_90: scene did
-  not settle" while the editor ran at 90 Hz for the whole settle timeout.
-  Two suspects, in order: the exports reported the Scene item present (not
-  remade) after the camera animation was recreated with
-  animation_create_key, so the assets may lack "Animation" on "Camera" or
-  carry the first run's linear one (open one with load_scene on the desktop
-  and list its animations; a Scene item key that does not change with a
-  scene edit is a bug of its own); and the user wore the headset during
-  these runs and suspects the benchmark still takes the head pose into
-  account, which a timedemo must not (check what the settle gate waits for
-  and what the camera path applies when a head pose is tracked).
+  `doc/erhe/primitive.md` "Pieces"). On the Quest (2026-11-08 21:22 -
+  21:27, street path at 90 Hz, headlamp, each extent twice, one input
+  hash; `doc/reference/quest_bench_runs.md`) pieces are slower: whole
+  primitives 33.6 fps (XR multiview 25.0 ms median, 457 draw-list entries
+  after load), 8 m 25.7 fps (31.3 ms, 1388 entries), 5 m 21.2 fps
+  (37.4 ms, 2294 entries); the shadow pass grows too (2.2 -> 2.4 / 3.1 ms).
+  The desktop triangle saving does not pay for the extra draws and the
+  split vertices on the Adreno; find out which (per-draw cost, or binning
+  of more, smaller draws) before splitting further.
 - Metal counts overdraw per sample under MSAA
   (`doc/plans/overdraw_visualization.md`).
 - The right trigger still selects while travelling.

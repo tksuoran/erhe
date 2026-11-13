@@ -25,6 +25,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
 #include <memory>
@@ -88,7 +89,8 @@ namespace {
 }
 
 // Collects the target nodes for the keying tools: named nodes when 'nodes'
-// is given, the current selection otherwise.
+// is given (in 'scene_name' when given; a name found in several scenes is
+// an error), the current selection otherwise.
 [[nodiscard]] auto collect_keying_nodes(
     App_context&       context,
     const json&        args,
@@ -97,25 +99,47 @@ namespace {
 {
     std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
     if (args.contains("nodes") && args["nodes"].is_array()) {
+        const std::string scene_name = args.value("scene_name", "");
+        std::vector<std::shared_ptr<Scene_root>> scene_roots;
+        if (context.app_scenes != nullptr) {
+            for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+                if (scene_name.empty() || (scene_root->get_name() == scene_name)) {
+                    scene_roots.push_back(scene_root);
+                }
+            }
+        }
+        if (!scene_name.empty() && scene_roots.empty()) {
+            out_error = "Scene not found: " + scene_name;
+            return {};
+        }
         for (const auto& element : args["nodes"]) {
             if (!element.is_string()) {
                 continue;
             }
             const std::string node_name = element.get<std::string>();
             std::shared_ptr<erhe::scene::Node> found;
-            if (context.app_scenes != nullptr) {
-                for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
-                    scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-                        if (node && (node->get_name() == node_name)) {
-                            found = node;
-                            return false;
-                        }
-                        return true;
-                    });
-                    if (found) {
-                        break;
+            std::string found_in;
+            for (const std::shared_ptr<Scene_root>& scene_root : scene_roots) {
+                std::shared_ptr<erhe::scene::Node> in_scene;
+                scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+                    if (node && (node->get_name() == node_name)) {
+                        in_scene = node;
+                        return false;
                     }
+                    return true;
+                });
+                if (!in_scene) {
+                    continue;
                 }
+                if (found) {
+                    out_error = fmt::format(
+                        "Node name '{}' is in scenes '{}' and '{}'; pass scene_name",
+                        node_name, found_in, scene_root->get_name()
+                    );
+                    return {};
+                }
+                found    = in_scene;
+                found_in = scene_root->get_name();
             }
             if (!found) {
                 out_error = "Node not found: " + node_name;
@@ -312,11 +336,28 @@ auto Mcp_server::action_animation_create_key(const json& args) -> std::string
     // No animation targeted: create one in the keyed scene's content library
     // and target it -- the same Unity-record-button behavior as the Animation
     // window's "+ Key" button (Animation_window::create_key_for_selection).
+    erhe::scene::Scene* scene      = nodes.front()->get_scene();
+    Scene_root*         scene_root = (scene != nullptr) ? static_cast<Scene_root*>(scene->get_item_host()) : nullptr;
+    const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        if (node->get_scene() != scene) {
+            return make_error_content("Keyed nodes are in different scenes; key one scene at a time");
+        }
+    }
     std::shared_ptr<erhe::scene::Animation> animation = window->get_animation();
+    // The saved animation is the keyed scene's: a target from another scene would save without these nodes.
+    bool animation_in_scene = true;
+    if (animation && library) {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
+        animation_in_scene = library->has_item(*animation);
+    }
+    if (!animation_in_scene) {
+        return make_error_content(fmt::format(
+            "The targeted animation '{}' is not in scene '{}'; target one of its animations with set_animation_target first",
+            animation->get_name(), scene_root->get_name()
+        ));
+    }
     if (!animation) {
-        erhe::scene::Scene* scene      = nodes.front()->get_scene();
-        Scene_root*         scene_root = (scene != nullptr) ? static_cast<Scene_root*>(scene->get_item_host()) : nullptr;
-        const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
         if (!library || (m_context.asset_manager == nullptr)) {
             return make_error_content("No animation targeted and the keyed scene cannot host a new one");
         }

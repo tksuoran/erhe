@@ -468,18 +468,20 @@ time those frames take. How to run one: [../agents/quest.md](../agents/quest.md)
     budgets and histories, the shadow map cache) advances during settle;
     that state is excluded from the determinism guarantee.
 - **Pose independence.** `erhe::xr::Headset::set_head_pose_override()`
-  (main thread, before `wait_frame()`) poses the head from the path: the
-  views are then located in the view reference space (each eye relative
-  to the tracked head) and composed with the path head, eye_i =
-  path_head * inverse(located_head) * located_eye_i, so the IPD and the
-  per-eye fovs stay the runtime's. The wait side (`update_view_pose()`,
-  `get_headset_pose()`, `locate_views()`) uses the value set; the frame
-  carries it to R in `Frame_timing::head_pose_override`, and
-  `render_frame()` / `render_frame_multiview()` apply it to the views they
-  render and submit as the projection layer (the compositor reprojects to
-  the real head, which is correct per the OpenXR spec: the layer pose is
-  the pose the image was rendered from). `Headset_view` sets the path pose
-  in M1 before the wait.
+  (main thread, before `wait_frame()`) poses the head from the path, and
+  no tracked pose reaches a frame: the first locate under the override
+  latches the eye views relative to the head (`xrLocateViews` in the view
+  reference space: eye offsets and per-eye fovs) and every later frame
+  reuses them, eye_i = path_head * latched_eye_i, without locating again.
+  The projection layer is submitted in the view reference space with the
+  latched head-relative eye poses, so the compositor shows each frame
+  head-locked and does not reproject it to the real head (OpenXR
+  `XrCompositionLayerProjection`: the `VIEW` space is the head-locked
+  choice). The wait side (`update_view_pose()`, `get_headset_pose()`,
+  `locate_views()`) uses the value set; the frame carries it to R in
+  `Frame_timing::head_pose_override` for `render_frame()` /
+  `render_frame_multiview()` and `end_frame()`. `Headset_view` sets the
+  path pose in M1 before the wait.
 - **Action independence.** In benchmark mode `Headset_view` skips
   `update_pointer_context_from_controller` (with it the ray trace, ID
   pick and quad layer hover merges), `update_id_render`, the controller

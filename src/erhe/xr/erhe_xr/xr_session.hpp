@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -224,6 +225,10 @@ public:
     [[nodiscard]] auto load_controller_render_model(bool right_hand) -> Render_model_data;
 
 private:
+    // Locates m_xr_views at display_time: tracked in the stage space, or under a
+    // head pose override the latched head-relative eye views placed at that pose.
+    [[nodiscard]] auto locate_xr_views(XrTime display_time, const std::optional<Pose>& head_pose_override, uint32_t& out_view_count) -> bool;
+    [[nodiscard]] auto get_layer_view_pose(uint32_t view_index, const std::optional<Pose>& head_pose_override) const -> XrPosef;
     void log_render_models();
     // Enumerate XR_FB_render_model paths (two-call idiom). Empty when the
     // extension is disabled or enumeration fails. Enumerating is also the
@@ -315,6 +320,9 @@ private:
     // and of the frame begin_frame() began (from its Frame_timing).
     std::optional<Pose>                           m_head_pose_override{};
     std::optional<Pose>                           m_render_head_pose_override{};
+    // Eye views relative to the head, latched by the first locate under an override.
+    mutable std::mutex                            m_override_eye_views_mutex;
+    std::vector<XrView>                           m_override_eye_views;
     std::vector<float>                            m_display_refresh_rates;
     Hand_tracker                                  m_hand_tracker_left;
     Hand_tracker                                  m_hand_tracker_right;

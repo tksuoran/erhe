@@ -28,8 +28,10 @@
 [TASK::world-space-pieces]{started-2026-11-08;branch=main;commit-735bfac9e;doc/erhe/primitive.md"Pieces";scripts(scratchpad,not-committed):pieces_bench.py/pieces_lists.py/quest_export.py/quest_pieces.sh}
 ✓split+lod-border-locks+gltf-member+buffer-mesh-pieces+entries-per-piece+setting+key+unit-test+docs
 ✓desktop-measured{corner-pose,world-space-form:tris-267k->71k(8m)/65k(5m);raster-6.75->6.16/5.89;shaded-2.4-level;0-mismatches;screenshots-differ<0.1%}
-✗quest-runs-fail{"scene did not settle"x7;editor-at-90Hz-whole-timeout;suspects:exported-Scene-item-reused(animation-missing/linear)|head-pose-applied-while-worn(©User)}
-?next{load_scene-one-asset-on-desktop->get_scene_animations|animation_playback;read-benchmark_driver.cpp-settle-gate+camera_path=animation-resolution;fix;rerun-quest_pieces.sh(alternating-0/5/8,--record)}
+✓settle-failure-root-cause{003316476;animation_create_key-resolved-"Camera"-in-empty-startup-"Scene 1"(--no-scene)->exports-lacked-Animation+camera;tools-take-scene_name+ambiguous-name=error;assets-re-exported+pushed}
+✓benchmark-views-head-locked{4ca6ec37b;eye-views-latched-once(view-space)+projection-layer-in-VIEW-space;©User-verified-worn:path-followed+image-fixed;!all-Quest-bench-runs-before-2026-11-08-21:18-INVALID(©User)}
+✓quest-measured{2026-11-08-21:22..21:27;one-input-hash;0m=33.6fps(multiview-25.0ms,457-entries)|8m=25.7fps(31.3ms,1388)|5m=21.2fps(37.4ms,2294);pieces-SLOWER-on-Adreno}
+?next{find-why(per-draw-cost|binning-of-more-smaller-draws|split-vertices)-before-splitting-further}
 
 [TASK::bistro-quest-benchmark]{started-2026-11-08;branch=main;doc/reference/quest_bench_runs.md(17:12..17:37-entries)+doc/plans/open_items.md"Quest session follow-ups"}
 ✓run-cmd{python3 scripts/quest_bench.py run --bench config/editor/benchmark_bistro_street_90.json --bench-to-device --editor-args=--no-scene --config scripts/quest_bench_configs/bistro_headlamp_gpu_occlusion.json --mcp 'set_graphics_preset={"shadow_bias":"normal_offset","shader_fp16_paths":1}' --load-scene /sdcard/Android/data/org.libsdl.app.quest/files/bistro/bistro_src.quest.erhe_prepared --mcp-measure get_lod_stats --record;off-head;add---perfetto|--gpu-metrics-for-counters(exclusive)}
