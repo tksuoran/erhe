@@ -4,7 +4,7 @@
 #include "transform/handle_visualizations.hpp"
 #include "transform/transform_tool_settings.hpp"
 #include "transform/ik_drag.hpp"
-#include "transform/lattice_point_transform.hpp"
+#include "transform/point_set_transform.hpp"
 #include "transform/mesh_component_transform.hpp"
 #include "transform/physics_driven_drag.hpp"
 #include "transform/rotation_inspector.hpp"
@@ -410,10 +410,12 @@ public:
     void confirm_scalar_drag      ();
     auto toggle_scalar_drag_option(Scalar_drag_option option) -> bool;
     [[nodiscard]] auto is_scalar_drag_active() const -> bool { return m_scalar_drag.active; }
-    // Cancels the active mesh component edit - the pointer scalar drag, or
-    // the edit of a gizmo drag - restoring its start state and queueing no
-    // operation. False when no mesh component edit is active.
+    // Cancels the active mesh component or point set edit - the pointer
+    // scalar drag, or the edit of a gizmo drag - restoring its start state
+    // and queueing no operation. False when no such edit is active.
     auto cancel_component_edit    () -> bool;
+    // The point set whose gesture is in progress; null outside one.
+    [[nodiscard]] auto get_point_set_edit() const -> const IPoint_set*;
     // A scalar edit the caller drives itself (the inset mode of
     // Mesh_component_selection_tool, doc/editor/mesh_modeling.md): begin with
     // a topology step, apply steps, commit; cancel_component_edit() cancels.
@@ -536,6 +538,8 @@ private:
     std::vector<const erhe::scene::Mesh*> m_surface_excluded;
     std::vector<glm::vec3>                m_surface_deltas;
     std::vector<std::shared_ptr<erhe::scene::Node>> m_moved_nodes; // drag end: the entries' nodes, kept for its capacity
+    // Whether this edit began the live layout preview of the moved layouts (Level_kits::begin_layout_move_preview()).
+    bool                                m_layout_preview_begun{false};
     Rotation_inspector                  m_rotation;
 
     Property_editor                     m_property_editor;
@@ -548,15 +552,16 @@ private:
     // mesh_components - a mesh component mode is active, whether or not its
     //        selection currently anchors the gizmo (shared.component_mode says);
     //        shared.entries stays empty.
-    // lattice_point - a designated lattice node's selected control point.
+    // point_set - the selected points of a point set tool (doc/editor/point_set_editing.md).
     // The node-selection message handlers act only while it is none; the
     // facade methods dispatch on it.
-    enum class Component_source { none, mesh_components, lattice_point };
+    enum class Component_source { none, mesh_components, point_set };
     Component_source m_component_source{Component_source::none};
     [[nodiscard]] auto is_node_selection_driving() const -> bool { return m_component_source == Component_source::none; }
 
     Mesh_component_transform m_component_transform;
-    Lattice_point_transform  m_lattice_point_transform;
+    Point_set_transform      m_point_set_transform;
+    IPoint_set*              m_point_set{nullptr}; // the point set anchoring the gizmo while m_component_source is point_set
 
     // The pointer scalar drag. `view` is the view it started in; it is only
     // dereferenced while it is still the hovered view.
@@ -594,6 +599,9 @@ private:
 
     // The surface step of a translate drag (D4.6), after the tool wrote the step's transforms.
     void apply_drag_surface_step();
+    // After the tool wrote a step's node transforms: the moved surface-snapped kit layouts follow live (D3.9).
+    void follow_layout_preview();
+    void end_layout_preview();
     // True when an ancestor of the node is a target the drag moves: the node rides along rigidly.
     [[nodiscard]] auto has_moved_ancestor_entry(const erhe::scene::Node& node) const -> bool;
     // A pointer drag whose only free axis is the surface direction's axis lifts off the surface.

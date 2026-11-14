@@ -7,6 +7,10 @@ namespace erhe::scene {
 
 Scene_host::~Scene_host() noexcept = default;
 
+void Scene_host::on_curve_changed(const std::shared_ptr<Curve>&, Curve_change)
+{
+}
+
 auto Scene_host::find_hosted_item(const std::string_view name_or_path) -> erhe::Item_base*
 {
     Scene* const scene = get_hosted_scene();

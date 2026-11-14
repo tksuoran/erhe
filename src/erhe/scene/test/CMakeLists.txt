@@ -5,6 +5,7 @@ add_executable(${_target}
     test_animation_sampler.cpp
     test_camera_light_prims.cpp
     test_camera_properties.cpp
+    test_curve_prims.cpp
     test_gprim_display_color.cpp
     test_gprim_double_sided.cpp
     test_imported_defaults.cpp

@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "gltf_fastgltf.hpp"
+#include "gltf_curve.hpp"
 #include "gltf_item_flags.hpp"
 #include "gltf_log.hpp"
 #include "gltf_uid.hpp"
@@ -35,6 +36,7 @@
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/pvs_database.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -5174,7 +5176,13 @@ private:
     std::map<std::pair<std::size_t, std::size_t>, std::string> m_primitive_geometry_extensions;
     // The prim class of the glTF nodes that name one, see parse_prim_node.
     std::map<std::size_t, Gltf_node_prim_class>               m_node_prim_classes;
+    // The path of each glTF node carrying ERHE_curve: the node is a Curve prim.
+    std::map<std::size_t, erhe::math::Curve_path>             m_node_curves;
 public:
+    void set_node_curves(std::map<std::size_t, erhe::math::Curve_path>&& node_curves)
+    {
+        m_node_curves = std::move(node_curves);
+    }
     // The prim class of each glTF node whose ERHE_node extension names one,
     // read out of the captured extension payloads before the parse (see
     // parse_prim_node). Handed in by parse_gltf().
@@ -6398,6 +6406,18 @@ private:
         const bool node_is_mesh   = node.meshIndex.has_value() && instances.empty();
         const bool node_is_camera = !node_is_mesh && node.cameraIndex.has_value();
         const bool node_is_light  = !node_is_mesh && !node_is_camera && node.lightIndex.has_value();
+        // A node carrying ERHE_curve is a Curve prim (doc/gltf_extensions/ERHE_curve.md); the
+        // writer never gives it a mesh, camera or light.
+        const std::map<std::size_t, erhe::math::Curve_path>::const_iterator curve_path = m_node_curves.find(node_index);
+        const bool node_is_curve  = !node_is_mesh && !node_is_camera && !node_is_light && (curve_path != m_node_curves.end());
+        if ((curve_path != m_node_curves.end()) && !node_is_curve) {
+            log_gltf->warn("Node '{}': ERHE_curve on a node that carries a mesh, camera or light - the curve is not read", node_name);
+        }
+        const auto make_curve = [&]() -> std::shared_ptr<erhe::scene::Curve> {
+            std::shared_ptr<erhe::scene::Curve> curve = std::make_shared<erhe::scene::Curve>(node_name);
+            curve->set_path(curve_path->second);
+            return curve;
+        };
         std::shared_ptr<erhe::scene::Xformable> erhe_node =
             node_is_mesh
                 ? std::static_pointer_cast<erhe::scene::Xformable>(clone_mesh(node_name))
@@ -6405,7 +6425,9 @@ private:
                     ? std::static_pointer_cast<erhe::scene::Xformable>(instantiate_camera(node.cameraIndex.value(), node_name))
                     : node_is_light
                         ? std::static_pointer_cast<erhe::scene::Xformable>(instantiate_light(node.lightIndex.value(), node_name))
-                        : std::static_pointer_cast<erhe::scene::Xformable>(std::make_shared<erhe::scene::Xform>(node_name));
+                        : node_is_curve
+                            ? std::static_pointer_cast<erhe::scene::Xformable>(make_curve())
+                            : std::static_pointer_cast<erhe::scene::Xformable>(std::make_shared<erhe::scene::Xform>(node_name));
         erhe_node->set_source_path(m_arguments.path);
         apply_uid(m_object_uids.nodes, node_index, *erhe_node);
         erhe_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
@@ -8312,9 +8334,20 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     // Xform (see parse_prim_node).
     {
         std::map<std::size_t, Gltf_node_prim_class> node_prim_classes;
+        std::map<std::size_t, erhe::math::Curve_path> node_curves;
         simdjson::dom::parser prim_class_parser;
         for (const auto& [index, captured] : parse_extras_context.node_extensions) {
             for (const auto& [extension_name, extension_value] : captured.entries) {
+                if (extension_name == "ERHE_curve") {
+                    erhe::math::Curve_path path{};
+                    std::string            error;
+                    if (erhe::gltf::curve_path_from_json(extension_value, path, error)) {
+                        node_curves.emplace(index, std::move(path));
+                    } else {
+                        log_gltf->error("glTF load '{}': node {}: ERHE_curve does not read ({}); the node loads as an Xform", arguments.path.filename().string(), index, error);
+                    }
+                    continue;
+                }
                 if (extension_name != "ERHE_node") {
                     continue;
                 }
@@ -8340,6 +8373,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             }
         }
         erhe_parser.set_node_prim_classes(std::move(node_prim_classes));
+        erhe_parser.set_node_curves(std::move(node_curves));
     }
 
     erhe_parser.parse_and_build();
@@ -12740,6 +12774,7 @@ private:
         std::vector<Item_object_reference_value>       node_references;
     };
     std::unordered_map<std::size_t, Node_extension_payload> m_internal_node_extensions;
+    bool                                                    m_uses_curve{false}; // ERHE_curve
     void record_node_extensions(
         const erhe::Typed&                         erhe_node,
         const std::size_t                          gltf_node_index,
@@ -12786,8 +12821,14 @@ private:
         }
         members += extra_erhe_node_members;
         std::string trailing;
+        // A Curve prim is its glTF node; its path rides ERHE_curve (doc/gltf_extensions/ERHE_curve.md).
+        const erhe::scene::Curve* const erhe_curve = dynamic_cast<const erhe::scene::Curve*>(&erhe_node);
+        if (erhe_curve != nullptr) {
+            trailing += ",\"ERHE_curve\":" + erhe::gltf::curve_path_to_json(erhe_curve->get_path());
+            m_uses_curve = true;
+        }
         if (erhe_light) {
-            trailing = fmt::format(
+            trailing += fmt::format(
                 ",\"ERHE_light\":{{\"cast_shadow\":{},\"infinite_range\":{},\"flags\":{},\"properties\":{}}}",
                 erhe_light->get_cast_shadow() ? "true" : "false",
                 (erhe_light->get_range() <= 0.0f) ? "true" : "false",
@@ -13948,6 +13989,9 @@ auto Gltf_exporter::export_gltf() -> Gltf_export_document
         }
         if (!m_internal_node_extensions.empty()) {
             declare_extension_used("ERHE_node");
+        }
+        if (m_uses_curve) {
+            declare_extension_used("ERHE_curve");
         }
         if (!m_gltf_asset.lights.empty()) {
             declare_extension_used("ERHE_light");

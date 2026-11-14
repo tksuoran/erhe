@@ -8,7 +8,7 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=9,
+    version=10,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
@@ -74,6 +74,26 @@ struct("Debug_visualizations_style",
         field("camera_line_color",                 Vec4,  added_in=1, default="1.0f, 1.0f, 1.0f, 1.0f", short_desc="Camera Line Color"),
         field("layout_line_width",                 Float, added_in=1, default="2.0f",   short_desc="Layout Line Width"),
         field("layout_line_color",                 Vec4,  added_in=1, default="0.2f, 0.8f, 1.0f, 1.0f", short_desc="Layout Line Color"),
+
+        # Curve prims (doc/editor/curves.md "Drawing"): the curve line, its point and handle markers and handle lines.
+        field("curve_selected_color",              Vec4,  added_in=10, default="0.25f, 1.0f, 1.0f, 1.0f", short_desc="Curve Selected Color",     long_desc="Line of a selected or hovered curve"),
+        field("curve_selected_width",              Float, added_in=10, default="-4.0f",                   short_desc="Curve Selected Width",     long_desc="Line width of a selected or hovered curve; negative is pixels"),
+        field("curve_unselected_color",            Vec4,  added_in=10, default="0.3f, 0.75f, 0.9f, 0.8f", short_desc="Curve Unselected Color",   long_desc="Line of an unselected curve (Curves mode All)"),
+        field("curve_unselected_width",            Float, added_in=10, default="-2.0f",                   short_desc="Curve Unselected Width",   long_desc="Line width of an unselected curve; negative is pixels"),
+        field("curve_handle_line_color",           Vec4,  added_in=10, default="1.0f, 0.35f, 0.8f, 1.0f", short_desc="Curve Handle Line Color",  long_desc="Line from a control point to each of its handle ends"),
+        field("curve_handle_line_width",           Float, added_in=10, default="-2.0f",                   short_desc="Curve Handle Line Width",  long_desc="Line width of the handle lines; negative is pixels"),
+        field("curve_point_marker_color",          Vec4,  added_in=10, default="1.0f, 1.0f, 0.3f, 1.0f",  short_desc="Curve Point Marker Color", long_desc="Axis cross at a smooth or free control point"),
+        field("curve_corner_marker_color",         Vec4,  added_in=10, default="1.0f, 0.5f, 0.2f, 1.0f",  short_desc="Curve Corner Marker Color", long_desc="Axis cross at a corner control point"),
+        field("curve_handle_marker_color",         Vec4,  added_in=10, default="1.0f, 0.35f, 0.8f, 1.0f", short_desc="Curve Handle Marker Color", long_desc="Axis cross at a handle end"),
+        field("curve_marker_size",                 Float, added_in=10, default="0.012f",                  short_desc="Curve Marker Size",        long_desc="Half size of the axis crosses per metre of distance to the camera"),
+        field("curve_marker_width",                Float, added_in=10, default="-2.0f",                   short_desc="Curve Marker Width",       long_desc="Line width of the axis crosses; negative is pixels"),
+        # Point handles of the curve and lattice tools (doc/editor/point_set_editing.md): camera-facing quads.
+        field("point_handle_color",                Vec4,  added_in=10, default="1.0f, 0.6f, 0.1f, 1.0f",  short_desc="Point Handle Color",       long_desc="Quad of a point that can be grabbed"),
+        field("point_handle_size",                 Float, added_in=10, default="0.006f",                  short_desc="Point Handle Size",        long_desc="Half size of a point handle quad per metre of distance to the camera"),
+        field("point_hover_color",                 Vec4,  added_in=10, default="1.0f, 1.0f, 1.0f, 1.0f",  short_desc="Point Hover Color",        long_desc="Quad of the point under the pointer"),
+        field("point_hover_size",                  Float, added_in=10, default="0.008f",                  short_desc="Point Hover Size",         long_desc="Half size of the hovered point quad per metre of distance to the camera"),
+        field("point_selected_color",              Vec4,  added_in=10, default="1.0f, 1.0f, 0.0f, 1.0f",  short_desc="Point Selected Color",     long_desc="Quad of a selected point"),
+        field("point_selected_size",               Float, added_in=10, default="0.009f",                  short_desc="Point Selected Size",      long_desc="Half size of a selected point quad per metre of distance to the camera"),
 
         field("skin_bone_color_a",                 Vec4,  added_in=1, default="0.0f, 1.0f, 1.0f, 1.0f", short_desc="Skin Bone Color A", long_desc="Color for joints at even hierarchy depth; alternates with Skin Bone Color B"),
         field("skin_bone_color_b",                 Vec4,  added_in=1, default="1.0f, 0.0f, 1.0f, 1.0f", short_desc="Skin Bone Color B", long_desc="Color for joints at odd hierarchy depth; alternates with Skin Bone Color A"),

@@ -1,16 +1,15 @@
 #pragma once
 
 #include "app_message.hpp"
-#include "tools/tool.hpp"
+#include "tools/point_set_tool.hpp"
 
-#include "erhe_commands/command.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 
 #include <glm/glm.hpp>
 
 #include <memory>
-#include <optional>
+#include <string>
 #include <vector>
 
 namespace erhe::commands { class Commands; }
@@ -21,49 +20,22 @@ namespace editor {
 class App_message_bus;
 class Lattice_node;
 class Scene_root;
-class Scene_view;
 class Tools;
-class Viewport_scene_view;
 
-class Lattice_select_command : public erhe::commands::Command
+// Viewport editing of a Lattice_node's control points
+// (doc/editor/lattice_deform_geometry_node.md "Viewport editing"): active when
+// a display or ghost designated Lattice_node is bound into the active scene.
+// The point set is the control points; the selection is the node's own
+// selected point, so the node UI's offset editor and the viewport stay in sync.
+class Lattice_tool : public Point_set_tool
 {
 public:
-    Lattice_select_command(erhe::commands::Commands& commands, App_context& context);
-    void try_ready() override;
-    auto try_call () -> bool override;
-
-private:
-    App_context& m_context;
-};
-
-// Viewport editing of a Lattice_node's control points.
-//
-// Active when a Geometry_graph_mesh value group in the active scene binds a
-// Graph_mesh whose display or ghost designated node is a Lattice_node (the
-// designation is what puts the lattice-deformed geometry in the viewport, so
-// it doubles as the edit-mode switch). While active:
-//   - tool_render draws the deformed cage wireframe and a billboard handle
-//     per control point (selected / hovered highlighted);
-//   - left click selects the control point under the pointer (screen-space
-//     pick, consumed so the scene selection does not change);
-//   - the transform gizmo anchors to the selected point and drags edit the
-//     point's offset undoably (Lattice_point_transform).
-// The control point selection is the node's own selected point, so the node
-// UI's offset editor and the viewport stay in sync.
-class Lattice_tool : public Tool
-{
-public:
-    static constexpr int c_priority{4};
-
     Lattice_tool(
         erhe::commands::Commands& commands,
         App_context&              context,
         App_message_bus&          app_message_bus,
         Tools&                    tools
     );
-
-    // Implements Tool
-    void tool_render(const Render_context& context) override;
 
     // The lattice being edited and the scene node whose transform maps the
     // lattice's local space to world. Both empty when no designated lattice
@@ -76,35 +48,60 @@ public:
     };
 
     // Returns the current target, re-scanning the active scene first when a
-    // change it depends on was reported (never during a gizmo edit). Called by
-    // Transform_tool::update_for_view each idle frame; tool_render reuses it.
+    // change it depends on was reported (never during a gizmo edit).
     auto update_active_lattice() -> const Active_lattice&;
     [[nodiscard]] auto get_active_lattice() const -> const Active_lattice&;
     void on_items_removed(const Removed_items& removed);
 
-    // Commands
-    [[nodiscard]] auto try_ready() -> bool;
-    auto on_select() -> bool;
+    // Implements IPoint_set
+    auto update_point_set() -> bool override;
+    [[nodiscard]] auto has_point_set_target    () const -> bool override;
+    [[nodiscard]] auto get_point_set_scene_root() const -> std::shared_ptr<Scene_root> override;
+    void get_point_world_positions(std::vector<std::optional<glm::vec3>>& out_positions) const override;
+    [[nodiscard]] auto is_point_selected       (std::size_t index) const -> bool override;
+    [[nodiscard]] auto has_point_selection     () const -> bool override;
+    void select_point                          (std::size_t index, Point_select select) override;
+    auto clear_point_selection                 () -> bool override;
+    [[nodiscard]] auto get_point_frame_rotation() const -> glm::quat override;
+    [[nodiscard]] auto get_point_drawing       () const -> Point_drawing override;
+    auto begin_point_edit () -> bool override;
+    void apply_point_edit (const std::optional<glm::mat4>& world_delta) override;
+    void commit_point_edit() override;
+    void cancel_point_edit() override;
+
+protected:
+    void render_extras(const Render_context& context) override;
 
 private:
-    [[nodiscard]] auto pick_control_point(Scene_view& scene_view) const -> std::optional<glm::ivec3>;
-    void append_point_quad(const glm::vec3& position_in_world, const glm::vec3& camera_right, const glm::vec3& camera_up, float half_size);
+    [[nodiscard]] auto point_from_index(std::size_t index) const -> glm::ivec3;
+    [[nodiscard]] auto get_point_count () const -> std::size_t;
 
-    erhe::message_bus::Subscription<Hover_scene_view_message>           m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Graph_mesh_binding_changed_message> m_graph_mesh_binding_changed_subscription;
     erhe::message_bus::Subscription<Close_scene_message>                m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message>              m_items_removed_subscription;
-    Lattice_select_command    m_select_command;
     Active_lattice            m_active;
     bool                      m_active_stale{true};
     std::weak_ptr<Scene_root> m_active_scene_root; // the scene m_active was scanned from
-    std::optional<glm::ivec3> m_pick_point; // armed by try_ready(), consumed by on_select()
 
-    // Scratch for billboard quads (cleared per use, capacity kept)
-    std::vector<glm::vec3> m_scratch_positions;
-    std::vector<uint32_t>  m_scratch_indices;
-    // Cage wireframe lines of tool_render (cleared per use, capacity kept)
+    // Cage wireframe lines of render_extras (cleared per use, capacity kept)
     std::vector<erhe::renderer::Line> m_scratch_lines;
+
+    // The point edit gesture (begin_point_edit .. commit / cancel)
+    class Edit
+    {
+    public:
+        std::weak_ptr<Lattice_node> lattice;
+        glm::ivec3                  point           {0, 0, 0};
+        glm::vec3                   rest_local      {0.0f}; // rest grid position, pre-driver-transform lattice space
+        glm::vec3                   before_offset   {0.0f};
+        glm::mat4                   world_from_node {1.0f};
+        glm::mat4                   node_from_world {1.0f};
+        glm::mat4                   driver_transform{1.0f}; // the driver node's parent transform
+        glm::mat4                   driver_inverse  {1.0f};
+        std::string                 before_parameters;
+        bool                        active{false};
+    };
+    Edit m_edit;
 };
 
 }

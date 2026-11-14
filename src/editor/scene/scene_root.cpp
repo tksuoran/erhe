@@ -75,6 +75,7 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/pvs_database.hpp"
@@ -1566,6 +1567,10 @@ void Scene_root::register_node(const std::shared_ptr<erhe::scene::Node>& node)
     if (node) {
         on_navigation_seed_changed(node);
     }
+    if (erhe::is<erhe::scene::Curve>(node.get())) {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_curves_mutex};
+        m_curves.push_back(std::static_pointer_cast<erhe::scene::Curve>(node));
+    }
 }
 
 void Scene_root::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
@@ -1583,6 +1588,57 @@ void Scene_root::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
             with_navigation(*this, [](auto& navigation) { navigation.on_seeds_changed(); });
         }
     }
+    if (erhe::is<erhe::scene::Curve>(node.get())) {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_curves_mutex};
+        std::erase(m_curves, node);
+    }
+}
+
+void Scene_root::get_curves(std::vector<std::shared_ptr<erhe::scene::Curve>>& out_curves) const
+{
+    out_curves.clear();
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_curves_mutex};
+    out_curves.insert(out_curves.end(), m_curves.begin(), m_curves.end());
+}
+
+void Scene_root::on_curve_changed(const std::shared_ptr<erhe::scene::Curve>& curve, const erhe::scene::Curve_change change)
+{
+    if (!curve) {
+        return;
+    }
+    const bool shape = (change == erhe::scene::Curve_change::shape);
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_curves_mutex};
+    for (std::size_t i = 0, end = m_changed_curves.size(); i < end; ++i) {
+        if (m_changed_curves[i] == curve) {
+            if (shape) {
+                m_changed_curve_shapes[i] = true;
+            }
+            return;
+        }
+    }
+    m_changed_curves.push_back(curve);
+    m_changed_curve_shapes.push_back(shape);
+}
+
+void Scene_root::take_changed_curves(std::vector<std::shared_ptr<erhe::scene::Curve>>& out_curves, std::vector<bool>& out_shape_changed)
+{
+    out_curves.clear();
+    out_shape_changed.clear();
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_curves_mutex};
+    std::swap(out_curves, m_changed_curves);
+    std::swap(out_shape_changed, m_changed_curve_shapes);
+}
+
+void Scene_root::count_curve_change_message()
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_curves_mutex};
+    ++m_curve_change_message_count;
+}
+
+auto Scene_root::get_curve_change_message_count() const -> uint64_t
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_curves_mutex};
+    return m_curve_change_message_count;
 }
 
 void Scene_root::get_navigation_seed_nodes(std::vector<std::shared_ptr<erhe::scene::Node>>& out_nodes) const

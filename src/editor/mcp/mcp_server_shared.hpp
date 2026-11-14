@@ -35,6 +35,9 @@ namespace httplib {
     struct Request;
 }
 
+namespace erhe::math {
+    class Curve_path;
+}
 namespace erhe::scene {
     class Mesh;
     class Xformable; using Node = Xformable;
@@ -86,6 +89,10 @@ constexpr float c_unit_quaternion_tolerance = 1.0e-3f;
 [[nodiscard]] auto make_unit_quaternion(const float xyzw[4], std::string_view key, std::string& out_error) -> std::optional<glm::quat>;
 
 // Finds a node by the integer args[id_key], or by the string args[name_key].
+// The "points" ([{position, in?, out?, kind?}], at least two) and "closed" keys of args over the path, as
+// create_curve reads them (mcp_server_curves.cpp); false with the error when one does not read.
+[[nodiscard]] auto read_curve_path_args(const json& args, erhe::math::Curve_path& io_path, std::string& out_error) -> bool;
+
 auto find_node_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Node>;
 
 // Finds a PRIM by the integer args[id_key], or by the string args[name_key]

@@ -8,6 +8,8 @@
 namespace erhe::scene {
 
 class Camera;
+class Curve;
+enum class Curve_change : unsigned int;
 class Light;
 class Lod_data;
 class Mesh;
@@ -84,6 +86,11 @@ public:
     // cast_shadow, range - anything Light_set::resolve() reads). Any thread;
     // implementations only mark state stale (Light_set::invalidate()).
     virtual void on_light_changed          (const std::shared_ptr<Light>& light) = 0;
+
+    // Curve change notification (Curve::set_path, Curve::handle_transform_update;
+    // doc/editor/curves.md "Change notification"). May arrive several times in
+    // one frame for one curve; a host without curve users ignores it.
+    virtual void on_curve_changed(const std::shared_ptr<Curve>& curve, Curve_change change);
 };
 
 } // namespace erhe::scene

@@ -52,6 +52,7 @@
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/layout.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -1690,6 +1691,72 @@ private:
 
 } // anonymous namespace
 
+// The curves of the view's scene from the scene's curve list (doc/editor/curves.md "Drawing"):
+// the cached draw points, and for a selected curve its control points and handles.
+void Debug_visualizations::curves_visualization(const Render_context& context, const Scene_root& scene_root)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    scene_root.get_curves(m_curves);
+    if (m_curves.empty()) {
+        return;
+    }
+    const Debug_visualizations_style& style = context.app_context.editor_settings->debug_visualizations_style;
+
+    const erhe::scene::Node* const camera_node = context.get_camera_node();
+    const glm::vec3 camera_position = (camera_node != nullptr) ? glm::vec3{camera_node->world_from_node()[3]} : glm::vec3{0.0f};
+
+    // X-ray: a curve lying on a surface (a path on the ground) stays at full strength.
+    erhe::renderer::Primitive_renderer line_renderer = context.get(
+        {
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .thin_lines        = false,
+            .xray              = true
+        }
+    );
+    const float marker_width = style.curve_marker_width;
+    const auto add_marker = [&](const glm::vec3& p, const glm::vec4& color) {
+        const float h = style.curve_marker_size * std::max(glm::distance(camera_position, p), 0.1f);
+        line_renderer.add_line(color, marker_width, p - glm::vec3{h, 0.0f, 0.0f}, color, marker_width, p + glm::vec3{h, 0.0f, 0.0f});
+        line_renderer.add_line(color, marker_width, p - glm::vec3{0.0f, h, 0.0f}, color, marker_width, p + glm::vec3{0.0f, h, 0.0f});
+        line_renderer.add_line(color, marker_width, p - glm::vec3{0.0f, 0.0f, h}, color, marker_width, p + glm::vec3{0.0f, 0.0f, h});
+    };
+    for (const std::shared_ptr<erhe::scene::Curve>& curve : m_curves) {
+        if (!should_visualize(m_settings.curves, static_cast<const erhe::Item_base*>(curve.get()))) {
+            continue;
+        }
+        const bool      selected        = curve->is_selected() || editor::is_hovered(*curve);
+        const glm::mat4 world_from_node = curve->world_from_node();
+        const glm::vec4 line_color      = selected ? style.curve_selected_color : style.curve_unselected_color;
+        const float     line_width      = selected ? style.curve_selected_width : style.curve_unselected_width;
+        const std::span<const glm::vec3> draw_points = curve->get_draw_points();
+        for (std::size_t i = 1, end = draw_points.size(); i < end; ++i) {
+            const glm::vec3 a{world_from_node * glm::vec4{draw_points[i - 1], 1.0f}};
+            const glm::vec3 b{world_from_node * glm::vec4{draw_points[i], 1.0f}};
+            line_renderer.add_line(line_color, line_width, a, line_color, line_width, b);
+        }
+        if (!selected) {
+            continue;
+        }
+        for (const erhe::math::Curve_point& point : curve->get_path().points) {
+            const glm::vec3 p{world_from_node * glm::vec4{point.position, 1.0f}};
+            add_marker(p, (point.kind == erhe::math::Curve_point_kind::corner) ? style.curve_corner_marker_color : style.curve_point_marker_color);
+            if (point.kind == erhe::math::Curve_point_kind::corner) {
+                continue;
+            }
+            for (const glm::vec3& handle : {point.in_handle, point.out_handle}) {
+                const glm::vec3 h{world_from_node * glm::vec4{point.position + handle, 1.0f}};
+                line_renderer.add_line(style.curve_handle_line_color, style.curve_handle_line_width, p, style.curve_handle_line_color, style.curve_handle_line_width, h);
+                add_marker(h, style.curve_handle_marker_color);
+            }
+        }
+    }
+    m_curves.clear();
+}
+
 void Debug_visualizations::navigation_seeds_visualization(const Render_context& context, const Scene_root& scene_root)
 {
     ERHE_PROFILE_FUNCTION();
@@ -2335,6 +2402,10 @@ void Debug_visualizations::render(const Render_context& context)
         navigation_seeds_visualization(context, *scene_root);
     }
 
+    if (m_settings.curves != Visualization_mode::off) {
+        curves_visualization(context, *scene_root);
+    }
+
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
         for (const auto& mesh : layer->meshes) {
             mesh_labels(context, mesh.get());
@@ -2647,6 +2718,40 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     p.add_entry(Property_row_id::debug_camera_line_color, "Camera Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.camera_line_color.x,  ImGuiColorEditFlags_Float); });
     p.add_entry(Property_row_id::debug_layout_line_width, "Layout Line Width", [&style](){ ImGui::SliderFloat("##", &style.layout_line_width,    0.1f, 100.0f); });
     p.add_entry(Property_row_id::debug_layout_line_color, "Layout Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.layout_line_color.x,  ImGuiColorEditFlags_Float); });
+    // Curve prims (doc/editor/curves.md "Drawing"); read at draw time, so an edit shows on the next frame.
+    p.push_group(Property_row_id::debug_curves_style, "Curves", ImGuiTreeNodeFlags_None);
+    p.add_entry(Property_row_id::debug_curve_selected,     "Selected",     [style_row, &style](){ style_row(&style.curve_selected_color,    &style.curve_selected_width); });
+    p.add_entry(Property_row_id::debug_curve_unselected,   "Unselected",   [style_row, &style](){ style_row(&style.curve_unselected_color,  &style.curve_unselected_width); });
+    p.add_entry(Property_row_id::debug_curve_handle_lines, "Handle Lines", [style_row, &style](){ style_row(&style.curve_handle_line_color, &style.curve_handle_line_width); });
+    p.add_entry(Property_row_id::debug_curve_point_markers, "Markers", [&style]() {
+        ImGui::ColorEdit4("##point",  &style.curve_point_marker_color.x,  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##corner", &style.curve_corner_marker_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##handle", &style.curve_handle_marker_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##w", &style.curve_marker_width, 0.1f, -100.0f, 100.0f, "%.1f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Point, corner and handle end crosses; line width (negative is pixels)");
+        }
+    });
+    p.add_entry(Property_row_id::debug_curve_marker_size, "Marker Size", [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.curve_marker_size, 0.0005f, 0.0f, 0.1f, "%.4f"); });
+    p.pop_group();
+
+    // The camera-facing point quads of the curve and lattice tools (doc/editor/point_set_editing.md).
+    p.push_group(Property_row_id::debug_point_handles_style, "Point Handles", ImGuiTreeNodeFlags_None);
+    const auto point_row = [](glm::vec4* color, float* size) {
+        ImGui::ColorEdit4("##c", &color->x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##s", size, 0.0005f, 0.0f, 0.1f, "%.4f");
+    };
+    p.add_entry(Property_row_id::debug_point_handle,   "Handle",   [point_row, &style](){ point_row(&style.point_handle_color,   &style.point_handle_size); });
+    p.add_entry(Property_row_id::debug_point_hover,    "Hovered",  [point_row, &style](){ point_row(&style.point_hover_color,    &style.point_hover_size); });
+    p.add_entry(Property_row_id::debug_point_selected, "Selected", [point_row, &style](){ point_row(&style.point_selected_color, &style.point_selected_size); });
+    p.pop_group();
+
     p.add_entry(Property_row_id::debug_primitive_boxes, "Primitive Boxes",   [style_row, &style](){ style_row(&style.mesh_primitive_box_color, &style.mesh_primitive_box_width); });
     p.add_entry(Property_row_id::debug_bone_boxes, "Bone Boxes",        [style_row, &style](){ style_row(&style.bone_box_color,           &style.bone_box_width); });
     // Skin bone visualization: colors alternate by joint hierarchy depth (A = even, B = odd) + line width.
@@ -2803,6 +2908,22 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
                 "translation sampled at Path Interval (cyan / magenta segments)\n"
                 "and the node axes at the current time."
             );
+        }
+    });
+    p.add_entry(Property_row_id::debug_curves, "Curves", [this](){
+        static constexpr const char* c_curve_mode_strings[] = { "Off", "Selected", "All" };
+        static constexpr Visualization_mode c_curve_modes[] = { Visualization_mode::off, Visualization_mode::selected, Visualization_mode::all };
+        int index = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (c_curve_modes[i] == m_settings.curves) {
+                index = i;
+            }
+        }
+        if (ImGui::Combo("##", &index, c_curve_mode_strings, 3)) {
+            m_settings.curves = c_curve_modes[index];
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Curve prims: a selected curve with its control points and handles,\nan unselected one (All) as a thin dim line.");
         }
     });
     p.add_entry(Property_row_id::debug_path_interval, "Path Interval", [this](){ ImGui::DragFloat("##", &m_settings.animation_path_interval, 0.01f, 0.001f, 10.0f, "%.3f s"); });

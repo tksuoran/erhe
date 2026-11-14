@@ -40,6 +40,7 @@ and a glTF file parse reads none of them.
 | [`ERHE_node`](ERHE_node.md) | node | node Item flags, mesh-prim Item flags |
 | [`ERHE_camera`](ERHE_camera.md) | camera | full erhe projection, exposure, shadow range, Item flags |
 | [`ERHE_light`](ERHE_light.md) | node (light-carrying) | cast_shadow, infinite_range, Item flags |
+| [`ERHE_curve`](ERHE_curve.md) | node (Curve prim) | the curve path: control points with handles and kinds, closed |
 | [`ERHE_physics_joint`](ERHE_physics_joint.md) | node (KHR joint-carrying) | Joint prim name, Item flags, local values (active) |
 | [`ERHE_material`](ERHE_material.md) | material | roughness_y, bxdf_model, blending_mode, brushed-metal fields |
 | [`ERHE_scene`](ERHE_scene.md) | scene | per-scene settings, ambient light, enable_physics |
@@ -54,7 +55,7 @@ the extension's JSON value (the object stored under the extension name in
 `"extensions"`).
 
 Writer / reader: `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp` (library-domain
-extensions: geometry, node, camera, light, material, the prepared mesh data
+extensions: geometry, node, camera, light, curve, material, the prepared mesh data
 (including the LOD chains),
 texture_ktx2, texture_properties, pvs) and
 `src/editor/parsers/gltf_extensions_export.cpp` /

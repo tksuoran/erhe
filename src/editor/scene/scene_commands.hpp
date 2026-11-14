@@ -41,6 +41,7 @@ namespace erhe::rendergraph {
 }
 namespace erhe::scene {
     class Camera;
+    class Curve;
     class Light;
     class Mesh;
     class Xformable; using Node = Xformable;
@@ -99,6 +100,16 @@ class Create_new_scope_command : public erhe::commands::Command
 {
 public:
     Create_new_scope_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
+class Create_new_curve_command : public erhe::commands::Command
+{
+public:
+    Create_new_curve_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -269,6 +280,8 @@ public:
     // conventionally gathered under (C5). Undoable, like every other creation
     // here; inserted on the next editor frame.
     auto create_new_scope       (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::Scope>;
+    // A Curve prim holding erhe::scene::make_default_curve_path() (doc/editor/curves.md).
+    auto create_new_curve       (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Curve>;
 
     // Adds an empty child node at the tip of every leaf bone (a bone with no
     // bone children) in the target subtrees, placed at the bone's Rig.tail.
@@ -362,6 +375,7 @@ private:
     Create_new_camera_command       m_create_new_camera_command;
     Create_new_xform_command   m_create_new_xform_command;
     Create_new_scope_command        m_create_new_scope_command;
+    Create_new_curve_command        m_create_new_curve_command;
     Create_new_light_command        m_create_new_light_command;
     Create_new_rendertarget_command m_create_new_rendertarget_command;
     Create_new_joint_command        m_create_new_joint_command;

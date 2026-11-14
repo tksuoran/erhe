@@ -24,6 +24,7 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 namespace erhe::scene {
+    class Curve;
     class Mesh;
     class Xformable;
     using Node = Xformable;
@@ -112,8 +113,6 @@ private:
     [[nodiscard]] auto count_selected_nodes (const Scene_root& scene_root) const -> std::size_t;
     // The active item when it is a selected group node (an Xform) of the scene, else the first selected one.
     [[nodiscard]] auto find_selected_group  (const Scene_root& scene_root) const -> std::shared_ptr<erhe::scene::Node>;
-    // The active item when it is a selected kit layout node of the scene, else the first selected one.
-    [[nodiscard]] auto find_selected_layout (const Scene_root& scene_root) const -> std::shared_ptr<erhe::scene::Node>;
 
     App_context& m_context;
 
@@ -135,8 +134,8 @@ private:
     // The selected piece's values as last read from its record.
     Kit_piece_editor m_piece_editor;
 
-    // The Layout section (D4.9).
-    Kit_layout_editor m_layout_editor;
+    // The Layout section: the initial values of a new kit layout node (R5.12.9).
+    Kit_layout_initial_editor m_layout_editor;
 
     // The Group section: the new group's name, the copy's offset (the group's width by default) and the last result.
     std::string                            m_group_name{"Group"};
@@ -170,7 +169,6 @@ private:
     erhe::message_bus::Subscription<Active_item_changed_message>   m_active_item_subscription;
     erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
     erhe::message_bus::Subscription<Kit_values_changed_message>    m_kit_values_changed_subscription;
-    erhe::message_bus::Subscription<Kit_layout_changed_message>    m_kit_layout_changed_subscription;
 };
 
 } // namespace editor

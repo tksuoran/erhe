@@ -30,6 +30,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/trs_transform.hpp"
@@ -103,14 +104,12 @@ Level_kit_window::Level_kit_window(
     m_selection_subscription = app_message_bus.selection.subscribe(
         [this](Selection_message&) {
             m_piece_editor.mark_dirty();
-            m_layout_editor.mark_dirty();
             m_group_selection_changed  = true;
         }
     );
     m_active_item_subscription = app_message_bus.active_item.subscribe(
         [this](Active_item_changed_message&) {
             m_piece_editor.mark_dirty();
-            m_layout_editor.mark_dirty();
             m_group_selection_changed  = true;
         }
     );
@@ -120,18 +119,10 @@ Level_kit_window::Level_kit_window(
             on_kit_values_changed();
         }
     );
-    // A Kit_layout value written by an operation, its undo or redo: the Layout rows read the node again.
-    m_kit_layout_changed_subscription = app_message_bus.kit_layout_changed.subscribe(
-        [this](Kit_layout_changed_message&) {
-            m_layout_editor.mark_dirty();
-        }
-    );
     // A parameter change, its undo and redo all send it (Kit_piece_parameters_operation).
     m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
         [this](Mesh_geometry_changed_message&) {
             m_piece_editor.mark_dirty();
-            // The selected piece's extent may have changed: the Make Layout spacings are taken again.
-            m_layout_editor.mark_geometry_changed();
             m_duplicate_source.reset();
             m_group_selection_changed = true;
         }
@@ -482,39 +473,12 @@ void Level_kit_window::queue_snap_selected(const std::shared_ptr<Scene_root>& sc
     );
 }
 
-auto Level_kit_window::find_selected_layout(const Scene_root& scene_root) const -> std::shared_ptr<erhe::scene::Node>
-{
-    const auto is_layout = [&scene_root](const std::shared_ptr<erhe::Item_base>& item) -> bool {
-        const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(item.get());
-        return (node != nullptr) && (item->get_item_host() == &scene_root) && carries_kit_layout(*node);
-    };
-    const std::shared_ptr<erhe::Item_base> active = m_context.selection->get_active_item();
-    if (is_layout(active) && active->is_selected()) {
-        return std::dynamic_pointer_cast<erhe::scene::Node>(active);
-    }
-    for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
-        if (is_layout(item)) {
-            return std::dynamic_pointer_cast<erhe::scene::Node>(item);
-        }
-    }
-    return {};
-}
-
 void Level_kit_window::layout_imgui(const std::shared_ptr<Scene_root>& scene_root)
 {
     if (!ImGui::CollapsingHeader("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
-    m_layout_editor.imgui(
-        scene_root,
-        find_selected_layout(*scene_root),
-        find_selected_piece(*scene_root),
-        Kit_catalog_item{
-            .shape          = (m_place_message.empty() ? m_shape : nullptr),
-            .values         = &m_place_values,
-            .slot_materials = m_place_slot_materials
-        }
-    );
+    m_layout_editor.imgui(scene_root, find_selected_piece(*scene_root));
 }
 
 auto Level_kit_window::count_selected_nodes(const Scene_root& scene_root) const -> std::size_t

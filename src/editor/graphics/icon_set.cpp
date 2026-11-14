@@ -18,6 +18,9 @@
 
 #include <bit>
 
+// From windows/IconsMaterialDesignIcons.h.
+#define ICON_MDI_VECTOR_BEZIER "\xf3\xb0\xab\xa8" // U+F0AE8
+
 namespace editor {
 
 Icon_set::Icon_set(
@@ -268,6 +271,12 @@ auto Icon_set::get_item_icon(const std::shared_ptr<erhe::Item_base>& item) const
 
     if (erhe::scene::is_bone(item)) {
         icon.code = icons.bone;
+    }
+    // The curve bit sits above the Xformable bit, so the lowest-bit rule would show the node icon.
+    if (test_bit_set(type_mask, erhe::Item_type::curve)) {
+        icon.font  = material_design;
+        icon.code  = ICON_MDI_VECTOR_BEZIER;
+        icon.color = glm::vec4{0.4f, 0.9f, 1.0f, 1.0f};
     }
     if (test_bit_set(type_mask, erhe::Item_type::material)) {
         const auto material = std::static_pointer_cast<erhe::primitive::Material>(item);

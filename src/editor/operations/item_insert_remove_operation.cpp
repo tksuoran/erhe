@@ -37,6 +37,18 @@ void note_subtree_removed(App_context& context, const std::shared_ptr<erhe::Hier
     }
 }
 
+[[nodiscard]] auto is_in_subtree(const std::shared_ptr<erhe::Item_base>& item, const std::shared_ptr<erhe::Hierarchy>& root) -> bool
+{
+    std::shared_ptr<erhe::Hierarchy> node = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    while (node) {
+        if (node == root) {
+            return true;
+        }
+        node = node->get_parent().lock();
+    }
+    return false;
+}
+
 // Keeps the local transform; Xformable::set_parent would re-derive it through the parent inverse.
 void reattach_keeping_local_transform(
     const std::shared_ptr<erhe::Hierarchy>& item,
@@ -181,6 +193,19 @@ void Item_insert_remove_operation::execute(App_context& context)
     }
     if (m_mode == Mode::insert) {
         m_inserted_once = true;
+    }
+
+    if (m_mode == Mode::remove) {
+        // The selection as it is now, less what left the scene (an unselected removal keeps it).
+        const Selection& selection = *context.selection;
+        m_selection_after.clear();
+        for (const std::shared_ptr<erhe::Item_base>& selected : selection.get_selected_items()) {
+            if (!is_in_subtree(selected, m_item)) {
+                m_selection_after.push_back(selected);
+            }
+        }
+        const std::shared_ptr<erhe::Item_base> active = selection.get_active_item();
+        m_active_item_after = is_in_subtree(active, m_item) ? std::shared_ptr<erhe::Item_base>{} : active;
     }
 
     context.selection->set_selection(m_selection_after, m_active_item_after.lock());

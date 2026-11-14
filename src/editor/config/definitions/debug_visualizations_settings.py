@@ -8,7 +8,7 @@ from erhe_codegen import *
 # Debug_visualizations_config, the per-viewport light/camera visualization
 # modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
-    version=6,
+    version=7,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
@@ -28,6 +28,8 @@ struct("Debug_visualizations_settings",
         field("navigation_seeds",            Bool,  added_in=5, default="true", short_desc="Navigation Seeds", long_desc="A marker at the origin of every navigation seed node of the scene"),
         # Navigation mesh polygons (doc/editor/navigation.md "Visualization").
         field("navigation_mesh",             EnumRef("Navigation_mesh_visualization"), added_in=6, default="Navigation_mesh_visualization::reachable", short_desc="Navigation Mesh", long_desc="Polygons of the scene's navigation mesh: off, the reachable ones, or all"),
+        # Curve prims (doc/editor/curves.md "Drawing"): the curve, its control points and handles.
+        field("curves",                      EnumRef("Visualization_mode"), added_in=7, default="Visualization_mode::selected", short_desc="Curves", long_desc="Curve prims with their control points and handles: off, the selected curves, or all curves (unselected ones thin and dim)"),
         field("physics",                     EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Physics"),
         field("raytrace",                    EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Raytrace"),
         field("vertex_labels",               EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Show Vertices"),

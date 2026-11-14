@@ -195,16 +195,20 @@ R-numbers). The build order is in
     default or an arc whose ends both hold an element; each element faces
     outward (it turns with its angle), or keeps the start rotation
     (`Repeat_ring_facing`);
-  - polyline: points after the start position and a spacing; elements sit at
-    arc-length steps measured along the whole path, across corners, each the
-    start rotation turned about its up axis so its x axis follows the segment
-    it is on. An element exactly at a corner takes the segment that leaves
-    the corner; a remainder shorter than the spacing holds no element, an end
-    on a step does; a segment along the up axis keeps the previous heading.
+  - path: a count, a curve (an `erhe::math::Curve_path_table` in the start
+    frame) and a step; elements sit at distances 0, step, 2 step ... along
+    the curve, a distance within 1e-4 of a step of a control point taking
+    that point's distance so an element at a corner takes the leaving span
+    (the table's rule). `Repeat_path_orientation` `upright` (the default)
+    turns each element about the start frame's up axis to the tangent's
+    heading of the up-keeping frame (a vertical span keeps the heading around
+    it, the table's fallback); `tangent` puts its x axis on the tangent and
+    its up axis on the frame's up. A polyline is a path along a curve of
+    corner points.
   More than `c_max_repeat_count` (1024) elements, a count below 1, a zero
-  spacing, a non-positive radius or path spacing, an arc outside (0, 360] and
-  an empty path are refused with an explicit message, as the height map's
-  cell limit is (D7.2).
+  spacing, a non-positive radius, an arc outside (0, 360], a path without a
+  curve and a negative path step are refused with an explicit message, as
+  the height map's cell limit is (D7.2).
 
 - D3.9 Kit layout node (R5.12). A kit layout node is an ordinary
   `erhe::scene::Xform` node that carries the attached property group
@@ -212,10 +216,11 @@ R-numbers). The build order is in
   children are its pieces. The group's serialized values:
   - `Kit_layout.pattern` (the key value): the canonical text of a
     `Kit_layout_pattern` (`level/kit_layout_values.hpp`, scene-free and tested
-    in `editor_level_tests`): the kind (line, grid, ring, polyline; scatter
-    joins as a further kind), every kind's values (kept across a kind change),
-    a polyline's points, all in the node's own frame with element 0 at its
-    origin; JSON with sorted keys and hexadecimal floats as D1.3;
+    in `editor_level_tests`): the kind (line, grid, ring, path; scatter joins
+    as a further kind), every kind's values (kept across a kind change), a
+    path's orientation; a line, grid or ring in the node's own frame with
+    element 0 at its origin, a path along its curve in world space; JSON with
+    sorted keys and hexadecimal floats as D1.3;
   - `Kit_layout.items`: the canonical text of a list of `Kit_layout_item`s,
     each a shape id, the canonical parameter text (D1.3) and a material name
     per slot (D1.11, empty for the slot's default); element i takes item
@@ -228,27 +233,37 @@ R-numbers). The build order is in
     layout seed and the index) and its item's masked parameters derive from
     it;
   - `Kit_layout.locked`.
-  Count modes (R5.12.7): a line, a ring and a polyline have
+  The node type follows the kind (R5.12.8): a line, grid or ring layout is an
+  `erhe::scene::Xform`, a path layout an `erhe::scene::Curve` prim carrying
+  the values, its own curve the path (`doc/plans/curves.md` C6, D4), with the
+  pieces its children. `check_layout_kind()` refuses a kind not of the node's
+  type in every write and generation, and a node holding one does not read; a
+  kind change between path and the others would replace the node, so it is
+  refused and the UI offers the kinds of the node's type.
+  Count modes (R5.12.7): a line, a ring and a path have
   `Kit_layout_count_mode` `count` or `gap`; a grid states its counts.
-  `resolve_layout_pattern(pattern, item_extent, out_run)` turns either into a
-  count mode `Repeat_pattern` for `expand_repeat()` (D3.7) from the node's
-  origin. Count mode: a line is `count` elements `step` apart along
-  `direction`, a ring `count` elements over its arc, a polyline `count`
-  elements spread evenly over its path with both ends holding one. Gap mode:
-  the step is the item extent plus the gap, the item extent being the largest
-  extent along x of the items' brushes (the run stays regular); the space is a
-  line's `length` (first to last center), a ring's arc length at its radius
-  and a polyline's path length. A line, a polyline and an open arc hold
+  `resolve_layout_pattern(pattern, item_extent, path_table, out_run)` turns
+  either into a count mode `Repeat_pattern` for `expand_repeat()` (D3.7) from
+  the node's origin, a path's along the node's own curve table. Count
+  mode: a line is `count` elements `step` apart along `direction`, a ring
+  `count` elements over its arc, a path `count` elements spread evenly over
+  its curve, an open curve with both ends holding one, a closed curve around
+  it without one twice at the seam. Gap mode: the step is the item extent
+  plus the gap, the item extent being the largest extent along x of the
+  items' brushes (the run stays regular); the space is a line's `length`
+  (first to last center), a ring's arc length at its radius and a curve's
+  length (the node keeps scale 1). A line, a path along an open curve and an open arc hold
   floor(space / step) + 1 centers spread evenly from the start to the end of
-  the space; a full ring closes and holds floor(circumference / step)
-  elements evenly apart. The remainder spreads over the gaps (the stated gap
+  the space; a full ring and a closed curve close and hold floor(space /
+  step) elements evenly apart. The remainder spreads over the gaps (the stated gap
   is a minimum), an exact fit within 1e-4 of a step counts, and a space
   shorter than one step holds element 0 alone. A determined count above
   `c_max_repeat_count` is refused with the space and step in the message, as
   is a gap that leaves no positive step.
   `Level_kits::build_layout_generation()` (`level/level_kits_layout.cpp`)
   makes one `Kit_placement` per element at the node's world transform times
-  the element's pose, then the module snap and the surface options with the
+  the element's pose (every kind in the node's frame, so moving or turning the
+  node moves the run rigidly), then the module snap and the surface options with the
   node's current children excluded from the rays. Child i is kept when it
   equals element i (record, slot materials by name, local pose, no children of
   its own); the others are removed with their subtrees, last first, and the
@@ -256,11 +271,16 @@ R-numbers). The build order is in
   D3.2 (`prepare_placements()`, the part of `place()` that builds the
   operations). A node whose world scale is not 1 is refused. The generation
   runs only inside these operations, never per frame:
-  - `create_layout()`: the node's insert and its generated children;
+  - `create_layout()`: the node's insert (a path: a Curve prim of the given
+    path, else straight along its x axis sized from count and step) and its
+    generated children;
   - `make_layout_from_piece()`: a placed piece's remove, then the node's
     insert at the piece's parent, index and world transform with the piece's
-    shape, values and slot materials as the one item, and its generated
-    children, the piece excluded from the surface rays;
+    shape, values and slot materials as the one item (a path: a Curve prim),
+    and its generated children, the piece excluded from the surface rays;
+  - `make_layout_on_curve()`: a plain Curve prim (no children, no values)
+    takes the values, one `Property_set_operation` each, and a locked
+    layout's generated children;
   - `set_layout()`: a `Property_set_operation` per changed value and, for a
     locked node, the generation keeping matching children; an unlocked node
     takes the values alone, checked as a generation reads them;
@@ -274,7 +294,18 @@ R-numbers). The build order is in
   - `append_layout_move_operations()`: the generation of each locked layout
     node at or below moved nodes whose surface snap or orient is on, appended
     to the move's entry at the Transform tool's drag end and in
-    `set_node_transform`.
+    `set_node_transform`; without one the children ride rigidly;
+  - a curve edit: `Curve_set_operation` records the generation of the curve
+    when it is a locked path layout as its follow-ups
+    (`append_curve_follow_ups()`, the mechanism of `Property_set_operation`),
+    so the edit, its undo and its redo carry the pieces with them.
+  - the live layout preview (`begin_layout_preview()`,
+    `step_layout_preview()`, `preview_layout_values()`,
+    `end_layout_preview()`): a curve point drag, a Properties value drag and
+    a Transform tool move of surface-snapped layouts lay the layouts out
+    again at every step from the children before the drag, without an
+    entry; the end gives those children back and the gesture's commit
+    records the one entry above.
   Each is one undo entry.
   Locked, the children are not edited directly. `Selection` never holds a
   child of a locked node: selecting one, by viewport click, item tree or MCP,
@@ -297,9 +328,12 @@ R-numbers). The build order is in
   `Property_set_operation` whose follow-ups are the generation a locked
   node's new values need (one undo entry); a value the generation refuses is
   taken back. Unlocked, no generation runs for the node and its children
-  are plain pieces. `duplicate()` and paste copy a layout node with its
-  values and copied children; `mirror()` moves a locked layout node as a unit
-  and reports it as not exact. A level saves the children as ordinary pieces
+  are plain pieces. `duplicate()`, copy and paste and delete with undo work on
+  the one node through the ordinary node paths (a path layout's copy is a
+  Curve prim with its own curve and copied children); `mirror()` moves a
+  locked layout node as a unit and reports it as not exact, and reflects a
+  curve's points across its local x plane in the same entry, so a path
+  layout lies along the mirrored curve. A level saves the children as ordinary pieces
   (R8.1); at load they are taken as saved and follow the kit as other pieces
   do (D3.5).
 - D3.8 Groups (R5.6, R5.10). A group is an ordinary empty `erhe::scene::Xform`
@@ -408,55 +442,73 @@ R-numbers). The build order is in
   drag stays one undo entry. MCP `transform_selection` and
   `drag_selection` take explicit `surface_snap` and `surface_orient`
   (default off) in place of the shared pair.
-- D4.7 Pattern rows (R5.12.1, R5.12.7, R6.2). The Level Kit window's Layout
-  section (`level/kit_layout_editor.hpp`) edits a `Kit_layout_pattern` with
-  one set of rows: the kind (Line, Grid, Ring, Polyline), for a line, ring and
-  polyline the count mode (By Count, By Gap) with Count or Gap, a line's
-  Direction and Step or Length, a grid's counts and spacings, a ring's
-  Radius, Arc and Face Outward, and a polyline's points in the node's frame,
-  each its own row with Remove Point, and Add Point. The same rows edit the
-  window's pattern for Make Layout (its step and spacings taken from the
-  selected piece's extent, `set_layout_spacing_from_extent()`) and a selected
-  kit layout node's values (D4.9).
-- D4.9 Kit layout node (R5.12, R6.1). The Level Kit window's Layout section:
-  with a kit piece selected, Make Layout queues
-  `Level_kits::make_layout_from_piece()` (`Imgui_windows::queue()`) with the
-  window's pattern and the placement settings' module and surface snaps,
-  locked: one undo entry that removes the piece and inserts the node at its
-  parent, index and world transform with its shape, values (seed mask
-  included) and slot materials as the one item, so element 0 replaces the
-  piece and undo gives the piece back; the new node is selected. With a kit
-  layout node selected (selection redirects a locked node's child to it), the
-  pattern rows (D4.7) over a copy of its values, the resolved count and, in
-  gap mode, the actual gap; per item its parameter rows (D4.5, the seed mask
-  toggles included), slot material combos (D4.1) and Remove Item; Add Shape
-  Item (the shape chosen in the window with its values and slot materials)
-  and Add Piece Item (a selected piece); the snap and seed rows; Lock (its
-  tooltip warns that locking discards the children's edits), Unlock and
-  Refresh. An edit commits one `set_layout()`, `set_layout_lock()` or
-  `refresh_layout()` at the edit (`IsItemDeactivatedAfterEdit()` for a
-  drag, at once for a radio button, checkbox, combo entry or button); a
-  refusal shows in red under the rows. Unlocked, the rows change the values
-  alone. The copy is read again in a queued call on the selection messages
-  and on `Kit_layout_changed_message`, which every operation writing a
-  `Kit_layout` value queues (`App_context::on_item_property_changed()`);
-  nothing is recomputed per frame. A Properties row write of a `Kit_layout`
-  value is checked with `check_layout_value_write()` before it is queued, as
-  `set_item_property` checks it: a value the node cannot take is taken back
-  and records no undo entry. MCP: `level_create_layout {scene_name, name,
-  parent_id, position, rotation_xyzw, pattern, items | from_piece_id, snap,
-  surface_snap, surface_orient, random_seeds, seed, locked}` (`pattern` an
-  object of the `Kit_layout_pattern` keys over the defaults, the step and
+- D4.7 Pattern rows (R5.12.1, R5.12.7, R6.2). `level/kit_layout_editor.hpp`
+  draws a `Kit_layout_pattern` with one set of row widgets
+  (`layout_pattern_row()`, the rows of the kind and count mode from
+  `get_layout_rows()`): the kind (Line, Grid, Ring, Path, as many as the
+  target offers), for a line, ring and path the count mode (By Count, By Gap)
+  with Count or Gap, a line's Direction and Step or Length, a grid's counts
+  and spacings, a ring's Radius, Arc and Face Outward, and a path's
+  orientation (Upright, Follow Tangent); `layout_setting_row()` the snap and
+  seed rows. The same rows edit the Level Kit window's initial values (names
+  beside the widgets) and a selected node's values in the Properties window
+  (one row each, D4.9).
+- D4.9 Kit layout node (R5.12, R5.12.8, R5.12.9, R6.1). A selected kit layout
+  node's values are edited in the Properties window's "Kit Layout" group
+  (`Kit_layout_editor`, registered with `add_group_rows` like "Kit Piece";
+  selection redirects a locked node's child to it): the pattern rows (D4.7)
+  over a copy of its values, the Kind row offering the kinds of the node's
+  type (Line, Grid and Ring on an Xform, Path on a Curve prim, whose own
+  "Curve" group shows beside it); the resolved count, the step or, in gap
+  mode, the actual gap, and the space; per item its parameter rows (D4.5, the
+  seed mask toggles included), slot material combos (D4.1) and Remove Item;
+  Add Shape Item (the shape the Brush tool places with its values and slot
+  materials); the snap and seed rows; Lock (its tooltip warns that locking
+  discards the children's edits), Unlock and Refresh. An edit commits one
+  `set_layout()`, `set_layout_lock()` or `refresh_layout()` at the edit
+  (`IsItemDeactivatedAfterEdit()` for a drag, at once for a radio button,
+  checkbox, combo entry or button); a refusal shows in the group's Message
+  row. Each change of a drag (or typed character) of a locked node is
+  previewed live (`preview_layout_values()`, the live layout preview of
+  D3.9) and the commit starts from the state before the drag. Unlocked, the
+  rows change the values alone. The copy is read again in
+  a queued call on the selection messages, on `Kit_layout_changed_message`,
+  which every operation writing a `Kit_layout` value queues
+  (`App_context::on_item_property_changed()`), and on a shape change of the
+  node's own curve; nothing is recomputed per frame. A raw developer-mode row
+  write of a `Kit_layout` value is checked with `check_layout_value_write()`
+  before it is queued, as `set_item_property` checks it: a value the node
+  cannot take is taken back and records no undo entry.
+  The Level Kit window's Layout section (`Kit_layout_initial_editor`) holds
+  the initial values of a new layout node (the editor setting `level_kit`,
+  `Level_kits::get_layout_initial_values()`): the pattern rows with every
+  kind, Spacing From Item (the line step and grid spacings from the item's
+  extent, `set_layout_spacing_from_extent()`), the snap and seed rows and
+  Locked; editing them changes no node. Make Layout queues
+  `make_layout_from_piece_initial()` for the selected piece: one undo entry
+  that removes the piece and inserts the node (a path layout: a Curve prim
+  straight along the piece's x axis) at its parent, index and world transform
+  with its shape, values (seed mask included) and slot materials as the one
+  item, so element 0 replaces the piece and undo gives the piece back. Place
+  As Layout makes the Brush tool's kit mode click call `add_layout_initial()`
+  with the shape it places, element 0 at the preview's pose. The new node is
+  selected. MCP: `level_create_layout {scene_name, name, parent_id, position,
+  rotation_xyzw, pattern, items | from_piece_id | curve_id, points, closed,
+  snap, surface_snap, surface_orient, random_seeds, seed, locked}` (`pattern`
+  an object of the `Kit_layout_pattern` keys over the defaults, the step and
   grid spacings defaulting to the largest item extent; `items` a list of
   `{shape, parameters, materials}`; `from_piece_id` Make Layout's call, not
-  with `items`, `position`, `rotation_xyzw` or `parent_id`; locked by
-  default), `level_set_layout {scene_name, layout_id, pattern, items, snap,
+  with `items`, `position`, `rotation_xyzw` or `parent_id`; `curve_id` a
+  plain curve node made the path layout itself; `points` and `closed` a path
+  layout's curve as `create_curve` takes them; locked by default),
+  `level_set_layout {scene_name, layout_id, pattern, items, snap,
   surface_snap, surface_orient, random_seeds, seed}` (the values given merge
   over the node's: the pattern key by key, the items as a list),
   `level_get_layouts {scene_name}`, `level_set_layout_lock {scene_name,
   layout_id, locked}` and `level_refresh_layout {scene_name, layout_id}`,
-  each edit one undo entry; the replies give the values, the run (`count`,
-  `step`, `space`, `item_extent`) and the children.
+  each edit one undo entry; the replies give the node's type, its own curve
+  for a path, the values, the run (`count`, `step`, `space`, `item_extent`)
+  and the children.
 - D4.8 Groups (R5.6, R6.1). The Level Kit window's "Group" section: Group
   Name and Group Selected act on the selected nodes of the scene; Ungroup,
   Duplicate Offset (the group's width along x by default, taken again when

@@ -65,6 +65,8 @@ namespace erhe::scene_renderer {
 namespace erhe::scene {
     using Layer_id = uint64_t;
     class Camera;
+    class Curve;
+    enum class Curve_change : unsigned int;
     class Light;
     class Light_layer;
     class Mesh;
@@ -300,6 +302,8 @@ public:
     void on_mesh_lod_changed           (const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::scene::Lod_data& lod) override;
     void on_mesh_bounds_changed        (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_light_changed          (const std::shared_ptr<erhe::scene::Light>& light) override;
+    // Any thread, enqueue only; App_scenes::flush_curve_changes() announces the queue once per frame.
+    void on_curve_changed          (const std::shared_ptr<erhe::scene::Curve>& curve, erhe::scene::Curve_change change) override;
 
     // The registered meshes of this scene that reference any Primitive of
     // mesh_primitives, read from the shape-to-meshes index: out_meshes is
@@ -420,6 +424,14 @@ public:
     [[nodiscard]] auto get_navigation_seed_count() const -> std::size_t;
     // A writer of Editor_item_flags::navigation_seed calls this after the write.
     void on_navigation_seed_changed(const std::shared_ptr<erhe::scene::Node>& node);
+
+    // The scene's curve prims (doc/editor/curves.md), kept at node registration and unregistration.
+    void get_curves(std::vector<std::shared_ptr<erhe::scene::Curve>>& out_curves) const;
+    // The curves changed since the last call, each once, with whether the path changed; clears the queue.
+    void take_changed_curves(std::vector<std::shared_ptr<erhe::scene::Curve>>& out_curves, std::vector<bool>& out_shape_changed);
+    // Curve_changed_message count of this scene, for the MCP curve tools.
+    void count_curve_change_message();
+    [[nodiscard]] auto get_curve_change_message_count() const -> uint64_t;
 
     // The card images the draw-mode proxies of this scene read, keyed by the
     // file each was read from, so two prims naming the same file share
@@ -799,6 +811,12 @@ private:
     // Own mutex: register_node runs on load workers.
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_navigation_seed_mutex);
     std::vector<std::shared_ptr<erhe::scene::Node>> m_navigation_seed_nodes;
+    // Own mutex: register_node runs on load workers, transform updates may too.
+    mutable ERHE_PROFILE_MUTEX(std::mutex, m_curves_mutex);
+    std::vector<std::shared_ptr<erhe::scene::Curve>> m_curves;
+    std::vector<std::shared_ptr<erhe::scene::Curve>> m_changed_curves;
+    std::vector<bool>                                m_changed_curve_shapes;
+    uint64_t                                         m_curve_change_message_count{0};
     std::unordered_map<std::string, std::weak_ptr<erhe::graphics::Texture>> m_card_textures;
     std::vector<Physics_drag_constraint*>           m_physics_drags;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;

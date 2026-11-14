@@ -1,7 +1,10 @@
 #include "level/kit_layout_values.hpp"
 #include "level/kit_shape.hpp"
 
+#include "erhe_math/curve_path.hpp"
+
 #include <gtest/gtest.h>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <glm/gtc/constants.hpp>
 
@@ -16,15 +19,16 @@ using editor::Kit_layout_count_mode;
 using editor::Kit_layout_item;
 using editor::Kit_layout_pattern;
 using editor::Kit_layout_run;
+using editor::Repeat_path_orientation;
 using editor::Repeat_pattern_kind;
 using editor::Repeat_pose;
 using editor::Repeat_ring_facing;
 
 constexpr float c_tolerance = 1.0e-4f;
 
-auto run_of(const Kit_layout_pattern& pattern, const float extent, Kit_layout_run& run, std::vector<Repeat_pose>& poses) -> std::string
+auto run_of(const Kit_layout_pattern& pattern, const float extent, Kit_layout_run& run, std::vector<Repeat_pose>& poses, const erhe::math::Curve_path_table* table = nullptr) -> std::string
 {
-    const std::string error = editor::resolve_layout_pattern(pattern, extent, run);
+    const std::string error = editor::resolve_layout_pattern(pattern, extent, table, run);
     if (!error.empty()) {
         return error;
     }
@@ -42,7 +46,7 @@ auto make_pattern(const Repeat_pattern_kind kind, const Kit_layout_count_mode mo
 TEST(Kit_layout_values, pattern_text_round_trips)
 {
     Kit_layout_pattern pattern;
-    pattern.kind        = Repeat_pattern_kind::polyline;
+    pattern.kind        = Repeat_pattern_kind::path;
     pattern.count_mode  = Kit_layout_count_mode::gap;
     pattern.count       = 7;
     pattern.gap         = 0.1f;
@@ -56,7 +60,7 @@ TEST(Kit_layout_values, pattern_text_round_trips)
     pattern.radius      = 6.0f;
     pattern.arc_degrees = 90.0f;
     pattern.facing      = Repeat_ring_facing::start_rotation;
-    pattern.points      = {glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{1.0f, 0.1f, 2.0f}};
+    pattern.orientation = Repeat_path_orientation::tangent;
     const std::string text = editor::to_canonical_text(pattern);
     Kit_layout_pattern read;
     ASSERT_EQ(editor::parse_layout_pattern(text, read), "");
@@ -189,30 +193,119 @@ TEST(Kit_layout_values, ring_gap_mode_closes_a_full_ring)
     EXPECT_EQ(poses.size(), 1u);
 }
 
-TEST(Kit_layout_values, polyline_modes)
+auto make_table(const erhe::math::Curve_path& path) -> erhe::math::Curve_path_table
 {
-    // An L path 4 m + 3 m long; count mode spreads 8 elements 1 m apart, both ends holding one.
-    Kit_layout_pattern pattern = make_pattern(Repeat_pattern_kind::polyline, Kit_layout_count_mode::count);
-    pattern.points = {glm::vec3{4.0f, 0.0f, 0.0f}, glm::vec3{4.0f, 0.0f, 3.0f}};
-    pattern.count  = 8;
+    erhe::math::Curve_path_table table;
+    table.build(path);
+    return table;
+}
+
+auto corner_path(const std::vector<glm::vec3>& positions, const erhe::math::Curve_closure closure) -> erhe::math::Curve_path
+{
+    erhe::math::Curve_path path;
+    for (const glm::vec3& position : positions) {
+        path.points.push_back(erhe::math::Curve_point{.position = position});
+    }
+    path.closure = closure;
+    return path;
+}
+
+TEST(Kit_layout_values, path_modes_on_a_corner_curve)
+{
+    // An L of corner points 4 m + 3 m long; count mode spreads 8 elements 1 m apart, both ends holding one.
+    const erhe::math::Curve_path_table table = make_table(corner_path({{0.0f, 0.0f, 0.0f}, {4.0f, 0.0f, 0.0f}, {4.0f, 0.0f, 3.0f}}, erhe::math::Curve_closure::open));
+    Kit_layout_pattern pattern = make_pattern(Repeat_pattern_kind::path, Kit_layout_count_mode::count);
+    pattern.count = 8;
     Kit_layout_run run;
     std::vector<Repeat_pose> poses;
-    ASSERT_EQ(run_of(pattern, 1.0f, run, poses), "");
+    ASSERT_EQ(run_of(pattern, 1.0f, run, poses, &table), "");
     ASSERT_EQ(poses.size(), 8u);
     EXPECT_NEAR(run.space, 7.0f, c_tolerance);
+    EXPECT_NEAR(run.step, 1.0f, c_tolerance);
     EXPECT_NEAR(poses[7].position.x, 4.0f, c_tolerance);
     EXPECT_NEAR(poses[7].position.z, 3.0f, c_tolerance);
     EXPECT_NEAR(poses[5].position.z, 1.0f, c_tolerance);
+    // The corner piece takes the leaving span: x along +z.
+    EXPECT_NEAR((poses[4].rotation * glm::vec3{1.0f, 0.0f, 0.0f}).z, 1.0f, c_tolerance);
     pattern.count = 1;
-    ASSERT_EQ(run_of(pattern, 1.0f, run, poses), "");
+    ASSERT_EQ(run_of(pattern, 1.0f, run, poses, &table), "");
     EXPECT_EQ(poses.size(), 1u);
     // Gap mode: extent 1.5 + gap 0.5 is a 2 m step; 7 m holds 4 centers, spread to 2.333 m.
     pattern.count_mode = Kit_layout_count_mode::gap;
     pattern.gap        = 0.5f;
-    ASSERT_EQ(run_of(pattern, 1.5f, run, poses), "");
+    ASSERT_EQ(run_of(pattern, 1.5f, run, poses, &table), "");
     ASSERT_EQ(poses.size(), 4u);
     EXPECT_NEAR(run.step, 7.0f / 3.0f, c_tolerance);
     EXPECT_NEAR(poses[3].position.z, 3.0f, c_tolerance);
+}
+
+TEST(Kit_layout_values, path_modes_on_a_closed_curve)
+{
+    // A closed square of 2 m sides: 8 m around, no piece twice at the seam.
+    const erhe::math::Curve_path_table table = make_table(corner_path({{0.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 2.0f}, {0.0f, 0.0f, 2.0f}}, erhe::math::Curve_closure::closed));
+    Kit_layout_pattern pattern = make_pattern(Repeat_pattern_kind::path, Kit_layout_count_mode::count);
+    pattern.count = 8;
+    Kit_layout_run run;
+    std::vector<Repeat_pose> poses;
+    ASSERT_EQ(run_of(pattern, 1.0f, run, poses, &table), "");
+    ASSERT_EQ(poses.size(), 8u);
+    EXPECT_NEAR(run.step, 1.0f, c_tolerance);
+    EXPECT_NEAR(poses[7].position.x, 0.0f, c_tolerance);
+    EXPECT_NEAR(poses[7].position.z, 1.0f, c_tolerance);
+    // Gap mode closes as a full ring: extent 1 + gap 0.5 is 1.5 m, 8 m holds 5, spread to 1.6 m.
+    pattern.count_mode = Kit_layout_count_mode::gap;
+    pattern.gap        = 0.5f;
+    ASSERT_EQ(run_of(pattern, 1.0f, run, poses, &table), "");
+    ASSERT_EQ(poses.size(), 5u);
+    EXPECT_NEAR(run.step, 1.6f, c_tolerance);
+    EXPECT_NEAR(poses[1].position.x, 1.6f, c_tolerance);
+}
+
+TEST(Kit_layout_values, path_on_a_smooth_curve_sits_at_the_table_distances)
+{
+    // A cubic quarter-circle approximation of radius 4 in the xz plane, rising 1 m.
+    erhe::math::Curve_path path;
+    path.points.push_back(erhe::math::Curve_point{.position = {0.0f, 0.0f, 0.0f}, .in_handle = {-2.2f, 0.0f, 0.0f}, .out_handle = {2.2f, 0.0f, 0.0f}, .kind = erhe::math::Curve_point_kind::smooth});
+    path.points.push_back(erhe::math::Curve_point{.position = {4.0f, 1.0f, 4.0f}, .in_handle = {0.0f, 0.0f, -2.2f}, .out_handle = {0.0f, 0.0f, 2.2f}, .kind = erhe::math::Curve_point_kind::smooth});
+    const erhe::math::Curve_path_table table = make_table(path);
+    Kit_layout_pattern pattern = make_pattern(Repeat_pattern_kind::path, Kit_layout_count_mode::count);
+    pattern.count = 5;
+    for (const Repeat_path_orientation orientation : {Repeat_path_orientation::upright, Repeat_path_orientation::tangent}) {
+        pattern.orientation = orientation;
+        Kit_layout_run run;
+        std::vector<Repeat_pose> poses;
+        ASSERT_EQ(run_of(pattern, 1.0f, run, poses, &table), "");
+        ASSERT_EQ(poses.size(), 5u);
+        for (std::size_t i = 0; i < poses.size(); ++i) {
+            const float distance = table.get_length() * static_cast<float>(i) / 4.0f;
+            const erhe::math::Curve_sample sample = table.sample_at_distance(distance);
+            EXPECT_NEAR(glm::length(poses[i].position - sample.position), 0.0f, c_tolerance);
+            const glm::vec3 x_axis = poses[i].rotation * glm::vec3{1.0f, 0.0f, 0.0f};
+            const glm::vec3 y_axis = poses[i].rotation * glm::vec3{0.0f, 1.0f, 0.0f};
+            if (orientation == Repeat_path_orientation::tangent) {
+                EXPECT_NEAR(glm::dot(x_axis, sample.tangent), 1.0f, c_tolerance);
+            } else {
+                const glm::vec3 heading = glm::normalize(glm::vec3{sample.tangent.x, 0.0f, sample.tangent.z});
+                EXPECT_NEAR(glm::dot(x_axis, heading), 1.0f, c_tolerance);
+                EXPECT_NEAR(y_axis.y, 1.0f, c_tolerance);
+            }
+        }
+    }
+}
+
+TEST(Kit_layout_values, transformed_curve_path)
+{
+    erhe::math::Curve_path path;
+    path.points.push_back(erhe::math::Curve_point{.position = {0.0f, 0.0f, 0.0f}, .out_handle = {1.0f, 0.0f, 0.0f}, .kind = erhe::math::Curve_point_kind::free});
+    path.points.push_back(erhe::math::Curve_point{.position = {3.0f, 0.0f, 0.0f}, .in_handle = {0.0f, 0.0f, 1.0f}, .kind = erhe::math::Curve_point_kind::free});
+    const glm::mat4 transform = glm::rotate(glm::translate(glm::mat4{1.0f}, glm::vec3{5.0f, 1.0f, 0.0f}), glm::radians(90.0f), glm::vec3{0.0f, 1.0f, 0.0f});
+    erhe::math::Curve_path moved;
+    editor::transform_curve_path(path, transform, moved);
+    ASSERT_EQ(moved.points.size(), 2u);
+    EXPECT_NEAR(glm::length(moved.points[1].position - glm::vec3{5.0f, 1.0f, -3.0f}), 0.0f, c_tolerance);
+    EXPECT_NEAR(glm::length(moved.points[0].out_handle - glm::vec3{0.0f, 0.0f, -1.0f}), 0.0f, c_tolerance);
+    EXPECT_EQ(moved.points[1].kind, erhe::math::Curve_point_kind::free);
+    EXPECT_NEAR(make_table(moved).get_length(), make_table(path).get_length(), c_tolerance);
 }
 
 TEST(Kit_layout_values, refusals)
@@ -221,27 +314,30 @@ TEST(Kit_layout_values, refusals)
     Kit_layout_pattern line = make_pattern(Repeat_pattern_kind::line, Kit_layout_count_mode::gap);
     line.length = 5000.0f;
     line.gap    = 0.0f;
-    EXPECT_NE(editor::resolve_layout_pattern(line, 1.0f, run).find("more than the 1024"), std::string::npos);
+    EXPECT_NE(editor::resolve_layout_pattern(line, 1.0f, nullptr, run).find("more than the 1024"), std::string::npos);
     line.length = 4.0f;
     line.gap    = -1.0f;
-    EXPECT_NE(editor::resolve_layout_pattern(line, 1.0f, run).find("not positive"), std::string::npos);
+    EXPECT_NE(editor::resolve_layout_pattern(line, 1.0f, nullptr, run).find("not positive"), std::string::npos);
     line.gap    = 0.0f;
     line.length = -1.0f;
-    EXPECT_NE(editor::resolve_layout_pattern(line, 1.0f, run), "");
+    EXPECT_NE(editor::resolve_layout_pattern(line, 1.0f, nullptr, run), "");
     Kit_layout_pattern counted = make_pattern(Repeat_pattern_kind::ring, Kit_layout_count_mode::count);
     counted.count = 0;
-    EXPECT_NE(editor::resolve_layout_pattern(counted, 1.0f, run), "");
+    EXPECT_NE(editor::resolve_layout_pattern(counted, 1.0f, nullptr, run), "");
     counted.count = 1025;
-    EXPECT_NE(editor::resolve_layout_pattern(counted, 1.0f, run), "");
-    Kit_layout_pattern path = make_pattern(Repeat_pattern_kind::polyline, Kit_layout_count_mode::count);
-    EXPECT_NE(editor::resolve_layout_pattern(path, 1.0f, run), "");
-    path.points = {glm::vec3{0.0f}};
+    EXPECT_NE(editor::resolve_layout_pattern(counted, 1.0f, nullptr, run), "");
+    Kit_layout_pattern path = make_pattern(Repeat_pattern_kind::path, Kit_layout_count_mode::count);
+    EXPECT_NE(editor::resolve_layout_pattern(path, 1.0f, nullptr, run).find("needs a curve"), std::string::npos);
+    const erhe::math::Curve_path_table point = make_table(corner_path({glm::vec3{0.0f}, glm::vec3{0.0f}}, erhe::math::Curve_closure::open));
     path.count  = 3;
-    EXPECT_NE(editor::resolve_layout_pattern(path, 1.0f, run).find("no length"), std::string::npos);
+    EXPECT_NE(editor::resolve_layout_pattern(path, 1.0f, &point, run).find("no length"), std::string::npos);
+    const erhe::math::Curve_path_table long_line = make_table(corner_path({glm::vec3{0.0f}, glm::vec3{2000.0f, 0.0f, 0.0f}}, erhe::math::Curve_closure::open));
+    path.count_mode = Kit_layout_count_mode::gap;
+    EXPECT_NE(editor::resolve_layout_pattern(path, 1.0f, &long_line, run).find("1024"), std::string::npos);
     Kit_layout_pattern grid = make_pattern(Repeat_pattern_kind::grid, Kit_layout_count_mode::gap);
     grid.count_x = 40;
     grid.count_z = 40;
-    EXPECT_NE(editor::resolve_layout_pattern(grid, 1.0f, run), "");
+    EXPECT_NE(editor::resolve_layout_pattern(grid, 1.0f, nullptr, run), "");
 }
 
 TEST(Kit_layout_values, spacing_from_extent)

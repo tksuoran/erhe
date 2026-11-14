@@ -1,0 +1,25 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_curve.schema.json",
+    "title": "ERHE_curve glTF node extension",
+    "type": "object",
+    "properties": {
+        "closed": {"type": "boolean", "description": "true: the last point joins the first"},
+        "points": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "Position in the node's frame"},
+                    "in":       {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "Incoming handle, an offset from position"},
+                    "out":      {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "Outgoing handle, an offset from position"},
+                    "kind":     {"type": "string", "enum": ["corner", "smooth", "free"]}
+                },
+                "required": ["position", "in", "out", "kind"],
+                "additionalProperties": false
+            }
+        }
+    },
+    "required": ["closed", "points"],
+    "additionalProperties": false
+}

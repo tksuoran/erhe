@@ -318,6 +318,7 @@ flowchart TD
 - [editor/content_library_folders.md](editor/content_library_folders.md) (stable): Folder scopes inside content-library kind scopes: creation, inheritance, persistence
 - [editor/content_library_ownership.md](editor/content_library_ownership.md) (stable): Content_library ownership and host resolution; owning vs reference entries
 - [editor/create.md](editor/create.md) (stable): Provides the Create tool and shape generator classes for interactively creating new mesh primitives in the scene
+- [editor/curves.md](editor/curves.md) (experimental): Curve prims: one curve path (control points with handles and kinds, open or closed) per node, the baked table, change notification, users of a curve (a path kit layout is a curve node, laid out again in the edit's undo entry), glTF persistence (ERHE_curve), drawing, viewport editing (curve tool: pick, gizmo moves, handles, insert / add / remove / kind / closed), Properties rows, MCP create_curve / get_curves / get_curve / set_curve / curve_set_point_kind / curve_add_point / curve_remove_points / select_curve_points / get_curve_point_selection / evaluate_curve
 - [editor/ddgi.md](editor/ddgi.md) (experimental): Dynamic diffuse global illumination: probe volume, tracing, atlases, sampling
 - [editor/editor.md](editor/editor.md) (mostly stable): The editor is the main application built on the erhe C++ graphics engine
 - [editor/four_view.md](editor/four_view.md) (experimental): Four linked viewports (top, front, right, perspective) docked as a 2 x 2 grid with a cross splitter
@@ -333,7 +334,7 @@ flowchart TD
 - [editor/import_undo_reference_clearing.md](editor/import_undo_reference_clearing.md) (mostly stable): Clearing stale editor references after an undo removes imported content
 - [editor/input_bindings.md](editor/input_bindings.md) (mostly stable): User-editable input bindings: Input Bindings window, persistence in input_bindings.json, MCP tools
 - [editor/lattice_deform_geometry_node.md](editor/lattice_deform_geometry_node.md) (mostly stable): Lattice free-form deformation geometry-graph node
-- [editor/level_tools.md](editor/level_tools.md) (experimental): Level kit-bashing: kit shapes, pieces sharing one mesh per parameter values, placement as one undo entry, material slots per shape, groups (group, ungroup, duplicate, mirror), kit layout nodes (a line, grid, ring or polyline run kept as one node with its values, count and gap modes, lock; made from a piece and edited in the Level Kit window), parameter changes, surface placement, brush cache lifetime, level settings, spatial queries (region contents, height map, support report, overlap report, level check), MCP level_get_kits / level_place_pieces / level_group_nodes / level_ungroup / level_duplicate_group / level_mirror_group / level_create_layout / level_set_layout / level_get_layouts / level_set_layout_lock / level_refresh_layout / level_get_pieces / level_set_piece_parameters / level_set_piece_material / level_snap_to_surface / level_get_region_contents / level_get_height_map / level_get_support_report / level_get_overlap_report / level_check
+- [editor/level_tools.md](editor/level_tools.md) (experimental): Level kit-bashing: kit shapes, pieces sharing one mesh per parameter values, placement as one undo entry, material slots per shape, groups (group, ungroup, duplicate, mirror), kit layout nodes (a line, grid, ring or path run kept as one node with its values, count and gap modes, lock, a path layout being a curve node; values edited in the Properties window, the Level Kit window holding the initial values of a new one), parameter changes, surface placement, brush cache lifetime, level settings, spatial queries (region contents, height map, support report, overlap report, level check), MCP level_get_kits / level_place_pieces / level_group_nodes / level_ungroup / level_duplicate_group / level_mirror_group / level_create_layout / level_set_layout / level_get_layouts / level_set_layout_lock / level_refresh_layout / level_get_pieces / level_set_piece_parameters / level_set_piece_material / level_snap_to_surface / level_get_region_contents / level_get_height_map / level_get_support_report / level_get_overlap_report / level_check
 - [editor/lightmap_baking.md](editor/lightmap_baking.md) (experimental): Interactive lightmap baker: architecture, texel density, bake and sampling features
 - [editor/lightmap_texture_viewer.md](editor/lightmap_texture_viewer.md) (stable): Lightmap Texture viewer window: atlas display, edge and hover overlays
 - [editor/light_mixer.md](editor/light_mixer.md) (experimental): Light Mixer window: per-light table of the active scene with mute / solo, intensity, color, range and spot cone angles
@@ -346,6 +347,7 @@ flowchart TD
 - [editor/parsers.md](editor/parsers.md) (mostly stable): File format importers for loading 3D content into the editor, plus the erhe-authored glTF scene persistence entry points (doc/editor/gltf_scene_roundtrip.md)
 - [editor/joint_constraint_test_asset.md](editor/joint_constraint_test_asset.md) (stable): Joint constraint test scene: stations, what to look for, verification script
 - [editor/physics.md](editor/physics.md) (stable): Physics-related tools, UI, and collision shape generation for the editor
+- [editor/point_set_editing.md](editor/point_set_editing.md) (experimental): Point set editing: the IPoint_set interface, Point_set_tool (pick, click selection, cancel, handle drawing) and the Point_set_transform gizmo adapter shared by the lattice and curve tools
 - [editor/post_processing.md](editor/post_processing.md) (mostly stable): Bloom post-processing pipeline: textures, passes, synchronization
 - [editor/prepared_assets.md](editor/prepared_assets.md) (experimental): Editor assets and prepared assets: locations, records, item keys, the Export job (Ensure, Copy) and the MCP prepare_scene / get_save_status fields
 - [editor/prewarm.md](editor/prewarm.md) (stable): Init-time GPU shader and pipeline prewarming
@@ -421,6 +423,7 @@ flowchart TD
 - [gltf_extensions/ERHE_brushes.md](gltf_extensions/ERHE_brushes.md) (mostly stable): ERHE_brushes
 - [gltf_extensions/ERHE_camera.md](gltf_extensions/ERHE_camera.md) (mostly stable): ERHE_camera
 - [gltf_extensions/ERHE_collections.md](gltf_extensions/ERHE_collections.md) (mostly stable): ERHE_collections
+- [gltf_extensions/ERHE_curve.md](gltf_extensions/ERHE_curve.md) (experimental): ERHE_curve
 - [gltf_extensions/ERHE_geometry.md](gltf_extensions/ERHE_geometry.md) (mostly stable): ERHE_geometry
 - [gltf_extensions/ERHE_light.md](gltf_extensions/ERHE_light.md) (mostly stable): ERHE_light
 - [gltf_extensions/ERHE_material.md](gltf_extensions/ERHE_material.md) (mostly stable): ERHE_material
@@ -438,7 +441,7 @@ flowchart TD
 - [plans/asset_loading.md](plans/asset_loading.md) (proposed): Asset loading: outstanding work
 - [plans/audit_2026_09_30_followups.md](plans/audit_2026_09_30_followups.md) (in progress): 2026-09-30 audit: medium-term set and follow-ups
 - [plans/background_scene_save.md](plans/background_scene_save.md) (in progress): Background scene save and Prepare: outstanding work
-- [plans/curves.md](plans/curves.md) (proposed): Curves: curve node type, control point editing in the 3D viewport, kit layouts along a curve, 2D Bezier editor widget
+- [plans/curves.md](plans/curves.md) (in progress): Curves: curve node type, control point editing in the 3D viewport, kit layouts along a curve, 2D Bezier editor widget
 - [plans/prepared_assets.md](plans/prepared_assets.md) (proposed): Source, editor and prepared assets: requirements (three assets, content-addressed items, SQLite container, Export)
 - [plans/prepared_assets_design.md](plans/prepared_assets_design.md) (proposed): Source, editor and prepared assets: design and incremental build plan (MVP first)
 - [plans/prepare_pvs_export.md](plans/prepare_pvs_export.md) (proposed): Prepare and the potentially visible set: PVS mode export setting, baking the PVS after the world-space bake

@@ -1,4 +1,5 @@
 #include "tools/selection_tool.hpp"
+#include "tools/curve_tool.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/selection_config.hpp"
 #include "config/generated/xr_selection_mode.hpp"
@@ -319,6 +320,10 @@ auto Selection_delete_command::try_call() -> bool
     // With a live selection in a mesh component mode the Delete key belongs to
     // Geometry.Delete.Selected (Operations), which deletes the components.
     if ((m_context.mesh_component_selection != nullptr) && m_context.mesh_component_selection->has_live_mode_selection()) {
+        return false;
+    }
+    // With selected curve points the Delete key belongs to Curve.remove_points.
+    if ((m_context.curve_tool != nullptr) && m_context.curve_tool->has_point_selection()) {
         return false;
     }
     return m_context.selection->delete_selection();

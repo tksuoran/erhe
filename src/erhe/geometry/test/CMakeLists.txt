@@ -31,6 +31,7 @@ add_executable(${_target}
     test_split_components.cpp
     test_subdivide_edges.cpp
     test_subdivision_chain.cpp
+    test_sweep.cpp
     test_timing_harness.cpp
     test_topology_walkers.cpp
 )

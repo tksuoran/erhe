@@ -111,13 +111,18 @@ an empty scene and checks over MCP:
   that undo removes and redo restores, surface snap per element on a ground
   with a raised slab, from_piece_id replacing a parented piece in one entry
   whose undo gives the piece back exactly, and refused calls. In the window
-  scene the Level Kit window's Layout section: Make Layout from the selected
-  piece (one entry, the piece replaced, undo restoring it), every row kind
-  (count and gap modes, line, grid, ring and polyline rows, points added,
-  moved and removed, items added from a piece, edited, re-materialed and
-  removed, snap and seed rows) as one entry each, a refused edit, Unlock, an
-  edit while unlocked, Lock and Refresh; a capture_screenshot of the section
-  is written and its path printed.
+  scene the Level Kit window's Layout section holds the initial values of a
+  new layout node (R5.12.9): editing them changes no node and records no
+  entry; Make Layout from the selected piece (a line, and with Path a Curve
+  node) and the Brush tool's Place As Layout click use them, each one entry
+  that selects the new node; a capture_screenshot of the section is written
+  and its path printed. The Properties window's Kit Layout group, the node
+  selected through one of its pieces: every row kind (count and gap modes,
+  line, grid and ring rows, items added from the Brush tool's shape, edited,
+  re-materialed and removed, snap and seed rows) as one entry each, a
+  refused edit with its message in the group, Unlock, an edit while
+  unlocked, Lock and Refresh, and a path layout's Kind row offering Path
+  alone beside its Curve group.
 - groups (doc/editor/level_tools.md "Groups"), in a scene of their own
   (closed afterwards): level_group_nodes at the base center of the bounds
   with world transforms kept, undo and redo; set_node_transform on the group
@@ -149,13 +154,32 @@ an empty scene and checks over MCP:
   redirect, 15 edit paths refusing a locked child, unlock, edits while
   unlocked, lock with undo and redo, a duplicated and mirrored group holding
   a layout, refused calls, save and reopen.
+- path layouts (doc/editor/level_tools.md "Path layouts", R5.12.8), in a
+  scene of their own (closed afterwards): a path layout is one Curve node
+  carrying the layout values with its pieces as children; corner, smooth and
+  closed curves in count and gap modes, both orientations; every curve edit
+  path over MCP (set_curve, curve_add_point, curve_remove_points,
+  curve_set_point_kind, closing) laid out in its one undo entry; moves and
+  turns of the node carrying the pieces rigidly (the same ids) and a
+  surface-snapped one resting again; selecting a piece selects the node, the
+  curve tool's target, and a viewport point drag lays out live and records
+  one entry; the kind rule's refusals; a plain curve made a layout in place;
+  delete and undo, duplicate, copy and paste, mirror; values of the former
+  form not reading; save and reopen; a capture_screenshot of the selected
+  path layout with the Properties window's Curve and Kit Layout groups is
+  written and its path printed.
 
-The run restores config/editor/editor_settings.json and desktop_windows.json,
-which the window's checkboxes and its visibility rewrite.
+The run restores config/editor/editor_settings.json, desktop_windows.json,
+user_state.json and desktop_window_imgui_host_imgui.ini, which the window's
+checkboxes and its visibility could rewrite. The viewport cameras of the
+clicking and dragging checks are placed from the viewport's real size
+(curve_verify.frame_camera), so the checks do not depend on the user's window
+layout.
 
 Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png path>] [--surface-image <png path>]
        [--walkable-image <png path>] [--window-image <png path>] [--properties-image <png path>] [--queries-image <png path>]
-       [--layout-image <png path>] [--group-image <png path>] [--only-walkable] [--only-transform] [--only-layouts] [--only-window-layout]
+       [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
+       [--only-path-layouts] [--only-window-layout]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
 
@@ -186,11 +210,13 @@ DEFAULT_QUERIES_IMAGE = os.path.join("logs", "level_tools_spatial_queries.png")
 DEFAULT_LAYOUT_IMAGE = os.path.join("logs", "level_tools_layout.png")
 DEFAULT_GROUP_IMAGE = os.path.join("logs", "level_tools_group.png")
 DEFAULT_MATERIALS_IMAGE = os.path.join("logs", "level_tools_material_slots.png")
+DEFAULT_PATH_IMAGE = os.path.join("logs", "level_tools_path_layout.png")
+DEFAULT_LAYOUT_DRAG_IMAGE = os.path.join("logs", "level_tools_layout_drag.png")
 WINDOW          = "Level Kit"
 IMAGE_WIDTH     = 1600
 IMAGE_HEIGHT    = 600
 TOLERANCE       = 1.0e-3
-RESTORED_CONFIG_FILES = [os.path.join("config", "editor", "editor_settings.json"), os.path.join("config", "editor", "desktop_windows.json")]
+RESTORED_CONFIG_FILES = [os.path.join("config", "editor", name) for name in ("editor_settings.json", "desktop_windows.json", "user_state.json", "desktop_window_imgui_host_imgui.ini")]
 
 # Default sizes (x, y, z) at module 1 m and wall height 3 m, from the definitions in src/editor/level/.
 EXACT_DEFAULT_SIZES = {
@@ -1214,7 +1240,9 @@ def check_layout_patterns(editor):
     # Creation is one undo entry: undo removes the node and every piece, redo gives them back at their transforms.
     depth = undo_depth(editor)
     before_ids = {p["id"] for p in pieces(editor, scene)}
-    run = create({"position": [70.0, 0.0, 0.0], "name": "corner", "items": block, "pattern": {"kind": "polyline", "count": 4, "points": [[4.0, 0.0, 0.0], [4.0, 0.0, 2.0]]}})
+    depth = undo_depth(editor)
+    run = create({"position": [70.0, 0.0, 0.0], "name": "corner", "items": block, "pattern": {"kind": "path", "count": 4},
+                  "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 2.0]}]})
     run_ids = {c["id"] for c in run["children"]}
     editor.wait_idle()
     check("level_create_layout is one undo entry", undo_depth(editor) == depth + 1, f"{undo_depth(editor)} vs {depth + 1}")
@@ -1283,6 +1311,7 @@ def check_layout_patterns(editor):
     editor.call("undo")
     editor.wait_idle()
 
+    long_points = [{"position": [0.0, 0.0, 0.0]}, {"position": [2000.0, 0.0, 0.0]}]
     count = len(pieces(editor, scene))
     depth = undo_depth(editor)
     for label, arguments, needle in [
@@ -1291,8 +1320,10 @@ def check_layout_patterns(editor):
         ("a ring of radius 0", {"items": block, "pattern": {"kind": "ring", "count": 3, "radius": 0.0}}, "radius"),
         ("an arc of 400 degrees", {"items": block, "pattern": {"kind": "ring", "count": 3, "radius": 1.0, "arc_degrees": 400.0}}, "arc"),
         ("an unknown facing", {"items": block, "pattern": {"kind": "ring", "count": 3, "radius": 1.0, "facing": "inward"}}, "facing"),
-        ("an empty path", {"items": block, "pattern": {"kind": "polyline", "points": []}}, "path"),
-        ("a gap path of more than 1024 pieces", {"items": block, "pattern": {"kind": "polyline", "count_mode": "gap", "points": [[2000.0, 0.0, 0.0]]}}, "1024"),
+        ("points for a line (only a path layout is a curve node)", {"items": block, "pattern": {"kind": "line"}, "points": long_points}, "Xform"),
+        ("a gap path of more than 1024 pieces", {"items": block, "pattern": {"kind": "path", "count_mode": "gap"}, "points": long_points}, "1024"),
+        ("the removed polyline kind", {"items": block, "pattern": {"kind": "polyline"}}, "kind"),
+        ("the removed pattern points key", {"items": block, "pattern": {"kind": "path", "points": [[1.0, 0.0, 0.0]]}}, "points"),
         ("an unknown argument", {"items": block, "pattern": {"kind": "line"}, "count": 2}, "count"),
         ("a value out of range", {"items": [{"shape": "basic.block", "parameters": {"width": 100.0}}], "pattern": {"kind": "line"}}, "width"),
         ("from_piece_id with items", {"from_piece_id": source["id"], "items": block, "pattern": {"kind": "line"}}, "not both"),
@@ -1311,6 +1342,19 @@ def check_layout_patterns(editor):
     editor.close(scene)
 
 
+def create_curve(editor, scene, name, positions, position=(0.0, 0.0, 0.0), closed=False, rotation=None, parent_id=None):
+    """A curve node: corner points at the positions (a polyline), or given point objects."""
+    points = [p if isinstance(p, dict) else {"position": list(p)} for p in positions]
+    arguments = {"scene_name": scene, "name": name, "position": list(position), "points": points, "closed": closed}
+    if rotation is not None:
+        arguments["rotation_xyzw"] = list(rotation)
+    if parent_id is not None:
+        arguments["parent_id"] = parent_id
+    made = editor.call("create_curve", arguments)
+    editor.wait_idle()
+    return made
+
+
 def layouts_by_id(editor, scene):
     return {layout["id"]: layout for layout in editor.call("level_get_layouts", {"scene_name": scene})["layouts"]}
 
@@ -1327,6 +1371,415 @@ def child_snapshot(layout):
 
 def positions_match(actual, expected, tolerance=TOLERANCE):
     return (len(actual) == len(expected)) and all(close(a, e, tolerance) for a, e in zip(actual, expected))
+
+
+def x_axis_of(rotation_xyzw):
+    return q_rotate(rotation_xyzw, [1.0, 0.0, 0.0])
+
+
+def curve_samples(editor, scene, curve_id, distances):
+    return editor.call("evaluate_curve", {"scene_name": scene, "curve_id": curve_id, "distances": distances})["samples"]
+
+
+def on_curve(editor, scene, layout, curve_id, orientation="upright", tolerance=TOLERANCE):
+    """The layout's pieces sit at the curve's distances length * i / (n - 1) (closed: / n) with the orientation's heading."""
+    children = layout["children"]
+    curve = editor.call("get_curve", {"scene_name": scene, "curve_id": curve_id})
+    n = len(children)
+    if n == 0:
+        return False
+    step = curve["length"] / n if curve["closed"] else (curve["length"] / (n - 1) if n > 1 else 0.0)
+    samples = curve_samples(editor, scene, curve_id, [step * i for i in range(n)])
+    for child, sample in zip(children, samples):
+        if not close(child["position"], sample["position"], tolerance):
+            return False
+        x_axis = x_axis_of(child["rotation_xyzw"])
+        tangent = sample["tangent"]
+        if orientation == "tangent":
+            expected = tangent
+        else:
+            horizontal = [tangent[0], 0.0, tangent[2]]
+            if math.hypot(horizontal[0], horizontal[2]) < 1.0e-4:
+                continue
+            expected = normalize(horizontal)
+            if abs(q_rotate(child["rotation_xyzw"], [0.0, 1.0, 0.0])[1] - 1.0) > 1.0e-3:
+                return False
+        if dot(x_axis, expected) < 1.0 - 1.0e-3:
+            return False
+    return True
+
+
+def check_path_layouts(editor, directory, image_path):
+    """C6, C7, D4, R5.12.8: a path layout is one Curve node carrying the layout values with the pieces as its children - a polyline as a
+    curve of corner points, smooth and closed curves, count and gap, both orientations, regeneration with each curve edit path in its undo
+    entry, rigid moves and turns, surface snap after a move, a viewport drag through the curve tool, the kind rule, a plain curve made a
+    layout, delete and undo, duplicates, copy and paste, mirror, values that do not read, save and reopen, refusals, and a screenshot of
+    a selected path layout with the Properties window (scene closed afterwards)."""
+    import curve_verify as cv  # noqa: E402 - the camera, viewport and Move tool helpers of the curve checks
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    block = [{"shape": "basic.block"}]
+
+    def create(arguments):
+        return editor.call("level_create_layout", dict({"scene_name": scene}, **arguments))
+
+    def create_path(name, positions, position, count=None, closed=False, **extra):
+        points = [p if isinstance(p, dict) else {"position": list(p)} for p in positions]
+        pattern = dict({"kind": "path"}, **({"count": count} if count is not None else {}))
+        pattern.update(extra.pop("pattern", {}))
+        arguments = dict({"name": name, "position": list(position), "items": extra.pop("items", block), "pattern": pattern, "points": points}, **extra)
+        if closed:
+            arguments["closed"] = True
+        made = create(arguments)
+        editor.wait_idle()
+        return made
+
+    def layout_of(layout_id):
+        return layouts_by_id(editor, scene)[layout_id]
+
+    def child_ids(layout):
+        return [c["id"] for c in layout["children"]]
+
+    # A polyline is a curve of corner points: the old polyline's answers (an L at a corner), on one Curve node.
+    corner = create_path("corner L", [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 0.0, 2.0]], [0.0, 0.0, -30.0], count=4)
+    tree = scene_tree(editor, scene)
+    child_parents = {tree[c]["parent_id"] for c in child_ids(corner)}
+    check("a path layout is one node of type Curve carrying the layout values, its pieces its children, its curve its own points",
+          (corner["type"] == "Curve") and (tree[corner["id"]]["type"] == "Curve") and (child_parents == {corner["id"]}) and
+          (corner["curve"]["point_count"] == 3) and (abs(corner["curve"]["length"] - 6.0) < TOLERANCE) and
+          (corner["id"] in {c["id"] for c in editor.call("get_curves", {"scene_name": scene})["curves"]}),
+          f"type {corner['type']}, parents {child_parents}, curve {corner['curve']}")
+    check("a path along an L of corner points reproduces the polyline answers: 0, 2, 4 (the corner, turned to the leaving span) and 6 m",
+          positions_match(child_positions(corner), [[0.0, 0.0, -30.0], [2.0, 0.0, -30.0], [4.0, 0.0, -30.0], [4.0, 0.0, -28.0]]) and
+          same_rotation(corner["children"][1]["rotation_xyzw"], yaw_xyzw(0.0)) and same_rotation(corner["children"][2]["rotation_xyzw"], yaw_xyzw(-90.0)),
+          f"{[fmt3(p) for p in child_positions(corner)]}")
+
+    # A smooth curve: the pieces at the table's distances, the heading of the tangent; tangent orientation pitches with it.
+    smooth_points = [
+        {"position": [0.0, 0.0, 0.0], "kind": "smooth", "in": [-2.0, 0.0, 0.0], "out": [2.0, 0.0, 0.0]},
+        {"position": [5.0, 1.5, -4.0], "kind": "smooth", "in": [-1.0, -0.5, 2.0], "out": [1.0, 0.5, -2.0]},
+        {"position": [10.0, 0.0, 0.0], "kind": "smooth", "in": [-2.0, 0.0, -1.0], "out": [2.0, 0.0, 1.0]},
+    ]
+    upright = create_path("smooth upright", smooth_points, [0.0, 0.0, 0.0], count=9)
+    check("over a smooth curve 9 pieces sit at the table's distances (length / 8 apart), each upright with the tangent's heading",
+          (upright["child_count"] == 9) and on_curve(editor, scene, upright, upright["id"], "upright"), describe_run({"pieces": upright["children"]})[:400])
+    tangent = editor.call("level_set_layout", {"scene_name": scene, "layout_id": upright["id"], "pattern": {"orientation": "tangent"}})
+    editor.wait_idle()
+    check("orientation tangent turns each piece's x axis onto the curve's tangent (pitching with the curve) as one change",
+          (tangent["pattern"]["orientation"] == "tangent") and on_curve(editor, scene, tangent, upright["id"], "tangent"), describe_run({"pieces": tangent["children"]})[:400])
+    editor.call("level_set_layout", {"scene_name": scene, "layout_id": upright["id"], "pattern": {"orientation": "upright"}})
+    editor.wait_idle()
+
+    # A closed curve: no piece twice at the seam; gap mode closes as a full ring.
+    ring = create_path("closed square", [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 0.0, 4.0], [0.0, 0.0, 4.0]], [30.0, 0.0, 0.0], count=8, closed=True)
+    check("a closed curve of 16 m holds 8 pieces 2 m apart around it, none twice at the seam, each turned to its span",
+          positions_match(child_positions(ring), [[30.0, 0.0, 0.0], [32.0, 0.0, 0.0], [34.0, 0.0, 0.0], [34.0, 0.0, 2.0], [34.0, 0.0, 4.0], [32.0, 0.0, 4.0], [30.0, 0.0, 4.0], [30.0, 0.0, 2.0]]) and
+          same_rotation(ring["children"][7]["rotation_xyzw"], yaw_xyzw(90.0)) and (abs(ring["run"]["step"] - 2.0) < TOLERANCE) and ring["curve"]["closed"],
+          f"{[fmt3(p) for p in child_positions(ring)]}")
+    gap_ring = editor.call("level_set_layout", {"scene_name": scene, "layout_id": ring["id"], "pattern": {"count_mode": "gap", "gap": 0.5}})
+    check("gap mode on the closed curve: 1 m blocks at a 0.5 m gap hold 10 pieces around 16 m, spread to 1.6 m",
+          (gap_ring["child_count"] == 10) and (abs(gap_ring["run"]["step"] - 1.6) < TOLERANCE) and on_curve(editor, scene, gap_ring, ring["id"]),
+          f"{gap_ring['child_count']} run {gap_ring['run']}")
+    open_gap = editor.call("level_set_layout", {"scene_name": scene, "layout_id": corner["id"], "pattern": {"count_mode": "gap", "gap": 0.5}})
+    check("gap mode on the open L of 6 m: 1 m blocks at a 0.5 m gap hold 5 pieces 1.5 m apart, both ends holding one",
+          (open_gap["child_count"] == 5) and close(open_gap["children"][4]["position"], [4.0, 0.0, -28.0]) and (abs(open_gap["run"]["step"] - 1.5) < TOLERANCE),
+          f"{[fmt3(p) for p in child_positions(open_gap)]}")
+    editor.call("level_set_layout", {"scene_name": scene, "layout_id": corner["id"], "pattern": {"count_mode": "count"}})
+    editor.wait_idle()
+
+    # Every curve edit path over MCP lays the locked layout out again in the same undo entry; undo restores both, redo both again.
+    unlocked = create_path("unlocked smooth", smooth_points, [0.0, 0.0, 20.0], count=3, locked=False)
+    unlocked_before = child_snapshot(layout_of(unlocked["id"]))
+    before_upright = child_snapshot(layout_of(upright["id"]))
+    curve_before = editor.call("get_curve", {"scene_name": scene, "curve_id": upright["id"]})["points"]
+    moved_points = json.loads(json.dumps(smooth_points))
+    moved_points[1]["position"] = [5.0, 3.0, -6.0]
+    depth = undo_depth(editor)
+    editor.call("set_curve", {"scene_name": scene, "curve_id": upright["id"], "points": moved_points})
+    editor.wait_idle()
+    after_upright = layout_of(upright["id"])
+    check("set_curve moving one point of the layout node's curve lays its pieces out again in the same single undo entry",
+          (undo_depth(editor) == depth + 1) and on_curve(editor, scene, after_upright, upright["id"]) and (child_snapshot(after_upright) != before_upright),
+          f"depth {undo_depth(editor)} vs {depth + 1}")
+    editor.call("set_curve", {"scene_name": scene, "curve_id": unlocked["id"], "points": moved_points})
+    editor.wait_idle()
+    check("an unlocked path layout is left alone by an edit of its own curve", child_snapshot(layout_of(unlocked["id"])) == unlocked_before, "")
+    editor.call("undo")
+    editor.call("undo")
+    editor.wait_idle()
+    check("one undo restores the curve point and the pieces exactly",
+          (editor.call("get_curve", {"scene_name": scene, "curve_id": upright["id"]})["points"] == curve_before) and (child_snapshot(layout_of(upright["id"])) == before_upright), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo moves the point and lays the layout out again",
+          on_curve(editor, scene, layout_of(upright["id"]), upright["id"]) and (child_snapshot(layout_of(upright["id"])) == child_snapshot(after_upright)), "")
+    editor.call("undo")
+    editor.wait_idle()
+    for tool, arguments in [
+        ("curve_add_point",      {"at": "end"}),
+        ("curve_remove_points",  {"indices": [1]}),
+        ("curve_set_point_kind", {"index": 1, "kind": "corner"}),
+        ("set_curve",            {"closed": True}),
+    ]:
+        depth = undo_depth(editor)
+        editor.call(tool, dict({"scene_name": scene, "curve_id": upright["id"]}, **arguments))
+        editor.wait_idle()
+        edited = layout_of(upright["id"])
+        check(f"{tool} on the layout node's curve lays the pieces out on the edited curve in its one undo entry",
+              (undo_depth(editor) == depth + 1) and (child_snapshot(edited) != before_upright) and on_curve(editor, scene, edited, upright["id"]),
+              f"depth {undo_depth(editor)} vs {depth + 1}, {edited['child_count']} pieces")
+        editor.call("undo")
+        editor.wait_idle()
+        check(f"undo of {tool} gives the curve and the pieces back exactly",
+              (editor.call("get_curve", {"scene_name": scene, "curve_id": upright["id"]})["points"] == curve_before) and (child_snapshot(layout_of(upright["id"])) == before_upright), "")
+
+    # Moving or turning the node moves the run rigidly: the same pieces (ids) ride with it, nothing is laid out again.
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": upright["id"], "space": "world", "translation": [0.0, 0.0, 10.0]})
+    editor.wait_idle()
+    moved = layout_of(upright["id"])
+    check("set_node_transform of the path layout node moves its pieces rigidly with it (10 m along z), the same pieces, one undo entry",
+          (undo_depth(editor) == depth + 1) and (child_ids(moved) == [c[0] for c in before_upright]) and
+          positions_match(child_positions(moved), [[p[0], p[1], p[2] + 10.0] for p in [c[2] for c in before_upright]], 2.0e-3) and on_curve(editor, scene, moved, upright["id"]),
+          f"depth {undo_depth(editor)} vs {depth + 1}")
+    editor.call("undo")
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": upright["id"], "space": "world", "rotation_xyzw": yaw_xyzw(90.0)})
+    editor.wait_idle()
+    turned = layout_of(upright["id"])
+    expected = [q_rotate(yaw_xyzw(90.0), c[2]) for c in before_upright]
+    check("turning the node 90 degrees about y turns the run rigidly about its origin, the same pieces, one undo entry",
+          (undo_depth(editor) == depth + 1) and (child_ids(turned) == [c[0] for c in before_upright]) and positions_match(child_positions(turned), expected, 2.0e-3),
+          f"{[fmt3(p) for p in child_positions(turned)][:3]} vs {[fmt3(p) for p in expected][:3]}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the turn puts the pieces back", child_snapshot(layout_of(upright["id"])) == before_upright, "")
+
+    # With surface snap a move rests the pieces again in the move's entry: over a raised slab they rise.
+    slabs = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, 0.0, 60.0], "name": "path ground", "parameters": {"width": 12.0, "depth": 4.0}},
+        {"shape": "basic.floor_slab", "position": [0.0, 0.2, 70.0], "name": "path step", "parameters": {"width": 12.0, "depth": 4.0}},
+    ]})["pieces"]
+    editor.wait_idle()
+    low, high = slabs[0]["world_aabb"]["max"][1], slabs[1]["world_aabb"]["max"][1]
+    snapped = create_path("snapped path", [[-4.0, 0.0, 0.0], [4.0, 0.0, 0.0]], [0.0, 2.0, 60.0], count=3, surface_snap=True)
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": snapped["id"], "space": "world", "translation": [0.0, 2.0, 70.0]})
+    editor.wait_idle()
+    rested = layout_of(snapped["id"])
+    check("a surface-snapped path layout moved over the raised slab rests its pieces on it in the move's one undo entry",
+          (undo_depth(editor) == depth + 1) and all(abs(c["position"][1] - high) < TOLERANCE for c in rested["children"]) and
+          all(abs(c["position"][1] - low) < TOLERANCE for c in snapped["children"]),
+          f"low {low:.3f} high {high:.3f}: {[fmt3(p) for p in child_positions(rested)]}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # A viewport drag of a curve point through the curve tool, the layout node selected through one of its pieces.
+    # The curve's points, the end point as far as its drag takes it and the node as far as its own drag takes it.
+    viewport = cv.frame_camera(editor, scene, [5.0, 12.0, 14.0], [5.0, 0.0, -1.0],
+                               [[0.0, 0.0, 0.0], [5.0, 1.5, -4.0], [10.0, 0.0, 0.0], [11.5, 0.0, 0.0], [1.0, 0.0, 1.0]])
+    cv.choose_move_tool(editor, viewport)
+    editor.call("select_items", {"scene_name": scene, "ids": [upright["children"][0]["id"]]})
+    editor.wait_idle()
+    selection = [i["id"] for i in editor.call("get_selection")["items"]]
+    target = editor.call("get_curve_point_selection").get("curve")
+    check("selecting a piece of the locked path layout selects the one layout node, the curve tool's target",
+          (selection == [upright["id"]]) and (target is not None) and (target["id"] == upright["id"]), f"{selection}, target {target}")
+    editor.call("select_curve_points", {"scene_name": scene, "curve_id": upright["id"], "points": [{"index": 2}]})
+    editor.wait_idle()
+    cv.settle(editor)
+    depth = undo_depth(editor)
+    px_per_metre = cv.gizmo_drag(editor, viewport, TRANSLATE_X, [1.0, 0.0, 0.0], hold=True)
+    cv.settle(editor)
+    held_x = editor.call("get_curve", {"scene_name": scene, "curve_id": upright["id"]})["points"][2]["position"][0]
+    check("mid-drag (button held) the locked layout's pieces already stand on the moved curve, no undo entry",
+          (held_x > 10.5) and on_curve(editor, scene, layout_of(upright["id"]), upright["id"]) and (undo_depth(editor) == depth),
+          f"x {held_x:.4f}, depth {undo_depth(editor)} vs {depth}")
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    cv.settle(editor)
+    dragged_x = editor.call("get_curve", {"scene_name": scene, "curve_id": upright["id"]})["points"][2]["position"][0]
+    cv.report_shortfall("path curve point gizmo X drag", dragged_x - 10.0, 1.0, px_per_metre)
+    kept = editor.call("get_curve_point_selection")
+    check(f"a viewport gizmo drag of the curve's end point (1 m along x, within {cv.GIZMO_SHORTFALL_PX} px) lays the layout out on the final curve, one undo entry; the point and the gizmo stay",
+          (abs(dragged_x - 11.0) <= cv.drag_tolerance(px_per_metre)) and (undo_depth(editor) == depth + 1) and on_curve(editor, scene, layout_of(upright["id"]), upright["id"]) and
+          ([(p["index"], p["part"]) for p in kept["points"]] == [(2, "point")]) and kept.get("gizmo_on_points", False),
+          f"x {dragged_x:.4f}, depth {undo_depth(editor)} vs {depth + 1}, {json.dumps(kept)[:200]}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("one undo of the drag restores the curve point and the pieces",
+          (editor.call("get_curve", {"scene_name": scene, "curve_id": upright["id"]})["points"] == curve_before) and (child_snapshot(layout_of(upright["id"])) == before_upright), "")
+    # With no point selected the gizmo moves the node: its pieces ride with it, nothing is laid out again.
+    editor.call("select_curve_points", {"scene_name": scene, "curve_id": upright["id"], "points": []})
+    editor.wait_idle()
+    cv.settle(editor)
+    depth = undo_depth(editor)
+    px_per_metre = cv.gizmo_drag(editor, viewport, TRANSLATE_X, [1.0, 0.0, 0.0])
+    cv.settle(editor)
+    node_x = editor.call("get_curve", {"scene_name": scene, "curve_id": upright["id"]})["world_position"][0]
+    dragged = layout_of(upright["id"])
+    check("a viewport gizmo drag of the layout node carries its pieces rigidly (the same pieces), one undo entry",
+          (abs(node_x - 1.0) <= cv.drag_tolerance(px_per_metre)) and (undo_depth(editor) == depth + 1) and (child_ids(dragged) == [c[0] for c in before_upright]) and
+          on_curve(editor, scene, dragged, upright["id"]),
+          f"node x {node_x:.4f}, depth {undo_depth(editor)} vs {depth + 1}")
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+    # The kind and the node type agree.
+    line = create({"name": "line holder", "position": [60.0, 0.0, 0.0], "items": block, "pattern": {"kind": "line", "count": 2}})
+    editor.wait_idle()
+    plain = create_curve(editor, scene, "plain curve", [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]], position=[0.0, 0.0, 90.0])
+    count = len(pieces(editor, scene))
+    depth = undo_depth(editor)
+    for tool, label, arguments, needle in [
+        ("level_set_layout", "a line kind on a path layout (a Curve node)", {"layout_id": upright["id"], "pattern": {"kind": "line"}}, "is a curve node"),
+        ("level_set_layout", "a path kind on a line layout (an Xform node)", {"layout_id": line["id"], "pattern": {"kind": "path"}}, "not a curve node"),
+        ("level_create_layout", "points with a line kind", {"items": block, "pattern": {"kind": "line"}, "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [1.0, 0.0, 0.0]}]}, "Xform"),
+        ("level_create_layout", "closed without points", {"items": block, "pattern": {"kind": "path"}, "closed": True}, "needs points"),
+        ("level_create_layout", "the former pattern curve_id key", {"items": block, "pattern": {"kind": "path", "curve_id": plain["id"]}}, "curve_id"),
+        ("level_create_layout", "a curve_id naming a piece", {"items": block, "curve_id": corner["children"][0]["id"], "pattern": {"kind": "path"}}, "no curve node"),
+        ("level_create_layout", "a curve_id naming a path layout already", {"items": block, "curve_id": corner["id"], "pattern": {"kind": "path"}}, "already"),
+        ("level_create_layout", "a curve_id with a position", {"items": block, "curve_id": plain["id"], "position": [0.0, 0.0, 0.0], "pattern": {"kind": "path"}}, "not both"),
+        ("level_create_layout", "a curve_id with a line kind", {"items": block, "curve_id": plain["id"], "pattern": {"kind": "line"}}, "path layout only"),
+        ("level_create_layout", "an unknown orientation", {"items": block, "pattern": {"kind": "path", "orientation": "sideways"}}, "orientation"),
+    ]:
+        error = call_error(editor, tool, dict({"scene_name": scene}, **arguments))
+        check(f"{tool} refuses {label}", (error is not None) and (needle in error), str(error))
+    error = call_error(editor, "set_item_property", {"item_id": line["id"], "property": "Kit_layout.pattern", "value": layout_of(upright["id"])["pattern_text"]})
+    check("set_item_property of a path pattern on an Xform layout node is refused naming the node type", (error is not None) and ("not a curve node" in error), str(error))
+    editor.wait_idle()
+    check("the refused calls placed nothing and recorded no undo entry", (len(pieces(editor, scene)) == count) and (undo_depth(editor) == depth),
+          f"{len(pieces(editor, scene))} vs {count}, depth {undo_depth(editor)} vs {depth}")
+
+    # A plain curve made a path layout in place: the same node, one undo entry; undo leaves the plain curve.
+    depth = undo_depth(editor)
+    on_plain = create({"curve_id": plain["id"], "items": block, "pattern": {"kind": "path", "count": 4}})
+    editor.wait_idle()
+    check("level_create_layout curve_id makes that plain curve node the path layout itself: the same id, 4 pieces on it, one undo entry",
+          (on_plain["id"] == plain["id"]) and (on_plain["type"] == "Curve") and (on_plain["child_count"] == 4) and on_curve(editor, scene, on_plain, plain["id"]) and
+          (undo_depth(editor) == depth + 1), f"{on_plain['id']} vs {plain['id']}, depth {undo_depth(editor)} vs {depth + 1}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo leaves the plain curve without layout values or children",
+          (plain["id"] not in layouts_by_id(editor, scene)) and not [n for n, t in scene_tree(editor, scene).items() if t.get("parent_id") == plain["id"]] and
+          (plain["id"] in {c["id"] for c in editor.call("get_curves", {"scene_name": scene})["curves"]}), "")
+
+    # Delete and undo of the one node.
+    corner = layout_of(corner["id"])
+    depth = undo_depth(editor)
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [corner["id"]]})
+    editor.wait_idle()
+    gone = (corner["id"] not in scene_tree(editor, scene)) and not (set(child_ids(layout_of(upright["id"]))) & set(child_ids(corner)))
+    check("delete_nodes of the path layout node removes the curve and its pieces in one undo entry",
+          gone and (corner["id"] not in layouts_by_id(editor, scene)) and (undo_depth(editor) == depth + 1), "")
+    editor.call("undo")
+    editor.wait_idle()
+    back = layouts_by_id(editor, scene).get(corner["id"])
+    check("undo of the delete gives the same node back with its curve and the same pieces",
+          (back is not None) and (child_snapshot(back) == child_snapshot(corner)) and (back["curve"]["point_count"] == 3), "")
+
+    # Duplicates: the copy is a path layout of its own, its pieces on its own copy of the curve.
+    copy = editor.call("level_duplicate_group", {"scene_name": scene, "group_id": corner["id"], "offset": [0.0, 0.0, -10.0]})
+    editor.wait_idle()
+    copied = layout_of(copy["id"])
+    check("level_duplicate_group of the path layout node: a Curve layout node of its own with its own pieces along its own curve, 10 m along -z",
+          (copied["type"] == "Curve") and (copied["id"] != corner["id"]) and (copied["child_count"] == corner["child_count"]) and
+          not (set(child_ids(copied)) & set(child_ids(corner))) and on_curve(editor, scene, copied, copied["id"]) and
+          positions_match(child_positions(copied), [[p[0], p[1], p[2] - 10.0] for p in child_positions(corner)]),
+          f"{copied['type']} {copied['child_count']}")
+    known = set(layouts_by_id(editor, scene))
+    editor.call("clipboard_copy_nodes", {"scene_name": scene, "node_ids": [corner["id"]]})
+    editor.call("clipboard_paste", {"scene_name": scene})
+    editor.wait_idle()
+    pasted = [l for i, l in layouts_by_id(editor, scene).items() if i not in known]
+    check("copy and paste of the path layout node gives a Curve layout node with its own pieces on its own curve",
+          (len(pasted) == 1) and (pasted[0]["type"] == "Curve") and on_curve(editor, scene, pasted[0], pasted[0]["id"]) and
+          not (set(child_ids(pasted[0])) & set(child_ids(corner))), f"{[(p['name'], p['type']) for p in pasted]}")
+    editor.call("set_curve", {"scene_name": scene, "curve_id": corner["id"], "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [5.0, 0.0, 0.0]}]})
+    editor.wait_idle()
+    check("an edit of the original's curve lays out the original only, not its copies",
+          on_curve(editor, scene, layout_of(corner["id"]), corner["id"]) and (child_snapshot(layout_of(copied["id"])) == child_snapshot(copied)) and
+          (child_snapshot(layout_of(pasted[0]["id"])) == child_snapshot(pasted[0])) if pasted else False, "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Mirror: the curve's points reflect, the locked layout lies along the mirrored curve, one undo entry.
+    mirror_group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [copied["id"]], "name": "mirror group"})
+    editor.wait_idle()
+    world_before = [p["world_position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": copied["id"], "world": True})["points"]]
+    depth = undo_depth(editor)
+    mirrored = editor.call("level_mirror_group", {"scene_name": scene, "group_id": mirror_group["id"], "axis": "x"})
+    editor.wait_idle()
+    world_after = [p["world_position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": copied["id"], "world": True})["points"]]
+    plane_x = mirrored["plane_point"][0]
+    check("level_mirror_group of a group holding the path layout reflects the curve's points across the plane, its pieces on the mirrored curve, one undo entry",
+          (undo_depth(editor) == depth + 1) and positions_match(world_after, [[2.0 * plane_x - p[0], p[1], p[2]] for p in world_before], 2.0e-3) and
+          on_curve(editor, scene, layout_of(copied["id"]), copied["id"]),
+          f"{[fmt3(p) for p in world_before]} -> {[fmt3(p) for p in world_after]} about x {plane_x:.3f}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Save and reopen: the one Curve node with its values and children; an edit of the reloaded curve lays it out again.
+    path = os.path.join(directory, "path_layouts.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    name = editor.load(path)
+    reloaded = {l["name"]: l for l in editor.call("level_get_layouts", {"scene_name": name})["layouts"]}
+    smooth_again = reloaded.get("smooth upright")
+    check("save and reopen: the path layout is one Curve node with its values, its curve and its 9 pieces on it",
+          (smooth_again is not None) and (smooth_again.get("type") == "Curve") and (smooth_again["child_count"] == 9) and
+          on_curve(editor, name, smooth_again, smooth_again["id"]), f"{smooth_again and smooth_again.get('type')}")
+    if smooth_again is not None:
+        depth = undo_depth(editor)
+        editor.call("set_curve", {"scene_name": name, "curve_id": smooth_again["id"], "points": moved_points})
+        editor.wait_idle()
+        relaid = {l["name"]: l for l in editor.call("level_get_layouts", {"scene_name": name})["layouts"]}["smooth upright"]
+        check("after reopening, a curve edit lays the layout out again in its undo entry",
+              (undo_depth(editor) == depth + 1) and on_curve(editor, name, relaid, smooth_again["id"]) and (child_snapshot(relaid) != child_snapshot(smooth_again)), "")
+        editor.call("undo")
+        editor.wait_idle()
+
+    # Values of the former form do not read: an Xform carrying a path pattern (a hand-edited copy of the line layout).
+    with open(path, "r", encoding="utf-8") as file:
+        text = file.read()
+    line_kind = '\\"kind\\":\\"line\\"'
+    edited_path = os.path.join(directory, "path_layouts_old_form.gltf")
+    with open(edited_path, "w", encoding="utf-8") as file:
+        file.write(text.replace(line_kind, '\\"kind\\":\\"path\\"'))
+    old_name = editor.load(edited_path)
+    old = {l["name"]: l for l in editor.call("level_get_layouts", {"scene_name": old_name})["layouts"]}.get("line holder")
+    error = call_error(editor, "level_refresh_layout", {"scene_name": old_name, "layout_id": old["id"]}) if old else None
+    check("an Xform carrying a path pattern (the former form) does not read: level_get_layouts names the problem, a refresh is refused, the pieces stay as saved",
+          (line_kind in text) and (old is not None) and ("not a curve node" in old.get("problem", "")) and (error is not None) and ("not a curve node" in error) and
+          (len([n for n, t in scene_tree(editor, old_name).items() if t.get("parent_id") == old["id"]]) == 2),
+          f"{old and old.get('problem')}; {error}")
+    editor.close(old_name)
+
+    # The picture: the selected path layout - its curve, handles and pieces - with the Properties window's Curve and Kit Layout groups.
+    editor.call("set_active_scene", {"scene_name": name})
+    cv.set_camera(editor, name, [5.0, 10.0, 12.0], [5.0, 0.0, -2.0])
+    cv.viewport_of(editor, name)
+    if smooth_again is not None:
+        editor.call("select_items", {"scene_name": name, "ids": [smooth_again["id"]]})
+        editor.call("select_curve_points", {"scene_name": name, "curve_id": smooth_again["id"], "points": [{"index": 1}]})
+    editor.call("set_window_visibility", {"title": "Properties", "visible": True, "focus": True})
+    editor.wait_idle()
+    open_property_groups(editor, ["Curve", "Kit Layout"])
+    labels = {i.get("display_label") for i in editor.call("get_imgui_items", {"window": "Properties", "limit": 2000, "visible_only": False}).get("items", [])}
+    check("the Properties window shows the selected path layout's Curve group and Kit Layout group", {"Curve", "Kit Layout", "Closed", "Orientation.upright"} <= labels,
+          f"missing {sorted({'Curve', 'Kit Layout', 'Closed', 'Orientation.upright'} - labels)}")
+    editor.call("imgui_scroll_to_item", {"window": "Properties", "label": "Orientation.upright", "align": "center"})
+    cv.settle(editor, 5)
+    os.makedirs(os.path.dirname(image_path), exist_ok=True)
+    editor.call("capture_screenshot", {"path": image_path})
+    check("capture_screenshot of the selected path layout with the Properties window is written", os.path.isfile(image_path), image_path)
+    print(f"path layout image: {image_path}", flush=True)
+    editor.call("select_items", {"scene_name": name, "ids": []})
+    editor.wait_idle()
+    editor.close(name)
 
 
 def check_layouts(editor, directory):
@@ -1363,8 +1816,9 @@ def check_layouts(editor, directory):
     check("a full ring of 4 at radius 2 m about a center 2 m behind the node, each piece facing outward",
           positions_match(child_positions(ring), [[50.0, 0.0, 0.0], [52.0, 0.0, -2.0], [50.0, 0.0, -4.0], [48.0, 0.0, -2.0]]) and
           same_rotation(ring["children"][1]["rotation_xyzw"], yaw_xyzw(90.0)), f"{[fmt3(p) for p in child_positions(ring)]}")
-    path = create({"position": [70.0, 0.0, 0.0], "items": block, "pattern": {"kind": "polyline", "count": 8, "points": [[4.0, 0.0, 0.0], [4.0, 0.0, 3.0]]}})
-    check("a polyline in count mode spreads 8 pieces evenly over its 7 m, both ends holding one, the corner piece turned to the second segment",
+    path = create({"position": [70.0, 0.0, 0.0], "items": block, "pattern": {"kind": "path", "count": 8},
+                   "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 3.0]}]})
+    check("a path along an L of corner points (a polyline) in count mode spreads 8 pieces evenly over its 7 m, both ends holding one, the corner piece turned to the second span",
           positions_match(child_positions(path), [[70.0 + i, 0.0, 0.0] for i in range(5)] + [[74.0, 0.0, float(i)] for i in range(1, 4)]) and
           same_rotation(path["children"][4]["rotation_xyzw"], yaw_xyzw(-90.0)) and (abs(path["run"]["space"] - 7.0) < TOLERANCE),
           f"{[fmt3(p) for p in child_positions(path)]}")
@@ -1379,8 +1833,9 @@ def check_layouts(editor, directory):
           (gap_ring["child_count"] == 12) and same_rotation(gap_ring["children"][3]["rotation_xyzw"], yaw_xyzw(90.0)) and
           close(gap_ring["children"][3]["position"], [4.0, 0.0, 56.0]), f"{gap_ring['child_count']} pieces, run {gap_ring['run']}")
     gap_path = create({"position": [0.0, 0.0, 80.0], "items": [{"shape": "basic.block", "parameters": {"width": 1.5}}],
-                       "pattern": {"kind": "polyline", "count_mode": "gap", "gap": 0.5, "points": [[4.0, 0.0, 0.0], [4.0, 0.0, 3.0]]}})
-    check("a gap-mode polyline of 7 m with a 0.5 m gap between 1.5 m blocks holds 4 pieces 2.333 m apart along the path, the last at its end",
+                       "pattern": {"kind": "path", "count_mode": "gap", "gap": 0.5},
+                       "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 3.0]}]})
+    check("a gap-mode path along a 7 m L of corner points with a 0.5 m gap between 1.5 m blocks holds 4 pieces 2.333 m apart, the last at its end",
           (gap_path["child_count"] == 4) and close(child_positions(gap_path)[3], [4.0, 0.0, 83.0]) and close(child_positions(gap_path)[1], [7.0 / 3.0, 0.0, 80.0]),
           f"{[fmt3(p) for p in child_positions(gap_path)]}")
     depth = undo_depth(editor)
@@ -1859,8 +2314,20 @@ def type_into(editor, label, text, index=0):
     editor.wait_idle()
 
 
+def open_property_groups(editor, headers):
+    """Opens the named collapsed groups of the Properties window."""
+    for header in headers:
+        items = editor.call("get_imgui_items", {"window": "Properties", "limit": 2000, "visible_only": False, "label_contains": header}).get("items", [])
+        item = next((i for i in items if i.get("display_label") == header), None)
+        if (item is not None) and not item.get("status", {}).get("opened"):
+            editor.call("imgui_scroll_to_item", {"window": "Properties", "id": item["id"]})
+            editor.call("imgui_click", {"window": "Properties", "id": item["id"]})
+            editor.wait_idle()
+
+
 def check_window_layout(editor, scene, image_path):
-    """D4.9: the Level Kit window's Layout section - Make Layout from a piece, every row kind, items, lock, refresh, refusals."""
+    """R5.12.9: the Level Kit window's Layout section holds the initial values of a new kit layout node - editing them changes no
+    node; Make Layout from the selected piece and the Brush tool's Place As Layout use them; the new node is selected."""
     slab = next(p for p in pieces(editor, scene) if p["name"] == "slab")
     top = slab["world_aabb"]["max"][1]
     placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
@@ -1871,17 +2338,190 @@ def check_window_layout(editor, scene, image_path):
     source, wedge = placed
     source_before = piece_by_id(editor, scene, source["id"])
     start_depth = undo_depth(editor)
+    existing = editor.call("level_create_layout", {"scene_name": scene, "name": "existing layout", "position": [-3.0, top, 2.0],
+                                                   "items": [{"shape": "basic.block"}], "pattern": {"kind": "line", "count": 2}})
+    editor.wait_idle()
+    existing_before = layouts_by_id(editor, scene)[existing["id"]]
+
+    labels = {i.get("display_label") or "" for i in imgui_items(editor)}
+    wanted = {"Layout", "Line", "Grid", "Ring", "Path", "By Count", "By Gap", "Count", "Direction.x", "Step", "Spacing From Item", "Module Snap",
+              "Surface Snap", "Surface Orient", "Random Seeds", "Layout Seed", "Locked", "Make Layout", "Place As Layout"}
+    check("the Layout section shows the initial values (every pattern row of the kind, the snap, seed and lock rows), Make Layout and Place As Layout",
+          wanted <= labels, f"missing {sorted(wanted - labels)}")
+    check("the Layout section no longer edits a selected node: no Lock, Unlock, Refresh, Remove Item, curve combo or New Curve rows",
+          not ({"Unlock", "Refresh", "Remove Item", "New Curve", "Use Selected Curve", "Select Curve"} & labels), f"{sorted(labels & {'Unlock', 'Refresh', 'Remove Item', 'New Curve'})}")
+
+    # Editing the initial values with the existing layout selected changes no node and records no entry.
+    editor.call("select_items", {"scene_name": scene, "ids": [existing["id"]]})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    click(editor, "Grid")
+    click(editor, "Line")
+    type_into(editor, "Count", "3")
+    set_checkbox(editor, "Random Seeds", True)
+    set_checkbox(editor, "Random Seeds", False)
+    type_into(editor, "Layout Seed", "0")
+    editor.wait_idle()
+    check("editing the Layout section's values with a layout node selected changes no node and records no undo entry",
+          (undo_depth(editor) == depth) and (child_snapshot(layouts_by_id(editor, scene)[existing["id"]]) == child_snapshot(existing_before)) and
+          (layouts_by_id(editor, scene)[existing["id"]]["pattern"] == existing_before["pattern"]), f"depth {undo_depth(editor)} vs {depth}")
     module_was, surface_was = is_checked(editor, "Snap To Module"), is_checked(editor, "Snap To Surface")
-    settings_ok = set_checkbox(editor, "Snap To Module", False) and set_checkbox(editor, "Snap To Surface", False)
+    set_checkbox(editor, "Snap To Module", False)
+    set_checkbox(editor, "Snap To Surface", False)
+    set_checkbox(editor, "Module Snap", False)
+    set_checkbox(editor, "Surface Snap", False)
+    set_checkbox(editor, "Spacing From Item", True)
+    set_checkbox(editor, "Locked", True)
+
+    def made_layout(known):
+        made = [l for i, l in layouts_by_id(editor, scene).items() if i not in known]
+        return made[0] if len(made) == 1 else None
+
+    # Make Layout: a line of 3 from the piece with the section's values, one entry, the piece replaced by element 0, the node selected.
     editor.call("select_items", {"scene_name": scene, "ids": [source["id"]]})
     editor.wait_idle()
-    labels = {i.get("display_label") or "" for i in imgui_items(editor)}
-    wanted = {"Layout", "Line", "Grid", "Ring", "Polyline", "By Count", "By Gap", "Count", "Direction.x", "Step", "Make Layout"}
-    check("with a kit piece selected the Layout section shows the pattern rows and Make Layout", settings_ok and (wanted <= labels), f"missing {sorted(wanted - labels)}")
+    known = set(layouts_by_id(editor, scene))
+    depth = undo_depth(editor)
+    click(editor, "Make Layout")
+    editor.wait_idle()
+    made = made_layout(known)
+    selection = [i["id"] for i in editor.call("get_selection")["items"]]
+    check("Make Layout with the section's values (a line of 3, spacing from the item) makes a locked Xform layout of 3 blocks 1 m apart in the piece's place, one undo entry, and selects it",
+          (made is not None) and made["locked"] and (made["type"] == "Xform") and positions_match(child_positions(made), [[-3.0 + i, top, -1.0] for i in range(3)]) and
+          (made["name"] == "layout source Layout") and (made["children"][0]["parameters_text"] == source_before["parameters_text"]) and
+          (undo_depth(editor) == depth + 1) and (selection == [made["id"]]) and (source["id"] not in pieces_by_id(editor, scene)),
+          f"{made and [fmt3(p) for p in child_positions(made)]}, selection {selection}, depth {undo_depth(editor)} vs {depth + 1}")
+    editor.call("undo")
+    editor.wait_idle()
+    restored = pieces_by_id(editor, scene).get(source["id"])
+    check("undo of Make Layout gives the original piece back exactly and removes the layout",
+          (restored is not None) and (made_layout(known) is None) and
+          all(restored[k] == source_before[k] for k in ("name", "parameters_text", "materials", "brush_id")) and close(restored["position"], source_before["position"]),
+          f"{restored and restored['name']}")
+
+    # Make Layout with Path: the node is a Curve in the piece's place, straight along its x axis, the pieces on it.
+    click(editor, "Path")
+    editor.call("select_items", {"scene_name": scene, "ids": [wedge["id"]]})
+    editor.wait_idle()
+    known = set(layouts_by_id(editor, scene))
+    depth = undo_depth(editor)
+    click(editor, "Make Layout")
+    editor.wait_idle()
+    made_path = made_layout(known)
+    selection = [i["id"] for i in editor.call("get_selection")["items"]]
+    check("Make Layout with Path makes a Curve layout node in the wedge's place, 3 pieces on its straight curve along x, one undo entry, selected",
+          (made_path is not None) and (made_path["type"] == "Curve") and (made_path["child_count"] == 3) and on_curve(editor, scene, made_path, made_path["id"]) and
+          close(made_path["children"][0]["position"], [3.0, top, 3.0]) and (undo_depth(editor) == depth + 1) and (selection == [made_path["id"]]),
+          f"{made_path and (made_path['type'], made_path['child_count'], made_path['curve'])}, selection {selection}")
+    editor.call("undo")
+    editor.wait_idle()
+    click(editor, "Line")
+
+    # Place As Layout: a Brush tool click in kit mode places a layout node of the chosen shape with the section's values and selects it.
+    viewport = next(v for v in editor.call("get_viewports")["viewports"] if v.get("scene") == scene)
+    insert_button = binding_input(editor, "Brush_tool.insert", "mouse_button")
+    set_checkbox(editor, "Place As Layout", True)
+    click(editor, "Block")
+    wait_preview(editor, lambda r: r.get("active"))
+    aim = [1.0, top, -3.0]
+    hover(editor, viewport, aim)
+    state = wait_preview(editor, lambda r: r.get("visible") and close(r.get("hover_position") or [9, 9, 9], aim, 0.15))
+    known = set(layouts_by_id(editor, scene))
+    known_pieces = set(pieces_by_id(editor, scene))
+    depth = undo_depth(editor)
+    x, y = window_point(viewport, aim)
+    editor.call("mouse_click", {"x": x, "y": y, "button": insert_button})
+    editor.wait_idle()
+    placed_layout = made_layout(known)
+    selection = [i["id"] for i in editor.call("get_selection")["items"]]
+    check("with Place As Layout a Brush tool click places a locked line layout of 3 blocks, element 0 at the preview, one undo entry, and selects it",
+          (placed_layout is not None) and (placed_layout["child_count"] == 3) and placed_layout["locked"] and
+          close(placed_layout["children"][0]["position"], state.get("position", [9, 9, 9]), 0.01) and (undo_depth(editor) == depth + 1) and
+          (selection == [placed_layout["id"]]) and (set(pieces_by_id(editor, scene)) - known_pieces == {c["id"] for c in placed_layout["children"]}),
+          f"{placed_layout and [fmt3(p) for p in child_positions(placed_layout)]}, preview {fmt3(state.get('position', [0, 0, 0]))}, selection {selection}")
+    set_checkbox(editor, "Place As Layout", False)
+    known = set(layouts_by_id(editor, scene))
+    known_pieces = set(pieces_by_id(editor, scene))
+    hover(editor, viewport, aim)
+    wait_preview(editor, lambda r: r.get("visible"))
+    editor.call("mouse_click", {"x": x, "y": y, "button": insert_button})
+    editor.wait_idle()
+    check("with Place As Layout off a click places one piece again, no layout",
+          (made_layout(known) is None) and (len(set(pieces_by_id(editor, scene)) - known_pieces) == 1), "")
+
+    os.makedirs(os.path.dirname(image_path), exist_ok=True)
+    editor.call("imgui_scroll_to_item", {"window": WINDOW, "label": "Place As Layout", "align": "center"})
+    editor.wait_idle()
+    editor.call("capture_screenshot", {"path": image_path})
+    check("capture_screenshot of the Level Kit window's Layout section is written", os.path.isfile(image_path), image_path)
+    print(f"layout window screenshot: {image_path}", flush=True)
+
+    # The window scene goes back to how it was for the next checks.
+    while undo_depth(editor) > start_depth:
+        editor.call("undo")
+        editor.wait_idle()
+    check("undoing every entry gives the window scene its pieces back and no layout", (not layouts_by_id(editor, scene)) and (source["id"] in pieces_by_id(editor, scene)), "")
+    set_checkbox(editor, "Snap To Module", module_was)
+    set_checkbox(editor, "Snap To Surface", surface_was)
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+
+def check_properties_layout(editor, scene):
+    """R5.12.9: the Properties window's "Kit Layout" group edits a selected kit layout node's values - every row kind as one undo
+    entry that regenerates the children, items, a refusal shown in the group, Lock, Unlock and Refresh."""
+    properties = "Properties"
+    slab = next(p for p in pieces(editor, scene) if p["name"] == "slab")
+    top = slab["world_aabb"]["max"][1]
+    start_depth = undo_depth(editor)
+    made = editor.call("level_create_layout", {"scene_name": scene, "name": "properties layout", "position": [-3.0, top, -1.0],
+                                               "items": [{"shape": "basic.block"}], "pattern": {"kind": "line", "count": 3}})
+    editor.wait_idle()
+    layout_id = made["id"]
+    # Selected through one of its pieces: the redirect selects the node.
+    editor.call("select_items", {"scene_name": scene, "ids": [made["children"][1]["id"]]})
+    editor.call("set_window_visibility", {"title": properties, "visible": True, "focus": True})
+    editor.wait_idle()
+
+    def items(label=None):
+        arguments = {"window": properties, "limit": 2000, "visible_only": False}
+        if label is not None:
+            arguments["label_contains"] = label
+        return editor.call("get_imgui_items", arguments).get("items", [])
+
+    def find(label, index=0):
+        matches = sorted((i for i in items(label) if i.get("display_label") == label), key=lambda i: i.get("center_y", 0))
+        return matches[index] if index < len(matches) else None
+
+    def p_click(label, index=0):
+        target = find(label, index)
+        if target is None:
+            raise RuntimeError(f"no {label!r} in the Properties window")
+        editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
+        editor.call("imgui_click", {"window": properties, "id": target["id"]})
+        editor.wait_idle()
+
+    def p_type(label, text, index=0):
+        target = find(label, index)
+        if target is None:
+            raise RuntimeError(f"no {label!r} in the Properties window")
+        editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
+        editor.call("imgui_click", {"window": properties, "id": target["id"], "modifiers": ["ctrl"]})
+        editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+        editor.call("type_text", {"text": text})
+        editor.call("key_press", {"key": "enter"})
+        editor.wait_idle()
+
+    open_property_groups(editor, ["Kit Layout"])
+    labels = {i.get("display_label") or "" for i in items()}
+    wanted = {"Kit Layout", "Kind.line", "Kind.grid", "Kind.ring", "Count Mode.count", "Count Mode.gap", "Count", "Direction.x", "Step", "Module Snap", "Surface Snap",
+              "Surface Orient", "Random Seeds", "Layout Seed", "Lock.lock", "Lock.unlock", "Lock.refresh", "Remove Item", "Add Shape Item", "width", "stone material"}
+    selection = [i["id"] for i in editor.call("get_selection")["items"]]
+    check("selecting a piece selects the layout node; the Properties window shows its Kit Layout group: the pattern rows of the kind, the item's rows, snap, seed and lock rows",
+          (selection == [layout_id]) and (wanted <= labels) and ("Kind.path" not in labels), f"selection {selection}, missing {sorted(wanted - labels)}")
 
     def layout():
-        layouts = list(layouts_by_id(editor, scene).values())
-        return layouts[0] if len(layouts) == 1 else None
+        return layouts_by_id(editor, scene).get(layout_id)
 
     def entry(label, action, predicate, describe=lambda l: ""):
         depth = undo_depth(editor)
@@ -1892,152 +2532,110 @@ def check_window_layout(editor, scene, image_path):
         check(label, ok, f"depth {undo_depth(editor)} vs {depth + 1}; {describe(current) if current else 'no layout'}")
         return current
 
-    # Make Layout: a line of 3 from the piece, one entry, the piece replaced by element 0, the node selected.
-    click(editor, "Line")
-    type_into(editor, "Count", "3")
-    made = entry("Make Layout with a line of 3 makes a locked layout of 3 blocks 1 m apart in the piece's place as one undo entry",
-                 lambda: click(editor, "Make Layout"),
-                 lambda l: l["locked"] and positions_match(child_positions(l), [[-3.0 + i, top, -1.0] for i in range(3)]) and
-                           (l["name"] == "layout source Layout") and (l["children"][0]["parameters_text"] == source_before["parameters_text"]),
-                 lambda l: f"{[fmt3(p) for p in child_positions(l)]} {l['name']}")
-    if made is None:
-        set_checkbox(editor, "Snap To Module", module_was)
-        set_checkbox(editor, "Snap To Surface", surface_was)
-        return
-    selection = editor.call("get_selection")
-    check("the selected piece is replaced by element 0 (not left beside the layout) and the layout node is selected",
-          (source["id"] not in pieces_by_id(editor, scene)) and ([i["id"] for i in selection["items"]] == [made["id"]]), f"{selection}")
-    editor.call("undo")
-    editor.wait_idle()
-    restored = pieces_by_id(editor, scene).get(source["id"])
-    check("undo of Make Layout gives the original piece back exactly and removes the layout",
-          (restored is not None) and (layout() is None) and
-          all(restored[k] == source_before[k] for k in ("name", "parameters_text", "materials", "brush_id")) and close(restored["position"], source_before["position"]),
-          f"{restored and restored['name']}")
-    editor.call("redo")
-    editor.wait_idle()
-    layout_id = made["id"]
+    entry("Properties: typing Count 4 regenerates 4 pieces as one undo entry", lambda: p_type("Count", "4"), lambda l: l["child_count"] == 4)
+    entry("Properties: typing Step 2 spaces them 2 m apart as one undo entry", lambda: p_type("Step", "2"),
+          lambda l: positions_match(child_positions(l), [[-3.0 + 2.0 * i, top, -1.0] for i in range(4)]), lambda l: f"{[fmt3(p) for p in child_positions(l)]}")
+    entry("Properties: By Gap switches the line to gap mode as one undo entry", lambda: p_click("Count Mode.gap"), lambda l: l["pattern"]["count_mode"] == "gap")
+    labels = {i.get("display_label") or "" for i in items()}
+    check("Properties: gap mode shows the Gap and Length rows in place of Count and Step", ({"Gap", "Length"} <= labels) and not ({"Count", "Step"} & labels),
+          f"{sorted(labels & {'Gap', 'Length', 'Count', 'Step'})}")
+    entry("Properties: typing Length 5 makes the count from the space: 5 m at a 0 m gap between 1 m blocks holds 6 pieces", lambda: p_type("Length", "5"),
+          lambda l: l["child_count"] == 6, lambda l: f"{l['child_count']} run {l['run']}")
+    entry("Properties: typing Gap 0.5 gives 4 pieces", lambda: p_type("Gap", "0.5"), lambda l: l["child_count"] == 4, lambda l: f"{l['child_count']} run {l['run']}")
+    entry("Properties: By Count switches back as one undo entry", lambda: p_click("Count Mode.count"), lambda l: (l["pattern"]["count_mode"] == "count") and (l["child_count"] == 4))
+    entry("Properties: typing a Direction component changes the line's direction as one undo entry", lambda: p_type("Direction.z", "1"),
+          lambda l: l["pattern"]["direction"] != [1.0, 0.0, 0.0], lambda l: f"{l['pattern']['direction']}")
+    entry("Properties: Grid makes a 3 x 3 grid of 9 pieces as one undo entry", lambda: p_click("Kind.grid"), lambda l: (l["pattern"]["kind"] == "grid") and (l["child_count"] == 9))
+    entry("Properties: typing Count X 2 gives 6 pieces", lambda: p_type("Count X", "2"), lambda l: l["child_count"] == 6)
+    entry("Properties: typing Spacing Z 2 spaces the rows 2 m apart", lambda: p_type("Spacing Z", "2"),
+          lambda l: abs(l["children"][2]["position"][2] - l["children"][0]["position"][2] - 2.0) < TOLERANCE, lambda l: f"{[fmt3(p) for p in child_positions(l)]}")
+    entry("Properties: Ring makes a ring of 4 as one undo entry", lambda: p_click("Kind.ring"), lambda l: (l["pattern"]["kind"] == "ring") and (l["child_count"] == 4))
+    entry("Properties: typing Radius 3 changes the ring's radius as one undo entry", lambda: p_type("Radius", "3"), lambda l: abs(l["pattern"]["radius"] - 3.0) < TOLERANCE)
+    entry("Properties: typing Arc 180 makes an open arc as one undo entry", lambda: p_type("Arc", "180"), lambda l: abs(l["pattern"]["arc_degrees"] - 180.0) < TOLERANCE)
+    entry("Properties: Face Outward off keeps the node's rotation for every piece, one undo entry", lambda: p_click("Face Outward"),
+          lambda l: (l["pattern"]["facing"] == "start") and all(same_rotation(c["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]) for c in l["children"]))
+    entry("Properties: Line again as one undo entry", lambda: p_click("Kind.line"), lambda l: l["pattern"]["kind"] == "line")
+
+    # Items: add the Brush tool's shape, edit an item's parameter and slot material, remove an item.
+    click(editor, "Wedge / slope")
+    wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "basic.wedge"))
     editor.call("select_items", {"scene_name": scene, "ids": [layout_id]})
     editor.wait_idle()
-    labels = {i.get("display_label") or "" for i in imgui_items(editor)}
-    wanted = {"Layout", "Line", "Grid", "Ring", "Polyline", "By Count", "By Gap", "Count", "Direction.x", "Step", "Module Snap", "Surface Snap",
-              "Surface Orient", "Random Seeds", "Layout Seed", "Lock", "Unlock", "Refresh", "Remove Item", "Add Shape Item", "Add Piece Item", "stone material"}
-    check("with the layout node selected the section shows every value row, the item's rows and Lock, Unlock and Refresh", wanted <= labels, f"missing {sorted(wanted - labels)}")
-    os.makedirs(os.path.dirname(image_path), exist_ok=True)
-    editor.call("imgui_scroll_to_item", {"window": WINDOW, "label": "Layout Seed", "align": "center"})
-    editor.wait_idle()
-    editor.call("capture_screenshot", {"path": image_path})
-    check("capture_screenshot of the Level Kit window's Layout section is written", os.path.isfile(image_path), image_path)
-    print(f"layout window screenshot: {image_path}", flush=True)
-
-    # Each row kind edits and regenerates as one undo entry.
-    entry("typing Count 4 regenerates 4 pieces as one undo entry", lambda: type_into(editor, "Count", "4"), lambda l: l["child_count"] == 4)
-    entry("typing Step 2 spaces them 2 m apart as one undo entry", lambda: type_into(editor, "Step", "2"),
-          lambda l: positions_match(child_positions(l), [[-3.0 + 2.0 * i, top, -1.0] for i in range(4)]), lambda l: f"{[fmt3(p) for p in child_positions(l)]}")
-    entry("By Gap switches the line to gap mode as one undo entry", lambda: click(editor, "By Gap"), lambda l: l["pattern"]["count_mode"] == "gap")
-    labels = {i.get("display_label") or "" for i in imgui_items(editor)}
-    check("gap mode shows the Gap and Length rows in place of Count and Step", ({"Gap", "Length"} <= labels) and not ({"Count", "Step"} & labels), f"{sorted(labels & {'Gap', 'Length', 'Count', 'Step'})}")
-    entry("typing Length 5 makes the count from the space: 5 m at a 0 m gap between 1 m blocks holds 6 pieces", lambda: type_into(editor, "Length", "5"),
-          lambda l: l["child_count"] == 6, lambda l: f"{l['child_count']} run {l['run']}")
-    entry("typing Gap 0.5 gives 4 pieces (1.5 m steps spread to 1.667 m)", lambda: type_into(editor, "Gap", "0.5"),
-          lambda l: (l["child_count"] == 4) and (abs(l["run"]["step"] - 5.0 / 3.0) < TOLERANCE), lambda l: f"{l['child_count']} run {l['run']}")
-    entry("By Count switches back to count mode as one undo entry", lambda: click(editor, "By Count"), lambda l: (l["pattern"]["count_mode"] == "count") and (l["child_count"] == 4))
-    entry("typing a Direction component changes the line's direction as one undo entry", lambda: type_into(editor, "Direction.z", "1"),
-          lambda l: l["pattern"]["direction"] != [1.0, 0.0, 0.0], lambda l: f"{l['pattern']['direction']}")
-    entry("Grid makes a 3 x 3 grid of 9 pieces as one undo entry", lambda: click(editor, "Grid"), lambda l: (l["pattern"]["kind"] == "grid") and (l["child_count"] == 9))
-    entry("typing Count X 2 gives 6 pieces", lambda: type_into(editor, "Count X", "2"), lambda l: l["child_count"] == 6)
-    entry("typing Spacing Z 2 spaces the rows 2 m apart", lambda: type_into(editor, "Spacing Z", "2"),
-          lambda l: abs(l["children"][2]["position"][2] - l["children"][0]["position"][2] - 2.0) < TOLERANCE, lambda l: f"{[fmt3(p) for p in child_positions(l)]}")
-    entry("Ring makes a ring of 4 as one undo entry", lambda: click(editor, "Ring"), lambda l: (l["pattern"]["kind"] == "ring") and (l["child_count"] == 4))
-    entry("typing Radius 3 changes the ring's radius as one undo entry", lambda: type_into(editor, "Radius", "3"),
-          lambda l: (abs(l["pattern"]["radius"] - 3.0) < TOLERANCE) and close(l["children"][2]["position"], [-3.0, top, -7.0]), lambda l: f"{[fmt3(p) for p in child_positions(l)]}")
-    entry("typing Arc 180 makes an open arc as one undo entry", lambda: type_into(editor, "Arc", "180"), lambda l: abs(l["pattern"]["arc_degrees"] - 180.0) < TOLERANCE)
-    entry("Face Outward off keeps the node's rotation for every piece, one undo entry", lambda: click(editor, "Face Outward"),
-          lambda l: (l["pattern"]["facing"] == "start") and all(same_rotation(c["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]) for c in l["children"]))
-    entry("Polyline lays the pieces along the path as one undo entry", lambda: click(editor, "Polyline"),
-          lambda l: (l["pattern"]["kind"] == "polyline") and (len(l["pattern"]["points"]) == 1) and (l["child_count"] == 4))
-    entry("Add Point adds a point after the last as one undo entry", lambda: click(editor, "Add Point"), lambda l: len(l["pattern"]["points"]) == 2,
-          lambda l: f"{l['pattern']['points']}")
-    entry("typing into the second Point row moves that point as one undo entry", lambda: type_into(editor, "Point.x", "2", 1),
-          lambda l: (len(l["pattern"]["points"]) == 2) and (l["pattern"]["points"][1] != [6.0, 0.0, 0.0]), lambda l: f"{l['pattern']['points']}")
-    entry("Remove Point removes the first point as one undo entry", lambda: click_item(editor, "Remove Point", 0),
-          lambda l: len(l["pattern"]["points"]) == 1, lambda l: f"{l['pattern']['points']}")
-    entry("Line again as one undo entry", lambda: click(editor, "Line"), lambda l: l["pattern"]["kind"] == "line")
-
-    # Items: add the selected piece, edit an item's parameter and slot material, remove an item.
-    editor.call("select_items", {"scene_name": scene, "ids": [layout_id, wedge["id"]], "active": layout_id})
-    editor.wait_idle()
-    entry("Add Piece Item adds the selected wedge as a second item: the pieces alternate block, wedge, one undo entry", lambda: click(editor, "Add Piece Item"),
+    entry("Properties: Add Shape Item adds the Level Kit window's wedge as a second item: the pieces alternate block, wedge, one undo entry", lambda: p_click("Add Shape Item"),
           lambda l: (len(l["items"]) == 2) and ([c["shape"] for c in l["children"]] == ["basic.block", "basic.wedge", "basic.block", "basic.wedge"]),
           lambda l: f"{[c['shape'] for c in l['children']]}")
-    editor.call("select_items", {"scene_name": scene, "ids": [layout_id]})
-    editor.wait_idle()
-    # The first item's width row is the second last one down the window (the second item, the wedge, has one too).
-    width_rows = sorted((i for i in imgui_items(editor) if i.get("display_label") == "width"), key=lambda i: i["center_y"])
-    block_width = width_rows[-2]["index"] if len(width_rows) >= 2 else 0
-    entry("typing 2 into the first item's width row gives its pieces width 2 as one undo entry", lambda: type_into(editor, "width", "2", block_width),
-          lambda l: (l["items"][0]["parameters"]["width"] == 2.0) and (l["children"][0]["parameters"]["width"] == 2.0),
-          lambda l: f"{[i['parameters'] for i in l['items']]}, {len(width_rows)} width rows")
+    entry("Properties: typing 2 into the first item's width row gives its pieces width 2 as one undo entry", lambda: p_type("width", "2", 0),
+          lambda l: (l["items"][0]["parameters"]["width"] == 2.0) and (l["children"][0]["parameters"]["width"] == 2.0), lambda l: f"{[i['parameters'] for i in l['items']]}")
     kits = editor.call("level_get_kits", {"scene_name": scene})
     block_slot = next(s for s in kits["shapes"] if s["id"] == "basic.block")["material_slots"][0]
     alternative = block_slot["alternatives"][0]
-    wedge_slots = [x["slot"] for x in next(s for s in kits["shapes"] if s["id"] == "basic.wedge")["material_slots"]]
-    slot_rows = sorted((i for i in imgui_items(editor) if i.get("display_label") == f"{block_slot['slot']} material"), key=lambda i: i["center_y"])
-    block_slot_row = slot_rows[-2 if block_slot["slot"] in wedge_slots else -1]["index"]
 
     def choose_material():
-        click_item(editor, f"{block_slot['slot']} material", block_slot_row)
+        p_click(f"{block_slot['slot']} material", 0)
         editor.call("imgui_click", {"label": alternative})
+        editor.wait_idle()
 
-    entry(f"choosing {alternative} in the first item's {block_slot['slot']} material combo gives its pieces that material as one undo entry", choose_material,
+    entry(f"Properties: choosing {alternative} in the first item's {block_slot['slot']} material combo gives its pieces that material as one undo entry", choose_material,
           lambda l: (l["children"][0]["materials"][block_slot["slot"]] == alternative) and (l["items"][0]["materials"][block_slot["slot"]] == alternative),
           lambda l: f"{l['children'][0]['materials']}")
-    entry("Remove Item on the second item leaves the blocks alone, one undo entry", lambda: click_item(editor, "Remove Item", 1),
+    entry("Properties: Remove Item on the second item leaves the blocks alone, one undo entry", lambda: p_click("Remove Item", 1),
           lambda l: (len(l["items"]) == 1) and all(c["shape"] == "basic.block" for c in l["children"]))
 
     # Snap and seed rows.
-    entry("Module Snap on is one undo entry", lambda: click(editor, "Module Snap"), lambda l: l["snap"] == "module")
-    entry("Surface Snap on rests the pieces on what is under them, one undo entry", lambda: click(editor, "Surface Snap"),
-          lambda l: l["surface_snap"] and all(c["position"][1] >= (top - TOLERANCE) for c in l["children"]),
-          lambda l: f"top {top:.3f}: {[fmt3(p) for p in child_positions(l)]}")
-    entry("Surface Orient on is one undo entry", lambda: click(editor, "Surface Orient"), lambda l: l["surface_orient"])
-    entry("Random Seeds on is one undo entry", lambda: click(editor, "Random Seeds"), lambda l: l["random_seeds"])
-    entry("typing Layout Seed 7 is one undo entry", lambda: type_into(editor, "Layout Seed", "7"), lambda l: l["seed"] == 7)
+    entry("Properties: Module Snap on is one undo entry", lambda: p_click("Module Snap"), lambda l: l["snap"] == "module")
+    entry("Properties: Surface Snap on rests the pieces on what is under them, one undo entry", lambda: p_click("Surface Snap"),
+          lambda l: l["surface_snap"] and all(c["position"][1] >= (top - TOLERANCE) for c in l["children"]))
+    entry("Properties: Surface Orient on is one undo entry", lambda: p_click("Surface Orient"), lambda l: l["surface_orient"])
+    entry("Properties: Random Seeds on is one undo entry", lambda: p_click("Random Seeds"), lambda l: l["random_seeds"])
+    entry("Properties: typing Layout Seed 7 is one undo entry", lambda: p_type("Layout Seed", "7"), lambda l: l["seed"] == 7)
 
-    # A refused edit: a zero step with four pieces; its message shows in the section and nothing is recorded.
+    # A refused edit: a zero step with four pieces; its message shows in the group and nothing is recorded.
     before = child_snapshot(layout())
     depth = undo_depth(editor)
-    type_into(editor, "Step", "0")
+    p_type("Step", "0")
     editor.wait_idle()
     log_text = pav.read_log()
-    check("a refused row edit (Step 0 for 4 pieces) records nothing, keeps the children and shows its refusal (logged with the section's message)",
+    check("Properties: a refused row edit (Step 0 for 4 pieces) records nothing, keeps the children and shows its refusal (the group's Message row, logged with it)",
           (undo_depth(editor) == depth) and (child_snapshot(layout()) == before) and (abs(layout()["pattern"]["step"] - 2.0) < TOLERANCE) and
-          ("Level Kit: layout" in log_text) and ("step" in log_text.split("Level Kit: layout")[-1].splitlines()[0]),
+          ("Kit Layout:" in log_text) and ("step" in log_text.split("Kit Layout:")[-1].splitlines()[0]),
           f"depth {undo_depth(editor)} vs {depth}, step {layout()['pattern']['step']}")
 
     # Unlock, an edit while unlocked, Lock and Refresh.
-    unlocked = entry("Unlock is one undo entry and changes no child", lambda: click(editor, "Unlock"),
-                     lambda l: (not l["locked"]) and (child_snapshot(l) == before))
+    unlocked = entry("Properties: Unlock is one undo entry and changes no child", lambda: p_click("Lock.unlock"), lambda l: (not l["locked"]) and (child_snapshot(l) == before))
     if unlocked is not None:
-        entry("typing Count 2 on the unlocked layout changes its value and leaves its children", lambda: type_into(editor, "Count", "2"),
+        editor.call("select_items", {"scene_name": scene, "ids": [layout_id]})
+        editor.wait_idle()
+        entry("Properties: typing Count 2 on the unlocked layout changes its value and leaves its children", lambda: p_type("Count", "2"),
               lambda l: (l["pattern"]["count"] == 2) and (child_snapshot(l) == before))
-        relocked = entry("Lock replaces every child with the 2 its values make, one undo entry", lambda: click(editor, "Lock"),
+        relocked = entry("Properties: Lock replaces every child with the 2 its values make, one undo entry", lambda: p_click("Lock.lock"),
                          lambda l: l["locked"] and (l["child_count"] == 2) and not ({c["id"] for c in l["children"]} & {c[0] for c in before}))
         if relocked is not None:
             depth = undo_depth(editor)
-            click(editor, "Refresh")
-            editor.wait_idle()
-            check("Refresh of a layout whose children match records no entry", (undo_depth(editor) == depth) and (child_snapshot(layout()) == child_snapshot(relocked)), "")
-    states = {i.get("display_label"): i.get("status", {}).get("disabled") for i in imgui_items(editor) if i.get("display_label") in ("Lock", "Unlock", "Refresh")}
-    check("locked, Lock is disabled and Unlock and Refresh are enabled", states == {"Lock": True, "Unlock": False, "Refresh": False}, f"{states}")
+            p_click("Lock.refresh")
+            check("Properties: Refresh of a layout whose children match records no entry", (undo_depth(editor) == depth) and (child_snapshot(layout()) == child_snapshot(relocked)), "")
+    states = {i.get("display_label"): i.get("status", {}).get("disabled") for i in items() if i.get("display_label") in ("Lock.lock", "Lock.unlock", "Lock.refresh")}
+    check("Properties: locked, Lock is disabled and Unlock and Refresh are enabled", states == {"Lock.lock": True, "Lock.unlock": False, "Lock.refresh": False}, f"{states}")
 
-    # The window scene goes back to how it was for the next checks.
+    # A path layout: the Kind row offers Path alone and the Curve group shows beside the Kit Layout group.
+    path = editor.call("level_create_layout", {"scene_name": scene, "name": "properties path", "position": [-3.0, top, 3.0], "items": [{"shape": "basic.block"}],
+                                               "pattern": {"kind": "path", "count": 3}})
+    editor.wait_idle()
+    editor.call("select_items", {"scene_name": scene, "ids": [path["id"]]})
+    editor.wait_idle()
+    open_property_groups(editor, ["Curve", "Kit Layout"])
+    labels = {i.get("display_label") or "" for i in items()}
+    check("Properties: a selected path layout shows the Curve group and the Kit Layout group, its Kind row offering Path alone (a Curve node)",
+          {"Curve", "Closed", "Kit Layout", "Orientation.upright", "Orientation.tangent"} <= labels and bool({"Kind", "Kind.path"} & labels) and not ({"Kind.line", "Kind.grid", "Kind.ring"} & labels),
+          f"missing {sorted({'Curve', 'Closed', 'Kit Layout', 'Orientation.upright', 'Orientation.tangent'} - labels)}")
+    entry_path = layouts_by_id(editor, scene)[path["id"]]
+    depth = undo_depth(editor)
+    p_click("Orientation.tangent")
+    check("Properties: Follow Tangent on the path layout is one undo entry", (undo_depth(editor) == depth + 1) and
+          (layouts_by_id(editor, scene)[path["id"]]["pattern"]["orientation"] == "tangent") and (entry_path["pattern"]["orientation"] == "upright"), "")
+
     while undo_depth(editor) > start_depth:
         editor.call("undo")
         editor.wait_idle()
-    check("undoing every entry gives the window scene its piece back", (layout() is None) and (source["id"] in pieces_by_id(editor, scene)), "")
-    set_checkbox(editor, "Snap To Module", module_was)
-    set_checkbox(editor, "Snap To Surface", surface_was)
     editor.call("select_items", {"scene_name": scene, "ids": []})
     editor.wait_idle()
 
@@ -2084,6 +2682,344 @@ def check_properties_layout_write(editor, scene):
               (undo_depth(editor) == depth) and (after["pattern_text"] == before["pattern_text"]) and (child_snapshot(after) == child_snapshot(before)),
               f"depth {undo_depth(editor)} vs {depth}, pattern {after['pattern_text'][:80]}")
     editor.call("undo")
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+
+def layout_step_times(log_text, pieces_count):
+    """The milliseconds of the 'layout preview step' trace lines of one layout of the piece count."""
+    times = []
+    needle = f"layout preview step: 1 layouts, {pieces_count} pieces: "
+    for line in log_text.splitlines():
+        if needle in line and line.rstrip().endswith(" ms"):
+            try:
+                times.append(float(line.rstrip()[:-3].rsplit(" ", 1)[-1]))
+            except ValueError:
+                pass
+    return times
+
+
+def median(values):
+    return sorted(values)[len(values) // 2] if values else 0.0
+
+
+def check_layout_live_drags(editor, image_path):
+    """D3.9 live layout preview (doc/editor/level_tools.md "Live layout preview"): a locked layout's children follow a held drag
+    of a Properties "Kit Layout" row and a Transform tool drag of a surface-snapped layout node; the release records one entry,
+    Escape, a deselection and a refused value give the state from before the drag back."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    properties = "Properties"
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}},
+        {"shape": "nature.hill", "position": [6.0, 0.0, 6.0], "name": "hill", "parameters": {"seed": 2}}]})
+    editor.wait_idle()
+    editor.call("set_log_levels", {"loggers": {"editor.scene": "trace"}})
+    editor.call("set_window_visibility", {"title": properties, "visible": True, "focus": True})
+
+    def create(arguments):
+        made = editor.call("level_create_layout", dict({"scene_name": scene}, **arguments))
+        editor.wait_idle()
+        return made["id"]
+
+    fence_id = create({"name": "drag fence", "position": [-10.0, 0.0, -8.0], "items": [{"shape": "architecture.pillar", "parameters": {"height": 1.0}}],
+                       "pattern": {"kind": "line", "count": 12, "step": 1.0}})
+    gap_id = create({"name": "drag gap line", "position": [-10.0, 0.0, -4.0], "items": [{"shape": "basic.block"}],
+                     "pattern": {"kind": "line", "count_mode": "gap", "gap": 0.5, "length": 6.0}})
+    ring_id = create({"name": "drag ring", "position": [-6.0, 0.0, 12.0], "items": [{"shape": "basic.block"}], "pattern": {"kind": "ring", "count": 6, "radius": 2.0}})
+    hill_line_id = create({"name": "drag hill line", "position": [1.0, 0.0, 6.0], "surface_snap": True, "items": [{"shape": "basic.block", "parameters": {"width": 0.5, "depth": 0.5}}],
+                           "pattern": {"kind": "line", "count": 10, "step": 0.6}})
+    viewport = cv.frame_camera(editor, scene, [-4.0, 14.0, 10.0], [-4.0, 0.0, -2.0], [[-10.0, 0.0, -8.0], [3.0, 0.0, -8.0], [-10.0, 0.0, 0.0], [3.0, 0.0, 0.0]])
+
+    def lay(layout_id):
+        return layouts_by_id(editor, scene)[layout_id]
+
+    def select_layout(layout_id):
+        editor.call("select_items", {"scene_name": scene, "ids": [layout_id]})
+        editor.wait_idle()
+        open_property_groups(editor, ["Kit Layout"])
+
+    def child_heights(layout):
+        by_id = pieces_by_id(editor, scene)
+        return [size_of(by_id[c["id"]]["world_aabb"])[1] for c in layout["children"]]
+
+    def rest_distances(layout):
+        """level_snap_to_surface query_only of the children: per child whether a surface is under it and its resting distance."""
+        ids = [c["id"] for c in layout["children"]]
+        nodes = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": ids, "query_only": True}).get("nodes", [])
+        return [(n.get("surface_found"), round(n.get("distance", 9.0), 4)) for n in nodes]
+
+    def rests_as_released(mid, released):
+        """The held drag's children stand where the release's surface placement put them, and a support query answers the same for both."""
+        return (positions_match(child_positions(mid), child_positions(released), 1.0e-3) and (mid_distances == rest_distances(released))
+                and all(found for found, _ in mid_distances))
+
+    def release():
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+
+    def drag_row(window, label, pixels):
+        """drag_row() of the last recorded item with exactly the label, by its id (an earlier run's window may hold another)."""
+        matches = [i for i in editor.call("get_imgui_items", {"window": window, "limit": 3000, "visible_only": False, "label_contains": label}).get("items", [])
+                   if i.get("display_label") == label]
+        target = matches[-1]
+        editor.call("imgui_scroll_to_item", {"window": window, "id": target["id"]})
+        rect = editor.call("get_imgui_item_rect", {"window": window, "id": target["id"]})
+        x, y = rect["center_x"], rect["center_y"]
+        editor.call("mouse_drag", {"from": [x, y], "to": [x + pixels, y], "frames": 10, "hold": True})
+        return x, y
+
+    def undo_to(depth):
+        while undo_depth(editor) > depth:
+            editor.call("undo")
+            editor.wait_idle()
+
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+
+    # Item parameter row: mid-drag the pillars already have the dragged height, the values report it; one entry at the release.
+    select_layout(fence_id)
+    start = lay(fence_id)
+    start_snapshot = child_snapshot(start)
+    start_heights = child_heights(start)
+    depth = undo_depth(editor)
+    drag_row(properties, "height", 60.0)
+    editor.wait_idle()
+    mid = lay(fence_id)
+    mid_heights = child_heights(mid)
+    check("Kit Layout height row mid-drag: every pillar of the locked fence already has the dragged height, the values report it, no undo entry",
+          (len(mid_heights) == 12) and all(h > start_heights[0] + 0.2 for h in mid_heights) and (undo_depth(editor) == depth) and
+          (abs(mid["items"][0]["parameters"]["height"] - mid_heights[0]) < TOLERANCE),
+          f"heights {start_heights[0]:.3f} -> {mid_heights[0]:.3f}, item height {mid['items'][0]['parameters']['height']}, undo {undo_depth(editor) - depth}")
+    os.makedirs(os.path.dirname(image_path), exist_ok=True)
+    editor.call("capture_screenshot", {"path": image_path})
+    check("a mid-drag capture_screenshot of the fence is written", os.path.isfile(image_path), image_path)
+    print(f"layout drag screenshot: {image_path}", flush=True)
+    release()
+    end = lay(fence_id)
+    check("the release records one undo entry with the dragged height in the values and the children",
+          (undo_depth(editor) == depth + 1) and (len(end["children"]) == 12) and (abs(child_heights(end)[0] - mid_heights[0]) < TOLERANCE) and
+          (abs(end["items"][0]["parameters"]["height"] - mid_heights[0]) < TOLERANCE),
+          f"undo {undo_depth(editor) - depth}, height {child_heights(end)[0]:.3f}")
+    end_snapshot = child_snapshot(end)
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo restores the pre-drag children exactly (ids, transforms, records)", child_snapshot(lay(fence_id)) == start_snapshot, "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo gives the final children", child_snapshot(lay(fence_id)) == end_snapshot, "")
+    editor.call("undo")
+    editor.wait_idle()
+    times_fence = layout_step_times(pav.read_log(), 12)
+
+    # Escape mid-drag restores everything; the cached brush count and the piece count are back.
+    depth = undo_depth(editor)
+    count_before = cached_brush_count(editor, scene)
+    pieces_before = len(pieces(editor, scene))
+    drag_row(properties, "height", 60.0)
+    editor.wait_idle()
+    moved = child_heights(lay(fence_id))[0]
+    editor.call("key_press", {"key": "escape"})
+    editor.wait_idle()
+    release()
+    check("Escape mid-drag of the height row restores the children exactly (ids, transforms, records), the cached brush count, the piece count and the undo depth",
+          (moved > start_heights[0] + 0.2) and (child_snapshot(lay(fence_id)) == start_snapshot) and (cached_brush_count(editor, scene) == count_before) and
+          (len(pieces(editor, scene)) == pieces_before) and (undo_depth(editor) == depth),
+          f"mid {moved:.3f}, brushes {count_before} -> {cached_brush_count(editor, scene)}, pieces {pieces_before} -> {len(pieces(editor, scene))}, undo {undo_depth(editor) - depth}")
+
+    # A drag that ends on its starting value records nothing.
+    x, y = drag_row(properties, "height", 60.0)
+    editor.call("inject_input_events", {"events": [{"type": "mouse_move", "frame": i, "x": x + 60.0 - 12.0 * (i + 1), "y": y} for i in range(5)]})
+    editor.wait_idle()
+    release()
+    check("a drag that ends back on the starting height records nothing and leaves the children as they were",
+          (undo_depth(editor) == depth) and (child_snapshot(lay(fence_id)) == start_snapshot), f"undo {undo_depth(editor) - depth}")
+
+    # Deselecting the node mid-drag ends the preview without residue.
+    drag_row(properties, "height", 60.0)
+    editor.wait_idle()
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    release()
+    check("deselecting the layout mid-drag restores its children exactly with no undo entry",
+          (child_snapshot(lay(fence_id)) == start_snapshot) and (undo_depth(editor) == depth) and (len(pieces(editor, scene)) == pieces_before), "")
+
+    # Count row: pieces are added mid-drag; the run reports them.
+    select_layout(fence_id)
+    drag_row(properties, "Count", 60.0)
+    editor.wait_idle()
+    mid = lay(fence_id)
+    check("Count row mid-drag: the fence has the dragged count of pieces and level_get_layouts reports that run",
+          (mid["child_count"] > 12) and (mid["child_count"] == mid["pattern"]["count"]) and (mid["run"].get("count") == mid["child_count"]) and (undo_depth(editor) == depth),
+          f"{mid['child_count']} children, count {mid['pattern']['count']}, run {mid['run']}")
+    release()
+    check("the Count release is one undo entry", (undo_depth(editor) == depth + 1) and (lay(fence_id)["child_count"] == mid["child_count"]), "")
+    undo_to(depth)
+
+    # A refused value mid-drag (Step 0 for 12 pieces): the last valid step stays, the refusal shows, the release restores with no entry.
+    drag_row(properties, "Step", -300.0)
+    editor.wait_idle()
+    mid = lay(fence_id)
+    refusal = [line for line in pav.read_log().splitlines() if ("'drag fence' keeps its last previewed children" in line)]
+    check("a drag of Step into a refused 0 keeps the last valid children (values not written: step above 0) and the refusal is reported (the group's Message row, a trace line)",
+          (mid["child_count"] == 12) and (mid["pattern"]["step"] > 0.0) and bool(refusal) and (undo_depth(editor) == depth),
+          f"step {mid['pattern']['step']}, {mid['child_count']} children, {refusal[-1][-90:] if refusal else 'no refusal line'}")
+    release()
+    check("the release on the refused step records nothing and restores the pre-drag children",
+          (undo_depth(editor) == depth) and (child_snapshot(lay(fence_id)) == start_snapshot), f"undo {undo_depth(editor) - depth}")
+
+    # Gap mode: a Length drag changes the child count mid-drag; a Gap drag too.
+    select_layout(gap_id)
+    gap_start = lay(gap_id)
+    depth = undo_depth(editor)
+    drag_row(properties, "Length", 200.0)
+    editor.wait_idle()
+    mid = lay(gap_id)
+    check("Length row of a gap-mode line mid-drag: the child count already follows the longer space",
+          (mid["child_count"] > gap_start["child_count"]) and (mid["run"].get("count") == mid["child_count"]) and (undo_depth(editor) == depth),
+          f"{gap_start['child_count']} -> {mid['child_count']}, run {mid['run']}")
+    release()
+    undo_to(depth)
+    drag_row(properties, "Gap", 80.0)
+    editor.wait_idle()
+    mid = lay(gap_id)
+    check("Gap row mid-drag: fewer pieces at the wider gap", (mid["child_count"] < gap_start["child_count"]) and (undo_depth(editor) == depth),
+          f"{gap_start['child_count']} -> {mid['child_count']}")
+    release()
+    check("the Gap release is one undo entry", undo_depth(editor) == depth + 1, "")
+    undo_to(depth)
+
+    # Ring radius.
+    select_layout(ring_id)
+    ring_start = lay(ring_id)
+
+    def spread(layout):
+        positions = child_positions(layout)
+        center = [sum(p[i] for p in positions) / len(positions) for i in range(3)]
+        return sum(math.dist(p, center) for p in positions) / len(positions)
+
+    drag_row(properties, "Radius", 80.0)
+    editor.wait_idle()
+    mid = lay(ring_id)
+    check("Radius row of a ring mid-drag: the pieces already stand on the larger ring",
+          (spread(mid) > spread(ring_start) + 0.5) and (abs(spread(mid) - mid["pattern"]["radius"]) < 0.01) and (undo_depth(editor) == depth),
+          f"spread {spread(ring_start):.3f} -> {spread(mid):.3f}, radius {mid['pattern']['radius']}")
+    release()
+    undo_to(depth)
+
+    # Surface snap over the hill: a Step drag moves the pieces over it and each previewed piece rests on the surface under it.
+    select_layout(hill_line_id)
+    hill_start = lay(hill_line_id)
+    drag_row(properties, "Step", 40.0)
+    editor.wait_idle()
+    mid = lay(hill_line_id)
+    mid_distances = rest_distances(mid)
+    lifted = [p[1] for p in child_positions(mid) if p[1] > 0.05]
+    release()
+    check("Step row of a surface-snapped line over the hill mid-drag: every previewed piece rests on the surface under it (some on the hill) exactly as the release rests it",
+          rests_as_released(mid, lay(hill_line_id)) and bool(lifted) and (child_positions(mid) != child_positions(hill_start)) and (undo_depth(editor) == depth + 1),
+          f"{len(lifted)} lifted, step {mid['pattern']['step']}, undo {undo_depth(editor) - depth}")
+    undo_to(depth)
+
+    # An unlocked layout: the value changes at the release alone, its children never move.
+    editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": gap_id, "locked": False})
+    editor.wait_idle()
+    select_layout(gap_id)
+    unlocked_start = child_snapshot(lay(gap_id))
+    depth = undo_depth(editor)
+    drag_row(properties, "Length", 200.0)
+    editor.wait_idle()
+    mid = lay(gap_id)
+    release()
+    check("an unlocked layout's children do not move during or after a Length drag; the value changes at the release",
+          (child_snapshot(mid) == unlocked_start) and (child_snapshot(lay(gap_id)) == unlocked_start) and (undo_depth(editor) == depth + 1) and
+          (lay(gap_id)["pattern"]["length"] > 6.5), f"length {lay(gap_id)['pattern']['length']}")
+    undo_to(0)
+
+    # --- Transform tool drags (drag_selection drives the gizmo's path) of surface-snapped layout nodes over the hill. ---
+    stones_id = create({"name": "drag stones", "position": [1.0, 0.0, 3.5], "surface_snap": True, "items": [{"shape": "nature.rock", "parameters": {"seed": 3, "size": 0.5, "derive": []}}],
+                        "pattern": {"kind": "path", "count": 20}, "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [12.0, 0.0, 0.0]}]})
+    hill_ring_id = create({"name": "drag hill ring", "position": [6.0, 0.0, 9.5], "surface_snap": True, "items": [{"shape": "basic.block", "parameters": {"width": 0.5, "depth": 0.5}}],
+                           "pattern": {"kind": "ring", "count": 8, "radius": 2.0}})
+    rigid_id = create({"name": "drag rigid line", "position": [-10.0, 0.0, 4.0], "items": [{"shape": "basic.block"}], "pattern": {"kind": "line", "count": 4}})
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+
+    def local_positions(layout):
+        return [[c["position"][i] - layout["position"][i] for i in range(3)] for c in layout["children"]]
+
+    for name, layout_id, delta in (("path", stones_id, [0.0, 0.0, 2.5]), ("ring", hill_ring_id, [0.0, 0.0, -2.5])):
+        before = lay(layout_id)
+        before_snapshot = child_snapshot(before)
+        depth = undo_depth(editor)
+        editor.call("select_items", {"scene_name": scene, "ids": [layout_id]})
+        editor.wait_idle()
+        editor.call("drag_selection", {"translation": delta, "frames": 10, "release": False})
+        editor.wait_idle()
+        mid = lay(layout_id)
+        mid_distances = rest_distances(mid)
+        moved_ok = close(mid["position"], [before["position"][i] + delta[i] for i in range(3)])
+        rigid = [[before["children"][i]["position"][k] + delta[k] for k in range(3)] for i in range(len(before["children"]))]
+        rerested = [i for i in range(min(len(rigid), len(mid["children"]))) if abs(mid["children"][i]["position"][1] - rigid[i][1]) > 0.05]
+        kept_rule = all((mid["children"][i]["id"] == before["children"][i]["id"]) == close(local_positions(mid)[i], local_positions(before)[i], 1.0e-4)
+                        for i in range(min(len(mid["children"]), len(before["children"]))))
+        mid_depth = undo_depth(editor)
+        editor.call("drag_selection", {"action": "release"})
+        editor.wait_idle()
+        released = lay(layout_id)
+        check(f"Transform drag of a surface-snapped {name} layout over the hill, button held: the node moved, its pieces already re-rested on the surface "
+              "under their new positions exactly as the release rests them, a child keeps its id exactly when its local pose is unchanged (keep matching), no undo entry",
+              moved_ok and bool(rerested) and rests_as_released(mid, released) and kept_rule and (len(mid["children"]) == len(before["children"])) and (mid_depth == depth),
+              f"moved {moved_ok}, {len(rerested)} re-rested, kept rule {kept_rule}, {sum(1 for c in mid['children'] if c['id'] in {b['id'] for b in before['children']})} ids kept, "
+              f"largest position difference to the release {max((math.dist(a, b) for a, b in zip(child_positions(mid), child_positions(released))), default=0.0):.4f}, "
+              f"support query differences {[(i, a, b) for i, (a, b) in enumerate(zip(mid_distances, rest_distances(released))) if a != b][:4]}")
+        check(f"the {name} drag's release is one undo entry", undo_depth(editor) == depth + 1, f"undo {undo_depth(editor) - depth}")
+        editor.call("undo")
+        editor.wait_idle()
+        undone = lay(layout_id)
+        check(f"undo of the {name} drag restores the node transform and the pre-drag children exactly",
+              close(undone["position"], before["position"]) and (child_snapshot(undone) == before_snapshot), "")
+    times_stones = layout_step_times(pav.read_log(), 20)
+
+    # Both together: every dragged layout with a surface setting follows.
+    editor.call("select_items", {"scene_name": scene, "ids": [stones_id, hill_ring_id]})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    both_before = [lay(stones_id), lay(hill_ring_id)]
+    editor.call("drag_selection", {"translation": [1.5, 0.0, 0.0], "frames": 10, "release": False})
+    editor.wait_idle()
+    both_mid = [lay(stones_id), lay(hill_ring_id)]
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    both_released = [lay(stones_id), lay(hill_ring_id)]
+    followed = all((child_snapshot(m) != child_snapshot(b)) and positions_match(child_positions(m), child_positions(r), 1.0e-3)
+                   for b, m, r in zip(both_before, both_mid, both_released))
+    check("a drag of both surface-snapped layouts together: both follow mid-drag where the release puts them; the release is one entry",
+          followed and (undo_depth(editor) == depth + 1), f"undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # A layout without a surface setting moves rigidly: ids and local transforms kept.
+    rigid = lay(rigid_id)
+    editor.call("select_items", {"scene_name": scene, "ids": [rigid_id]})
+    editor.wait_idle()
+    editor.call("drag_selection", {"translation": [0.0, 0.0, 2.0], "frames": 10, "release": False})
+    editor.wait_idle()
+    mid = lay(rigid_id)
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    after = lay(rigid_id)
+    check("a layout without a surface setting dragged the same way keeps its children's ids and local transforms, mid-drag and after",
+          ([c["id"] for c in mid["children"]] == [c["id"] for c in rigid["children"]]) and positions_match(local_positions(mid), local_positions(rigid)) and
+          ([c["id"] for c in after["children"]] == [c["id"] for c in rigid["children"]]), "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    check("the preview steps are timed (trace lines 'layout preview step')", bool(times_fence) and bool(times_stones), f"{len(times_fence)} fence, {len(times_stones)} stones")
+    print(f"layout preview step: 12-pillar fence value drag {len(times_fence)} steps, median {median(times_fence):.3f} ms, max {max(times_fence) if times_fence else 0:.3f} ms; "
+          f"20-stone surface-snapped path Transform drag {len(times_stones)} steps, median {median(times_stones):.3f} ms, max {max(times_stones) if times_stones else 0:.3f} ms", flush=True)
+    editor.call("set_log_levels", {"loggers": {"editor.scene": "info"}})
     editor.call("select_items", {"scene_name": scene, "ids": []})
     editor.wait_idle()
 
@@ -3349,13 +4285,10 @@ def check_level_kit_window(editor, image_path):
     slab = fixtures[0]
     slab_top = slab["world_aabb"]["max"][1]
     known = {p["id"] for p in fixtures}
-    camera = editor.call("get_scene_cameras", {"scene_name": scene})["cameras"][0]
-    pitch = math.atan2(9.0, 12.0)
-    editor.call("set_node_transform", {"scene_name": scene, "node_id": camera["id"], "translation": [0.0, 9.0, 12.0],
-                                       "rotation_xyzw": [-math.sin(0.5 * pitch), 0.0, 0.0, math.cos(0.5 * pitch)]})
-    isolate_viewport(editor.call, scene_name=scene)
-    editor.wait_idle()
-    viewport = next(v for v in editor.call("get_viewports")["viewports"] if v.get("scene") == scene)
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    # The slab, where the section hovers and places.
+    viewport = cv.frame_camera(editor, scene, [0.0, 9.0, 12.0], [0.0, 0.0, 0.0],
+                               [[x, slab_top, z] for x in (-4.0, 4.0) for z in (-4.0, 4.0)])
     insert_button = binding_input(editor, "Brush_tool.insert", "mouse_button")
     rotate_key = binding_input(editor, "Brush_tool.rotate_cw", "key")
     # The window acts on the last hovered viewport.
@@ -3971,13 +4904,10 @@ def check_transform_surface(editor, image_path):
     slab, wedge, mover, mate, parent, child = fixtures
     slab_top = slab["world_aabb"]["max"][1]
     slope_normal = normalize([0.0, 2.0, 1.0])
-    camera = editor.call("get_scene_cameras", {"scene_name": scene})["cameras"][0]
-    pitch = math.atan2(9.0, 12.0)
-    editor.call("set_node_transform", {"scene_name": scene, "node_id": camera["id"], "translation": [0.0, 9.0, 12.0],
-                                       "rotation_xyzw": [-math.sin(0.5 * pitch), 0.0, 0.0, math.cos(0.5 * pitch)]})
-    isolate_viewport(editor.call, scene_name=scene)
-    editor.wait_idle()
-    viewport = next(v for v in editor.call("get_viewports")["viewports"] if v.get("scene") == scene)
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    # The pieces inside the viewport; the drags' 0.02 m tolerances need the default scale wherever it fits.
+    viewport = cv.frame_camera(editor, scene, [0.0, 9.0, 12.0], [0.0, 0.0, 0.0],
+                               [[-4.0, 0.0, -2.0], [-4.0, 0.0, 2.0], [4.0, 0.0, -2.0], [4.0, 0.0, 2.0], [-3.0, 3.5, -1.5]], limit=0.92)
     hover(editor, viewport, [0.0, slab_top, 0.0])
     kit_open = open_window(editor, WINDOW)
     transform_open = open_window(editor, TRANSFORM_WINDOW)
@@ -4162,8 +5092,12 @@ def main():
     parser.add_argument("--materials-image", default=DEFAULT_MATERIALS_IMAGE, help="slot material rows screenshot PNG (relative to the repository root or absolute)")
     parser.add_argument("--only-walkable", action="store_true", help="run the walkable level, persistence and window checks alone")
     parser.add_argument("--only-transform", action="store_true", help="run the surface settings and Transform tool checks alone")
+    parser.add_argument("--path-image", default=DEFAULT_PATH_IMAGE, help="path layout PNG (relative to the repository root or absolute)")
     parser.add_argument("--only-layouts", action="store_true", help="run the kit layout node checks alone")
+    parser.add_argument("--only-path-layouts", action="store_true", help="run the path layout checks alone")
     parser.add_argument("--only-window-layout", action="store_true", help="run the Level Kit window checks up to its Layout section alone")
+    parser.add_argument("--only-layout-drags", action="store_true", help="run the live layout preview checks alone")
+    parser.add_argument("--layout-drag-image", default=DEFAULT_LAYOUT_DRAG_IMAGE, help="mid-drag layout screenshot PNG (relative to the repository root or absolute)")
     args = parser.parse_args()
     image_path = args.image if os.path.isabs(args.image) else os.path.join(pav.REPO_ROOT, args.image)
     surface_image_path = args.surface_image if os.path.isabs(args.surface_image) else os.path.join(pav.REPO_ROOT, args.surface_image)
@@ -4176,6 +5110,8 @@ def main():
     group_image_path = args.group_image if os.path.isabs(args.group_image) else os.path.join(pav.REPO_ROOT, args.group_image)
     materials_image_path = args.materials_image if os.path.isabs(args.materials_image) else os.path.join(pav.REPO_ROOT, args.materials_image)
     transform_image_path = args.transform_image if os.path.isabs(args.transform_image) else os.path.join(pav.REPO_ROOT, args.transform_image)
+    path_image_path = args.path_image if os.path.isabs(args.path_image) else os.path.join(pav.REPO_ROOT, args.path_image)
+    layout_drag_image_path = args.layout_drag_image if os.path.isabs(args.layout_drag_image) else os.path.join(pav.REPO_ROOT, args.layout_drag_image)
     work = tempfile.mkdtemp(prefix="level_tools_verify_")
     # The window's checkboxes and its visibility rewrite these; the run gives them back as they were.
     restored = {}
@@ -4194,11 +5130,17 @@ def main():
         elif args.only_layouts:
             check_layout_patterns(editor)
             check_layouts(editor, work)
+            check_path_layouts(editor, work, path_image_path)
             check_layout_tree(editor)
+        elif args.only_path_layouts:
+            check_path_layouts(editor, work, path_image_path)
         elif args.only_window_layout:
             window_scene, _ = check_level_kit_window(editor, window_image_path)
             check_window_layout(editor, window_scene, layout_image_path)
+            check_properties_layout(editor, window_scene)
             check_properties_layout_write(editor, window_scene)
+        elif args.only_layout_drags:
+            check_layout_live_drags(editor, layout_drag_image_path)
         else:
             if not args.only_walkable:
                 scene = create_scene(editor)
@@ -4221,6 +5163,7 @@ def main():
                 check_groups(editor, work)
                 check_material_slots(editor, work)
                 check_layouts(editor, work)
+                check_path_layouts(editor, work, path_image_path)
                 check_layout_tree(editor)
             walkable_scene = check_walkable_level(editor, walkable_image_path)
             check_persistence(editor, scene, walkable_scene, work)
@@ -4230,10 +5173,13 @@ def main():
             check_live_drags(editor, window_scene, stairs, editor.call("level_get_kits", {"scene_name": window_scene}))
             check_window_queries(editor, window_scene, queries_image_path)
             check_window_layout(editor, window_scene, layout_image_path)
+            check_properties_layout(editor, window_scene)
             check_properties_layout_write(editor, window_scene)
             check_window_group(editor, window_scene, group_image_path)
             check_window_materials(editor, window_scene, materials_image_path)
             check_transform_surface(editor, transform_image_path)
+            # Last: it makes its own scene the active one.
+            check_layout_live_drags(editor, layout_drag_image_path)
     except Exception as error:  # noqa: BLE001 - a failed step is a failed check
         check("run completed without an error", False, f"{type(error).__name__}: {error}")
     finally:

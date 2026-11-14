@@ -16,7 +16,7 @@ Level Kit window, persistence, placing in the viewport with the Brush
 tool, live parameter drags, derive from seed, rock forms, surface settings in the toolbar and the
 Transform tool), step 8 (region contents, height map and support report as MCP tools and
 Level Kit window actions), step 9 (overlap report and level check, likewise)
-step 10, the pattern expansion (line, grid, ring and polyline runs) and the
+step 10, the pattern expansion (line, grid and ring runs) and the
 group tools (group, ungroup, duplicate and mirror), over MCP and in the Level
 Kit window, step 11, material slots per shape (the tree's bark and
 foliage, a palette default and alternatives per slot, a material per slot at
@@ -25,9 +25,14 @@ values with count and gap modes, generation, the lock with its operation, the
 refusals for children of a locked node, persistence and its MCP tools), step
 24, the kit layout node in the Level Kit window (Make Layout from a piece and
 the rows of every value, items, lock and refresh), and step 25, a refused
-Properties row write of a `Kit_layout` value recording no undo entry, are
-built and described in `doc/editor/level_tools.md` and
-`doc/editor/navigation.md`.
+Properties row write of a `Kit_layout` value recording no undo entry, and
+step 22, the path layout as one curve node carrying the layout values
+(R5.12.8, `doc/plans/curves.md` C6, C7: count and gap over open and closed
+curves, upright and tangent orientation, laid out again in the entry of each
+curve edit and live during a point drag), and the kit layout node's values in
+the Properties window with the Level Kit window holding the initial values of
+a new layout node (R5.12.9), are built and described in
+`doc/editor/level_tools.md` and `doc/editor/navigation.md`.
 
 ## Next steps
 
@@ -69,14 +74,35 @@ built and described in `doc/editor/level_tools.md` and
     (`mouse_drag` and `Mouse_move_event` carry floats). Not yet known:
     whether the script's projection (`window_point()`) or the Transform
     tool's drag mapping is off. `check_spatial_queries` closes its scene
-    until this is found.
+    until this is found. `scripts/curve_verify.py` reproduces it on
+    point drags in one fixed viewport: an X drag lands 0.84 px short at
+    288.6 px/m (lattice point) and 0.85 px short at 311.7 px/m (curve
+    point), a Y drag 0.59 px over at 282.7 px/m, so the error is a
+    sub-pixel offset per drag, not a scale.
 21. An exact overlap depth for two triangle mesh pieces
     (`find_overlaps()` measures such a pair against convex hulls, which
     reports a piece standing inside another piece's opening as an
     overlap).
-22. The kit layout node's path over a curve node edited in the viewport:
-    `doc/plans/curves.md` steps 1 - 4 (R5.12.8).
-26. A live preview while a value row of the Level Kit window's Layout
-    section is dragged (D4.9): the children follow the dragged value without
-    an operation, and the release commits one entry, as the parameter rows'
-    preview does for a piece (D3.6).
+27. A move of a node through the Properties window's transform rows runs
+    the kit layout move hook (`Level_kits::append_layout_move_operations()`)
+    and its live preview (`doc/editor/level_tools.md` "Live layout
+    preview"), as the Transform tool and `set_node_transform` do: today a
+    surface-snapped layout moved that way keeps its old children until a
+    refresh. Those rows are generic `Dependency_property` rows that commit a
+    `Property_set_operation` of the node's transform property, not the
+    Transform tool's edit, so the hook needs a transform-property follow-up
+    in `Property_set_operation` and the preview a drag hook in the generic
+    row editor.
+29. Surface resting disagrees with itself in three observed cases; find
+    the cause (the pass-through rule of `cast_surface_ray()`, or bounds
+    taken from another mesh than the piece's own):
+    - a ring layout of trees with per-element seeds and snap to surface on
+      a hill leaves some trees 0.02 - 0.05 m above the surface (the support
+      report lists them);
+    - on a hill, `level_snap_to_surface` with `query_only` answers 0.19 m
+      away from where the layout generation rests the same piece;
+    - overlapping 1.4 m rocks whose rays start inside a hill rest 0.36 m
+      apart between a preview step and the release.
+30. The Transform tool has no Escape cancel for a node drag (the release
+    always records); with one, a cancelled drag of a surface-snapped layout
+    node ends its preview and restores the children.

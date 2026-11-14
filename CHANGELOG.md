@@ -9,6 +9,29 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::math`: `curve_path.hpp` - `insert_curve_point()` (splits a span by
+  de Casteljau keeping the shape), `make_curve_end_point()` /
+  `add_curve_point()` with `Curve_end`, and
+  `Curve_path_table::get_nearest_location()` (`doc/erhe/math.md` "Curve
+  path").
+- `erhe::scene`: `curve.hpp` - the `Curve` prim class (a `Gprim` holding one
+  `erhe::math::Curve_path` with its baked table and draw points; `set_path()`,
+  `get_path()`, `get_table()`, `get_draw_points()`, `get_revision()`),
+  `Curve_change`, `make_default_curve_path()`, `c_str(Curve_point_kind)` and
+  `curve_point_kind_from_string()`; `Scene_host::on_curve_changed()` (empty
+  default) (`doc/editor/curves.md`).
+- `erhe::item`: `Item_type::curve` / `index_curve`, the `Curve` type bit;
+  `library_end_index` moves up by one.
+- `erhe::gltf`: `gltf_curve.hpp` - `curve_path_to_json()` and
+  `curve_path_from_json()`; the exporter writes and the parser reads the
+  `ERHE_curve` node extension (`doc/gltf_extensions/ERHE_curve.md`).
+- `erhe::math`: `curve_path.hpp` - `Curve_point`, `Curve_point_kind`,
+  `Curve_path`, `Curve_closure`, `Curve_handle`, `Curve_span`,
+  `Curve_span_shape`, `Curve_path_table`, `Curve_location`, `Curve_sample`,
+  `Curve_frame`, the handle and kind helpers, `make_curve_span()`,
+  `make_up_frame()`, and the general-degree `bezier_point()`,
+  `bezier_unit_tangent()`, `initial_transport_up()` and `transport_up()`:
+  3D curves stepped by distance (`doc/erhe/math.md` "Curve path").
 - `erhe::physics`: `ICollision_shape::get_penetration_depth()`: the greatest
   penetration depth of two shapes at node-space transforms, nothing when the
   backend cannot collide the pair (`doc/erhe/physics.md` "Key Types");

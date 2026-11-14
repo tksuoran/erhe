@@ -1527,6 +1527,31 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
         json{{"scene_name", scene}, {"light_name", "undo test light"}, {"intensity", 7.5}, {"color", {1.0, 0.5, 0.25}}, {"position", {1.0, 2.0, 3.0}}}
     );
     check_one_entry("edit_material", json{{"scene_name", scene}, {"material_name", env.material_name()}, {"metallic", 0.25}});
+    // A curve prim (doc/editor/curves.md): its creation and every path edit are one entry each.
+    {
+        json created;
+        check_one_entry_into(
+            "create_curve",
+            json{{"scene_name", scene}, {"name", "undo test curve"}, {"points", json::array({
+                json{{"position", {0.0, 0.0, 0.0}}},
+                json{{"position", {2.0, 0.0, 0.0}}},
+                json{{"position", {2.0, 0.0, 2.0}}}
+            })}},
+            created
+        );
+        const std::size_t curve_id = created.at("id").get<std::size_t>();
+        check_one_entry(
+            "set_curve",
+            json{{"scene_name", scene}, {"curve_id", curve_id}, {"closed", true}, {"points", json::array({
+                json{{"position", {0.0, 0.0, 0.0}}, {"out", {0.5, 0.0, 0.0}}, {"kind", "free"}},
+                json{{"position", {2.0, 0.0, 0.0}}},
+                json{{"position", {2.0, 1.0, 2.0}}}
+            })}}
+        );
+        check_one_entry("curve_set_point_kind", json{{"scene_name", scene}, {"curve_id", curve_id}, {"index", 1}, {"kind", "smooth"}});
+        check_one_entry("curve_add_point", json{{"scene_name", scene}, {"curve_id", curve_id}, {"at", "curve"}, {"distance", 1.0}});
+        check_one_entry("curve_remove_points", json{{"scene_name", scene}, {"curve_id", curve_id}, {"indices", {1}}});
+    }
     check_one_entry("lightmap_subdivide_tile", json{{"level", 0}, {"ix", 0}, {"iz", 0}});
     check_one_entry("lightmap_merge_tile",     json{{"level", 1}, {"ix", 0}, {"iz", 0}});
     // Two pieces and the palette material they add are one entry.
@@ -1589,6 +1614,51 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
         check_one_entry(
             "level_create_layout",
             json{{"scene_name", scene}, {"from_piece_id", source.at("pieces")[0].at("id")}, {"pattern", {{"kind", "line"}, {"count", 3}}}}
+        );
+        // A path layout is its own curve node; a curve edit and the regeneration it implies are one entry.
+        json path_layout;
+        check_one_entry_into(
+            "level_create_layout",
+            json{{"scene_name", scene}, {"position", {30.0, 0.0, 30.0}}, {"items", json::array({json{{"shape", "basic.block"}}})},
+                 {"pattern", {{"kind", "path"}, {"count", 3}}}, {"points", json::array({
+                     json{{"position", {0.0, 0.0, 0.0}}},
+                     json{{"position", {4.0, 0.0, 0.0}}}
+                 })}},
+            path_layout
+        );
+        ASSERT_TRUE(path_layout.contains("curve")) << path_layout.dump();
+        EXPECT_EQ(path_layout.at("type").get<std::string>(), "Curve");
+        const std::size_t path_curve_id = path_layout.at("id").get<std::size_t>();
+        check_one_entry(
+            "set_curve",
+            json{{"scene_name", scene}, {"curve_id", path_curve_id}, {"points", json::array({
+                json{{"position", {0.0, 0.0, 0.0}}},
+                json{{"position", {4.0, 0.0, 0.0}}},
+                json{{"position", {4.0, 0.0, 4.0}}}
+            })}}
+        );
+        check_one_entry("level_set_layout", json{{"scene_name", scene}, {"layout_id", path_layout.at("id")}, {"pattern", {{"orientation", "tangent"}}}});
+        // A plain curve node made a path layout in place.
+        json plain_curve;
+        check_one_entry_into(
+            "create_curve",
+            json{{"scene_name", scene}, {"name", "undo test plain curve"}, {"position", {40.0, 0.0, 30.0}}},
+            plain_curve
+        );
+        check_one_entry(
+            "level_create_layout",
+            json{{"scene_name", scene}, {"curve_id", plain_curve.at("id")}, {"items", json::array({json{{"shape", "basic.block"}}})}, {"pattern", {{"kind", "path"}, {"count", 2}}}}
+        );
+        // From a piece: the piece's place becomes a curve node carrying the layout, in the same entry.
+        json path_source;
+        check_one_entry_into(
+            "level_place_pieces",
+            json{{"scene_name", scene}, {"pieces", json::array({json{{"shape", "basic.block"}, {"position", {30.0, 0.0, 36.0}}}})}},
+            path_source
+        );
+        check_one_entry(
+            "level_create_layout",
+            json{{"scene_name", scene}, {"from_piece_id", path_source.at("pieces")[0].at("id")}, {"pattern", {{"kind", "path"}, {"count", 3}}}}
         );
     }
 

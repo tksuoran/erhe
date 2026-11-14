@@ -1,5 +1,7 @@
 #include "level/level_repeat.hpp"
 
+#include "erhe_math/curve_path.hpp"
+
 #include <gtest/gtest.h>
 
 #include <glm/gtc/quaternion.hpp>
@@ -10,6 +12,7 @@
 
 namespace {
 
+using editor::Repeat_path_orientation;
 using editor::Repeat_pattern;
 using editor::Repeat_pattern_kind;
 using editor::Repeat_pose;
@@ -120,15 +123,36 @@ TEST(Level_repeat, ring_arc_includes_both_ends)
     }
 }
 
-TEST(Level_repeat, polyline_turns_at_a_corner_and_drops_the_remainder)
+// A curve of corner points: a polyline.
+auto corner_table(const std::vector<glm::vec3>& positions, const erhe::math::Curve_closure closure) -> erhe::math::Curve_path_table
+{
+    erhe::math::Curve_path path;
+    for (const glm::vec3& position : positions) {
+        path.points.push_back(erhe::math::Curve_point{.position = position});
+    }
+    path.closure = closure;
+    erhe::math::Curve_path_table table;
+    table.build(path);
+    return table;
+}
+
+auto path_pattern(const erhe::math::Curve_path_table& table, const int count, const float step, const Repeat_path_orientation orientation) -> Repeat_pattern
 {
     Repeat_pattern pattern;
-    pattern.kind         = Repeat_pattern_kind::polyline;
-    pattern.points       = {{4.0f, 0.0f, 0.0f}, {4.0f, 0.0f, 3.0f}};
-    pattern.path_spacing = 2.0f;
+    pattern.kind             = Repeat_pattern_kind::path;
+    pattern.count            = count;
+    pattern.path             = &table;
+    pattern.path_step        = step;
+    pattern.path_orientation = orientation;
+    return pattern;
+}
+
+TEST(Level_repeat, path_turns_at_a_corner_point)
+{
+    const erhe::math::Curve_path_table table = corner_table({{0.0f, 0.0f, 0.0f}, {4.0f, 0.0f, 0.0f}, {4.0f, 0.0f, 3.0f}}, erhe::math::Curve_closure::open);
     std::vector<Repeat_pose> poses;
-    ASSERT_EQ(expand(pattern, Repeat_pose{}, poses), "");
-    // 7 m of path at 2 m: arc lengths 0, 2, 4 (the corner) and 6; the last 1 m holds no piece.
+    ASSERT_EQ(expand(path_pattern(table, 4, 2.0f, Repeat_path_orientation::upright), Repeat_pose{}, poses), "");
+    // Distances 0, 2, 4 (the corner) and 6 of the 7 m L.
     ASSERT_EQ(poses.size(), 4u);
     expect_position(poses[0], {0.0f, 0.0f, 0.0f});
     expect_position(poses[1], {2.0f, 0.0f, 0.0f});
@@ -136,53 +160,60 @@ TEST(Level_repeat, polyline_turns_at_a_corner_and_drops_the_remainder)
     expect_position(poses[3], {4.0f, 0.0f, 2.0f});
     expect_rotation(poses[0], glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
     expect_rotation(poses[1], glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
-    // The piece at the corner takes the segment that leaves it: x along +z.
+    // The piece at the corner takes the span that leaves it: x along +z.
     expect_rotation(poses[2], yaw(-90.0f));
     expect_rotation(poses[3], yaw(-90.0f));
     const glm::vec3 x_axis = poses[3].rotation * glm::vec3{1.0f, 0.0f, 0.0f};
     EXPECT_NEAR(x_axis.z, 1.0f, c_tolerance);
+    // A distance a rounding short of the corner is the corner's.
+    ASSERT_EQ(expand(path_pattern(table, 3, 2.0f - 1.0e-6f, Repeat_path_orientation::upright), Repeat_pose{}, poses), "");
+    expect_rotation(poses[2], yaw(-90.0f));
 }
 
-TEST(Level_repeat, polyline_end_on_a_step_gets_a_piece)
+TEST(Level_repeat, path_orientations_on_a_slope_and_a_vertical_span)
 {
-    Repeat_pattern pattern;
-    pattern.kind         = Repeat_pattern_kind::polyline;
-    pattern.points       = {{3.0f, 0.0f, 0.0f}};
-    pattern.path_spacing = 1.5f;
+    const erhe::math::Curve_path_table slope = corner_table({{0.0f, 0.0f, 0.0f}, {3.0f, 4.0f, 0.0f}}, erhe::math::Curve_closure::open);
     std::vector<Repeat_pose> poses;
-    ASSERT_EQ(expand(pattern, Repeat_pose{.position = glm::vec3{0.0f}, .rotation = yaw(90.0f)}, poses), "");
+    ASSERT_EQ(expand(path_pattern(slope, 3, 2.5f, Repeat_path_orientation::upright), Repeat_pose{}, poses), "");
     ASSERT_EQ(poses.size(), 3u);
-    expect_position(poses[2], {3.0f, 0.0f, 0.0f});
-    // The start's x axis (world -z after the yaw) turns onto the path.
+    expect_position(poses[1], {1.5f, 2.0f, 0.0f});
+    expect_position(poses[2], {3.0f, 4.0f, 0.0f});
+    expect_rotation(poses[1], glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
+    // Tangent: the x axis along the slope, pitched about z.
+    ASSERT_EQ(expand(path_pattern(slope, 3, 2.5f, Repeat_path_orientation::tangent), Repeat_pose{}, poses), "");
+    const glm::quat pitch = glm::angleAxis(std::atan2(4.0f, 3.0f), glm::vec3{0.0f, 0.0f, 1.0f});
+    for (const Repeat_pose& pose : poses) {
+        expect_rotation(pose, pitch);
+    }
+
+    // A vertical span has no heading: its pieces take the heading of the first span that has one.
+    const erhe::math::Curve_path_table riser = corner_table({{0.0f, 0.0f, 0.0f}, {0.0f, 2.0f, 0.0f}, {2.0f, 2.0f, 0.0f}}, erhe::math::Curve_closure::open);
+    ASSERT_EQ(expand(path_pattern(riser, 5, 1.0f, Repeat_path_orientation::upright), Repeat_pose{}, poses), "");
+    ASSERT_EQ(poses.size(), 5u);
+    expect_position(poses[1], {0.0f, 1.0f, 0.0f});
+    expect_position(poses[3], {1.0f, 2.0f, 0.0f});
     for (const Repeat_pose& pose : poses) {
         expect_rotation(pose, glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
     }
 }
 
-TEST(Level_repeat, polyline_slopes_and_vertical_segments_keep_upright)
+TEST(Level_repeat, path_on_a_closed_curve_and_from_a_start_pose)
 {
-    Repeat_pattern pattern;
-    pattern.kind         = Repeat_pattern_kind::polyline;
-    pattern.points       = {{3.0f, 4.0f, 0.0f}};
-    pattern.path_spacing = 2.5f;
+    const erhe::math::Curve_path_table square = corner_table({{0.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 2.0f}, {0.0f, 0.0f, 2.0f}}, erhe::math::Curve_closure::closed);
     std::vector<Repeat_pose> poses;
-    ASSERT_EQ(expand(pattern, Repeat_pose{}, poses), "");
-    ASSERT_EQ(poses.size(), 3u);
-    expect_position(poses[1], {1.5f, 2.0f, 0.0f});
-    expect_position(poses[2], {3.0f, 4.0f, 0.0f});
+    ASSERT_EQ(expand(path_pattern(square, 4, 2.0f, Repeat_path_orientation::upright), Repeat_pose{}, poses), "");
+    ASSERT_EQ(poses.size(), 4u);
+    expect_position(poses[1], {2.0f, 0.0f, 0.0f});
+    expect_position(poses[3], {0.0f, 0.0f, 2.0f});
+    expect_rotation(poses[0], glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
+    expect_rotation(poses[1], yaw(-90.0f));
+    expect_rotation(poses[2], yaw(180.0f));
+    expect_rotation(poses[3], yaw(90.0f));
+    // The curve in the start frame: the poses move and turn with it.
+    const Repeat_pose start{.position = glm::vec3{10.0f, 0.0f, 0.0f}, .rotation = yaw(90.0f)};
+    ASSERT_EQ(expand(path_pattern(square, 4, 2.0f, Repeat_path_orientation::upright), start, poses), "");
+    expect_position(poses[1], {10.0f, 0.0f, -2.0f});
     expect_rotation(poses[1], glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
-
-    // A vertical segment has no heading: its pieces keep the heading they had.
-    pattern.points       = {{0.0f, 2.0f, 0.0f}, {2.0f, 2.0f, 0.0f}};
-    pattern.path_spacing = 1.0f;
-    ASSERT_EQ(expand(pattern, Repeat_pose{.position = glm::vec3{0.0f}, .rotation = yaw(30.0f)}, poses), "");
-    ASSERT_EQ(poses.size(), 5u);
-    expect_rotation(poses[0], yaw(30.0f));
-    expect_rotation(poses[1], yaw(30.0f));
-    expect_position(poses[1], {0.0f, 1.0f, 0.0f});
-    expect_position(poses[3], {1.0f, 2.0f, 0.0f});
-    expect_rotation(poses[2], glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
-    expect_rotation(poses[4], glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
 }
 
 TEST(Level_repeat, refusals_leave_no_poses)
@@ -222,14 +253,15 @@ TEST(Level_repeat, refusals_leave_no_poses)
     EXPECT_NE(refusal(ring), "");
 
     Repeat_pattern path;
-    path.kind = Repeat_pattern_kind::polyline;
+    path.kind = Repeat_pattern_kind::path;
+    EXPECT_NE(refusal(path).find("curve"), std::string::npos);
+    const erhe::math::Curve_path_table table = corner_table({{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}}, erhe::math::Curve_closure::open);
+    path.path      = &table;
+    path.path_step = -1.0f;
     EXPECT_NE(refusal(path), "");
-    path.points       = {{2000.0f, 0.0f, 0.0f}};
-    path.path_spacing = 0.0f;
-    EXPECT_NE(refusal(path), "");
-    path.path_spacing = 1.0f;
-    const std::string path_text = refusal(path);
-    EXPECT_NE(path_text.find("2001"), std::string::npos) << path_text;
+    path.path_step = 1.0f;
+    path.count     = 1025;
+    EXPECT_NE(refusal(path).find("1024"), std::string::npos);
 }
 
 } // anonymous namespace

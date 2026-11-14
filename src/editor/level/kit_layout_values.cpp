@@ -3,6 +3,8 @@
 #include "level/kit_mesh_builder.hpp"
 #include "level/kit_shape.hpp"
 
+#include "erhe_math/curve_path.hpp"
+
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
@@ -31,7 +33,7 @@ constexpr double c_fit_epsilon = 1.0e-4;
 
 [[nodiscard]] auto parse_kind(const std::string& name, Repeat_pattern_kind& out_kind) -> bool
 {
-    for (const Repeat_pattern_kind kind : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::polyline}) {
+    for (const Repeat_pattern_kind kind : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path}) {
         if (name == c_str(kind)) {
             out_kind = kind;
             return true;
@@ -176,10 +178,6 @@ auto c_str(const Repeat_ring_facing facing) -> const char*
 
 auto to_canonical_text(const Kit_layout_pattern& pattern) -> std::string
 {
-    json points = json::array();
-    for (const glm::vec3& point : pattern.points) {
-        points.push_back(vec3_json(point));
-    }
     const json object{
         {"kind",        c_str(pattern.kind)},
         {"count_mode",  c_str(pattern.count_mode)},
@@ -195,7 +193,7 @@ auto to_canonical_text(const Kit_layout_pattern& pattern) -> std::string
         {"radius",      hex_json(pattern.radius)},
         {"arc_degrees", hex_json(pattern.arc_degrees)},
         {"facing",      c_str(pattern.facing)},
-        {"points",      points}
+        {"orientation", c_str(pattern.orientation)}
     };
     return object.dump();
 }
@@ -239,15 +237,13 @@ auto parse_layout_pattern(const std::string_view text, Kit_layout_pattern& out_p
     } else if (!facing.empty()) {
         reader.fail(fmt::format("unknown ring facing '{}'", facing));
     }
-    const json* points = reader.find("points");
-    if ((points != nullptr) && !points->is_array()) {
-        reader.fail("'points' is not a list");
-    } else if (points != nullptr) {
-        for (const json& point : *points) {
-            glm::vec3 value{0.0f};
-            reader.read_vec3(point, "points", value);
-            pattern.points.push_back(value);
-        }
+    const std::string orientation = reader.find_string("orientation");
+    if (orientation == c_str(Repeat_path_orientation::upright)) {
+        pattern.orientation = Repeat_path_orientation::upright;
+    } else if (orientation == c_str(Repeat_path_orientation::tangent)) {
+        pattern.orientation = Repeat_path_orientation::tangent;
+    } else if (!orientation.empty()) {
+        reader.fail(fmt::format("unknown path orientation '{}'", orientation));
     }
     const std::string error = reader.finish("pattern");
     if (!error.empty()) {
@@ -318,18 +314,29 @@ auto parse_layout_items(const std::string_view text, std::vector<Kit_layout_item
     return {};
 }
 
-auto get_path_length(const std::span<const glm::vec3> points) -> double
+void transform_curve_path(const erhe::math::Curve_path& path, const glm::mat4& transform, erhe::math::Curve_path& out_path)
 {
-    double    length = 0.0;
-    glm::vec3 from{0.0f};
-    for (const glm::vec3& point : points) {
-        length += static_cast<double>(glm::length(point - from));
-        from = point;
+    out_path.points.clear();
+    out_path.closure = path.closure;
+    const glm::mat3 linear{transform};
+    for (const erhe::math::Curve_point& point : path.points) {
+        out_path.points.push_back(
+            erhe::math::Curve_point{
+                .position   = glm::vec3{transform * glm::vec4{point.position, 1.0f}},
+                .in_handle  = linear * point.in_handle,
+                .out_handle = linear * point.out_handle,
+                .kind       = point.kind
+            }
+        );
     }
-    return length;
 }
 
-auto resolve_layout_pattern(const Kit_layout_pattern& pattern, const float item_extent, Kit_layout_run& out_run) -> std::string
+auto resolve_layout_pattern(
+    const Kit_layout_pattern&                 pattern,
+    const float                               item_extent,
+    const erhe::math::Curve_path_table* const path_table,
+    Kit_layout_run&                           out_run
+) -> std::string
 {
     out_run = Kit_layout_run{};
     Repeat_pattern& run = out_run.pattern;
@@ -434,32 +441,34 @@ auto resolve_layout_pattern(const Kit_layout_pattern& pattern, const float item_
                 : ((count > 1.0) ? static_cast<float>(arc / (count - 1.0)) : 0.0f);
             return {};
         }
-        case Repeat_pattern_kind::polyline: {
-            if (pattern.points.empty()) {
-                return "a path needs at least one point after the origin";
+        case Repeat_pattern_kind::path: {
+            if (path_table == nullptr) {
+                return "a path layout needs a curve";
             }
-            for (const glm::vec3& point : pattern.points) {
-                if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z)) {
-                    return "the path points must be finite";
-                }
-            }
-            const double length = get_path_length(pattern.points);
+            const double length = static_cast<double>(path_table->get_length());
+            const bool   closed = (path_table->get_closure() == erhe::math::Curve_closure::closed);
             double count = static_cast<double>(pattern.count);
             if (gap_mode) {
-                count = span_count(length, step_min);
+                // A closed curve closes as a full ring does: its last gap is a gap like the others.
+                count = closed
+                    ? std::max(1.0, std::floor((length / step_min) + c_fit_epsilon))
+                    : span_count(length, step_min);
                 if (count > static_cast<double>(c_max_repeat_count)) {
-                    return count_limit_refusal("path", length, step_min, count);
+                    return count_limit_refusal("curve", length, step_min, count);
                 }
             }
             if ((count > 1.0) && !(length > 0.0)) {
-                return fmt::format("the path has no length: it holds one piece, not {:.0f}", count);
+                return fmt::format("the curve has no length: it holds one piece, not {:.0f}", count);
             }
-            run.points       = pattern.points;
-            // One element: a spacing past the path's end leaves element 0 alone.
-            run.path_spacing = (count > 1.0) ? static_cast<float>(length / (count - 1.0)) : static_cast<float>(length + 1.0);
-            out_run.count    = static_cast<std::size_t>(count);
-            out_run.space    = static_cast<float>(length);
-            out_run.step     = (count > 1.0) ? run.path_spacing : 0.0f;
+            // An open curve holds a piece at each end; a closed one spreads them around without one at the seam twice.
+            const double step = closed ? (length / count) : ((count > 1.0) ? (length / (count - 1.0)) : 0.0);
+            run.count            = static_cast<int>(count);
+            run.path             = path_table;
+            run.path_step        = static_cast<float>(step);
+            run.path_orientation = pattern.orientation;
+            out_run.count        = static_cast<std::size_t>(count);
+            out_run.space        = static_cast<float>(length);
+            out_run.step         = (count > 1.0) ? static_cast<float>(step) : 0.0f;
             return {};
         }
         default: {

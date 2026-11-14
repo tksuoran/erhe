@@ -54,6 +54,7 @@
 #include "erhe_physics/physics_joint_settings.hpp"
 #include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -125,6 +126,17 @@ Create_new_scope_command::Create_new_scope_command(erhe::commands::Commands& com
 auto Create_new_scope_command::try_call() -> bool
 {
     return m_context.scene_commands->create_new_scope().operator bool();
+}
+
+Create_new_curve_command::Create_new_curve_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.create_new_curve"}
+    , m_context{context}
+{
+}
+
+auto Create_new_curve_command::try_call() -> bool
+{
+    return m_context.scene_commands->create_new_curve().operator bool();
 }
 
 Create_new_light_command::Create_new_light_command(erhe::commands::Commands& commands, App_context& context)
@@ -349,6 +361,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     , m_create_new_camera_command      {commands, context}
     , m_create_new_xform_command  {commands, context}
     , m_create_new_scope_command       {commands, context}
+    , m_create_new_curve_command       {commands, context}
     , m_create_new_light_command       {commands, context}
     , m_create_new_rendertarget_command{commands, context}
     , m_create_new_joint_command       {commands, context}
@@ -365,6 +378,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.register_command   (&m_create_new_camera_command);
     commands.register_command   (&m_create_new_xform_command);
     commands.register_command   (&m_create_new_scope_command);
+    commands.register_command   (&m_create_new_curve_command);
     commands.register_command   (&m_create_new_light_command);
     commands.register_command   (&m_create_new_rendertarget_command);
     commands.register_command   (&m_create_new_joint_command);
@@ -383,6 +397,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.bind_command_to_menu(&m_create_new_camera_command,       "Create.Camera");
     commands.bind_command_to_menu(&m_create_new_xform_command,   "Create.Xform");
     commands.bind_command_to_menu(&m_create_new_scope_command,        "Create.Scope");
+    commands.bind_command_to_menu(&m_create_new_curve_command,        "Create.Curve");
     commands.bind_command_to_menu(&m_create_new_light_command,        "Create.Light");
     commands.bind_command_to_menu(&m_create_new_rendertarget_command, "Create.Rendertarget");
     commands.bind_command_to_menu(&m_create_new_joint_command,        "Create.Joint");
@@ -722,6 +737,31 @@ auto Scene_commands::create_new_scope(erhe::Hierarchy* parent) -> std::shared_pt
     );
 
     return new_scope;
+}
+
+auto Scene_commands::create_new_curve(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Curve>
+{
+    Scene_root* scene_root = get_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+
+    std::shared_ptr<erhe::scene::Curve> new_curve = std::make_shared<erhe::scene::Curve>("new curve");
+    new_curve->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    new_curve->set_path(erhe::scene::make_default_curve_path());
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context         = m_context,
+                .item            = new_curve,
+                .parent          = get_insert_parent(*scene_root, parent),
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = std::numeric_limits<std::size_t>::max() // last child
+            }
+        )
+    );
+
+    return new_curve;
 }
 
 auto Scene_commands::add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t

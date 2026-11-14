@@ -24,6 +24,7 @@ behavior::doc/editor/level_tools.md(what-is-built)+doc/editor/navigation.md"Isla
 [OPEN]
 ✓step-7f::DONE-2026-11-14{Properties-row-drag-froze-because-rows-had-positional-ImGui-ids+developer-mode-rows-above-changed-count-during-preview;fix=key-based-row-ids(doc/editor/properties_window.md-section-5);©User-verified-windowed;!trap:developer-mode-off-headless-hid-it->reproduce-UI-bugs-with-the-user's-config;gdb-logging-breakpoint-on-ImGui::SetActiveID(id!=ActiveId&&MouseDown)-gives-the-drag-loss-callstack}
 ✓kit-layout-node{step-23;level/kit_layout{,_values}.{hpp,cpp}+level_kits_layout.cpp;Kit_layout-group(pattern+items-canonical-text,module_snap,surface_snap,surface_orient,random_seeds,seed,locked);count|gap-modes(gap:step=largest-item-extent+gap,remainder-spread,both-ends-hold-a-piece;full-ring-closes);seed-mask=each-items-derive-list;locked:value-change/lock/refresh/surface-snapped-move-regenerate(one-entry;matching-children-kept);lock-replaces-all-children,undo-restores-user-nodes;raw-Kit_layout-writes=Property_set_operation-follow-ups;refusals:selection-redirect-to-layout+instance_structure-predicates-extended+locked_layout_refusal()-in-each-item-editing-MCP-tool;level-settings-change-needs-explicit-refresh;layout-node-world-scale!=1-refused;MCP-level_create_layout+level_set_layout+level_get_layouts+level_set_layout_lock+level_refresh_layout}
+!rulings-U18+U19::path-layout-is-one-Curve-node+values-in-Properties(see-progress.md);test-level-res/editor/scenes/level_kit_test2.glb-is-rebuilt-by-the-session-script(old-two-node-form-no-longer-reads)
 ?curves::doc/plans/curves.md(rulings-V1-V6+C1-C9+steps;kit-layout-path-arrangement-follows-a-curve-node=R5.12.8;replaces-plan-step-22-and-the-layout-polyline-point-list;reuse:sweep.cpp-bezier+frames->erhe::math,lattice-tool-pick/draw/gizmo-anchor->point-set-interface,animation-window-handle-behavior)
 ✓layout-window{step-24+25;level/kit_layout_editor.{hpp,cpp}=Level-Kit-window-"Layout"-section(Make-Layout-from-piece=one-entry,piece-replaced-by-element-0;rows-for-every-value;Lock/Unlock/Refresh);Kit_layout_changed_message;level_create_layout-from_piece_id;level_repeat_pieces+Level_kits::repeat-REMOVED;!imgui_click-index-counts-visible-items-only->click-by-id}
 ?then::curves-plan+step-26(layout-drag-preview);spec(©User-U17-2026-11-14:properties=pattern+items+snap+random-seeds+seed-mask;owns-children;locked=layout-regenerates+children-not-editable;unlocked=layout-hands-off;unlock-changes-nothing;lock-discards-edits;both-undoable,undo-of-lock-restores-user-children;scatter-later-as-a-pattern-kind)+12..22
@@ -45,3 +46,11 @@ Kit_piece-records-saved-before-df4e343c0(no-seed)::do-not-parse->follows_kit-fal
 developer-mode-on::raw-Kit_piece.shape/parameters-rows-still-show(developer_only)
 Brush-insert-binding::plain-right-press-only(modifier-mask-0);Alt+right=camera-tumble
 Recast-DebugUtils--Werror-on-GCC->build-named-targets-never-all
+
+[STATE_2026_11_14_END]{supersedes-the-older-lines-above-where-they-differ}
+kit-layout-node::line|grid|ring=Xform-carrying-Kit_layout;path=Curve-prim-carrying-Kit_layout(ONE-node;pieces=children-in-the-node-frame;kind-fixed-by-node-type;no-referenced-curve)
+edit-UI::Properties-"Kit Layout"-group(all-values+Lock/Unlock/Refresh)+"Curve"-group;Level-Kit-window-Layout-section=initial-values(Make-Layout|Brush-tool-"Place As Layout")
+live-preview::Level_kits::begin_layout_preview|begin_layout_move_preview|step_layout_preview|preview_layout_values|end_layout_preview(curve-point-drag+Properties-value-drag+Transform-drag-of-surface-snapped-layouts;each-step=undo-previous+update_node_transforms+rebuild-from-pre-drag-children;no-entry-until-release)
+selection::Item_insert_remove_operation-remove-keeps-the-remaining-selection(was-emptying-it->curve-tool-lost-its-point-selection)
+verify-scripts::frame-cameras-from-the-real-viewport-size(curve_verify.frame_camera)+restore-user_state.json+imgui-ini;NEVER-run-while-the-user's-editor-is-open
+

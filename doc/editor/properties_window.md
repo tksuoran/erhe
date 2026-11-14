@@ -36,10 +36,12 @@ migrated" table lists the hand-written rows that are authored state; section
 3. Hand-written groups (`Property_group_rows`, registered in the
    `Properties` constructor) draw rows inside a named property group: the
    read-back state of a "Rigid Body", a scene's "Scene Overrides" and
-   "Variants", a mesh's "Skin" and "Primitives", and a kit piece's "Kit Piece"
-   group, whose parameter rows stand for the developer-only raw record
-   (`doc/editor/level_tools.md` "Parameter rows"). The editing ones are the R5
-   exception.
+   "Variants", a mesh's "Skin" and "Primitives", a curve's "Curve", a kit
+   piece's "Kit Piece" group, whose parameter rows stand for the
+   developer-only raw record (`doc/editor/level_tools.md` "Parameter rows"),
+   and a kit layout node's "Kit Layout" group, whose value rows stand for the
+   developer-only raw `Kit_layout` rows (`doc/editor/level_tools.md` "Kit
+   layout rows"). The editing ones are the R5 exception.
 
 ## 2. Requirements
 

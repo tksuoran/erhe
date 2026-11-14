@@ -2,6 +2,7 @@
 #include "renderers/ray_trace_scene.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "scene/scene_save_service.hpp"
 #include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
@@ -27,6 +28,7 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -250,6 +252,40 @@ void App_scenes::rebuild_display_colors()
         m_display_color_meshes.clear();
     }
     m_display_color_roots.clear();
+}
+
+void App_scenes::flush_curve_changes()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        m_curve_change_roots = m_scene_roots;
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : m_curve_change_roots) {
+        scene_root->take_changed_curves(m_changed_curves, m_changed_curve_shapes);
+        for (std::size_t i = 0, end = m_changed_curves.size(); i < end; ++i) {
+            const std::shared_ptr<erhe::scene::Curve>& curve = m_changed_curves[i];
+            // A curve that left the scene in the same frame has no users here to tell.
+            if (!curve || (curve->get_item_host() != scene_root.get())) {
+                continue;
+            }
+            scene_root->count_curve_change_message();
+            if (m_context.app_message_bus != nullptr) {
+                m_context.app_message_bus->curve_changed.send_message(
+                    Curve_changed_message{
+                        .scene_root = scene_root,
+                        .curve      = curve,
+                        .revision   = curve->get_revision(),
+                        .shape      = m_changed_curve_shapes[i]
+                    }
+                );
+            }
+        }
+        m_changed_curves.clear();
+        m_changed_curve_shapes.clear();
+    }
+    m_curve_change_roots.clear();
 }
 
 auto App_scenes::can_defer_display_color_rebuild() const -> bool

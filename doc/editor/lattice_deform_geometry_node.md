@@ -11,7 +11,7 @@ of erhe's geometry-processing layers, split the way every geometry operation is:
 |---|---|
 | Math / library operation | `src/erhe/geometry/erhe_geometry/operation/lattice_deform.{hpp,cpp}` |
 | Graph node | `src/editor/geometry_graph/nodes/lattice_node.{hpp,cpp}` |
-| Viewport tool | `src/editor/tools/lattice_tool.cpp`, `src/editor/transform/lattice_point_transform.cpp` |
+| Viewport tool | `src/editor/tools/lattice_tool.cpp` on the point set interface (`doc/editor/point_set_editing.md`) |
 
 ## Control points are node parameters
 
@@ -127,29 +127,30 @@ that is what puts the lattice-deformed geometry in the viewport - **and** the
 graph's output is bound to a scene node through that node's
 `Geometry_graph_mesh.graph_mesh` value in the active scene. While active:
 
-- `Lattice_tool` (a background tool, priority 4) finds the designated lattice
-  and the bound scene node, draws the deformed cage wireframe and a billboard
-  handle for every control point (orange normal, white hovered, yellow
-  selected), and consumes a left click that lands on a control point (a 12 px
-  screen-space pick) to select it. The selection is the node's own
-  `m_selected_point`, so the viewport and the node UI's offset editor stay in
-  sync. The target is found by a scan of the active scene that runs only
-  after a change it depends on: `Graph_mesh_binding_changed_message`
-  (queued by `Geometry_graph_mesh_system` when a bound node enters or leaves
-  the scene or its binding is written, by the display / ghost designation
-  operation, and by `Geometry_graph_window` node inserts and erases), a scene
-  close (which also drops the cached target), or a different effective active
-  scene. A scan never runs during a gizmo edit.
-- `Lattice_point_transform` drives the standard transform gizmo, mirroring
-  `Mesh_component_transform`: `update_anchor()` places the gizmo at the
-  selected point's deformed world position each idle frame
-  (`Transform_tool::update_for_view` dispatches through `Component_source`),
-  and `begin()` / `apply()` / `commit()` snapshot the node parameters at drag
-  start, write the moved offset on each update (`set_control_point_offset` plus
-  `mark_dirty`, so the background re-evaluation gives live feedback), and push
-  a single undoable `Geometry_graph_parameter_operation` per gesture on
-  release. A point drag inverts T (`safe_inverse`) so the stored offsets stay
-  in cage space.
+- `Lattice_tool` (a point set tool, `doc/editor/point_set_editing.md`: a
+  background tool at priority 4) finds the designated lattice and the bound
+  scene node, draws the deformed cage wireframe and a billboard handle for
+  every control point (orange normal, white hovered, yellow selected), and
+  consumes a left click that lands on a control point (a 12 px screen-space
+  pick) to select it; a click elsewhere reaches the object selection. The
+  selection is the node's own `m_selected_point` - one point, always set, so
+  Ctrl / Shift select the clicked point too - and the viewport and the node
+  UI's offset editor stay in sync. The target is found by a scan of the
+  active scene that runs only after a change it depends on:
+  `Graph_mesh_binding_changed_message` (queued by `Geometry_graph_mesh_system`
+  when a bound node enters or leaves the scene or its binding is written, by
+  the display / ghost designation operation, and by `Geometry_graph_window`
+  node inserts and erases), a scene close (which also drops the cached target),
+  or a different effective active scene. A scan never runs during a gizmo
+  edit.
+- The Transform gizmo anchors at the selected point's deformed world position
+  (`Point_set_transform`); a gesture snapshots the node parameters at the
+  press, writes the moved offset on each drag step
+  (`set_control_point_offset` plus `mark_dirty`, so the background
+  re-evaluation gives live feedback), and pushes a single undoable
+  `Geometry_graph_parameter_operation` on release; Escape during the drag
+  restores the offset. A point drag inverts T (`safe_inverse`) so the stored
+  offsets stay in cage space.
 - While a lattice designation is active the gizmo belongs to the lattice, the
   way a Houdini display flag works; clear the designation to return the gizmo
   to scene node selection. Mesh component mode (vertex, edge, face) takes

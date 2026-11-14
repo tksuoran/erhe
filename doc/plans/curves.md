@@ -1,13 +1,18 @@
 # Curves: curve nodes, viewport editing, curve kit layouts, 2D Bezier editor
 
-Status: proposed
+Status: in progress
 
 Requirements, design outline and build steps for 3D curves as scene nodes:
 a curve node type, editing of its control points in the 3D viewport, kit
 layout nodes that place pieces along a curve
 (`doc/plans/level_tools.md` R5.12, `doc/editor/level_tools.md` "Kit layout
 nodes"), and a separate 2D Bezier editor widget. The shared pieces this
-builds on are named in "What the work builds on".
+builds on are named in "What the work builds on". The curve node as built -
+its class, data, persistence, drawing, viewport editing, Properties rows and
+MCP tools - is described in `doc/editor/curves.md`, the point set editing it
+shares with the lattice tool in `doc/editor/point_set_editing.md`, the kit
+layout along a curve in `doc/editor/level_tools.md` "Path layouts"; the
+rulings and requirements below stay the reference for the remaining steps.
 
 ## Rulings
 
@@ -49,13 +54,14 @@ The user's rulings (2026-11-14):
 - C5 `[must]` Parity. Every curve edit and read of C1 - C4 is an MCP tool
   as well (`doc/agents/mcp_api_guidelines.md`): create, read, set points,
   add, remove, set a point's kind, evaluate at a distance.
-- C6 `[must]` Curve kit layout. A kit layout node has a path arrangement
-  that follows a curve node it names: the pieces sit along the curve by
-  count or by gap (R5.12.7), each turned to the curve's tangent. The
-  polyline arrangement of the kit layout node is this arrangement over a
-  curve of corner points. A locked kit layout node is laid out again when
-  its curve changes (a point, a handle, the closed setting, the curve
-  node's transform), as one undo entry with that change.
+- C6 `[must]` Curve kit layout. A kit layout along a path is one node
+  (`doc/plans/level_tools.md` U18, R5.12.8): a curve node that carries the
+  kit layout values and has the pieces as its children. The pieces sit
+  along the curve by count or by gap (R5.12.7), each turned to the curve's
+  tangent; over a curve of corner points this is the polyline arrangement.
+  A locked kit layout is laid out again when its curve changes (a point, a
+  handle, the closed setting), as one undo entry with that change, and
+  live while a point is dragged.
 - C7 `[must]` Change-driven. A curve's users are notified by the change
   itself; nothing polls a curve per frame.
 - C8 `[should]` 2D Bezier editor (V5). An ImGui widget that edits a planar
@@ -67,19 +73,20 @@ The user's rulings (2026-11-14):
 
 ## What the work builds on
 
-- `erhe::geometry` sweep (`shapes/sweep.cpp`): 3D Bezier point and tangent
-  evaluation and parallel-transported frames, private to that file, one
-  Bezier of any degree, stepped by parameter.
+- `erhe::math` curve path (`curve_path.hpp`, `doc/erhe/math.md` "Curve
+  path"): control points with handles and kinds, cubic spans, the arc-length
+  table, and up-keeping and parallel-transported frames at a distance. The
+  `erhe::geometry` sweep (`shapes/sweep.cpp`) evaluates its one Bezier of
+  any degree, stepped by parameter, through its Bezier and transport
+  helpers.
 - `erhe::math` `hermite.hpp`: the scalar cubic Hermite segment the texture
   curve widget and the animation edit helpers share.
-- The lattice tool (`doc/editor/lattice_deform_geometry_node.md` "Viewport
-  editing"; `tools/lattice_tool.*`, `transform/lattice_point_transform.*`):
-  control points held as data of one node, picked by screen-space distance,
-  drawn as handles by the line renderer, and moved by the Transform tool's
-  gizmo anchored to the selected point (`Transform_tool_shared`
-  `component_mode`), one parameter operation per gesture. Mesh component
-  editing (`doc/editor/mesh_component_selection.md`) uses the same anchor
-  adapter.
+- The point set editing of the lattice and curve tools
+  (`doc/editor/point_set_editing.md`): points of one target picked by
+  screen-space distance, drawn as handles, and moved by the Transform tool's
+  gizmo anchored at the selection, one operation per gesture. Mesh component
+  editing (`doc/editor/mesh_component_selection.md`) has its own anchor
+  adapter (`Mesh_component_transform`).
 - The Animation window's curve canvas (`animation/animation_window.*`):
   tangent handles aligned by default, Alt freeing one side, Shift locks;
   bound to animation channel and key ids.
@@ -87,8 +94,8 @@ The user's rulings (2026-11-14):
   y(x) curve of points without handles, a plain vector in and a changed
   flag out.
 - The kit layout node (`level/kit_layout_values.hpp`, `level_repeat.hpp`):
-  polyline points held in the layout node's pattern, expanded into poses by
-  arc length over straight segments.
+  a path layout is a curve node carrying the layout values, its pieces its
+  children (`doc/editor/level_tools.md` "Path layouts").
 
 ## Design outline
 
@@ -96,35 +103,35 @@ The user's rulings (2026-11-14):
   kind, cubic Bezier spans (a corner gives a straight span), an arc-length
   table, and position, tangent and frame at a distance. The sweep shape
   evaluates through it.
-- D2 The curve node. Whether it is a prim class of `erhe::scene` or an
-  Xform node carrying an attached value group is settled by the first step
-  that builds it, on what the node systems, the persistence
-  (`doc/gltf_extensions/`), USD and the item tree need; V1 requires that
-  the user sees and makes it as a node type of its own either way.
-- D3 A point-set editing interface generalized from the lattice tool: a
-  provider gives the points (and handles) of the selected node in world
-  space, the pick radius and the selection, and takes back a moved point;
-  the lattice tool, the curve tool and later users implement it, and the
-  gizmo anchor adapter is shared.
-- D4 A kit layout node names its curve node by a scene-hosted reference
-  (`doc/editor/coding_rules.md`); the curve node tells its users of a
-  change, and the kit layout regeneration of that change joins the curve
-  edit's undo entry (the follow-up mechanism of `Property_set_operation`).
+- D2 The curve node is the `erhe::scene::Curve` prim class
+  (`doc/editor/curves.md`). Its USD form is a `BasisCurves` prim (step 7).
+- D3 The point set interface (`IPoint_set`, `doc/editor/point_set_editing.md`)
+  is built and used by the lattice and curve tools. What remains: a point
+  set's drag honors the surface settings (step 8); mesh component editing
+  stays on its own adapter (`Mesh_component_transform`) - its selection is
+  per mesh primitive and its edits are topology-aware, which the point set
+  interface does not carry.
+- D4 The kit layout along a curve is built as one node (C6, R5.12.8): the
+  `Curve` prim carries the `Kit_layout` values and has the pieces as its
+  children, laid out along its own path in its own frame, again in the entry
+  of each curve edit and live during a point drag (`doc/editor/level_tools.md`
+  "Path layouts", `doc/editor/curves.md` "Users of a curve").
 
 ## Steps
 
-1. The curve path in `erhe::math` (D1) with unit tests; the sweep shape
-   uses it.
-2. The curve node (C1, C2, C3, C5 reads and whole-curve writes, D2):
-   data, persistence, drawing when selected, Properties rows, MCP tools.
-3. Viewport editing (C4, the point edits of C5, D3): the point-set
-   interface, the lattice tool moved onto it, the curve tool.
-4. The curve kit layout (C6, C7, D4): the path arrangement over a curve
-   node; the kit layout node's polyline arrangement and its point list are
-   removed (`doc/plans/level_tools_implementation.md` step 22 is this
-   step).
 5. The 2D Bezier editor widget (C8).
 6. The sweep shape's spine from a curve node (C9).
+7. USD persistence of a curve node: a `Curve` prim saves as a `BasisCurves`
+   prim (cubic, bezier basis, `wrap` periodic for a closed curve, the
+   control points and handle ends as `points`, the point kinds as an erhe
+   custom attribute) and a `BasisCurves` prim of that form loads as a
+   `Curve`; until then a USD save writes a curve as an `Xform` with a
+   warning naming it.
+8. Surface snap of point drags (C4 "surface snap"): with Snap To Surface on,
+   a translate drag of curve points (and lattice control points) rests the
+   moved points on the surface under them, as a node drag rests a moved
+   mesh; `Transform_tool::rest_on_surface()` acts on node entries only
+   today.
 
 ## Later
 

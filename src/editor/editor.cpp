@@ -147,6 +147,7 @@
 #include "tools/debug_visualizations.hpp"
 #include "tools/light_hover_provider.hpp"
 #include "tools/mesh_component_selection.hpp"
+#include "tools/curve_tool.hpp"
 #include "tools/lattice_tool.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/navigation_gizmo_tool.hpp"
@@ -1871,6 +1872,9 @@ public:
         // primitives, which enqueues a re-register of its own.
         erhe::log::set_breadcrumb("tick: rebuild_display_colors");
         m_app_scenes->rebuild_display_colors();
+
+        erhe::log::set_breadcrumb("tick: flush_curve_changes");
+        m_app_scenes->flush_curve_changes();
 
         // The card proxies of the draw modes whose values or extent changed,
         // beside the display colors and for the same reason: the build
@@ -3912,6 +3916,12 @@ public:
                     *m_app_message_bus.get(),
                     *m_tools.get()
                 );
+                m_curve_tool = std::make_unique<Curve_tool>(
+                    *m_commands.get(),
+                    m_app_context,
+                    *m_app_message_bus.get(),
+                    *m_tools.get()
+                );
                 m_draw_mode_renderer = std::make_unique<Draw_mode_renderer>(
                     m_app_context,
                     *m_tools.get()
@@ -4515,6 +4525,7 @@ public:
         m_app_context.input_state              = m_input_state           .get();
         m_app_context.inventory_window         = m_inventory_window      .get();
         m_app_context.lattice_tool             = m_lattice_tool          .get();
+        m_app_context.curve_tool               = m_curve_tool            .get();
         m_app_context.material_paint_tool      = m_material_paint_tool   .get();
         m_app_context.material_preview         = m_material_preview      .get();
         m_app_context.brush_preview            = m_brush_preview         .get();
@@ -5918,6 +5929,7 @@ public:
     std::unique_ptr<Material_paint_tool>                     m_material_paint_tool;
     std::unique_ptr<Mesh_component_selection_tool>           m_mesh_component_selection_tool;
     std::unique_ptr<Lattice_tool>                            m_lattice_tool;
+    std::unique_ptr<Curve_tool>                              m_curve_tool;
     std::unique_ptr<Draw_mode_renderer>                      m_draw_mode_renderer;
     std::unique_ptr<Paint_tool         >                     m_paint_tool;
     std::unique_ptr<Weight_paint_tool  >                     m_weight_paint_tool;

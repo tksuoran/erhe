@@ -51,6 +51,15 @@ The user's ruling (2026-11-14):
 
 - U17: a run of pieces is a kit layout node that owns its children, with
   a lock that says who edits them (R5.12).
+- U18: a kit layout along a path is one node: the layout node is the curve
+  node (R5.12.8).
+- U19: a kit layout node's values are edited in the Properties window; the
+  Level Kit window holds the values a new kit layout node starts with
+  (R5.12.9).
+- U20: pieces that overlap are accepted in kit-bashing (walls of a run
+  sharing a corner, a rock sunk into the ground): an overlap is not a
+  defect of a placement tool, and the overlap report (R10.3) stays a read
+  the author asks for.
 
 ## Terms
 
@@ -297,8 +306,16 @@ the starter set.
     neighboring pieces and the layout determines the count from the space
     of the arrangement (the line's length, the ring's arc, the path's
     length).
-  - R5.12.8 The path arrangement follows a curve node, and a polyline is
-    a curve of corner points (`doc/plans/curves.md` C6).
+  - R5.12.8 A kit layout along a path is one node: a curve node
+    (`doc/plans/curves.md`) that carries the kit layout values, with the
+    pieces as its children, so the author selects one node to edit the
+    path's points and the layout's values. A polyline is a curve of corner
+    points.
+  - R5.12.9 The values of a kit layout node (R5.12.1, the lock included)
+    are edited in the Properties window with the node selected. The Level
+    Kit window keeps a set of the same values as well: they are the
+    initial values of a kit layout node the author adds to the scene, and
+    editing them changes no node.
   - R5.12.2 The kit layout node owns its children and has a lock setting.
   - R5.12.3 Locked: the kit layout node creates, removes and adjusts its
     children as its properties need, and the children cannot be edited

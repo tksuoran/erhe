@@ -308,6 +308,7 @@ void Operation_stack::undo()
     // A live kit parameter drag ends first, so the operation finds the piece's committed state (D3.6).
     if (m_context.level_kits != nullptr) {
         m_context.level_kits->cancel_parameter_preview();
+        m_context.level_kits->end_layout_preview();
     }
     auto operation = m_executed.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_executed.pop_back();
@@ -417,6 +418,7 @@ void Operation_stack::redo()
     // A live kit parameter drag ends first, so the operation finds the piece's committed state (D3.6).
     if (m_context.level_kits != nullptr) {
         m_context.level_kits->cancel_parameter_preview();
+        m_context.level_kits->end_layout_preview();
     }
     auto operation = m_undone.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_undone.pop_back();

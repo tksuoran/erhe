@@ -42,7 +42,7 @@ public:
     void prepare_for_evaluation() override;
     void capture_evaluation_state(const Geometry_graph_node& live_node) override;
 
-    // Viewport editing API (Lattice_tool / Lattice_point_transform). Main
+    // Viewport editing API (Lattice_tool). Main
     // thread, live node only.
     [[nodiscard]] auto get_divisions() const -> glm::ivec3 { return m_divisions; }
     [[nodiscard]] auto get_selected_point() const -> glm::ivec3 { return m_selected_point; }

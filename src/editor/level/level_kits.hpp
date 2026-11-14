@@ -10,7 +10,9 @@
 
 #include "app_message.hpp"
 
+#include "erhe_math/curve_path.hpp"
 #include "erhe_message_bus/message_bus.hpp"
+#include "erhe_property/expression.hpp"
 #include "erhe_property/property_value.hpp"
 
 #include <glm/glm.hpp>
@@ -28,7 +30,8 @@
 namespace erhe           { class Hierarchy; class Item_base; class Item_host; }
 namespace erhe::property { class Dependency_property; }
 namespace erhe::primitive { class Material; }
-namespace erhe::scene    { class Mesh; class Xformable; using Node = Xformable; }
+namespace erhe::math     { class Curve_path_table; }
+namespace erhe::scene    { class Curve; class Mesh; class Xformable; using Node = Xformable; }
 
 namespace editor {
 
@@ -210,15 +213,17 @@ enum class Kit_layout_reuse : unsigned int {
     replace_all
 };
 
-// A new kit layout node (D3.9): its values, parent (none: the scene root) and world transform.
+// A new kit layout node (D3.9): its values, parent (none: the scene root) and world transform; a path layout is a
+// curve node (R5.12.8) whose path is given, else straight along its x axis.
 class Kit_layout_create
 {
 public:
-    Kit_layout_data                  data;
-    std::shared_ptr<erhe::Hierarchy> parent;
-    glm::vec3                        position{0.0f};
-    glm::quat                        rotation{1.0f, 0.0f, 0.0f, 0.0f};
-    std::string                      name;     // empty: "Kit Layout"
+    Kit_layout_data                       data;
+    std::shared_ptr<erhe::Hierarchy>      parent;
+    glm::vec3                             position{0.0f};
+    glm::quat                             rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    std::string                           name;     // empty: "Kit Layout"
+    std::optional<erhe::math::Curve_path> path;     // a path layout's curve in the node's frame
 };
 
 // A kit layout node made from a placed piece (D3.9, D4.9): the piece's shape, values and slot materials are the
@@ -235,6 +240,29 @@ public:
     int                                seed          {0};
     Kit_layout_lock                    lock          {Kit_layout_lock::locked};
     std::string                        name;          // empty: the piece's name followed by " Layout"
+    std::optional<erhe::math::Curve_path> path;          // a path layout's curve; none: straight along the piece's x axis
+};
+
+// Whether a new kit layout node's line step and grid spacings are as given or its item's extent (a contiguous run).
+enum class Kit_layout_spacing : unsigned int {
+    as_given = 0,
+    from_item
+};
+
+// Whether a Brush tool click in kit mode places one piece or a kit layout node of the initial values (R5.12.9).
+enum class Kit_place_as : unsigned int {
+    piece = 0,
+    layout
+};
+
+// The initial values of a kit layout node the author adds (R5.12.9): the Level Kit window's Layout rows, saved in the
+// editor setting level_kit. The items come from what is added (a piece, the shape the Brush tool places).
+class Kit_layout_initial_values
+{
+public:
+    Kit_layout_data    data;
+    Kit_layout_spacing spacing {Kit_layout_spacing::from_item};
+    Kit_place_as       place_as{Kit_place_as::piece};
 };
 
 class Kit_layout_result
@@ -265,6 +293,10 @@ public:
 
     // Kit_placement_settings of the editor settings level_kit and surface_snap.
     [[nodiscard]] auto get_placement_settings() const -> Kit_placement_settings;
+
+    // R5.12.9: the initial values of a new kit layout node (Level_kit_config); setting them changes no node.
+    [[nodiscard]] auto get_layout_initial_values() const -> Kit_layout_initial_values;
+    void set_layout_initial_values(const Kit_layout_initial_values& values);
 
     // The shared surface pair (Surface_snap_config, D4.6): every UI site reads and writes it here.
     [[nodiscard]] auto get_surface_settings() const -> Surface_options;
@@ -364,6 +396,13 @@ public:
     // D3.9: the piece's removal, the node's insert at its place and the generated children, one undo entry.
     [[nodiscard]] auto make_layout_from_piece(Scene_root& scene_root, const Kit_layout_from_piece& from_piece) -> Kit_layout_result;
 
+    // R5.12.9: make_layout_from_piece() with the initial values, the spacings from the piece's extent when they say so.
+    [[nodiscard]] auto make_layout_from_piece_initial(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Mesh>& piece) -> Kit_layout_result;
+
+    // R5.12.9: a new kit layout node of the initial values with the one item at a world pose (the Brush tool's
+    // Place As Layout click), one undo entry.
+    [[nodiscard]] auto add_layout_initial(Scene_root& scene_root, const Kit_layout_item& item, const glm::vec3& position, const glm::quat& rotation) -> Kit_layout_result;
+
     // The layout item of a placed piece: its shape, record values (seed mask included) and its primitives' material names.
     [[nodiscard]] auto read_piece_layout_item(const erhe::scene::Mesh& piece, Kit_layout_item& out_item) const -> std::string;
 
@@ -383,6 +422,43 @@ public:
         std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
         std::vector<std::shared_ptr<Operation>>&            out_operations
     );
+
+    // D3.9: the regeneration of the curve when it is a locked path layout and its path has just changed; appended to the
+    // curve edit's operations (Curve_set_operation). A layout the new curve refuses keeps its children (a warning).
+    void append_curve_follow_ups(const erhe::scene::Curve& curve, std::vector<std::shared_ptr<Operation>>& out_operations);
+
+    // The live layout preview of a drag (doc/editor/level_tools.md "Live layout preview"): begin with the layouts,
+    // step at each change of the drag, end before the gesture's commit, which then records one entry.
+    void begin_layout_preview(const std::shared_ptr<erhe::scene::Node>& layout);
+    void begin_layout_preview(std::span<const std::shared_ptr<erhe::scene::Node>> layouts);
+
+    // Begins a preview of every locked layout at or below the moved nodes whose surface settings are on (the move hook's set).
+    void begin_layout_move_preview(Scene_root& scene_root, std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes);
+
+    // Lays every previewed layout out again from its live values, transform and curve; returns the first refusal.
+    auto step_layout_preview() -> std::string;
+
+    // Gives the layout the values without an entry (beginning its preview) and lays it out; refused values keep the last
+    // valid step and are not written. Returns the refusal; the result holds the run of shown values.
+    [[nodiscard]] auto preview_layout_values(const std::shared_ptr<erhe::scene::Node>& layout, const Kit_layout_data& data, Kit_layout_result& out_result) -> std::string;
+
+    // Gives every previewed layout its children and values from before the drag back; nothing when no preview is live.
+    void end_layout_preview();
+
+    [[nodiscard]] auto is_layout_previewing(const erhe::scene::Node& node) const -> bool;
+
+    // R5.12.8: a plain curve node (no children, no layout values) becomes a path layout with the values and the children
+    // a locked layout makes; one undo entry.
+    [[nodiscard]] auto make_layout_on_curve(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Curve>& curve, const Kit_layout_data& data) -> Kit_layout_result;
+
+    // The run the values make on the node (a path: along its own curve); the run's pattern refers to no table. Returns
+    // the refusal (the kind not of the node's type, ...), empty when resolved.
+    [[nodiscard]] auto resolve_layout_run(
+        const erhe::scene::Node& layout,
+        const Kit_layout_data&   data,
+        float                    item_extent,
+        Kit_layout_run&          out_run
+    ) const -> std::string;
 
     // D3.9: a Kit_layout value written outside these entry points (set_item_property, a Properties row), already
     // applied: the generation a locked node's values now need, or the reason they cannot stand. Nothing otherwise.
@@ -417,8 +493,9 @@ private:
         std::vector<std::shared_ptr<Operation>>& out_operations
     ) -> bool;
 
-    // D3.9: the operations that make the node's children what the values state, from the node's world transform;
-    // the excluded meshes are no surface for the elements, nor are the node's current children.
+    // D3.9: the operations that make the node's children what the values state, from the node's world transform (a
+    // path: along its own curve); the excluded meshes are no surface for the elements, nor are the node's current
+    // children.
     [[nodiscard]] auto build_layout_generation(
         Scene_root&                                 scene_root,
         const std::shared_ptr<erhe::scene::Node>&   node,
@@ -429,6 +506,14 @@ private:
         std::vector<std::shared_ptr<Operation>>&    out_operations,
         Kit_layout_result&                          result
     ) -> std::string;
+
+    // The regeneration of each locked layout of the list, warned about and skipped where its values refuse.
+    void append_layout_regenerations(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> layouts,
+        const char*                                         reason,
+        std::vector<std::shared_ptr<Operation>>&            out_operations
+    );
 
     // create_layout() with the node inserted at index_in_parent (none: last) after the given leading operations.
     [[nodiscard]] auto create_layout_after(
@@ -459,9 +544,45 @@ private:
     };
     std::optional<Parameter_preview> m_parameter_preview;
 
+    // The live layout preview: per layout the operations that laid it out (executed in order) and its values from before
+    // the drag once a step wrote values.
+    class Layout_preview_entry
+    {
+    public:
+        std::shared_ptr<erhe::scene::Node>                      node;
+        bool                                                    selected_at_begin{false};
+        std::vector<std::optional<erhe::property::Local_state>> values_before;
+        std::vector<std::shared_ptr<Operation>>                 operations;
+        std::vector<std::shared_ptr<Operation>>                 generation;
+        Kit_layout_result                                       result;
+        std::string                                             refusal;
+        bool                                                    built{false};
+    };
+    // One step of every entry; the values, when given, are the given node's instead of its own.
+    auto step_layout_preview_entries(const erhe::scene::Node* values_node, const Kit_layout_data* values) -> std::string;
+    void collect_moved_layouts(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+        std::vector<std::shared_ptr<erhe::scene::Node>>&    out_layouts
+    ) const;
+    void end_layout_preview_of(const erhe::scene::Node& node);
+    void queue_end_layout_preview();
+    // A previewed node left the selection it had at the start, or its scene.
+    [[nodiscard]] auto is_layout_preview_lost() const -> bool;
+    // The preview's operations restore the selection they were made under; the preview keeps the current one.
+    void hold_selection();
+    void restore_held_selection();
+    std::vector<std::shared_ptr<erhe::Item_base>>   m_held_selection;
+    std::shared_ptr<erhe::Item_base>                m_held_active_item;
+    bool                                            m_layout_preview_end_queued{false};
+    std::vector<Layout_preview_entry>               m_layout_preview;
+    std::vector<const erhe::scene::Mesh*>           m_layout_preview_excluded;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_layout_preview_layouts;
+
     erhe::message_bus::Subscription<Selection_message>     m_selection_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
+    erhe::message_bus::Subscription<Curve_changed_message> m_curve_changed_subscription;
 };
 
 } // namespace editor

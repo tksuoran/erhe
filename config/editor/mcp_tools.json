@@ -1603,12 +1603,27 @@
     "name": "level_mirror_group"
   },
   {
-    "description": "Create a kit layout node (doc/editor/level_tools.md \"Kit layout nodes\", R5.12) as ONE undo entry: an Xform node carrying the Kit_layout values at position / rotation_xyzw (world; it keeps scale 1) under parent_id (default the scene root), or in the place of the piece from_piece_id names, and the pieces its values make as its children, element i at the pattern's i-th pose in the node's frame. locked (default true): the node makes its children and they cannot be edited directly (selecting one selects the layout node; transform, parameter, material, reparent, delete and paste tools refuse it naming the node); unlocked, the children are ordinary pieces. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the path length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "description": "Create a kit layout node (doc/editor/level_tools.md \"Kit layout nodes\", R5.12) as ONE undo entry: an Xform node carrying the Kit_layout values (a path layout: a Curve node carrying them, R5.12.8) at position / rotation_xyzw (world; it keeps scale 1) under parent_id (default the scene root), or in the place of the piece from_piece_id names, or on the plain curve node curve_id names, and the pieces its values make as its children, element i at the pattern's i-th pose in the node's frame. locked (default true): the node makes its children and they cannot be edited directly (selecting one selects the layout node; transform, parameter, material, reparent, delete and paste tools refuse it naming the node); unlocked, the children are ordinary pieces. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the curve's world length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
     "inputSchema": {
       "properties": {
         "from_piece_id": {
-          "description": "Id of a placed kit piece the layout is made from (the Level Kit window's Make Layout): its shape, parameter values (seed mask included) and slot materials are the one item, the node takes its parent, place among the parent's children and world transform, and the piece is removed in the same undo entry, element 0 taking its place. Not with items, position, rotation_xyzw or parent_id. The reply adds replaced_piece_id.",
+          "description": "Id of a placed kit piece the layout is made from (the Level Kit window's Make Layout): its shape, parameter values (seed mask included) and slot materials are the one item, the node takes its parent, place among the parent's children and world transform, and the piece is removed in the same undo entry, element 0 taking its place; a path layout is a Curve node there with the given points, else a straight curve of two corner points along the piece's x axis sized from count and step. Not with items, position, rotation_xyzw or parent_id. The reply adds replaced_piece_id.",
           "type": "integer"
+        },
+        "curve_id": {
+          "description": "Id of a plain Curve node (no children, no layout values) that becomes the path layout itself: the values are written on it and the pieces become its children, one undo entry. pattern.kind must be path; not with from_piece_id, position, rotation_xyzw, parent_id, name, points or closed.",
+          "type": "integer"
+        },
+        "points": {
+          "description": "A path layout's curve in the node's frame, as create_curve takes it: [{position, in?, out?, kind? (corner|smooth|free)}], at least two (default: two corner points along +X sized from count and step). Path only.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "closed": {
+          "description": "Whether the path layout's curve is closed (default false; needs points). Path only.",
+          "type": "boolean"
         },
         "items": {
           "description": "The kit items, element i taking item i modulo the item count: [{shape, parameters (over the shape's defaults; 'derive' names the item's seed mask), materials ({slot: scene or palette material name})}]; required unless from_piece_id is given",
@@ -1630,7 +1645,7 @@
           "type": "integer"
         },
         "pattern": {
-          "description": "The arrangement in the layout node's frame, element 0 at its origin (doc/editor/level_tools.md \"Kit layout nodes\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|polyline. count_mode (line, ring, polyline): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring floor(circumference / step) spread evenly, so the stated gap is a minimum; at least element 0). count (line, ring, polyline in count mode), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), points (polyline: [[x,y,z],...] after the origin, layout frame; count mode spreads count elements evenly over the path, both ends holding one).",
+          "description": "The arrangement in the layout node's frame, element 0 at its origin; a path runs along the layout node's own curve, the node being a Curve prim (doc/editor/level_tools.md \"Kit layout nodes\", \"Path layouts\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|path (a polyline is a path along a curve of corner points). count_mode (line, ring, path): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring or a closed curve floor(length / step) spread evenly around, so the stated gap is a minimum; at least element 0). count (line, ring, path in count mode; an open curve holds one at each end, a closed one spreads them around without one twice at the seam), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), orientation (path: upright (default; each piece turns about the world up axis to the curve's heading) or tangent (its x axis takes the curve's tangent and it pitches with the curve)). A locked path layout is laid out again in the same undo entry as each edit of its curve (set_curve, curve_add_point, curve_remove_points, curve_set_point_kind, the curve tool, the Properties Curve rows); a move of the node carries its pieces rigidly (a surface setting rests them again in the move's entry). The kind and the node type agree: path only on a Curve node, line, grid and ring only on an Xform; a change between them is refused.",
           "type": "object"
         },
         "position": {
@@ -1685,7 +1700,7 @@
     "name": "level_create_layout"
   },
   {
-    "description": "Change a kit layout node's values as ONE undo entry (D4.9): the values given merge over the node's (a pattern object merges key by key; items replace the list). A locked node makes its children equal the new values in the same entry, keeping each child that already matches (same shape, parameters, materials and pose); an unlocked node changes its values alone and leaves its children untouched. No entry when nothing changes. The lock is set by level_set_layout_lock. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the path length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "description": "Change a kit layout node's values as ONE undo entry (D4.9): the values given merge over the node's (a pattern object merges key by key; items replace the list). A locked node makes its children equal the new values in the same entry, keeping each child that already matches (same shape, parameters, materials and pose); an unlocked node changes its values alone and leaves its children untouched. No entry when nothing changes. The lock is set by level_set_layout_lock. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the curve's world length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
     "inputSchema": {
       "properties": {
         "items": {
@@ -1700,7 +1715,7 @@
           "type": "integer"
         },
         "pattern": {
-          "description": "The arrangement in the layout node's frame, element 0 at its origin (doc/editor/level_tools.md \"Kit layout nodes\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|polyline. count_mode (line, ring, polyline): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring floor(circumference / step) spread evenly, so the stated gap is a minimum; at least element 0). count (line, ring, polyline in count mode), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), points (polyline: [[x,y,z],...] after the origin, layout frame; count mode spreads count elements evenly over the path, both ends holding one).",
+          "description": "The arrangement in the layout node's frame, element 0 at its origin; a path runs along the layout node's own curve, the node being a Curve prim (doc/editor/level_tools.md \"Kit layout nodes\", \"Path layouts\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|path (a polyline is a path along a curve of corner points). count_mode (line, ring, path): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring or a closed curve floor(length / step) spread evenly around, so the stated gap is a minimum; at least element 0). count (line, ring, path in count mode; an open curve holds one at each end, a closed one spreads them around without one twice at the seam), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), orientation (path: upright (default; each piece turns about the world up axis to the curve's heading) or tangent (its x axis takes the curve's tangent and it pitches with the curve)). A locked path layout is laid out again in the same undo entry as each edit of its curve (set_curve, curve_add_point, curve_remove_points, curve_set_point_kind, the curve tool, the Properties Curve rows); a move of the node carries its pieces rigidly (a surface setting rests them again in the move's entry). The kind and the node type agree: path only on a Curve node, line, grid and ring only on an Xform; a change between them is refused.",
           "type": "object"
         },
         "random_seeds": {
@@ -1757,7 +1772,7 @@
     "name": "level_get_layouts"
   },
   {
-    "description": "Lock or unlock a kit layout node as ONE undo entry (R5.12.5, R5.12.6). Unlocking writes the lock value alone and changes no child. Locking discards the edits made while unlocked: every child is replaced by the pieces the values make; undo puts the children back exactly as they were (the same nodes, ids, transforms, parameters and materials). No entry when the node already has the state. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the path length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "description": "Lock or unlock a kit layout node as ONE undo entry (R5.12.5, R5.12.6). Unlocking writes the lock value alone and changes no child. Locking discards the edits made while unlocked: every child is replaced by the pieces the values make; undo puts the children back exactly as they were (the same nodes, ids, transforms, parameters and materials). No entry when the node already has the state. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the curve's world length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
     "inputSchema": {
       "properties": {
         "layout_id": {
@@ -1783,7 +1798,7 @@
     "name": "level_set_layout_lock"
   },
   {
-    "description": "Make a locked kit layout node's children equal its values again (after a level settings change or a kit change), as ONE undo entry; no entry when they already are. An unlocked node is refused: it leaves its children alone. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the path length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "description": "Make a locked kit layout node's children equal its values again (after a level settings change or a kit change), as ONE undo entry; no entry when they already are. An unlocked node is refused: it leaves its children alone. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the curve's world length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
     "inputSchema": {
       "properties": {
         "layout_id": {
@@ -3384,7 +3399,7 @@
     "name": "set_log_levels"
   },
   {
-    "description": "Create a new typed child prim (undoable, executes on the next frame). 'type' is a child prim catalog key: mesh, camera, light or joint, inserted as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. A joint created this way names the nearest node at or above the addressed prim as its first frame node (use create_joint to name both frame nodes). A rigid body is a node value group: set the node property Node_physics.motion_mode (set_item_property) or use toggle_physics. Verify with get_node_details / get_scene_nodes.",
+    "description": "Create a new typed child prim (undoable, executes on the next frame). 'type' is a child prim catalog key: mesh, camera, light, joint or curve (the default curve; create_curve takes points), inserted as the last child of the addressed prim, which may be any prim (Xform, Scope, Material, ...); refused under a reference instance. A joint created this way names the nearest node at or above the addressed prim as its first frame node (use create_joint to name both frame nodes). A rigid body is a node value group: set the node property Node_physics.motion_mode (set_item_property) or use toggle_physics. Verify with get_node_details / get_scene_nodes.",
     "inputSchema": {
       "properties": {
         "node_id": {
@@ -3405,7 +3420,8 @@
             "mesh",
             "camera",
             "light",
-            "joint"
+            "joint",
+            "curve"
           ],
           "type": "string"
         }
@@ -8629,7 +8645,7 @@
     "name": "slide_mesh_components"
   },
   {
-    "description": "Cancel the active mesh component edit - a G key slide in progress, or the component edit of a gizmo drag - the way Escape does: positions, the before primitive of an extruded or forked mesh, the selection and the GPU buffers return to the edit's start and no operation is queued. Returns cancelled false when no component edit was active.",
+    "description": "Cancel the active mesh component edit - a G key slide in progress, or the component edit of a gizmo drag - the way Escape does: positions, the before primitive of an extruded or forked mesh, the selection and the GPU buffers return to the edit's start and no operation is queued. A point edit of a gizmo drag (curve points, lattice control points; doc/editor/point_set_editing.md) is cancelled the same way: the points return to the drag's start and no operation is recorded. Returns cancelled false when no component or point edit was active.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -12310,5 +12326,490 @@
       "type": "object"
     },
     "name": "set_graphics_preset"
+  },
+  {
+    "description": "Create a Curve prim (doc/editor/curves.md) as ONE undo entry, inserted at once (the reply's id is addressable). Without points the curve is the default one: two smooth points 1 m apart along +X. position and rotation_xyzw are the world pose of the new prim. The reply describes the curve: id, name, parent_id, closed, point_count, span_count, length (in the prim's own units), point_distances (the distance of each span's start point, then the length), points (position, in, out, kind in the prim's frame), world_position, world_rotation_xyzw, revision (counts path changes) and change_message_count (Curve_changed_message count of the scene: one per curve per frame in which a curve's path or world transform changed). The reply's points also carry world_position, world_in and world_out (handle ends).",
+    "inputSchema": {
+      "properties": {
+        "closed": {
+          "description": "true: the last point joins the first (default false)",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Name of the new curve (default 'new curve')",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Id of the parent prim (default: the scene root)",
+          "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name or path of the parent prim (alternative to parent_id)",
+          "type": "string"
+        },
+        "points": {
+          "description": "The control points in order, at least 2. A curve whose points are all corners is a polyline. The values are stored as given: smooth points are not re-aligned.",
+          "items": {
+            "properties": {
+              "in": {
+                "description": "Incoming handle as an offset from the position (default zero; a corner ignores it)",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "kind": {
+                "description": "corner (no handles), smooth (handles on one line) or free (default corner)",
+                "enum": [
+                  "corner",
+                  "smooth",
+                  "free"
+                ],
+                "type": "string"
+              },
+              "out": {
+                "description": "Outgoing handle as an offset from the position (default zero; a corner ignores it)",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "position": {
+                "description": "Position in the curve prim's own frame",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              }
+            },
+            "required": [
+              "position"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "position": {
+          "description": "World position of the curve prim (default origin)",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "rotation_xyzw": {
+          "description": "World rotation of the curve prim as a unit quaternion [x, y, z, w] (default identity)",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "create_curve"
+  },
+  {
+    "description": "Every Curve prim of the scene, without the point lists: id, name, parent_id, closed, point_count, span_count, length, point_distances, world_position, world_rotation_xyzw, revision. Returns scene_name, count, curves and change_message_count.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_curves"
+  },
+  {
+    "description": "One Curve prim. The reply describes the curve: id, name, parent_id, closed, point_count, span_count, length (in the prim's own units), point_distances (the distance of each span's start point, then the length), points (position, in, out, kind in the prim's frame), world_position, world_rotation_xyzw, revision (counts path changes) and change_message_count (Curve_changed_message count of the scene: one per curve per frame in which a curve's path or world transform changed). With world true the points also carry world_position, world_in and world_out (handle ends) in world space.",
+    "inputSchema": {
+      "properties": {
+        "curve_id": {
+          "description": "Id of the curve prim",
+          "type": "integer"
+        },
+        "curve_name": {
+          "description": "Name or path of the curve prim (alternative to curve_id)",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "world": {
+          "description": "Also give the points and handle ends in world space (default false)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_curve"
+  },
+  {
+    "description": "Replace a curve's points, its closed setting or both as ONE undo entry that undo restores exactly (points, handles, kinds, closure). No entry when the values equal the curve's (changed false). Refused for a curve inside a reference instance. The reply describes the curve: id, name, parent_id, closed, point_count, span_count, length (in the prim's own units), point_distances (the distance of each span's start point, then the length), points (position, in, out, kind in the prim's frame), world_position, world_rotation_xyzw, revision (counts path changes) and change_message_count (Curve_changed_message count of the scene: one per curve per frame in which a curve's path or world transform changed). Also returns changed.",
+    "inputSchema": {
+      "properties": {
+        "closed": {
+          "description": "true: the last point joins the first",
+          "type": "boolean"
+        },
+        "curve_id": {
+          "description": "Id of the curve prim",
+          "type": "integer"
+        },
+        "curve_name": {
+          "description": "Name or path of the curve prim (alternative to curve_id)",
+          "type": "string"
+        },
+        "points": {
+          "description": "The control points in order, at least 2. A curve whose points are all corners is a polyline. The values are stored as given: smooth points are not re-aligned.",
+          "items": {
+            "properties": {
+              "in": {
+                "description": "Incoming handle as an offset from the position (default zero; a corner ignores it)",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "kind": {
+                "description": "corner (no handles), smooth (handles on one line) or free (default corner)",
+                "enum": [
+                  "corner",
+                  "smooth",
+                  "free"
+                ],
+                "type": "string"
+              },
+              "out": {
+                "description": "Outgoing handle as an offset from the position (default zero; a corner ignores it)",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "position": {
+                "description": "Position in the curve prim's own frame",
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              }
+            },
+            "required": [
+              "position"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "set_curve"
+  },
+  {
+    "description": "Set one control point's kind as ONE undo entry, with the handle rule of the kind change (doc/erhe/math.md 'Curve path'): to corner zeroes the handles, from corner gives Catmull-Rom handles, free to smooth turns the in handle opposite the out handle. No entry when nothing changes (changed false). The reply describes the curve: id, name, parent_id, closed, point_count, span_count, length (in the prim's own units), point_distances (the distance of each span's start point, then the length), points (position, in, out, kind in the prim's frame), world_position, world_rotation_xyzw, revision (counts path changes) and change_message_count (Curve_changed_message count of the scene: one per curve per frame in which a curve's path or world transform changed). Also returns changed.",
+    "inputSchema": {
+      "properties": {
+        "curve_id": {
+          "description": "Id of the curve prim",
+          "type": "integer"
+        },
+        "curve_name": {
+          "description": "Name or path of the curve prim (alternative to curve_id)",
+          "type": "string"
+        },
+        "index": {
+          "description": "Index of the control point",
+          "type": "integer"
+        },
+        "kind": {
+          "description": "The new kind",
+          "enum": [
+            "corner",
+            "smooth",
+            "free"
+          ],
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "index",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "name": "curve_set_point_kind"
+  },
+  {
+    "description": "Add one control point to a curve prim as ONE undo entry (doc/editor/curves.md 'Viewport editing'). at 'start' / 'end' (open curves only; a closed curve has no ends) adds a point before the first / after the last point: without 'point' or 'position' it lies along the end tangent at the distance of the end span's chord, a corner beyond a corner end and otherwise smooth with handles a third of that chord; 'position' (in the prim's own frame) places it there with the same kind and Catmull-Rom handles; 'point' gives its values exactly. at 'curve' inserts a point on the curve by splitting the span there (de Casteljau), leaving the shape unchanged: a line span gives a corner, a cubic span a smooth point, and a neighbor that gave the span no handle gets the split's handle and becomes free; the place is 'distance' (along the curve in the prim's units, clamped / wrapped as evaluate_curve) or 'position' (world space; the nearest point of the curve). Refused at a control point (the place must be inside a span), for a curve inside a reference instance and for unknown arguments. The reply describes the curve as curve_set_point_kind's does (points in the prim's frame, length, point_distances, revision, change_message_count), plus changed, index (the new point's index) and, for at 'curve', location (span, t, distance).",
+    "inputSchema": {
+      "properties": {
+        "at": {
+          "description": "Where the point goes",
+          "enum": [
+            "start",
+            "end",
+            "curve"
+          ],
+          "type": "string"
+        },
+        "curve_id": {
+          "description": "Id of the curve prim",
+          "type": "integer"
+        },
+        "curve_name": {
+          "description": "Name or path of the curve prim (alternative to curve_id)",
+          "type": "string"
+        },
+        "distance": {
+          "description": "at 'curve': the distance along the curve, in the prim's own units",
+          "type": "number"
+        },
+        "point": {
+          "description": "at 'start' / 'end': the new point's exact values",
+          "properties": {
+            "in": {
+              "description": "Incoming handle as an offset from the position (default zero)",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "kind": {
+              "description": "The point's kind (default corner)",
+              "enum": [
+                "corner",
+                "smooth",
+                "free"
+              ],
+              "type": "string"
+            },
+            "out": {
+              "description": "Outgoing handle as an offset from the position (default zero)",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "position": {
+              "description": "Position in the curve prim's own frame",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            }
+          },
+          "required": [
+            "position"
+          ],
+          "type": "object"
+        },
+        "position": {
+          "description": "at 'start' / 'end': the new point's position in the prim's own frame; at 'curve': a world-space place whose nearest point of the curve is split",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "at"
+      ],
+      "type": "object"
+    },
+    "name": "curve_add_point"
+  },
+  {
+    "description": "Remove control points of a curve prim as ONE undo entry. A curve keeps at least 2 points: a removal that would leave fewer is refused, as are indices out of range or given twice. The reply describes the curve as curve_set_point_kind's does (points in the prim's frame, length, point_distances, revision, change_message_count), plus changed.",
+    "inputSchema": {
+      "properties": {
+        "curve_id": {
+          "description": "Id of the curve prim",
+          "type": "integer"
+        },
+        "curve_name": {
+          "description": "Name or path of the curve prim (alternative to curve_id)",
+          "type": "string"
+        },
+        "indices": {
+          "description": "Indices of the control points to remove",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "indices"
+      ],
+      "type": "object"
+    },
+    "name": "curve_remove_points"
+  },
+  {
+    "description": "Read the curve tool's point selection (doc/editor/curves.md 'Viewport editing'): the target curve (id, name, scene_name; null when no curve is the only selected item) and its selected points, each with index (the control point), part ('point', 'in' or 'out': the point itself or its in / out handle end) and world_position. gizmo_on_points tells whether the Transform gizmo is anchored at the selection (it is from the next idle viewport frame after a selection), so transform_selection, get_transform_handles and gizmo mouse drags then move the selected points.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_curve_point_selection"
+  },
+  {
+    "description": "Select points of a curve prim for the curve tool, as a viewport click does: the curve becomes the only selected item (the tool's target) and the given points are selected - replacing the point selection, or with extend toggled into it. An empty points array clears the point selection. A selected point carries the Transform gizmo: transform_selection, get_transform_handles and gizmo drags (mouse_drag) then move the points the way a user does. Not an undo entry (a selection). Refused: an index out of range, a handle part of a corner point, unknown keys. Returns what get_curve_point_selection returns.",
+    "inputSchema": {
+      "properties": {
+        "curve_id": {
+          "description": "Id of the curve prim",
+          "type": "integer"
+        },
+        "curve_name": {
+          "description": "Name or path of the curve prim (alternative to curve_id)",
+          "type": "string"
+        },
+        "extend": {
+          "description": "Toggle the given points into the current point selection instead of replacing it (default false)",
+          "type": "boolean"
+        },
+        "points": {
+          "description": "Points to select",
+          "items": {
+            "properties": {
+              "index": {
+                "description": "Index of the control point",
+                "type": "integer"
+              },
+              "part": {
+                "description": "The point itself or one of its handle ends (default point)",
+                "enum": [
+                  "point",
+                  "in",
+                  "out"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "index"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "points"
+      ],
+      "type": "object"
+    },
+    "name": "select_curve_points"
+  },
+  {
+    "description": "Evaluate a curve at distances along it (read-only). Distances are in the curve prim's own units, measured from its first point; on an open curve they clamp to [0, length], on a closed one they wrap. Each sample gives distance, normalized_distance, the world-space position, unit tangent and up-keeping frame (up = reference_up with the tangent's part removed, side = cross(up, tangent); where the tangent is vertical the previous sample's side is kept), and local_position / local_tangent in the prim's frame. Returns id, name, closed, length, reference_up and samples.",
+    "inputSchema": {
+      "properties": {
+        "curve_id": {
+          "description": "Id of the curve prim",
+          "type": "integer"
+        },
+        "curve_name": {
+          "description": "Name or path of the curve prim (alternative to curve_id)",
+          "type": "string"
+        },
+        "distances": {
+          "description": "Distances along the curve, at least one",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "reference_up": {
+          "description": "World up the frames keep (default [0, 1, 0])",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "distances"
+      ],
+      "type": "object"
+    },
+    "name": "evaluate_curve"
   }
 ]

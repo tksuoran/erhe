@@ -19,9 +19,11 @@
 #include "tools/tools.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_math/curve_path.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -1946,10 +1948,6 @@ namespace {
 
 [[nodiscard]] auto layout_pattern_json(const Kit_layout_pattern& pattern) -> json
 {
-    json points = json::array();
-    for (const glm::vec3& point : pattern.points) {
-        points.push_back(vec3_json(point));
-    }
     return json{
         {"kind",        c_str(pattern.kind)},
         {"count_mode",  c_str(pattern.count_mode)},
@@ -1965,11 +1963,25 @@ namespace {
         {"radius",      pattern.radius},
         {"arc_degrees", pattern.arc_degrees},
         {"facing",      c_str(pattern.facing)},
-        {"points",      points}
+        {"orientation", c_str(pattern.orientation)}
     };
 }
 
-// The given keys over the pattern; "kind" and "count_mode" by name.
+// A path layout's own curve: its points, closure and length; null for a node that is not a curve.
+[[nodiscard]] auto layout_curve_json(const erhe::scene::Node& node) -> json
+{
+    const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(&node);
+    if (curve == nullptr) {
+        return json(nullptr);
+    }
+    return json{
+        {"point_count", curve->get_path().points.size()},
+        {"closed",      curve->get_path().closure == erhe::math::Curve_closure::closed},
+        {"length",      curve->get_table().get_length()}
+    };
+}
+
+// The given keys over the pattern; "kind", "count_mode", "facing" and "orientation" by name.
 [[nodiscard]] auto read_layout_pattern_json(const json& object, Kit_layout_pattern& pattern) -> std::string
 {
     if (!object.is_object()) {
@@ -1977,23 +1989,34 @@ namespace {
     }
     const std::string unrecognized = unrecognized_keys(
         object,
-        {"kind", "count_mode", "count", "gap", "direction", "step", "length", "count_x", "count_z", "spacing_x", "spacing_z", "radius", "arc_degrees", "facing", "points"}
+        {"kind", "count_mode", "count", "gap", "direction", "step", "length", "count_x", "count_z", "spacing_x", "spacing_z", "radius", "arc_degrees", "facing", "orientation"}
     );
     if (!unrecognized.empty()) {
         return "pattern: unrecognized key(s): " + unrecognized +
-            " (accepted: kind, count_mode, count, gap, direction, step, length, count_x, count_z, spacing_x, spacing_z, radius, arc_degrees, facing, points)";
+            " (accepted: kind, count_mode, count, gap, direction, step, length, count_x, count_z, spacing_x, spacing_z, radius, arc_degrees, facing, orientation;"
+            " a path layout is its own curve node: level_create_layout takes points and closed, or curve_id of a plain curve)";
     }
     if (object.contains("kind")) {
         const json& kind = object.at("kind");
         bool found = false;
-        for (const Repeat_pattern_kind candidate : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::polyline}) {
+        for (const Repeat_pattern_kind candidate : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path}) {
             if (kind == json(c_str(candidate))) {
                 pattern.kind = candidate;
                 found = true;
             }
         }
         if (!found) {
-            return "pattern: kind is " + kind.dump() + " (line, grid, ring, polyline)";
+            return "pattern: kind is " + kind.dump() + " (line, grid, ring, path; a polyline is a path along a curve of corner points)";
+        }
+    }
+    if (object.contains("orientation")) {
+        const json& orientation = object.at("orientation");
+        if (orientation == json(c_str(Repeat_path_orientation::upright))) {
+            pattern.orientation = Repeat_path_orientation::upright;
+        } else if (orientation == json(c_str(Repeat_path_orientation::tangent))) {
+            pattern.orientation = Repeat_path_orientation::tangent;
+        } else {
+            return "pattern: orientation is " + orientation.dump() + " (upright, tangent)";
         }
     }
     if (object.contains("count_mode")) {
@@ -2044,20 +2067,6 @@ namespace {
             pattern.facing = Repeat_ring_facing::start_rotation;
         } else {
             return "pattern: facing is " + facing.dump() + " (outward, start)";
-        }
-    }
-    if (object.contains("points")) {
-        const json& points = object.at("points");
-        if (!points.is_array()) {
-            return "pattern: points must be an array of [x, y, z] in the layout node's frame";
-        }
-        pattern.points.clear();
-        for (const json& point : points) {
-            float xyz[3]{};
-            if (!read_finite_numbers(point, 3, xyz)) {
-                return "pattern: each point must be an array of 3 finite numbers";
-            }
-            pattern.points.emplace_back(xyz[0], xyz[1], xyz[2]);
         }
     }
     return {};
@@ -2161,11 +2170,14 @@ namespace {
     Kit_layout_data   data;
     const std::string read_error = read_kit_layout(node, data);
     const erhe::scene::Trs_transform world = node.world_from_node_transform();
+    // R5.12.8: a path layout is a curve node; get_curve and the curve tools read and edit it as any curve.
     json reply{
         {"id",            node.get_id()},
         {"name",          node.get_name()},
+        {"type",          std::string{node.get_type_name()}},
         {"position",      vec3_json(world.get_translation())},
-        {"rotation_xyzw", quat_json(world.get_rotation())}
+        {"rotation_xyzw", quat_json(world.get_rotation())},
+        {"curve",         layout_curve_json(node)}
     };
     if (!read_error.empty()) {
         reply["problem"] = read_error;
@@ -2188,8 +2200,8 @@ namespace {
             extent = std::max(extent, bounds.max.x - bounds.min.x);
         }
     }
-    Kit_layout_run run;
-    const std::string run_error = resolve_layout_pattern(data.pattern, extent, run);
+    Kit_layout_run    run;
+    const std::string run_error = level_kits.resolve_layout_run(node, data, extent, run);
     reply["run"] = run_error.empty()
         ? json{{"count", run.count}, {"step", run.step}, {"space", run.space}, {"item_extent", extent}}
         : json{{"problem", run_error}, {"item_extent", extent}};
@@ -2253,12 +2265,12 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
 {
     const std::string tail = "; nothing was placed";
     const std::string unrecognized = unrecognized_keys(
-        args, {"scene_name", "name", "parent_id", "position", "rotation_xyzw", "pattern", "items", "from_piece_id", "snap", "surface_snap", "surface_orient", "random_seeds", "seed", "locked"}
+        args, {"scene_name", "name", "parent_id", "position", "rotation_xyzw", "pattern", "items", "from_piece_id", "curve_id", "points", "closed", "snap", "surface_snap", "surface_orient", "random_seeds", "seed", "locked"}
     );
     if (!unrecognized.empty()) {
         return make_error_content(
             "level_create_layout: unrecognized argument(s): " + unrecognized +
-            " (accepted: scene_name, name, parent_id, position, rotation_xyzw, pattern, items, from_piece_id, snap, surface_snap, surface_orient, random_seeds, seed, locked)"
+            " (accepted: scene_name, name, parent_id, position, rotation_xyzw, pattern, items, from_piece_id, curve_id, points, closed, snap, surface_snap, surface_orient, random_seeds, seed, locked)"
         );
     }
     const std::string scene_name = args.value("scene_name", "");
@@ -2269,7 +2281,22 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
     Level_kits&       level_kits = *m_context.level_kits;
     Kit_layout_create create;
     std::string       error;
-    std::shared_ptr<erhe::scene::Mesh> piece;
+    std::shared_ptr<erhe::scene::Mesh>  piece;
+    std::shared_ptr<erhe::scene::Curve> on_curve; // curve_id: this plain curve node becomes the path layout
+    if (args.contains("curve_id")) {
+        for (const char* const key : {"from_piece_id", "position", "rotation_xyzw", "parent_id", "name", "points", "closed"}) {
+            if (args.contains(key)) {
+                return make_error_content(std::string{"level_create_layout: give curve_id or "} + key + ", not both: the curve node states its place, name and points" + tail);
+            }
+        }
+        if (!args.at("curve_id").is_number_unsigned()) {
+            return make_error_content("level_create_layout: curve_id must be a curve node id (create_curve, get_curves)" + tail);
+        }
+        on_curve = std::dynamic_pointer_cast<erhe::scene::Curve>(find_node_in_scene(*scene_root, args, "curve_id", "curve_name"));
+        if (!on_curve) {
+            return make_error_content("level_create_layout: curve_id " + args.at("curve_id").dump() + " is no curve node of scene " + scene_root->get_name() + tail);
+        }
+    }
     if (args.contains("from_piece_id")) {
         // The piece is the one item and its place is the node's (the Level Kit window's Make Layout).
         for (const char* const key : {"items", "position", "rotation_xyzw", "parent_id"}) {
@@ -2305,8 +2332,21 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
             error = read_layout_pattern_json(args.at("pattern"), create.data.pattern);
         }
     }
+    // A path layout is a curve node (R5.12.8): its points and closure, else a straight curve along its x axis.
+    if (error.empty() && (args.contains("points") || args.contains("closed"))) {
+        if (create.data.pattern.kind != Repeat_pattern_kind::path) {
+            error = std::string{"points and closed are a path layout's curve; a "} + c_str(create.data.pattern.kind) + " layout is an Xform node";
+        } else if (!args.contains("points")) {
+            error = "closed needs points: the default curve is a straight open one";
+        } else {
+            erhe::math::Curve_path path;
+            if (read_curve_path_args(args, path, error)) {
+                create.path = path;
+            }
+        }
+    }
     if (error.empty()) { error = read_layout_settings_json(args, create.data); }
-    if (error.empty() && !piece) {
+    if (error.empty() && !piece && !on_curve) {
         Kit_placement pose;
         error = read_piece_pose(args, pose);
         create.position = pose.position;
@@ -2317,7 +2357,7 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
         error = read_piece_name(args, "name", named);
         create.name = named.name;
     }
-    if (error.empty() && !piece) {
+    if (error.empty() && !piece && !on_curve) {
         Kit_placement parented;
         error = read_piece_parent(*scene_root, args, parented);
         create.parent = parented.parent;
@@ -2331,7 +2371,9 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
     if (!error.empty()) {
         return make_error_content("level_create_layout: " + error + tail);
     }
-    const Kit_layout_result result = piece
+    const Kit_layout_result result = on_curve
+        ? level_kits.make_layout_on_curve(*scene_root, on_curve, create.data)
+        : piece
         ? level_kits.make_layout_from_piece(
             *scene_root,
             Kit_layout_from_piece{
@@ -2343,7 +2385,8 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
                 .seeds          = create.data.seeds,
                 .seed           = create.data.seed,
                 .lock           = create.data.lock,
-                .name           = create.name
+                .name           = create.name,
+                .path           = create.path
             }
         )
         : level_kits.create_layout(*scene_root, create);

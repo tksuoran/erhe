@@ -3362,7 +3362,7 @@ auto Mcp_server::action_create_child_prim(const json& args) -> std::string
         return make_error_content("Missing 'type' (child prim catalog key)");
     }
 
-    // A child prim kind (Mesh, Camera, Light, Joint) goes under any prim
+    // A child prim kind (Mesh, Camera, Light, Joint, Curve) goes under any prim
     // (doc/erhe/usd_compatibility_design.md C5).
     const Child_prim_type_info* const child_prim_info = find_child_prim_type(type_key);
     if (child_prim_info == nullptr) {

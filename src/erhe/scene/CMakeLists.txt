@@ -11,6 +11,8 @@ erhe_target_sources_grouped(
     erhe_scene/camera.hpp
     erhe_scene/camera_snapshot.cpp
     erhe_scene/camera_snapshot.hpp
+    erhe_scene/curve.cpp
+    erhe_scene/curve.hpp
     erhe_scene/draw_mode_description.cpp
     erhe_scene/draw_mode_description.hpp
     erhe_scene/gprim.cpp

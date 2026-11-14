@@ -26,6 +26,8 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
+#include "tools/curve_tool.hpp"
+#include "tools/lattice_tool.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
@@ -874,6 +876,7 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
     }
 
     shared.world_from_anchor.set(updated_world_from_anchor);
+    follow_layout_preview();
 }
 
 void Transform_tool::adjust_from_origin(const Trs_transform& updated_world_from_origin)
@@ -914,6 +917,7 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
     apply_drag_surface_step();
+    follow_layout_preview();
     update_transforms();
 }
 
@@ -929,6 +933,39 @@ void Transform_tool::apply_drag_surface_step()
         return;
     }
     static_cast<void>(rest_on_surface(m_drag_surface));
+}
+
+void Transform_tool::follow_layout_preview()
+{
+    if (m_context.level_kits == nullptr) {
+        return;
+    }
+    // Begun at the first step of an edit, ended where the edit records (record_transform_operation()).
+    if (!m_layout_preview_begun) {
+        m_layout_preview_begun = true;
+        const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+        if (!scene_root) {
+            return;
+        }
+        m_moved_nodes.clear();
+        for (const Transform_entry& entry : shared.entries) {
+            m_moved_nodes.push_back(entry.node);
+        }
+        m_context.level_kits->begin_layout_move_preview(*scene_root, m_moved_nodes);
+        m_moved_nodes.clear();
+    }
+    static_cast<void>(m_context.level_kits->step_layout_preview());
+}
+
+void Transform_tool::end_layout_preview()
+{
+    if (!m_layout_preview_begun) {
+        return;
+    }
+    m_layout_preview_begun = false;
+    if (m_context.level_kits != nullptr) {
+        m_context.level_kits->end_layout_preview();
+    }
 }
 
 auto Transform_tool::has_moved_ancestor_entry(const erhe::scene::Node& node) const -> bool
@@ -1161,6 +1198,7 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
             enforce_channel_locks(*node, entry.parent_from_node_before);
         }
         shared.world_from_anchor = erhe::scene::rotate(shared.world_from_anchor_initial_state, rotation);
+        follow_layout_preview();
     } else {
         const mat4 translate   = erhe::math::create_translation<float>(vec3{-center_of_rotation});
         const mat4 untranslate = erhe::math::create_translation<float>(vec3{ center_of_rotation});
@@ -1198,6 +1236,7 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
             enforce_channel_locks(*node, entry.parent_from_node_before);
         }
         shared.world_from_anchor = erhe::scene::scale(shared.world_from_anchor_initial_state, scale);
+        follow_layout_preview();
     } else {
         const mat4 translate   = erhe::math::create_translation<float>(vec3{-center_of_scale});
         const mat4 untranslate = erhe::math::create_translation<float>(vec3{ center_of_scale});
@@ -1238,6 +1277,7 @@ void Transform_tool::apply_translation_edit(const glm::vec3 translation, const b
     entry.node->set_parent_from_node(parent_from_node);
     enforce_channel_locks(*entry.node, entry.parent_from_node_before);
     shared.set_anchor_from_origin(entry.node->world_from_node_transform());
+    follow_layout_preview();
     update_transforms();
 }
 
@@ -1284,6 +1324,7 @@ void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool lo
             shared.set_anchor_from_origin(node->world_from_node_transform());
         }
     }
+    follow_layout_preview();
     update_transforms();
 }
 
@@ -1319,6 +1360,7 @@ void Transform_tool::apply_scale_edit(const glm::vec3 scale, const bool local)
     entry.node->set_parent_from_node(parent_from_node);
     enforce_channel_locks(*entry.node, entry.parent_from_node_before);
     shared.set_anchor_from_origin(entry.node->world_from_node_transform());
+    follow_layout_preview();
     update_transforms();
 }
 
@@ -1353,6 +1395,7 @@ void Transform_tool::apply_skew_edit(const glm::vec3 skew, const bool local)
     parent_from_node.set_skew(skew);
     entry.node->set_parent_from_node(parent_from_node);
     shared.set_anchor_from_origin(entry.node->world_from_node_transform());
+    follow_layout_preview();
     update_transforms();
 }
 
@@ -1698,6 +1741,7 @@ void Transform_tool::end_drag()
     // After the record above: the operation captured the release pose. The
     // released bodies keep their velocity.
     m_physics_drag.end();
+    end_layout_preview();
 
     // In component mode the node record path (record_transform_operation, called via
     // Subtool::end above) is a no-op because shared.entries is empty; queue the mesh
@@ -2623,11 +2667,11 @@ void Transform_tool::render_hover_preview(const Render_context& context)
 
 void Transform_tool::update_for_view(Scene_view* scene_view)
 {
-    // Keep the gizmo anchor tracking the live mesh component selection (or a
-    // designated lattice node's selected control point) while idle. Skipped
+    // Keep the gizmo anchor tracking the live mesh component selection (or the
+    // selected points of a point set tool) while idle. Skipped
     // during an active gizmo drag or numeric component edit so the captured
     // initial anchor is not stomped mid-edit.
-    if (!is_transform_tool_active() && !m_component_transform.is_active() && !m_lattice_point_transform.is_active()) {
+    if (!is_transform_tool_active() && !m_component_transform.is_active() && !m_point_set_transform.is_active()) {
         Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
         // Bone mode is not a mesh component mode: a selected bone is an
         // ordinary joint Node, so the gizmo must fall through to the node
@@ -2635,6 +2679,18 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
         const bool want_component =
             (mesh_component_selection != nullptr) &&
             is_mesh_component_mode(mesh_component_selection->get_mode());
+        IPoint_set* point_set = nullptr;
+        if (!want_component) {
+            // A designated lattice bound into the active scene owns the gizmo
+            // (as a Houdini display flag would); then the selected points of
+            // the selected curve.
+            for (IPoint_set* candidate : {static_cast<IPoint_set*>(m_context.lattice_tool), static_cast<IPoint_set*>(m_context.curve_tool)}) {
+                if ((candidate != nullptr) && candidate->update_point_set() && m_point_set_transform.update_anchor(*candidate, shared)) {
+                    point_set = candidate;
+                    break;
+                }
+            }
+        }
         if (want_component) {
             // The mesh component selection owns the gizmo for as long as a
             // mesh component mode is active, anchored or not: an empty
@@ -2642,19 +2698,19 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
             // and the node-selection handlers must not rebuild it meanwhile.
             m_component_transform.update_anchor(m_context, shared);
             m_component_source = Component_source::mesh_components;
-        } else if (m_lattice_point_transform.update_anchor(m_context, shared)) {
-            // A display/ghost designated Lattice_node is bound into the active
-            // scene: its selected control point owns the gizmo (viewport lattice
-            // editing). Clearing the designation returns the gizmo to the node
-            // selection below.
-            m_component_source = Component_source::lattice_point;
+            m_point_set        = nullptr;
+        } else if (point_set != nullptr) {
+            m_component_source = Component_source::point_set;
+            m_point_set        = point_set;
         } else if (!is_node_selection_driving()) {
-            // Left component / lattice mode: restore the node gizmo.
+            // Left component / point set mode: restore the node gizmo.
             m_component_source = Component_source::none;
+            m_point_set        = nullptr;
             shared.component_mode = false;
             update_target_nodes(nullptr);
         } else {
             m_component_source = Component_source::none;
+            m_point_set        = nullptr;
         }
     }
 
@@ -2712,8 +2768,8 @@ void Transform_tool::apply_component_transform(const glm::mat4& updated_world_fr
 {
     // Note: the component path does not use shared.touched (which gates the node
     // record path); commit is driven by the producer's is_active().
-    if (m_component_source == Component_source::lattice_point) {
-        m_lattice_point_transform.apply(m_context, shared, updated_world_from_anchor);
+    if (m_component_source == Component_source::point_set) {
+        m_point_set_transform.apply(shared, updated_world_from_anchor);
     } else {
         m_component_transform.apply(m_context, shared, updated_world_from_anchor);
     }
@@ -2723,8 +2779,10 @@ void Transform_tool::apply_component_transform(const glm::mat4& updated_world_fr
 
 void Transform_tool::begin_component_edit()
 {
-    if (m_component_source == Component_source::lattice_point) {
-        m_lattice_point_transform.begin(m_context);
+    if (m_component_source == Component_source::point_set) {
+        if (m_point_set != nullptr) {
+            m_point_set_transform.begin(*m_point_set);
+        }
     } else {
         m_component_transform.begin(m_context);
     }
@@ -2732,8 +2790,8 @@ void Transform_tool::begin_component_edit()
 
 void Transform_tool::commit_component_edit()
 {
-    if (m_lattice_point_transform.is_active()) {
-        m_lattice_point_transform.commit(m_context);
+    if (m_point_set_transform.is_active()) {
+        m_point_set_transform.commit();
     }
     if (m_component_transform.is_active()) {
         m_component_transform.commit(m_context);
@@ -2742,7 +2800,12 @@ void Transform_tool::commit_component_edit()
 
 auto Transform_tool::is_component_edit_active() const -> bool
 {
-    return m_component_transform.is_active() || m_lattice_point_transform.is_active();
+    return m_component_transform.is_active() || m_point_set_transform.is_active();
+}
+
+auto Transform_tool::get_point_set_edit() const -> const IPoint_set*
+{
+    return m_point_set_transform.get_point_set();
 }
 
 auto Transform_tool::begin_scalar_drag(
@@ -2875,6 +2938,11 @@ auto Transform_tool::toggle_scalar_drag_option(const Scalar_drag_option option) 
 auto Transform_tool::cancel_component_edit() -> bool
 {
     m_scalar_drag = Scalar_drag{};
+    if (m_point_set_transform.is_active()) {
+        m_point_set_transform.cancel();
+        log_trs_tool->info("Point edit cancelled");
+        return true;
+    }
     if (!m_component_transform.is_active()) {
         return false;
     }
@@ -2948,6 +3016,8 @@ void Transform_tool::touch()
 
 void Transform_tool::record_transform_operation()
 {
+    // The moved layouts get their children from before the drag back; the move hook below records their generation.
+    end_layout_preview();
     if (!shared.touched || shared.entries.empty()) {
         return;
     }
@@ -3061,6 +3131,7 @@ void Transform_tool::end_scripted_drag()
     }
     record_transform_operation();
     m_physics_drag.end();
+    end_layout_preview();
     m_scripted_drag_active = false;
     m_active_tool          = nullptr;
     m_drag_surface         = Surface_options{};

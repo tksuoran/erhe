@@ -1,5 +1,6 @@
 #include "erhe_geometry/shapes/sweep.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_math/curve_path.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <geogram/mesh/mesh.h>
@@ -13,40 +14,6 @@
 namespace erhe::geometry::shapes {
 
 namespace {
-
-// De Casteljau evaluation of a single bezier segment whose degree is
-// control_points.size() - 1.
-auto bezier_point(std::vector<glm::vec3> points, const float t) -> glm::vec3
-{
-    for (std::size_t k = points.size() - 1; k >= 1; --k) {
-        for (std::size_t i = 0; i < k; ++i) {
-            points[i] = glm::mix(points[i], points[i + 1], t);
-        }
-    }
-    return points[0];
-}
-
-auto bezier_tangent(const std::vector<glm::vec3>& points, const float t) -> glm::vec3
-{
-    // Derivative bezier: d_i = n * (P_{i+1} - P_i)
-    std::vector<glm::vec3> derivative;
-    derivative.reserve(points.size() - 1);
-    const float n = static_cast<float>(points.size() - 1);
-    for (std::size_t i = 0; i + 1 < points.size(); ++i) {
-        derivative.push_back(n * (points[i + 1] - points[i]));
-    }
-    glm::vec3 tangent = (derivative.size() == 1) ? derivative[0] : bezier_point(derivative, t);
-    const float length = glm::length(tangent);
-    if (length < 1.0e-8f) {
-        // Repeated control points: fall back to a small finite difference.
-        const float h  = 1.0e-3f;
-        const float t0 = std::max(0.0f, t - h);
-        const float t1 = std::min(1.0f, t + h);
-        tangent = bezier_point(std::vector<glm::vec3>{points}, t1) - bezier_point(std::vector<glm::vec3>{points}, t0);
-    }
-    const float final_length = glm::length(tangent);
-    return (final_length > 1.0e-12f) ? tangent / final_length : glm::vec3{0.0f, 1.0f, 0.0f};
-}
 
 auto evaluate_taper(const std::vector<glm::vec2>& keys, const float t) -> float
 {
@@ -86,39 +53,16 @@ void make_sweep(GEO::Mesh& mesh, const Sweep_parameters& parameters)
     std::vector<glm::vec3> ups      (station_count);
     std::vector<glm::vec3> sides    (station_count);
     std::vector<float>     scales   (station_count);
+    std::vector<glm::vec3> scratch  (parameters.spine.size());
     for (int i = 0; i < station_count; ++i) {
         const float t = static_cast<float>(i) / static_cast<float>(spine_steps);
-        positions[i] = bezier_point(parameters.spine, t);
-        tangents [i] = bezier_tangent(parameters.spine, t);
+        positions[i] = erhe::math::bezier_point       (parameters.spine, t, scratch);
+        tangents [i] = erhe::math::bezier_unit_tangent(parameters.spine, t, scratch);
         scales   [i] = evaluate_taper(parameters.taper, t);
     }
-    {
-        // Initial up: world +Y projected off the tangent; +X when vertical.
-        const glm::vec3 t0 = tangents[0];
-        glm::vec3 up = glm::vec3{0.0f, 1.0f, 0.0f} - t0 * t0.y;
-        if (glm::length(up) < 1.0e-4f) {
-            up = glm::vec3{1.0f, 0.0f, 0.0f} - t0 * t0.x;
-        }
-        ups[0] = glm::normalize(up);
-    }
+    ups[0] = erhe::math::initial_transport_up(tangents[0]);
     for (int i = 1; i < station_count; ++i) {
-        // Rotate the previous up by the minimal rotation between tangents.
-        const glm::vec3 prev = tangents[i - 1];
-        const glm::vec3 next = tangents[i];
-        const glm::vec3 axis = glm::cross(prev, next);
-        const float     s    = glm::length(axis);
-        const float     c    = std::clamp(glm::dot(prev, next), -1.0f, 1.0f);
-        if (s < 1.0e-8f) {
-            ups[i] = ups[i - 1];
-        } else {
-            const glm::vec3 a     = axis / s;
-            const float     angle = std::atan2(s, c);
-            const glm::vec3 u     = ups[i - 1];
-            // Rodrigues rotation
-            ups[i] = u * std::cos(angle) + glm::cross(a, u) * std::sin(angle) + a * glm::dot(a, u) * (1.0f - std::cos(angle));
-        }
-        // Re-orthonormalize against drift.
-        ups[i] = glm::normalize(ups[i] - tangents[i] * glm::dot(tangents[i], ups[i]));
+        ups[i] = erhe::math::transport_up(tangents[i - 1], tangents[i], ups[i - 1]);
     }
     for (int i = 0; i < station_count; ++i) {
         // side x up = tangent: CCW profiles face outward.

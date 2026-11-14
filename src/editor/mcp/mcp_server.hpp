@@ -331,6 +331,17 @@ private:
     auto action_drag_selection     (const nlohmann::json& args) -> std::string;
     auto action_physics_drag       (const nlohmann::json& args) -> std::string;
     auto action_set_node_transform(const nlohmann::json& args) -> std::string;
+    // Curve prims (mcp_server_curves.cpp, doc/editor/curves.md "MCP").
+    auto action_create_curve        (const nlohmann::json& args) -> std::string;
+    auto query_get_curves           (const nlohmann::json& args) -> std::string;
+    auto query_get_curve            (const nlohmann::json& args) -> std::string;
+    auto action_set_curve           (const nlohmann::json& args) -> std::string;
+    auto action_curve_set_point_kind(const nlohmann::json& args) -> std::string;
+    auto query_evaluate_curve       (const nlohmann::json& args) -> std::string;
+    auto action_curve_add_point     (const nlohmann::json& args) -> std::string;
+    auto action_curve_remove_points (const nlohmann::json& args) -> std::string;
+    auto query_get_curve_point_selection(const nlohmann::json& args) -> std::string;
+    auto action_select_curve_points (const nlohmann::json& args) -> std::string;
     auto action_ik_drag            (const nlohmann::json& args) -> std::string;
     auto action_select_bones       (const nlohmann::json& args) -> std::string;
     auto action_flip_bone_names    (const nlohmann::json& args) -> std::string;

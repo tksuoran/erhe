@@ -1,4 +1,5 @@
 #include "windows/properties.hpp"
+#include "tools/curve_tool.hpp"
 
 #include "animation/animation_window.hpp"
 #include "app_context.hpp"
@@ -26,6 +27,7 @@
 #include "operations/material_change_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/curve_set_operation.hpp"
 #include "operations/property_set_operation.hpp"
 
 #include "app_scenes.hpp"
@@ -45,6 +47,7 @@
 #include "tools/selection_tool.hpp"
 #include "level/kit_piece.hpp"
 #include "level/kit_shape.hpp"
+#include "level/level_kits.hpp"
 #include "windows/config_ui.hpp"
 #include "config/generated/lod_config_serialization.hpp"
 #include "config/generated/navigation_settings_serialization.hpp"
@@ -77,6 +80,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/iinstance.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/layout.hpp"
@@ -122,6 +126,7 @@ Properties::Properties(
     , m_context   {app_context}
     , m_dependency_rows{app_context}
     , m_kit_piece_editor{app_context}
+    , m_kit_layout_editor{app_context}
 {
     // Below the Rest Rotation row of a bone's "IK" group
     // (doc/plans/rigging/ik_settings.md section 5): the same undoable write the
@@ -255,6 +260,22 @@ Properties::Properties(
             }
         }
     );
+    // A curve prim's "Curve" group (doc/editor/curves.md "Properties"): closed, counts, length and
+    // the point list, each edit one undo entry.
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Curve",
+            .applies  = [single](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(single(items));
+                return (curve != nullptr) && (curve->get_item_host() != nullptr);
+            },
+            .add_rows = [this, single](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                if (single(items) != nullptr) {
+                    curve_properties(std::dynamic_pointer_cast<erhe::scene::Curve>(items.front()));
+                }
+            }
+        }
+    );
     // A kit piece's "Kit Piece" group: one row per parameter in place of the
     // record's developer-only raw rows, each commit one undo entry.
     m_dependency_rows.add_group_rows(
@@ -267,6 +288,22 @@ Properties::Properties(
             .add_rows = [this, single](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
                 if (single(items) != nullptr) {
                     kit_piece_properties(std::dynamic_pointer_cast<erhe::scene::Mesh>(items.front()));
+                }
+            }
+        }
+    );
+    // A kit layout node's "Kit Layout" group (R5.12.9): a row per value in place of the raw developer-only rows,
+    // each commit one undo entry through the Level_kits entry points.
+    m_dependency_rows.add_group_rows(
+        Property_group_rows{
+            .group    = "Kit Layout",
+            .applies  = [single](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(single(items));
+                return (node != nullptr) && (node->get_item_host() != nullptr) && carries_kit_layout(*node);
+            },
+            .add_rows = [this, single](Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+                if (single(items) != nullptr) {
+                    kit_layout_properties(std::dynamic_pointer_cast<erhe::scene::Node>(items.front()));
                 }
             }
         }
@@ -341,11 +378,27 @@ Properties::Properties(
     m_selection_subscription = app_message_bus.selection.subscribe(
         [this](Selection_message&) {
             m_kit_piece_editor.mark_dirty();
+            m_kit_layout_editor.mark_dirty();
         }
     );
     m_active_item_subscription = app_message_bus.active_item.subscribe(
         [this](Active_item_changed_message&) {
             m_kit_piece_editor.mark_dirty();
+            m_kit_layout_editor.mark_dirty();
+        }
+    );
+    // A Kit_layout value written by an operation, its undo or redo: the Kit Layout rows read the node again.
+    m_kit_layout_changed_subscription = app_message_bus.kit_layout_changed.subscribe(
+        [this](Kit_layout_changed_message&) {
+            m_kit_layout_editor.mark_dirty();
+        }
+    );
+    // A path layout's run follows its own curve: a curve edit, its undo or redo reads it again.
+    m_curve_changed_subscription = app_message_bus.curve_changed.subscribe(
+        [this](Curve_changed_message& message) {
+            if (message.curve && message.shape) {
+                m_kit_layout_editor.on_curve_changed(*message.curve);
+            }
         }
     );
     m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
@@ -1177,6 +1230,180 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
     }
     if (!m_kit_piece_editor.get_message().empty()) {
         add_entry(Property_row_id::properties_message, "Message", [this]() { kit_message_line(m_kit_piece_editor.get_message()); });
+    }
+}
+
+void Properties::kit_layout_properties(const std::shared_ptr<erhe::scene::Node>& layout)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!layout || !carries_kit_layout(*layout)) {
+        return;
+    }
+    Kit_layout_editor& editor = m_kit_layout_editor;
+    editor.update(layout);
+    if (!editor.is_ready()) {
+        return;
+    }
+    if (!editor.get_problem().empty()) {
+        add_entry(Property_row_id::properties_kit_layout_problem, "Problem", [&editor]() { kit_message_line(editor.get_problem()); });
+        return;
+    }
+    add_entry(Property_row_id::properties_kit_layout_state, "Layout", [&editor]() { editor.state_line(); });
+    for (const Kit_layout_row row : get_layout_rows(editor.get_pattern())) {
+        add_entry({Property_row_id::properties_kit_layout_pattern, static_cast<uint64_t>(row)}, get_layout_row_name(row), [&editor, row]() { editor.pattern_row(row); });
+    }
+    add_entry(Property_row_id::properties_kit_layout_run, "Run", [&editor]() { editor.run_line(); });
+    const std::span<const Kit_layout_item_rows> items = editor.get_items();
+    for (std::size_t i = 0, end = items.size(); i < end; ++i) {
+        push_group({Property_row_id::properties_kit_layout_item, i}, std::string{items[i].label}, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        add_entry(Property_row_id::properties_kit_layout_item_shape, "Shape", [&editor, i]() { editor.item_shape_line(i); });
+        const Kit_shape_definition* const shape = items[i].problem.empty() ? items[i].values.get_shape() : nullptr;
+        if (shape != nullptr) {
+            for (std::size_t j = 0, parameter_end = shape->parameters.size(); j < parameter_end; ++j) {
+                add_entry({Property_row_id::properties_kit_layout_item_parameter, j}, std::string{shape->parameters[j].name}, [&editor, i, j]() { editor.item_parameter_row(i, j); });
+            }
+            for (std::size_t slot = 0, slot_end = shape->material_slots.size(); slot < slot_end; ++slot) {
+                add_entry({Property_row_id::properties_kit_layout_item_material, slot}, shape->material_slots[slot] + " material", [&editor, i, slot]() { editor.item_material_row(i, slot); });
+            }
+        }
+        add_entry(Property_row_id::properties_kit_layout_item_remove, "Remove Item", [&editor, i]() { editor.item_remove_button(i); });
+        pop_group();
+    }
+    add_entry(Property_row_id::properties_kit_layout_add_item, "Add Shape Item", [&editor]() { editor.add_item_button(); });
+    for (const Kit_layout_setting_row row : c_layout_setting_rows) {
+        add_entry({Property_row_id::properties_kit_layout_setting, static_cast<uint64_t>(row)}, get_layout_setting_name(row), [&editor, row]() { editor.setting_row(row); });
+    }
+    add_entry(Property_row_id::properties_kit_layout_lock, "Lock", [&editor]() { editor.lock_buttons(); });
+    if (!editor.get_message().empty()) {
+        add_entry(Property_row_id::properties_kit_layout_message, "Message", [&editor]() { editor.message_line(); });
+    }
+}
+
+void Properties::curve_edit(const std::shared_ptr<erhe::scene::Curve>& curve, const erhe::math::Curve_path& after, const char* const what)
+{
+    if (ImGui::IsItemActivated()) {
+        m_curve_edit_before = curve->get_path();
+        if (m_context.level_kits != nullptr) {
+            m_context.level_kits->begin_layout_preview(curve);
+        }
+    }
+    if (ImGui::IsItemEdited()) {
+        curve->set_path(after);
+    }
+    if (ImGui::IsItemDeactivated() && (m_context.level_kits != nullptr)) {
+        m_context.level_kits->end_layout_preview();
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        m_context.operation_stack->queue(std::make_shared<Curve_set_operation>(curve, m_curve_edit_before, curve->get_path(), what));
+    }
+}
+
+void Properties::curve_properties(const std::shared_ptr<erhe::scene::Curve>& curve)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!curve) {
+        return;
+    }
+    add_entry(Property_row_id::properties_curve_closed, "Closed", [this, curve]() {
+        bool closed = (curve->get_path().closure == erhe::math::Curve_closure::closed);
+        if (ImGui::Checkbox("##", &closed)) {
+            erhe::math::Curve_path after = curve->get_path();
+            after.closure = closed ? erhe::math::Curve_closure::closed : erhe::math::Curve_closure::open;
+            m_context.operation_stack->queue(std::make_shared<Curve_set_operation>(curve, curve->get_path(), after, closed ? "close" : "open"));
+        }
+    });
+    add_entry(Property_row_id::properties_curve_point_count, "Points", [curve]() {
+        ImGui::Text("%zu", curve->get_path().points.size());
+    });
+    add_entry(Property_row_id::properties_curve_length, "Length", [curve]() {
+        ImGui::Text("%.4f", curve->get_table().get_length());
+    });
+    // The point edits of the curve tool (doc/editor/curves.md "Viewport editing"); its target is the selected curve.
+    Curve_tool* const curve_tool = m_context.curve_tool;
+    if ((curve_tool != nullptr) && (curve_tool->get_target_curve() == curve)) {
+        add_entry(Property_row_id::properties_curve_edit, "Add Point", [curve_tool]() {
+            const bool open = curve_tool->can_run(Curve_tool_action::add_point_at_start);
+            ImGui::BeginDisabled(!open);
+            if (ImGui::SmallButton("At Start")) {
+                static_cast<void>(curve_tool->run(Curve_tool_action::add_point_at_start));
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("At End")) {
+                static_cast<void>(curve_tool->run(Curve_tool_action::add_point_at_end));
+            }
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                ImGui::SetTooltip("Extends an open curve along its end tangent.\nCtrl+click on the curve in a viewport inserts a point there.");
+            }
+        });
+        add_entry(Property_row_id::properties_curve_selected_points, "Selected Points", [curve_tool]() {
+            ImGui::BeginDisabled(!curve_tool->can_run(Curve_tool_action::set_kind_corner));
+            if (ImGui::SmallButton("Corner")) {
+                static_cast<void>(curve_tool->run(Curve_tool_action::set_kind_corner));
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Smooth")) {
+                static_cast<void>(curve_tool->run(Curve_tool_action::set_kind_smooth));
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Free")) {
+                static_cast<void>(curve_tool->run(Curve_tool_action::set_kind_free));
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::BeginDisabled(!curve_tool->can_run(Curve_tool_action::remove_points));
+            if (ImGui::SmallButton("Remove")) {
+                static_cast<void>(curve_tool->run(Curve_tool_action::remove_points));
+            }
+            ImGui::EndDisabled();
+        });
+    }
+    const std::size_t point_count = curve->get_path().points.size();
+    for (std::size_t i = 0; i < point_count; ++i) {
+        while (m_curve_point_labels.size() <= i) {
+            m_curve_point_labels.push_back(fmt::format("Point {}", m_curve_point_labels.size()));
+        }
+        push_group({Property_row_id::properties_curve_point, i}, m_curve_point_labels.at(i).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        add_entry({Property_row_id::properties_curve_position, i}, "Position", [this, curve, i]() {
+            erhe::math::Curve_path after = curve->get_path();
+            if (i >= after.points.size()) {
+                return;
+            }
+            ImGui::DragFloat3("##", &after.points[i].position.x, 0.01f);
+            curve_edit(curve, after, "point position");
+        });
+        add_entry({Property_row_id::properties_curve_kind, i}, "Kind", [this, curve, i]() {
+            const erhe::math::Curve_path& before = curve->get_path();
+            if (i >= before.points.size()) {
+                return;
+            }
+            static constexpr const char* c_kind_strings[] = { "Corner", "Smooth", "Free" };
+            int kind = static_cast<int>(before.points[i].kind);
+            if (ImGui::Combo("##", &kind, c_kind_strings, 3)) {
+                erhe::math::Curve_path after = before;
+                erhe::math::set_curve_point_kind(after.points, i, after.closure, static_cast<erhe::math::Curve_point_kind>(kind));
+                m_context.operation_stack->queue(std::make_shared<Curve_set_operation>(curve, before, after, "point kind"));
+            }
+        });
+        if (curve->get_path().points[i].kind != erhe::math::Curve_point_kind::corner) {
+            const auto handle_row = [this, curve, i](const erhe::math::Curve_handle handle) {
+                erhe::math::Curve_path after = curve->get_path();
+                if (i >= after.points.size()) {
+                    return;
+                }
+                erhe::math::Curve_point& point = after.points[i];
+                glm::vec3 offset = (handle == erhe::math::Curve_handle::in) ? point.in_handle : point.out_handle;
+                if (ImGui::DragFloat3("##", &offset.x, 0.01f)) {
+                    erhe::math::set_curve_handle(point, handle, offset);
+                }
+                curve_edit(curve, after, "point handle");
+            };
+            add_entry({Property_row_id::properties_curve_in_handle, i}, "In Handle", [handle_row]() { handle_row(erhe::math::Curve_handle::in); });
+            add_entry({Property_row_id::properties_curve_out_handle, i}, "Out Handle", [handle_row]() { handle_row(erhe::math::Curve_handle::out); });
+        }
+        pop_group();
     }
 }
 

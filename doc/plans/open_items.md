@@ -52,8 +52,11 @@ ask the user which to pick. Item 14 starts with writing its plan.
 14. Triangle classification from walkable sample points: a plan to write,
     then build (`doc/plans/navigation_mesh.md` "Triangle classification from
     walkable sample points"; the navigation mesh it reads is built).
-15. Level tools: step 8 of `doc/plans/level_tools_implementation.md`.
-    State: `memory-bank/topics/level_tools.md`.
+15. Level tools and curves: the "Next steps" of
+    `doc/plans/level_tools_implementation.md` and the "Steps" of
+    `doc/plans/curves.md` (the user tests each change hands-on in the
+    windowed Debug editor and rules on what comes next). State:
+    `memory-bank/topics/level_tools.md`.
 
 ## Quest session follow-ups
 

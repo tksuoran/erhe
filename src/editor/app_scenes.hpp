@@ -27,6 +27,7 @@ namespace erhe::primitive {
     class Triangle_soup;
 }
 namespace erhe::scene {
+    class Curve;
     class Mesh;
 }
 
@@ -77,6 +78,9 @@ public:
     // changed (doc/erhe/usd_compatibility.md, "Draw modes").
     // Change-driven for the same reason and in the same shape.
     void rebuild_draw_mode_proxies           ();
+    // Main thread, once per frame after the transform propagation: one Curve_changed_message per curve
+    // that changed in the frame (doc/editor/curves.md "Change notification"); nothing when none did.
+    void flush_curve_changes                 ();
     // Step 2 of the per-frame material schedule
     // (doc/erhe/draw_list_material_set.md D6), for every registered root:
     // reconcile each set against the root's content library, apply the
@@ -195,6 +199,10 @@ private:
     // Scratch of rebuild_display_colors(); cleared after use, capacity kept.
     std::vector<std::shared_ptr<Scene_root>>          m_display_color_roots;
     std::vector<std::shared_ptr<erhe::scene::Mesh>>   m_display_color_meshes;
+    // Scratch of flush_curve_changes(); cleared after use, capacity kept.
+    std::vector<std::shared_ptr<Scene_root>>          m_curve_change_roots;
+    std::vector<std::shared_ptr<erhe::scene::Curve>>  m_changed_curves;
+    std::vector<bool>                                 m_changed_curve_shapes;
     std::vector<Display_color_build>                  m_display_color_builds;
     std::vector<std::shared_ptr<erhe::Item_base>>     m_display_color_items;
     // Scratch of rebuild_draw_mode_proxies(); cleared after use, capacity kept.

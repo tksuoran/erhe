@@ -24,6 +24,7 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/skin.hpp"
@@ -3983,6 +3984,11 @@ private:
         const std::map<const erhe::Item_base*, Skeleton_record>::const_iterator skeleton = m_skeletons.find(&node);
         if (skeleton != m_skeletons.end()) {
             return write_skeleton_prim(node, skeleton->second, plan_prim, prim_name, matrix, override_root);
+        }
+
+        // The BasisCurves mapping of a Curve prim is curves step 7 (doc/plans/curves.md).
+        if (dynamic_cast<const erhe::scene::Curve*>(&node) != nullptr) {
+            add_warning(fmt::format("curve '{}' is written as an Xform: USD does not carry its points yet", prim_name));
         }
 
         lightusd::Prim prim =

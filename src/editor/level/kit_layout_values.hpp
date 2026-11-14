@@ -10,6 +10,8 @@
 #include <string_view>
 #include <vector>
 
+namespace erhe::math { class Curve_path; class Curve_path_table; }
+
 // Scene-free values of a kit layout node (doc/editor/level_tools.md "Kit layout nodes", D3.9).
 
 namespace editor {
@@ -19,7 +21,7 @@ enum class Kit_snap : unsigned int {
     module // positions round to multiples of the module (R5.2)
 };
 
-// How a line, ring or polyline gets its piece count (R5.12.7); a grid always states its counts.
+// How a line, ring or path gets its piece count (R5.12.7); a grid always states its counts.
 enum class Kit_layout_count_mode : unsigned int {
     count = 0, // the count is stated
     gap        // the free distance between neighbors is stated, the space gives the count
@@ -34,8 +36,8 @@ class Kit_layout_pattern
 public:
     Repeat_pattern_kind    kind       {Repeat_pattern_kind::line};
     Kit_layout_count_mode  count_mode {Kit_layout_count_mode::count};
-    int                    count      {3};                  // line, ring, polyline in count mode
-    float                  gap        {0.0f};               // line, ring, polyline in gap mode
+    int                    count      {3};                  // line, ring, path in count mode
+    float                  gap        {0.0f};               // line, ring, path in gap mode
     glm::vec3              direction  {1.0f, 0.0f, 0.0f};   // line
     float                  step       {1.0f};               // line in count mode: center to center
     float                  length     {4.0f};               // line in gap mode: from the first center to the last
@@ -46,7 +48,7 @@ public:
     float                  radius     {4.0f};               // ring
     float                  arc_degrees{360.0f};             // ring: 360 is a full ring
     Repeat_ring_facing     facing     {Repeat_ring_facing::outward};
-    std::vector<glm::vec3> points;                          // polyline: after the origin
+    Repeat_path_orientation orientation{Repeat_path_orientation::upright}; // path; its curve is the layout node itself
 
     [[nodiscard]] auto operator==(const Kit_layout_pattern& other) const -> bool = default;
 };
@@ -73,21 +75,28 @@ void set_layout_spacing_from_extent(Kit_layout_pattern& pattern, const glm::vec3
 [[nodiscard]] auto parse_layout_pattern(std::string_view text, Kit_layout_pattern& out_pattern) -> std::string;
 [[nodiscard]] auto parse_layout_items  (std::string_view text, std::vector<Kit_layout_item>& out_items) -> std::string;
 
-// The run a pattern makes: a count mode Repeat_pattern for expand_repeat() from the node's origin.
+// The run a pattern makes: a count mode Repeat_pattern for expand_repeat() from the node's origin (a path: the node is
+// its curve, so its own frame).
 class Kit_layout_run
 {
 public:
     Repeat_pattern pattern;
     std::size_t    count{0};
     float          step {0.0f}; // center to center along the space (the arc for a ring); 0 for one element and a grid
-    float          space{0.0f}; // line: first to last center; ring: arc length; polyline: path length; grid: 0
+    float          space{0.0f}; // line: first to last center; ring: arc length; path: curve length; grid: 0
 };
 
-// item_extent: the largest extent along x of the items placed, read in gap mode. Returns the refusal, empty when resolved.
-[[nodiscard]] auto resolve_layout_pattern(const Kit_layout_pattern& pattern, float item_extent, Kit_layout_run& out_run) -> std::string;
+// item_extent: the largest extent along x of the items placed, read in gap mode; path_table: a path's curve (the run
+// refers to it), null for the other kinds. Returns the refusal, empty when resolved.
+[[nodiscard]] auto resolve_layout_pattern(
+    const Kit_layout_pattern&           pattern,
+    float                               item_extent,
+    const erhe::math::Curve_path_table* path_table,
+    Kit_layout_run&                     out_run
+) -> std::string;
 
-// The length of the path from the origin through the points.
-[[nodiscard]] auto get_path_length(std::span<const glm::vec3> points) -> double;
+// The path with every position and handle end taken through the transform; cleared and filled.
+void transform_curve_path(const erhe::math::Curve_path& path, const glm::mat4& transform, erhe::math::Curve_path& out_path);
 
 [[nodiscard]] auto get_layout_item_index(std::size_t element, std::size_t item_count) -> std::size_t;
 

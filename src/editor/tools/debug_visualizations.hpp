@@ -24,6 +24,7 @@ namespace erhe::imgui    { class Imgui_windows; }
 namespace erhe::renderer { class Debug_renderer; }
 namespace erhe::scene {
     class Camera;
+    class Curve;
     class Layout_data;
     class Light;
     class Mesh;
@@ -167,6 +168,7 @@ private:
     // segments, and the node's axes at the playhead time.
     void animation_paths_visualization   (const Render_context& context);
     void navigation_seeds_visualization  (const Render_context& context, const Scene_root& scene_root);
+    void curves_visualization            (const Render_context& context, const Scene_root& scene_root);
     void physics_nodes_visualization     (const Render_context& context);
     void raytrace_nodes_visualization    (const Render_context& context);
     // Spatial lightmap tiles (Lightmap_baker::get_show_tile_bounds): x-ray
@@ -228,6 +230,8 @@ private:
     // the capacity is kept.
     // navigation_seeds_visualization() scratch, cleared after use so it pins no node.
     std::vector<std::shared_ptr<erhe::scene::Node>> m_navigation_seed_nodes;
+    // curves_visualization() scratch, cleared after use so it pins no curve.
+    std::vector<std::shared_ptr<erhe::scene::Curve>> m_curves;
     std::vector<glm::vec2> m_ndc_points;
     std::vector<glm::vec2> m_ndc_convex_hull;
     std::vector<glm::vec3> m_projected_convex_hull_points;

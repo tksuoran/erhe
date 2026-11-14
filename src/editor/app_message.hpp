@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -7,6 +8,7 @@
 #include <vector>
 
 namespace erhe        { class Item_base; }
+namespace erhe::scene { class Curve; }
 namespace erhe::scene { class Mesh; }
 namespace erhe::scene { class Xformable; using Node = Xformable; }
 namespace erhe::scene { class Skin; }
@@ -117,6 +119,17 @@ class Kit_values_changed_message
 // A Kit_layout value of a node was written by an operation (execute, undo, redo; App_context::on_item_property_changed()).
 class Kit_layout_changed_message
 {
+};
+
+// A curve's path or world transform changed (doc/editor/curves.md "Change notification"): sent once per
+// curve per frame in which it changed, by App_scenes::flush_curve_changes().
+class Curve_changed_message
+{
+public:
+    std::shared_ptr<Scene_root>         scene_root{};
+    std::shared_ptr<erhe::scene::Curve> curve{};
+    uint64_t                            revision{0};  // Curve::get_revision() when sent
+    bool                                shape{false}; // the path changed, not only the transform
 };
 
 // A COMMITTED change of a scene's light transport: a content-layer mesh or

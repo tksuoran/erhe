@@ -613,10 +613,24 @@ auto Brush_tool::try_insert_kit_piece() -> bool
         placement.materials.push_back(Kit_slot_material{.material = {}, .palette_name = name});
     }
     Level_kits& level_kits = *m_context.level_kits;
-    const Kit_place_result result = level_kits.place(*scene_root, std::span<const Kit_placement>{&placement, 1}, Kit_snap::none);
-    if (!result.error.empty()) {
-        log_scene->warn("Brush tool: kit piece placement failed: {}", result.error);
-        return false;
+    // R5.12.9 Place As Layout: a kit layout node of the initial values, element 0 at the preview's pose, selected.
+    if (level_kits.get_layout_initial_values().place_as == Kit_place_as::layout) {
+        Kit_layout_item item;
+        item.shape      = placement.shape->id;
+        item.parameters = m_kit_values.to_canonical_text();
+        item.materials.assign(m_kit_slot_materials.begin(), m_kit_slot_materials.end());
+        const Kit_layout_result layout = level_kits.add_layout_initial(*scene_root, item, placement.position, placement.rotation);
+        if (!layout.error.empty()) {
+            log_scene->warn("Brush tool: kit layout placement failed: {}", layout.error);
+            return false;
+        }
+        m_context.selection->set_selection({layout.node}, layout.node);
+    } else {
+        const Kit_place_result result = level_kits.place(*scene_root, std::span<const Kit_placement>{&placement, 1}, Kit_snap::none);
+        if (!result.error.empty()) {
+            log_scene->warn("Brush tool: kit piece placement failed: {}", result.error);
+            return false;
+        }
     }
     if (level_kits.get_placement_settings().seed_per_piece == Kit_seed_per_piece::next) {
         take_next_kit_seed(*scene_root);

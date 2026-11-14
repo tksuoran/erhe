@@ -8,6 +8,7 @@ add_executable(${_target}
     gltf_test_util.hpp
     test_gltf_authoring.cpp
     test_gltf_content_hash.cpp
+    test_gltf_curve.cpp
     test_gltf_identities.cpp
     test_gltf_mesh_item.cpp
     test_gltf_parse.cpp

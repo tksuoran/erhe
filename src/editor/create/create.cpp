@@ -154,6 +154,9 @@ void Create::window_imgui()
     if (ImGui::Button("Light", button_size)) {
         m_context.scene_commands->create_new_light(parent.get());
     }
+    if (ImGui::Button("Curve", button_size)) {
+        m_context.scene_commands->create_new_curve(parent.get());
+    }
     if (ImGui::Button("Rendertarget", button_size)) {
         // Out of the ImGui iteration: records the texture and mesh uploads
         // and creates a viewport.

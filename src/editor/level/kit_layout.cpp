@@ -3,9 +3,11 @@
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_property/attached_group.hpp"
 #include "erhe_property/property_metadata.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/node.hpp"
 
 #include <fmt/format.h>
+
 
 namespace editor {
 
@@ -100,6 +102,18 @@ auto carries_kit_layout(const erhe::scene::Node& node) -> bool
     return erhe::property::carries_attached_group(node, Kit_layout::pattern_property.get());
 }
 
+auto check_layout_kind(const erhe::scene::Node& node, const Repeat_pattern_kind kind) -> std::string
+{
+    const bool is_curve = (dynamic_cast<const erhe::scene::Curve*>(&node) != nullptr);
+    if ((kind == Repeat_pattern_kind::path) && !is_curve) {
+        return fmt::format("'{}' is not a curve node: a path layout is the curve node itself, carrying the layout values", node.get_name());
+    }
+    if ((kind != Repeat_pattern_kind::path) && is_curve) {
+        return fmt::format("'{}' is a curve node: it carries a path layout only (a {} layout is an Xform node)", node.get_name(), c_str(kind));
+    }
+    return {};
+}
+
 auto read_kit_layout(const erhe::scene::Node& node, Kit_layout_data& out_data) -> std::string
 {
     if (!carries_kit_layout(node)) {
@@ -109,6 +123,10 @@ auto read_kit_layout(const erhe::scene::Node& node, Kit_layout_data& out_data) -
     std::string error = parse_layout_pattern(node.get_value(Kit_layout::pattern_property), data.pattern);
     if (!error.empty()) {
         return fmt::format("'{}': the pattern does not read: {}", node.get_name(), error);
+    }
+    error = check_layout_kind(node, data.pattern.kind);
+    if (!error.empty()) {
+        return fmt::format("the values do not read: {}", error);
     }
     error = parse_layout_items(node.get_value(Kit_layout::items_property), data.items);
     if (!error.empty()) {

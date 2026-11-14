@@ -12,6 +12,7 @@ void make_camera(Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_ca
 void make_light (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_light (&parent); }
 void make_mesh  (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_mesh  (&parent); }
 void make_joint (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_joint (&parent); }
+void make_curve (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_curve (&parent); }
 
 } // anonymous namespace
 
@@ -21,7 +22,8 @@ auto get_child_prim_types() -> const std::vector<Child_prim_type_info>&
         {"mesh",   "Mesh",   make_mesh  },
         {"camera", "Camera", make_camera},
         {"light",  "Light",  make_light },
-        {"joint",  "Joint",  make_joint }
+        {"joint",  "Joint",  make_joint },
+        {"curve",  "Curve",  make_curve }
     };
     return catalog;
 }

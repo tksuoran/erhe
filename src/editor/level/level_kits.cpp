@@ -14,6 +14,7 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
+#include "operations/curve_set_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/library_attach_operation.hpp"
@@ -28,12 +29,14 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item_host.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -315,6 +318,13 @@ Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
             on_close_scene(message.scene_root.get());
         }
     );
+    m_curve_changed_subscription = app_message_bus.curve_changed.subscribe(
+        [this](Curve_changed_message& message) {
+            if (message.shape && message.curve && is_layout_previewing(*message.curve)) {
+                static_cast<void>(step_layout_preview());
+            }
+        }
+    );
 }
 
 Level_kits::~Level_kits() noexcept = default;
@@ -345,6 +355,53 @@ auto Level_kits::get_placement_settings() const -> Kit_placement_settings
     settings.rotation_step_degrees = static_cast<float>(config.rotation_step_degrees);
     settings.seed_per_piece        = config.new_seed_per_piece ? Kit_seed_per_piece::next : Kit_seed_per_piece::same;
     return settings;
+}
+
+auto Level_kits::get_layout_initial_values() const -> Kit_layout_initial_values
+{
+    Kit_layout_initial_values values;
+    if (m_context.editor_settings == nullptr) {
+        return values;
+    }
+    const Level_kit_config& config = m_context.editor_settings->level_kit;
+    if (!config.layout_pattern.empty()) {
+        Kit_layout_pattern pattern;
+        const std::string error = parse_layout_pattern(config.layout_pattern, pattern);
+        if (error.empty()) {
+            values.data.pattern = pattern;
+        } else {
+            log_scene->warn("level_kit.layout_pattern does not read, the defaults stand: {}", error);
+        }
+    }
+    values.data.snap           = config.layout_module_snap    ? Kit_snap::module              : Kit_snap::none;
+    values.data.surface_snap   = config.layout_surface_snap   ? Surface_snap::on              : Surface_snap::off;
+    values.data.surface_orient = config.layout_surface_orient ? Surface_orient::on            : Surface_orient::off;
+    values.data.seeds          = config.layout_random_seeds   ? Kit_layout_seeds::per_element : Kit_layout_seeds::item;
+    values.data.seed           = config.layout_seed;
+    values.data.lock           = config.layout_locked         ? Kit_layout_lock::locked       : Kit_layout_lock::unlocked;
+    values.spacing             = config.layout_spacing_from_item ? Kit_layout_spacing::from_item : Kit_layout_spacing::as_given;
+    values.place_as            = config.place_as_layout       ? Kit_place_as::layout          : Kit_place_as::piece;
+    return values;
+}
+
+void Level_kits::set_layout_initial_values(const Kit_layout_initial_values& values)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    Level_kit_config& config = m_context.editor_settings->level_kit;
+    config.layout_pattern           = (values.data.pattern == Kit_layout_pattern{}) ? std::string{} : to_canonical_text(values.data.pattern);
+    config.layout_module_snap       = (values.data.snap == Kit_snap::module);
+    config.layout_surface_snap      = (values.data.surface_snap == Surface_snap::on);
+    config.layout_surface_orient    = (values.data.surface_orient == Surface_orient::on);
+    config.layout_random_seeds      = (values.data.seeds == Kit_layout_seeds::per_element);
+    config.layout_seed              = values.data.seed;
+    config.layout_locked            = (values.data.lock == Kit_layout_lock::locked);
+    config.layout_spacing_from_item = (values.spacing == Kit_layout_spacing::from_item);
+    config.place_as_layout          = (values.place_as == Kit_place_as::layout);
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
 }
 
 auto Level_kits::get_surface_settings() const -> Surface_options
@@ -1107,6 +1164,14 @@ auto Level_kits::mirror(Scene_root& scene_root, const std::shared_ptr<erhe::scen
                 }
             )
         );
+        // A curve's points reflect across its local x = 0 plane, the plane its new rotation reflects across, so the
+        // curve is the exact mirror image; a locked path layout lays out again along it (Curve_set_operation).
+        const std::shared_ptr<erhe::scene::Curve> curve = std::dynamic_pointer_cast<erhe::scene::Curve>(node);
+        if (curve) {
+            erhe::math::Curve_path reflected;
+            transform_curve_path(curve->get_path(), erhe::math::create_scale<float>(glm::vec3{-1.0f, 1.0f, 1.0f}), reflected);
+            operations.push_back(std::make_shared<Curve_set_operation>(curve, curve->get_path(), reflected, "mirror"));
+        }
         result.nodes.push_back(
             Kit_mirrored_node{
                 .node     = node,
@@ -1191,6 +1256,37 @@ void Level_kits::on_selection()
     if (m_parameter_preview.has_value() && !m_parameter_preview.value().mesh->is_selected()) {
         cancel_parameter_preview();
     }
+    if (is_layout_preview_lost()) {
+        queue_end_layout_preview();
+    }
+}
+
+auto Level_kits::is_layout_preview_lost() const -> bool
+{
+    for (const Layout_preview_entry& entry : m_layout_preview) {
+        if ((entry.selected_at_begin && !entry.node->is_selected()) || (entry.node->get_item_host() == nullptr)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Level_kits::queue_end_layout_preview()
+{
+    // Not inside the message's dispatch: the end removes and inserts pieces, which sends messages of its own.
+    if (m_layout_preview_end_queued) {
+        return;
+    }
+    m_layout_preview_end_queued = true;
+    m_context.imgui_windows->queue(
+        [this]() {
+            m_layout_preview_end_queued = false;
+            // A preview begun since the message keeps running.
+            if (is_layout_preview_lost()) {
+                end_layout_preview();
+            }
+        }
+    );
 }
 
 void Level_kits::on_items_removed(const Removed_items& removed)
@@ -1198,12 +1294,22 @@ void Level_kits::on_items_removed(const Removed_items& removed)
     if (m_parameter_preview.has_value() && removed.lookup.contains(m_parameter_preview.value().mesh.get())) {
         cancel_parameter_preview();
     }
+    for (const Layout_preview_entry& entry : m_layout_preview) {
+        if (removed.lookup.contains(static_cast<const erhe::Item_base*>(entry.node.get()))) {
+            queue_end_layout_preview();
+            break;
+        }
+    }
 }
 
 void Level_kits::on_close_scene(const erhe::Item_host* const closing_host)
 {
     if (m_parameter_preview.has_value() && (m_parameter_preview.value().mesh->get_item_host() == closing_host)) {
         cancel_parameter_preview();
+    }
+    // The closing scene's layouts go with it; nothing is restored.
+    if (!m_layout_preview.empty() && (m_layout_preview.front().node->get_item_host() == closing_host)) {
+        m_layout_preview.clear();
     }
 }
 

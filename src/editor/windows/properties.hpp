@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "level/kit_layout_editor.hpp"
 #include "level/kit_parameter_rows.hpp"
 #include "windows/property_editor.hpp"
 #include "windows/dependency_property_rows.hpp"
@@ -8,6 +9,7 @@
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_math/curve_path.hpp"
 
 #include <memory>
 #include <string_view>
@@ -25,6 +27,7 @@ namespace erhe::imgui {
 namespace erhe::scene {
     class Animation;
     class Camera;
+    class Curve;
     class Light;
     class Mesh;
     class Xformable; using Node = Xformable;
@@ -123,6 +126,10 @@ private:
     void mesh_raytrace_properties     (erhe::scene::Mesh& mesh);
     void texture_properties           (const std::shared_ptr<erhe::graphics::Texture>& texture);
     void kit_piece_properties         (const std::shared_ptr<erhe::scene::Mesh>& piece);
+    void kit_layout_properties        (const std::shared_ptr<erhe::scene::Node>& layout);
+    void curve_properties             (const std::shared_ptr<erhe::scene::Curve>& curve);
+    // One curve edit: a widget edit applies live; its end records one Curve_set_operation from the path at its start.
+    void curve_edit(const std::shared_ptr<erhe::scene::Curve>& curve, const erhe::math::Curve_path& after, const char* what);
     void brush_placement_properties   (const erhe::scene::Node& node);
 
     void animation_properties         (const std::shared_ptr<erhe::scene::Animation>& animation);
@@ -175,9 +182,13 @@ private:
     erhe::message_bus::Subscription<Selection_message>             m_selection_subscription;
     erhe::message_bus::Subscription<Active_item_changed_message>   m_active_item_subscription;
     erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
+    erhe::message_bus::Subscription<Kit_layout_changed_message>    m_kit_layout_changed_subscription;
+    erhe::message_bus::Subscription<Curve_changed_message>         m_curve_changed_subscription;
 
     // The "Kit Piece" group of a single selected kit piece (doc/editor/level_tools.md "Parameter rows").
     Kit_piece_editor m_kit_piece_editor;
+    // The "Kit Layout" group of a single selected kit layout node (doc/editor/level_tools.md "Kit layout rows").
+    Kit_layout_editor m_kit_layout_editor;
 
     // Issue #252: the explicit pinned target (weak_ptr so a deleted item
     // reverts the window to selection mode), and the reused single-element
@@ -203,6 +214,8 @@ private:
     std::vector<std::string> m_primitive_labels;
     std::vector<std::string> m_rt_primitive_labels;
     std::vector<std::string> m_ngon_labels;
+    std::vector<std::string> m_curve_point_labels;
+    erhe::math::Curve_path   m_curve_edit_before;
 
     // Reused scratch for the mesh-primitive material picker (cleared + refilled each use).
 };

@@ -425,6 +425,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server_material.cpp
     mcp/mcp_server_properties.cpp
     mcp/mcp_server_pvs.cpp
+    mcp/mcp_server_curves.cpp
     mcp/mcp_server_level.cpp
     mcp/mcp_server_lod.cpp
     mcp/mcp_server_mesh_components.cpp
@@ -470,6 +471,8 @@ erhe_target_sources_grouped(
     operations/material_change_operation.cpp
     operations/property_set_operation.cpp
     operations/property_set_operation.hpp
+    operations/curve_set_operation.cpp
+    operations/curve_set_operation.hpp
     operations/style_set_operation.cpp
     operations/style_set_operation.hpp
     operations/variant_select_operation.cpp
@@ -812,6 +815,8 @@ erhe_target_sources_grouped(
     tools/hover_tool.hpp
     tools/hud.cpp
     tools/hud.hpp
+    tools/curve_tool.cpp
+    tools/curve_tool.hpp
     tools/lattice_tool.cpp
     tools/lattice_tool.hpp
     tools/material_paint_tool.cpp
@@ -824,6 +829,8 @@ erhe_target_sources_grouped(
     tools/navigation_gizmo_tool.hpp
     tools/paint_tool.cpp
     tools/paint_tool.hpp
+    tools/point_set_tool.cpp
+    tools/point_set_tool.hpp
     tools/screen_snap.cpp
     tools/screen_snap.hpp
     tools/selection_tool.cpp
@@ -852,14 +859,14 @@ erhe_target_sources_grouped(
     transform/ik_drag.hpp
     transform/ik_solver.cpp
     transform/ik_solver.hpp
-    transform/lattice_point_transform.cpp
-    transform/lattice_point_transform.hpp
     transform/mesh_component_transform.cpp
     transform/mesh_component_transform.hpp
     transform/move_tool.cpp
     transform/move_tool.hpp
     transform/physics_driven_drag.cpp
     transform/physics_driven_drag.hpp
+    transform/point_set_transform.cpp
+    transform/point_set_transform.hpp
     transform/rotate_tool.cpp
     transform/rotate_tool.hpp
     transform/rotation_inspector.cpp

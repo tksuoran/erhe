@@ -3,10 +3,13 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "geometry_graph/geometry_graph.hpp"
+#include "geometry_graph/geometry_graph_operations.hpp"
+#include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/geometry_graph_mesh.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/nodes/lattice_node.hpp"
 #include "renderers/render_context.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -19,15 +22,37 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
+#include <cmath>
+
 namespace editor {
 
 namespace {
 
-constexpr float     c_pick_radius_px  {12.0f};
-constexpr glm::vec4 c_cage_color      {1.0f, 0.6f, 0.1f, 1.0f};
-constexpr glm::vec4 c_point_color     {1.0f, 0.6f, 0.1f, 1.0f};
-constexpr glm::vec4 c_hover_color     {1.0f, 1.0f, 1.0f, 1.0f};
-constexpr glm::vec4 c_selected_color  {1.0f, 1.0f, 0.0f, 1.0f};
+constexpr glm::vec4 c_cage_color{1.0f, 0.6f, 0.1f, 1.0f};
+
+[[nodiscard]] auto control_point_rest_position(const Lattice_node& lattice, const glm::vec3& cage_min, const glm::vec3& cage_max, const glm::ivec3 point) -> glm::vec3
+{
+    const glm::ivec3 divisions = lattice.get_divisions();
+    return
+        cage_min +
+        (cage_max - cage_min) * glm::vec3{
+            static_cast<float>(point.x) / static_cast<float>(divisions.x),
+            static_cast<float>(point.y) / static_cast<float>(divisions.y),
+            static_cast<float>(point.z) / static_cast<float>(divisions.z)
+        };
+}
+
+// Inverse of the driver transform, for mapping a gizmo-moved control point
+// position back into an offset. Falls back to identity for a degenerate
+// (non-invertible) driver transform - the drag then edits pre-transform space.
+[[nodiscard]] auto safe_inverse(const glm::mat4& transform) -> glm::mat4
+{
+    const float determinant = glm::determinant(transform);
+    if (std::abs(determinant) < 1e-12f) {
+        return glm::mat4{1.0f};
+    }
+    return glm::inverse(transform);
+}
 
 [[nodiscard]] auto control_point_local_position(
     const Lattice_node& lattice,
@@ -36,49 +61,12 @@ constexpr glm::vec4 c_selected_color  {1.0f, 1.0f, 0.0f, 1.0f};
     const glm::ivec3    point
 ) -> glm::vec3
 {
-    const glm::ivec3 divisions = lattice.get_divisions();
-    const glm::vec3  rest =
-        cage_min +
-        (cage_max - cage_min) * glm::vec3{
-            static_cast<float>(point.x) / static_cast<float>(divisions.x),
-            static_cast<float>(point.y) / static_cast<float>(divisions.y),
-            static_cast<float>(point.z) / static_cast<float>(divisions.z)
-        };
+    const glm::vec3 rest = control_point_rest_position(lattice, cage_min, cage_max, point);
     // The transform-driver node parents every control point (identity when unset)
     return glm::vec3{lattice.get_control_point_transform() * glm::vec4{rest + lattice.get_control_point_offset(point), 1.0f}};
 }
 
 } // anonymous namespace
-
-Lattice_select_command::Lattice_select_command(erhe::commands::Commands& commands, App_context& context)
-    : Command  {commands, "Lattice.select"}
-    , m_context{context}
-{
-}
-
-void Lattice_select_command::try_ready()
-{
-    if (m_context.lattice_tool == nullptr) {
-        return;
-    }
-    if (m_context.lattice_tool->try_ready()) {
-        set_ready();
-    }
-}
-
-auto Lattice_select_command::try_call() -> bool
-{
-    if (get_command_state() != erhe::commands::State::Ready) {
-        return false;
-    }
-    if (m_context.lattice_tool == nullptr) {
-        set_inactive();
-        return false;
-    }
-    const bool consumed = m_context.lattice_tool->on_select();
-    set_inactive();
-    return consumed;
-}
 
 Lattice_tool::Lattice_tool(
     erhe::commands::Commands& commands,
@@ -86,29 +74,21 @@ Lattice_tool::Lattice_tool(
     App_message_bus&          app_message_bus,
     Tools&                    tools
 )
-    : Tool            {context, tools, Tool_flags::background}
-    , m_select_command{commands, context}
+    : Point_set_tool{commands, context, app_message_bus, tools, "Lattice.select", "Lattice.cancel_edit"}
 {
-    set_base_priority(c_priority);
-    set_description  ("Lattice Edit");
+    set_description("Lattice Edit");
 
-    m_select_command.set_host(this);
-    commands.register_command            (&m_select_command);
-    commands.bind_command_to_mouse_button(&m_select_command, erhe::window::Mouse_button_left, erhe::commands::Button_trigger::Button_released);
-
-    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
-        [this](Hover_scene_view_message& message) {
-            Tool::on_message(message);
-        }
-    );
     m_graph_mesh_binding_changed_subscription = app_message_bus.graph_mesh_binding_changed.subscribe(
         [this](Graph_mesh_binding_changed_message&) {
             m_active_stale = true;
         }
     );
     m_close_scene_subscription = app_message_bus.close_scene.subscribe(
-        [this](Close_scene_message&) {
+        [this](Close_scene_message& message) {
             // Drop the closing scene's node and graph now (doc/editor/coding_rules.md "Scene-hosted references").
+            if (message.scene_root == m_active_scene_root.lock()) {
+                on_cancel_edit();
+            }
             m_active = {};
             m_active_scene_root.reset();
             m_active_stale = true;
@@ -130,6 +110,7 @@ void Lattice_tool::on_items_removed(const Removed_items& removed)
         (m_active.lattice    && removed.lookup.contains(m_active.lattice.get())) ||
         (graph_mesh          && removed.lookup.contains(graph_mesh.get()));
     if (removed_target) {
+        on_cancel_edit();
         m_active = {};
         m_active_stale = true;
     }
@@ -193,134 +174,181 @@ auto Lattice_tool::get_active_lattice() const -> const Active_lattice&
     return m_active;
 }
 
-auto Lattice_tool::pick_control_point(Scene_view& scene_view) const -> std::optional<glm::ivec3>
+auto Lattice_tool::point_from_index(const std::size_t index) const -> glm::ivec3
 {
-    if (!m_active.lattice || !m_active.bound_node) {
-        return std::nullopt;
+    const glm::ivec3 divisions = m_active.lattice->get_divisions();
+    const std::size_t nx = static_cast<std::size_t>(divisions.x) + 1;
+    const std::size_t ny = static_cast<std::size_t>(divisions.y) + 1;
+    return glm::ivec3{
+        static_cast<int>(index % nx),
+        static_cast<int>((index / nx) % ny),
+        static_cast<int>(index / (nx * ny))
+    };
+}
+
+auto Lattice_tool::update_point_set() -> bool
+{
+    const Active_lattice& active = update_active_lattice();
+    return active.lattice && active.bound_node;
+}
+
+auto Lattice_tool::has_point_set_target() const -> bool
+{
+    return m_active.lattice && m_active.bound_node;
+}
+
+auto Lattice_tool::get_point_set_scene_root() const -> std::shared_ptr<Scene_root>
+{
+    // The active scene: where the target was found and where the gizmo operates.
+    if (!has_point_set_target() || (m_context.selection == nullptr)) {
+        return {};
     }
-    Viewport_scene_view* viewport_scene_view = scene_view.as_viewport_scene_view();
-    if (viewport_scene_view == nullptr) {
-        return std::nullopt;
+    return m_context.selection->get_active_scene_root();
+}
+
+auto Lattice_tool::get_point_count() const -> std::size_t
+{
+    if (!has_point_set_target()) {
+        return 0;
     }
-    const std::optional<glm::vec2> pointer_opt = viewport_scene_view->get_position_in_viewport();
-    if (!pointer_opt.has_value()) {
-        return std::nullopt;
+    const glm::ivec3 divisions = m_active.lattice->get_divisions();
+    return static_cast<std::size_t>(divisions.x + 1) * static_cast<std::size_t>(divisions.y + 1) * static_cast<std::size_t>(divisions.z + 1);
+}
+
+void Lattice_tool::get_point_world_positions(std::vector<std::optional<glm::vec3>>& out_positions) const
+{
+    out_positions.clear();
+    glm::vec3 cage_min{0.0f};
+    glm::vec3 cage_max{0.0f};
+    if (!has_point_set_target() || !m_active.lattice->resolve_cage(cage_min, cage_max)) {
+        return;
+    }
+    const glm::mat4 world_from_node = m_active.bound_node->world_from_node();
+    for (std::size_t i = 0, end = get_point_count(); i < end; ++i) {
+        const glm::vec3 local = control_point_local_position(*m_active.lattice, cage_min, cage_max, point_from_index(i));
+        out_positions.push_back(glm::vec3{world_from_node * glm::vec4{local, 1.0f}});
+    }
+}
+
+auto Lattice_tool::is_point_selected(const std::size_t index) const -> bool
+{
+    return has_point_set_target() && (index < get_point_count()) && (point_from_index(index) == m_active.lattice->get_selected_point());
+}
+
+auto Lattice_tool::has_point_selection() const -> bool
+{
+    return has_point_set_target();
+}
+
+void Lattice_tool::select_point(const std::size_t index, const Point_select)
+{
+    // One selected point: a toggle selects it too.
+    if (has_point_set_target() && (index < get_point_count())) {
+        m_active.lattice->set_selected_point(point_from_index(index));
+    }
+}
+
+auto Lattice_tool::clear_point_selection() -> bool
+{
+    return false;
+}
+
+auto Lattice_tool::get_point_frame_rotation() const -> glm::quat
+{
+    return has_point_set_target() ? m_active.bound_node->world_from_node_transform().get_rotation() : glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
+}
+
+auto Lattice_tool::get_point_drawing() const -> Point_drawing
+{
+    return Point_drawing::all;
+}
+
+auto Lattice_tool::begin_point_edit() -> bool
+{
+    m_edit = Edit{};
+    if (!has_point_set_target()) {
+        return false;
     }
     glm::vec3 cage_min{0.0f};
     glm::vec3 cage_max{0.0f};
     if (!m_active.lattice->resolve_cage(cage_min, cage_max)) {
-        return std::nullopt;
-    }
-    const glm::vec2  pointer         = pointer_opt.value();
-    const glm::mat4  world_from_node = m_active.bound_node->world_from_node();
-    const glm::ivec3 divisions       = m_active.lattice->get_divisions();
-
-    std::optional<glm::ivec3> best_point;
-    float                     best_depth{0.0f};
-    for (int k = 0; k <= divisions.z; ++k) {
-        for (int j = 0; j <= divisions.y; ++j) {
-            for (int i = 0; i <= divisions.x; ++i) {
-                const glm::ivec3 point{i, j, k};
-                const glm::vec3  local = control_point_local_position(*m_active.lattice, cage_min, cage_max, point);
-                const glm::vec3  world = glm::vec3{world_from_node * glm::vec4{local, 1.0f}};
-                const std::optional<glm::vec3> projected = viewport_scene_view->project_to_viewport(world);
-                if (!projected.has_value()) {
-                    continue;
-                }
-                const float distance = glm::distance(glm::vec2{projected.value()}, pointer);
-                if (distance > c_pick_radius_px) {
-                    continue;
-                }
-                // Nearest in depth among the points under the pointer.
-                if (!best_point.has_value() || (projected.value().z > best_depth)) {
-                    best_point = point;
-                    best_depth = projected.value().z;
-                }
-            }
-        }
-    }
-    return best_point;
-}
-
-auto Lattice_tool::try_ready() -> bool
-{
-    m_pick_point.reset();
-    if (!m_active.lattice || !m_active.bound_node) {
         return false;
     }
-    Scene_view* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr) {
-        return false;
-    }
-    // Only pick in views of the active scene (the scene the target was found in).
-    const std::shared_ptr<Scene_root> view_scene_root   = scene_view->get_scene_root();
-    const std::shared_ptr<Scene_root> active_scene_root = (m_context.selection != nullptr)
-        ? m_context.selection->get_active_scene_root()
-        : std::shared_ptr<Scene_root>{};
-    if (!view_scene_root || (view_scene_root != active_scene_root)) {
-        return false;
-    }
-    // The gizmo handles win over control point picking.
-    Transform_tool* transform_tool = m_context.transform_tool;
-    if ((transform_tool != nullptr) && (transform_tool->get_hover_handle() != Handle::e_handle_none)) {
-        return false;
-    }
-    m_pick_point = pick_control_point(*scene_view);
-    return m_pick_point.has_value();
-}
-
-auto Lattice_tool::on_select() -> bool
-{
-    if (!m_pick_point.has_value() || !m_active.lattice) {
-        return false;
-    }
-    m_active.lattice->set_selected_point(m_pick_point.value());
-    m_pick_point.reset();
+    m_edit.lattice           = m_active.lattice;
+    m_edit.point             = m_active.lattice->get_selected_point();
+    m_edit.rest_local        = control_point_rest_position(*m_active.lattice, cage_min, cage_max, m_edit.point);
+    m_edit.before_offset     = m_active.lattice->get_control_point_offset(m_edit.point);
+    m_edit.world_from_node   = m_active.bound_node->world_from_node();
+    m_edit.node_from_world   = m_active.bound_node->node_from_world();
+    m_edit.driver_transform  = m_active.lattice->get_control_point_transform();
+    m_edit.driver_inverse    = safe_inverse(m_edit.driver_transform);
+    m_edit.before_parameters = m_active.lattice->dump_parameters();
+    m_edit.active            = true;
     return true;
 }
 
-void Lattice_tool::append_point_quad(
-    const glm::vec3& position_in_world,
-    const glm::vec3& camera_right,
-    const glm::vec3& camera_up,
-    const float      half_size
-)
+void Lattice_tool::apply_point_edit(const std::optional<glm::mat4>& world_delta)
 {
-    const glm::vec3 r    = half_size * camera_right;
-    const glm::vec3 u    = half_size * camera_up;
-    const uint32_t  base = static_cast<uint32_t>(m_scratch_positions.size());
-    m_scratch_positions.push_back(position_in_world - r - u);
-    m_scratch_positions.push_back(position_in_world + r - u);
-    m_scratch_positions.push_back(position_in_world + r + u);
-    m_scratch_positions.push_back(position_in_world - r + u);
-    m_scratch_indices.push_back(base + 0);
-    m_scratch_indices.push_back(base + 1);
-    m_scratch_indices.push_back(base + 2);
-    m_scratch_indices.push_back(base + 0);
-    m_scratch_indices.push_back(base + 2);
-    m_scratch_indices.push_back(base + 3);
+    if (!m_edit.active) {
+        return;
+    }
+    const std::shared_ptr<Lattice_node> lattice = m_edit.lattice.lock();
+    if (!lattice) {
+        return;
+    }
+    if (!world_delta.has_value()) {
+        lattice->set_control_point_offset(m_edit.point, m_edit.before_offset);
+        return;
+    }
+    // Forward: offset -> driver transform -> bound node -> world; the gizmo
+    // delta applies in world, then the chain inverts back to an offset.
+    const glm::vec3 before_local = glm::vec3{m_edit.driver_transform * glm::vec4{m_edit.rest_local + m_edit.before_offset, 1.0f}};
+    const glm::vec3 before_world = glm::vec3{m_edit.world_from_node * glm::vec4{before_local, 1.0f}};
+    const glm::vec3 after_world  = glm::vec3{world_delta.value() * glm::vec4{before_world, 1.0f}};
+    const glm::vec3 after_local  = glm::vec3{m_edit.node_from_world * glm::vec4{after_world, 1.0f}};
+    const glm::vec3 after_pre    = glm::vec3{m_edit.driver_inverse * glm::vec4{after_local, 1.0f}};
+    lattice->set_control_point_offset(m_edit.point, after_pre - m_edit.rest_local);
 }
 
-void Lattice_tool::tool_render(const Render_context& context)
+void Lattice_tool::commit_point_edit()
 {
-    // Desktop viewport only: the billboard quads go through Debug_renderer's
-    // direct triangle path, which is single-view only (see the equivalent
-    // gate in Mesh_component_selection_tool::tool_render).
-    if (context.viewport_scene_view == nullptr) {
+    if (!m_edit.active) {
         return;
     }
-    if (!m_active.lattice || !m_active.bound_node) {
+    m_edit.active = false;
+    const std::shared_ptr<Lattice_node> lattice = m_edit.lattice.lock();
+    if (!lattice || (m_context.geometry_graph_window == nullptr) || (m_context.operation_stack == nullptr)) {
         return;
     }
-    // Draw only in views of the active scene (where the target lives and
-    // where the gizmo operates).
-    const std::shared_ptr<Scene_root> view_scene_root   = context.scene_view.get_scene_root();
-    const std::shared_ptr<Scene_root> active_scene_root = (m_context.selection != nullptr)
-        ? m_context.selection->get_active_scene_root()
-        : std::shared_ptr<Scene_root>{};
-    if (!view_scene_root || (view_scene_root != active_scene_root)) {
+    std::string after_parameters = lattice->dump_parameters();
+    if (after_parameters == m_edit.before_parameters) {
         return;
     }
+    const std::shared_ptr<Geometry_graph_node> node = std::dynamic_pointer_cast<Geometry_graph_node>(lattice->node_from_this());
+    m_context.operation_stack->execute_now(
+        std::make_shared<Geometry_graph_parameter_operation>(
+            *m_context.geometry_graph_window,
+            node,
+            std::move(m_edit.before_parameters),
+            std::move(after_parameters)
+        )
+    );
+}
+
+void Lattice_tool::cancel_point_edit()
+{
+    if (!m_edit.active) {
+        return;
+    }
+    m_edit.active = false;
+    const std::shared_ptr<Lattice_node> lattice = m_edit.lattice.lock();
+    if (lattice) {
+        lattice->set_control_point_offset(m_edit.point, m_edit.before_offset);
+    }
+}
+
+void Lattice_tool::render_extras(const Render_context& context)
+{
     glm::vec3 cage_min{0.0f};
     glm::vec3 cage_max{0.0f};
     if (!m_active.lattice->resolve_cage(cage_min, cage_max)) {
@@ -328,7 +356,6 @@ void Lattice_tool::tool_render(const Render_context& context)
     }
     const glm::mat4  world_from_node = m_active.bound_node->world_from_node();
     const glm::ivec3 divisions       = m_active.lattice->get_divisions();
-    const glm::ivec3 selected        = m_active.lattice->get_selected_point();
 
     const auto local_position = [&](const glm::ivec3 point) -> glm::vec3 {
         return control_point_local_position(*m_active.lattice, cage_min, cage_max, point);
@@ -352,50 +379,6 @@ void Lattice_tool::tool_render(const Render_context& context)
     }
     line_renderer.set_thickness(2.0f);
     line_renderer.add_lines(world_from_node, c_cage_color, lines);
-
-    // Billboarded control point handles: normal / hovered / selected.
-    glm::vec3 camera_position{0.0f};
-    glm::vec3 camera_right   {1.0f, 0.0f, 0.0f};
-    glm::vec3 camera_up      {0.0f, 1.0f, 0.0f};
-    const erhe::scene::Node* camera_node = context.get_camera_node();
-    if (camera_node != nullptr) {
-        const glm::mat4 world_from_camera = camera_node->world_from_node();
-        camera_position = glm::vec3{world_from_camera[3]};
-        camera_right    = glm::normalize(glm::vec3{world_from_camera[0]});
-        camera_up       = glm::normalize(glm::vec3{world_from_camera[1]});
-    }
-    const std::optional<glm::ivec3> hovered = context.viewport_scene_view->is_scene_view_hovered()
-        ? pick_control_point(context.scene_view)
-        : std::nullopt;
-
-    erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 2, true, false});
-    const auto draw_points = [&](const glm::vec4& color, const float size_factor, const auto& predicate) {
-        m_scratch_positions.clear();
-        m_scratch_indices.clear();
-        for (int k = 0; k <= divisions.z; ++k) {
-            for (int j = 0; j <= divisions.y; ++j) {
-                for (int i = 0; i <= divisions.x; ++i) {
-                    const glm::ivec3 point{i, j, k};
-                    if (!predicate(point)) {
-                        continue;
-                    }
-                    const glm::vec3 world     = glm::vec3{world_from_node * glm::vec4{local_position(point), 1.0f}};
-                    const float     half_size = size_factor * glm::distance(camera_position, world);
-                    append_point_quad(world, camera_right, camera_up, half_size);
-                }
-            }
-        }
-        if (!m_scratch_indices.empty()) {
-            triangle_renderer.add_triangles(glm::mat4{1.0f}, color, m_scratch_positions, m_scratch_indices);
-        }
-    };
-    draw_points(c_point_color, 0.006f, [&](const glm::ivec3 p) {
-        return (p != selected) && (!hovered.has_value() || (p != hovered.value()));
-    });
-    if (hovered.has_value() && (hovered.value() != selected)) {
-        draw_points(c_hover_color, 0.008f, [&](const glm::ivec3 p) { return p == hovered.value(); });
-    }
-    draw_points(c_selected_color, 0.009f, [&](const glm::ivec3 p) { return p == selected; });
 }
 
 }
