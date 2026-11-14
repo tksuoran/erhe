@@ -33,6 +33,11 @@ headers fail ("tried including <stddef.h> but didn't find libc++'s
 implicit include directory. Delete the cache lines naming the old SDK and the
 `CMakeFiles/<cmake version>/` directory, then configure again.
 
+When a `CMakeLists.txt` changed since the last build, the build regenerates
+the Xcode project but runs on the project already loaded, so a newly added
+source file is not compiled and its target fails to link with undefined
+symbols. Run the same `cmake --build` again; it builds the regenerated project.
+
 Executables land in `<build>/bin/<Config>/`. The headless Metal build is
 described in `doc/erhe/metal_headless.md`; the Metal 4 backend (in progress,
 built beside Metal 3) in `doc/erhe/metal4_backend.md`.
