@@ -325,6 +325,9 @@ public:
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
     [[nodiscard]] auto is_validation_layer_enabled        () const -> bool;
     [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget;
+    // Out-of-memory diagnostic: per-heap budget and usage, each allocator's
+    // own bytes, then each allocator's full VMA stats.
+    void log_memory_state_at_allocation_failure() const;
     [[nodiscard]] auto get_debug_state                    () const -> Device_debug_state;
     [[nodiscard]] auto get_allocator                      () -> VmaAllocator&;
     // At most an eighth of maxMemoryAllocationCount is granted.

@@ -234,6 +234,11 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     VmaAllocator& allocator = device.get_impl().get_allocator();
     VkResult result = vmaCreateImage(allocator, &image_create_info, &allocation_create_info, &m_vk_image, &m_vma_allocation, nullptr);
     if (result != VK_SUCCESS) {
+        log_texture->error(
+            "vmaCreateImage() failed with {} {} (debug_label = {})",
+            static_cast<int32_t>(result), c_str(result), create_info.debug_label.data()
+        );
+        device.get_impl().log_memory_state_at_allocation_failure();
         log_swapchain->critical("vmaCreateImage() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }

@@ -2612,6 +2612,53 @@ auto Device_impl::get_memory_budget() const -> Memory_budget
     return result;
 }
 
+void Device_impl::log_memory_state_at_allocation_failure() const
+{
+    if (m_vma_allocator == nullptr) {
+        return;
+    }
+    const VkPhysicalDeviceMemoryProperties* memory_properties{nullptr};
+    vmaGetMemoryProperties(m_vma_allocator, &memory_properties);
+    std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
+    vmaGetHeapBudgets(m_vma_allocator, budgets.data());
+    std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> device_address_budgets{};
+    if (m_vma_device_address_allocator != VK_NULL_HANDLE) {
+        vmaGetHeapBudgets(m_vma_device_address_allocator, device_address_budgets.data());
+    }
+    const uint32_t heap_count = (memory_properties != nullptr) ? memory_properties->memoryHeapCount : 0;
+    for (uint32_t heap = 0; heap < heap_count; ++heap) {
+        const uint64_t accounted =
+            budgets[heap].statistics.blockBytes + device_address_budgets[heap].statistics.blockBytes;
+        log_vulkan->error(
+            "Heap {} (size {}): budget {}, process usage {} (driver-reported: {}); "
+            "main allocator blocks {} / allocations {}; device-address allocator blocks {} / allocations {}; "
+            "usage outside both allocators {}",
+            heap,
+            memory_properties->memoryHeaps[heap].size,
+            budgets[heap].budget,
+            budgets[heap].usage,
+            m_device_extensions.m_VK_EXT_memory_budget ? "yes" : "no",
+            budgets[heap].statistics.blockBytes,
+            budgets[heap].statistics.allocationBytes,
+            device_address_budgets[heap].statistics.blockBytes,
+            device_address_budgets[heap].statistics.allocationBytes,
+            (budgets[heap].usage > accounted) ? (budgets[heap].usage - accounted) : uint64_t{0}
+        );
+    }
+    const auto log_stats = [](VmaAllocator allocator, const char* name) {
+        char* stats_string = nullptr;
+        vmaBuildStatsString(allocator, &stats_string, VK_TRUE);
+        if (stats_string != nullptr) {
+            log_vulkan->error("VMA stats of the {} allocator:\n{}", name, stats_string);
+            vmaFreeStatsString(allocator, stats_string);
+        }
+    };
+    log_stats(m_vma_allocator, "main");
+    if (m_vma_device_address_allocator != VK_NULL_HANDLE) {
+        log_stats(m_vma_device_address_allocator, "device-address");
+    }
+}
+
 auto Device_impl::get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>
 {
     std::vector<erhe::dataformat::Format> result;
