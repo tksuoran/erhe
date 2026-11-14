@@ -8,6 +8,8 @@
 #include "app_settings.hpp"
 #include "time.hpp"
 
+#include "config/generated/graphics_preset_entry.hpp"
+#include "config/generated/graphics_preset_entry_serialization.hpp"
 #include "config/generated/thumbnails_config.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -123,14 +125,28 @@ Thumbnails::Thumbnails(
     // selects the shader variants thumbnails draw with) changes how every
     // item renders: every shown slot re-renders on its next draw().
     m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
-        [this](Graphics_settings_message&) {
-            on_graphics_settings_changed();
+        [this](Graphics_settings_message& message) {
+            on_graphics_settings_changed(message.graphics_preset);
         }
     );
 }
 
-void Thumbnails::on_graphics_settings_changed()
+void Thumbnails::on_graphics_settings_changed(const Graphics_preset_entry* graphics_preset)
 {
+    if (graphics_preset != nullptr) {
+        Graphics_preset_entry without_lod = *graphics_preset;
+        const Graphics_preset_entry defaults{};
+        without_lod.lod_enabled          = defaults.lod_enabled;
+        without_lod.lod_threshold_pixels = defaults.lod_threshold_pixels;
+        without_lod.lod_bias             = defaults.lod_bias;
+        without_lod.lod_hysteresis_band  = defaults.lod_hysteresis_band;
+        without_lod.lod_cpu_selection    = defaults.lod_cpu_selection;
+        std::string key = serialize(without_lod);
+        if (key == m_rendered_preset_key) {
+            return;
+        }
+        m_rendered_preset_key = std::move(key);
+    }
     for (Thumbnail& thumbnail : m_thumbnails) {
         if (thumbnail.item_id != 0) {
             thumbnail.stale = true;

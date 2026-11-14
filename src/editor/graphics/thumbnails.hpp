@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace erhe::graphics {
@@ -86,8 +87,9 @@ public:
     void on_close_scene  (erhe::Item_host* closing_host);
     void on_items_removed(const Removed_items& removed);
     // Graphics preset change: every occupied slot is marked stale, so its
-    // next draw() re-renders it with the new settings.
-    void on_graphics_settings_changed();
+    // next draw() re-renders it with the new settings. Thumbnails always draw
+    // level 0, so a change of the LOD fields alone re-renders nothing.
+    void on_graphics_settings_changed(const Graphics_preset_entry* graphics_preset);
 
     // The callback is NOT invoked from inside draw(): it is stored in a
     // thumbnail slot and invoked later from update() -- typically on the
@@ -115,6 +117,7 @@ private:
     erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
+    std::string                                                m_rendered_preset_key; // serialized preset minus LOD fields
     erhe::graphics::Device&                  m_graphics_device;
     std::shared_ptr<erhe::graphics::Texture> m_color_texture;
     erhe::graphics::Sampler                  m_color_sampler;
