@@ -300,55 +300,6 @@ App_rendering::App_rendering(
         selected
     );
 
-    // The selection stencil masks: depth and selection stencil bit 7, no
-    // color (Composition_pass_output::depth_stencil, the selection_stencil_mask
-    // base pipeline), for the meshes whose selection fill does not draw, so
-    // the selection outline still has its silhouette. They take the draw
-    // lists like the fills, so the silhouette is the drawn LOD level, and
-    // neither the view's shader debug mode nor overdraw counting reaches
-    // them. Each mask is an opaque, a translucent and an alpha-tested pass:
-    // the opaque and translucent passes here, the alpha-tested one (which
-    // keeps the material's discard, so the mask follows the cutout) with the
-    // alpha-tested fills below.
-    //
-    // Fill disabled: when the selection Polygon Fill is off,
-    // content_fill_selected_or_hovered no-ops and never writes bit 7, so these
-    // passes write it for the selected / hovered meshes instead. Exactly one
-    // of them and the selected fill is active per frame (mutually exclusive on
-    // render_style_selected.polygon_fill).
-    const auto selection_fill_disabled = [](const Render_context& context) -> bool {
-        return !context.viewport_config.render_style_selected.polygon_fill;
-    };
-    const std::shared_ptr<Composition_pass> selection_stencil_mask = make_composition_pass(
-        "Selection stencil mask (fill disabled)",
-        Composition_pass_data{
-            .mesh_layers          {Mesh_layer_id::content},
-            .blending_mode_policy {Blending_mode_policy::opaque_primitives_only},
-            .primitive_mode       {Primitive_mode::polygon_fill},
-            .filter               {filter_selected_or_hovered},
-            .output               {Composition_pass_output::depth_stencil},
-            .is_enabled           {selection_fill_disabled}
-        },
-        { &m_pipeline_passes.selection_stencil_mask }
-    );
-
-    // Proxy hidden: the selection silhouette of proxy_hidden sources
-    // (lightmap originals while their render proxies draw). The selection
-    // fill excludes them, so bit 7 comes from these always-on passes
-    // instead. Their depth matches the coplanar proxy surfaces, so this adds
-    // no visible geometry - just the stencil mask the outline needs.
-    const std::shared_ptr<Composition_pass> selection_stencil_mask_proxy_hidden = make_composition_pass(
-        "Selection stencil mask (proxy hidden)",
-        Composition_pass_data{
-            .mesh_layers          {Mesh_layer_id::content},
-            .blending_mode_policy {Blending_mode_policy::opaque_primitives_only},
-            .primitive_mode       {Primitive_mode::polygon_fill},
-            .filter               {filter_selected_or_hovered_proxy_hidden},
-            .output               {Composition_pass_output::depth_stencil}
-        },
-        { &m_pipeline_passes.selection_stencil_mask }
-    );
-
     // The alpha-tested and translucent passes, the content fills and the
     // masks alike, draw only while the session's content draws are all
     // (renderers/content_draws.hpp); opaque_only leaves them out in every
@@ -356,20 +307,6 @@ App_rendering::App_rendering(
     const auto all_content_draws = [](const Render_context& context) -> bool {
         return context.app_context.render_settings->content_draws == Content_draws::all;
     };
-    const std::shared_ptr<Composition_pass> translucent_selection_stencil_mask = make_composition_pass(
-        "Selection stencil mask translucent (fill disabled)",
-        selection_stencil_mask,
-        Blending_mode_policy::translucent_primitives_only
-    );
-    translucent_selection_stencil_mask->data.is_enabled = [selection_fill_disabled, all_content_draws](const Render_context& context) -> bool {
-        return selection_fill_disabled(context) && all_content_draws(context);
-    };
-    const std::shared_ptr<Composition_pass> translucent_selection_stencil_mask_proxy_hidden = make_composition_pass(
-        "Selection stencil mask translucent (proxy hidden)",
-        selection_stencil_mask_proxy_hidden,
-        Blending_mode_policy::translucent_primitives_only
-    );
-    translucent_selection_stencil_mask_proxy_hidden->data.is_enabled = all_content_draws;
 
     // Corner points and polygon centroids. Both take the normal
     // Forward_renderer path (not Content_wide_line_renderer) and force the
@@ -523,8 +460,8 @@ App_rendering::App_rendering(
     // screen_door materials). These draws write depth but discard, which
     // turns early depth testing / hidden surface removal off for the draws
     // that follow, so they come after every draw above that writes depth
-    // without discarding - the opaque fills, the selection stencil masks,
-    // the corner points and centroids - and before the sky, which then skips
+    // without discarding - the opaque fills, the corner points and
+    // centroids - and before the sky, which then skips
     // the pixels they cover. Blending is off (the shader writes alpha 1),
     // and the selected pass writes selection stencil bit 7 like the opaque
     // one, so the outline below masks against these meshes too. The edge
@@ -548,22 +485,6 @@ App_rendering::App_rendering(
     );
     alpha_tested_content_fill_selected_or_hovered->data.is_enabled = all_content_draws;
 
-    // The alpha-tested selection stencil masks (see the opaque ones above).
-    const std::shared_ptr<Composition_pass> alpha_tested_selection_stencil_mask = make_composition_pass(
-        "Selection stencil mask alpha tested (fill disabled)",
-        selection_stencil_mask,
-        erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only
-    );
-    alpha_tested_selection_stencil_mask->data.is_enabled = [selection_fill_disabled, all_content_draws](const Render_context& context) -> bool {
-        return selection_fill_disabled(context) && all_content_draws(context);
-    };
-    const std::shared_ptr<Composition_pass> alpha_tested_selection_stencil_mask_proxy_hidden = make_composition_pass(
-        "Selection stencil mask alpha tested (proxy hidden)",
-        selection_stencil_mask_proxy_hidden,
-        erhe::scene_renderer::Blending_mode_policy::alpha_tested_primitives_only
-    );
-    alpha_tested_selection_stencil_mask_proxy_hidden->data.is_enabled = all_content_draws;
-
     // The raster occlusion test (doc/plans/occlusion_culling.md): right
     // after the last passes that write depth (the opaque and alpha-tested
     // fills above; the outline, sky, grid and translucent passes below write
@@ -582,26 +503,8 @@ App_rendering::App_rendering(
             (settings.culling_classification == Culling_classification::gpu);
     };
 
-    selection_outline = make_composition_pass(
-        "Content outline opaque selected",
-        Composition_pass_data{
-            .content_wide_line_group       {2},
-            .mesh_layers                   {Mesh_layer_id::content},
-            .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
-            .primitive_mode                {Primitive_mode::edge_lines},
-            // Outline-inclusive filter: proxy_hidden sources get an outline
-            // too (their silhouette stencil comes from the dedicated pass
-            // above; their edges coincide with the rendered proxies).
-            .filter                        {filter_selected_or_hovered_outline}
-        },
-        { &m_pipeline_passes.outline }
-    );
-
     // Editor guides, not scene content: a Render_content::scene_only render
     // (MCP render_scene_image) leaves these passes out.
-    selection_outline->data.kind = Composition_pass_kind::editor_aid;
-    selection_outline->data.selection_outline_pulse = true;
-
     ghost_edge_lines ->data.kind = Composition_pass_kind::editor_aid;
 
     {
@@ -648,6 +551,97 @@ App_rendering::App_rendering(
         { &m_pipeline_passes.grid }
     );
     m_grid_composition_pass->data.kind = Composition_pass_kind::editor_aid;
+
+    // The selection stencil masks: selection stencil bit 7 only, no depth
+    // and no color (Composition_pass_output::depth_stencil, the
+    // selection_stencil_mask base pipeline), for the meshes whose selection
+    // fill does not draw, so the selection outline still has its silhouette.
+    // They take the draw lists like the fills (the silhouette is the drawn
+    // LOD level) and skip shader debug and overdraw counting; the
+    // alpha-tested ones keep the material's discard. They run after the sky
+    // and the grid, which read bit 7 as a selected surface, so both still
+    // draw where a mask covers no drawn surface.
+    //
+    // Fill disabled: when the selection Polygon Fill is off,
+    // content_fill_selected_or_hovered no-ops and never writes bit 7, so these
+    // masks write it for the selected / hovered meshes instead (mutually
+    // exclusive with the selected fills on render_style_selected.polygon_fill).
+    const auto selection_fill_disabled = [](const Render_context& context) -> bool {
+        return !context.viewport_config.render_style_selected.polygon_fill;
+    };
+    const std::shared_ptr<Composition_pass> selection_stencil_mask = make_composition_pass(
+        "Selection stencil mask (fill disabled)",
+        Composition_pass_data{
+            .mesh_layers          {Mesh_layer_id::content},
+            .blending_mode_policy {Blending_mode_policy::opaque_primitives_only},
+            .primitive_mode       {Primitive_mode::polygon_fill},
+            .filter               {filter_selected_or_hovered},
+            .output               {Composition_pass_output::depth_stencil},
+            .is_enabled           {selection_fill_disabled}
+        },
+        { &m_pipeline_passes.selection_stencil_mask }
+    );
+    const auto selection_fill_disabled_all_content_draws = [selection_fill_disabled, all_content_draws](const Render_context& context) -> bool {
+        return selection_fill_disabled(context) && all_content_draws(context);
+    };
+    const std::shared_ptr<Composition_pass> alpha_tested_selection_stencil_mask = make_composition_pass(
+        "Selection stencil mask alpha tested (fill disabled)",
+        selection_stencil_mask,
+        Blending_mode_policy::alpha_tested_primitives_only
+    );
+    alpha_tested_selection_stencil_mask->data.is_enabled = selection_fill_disabled_all_content_draws;
+    const std::shared_ptr<Composition_pass> translucent_selection_stencil_mask = make_composition_pass(
+        "Selection stencil mask translucent (fill disabled)",
+        selection_stencil_mask,
+        Blending_mode_policy::translucent_primitives_only
+    );
+    translucent_selection_stencil_mask->data.is_enabled = selection_fill_disabled_all_content_draws;
+
+    // Proxy hidden: the selection silhouette of proxy_hidden sources
+    // (lightmap originals while their render proxies draw). The selection
+    // fill excludes them, so bit 7 comes from these always-on masks instead.
+    const std::shared_ptr<Composition_pass> selection_stencil_mask_proxy_hidden = make_composition_pass(
+        "Selection stencil mask (proxy hidden)",
+        Composition_pass_data{
+            .mesh_layers          {Mesh_layer_id::content},
+            .blending_mode_policy {Blending_mode_policy::opaque_primitives_only},
+            .primitive_mode       {Primitive_mode::polygon_fill},
+            .filter               {filter_selected_or_hovered_proxy_hidden},
+            .output               {Composition_pass_output::depth_stencil}
+        },
+        { &m_pipeline_passes.selection_stencil_mask }
+    );
+    const std::shared_ptr<Composition_pass> alpha_tested_selection_stencil_mask_proxy_hidden = make_composition_pass(
+        "Selection stencil mask alpha tested (proxy hidden)",
+        selection_stencil_mask_proxy_hidden,
+        Blending_mode_policy::alpha_tested_primitives_only
+    );
+    alpha_tested_selection_stencil_mask_proxy_hidden->data.is_enabled = all_content_draws;
+    const std::shared_ptr<Composition_pass> translucent_selection_stencil_mask_proxy_hidden = make_composition_pass(
+        "Selection stencil mask translucent (proxy hidden)",
+        selection_stencil_mask_proxy_hidden,
+        Blending_mode_policy::translucent_primitives_only
+    );
+    translucent_selection_stencil_mask_proxy_hidden->data.is_enabled = all_content_draws;
+
+    // After the selected opaque / alpha-tested fills and the masks, which
+    // write bit 7, and after the sky and the grid, so the ring draws over them.
+    selection_outline = make_composition_pass(
+        "Content outline opaque selected",
+        Composition_pass_data{
+            .content_wide_line_group       {2},
+            .mesh_layers                   {Mesh_layer_id::content},
+            .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode                {Primitive_mode::edge_lines},
+            // Outline-inclusive filter: proxy_hidden sources get an outline
+            // too (their silhouette stencil comes from the proxy-hidden masks
+            // above; their edges coincide with the rendered proxies).
+            .filter                        {filter_selected_or_hovered_outline}
+        },
+        { &m_pipeline_passes.outline }
+    );
+    selection_outline->data.kind = Composition_pass_kind::editor_aid;
+    selection_outline->data.selection_outline_pulse = true;
 
     auto translucent_content_fill_not_selected = make_composition_pass(
         "Content fill translucent not selected",
@@ -1368,16 +1362,24 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }
 
     // The selection stencil masks (Composition_pass_output::depth_stencil):
-    // the selected fill's depth and stencil state, color writes disabled
-    // (this base pipeline's color blend state takes precedence over the
-    // blending class's, Base_render_pipeline::get_pipeline_for()).
+    // stencil bit 7 only - no depth test or write, so a selected mesh whose
+    // fill is off occludes nothing - and color writes disabled (this base
+    // pipeline's color blend state takes precedence over the blending
+    // class's, Base_render_pipeline::get_pipeline_for()).
     , selection_stencil_mask{
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Selection Stencil Mask"},
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-            .depth_stencil  = polygon_fill_standard_selected.data.depth_stencil,
+            .depth_stencil  = {
+                .depth_test_enable   = false,
+                .depth_write_enable  = false,
+                .depth_compare_op    = erhe::graphics::Compare_operation::always,
+                .stencil_test_enable = true,
+                .stencil_front       = polygon_fill_standard_selected.data.depth_stencil.stencil_front,
+                .stencil_back        = polygon_fill_standard_selected.data.depth_stencil.stencil_back
+            },
             .color_blend    = &Color_blend_state::color_writes_disabled
         }
     }
@@ -1577,7 +1579,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                 .depth_test_enable   = true,
                 .depth_write_enable  = false,
                 .depth_compare_op    = erhe::graphics::Compare_operation::equal, // Depth buffer must be cleared to the far plane value
-                .stencil_test_enable = true, // Require stencil clear value 0 (to prevent overdrawing selection silhouette)
+                .stencil_test_enable = true, // Require stencil clear value 0 (no edge line, no selected surface)
                 .stencil_front = {
                     .stencil_fail_op = erhe::graphics::Stencil_op::keep,
                     .z_fail_op       = erhe::graphics::Stencil_op::keep,
@@ -1621,11 +1623,8 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                 .depth_write_enable  = false,
                 .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
                 // Draw only where bit 7 is clear, without modifying the stencil
-                // buffer: bit 7 is the selection silhouette written by the
-                // selected fill / selection stencil mask passes and extended
-                // over the outline ring by the outline pass, all of which run
-                // before the grid, so the grid stays off selected content and
-                // off its outline.
+                // buffer: before the grid, only the selected opaque /
+                // alpha-tested fills have written bit 7, so the grid stays off them.
                 .stencil_test_enable = true,
                 .stencil_front = {
                     .stencil_fail_op = erhe::graphics::Stencil_op::keep,

@@ -116,7 +116,7 @@ migrates older files, which all stored the former default off, to on).
    preset visible for entries without bounds, boxes reaching the near
    plane - a camera inside the box among them - and entries outside the
    frustum), and the view's "Occlusion test" composition pass, after the
-   opaque and alpha-tested fills (`doc/editor/rendering.md` pass 16),
+   opaque and alpha-tested fills (`doc/editor/rendering.md` pass 14),
    draws per entry the three faces of its box toward the camera (a +X +Y
    +Z template mirrored per axis, 7 corners and 18 indices from a static
    uint32 index buffer, no face culling) whose fragments (early fragment

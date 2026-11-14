@@ -606,7 +606,7 @@ change.
   gizmo and export all keep operating on the source, while the visual content
   passes, the shadow passes and the bake occluder set exclude them. Selection
   outlines still render for proxy-hidden sources through a dedicated always-on
-  depth-only pass ("Selection stencil mask (proxy hidden)") that writes
+  stencil-only pass ("Selection stencil mask (proxy hidden)") that writes
   silhouette stencil bit 7, with the outline pass using a proxy-inclusive
   filter; the source's edges coincide with the proxies' surfaces, so the outline
   lands exactly around the rendered geometry. The selection fill highlight stays
