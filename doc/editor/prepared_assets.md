@@ -64,7 +64,9 @@ Records (`doc/erhe/asset_store.md` "Container"):
 - editor asset: `source.relative_path` (the source file relative to the
   editor asset's directory), `source.scene_id` (the scene's `ERHE_scene`
   `scene_id`) and `prepared_path.<target>` per target (the prepared asset
-  relative to the editor asset's directory, written by each Export);
+  relative to the editor asset's directory, written by each Export) and
+  `navigation.key` (the scene's navigation mesh item, written by each
+  navigation mesh install and Save Scene; `doc/editor/navigation.md` "Saving");
 - prepared asset: `source.relative_path` (relative to the prepared asset's
   directory), `source.scene_id`, `prepared.target`, `prepared.scene_key`
   and the stamp records of the exporting build ("Format stamps"):
@@ -271,15 +273,22 @@ thread, the status line ("Exporting '<scene>': <stage>" with the stage's
 progress) and `get_save_status` (doc/editor/scene_serialization.md "Saving
 in the background").
 
-1. `begin_scene_export()` (main thread) refuses what `get_export_refusal()`
-   refuses ("Export settings"), reads the scene's export settings, opens the editor asset, collects the
+The refusals of step 1 come first: a refused Export makes nothing. With the
+navigation `mode` `build`, the navigation stage (doc/editor/navigation.md
+"Export") then runs before step 1 collects anything, and the steps below
+follow it.
+
+1. `begin_scene_export()` (main thread) refuses what
+   `get_scene_export_refusal()` refuses (`get_export_refusal()`, "Export
+   settings"; a target other than `pc` and `quest`; `pvs_mode` `rebake`
+   without its inputs, "PVS" below), reads the scene's export settings, opens the editor asset, collects the
    export arguments of a `Gltf_scene_save_kind::scene_item` save onto the
    prepared asset path (prepared mesh data and GPU vertex streams, images
    as the target holds them, "Targets", and with `bake_static_to_world_space`
    the world-space bake planned with geometry-normative primitives
    admitted, `doc/editor/world_space_bake.md`), drops the open scene's PVS
    database from them (the Scene item names the PVS item `pvs_mode` chooses,
-   "PVS" below; `pvs_mode` `rebake` is refused here without a region), collects the primitive shapes
+   "PVS" below), collects the primitive shapes
    the exporter visits with their LOD requests - soup shapes and
    geometry-normative ones, a Geometry without facets being one the exporter
    writes nothing for -, the primitives of the baked meshes with their
@@ -529,6 +538,7 @@ The fields beside the world-space bake's (`doc/editor/world_space_bake.md`
 | `texture_encoding` | `Texture_encoding` | `target` | What the Texture item of a PNG / JPEG image holds (R7.5): `target` - the image encoded to the target's block format by way of its Basis texture item ("Export" step 3); `source` - the image bytes as they are, which the prepared run decodes at load. A Basis Universal image is transcoded either way |
 | `texture_supercompression` | `Texture_supercompression` | `zstd` | The raw block images a target transcodes (the images the quest Scene item carries itself): Zstandard supercompressed (`zstd`) or stored as they upload (`none`) |
 | `world_piece_extent` | `Float` | 0 | The world-space bake's piece extent (`doc/editor/world_space_bake.md` "Export settings", `doc/erhe/primitive.md` "Pieces"); a World-space mesh key input when set |
+| `navigation` | `Navigation_settings` | `mode` `off` | The navigation mesh build settings (`doc/editor/navigation.md` "Settings"); no key input |
 | `raytrace_bvh` | `Bool` | true | Each mesh item has a Raytrace BVH item, which the Scene item names and Copy puts into the prepared asset; off makes no BVH items and names none, and a prepared run builds the BVHs in memory ("Format stamps") |
 
 `raytrace_bvh` is no key input: turning it off or on exports the same mesh
@@ -780,7 +790,11 @@ Drops (`Prepared_drop`), each a status job that measures after the drop:
 - `prepared_asset`: deletes the target's prepared asset file.
 
 Drops change the scene's own editor asset alone: a prefab's or a material
-container's editor asset serves other scenes too.
+container's editor asset serves other scenes too. The navigation mesh item the record `navigation.key` names
+is asked for (counted `present`, not unreferenced; editor asset only, so the
+prepared asset comparison leaves it out) and no drop removes it, `all`
+included; a `navigation_mesh` item no record names is unreferenced
+(`doc/editor/navigation.md` "Saving").
 
 Item drops remove in one write transaction and then `VACUUM`
 (`drop_store_items()`); the next Export makes the dropped items again. The
@@ -824,10 +838,13 @@ and `export`:
            "raytrace_bvh":{"made":n,"present":n,"written":n},
            "texture":{"made":n,"present":n,"written":n},
            "scene":{"made":n,"present":n,"written":n},
-           "pvs":{"made":n,"present":n,"written":n}},
+           "pvs":{"made":n,"present":n,"written":n},
+           "navigation_mesh":{"made":n,"present":n,"written":0,"skipped":n}},
  "inline_primitive_count":n,"inline_image_count":n,"world_mesh_node_count":n,"world_form_mesh_count":n,
  "prepared_item_count":n,"prepared_asset_bytes":n,
- "ensure_ms":t,"scene_ms":t,"copy_ms":t,"pvs_ms":t,"pvs_cell_count":n}
+ "ensure_ms":t,"scene_ms":t,"copy_ms":t,"pvs_ms":t,"pvs_cell_count":n,
+ "navigation_ms":t,"navigation_polygon_count":n,"navigation_reachable_polygon_count":n,
+ "navigation_total_area":a,"navigation_reachable_area":a}
 ```
 
 `files` lists the source files in Ensure order (the scene last) with what
@@ -838,7 +855,9 @@ items, the `texture` row when the scene has a texture, the
 `basis_texture` row (made and present; never written) when a missing Texture
 item of a `target` PNG / JPEG image needed its Basis texture item, the
 `world_mesh` row when the bake admits a mesh node (`world_mesh_node_count`
-of them; `world_form_mesh_count` is the bake job's).
+of them; `world_form_mesh_count` is the bake job's), and the
+`navigation_mesh` row and the `navigation_*` fields come from the navigation
+stage (doc/editor/navigation.md "Export").
 While the job runs it carries `progress{stage, done, total}` (R9.7), the
 stage being `computing mesh keys`, `making world-space mesh items`,
 `making mesh items`, `computing texture keys`, `encoding basis texture
@@ -1203,6 +1222,8 @@ any failure:
   directory, the same Scene key and stamp records, and no temporary file
   remains. Every Export check also finds no temporary file beside the
   prepared asset.
+- The navigation stage (`--only-navigation` runs it alone): the checks of
+  doc/editor/navigation.md "Verification".
 
 The checks above export with `bake_static_to_world_space` off and, but for
 the `texture_encoding` checks, with `texture_encoding` `source`, so the PNG of

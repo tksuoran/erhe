@@ -15,7 +15,8 @@ enum class Item_kind : std::uint32_t
     texture       = 5,
     basis_texture = 6,
     pvs           = 7,
-    editor_data   = 8
+    editor_data     = 8,
+    navigation_mesh = 9 // a scene's navigation mesh; kept while the editor asset's record names it
 };
 
 [[nodiscard]] auto c_str(Item_kind kind) -> const char*;

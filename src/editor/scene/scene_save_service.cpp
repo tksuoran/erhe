@@ -9,6 +9,16 @@
 #include "renderers/pvs_baker.hpp"
 #include "scene/scene_root.hpp"
 #include "time.hpp"
+#include "config/generated/navigation_mode.hpp"
+#include "config/generated/navigation_settings.hpp"
+#include "config/generated/scene_export_settings.hpp"
+#if defined(ERHE_USE_DETOUR)
+#   include "navigation/make_navigation_build_settings.hpp"
+#   include "scene/scene_navigation.hpp"
+#endif
+#if defined(ERHE_USE_RECAST)
+#   include "scene/navigation_build_job.hpp"
+#endif
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_file/file.hpp"
@@ -18,6 +28,8 @@
 
 #include <fmt/format.h>
 #include <imgui/imgui.h>
+
+#include <algorithm>
 
 namespace editor {
 
@@ -30,6 +42,29 @@ namespace {
     return result;
 }
 
+[[nodiscard]] auto get_elapsed_ms(const std::chrono::steady_clock::time_point start_time) -> double
+{
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+}
+
+#if defined(ERHE_USE_DETOUR)
+// The installed navigation mesh's totals for an Export's report.
+[[nodiscard]] auto make_export_navigation_report(const Scene_root& scene_root, const Export_navigation_result result) -> Export_navigation_report
+{
+    const Navigation_status status = scene_root.get_navigation().get_status();
+    return Export_navigation_report{
+        .result                  = result,
+        .navigation_ms           = 0.0,
+        .polygon_count           = status.totals.polygon_count,
+        .reachable_polygon_count = status.totals.reachable_polygon_count,
+        .total_area              = status.totals.total_area,
+        .reachable_area          = status.totals.reachable_area,
+        .item_key                = status.item.has_value() ? status.item->key : std::string{},
+        .item_made               = (result == Export_navigation_result::made) && status.item.has_value() && status.item->made
+    };
+}
+#endif
+
 } // anonymous namespace
 
 auto get_export_action(const Scene_export_mode mode) -> const char*
@@ -37,9 +72,12 @@ auto get_export_action(const Scene_export_mode mode) -> const char*
     switch (mode) {
         case Scene_export_mode::status:            return "Status";
         case Scene_export_mode::bake_world_meshes: return "Bake World-Space Meshes";
+        case Scene_export_mode::build_navigation:  return "Build Navigation Mesh";
         default:                                   return "Export";
     }
 }
+
+Scene_service_job::~Scene_service_job() noexcept = default;
 
 void request_world_space_bake(
     App_context&                                                    context,
@@ -61,6 +99,33 @@ void request_world_space_bake(
         }
     );
 }
+
+#if defined(ERHE_USE_RECAST)
+void request_navigation_build(
+    App_context&                                  context,
+    const std::shared_ptr<Scene_root>&            scene_root,
+    std::function<void()>                         on_started,
+    std::function<void(const Scene_save_result&)> on_finished
+)
+{
+    ERHE_VERIFY(context.scene_save_service != nullptr);
+    context.scene_save_service->request(
+        Scene_save_request{
+            .scene_root  = scene_root,
+            .path        = {},
+            .job         = Scene_save_job::store,
+            .target      = Prepare_target::pc,
+            .export_mode = Scene_export_mode::build_navigation,
+            .on_started  = [on_started = std::move(on_started)](const std::shared_ptr<const Scene_export>&) {
+                if (on_started) {
+                    on_started();
+                }
+            },
+            .on_finished = std::move(on_finished)
+        }
+    );
+}
+#endif
 
 void request_prepared_status(
     App_context&                                                    context,
@@ -124,6 +189,7 @@ void Scene_save_service::request(Scene_save_request&& request)
     log_operations->info(
         "Scene save queued: '{}' -> '{}'",
         scene_root ? scene_root->get_name() : std::string{"?"},
+        (request.export_mode == Scene_export_mode::build_navigation) ? std::string{"<navigation mesh>"} :
         request.path.empty() ? std::string{"<default prepared asset>"} : erhe::file::to_string(request.path)
     );
     m_requests.push_back(std::move(request));
@@ -206,6 +272,12 @@ void Scene_save_service::update_requests()
         if (m_running_export && !is_scene_export_ready(m_context, *m_running_export)) {
             return;
         }
+        if (ok && m_running_service_job && (m_running_request.job == Scene_save_job::store) && (m_running_request.export_mode == Scene_export_mode::export_items)) {
+            m_worker.join();
+            if (continue_export_after_navigation()) {
+                return;
+            }
+        }
         if (ok && m_running_export && (get_scene_export_continuation(*m_running_export) == Scene_export_continuation::pvs_bake)) {
             m_worker.join();
             if (start_scene_export_pvs_bake(m_context, *m_running_export, m_running_scene_root)) {
@@ -281,11 +353,20 @@ void Scene_save_service::start(Scene_save_request&& request)
         return;
     }
 
+    if ((request.job == Scene_save_job::store) && (request.export_mode == Scene_export_mode::build_navigation)) {
+        if (start_service_job(request, scene_root)) {
+            m_running_start_time = start_time;
+            launch_worker();
+        }
+        return;
+    }
+
     std::unique_ptr<Gltf_scene_save> save;
     std::unique_ptr<Scene_export>    scene_export;
     if (request.job == Scene_save_job::store) {
         // The scene's export settings as they are when the Export starts are its only settings input (R7.2).
-        const std::string refusal = get_export_refusal(*scene_root, get_export_action(request.export_mode));
+        // A refused Export builds no navigation mesh.
+        const std::string refusal = get_scene_export_refusal(m_context, *scene_root, c_str(request.target), request.export_mode);
         if (!refusal.empty()) {
             log_operations->warn("{}", refusal);
             if (request.on_finished) {
@@ -293,7 +374,18 @@ void Scene_save_service::start(Scene_save_request&& request)
             }
             return;
         }
+        Export_navigation_report navigation{};
+        if (request.export_mode == Scene_export_mode::export_items) {
+            m_running_start_time = start_time;
+            const Export_navigation_stage stage = start_export_navigation_stage(request, scene_root, navigation);
+            if (stage != Export_navigation_stage::export_next) {
+                return;
+            }
+        }
         scene_export = begin_scene_export(m_context, *scene_root, c_str(request.target), request.path, request.export_mode, request.drop);
+        if (scene_export) {
+            set_scene_export_navigation(*scene_export, navigation);
+        }
     } else {
         save = begin_scene_save_gltf(m_context, *scene_root, request.path, Gltf_scene_save_kind::scene, erhe::gltf::Gltf_texture_export::source, nullptr);
     }
@@ -323,6 +415,137 @@ void Scene_save_service::start(Scene_save_request&& request)
     launch_worker();
 }
 
+auto Scene_save_service::start_service_job(Scene_save_request& request, const std::shared_ptr<Scene_root>& scene_root) -> bool
+{
+    std::string                        refusal;
+    std::shared_ptr<Scene_service_job> job;
+#if defined(ERHE_USE_RECAST)
+    job = make_navigation_build_job(m_context, scene_root, Navigation_build_purpose::build_command, refusal);
+#else
+    refusal = fmt::format("{} of '{}' refused: this editor is built without ERHE_USE_RECAST", get_export_action(request.export_mode), scene_root->get_name());
+#endif
+    if (!job) {
+        log_operations->warn("{}", refusal);
+        if (request.on_finished) {
+            request.on_finished(make_failed_result(refusal));
+        }
+        return false;
+    }
+    run_service_job(request, scene_root, std::move(job));
+    return true;
+}
+
+void Scene_save_service::run_service_job(Scene_save_request& request, const std::shared_ptr<Scene_root>& scene_root, std::shared_ptr<Scene_service_job> job)
+{
+    m_running_request     = std::move(request);
+    m_running_scene_root  = scene_root;
+    m_running_service_job = std::move(job);
+    {
+        std::lock_guard<std::mutex> lock{m_worker_mutex};
+        m_worker_done = false;
+        m_worker_ok   = false;
+    }
+    m_running_scene_root->set_save_in_progress(true);
+    set_active(true);
+    log_operations->info("{} started (scene '{}' is read-only until it ends)", m_running_service_job->get_status_title(), scene_root->get_name());
+    if (m_running_request.on_started) {
+        m_running_request.on_started(std::shared_ptr<const Scene_export>{});
+    }
+}
+
+auto Scene_save_service::start_export_navigation_stage(
+    Scene_save_request&                request,
+    const std::shared_ptr<Scene_root>& scene_root,
+    Export_navigation_report&          out_report
+) -> Export_navigation_stage
+{
+    out_report = Export_navigation_report{};
+    const Scene_export_settings& export_settings = scene_root->get_scene_settings().export_settings.value();
+    if (export_settings.navigation.mode != Navigation_mode::build) {
+        return Export_navigation_stage::export_next;
+    }
+    // U3: no seed, no navigation mesh.
+    if (scene_root->get_navigation_seed_count() == 0) {
+        log_export->warn(
+            "Export of '{}': the scene has no navigation seed - mark a node (Properties > Navigation Seed); the Export goes on without a navigation mesh",
+            scene_root->get_name()
+        );
+        out_report.result = Export_navigation_result::skipped;
+        return Export_navigation_stage::export_next;
+    }
+#if defined(ERHE_USE_DETOUR)
+    if (scene_root->get_navigation().is_current(make_navigation_build_settings(export_settings.navigation))) {
+        out_report = make_export_navigation_report(*scene_root, Export_navigation_result::present);
+        out_report.navigation_ms = get_elapsed_ms(m_running_start_time);
+        log_export->info("Export of '{}': the navigation mesh is current and is used as it is", scene_root->get_name());
+        return Export_navigation_stage::export_next;
+    }
+#endif
+#if defined(ERHE_USE_RECAST)
+    std::string refusal;
+    std::shared_ptr<Scene_service_job> job = make_navigation_build_job(m_context, scene_root, Navigation_build_purpose::export_stage, refusal);
+    if (!job) {
+        const std::string error = fmt::format("Export of '{}' failed: {}", scene_root->get_name(), refusal);
+        log_export->warn("{}", error);
+        if (request.on_finished) {
+            request.on_finished(make_failed_result(error));
+        }
+        return Export_navigation_stage::failed;
+    }
+    run_service_job(request, scene_root, std::move(job));
+    launch_worker();
+    return Export_navigation_stage::job_started;
+#else
+    static_cast<void>(request);
+    log_export->warn(
+        "Export of '{}': the navigation mode is build, and this editor is built without ERHE_USE_RECAST, so it cannot build navigation meshes - "
+        "the Export goes on without one",
+        scene_root->get_name()
+    );
+    return Export_navigation_stage::export_next;
+#endif
+}
+
+auto Scene_save_service::continue_export_after_navigation() -> bool
+{
+    Scene_save_result navigation_result{};
+    m_running_service_job->finish(m_context, true, navigation_result);
+    m_running_service_job.reset();
+    const auto fail = [this](std::string error) -> bool {
+        m_running_error = std::move(error);
+        std::lock_guard<std::mutex> lock{m_worker_mutex};
+        m_worker_ok = false;
+        return false;
+    };
+    if (!navigation_result.saved) {
+        return fail(navigation_result.error);
+    }
+#if defined(ERHE_USE_DETOUR)
+    m_running_navigation = make_export_navigation_report(*m_running_scene_root, Export_navigation_result::made);
+#else
+    m_running_navigation = Export_navigation_report{.result = Export_navigation_result::made};
+#endif
+    m_running_navigation.navigation_ms = get_elapsed_ms(m_running_start_time);
+    log_export->info(
+        "Export of '{}': navigation mesh made in {:.1f} ms; the Export goes on",
+        m_running_scene_root->get_name(), m_running_navigation.navigation_ms
+    );
+    std::unique_ptr<Scene_export> scene_export = begin_scene_export(
+        m_context, *m_running_scene_root, c_str(m_running_request.target), m_running_request.path, m_running_request.export_mode, m_running_request.drop
+    );
+    if (!scene_export) {
+        return fail(fmt::format("Export of '{}' refused after its navigation stage (details in logs/log.txt)", m_running_scene_root->get_name()));
+    }
+    set_scene_export_navigation(*scene_export, m_running_navigation);
+    m_running_export = std::move(scene_export);
+    log_operations->info("Scene save started: '{}' -> '{}' (scene is read-only until it ends)", m_running_scene_root->get_name(), erhe::file::to_string(get_running_path()));
+    if (m_running_request.on_started) {
+        m_running_request.on_started(m_running_export);
+    }
+    launch_worker();
+    return true;
+}
+
 void Scene_save_service::update_pvs_bake_stage()
 {
     const Scene_export_pvs_bake_state state = update_scene_export_pvs_bake(m_context, *m_running_export);
@@ -349,14 +572,18 @@ void Scene_save_service::launch_worker()
         m_worker_done = false;
         m_worker_ok   = false;
     }
-    Gltf_scene_save* const save_pointer   = m_running_save.get();
-    Scene_export*    const export_pointer = m_running_export.get();
+    Gltf_scene_save*   const save_pointer    = m_running_save.get();
+    Scene_export*      const export_pointer  = m_running_export.get();
+    Scene_service_job* const service_pointer = m_running_service_job.get();
     m_worker = std::thread{
-        [this, save_pointer, export_pointer]() {
+        [this, save_pointer, export_pointer, service_pointer]() {
             ERHE_PROFILE_THREAD_NAME("Scene save");
             bool ok = false;
             try {
-                ok = (export_pointer != nullptr) ? run_scene_export(*export_pointer) : write_scene_save_gltf(*save_pointer);
+                ok =
+                    (service_pointer != nullptr) ? service_pointer->run() :
+                    (export_pointer  != nullptr) ? run_scene_export(*export_pointer) :
+                    write_scene_save_gltf(*save_pointer);
             } catch (const std::exception& e) {
                 log_operations->error("Scene save threw: {}", e.what());
             }
@@ -380,7 +607,10 @@ void Scene_save_service::finish_running()
     }
     Scene_save_result result{};
     result.saved = ok;
-    if (ok && m_running_export && (get_scene_export_mode(*m_running_export) == Scene_export_mode::status)) {
+    if (m_running_service_job) {
+        m_running_service_job->finish(m_context, ok, result);
+        ok = result.saved;
+    } else if (ok && m_running_export && (get_scene_export_mode(*m_running_export) == Scene_export_mode::status)) {
         result.status_report = finish_scene_status(*m_running_export);
     } else if (ok && m_running_export) {
         Scene_export_report export_report{};
@@ -395,17 +625,23 @@ void Scene_save_service::finish_running()
         result.file_bytes = result.report.file_bytes;
     } else if (m_running_export && !get_scene_export_error(*m_running_export).empty()) {
         result.error = get_scene_export_error(*m_running_export);
+    } else if (!m_running_error.empty()) {
+        result.error = m_running_error;
     } else {
         result.error = "save failed: " + get_running_path().string() + " (details in logs/log.txt)";
     }
     result.save_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - m_running_start_time).count();
-    log_operations->info(
-        "Scene save {}: '{}' -> '{}' in {:.1f} s",
-        ok ? "done" : "failed",
-        m_running_scene_root->get_name(),
-        erhe::file::to_string(get_running_path()),
-        result.save_ms / 1000.0
-    );
+    if (m_running_service_job) {
+        log_operations->info("{} {} in {:.1f} s", m_running_service_job->get_status_title(), ok ? "done" : "failed", result.save_ms / 1000.0);
+    } else {
+        log_operations->info(
+            "Scene save {}: '{}' -> '{}' in {:.1f} s",
+            ok ? "done" : "failed",
+            m_running_scene_root->get_name(),
+            erhe::file::to_string(get_running_path()),
+            result.save_ms / 1000.0
+        );
+    }
 
     // A job that writes the stores changes what every scene's status reads (R8.12).
     const bool wrote_stores = m_running_export && (
@@ -419,6 +655,9 @@ void Scene_save_service::finish_running()
     m_running_request = Scene_save_request{};
     m_running_save.reset();
     m_running_export.reset();
+    m_running_service_job.reset();
+    m_running_navigation = Export_navigation_report{};
+    m_running_error.clear();
     m_running_scene_root->set_save_in_progress(false);
     m_running_scene_root.reset();
     set_active(false);
@@ -484,6 +723,30 @@ auto Scene_save_service::is_read_only(const erhe::Item_host* const item_host) co
     return m_active && (item_host != nullptr) && (static_cast<const erhe::Item_host*>(m_running_scene_root.get()) == item_host);
 }
 
+auto Scene_save_service::is_job_pending(const Scene_root& scene_root, const Scene_export_mode mode) const -> bool
+{
+    const auto is_match = [&scene_root, mode](const Scene_save_request& request) -> bool {
+        const std::shared_ptr<Scene_root> request_scene_root = request.scene_root.lock();
+        return (request.job == Scene_save_job::store) && (request.export_mode == mode) && (request_scene_root.get() == &scene_root);
+    };
+    if (m_active && (m_running_scene_root.get() == &scene_root) && is_match(m_running_request)) {
+        return true;
+    }
+    return std::any_of(m_requests.begin(), m_requests.end(), is_match);
+}
+
+auto Scene_save_service::is_navigation_pending(const Scene_root& scene_root) const -> bool
+{
+    // Every service job builds a navigation mesh: Build Navigation Mesh, or an Export's navigation stage.
+    const bool stage_running = m_active && m_running_service_job && (m_running_scene_root.get() == &scene_root);
+    return stage_running || is_job_pending(scene_root, Scene_export_mode::build_navigation);
+}
+
+auto Scene_save_service::get_running_service_job() const -> std::shared_ptr<const Scene_service_job>
+{
+    return m_active ? m_running_service_job : std::shared_ptr<const Scene_service_job>{};
+}
+
 auto Scene_save_service::is_automatic_status_job_active() const -> bool
 {
     return m_active && m_running_request.automatic;
@@ -511,7 +774,12 @@ auto Scene_save_service::imgui_status() const -> bool
     const double elapsed_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - m_running_start_time).count();
     std::size_t done  = 0;
     std::size_t total = 0;
-    if (m_running_export) {
+    if (m_running_service_job) {
+        const Scene_export_progress_state progress = m_running_service_job->get_progress();
+        ImGui::Text("%s: %s %.0f s", m_running_service_job->get_status_title().c_str(), c_str(progress.stage), elapsed_s);
+        done  = progress.done;
+        total = progress.total;
+    } else if (m_running_export) {
         const Scene_export_progress_state progress = get_scene_export_progress(*m_running_export);
         const Scene_export_mode mode = get_scene_export_mode(*m_running_export);
         const char* const verb =

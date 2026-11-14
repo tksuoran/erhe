@@ -154,7 +154,8 @@ attempt and the launch must be retried.
 | `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` | `bvh` |
 | `ERHE_MALLOC_LIBRARY` | Memory allocator for C++ `new`/`delete` | `mimalloc`, `jemalloc`, `none` | `none` |
 | `ERHE_USD_LIBRARY` | USD support (`erhe::usd`, the `describe_usd_file` MCP tool) | `lightusd`, `none` | `none` |
-| `ERHE_NAVIGATION_LIBRARY` | Navigation mesh library | `recastnavigation`, `none` | `none` |
+| `ERHE_USE_DETOUR` | The editor's navigation mesh (`src/editor/navigation/`) with Recast Navigation's Detour: the mesh, its reading and writing, reachability; forced `OFF` on Android | `ON`, `OFF` | `ON` |
+| `ERHE_USE_RECAST` | The editor's navigation mesh build with Recast Navigation's Recast; needs `ERHE_USE_DETOUR` (configure error otherwise); forced `OFF` on Android | `ON`, `OFF` | `ON` |
 | `ERHE_PROFILE_LIBRARY` | Profiler integration | `nvtx`, `superluminal`, `tracy`, `none` | `none` |
 | `ERHE_TRACY_ON_DEMAND` | Tracy records only while a profiler is connected | `ON`, `OFF` | `ON` |
 | `ERHE_TRACY_CALLSTACK_DEPTH` | Callstack depth captured with every Tracy function zone; `0` records zones without callstacks | integer | `32` |

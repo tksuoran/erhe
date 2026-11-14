@@ -35,7 +35,10 @@ constexpr erhe::Item_flag_info c_editor_item_flags[] = {
     { Editor_item_flags::light_muted,                    "Light Muted",                    nullptr                     },
     { Editor_item_flags::light_solo,                     "Light Solo",                     nullptr                     },
     { Editor_item_flags::world_space_form,               "World Space Form",               nullptr                     },
-    { Editor_item_flags::world_space_source,             "World Space Source",             nullptr                     }
+    { Editor_item_flags::world_space_source,             "World Space Source",             nullptr                     },
+    { Editor_item_flags::navigation_seed,                "Navigation Seed",                "navigation_seed"           },
+    { Editor_item_flags::navigation_mesh,                "Navigation Mesh",                nullptr                     },
+    { Editor_item_flags::navigation_reachable,           "Navigation Reachable",           nullptr                     }
 };
 
 // The C++ class names (the item trees name their drag and drop payloads by them).

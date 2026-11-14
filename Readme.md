@@ -226,7 +226,7 @@ erhe stands on many excellent open-source projects. Most are fetched at configur
 | [oneTBB](https://github.com/uxlfoundation/oneTBB) | Required by OpenVDB (optional) | Apache-2.0 |
 | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | Physics (default physics backend) | MIT |
 | [Box3D](https://github.com/erincatto/box3d) | Physics (optional backend) | MIT |
-| [Recast Navigation](https://github.com/recastnavigation/recastnavigation) | Navigation meshes (optional) | Zlib |
+| [Recast Navigation](https://github.com/recastnavigation/recastnavigation) | Editor navigation meshes (desktop builds) | Zlib |
 | [bvh](https://github.com/madmann91/bvh) | CPU ray tracing (default raytrace backend) | MIT |
 | [tinybvh](https://github.com/jbikker/tinybvh) | CPU ray tracing (optional backend) | MIT |
 | [Embree](https://github.com/RenderKit/embree) | CPU ray tracing (optional backend) | Apache-2.0 |

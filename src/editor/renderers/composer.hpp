@@ -20,6 +20,7 @@ class Composition_pass_views;
 class Render_context;
 class Scene_view;
 class Composition_pass;
+enum class Render_content : unsigned int;
 
 // One scene view's prepared rendering for one frame: what
 // Composition_pass::prepare() decided for every pass of the composer, indexed
@@ -154,5 +155,8 @@ private:
 // (Draw_list_scene::register_pvs_view(); get_pvs_status reports it): the
 // view's address, stable for its lifetime.
 [[nodiscard]] auto get_pvs_view_key(const Scene_view& scene_view) -> uint64_t;
+
+// Whether a render of `content` draws the pass (a scene image leaves the editor aids out).
+[[nodiscard]] auto is_drawn_for_content(const Composition_pass& composition_pass, Render_content content) -> bool;
 
 }

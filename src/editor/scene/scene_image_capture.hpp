@@ -4,6 +4,7 @@
 #include "renderers/render_context.hpp"
 #include "rendergraph/overdraw_source.hpp"
 #include "scene/mesh_form.hpp"
+#include "config/generated/navigation_mesh_visualization.hpp"
 #include "scene/scene_view.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
@@ -355,6 +356,8 @@ public:
     erhe::graphics::Gpu_timer*           forward_pass_timer{nullptr};
     // The form of the world-space bake's mesh nodes the image draws (doc/editor/world_space_bake.md "Two forms").
     Mesh_form                            mesh_form{Mesh_form::source};
+    // The navigation mesh polygons the image draws (doc/editor/navigation.md "Visualization").
+    Navigation_mesh_visualization        navigation_mesh{Navigation_mesh_visualization::off};
     // Draw-list objects whose LOD levels in the rendered frame are captured (empty: none).
     std::vector<erhe::scene_renderer::Draw_list_object_id> lod_capture_objects;
 };

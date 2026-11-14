@@ -54,6 +54,30 @@ public:
     std::map<erhe::asset_store::Item_kind, Export_kind_counts> counts;   // made and present
 };
 
+// What the navigation stage of an Export did (doc/editor/navigation.md "Export").
+enum class Export_navigation_result : unsigned int
+{
+    none = 0, // navigation mode off, or no current mesh in a build without ERHE_USE_RECAST
+    made,     // built (or flooded) and installed
+    present,  // the installed mesh was current
+    skipped   // the scene has no navigation seed
+};
+
+[[nodiscard]] auto c_str(Export_navigation_result result) -> const char*;
+
+class Export_navigation_report
+{
+public:
+    Export_navigation_result result{Export_navigation_result::none};
+    double                   navigation_ms          {0.0};
+    std::size_t              polygon_count          {0};
+    std::size_t              reachable_polygon_count{0};
+    double                   total_area             {0.0}; // square meters
+    double                   reachable_area         {0.0};
+    std::string              item_key;                    // the editor asset's navigation mesh item; empty when none was stored
+    bool                     item_made              {false}; // the stage stored a new item
+};
+
 class Scene_export_report
 {
 public:
@@ -74,6 +98,7 @@ public:
     double                                                     copy_ms  {0.0};
     double                                                     pvs_ms   {0.0}; // pvs_mode rebake: the PVS bake
     std::uint32_t                                              pvs_cell_count{0};
+    Export_navigation_report                                   navigation;
 };
 
 enum class Scene_export_stage : unsigned int
@@ -89,7 +114,10 @@ enum class Scene_export_stage : unsigned int
     pvs_bake,         // pvs_mode rebake: the PVS bake on the world-space form (main thread, over frames)
     check_items, // status: the stores against the keys
     drop_items,  // status: a drop of R8.13
-    basis_texture_items // the Basis texture items of texture_encoding target
+    basis_texture_items, // the Basis texture items of texture_encoding target
+    navigation_triangles, // Build Navigation Mesh: the input triangles (doc/editor/navigation.md "Job")
+    navigation_tiles,     // Build Navigation Mesh: the tiles
+    navigation_flood      // Build Navigation Mesh: the reachability flood
 };
 
 [[nodiscard]] auto c_str(Scene_export_stage stage) -> const char*;
@@ -127,7 +155,9 @@ enum class Scene_export_mode : unsigned int
     bake_world_meshes,
     // The status without the scene held read-only (Prepared_keys): the keys from
     // stored content hashes and the stores' presence; no Scene item, no drop.
-    key_check
+    key_check,
+    // Build Navigation Mesh (doc/editor/navigation.md "Job"): no Scene_export, a Scene_service_job.
+    build_navigation
 };
 
 // The PVS item a bake stored (R4.10).
@@ -154,9 +184,18 @@ public:
 // What a prepared run of this build reads (doc/editor/prepared_assets.md "Format stamps"). Main thread.
 [[nodiscard]] auto get_prepared_build_formats(const App_context& context) -> Prepared_build_formats;
 
+// Main thread: why begin_scene_export() refuses the job before anything is made
+// (get_export_refusal(), the target, pvs_mode rebake without its inputs); empty when it does not.
+[[nodiscard]] auto get_scene_export_refusal(
+    const App_context& context,
+    const Scene_root&  scene_root,
+    std::string_view   target,
+    Scene_export_mode  mode
+) -> std::string;
+
 // Main thread. Reads the scene's export settings. Null when the Export is
-// refused (logged): get_export_refusal(), a target other than pc and quest, an
-// editor asset that cannot be opened. prepared_asset_path empty: the default location (R2.4).
+// refused (logged): get_scene_export_refusal(), a Scene item save that does not
+// begin. An editor asset that cannot be opened fails the worker run. prepared_asset_path empty: the default location (R2.4).
 [[nodiscard]] auto begin_scene_export(
     App_context&                 context,
     Scene_root&                  scene_root,
@@ -178,6 +217,9 @@ void finish_scene_export(App_context& context, Scene_export& scene_export, Scene
 [[nodiscard]] auto get_scene_export_prepared_asset_path(const Scene_export& scene_export) -> const std::filesystem::path&;
 // Why a worker run failed, naming the file (R10.8); empty when the log alone says.
 [[nodiscard]] auto get_scene_export_error(const Scene_export& scene_export) -> const std::string&;
+
+// Main thread, before the first worker run: what the Export's navigation stage did, for its report and summary line.
+void set_scene_export_navigation(Scene_export& scene_export, const Export_navigation_report& navigation);
 
 // A key check of a scene an Export just wrote: the Scene key that Export made, so the
 // check measures the prepared asset against it with no Scene item export of its own.

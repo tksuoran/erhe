@@ -71,6 +71,7 @@ class Brush;
 enum class Transform_drag_kind : unsigned int;
 class Scene_export;
 class Scene_id_capture;
+class Scene_service_job;
 class Scene_image_capture;
 class Scene_root;
 class Viewport_scene_view;
@@ -261,6 +262,16 @@ private:
     auto query_transform_update_stats(const nlohmann::json& args) -> std::string;
     auto action_bake_world_space_meshes       (const nlohmann::json& args) -> std::string;
     auto query_world_space_meshes             (const nlohmann::json& args) -> std::string;
+    auto action_navigation_set_seed           (const nlohmann::json& args) -> std::string;
+    auto query_navigation_status              (const nlohmann::json& args) -> std::string;
+#if defined(ERHE_USE_RECAST)
+    auto action_navigation_build              (const nlohmann::json& args) -> std::string;
+#endif
+#if defined(ERHE_USE_DETOUR)
+    auto action_navigation_clear              (const nlohmann::json& args) -> std::string;
+    auto action_navigation_set_visualization  (const nlohmann::json& args) -> std::string;
+    auto query_navigation_mesh                (const nlohmann::json& args) -> std::string;
+#endif
     auto action_merge_static_subtree(const nlohmann::json& args) -> std::string;
     auto query_shadow_fit_debug (const nlohmann::json& args) -> std::string;
     auto query_raycast          (const nlohmann::json& args) -> std::string;
@@ -976,6 +987,8 @@ private:
     std::deque<nlohmann::json>                       m_save_jobs;
     // The running Export of a job, for its progress (R9.7).
     std::map<std::uint64_t, std::shared_ptr<const Scene_export>> m_running_exports;
+    // The running store job of a job that runs no Scene_export (navigation_build), for its progress.
+    std::map<std::uint64_t, std::shared_ptr<const Scene_service_job>> m_running_service_jobs;
     std::uint64_t                                    m_next_save_job_id{1};
 };
 

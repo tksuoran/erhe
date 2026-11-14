@@ -13,7 +13,7 @@ into its subsystem's plan (or is fixed) and its line here is removed.
 The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 "Session handoff"). Items 1 and 2 come first; items 3 - 13 each need a user
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
-ask the user which to pick.
+ask the user which to pick. Item 14 starts with writing its plan.
 
 0. The user rulings on the D8 coder decisions ("Prepared assets" below,
    `doc/plans/prepared_assets_design.md` D8).
@@ -48,6 +48,10 @@ ask the user which to pick.
 13. Bistro load decisions (step 5 KTX2, step 7c lazy attribute stores,
     geogram colocate serialization, worker release reopen cost):
     `doc/plans/bistro_load_profiling.md` "Status".
+
+14. Triangle classification from walkable sample points: a plan to write,
+    then build (`doc/plans/navigation_mesh.md` "Triangle classification from
+    walkable sample points"; the navigation mesh it reads is built).
 
 ## Quest session follow-ups
 

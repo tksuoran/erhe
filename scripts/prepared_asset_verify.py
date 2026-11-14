@@ -115,6 +115,10 @@ Checks (one PASS / FAIL line each):
    R10.5 settings log, reload as the change site, the bake with instancing
    duplicate and skip, the R10.8 failures, the R2.2 record and the R2.5
    fallback.
+10c. Navigation (doc/editor/navigation.md "Verification"; --only-navigation
+   runs these alone): the Export's navigation stage reports made, present and
+   skipped, keeps the Scene key and the prepared asset of mode off, fails with
+   a seed's reason, and a refused Export builds no navigation mesh.
 11. "many": an Export killed (SIGKILL) during Ensure (mesh items) and another
    killed during Copy, then run again, leave the editor asset and the
    prepared asset with the same keys, payload bytes and meta as an
@@ -125,7 +129,7 @@ Checks (one PASS / FAIL line each):
    byte-identical. No Export leaves a temporary file.
 
 Usage: python3 scripts/prepared_asset_verify.py --editor <headless editor>
-       [--mesh-count N] [--keep] [--negative-control image|items|drop|multi] [--skip-kill] [--only-world] [--only-encoding] [--only-multi]
+       [--mesh-count N] [--keep] [--negative-control image|items|drop|multi] [--skip-kill] [--only-world] [--only-encoding] [--only-multi] [--only-navigation]
 Exit code 0 = every check passed.
 """
 
@@ -3413,6 +3417,214 @@ def phase_several_files(args, work):
                 os.remove(path + suffix)
 
 
+NAVIGATION_SEED = (-5.0, 0.05, -5.0)
+
+
+def write_navigation_scene(directory):
+    """A 20 m floor, a crate on it and an empty node for the navigation seed."""
+    builder = Gltf_builder()
+    meshes = [
+        {"name": "floor_mesh", "primitives": [builder.primitive(make_plane(10.0), 0)]},
+        {"name": "crate_mesh", "primitives": [builder.primitive(make_box(0.5, 0.5, 0.5), 0)]}
+    ]
+    nodes = [
+        {"name": "floor", "mesh": 0},
+        {"name": "crate", "mesh": 1, "translation": [3.0, 0.5, 3.0]},
+        {"name": "seed",  "translation": list(NAVIGATION_SEED)}
+    ]
+    document = {
+        "asset": {"version": "2.0", "generator": "prepared_asset_verify.py"},
+        "scene": 0, "scenes": [{"nodes": [0, 1, 2]}],
+        "nodes": nodes, "meshes": meshes,
+        "materials": [{"name": "grey", "pbrMetallicRoughness": {"baseColorFactor": [0.7, 0.7, 0.68, 1.0], "metallicFactor": 0.0, "roughnessFactor": 0.7}}],
+        "accessors": builder.accessors, "bufferViews": builder.views
+    }
+    binary = builder.padded_binary()
+    document["buffers"] = [{"uri": "navigation.bin", "byteLength": len(binary)}]
+    with open(os.path.join(directory, "navigation.bin"), "wb") as handle:
+        handle.write(binary)
+    path = os.path.join(directory, "navigation.gltf")
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(document, handle)
+    return path
+
+
+def navigation_count(status):
+    return export_counts(status, "navigation_mesh")
+
+
+def navigation_text(status):
+    export = status.get("export", {})
+    fields = {key: value for key, value in export.items() if key.startswith("navigation_")}
+    return f"counts.navigation_mesh {json.dumps(navigation_count(status))} {json.dumps(fields)} {status.get('error', '')}"[:600]
+
+
+def phase_navigation(args, work):
+    """The navigation stage of an Export (doc/editor/navigation.md "Export"; --only-navigation runs these alone)."""
+    foreign_dir = os.path.join(work, "navigation_foreign")
+    source_dir  = os.path.join(work, "navigation_source")
+    for directory in (foreign_dir, source_dir):
+        os.makedirs(directory, exist_ok=True)
+    source   = os.path.join(source_dir, "navigation.glb")
+    prepared = os.path.join(source_dir, "navigation.pc.erhe_prepared")
+    editor = Editor(args.editor)
+    try:
+        if "navigation_build" not in editor.client.tool_names():
+            check("navigation: this editor builds navigation meshes (ERHE_USE_RECAST); the navigation checks are skipped", True)
+            return
+
+        def navigation_status(scene):
+            return editor.call("get_navigation_status", {"scene_name": scene})
+
+        def set_mode(scene, mode):
+            editor.set_export_settings(scene, {"navigation": {"mode": mode}})
+
+        def source_binding(scene):
+            return [entry.get("source_path") for entry in editor.call("list_scenes")["scenes"] if entry.get("name") == scene]
+
+        def undo_stack():
+            return json.dumps(editor.call("get_undo_redo_stack"), sort_keys=True)
+
+        # A refused Export builds no navigation mesh: the default scene has no source file.
+        default_scene = "Default Scene"
+        if default_scene in editor.scene_names():
+            editor.set_export_settings(default_scene, dict(NO_BAKE, navigation={"mode": "build"}))
+            child = next(node for node in editor.call("get_scene_nodes", {"scene_name": default_scene})["nodes"] if node.get("parent"))
+            editor.call("navigation_set_seed", {"scene_name": default_scene, "node_id": child["id"]})
+            refusal = editor.refusal("prepare_scene", {"scene_name": default_scene, "target": "pc"})
+            default_navigation = navigation_status(default_scene)
+            check("navigation: an Export refused before it starts (no source file) builds no navigation mesh",
+                  (refusal is not None) and ("no source file" in refusal) and not default_navigation.get("available") and
+                  (default_navigation.get("build_count", 0) == 0),
+                  f"{(refusal or 'accepted')[:120]}; available {default_navigation.get('available')}")
+
+        name = editor.open_foreign(write_navigation_scene(foreign_dir))
+        editor.save(name, source)
+        editor.close(name)
+        scene = editor.load(source)
+        editor.set_export_settings(scene, NO_BAKE)
+        editor.call("navigation_set_seed", {"scene_name": scene, "node": "seed"})
+        editor.wait_idle()
+        binding_before = source_binding(scene)
+        stack_before = undo_stack()
+
+        off = editor.export(scene)
+        off_key = off.get("export", {}).get("scene_key")
+        off_items, _ = read_store(prepared)
+        check("navigation: an Export with mode off reports no navigation mesh and builds none",
+              (off.get("state") == "done") and ("navigation_mesh" not in off.get("export", {}).get("counts", {})) and
+              ("navigation_ms" not in off.get("export", {})) and not navigation_status(scene).get("available"),
+              navigation_text(off))
+
+        # pvs_mode rebake without a region: the Export's own refusal comes before the navigation stage.
+        set_mode(scene, "build")
+        editor.set_export_settings(scene, {"pvs_mode": "rebake", "bake_static_to_world_space": True})
+        refused = editor.export(scene)
+        check("navigation: an Export the service refuses (pvs_mode rebake without a region) builds no navigation mesh",
+              (refused.get("state") == "failed") and ("refused" in refused.get("error", "")) and not navigation_status(scene).get("available"),
+              refused.get("error", json.dumps(refused))[:200])
+        editor.set_export_settings(scene, {"pvs_mode": "off", "bake_static_to_world_space": False})
+
+        job_id = editor.begin_export(scene)
+        stages = set()
+        deadline = time.monotonic() + 600.0
+        while time.monotonic() < deadline:
+            job = editor.job(job_id)
+            if "progress" in job:
+                stages.add(job["progress"].get("stage", ""))
+            if job.get("state") in ("done", "failed"):
+                break
+            time.sleep(0.01)
+        made = job
+        editor.wait_idle()
+        made_export = made.get("export", {})
+        built = navigation_status(scene)
+        check("navigation: mode build, first Export: counts.navigation_mesh made, with the polygon totals and areas of the installed mesh",
+              (made.get("state") == "done") and (navigation_count(made).get("made") == 1) and (navigation_count(made).get("present") == 0) and
+              built.get("available") and not built.get("stale") and (built.get("build_count") == 1) and
+              (made_export.get("navigation_polygon_count") == built.get("polygon_count") > 0) and
+              (made_export.get("navigation_reachable_polygon_count") == built.get("reachable_polygon_count") > 0) and
+              (abs(made_export.get("navigation_total_area", 0.0) - built.get("total_area", -1.0)) < 1e-6) and
+              (abs(made_export.get("navigation_reachable_area", 0.0) - built.get("reachable_area", -1.0)) < 1e-6) and
+              (made_export.get("navigation_reachable_area", 0.0) > 300.0) and (made_export.get("navigation_ms", 0.0) > 0.0),
+              navigation_text(made))
+        print(f"INFO: navigation: get_save_status stages seen during the Export: {sorted(stages)}", flush=True)
+        made_items, _ = read_store(prepared)
+        check("navigation: the Scene key and the prepared asset content are those of mode off",
+              (made_export.get("scene_key") == off_key) and (made_items == off_items),
+              f"key {made_export.get('scene_key')} vs {off_key}; {len(made_items)} vs {len(off_items)} items")
+        log_text = read_log()
+        check("navigation: the summary line carries the navigation mesh",
+              re.search(rf"Export of '{re.escape(scene)}' \(pc\) done: .*; navigation mesh made: \d+ polygons", log_text) is not None)
+
+        present = editor.export(scene)
+        after_present = navigation_status(scene)
+        check("navigation: a second Export reports present and builds nothing",
+              (present.get("state") == "done") and (navigation_count(present).get("present") == 1) and (navigation_count(present).get("made") == 0) and
+              (after_present.get("build_count") == 1) and (after_present.get("flood_count") == built.get("flood_count")) and
+              (present.get("export", {}).get("navigation_polygon_count") == built.get("polygon_count")) and
+              (present.get("export", {}).get("scene_key") == off_key),
+              navigation_text(present))
+
+        status = editor.status(scene)
+        check("navigation: the prepared status with mode build matches and builds nothing",
+              status.get("matches") and (navigation_status(scene).get("build_count") == 1), status_text(status))
+
+        check("navigation: the Exports leave the source binding and the undo stack as they were",
+              (source_binding(scene) == binding_before) and (undo_stack() == stack_before))
+
+        # A moved mesh makes the mesh stale: the next Export builds it again.
+        editor.call("set_node_transform", {"scene_name": scene, "node_name": "crate", "space": "local", "translation": [-3.0, 0.5, 3.0]})
+        editor.wait_idle()
+        stale = navigation_status(scene)
+        moved = editor.export(scene)
+        rebuilt = navigation_status(scene)
+        check("navigation: after a mesh move (stale) an Export reports made again and the mesh is current",
+              stale.get("stale") and (moved.get("state") == "done") and (navigation_count(moved).get("made") == 1) and
+              (rebuilt.get("build_count") == 2) and not rebuilt.get("stale"),
+              f"stale {stale.get('stale_reasons')}; {navigation_text(moved)}")
+        editor.call("undo")
+        editor.wait_idle()
+
+        # No seed: the Export goes on with a warning and no navigation mesh (U3).
+        editor.call("navigation_set_seed", {"scene_name": scene, "node": "seed", "seed": False})
+        editor.wait_idle()
+        mark = len(read_log())
+        before_seedless = navigation_status(scene)
+        seedless = editor.export(scene)
+        warning = f"Export of '{scene}': the scene has no navigation seed - mark a node (Properties > Navigation Seed)"
+        seedless_lines = [line for line in log_since(mark).splitlines() if warning in line]
+        check("navigation: without a seed the Export succeeds, logs the warning in editor.export and reports the navigation mesh skipped",
+              (seedless.get("state") == "done") and (navigation_count(seedless) == {"made": 0, "present": 0, "written": 0, "skipped": 1}) and
+              ("navigation_ms" not in seedless.get("export", {})) and bool(seedless_lines) and ("editor.export" in seedless_lines[0]) and
+              (navigation_status(scene).get("build_count") == before_seedless.get("build_count")),
+              (seedless_lines[0][-200:] if seedless_lines else "no warning line") + " " + navigation_text(seedless))
+        editor.call("navigation_set_seed", {"scene_name": scene, "node": "seed"})
+        editor.wait_idle()
+
+        # A seed 50 m up: every seed fails, so the Export fails with the seed's reason and makes nothing.
+        editor.call("set_node_transform", {"scene_name": scene, "node_name": "seed", "space": "local", "translation": [NAVIGATION_SEED[0], 50.0, NAVIGATION_SEED[2]]})
+        editor.wait_idle()
+        prepared_before = sha256_of(prepared)
+        editor_asset_before, _ = read_store(os.path.join(source_dir, "navigation.erhe_editor"))
+        before_failure = navigation_status(scene)
+        failed = editor.export(scene)
+        after_failure = navigation_status(scene)
+        editor_asset_after, _ = read_store(os.path.join(source_dir, "navigation.erhe_editor"))
+        error = failed.get("error", "")
+        check("navigation: with the seed 50 m up the Export fails with the seed's reason",
+              (failed.get("state") == "failed") and (f"Export of '{scene}' failed" in error) and ("no polygon within" in error) and ("'seed'" in error),
+              error[:300] or json.dumps(failed)[:300])
+        check("navigation: the failed Export leaves the prepared asset, the editor asset and the installed mesh unchanged",
+              (sha256_of(prepared) == prepared_before) and (editor_asset_after == editor_asset_before) and
+              after_failure.get("available") and all(after_failure.get(k) == before_failure.get(k) for k in ("polygon_count", "reachable_area", "build_count")))
+        editor.call("undo")
+        editor.wait_idle()
+        editor.close(scene)
+    finally:
+        editor.stop()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--editor", required=True, help="headless editor binary (relative to the repository root or absolute)")
@@ -3424,6 +3636,7 @@ def main():
     parser.add_argument("--only-pvs", action="store_true", help="run the PVS checks alone")
     parser.add_argument("--only-encoding", action="store_true", help="run the texture_encoding checks alone")
     parser.add_argument("--only-multi", action="store_true", help="run the several-files checks alone")
+    parser.add_argument("--only-navigation", action="store_true", help="run the navigation checks alone")
     args = parser.parse_args()
 
     start = time.monotonic()
@@ -3444,6 +3657,9 @@ def main():
         if args.only_multi:
             phase_several_files(args, work)
             raise SystemExit
+        if args.only_navigation:
+            phase_navigation(args, work)
+            raise SystemExit
         source, images, status, _ = phase_export(args, work)
         source_hit = phase_reexport_and_open(args, work, source, images, status)
         phase_quest_target(args, work, source, images, source_hit)
@@ -3455,6 +3671,7 @@ def main():
         phase_world_space(args, work)
         phase_pvs(args, work)
         phase_several_files(args, work)
+        phase_navigation(args, work)
         if not args.skip_kill:
             phase_kill(args, work)
     except SystemExit:

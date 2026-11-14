@@ -22,6 +22,7 @@ std::shared_ptr<spdlog::logger> log_id_render;
 std::shared_ptr<spdlog::logger> log_input;
 std::shared_ptr<spdlog::logger> log_input_frame;
 std::shared_ptr<spdlog::logger> log_materials;
+std::shared_ptr<spdlog::logger> log_navigation;
 std::shared_ptr<spdlog::logger> log_net;
 std::shared_ptr<spdlog::logger> log_node_properties;
 std::shared_ptr<spdlog::logger> log_operations;
@@ -74,6 +75,7 @@ void initialize_logging()
     log_hud                        = make_logger      ("editor.hud"                       );
     log_id_render                  = make_frame_logger("editor.id_render"                 );
     log_materials                  = make_logger      ("editor.materials"                 );
+    log_navigation                 = make_logger      ("editor.navigation"                );
     log_net                        = make_logger      ("editor.net"                       );
     log_node_properties            = make_logger      ("editor.node_properties"           );
     log_operations                 = make_logger      ("editor.operations"                );

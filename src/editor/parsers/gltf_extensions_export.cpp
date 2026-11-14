@@ -22,6 +22,8 @@
 #include "texture_graph/graph_texture_serialization.hpp"
 
 #include "scene/generated/scene_settings_serialization.hpp"
+#include "config/generated/navigation_settings.hpp"
+#include "config/generated/scene_export_settings.hpp"
 
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf_item_flags.hpp"
@@ -497,6 +499,10 @@ void add_gltf_editor_state(
         // write name nothing in it, so they are left out.
         Scene_settings scene_settings = scene_root.get_scene_settings();
         scene_settings.variant_selections.clear();
+        // No prepared run reads the navigation settings (doc/editor/navigation.md "Export").
+        if (!scene_file && scene_settings.export_settings.has_value()) {
+            scene_settings.export_settings->navigation = Navigation_settings{};
+        }
         if (exported_variant_set != nullptr) {
             const Variant_set_key exported_key = exported_variant_set->get_key();
             for (const Variant_selection& selection : scene_root.get_scene_settings().variant_selections) {
@@ -602,6 +608,9 @@ void add_gltf_editor_state(
                     kind_scopes.insert(kind_scope.get());
                 }
             }
+            const auto is_session_only = [](const erhe::Hierarchy& prim) -> bool {
+                return (prim.get_flag_bits() & erhe::Item_flags::session_only) != 0;
+            };
             const std::function<void(const erhe::Hierarchy&)> collect_prim =
                 [&](const erhe::Hierarchy& prim) -> void
                 {
@@ -610,7 +619,7 @@ void add_gltf_editor_state(
                     if (!is_kind_scope) {
                         nlohmann::json items = nlohmann::json::array();
                         for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
-                            if (content_library->has_item(*child)) {
+                            if (content_library->has_item(*child) && !is_session_only(*child)) {
                                 items.push_back(child->get_name());
                             }
                         }
@@ -634,8 +643,8 @@ void add_gltf_editor_state(
                         }
                     }
                     for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
-                        // A resource prim holds no resources of its own.
-                        if (!content_library->has_item(*child)) {
+                        // A resource prim holds no resources of its own; a session-only subtree is not saved.
+                        if (!content_library->has_item(*child) && !is_session_only(*child)) {
                             collect_prim(*child);
                         }
                     }

@@ -117,6 +117,7 @@ enum class Scene_source_format : unsigned int {
 class Prepared_asset;
 class Prepared_keys;
 class Prepared_status_report;
+class Scene_navigation;
 class World_space_form;
 
 // One `DomeLight` prim a USD-backed scene was opened from authored. erhe has
@@ -164,6 +165,7 @@ public:
     static constexpr erhe::scene::Layer_id tool         = 4;
     static constexpr erhe::scene::Layer_id rendertarget = 5;
     static constexpr erhe::scene::Layer_id bone         = 6;
+    static constexpr erhe::scene::Layer_id navigation   = 7;
 };
 
 class Scene_layers
@@ -182,6 +184,8 @@ public:
     // A separate layer so they can be rendered, id-rendered and raytraced as a
     // group without ever being mistaken for scene content.
     [[nodiscard]] auto bone        () const -> erhe::scene::Mesh_layer*;
+    // The navigation mesh visualization (doc/editor/navigation.md "Visualization"): drawn by its own passes only.
+    [[nodiscard]] auto navigation  () const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto light       () const -> erhe::scene::Light_layer*;
     [[nodiscard]] auto mesh_layers () const -> std::array<erhe::scene::Mesh_layer*, 6>;
 
@@ -192,6 +196,7 @@ private:
     std::shared_ptr<erhe::scene::Mesh_layer>  m_brush;
     std::shared_ptr<erhe::scene::Mesh_layer>  m_rendertarget;
     std::shared_ptr<erhe::scene::Mesh_layer>  m_bone;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_navigation;
     std::shared_ptr<erhe::scene::Light_layer> m_light;
 };
 
@@ -409,6 +414,13 @@ public:
     // sites, so no pass scans the tree for bodies.
     [[nodiscard]] auto get_node_physics_system() -> Node_physics_system&;
 
+    // The scene's navigation seed nodes (doc/editor/navigation.md "Seeds"),
+    // kept at node registration, unregistration and on_navigation_seed_changed().
+    void get_navigation_seed_nodes(std::vector<std::shared_ptr<erhe::scene::Node>>& out_nodes) const;
+    [[nodiscard]] auto get_navigation_seed_count() const -> std::size_t;
+    // A writer of Editor_item_flags::navigation_seed calls this after the write.
+    void on_navigation_seed_changed(const std::shared_ptr<erhe::scene::Node>& node);
+
     // The card images the draw-mode proxies of this scene read, keyed by the
     // file each was read from, so two prims naming the same file share
     // one texture. Weakly held: the proxy materials own the textures, the
@@ -521,6 +533,11 @@ public:
     // The world-space form of the scene (doc/editor/world_space_bake.md "Two forms").
     [[nodiscard]] auto get_world_space_form() -> World_space_form&;
     [[nodiscard]] auto get_world_space_form() const -> const World_space_form&;
+#if defined(ERHE_USE_DETOUR)
+    // The scene's navigation mesh and its staleness (doc/editor/navigation.md "Scene state").
+    [[nodiscard]] auto get_navigation() -> Scene_navigation&;
+    [[nodiscard]] auto get_navigation() const -> const Scene_navigation&;
+#endif
     // The change site of every edit of the scene's export settings (Properties, MCP set_scene_settings).
     void on_export_settings_changed();
 
@@ -756,6 +773,9 @@ private:
     std::filesystem::path                           m_editor_asset_record;
     std::vector<std::filesystem::path>              m_unresolved_sources;
     std::unique_ptr<World_space_form>               m_world_space_form;
+#if defined(ERHE_USE_DETOUR)
+    std::unique_ptr<Scene_navigation>               m_navigation;
+#endif
     std::vector<Usd_dome_light_record>              m_usd_dome_lights;
     std::vector<std::string>                        m_usd_sublayers;
     Usd_time_code_record                            m_usd_time_codes;
@@ -776,6 +796,9 @@ private:
     std::unique_ptr<Geometry_graph_mesh_system>     m_geometry_graph_mesh_system;
     std::unique_ptr<Node_physics_system>            m_node_physics_system;
     std::unique_ptr<Joint_system>                   m_joint_system;
+    // Own mutex: register_node runs on load workers.
+    mutable ERHE_PROFILE_MUTEX(std::mutex, m_navigation_seed_mutex);
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_navigation_seed_nodes;
     std::unordered_map<std::string, std::weak_ptr<erhe::graphics::Texture>> m_card_textures;
     std::vector<Physics_drag_constraint*>           m_physics_drags;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
@@ -874,6 +897,13 @@ private:
 // any library, or a shared prefab template resource (reference entries are
 // deliberately non-hosted).
 [[nodiscard]] auto get_hosting_scene_root(const erhe::Item_base* item) -> std::shared_ptr<Scene_root>;
+
+// A navigation seed point: the node's origin in the scene root's space.
+[[nodiscard]] auto get_navigation_seed_point(const Scene_root& scene_root, const erhe::scene::Node& node) -> glm::vec3;
+// The seed points of the scene's seed nodes, in their list order; clears out_points first.
+void get_navigation_seed_points(const Scene_root& scene_root, std::vector<glm::vec3>& out_points);
+// Tells the hosting scene of `item` (a node) that its navigation_seed bit may have changed.
+void notify_navigation_seed_changed(const std::shared_ptr<erhe::Item_base>& item);
 
 // Empty when the scene may be saved and exported; for a prepared run the
 // message that refuses `action` (R11.2).

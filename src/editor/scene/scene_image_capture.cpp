@@ -13,7 +13,10 @@
 #include "rendergraph/post_processing.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/joint_buffer.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "scene/viewport_render_state.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -181,6 +184,8 @@ void Scene_image_view::prepare_composition(const uint64_t frame_index, const std
     // be replacing (commit_geometry_buffer_mesh, under this mutex).
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{scene_root->item_host_mutex};
     m_context.app_rendering->prepare_composer(context, host_system_time_ns, slot);
+    // The edge-line feed of the passes a scene image draws (the navigation mesh borders).
+    m_context.app_rendering->prepare_wide_line_feed(context, host_system_time_ns, slot.wide_line_feed);
 }
 
 void Scene_image_view::set_lod_capture_objects(std::vector<erhe::scene_renderer::Draw_list_object_id> objects)
@@ -405,6 +410,31 @@ void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& 
         context.overdraw_count_buffer = m_overdraw_view_state.get_count_buffer(frame_index);
     }
 
+    // The prepared edge-line feed, queued as Viewport_scene_view queues it; drawn by the edge-line passes' render().
+    erhe::scene_renderer::Content_wide_line_renderer* const wide_line_renderer = m_context.content_wide_line_renderer;
+    const bool drive_wide_lines = (wide_line_renderer != nullptr) && wide_line_renderer->is_enabled();
+    if (drive_wide_lines) {
+        ERHE_VERIFY(context.composer_prepared != nullptr);
+        const erhe::scene_renderer::Content_wide_line_feed& wide_line_feed = context.composer_prepared->wide_line_feed;
+        wide_line_renderer->begin_frame();
+        wide_line_renderer->add_feed(
+            wide_line_feed,
+            erhe::scene_renderer::Content_wide_line_lod_view{
+                .draw_list_scene = scene_root->get_draw_list_scene(),
+                .frame_index     = frame_index,
+                .cull_view       = context.composer_prepared->color_cull_view
+            }
+        );
+        wide_line_renderer->set_view_params(context.views, get_reverse_depth(), get_depth_range(), get_conventions());
+        if ((wide_line_feed.mesh_count > 0) && (m_context.forward_renderer != nullptr)) {
+            erhe::scene_renderer::Joint_buffer& joint_buffer       = m_context.forward_renderer->get_joint_buffer();
+            erhe::graphics::Ring_buffer_range   joint_buffer_range = joint_buffer.update(
+                glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, scene_root->get_render_joint_poses(frame_index)
+            );
+            wide_line_renderer->set_joint_buffer(&joint_buffer, std::move(joint_buffer_range));
+        }
+    }
+
     if (m_forward_pass_timer != nullptr) {
         m_forward_pass_timer->begin(command_buffer);
     }
@@ -417,6 +447,9 @@ void Scene_image_view::execute_rendergraph_node(erhe::graphics::Command_buffer& 
         // Content passes only; the overlay passes (tool / rendertarget meshes)
         // are editor UI.
         m_context.app_rendering->render_viewport_main(context, false);
+        if (drive_wide_lines) {
+            wide_line_renderer->end_frame();
+        }
     }
     if (m_forward_pass_timer != nullptr) {
         m_forward_pass_timer->end(command_buffer);
@@ -597,6 +630,7 @@ Scene_image_capture::Scene_image_capture(App_context& context, const Scene_image
         create_info.mesh_form
     );
     m_view->set_lod_capture_objects(create_info.lod_capture_objects);
+    m_view->get_debug_visualizations().edit_settings().navigation_mesh = create_info.navigation_mesh;
 
     m_shadow_render_node = m_context.app_rendering->create_shadow_node_for_scene_view(
         *m_context.graphics_device,

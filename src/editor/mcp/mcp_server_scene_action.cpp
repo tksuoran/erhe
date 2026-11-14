@@ -873,6 +873,9 @@ auto Mcp_server::action_set_item_flags(const json& args) -> std::string
         } else {
             target->disable_flag_bits(flag_bits);
         }
+        if ((flag_bits & Editor_item_flags::navigation_seed) != 0u) {
+            notify_navigation_seed_changed(target);
+        }
         updated.push_back({
             {"id",    target->get_id()},
             {"name",  target->get_name()},

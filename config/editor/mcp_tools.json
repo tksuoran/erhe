@@ -642,6 +642,131 @@
     "name": "get_world_space_meshes"
   },
   {
+    "description": "Mark or unmark a node as a navigation seed (doc/editor/navigation.md \"Seeds\"): the node's origin, in the scene root's space, is a place the viewer can stand, and the navigation mesh's reachable area is flooded from the seeds. Sets or clears the persistent navigation_seed flag with one undoable operation (none when the node already has the requested state). A scene or node name that matches more than one open scene or prim is an error. Returns {scene_name, node, id, uid, point, seed, changed}.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node": {
+          "description": "Node name, or a path when it holds '/'",
+          "type": "string"
+        },
+        "node_id": {
+          "description": "Node id (alternative to 'node')",
+          "type": "integer"
+        },
+        "seed": {
+          "description": "true marks the node as a seed (default), false unmarks it",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "navigation_set_seed"
+  },
+  {
+    "description": "The navigation state of a scene (doc/editor/navigation.md \"MCP\"): available (a navigation mesh is installed), pending (a navigation_build of the scene is queued or running), stale and stale_reasons (\"geometry changed\": an input mesh moved, changed its primitives or left, or a candidate mesh entered; \"settings changed\": a build setting differs from the built ones - the seed search extents alone do not count; \"seeds changed\": the seed set or a seed point differs; each ends when an undo makes the values equal again), the totals (polygon_count, reachable_polygon_count, total_area, reachable_area in square meters), tile_count, input_mesh_count, input_shape_count (a primitive several nodes share counts once), input_triangle_count, skipped_mesh_count and skipped_meshes (input meshes that yielded no triangles), build_ms, flood_ms, build_count and flood_count (installed since the scene opened; a flood-only build adds to flood_count alone), built_seeds (per seed of the build: node, uid, point and result {found, polygon, snapped_point} or {found: false, reason}), status_text, seed_count and seeds (the current seed nodes: node name, id, uid and point - the node's origin in the scene root's space). Answered while a scene save or build runs.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_navigation_status"
+  },
+  {
+    "description": "Queue Build Navigation Mesh of a scene (doc/editor/navigation.md \"Job\"): a Scene_save_service job with a save's staging (the scene is read-only while it runs; status line \"Building navigation mesh of '<scene>': <stage>\"). Returns {job_id, ...} at once; poll get_save_status {job_id} (progress stage reading triangles, building tiles or flooding) until state is done (navigation carries the get_navigation_status fields) or failed (error names the reason: no polygon, or every seed's reason - the installed mesh stays as it was). Input: every mesh of the PVS static set with translucent meshes, level 0, in the scene root's space. Refused for a scene without export settings and for a scene without a navigation seed. When the geometry and the build settings equal the installed mesh's, only the flood runs again (seeds or seed search extents). Changes neither the node tree nor the undo stack.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "navigation_build"
+  },
+  {
+    "description": "Remove the navigation mesh of a scene (doc/editor/navigation.md \"Scene state\"). Returns {scene_name, cleared} (cleared false: the scene had none).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "navigation_clear"
+  },
+  {
+    "description": "Set the Navigation Mesh mode of the Debug Visualization popup (doc/editor/navigation.md \"Visualization\") in every viewport, or in the one titled 'viewport': off, reachable (the reachable polygons, green, the default) or all (the unreachable ones too, magenta). The setting is per view; the viewports draw the scene's \"Navigation Mesh\" node by it from the next frame. render_scene_image takes its own navigation_mesh argument. Returns {viewports: [{viewport, mode}]}.",
+    "inputSchema": {
+      "properties": {
+        "mode": {
+          "description": "\"off\", \"reachable\" or \"all\"",
+          "enum": [
+            "off",
+            "reachable",
+            "all"
+          ],
+          "type": "string"
+        },
+        "viewport": {
+          "description": "Title of the viewport window (see get_viewports); default every viewport",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "name": "navigation_set_visualization"
+  },
+  {
+    "description": "The polygons of a scene's navigation mesh (doc/editor/navigation.md \"MCP\"), in the scene root's space: available, bounds_min, bounds_max, polygon_count, matching_count (polygons that pass reachable_only), returned_count, truncated, and polygons [{index, tile, vertices [[x, y, z], ...], area (square meters, from the detail triangles), reachable}].",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "reachable_only": {
+          "description": "Only the reachable polygons (default false)",
+          "type": "boolean"
+        },
+        "max_polygons": {
+          "description": "At most this many polygons are returned (default 1000)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_navigation_mesh"
+  },
+  {
     "description": "Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.",
     "inputSchema": {
       "properties": {},
@@ -4274,11 +4399,15 @@
     "name": "capture_screenshot"
   },
   {
-    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, overdraw_mode / max_count / overdraw_statistics (output overdraw; overdraw_mode cost adds metric, metric_title, weight_scale and max_value), scene, camera (effective values), msaa_samples, shader_debug, color_format, shadow_debug_light {name, id, light_index} when given (light_index = the light slot the render used, null when the light got none); shadow_maps {map_width, map_height, map_format, depth_bits, technique, cube_size, cube_format, reverse_depth, depth_range} and shadow_lights [{name, id, type directional|spot|point, slot, position, resolution, layer + texture_from_world + clip_from_world (directional / spot; 4x4 row-major: rows[r] . (x, y, z, 1) = component r, divide by w; texture_from_world gives shadow map uv and depth), cube_index (point; the cube holds radial distances from position)}] - the shadow-mapped lights exactly as this render's own shadow pass used them (the directional fit depends on this camera); for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the covered pixels, and for a linear render with shader_debug != 0 background {marker: 'nan', pixel_count}: pixels no surface covers have NaN RGB (the sky is not drawn in those renders). With lod_nodes also lod_selection: the LOD levels of the frame the image was rendered in, captured for that frame alone (the reply waits for its GPU levels; an error when that frame was not captured), with the fields of get_lod_selection (frame_index, columns - the capture's own color column and the shadow column its shadow pass samples among them, previous_column null: no hysteresis history - and entries with object_index and node_name). See doc/editor/rendergraph.md 'Scene image capture'.",
+    "description": "Render a scene offscreen through an explicit camera into a temporary render target owned by this request, and write the image to a file. Independent of viewport windows and the ImGui layout: no window has to exist, be visible, focused or sized, and floating windows cannot cover the image. Uses the viewport's own renderer path (forward / draw-list passes, a real shadow pass for this camera, the DDGI field, lights, sky) and, for png, the viewport's post-processing (bloom + tonemap) and sRGB encoding - so it matches what a viewport of the same camera and size shows for scene content. Editor overlays are never drawn: no grid, gizmos, tool meshes, selection outline or selection style, hover highlight, brush preview, solid bones, debug visualizations, hotbar; edge lines / wireframe / points styles are off (polygon fill only). The navigation mesh visualization is drawn only when navigation_mesh asks for it (its fills and its border lines). Viewport settings come from the default viewport config (the one a new viewport starts from), not from any open viewport. Use this for scene-content verification; use capture_screenshot for the editor UI. The call spans the frames the render and GPU readback need (typically 2-3); it cannot run inside batch. Result: path, width, height, output, overdraw_mode / max_count / overdraw_statistics (output overdraw; overdraw_mode cost adds metric, metric_title, weight_scale and max_value), scene, camera (effective values), msaa_samples, shader_debug, color_format, shadow_debug_light {name, id, light_index} when given (light_index = the light slot the render used, null when the light got none); shadow_maps {map_width, map_height, map_format, depth_bits, technique, cube_size, cube_format, reverse_depth, depth_range} and shadow_lights [{name, id, type directional|spot|point, slot, position, resolution, layer + texture_from_world + clip_from_world (directional / spot; 4x4 row-major: rows[r] . (x, y, z, 1) = component r, divide by w; texture_from_world gives shadow map uv and depth), cube_index (point; the cube holds radial distances from position)}] - the shadow-mapped lights exactly as this render's own shadow pass used them (the directional fit depends on this camera); for output 'linear' also min_luminance / max_luminance / mean_luminance (Rec. 709 weights) over the covered pixels, and for a linear render with shader_debug != 0 background {marker: 'nan', pixel_count}: pixels no surface covers have NaN RGB (the sky is not drawn in those renders). With lod_nodes also lod_selection: the LOD levels of the frame the image was rendered in, captured for that frame alone (the reply waits for its GPU levels; an error when that frame was not captured), with the fields of get_lod_selection (frame_index, columns - the capture's own color column and the shadow column its shadow pass samples among them, previous_column null: no hysteresis history - and entries with object_index and node_name). See doc/editor/rendergraph.md 'Scene image capture'.",
     "inputSchema": {
       "properties": {
         "mesh_form": {
           "description": "\"source\" (default) or \"world_space\": the form of the world-space bake's mesh nodes the image draws (doc/editor/world_space_bake.md \"Two forms\"); world_space is refused while get_world_space_meshes reports it unavailable",
+          "type": "string"
+        },
+        "navigation_mesh": {
+          "description": "\"off\" (default), \"reachable\" or \"all\": the scene's navigation mesh polygons the image draws, as the viewports' Debug Visualization \"Navigation Mesh\" mode does (doc/editor/navigation.md \"Visualization\"); the image is otherwise free of editor overlays",
           "type": "string"
         },
         "lod_nodes": {

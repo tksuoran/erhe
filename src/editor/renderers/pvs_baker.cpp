@@ -6,11 +6,11 @@
 #include "assets/scene_export.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
-#include "scene/node_physics.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/scene_id_capture.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_save_service.hpp"
+#include "scene/static_mesh_set.hpp"
 #include "scene/world_space_form.hpp"
 
 #include "erhe_graphics/buffer.hpp"
@@ -24,7 +24,6 @@
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -82,45 +81,6 @@ constexpr uint64_t c_max_cell_count = uint64_t{1} << 24;
 [[nodiscard]] auto is_finite(const glm::vec3& value) -> bool
 {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-}
-
-// The node or an ancestor carries a rigid body whose motion mode is not
-// static: the body moves the node (a subtree below a body is carried by it).
-[[nodiscard]] auto is_moved_by_physics(const erhe::scene::Node& node) -> bool
-{
-    const erhe::scene::Node* current = &node;
-    std::shared_ptr<erhe::scene::Node> parent;
-    while (current != nullptr) {
-        const std::optional<Node_physics_data> physics = read_node_physics(*current);
-        if (
-            physics.has_value() &&
-            (physics->motion_mode != erhe::physics::Motion_mode::e_none) &&
-            (physics->motion_mode != erhe::physics::Motion_mode::e_static)
-        ) {
-            return true;
-        }
-        parent  = current->get_parent_node();
-        current = parent.get();
-    }
-    return false;
-}
-
-// The node or an ancestor is the target of an animation channel.
-[[nodiscard]] auto is_animated(const erhe::scene::Node& node, const std::unordered_set<const erhe::scene::Node*>& animated_nodes) -> bool
-{
-    if (animated_nodes.empty()) {
-        return false;
-    }
-    const erhe::scene::Node* current = &node;
-    std::shared_ptr<erhe::scene::Node> parent;
-    while (current != nullptr) {
-        if (animated_nodes.contains(current)) {
-            return true;
-        }
-        parent  = current->get_parent_node();
-        current = parent.get();
-    }
-    return false;
 }
 
 } // anonymous namespace
@@ -409,15 +369,7 @@ auto Pvs_baker::begin(const std::shared_ptr<Scene_root>& scene_root, const Pvs_b
     std::unordered_set<const erhe::scene::Node*> animated_nodes;
     const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
     if (content_library) {
-        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-        for (const std::shared_ptr<erhe::scene::Animation>& animation : content_library->get_all<erhe::scene::Animation>()) {
-            for (const erhe::scene::Animation_channel& channel : animation->channels) {
-                const std::shared_ptr<erhe::scene::Xformable> target = erhe::scene::get_target_node(channel);
-                if (target) {
-                    animated_nodes.insert(target.get());
-                }
-            }
-        }
+        collect_animated_nodes(*content_library, animated_nodes);
     }
 
     // The static set (doc/plans/pvs.md D3), one column per (mesh, primitive).

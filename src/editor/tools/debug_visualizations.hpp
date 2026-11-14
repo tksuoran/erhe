@@ -166,6 +166,7 @@ private:
     // animation_path_interval as a polyline of alternating cyan and magenta
     // segments, and the node's axes at the playhead time.
     void animation_paths_visualization   (const Render_context& context);
+    void navigation_seeds_visualization  (const Render_context& context, const Scene_root& scene_root);
     void physics_nodes_visualization     (const Render_context& context);
     void raytrace_nodes_visualization    (const Render_context& context);
     // Spatial lightmap tiles (Lightmap_baker::get_show_tile_bounds): x-ray
@@ -225,6 +226,8 @@ private:
 
     // selection_visualization() projected-hull scratch, cleared at use so
     // the capacity is kept.
+    // navigation_seeds_visualization() scratch, cleared after use so it pins no node.
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_navigation_seed_nodes;
     std::vector<glm::vec2> m_ndc_points;
     std::vector<glm::vec2> m_ndc_convex_hull;
     std::vector<glm::vec3> m_projected_convex_hull_points;

@@ -8,7 +8,7 @@ from erhe_codegen import *
 # Debug_visualizations_config, the per-viewport light/camera visualization
 # modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
-    version=4,
+    version=6,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
@@ -24,6 +24,10 @@ struct("Debug_visualizations_settings",
         # animation_path_interval, and the node axes at the playhead time.
         field("animation_paths",             EnumRef("Visualization_mode"), added_in=4, default="Visualization_mode::off", short_desc="Animation Paths", long_desc="Paths of the targeted animation's nodes: off, the selected nodes, or all target nodes"),
         field("animation_path_interval",     Float, added_in=4, default="0.1f", short_desc="Path Interval", long_desc="Seconds between the sampled points of an animation path"),
+        # Navigation seed markers (doc/editor/navigation.md "Seeds").
+        field("navigation_seeds",            Bool,  added_in=5, default="true", short_desc="Navigation Seeds", long_desc="A marker at the origin of every navigation seed node of the scene"),
+        # Navigation mesh polygons (doc/editor/navigation.md "Visualization").
+        field("navigation_mesh",             EnumRef("Navigation_mesh_visualization"), added_in=6, default="Navigation_mesh_visualization::reachable", short_desc="Navigation Mesh", long_desc="Polygons of the scene's navigation mesh: off, the reachable ones, or all"),
         field("physics",                     EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Physics"),
         field("raytrace",                    EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Raytrace"),
         field("vertex_labels",               EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Show Vertices"),

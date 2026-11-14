@@ -53,7 +53,6 @@ set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either fastgltf or non
 set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                          "imgui"    "imgui;none")
 set_option(ERHE_GRAPHICS_API               "Graphics library to use with erhe. Either vulkan, opengl, metal, metal4 or none" "vulkan" "opengl;vulkan;metal;metal4;none")
 set_option(ERHE_MALLOC_LIBRARY             "Memory allocator library. Either mimalloc, jemalloc or none"                "none"     "mimalloc;jemalloc;none")
-set_option(ERHE_NAVIGATION_LIBRARY         "Navigation mesh library. Either recastnavigation or none"                   "none"     "recastnavigation;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt, box3d or none"               "jolt"     "jolt;box3d;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
 set_option(ERHE_TRACY_ON_DEMAND            "Tracy records only while a profiler is connected. OFF captures startup"    "ON"       "ON;OFF")
@@ -75,6 +74,8 @@ set_option(ERHE_WARNINGS_AS_ERRORS         "Compile erhe targets with warnings a
 set_option(ERHE_USE_FPNG                   "Build the fpng image writer (fast PNG save), independent of window lib"     "ON"       "ON;OFF")
 set_option(ERHE_BASIS_ENCODER              "Build the Basis Universal encoder (Export's Basis texture items); forced OFF on Android" "ON" "ON;OFF")
 set_option(ERHE_SPIRV                      "Enable SPIR-V"                                                              "OFF"      "ON;OFF")
+set_option(ERHE_USE_DETOUR                  "Editor navigation mesh with Detour; forced OFF on Android"                 "ON"       "ON;OFF")
+set_option(ERHE_USE_RECAST                  "Editor navigation mesh build with Recast (needs ERHE_USE_DETOUR); forced OFF on Android" "ON" "ON;OFF")
 set_option(ERHE_BUILD_TESTS                "Build erhe unit tests"                                                      "OFF"      "ON;OFF")
 set_option(ERHE_GPU_TESTS_PER_PROCESS       "Register each case of the gpu-labelled test binaries as its own ctest process" "OFF"      "ON;OFF")
 
@@ -161,6 +162,12 @@ if (ERHE_TARGET_OS_ANDROID)
     set(ERHE_USE_TSAN         OFF       CACHE BOOL   "" FORCE)
     # The device never encodes: Export, which makes Basis texture items, runs on the desktop.
     set(ERHE_BASIS_ENCODER    OFF       CACHE STRING "" FORCE)
+    set(ERHE_USE_DETOUR       OFF       CACHE STRING "" FORCE)
+    set(ERHE_USE_RECAST       OFF       CACHE STRING "" FORCE)
+endif ()
+
+if (ERHE_USE_RECAST AND NOT ERHE_USE_DETOUR)
+    message(FATAL_ERROR "ERHE_USE_RECAST=ON needs ERHE_USE_DETOUR=ON: the Recast build produces a Detour navigation mesh.")
 endif ()
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
@@ -948,7 +955,7 @@ CPMAddPackage(
     DOWNLOAD_ONLY     YES
 )
 
-if (${ERHE_NAVIGATION_LIBRARY} STREQUAL "recastnavigation")
+if (ERHE_USE_DETOUR OR ERHE_USE_RECAST)
     CPMAddPackage(
         NAME              recastnavigation
         GIT_TAG           9f4ce64458dfae86e1239c525ddc219c4e9e06f1 # main 2026-06; last release v1.6.0 (2023) predates CMake 3.5+ minimum requirement
@@ -959,11 +966,20 @@ if (${ERHE_NAVIGATION_LIBRARY} STREQUAL "recastnavigation")
                "RECASTNAVIGATION_TESTS OFF"
             "RECASTNAVIGATION_EXAMPLES OFF"
     )
-    message(STATUS "Erhe configured to use recastnavigation for navigation meshes.")
-    add_definitions(-DERHE_NAVIGATION_LIBRARY_RECASTNAVIGATION)
+    # Recast and Detour headers as SYSTEM (as Taskflow below): they are not clean at erhe's warning level.
+    foreach (_recast_target Recast Detour)
+        get_target_property(_recast_interface_includes ${_recast_target} INTERFACE_INCLUDE_DIRECTORIES)
+        set_target_properties(${_recast_target} PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_recast_interface_includes}")
+    endforeach ()
+    # The editor subclasses rcContext; with -fno-rtti Recast does not emit rcContext's typeinfo (its key function is in Recast.cpp).
+    if ((TARGET Recast) AND NOT MSVC)
+        get_target_property(_recast_compile_options Recast COMPILE_OPTIONS)
+        list(REMOVE_ITEM _recast_compile_options -fno-rtti)
+        set_target_properties(Recast PROPERTIES COMPILE_OPTIONS "${_recast_compile_options}")
+    endif ()
+    message(STATUS "Erhe configured to use recastnavigation (ERHE_USE_DETOUR=${ERHE_USE_DETOUR}, ERHE_USE_RECAST=${ERHE_USE_RECAST}).")
 else ()
-    message(STATUS "Erhe configured to disable navigation meshes.")
-    add_definitions(-DERHE_NAVIGATION_LIBRARY_NONE)
+    message(STATUS "Erhe configured without navigation meshes.")
 endif ()
 
 CPMAddPackage(

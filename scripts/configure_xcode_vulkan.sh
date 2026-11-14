@@ -31,7 +31,6 @@ cmake \
     -DERHE_GLTF_LIBRARY=fastgltf \
     -DERHE_GRAPHICS_API=vulkan \
     -DERHE_GUI_LIBRARY=imgui \
-    -DERHE_NAVIGATION_LIBRARY=none \
     -DERHE_PHYSICS_LIBRARY=jolt \
     -DERHE_PROFILE_LIBRARY=none \
     -DERHE_RAYTRACE_LIBRARY=bvh \

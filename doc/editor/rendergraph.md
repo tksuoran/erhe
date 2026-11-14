@@ -66,7 +66,16 @@ the editor UI.
   with edge lines, solid wireframe, centroids and corner points off and the
   selected style equal to the unselected one. Nothing about the view persists
   (no settings store). The shadow fit gets its aspect ratio from
-  `Scene_view::get_camera_viewport()`, which it overrides.
+  `Scene_view::get_camera_viewport()`, which it overrides. Its Debug
+  Visualization settings are the defaults with `navigation_mesh` set from the
+  request (`navigation_mesh`, default `off`), which the navigation passes
+  read (`doc/editor/navigation.md` "Visualization"). The edge-line passes the
+  view draws get their feed as a viewport's do: `prepare_composition()`
+  prepares it (`App_rendering::prepare_wide_line_feed()`, which feeds only
+  the passes the render's content draws and whose activation predicate
+  holds) and `execute_rendergraph_node()` queues it on
+  `Content_wide_line_renderer` around its render pass; with the style rows
+  off that is the navigation mesh borders alone.
 - Timing: `Scene_image_view` brackets its forward render pass with an
   explicit-range `erhe::graphics::Gpu_timer` owned by the `Mcp_server`
   (`render_scene_image forward pass`), which outlives each capture because

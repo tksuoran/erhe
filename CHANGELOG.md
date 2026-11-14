@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::asset_store`: `Item_kind::navigation_mesh` (10): a scene's navigation
+  mesh in the editor asset, kept while the record `navigation.key` names it
+  (`doc/editor/navigation.md` "Saving").
 - `erhe::primitive`: `mesh_pieces.hpp` - `Mesh_pieces`, `Piece_span`,
   `Piece_partition`, `partition_triangles()`, `order_level_by_pieces()`,
   `validate_mesh_pieces()`; `split_prepared_primitive_pieces()`,

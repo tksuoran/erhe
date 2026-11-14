@@ -20,6 +20,7 @@
     "editor.input_frame": "info",
     "editor.materials": "info",
     "editor.mcp": "info",
+    "editor.navigation": "info",
     "editor.net": "info",
     "editor.node_properties": "info",
     "editor.operations": "info",

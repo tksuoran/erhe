@@ -45,7 +45,8 @@ plain interchange exports never do.
   the scene with: the LOD request, the world-space bake switch and its
   instancing mode, the potentially visible set bake grid `pvs_region_min` /
   `pvs_region_max` / `pvs_cell_size` (`doc/editor/pvs.md` D2),
-  `texture_supercompression` and `raytrace_bvh`; null or absent when the
+  `texture_supercompression`, `raytrace_bvh` and `navigation`, the
+  navigation mesh settings (`doc/editor/navigation.md` "Settings"); null or absent when the
   scene has none, `doc/editor/prepared_assets.md` "Export settings"). A v1
   `settings` object carries the three PVS fields at its top level; the
   import moves them into `export_settings`. Omitted entirely when every

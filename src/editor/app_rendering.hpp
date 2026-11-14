@@ -297,6 +297,9 @@ public:
     // Headset_view in color mode (invisible in id-buffer edge mode).
     std::shared_ptr<Composition_pass> ghost_edge_lines;
     std::shared_ptr<Composition_pass> translucent_outline;
+    // The navigation mesh borders (doc/editor/navigation.md "Visualization"), fed as the other edge-line passes.
+    std::shared_ptr<Composition_pass> navigation_borders_reachable;
+    std::shared_ptr<Composition_pass> navigation_borders_unreachable;
     // Overlay pass that draws rendertarget meshes (e.g. the hotbar), ignoring
     // camera exposure and rendered after post-processing when enabled (#230).
     std::shared_ptr<Composition_pass> rendertarget;

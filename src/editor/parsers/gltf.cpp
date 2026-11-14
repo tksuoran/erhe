@@ -20,6 +20,9 @@
 #include "assets/asset_paths.hpp"
 #include "assets/editor_asset.hpp"
 #include "assets/prepared_asset.hpp"
+#if defined(ERHE_USE_DETOUR)
+#   include "assets/navigation_item.hpp"
+#endif
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
@@ -2281,6 +2284,10 @@ void finish_scene_save_gltf(App_context& context, Gltf_scene_save& save, Gltf_sc
         scene_root.set_editor_asset_record(normalize_asset_path(path.parent_path() / impl.editor_asset_record));
     }
     if (impl.kind == Gltf_scene_save_kind::scene) {
+#if defined(ERHE_USE_DETOUR)
+        // A scene built before it had a source file gets its item here (doc/editor/navigation.md "Saving").
+        static_cast<void>(store_navigation_item(context, scene_root, path, normalize_asset_path(path.parent_path() / impl.editor_asset_record)));
+#endif
         // R5.8: a successful save clears the scene's container record dirty flag
         // (the file now matches the live asset state).
         if (context.asset_manager != nullptr) {
@@ -2552,6 +2559,13 @@ auto finish_open_scene_gltf(
         scene_root->set_pvs_database(std::move(gltf_data.pvs_database), Mesh_form::source);
     }
     scene_root->apply_variant_selections(context);
+
+    // Editor-only state from the editor asset; a prepared run has none.
+    if (!prepared_asset) {
+#if defined(ERHE_USE_DETOUR)
+        load_navigation_item(context, *scene_root);
+#endif
+    }
 
     // After the nodes are in the scene: a saved library_folders path may name
     // any prim of the tree (C5), and so may an object reference written as a

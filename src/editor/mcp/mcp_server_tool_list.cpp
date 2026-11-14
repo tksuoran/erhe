@@ -86,6 +86,24 @@ void remove_sdf_geometry_node_types(std::vector<Mcp_tool_info>& tools)
 }
 #endif
 
+#if !defined(ERHE_USE_RECAST) || !defined(ERHE_USE_DETOUR)
+// The navigation mesh tools exist with ERHE_USE_RECAST (the build) and ERHE_USE_DETOUR (the mesh).
+void remove_absent_navigation_tools(std::vector<Mcp_tool_info>& tools)
+{
+    std::vector<std::string_view> absent;
+#   if !defined(ERHE_USE_RECAST)
+    absent.push_back("navigation_build");
+#   endif
+#   if !defined(ERHE_USE_DETOUR)
+    absent.push_back("navigation_clear");
+    absent.push_back("get_navigation_mesh");
+#   endif
+    std::erase_if(tools, [&absent](const Mcp_tool_info& tool) {
+        return std::find(absent.begin(), absent.end(), std::string_view{tool.name}) != absent.end();
+    });
+}
+#endif
+
 // Parsed once per process: the file is a static asset and refresh_tool_list()
 // runs on every tools/list request.
 [[nodiscard]] auto load_static_tool_list() -> std::vector<Mcp_tool_info>
@@ -120,6 +138,9 @@ void remove_sdf_geometry_node_types(std::vector<Mcp_tool_info>& tools)
 
 #if !defined(ERHE_VOXEL_LIBRARY_OPENVDB)
     remove_sdf_geometry_node_types(tools);
+#endif
+#if !defined(ERHE_USE_RECAST) || !defined(ERHE_USE_DETOUR)
+    remove_absent_navigation_tools(tools);
 #endif
 
     log_mcp->info("MCP server: loaded {} built-in tools from {}", tools.size(), c_tool_list_path);

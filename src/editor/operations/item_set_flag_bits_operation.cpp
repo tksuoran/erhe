@@ -1,5 +1,7 @@
 #include "operations/item_set_flag_bits_operation.hpp"
+#include "editor_item_bits.hpp"
 #include "editor_log.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe_item/item.hpp"
 
@@ -25,6 +27,9 @@ void Item_set_flag_bits_operation::apply(const bool enable)
     for (const std::shared_ptr<erhe::Item_base>& item : m_items) {
         if (item) {
             item->set_flag_bits(m_flag_bits, enable);
+            if ((m_flag_bits & Editor_item_flags::navigation_seed) != 0u) {
+                notify_navigation_seed_changed(item);
+            }
         }
     }
 }

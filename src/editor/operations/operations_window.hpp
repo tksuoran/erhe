@@ -339,6 +339,10 @@ public:
     void export_scene(Prepare_target target);
     // Mesh > Bake World-Space Meshes: the bake job of the target scene (doc/editor/world_space_bake.md).
     void bake_world_space_meshes();
+#if defined(ERHE_USE_RECAST)
+    // Mesh > Build Navigation Mesh: the navigation job of the target scene (doc/editor/navigation.md "Job").
+    void build_navigation_mesh();
+#endif
     // Renders pending modal confirmation dialogs (the File > Save glTF (erhe)
     // overwrite prompt). Called once per frame from App_windows::viewport_menu
     // -- the imgui-host begin callback -- so the modal shows regardless of the
@@ -602,6 +606,9 @@ private:
     erhe::commands::Lambda_command m_export_scene_quest_command;
     erhe::commands::Lambda_command m_export_scene_pc_command;
     erhe::commands::Lambda_command m_bake_world_space_meshes_command;
+#if defined(ERHE_USE_RECAST)
+    erhe::commands::Lambda_command m_build_navigation_mesh_command;
+#endif
     erhe::commands::Lambda_command m_load_scene_command;
 
     erhe::commands::Lambda_command m_create_material;

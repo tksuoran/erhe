@@ -339,6 +339,7 @@ flowchart TD
 - [editor/lod.md](editor/lod.md) (experimental): Mesh level of detail in the editor: LOD window (generation for the selection, chain table with pixel errors, forced level slider) and the `lod` config section
 - [editor/mesh_component_selection.md](editor/mesh_component_selection.md) (mostly stable): Face / edge / vertex selection and viewport overlay
 - [editor/mesh_modeling.md](editor/mesh_modeling.md) (experimental): Modal mesh modeling tools (loop cut, inset, bevel, knife): gesture lifecycle, keys, MCP tools
+- [editor/navigation.md](editor/navigation.md) (experimental): Navigation mesh of a scene with Recast Navigation: the two CMake options, the build, the Detour mesh with its reachability flood and byte form, the per-scene navigation settings
 - [editor/nsight_graphics.md](editor/nsight_graphics.md) (experimental): Nsight Graphics GPU Trace and Graphics Capture started by the editor (start_nsight_* MCP tools, ERHE_NSIGHT_GRAPHICS_SDK_DIR, scripts/nsight_graphics.py)
 - [editor/operations.md](editor/operations.md) (stable): Implements the undo/redo operation system and all concrete editor operations
 - [editor/parsers.md](editor/parsers.md) (mostly stable): File format importers for loading 3D content into the editor, plus the erhe-authored glTF scene persistence entry points (doc/editor/gltf_scene_roundtrip.md)
@@ -485,6 +486,7 @@ flowchart TD
 - [plans/mesh_modeling.md](plans/mesh_modeling.md) (in progress): Blender-style mesh modeling operations: remaining work
 - [plans/meshoptimizer.md](plans/meshoptimizer.md) (proposed): Mesh optimization: outstanding work
 - [plans/node_editor_native_rendering.md](plans/node_editor_native_rendering.md) (in progress): Node editor native-resolution rendering: live-interaction verification
+- [plans/navigation_mesh.md](plans/navigation_mesh.md) (in progress): Navigation mesh: outstanding work (triangle classification from walkable sample points, open items, unverified paths)
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
 - [plans/quest_fragment_shader.md](plans/quest_fragment_shader.md) (proposed): Quest fragment shader: the mobile shading variant (mobile shadow lookup, fp16 chain, 16-bit material record, measured Adreno 740 costs)
 - [plans/quest_performance.md](plans/quest_performance.md) (proposed): Quest 3 performance: baseline, ranking, items

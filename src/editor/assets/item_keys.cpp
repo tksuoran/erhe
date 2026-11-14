@@ -1,5 +1,6 @@
 #include "assets/item_keys.hpp"
 
+#include "erhe_asset_store/asset_store.hpp"
 #include "erhe_asset_store/item_kind.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
@@ -323,6 +324,24 @@ auto make_pvs_key(const std::string_view stamp, const std::string_view meta, con
     builder.add_content_hash(erhe::asset_store::Content_hasher::hash(std::as_bytes(std::span<const char>{key_meta.data(), key_meta.size()})));
     builder.add_content_hash(erhe::asset_store::Content_hasher::hash(payload));
     return builder.finish();
+}
+
+auto make_navigation_mesh_key(const std::string_view stamp, const std::span<const std::byte> payload) -> erhe::asset_store::Key
+{
+    erhe::asset_store::Key_builder builder{erhe::asset_store::Item_kind::navigation_mesh};
+    builder.add_code_version(c_navigation_mesh_code_version);
+    builder.add_format_stamp(stamp);
+    builder.add_content_hash(erhe::asset_store::Content_hasher::hash(payload));
+    return builder.finish();
+}
+
+auto get_recorded_key(const erhe::asset_store::Asset_store& store, const std::string_view record) -> std::optional<erhe::asset_store::Key>
+{
+    const std::optional<std::string> value = store.get_record(record);
+    if (!value.has_value() || value->empty()) {
+        return std::nullopt;
+    }
+    return erhe::asset_store::Key::from_hex(value.value());
 }
 
 auto collect_scene_item_keys(const std::span<const std::byte> scene_item) -> std::optional<std::vector<erhe::asset_store::Key>>

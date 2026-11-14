@@ -457,8 +457,9 @@ namespace {
 
 [[nodiscard]] auto is_allowed_during_scene_save(const std::string& tool_name) -> bool
 {
-    static constexpr std::array<std::string_view, 10> allowed{
+    static constexpr std::array<std::string_view, 11> allowed{
         "get_async_status",
+        "get_navigation_status",
         "get_pvs_bake_status",
         "get_viewports",
         "list_scenes",
@@ -685,6 +686,16 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "merge_static_subtree",           &Mcp_server::action_merge_static_subtree          },
         { "bake_world_space_meshes",        &Mcp_server::action_bake_world_space_meshes       },
         { "get_world_space_meshes",         &Mcp_server::query_world_space_meshes             },
+        { "navigation_set_seed",            &Mcp_server::action_navigation_set_seed           },
+        { "get_navigation_status",          &Mcp_server::query_navigation_status              },
+#if defined(ERHE_USE_RECAST)
+        { "navigation_build",               &Mcp_server::action_navigation_build              },
+#endif
+#if defined(ERHE_USE_DETOUR)
+        { "navigation_clear",               &Mcp_server::action_navigation_clear              },
+        { "navigation_set_visualization",   &Mcp_server::action_navigation_set_visualization  },
+        { "get_navigation_mesh",            &Mcp_server::query_navigation_mesh                },
+#endif
         { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
         { "raycast",                        &Mcp_server::query_raycast                        },
         { "geometry_query",                 &Mcp_server::query_geometry_batch                 },

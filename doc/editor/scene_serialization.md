@@ -320,6 +320,9 @@ running. An Export into the store (doc/editor/prepared_assets.md) runs
 through the same steps, with `begin_scene_export()`, `run_scene_export()`
 and `finish_scene_export()` in place of the three glTF save functions:
 
+Build Navigation Mesh (`Scene_export_mode::build_navigation`,
+doc/editor/navigation.md "Job") runs a `Scene_service_job` through the same steps.
+
 1. The request waits until the scene is quiescent: nothing queued on the
    `Operation_stack`, no async operation, scene commit or asset load in
    flight (`App_context::is_scene_load_in_flight()`), no mouse drag, live

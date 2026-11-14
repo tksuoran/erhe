@@ -2,6 +2,9 @@
 #include "assets/prepared_keys.hpp"
 #include "assets/asset_paths.hpp"
 #include "renderers/render_context.hpp"
+#if defined(ERHE_USE_DETOUR)
+#   include "scene/scene_navigation.hpp"
+#endif
 #include "scene/world_space_form.hpp"
 #include "renderers/ray_trace_scene.hpp"
 #include "scene/scene_settings_resolve.hpp"
@@ -113,6 +116,7 @@ Scene_layers::Scene_layers()
     m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", editor::Editor_item_flags::rendertarget, Mesh_layer_id::rendertarget);
     m_tool         = std::make_shared<Mesh_layer>("tool",         editor::Editor_item_flags::tool,         Mesh_layer_id::tool);
     m_bone         = std::make_shared<Mesh_layer>("bone",         editor::Editor_item_flags::bone_proxy,   Mesh_layer_id::bone);
+    m_navigation   = std::make_shared<Mesh_layer>("navigation",   editor::Editor_item_flags::navigation_mesh, Mesh_layer_id::navigation);
 
     m_light        = std::make_shared<Light_layer>("lights", 0);
 }
@@ -125,6 +129,7 @@ void Scene_layers::add_layers_to_scene(erhe::scene::Scene& scene)
     scene.add_mesh_layer(m_rendertarget);
     scene.add_mesh_layer(m_tool);
     scene.add_mesh_layer(m_bone);
+    scene.add_mesh_layer(m_navigation);
 
     scene.add_light_layer(m_light);
 }
@@ -159,6 +164,11 @@ auto Scene_layers::bone() const -> erhe::scene::Mesh_layer*
     return m_bone.get();
 }
 
+auto Scene_layers::navigation() const -> erhe::scene::Mesh_layer*
+{
+    return m_navigation.get();
+}
+
 auto Scene_layers::light() const -> erhe::scene::Light_layer*
 {
     return m_light.get();
@@ -176,6 +186,22 @@ auto Scene_layers::mesh_layers() const -> std::array<erhe::scene::Mesh_layer*, 6
     };
 };
 
+namespace {
+
+// Calls f(Scene_navigation&) in a build with ERHE_USE_DETOUR; f is a generic lambda, so a build without it never instantiates the call.
+template <typename F>
+void with_navigation(Scene_root& scene_root, F&& f)
+{
+#if defined(ERHE_USE_DETOUR)
+    f(scene_root.get_navigation());
+#else
+    static_cast<void>(scene_root);
+    static_cast<void>(f);
+#endif
+}
+
+} // anonymous namespace
+
 Scene_root::Scene_root(
     App_message_bus*                                     app_message_bus,
     const std::shared_ptr<Content_library>&              content_library,
@@ -187,6 +213,9 @@ Scene_root::Scene_root(
     : m_app_message_bus{app_message_bus}
     , m_content_library{content_library}
     , m_world_space_form{std::make_unique<World_space_form>()}
+#if defined(ERHE_USE_DETOUR)
+    , m_navigation         {std::make_unique<Scene_navigation>(*this)}
+#endif
     , m_material_set{material_set_create_info}
     , m_prepared_keys{std::make_unique<Prepared_keys>()}
 {
@@ -422,6 +451,8 @@ Scene_root::~Scene_root() noexcept
     // last reference this host held (Geometry, triangle soup, raytrace,
     // Buffer_mesh) is destroyed by one worker task instead of here
     // (scene/scene_payload_release.hpp).
+    // The sever below unregisters every mesh and node: no staleness is kept for a scene going away.
+    with_navigation(*this, [](auto& navigation) { navigation.clear(); });
     std::vector<std::shared_ptr<erhe::primitive::Primitive>> released_primitives;
     if (m_scene && (m_payload_release != nullptr)) {
         collect_mesh_primitives(released_primitives);
@@ -1523,6 +1554,9 @@ void Scene_root::register_node(const std::shared_ptr<erhe::scene::Node>& node)
     if (node && m_joint_system) {
         m_joint_system->handle_node_registered(*node);
     }
+    if (node) {
+        on_navigation_seed_changed(node);
+    }
 }
 
 void Scene_root::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
@@ -1530,6 +1564,50 @@ void Scene_root::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
     if (m_scene) {
         m_scene->unregister_node(node);
     }
+    if (node) {
+        std::size_t erased = 0;
+        {
+            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_navigation_seed_mutex};
+            erased = std::erase(m_navigation_seed_nodes, node);
+        }
+        if (erased > 0) {
+            with_navigation(*this, [](auto& navigation) { navigation.on_seeds_changed(); });
+        }
+    }
+}
+
+void Scene_root::get_navigation_seed_nodes(std::vector<std::shared_ptr<erhe::scene::Node>>& out_nodes) const
+{
+    out_nodes.clear();
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_navigation_seed_mutex};
+    out_nodes.insert(out_nodes.end(), m_navigation_seed_nodes.begin(), m_navigation_seed_nodes.end());
+}
+
+auto Scene_root::get_navigation_seed_count() const -> std::size_t
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_navigation_seed_mutex};
+    return m_navigation_seed_nodes.size();
+}
+
+void Scene_root::on_navigation_seed_changed(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    // A node outside this scene (removed, kept for undo) re-enters through register_node.
+    const bool is_seed =
+        (node->get_item_host() == static_cast<erhe::Item_host*>(this)) &&
+        ((node->get_flag_bits() & Editor_item_flags::navigation_seed) != 0u);
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_navigation_seed_mutex};
+        const std::vector<std::shared_ptr<erhe::scene::Node>>::iterator i = std::find(m_navigation_seed_nodes.begin(), m_navigation_seed_nodes.end(), node);
+        const bool is_listed = (i != m_navigation_seed_nodes.end());
+        if (is_seed && !is_listed) {
+            m_navigation_seed_nodes.push_back(node);
+        } else if (!is_seed && is_listed) {
+            m_navigation_seed_nodes.erase(i);
+        } else {
+            return;
+        }
+    }
+    with_navigation(*this, [](auto& navigation) { navigation.on_seeds_changed(); });
 }
 
 void Scene_root::register_camera(const std::shared_ptr<erhe::scene::Camera>& camera)
@@ -1716,6 +1794,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
     index_mesh_primitives(mesh);
     m_world_space_form->get_validity().on_mesh_registered(*mesh);
+    with_navigation(*this, [&mesh](auto& navigation) { navigation.on_mesh_registered(*mesh); });
     if (is_prepared_key_input(*mesh)) {
         m_prepared_keys->on_change(Prepared_key_change::mesh_set);
     }
@@ -1836,6 +1915,7 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
     unindex_mesh_primitives(mesh.get());
     m_world_space_form->get_validity().on_mesh_unregistered(*mesh);
+    with_navigation(*this, [&mesh](auto& navigation) { navigation.on_mesh_unregistered(*mesh); });
     if (is_prepared_key_input(*mesh)) {
         m_prepared_keys->on_change(Prepared_key_change::mesh_set);
     }
@@ -2110,6 +2190,7 @@ void Scene_root::on_mesh_primitives_changed(const std::shared_ptr<erhe::scene::M
     enqueue_mesh_materials(mesh);
     if (mesh) {
         m_world_space_form->get_validity().on_mesh_primitives_changed(*mesh);
+        with_navigation(*this, [&mesh](auto& navigation) { navigation.on_mesh_primitives_changed(*mesh); });
         if (is_prepared_key_input(*mesh)) {
             m_prepared_keys->on_change(Prepared_key_change::content);
         }
@@ -2141,6 +2222,9 @@ void Scene_root::on_mesh_material_changed(const std::shared_ptr<erhe::scene::Mes
 
 void Scene_root::on_mesh_flags_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh, const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
+    if (mesh) {
+        with_navigation(*this, [&mesh, old_flag_bits, new_flag_bits](auto& navigation) { navigation.on_mesh_flags_changed(*mesh, old_flag_bits, new_flag_bits); });
+    }
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_set_flags(mesh, new_flag_bits);
     }
@@ -2156,6 +2240,7 @@ void Scene_root::on_mesh_transform_changed(const std::shared_ptr<erhe::scene::Me
 {
     if (mesh) {
         m_world_space_form->get_validity().on_mesh_transform_changed(*mesh);
+        with_navigation(*this, [&mesh](auto& navigation) { navigation.on_mesh_transform_changed(*mesh); });
         m_prepared_keys->on_mesh_transform_changed(*mesh);
     }
     if (m_draw_list_scene) {
@@ -2774,9 +2859,22 @@ auto Scene_root::get_world_space_form() const -> const World_space_form&
     return *m_world_space_form;
 }
 
+#if defined(ERHE_USE_DETOUR)
+auto Scene_root::get_navigation() -> Scene_navigation&
+{
+    return *m_navigation;
+}
+
+auto Scene_root::get_navigation() const -> const Scene_navigation&
+{
+    return *m_navigation;
+}
+#endif
+
 void Scene_root::on_export_settings_changed()
 {
     m_world_space_form->get_validity().on_export_settings_changed(make_world_space_settings_signature(m_scene_settings.export_settings));
+    with_navigation(*this, [this](auto& navigation) { navigation.on_export_settings_changed(m_scene_settings.export_settings); });
     m_prepared_keys->on_change(Prepared_key_change::settings);
 }
 
@@ -3139,6 +3237,36 @@ auto get_hosting_scene_root(const erhe::Item_base* const item) -> std::shared_pt
         return {};
     }
     return scene_root->shared_from_this();
+}
+
+auto get_navigation_seed_point(const Scene_root& scene_root, const erhe::scene::Node& node) -> glm::vec3
+{
+    const std::shared_ptr<erhe::scene::Node> root = scene_root.get_scene().get_root_node();
+    const glm::mat4 root_from_world = root ? glm::inverse(root->world_from_node()) : glm::mat4{1.0f};
+    return glm::vec3{root_from_world * node.world_from_node() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+}
+
+void get_navigation_seed_points(const Scene_root& scene_root, std::vector<glm::vec3>& out_points)
+{
+    out_points.clear();
+    static thread_local std::vector<std::shared_ptr<erhe::scene::Node>> seed_nodes;
+    scene_root.get_navigation_seed_nodes(seed_nodes);
+    for (const std::shared_ptr<erhe::scene::Node>& node : seed_nodes) {
+        out_points.push_back(get_navigation_seed_point(scene_root, *node));
+    }
+    seed_nodes.clear();
+}
+
+void notify_navigation_seed_changed(const std::shared_ptr<erhe::Item_base>& item)
+{
+    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+    if (!node) {
+        return;
+    }
+    Scene_root* const scene_root = dynamic_cast<Scene_root*>(node->get_item_host());
+    if (scene_root != nullptr) {
+        scene_root->on_navigation_seed_changed(node);
+    }
 }
 
 auto Scene_root::camera_combo(

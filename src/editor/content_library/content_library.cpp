@@ -172,6 +172,10 @@ void Content_library::register_prim(const std::shared_ptr<erhe::Typed>& prim)
     if (get_kind_type_bit(*prim) == 0) {
         return; // a Scope, or a prim of a class no library indexes
     }
+    // Session-only resources (a render proxy's own materials) are derived editor state the scene does not own.
+    if ((prim->get_flag_bits() & erhe::Item_flags::session_only) != 0) {
+        return;
+    }
     index_insert(prim);
     announce_attached(prim);
 }
@@ -182,7 +186,7 @@ void Content_library::unregister_prim(const std::shared_ptr<erhe::Typed>& prim)
         return;
     }
     forget_kind_scope(prim);
-    if (get_kind_type_bit(*prim) == 0) {
+    if ((get_kind_type_bit(*prim) == 0) || !m_listed.contains(prim.get())) {
         return;
     }
     index_erase(prim);

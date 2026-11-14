@@ -88,6 +88,12 @@ public:
     // out world_space_form, one drawing world-space meshes world_space_source.
     static constexpr uint64_t world_space_form          = erhe::Item_flags::application_bit(24);
     static constexpr uint64_t world_space_source        = erhe::Item_flags::application_bit(25);
+    // Authored: the node's origin is a navigation seed (doc/editor/navigation.md "Seeds").
+    static constexpr uint64_t navigation_seed           = erhe::Item_flags::application_bit(26);
+    // The visualization of a scene's navigation mesh (doc/editor/navigation.md "Visualization"):
+    // its session-only meshes in the navigation layer, and of those the one of the reachable polygons.
+    static constexpr uint64_t navigation_mesh           = erhe::Item_flags::application_bit(27);
+    static constexpr uint64_t navigation_reachable      = erhe::Item_flags::application_bit(28);
 
     // The bits register_editor_item_bits() reports as transient
     // (erhe::Item_flags::get_transient_bits()) and as purpose inputs
@@ -95,7 +101,8 @@ public:
     static constexpr uint64_t transient =
         hovered_in_viewport | hovered_in_item_tree | descendant_hovered_in_viewport |
         hovered_in_graph | child_hovered_in_graph | ancestor_hovered_in_graph |
-        affects_shadow | active_item | light_muted | light_solo | world_space_form | world_space_source;
+        affects_shadow | active_item | light_muted | light_solo | world_space_form | world_space_source |
+        navigation_mesh | navigation_reachable;
     static constexpr uint64_t purpose_guide_when_set = tool | brush | controller | rendertarget;
     // Hover bits the renderers color an entry as hovered by
     // (erhe::scene_renderer::Primitive_interface_settings::hovered_flag_bits).

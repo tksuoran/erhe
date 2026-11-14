@@ -7,6 +7,7 @@
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "graph_editor/graph_editor_node.hpp"
 #include "items.hpp"
+#include "scene/scene_root.hpp"
 #include "texture_graph/texture_graph_window.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/editor_windows.hpp"
@@ -84,6 +85,9 @@ void Node_properties_window::item_flags(const std::shared_ptr<erhe::Item_base>& 
                     }
                 } else {
                     item->set_flag_bits(bit_mask, value);
+                    if (bit_mask == Editor_item_flags::navigation_seed) {
+                        notify_navigation_seed_changed(item);
+                    }
                 }
             }
         });

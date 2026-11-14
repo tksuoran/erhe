@@ -4,7 +4,9 @@
 
 #include "app_context.hpp"
 #include "renderers/render_settings.hpp"
+#include "config/generated/debug_visualizations_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/navigation_mesh_visualization.hpp"
 #include "config/generated/sky_config.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "editor_log.hpp"
@@ -652,6 +654,70 @@ App_rendering::App_rendering(
     );
     translucent_content_fill_selected_or_hovered->data.is_enabled = all_content_draws;
 
+#if defined(ERHE_USE_DETOUR)
+    // The navigation mesh visualization (doc/editor/navigation.md "Visualization"):
+    // the navigation layer only, translucent unlit fills and constant color
+    // borders, gated by the rendered view's Navigation Mesh setting. Scene
+    // content kind, so a scene image that asks for it draws it.
+    const auto navigation_shown = [](const Navigation_mesh_visualization shown_from) {
+        return [shown_from](const Render_context& context) -> bool {
+            const Navigation_mesh_visualization mode = context.scene_view.get_debug_visualizations_settings().navigation_mesh;
+            return static_cast<unsigned int>(mode) >= static_cast<unsigned int>(shown_from);
+        };
+    };
+    const Item_filter filter_navigation_reachable{
+        .require_all_bits_set         = Item_flags::visible | Item_flags::active | editor::Editor_item_flags::navigation_mesh | editor::Editor_item_flags::navigation_reachable,
+        .require_at_least_one_bit_set = 0,
+        .require_all_bits_clear       = 0
+    };
+    const Item_filter filter_navigation_unreachable{
+        .require_all_bits_set         = Item_flags::visible | Item_flags::active | editor::Editor_item_flags::navigation_mesh,
+        .require_at_least_one_bit_set = 0,
+        .require_all_bits_clear       = editor::Editor_item_flags::navigation_reachable
+    };
+    const auto make_navigation_fill = [&](const std::string_view name, const Item_filter& filter, const Navigation_mesh_visualization shown_from) {
+        return make_composition_pass(
+            name,
+            Composition_pass_data{
+                .ignore_exposure      {true},
+                .mesh_layers          {Mesh_layer_id::navigation},
+                .blending_mode_policy {Blending_mode_policy::translucent_primitives_only},
+                .primitive_mode       {Primitive_mode::polygon_fill},
+                .filter               {filter},
+                .is_enabled           {navigation_shown(shown_from)}
+            },
+            not_selected
+        );
+    };
+    const auto make_navigation_borders = [&](const std::string_view name, const uint32_t group, const Item_filter& filter, const glm::vec4& color, const Navigation_mesh_visualization shown_from) {
+        return make_composition_pass(
+            name,
+            Composition_pass_data{
+                .content_wide_line_group {group},
+                .mesh_layers             {Mesh_layer_id::navigation},
+                .blending_mode_policy    {Blending_mode_policy::override_with_base_render_pipeline},
+                .primitive_mode          {Primitive_mode::edge_lines},
+                .filter                  {filter},
+                .primitive_settings{
+                    erhe::scene_renderer::Primitive_interface_settings{
+                        .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
+                        .constant_color0 = color,
+                        .constant_color1 = color,
+                        .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
+                        .constant_size   = 1.5f
+                    }
+                },
+                .is_enabled              {navigation_shown(shown_from)}
+            },
+            not_selected
+        );
+    };
+    make_navigation_fill("Navigation mesh reachable",   filter_navigation_reachable,   Navigation_mesh_visualization::reachable);
+    make_navigation_fill("Navigation mesh unreachable", filter_navigation_unreachable, Navigation_mesh_visualization::all);
+    navigation_borders_reachable   = make_navigation_borders("Navigation mesh reachable borders",   4, filter_navigation_reachable,   glm::vec4{0.0f, 0.30f, 0.05f, 1.0f}, Navigation_mesh_visualization::reachable);
+    navigation_borders_unreachable = make_navigation_borders("Navigation mesh unreachable borders", 5, filter_navigation_unreachable, glm::vec4{0.35f, 0.0f, 0.20f, 1.0f}, Navigation_mesh_visualization::all);
+#endif
+
     auto brush = make_composition_pass(
         "Brush",
         Composition_pass_data{
@@ -1169,6 +1235,10 @@ void App_rendering::prepare_wide_line_feed(
         if ((data.primitive_mode != erhe::primitive::Primitive_mode::edge_lines) || !data.enabled) {
             return;
         }
+        // The pass's activation predicate and the render's content, as Composition_pass::prepare() and the Composer gate the draw.
+        if ((data.is_enabled && !data.is_enabled(context)) || !is_drawn_for_content(*pass, context.content)) {
+            return;
+        }
         // Mirror Composition_pass::prepare's per-view Visual Style gate
         // (get_render_style + is_primitive_mode_enabled): when this view's
         // style disables the pass's edge lines, do not feed its meshes - they
@@ -1221,6 +1291,8 @@ void App_rendering::prepare_wide_line_feed(
     feed_pass(edge_lines_selected.get());
     feed_pass(translucent_outline.get());
     feed_pass(ghost_edge_lines.get());
+    feed_pass(navigation_borders_reachable.get());
+    feed_pass(navigation_borders_unreachable.get());
 }
 
 auto App_rendering::composition_passes() const -> const std::vector<std::shared_ptr<Composition_pass>>&

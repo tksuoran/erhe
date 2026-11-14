@@ -1690,6 +1690,33 @@ private:
 
 } // anonymous namespace
 
+void Debug_visualizations::navigation_seeds_visualization(const Render_context& context, const Scene_root& scene_root)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    scene_root.get_navigation_seed_nodes(m_navigation_seed_nodes);
+    if (m_navigation_seed_nodes.empty()) {
+        return;
+    }
+    // A post standing on the seed point and a diamond around its foot, in world units.
+    constexpr glm::vec4 color      {1.0f, 0.55f, 0.0f, 1.0f};
+    constexpr float     post_height{1.0f};
+    constexpr float     radius     {0.25f};
+    const float         width = m_selection_node_axis_width;
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    for (const std::shared_ptr<erhe::scene::Node>& node : m_navigation_seed_nodes) {
+        const glm::vec3 p{node->position_in_world()};
+        const glm::vec3 x{radius, 0.0f, 0.0f};
+        const glm::vec3 z{0.0f, 0.0f, radius};
+        line_renderer.add_line(color, width, p, color, width, p + glm::vec3{0.0f, post_height, 0.0f});
+        line_renderer.add_line(color, width, p + x, color, width, p + z);
+        line_renderer.add_line(color, width, p + z, color, width, p - x);
+        line_renderer.add_line(color, width, p - x, color, width, p - z);
+        line_renderer.add_line(color, width, p - z, color, width, p + x);
+    }
+    m_navigation_seed_nodes.clear();
+}
+
 void Debug_visualizations::animation_paths_visualization(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
@@ -2304,6 +2331,10 @@ void Debug_visualizations::render(const Render_context& context)
         animation_paths_visualization(context);
     }
 
+    if (m_settings.navigation_seeds) {
+        navigation_seeds_visualization(context, *scene_root);
+    }
+
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
         for (const auto& mesh : layer->meshes) {
             mesh_labels(context, mesh.get());
@@ -2775,6 +2806,17 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
         }
     });
     p.add_entry("Path Interval", [this](){ ImGui::DragFloat("##", &m_settings.animation_path_interval, 0.01f, 0.001f, 10.0f, "%.3f s"); });
+    p.add_entry("Navigation Seeds", [this](){ ImGui::Checkbox("##", &m_settings.navigation_seeds); });
+#if defined(ERHE_USE_DETOUR)
+    // The edit is the change site: the navigation passes read the view's setting as they prepare (doc/editor/navigation.md "Visualization").
+    p.add_entry("Navigation Mesh", [this](){
+        static constexpr const char* c_navigation_mesh_strings[] = { "Off", "Reachable", "All" };
+        erhe::imgui::make_combo("##", m_settings.navigation_mesh, c_navigation_mesh_strings, IM_ARRAYSIZE(c_navigation_mesh_strings));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Polygons of the scene's navigation mesh: the reachable ones (green), or all (unreachable in magenta).");
+        }
+    });
+#endif
     p.add_entry("Physics",     [this](){ make_combo("##", m_settings.physics  ); });
     p.add_entry("Raytrace",    [this](){ make_combo("##", m_settings.raytrace ); });
     // Joint constraints (doc/editor/tools.md "Debug_visualizations"):

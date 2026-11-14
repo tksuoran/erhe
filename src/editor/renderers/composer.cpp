@@ -54,9 +54,7 @@ Composer::Composer(const std::string_view name)
 {
 }
 
-namespace {
-
-[[nodiscard]] auto is_drawn_for_content(const Composition_pass& composition_pass, const Render_content content) -> bool
+auto is_drawn_for_content(const Composition_pass& composition_pass, const Render_content content) -> bool
 {
     if (
         (content != Render_content::scene_and_editor_aids) &&
@@ -79,8 +77,6 @@ namespace {
         return false;
     }
     return true;
-}
-
 }
 
 auto Composer_frame_slots::begin_prepare(const uint64_t frame_index, const std::size_t frames_in_flight) -> Composer_prepared&

@@ -138,6 +138,10 @@ Implements the undo/redo operation system and all concrete editor operations.
     in the editor asset and loads the scene's world-space form from them,
     leaving the node tree and the undo stack as they were
     (`doc/editor/world_space_bake.md`).
+  - Mesh > Build Navigation Mesh (MCP `navigation_build`) is no operation
+    either: a `Scene_save_service` job that installs the scene's navigation
+    mesh, leaving the node tree and the undo stack as they were
+    (`doc/editor/navigation.md` "Job").
 
 - **In-place vertex edits** (NOT `Mesh_operation`: they mutate and reuse the SAME `Geometry` object so `Mesh_component_selection` entries keyed on the Geometry pointer survive, then rebuild one `Primitive` and share it across every mesh referencing the Geometry):
   - `Move_mesh_vertices_operation` -- moves a vertex set of one primitive (mesh-component transform commit) and, for a slide, sets the corner texcoords the slide re-interpolated (`doc/editor/transform.md` "Scalar edits"); refreshes normals, rebuilds static physics. Undo restores the primitives, normals and physics from before it ("Undo of an in-place edit" below).

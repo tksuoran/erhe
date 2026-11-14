@@ -67,13 +67,30 @@ public:
     // Queued by Prepared_keys, not by a user or a client.
     bool                                 automatic     {false};
     // Main thread, when the save starts running (with the running store job, null
-    // for a Save Scene; its progress is readable on any thread) and when it has finished.
+    // for a Save Scene and for an Export's navigation stage, after which it is called
+    // again with the Scene_export; its progress is readable on any thread) and when it has finished.
     std::function<void(const std::shared_ptr<const Scene_export>&)> on_started;
     std::function<void(const Scene_save_result&)>                   on_finished;
 };
 
-// The action a refusal of a store job names: "Export", "Status" or "Bake World-Space Meshes".
+// The action a refusal of a store job names: "Export", "Status", "Bake World-Space Meshes" or "Build Navigation Mesh".
 [[nodiscard]] auto get_export_action(Scene_export_mode mode) -> const char*;
+
+// A store job that runs no Scene_export, with the save's staging (Build Navigation Mesh).
+class Scene_service_job
+{
+public:
+    virtual ~Scene_service_job() noexcept;
+
+    // Worker thread while the scene is read-only.
+    [[nodiscard]] virtual auto run() -> bool = 0;
+    // Main thread after run(); ok is run()'s result. Sets result.saved and result.error.
+    virtual void finish(App_context& context, bool ok, Scene_save_result& result) = 0;
+    // Any thread.
+    [[nodiscard]] virtual auto get_progress() const -> Scene_export_progress_state = 0;
+    // The status line before the stage, e.g. "Building navigation mesh of '<scene>'".
+    [[nodiscard]] virtual auto get_status_title() const -> const std::string& = 0;
+};
 
 // Queues Bake World-Space Meshes (R8.7) for the scene; the world-space form is installed when it ends. Main thread.
 void request_world_space_bake(
@@ -82,6 +99,17 @@ void request_world_space_bake(
     std::function<void(const std::shared_ptr<const Scene_export>&)> on_started,
     std::function<void(const Scene_save_result&)>                   on_finished
 );
+
+#if defined(ERHE_USE_RECAST)
+// Queues Build Navigation Mesh for the scene (doc/editor/navigation.md "Job"); the
+// refusals are checked when it starts. Main thread.
+void request_navigation_build(
+    App_context&                                  context,
+    const std::shared_ptr<Scene_root>&            scene_root,
+    std::function<void()>                         on_started,
+    std::function<void(const Scene_save_result&)> on_finished
+);
+#endif
 
 // Queues a status job of the store container for the scene (and a drop of
 // R8.13); its report is kept on the Scene_root when the job ends. Main thread.
@@ -125,6 +153,12 @@ public:
     [[nodiscard]] auto get_pending_count() const -> std::size_t;
     // The running Export bakes its PVS (pvs_mode rebake): the PVS bake steps run during it (R9.6).
     [[nodiscard]] auto is_pvs_bake_stage() const -> bool;
+    // A request of `mode` for the scene is queued or running.
+    [[nodiscard]] auto is_job_pending(const Scene_root& scene_root, Scene_export_mode mode) const -> bool;
+    // A Build Navigation Mesh of the scene is queued or running, or an Export's navigation stage runs for it.
+    [[nodiscard]] auto is_navigation_pending(const Scene_root& scene_root) const -> bool;
+    // The running store job that is no Scene_export (its progress is readable on any thread); null when none.
+    [[nodiscard]] auto get_running_service_job() const -> std::shared_ptr<const Scene_service_job>;
     // The running job is a status job without a drop that Prepared_keys queued.
     [[nodiscard]] auto is_automatic_status_job_active() const -> bool;
     // No operation queued or in flight, no scene load, no live edit, no transform animation.
@@ -137,10 +171,29 @@ public:
     void notify_stores_changed();
 
 private:
+    // What start() does after an Export's navigation stage began (doc/editor/navigation.md "Export").
+    enum class Export_navigation_stage : unsigned int
+    {
+        export_next = 0, // no build job: the Scene_export starts now
+        job_started,     // the build job runs; the Scene_export starts after it
+        failed           // finished as failed
+    };
+
     [[nodiscard]] auto can_start() const -> bool;
     void update_requests();
     void serve_prepared_keys();
     void start         (Scene_save_request&& request);
+    // A store job of a Scene_service_job; false (finished as refused) when it does not start.
+    [[nodiscard]] auto start_service_job(Scene_save_request& request, const std::shared_ptr<Scene_root>& scene_root) -> bool;
+    // Makes the job the running one and calls on_started.
+    void run_service_job(Scene_save_request& request, const std::shared_ptr<Scene_root>& scene_root, std::shared_ptr<Scene_service_job> job);
+    [[nodiscard]] auto start_export_navigation_stage(
+        Scene_save_request&                request,
+        const std::shared_ptr<Scene_root>& scene_root,
+        Export_navigation_report&          out_report
+    ) -> Export_navigation_stage;
+    // After the navigation stage's worker run succeeded: installs the mesh and starts the Scene_export; false (failed) when either fails.
+    [[nodiscard]] auto continue_export_after_navigation() -> bool;
     void finish_running();
     // The worker thread of the running save; an Export with a PVS bake runs it twice.
     void launch_worker();
@@ -160,7 +213,10 @@ private:
     std::shared_ptr<Scene_root>                m_running_scene_root;
     std::unique_ptr<Gltf_scene_save>           m_running_save;
     std::shared_ptr<Scene_export>              m_running_export;
+    std::shared_ptr<Scene_service_job>         m_running_service_job;
     std::chrono::steady_clock::time_point      m_running_start_time;
+    Export_navigation_report                   m_running_navigation;
+    std::string                                m_running_error; // a failure no job object reports
     std::thread                                m_worker;
     bool                                       m_active{false};
     bool                                       m_pvs_bake_stage{false};

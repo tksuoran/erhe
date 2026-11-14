@@ -3,6 +3,9 @@
 
 #include "app_context.hpp"
 #include "scene/scene_save_service.hpp"
+#if defined(ERHE_USE_RECAST)
+#   include "scene/navigation_build_job.hpp"
+#endif
 #include "config/generated/editor_settings_config.hpp"
 #include "app_scenes.hpp"
 #include "app_message_bus.hpp"
@@ -810,6 +813,9 @@ Operations::Operations(
     , m_export_scene_quest_command  {commands, "File.ExportQuest",                 [this]() -> bool { export_scene(Prepare_target::quest);  return true; } }
     , m_export_scene_pc_command     {commands, "File.ExportPc",                    [this]() -> bool { export_scene(Prepare_target::pc);     return true; } }
     , m_bake_world_space_meshes_command{commands, "Mesh.BakeWorldSpaceMeshes", [this]() -> bool { bake_world_space_meshes(); return true; } }
+#if defined(ERHE_USE_RECAST)
+    , m_build_navigation_mesh_command{commands, "Mesh.BuildNavigationMesh", [this]() -> bool { build_navigation_mesh(); return true; } }
+#endif
     , m_load_scene_command        {commands, "File.LoadScene",                     [this]() -> bool { load_scene             (); return true; } }
     , m_create_material           {commands, "Create.Material",                    [this]() -> bool { create_material        (); return true; } }
     , m_create_brush              {commands, "Create.Brush",                       [this]() -> bool { create_brush           (); return true; } }
@@ -890,6 +896,9 @@ Operations::Operations(
     commands.register_command(&m_export_scene_quest_command);
     commands.register_command(&m_export_scene_pc_command);
     commands.register_command(&m_bake_world_space_meshes_command);
+#if defined(ERHE_USE_RECAST)
+    commands.register_command(&m_build_navigation_mesh_command);
+#endif
     commands.register_command(&m_load_scene_command);
     commands.register_command(&m_create_material);
     commands.register_command(&m_create_brush);
@@ -968,6 +977,9 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_make_geometry_command,     "Mesh.Make Geometry");
     commands.bind_command_to_menu(&m_make_raytrace_command,     "Mesh.Make Raytrace");
     commands.bind_command_to_menu(&m_bake_world_space_meshes_command, "Mesh.Bake World-Space Meshes");
+#if defined(ERHE_USE_RECAST)
+    commands.bind_command_to_menu(&m_build_navigation_mesh_command, "Mesh.Build Navigation Mesh");
+#endif
 
     commands.bind_command_to_menu(&m_export_gltf_command,     "File.Save glTF (standard)");
     commands.bind_command_to_menu(&m_save_scene_command,      "File.Save glTF (erhe)");
@@ -3755,6 +3767,23 @@ void Operations::bake_world_space_meshes()
     }
     request_world_space_bake(m_context, scene_root, {}, {});
 }
+
+#if defined(ERHE_USE_RECAST)
+void Operations::build_navigation_mesh()
+{
+    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
+        log_operations->warn("Build Navigation Mesh: no scene");
+        return;
+    }
+    const std::string refusal = get_navigation_build_refusal(*scene_root);
+    if (!refusal.empty()) {
+        log_operations->warn("{}", refusal);
+        return;
+    }
+    request_navigation_build(m_context, scene_root, {}, {});
+}
+#endif
 
 void Operations::export_scene(const Prepare_target target)
 {

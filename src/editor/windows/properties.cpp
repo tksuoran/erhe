@@ -12,6 +12,14 @@
 #include "texture_graph/graph_texture.hpp"
 #include "editor_log.hpp"
 #include "items.hpp"
+#include "navigation/navigation_seeds.hpp"
+#if defined(ERHE_USE_DETOUR)
+#   include "assets/navigation_item.hpp"
+#   include "scene/scene_navigation.hpp"
+#endif
+#if defined(ERHE_USE_RECAST)
+#   include "scene/navigation_build_job.hpp"
+#endif
 #include <algorithm>
 #include <array>
 #include "operations/compound_operation.hpp"
@@ -37,6 +45,7 @@
 #include "tools/selection_tool.hpp"
 #include "windows/config_ui.hpp"
 #include "config/generated/lod_config_serialization.hpp"
+#include "config/generated/navigation_settings_serialization.hpp"
 #include "windows/item_reference.hpp"
 
 // Per-scene overrides (issues #239 / #240): the editor-global defaults type plus
@@ -509,6 +518,29 @@ void Properties::scene_override_properties(erhe::scene::Scene& scene)
             scene_root->on_export_settings_changed();
         }
     }, "What Export does about the PVS: off writes none; reuse copies the editor asset's PVS item as it is (unsafe: nothing checks it matches the exported geometry); rebake bakes it on the world-space form during every Export (needs the PVS region).");
+    // The navigation mesh build settings (doc/editor/navigation.md "Settings"); a drag commits at its release.
+    Navigation_settings& navigation = export_settings.navigation;
+    push_group("Navigation", ImGuiTreeNodeFlags_Framed);
+    for (const erhe::codegen::Field_info& field : get_fields(static_cast<const Navigation_settings*>(nullptr))) {
+        if (field.removed_in != 0) {
+            continue;
+        }
+        std::string tooltip = (field.long_desc != nullptr) ? std::string{field.long_desc} : std::string{};
+        add_entry(std::string{(field.short_desc != nullptr) ? field.short_desc : field.name}, [&navigation, &field, scene_root]() {
+            using erhe::codegen::Field_type;
+            void* const base    = static_cast<void*>(&navigation);
+            const bool  changed = (field.field_type == Field_type::vec3)
+                ? ImGui::DragFloat3("##", static_cast<float*>(static_cast<void*>(static_cast<char*>(base) + field.offset)), 0.1f)
+                : imgui_field(base, field);
+            const bool immediate = (field.field_type == Field_type::bool_) || (field.field_type == Field_type::enum_ref);
+            if (immediate ? changed : ImGui::IsItemDeactivatedAfterEdit()) {
+                scene_root->on_export_settings_changed();
+            }
+        }, std::move(tooltip));
+    }
+    navigation_seed_properties(*scene_root);
+    navigation_mesh_properties(*scene_root);
+    pop_group();
     // Last of the rows that read the settings: a removal leaves no later row reading them.
     add_entry("Export Settings", [&optional_export_settings, scene_root]() {
         if (ImGui::Button("Remove Export Settings")) {
@@ -627,7 +659,8 @@ void Properties::prepared_status_properties(Scene_root& scene_root)
                 (kind == erhe::asset_store::Item_kind::raytrace_bvh) ? "BVH Items" :
                 (kind == erhe::asset_store::Item_kind::texture)      ? "Texture Items" :
                 (kind == erhe::asset_store::Item_kind::basis_texture) ? "Basis Texture Items" :
-                (kind == erhe::asset_store::Item_kind::scene)        ? "Scene Items" : erhe::asset_store::c_str(kind);
+                (kind == erhe::asset_store::Item_kind::scene)        ? "Scene Items" :
+                (kind == erhe::asset_store::Item_kind::navigation_mesh) ? "Navigation Mesh Items" : erhe::asset_store::c_str(kind);
             add_entry(kind_label, [kind_status]() {
                 ImGui::Text(
                     "present %zu, missing %zu; stored %llu (%s), unreferenced %llu (%s)",
@@ -1166,6 +1199,111 @@ void Properties::node_physics_properties(const erhe::scene::Node& node)
 // simulate exactly (erhe::physics::describe_box3d_incompatibility), shown
 // whatever backend this editor is built with: the settings are the
 // erhe::physics joint contract, and this says whether they are portable.
+void Properties::node_navigation_properties(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    const std::shared_ptr<Scene_root> scene_root = get_hosting_scene_root(node.get());
+    if (!scene_root || (node == scene_root->get_scene().get_root_node())) {
+        return;
+    }
+    add_entry("Navigation Seed", [this, node]() {
+        bool is_seed = ((node->get_flag_bits() & Editor_item_flags::navigation_seed) != 0u);
+        if (ImGui::Checkbox("##", &is_seed)) {
+            const std::shared_ptr<Operation> operation = make_navigation_seed_operation(
+                std::vector<std::shared_ptr<erhe::Item_base>>{node},
+                is_seed ? Navigation_seed_state::marked : Navigation_seed_state::unmarked
+            );
+            if (operation) {
+                m_context.operation_stack->queue(operation);
+            }
+        }
+    }, "The node's origin is a navigation seed: a place the viewer can stand, from which the navigation mesh's reachable area is flooded.");
+}
+
+// The seed change sites of the scene's "Navigation" group (doc/editor/navigation.md "Seeds").
+void Properties::navigation_seed_properties(Scene_root& scene_root)
+{
+    const std::weak_ptr<Scene_root> weak_scene_root = scene_root.shared_from_this();
+    add_entry("Seeds", [this, weak_scene_root]() {
+        const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
+        if (!root) {
+            return;
+        }
+        ImGui::Text("%zu", root->get_navigation_seed_count());
+    }, "The scene's navigation seed nodes (Properties > Navigation Seed on a node).");
+    add_entry("Selected", [this, weak_scene_root]() {
+        const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
+        if (!root) {
+            return;
+        }
+        if (ImGui::Button("Mark Selected As Seeds")) {
+            static_cast<void>(queue_mark_selected_navigation_seeds(m_context, *root, Navigation_seed_state::marked));
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Unmark Selected")) {
+            static_cast<void>(queue_mark_selected_navigation_seeds(m_context, *root, Navigation_seed_state::unmarked));
+        }
+    }, "Marks or unmarks the selected nodes of this scene as navigation seeds, one undo step.");
+    add_entry("Seed Nodes", [this, weak_scene_root]() {
+        const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
+        if (!root) {
+            return;
+        }
+        if (ImGui::Button("Select Seeds")) {
+            select_navigation_seeds(m_context, *root);
+        }
+        ImGui::SameLine();
+        const std::optional<glm::vec3> camera_position = get_navigation_seed_camera_position(m_context, *root);
+        ImGui::BeginDisabled(!camera_position.has_value());
+        if (ImGui::Button("Add Seed At Camera") && camera_position.has_value()) {
+            static_cast<void>(queue_add_navigation_seed(m_context, *root, camera_position.value()));
+        }
+        ImGui::EndDisabled();
+    }, "Select Seeds replaces the selection with the seed nodes. Add Seed At Camera adds an empty node 'Navigation Seed' at the camera of the last hovered viewport showing this scene, one undo step.");
+}
+
+// doc/editor/navigation.md "Job": the rows exist with ERHE_USE_DETOUR, Build with ERHE_USE_RECAST.
+void Properties::navigation_mesh_properties(Scene_root& scene_root)
+{
+#if defined(ERHE_USE_DETOUR)
+    const std::weak_ptr<Scene_root> weak_scene_root = scene_root.shared_from_this();
+    add_entry("Navigation Mesh", [weak_scene_root]() {
+        const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
+        if (!root) {
+            return;
+        }
+        ImGui::TextWrapped("%s", root->get_navigation().get_status_text().c_str());
+    }, "The scene's navigation mesh: polygons, reachable area, tiles and build time, and why it is stale.");
+    add_entry("Navigation Build", [this, weak_scene_root]() {
+        const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
+        if (!root) {
+            return;
+        }
+#   if defined(ERHE_USE_RECAST)
+        if (ImGui::Button("Build")) {
+            const std::string refusal = get_navigation_build_refusal(*root);
+            if (refusal.empty()) {
+                request_navigation_build(m_context, root, {}, {});
+            } else {
+                log_operations->warn("{}", refusal);
+            }
+        }
+        ImGui::SameLine();
+#   endif
+        if (ImGui::Button("Clear")) {
+            // Clear detaches the visualization node: not at ImGui time (doc/editor/coding_rules.md "ImGui-time work").
+            m_context.imgui_windows->queue([this, weak_scene_root]() {
+                const std::shared_ptr<Scene_root> queued_root = weak_scene_root.lock();
+                if (queued_root) {
+                    clear_navigation(m_context, *queued_root);
+                }
+            });
+        }
+    }, "Build queues Build Navigation Mesh (Mesh menu): the scene is read-only while it runs. Clear removes the navigation mesh and its saved item.");
+#else
+    static_cast<void>(scene_root);
+#endif
+}
+
 void Properties::joint_limits_portability(const erhe::physics::Physics_joint_settings& settings)
 {
     const std::optional<std::string> note = erhe::physics::describe_box3d_incompatibility(settings.get_axis_limits());
@@ -1256,6 +1394,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     const auto& joint_settings   = std::dynamic_pointer_cast<erhe::physics::Physics_joint_settings>(item);
     const auto& light            = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
     const auto& mesh             = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
+    const auto& node             = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
 
     const bool edit_disabled = item->is_lock_edit();
     if (edit_disabled) {
@@ -1265,6 +1404,7 @@ void Properties::item_diagnostics(const std::shared_ptr<erhe::Item_base>& item)
     if (joint_settings)   { joint_limits_portability(*joint_settings); }
     if (light)            { light_properties(*light); }
     if (mesh)             { mesh_properties(*mesh); }
+    if (node)             { node_navigation_properties(node); }
     if (edit_disabled) {
         ImGui::EndDisabled();
     }

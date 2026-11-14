@@ -85,7 +85,21 @@ auto c_str(const Scene_export_stage stage) -> const char*
         case Scene_export_stage::world_mesh_items: return "making world-space mesh items";
         case Scene_export_stage::world_form:       return "loading the world-space form";
         case Scene_export_stage::pvs_bake:         return "baking the PVS";
+        case Scene_export_stage::navigation_triangles: return "reading triangles";
+        case Scene_export_stage::navigation_tiles:     return "building tiles";
+        case Scene_export_stage::navigation_flood:     return "flooding";
         default:                             return "?";
+    }
+}
+
+auto c_str(const Export_navigation_result result) -> const char*
+{
+    switch (result) {
+        case Export_navigation_result::none:    return "none";
+        case Export_navigation_result::made:    return "made";
+        case Export_navigation_result::present: return "present";
+        case Export_navigation_result::skipped: return "skipped";
+        default:                                return "?";
     }
 }
 
@@ -647,6 +661,57 @@ public:
 Scene_export::Scene_export() = default;
 Scene_export::~Scene_export() noexcept = default;
 
+namespace {
+
+[[nodiscard]] auto get_scene_export_verb(const Scene_export_mode mode) -> const char*
+{
+    return
+        ((mode == Scene_export_mode::status) || (mode == Scene_export_mode::key_check)) ? "Status" :
+        (mode == Scene_export_mode::bake_world_meshes) ? "Bake World-Space Meshes" : "Export";
+}
+
+} // anonymous namespace
+
+auto get_scene_export_refusal(
+    const App_context&     context,
+    const Scene_root&      scene_root,
+    const std::string_view target,
+    const Scene_export_mode mode
+) -> std::string
+{
+    const char* const verb = get_scene_export_verb(mode);
+    if (!get_target_scene_item_textures(target).has_value()) {
+        return fmt::format("{} of '{}' refused: the store container exports targets pc and quest, not '{}'", verb, scene_root.get_name(), target);
+    }
+    // R11.2: no editor asset is made for a prepared run; R1.7, R2.7, R7.3.
+    const std::string refusal = get_export_refusal(scene_root, verb);
+    if (!refusal.empty()) {
+        return refusal;
+    }
+    const Scene_export_settings& settings = scene_root.get_scene_settings().export_settings.value();
+    if ((mode == Scene_export_mode::export_items) && (settings.pvs_mode == Pvs_mode::rebake)) {
+        // R7.6: refused before anything is made.
+        if ((settings.pvs_region_min == glm::vec3{0.0f}) && (settings.pvs_region_max == glm::vec3{0.0f})) {
+            return fmt::format(
+                "Export of '{}' refused: pvs_mode is rebake and the PVS region is unset (pvs_region_min and pvs_region_max are zero) - "
+                "set the region (Properties > Export, or MCP set_scene_settings) or choose pvs_mode off or reuse",
+                scene_root.get_name()
+            );
+        }
+        if (!settings.bake_static_to_world_space) {
+            return fmt::format(
+                "Export of '{}' refused: pvs_mode rebake bakes the PVS on the world-space form, which a Scene item writes only with "
+                "bake_static_to_world_space on - turn it on or choose pvs_mode off or reuse",
+                scene_root.get_name()
+            );
+        }
+        if ((context.pvs_baker == nullptr) || context.pvs_baker->is_running()) {
+            return fmt::format("Export of '{}' refused: pvs_mode rebake needs the PVS baker, which {}", scene_root.get_name(), (context.pvs_baker == nullptr) ? "this editor has not" : "is running another bake");
+        }
+    }
+    return {};
+}
+
 auto begin_scene_export(
     App_context&                 context,
     Scene_root&                  scene_root,
@@ -656,20 +721,13 @@ auto begin_scene_export(
     const Prepared_drop          drop
 ) -> std::unique_ptr<Scene_export>
 {
-    const char* const verb =
-        ((mode == Scene_export_mode::status) || (mode == Scene_export_mode::key_check)) ? "Status" :
-        (mode == Scene_export_mode::bake_world_meshes) ? "Bake World-Space Meshes" : "Export";
-    const std::optional<Scene_item_textures> textures = get_target_scene_item_textures(target);
-    if (!textures.has_value()) {
-        log_export->error("{} of '{}' refused: the store container exports targets pc and quest, not '{}'", verb, scene_root.get_name(), target);
-        return {};
-    }
-    // R11.2: no editor asset is made for a prepared run; R1.7, R2.7, R7.3.
-    const std::string refusal = get_export_refusal(scene_root, verb);
+    const char* const verb = get_scene_export_verb(mode);
+    const std::string refusal = get_scene_export_refusal(context, scene_root, target, mode);
     if (!refusal.empty()) {
         log_export->warn("{}", refusal);
         return {};
     }
+    const std::optional<Scene_item_textures> textures = get_target_scene_item_textures(target);
     const std::filesystem::path& source_path = scene_root.get_source_path();
     ERHE_VERIFY(context.editor_asset_registry != nullptr);
     // R10.8: an editor asset that cannot be written fails the job on its worker, naming the file.
@@ -706,29 +764,6 @@ auto begin_scene_export(
         settings.bake_static_to_world_space = true;
     }
     impl.pvs_mode = settings.pvs_mode;
-    if ((mode == Scene_export_mode::export_items) && (settings.pvs_mode == Pvs_mode::rebake)) {
-        // R7.6: refused before anything is made.
-        if ((settings.pvs_region_min == glm::vec3{0.0f}) && (settings.pvs_region_max == glm::vec3{0.0f})) {
-            log_export->warn(
-                "Export of '{}' refused: pvs_mode is rebake and the PVS region is unset (pvs_region_min and pvs_region_max are zero) - "
-                "set the region (Properties > Export, or MCP set_scene_settings) or choose pvs_mode off or reuse",
-                scene_root.get_name()
-            );
-            return {};
-        }
-        if (!settings.bake_static_to_world_space) {
-            log_export->warn(
-                "Export of '{}' refused: pvs_mode rebake bakes the PVS on the world-space form, which a Scene item writes only with "
-                "bake_static_to_world_space on - turn it on or choose pvs_mode off or reuse",
-                scene_root.get_name()
-            );
-            return {};
-        }
-        if ((context.pvs_baker == nullptr) || context.pvs_baker->is_running()) {
-            log_export->warn("Export of '{}' refused: pvs_mode rebake needs the PVS baker, which {}", scene_root.get_name(), (context.pvs_baker == nullptr) ? "this editor has not" : "is running another bake");
-            return {};
-        }
-    }
     impl.load_form = (mode == Scene_export_mode::bake_world_meshes) || ((mode == Scene_export_mode::export_items) && (settings.pvs_mode == Pvs_mode::rebake));
     impl.scene_stamp = make_scene_item_stamp(textures.value());
     // A quest Scene item carries its images as raw ASTC 4x4 KTX2 (ERHE_texture_ktx2).
@@ -2329,6 +2364,13 @@ auto Scene_export::Impl::compute_status() -> bool
     } else if (pvs_mode == Pvs_mode::rebake) {
         ++unknown_pvs_count;
     }
+    // The navigation mesh item the record names (doc/editor/navigation.md "Saving"): asked, so it is not
+    // unreferenced; editor asset only, so the prepared asset comparison leaves it out, and no drop removes it.
+    const std::optional<Key> navigation_key = get_recorded_key(store, c_navigation_key_record);
+    if (navigation_key.has_value()) {
+        asked[Item_kind::navigation_mesh].insert(navigation_key.value());
+        ask(0, Item_kind::navigation_mesh, navigation_key.value());
+    }
 
     // The Scene item Export would write, in memory; a key check leaves it to a status job, which holds the scene read-only.
     std::optional<Key> scene_key;
@@ -2398,6 +2440,9 @@ auto Scene_export::Impl::compute_status() -> bool
             log_export->error("Drop: the items of '{}' cannot be listed", erhe::file::to_string(status.editor_asset_path));
             return false;
         }
+        if (navigation_key.has_value()) {
+            std::erase(drop_keys, navigation_key.value());
+        }
         status.bytes_before_drop = store.get_database_size().value_or(0);
         const bool dropped = drop_store_items(store, drop_keys);
         editor_asset->invalidate_item_catalog();
@@ -2440,7 +2485,7 @@ auto Scene_export::Impl::compute_status() -> bool
         if (scene_key.has_value()) {
             std::set<Key> all_asked;
             for (const auto& [kind, keys] : asked) {
-                if (kind != Item_kind::basis_texture) {
+                if ((kind != Item_kind::basis_texture) && (kind != Item_kind::navigation_mesh)) {
                     all_asked.insert(keys.begin(), keys.end());
                 }
             }
@@ -2668,6 +2713,27 @@ auto is_scene_export_ready(const App_context& context, const Scene_export& scene
     return context.mesh_memory->get_loader_transfer_queue().get_watermark() >= impl.form_ticket;
 }
 
+namespace {
+
+// The summary line's navigation part; empty with the navigation mode off.
+[[nodiscard]] auto make_navigation_summary(const Export_navigation_report& navigation) -> std::string
+{
+    switch (navigation.result) {
+        case Export_navigation_result::made:
+        case Export_navigation_result::present: {
+            return fmt::format(
+                "; navigation mesh {}: {} polygons, {} reachable, {:.1f} m2 total, {:.1f} m2 reachable, {:.1f} ms",
+                c_str(navigation.result), navigation.polygon_count, navigation.reachable_polygon_count,
+                navigation.total_area, navigation.reachable_area, navigation.navigation_ms
+            );
+        }
+        case Export_navigation_result::skipped: return "; navigation mesh skipped: no navigation seed";
+        default:                                return {};
+    }
+}
+
+} // anonymous namespace
+
 void finish_scene_export(App_context& context, Scene_export& scene_export, Scene_export_report* const report)
 {
     Scene_export::Impl& impl = *scene_export.impl;
@@ -2703,7 +2769,7 @@ void finish_scene_export(App_context& context, Scene_export& scene_export, Scene
     log_export->info(
         "Export of '{}' ({}) done: mesh items made {} present {} written {}; BVH items made {} present {} written {}; "
         "texture items made {} present {} written {}; scene items made {} present {} written {}; "
-        "{} primitives and {} images inside the Scene item; prepared asset '{}' {} items {} bytes; ensure {:.1f} ms, scene {:.1f} ms, copy {:.1f} ms",
+        "{} primitives and {} images inside the Scene item; prepared asset '{}' {} items {} bytes; ensure {:.1f} ms, scene {:.1f} ms, copy {:.1f} ms{}",
         impl.scene_root.get_name(), impl.target,
         meshes.made, meshes.present, meshes.written,
         bvhs.made, bvhs.present, bvhs.written,
@@ -2711,11 +2777,17 @@ void finish_scene_export(App_context& context, Scene_export& scene_export, Scene
         scenes.made, scenes.present, scenes.written,
         impl.report.inline_primitive_count, impl.report.inline_image_count,
         erhe::file::to_string(impl.prepared_asset_path), impl.report.prepared_item_count, impl.report.prepared_asset_bytes,
-        impl.report.ensure_ms, impl.report.scene_ms, impl.report.copy_ms
+        impl.report.ensure_ms, impl.report.scene_ms, impl.report.copy_ms,
+        make_navigation_summary(impl.report.navigation)
     );
     if (report != nullptr) {
         *report = impl.report;
     }
+}
+
+void set_scene_export_navigation(Scene_export& scene_export, const Export_navigation_report& navigation)
+{
+    scene_export.impl->report.navigation = navigation;
 }
 
 auto get_scene_export_mode(const Scene_export& scene_export) -> Scene_export_mode

@@ -39,3 +39,8 @@
 !traps{MCP-set_node_transform-arg=translation(¬position:silently-"Nothing to set");device-migrated-config-stale-after-install(fp16-preset-via---mcp);desktop-editor-has-no-headlamp(headset-only)->desktop-renders-show-scene-lights;a-second-editor-takes-port-3744;disk-nearly-full(1.7GB-free;Debug-trees=next-cleanup)}
 ?next{opaque-draw-order-front-to-back/early-Z-check|shorten-or-re-pose-path-away-from-corner|Perfetto-render-stages-empty(surfaces-[])->investigate-metavr-capture}
 
+
+[TASK::navigation-mesh]{started-2026-11-10;branch=main;doc/editor/navigation.md+doc/plans/navigation_mesh.md}
+✓steps-1-8{core+settings+seeds+job+staleness+visualization+Export-stage+editor-asset-item(Item_kind::navigation_mesh=9-on-main)}
+!traps{Recast-target-built-without--fno-rtti(editor-subclasses-rcContext)+hollow-closed-mesh-gets-inner-walkable-floor(unreachable)+Recast-DebugUtils-fails--Werror-on-GCC->build-named-targets}
+?next{open-items-in-doc/plans/navigation_mesh.md|triangle-classification-plan-needs-triangle-visibility(branch-triangle-visibility)}

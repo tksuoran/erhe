@@ -807,7 +807,7 @@ saved: false, message}`. The save runs in the editor's scene save service,
 as File > Save does (doc/editor/scene_serialization.md "Saving in the
 background"): `running` once the queued operations have drained, on a worker
 thread while the editor keeps rendering. While a save runs every tool except
-`get_save_status`, `get_async_status`, `get_viewports`, `list_scenes`,
+`get_save_status`, `get_async_status`, `get_navigation_status`, `get_viewports`, `list_scenes`,
 `capture_screenshot` and the save tools themselves (with
 `get_prepared_status` and `drop_prepared_items`) is refused with an error
 naming the running save; `get_save_status` is answered by the server thread
@@ -939,6 +939,44 @@ py -3 scripts/mcp_call.py bake_world_space_meshes '{"scene_name":"bistro_lights_
 # -> {"job_id": 3, "state": "pending", ...}
 py -3 scripts/mcp_call.py get_world_space_meshes '{"scene_name":"bistro_lights_c"}'
 # -> {"admitted_count": 2670, "valid_count": 2670, "missing_count": 0, "available": true, ...}
+```
+
+### navigation_set_seed, get_navigation_status, navigation_build, navigation_clear, get_navigation_mesh, navigation_set_visualization
+
+Navigation seeds and the navigation mesh (`doc/editor/navigation.md` "Seeds",
+"Job", "MCP"): `navigation_set_seed {scene_name, node | node_id, seed}` marks
+(`seed` true, the default) or unmarks a node as a seed with one undoable
+operation and returns `{scene_name, node, id, uid, point, seed, changed}`.
+`navigation_build {scene_name}` queues Build Navigation Mesh and returns the
+job at once; poll `get_save_status {job_id}` (progress stages `reading
+triangles`, `building tiles`, `flooding`) until it is `done` (with the
+`navigation` status) or `failed` (`error` names the reason). It is refused for
+a scene without export settings or without a seed. `get_navigation_status
+{scene_name}` returns `available`, `pending` (a build queued or running, or an
+Export's navigation stage running), `stale` and `stale_reasons`, the
+totals, `tile_count`, `skipped_mesh_count`, `build_ms`, `build_count`,
+`flood_count`, `built_seeds` (with each seed's polygon or reason), the
+current `seeds` and `item` (`{key, made, bytes}` of the navigation mesh item in
+the editor asset - `doc/editor/navigation.md` "Saving" - or null); it is
+answered while a save or build runs.
+`get_navigation_mesh {scene_name, reachable_only, max_polygons}` returns the
+bounds and the polygons (vertices, area, reachable); `navigation_clear
+{scene_name}` removes the mesh, its "Navigation Mesh" node and its item.
+`navigation_set_visualization {mode, viewport}` sets the viewports'
+Navigation Mesh mode (`off`, `reachable`, `all`), and `render_scene_image`
+draws the navigation mesh with `navigation_mesh` (`reachable` or `all`,
+default `off`; `doc/editor/navigation.md` "Visualization"). An unknown or
+ambiguous scene or node name is an error. `scripts/navigation_verify.py`
+drives all of them.
+
+```bash
+python3 scripts/mcp_call.py navigation_set_seed '{"scene_name":"Default Scene","node":"street seed"}'
+python3 scripts/mcp_call.py navigation_build '{"scene_name":"Default Scene"}'
+# -> {"job_id": 3, "state": "pending", ...}; then get_save_status {"job_id": 3}
+python3 scripts/mcp_call.py get_navigation_status '{"scene_name":"Default Scene"}'
+# -> {"available": true, "stale": false, "polygon_count": 47, "reachable_area": 318.7, "built_seeds": [{"node": "street seed", "result": {"found": true, "polygon": 19, ...}}], ...}
+python3 scripts/mcp_call.py get_navigation_mesh '{"scene_name":"Default Scene","reachable_only":true,"max_polygons":10}'
+python3 scripts/mcp_call.py render_scene_image '{"scene":"Default Scene","camera":{"eye":[0,30,0],"target":[0,0,0],"up":[0,0,-1]},"width":640,"height":640,"path":"logs/navigation_all.png","navigation_mesh":"all"}'
 ```
 
 ### create_node
@@ -1169,7 +1207,7 @@ Visual Style popup's checkboxes do: `style` `not_selected` (default) or
 a full mesh build provides queues the on-demand full build of every prepared
 primitive in every scene (doc/editor/async_asset_loading.md "Prepared mesh
 data"), exactly as the checkbox does; wait for `get_async_status` idle before
-capturing. `render_scene_image` draws no edge lines; capture them with
+capturing. `render_scene_image` draws no content edge lines; capture them with
 `capture_screenshot` of a viewport.
 
 Returns: `{style, polygon_fill, edge_lines, corner_points, polygon_centroids, solid_wireframe, full_builds_queued}`.
@@ -1607,7 +1645,9 @@ Two tools write images; choose by what is being verified.
   reports; occlusion culling culls nothing in a one-frame capture). Options: `scene`, `path`, `shader_debug`,
   `shadow_debug_light` (the light, by name or id, that `shader_debug` 30
   shadow_visibility shows), `msaa_samples`, `color_format` (`rgba16f`
-  default, `rgba32f` for `output: "linear"`). `shader_debug` 36
+  default, `rgba32f` for `output: "linear"`), `navigation_mesh` (`off`
+  default, `reachable`, `all`: the navigation mesh fills and borders,
+  `doc/editor/navigation.md` "Visualization"). `shader_debug` 36
   world_position with `output: "linear"` reads back the per-pixel world
   position (use `rgba32f`: fp16 rounds by about 1 mm at 1 m). Linear
   debug renders mark uncovered pixels with NaN RGB (`background` in the

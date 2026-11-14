@@ -18,6 +18,7 @@
 #include <string_view>
 #include <vector>
 
+namespace erhe::asset_store { class Asset_store; }
 namespace erhe::gltf      { class Gltf_gpu_vertex_formats; }
 namespace erhe::primitive { class Triangle_soup; }
 
@@ -35,6 +36,9 @@ inline constexpr std::uint32_t    c_world_mesh_code_version   = 1;
 inline constexpr std::uint32_t    c_pvs_code_version          = 1;
 // Editor asset record: the key of the scene's PVS item, the last bake (R4.10).
 inline constexpr std::string_view c_pvs_key_record            = "pvs.key";
+inline constexpr std::uint32_t    c_navigation_mesh_code_version = 1;
+// Editor asset record: the key of the scene's navigation mesh item (doc/editor/navigation.md "Saving").
+inline constexpr std::string_view c_navigation_key_record     = "navigation.key";
 
 // "erhe-item:<key as 32 hex digits>"
 [[nodiscard]] auto make_item_uri (const erhe::asset_store::Key& key) -> std::string;
@@ -190,6 +194,13 @@ enum class Scene_item_textures : unsigned int
 // it is the content hash of what the bake made - its meta (without the
 // bake's duration) and payload.
 [[nodiscard]] auto make_pvs_key(std::string_view stamp, std::string_view meta, std::span<const std::byte> payload) -> erhe::asset_store::Key;
+
+// The key of a navigation mesh item: the content hash of its kind, code
+// version, format stamp and payload (doc/editor/navigation.md "Saving").
+[[nodiscard]] auto make_navigation_mesh_key(std::string_view stamp, std::span<const std::byte> payload) -> erhe::asset_store::Key;
+
+// The key a record of the store names; nullopt when the record is absent, empty or not a key.
+[[nodiscard]] auto get_recorded_key(const erhe::asset_store::Asset_store& store, std::string_view record) -> std::optional<erhe::asset_store::Key>;
 
 // The keys a Scene item (GLB or glTF JSON) names through erhe-item: buffer
 // uris, sorted and unique; nullopt when the document does not parse.

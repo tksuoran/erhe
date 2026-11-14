@@ -26,8 +26,9 @@ container; scenes, glTF and the item formats belong to its callers.
   `add_text_setting` (named settings), `add_key`, `add_content_hash`,
   `add_bytes`; `finish()` returns the key.
 - `Item_kind` -- `scene`, `local_mesh`, `world_mesh`, `raytrace_bvh`,
-  `texture`, `basis_texture`, `pvs`, `editor_data` (R4.1). The numeric
-  values are stored in the container and never change.
+  `texture`, `basis_texture`, `pvs`, `editor_data` (R4.1),
+  `navigation_mesh` (a scene's navigation mesh, `doc/editor/navigation.md`
+  "Saving"). The numeric values are stored in the container and never change.
 - `Item_data` -- what `put()` stores: key, kind, target, stamp, `meta`
   (JSON text that makes the item usable on its own), `info` (the node record
   of R4.8) and the payload bytes. Views; valid for the call.

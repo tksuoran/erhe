@@ -388,6 +388,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server_pvs.cpp
     mcp/mcp_server_lod.cpp
     mcp/mcp_server_mesh_components.cpp
+    mcp/mcp_server_navigation.cpp
     mcp/mcp_process_memory.cpp
     mcp/mcp_process_memory.hpp
     mcp/mcp_server_references.cpp
@@ -402,6 +403,8 @@ erhe_target_sources_grouped(
     mcp/mcp_server_skinning.cpp
     mcp/mcp_server_tool_list.cpp
     mcp/mcp_server_ui.cpp
+    navigation/navigation_seeds.cpp
+    navigation/navigation_seeds.hpp
     operations/animation_edit_operation.cpp
     operations/animation_edit_operation.hpp
     operations/async_raytrace_kickoff_operation.cpp
@@ -691,6 +694,8 @@ erhe_target_sources_grouped(
     scene/scene_save_service.cpp
     scene/scene_save_service.hpp
     scene/scene_settings_resolve.cpp
+    scene/static_mesh_set.cpp
+    scene/static_mesh_set.hpp
     scene/world_space_bake.cpp
     scene/world_space_bake.hpp
     scene/mesh_form.hpp
@@ -952,6 +957,35 @@ if (ERHE_GRAPHICS_API_VULKAN AND NOT ("${ERHE_NSIGHT_GRAPHICS_SDK_DIR}" STREQUAL
     message(STATUS "Editor built with Nsight Graphics SDK activity control from ${ERHE_NSIGHT_GRAPHICS_SDK_DIR}")
 endif ()
 
+# Navigation mesh (doc/plans/navigation_mesh.md N1): Detour for the mesh itself, Recast for its build.
+if (ERHE_USE_DETOUR)
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        assets/navigation_item.cpp
+        assets/navigation_item.hpp
+        navigation/make_navigation_build_settings.cpp
+        navigation/make_navigation_build_settings.hpp
+        navigation/navigation_build_settings.hpp
+        navigation/navigation_mesh.cpp
+        navigation/navigation_mesh.hpp
+        navigation/navigation_mesh_io.cpp
+        navigation/navigation_mesh_io.hpp
+        scene/navigation_visualization.cpp
+        scene/navigation_visualization.hpp
+        scene/scene_navigation.cpp
+        scene/scene_navigation.hpp
+    )
+endif ()
+if (ERHE_USE_RECAST)
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        navigation/navigation_build.cpp
+        navigation/navigation_build.hpp
+        scene/navigation_build_job.cpp
+        scene/navigation_build_job.hpp
+    )
+endif ()
+
 if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -1093,6 +1127,13 @@ set(_config_sources
     ${_config_out}/texture_encoding.cpp
     ${_config_out}/pvs_mode.hpp
     ${_config_out}/pvs_mode.cpp
+    ${_config_out}/navigation_mode.hpp
+    ${_config_out}/navigation_mode.cpp
+    ${_config_out}/navigation_partitioning.hpp
+    ${_config_out}/navigation_partitioning.cpp
+    ${_config_out}/navigation_settings.hpp
+    ${_config_out}/navigation_settings_serialization.hpp
+    ${_config_out}/navigation_settings.cpp
     ${_config_out}/scene_export_settings.hpp
     ${_config_out}/scene_export_settings_serialization.hpp
     ${_config_out}/scene_export_settings.cpp
@@ -1206,6 +1247,8 @@ set(_config_sources
     ${_config_out}/geometry_edit_mode.cpp
     ${_config_out}/joint_constraint_filter.hpp
     ${_config_out}/joint_constraint_filter.cpp
+    ${_config_out}/navigation_mesh_visualization.hpp
+    ${_config_out}/navigation_mesh_visualization.cpp
     ${_config_out}/mesh_transform_mode.hpp
     ${_config_out}/mesh_transform_mode.cpp
     ${_config_out}/editor_settings_config.hpp
@@ -1446,16 +1489,13 @@ endif ()
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     target_link_libraries(${_target} PRIVATE miniaudio)
 endif ()
-if (${ERHE_NAVIGATION_LIBRARY} STREQUAL "recastnavigation")
-    target_link_libraries(
-        ${_target}
-        PRIVATE
-            RecastNavigation::Recast
-            RecastNavigation::Detour
-            RecastNavigation::DetourCrowd
-            RecastNavigation::DetourTileCache
-            RecastNavigation::DebugUtils
-    )
+if (ERHE_USE_DETOUR)
+    target_link_libraries(${_target} PRIVATE RecastNavigation::Detour)
+    target_compile_definitions(${_target} PRIVATE ERHE_USE_DETOUR)
+endif ()
+if (ERHE_USE_RECAST)
+    target_link_libraries(${_target} PRIVATE RecastNavigation::Recast)
+    target_compile_definitions(${_target} PRIVATE ERHE_USE_RECAST)
 endif ()
 # erhe::xr is always linked because it owns Headset_config (used by editor
 # settings serialization regardless of XR backend). The OpenXR loader is only
@@ -1519,6 +1559,9 @@ if (${ERHE_BUILD_TESTS})
     add_subdirectory(assets/test)
     add_subdirectory(brushes/test)
     add_subdirectory(mcp/test)
+    if (ERHE_USE_RECAST)
+        add_subdirectory(navigation/test)
+    endif ()
     add_subdirectory(renderers/test)
     add_subdirectory(rig/test)
     add_subdirectory(transform/test)

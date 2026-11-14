@@ -47,11 +47,15 @@ lock_rotation_z
 lock_scale_x
 lock_scale_y
 lock_scale_z
+navigation_seed
 ```
 
 `bone` is the authored skeleton-bone flag
 (`doc/plans/rigging/skeleton_editing.md` R1): a node listed with it is a
 bone whether or not a skin lists it.
+
+`navigation_seed` is an editor flag: the node's origin is a navigation
+seed (`doc/editor/navigation.md` "Seeds").
 
 Deliberately absent: transient presentation state (`selected`,
 `hovered_*`, `negative_determinant`, `affects_shadow`) and the

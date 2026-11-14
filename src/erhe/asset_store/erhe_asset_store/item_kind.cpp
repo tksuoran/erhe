@@ -13,13 +13,14 @@ auto c_str(const Item_kind kind) -> const char*
         case Item_kind::basis_texture: return "basis_texture";
         case Item_kind::pvs:           return "pvs";
         case Item_kind::editor_data:   return "editor_data";
+        case Item_kind::navigation_mesh: return "navigation_mesh";
         default:                       return "?";
     }
 }
 
 auto item_kind_from_value(const std::uint32_t value) -> std::optional<Item_kind>
 {
-    if ((value >= static_cast<std::uint32_t>(Item_kind::scene)) && (value <= static_cast<std::uint32_t>(Item_kind::editor_data))) {
+    if ((value >= static_cast<std::uint32_t>(Item_kind::scene)) && (value <= static_cast<std::uint32_t>(Item_kind::navigation_mesh))) {
         return static_cast<Item_kind>(value);
     }
     return {};

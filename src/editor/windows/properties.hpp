@@ -134,6 +134,10 @@ private:
     // Read-only rows of the node's rigid body, drawn inside the generic
     // "Rigid Body" group through Dependency_property_rows::add_group_rows.
     void node_physics_properties      (const erhe::scene::Node& node);
+    void node_navigation_properties   (const std::shared_ptr<erhe::scene::Node>& node);
+    void navigation_seed_properties   (Scene_root& scene_root);
+    // The navigation mesh rows of the scene's "Navigation" group: its status, Build and Clear.
+    void navigation_mesh_properties   (Scene_root& scene_root);
     void joint_properties             (Joint& joint);
     void joint_limits_portability     (const erhe::physics::Physics_joint_settings& settings);
     // Generic rows for the item's registered properties

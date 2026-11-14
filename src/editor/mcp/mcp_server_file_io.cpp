@@ -157,6 +157,16 @@ namespace {
             {"written", kind_counts.written}
         };
     }
+    // The navigation stage (doc/editor/navigation.md "Export"): its item is the editor asset's, so the prepared asset gets none.
+    const Export_navigation_report& navigation = report.navigation;
+    if (navigation.result != Export_navigation_result::none) {
+        counts["navigation_mesh"] = {
+            {"made",    (navigation.result == Export_navigation_result::made)    ? 1 : 0},
+            {"present", (navigation.result == Export_navigation_result::present) ? 1 : 0},
+            {"written", 0},
+            {"skipped", (navigation.result == Export_navigation_result::skipped) ? 1 : 0}
+        };
+    }
     json files = json::array();
     for (const Scene_export_file_report& file : report.files) {
         json file_counts = json::object();
@@ -172,7 +182,7 @@ namespace {
             {"counts",       file_counts}
         });
     }
-    return json{
+    json result = json{
         {"export", {
             {"files",                  files},
             {"target",                 report.target},
@@ -193,6 +203,18 @@ namespace {
             {"pvs_cell_count",         report.pvs_cell_count}
         }}
     };
+    if ((navigation.result == Export_navigation_result::made) || (navigation.result == Export_navigation_result::present)) {
+        json& fields = result["export"];
+        fields["navigation_ms"]                      = navigation.navigation_ms;
+        fields["navigation_polygon_count"]           = navigation.polygon_count;
+        fields["navigation_reachable_polygon_count"] = navigation.reachable_polygon_count;
+        fields["navigation_total_area"]              = navigation.total_area;
+        fields["navigation_reachable_area"]          = navigation.reachable_area;
+        if (!navigation.item_key.empty()) {
+            fields["navigation_item"] = {{"key", navigation.item_key}, {"made", navigation.item_made}};
+        }
+    }
+    return result;
 }
 
 // A status job's report (doc/editor/prepared_assets.md "Status").
@@ -631,21 +653,39 @@ auto Mcp_server::queue_save(
             .job            = save_job,
             .source_binding = source_binding,
             .target         = target,
+            // An Export's navigation stage starts with a service job; the Scene_export follows it.
             .on_started     = [this, job_id](const std::shared_ptr<const Scene_export>& running_export) {
                 update_save_job(job_id, json{{"state", "running"}});
+                const std::shared_ptr<const Scene_service_job> running_service_job = running_export
+                    ? std::shared_ptr<const Scene_service_job>{}
+                    : m_context.scene_save_service->get_running_service_job();
+                std::shared_ptr<const Scene_service_job> finished_service_job; // released outside the lock
+                std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
                 if (running_export) {
-                    std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
                     m_running_exports[job_id] = running_export;
+                    const auto service_job = m_running_service_jobs.find(job_id);
+                    if (service_job != m_running_service_jobs.end()) {
+                        finished_service_job = std::move(service_job->second);
+                        m_running_service_jobs.erase(service_job);
+                    }
+                } else if (running_service_job) {
+                    m_running_service_jobs[job_id] = running_service_job;
                 }
             },
             .on_finished    = [this, job_id, path](const Scene_save_result& result) {
-                std::shared_ptr<const Scene_export> finished_export; // released outside the lock
+                std::shared_ptr<const Scene_export>      finished_export;      // released outside the lock
+                std::shared_ptr<const Scene_service_job> finished_service_job;
                 {
                     std::lock_guard<std::mutex> lock{m_save_jobs_mutex};
                     const auto running_export = m_running_exports.find(job_id);
                     if (running_export != m_running_exports.end()) {
                         finished_export = std::move(running_export->second);
                         m_running_exports.erase(running_export);
+                    }
+                    const auto running_service_job = m_running_service_jobs.find(job_id);
+                    if (running_service_job != m_running_service_jobs.end()) {
+                        finished_service_job = std::move(running_service_job->second);
+                        m_running_service_jobs.erase(running_service_job);
                     }
                 }
                 if (!result.saved) {
@@ -710,10 +750,13 @@ auto Mcp_server::query_save_status(const json& args) -> std::string
         for (const json& job : m_save_jobs) {
             if (job.value("job_id", std::uint64_t{0}) == job_id) {
                 const auto running_export = m_running_exports.find(job_id);
-                if (running_export == m_running_exports.end()) {
+                const auto running_service_job = m_running_service_jobs.find(job_id);
+                if ((running_export == m_running_exports.end()) && (running_service_job == m_running_service_jobs.end())) {
                     return make_json_content(job).dump();
                 }
-                const Scene_export_progress_state progress = get_scene_export_progress(*running_export->second);
+                const Scene_export_progress_state progress = (running_export != m_running_exports.end())
+                    ? get_scene_export_progress(*running_export->second)
+                    : running_service_job->second->get_progress();
                 json running_job = job;
                 running_job["progress"] = json{{"stage", c_str(progress.stage)}, {"done", progress.done}, {"total", progress.total}};
                 return make_json_content(running_job).dump();
@@ -2102,6 +2145,14 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
     } else if (mesh_form_name != "source") {
         return make_error_content("render_scene_image: mesh_form must be \"source\" or \"world_space\"");
     }
+    // The navigation mesh visualization (doc/editor/navigation.md "Visualization"): off unless asked for.
+    Navigation_mesh_visualization navigation_mesh{Navigation_mesh_visualization::off};
+    if (args.contains("navigation_mesh")) {
+        const std::string navigation_mesh_name = args["navigation_mesh"].is_string() ? args["navigation_mesh"].get<std::string>() : std::string{};
+        if (!from_string(navigation_mesh_name, navigation_mesh)) {
+            return make_error_content("render_scene_image: navigation_mesh must be \"off\", \"reachable\" or \"all\"");
+        }
+    }
     if (has_camera_node) {
         const json& selector = args["camera_node"];
         for (const std::shared_ptr<erhe::scene::Camera>& candidate : scene_root->get_scene().get_cameras()) {
@@ -2237,6 +2288,7 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
             .overdraw           = overdraw,
             .forward_pass_timer = m_scene_image_forward_timer.get(),
             .mesh_form          = mesh_form,
+            .navigation_mesh    = navigation_mesh,
             .lod_capture_objects = std::move(lod_objects)
         }
     );
@@ -2251,7 +2303,8 @@ auto Mcp_server::action_render_scene_image(const json& args) -> std::string
         {"camera",       camera_json},
         {"msaa_samples", msaa_samples},
         {"color_format", color_format_name},
-        {"shader_debug", shader_debug_value}
+        {"shader_debug", shader_debug_value},
+        {"navigation_mesh", std::string{to_string(navigation_mesh)}}
     };
     if (background == Scene_image_background::marked) {
         m_scene_image_header["background"] = json{{"marker", "nan"}};

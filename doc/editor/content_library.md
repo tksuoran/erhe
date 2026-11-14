@@ -85,7 +85,10 @@ by-item set and `get_all_of_kind()` gives one kind's resources without naming
 their class (the asset manager's `scene_local` resolution asks by kind bit,
 `Content_library::get_kind_type_bit_of_type`). A move between scopes of one
 scene keeps the prim's item host, so the hook does not fire and the index is
-untouched - a move is not a removal.
+untouched - a move is not a removal. A prim that carries `Item_flags::session_only` when it
+enters is not listed: the materials a render proxy owns (draw mode cards, the
+navigation mesh visualization) sit under their mesh and render through the
+material set's per-object membership, and are no resource of the scene.
 
 `Resource_metadata` is what the library keeps beside a resource: where it came
 from (`gltf_source`, a texture's retained `image_source`) and how its defining
