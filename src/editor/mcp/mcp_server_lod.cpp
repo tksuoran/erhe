@@ -5,6 +5,7 @@
 // primitives' requests and chains.
 
 #include "mcp/mcp_server.hpp"
+#include "level/kit_layout.hpp"
 #include "mcp/mcp_server_shared.hpp"
 #include "app_context.hpp"
 #include "app_rendering.hpp"
@@ -208,6 +209,9 @@ auto Mcp_server::action_generate_lods(const json& args) -> std::string
         }
     } else {
         const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*scene_root, args, "node_id", "node_name");
+        if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+            return make_error_content("generate_lods: " + layout_refusal.value() + "; nothing was changed");
+        }
         if (!node) {
             return make_error_content("Node not found (give node_ids, node_id or node_name)");
         }

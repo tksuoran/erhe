@@ -2,6 +2,15 @@
 #include "erhe_physics/jolt/glm_conversions.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/CollisionDispatch.h>
+#include <Jolt/Physics/Collision/Shape/CompoundShape.h>
+#include <Jolt/Physics/Collision/Shape/DecoratedShape.h>
+#include <Jolt/Physics/Collision/Shape/SubShapeID.h>
+
+#include <algorithm>
+
 namespace erhe::physics {
 
 class Jolt_empty_shape : public Jolt_collision_shape
@@ -132,7 +141,7 @@ auto Jolt_collision_shape::is_convex() const -> bool
     return true;
 }
 
-auto Jolt_collision_shape::get_jolt_shape() -> JPH::ShapeRefC
+auto Jolt_collision_shape::get_jolt_shape() const -> JPH::ShapeRefC
 {
     return m_jolt_shape;
 }
@@ -463,6 +472,77 @@ auto Jolt_sphere_shape::get_shape_type() const -> Collision_shape_type
 auto Jolt_sphere_shape::get_radius() const -> std::optional<float>
 {
     return m_radius;
+}
+
+namespace {
+
+// Jolt collides no triangle surface (mesh, height field) with another (CollisionDispatch).
+[[nodiscard]] auto has_triangle_surface(const JPH::Shape& shape) -> bool
+{
+    switch (shape.GetType()) {
+        case JPH::EShapeType::Mesh:
+        case JPH::EShapeType::HeightField: {
+            return true;
+        }
+        case JPH::EShapeType::Decorated: {
+            return has_triangle_surface(*static_cast<const JPH::DecoratedShape&>(shape).GetInnerShape());
+        }
+        case JPH::EShapeType::Compound: {
+            for (const JPH::CompoundShape::SubShape& sub_shape : static_cast<const JPH::CompoundShape&>(shape).GetSubShapes()) {
+                if (has_triangle_surface(*sub_shape.mShape)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        default: {
+            return false;
+        }
+    }
+}
+
+// The center of mass transform of the shape placed at its node-space transform.
+[[nodiscard]] auto center_of_mass_transform(const JPH::Shape& shape, const Transform& transform) -> JPH::Mat44
+{
+    glm::mat4 world{transform.basis};
+    world[3] = glm::vec4{transform.origin, 1.0f};
+    world[3] = world * glm::vec4{from_jolt(shape.GetCenterOfMass()), 1.0f};
+    return to_jolt(world);
+}
+
+} // anonymous namespace
+
+auto ICollision_shape::get_penetration_depth(
+    const ICollision_shape& shape_a, const Transform& transform_a,
+    const ICollision_shape& shape_b, const Transform& transform_b
+) -> std::optional<float>
+{
+    const JPH::ShapeRefC jolt_a = static_cast<const Jolt_collision_shape&>(shape_a).get_jolt_shape();
+    const JPH::ShapeRefC jolt_b = static_cast<const Jolt_collision_shape&>(shape_b).get_jolt_shape();
+    if ((jolt_a == nullptr) || (jolt_b == nullptr)) {
+        return std::nullopt;
+    }
+    if (has_triangle_surface(*jolt_a) && has_triangle_surface(*jolt_b)) {
+        return std::nullopt;
+    }
+    JPH::CollideShapeSettings settings{};
+    settings.mMaxSeparationDistance = 0.0f; // only actual overlaps (depth >= 0)
+
+    // ClosestHit keeps the contact of the greatest penetration depth.
+    JPH::ClosestHitCollisionCollector<JPH::CollideShapeCollector> collector;
+    JPH::CollisionDispatch::sCollideShapeVsShape(
+        jolt_a.GetPtr(),
+        jolt_b.GetPtr(),
+        JPH::Vec3::sReplicate(1.0f),
+        JPH::Vec3::sReplicate(1.0f),
+        center_of_mass_transform(*jolt_a, transform_a),
+        center_of_mass_transform(*jolt_b, transform_b),
+        JPH::SubShapeIDCreator{},
+        JPH::SubShapeIDCreator{},
+        settings,
+        collector
+    );
+    return collector.HadHit() ? std::max(collector.mHit.mPenetrationDepth, 0.0f) : 0.0f;
 }
 
 } // namespace erhe::physics

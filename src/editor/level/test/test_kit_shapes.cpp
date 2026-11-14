@@ -124,7 +124,7 @@ TEST(Kit_shape_library, starter_set_has_the_14_shapes_of_r4_1)
         EXPECT_FALSE(shape.display_name.empty());
         EXPECT_FALSE(shape.description.empty());
         EXPECT_FALSE(shape.tags.empty());
-        EXPECT_FALSE(shape.material_slot.empty());
+        EXPECT_FALSE(shape.material_slots.empty());
         EXPECT_FALSE(shape.parameters.empty());
         EXPECT_TRUE(static_cast<bool>(shape.generator));
         EXPECT_EQ(library.find(shape.id), &shape);
@@ -135,14 +135,90 @@ TEST(Kit_shape_library, starter_set_has_the_14_shapes_of_r4_1)
     EXPECT_EQ(library.find("basic.nothing"), nullptr);
 }
 
-// R11.1 at defaults, plus R2.6: the shape's own budget and the kit ceiling.
+// R2.9: every slot name has a default and alternatives in the palette.
 TEST(Kit_shape_library, every_material_slot_has_a_palette_material)
 {
     const Kit_shape_library library;
     for (const Kit_shape_definition& shape : library.get_shapes()) {
-        EXPECT_NE(library.find_palette_material(shape.material_slot), nullptr) << shape.id << " slot " << shape.material_slot;
+        for (const std::string& slot : shape.material_slots) {
+            EXPECT_NE(library.find_slot_default(slot), nullptr) << shape.id << " slot " << slot;
+        }
+    }
+    for (const editor::Kit_slot_palette& palette : library.get_slot_palettes()) {
+        SCOPED_TRACE(palette.slot);
+        EXPECT_NE(library.find_palette_material(palette.default_material), nullptr);
+        EXPECT_FALSE(palette.alternatives.empty());
+        for (const std::string& alternative : palette.alternatives) {
+            EXPECT_NE(library.find_palette_material(alternative), nullptr) << alternative;
+            EXPECT_NE(alternative, palette.default_material);
+        }
+    }
+    // The material kinds R2.9 names are in the palette.
+    for (const char* name : {"Kit Stone", "Kit Wood", "Kit Plaster", "Kit Foliage", "Kit Bark", "Kit Earth", "Kit Grass"}) {
+        EXPECT_NE(library.find_palette_material(name), nullptr) << name;
     }
 }
+
+// D1.11 at the defaults and at a seed-derived second parameter set: every facet names a declared slot, every
+// declared slot has facets, and slot names are unique.
+TEST(Kit_shape_library, every_facet_belongs_to_a_declared_slot)
+{
+    for (const Kit_shape_definition& shape : get_library().get_shapes()) {
+        SCOPED_TRACE(shape.id);
+        const std::set<std::string> unique_names{shape.material_slots.begin(), shape.material_slots.end()};
+        EXPECT_EQ(unique_names.size(), shape.material_slots.size());
+        for (const Kit_parameter_values& values : {defaults(shape), all_derived(shape, 7)}) {
+            SCOPED_TRACE(values.to_canonical_text());
+            ASSERT_EQ(values.validate(), "");
+            const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+            std::vector<uint32_t> facet_slots;
+            editor::read_kit_facet_slots(*mesh, facet_slots);
+            ASSERT_EQ(facet_slots.size(), mesh->facets.nb());
+            std::vector<unsigned int> slot_triangles(shape.material_slots.size(), 0u);
+            for (GEO::index_t f = 0, end = mesh->facets.nb(); f < end; ++f) {
+                ASSERT_LT(facet_slots[f], shape.material_slots.size()) << "facet " << f;
+                slot_triangles[facet_slots[f]] += mesh->facets.nb_vertices(f) - 2;
+            }
+            unsigned int total = 0;
+            for (std::size_t slot = 0, end = shape.material_slots.size(); slot < end; ++slot) {
+                EXPECT_GT(slot_triangles[slot], 0u) << "slot " << shape.material_slots[slot];
+                GEO::Mesh part{3, true};
+                editor::extract_kit_slot_mesh(*mesh, facet_slots, static_cast<uint32_t>(slot), part);
+                EXPECT_EQ(editor::count_kit_triangles(part), slot_triangles[slot]) << "slot " << shape.material_slots[slot];
+                total += editor::count_kit_triangles(part);
+            }
+            EXPECT_EQ(total, editor::count_kit_triangles(*mesh));
+        }
+    }
+}
+
+// The tree's trunk is its bark slot and its canopy its foliage slot, each a closed part.
+TEST(Kit_shape_library, tree_has_bark_and_foliage_slots)
+{
+    const Kit_shape_definition& tree = get_shape("nature.tree");
+    ASSERT_EQ(tree.material_slots, (std::vector<std::string>{"bark", "foliage"}));
+    for (const std::string& canopy : {std::string{"round"}, std::string{"conical"}}) {
+        SCOPED_TRACE(canopy);
+        Kit_parameter_values values = defaults(tree);
+        ASSERT_TRUE(values.set_enum("canopy", canopy));
+        const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+        std::vector<uint32_t> facet_slots;
+        editor::read_kit_facet_slots(*mesh, facet_slots);
+        for (uint32_t slot = 0; slot < 2; ++slot) {
+            GEO::Mesh part{3, true};
+            editor::extract_kit_slot_mesh(*mesh, facet_slots, slot, part);
+            const Kit_mesh_report report = editor::check_kit_mesh(part);
+            EXPECT_TRUE(report.is_valid()) << tree.material_slots[slot] << ": " << describe(report);
+            EXPECT_EQ(report.component_count, 1u) << tree.material_slots[slot];
+        }
+        // The trunk is the six-sided prism: 6 sides and two hexagon caps.
+        GEO::Mesh bark{3, true};
+        editor::extract_kit_slot_mesh(*mesh, facet_slots, 0, bark);
+        EXPECT_EQ(editor::count_kit_triangles(bark), 20u);
+    }
+}
+
+// R11.1 at defaults, plus R2.6: the shape's own budget and the kit ceiling.
 
 TEST(Kit_shape_library, every_shape_passes_the_mesh_checks_at_defaults)
 {

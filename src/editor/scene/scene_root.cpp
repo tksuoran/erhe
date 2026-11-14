@@ -40,6 +40,7 @@
 #include "operations/property_set_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/variant_select_operation.hpp"
+#include "level/kit_layout.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "rig/bone_commands.hpp"
 #include "rig/bone_structure.hpp"
@@ -766,6 +767,14 @@ auto Scene_root::make_browser_window(
         ) {
             const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
             if (!node) {
+                return;
+            }
+            // A child of a locked kit layout node offers none of the node edits below.
+            if (const std::optional<std::string> refusal = locked_layout_refusal(*node); refusal.has_value()) {
+                ImGui::MenuItem("Locked by its kit layout", nullptr, false, false);
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip("%s", refusal.value().c_str());
+                }
                 return;
             }
             // Rigging: offered only when the clicked subtree contains a bone

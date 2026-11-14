@@ -156,10 +156,11 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("depth",  "Size along Z", 1.0f, Kit_default_scale::modules, 0.05f, 64.0f), 0.5f, 3.0f, 0.25f),
             make_seed_parameter()
         };
-        shape.material_slot   = "stone";
+        shape.material_slots  = {"stone"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 12;
         shape.generator       = generate_block;
+        shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_seam_sides  = [](const Kit_parameter_values&) { return all_sides(); };
         shapes.push_back(std::move(shape));
     }
@@ -177,10 +178,11 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("width", "Size along X",                            1.0f, Kit_default_scale::modules, 0.1f,  64.0f), 1.0f,  3.0f,  0.25f),
             make_seed_parameter()
         };
-        shape.material_slot   = "stone";
+        shape.material_slots  = {"stone"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 8;
         shape.generator       = generate_wedge;
+        shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x};
         shape.get_seam_sides  = [](const Kit_parameter_values&) { return std::vector<Kit_side>{Kit_side::y_neg, Kit_side::z_neg}; };
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             const Kit_shape_definition& self  = *values.get_shape();
@@ -205,11 +207,12 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter ("segments", "Sides around the axis", 16, 3, 64),
             make_seed_parameter  ()
         };
-        shape.material_slot           = "stone";
+        shape.material_slots          = {"stone"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
         shape.triangle_budget         = 60;
         shape.generator               = generate_cylinder;
+        shape.mirror_planes           = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shapes.push_back(std::move(shape));
     }
     {
@@ -228,11 +231,12 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             make_length_parameter("step_rise_limit", "Highest allowed single step", 0.2f, Kit_default_scale::meters,       0.05f, 1.0f),
             make_seed_parameter()
         };
-        shape.material_slot   = "stone";
+        shape.material_slots  = {"stone"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 130;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_stairs;
+        shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x};
         shape.get_seam_sides  = [](const Kit_parameter_values&) { return std::vector<Kit_side>{Kit_side::y_neg, Kit_side::z_neg}; };
         shape.check_combination = [](const Kit_parameter_values& values) -> std::string {
             const Kit_stairs_layout layout = get_stairs_layout(values);
@@ -270,10 +274,11 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("thickness", "Size along Y",  0.2f, Kit_default_scale::meters,  0.01f, 4.0f), 0.1f, 0.4f, 0.05f),
             make_seed_parameter()
         };
-        shape.material_slot   = "floor";
+        shape.material_slots  = {"floor"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 12;
         shape.generator       = generate_floor_slab;
+        shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_seam_sides  = [](const Kit_parameter_values&) { return all_sides(); };
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             const Kit_shape_definition& self = *values.get_shape();

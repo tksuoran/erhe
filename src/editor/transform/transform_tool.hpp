@@ -535,6 +535,7 @@ private:
     // Scratch of rest_on_surface(): the moved meshes and their descendants, and per entry the move.
     std::vector<const erhe::scene::Mesh*> m_surface_excluded;
     std::vector<glm::vec3>                m_surface_deltas;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_moved_nodes; // drag end: the entries' nodes, kept for its capacity
     Rotation_inspector                  m_rotation;
 
     Property_editor                     m_property_editor;

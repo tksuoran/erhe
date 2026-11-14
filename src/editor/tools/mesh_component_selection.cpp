@@ -1,4 +1,5 @@
 #include "tools/mesh_component_selection.hpp"
+#include "level/kit_layout.hpp"
 
 #include "app_message_bus.hpp"
 #include "editor_log.hpp"
@@ -129,7 +130,7 @@ auto append_mesh_component_targets(
     if (!erhe::utility::test_bit_set(mesh->get_flag_bits(), erhe::Item_flags::content)) {
         return 0;
     }
-    if (mesh->skin || mesh->is_lock_edit()) {
+    if (mesh->skin || mesh->is_lock_edit() || find_locking_kit_layout(*mesh)) {
         return 0;
     }
     std::size_t count = 0;

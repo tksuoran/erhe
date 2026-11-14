@@ -22,6 +22,10 @@ namespace editor {
 // reparented, while every property of every item inside the instance stays
 // editable (a local value there is an override of the reference layer).
 //
+// The children of a locked kit layout node are protected the same way and
+// more (doc/editor/level_tools.md "Kit layout nodes"): every predicate below
+// also refuses an item below a locked kit layout node, and a child under one.
+//
 // The two predicates answer that question for the two shapes a structural
 // edit takes; both return the user-facing reason when the edit is refused,
 // and nothing when it is allowed. Each walks the item's ancestors.

@@ -42,6 +42,8 @@
 #include "operations/operations_window.hpp"
 #include "operations/property_set_operation.hpp"
 #include "physics/physics_tool.hpp"
+#include "level/kit_layout.hpp"
+#include "level/level_kits.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "time.hpp"
 #include "renderers/lightmap_baker.hpp"
@@ -721,6 +723,11 @@ auto Mcp_server::action_attach_selection_to_active(const json& args) -> std::str
     if (!active_item) {
         return make_error_content("No active item to attach to");
     }
+    if (const erhe::Hierarchy* const active_hierarchy = dynamic_cast<const erhe::Hierarchy*>(active_item.get()); active_hierarchy != nullptr) {
+        if (const std::optional<std::string> refusal = locked_layout_child_refusal(*active_hierarchy); refusal.has_value()) {
+            return make_error_content("attach_selection_to_active: " + refusal.value() + "; nothing was changed");
+        }
+    }
     m_context.operations->attach_selection_to_active();
     return make_json_content({
         {"queued", true},
@@ -859,8 +866,12 @@ auto Mcp_server::action_set_item_flags(const json& args) -> std::string
     }
     const bool enabled = args.value("enabled", true);
 
+    const std::vector<std::shared_ptr<erhe::Item_base>> flag_items = find_items_by_ids(*sr, target_ids);
+    if (const std::optional<std::string> refusal = locked_layout_refusal_of_any(std::span<const std::shared_ptr<erhe::Item_base>>{flag_items}); refusal.has_value()) {
+        return make_error_content("set_item_flags: " + refusal.value() + "; nothing was changed");
+    }
     json updated = json::array();
-    for (const std::shared_ptr<erhe::Item_base>& item : find_items_by_ids(*sr, target_ids)) {
+    for (const std::shared_ptr<erhe::Item_base>& item : flag_items) {
         // Mesh-scoped flags live on the Mesh prim; a Node id resolves to its
         // mesh so callers can pass the ids that get_scene_nodes returns.
         std::shared_ptr<erhe::Item_base> target = item;
@@ -1903,6 +1914,9 @@ auto Mcp_server::action_physics_drag(const json& args) -> std::string
         if (!node) {
             return make_error_content("Node not found");
         }
+        if (const std::optional<std::string> refusal = locked_layout_refusal(*node); refusal.has_value()) {
+            return make_error_content("physics_drag: " + refusal.value() + "; nothing was changed");
+        }
         std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
         if (!mesh) {
             return make_error_content("physics_drag drags a Mesh prim with a rigid body; '" + node->get_name() + "' is not a Mesh");
@@ -2009,6 +2023,14 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
+    {
+        const std::optional<std::string> refusal = locked_layout_refusal(*node);
+        if (refusal.has_value()) {
+            json r = make_text_content("set_node_transform: " + refusal.value() + "; nothing was changed");
+            r["isError"] = true;
+            return r.dump();
+        }
+    }
 
     const std::string space = args.value("space", "world");
     const bool world = (space == "world") || (space == "global");
@@ -2087,7 +2109,8 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
     // recorded for undo: Node_transform_operation's execute is an idempotent
     // absolute re-apply, so queueing it is the record. It also snaps the
     // rigid body to the new pose (teleport, no impulse) on execute and undo.
-    m_context.operation_stack->queue(
+    std::vector<std::shared_ptr<Operation>> operations;
+    operations.push_back(
         std::make_shared<Node_transform_operation>(
             Node_transform_operation::Parameters{
                 .node                    = node,
@@ -2096,6 +2119,16 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
                 .xform_op_stack_before   = xform_op_stack_before
             }
         )
+    );
+    // A moved locked kit layout node with a surface setting rests its pieces again in the same entry (D3.9).
+    if (m_context.level_kits != nullptr) {
+        node->update_world_from_node();
+        m_context.level_kits->append_layout_move_operations(*sr, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, operations);
+    }
+    m_context.operation_stack->queue(
+        (operations.size() == 1)
+            ? operations.front()
+            : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
     );
 
     auto trs_to_json = [](const erhe::scene::Trs_transform& t) -> json {
@@ -2127,6 +2160,9 @@ auto Mcp_server::action_ik_drag(const json& args) -> std::string
         return r.dump();
     }
     const std::shared_ptr<erhe::scene::Node> effector = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = effector ? locked_layout_refusal(*effector) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("ik_drag: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!effector) {
         json r = make_text_content("Node not found (a node created this frame attaches on the next frame - retry)");
         r["isError"] = true;
@@ -3945,6 +3981,9 @@ auto Mcp_server::action_lock_items(const json& args) -> std::string
         if (v.is_number()) target_ids.insert(v.get<std::size_t>());
     }
     auto items = find_items_by_ids(*sr, target_ids);
+    if (const std::optional<std::string> refusal = locked_layout_refusal_of_any(std::span<const std::shared_ptr<erhe::Item_base>>{items}); refusal.has_value()) {
+        return make_error_content("lock_items: " + refusal.value() + "; nothing was changed");
+    }
     for (auto& item : items) {
         item->set_lock_edit(true);
     }
@@ -3966,6 +4005,9 @@ auto Mcp_server::action_unlock_items(const json& args) -> std::string
         if (v.is_number()) target_ids.insert(v.get<std::size_t>());
     }
     auto items = find_items_by_ids(*sr, target_ids);
+    if (const std::optional<std::string> refusal = locked_layout_refusal_of_any(std::span<const std::shared_ptr<erhe::Item_base>>{items}); refusal.has_value()) {
+        return make_error_content("unlock_items: " + refusal.value() + "; nothing was changed");
+    }
     for (auto& item : items) {
         item->set_lock_edit(false);
     }
@@ -3992,6 +4034,9 @@ auto Mcp_server::action_add_tags(const json& args) -> std::string
         if (v.is_string()) tags.push_back(v.get<std::string>());
     }
     auto items = find_items_by_ids(*sr, target_ids);
+    if (const std::optional<std::string> refusal = locked_layout_refusal_of_any(std::span<const std::shared_ptr<erhe::Item_base>>{items}); refusal.has_value()) {
+        return make_error_content("add_tags: " + refusal.value() + "; nothing was changed");
+    }
     for (auto& item : items) {
         for (const auto& tag : tags) {
             item->add_tag(tag);
@@ -4020,6 +4065,9 @@ auto Mcp_server::action_remove_tags(const json& args) -> std::string
         if (v.is_string()) tags.push_back(v.get<std::string>());
     }
     auto items = find_items_by_ids(*sr, target_ids);
+    if (const std::optional<std::string> refusal = locked_layout_refusal_of_any(std::span<const std::shared_ptr<erhe::Item_base>>{items}); refusal.has_value()) {
+        return make_error_content("remove_tags: " + refusal.value() + "; nothing was changed");
+    }
     for (auto& item : items) {
         for (const auto& tag : tags) {
             item->remove_tag(tag);
@@ -4036,6 +4084,28 @@ auto Mcp_server::action_merge_static_subtree(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("merge_static_subtree: " + layout_refusal.value() + "; nothing was changed");
+    }
+    if (node) {
+        const erhe::scene::Node* locked_layout = is_locked_kit_layout(*node) ? node.get() : nullptr;
+        static_cast<void>(
+            node->for_each_const<erhe::scene::Node>(
+                [&locked_layout](const erhe::scene::Node& visited) -> bool {
+                    if ((locked_layout == nullptr) && is_locked_kit_layout(visited)) {
+                        locked_layout = &visited;
+                    }
+                    return locked_layout == nullptr;
+                }
+            )
+        );
+        if (locked_layout != nullptr) {
+            return make_error_content(
+                "merge_static_subtree: the subtree holds the locked kit layout node '" + locked_layout->get_name() +
+                "', whose children the merge would consume; unlock it first; nothing was changed"
+            );
+        }
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }

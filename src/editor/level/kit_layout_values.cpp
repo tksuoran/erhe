@@ -1,0 +1,489 @@
+#include "level/kit_layout_values.hpp"
+
+#include "level/kit_mesh_builder.hpp"
+#include "level/kit_shape.hpp"
+
+#include <fmt/format.h>
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
+namespace editor {
+
+namespace {
+
+using json = nlohmann::json;
+
+// An exact fit of the space counts the last element (a fraction of a step in units of steps).
+constexpr double c_fit_epsilon = 1.0e-4;
+
+[[nodiscard]] auto hex_json(const float value) -> json
+{
+    return json(format_hexfloat(value));
+}
+
+[[nodiscard]] auto vec3_json(const glm::vec3& value) -> json
+{
+    return json::array({format_hexfloat(value.x), format_hexfloat(value.y), format_hexfloat(value.z)});
+}
+
+[[nodiscard]] auto parse_kind(const std::string& name, Repeat_pattern_kind& out_kind) -> bool
+{
+    for (const Repeat_pattern_kind kind : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::polyline}) {
+        if (name == c_str(kind)) {
+            out_kind = kind;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Reads the object's keys in turn; the first problem is kept.
+class Object_reader
+{
+public:
+    explicit Object_reader(const json& object) : m_object{object} {}
+
+    void read_float(const char* key, float& out_value)
+    {
+        const json* value = find(key);
+        if ((value == nullptr) || !value->is_string() || !parse_hexfloat(value->get<std::string>(), out_value)) {
+            fail(fmt::format("'{}' is not a hexadecimal float string", key));
+        }
+    }
+
+    void read_int(const char* key, int& out_value)
+    {
+        const json* value = find(key);
+        if ((value == nullptr) || !value->is_number_integer()) {
+            fail(fmt::format("'{}' is not an integer", key));
+            return;
+        }
+        const long long number = value->get<long long>();
+        if ((number < std::numeric_limits<int>::min()) || (number > std::numeric_limits<int>::max())) {
+            fail(fmt::format("'{}' is out of range", key));
+            return;
+        }
+        out_value = static_cast<int>(number);
+    }
+
+    void read_vec3(const json& value, const char* key, glm::vec3& out_value)
+    {
+        if (!value.is_array() || (value.size() != 3)) {
+            fail(fmt::format("'{}' is not 3 hexadecimal float strings", key));
+            return;
+        }
+        for (glm::vec3::length_type i = 0; i < 3; ++i) {
+            if (!value[i].is_string() || !parse_hexfloat(value[i].get<std::string>(), out_value[i])) {
+                fail(fmt::format("'{}' is not 3 hexadecimal float strings", key));
+                return;
+            }
+        }
+    }
+
+    void read_vec3(const char* key, glm::vec3& out_value)
+    {
+        const json* value = find(key);
+        if (value != nullptr) {
+            read_vec3(*value, key, out_value);
+        }
+    }
+
+    [[nodiscard]] auto find_string(const char* key) -> std::string
+    {
+        const json* value = find(key);
+        if ((value == nullptr) || !value->is_string()) {
+            fail(fmt::format("'{}' is not a string", key));
+            return {};
+        }
+        return value->get<std::string>();
+    }
+
+    [[nodiscard]] auto find(const char* key) -> const json*
+    {
+        if (!m_object.contains(key)) {
+            fail(fmt::format("'{}' is missing", key));
+            return nullptr;
+        }
+        ++m_read_count;
+        return &m_object.at(key);
+    }
+
+    void fail(std::string message)
+    {
+        if (m_error.empty()) {
+            m_error = std::move(message);
+        }
+    }
+
+    [[nodiscard]] auto finish(const char* what) -> std::string
+    {
+        if (m_error.empty() && (m_read_count != m_object.size())) {
+            m_error = fmt::format("the {} has keys it does not use", what);
+        }
+        return m_error;
+    }
+
+private:
+    const json& m_object;
+    std::size_t m_read_count{0};
+    std::string m_error;
+};
+
+[[nodiscard]] auto count_limit_refusal(const char* kind, const double space, const double step, const double count) -> std::string
+{
+    return fmt::format(
+        "the {} is {:.3f} m long: {:.0f} pieces at a {:.3f} m step, more than the {} pieces one layout places",
+        kind, space, count, step, c_max_repeat_count
+    );
+}
+
+[[nodiscard]] auto stated_count_refusal(const int count) -> std::string
+{
+    if ((count < 1) || (static_cast<std::size_t>(count) > c_max_repeat_count)) {
+        return fmt::format("count is {}, outside 1 - {} (the pieces one layout places)", count, c_max_repeat_count);
+    }
+    return {};
+}
+
+// Element centers spanning the space from the first to the last: floor(space / step) + 1.
+[[nodiscard]] auto span_count(const double space, const double step) -> double
+{
+    return std::floor((space / step) + c_fit_epsilon) + 1.0;
+}
+
+} // anonymous namespace
+
+auto c_str(const Kit_layout_count_mode mode) -> const char*
+{
+    switch (mode) {
+        case Kit_layout_count_mode::count: return "count";
+        case Kit_layout_count_mode::gap:   return "gap";
+        default:                           return "?";
+    }
+}
+
+auto c_str(const Repeat_ring_facing facing) -> const char*
+{
+    switch (facing) {
+        case Repeat_ring_facing::outward:        return "outward";
+        case Repeat_ring_facing::start_rotation: return "start";
+        default:                                 return "?";
+    }
+}
+
+auto to_canonical_text(const Kit_layout_pattern& pattern) -> std::string
+{
+    json points = json::array();
+    for (const glm::vec3& point : pattern.points) {
+        points.push_back(vec3_json(point));
+    }
+    const json object{
+        {"kind",        c_str(pattern.kind)},
+        {"count_mode",  c_str(pattern.count_mode)},
+        {"count",       pattern.count},
+        {"gap",         hex_json(pattern.gap)},
+        {"direction",   vec3_json(pattern.direction)},
+        {"step",        hex_json(pattern.step)},
+        {"length",      hex_json(pattern.length)},
+        {"count_x",     pattern.count_x},
+        {"count_z",     pattern.count_z},
+        {"spacing_x",   hex_json(pattern.spacing_x)},
+        {"spacing_z",   hex_json(pattern.spacing_z)},
+        {"radius",      hex_json(pattern.radius)},
+        {"arc_degrees", hex_json(pattern.arc_degrees)},
+        {"facing",      c_str(pattern.facing)},
+        {"points",      points}
+    };
+    return object.dump();
+}
+
+auto parse_layout_pattern(const std::string_view text, Kit_layout_pattern& out_pattern) -> std::string
+{
+    const json object = json::parse(text, nullptr, false);
+    if (!object.is_object()) {
+        return "the pattern text is not a JSON object";
+    }
+    Kit_layout_pattern pattern;
+    Object_reader      reader{object};
+    const std::string kind = reader.find_string("kind");
+    if (!kind.empty() && !parse_kind(kind, pattern.kind)) {
+        reader.fail(fmt::format("unknown pattern kind '{}'", kind));
+    }
+    const std::string count_mode = reader.find_string("count_mode");
+    if (count_mode == "count") {
+        pattern.count_mode = Kit_layout_count_mode::count;
+    } else if (count_mode == "gap") {
+        pattern.count_mode = Kit_layout_count_mode::gap;
+    } else if (!count_mode.empty()) {
+        reader.fail(fmt::format("unknown count mode '{}'", count_mode));
+    }
+    reader.read_int  ("count",       pattern.count);
+    reader.read_float("gap",         pattern.gap);
+    reader.read_vec3 ("direction",   pattern.direction);
+    reader.read_float("step",        pattern.step);
+    reader.read_float("length",      pattern.length);
+    reader.read_int  ("count_x",     pattern.count_x);
+    reader.read_int  ("count_z",     pattern.count_z);
+    reader.read_float("spacing_x",   pattern.spacing_x);
+    reader.read_float("spacing_z",   pattern.spacing_z);
+    reader.read_float("radius",      pattern.radius);
+    reader.read_float("arc_degrees", pattern.arc_degrees);
+    const std::string facing = reader.find_string("facing");
+    if (facing == "outward") {
+        pattern.facing = Repeat_ring_facing::outward;
+    } else if (facing == "start") {
+        pattern.facing = Repeat_ring_facing::start_rotation;
+    } else if (!facing.empty()) {
+        reader.fail(fmt::format("unknown ring facing '{}'", facing));
+    }
+    const json* points = reader.find("points");
+    if ((points != nullptr) && !points->is_array()) {
+        reader.fail("'points' is not a list");
+    } else if (points != nullptr) {
+        for (const json& point : *points) {
+            glm::vec3 value{0.0f};
+            reader.read_vec3(point, "points", value);
+            pattern.points.push_back(value);
+        }
+    }
+    const std::string error = reader.finish("pattern");
+    if (!error.empty()) {
+        return error;
+    }
+    out_pattern = std::move(pattern);
+    return {};
+}
+
+auto to_canonical_text(const std::span<const Kit_layout_item> items) -> std::string
+{
+    json list = json::array();
+    for (const Kit_layout_item& item : items) {
+        // The parameters are the item's canonical text as an object; a text that is not JSON is kept as a string.
+        json parameters = json::parse(item.parameters, nullptr, false);
+        if (parameters.is_discarded()) {
+            parameters = json(item.parameters);
+        }
+        list.push_back(json{{"shape", item.shape}, {"parameters", parameters}, {"materials", item.materials}});
+    }
+    return list.dump();
+}
+
+auto parse_layout_items(const std::string_view text, std::vector<Kit_layout_item>& out_items) -> std::string
+{
+    const json list = json::parse(text, nullptr, false);
+    if (!list.is_array()) {
+        return "the items text is not a JSON list";
+    }
+    std::vector<Kit_layout_item> items;
+    for (std::size_t i = 0, end = list.size(); i < end; ++i) {
+        const json& object = list[i];
+        if (!object.is_object()) {
+            return fmt::format("item {} is not an object", i);
+        }
+        Kit_layout_item item;
+        Object_reader   reader{object};
+        item.shape = reader.find_string("shape");
+        const json* parameters = reader.find("parameters");
+        if (parameters != nullptr) {
+            if (!parameters->is_object()) {
+                reader.fail("'parameters' is not an object");
+            } else {
+                item.parameters = parameters->dump();
+            }
+        }
+        const json* materials = reader.find("materials");
+        if (materials != nullptr) {
+            if (!materials->is_array()) {
+                reader.fail("'materials' is not a list");
+            } else {
+                for (const json& name : *materials) {
+                    if (!name.is_string()) {
+                        reader.fail("'materials' is not a list of names");
+                        break;
+                    }
+                    item.materials.push_back(name.get<std::string>());
+                }
+            }
+        }
+        const std::string error = reader.finish("item");
+        if (!error.empty()) {
+            return fmt::format("item {}: {}", i, error);
+        }
+        items.push_back(std::move(item));
+    }
+    out_items = std::move(items);
+    return {};
+}
+
+auto get_path_length(const std::span<const glm::vec3> points) -> double
+{
+    double    length = 0.0;
+    glm::vec3 from{0.0f};
+    for (const glm::vec3& point : points) {
+        length += static_cast<double>(glm::length(point - from));
+        from = point;
+    }
+    return length;
+}
+
+auto resolve_layout_pattern(const Kit_layout_pattern& pattern, const float item_extent, Kit_layout_run& out_run) -> std::string
+{
+    out_run = Kit_layout_run{};
+    Repeat_pattern& run = out_run.pattern;
+    run.kind = pattern.kind;
+    const bool gap_mode = (pattern.count_mode == Kit_layout_count_mode::gap) && (pattern.kind != Repeat_pattern_kind::grid);
+    double     step_min = 0.0;
+    if (gap_mode) {
+        if (!std::isfinite(pattern.gap)) {
+            return "gap must be finite";
+        }
+        if (!std::isfinite(item_extent) || (item_extent < 0.0f)) {
+            return "the item has no usable extent";
+        }
+        step_min = static_cast<double>(item_extent) + static_cast<double>(pattern.gap);
+        if (!(step_min > 0.0)) {
+            return fmt::format(
+                "gap is {} m with an item extent of {} m: the step is not positive, the gap must be more than -{} m",
+                pattern.gap, item_extent, item_extent
+            );
+        }
+    } else if (pattern.kind != Repeat_pattern_kind::grid) {
+        const std::string refusal = stated_count_refusal(pattern.count);
+        if (!refusal.empty()) {
+            return refusal;
+        }
+    }
+
+    switch (pattern.kind) {
+        case Repeat_pattern_kind::line: {
+            const float direction_length = glm::length(pattern.direction);
+            if (!std::isfinite(direction_length) || !(direction_length > 0.0f)) {
+                return "direction must be finite and not zero";
+            }
+            const glm::vec3 direction = pattern.direction / direction_length;
+            double count = static_cast<double>(pattern.count);
+            double step  = static_cast<double>(pattern.step);
+            if (gap_mode) {
+                if (!std::isfinite(pattern.length) || (pattern.length < 0.0f)) {
+                    return fmt::format("length is {} m, it must be zero or more", pattern.length);
+                }
+                const double length = static_cast<double>(pattern.length);
+                count = span_count(length, step_min);
+                if (count > static_cast<double>(c_max_repeat_count)) {
+                    return count_limit_refusal("line", length, step_min, count);
+                }
+                step = (count > 1.0) ? (length / (count - 1.0)) : 0.0;
+            } else if (!std::isfinite(pattern.step) || ((pattern.count > 1) && (pattern.step == 0.0f))) {
+                return fmt::format("step is {} m, it must be finite and not zero", pattern.step);
+            }
+            run.count       = static_cast<int>(count);
+            run.spacing     = direction * static_cast<float>(step);
+            out_run.count   = static_cast<std::size_t>(count);
+            out_run.step    = (count > 1.0) ? static_cast<float>(step) : 0.0f;
+            out_run.space   = static_cast<float>(step * (count - 1.0));
+            return {};
+        }
+        case Repeat_pattern_kind::grid: {
+            run.count_x   = pattern.count_x;
+            run.count_z   = pattern.count_z;
+            run.spacing_x = pattern.spacing_x;
+            run.spacing_z = pattern.spacing_z;
+            if ((pattern.count_x < 1) || (pattern.count_z < 1)) {
+                return fmt::format("the grid counts are {} x {}, each must be at least 1", pattern.count_x, pattern.count_z);
+            }
+            const std::size_t count = static_cast<std::size_t>(pattern.count_x) * static_cast<std::size_t>(pattern.count_z);
+            if (count > c_max_repeat_count) {
+                return fmt::format(
+                    "the grid is {} x {}: {} pieces, more than the {} pieces one layout places",
+                    pattern.count_x, pattern.count_z, count, c_max_repeat_count
+                );
+            }
+            out_run.count = count;
+            return {};
+        }
+        case Repeat_pattern_kind::ring: {
+            if (!std::isfinite(pattern.radius) || !(pattern.radius > 0.0f)) {
+                return fmt::format("radius is {}, it must be positive", pattern.radius);
+            }
+            if (!std::isfinite(pattern.arc_degrees) || !(pattern.arc_degrees > 0.0f) || (pattern.arc_degrees > 360.0f)) {
+                return fmt::format("arc is {} degrees, it must be more than 0 and at most 360", pattern.arc_degrees);
+            }
+            const bool   full = pattern.arc_degrees >= 360.0f;
+            const double arc  = static_cast<double>(pattern.radius) * glm::radians(static_cast<double>(pattern.arc_degrees));
+            double count = static_cast<double>(pattern.count);
+            if (gap_mode) {
+                // A full ring closes: its last gap is a gap like the others.
+                count = full
+                    ? std::max(1.0, std::floor((arc / step_min) + c_fit_epsilon))
+                    : span_count(arc, step_min);
+                if (count > static_cast<double>(c_max_repeat_count)) {
+                    return count_limit_refusal("ring's arc", arc, step_min, count);
+                }
+            }
+            run.count       = static_cast<int>(count);
+            run.radius      = pattern.radius;
+            run.arc_degrees = pattern.arc_degrees;
+            run.facing      = pattern.facing;
+            out_run.count   = static_cast<std::size_t>(count);
+            out_run.space   = static_cast<float>(arc);
+            out_run.step    = full
+                ? static_cast<float>(arc / count)
+                : ((count > 1.0) ? static_cast<float>(arc / (count - 1.0)) : 0.0f);
+            return {};
+        }
+        case Repeat_pattern_kind::polyline: {
+            if (pattern.points.empty()) {
+                return "a path needs at least one point after the origin";
+            }
+            for (const glm::vec3& point : pattern.points) {
+                if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z)) {
+                    return "the path points must be finite";
+                }
+            }
+            const double length = get_path_length(pattern.points);
+            double count = static_cast<double>(pattern.count);
+            if (gap_mode) {
+                count = span_count(length, step_min);
+                if (count > static_cast<double>(c_max_repeat_count)) {
+                    return count_limit_refusal("path", length, step_min, count);
+                }
+            }
+            if ((count > 1.0) && !(length > 0.0)) {
+                return fmt::format("the path has no length: it holds one piece, not {:.0f}", count);
+            }
+            run.points       = pattern.points;
+            // One element: a spacing past the path's end leaves element 0 alone.
+            run.path_spacing = (count > 1.0) ? static_cast<float>(length / (count - 1.0)) : static_cast<float>(length + 1.0);
+            out_run.count    = static_cast<std::size_t>(count);
+            out_run.space    = static_cast<float>(length);
+            out_run.step     = (count > 1.0) ? run.path_spacing : 0.0f;
+            return {};
+        }
+        default: {
+            return "unknown pattern kind";
+        }
+    }
+}
+
+auto get_layout_item_index(const std::size_t element, const std::size_t item_count) -> std::size_t
+{
+    return (item_count == 0) ? 0 : (element % item_count);
+}
+
+auto derive_layout_element_seed(const int layout_seed, const std::size_t element) -> int
+{
+    Kit_random random{layout_seed, fmt::format("layout element {}", element)};
+    return static_cast<int>(random.next_u32() % static_cast<uint32_t>(kit_seed_max + 1));
+}
+
+void set_layout_spacing_from_extent(Kit_layout_pattern& pattern, const glm::vec3& extent)
+{
+    pattern.step      = (extent.x > 0.0f) ? extent.x : 1.0f;
+    pattern.spacing_x = (extent.x > 0.0f) ? extent.x : 1.0f;
+    pattern.spacing_z = (extent.z > 0.0f) ? extent.z : 1.0f;
+}
+
+} // namespace editor

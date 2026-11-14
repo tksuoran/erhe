@@ -14,6 +14,11 @@
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/build_info.hpp"
 
+#include <cstddef>
+#include <memory>
+#include <span>
+#include <vector>
+
 namespace erhe {
     class Hierarchy;
 }
@@ -51,6 +56,9 @@ public:
     erhe::primitive::Normal_style                    normal_style               {erhe::primitive::Normal_style::corner_normals};
     std::shared_ptr<erhe::geometry::Geometry>        geometry                   {};
     Geometry_generator                               geometry_generator         {};
+    // The parts an instance gets, one mesh primitive each with its own material (doc/editor/brushes.md
+    // "Parts"); empty: the geometry is the one part.
+    std::vector<std::shared_ptr<erhe::geometry::Geometry>> part_geometries      {};
     // The preparation queue a tier 2 request goes to
     // (doc/editor/brushes.md G5, G6). Weak: the queue is owned
     // by Scene_builder and a brush may outlive it, in which case tier 1
@@ -73,6 +81,8 @@ public:
     Scene_root*                                scene_root     {nullptr};
     glm::mat4                                  world_from_node{1.0f};
     std::shared_ptr<erhe::primitive::Material> material;
+    // Part i's material; a part without an entry, or with a null one, takes material.
+    std::span<const std::shared_ptr<erhe::primitive::Material>> part_materials{};
     double                                     scale          {1.0f};
     bool                                       physics_enabled{true};
     erhe::physics::Motion_mode                 motion_mode    {erhe::physics::Motion_mode::e_dynamic};
@@ -88,10 +98,12 @@ public:
     {
     public:
         int                                              scale_key;
-        std::shared_ptr<erhe::primitive::Primitive>      primitive;
+        std::shared_ptr<erhe::primitive::Primitive>      primitive; // the whole geometry
         std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
         float                                            volume;
         glm::mat4                                        local_inertia;
+        // What an instance gets, one per part; {primitive} for a brush of one part.
+        std::vector<std::shared_ptr<erhe::primitive::Primitive>> part_primitives;
     };
 
     explicit Brush(const Brush_data& create_info);
@@ -124,8 +136,12 @@ public:
     // caller refuses the placement instead of dereferencing it.
     [[nodiscard]] auto get_scaled                (double scale) -> const Scaled*;
     [[nodiscard]] auto create_scaled             (int scale_key) -> Scaled;
+    // The made scale whose primitive or one of whose part primitives is the given one; null when none.
+    [[nodiscard]] auto find_scaled               (const std::shared_ptr<erhe::primitive::Primitive>& primitive) const -> const Scaled*;
     [[nodiscard]] auto make_instance             (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto get_bounding_box          () -> erhe::math::Aabb;
+    // The mesh primitives an instance gets; at least 1.
+    [[nodiscard]] auto get_part_count            () const -> std::size_t;
     // Tier 1 (doc/editor/brushes.md G2): prepares or waits as
     // needed and returns the ready geometry, or null when preparation failed.
     [[nodiscard]] auto get_geometry              () -> std::shared_ptr<erhe::geometry::Geometry>;
@@ -159,6 +175,8 @@ private:
     // (doc/editor/brushes.md G1), so a thread that has observed `ready` also
     // sees the statistics.
     void update_facet_statistics(const erhe::geometry::Geometry& geometry);
+    // The parts at the scale: the brush's own part primitives at 1, else scaled copies.
+    [[nodiscard]] auto make_part_primitives(float scale, const std::shared_ptr<erhe::primitive::Primitive>& whole) const -> std::vector<std::shared_ptr<erhe::primitive::Primitive>>;
 
     // The create info as given, minus the geometry and the generator, which
     // the slot owns: the slot is the single source of truth for both.
@@ -166,6 +184,7 @@ private:
     Brush_geometry_slot                                m_geometry_slot;
     std::shared_ptr<erhe::primitive::Material>         m_material;
     std::shared_ptr<erhe::primitive::Primitive>        m_primitive;
+    std::vector<std::shared_ptr<erhe::primitive::Primitive>> m_part_primitives; // empty for a brush of one part
     std::vector<Reference_frame>                      m_reference_frames;
     std::vector<Scaled>                               m_scaled_entries;
     std::map<GEO::index_t, std::vector<GEO::index_t>> m_corner_count_to_facets;
@@ -184,13 +203,13 @@ public:
 
 // The node and insert operation place_brush_in_scene() queues, for a caller
 // that groups several placements into one operation. Empty when the brush
-// has no geometry.
+// has no geometry. materials holds one per part, or one for every part.
 auto make_brush_instance_insert(
     App_context&                                      context,
     Brush&                                            brush,
     Scene_root&                                       scene_root,
     const glm::mat4&                                  world_from_node,
-    const std::shared_ptr<erhe::primitive::Material>& material,
+    std::span<const std::shared_ptr<erhe::primitive::Material>> materials,
     double                                            scale           = 1.0,
     erhe::physics::Motion_mode                        motion_mode     = erhe::physics::Motion_mode::e_dynamic,
     std::shared_ptr<erhe::Hierarchy>                  parent          = {},
@@ -214,5 +233,9 @@ auto place_brush_in_scene(
     std::size_t                                       index_in_parent = 0,
     std::optional<float>                              mass_override   = {}
 ) -> std::shared_ptr<erhe::scene::Node>;
+
+// Hands each brush instance with a body in a detached copy that is about to enter scene_root the
+// collision shape of its brush scale, which a clone does not carry (doc/editor/brushes.md "Copies").
+void set_copied_brush_collision_shapes(Scene_root& scene_root, erhe::Hierarchy& subtree);
 
 }

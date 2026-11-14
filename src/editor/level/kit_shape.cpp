@@ -86,6 +86,15 @@ auto c_str(const Kit_derive derive) -> const char*
     }
 }
 
+auto c_str(const Kit_mirror_plane plane) -> const char*
+{
+    switch (plane) {
+        case Kit_mirror_plane::x: return "x";
+        case Kit_mirror_plane::z: return "z";
+        default:                  return "?";
+    }
+}
+
 auto kit_next_seed(const int seed) -> int
 {
     Kit_random random{seed, "next_seed"};

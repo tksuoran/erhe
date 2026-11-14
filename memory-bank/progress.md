@@ -48,4 +48,11 @@
 [TASK::level-tools]{started-2026-11-13;branch=main;doc/plans/level_tools_implementation.md(steps)+topics/level_tools.md(state)}
 ✓requirements+design+steps-1-7e{see-topics/level_tools.md[BUILT]}
 ✓step-7f{2026-11-14;cause=positional-ImGui-row-ids(PushID(m_row++))+developer-mode-rows-above-changing-count-during-preview->dragged-row-new-id->ImGui-NewFrame-clears-ActiveId;fix=Property_row_key-ids(item-id|Selection::get_selection_key+owner-type,property-index,Property_ui::group_id,Property_row_id-enum-for-hand-written-rows);©User-verified}
-?next{step-8-region-contents+height-map+support-report}
+✓step-8{a8b8f7ef3;level_tools_verify.py-236}
+✓step-9{410a25bc2;level_tools_verify.py-273;erhe_physics_tests-80}
+✓step-10-repeat{level_tools_verify.py-313;editor_level_tests-41}
+✓step-10-groups{level_tools_verify.py-368;editor_level_tests-49}
+✓step-11{level_tools_verify.py-412;editor_level_tests-51;navigation_verify-76}
+✓step-23{kit-layout-node-core;level_tools_verify.py-515;editor_level_tests-60}
+✓step-24+25{Layout-section+old-repeat-removed;level_tools_verify.py-544}
+?next{doc/plans/curves.md-steps-1-6(curve-math->curve-node->viewport-editing->curve-kit-layout->2D-Bezier-widget->sweep-spine)->level-tools-step-26(layout-drag-preview)->step-12}

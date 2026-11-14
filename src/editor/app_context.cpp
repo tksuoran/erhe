@@ -3,6 +3,8 @@
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
+#include "level/kit_layout.hpp"
+#include "tools/selection_tool.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_commit_queue.hpp"
 #include "scene/scene_root.hpp"
@@ -12,6 +14,7 @@
 #include "erhe_utility/thread_roles.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
@@ -58,6 +61,19 @@ void App_context::on_item_property_changed(erhe::Item_base& item, const erhe::pr
     const bool lighting_item = erhe::is<erhe::primitive::Material>(&item) || erhe::is<erhe::scene::Light>(&item);
     if ((app_message_bus != nullptr) && lighting_item) {
         app_message_bus->scene_lighting_changed.queue_message(Scene_lighting_changed_message{});
+    }
+
+    if ((app_message_bus != nullptr) && is_kit_layout_property(property)) {
+        app_message_bus->kit_layout_changed.queue_message(Kit_layout_changed_message{});
+    }
+
+    // A kit layout node that becomes locked (a lock, the undo of an unlock) takes over its selected children.
+    if ((&property == &Kit_layout::locked_property.get()) && (selection != nullptr)) {
+        const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&item);
+        if ((node != nullptr) && is_locked_kit_layout(*node)) {
+            const std::vector<std::shared_ptr<erhe::Item_base>> selected = selection->get_selected_items();
+            selection->set_selection(selected, selection->get_active_item());
+        }
     }
 }
 

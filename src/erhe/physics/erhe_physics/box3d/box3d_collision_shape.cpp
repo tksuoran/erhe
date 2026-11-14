@@ -524,4 +524,17 @@ auto ICollision_shape::create_tapered_cylinder_shape_shared(
     return std::make_shared<Box3d_tapered_cylinder_shape>(axis, bottom_radius, top_radius, length);
 }
 
+auto ICollision_shape::get_penetration_depth(
+    const ICollision_shape& shape_a, const Transform& transform_a,
+    const ICollision_shape& shape_b, const Transform& transform_b
+) -> std::optional<float>
+{
+    // A shape's Box3D geometry exists only once it is attached to a body (box3d_collision_shape.hpp).
+    static_cast<void>(shape_a);
+    static_cast<void>(transform_a);
+    static_cast<void>(shape_b);
+    static_cast<void>(transform_b);
+    return std::nullopt;
+}
+
 } // namespace erhe::physics

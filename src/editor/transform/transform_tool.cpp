@@ -3013,6 +3013,17 @@ void Transform_tool::record_transform_operation()
         }
     }
 
+    // A moved locked kit layout node with a surface setting rests its pieces again in the same entry (D3.9).
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (scene_root && (m_context.level_kits != nullptr)) {
+        m_moved_nodes.clear();
+        for (const Transform_entry& entry : shared.entries) {
+            m_moved_nodes.push_back(entry.node);
+        }
+        m_context.level_kits->append_layout_move_operations(*scene_root, m_moved_nodes, compompound_parameters.operations);
+        m_moved_nodes.clear();
+    }
+
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(
             std::move(compompound_parameters)

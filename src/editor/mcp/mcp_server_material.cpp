@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "level/kit_layout.hpp"
 #include "editor_item_bits.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
@@ -897,6 +898,9 @@ auto Mcp_server::action_assign_mesh_material(const json& args) -> std::string
     const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
     if (!mesh) {
         return make_error_content("Node has no mesh: " + node->get_name());
+    }
+    if (const std::optional<std::string> refusal = locked_layout_refusal(*mesh); refusal.has_value()) {
+        return make_error_content("assign_mesh_material: " + refusal.value() + "; nothing was changed");
     }
     const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
     if (primitive_index >= primitives.size()) {

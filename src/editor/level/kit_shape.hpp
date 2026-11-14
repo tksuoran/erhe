@@ -83,6 +83,14 @@ enum class Kit_randomness : unsigned int {
 [[nodiscard]] auto c_str(Kit_collision collision) -> const char*;
 [[nodiscard]] auto c_str(Kit_derive derive) -> const char*;
 
+// A plane through a shape's origin its mesh is symmetric about at every parameter value (D1.10): x is x = 0.
+enum class Kit_mirror_plane : unsigned int {
+    x = 0,
+    z
+};
+
+[[nodiscard]] auto c_str(Kit_mirror_plane plane) -> const char*;
+
 // The level lengths in effect for a scene (D5).
 class Kit_lengths
 {
@@ -229,12 +237,13 @@ public:
     std::string                description;
     std::vector<std::string>   tags;
     std::vector<Kit_parameter> parameters;
-    std::string                material_slot;
+    std::vector<std::string>   material_slots;         // named, unique, in order; facets name theirs by index (D1.11)
     Kit_normal_style           normal_style           {Kit_normal_style::faceted};
     float                      hard_edge_angle_degrees{0.0f};
     unsigned int               triangle_budget        {0}; // at default parameters (R2.6)
     Kit_collision              collision              {Kit_collision::convex_hull};
     Kit_randomness             randomness             {Kit_randomness::none};
+    std::vector<Kit_mirror_plane> mirror_planes;       // empty: no exact mirror image (D1.10)
     Kit_generator              generator;
     Kit_values_check           check_combination;      // optional: limits between parameters
     Kit_walkability_check      check_walkability;      // set for shapes meant to be walked on or through

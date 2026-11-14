@@ -279,9 +279,24 @@ private:
     // Level kit tools (mcp_server_level.cpp, doc/editor/level_tools.md "MCP").
     auto query_level_kits                     (const nlohmann::json& args) -> std::string;
     auto action_level_place_pieces            (const nlohmann::json& args) -> std::string;
+    auto action_level_group_nodes             (const nlohmann::json& args) -> std::string;
+    auto action_level_ungroup                 (const nlohmann::json& args) -> std::string;
+    auto action_level_duplicate_group         (const nlohmann::json& args) -> std::string;
+    auto action_level_mirror_group            (const nlohmann::json& args) -> std::string;
+    auto action_level_create_layout           (const nlohmann::json& args) -> std::string;
+    auto action_level_set_layout              (const nlohmann::json& args) -> std::string;
+    auto query_level_layouts                  (const nlohmann::json& args) -> std::string;
+    auto action_level_set_layout_lock         (const nlohmann::json& args) -> std::string;
+    auto action_level_refresh_layout          (const nlohmann::json& args) -> std::string;
     auto query_level_pieces                   (const nlohmann::json& args) -> std::string;
     auto action_level_set_piece_parameters    (const nlohmann::json& args) -> std::string;
+    auto action_level_set_piece_material      (const nlohmann::json& args) -> std::string;
     auto action_level_snap_to_surface         (const nlohmann::json& args) -> std::string;
+    auto query_level_region_contents          (const nlohmann::json& args) -> std::string;
+    auto query_level_height_map               (const nlohmann::json& args) -> std::string;
+    auto query_level_support_report           (const nlohmann::json& args) -> std::string;
+    auto query_level_overlap_report           (const nlohmann::json& args) -> std::string;
+    auto query_level_check                    (const nlohmann::json& args) -> std::string;
     auto query_level_placement_preview        (const nlohmann::json& args) -> std::string;
     auto query_surface_snap_settings          (const nlohmann::json& args) -> std::string;
     auto action_set_surface_snap_settings     (const nlohmann::json& args) -> std::string;

@@ -1499,12 +1499,14 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
     auto undo_depth = [&client]() -> std::size_t {
         return client.call_tool("get_undo_redo_stack", json::object()).payload.at("undo").size();
     };
-    auto check_one_entry = [&](const std::string& tool, const json& arguments) {
+    // The reply's payload goes to out_payload.
+    auto check_one_entry_into = [&](const std::string& tool, const json& arguments, json& out_payload) {
         SCOPED_TRACE(tool);
         ASSERT_TRUE(wait_until_idle(client, 30000));
         const std::size_t depth0 = undo_depth();
         const Mcp_client::Tool_result result = client.call_tool(tool, arguments);
         ASSERT_FALSE(result.is_error) << result.text;
+        out_payload = result.payload;
         ASSERT_TRUE(wait_until_idle(client, 30000));
         EXPECT_EQ(undo_depth(), depth0 + 1);
         ASSERT_FALSE(client.call_tool("undo", json::object()).is_error);
@@ -1513,6 +1515,10 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
         ASSERT_FALSE(client.call_tool("redo", json::object()).is_error);
         ASSERT_TRUE(wait_until_idle(client, 30000));
         EXPECT_EQ(undo_depth(), depth0 + 1);
+    };
+    auto check_one_entry = [&](const std::string& tool, const json& arguments) {
+        json payload;
+        check_one_entry_into(tool, arguments, payload);
     };
 
     check_one_entry("create_light", json{{"scene_name", scene}, {"name", "undo test light"}, {"type", "point"}});
@@ -1546,8 +1552,44 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
         }
         ASSERT_NE(raised_id, 0u);
         check_one_entry("level_set_piece_parameters", json{{"scene_name", scene}, {"node_id", raised_id}, {"parameters", {{"width", 1.5}}}});
+        // A palette material the scene does not hold yet and the slot's assignment are one entry.
+        check_one_entry("level_set_piece_material", json{{"scene_name", scene}, {"node_id", raised_id}, {"slot", "stone"}, {"material", "Kit Wood"}});
         // The raised block comes to rest on the block below it.
         check_one_entry("level_snap_to_surface", json{{"scene_name", scene}, {"node_ids", json::array({raised_id})}});
+        // The group tools are one entry each; redo gives the same nodes back, so the ids stay valid.
+        json group;
+        check_one_entry_into("level_group_nodes", json{{"scene_name", scene}, {"node_ids", json::array({raised_id})}, {"name", "undo test group"}}, group);
+        ASSERT_TRUE(group.contains("id")) << group.dump();
+        const std::size_t group_id = group.at("id").get<std::size_t>();
+        check_one_entry("level_mirror_group", json{{"scene_name", scene}, {"group_id", group_id}, {"axis", "x"}});
+        json copy;
+        check_one_entry_into("level_duplicate_group", json{{"scene_name", scene}, {"group_id", group_id}, {"offset", {0.0, 0.0, 4.0}}}, copy);
+        ASSERT_TRUE(copy.contains("id")) << copy.dump();
+        check_one_entry("level_ungroup", json{{"scene_name", scene}, {"group_id", copy.at("id")}});
+        // A kit layout node with its pieces, a value change with its regeneration, the lock and the unlock are one entry each.
+        json layout;
+        check_one_entry_into(
+            "level_create_layout",
+            json{{"scene_name", scene}, {"position", {20.0, 0.0, 30.0}}, {"items", json::array({json{{"shape", "basic.block"}}})}, {"pattern", {{"kind", "line"}, {"count", 3}}}},
+            layout
+        );
+        ASSERT_TRUE(layout.contains("id")) << layout.dump();
+        const std::size_t layout_id = layout.at("id").get<std::size_t>();
+        check_one_entry("level_set_layout", json{{"scene_name", scene}, {"layout_id", layout_id}, {"pattern", {{"count_mode", "gap"}, {"length", 6.0}, {"gap", 0.5}}}});
+        check_one_entry("level_set_layout_lock", json{{"scene_name", scene}, {"layout_id", layout_id}, {"locked", false}});
+        check_one_entry("level_set_layout_lock", json{{"scene_name", scene}, {"layout_id", layout_id}, {"locked", true}});
+        // A layout made from a placed piece, which it replaces, is one entry.
+        json source;
+        check_one_entry_into(
+            "level_place_pieces",
+            json{{"scene_name", scene}, {"pieces", json::array({json{{"shape", "basic.block"}, {"position", {20.0, 0.0, 24.0}}}})}},
+            source
+        );
+        ASSERT_TRUE(source.contains("pieces")) << source.dump();
+        check_one_entry(
+            "level_create_layout",
+            json{{"scene_name", scene}, {"from_piece_id", source.at("pieces")[0].at("id")}, {"pattern", {{"kind", "line"}, {"count", 3}}}}
+        );
     }
 
     const Mcp_client::Tool_result cameras = client.call_tool("get_scene_cameras", json{{"scene_name", scene}});

@@ -1,6 +1,7 @@
 // Navigation mesh MCP tools (doc/editor/navigation.md "MCP").
 
 #include "mcp/mcp_server.hpp"
+#include "level/kit_layout.hpp"
 #include "mcp/mcp_server_shared.hpp"
 #include "app_context.hpp"
 #include "app_scenes.hpp"
@@ -243,6 +244,9 @@ auto Mcp_server::action_navigation_set_seed(const json& args) -> std::string
     }
     if (node == scene_root->get_scene().get_root_node()) {
         return make_error_content("The scene root node cannot be a navigation seed");
+    }
+    if (const std::optional<std::string> refusal = locked_layout_refusal(*node); refusal.has_value()) {
+        return make_error_content("navigation_set_seed: " + refusal.value() + "; nothing was changed");
     }
     if (args.contains("seed") && !args.at("seed").is_boolean()) {
         return make_error_content("'seed' must be true or false");

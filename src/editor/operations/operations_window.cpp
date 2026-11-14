@@ -1,4 +1,5 @@
 #include "operations/operations_window.hpp"
+#include "level/kit_layout.hpp"
 #include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
@@ -587,6 +588,28 @@ void Operations::shrink_component_selection()
     }
 }
 
+namespace {
+
+// A geometry operation edits the meshes of its items: a locked kit layout node's children are not edited directly.
+[[nodiscard]] auto refuses_locked_layout_items(const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> bool
+{
+    for (const std::shared_ptr<erhe::Item_base>& item : items) {
+        const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(item.get());
+        if ((node != nullptr) && is_locked_kit_layout(*node)) {
+            log_operations->info("Operation refused: '{}' is a locked kit layout node; its children are made from its values", node->get_name());
+            return true;
+        }
+        const std::optional<std::string> refusal = locked_layout_refusal(*item);
+        if (refusal.has_value()) {
+            log_operations->info("Operation refused: {}", refusal.value());
+            return true;
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
+
 auto Operations::resolve_operation_items(
     const bool                                     selection_aware,
     const Operation_reference                      reference,
@@ -623,7 +646,7 @@ auto Operations::resolve_operation_items(
             }
         }
         if (!out_items.empty()) {
-            return true;
+            return !refuses_locked_layout_items(out_items);
         }
         // A component mode is active but nothing is live (e.g. all entries dormant):
         // fall through to the object selection rather than silently doing nothing.
@@ -659,7 +682,7 @@ auto Operations::resolve_operation_items(
             out_items.insert(out_items.begin(), active_node);
         }
     }
-    return true;
+    return !refuses_locked_layout_items(out_items);
 }
 
 template<typename T>
@@ -2020,6 +2043,10 @@ void Operations::attach_selection_to_active()
     const std::shared_ptr<erhe::scene::Node> active_node = selection->get_active_item_as<erhe::scene::Node>();
     if (!active_node) {
         log_operations->warn("Attach: no active node to attach to");
+        return;
+    }
+    if (const std::optional<std::string> refusal = locked_layout_child_refusal(*active_node); refusal.has_value()) {
+        log_operations->warn("Attach refused: {}", refusal.value());
         return;
     }
     const erhe::Item_base* active_item = static_cast<const erhe::Item_base*>(active_node.get());

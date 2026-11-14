@@ -3,6 +3,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "level/kit_layout.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "animation/animation_edit.hpp"
@@ -332,6 +333,9 @@ auto Mcp_server::action_animation_create_key(const json& args) -> std::string
     if (nodes.empty()) {
         return make_error_content(error);
     }
+    if (const std::optional<std::string> refusal = locked_layout_refusal_of_any(std::span<const std::shared_ptr<erhe::scene::Node>>{nodes}); refusal.has_value()) {
+        return make_error_content("animation keying: " + refusal.value() + "; nothing was changed");
+    }
 
     // No animation targeted: create one in the keyed scene's content library
     // and target it -- the same Unity-record-button behavior as the Animation
@@ -447,6 +451,9 @@ auto Mcp_server::action_animation_delete_key(const json& args) -> std::string
     const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = collect_keying_nodes(m_context, args, error);
     if (nodes.empty()) {
         return make_error_content(error);
+    }
+    if (const std::optional<std::string> refusal = locked_layout_refusal_of_any(std::span<const std::shared_ptr<erhe::scene::Node>>{nodes}); refusal.has_value()) {
+        return make_error_content("animation keying: " + refusal.value() + "; nothing was changed");
     }
 
     const float time = args.contains("time") && args["time"].is_number()

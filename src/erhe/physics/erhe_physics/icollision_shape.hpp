@@ -113,6 +113,13 @@ public:
     [[nodiscard]] static auto create_uniform_scaling_shape       (const std::shared_ptr<ICollision_shape>& shape, float scale) -> ICollision_shape*;
     [[nodiscard]] static auto create_uniform_scaling_shape_shared(const std::shared_ptr<ICollision_shape>& shape, float scale) -> std::shared_ptr<ICollision_shape>;
 
+    // The greatest penetration depth of the two shapes at their node-space (rotation + translation)
+    // transforms, 0 when apart or touching; nothing when the backend cannot collide the pair.
+    [[nodiscard]] static auto get_penetration_depth(
+        const ICollision_shape& shape_a, const Transform& transform_a,
+        const ICollision_shape& shape_b, const Transform& transform_b
+    ) -> std::optional<float>;
+
                   virtual void calculate_local_inertia           (float mass, glm::mat4& inertia) const = 0;
     [[nodiscard]] virtual auto is_convex                         () const -> bool                       = 0;
     [[nodiscard]] virtual auto get_center_of_mass                () const -> glm::vec3                  = 0;

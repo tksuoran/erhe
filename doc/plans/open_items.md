@@ -194,6 +194,11 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Performance and measurement
 
+- Layout nodes recompute only when there is a need. `Layout_system::update`
+  recomputes every layout every frame (`doc/erhe/layout.md`); it shall run
+  a layout when a `Layout` value of the node or of a child changes, when
+  the child list changes and when a child's measured content changes, and
+  do nothing in a frame without such a change.
 - GPU memory on Bistro after Generate LODs (2026-11-09 out-of-memory abort on
   a 12 GB card): the mesh vertex pools held 5.9 GB in 352 blocks of 32 MB
   (index pools 384 MB), about 5 - 7x what Bistro's 3.8M level-0 + 3.0M LOD

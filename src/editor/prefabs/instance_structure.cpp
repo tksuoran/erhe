@@ -1,5 +1,6 @@
 #include "prefabs/instance_structure.hpp"
 
+#include "level/kit_layout.hpp"
 #include "parsers/usd.hpp"
 
 #include "erhe_file/file.hpp"
@@ -74,7 +75,7 @@ auto instance_structure_refusal(const erhe::Item_base& item) -> std::optional<st
     const erhe::Composition_arc*           arc = nullptr;
     const erhe::Hierarchy*                 carrier = find_carrier(parent.get(), arc);
     if (carrier == nullptr) {
-        return {};
+        return locked_layout_refusal(item);
     }
     return fmt::format(
         "'{}' is inside the reference instance '{}'; deactivate it or edit the referenced file '{}'",
@@ -87,7 +88,7 @@ auto instance_child_refusal(const erhe::Hierarchy& parent) -> std::optional<std:
     const erhe::Composition_arc* arc = nullptr;
     const erhe::Hierarchy*       carrier = find_carrier(&parent, arc);
     if (carrier == nullptr) {
-        return {};
+        return locked_layout_child_refusal(parent);
     }
     if (carrier == &parent) {
         return fmt::format(
@@ -109,13 +110,17 @@ auto is_instance_structure_protected(const erhe::Item_base& item) -> bool
     }
     const std::shared_ptr<erhe::Hierarchy> parent = hierarchy->get_parent().lock();
     const erhe::Composition_arc*           arc = nullptr;
-    return find_carrier(parent.get(), arc) != nullptr;
+    return (find_carrier(parent.get(), arc) != nullptr) || static_cast<bool>(find_locking_kit_layout(item));
 }
 
 auto refuses_instance_child(const erhe::Hierarchy& parent) -> bool
 {
     const erhe::Composition_arc* arc = nullptr;
-    return find_carrier(&parent, arc) != nullptr;
+    if (find_carrier(&parent, arc) != nullptr) {
+        return true;
+    }
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&parent);
+    return ((node != nullptr) && is_locked_kit_layout(*node)) || static_cast<bool>(find_locking_kit_layout(parent));
 }
 
 auto find_instance_position(const erhe::Item_base& item) -> Instance_position

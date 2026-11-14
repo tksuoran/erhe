@@ -24,6 +24,8 @@
 
 #include <geogram/mesh/mesh.h>
 
+#include <algorithm>
+
 using erhe::geometry::make_convex_hull;
 using erhe::geometry::get_pointf;
 
@@ -130,6 +132,7 @@ auto Brush::make_shared_payload_copy() const -> std::shared_ptr<Brush>
     data_copy.geometry_generator = data_copy.geometry ? Geometry_generator{} : m_geometry_slot.get_generator();
     std::shared_ptr<Brush> result = std::make_shared<Brush>(data_copy);
     result->m_primitive        = m_primitive;
+    result->m_part_primitives  = m_part_primitives;
     result->m_reference_frames = m_reference_frames;
     result->m_scaled_entries   = m_scaled_entries;
     return result;
@@ -176,6 +179,16 @@ void Brush::late_initialize()
 
     if (!render_shape->has_raytrace_triangles()) {
         render_shape->make_raytrace();
+    }
+
+    if (m_part_primitives.empty() && !m_data.part_geometries.empty()) {
+        for (const std::shared_ptr<erhe::geometry::Geometry>& part_geometry : m_data.part_geometries) {
+            std::shared_ptr<erhe::primitive::Primitive> part = std::make_shared<erhe::primitive::Primitive>(
+                part_geometry, m_data.build_info, m_data.normal_style
+            );
+            part->render_shape->make_raytrace();
+            m_part_primitives.push_back(std::move(part));
+        }
     }
 
     if (
@@ -274,6 +287,48 @@ auto Brush::get_scaled(const double scale) -> const Scaled*
     return &scaled;
 }
 
+auto Brush::find_scaled(const std::shared_ptr<erhe::primitive::Primitive>& primitive) const -> const Scaled*
+{
+    for (const Scaled& scaled : m_scaled_entries) {
+        if (scaled.primitive == primitive) {
+            return &scaled;
+        }
+        for (const std::shared_ptr<erhe::primitive::Primitive>& part : scaled.part_primitives) {
+            if (part == primitive) {
+                return &scaled;
+            }
+        }
+    }
+    return nullptr;
+}
+
+auto Brush::get_part_count() const -> std::size_t
+{
+    return std::max<std::size_t>(1, m_data.part_geometries.size());
+}
+
+auto Brush::make_part_primitives(const float scale, const std::shared_ptr<erhe::primitive::Primitive>& whole) const -> std::vector<std::shared_ptr<erhe::primitive::Primitive>>
+{
+    if (m_part_primitives.empty()) {
+        return {whole};
+    }
+    if (scale == 1.0f) {
+        return m_part_primitives;
+    }
+    std::vector<std::shared_ptr<erhe::primitive::Primitive>> result;
+    for (const std::shared_ptr<erhe::primitive::Primitive>& part : m_part_primitives) {
+        std::shared_ptr<erhe::geometry::Geometry> scaled_geometry = std::make_shared<erhe::geometry::Geometry>();
+        scaled_geometry->copy_with_transform(*part->render_shape->get_geometry().get(), GEO::create_scaling_matrix(scale));
+        scaled_geometry->set_name(fmt::format("{} scaled by {}", part->get_name(), scale));
+        std::shared_ptr<erhe::primitive::Primitive> scaled_part = std::make_shared<erhe::primitive::Primitive>(
+            scaled_geometry, m_data.build_info, m_data.normal_style
+        );
+        scaled_part->render_shape->make_raytrace();
+        result.push_back(std::move(scaled_part));
+    }
+    return result;
+}
+
 auto Brush::create_scaled(const int scale_key) -> Scaled
 {
     ERHE_PROFILE_FUNCTION();
@@ -291,7 +346,8 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
                     .primitive       = m_primitive,
                     .collision_shape = m_data.collision_shape,
                     .volume          = m_data.volume,
-                    .local_inertia   = local_inertia
+                    .local_inertia   = local_inertia,
+                    .part_primitives = make_part_primitives(scale, m_primitive)
                 };
             } else if (m_data.collision_shape_generator) {
                 const std::shared_ptr<erhe::physics::ICollision_shape> generated_collision_shape = m_data.collision_shape_generator(scale);
@@ -302,7 +358,8 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
                     .primitive       = m_primitive,
                     .collision_shape = generated_collision_shape,
                     .volume          = m_data.volume,
-                    .local_inertia   = local_inertia
+                    .local_inertia   = local_inertia,
+                    .part_primitives = make_part_primitives(scale, m_primitive)
                 };
             }
         }
@@ -311,7 +368,8 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
             .primitive       = m_primitive,
             .collision_shape = {},
             .volume          = m_data.volume,
-            .local_inertia   = local_inertia
+            .local_inertia   = local_inertia,
+            .part_primitives = make_part_primitives(scale, m_primitive)
         };
     }
 
@@ -344,7 +402,8 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
                 .primitive       = scaled_primitive,
                 .collision_shape = scaled_collision_shape,
                 .volume          = scaled_volume,
-                .local_inertia   = local_inertia
+                .local_inertia   = local_inertia,
+                .part_primitives = make_part_primitives(scale, scaled_primitive)
             };
         } else if (m_data.collision_shape_generator) {
             const std::shared_ptr<erhe::physics::ICollision_shape> scaled_collision_shape = m_data.collision_shape_generator(scale);
@@ -358,7 +417,8 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
                 .primitive       = scaled_primitive,
                 .collision_shape = scaled_collision_shape,
                 .volume          = scaled_volume,
-                .local_inertia   = local_inertia
+                .local_inertia   = local_inertia,
+                .part_primitives = make_part_primitives(scale, scaled_primitive)
             };
         }
     }
@@ -367,7 +427,8 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
         .primitive       = scaled_primitive,
         .collision_shape = {},
         .volume          = m_data.volume * scale * scale * scale,
-        .local_inertia   = local_inertia
+        .local_inertia   = local_inertia,
+        .part_primitives = make_part_primitives(scale, scaled_primitive)
     };
 }
 
@@ -433,14 +494,19 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
     log_scene->trace(
         "creating {} with material {}",
         name,
-        instance_create_info.material->get_name()
+        instance_create_info.material ? instance_create_info.material->get_name() : std::string{}
     );
 
     // The instance prim IS the mesh (doc/erhe/usd_compatibility_design.md C5): it
     // carries the instance transform, the node flags and the physics body.
     auto mesh = std::make_shared<erhe::scene::Mesh>(name);
     const std::shared_ptr<erhe::scene::Node>& node = mesh;
-    mesh->add_primitive(scaled.primitive, instance_create_info.material);
+    for (std::size_t part = 0, end = scaled.part_primitives.size(); part < end; ++part) {
+        const std::span<const std::shared_ptr<erhe::primitive::Material>> part_materials = instance_create_info.part_materials;
+        const std::shared_ptr<erhe::primitive::Material>& part_material =
+            ((part < part_materials.size()) && part_materials[part]) ? part_materials[part] : instance_create_info.material;
+        mesh->add_primitive(scaled.part_primitives[part], part_material);
+    }
 
     ERHE_VERIFY(instance_create_info.scene_root != nullptr);
 
@@ -526,7 +592,7 @@ auto make_brush_instance_insert(
     Brush&                                            brush,
     Scene_root&                                       scene_root,
     const glm::mat4&                                  world_from_node,
-    const std::shared_ptr<erhe::primitive::Material>& material,
+    const std::span<const std::shared_ptr<erhe::primitive::Material>> materials,
     double                                            scale,
     erhe::physics::Motion_mode                        motion_mode,
     std::shared_ptr<erhe::Hierarchy>                  parent,
@@ -548,7 +614,8 @@ auto make_brush_instance_insert(
         .mesh_flags      = mesh_flags,
         .scene_root      = &scene_root,
         .world_from_node = world_from_node,
-        .material        = material,
+        .material        = materials.empty() ? std::shared_ptr<erhe::primitive::Material>{} : materials.front(),
+        .part_materials  = materials,
         .scale           = scale,
         .motion_mode     = motion_mode,
         .mass_override   = mass_override,
@@ -593,13 +660,32 @@ auto place_brush_in_scene(
 ) -> std::shared_ptr<erhe::scene::Node>
 {
     const Brush_instance_insert insert = make_brush_instance_insert(
-        context, brush, scene_root, world_from_node, material, scale, motion_mode, parent, index_in_parent, mass_override
+        context, brush, scene_root, world_from_node, std::span<const std::shared_ptr<erhe::primitive::Material>>{&material, 1},
+        scale, motion_mode, parent, index_in_parent, mass_override
     );
     if (!insert.node) {
         return {};
     }
     context.operation_stack->queue(insert.operation);
     return insert.node;
+}
+
+void set_copied_brush_collision_shapes(Scene_root& scene_root, erhe::Hierarchy& subtree)
+{
+    erhe::scene::Mesh* const mesh = dynamic_cast<erhe::scene::Mesh*>(&subtree);
+    if ((mesh != nullptr) && carries_node_physics(*mesh) && !mesh->get_primitives().empty()) {
+        const std::optional<Brush_placement_data> placement = read_brush_placement(*mesh);
+        const Brush::Scaled* const scaled = (placement.has_value() && placement.value().brush)
+            ? placement.value().brush->find_scaled(mesh->get_primitives().front().primitive)
+            : nullptr;
+        if ((scaled != nullptr) && scaled->collision_shape) {
+            // The copy is not in the scene yet, so the system is named through the destination (as make_instance()).
+            scene_root.get_node_physics_system().set_collision_shape(*mesh, scaled->collision_shape);
+        }
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : subtree.get_children()) {
+        set_copied_brush_collision_shapes(scene_root, *child);
+    }
 }
 
 }

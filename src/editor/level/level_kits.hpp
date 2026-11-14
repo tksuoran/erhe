@@ -1,13 +1,17 @@
 #pragma once
 
+#include "level/kit_layout.hpp"
 #include "level/kit_piece_operation.hpp"
+#include "level/level_group.hpp"
 #include "level/kit_shape.hpp"
 #include "level/kit_shape_library.hpp"
 #include "level/level_queries.hpp"
+#include "level/level_repeat.hpp"
 
 #include "app_message.hpp"
 
 #include "erhe_message_bus/message_bus.hpp"
+#include "erhe_property/property_value.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -21,7 +25,8 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe           { class Hierarchy; class Item_host; }
+namespace erhe           { class Hierarchy; class Item_base; class Item_host; }
+namespace erhe::property { class Dependency_property; }
 namespace erhe::primitive { class Material; }
 namespace erhe::scene    { class Mesh; class Xformable; using Node = Xformable; }
 
@@ -30,11 +35,16 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class Brush;
+class Operation;
 class Scene_root;
 
-enum class Kit_snap : unsigned int {
-    none = 0,
-    module // positions round to multiples of the module (R5.2)
+// The material of one slot of a piece (D3.4): a material of the scene, else a palette material by name (found in
+// the scene's content library or added to it), else, with both empty, the slot's default palette material.
+class Kit_slot_material
+{
+public:
+    std::shared_ptr<erhe::primitive::Material> material;
+    std::string                                palette_name;
 };
 
 // One piece to place (D3.2); positions and rotations are in the scene root's space.
@@ -48,8 +58,9 @@ public:
     glm::vec3                                  position{0.0f};
     glm::quat                                  rotation{1.0f, 0.0f, 0.0f, 0.0f};
     std::string                                name;         // empty: the shape's display name
-    std::shared_ptr<erhe::primitive::Material> material;     // none: the palette material of the shape's slot
+    std::vector<Kit_slot_material>             materials;    // by slot index; a slot without an entry takes its default
     Surface_options                            surface;      // applied after the module snap (D7.3)
+    std::optional<std::size_t>                 index_in_parent; // none: after the parent's children
 };
 
 // Whether the Brush tool's kit values take the next seed after each placed piece (D4.5).
@@ -112,7 +123,7 @@ class Kit_placed_piece
 public:
     std::shared_ptr<erhe::scene::Node>         node;
     std::shared_ptr<Brush>                     brush;
-    std::shared_ptr<erhe::primitive::Material> material;
+    std::vector<std::shared_ptr<erhe::primitive::Material>> materials; // by slot index
     Kit_parameter_values                       values;
     glm::vec3                                  position{0.0f};
     glm::quat                                  rotation{1.0f, 0.0f, 0.0f, 0.0f};
@@ -127,11 +138,116 @@ public:
     std::size_t                   error_index{0};
 };
 
+// Where the copy of a group goes (D3.8): its source's world transform moved by an offset, or at a position.
+enum class Kit_copy_placement : unsigned int {
+    offset = 0,
+    position
+};
+
+class Kit_group_copy
+{
+public:
+    Kit_copy_placement placement{Kit_copy_placement::offset};
+    glm::vec3          value{0.0f}; // the world offset, or the copy's world position
+    std::string        name;        // empty: the source's name followed by " Copy"
+};
+
+class Kit_group_result
+{
+public:
+    std::shared_ptr<erhe::scene::Node> node;  // the new group node, or the copy; null with an error
+    std::string                        error; // empty on success; with an error nothing changed
+};
+
+class Kit_ungroup_result
+{
+public:
+    std::shared_ptr<erhe::Hierarchy>              parent;   // the group's parent, which now holds its children
+    std::vector<std::shared_ptr<erhe::Hierarchy>> children;
+    std::string                                   error;
+};
+
+// One node a mirror moved: its new world transform and whether it shows the exact mirror image.
+class Kit_mirrored_node
+{
+public:
+    std::shared_ptr<erhe::scene::Node> node;
+    glm::vec3                          position{0.0f};
+    glm::quat                          rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    Kit_mirror_plane                   plane{Kit_mirror_plane::x};
+    Mirror_image                       image{Mirror_image::exact};
+};
+
+class Kit_mirror_result
+{
+public:
+    glm::vec3                      plane_point {0.0f};
+    glm::vec3                      plane_normal{1.0f, 0.0f, 0.0f};
+    std::vector<Kit_mirrored_node> nodes;       // the group's node descendants, parents first
+    std::size_t                    not_exact_count{0};
+    std::string                    error;
+};
+
+class Kit_set_material_result
+{
+public:
+    std::shared_ptr<erhe::primitive::Material> material; // the slot's material now
+    std::shared_ptr<erhe::primitive::Material> previous;
+    bool                                       changed{false};
+    std::string                                error;    // empty on success; with an error nothing changed
+};
+
 class Kit_set_parameters_result
 {
 public:
     std::shared_ptr<Brush> brush; // the brush of the new values
     std::string            error; // empty on success; with an error nothing changed
+};
+
+// Which children a kit layout regeneration keeps (D3.9): the ones that already match, or none (a lock, R5.12.5).
+enum class Kit_layout_reuse : unsigned int {
+    keep_matching = 0,
+    replace_all
+};
+
+// A new kit layout node (D3.9): its values, parent (none: the scene root) and world transform.
+class Kit_layout_create
+{
+public:
+    Kit_layout_data                  data;
+    std::shared_ptr<erhe::Hierarchy> parent;
+    glm::vec3                        position{0.0f};
+    glm::quat                        rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    std::string                      name;     // empty: "Kit Layout"
+};
+
+// A kit layout node made from a placed piece (D3.9, D4.9): the piece's shape, values and slot materials are the
+// one item, the node takes the piece's place (parent, index, world transform) and the piece is removed.
+class Kit_layout_from_piece
+{
+public:
+    std::shared_ptr<erhe::scene::Mesh> piece;
+    Kit_layout_pattern                 pattern;
+    Kit_snap                           snap          {Kit_snap::none};
+    Surface_snap                       surface_snap  {Surface_snap::off};
+    Surface_orient                     surface_orient{Surface_orient::off};
+    Kit_layout_seeds                   seeds         {Kit_layout_seeds::item};
+    int                                seed          {0};
+    Kit_layout_lock                    lock          {Kit_layout_lock::locked};
+    std::string                        name;          // empty: the piece's name followed by " Layout"
+};
+
+class Kit_layout_result
+{
+public:
+    std::shared_ptr<erhe::scene::Node> node;
+    Kit_layout_run                     run;               // the run the values make
+    float                              item_extent{0.0f}; // the largest item extent along x
+    std::size_t                        kept_count   {0};
+    std::size_t                        added_count  {0};
+    std::size_t                        removed_count{0};
+    bool                               changed{false};    // an undo entry was recorded
+    std::string                        error;             // empty on success; with an error nothing changed
 };
 
 // The level kit editor part (D2.2): the shape library, the kit brush cache and piece placement.
@@ -165,8 +281,11 @@ public:
         const Kit_placement_settings& settings
     ) const -> Kit_placement_pose;
 
-    // A material of the palette color of the shape's slot, outside every content library.
-    [[nodiscard]] auto get_preview_material(const Kit_shape_definition& shape) -> std::shared_ptr<erhe::primitive::Material>;
+    // A material of the palette material's color, outside every content library; null for a name not in the palette.
+    [[nodiscard]] auto get_preview_material(std::string_view palette_name) -> std::shared_ptr<erhe::primitive::Material>;
+
+    // The default palette material names of the shape's slots, in slot order.
+    void get_default_slot_materials(const Kit_shape_definition& shape, std::vector<std::string>& out_names) const;
 
     // The cached brush of the values, made on first use; null when its geometry fails.
     [[nodiscard]] auto get_brush(const Kit_parameter_values& values) -> std::shared_ptr<Brush>;
@@ -176,6 +295,22 @@ public:
 
     // Validates every placement, then places all of them as one Compound_operation (one undo entry).
     [[nodiscard]] auto place(Scene_root& scene_root, std::span<const Kit_placement> placements, Kit_snap snap) -> Kit_place_result;
+
+    // D3.8: a new group node at the base center of the nodes' combined world bounds, under their common parent
+    // (else the scene root), takes the top-level nodes of the set as children, world transforms kept; one undo entry.
+    [[nodiscard]] auto group(Scene_root& scene_root, std::span<const std::shared_ptr<erhe::scene::Node>> nodes, std::string_view name) -> Kit_group_result;
+
+    // D3.8: the group's children go to its parent, world transforms kept, and the group node is removed; one undo entry.
+    [[nodiscard]] auto ungroup(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& group) -> Kit_ungroup_result;
+
+    // D3.8: a copy of the node's subtree beside it, every copied piece a full piece; one undo entry.
+    [[nodiscard]] auto duplicate(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node, const Kit_group_copy& copy) -> Kit_group_result;
+
+    // D3.8: reflects the group's content across the plane through its origin normal to its local axis; one undo entry.
+    [[nodiscard]] auto mirror(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& group, Mirror_axis axis) -> Kit_mirror_result;
+
+    // The world bounds of the meshes of the node's subtree; without a mesh, of its nodes' origins.
+    [[nodiscard]] static auto get_subtree_bounds(const erhe::scene::Node& node) -> erhe::math::Aabb;
 
     // The brush of the values when the cache holds it alive; never makes one.
     [[nodiscard]] auto find_cached_brush(const Kit_parameter_values& values) const -> std::shared_ptr<Brush>;
@@ -211,11 +346,98 @@ public:
     // preview of the piece, from the state before the drag (no entry when the values end where they began).
     [[nodiscard]] auto set_parameters(const std::shared_ptr<erhe::scene::Node>& node, const Kit_parameter_values& values) -> Kit_set_parameters_result;
 
+    // D3.4: gives one slot of the piece the material as one undo entry, a palette material added to the scene's
+    // content library in the same entry; no entry when the slot has it already.
+    [[nodiscard]] auto set_slot_material(
+        Scene_root&                               scene_root,
+        const std::shared_ptr<erhe::scene::Node>& node,
+        std::size_t                               slot,
+        const Kit_slot_material&                  material
+    ) -> Kit_set_material_result;
+
     [[nodiscard]] static auto get_mesh_key   (const Kit_parameter_values& values) -> std::string;
     [[nodiscard]] static auto snap_to_module (const glm::vec3& position, float module) -> glm::vec3;
 
+    // D3.9: a kit layout node with the children its values make, one undo entry.
+    [[nodiscard]] auto create_layout(Scene_root& scene_root, const Kit_layout_create& create) -> Kit_layout_result;
+
+    // D3.9: the piece's removal, the node's insert at its place and the generated children, one undo entry.
+    [[nodiscard]] auto make_layout_from_piece(Scene_root& scene_root, const Kit_layout_from_piece& from_piece) -> Kit_layout_result;
+
+    // The layout item of a placed piece: its shape, record values (seed mask included) and its primitives' material names.
+    [[nodiscard]] auto read_piece_layout_item(const erhe::scene::Mesh& piece, Kit_layout_item& out_item) const -> std::string;
+
+    // D3.9: new values; a locked node regenerates its children in the same undo entry. The lock is not changed here.
+    [[nodiscard]] auto set_layout(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node, const Kit_layout_data& data) -> Kit_layout_result;
+
+    // D3.9: unlocking writes the value alone; locking replaces every child with the generated ones. One undo entry each.
+    [[nodiscard]] auto set_layout_lock(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node, Kit_layout_lock lock) -> Kit_layout_result;
+
+    // D3.9: a locked node's children made equal to its values; no entry when they are.
+    [[nodiscard]] auto refresh_layout(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node) -> Kit_layout_result;
+
+    // D3.9: the regeneration of each locked kit layout node at or below the moved nodes whose surface settings
+    // are on, appended to the move's operations (the nodes stand at their moved transforms).
+    void append_layout_move_operations(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+        std::vector<std::shared_ptr<Operation>>&            out_operations
+    );
+
+    // D3.9: a Kit_layout value written outside these entry points (set_item_property, a Properties row), already
+    // applied: the generation a locked node's values now need, or the reason they cannot stand. Nothing otherwise.
+    [[nodiscard]] auto append_layout_value_follow_ups(
+        erhe::Item_base&                           item,
+        const erhe::property::Dependency_property& property,
+        std::vector<std::shared_ptr<Operation>>&   out_operations
+    ) -> std::string;
+
+    // The refusal a write of the value would meet in append_layout_value_follow_ups(), checked without a change.
+    [[nodiscard]] auto check_layout_value_write(
+        erhe::Item_base&                           item,
+        const erhe::property::Dependency_property& property,
+        const erhe::property::Property_value&      value
+    ) -> std::string;
+
+    // An item's values (its seed mask among them) and slot materials as a placement reads them; returns the problem.
+    [[nodiscard]] auto read_layout_item(Scene_root& scene_root, const Kit_layout_item& item, Kit_placement& out_placement) const -> std::string;
+
+    // The item's piece bounds in its own frame; invalid when the item does not read or makes no geometry.
+    [[nodiscard]] auto get_layout_item_bounds(Scene_root& scene_root, const Kit_layout_item& item) -> erhe::math::Aabb;
+
 private:
     [[nodiscard]] auto make_brush(const Kit_parameter_values& values) -> std::shared_ptr<Brush>;
+
+    // place() without the refusals and without executing: the operations in order (materials, then pieces).
+    [[nodiscard]] auto prepare_placements(
+        Scene_root&                              scene_root,
+        std::span<const Kit_placement>           placements,
+        Kit_snap                                 snap,
+        Kit_place_result&                        result,
+        std::vector<std::shared_ptr<Operation>>& out_operations
+    ) -> bool;
+
+    // D3.9: the operations that make the node's children what the values state, from the node's world transform;
+    // the excluded meshes are no surface for the elements, nor are the node's current children.
+    [[nodiscard]] auto build_layout_generation(
+        Scene_root&                                 scene_root,
+        const std::shared_ptr<erhe::scene::Node>&   node,
+        const Kit_layout_data&                      data,
+        const glm::mat4&                            world_from_layout,
+        Kit_layout_reuse                            reuse,
+        std::span<const erhe::scene::Mesh* const>   excluded,
+        std::vector<std::shared_ptr<Operation>>&    out_operations,
+        Kit_layout_result&                          result
+    ) -> std::string;
+
+    // create_layout() with the node inserted at index_in_parent (none: last) after the given leading operations.
+    [[nodiscard]] auto create_layout_after(
+        Scene_root&                              scene_root,
+        const Kit_layout_create&                 create,
+        std::optional<std::size_t>               index_in_parent,
+        std::span<const erhe::scene::Mesh* const> excluded,
+        std::vector<std::shared_ptr<Operation>>& leading_operations
+    ) -> Kit_layout_result;
     void on_selection    ();
     void on_items_removed(const Removed_items& removed);
     void on_close_scene  (const erhe::Item_host* closing_host);

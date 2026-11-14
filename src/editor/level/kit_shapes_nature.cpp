@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <numbers>
@@ -22,7 +23,9 @@ namespace editor {
 
 namespace {
 
-constexpr int   tree_trunk_segments = 6;
+constexpr int      tree_trunk_segments = 6;
+constexpr uint32_t tree_bark_slot      = 0; // the trunk
+constexpr uint32_t tree_foliage_slot   = 1; // the canopy
 constexpr float round_canopy_height_per_size   = 0.9f;
 constexpr float conical_canopy_height_per_size = 1.4f;
 
@@ -360,7 +363,9 @@ void generate_tree(const Kit_parameter_values& values, GEO::Mesh& mesh)
     }
     // Two closed components: the trunk reaches into the canopy so no gap shows between them.
     Kit_mesh_builder builder;
+    builder.set_slot(tree_bark_slot);
     builder.add_prism(tree_trunk_segments, trunk_radius, 0.0f, trunk_top, 0.0f);
+    builder.set_slot(tree_foliage_slot);
     builder.add_blob(blob, random);
     builder.write(mesh);
 }
@@ -406,7 +411,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_int(make_count_parameter("bevels", "Bevel passes over the hull's edges; the blob has none", 1, 0, 2), 0, 2),
             make_seed_parameter()
         };
-        shape.material_slot   = "rock";
+        shape.material_slots  = {"rock"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 120;
         shape.randomness      = Kit_randomness::seeded;
@@ -429,7 +434,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter  (),
             make_count_parameter ("segments",  "Sides around the axis",      16, 3, 64)
         };
-        shape.material_slot   = "earth";
+        shape.material_slots  = {"earth"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 128;
         shape.collision       = Kit_collision::triangle_mesh;
@@ -460,7 +465,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter  (),
             make_count_parameter ("segments", "Sides around the axis; rings are a quarter of it", 16, 3, 64)
         };
-        shape.material_slot   = "grass";
+        shape.material_slots  = {"grass"};
         shape.normal_style    = Kit_normal_style::smooth;
         shape.triangle_budget = 128;
         shape.randomness      = Kit_randomness::seeded;
@@ -489,8 +494,8 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.kit             = "nature";
         shape.display_name    = "Tree";
         shape.description     =
-            "Six-sided trunk standing at the origin with one round or conical canopy; the trunk reaches into the canopy, so the "
-            "mesh is two closed parts.";
+            "Six-sided trunk (slot bark) standing at the origin with one round or conical canopy (slot foliage); the trunk "
+            "reaches into the canopy, so the mesh is two closed parts.";
         shape.tags            = {"obstacle", "decoration", "size:2x2x3"};
         shape.parameters      = {
             from_seed_by_default(derive_float(make_length_parameter("trunk_height", "Height of the canopy's base", 0.6f, Kit_default_scale::wall_heights, 0.1f, 32.0f), 0.4f, 0.8f, 0.05f)),
@@ -499,7 +504,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter  (),
             make_count_parameter ("segments",     "Canopy sides around the axis", 8, 3, 32)
         };
-        shape.material_slot   = "foliage";
+        shape.material_slots  = {"bark", "foliage"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 68;
         shape.collision       = Kit_collision::triangle_mesh;
@@ -519,7 +524,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter  (),
             make_count_parameter ("segments", "Sides around the axis", 8, 3, 32)
         };
-        shape.material_slot   = "foliage";
+        shape.material_slots  = {"foliage"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 48;
         shape.randomness      = Kit_randomness::seeded;

@@ -161,4 +161,17 @@ auto Null_collision_shape::get_shape_type() const -> Collision_shape_type
     return Collision_shape_type::e_empty;
 }
 
+auto ICollision_shape::get_penetration_depth(
+    const ICollision_shape& shape_a, const Transform& transform_a,
+    const ICollision_shape& shape_b, const Transform& transform_b
+) -> std::optional<float>
+{
+    // The null backend collides nothing.
+    static_cast<void>(shape_a);
+    static_cast<void>(transform_a);
+    static_cast<void>(shape_b);
+    static_cast<void>(transform_b);
+    return std::nullopt;
+}
+
 } // namespace erhe::physics

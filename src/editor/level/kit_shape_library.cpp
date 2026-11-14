@@ -128,14 +128,29 @@ Kit_shape_library::Kit_shape_library()
     add_nature_shapes      (m_shapes);
     // Base colors are linear.
     m_palette = {
-        Kit_palette_material{.slot = "stone",   .name = "Kit Stone",   .base_color = glm::vec3{0.50f, 0.50f, 0.47f}, .roughness = 0.85f},
-        Kit_palette_material{.slot = "floor",   .name = "Kit Floor",   .base_color = glm::vec3{0.42f, 0.34f, 0.26f}, .roughness = 0.75f},
-        Kit_palette_material{.slot = "wall",    .name = "Kit Plaster", .base_color = glm::vec3{0.78f, 0.72f, 0.60f}, .roughness = 0.90f},
-        Kit_palette_material{.slot = "trim",    .name = "Kit Trim",    .base_color = glm::vec3{0.60f, 0.56f, 0.50f}, .roughness = 0.80f},
-        Kit_palette_material{.slot = "rock",    .name = "Kit Rock",    .base_color = glm::vec3{0.36f, 0.35f, 0.34f}, .roughness = 0.95f},
-        Kit_palette_material{.slot = "earth",   .name = "Kit Earth",   .base_color = glm::vec3{0.36f, 0.24f, 0.14f}, .roughness = 0.95f},
-        Kit_palette_material{.slot = "grass",   .name = "Kit Grass",   .base_color = glm::vec3{0.22f, 0.42f, 0.12f}, .roughness = 0.90f},
-        Kit_palette_material{.slot = "foliage", .name = "Kit Foliage", .base_color = glm::vec3{0.10f, 0.32f, 0.08f}, .roughness = 0.85f}
+        Kit_palette_material{.name = "Kit Stone",          .base_color = glm::vec3{0.50f, 0.50f, 0.47f}, .roughness = 0.85f},
+        Kit_palette_material{.name = "Kit Floor",          .base_color = glm::vec3{0.42f, 0.34f, 0.26f}, .roughness = 0.75f},
+        Kit_palette_material{.name = "Kit Plaster",        .base_color = glm::vec3{0.78f, 0.72f, 0.60f}, .roughness = 0.90f},
+        Kit_palette_material{.name = "Kit Trim",           .base_color = glm::vec3{0.60f, 0.56f, 0.50f}, .roughness = 0.80f},
+        Kit_palette_material{.name = "Kit Wood",           .base_color = glm::vec3{0.45f, 0.29f, 0.15f}, .roughness = 0.70f},
+        Kit_palette_material{.name = "Kit Rock",           .base_color = glm::vec3{0.36f, 0.35f, 0.34f}, .roughness = 0.95f},
+        Kit_palette_material{.name = "Kit Earth",          .base_color = glm::vec3{0.36f, 0.24f, 0.14f}, .roughness = 0.95f},
+        Kit_palette_material{.name = "Kit Grass",          .base_color = glm::vec3{0.22f, 0.42f, 0.12f}, .roughness = 0.90f},
+        Kit_palette_material{.name = "Kit Foliage",        .base_color = glm::vec3{0.10f, 0.32f, 0.08f}, .roughness = 0.85f},
+        Kit_palette_material{.name = "Kit Autumn Foliage", .base_color = glm::vec3{0.48f, 0.22f, 0.05f}, .roughness = 0.85f},
+        Kit_palette_material{.name = "Kit Bark",           .base_color = glm::vec3{0.22f, 0.15f, 0.09f}, .roughness = 0.95f}
+    };
+    // One default per slot name and a few alternatives (R2.9).
+    m_slot_palettes = {
+        Kit_slot_palette{.slot = "stone",   .default_material = "Kit Stone",   .alternatives = {"Kit Rock", "Kit Plaster", "Kit Wood"}},
+        Kit_slot_palette{.slot = "floor",   .default_material = "Kit Floor",   .alternatives = {"Kit Wood", "Kit Stone", "Kit Earth"}},
+        Kit_slot_palette{.slot = "wall",    .default_material = "Kit Plaster", .alternatives = {"Kit Stone", "Kit Wood", "Kit Trim"}},
+        Kit_slot_palette{.slot = "trim",    .default_material = "Kit Trim",    .alternatives = {"Kit Wood", "Kit Stone", "Kit Plaster"}},
+        Kit_slot_palette{.slot = "rock",    .default_material = "Kit Rock",    .alternatives = {"Kit Stone", "Kit Earth"}},
+        Kit_slot_palette{.slot = "earth",   .default_material = "Kit Earth",   .alternatives = {"Kit Grass", "Kit Rock", "Kit Stone"}},
+        Kit_slot_palette{.slot = "grass",   .default_material = "Kit Grass",   .alternatives = {"Kit Earth", "Kit Foliage"}},
+        Kit_slot_palette{.slot = "foliage", .default_material = "Kit Foliage", .alternatives = {"Kit Autumn Foliage", "Kit Grass"}},
+        Kit_slot_palette{.slot = "bark",    .default_material = "Kit Bark",    .alternatives = {"Kit Wood", "Kit Rock"}}
     };
 }
 
@@ -174,14 +189,35 @@ auto Kit_shape_library::get_palette() const -> const std::vector<Kit_palette_mat
     return m_palette;
 }
 
-auto Kit_shape_library::find_palette_material(const std::string_view slot) const -> const Kit_palette_material*
+auto Kit_shape_library::find_palette_material(const std::string_view name) const -> const Kit_palette_material*
 {
     for (const Kit_palette_material& material : m_palette) {
-        if (material.slot == slot) {
+        if (material.name == name) {
             return &material;
         }
     }
     return nullptr;
+}
+
+auto Kit_shape_library::get_slot_palettes() const -> const std::vector<Kit_slot_palette>&
+{
+    return m_slot_palettes;
+}
+
+auto Kit_shape_library::find_slot_palette(const std::string_view slot) const -> const Kit_slot_palette*
+{
+    for (const Kit_slot_palette& palette : m_slot_palettes) {
+        if (palette.slot == slot) {
+            return &palette;
+        }
+    }
+    return nullptr;
+}
+
+auto Kit_shape_library::find_slot_default(const std::string_view slot) const -> const Kit_palette_material*
+{
+    const Kit_slot_palette* const palette = find_slot_palette(slot);
+    return (palette != nullptr) ? find_palette_material(palette->default_material) : nullptr;
 }
 
 } // namespace editor

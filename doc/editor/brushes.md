@@ -10,7 +10,7 @@ Implements the brush system for placing parametric mesh shapes onto surfaces.
 
 - **`Brush`** -- A reusable mesh template (Item_base subtype). Holds a `Brush_data` with build info, normal style, collision shape, density and volume, and a `Brush_geometry_slot` that holds the geometry or the recipe for it ("Geometry preparation" below). Supports scale-dependent caching (`Scaled` entries) for GPU primitives and collision shapes at different scales. Provides `make_instance()` to create a scene node from the brush. Computes reference frames for face-aligned placement. A brush owns the mutex and the condition variable of its geometry slot, so it neither moves nor copies; `make_shared_payload_copy()` is how a second content library gets its own `Brush` item over the same payload.
 
-- **`Brush_data`** -- Configuration for creating a `Brush`: name, geometry or geometry generator, the preparation queue a request goes to, build info, collision shape generator, density. `get_name()` falls back to the name the geometry carries, for a brush created with a finished geometry.
+- **`Brush_data`** -- Configuration for creating a `Brush`: name, geometry or geometry generator, part geometries ("Parts" below), the preparation queue a request goes to, build info, collision shape generator, density. `get_name()` falls back to the name the geometry carries, for a brush created with a finished geometry.
 
 - **`Brush_geometry_slot`** (`brush_geometry_slot.hpp`) -- The geometry of one brush plus the state machine that prepares it exactly once, whichever thread gets there first. Knows nothing of the editor beyond the brush logger, so `editor_brush_tests` exercises it without an `App_context`.
 
@@ -131,6 +131,21 @@ something needs it.
   the `Brush_thumbnail_result` it returns: draw the site's own icon for `icon`,
   and nothing further for `thumbnail` or `spinner`.
 
+## Parts
+
+A brush places one mesh primitive per part, each with its own material. A
+brush of one part - every palette brush - has its geometry's primitive as that
+part. `Brush_data::part_geometries` gives a brush several parts (a level kit
+shape with several material slots, `doc/editor/level_tools.md` "Materials"):
+`late_initialize()` makes one renderable and raytraced `Primitive` per part
+geometry, while the brush's own geometry, the union of the parts, keeps giving
+its bounds, convex hull, collision shape, facet statistics and reference
+frames. `Brush::Scaled::part_primitives` holds the parts of a scale (scaled
+copies at a scale other than 1), `get_part_count()` their count.
+`Instance_create_info::part_materials` gives part i its material (a part
+without an entry takes `material`), and `make_brush_instance_insert()` takes
+one material per part or one for every part.
+
 ## Kit mode
 
 Choosing a shape in the Level Kit window hands `Brush_tool` a level kit brush
@@ -140,11 +155,28 @@ preview, grid snap and insert machinery and changes two places: the placement
 transform, which comes from `Level_kits::make_placement_pose()` for the preview
 and the insert alike (`update_kit_preview_transform()`), and the insert, which
 is one `Level_kits::place()` at the preview's transform (`try_insert_kit_piece()`).
+`set_kit_brush()` also takes the palette material of each slot; the preview
+shows each part with a preview material of that palette color, and the insert
+places the piece with those slot materials.
 The rotate commands turn the next piece about the up axis by the rotation step.
 Choosing a palette brush - `set_active_brush()` (hotbar, `set_tool_asset`), a
 drag-and-drop preview or selecting a brush in a content library - or another
 tool leaves kit mode (`leave_kit_mode()`). `level_get_placement_preview` reads
 the kit mode state over MCP.
+
+## Copies
+
+A brush instance's collision shape is runtime state of its scene's
+`Node_physics_system`, not a value of the node, so a `clone()` of the node
+carries its `Brush_placement` and `Node_physics` values but no shape; on
+entering a scene its body would be built from the convex hull of its mesh
+(a stand-in that differs from a brush's triangle mesh shape).
+`set_copied_brush_collision_shapes(scene_root, subtree)` gives each brush
+instance with a body in a detached copy the shape of its brush scale, the
+`Brush::Scaled` entry whose primitive or first part primitive the mesh shares
+(`Brush::find_scaled()`), through the destination scene's system, as
+`Brush::make_instance()` does. Clipboard paste and the level tools' group
+duplicate (`doc/editor/level_tools.md` "Groups") call it before their insert.
 
 ## Public API / Integration Points
 

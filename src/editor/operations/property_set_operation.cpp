@@ -3,6 +3,7 @@
 #include "assets/asset_key.hpp"
 #include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
+#include "level/level_kits.hpp"
 #include "rig/bone_connect.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
@@ -210,6 +211,9 @@ Property_set_operation::~Property_set_operation() noexcept = default;
 void Property_set_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
+    if (!m_refusal.empty()) {
+        return;
+    }
     adopt_userships(context);
     const bool applied = apply(context, m_after);
     if (!m_follow_ups_recorded) {
@@ -219,6 +223,16 @@ void Property_set_operation::execute(App_context& context)
         m_follow_ups_recorded = true;
         if (m_item && !m_sub_object.has_value()) {
             append_bone_connect_follow_ups(*m_item, m_property, m_follow_ups);
+            if ((m_follow_up_mode == Property_set_follow_ups::record) && (context.level_kits != nullptr)) {
+                m_refusal = context.level_kits->append_layout_value_follow_ups(*m_item, m_property, m_follow_ups);
+                if (!m_refusal.empty()) {
+                    // The values and the children would disagree: the write is taken back and stays a no-op.
+                    log_operations->warn("{} refused: {}", describe(), m_refusal);
+                    m_follow_ups.clear();
+                    static_cast<void>(apply(context, m_before));
+                    return;
+                }
+            }
         }
     }
     for (const std::shared_ptr<Operation>& follow_up : m_follow_ups) {
@@ -236,9 +250,17 @@ void Property_set_operation::adopt_userships(App_context& context)
     adopt_reference_usership(context, m_userships, referenced_item(m_after));
 }
 
+void Property_set_operation::set_follow_ups(const Property_set_follow_ups follow_ups)
+{
+    m_follow_up_mode = follow_ups;
+}
+
 void Property_set_operation::undo(App_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
+    if (!m_refusal.empty()) {
+        return;
+    }
     for (auto i = m_follow_ups.rbegin(), end = m_follow_ups.rend(); i != end; ++i) {
         (*i)->undo(context);
     }

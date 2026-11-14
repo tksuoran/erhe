@@ -15,11 +15,12 @@ All in namespace `editor`, depending on `erhe::geometry`, glm and fmt only, so
 the editor.
 
 - `Kit_shape_definition` (`kit_shape.hpp`): one shape: `id` (`<kit>.<shape>`),
-  kit, display name, description, tags, parameters, one material slot name,
-  normal style (`faceted`, `smooth`, `smooth_with_hard_edges` with its angle),
+  kit, display name, description, tags, parameters, its material slots
+  ("Materials"), normal style (`faceted`, `smooth`, `smooth_with_hard_edges` with its angle),
   triangle budget, collision kind (`Kit_collision::convex_hull` or
   `triangle_mesh`), randomness (`Kit_randomness::seeded` for the shapes whose
-  generator draws from the seed: the five nature shapes) and the generator.
+  generator draws from the seed: the five nature shapes), the mirror planes
+  ("Groups") and the generator.
 - `Kit_parameter`: name, type (`float_value`, `int_value`, `enum_value`), unit,
   range and default, and its derive range ("Derive from seed"). A float
   default is stated in meters, modules or wall heights (`Kit_default_scale`)
@@ -33,9 +34,8 @@ the editor.
   not empty, which is the piece's saved form and its mesh key. Equality
   compares the values and the mask.
 - `Kit_shape_library` (`kit_shape_library.hpp`): the three kits (basic,
-  architecture, nature), the 14 shapes and the palette: one flat-color
-  material per slot name (`Kit_palette_material`: slot, material name, linear
-  base color, roughness). Adding a shape is one generator and one table entry.
+  architecture, nature), the 14 shapes and the palette ("Materials"). Adding a
+  shape is one generator and one table entry.
 - Shape conventions: Y up, front toward +Z, the origin at the center of the
   base (a seeded shape: inside its base); stairs and the wedge rise toward -Z
   from their front edge. `kit_shape_checks.hpp` holds the mesh checks the
@@ -146,7 +146,54 @@ the raw values. `read_kit_piece(node)` returns the record or nothing,
 `write_kit_piece(node, record)` sets both.
 
 A piece is also a brush placement (`doc/editor/brushes.md`): its
-`Brush_placement.brush` names the kit brush whose primitive its mesh carries.
+`Brush_placement.brush` names the kit brush whose part primitives its mesh
+carries, one mesh primitive per material slot ("Materials").
+
+## Materials
+
+A shape declares an ordered list of named material slots,
+`Kit_shape_definition::material_slots` (R2.9, D1.11): one slot for most
+shapes (`stone`, `floor`, `wall`, `trim`, `rock`, `earth`, `grass`,
+`foliage`), `bark` and `foliage` for `nature.tree` (the trunk and the
+canopy). The generator assigns every facet to a slot:
+`Kit_mesh_builder::set_slot()` names the slot of the facets added after it,
+and `write()` stores each facet's slot index in the facet attribute
+`kit_slot` (`c_kit_slot_attribute`, `kit_mesh_builder.hpp`).
+`read_kit_facet_slots()` reads it back and `extract_kit_slot_mesh()` copies
+the facets of one slot with their vertices.
+
+The palette (`Kit_shape_library::get_palette()`) is a list of flat-color
+materials (`Kit_palette_material`: name, linear base color, roughness): Kit
+Stone, Kit Floor, Kit Plaster, Kit Trim, Kit Wood, Kit Rock, Kit Earth, Kit
+Grass, Kit Foliage, Kit Autumn Foliage and Kit Bark. Each slot name has a
+`Kit_slot_palette` (`get_slot_palettes()`, `find_slot_palette()`): its default
+material and a few alternatives, by palette name:
+
+| Slot | Default | Alternatives |
+|---|---|---|
+| stone | Kit Stone | Kit Rock, Kit Plaster, Kit Wood |
+| floor | Kit Floor | Kit Wood, Kit Stone, Kit Earth |
+| wall | Kit Plaster | Kit Stone, Kit Wood, Kit Trim |
+| trim | Kit Trim | Kit Wood, Kit Stone, Kit Plaster |
+| rock | Kit Rock | Kit Stone, Kit Earth |
+| earth | Kit Earth | Kit Grass, Kit Rock, Kit Stone |
+| grass | Kit Grass | Kit Earth, Kit Foliage |
+| foliage | Kit Foliage | Kit Autumn Foliage, Kit Grass |
+| bark | Kit Bark | Kit Wood, Kit Rock |
+
+A piece's mesh has one primitive per slot, in slot order, each with its own
+material; the primitives' materials are the piece's per-slot assignment, so
+the record (`Kit_piece`) carries no material. A placement names a material
+per slot as a `Kit_slot_material`: a material of the scene, or a palette
+material by name, or neither, which takes the slot's default. A palette
+material is found in the scene's content library by name, else made and
+inserted there in the same undo entry as the pieces that first need it.
+
+`Level_kits::set_slot_material(scene_root, node, slot, material)` gives one
+slot of a placed piece a material as one undo entry: a
+`Mesh_material_assign_operation` of that primitive, after the palette
+material's insert when the scene does not hold it yet. A material equal to
+the slot's current one records nothing. The other slots keep theirs.
 
 ## Kit brushes
 
@@ -156,7 +203,13 @@ the mesh key - shape id plus canonical text, `Level_kits::get_mesh_key()` - to
 a `Brush`. `get_brush(values)` returns the cached brush or makes it:
 
 - The brush's geometry generator runs the shape's generator and
-  `Geometry::process()` (connect, edges, facet texture coordinates). A
+  `Geometry::process()` (connect, edges, facet texture coordinates); this
+  whole geometry, of every slot, gives the brush's bounds, convex hull and
+  triangle mesh collision shape. A shape of several slots also gives the
+  brush one part geometry per slot (`Brush_data::part_geometries`,
+  `doc/editor/brushes.md` "Parts"), each the slot's facets processed the same
+  way; a slot without facets for the values makes no brush. A shape of one
+  slot has its whole geometry as its one part. A
   faceted shape renders with polygon normals; a smooth shape with corner
   normals averaged over the facets within 80 degrees of each other, so a base
   rim stays sharp; a shape with hard edges with corner normals averaged
@@ -168,7 +221,7 @@ a `Brush`. `get_brush(values)` returns the cached brush or makes it:
   `scene/collision_shape_from_mesh.hpp`).
 - Kit brushes belong to no content library: a scene file carries pieces and
   no kit brushes. Every piece of one mesh key shares the brush's geometry,
-  GPU buffers and collision shape.
+  part primitives, GPU buffers and collision shape.
 
 Cache lifetime. The cache holds weak references. The strong references are
 held by whoever needs the brush: each piece's `Brush_placement.brush`
@@ -185,28 +238,330 @@ as `cached_brush_count`.
 
 `Level_kits::place(scene_root, placements, snap)` takes a list of
 `Kit_placement` (shape, values or none for the defaults, parent or the index
-of an earlier placement of the same call, position, rotation, name,
-material or none, surface options) in the scene root's space. It checks
-every placement first (known shape, values of that shape, values in range,
-parent index earlier than the piece, a unit surface direction) and places
+of an earlier placement of the same call, position, rotation, name, a
+material per slot or none, surface options) in the scene root's space. It
+checks every placement first (known shape, values of that shape, values in
+range, parent index earlier than the piece, a unit surface direction, no more
+materials than slots and each named palette material in the palette) and places
 nothing when one fails, reporting the index and the message. Then, per
 placement:
 
 - the defaults resolve against the scene's level settings;
 - with `Kit_snap::module` the position rounds to multiples of the module;
-- the material is the given one, else the palette material of the shape's
-  slot, found in the scene's content library by name or created and inserted
-  there the first time a piece needs it;
+- each slot's material is the given one, else the slot's default palette
+  material ("Materials"), found in the scene's content library by name or
+  created and inserted there the first time a piece needs it;
 - the surface options of the placement (`Kit_placement::surface`, "Surface
   placement") move and turn the module-snapped transform;
 - `make_brush_instance_insert()` (`brushes/brush.hpp`) makes the node with a
-  static rigid body and its insert operation; the node takes the given name
+  static rigid body, a mesh primitive per brush part with that slot's
+  material, and its insert operation; the node takes the given name
   or the shape's display name and its `Kit_piece` record before the insert.
 
 All material inserts and node inserts of the call form one
 `Compound_operation`, run through `Operation_stack::execute_now()`: one undo
 entry, which removes every piece of the call and the palette materials it
 added.
+
+## Pattern expansion
+
+The arrangement of a kit layout node ("Kit layout nodes", R5.4, D3.7) is a
+pattern expanded from a start transform into one pose per element.
+`level_repeat.hpp` is that scene-free part, built into `editor_level_tests`:
+`Repeat_pattern` (kind `Repeat_pattern_kind` line, grid, ring or polyline and
+the fields of each) and `expand_repeat(pattern, start, out_poses)`, which
+returns the poses of the run with element 0 at the start, or a refusal and no
+poses. A kit layout node expands from its own origin
+(`resolve_layout_pattern()` turns its values into a `Repeat_pattern`); the
+axes are the start rotation's.
+
+- line: `count` elements, element i at the start plus i times `spacing` in
+  the start frame, each with the start rotation;
+- grid: `count_x` by `count_z` elements along the start frame's x and z axes,
+  `spacing_x` and `spacing_z` apart, x fastest;
+- ring: `count` elements turned about the start frame's up axis through a
+  center `radius` behind the start (against its +z front), counter-clockwise
+  seen from above; a full ring (`arc_degrees` 360, the default) spaces them
+  360 / count degrees apart, a smaller arc puts the first and the last element
+  at its ends. With `Repeat_ring_facing::outward` each element turns with its
+  angle, so a piece facing out of the ring at the start faces out everywhere;
+  `start_rotation` keeps the start rotation;
+- polyline: the path runs from the start position through `points`; the
+  elements sit at arc lengths 0, `path_spacing`, 2 `path_spacing` ... measured
+  along the whole path, so the steps continue across corners. A remainder
+  shorter than the spacing at the end holds no element; an end that falls on a
+  step (within 1e-4 of the spacing) does. Each element is the start rotation
+  turned about its up axis so that its x axis follows the part of its segment
+  across that axis: a sloped segment keeps the pieces upright, a segment along
+  the up axis keeps the heading before it, and an element exactly at a corner
+  takes the segment that leaves the corner.
+
+A count below 1, a run of more than `c_max_repeat_count` (1024) elements, a
+zero spacing along a repeated axis, a radius that is not positive, an arc
+outside (0, 360], an empty path, a path spacing that is not positive and a
+value that is not finite are refused with a message naming the value.
+
+## Groups
+
+A group is an ordinary empty node (an `erhe::scene::Xform`) that is the parent
+of its pieces (R5.6, D3.8); groups nest, and a level saves and loads its groups
+as the glTF node hierarchy. Every group tool is one undo entry.
+
+- `level_group.hpp` is the scene-free part, built into `editor_level_tests`:
+  `mirror_pose(pose, plane_point, plane_normal, symmetry_planes)` and
+  `get_group_origin(bounds)`, the center of the bounds' base.
+- `Level_kits::group(scene_root, nodes, name)`: the given nodes of one scene,
+  of which a node whose ancestor is also given goes with that ancestor, get a
+  new group node named `name` at the base center of their combined world
+  bounds (the bounds of the subtrees' meshes; of the nodes' origins when there
+  is no mesh), unrotated. It goes under the nodes' common parent at the first
+  node's place, else under the scene root. The nodes keep their world
+  transforms. No nodes, a node listed twice, the scene root, a node of another
+  scene and a node inside a reference instance are refused.
+- `Level_kits::ungroup(scene_root, group)`: the group's children move to the
+  group's parent, after its other children, keeping their world transforms,
+  and the group node is removed; undo gives both back. Only an `Xform` is a
+  group node.
+- Moving a group is a transform of the group node, which the pieces ride
+  with: the Transform tool, `set_node_transform` and `transform_selection`,
+  each one entry. The surface options rest moved mesh nodes and let a node
+  with a moved ancestor ride with it ("Transform tool"), so a dragged group
+  node, which has no mesh, moves its pieces rigidly. Deleting a group is Edit > Delete
+  or `delete_nodes` on the group node: the subtree in one entry, and undo
+  gives back the same pieces with their records, meshes, bodies and
+  collision shapes.
+- `Level_kits::duplicate(scene_root, node, copy)`: a copy of the node's
+  subtree, nested groups included, after the node under its parent, named
+  `copy.name` or the node's name followed by " Copy" (the nodes below keep
+  their names), at the node's world transform moved by `copy.value`
+  (`Kit_copy_placement::offset`) or with its origin at `copy.value`
+  (`position`). The copy is the node's `clone()`, so every copied piece keeps
+  its record, shares the mesh of its brush and has a static body; before the
+  insert `set_copied_brush_collision_shapes()` gives each brush instance the
+  collision shape of its brush (`doc/editor/brushes.md` "Copies"). A copied
+  piece is an ordinary piece: a parameter change of the copy leaves the
+  original alone.
+- `Level_kits::mirror(scene_root, group, axis)`: every node below the group
+  node is reflected across the plane through the group node's origin whose
+  normal is the group's local `Mirror_axis` x, y or z; the group node stays.
+  No node gets a negative scale: a rigid body takes only its node's
+  translation and rotation, so a reflected transform would leave a piece's
+  body unmirrored. The position is reflected, and the rotation is the
+  reflection composed with a reflection in the node's own frame across a
+  plane its shape is symmetric about, which is a rotation and gives the exact
+  mirror image. A shape declares those planes in
+  `Kit_shape_definition::mirror_planes` (`Kit_mirror_plane` x, the plane
+  x = 0, or z): x and z for the block, floor slab, wall, door wall and arch,
+  x for the wedge and the stairs, z for the cylinder and the pillar, none for
+  the seeded nature shapes. Of the declared planes the one whose normal is
+  closest to the mirror's is used, so a block mirrored across its own x axis
+  only moves, a wedge mirrored across z turns half a turn about its up axis,
+  and mirroring twice gives the original. A piece whose shape declares no
+  plane and a mesh that is not a piece use their local x plane and are
+  reported as not exact (`Mirror_image::not_exact`); a node without a mesh
+  uses local x too and has no image to be exact about. Each node's local
+  transform is set from its parent's new world transform.
+
+## Kit layout nodes
+
+A kit layout node is a run of pieces kept as one node of the scene graph, the
+pieces its children (R5.12, D3.9). It is an ordinary `erhe::scene::Xform` that
+carries the attached property group `Kit_layout` (`level/kit_layout.hpp`, the
+pattern of `Kit_piece`), so its values ride the node's `ERHE_node` properties
+like a piece record. Locked, the node makes its children from its values and
+they are not edited directly; unlocked, it leaves them alone and they are
+ordinary pieces.
+
+- The values (`Kit_layout_data`): `Kit_layout.pattern`, the canonical text of
+  a `Kit_layout_pattern`; `Kit_layout.items`, the canonical text of the
+  `Kit_layout_item` list; `Kit_layout.module_snap`, `surface_snap` and
+  `surface_orient`, the snap settings applied to every element as a placement
+  applies them (`Kit_snap`, `Surface_options` with the downward direction);
+  `Kit_layout.random_seeds` and `Kit_layout.seed`; `Kit_layout.locked`. The
+  pattern text is the key value: a node carries the group while it holds one.
+  The raw rows are developer-only in the Properties window. A write of a
+  `Kit_layout` value outside the entry points below (a Properties row,
+  `set_item_property`) is a `Property_set_operation` whose follow-ups
+  (`Level_kits::append_layout_value_follow_ups()`) are the generation a
+  locked node's new values need, so the write and its regeneration are one
+  undo entry, as `level_set_layout` makes them; writing `locked` true locks
+  and false unlocks as `level_set_layout_lock` does. A write the values
+  cannot take (a text that does not read, a pattern the generation refuses)
+  is taken back and applies nothing. `set_item_property` and the Properties
+  window's rows check it first (`check_layout_value_write()`), so it records
+  no undo entry: `set_item_property` refuses it naming `level_set_layout`,
+  and a row takes its live edit back and logs the refusal
+  (`Dependency_property_rows::refuse_layout_write()`). Both refuse an
+  expression and a cleared value of the group. Every operation that writes a
+  `Kit_layout` value (and its undo and redo) queues
+  `Kit_layout_changed_message` (`App_context::on_item_property_changed()`),
+  on which the Level Kit window reads the node's values again. The entry
+  points write their values with `Property_set_follow_ups::none`, adding the
+  generation themselves.
+- `level/kit_layout_values.hpp` is the scene-free part, built into
+  `editor_level_tests`. Both texts are JSON with sorted keys and hexadecimal
+  float strings (`format_hexfloat()`), so equal values give equal text; a
+  text with a missing, unknown or mistyped key does not read.
+  - `Kit_layout_pattern` holds every kind's values, so switching the kind and
+    back keeps them: `kind` (line, grid, ring, polyline), `count_mode`
+    (`Kit_layout_count_mode::count` or `gap`), `count`, `gap`, the line's
+    `direction`, `step` and `length`, the grid's `count_x`, `count_z`,
+    `spacing_x` and `spacing_z`, the ring's `radius`, `arc_degrees` and
+    `facing`, and the polyline's `points`. Everything is in the node's own
+    frame: element 0 is at the node's origin with its rotation, the points
+    follow it, so moving or turning the node moves the run.
+  - `Kit_layout_item`: a shape id, the canonical parameter text of its values
+    (D1.3) and a material name per slot, an empty name taking the slot's
+    default. The parameter text's `derive` list is the item's seed mask
+    (R3.9). Element i takes item `get_layout_item_index(i, n)` = i modulo n.
+  - `resolve_layout_pattern(pattern, item_extent, out_run)` turns the pattern
+    into a count mode `Repeat_pattern` that `expand_repeat()` expands from the
+    node's origin ("Pattern expansion"), and reports the element count, the step and the
+    space (`Kit_layout_run`). In count mode a line is `count` elements `step`
+    apart along `direction`, a ring `count` elements over its arc and a
+    polyline `count` elements spread evenly over the path, the first at the
+    origin and the last at the path's end. A grid always states its counts.
+  - Gap mode (R5.12.7) states the free distance between neighbours and the
+    space determines the count. The step is the item extent plus the gap; the
+    item extent is the largest extent along x of the layout's items (the
+    bounds of each item's brush), so a run of several items stays regular.
+    The space is the line's `length` from the first center to the last, the
+    ring's arc length at its radius and the polyline's path length. A line or
+    a polyline holds floor(space / step) + 1 element centers spread evenly
+    from the start to the end of the space, both ends holding one; an open
+    arc does the same, and a full ring, which closes, holds floor(circumference
+    / step) elements 360 / count degrees apart. The remainder is spread over
+    the gaps, so the stated gap is a minimum, and an exact fit (within 1e-4
+    of a step) counts. A space shorter than one step holds element 0 alone.
+    The gap of a ring and of a polyline is measured along the arc and the
+    path.
+  - Refused with a message naming the value: a determined or stated count
+    above `c_max_repeat_count` (1024) or below 1, a gap that leaves no
+    positive step, a negative length, a zero direction, a zero step with more
+    than one element, a radius that is not positive, an arc outside
+    (0, 360], an empty path, a path of no length holding more than one
+    element, and every refusal of `expand_repeat()`.
+  - `set_layout_spacing_from_extent(pattern, extent)` gives the line's step
+    and the grid's spacings of a contiguous run of an item with that bounds
+    extent (x for the step and `spacing_x`, z for `spacing_z`, 1 m for an
+    extent of 0); `level_create_layout` and Make Layout start from it.
+  - `derive_layout_element_seed(layout_seed, i)` is the seed of element i
+    with per-element seeds: a hash of the layout seed and the index through
+    the integer stream of D1.4, the same on every platform.
+- Generation: `Level_kits::build_layout_generation()` reads the items
+  (`read_layout_item()`: known shape, readable and valid values, materials of
+  the scene or the palette), resolves and expands the pattern, and makes one
+  `Kit_placement` per element at the node's world transform times the
+  element's pose, the module snap and then the surface options applied with
+  the node's current children excluded from the rays. With per-element seeds
+  the element's values take `derive_layout_element_seed()` as their seed and
+  derive their masked parameters from it, so the run's derived values are
+  stable across regenerations. Child i is kept when it already is element i:
+  a piece without children whose record (shape and parameter text), slot
+  materials by name and local pose (scale 1) equal the element's. The other
+  children are removed with their subtrees, last child first, and the
+  missing elements are placed at their indices through the placement path
+  of `place()` (`prepare_placements()`), named after the shape and the
+  element number from 1. A node whose world scale is not 1 is refused.
+- Every edit is one undo entry, and the generation runs only from these:
+  - `create_layout(scene_root, Kit_layout_create)`: the node at a world
+    position and rotation under a parent (the scene root by default) and its
+    generated children, locked or unlocked as the values say.
+  - `make_layout_from_piece(scene_root, Kit_layout_from_piece)`: a node in a
+    placed piece's place - under its parent at its index, at its world
+    translation and rotation, named after it followed by " Layout" unless a
+    name is given - with the piece as the one item
+    (`read_piece_layout_item()`: its shape, its record's parameter text with
+    its seed mask, and the name of each primitive's material), the given
+    pattern, snap settings, seeds and lock. One `Compound_operation`: the
+    piece's remove, the node's insert and its generated children, the piece
+    excluded from the surface rays, so element 0 takes the piece's place
+    rather than standing beside it and undo gives back exactly the piece
+    (the same node with its record, mesh, materials and body). A piece with
+    children, a scaled piece, a piece inside a reference instance or below a
+    locked kit layout node and a piece whose primitive count is not its
+    shape's slot count are refused.
+  - `set_layout(scene_root, node, data)`: the changed values, one
+    `Property_set_operation` each, and for a locked node the generation in
+    the same entry, keeping the children that match. An unlocked node takes
+    the values alone; they are checked as a generation reads them. The lock
+    is not changed here. No entry when nothing changes.
+  - `set_layout_lock(scene_root, node, lock)`: unlocking writes the lock
+    value alone and changes no child (R5.12.5). Locking writes the value and
+    replaces every child with the generated ones, which discards the edits
+    made while unlocked; the remove operations hold the user's children
+    themselves (records, meshes, collision shapes, bodies), so the lock's
+    undo puts exactly them back and unlocks, and redo locks again with the
+    same generated nodes (R5.12.6).
+  - `refresh_layout(scene_root, node)`: a locked node's generation, keeping
+    the children that match, no entry when all match; an unlocked node is
+    refused. A level settings change (module, wall height) does not
+    regenerate: the item values are stored resolved, and the explicit
+    refresh applies a new module to a module-snapped layout.
+  - The end of a move: `append_layout_move_operations()` adds the generation
+    of every locked layout node at or below the moved nodes whose surface
+    snap or orient is on to the move's own entry, for the Transform tool's
+    drag end (`record_transform_operation()`, which `transform_selection`
+    and `drag_selection` share) and `set_node_transform`. Without a surface
+    setting the children ride with the node and nothing regenerates.
+- A locked node's children cannot be edited directly (R5.12.3):
+  - Selection: `Selection` never holds a child of a locked layout node;
+    `add_to_selection()`, `set_selection()`, `set_active_item()` and a
+    viewport click (`toggle_node_selection()`) take the outermost locked
+    layout node above it instead, so every selection-driven tool (the
+    Transform tool and its gizmo, `transform_selection`, `drag_selection`,
+    the Properties window, the Level Kit window's piece rows, Edit > Delete,
+    cut, copy, duplicate) works on the layout node. When a node becomes locked
+    (a lock, the undo of an unlock) `App_context::on_item_property_changed()`
+    hands its selected children's place in the selection to it.
+  - Structure: `instance_structure_refusal()` and `instance_child_refusal()`
+    (`prefabs/instance_structure.hpp`) and their bool forms refuse an item
+    below a locked kit layout node and an insert under one
+    (`locked_layout_refusal()`, `locked_layout_child_refusal()`), so delete,
+    reparent (the item tree's drag and drop, `reparent_item`), paste into the
+    node (`clipboard_paste`, the item tree's Paste and Create entries, and
+    `Clipboard::try_paste()` for the Paste command), `create_node` and the
+    other insert tools, and the group tools refuse it.
+  - Values: `Level_kits::set_parameters()`, `preview_parameters()` and
+    `set_slot_material()` refuse a child, and so do `set_node_transform`,
+    `level_snap_to_surface` (unless `query_only`), `assign_mesh_material`,
+    `set_item_property`, `set_item_style`, `clear_item_style`,
+    `set_item_flags`, `add_tags`, `remove_tags`, `lock_items`,
+    `unlock_items`, `physics_drag`, `apply_physics_force`,
+    `create_physics_body`, `edit_physics_body`, `create_joint`, `edit_joint`,
+    `navigation_set_seed`, `set_node_graph_mesh`, `generate_lods`, the
+    animation keying tools, the mesh component selection tools, every
+    geometry tool that takes node ids (`Mcp_server::run_geometry_op_with_target()`),
+    `loop_cut_mesh`, `knife_cut_mesh`, `set_mesh_attribute_values`,
+    `set_edge_sharpness`, `ik_drag` and `csg` with a child as target or as a
+    consumed tool. `merge_static_subtree` refuses a subtree that holds a
+    locked kit layout node, and `attach_selection_to_active` (and the Attach
+    command) refuses a locked layout node as the parent.
+  - Geometry operations of the Operations window refuse a locked kit layout
+    node and its children among their items (`resolve_operation_items()`),
+    and the mesh component selection tool does not pick a child's mesh.
+  - Item tree: a child's row offers no Rename (and a rename commit is
+    refused), its Cut, Duplicate, Paste and Create entries are disabled and
+    its node menu shows "Locked by its kit layout" in place of the node
+    edits; Delete and drag and drop refuse through the structure predicates.
+    The recursive Lightmap and No Transform Update entries on the layout
+    node's own row reach its children through the layout node, which is an
+    edit of the layout, not of a child.
+  The message names the node and the layout ("'Block 2' is a child of the
+  locked kit layout node 'Wall run'; edit the layout's values, or unlock it to
+  edit its children"), and the refused call changes nothing. The physics
+  tool grabs no static body, so it never moves a piece.
+- Groups: a kit layout node is a group node as well, so `level_ungroup` of it
+  leaves its children as plain pieces. `duplicate()` and a paste copy the node
+  with its values and its own copied children: the copy is a kit layout node
+  with the same lock state. `mirror()` moves a locked layout node as a unit
+  (its children ride with it and are not listed) and reports it as not exact,
+  because the run keeps its own direction in the node's frame.
+- A level saves its kit layout nodes with their values and their children as
+  ordinary pieces (R8.1); at load the children are taken as saved and follow
+  the kit as other pieces do ("Persistence"), and nothing regenerates. The
+  level check, support and overlap reports, region contents, height map and
+  navigation input read the children as the pieces they are.
 
 ## Parameter changes
 
@@ -218,8 +573,10 @@ record change nothing and record no entry. Otherwise it gets the brush of the
 new values from the cache and executes one `Kit_piece_parameters_operation`
 (`kit_piece_operation.hpp`), which swaps, under the scene's item host mutex:
 
-- the mesh primitives: each keeps its material and takes the brush's
-  primitive (`swap_mesh_primitives()`, so the raytrace instances follow);
+- the mesh primitives: each keeps its slot's material and takes the brush's
+  part primitive of that slot (`swap_mesh_primitives()`, so the raytrace
+  instances follow); a mesh whose primitive count is not the shape's slot
+  count is refused;
 - the collision shape: the brush's, through the node's physics system, which
   rebuilds the static body (a node without a body keeps its shape);
 - `Brush_placement.brush` and `Kit_piece.parameters`.
@@ -231,7 +588,7 @@ brush. The body's mass value stays as placed.
 Live drags (D3.6, R3.4). `Level_kits::preview_parameters(node, values)` shows
 values on a piece without an operation: its first call remembers the piece's
 mesh primitives, collision shape, brush and record, and every call gives the
-mesh primitives the primitive of the values' brush (materials kept, raytrace
+mesh primitives the part primitives of the values' brush (materials kept, raytrace
 instances following) and sends `Mesh_geometry_changed_message`; the record,
 `Brush_placement.brush` and the collision shape stay. The preview holds the
 brush it shows, so the brush of an intermediate value leaves the cache when the
@@ -308,9 +665,12 @@ hits on the excluded meshes - the ones being moved - are passed through.
   the ray), which keeps its heading, and its base center comes to rest on the
   hit point. Orient with snap is orient.
 - A ray restarts 0.1 mm past each hit on an excluded mesh. When the first hit
-  after such a restart leaves a solid (its geometric normal points along the
-  ray), the solid's entry face lay on the passed face - a moved piece resting
-  on a surface - so the passed face's distance and plane are the hit.
+  after the ray left an excluded mesh leaves a solid (its geometric normal
+  points along the ray), the solid's entry face lay on the passed face - a
+  moved piece resting on a surface - so the passed face's distance and plane
+  are the hit. Any other hit that leaves a solid is passed through as well: the
+  bottom face of a piece resting on the start plane (on the moved piece's top)
+  is no surface.
 - With no hit the pose is unchanged and `surface_found` is false.
 
 Placement computes the resting transform before the insert, so the pieces of
@@ -418,8 +778,9 @@ viewer without the erhe extensions shows the right geometry (R8.2), and the
 node's `ERHE_node` properties carry the `Kit_piece` record. What a piece is right
 after the file is read:
 
-- its record, transform, name and palette material (the palette materials come
-  back by name, so a placement after the load finds them and adds none);
+- its record, transform, name and a mesh primitive per slot with that slot's
+  material (the palette materials come back by name, so a placement after the
+  load finds them and adds none);
 - a static body with a collision shape `KHR_physics_rigid_bodies` rebuilt from
   the piece's own saved mesh (a convex hull or a triangle mesh), one per piece;
 - a mesh of its own: pieces of equal values no longer share one, and a changed
@@ -434,19 +795,22 @@ are in the scene and before the navigation item's input check. For each node
 carrying `Kit_piece` it reads the record (`read_piece_values()`: known shape,
 readable text, values in range) and gives the node the cached brush of those
 values the way a parameter change does, without an undo entry: the brush's
-primitive in place of the loaded one (each primitive keeps its material), the
+part primitives in place of the loaded ones (each primitive keeps its slot's
+material), the
 brush's collision shape (the body keeps its motion mode and settings and is
 rebuilt around the shape) and `Brush_placement.brush`. The collision shape is
 replaced even when the kit is unchanged, because R8.3 makes it follow the kit
 and the brush's one shape is shared by all pieces of the mesh key. A prepared
 run keeps the meshes it was built with.
 
-A piece whose shape the kits no longer have, or whose parameters do not read or
-are out of range, keeps the loaded mesh and collision shape (R8.4) and is named
+A piece whose shape the kits no longer have, whose parameters do not read or
+are out of range, or whose loaded mesh has another primitive count than the
+shape has slots (a file saved before the shape had them: not migrated), keeps
+the loaded mesh and collision shape (R8.4) and is named
 in one warning of the `editor.scene` log (`Kit piece '<name>' (id <id>) keeps
 its loaded mesh: <problem>`); one info line counts the pieces that follow and
 the ones that do not. `Level_kits::check_piece()` reports per piece
-`follows_kit` (its mesh is the kit brush's primitive and its
+`follows_kit` (its mesh primitives are the kit brush's part primitives and its
 `Brush_placement.brush` the cached brush of its record) and the `problem`;
 `level_get_pieces` returns both.
 
@@ -485,7 +849,13 @@ Top to bottom:
   rise and tread depth (R3.5). An edit hands the Brush tool the kit brush of the
   new values when its drag ends, a value is typed or an entry is chosen; values
   `validate()` refuses show the message in red and the tool keeps the brush it
-  has. Reset To Defaults fills the rows again and hands the tool their brush.
+  has. Under them one combo per material slot, `<slot> material` (ImGui id
+  under the slot's name, so a row keeps its id whatever other rows show),
+  offering the slot's default palette material and its alternatives
+  ("Materials"); a choice hands the Brush tool the same brush with the new slot
+  materials, which its preview shows and its next piece gets. Reset To
+  Defaults fills the rows again, the slots' defaults included, and hands the
+  tool their brush.
 - Snap To Module, Snap To Surface, Orient To Surface, New Seed Per Piece and
   Rotation Step (90, 45 or 15 degrees): the editor setting `level_kit`
   (`Level_kit_config` version 4, `editor_settings.json`; on, off, 90) for
@@ -497,11 +867,90 @@ Top to bottom:
   the preview the brush of the next piece; the tool sends
   `Kit_values_changed_message` and the window's rows take its values.
 - Selection: for the selected piece of the scene (the active item when it is
-  one, else the first selected piece) its name and shape, and its parameter rows
-  ("Parameter rows"). Snap Selected To Surface and
+  one, else the first selected piece) its name and shape, its parameter rows
+  ("Parameter rows") and the slot material combos as above, each showing the
+  material of that slot's mesh primitive; a choice queues
+  `Level_kits::set_slot_material()` with the palette material, one undo entry
+  at the edit (`Imgui_windows::queue()`). The combos show only while the
+  piece's mesh has one primitive per slot. Snap Selected To Surface and
   Orient Selected To Surface run `Level_kits::snap_to_surface()` - the code
   path of `level_snap_to_surface` - over the selected meshes of the scene, one
   undo entry.
+- Layout ("Kit layout nodes", `Kit_layout_editor` in `kit_layout_editor.hpp`):
+  - The pattern rows, shared by both cases below: the radio buttons Line,
+    Grid, Ring and Polyline; for a line, ring and polyline By Count and By
+    Gap, then Count (count mode) or Gap (gap mode); for a line Direction
+    (components recorded as `Direction.x`, `.y`, `.z`) and Step (count mode)
+    or Length (gap mode); for a grid Count X, Count Z, Spacing X and Spacing
+    Z; for a ring Radius, Arc and Face Outward; for a polyline a line naming
+    the point count, one Point row (`Point.x` ...) and Remove Point per point,
+    in the node's frame, and Add Point, which continues the last segment
+    (from the origin, three steps along x). Viewport picking of the points is
+    a later step.
+  - With a kit piece selected (as Selection finds it) and no kit layout node:
+    its name, the pattern rows over a pattern of the window's own, its step
+    and spacings taken from the piece's extent when another piece becomes the
+    selected one or a mesh changes (the mesh geometry message), with one
+    point three steps along x, and Make Layout, which queues
+    `make_layout_from_piece()` with that pattern and the placement settings'
+    Snap To Module and surface pair, locked, and selects the new node.
+  - With a kit layout node selected (the active item when it is one, else
+    the first selected one; a click on a locked node's child selects the node
+    itself): its name and piece count, whether it is locked (the layout makes
+    its children) or unlocked (the children are edited directly and the rows
+    change the values alone), the pattern rows over the node's values, a line
+    with the count and step the values make or, in gap mode, the resolved
+    count and the actual gap once the remainder is spread; per item its shape,
+    its parameter rows ("Parameter rows", seed mask toggles included), its
+    `<slot> material` combos (the slot's default shown for an empty name) and
+    Remove Item (disabled for the last item); Add Shape Item (the shape chosen
+    above with its rows' values and slot materials, disabled without a valid
+    choice) and Add Piece Item (the selected kit piece, disabled without one);
+    Module Snap, Surface Snap, Surface Orient, Random Seeds and Layout Seed;
+    Lock (its tooltip warns that it discards the edits made to the children),
+    Unlock and Refresh. A drag commits when it ends
+    (`IsItemDeactivatedAfterEdit()`), a radio button, checkbox, combo entry or
+    button at once; each commit queues one `set_layout()`, `set_layout_lock()`
+    or `refresh_layout()` (`Imgui_windows::queue()`), the entry points of the
+    MCP tools, so each is one undo entry. A live preview while a value is
+    dragged is not shown; the children change at the commit.
+  - The rows show a copy of the node's values, read in a queued call (an
+    item's brush may be made there) when another node is selected, on the
+    selection and active item messages and on `Kit_layout_changed_message`,
+    and never while an item of the window is active; nothing is recomputed
+    per frame. The queued call writes the result or the refusal (in red, and
+    as a warning line `Level Kit: layout ... refused` in the log) under the
+    rows; a refused or unchanged edit reads the node's values back.
+- Group ("Groups"): Group Name (default "Group") and Group Selected, which
+  groups the selected nodes of the scene and selects the new group node; for
+  the selected group node (the active item when it is a selected `Xform`,
+  else the first selected one) its name and child count, Ungroup, Duplicate
+  Offset (the group's width along x, taken again when another group becomes
+  the selected one or a mesh changes; a typed offset stands until then),
+  Duplicate, which selects the copy, and Mirror X and Mirror Z. A press
+  queues its `Level_kits` call; the queued call writes the result, the names
+  of the pieces a mirror does not show exactly, or the refusal in red under
+  the buttons.
+- Spatial Queries ("Spatial queries"): Support Report runs `find_support()`
+  over the selected meshes of the scene, or over every kit piece when none is
+  selected, at the default tolerance, and shows the count, the unsupported
+  meshes as rows that select the clicked mesh, and Select Unsupported, which
+  selects them all. Region Contents runs `find_region_contents()` for the box
+  of the selected meshes' world bounds and lists the meshes found the same
+  way. Height Map runs `make_height_map()` over those bounds grown by one
+  module on every side, one cell per module, the rays from the grown top to
+  the grown bottom, and shows the text picture, with a navigation mesh also the island
+  picture, and a line naming the grid, the heights of digits 0 and 9 and a
+  stale navigation mesh. Exclude Tags takes comma separated tags (as the
+  Properties window's Tags row). Overlap Report runs `find_overlaps()` over
+  the selected meshes, or every kit piece without a selection, at the default
+  tolerance with those tags left out, and shows the counts and a row per pair
+  (names, depth, a measure other than exact) that selects both meshes. Level
+  Check runs `run_level_check()` at the defaults with those tags left out and
+  shows the counts, the navigation mesh's state and a row per finding (kind
+  and detail) that selects its pieces. A press runs its query in the queued
+  call (`Imgui_windows::queue()`); the result stays until the next press, the
+  meshes held weakly, and a removed mesh shows as "(removed)".
 
 The hand-overs and the row commits run through `Imgui_windows::queue()`
 (`doc/editor/coding_rules.md` "ImGui-time work"), because a new brush uploads
@@ -511,13 +960,14 @@ In kit mode the Brush tool keeps its hover, preview and insert machinery and
 takes the piece's transform from `make_placement_pose()` ("Surface
 placement"): the point is the hovered point on content, else the grid-snapped
 point on the grid; the rotation steps count the tool's rotate commands and
-start at zero when another shape is chosen. The preview mesh carries a material
-of the palette color of the shape's slot (`Level_kits::get_preview_material()`,
-outside every content library) and sits at exactly that pose; it is no surface
+start at zero when another shape is chosen. The preview mesh carries one
+primitive per slot, each with a material of the color of the palette material
+the window chose for that slot (`Level_kits::get_preview_material()`, outside
+every content library), and sits at exactly that pose; it is no surface
 for the rays, while placed pieces are, so a piece placed over a placed block
 rests on it. A click places one piece at that pose through `Level_kits::place()`
-(without a further snap): its record, palette material and static body, one
-undo entry. The tool keeps the selection, as its face-aligned insert does, and
+(without a further snap): its record, the chosen palette material of each slot
+and its static body, one undo entry. The tool keeps the selection, as its face-aligned insert does, and
 stays in kit mode for the next piece.
 
 ## MCP
@@ -529,13 +979,17 @@ stays in kit mode for the next piece.
   or int `derive_min` and `derive_max`, a float's resolved to meters with its
   `derive_step`), `default_derive` (the default mask's names),
   `default_size` and `default_bounds` of the mesh at the defaults (default
-  mask, default seed), material
-  slot with its palette material, connectors (none yet), normal style,
-  triangle budget and collision; the scene's level lengths and the palette.
+  mask, default seed), `material_slots` (in slot order: `slot`,
+  `default_material` and `alternatives`, palette names), connectors (none
+  yet), normal style, triangle budget, collision and `mirror_planes`
+  ("Groups"); the scene's level lengths and the `palette` (`name`,
+  `base_color`, `roughness`).
 - `level_place_pieces {scene_name, snap, surface_snap, surface_orient,
   surface_direction, pieces: [{shape, parameters, position, rotation_xyzw,
-  name, material, parent_id, parent_index, surface_snap, surface_orient}]}`:
-  one undo entry. `surface_snap` and `surface_orient` are booleans (default
+  name, materials, parent_id, parent_index, surface_snap, surface_orient}]}`:
+  one undo entry. `materials` maps slot names to material names: a material
+  of the scene, else a palette material (added to the scene the first time it
+  is needed); a slot not named takes its default. `surface_snap` and `surface_orient` are booleans (default
   false) a piece may override; `surface_direction` defaults to `[0, -1, 0]`. `parameters.derive`
   lists the parameters derived from the seed, replacing the default mask; the
   masked values are derived at the scene's lengths. A value given for a masked
@@ -543,18 +997,81 @@ stays in kit mode for the next piece.
   the call naming it.
   Unknown keys, an unknown shape or parameter, a value of the wrong type or
   out of range, a rotation that is not a unit quaternion
-  (`make_unit_quaternion()`), a zero direction or a missing material fails the
+  (`make_unit_quaternion()`), a zero direction, a slot the shape does not have
+  or a material neither in the scene nor in the palette fails the
   call with the piece index, and nothing is placed. The reply lists per piece
   `id`, `name`, `shape`, the effective `parameters` (with `derive`, the masked names), the placed `position` and
   `rotation_xyzw`, `surface_found` (false also without a surface option),
-  `world_aabb`, `triangle_count`, `material`, `brush_id` and `mesh_key`;
+  `world_aabb`, `triangle_count`, `materials` (slot name to material name),
+  `brush_id` and `mesh_key`;
   pieces of equal `brush_id` share one mesh.
+- `level_group_nodes {scene_name, node_ids, name}` ("Groups"): `group()`;
+  `name` defaults to "Group". The reply: the group's `id`, `name`,
+  `position`, `parent_id`, `count`, `piece_count` and `nodes`, the group and
+  every node below it, parents first, each with `id`, `name`, `kind`
+  (`group`, `piece`, `mesh` or `node`), `parent_id`, world `position` and
+  `rotation_xyzw`, `world_aabb`, for a piece `shape`, `parameters_text` and
+  `materials`, `brush_id` and `physics {collision_shape, has_body}`.
+- `level_ungroup {scene_name, group_id}`: `ungroup()`. The reply:
+  `parent_id`, `child_count` and `nodes`, the former children and their
+  subtrees as above.
+- `level_duplicate_group {scene_name, group_id, offset | position, name}`:
+  `duplicate()`, exactly one of `offset` and `position`. The reply is that of
+  `level_group_nodes` for the copy, plus `source_id`.
+- `level_mirror_group {scene_name, group_id, axis}`: `mirror()`, `axis` `x`,
+  `y` or `z`. The reply: `axis`, the world `plane_point` and `plane_normal`,
+  `count`, `not_exact_count`, `not_exact_ids` and per node `id`, `name`,
+  `kind`, the new world `position` and `rotation_xyzw`, `local_plane` (the
+  node's own plane used), `exact_mirror` and `world_aabb`.
+  A group tool refuses an unknown key, a `group_id` or node id that names no
+  node of the scene or names the scene root, and what the `Level_kits` call
+  refuses, changing nothing. Moving and deleting a group use
+  `set_node_transform`, `transform_selection` and `delete_nodes`.
+- `level_create_layout {scene_name, name, parent_id, position,
+  rotation_xyzw, pattern, items | from_piece_id, snap, surface_snap,
+  surface_orient, random_seeds, seed, locked}`: `create_layout()` ("Kit
+  layout nodes"), locked by default; with `from_piece_id`
+  `make_layout_from_piece()`, the Level Kit window's Make Layout, which takes
+  the item, parent, place and world transform from the piece (not combined
+  with `items`, `position`, `rotation_xyzw` or `parent_id`; the reply adds
+  `replaced_piece_id`). `pattern` is an object of the pattern's keys (`kind`,
+  `count_mode`, `count`, `gap`, `direction`, `step`, `length`, `count_x`,
+  `count_z`, `spacing_x`, `spacing_z`, `radius`, `arc_degrees`, `facing`,
+  `points` in the node's frame) over the defaults, `step` and the grid
+  spacings defaulting to the largest item's extent; `items` is a list of
+  `{shape, parameters, materials}` read as a `level_place_pieces` piece reads
+  them. The reply: the node's `id`, `name`, world `position` and
+  `rotation_xyzw`, `locked`, `pattern`, `pattern_text`, `items` (`shape`,
+  `parameters`, `parameters_text`, `materials`, `extent`), the snap and seed
+  values, `run {count, step, space, item_extent}`, `child_count` and
+  `children` (`id`, `name`, world `position` and `rotation_xyzw`, `shape`,
+  `parameters`, `parameters_text`, `materials`), and `changed`,
+  `kept_count`, `added_count` and `removed_count`.
+- `level_set_layout {scene_name, layout_id, pattern, items, snap,
+  surface_snap, surface_orient, random_seeds, seed}`: `set_layout()`; the
+  values given merge over the node's (the pattern key by key, the items as a
+  whole list). The reply as above.
+- `level_get_layouts {scene_name}`: every kit layout node as above.
+- `level_set_layout_lock {scene_name, layout_id, locked}`:
+  `set_layout_lock()`.
+- `level_refresh_layout {scene_name, layout_id}`: `refresh_layout()`.
+  A layout tool refuses an unknown key, a `layout_id` that names no kit
+  layout node, and what the `Level_kits` call refuses, changing nothing.
 - `level_set_piece_parameters {scene_name, node_id, parameters}`: the given
   parameters merge over the piece's current values (`derive` replaces the
   mask; a value for a masked parameter fails naming it), the masked values are
   derived again when the seed or the mask changed, and `set_parameters()`
   applies them. The reply: `id`, `name`, `shape`, `changed`, the effective
-  `parameters`, `mesh_key`, `brush_id`, `world_aabb`, `triangle_count`.
+  `parameters`, `mesh_key`, `brush_id`, `world_aabb`, `triangle_count`,
+  `materials`.
+- `level_set_piece_material {scene_name, node_id, slot, material}`:
+  `set_slot_material()` ("Materials") for the slot named, `material` read as
+  a `level_place_pieces` slot material reads; one undo entry, none when the
+  slot has the material already. The reply: `id`, `name`, `shape`, `slot`,
+  `material`, `previous_material`, `changed` and `materials`. The generic
+  `assign_mesh_material` with `primitive_index` the slot index assigns a
+  material the scene already holds the same way; this tool adds the slot
+  names and the palette materials the scene does not hold yet.
 - `level_snap_to_surface {scene_name, node_ids, orient, direction,
   query_only}`: `Level_kits::snap_to_surface()`, which runs
   `find_surface_placement()` with snap, and orient when asked, for any mesh
@@ -563,18 +1080,58 @@ stays in kit mode for the next piece.
   (none when no node moves); `query_only` moves nothing. The
   reply: `moved_count` and per node `id`, `name`, the resting world
   `position` and `rotation_xyzw`, `distance` and `surface_found`.
+- `level_get_region_contents {scene_name, box: {min, max} | sphere: {center,
+  radius}}` (read-only): `find_region_contents()`; exactly one of box and
+  sphere, a box's min not above its max, a sphere's radius positive. The reply
+  echoes the region and lists per mesh `id`, `name`, `kit_piece`, `shape`
+  (null for a mesh that is not a kit piece), the world `position`,
+  `rotation_xyzw` and `scale`, and `world_aabb`.
+- `level_get_height_map {scene_name, min, max, cell_size, text}` (read-only):
+  `make_height_map()` over `make_height_map_grid(min, max, cell_size)`; more
+  than `c_max_height_map_cells` (65536) cells fails the call naming the grid
+  and the limit. The reply: `columns`, `rows`, `first_cell_center` (x, z),
+  `hit_count`, `height_min` and `height_max`, `heights` (rows, null for a cell
+  without a hit) and `navigation_available`; with a navigation mesh also
+  `navigation_stale`, `walkable_count`, `walkable` and `islands` (rows, null
+  where not walkable); with `text` (default false) `height_text` and, with a
+  navigation mesh, `island_text`, one string per row.
+- `level_get_support_report {scene_name, node_ids, tolerance}` (read-only):
+  `find_support()` over the listed mesh nodes, or every kit piece when
+  `node_ids` is absent (`all_kit_pieces`), at `tolerance` (positive, default
+  `c_default_support_tolerance`, 0.01 m). The reply: `count`,
+  `unsupported_count`, `unsupported_ids` and per node `id`, `name`,
+  `supported`, `surface_found` and `distance` (null without a hit).
+- `level_get_overlap_report {scene_name, node_ids, tolerance, exclude_tags}`
+  (read-only): `find_overlaps()` over the listed mesh nodes, or every kit
+  piece when `node_ids` is absent, at `tolerance` (positive, default
+  `c_default_overlap_tolerance`, 0.01 m); `exclude_tags` is an array of
+  non-empty tag names. The reply: `count`, `tested_count`, `excluded_ids`,
+  `bounds_pair_count`, `overlap_count` and per pair `ids` (smaller first),
+  `names`, `depth`, `measure` and `position`.
+- `level_check {scene_name, support_tolerance, overlap_tolerance,
+  min_island_area, exclude_tags}` (read-only): `run_level_check()`; the
+  tolerances positive, `min_island_area` 0 or more. The reply: the effective
+  arguments, `piece_count`, `excluded_count`, `agent`,
+  `navigation_available`, `navigation_stale`, `island_count`,
+  `finding_count`, `counts` per kind and `findings`, each with `kind`,
+  `position`, `ids`, `names` and `detail`, and `distance` (unsupported, null
+  without a surface), `depth` and `measure` (overlap) or `area` and `island`
+  (island).
 - `level_get_placement_preview {}` (read-only): `active` (kit mode),
   `tool_active` (the Brush tool is the priority tool), `rotation_step_degrees`,
   `yaw_steps`, `hover_position` and `visible`; in kit mode also `shape`,
-  `parameters`, `mesh_key`, `brush_id` and the brush's own `bounds`; with a
+  `parameters`, `mesh_key`, `brush_id`, the brush's own `bounds` and
+  `materials` (slot name to the palette material of the next piece); with a
   visible preview also its `position`, `rotation_xyzw`, `surface_found` and
   `world_aabb`, the transform a click places the next piece at.
 - `get_surface_snap_settings {}` and `set_surface_snap_settings {snap, orient}`:
   the shared pair ("Surface settings").
 - `level_get_pieces {scene_name}`: every node carrying `Kit_piece`, in node id
   order: its record (`parameters` with `derive`, and `parameters_text`), `mesh_key`, world
-  position and rotation, `world_aabb`, material, `brush_id`,
-  `shares_brush_primitive` (the node's mesh primitive is its brush's),
+  position and rotation, `world_aabb`, `materials` (slot name to material
+  name; a primitive beyond the shape's slots as `primitive <index>`),
+  `brush_id`, `shares_brush_primitive` (each mesh primitive is its brush's
+  part of that slot),
   `follows_kit` and `problem` ("Persistence") and `physics` (motion mode,
   collision shape, whether the body exists).
 
@@ -588,12 +1145,97 @@ viewer stands, and a parameter change of a piece makes the mesh stale
 nearest walkable point and the path between two points
 (`doc/editor/navigation.md` "Islands and queries").
 
+## Spatial queries
+
+The reads of D7 take and return positions in the scene root's space and name
+nodes by id (R10.1). The queries are in `level_queries.hpp`, which the Level
+Kit window and the MCP tools both call; their scene-free parts are in
+`level_region.hpp`, which `editor_level_tests` builds without the editor.
+
+- `find_region_contents(scene_root, region, out_meshes)` (D7.1, R10.2): the
+  content meshes whose world bounds (`Mesh::get_aabb_world()`) intersect a
+  `Level_region`, a box or a sphere, by id. `region_intersects()` counts
+  touching as intersecting; a box test compares the bounds per axis, a sphere
+  test the distance from the center to the nearest point of the bounds.
+- `make_height_map(scene_root, grid, out_height_map)` (D7.2, R10.6):
+  `make_height_map_grid(min, max, cell_size)` covers the x extent with columns
+  and the z extent with rows of `cell_size` cells, a partial last cell
+  included. The raytrace scene is committed once; per cell one ray runs down
+  from `max.y` to `min.y` through the content meshes, and a face seen from
+  behind is passed through, so a ray starting inside a solid finds the first
+  upward face below it. The hit's y is the cell's height. With a navigation
+  mesh each hit asks `Navigation_mesh::find_nearest_point()` within a box of
+  5 cm half width and the agent's climb in height; a nearest point over the
+  polygon (within 1 mm horizontally) makes the cell walkable with the
+  polygon's island id. The cells are row after row, the row of the smallest z
+  first, and the caller's `Height_map` keeps their capacity.
+- The text pictures (`write_height_text()`, `write_island_text()`): one line
+  per row, the row of the smallest z first, x to the right. In the height
+  picture a digit maps the cell's height linearly from the lowest hit (0) to
+  the highest (9), rounded (`height_digit()`; all 0 when the hits are level),
+  and `.` marks a cell without a hit. In the island picture a walkable cell
+  shows its island id as 0 - 9 then a - z (modulo 36), `#` a hit that is not
+  walkable and `.` no hit.
+- `find_support(scene_root, meshes, tolerance, out_results)` (D7.4, R10.4):
+  per mesh the snap rays of `find_surface_placement()` straight down (the one
+  ray-casting function both share), with only the mesh itself passed through,
+  so pieces support pieces. The smallest distance from the base to a hit is
+  the result's `distance` (negative when the base is below the surface); the
+  mesh is supported when a hit exists and the distance is at most the
+  tolerance. `get_kit_piece_meshes()` gives the content meshes carrying a kit
+  piece record, by id.
+- `find_overlaps(meshes, tolerance, exclude_tags, out_report)` (D7.5,
+  R10.3): the meshes carrying none of the excluded tags (`Item::has_tag()`, the
+  Properties window's Tags row) are tested. The first pass,
+  `find_bounds_pairs()`, sorts their world bounds by min x and sweeps along x,
+  keeping the pairs whose bounds overlap by more than the tolerance on every
+  axis (`get_bounds_overlap()`, the smallest axis overlap, bounds every
+  penetration depth from above), so only overlapping neighbours reach the
+  exact pass. The exact pass measures a pair with
+  `ICollision_shape::get_penetration_depth()` (`doc/erhe/physics.md`) on the
+  meshes' collision shapes (`get_node_collision_shape()`) at the world
+  rotation and translation their bodies take, without node scale. `measure`
+  says how: `exact` with both shapes; `convex_hull` when a mesh has no
+  collision shape (a convex hull of its mesh, `build_shape_from_mesh()`,
+  stands in) or both are triangle meshes, which Jolt does not collide - then
+  each mesh is measured against the other's hull and the smaller depth is
+  kept, an upper bound of the depth; `not_measured` when the backend answers
+  for neither form (Box3D, null), with the bounds overlap as the depth. A pair
+  deeper than the tolerance is a result: both meshes, the smaller id first,
+  the depth, the measure and the center of the box both bounds cover; the
+  results are sorted by the ids. Against a triangle mesh the depth is the
+  deepest penetration through one of its triangles, which can be less than
+  the move that separates the two. The hulls are made per call and dropped at its end.
+- `run_level_check(scene_root, library, options, out_check)` (D7.6, R10.7):
+  over every kit piece, one list of `Level_finding`s (kind, position in the
+  scene root's space, at most two meshes, a value and a detail text) in this
+  order: `unsupported` (`find_support()` at `support_tolerance`; the base
+  center; the distance, none without a surface), `overlap` (`find_overlaps()`
+  at `overlap_tolerance`; the overlap's center; the depth and measure),
+  `unreachable_island` (each island of the scene's navigation mesh that is
+  not reachable and larger than `min_island_area`, default 1 m2; the island's
+  point; the area; the piece under the point, found by a downward ray from the
+  agent's climb above it, when one is), `unwalkable_parameters` (R2.10: the
+  shape's `check_walkability` over the piece's parameter values for the agent
+  of the scene's navigation build settings) and `unreadable_piece` (a record
+  naming no known shape or parameters that do not parse; the piece's origin).
+  Pieces carrying a tag of `exclude_tags` take no part in the support and
+  overlap parts, so ground pieces, which rest on nothing, and a rock sunk into
+  the ground on purpose can be left out. Without a navigation mesh no island
+  is checked and `navigation_available` is false; a stale mesh is checked as it
+  stands with `navigation_stale` true.
+
 ## Verification
 
 - `editor_level_tests`: the mesh checks of every shape at its defaults and at
   the ends of its ranges, the triangle ceiling, equal meshes for equal values
   and seeds, the range messages, walkability at defaults and a palette
-  material for every slot. Derive from seed: derived values inside their
+  default and alternatives for every slot, the palette holding stone, wood,
+  plaster, foliage, bark, earth and grass. Material slots, for every shape at
+  its defaults and at a seed-derived second parameter set: every facet names a
+  declared slot, every slot has facets and the slot meshes add up to the
+  mesh, slot names are unique; the tree's slots are bark and foliage, each a
+  closed part, the bark the 20 triangles of the trunk. Derive from seed: derived values inside their
   ranges on their steps for 200 seeds, equal for equal seeds and varied across
   seeds, independent of the other parameters, ranges following the lengths,
   walkable shapes walkable at 300 seeds with every derivable parameter masked,
@@ -601,18 +1243,49 @@ nearest walkable point and the path between two points
   parameter, texts without a seed or with a bad `derive` refused, and
   `kit_next_seed()`. Every rock form at 0, 1 and 2 bevels passes the mesh
   checks and the triangle ceiling over 40 seeds and three roughness values; the
-  counts are test properties (`--gtest_output=xml`).
+  counts are test properties (`--gtest_output=xml`). The spatial query
+  helpers: box and sphere intersection with touching, containing, separate and
+  invalid bounds; the grid's columns, rows and cell centers, a partial last
+  cell and refused sizes; the height digits; both text pictures of a known
+  grid; the bounds overlap of overlapping, touching, separate and invalid
+  bounds and its center; the bounds pairs at two tolerances; the tag test.
+  The group mirror: a reflected position, a block keeping its rotation across
+  its own plane (also yawed, through its z plane), a wedge turning half a turn
+  across z, a shape without planes taking local x and not exact, every pose
+  mirrored twice equal to the original (scale kept) and the group origin.
+  Every shape that declares mirror planes is its own mirror image across each
+  of them at its defaults, at a seed-derived second parameter set and at each
+  enum value; nine shapes declare planes, no seeded shape does.
+  The kit layout values: the pattern and items texts round trip bit for bit
+  and refuse a non-object, an unknown kind, an unknown key and a decimal
+  float; the item cycling and the element seeds (stable, distinct, in range);
+  a count mode line along its direction; gap mode lines with the remainder
+  spread, an exact fit, one just short, a line shorter than one step and a
+  wider item; a closing full ring, an arc and a ring shorter than one step;
+  a count mode and a gap mode polyline over a corner; and the refusals
+  (the limit, no positive step, a negative length, counts 0 and 1025, an
+  empty path, a path of no length, a 40 x 40 grid); the step and spacings
+  from an item's extent.
+  The pattern expansion: a line in a yawed start frame, the grid's element
+  order, a full ring facing outward and a half ring with both ends, the
+  ring keeping the start rotation, a polyline turning at a corner with the
+  remainder dropped, an end on a step, a sloped and a vertical segment, the
+  refusals (with the counts and the limit in the messages).
+  `erhe_physics_tests` (Jolt) measures two boxes 0.25 m into each other,
+  touching and apart, a hull placed by its corner and turned half a turn, a
+  box 0.2 m into a triangle mesh cube and no answer for two meshes.
 - `python3 scripts/level_tools_verify.py` (headless editor): the catalog lists
   14 shapes; the 14 shapes placed at their defaults in one row match their
   default sizes, stand on the ground, echo the catalog defaults and carry
-  their palette materials, with static bodies (a triangle mesh for the
-  stairs, a convex hull for the block); equal values share one mesh, different
+  with static bodies (a triangle mesh for the
+  stairs, a convex hull for the block) and their slots' default materials;
+  equal values share one mesh, different
   values do not, and a later call reuses the mesh; undo removes a batch in one
   step and redo restores it; out-of-range values, unknown keys, parameters
   and shapes and a scaled rotation fail the call and place nothing; snapping
   rounds to the module; defaults and snapping follow `set_scene_settings`
   level lengths. Parameter changes: a stair's new rise and bounds, the node
-  keeping its id, name, transform and material and a static body with the new
+  keeping its id, name, transform and materials and a static body with the new
   triangle mesh shape, a second piece of the old values unaffected, undo and
   redo, a refused out-of-range value and a refused node that is not a piece,
   and `cached_brush_count` falling back after `clear_undo_history` for a
@@ -687,7 +1360,126 @@ nearest walkable point and the path between two points
   two clicks two rocks of consecutive seeds and the preview the next; the
   Properties window shows the `size.from_seed`, `roughness.from_seed` and
   `seed.new` items, a click on `roughness.from_seed` derives it as one undo
-  entry and `seed.new` takes the next seed as one. The run gives back `config/editor/editor_settings.json`
+  entry and `seed.new` takes the next seed as one. Spatial queries, in a
+  scene of its own with a ground slab, a block resting on it, a block stacked
+  on that, a floating block and a block over nothing:
+  `level_get_support_report` finds the ground, the floating block and the
+  block over nothing unsupported, the resting and the stacked block at
+  distance 0, the floating block 1.8 m above the ground, and with `node_ids`
+  and a 2 m tolerance the floating block supported; a box inside the resting
+  block's height holds it alone, a box through all three heights holds the
+  ground and both blocks, a sphere touching the floating block's top holds it
+  alone and one 0.7 m above the far block nothing, with the entries' shape,
+  transform and bounds; a height map over the ground and the block stack
+  matches the known heights cell by cell, its text picture the expected
+  lines, a ray starting inside the floating block finds the ground and a
+  region below the floating block has no hit; refused arguments of all three
+  tools and an oversized grid. Overlap report, in a scene of its own (closed
+  afterwards): over a tagged ground, two blocks 0.25 m into each other, a
+  block touching one of them, one apart, one sunk 0.2 m into the ground and
+  two stairs 0.5 m into each other, exactly the three pairs (the blocks and
+  the sunk block exact with their depths, the stairs `convex_hull` within
+  their bounds overlap) and three bounds pairs; `exclude_tags` leaves out the
+  ground and a tagged block; a 0.3 m tolerance and the touching and apart
+  blocks alone give none; refused arguments. Level check, in a scene of its
+  own (closed afterwards): without a navigation mesh it says so and finds the
+  ground unsupported too; after a build with a seed on the ground and the
+  ground excluded by tag exactly one finding of each kind - a floating block
+  3.8 m above the ground, two blocks 0.5 m into each other, the unreachable
+  island on a platform on a pillar, and a door wall with a 1.9 m opening -
+  with their pieces and positions; `min_island_area` 1000 drops the island;
+  refused arguments; after moving the pieces apart, resetting the opening and
+  seeding the platform it reports the mesh stale, and after the rebuild no
+  finding. Layout patterns, in a scene of their own (closed afterwards): a
+  line of walls without a step touching end to end, named after the shape
+  and sharing one mesh; an arc of 180 degrees with both ends keeping the
+  node's rotation; a polyline layout one undo entry that one undo removes
+  with its node and redo restores; with `surface_snap` a line over a ground
+  slab and a raised slab rests each block on the surface under it;
+  `from_piece_id` of a yawed, parented piece with a width and a material
+  lays three pieces along its x axis with its values and material under its
+  parent, removes the piece in the same entry, and undo gives the piece back
+  exactly (id, place among its siblings, transform, record, material, body);
+  14 refused calls (the grid limit, a zero step, radius, arc, facing, an
+  empty path, a gap path over the limit, unknown keys, values out of range,
+  `from_piece_id` combinations, a missing or non-piece node and a locked
+  layout's child) place nothing and record no entry. Groups, in a
+  scene of their own (closed afterwards): `level_group_nodes` of a block, a
+  wedge, a rock and stairs puts them under an `Xform` at the base center of
+  their bounds, world transforms and bounds kept, one entry; undo and redo;
+  `set_node_transform` on the group moves every piece, one entry;
+  `level_duplicate_group` copies the four as full pieces (record, the
+  original's `brush_id`, `follows_kit`, a static body with the original's
+  collision shape), a parameter change of a copy leaves the original alone,
+  undo and redo; `level_mirror_group` z reflects the positions, keeps the
+  block's rotation, turns the wedge, the stairs and the rock half a turn,
+  reflects the symmetric pieces' bounds and lists the rock as not exact; twice
+  gives the original, x keeps the plane-x shapes' rotations; a group of the
+  group, a piece and a piece inside it nests the group, its copy at a
+  position copies the nested group; `level_ungroup` and its undo;
+  `delete_nodes` on the group and its undo give back the pieces with their
+  bodies and the stairs' triangle mesh shape; a pasted stairs piece has that
+  shape too; 14 refused calls change nothing; saved and loaded with a copy of
+  the group, the pieces are back (as in persistence), the group and its copy
+  each hold its four pieces and the reloaded group mirrors. In the walkable level after the rebuild a
+  height map strip from the upper slab to the floor has the upper slab's
+  height, walkable cells and island in its first row and the floor's, with
+  another island, in its last. In the window scene: Support Report over a
+  resting and a floating block with Select Unsupported selects the floating
+  one, over the resting block alone it lists nothing, Region Contents over the
+  resting block lists it and a click on its row selects it, Height Map
+  shows its picture, Overlap Report over two selected blocks 0.6 m into each
+  other lists the pair and a click on its row selects both, with one of them
+  tagged and its tag typed into Exclude Tags it lists nothing, and Level Check
+  lists as many rows as `level_check` returns findings, a click on the pair's
+  row selecting both; a `capture_screenshot` goes to
+  `logs/level_tools_spatial_queries.png` (`--queries-image`). The window's
+  Layout section with module and surface snap off: a selected piece shows the
+  pattern rows and Make Layout; a Count of 3 typed and
+  Make Layout make a locked layout of three blocks in the piece's place, one
+  entry, the piece gone and the node selected; undo gives the piece back
+  exactly and redo the layout; the node's rows (every value row, the item's
+  rows, Lock, Unlock and Refresh) show and a `capture_screenshot` goes to
+  `logs/level_tools_layout.png` (`--layout-image`); Count, Step, By Gap,
+  Length, Gap, By Count, a Direction component, Grid, Count X, Spacing Z,
+  Ring, Radius, Arc, Face Outward, Polyline, Add Point, a Point component,
+  Remove Point, Line, Add Piece Item (a selected wedge, the pieces
+  alternating), the first item's width row and slot material combo, Remove
+  Item, Module Snap, Surface Snap, Surface Orient, Random Seeds and Layout
+  Seed each regenerate or change the values as one entry; Step 0 for four
+  pieces is refused with its message (logged), recording nothing; Unlock
+  changes no child, Count typed while unlocked changes the value and leaves
+  the children, Lock replaces every child, Refresh of a matching layout
+  records nothing, and the buttons' enabled states follow the lock; every
+  entry is undone afterwards. With developer mode on, the selected layout's
+  raw Pattern row in the Properties window typed with a text the layout
+  cannot take is taken back and records no entry. The window's Group section: Group Name typed and Group
+  Selected over two selected pieces makes the named group, one entry, and
+  selects it; Duplicate copies it by its width along x as full pieces, Mirror
+  X reflects the copy's pieces across its x plane, Ungroup moves them under
+  the scene root keeping their transforms, each one entry; a
+  `capture_screenshot` goes to `logs/level_tools_group.png`
+  (`--group-image`). Material slots, in a scene of their own (closed
+  afterwards): the catalog's tree slots bark and foliage with Kit Bark and Kit
+  Foliage and alternatives, every slot's default and alternatives in the
+  palette; a placed tree with two mesh primitives of those materials sharing
+  the kit brush's parts; per-slot materials at placement in one undo entry
+  whose undo takes out the palette materials it added; trees on a ground slab
+  supported, not overlapping it, and a raised one 1 m above it for
+  `level_snap_to_surface`; `level_set_piece_material` on the foliage as one
+  entry keeping the bark, no entry when unchanged, a palette material the
+  scene lacks added in the same entry; a parameter change, a layout made from
+  the piece, a new layout with item `materials`, a duplicate, a mirror and a paste keeping
+  the assignments (and the triangle mesh collision shape); ten refused calls
+  changing nothing; save and reopen giving every piece its slot materials
+  back by name. The window's slot rows: choosing Tree shows bark material and
+  foliage material with the defaults in the preview, Kit Autumn Foliage chosen
+  in the foliage row reaches the preview and the tree a click places, the
+  selected tree's own bark row set to Kit Wood is one entry keeping the
+  foliage, and a held drag of its segments row in the Properties window
+  previews a new mesh with both materials kept and commits one entry; a
+  `capture_screenshot` goes to `logs/level_tools_material_slots.png`
+  (`--materials-image`). The run gives back `config/editor/editor_settings.json`
   and `desktop_windows.json` as they were. Surface settings, in a scene of its
   own with a slab, a wedge and blocks, driving the gizmo with
   `get_transform_handles` and held `mouse_drag`s: the pair shows in the Level
@@ -705,12 +1497,57 @@ nearest walkable point and the path between two points
   `drag_selection` of 50 blocks rests all of them and its steps are timed. A
   `capture_screenshot` of the toolbar buttons and the Move rows goes to
   `logs/level_tools_surface_settings.png` (`--transform-image`).
+  Kit layout nodes, in a scene of their own (closed afterwards): a locked
+  line of four blocks in a yawed node at known world positions, one entry,
+  the node an `Xform` holding them; a grid, a ring and a count mode
+  polyline with a corner at known positions; gap mode lines, rings and
+  polylines with known counts and positions (7 m with a 0.5 m gap between
+  1 m blocks holds 5 at 1.75 m, a radius 4 ring with a 1 m gap 12, a 7 m
+  path with 1.5 m blocks 4); a length, a gap and an item width change each
+  regenerating as one entry with the counts they determine, undone exactly;
+  two items alternating with the first item's slot material; the module
+  snap and the surface snap per element; per-element seeds giving three
+  rocks three parameter sets, a refresh keeping them with no entry, a fourth
+  element keeping the first three; a count and step change as one entry
+  whose undo restores the previous children and whose redo makes them again;
+  `set_node_transform` moving the run as one entry, and a surface-snapped
+  layout moved over the ground resting its pieces again in the move's
+  entry; a click-equivalent `select_items` of a child selecting the node and
+  `transform_selection` moving the whole run; 15 edit paths refusing a child
+  naming the node with nothing changed; unlock as one entry changing no
+  child, unlocked children moved, re-parametrized, re-materialed and deleted
+  and a `level_set_layout` changing the values alone; lock as one entry
+  discarding the edits, its undo giving the edited children back exactly
+  with their bodies, redo locking with the same generated children; a
+  duplicated group holding a locked layout giving a locked copy with its own
+  children, its mirror moving the layout as a unit reported not exact;
+  `level_check` over the scene; 14 refused calls; save and reopen keeping
+  every layout's values, lock state and children, and a reopened locked
+  layout regenerating on a change. 15 more id-addressed tools (flags, tags,
+  lock_edit, physics force and drag, navigation seed, a geometry operation,
+  CSG with the child as tool, component selection, LODs, a merge of the
+  layout, Attach under it, keying) refuse a child naming the node with
+  nothing changed; a raw `Kit_layout.pattern` write regenerates as one entry
+  whose undo restores the children, a pattern it cannot take, an expression
+  and an unreadable text are refused naming `level_set_layout`, raw
+  `Kit_layout.locked` false and true unlock and lock as the lock operation
+  does. In the item tree, driven with `mouse_click` and `mouse_drag`: a
+  child's menu disables Rename, Cut, Duplicate, Paste and Create and shows
+  the lock, its Delete deletes nothing; the layout row disables Paste and
+  Create and offers Rename; dragging a free piece onto another reparents it
+  (the control), dragging the child out and a piece onto the layout change
+  nothing.
   `--only-walkable` runs the walkable level, persistence (of the walkable
   level) and window checks alone, `--only-transform` the surface settings
-  checks.
+  checks, `--only-layouts` the kit layout node checks and
+  `--only-window-layout` the Level Kit window checks up to its Layout section
+  and the Properties write.
 - `Mcp_test.document_edits_record_one_undo_entry_each` places three pieces as
   one undo entry, changes a piece's parameters and snaps a raised piece onto
-  the one below it, each one undo entry.
+  the one below it, groups it, mirrors the group, duplicates it and ungroups
+  the copy, creates a kit layout node, changes it into a gap mode line,
+  unlocks and locks it, and makes a layout from a placed piece, each one undo
+  entry.
 
 ## Future work
 

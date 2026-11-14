@@ -19,6 +19,12 @@ namespace editor {
 
 class App_context;
 
+// Whether a Property_set_operation records the operations its write implies (the follow-ups below).
+enum class Property_set_follow_ups : unsigned int {
+    record = 0,
+    none        // the caller's own operation carries them (Level_kits writing Kit_layout values)
+};
+
 // Undoable write of one property on one item (doc/erhe/property_system.md
 // D11). `before` / `after` are the item's LOCAL state - a stored value or an
 // expression (D22), nullopt meaning "no local value" - so undo restores a
@@ -32,6 +38,8 @@ class App_context;
 // Follow-ups: the first execute that applies the write records the
 // operations the edit implies on other items (the connected child bones a
 // Rig.tail or Rig.connected edit moves, rig/bone_connect.hpp) and runs them;
+// a Kit_layout value of a locked kit layout node regenerates its children
+// (Level_kits::append_layout_value_follow_ups(), doc/editor/level_tools.md);
 // a redo runs them again after the write and an undo undoes them before
 // restoring the value, so the edit and its consequences are one undo step.
 class Property_set_operation : public Operation
@@ -67,6 +75,11 @@ public:
     [[nodiscard]] auto get_sub_object() const -> const std::optional<std::size_t>&           { return m_sub_object; }
     [[nodiscard]] auto get_property  () const -> const erhe::property::Dependency_property& { return m_property; }
 
+    void set_follow_ups(Property_set_follow_ups follow_ups);
+
+    // A write whose follow-ups could not be made (a kit layout generation refusal): it applies nothing.
+    [[nodiscard]] auto get_refusal() const -> const std::string& { return m_refusal; }
+
 private:
     auto apply(App_context& context, const std::optional<erhe::property::Local_state>& state) -> bool;
     void adopt_userships(App_context& context);
@@ -84,6 +97,8 @@ private:
     bool                                        m_userships_adopted{false};
     std::vector<std::shared_ptr<Operation>>     m_follow_ups;
     bool                                        m_follow_ups_recorded{false};
+    Property_set_follow_ups                     m_follow_up_mode{Property_set_follow_ups::record};
+    std::string                                 m_refusal;
 };
 
 // Applies a Property_set to several items (paste, multi-selection edit) as

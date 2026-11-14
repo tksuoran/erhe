@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "level/kit_layout.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
@@ -140,6 +141,9 @@ auto Mcp_server::action_apply_physics_force(const json& args) -> std::string
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
+    if (const std::optional<std::string> refusal = locked_layout_refusal(*node); refusal.has_value()) {
+        return make_error_content("apply_physics_force: " + refusal.value() + "; nothing was changed");
+    }
     erhe::physics::IRigid_body* rigid_body = get_node_rigid_body(*node.get());
     if (rigid_body == nullptr) {
         return make_error_content("Node has no live rigid body: " + node->get_name());
@@ -239,6 +243,9 @@ auto Mcp_server::action_create_physics_body(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("create_physics_body: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
@@ -318,6 +325,9 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("edit_physics_body: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
@@ -433,6 +443,9 @@ auto Mcp_server::action_create_joint(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("create_joint: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
@@ -483,6 +496,9 @@ auto Mcp_server::action_edit_joint(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("edit_joint: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }

@@ -232,7 +232,7 @@ void Brush_tool::set_active_brush(const std::shared_ptr<Brush>& brush)
     m_active_brush.adopt(*m_context.asset_manager, brush);
 }
 
-void Brush_tool::set_kit_brush(const Kit_parameter_values& values, const std::shared_ptr<Brush>& brush)
+void Brush_tool::set_kit_brush(const Kit_parameter_values& values, const std::shared_ptr<Brush>& brush, const std::span<const std::string> slot_materials)
 {
     const Kit_shape_definition* const shape = values.get_shape();
     if (!brush || (shape == nullptr)) {
@@ -241,9 +241,17 @@ void Brush_tool::set_kit_brush(const Kit_parameter_values& values, const std::sh
     if (get_kit_shape() != shape) {
         m_kit_yaw_steps = 0;
     }
-    m_kit_values   = values;
-    m_kit_brush    = brush;
-    m_kit_material = m_context.level_kits->get_preview_material(*shape);
+    m_kit_values = values;
+    m_kit_brush  = brush;
+    Level_kits& level_kits = *m_context.level_kits;
+    level_kits.get_default_slot_materials(*shape, m_kit_slot_materials);
+    m_kit_preview_materials.clear();
+    for (std::size_t slot = 0, end = m_kit_slot_materials.size(); slot < end; ++slot) {
+        if ((slot < slot_materials.size()) && !slot_materials[slot].empty()) {
+            m_kit_slot_materials[slot] = slot_materials[slot];
+        }
+        m_kit_preview_materials.push_back(level_kits.get_preview_material(m_kit_slot_materials[slot]));
+    }
     // The preview takes the new brush's primitive and material when it is made again.
     remove_preview_mesh();
     on_motion();
@@ -255,7 +263,8 @@ void Brush_tool::leave_kit_mode()
         return;
     }
     m_kit_brush.reset();
-    m_kit_material.reset();
+    m_kit_slot_materials.clear();
+    m_kit_preview_materials.clear();
     m_kit_pose.reset();
     remove_preview_mesh();
 }
@@ -278,6 +287,11 @@ auto Brush_tool::get_kit_values() const -> const Kit_parameter_values&
 auto Brush_tool::get_kit_brush() const -> const std::shared_ptr<Brush>&
 {
     return m_kit_brush;
+}
+
+auto Brush_tool::get_kit_slot_materials() const -> const std::vector<std::string>&
+{
+    return m_kit_slot_materials;
 }
 
 auto Brush_tool::get_kit_yaw_steps() const -> int
@@ -595,6 +609,9 @@ auto Brush_tool::try_insert_kit_piece() -> bool
     placement.values   = m_kit_values;
     placement.position = m_kit_pose.value().position;
     placement.rotation = m_kit_pose.value().rotation;
+    for (const std::string& name : m_kit_slot_materials) {
+        placement.materials.push_back(Kit_slot_material{.material = {}, .palette_name = name});
+    }
     Level_kits& level_kits = *m_context.level_kits;
     const Kit_place_result result = level_kits.place(*scene_root, std::span<const Kit_placement>{&placement, 1}, Kit_snap::none);
     if (!result.error.empty()) {
@@ -620,7 +637,9 @@ void Brush_tool::take_next_kit_seed(const Scene_root& scene_root)
         log_scene->warn("Brush tool: the kit shape made no geometry for {}", next_values.to_canonical_text());
         return;
     }
-    set_kit_brush(next_values, brush);
+    // A copy: set_kit_brush() rewrites the member it would read.
+    const std::vector<std::string> slot_materials = m_kit_slot_materials;
+    set_kit_brush(next_values, brush, slot_materials);
     m_context.app_message_bus->kit_values_changed.send_message(Kit_values_changed_message{});
 }
 
@@ -964,7 +983,7 @@ void Brush_tool::add_preview_mesh(Brush& brush)
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
     const bool kit_preview = m_kit_brush && (&brush == m_kit_brush.get());
     const std::shared_ptr<erhe::primitive::Material> material =
-        (kit_preview && m_kit_material)                    ? m_kit_material :
+        (kit_preview && !m_kit_preview_materials.empty() && m_kit_preview_materials.front()) ? m_kit_preview_materials.front() :
         (active_brush && active_brush->get_material())     ? active_brush->get_material() :
                                                              get_material();
     auto* scene_view = get_hover_scene_view();
@@ -989,7 +1008,15 @@ void Brush_tool::add_preview_mesh(Brush& brush)
     const std::string name = fmt::format("brush-{}", brush.get_name());
     m_preview_node = std::make_shared<erhe::scene::Xform>(name);
     m_preview_mesh = std::make_shared<erhe::scene::Mesh>(name);
-    m_preview_mesh->add_primitive(brush_scaled.primitive, material);
+    if (kit_preview) {
+        // One primitive per slot with that slot's material, as the placed piece gets them.
+        for (std::size_t part = 0, end = brush_scaled.part_primitives.size(); part < end; ++part) {
+            const bool has_own = (part < m_kit_preview_materials.size()) && m_kit_preview_materials[part];
+            m_preview_mesh->add_primitive(brush_scaled.part_primitives[part], has_own ? m_kit_preview_materials[part] : material);
+        }
+    } else {
+        m_preview_mesh->add_primitive(brush_scaled.primitive, material);
+    }
     m_preview_node->enable_flag_bits(
         editor::Editor_item_flags::brush      |
         erhe::Item_flags::no_message |

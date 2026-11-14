@@ -1,16 +1,20 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "level/kit_layout_editor.hpp"
 #include "level/kit_parameter_rows.hpp"
 #include "level/kit_shape.hpp"
+#include "level/level_group.hpp"
 #include "level/level_queries.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace erhe::commands {
     class Commands;
@@ -21,6 +25,8 @@ namespace erhe::imgui {
 }
 namespace erhe::scene {
     class Mesh;
+    class Xformable;
+    using Node = Xformable;
 }
 
 namespace editor {
@@ -28,6 +34,32 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class Scene_root;
+
+enum class Spatial_query : unsigned int {
+    support_report = 0,
+    region_contents,
+    height_map,
+    overlap_report,
+    level_check
+};
+
+// A press of the Group section (D4.8).
+enum class Group_action : unsigned int {
+    group = 0,
+    ungroup,
+    duplicate,
+    mirror_x,
+    mirror_z
+};
+
+// A result row of the overlap report or the level check: a click selects its meshes.
+class Spatial_query_row
+{
+public:
+    std::string                                     label;
+    std::array<std::weak_ptr<erhe::scene::Mesh>, 2> meshes;
+    std::size_t                                     mesh_count{0};
+};
 
 // The "Level Kit" window (doc/editor/level_tools.md "Level Kit window", D4.1).
 class Level_kit_window : public erhe::imgui::Imgui_window
@@ -51,20 +83,44 @@ private:
     void placement_settings_imgui();
     void selection_imgui        (const std::shared_ptr<Scene_root>& scene_root);
     void select_shape           (const Kit_shape_definition& shape, const Scene_root& scene_root);
+    // D3.4: the selected piece's slot takes the palette material in the queued call, one undo entry.
+    void queue_slot_material    (const std::shared_ptr<Scene_root>& scene_root, const std::shared_ptr<erhe::scene::Mesh>& piece, std::size_t slot, const std::string& palette_name);
     void on_kit_values_changed  ();
     // Hands the Brush tool the kit brush of m_place_values and makes it the active tool in kit mode (D4.4).
     void queue_kit_brush        ();
     void update_place_hint      ();
     void queue_snap_selected    (const std::shared_ptr<Scene_root>& scene_root, Surface_orient orient);
+    void layout_imgui           (const std::shared_ptr<Scene_root>& scene_root);
+    void group_imgui            (const std::shared_ptr<Scene_root>& scene_root);
+    // D3.8: runs the action in the queued call on the selected nodes (group) or the selected group node.
+    void queue_group_action     (const std::shared_ptr<Scene_root>& scene_root, Group_action action, const std::shared_ptr<erhe::scene::Node>& group);
+    void spatial_queries_imgui  (const std::shared_ptr<Scene_root>& scene_root);
+    void query_entries_imgui    (const char* id, const std::vector<std::weak_ptr<erhe::scene::Mesh>>& meshes);
+    void query_rows_imgui       (const char* id, const std::vector<Spatial_query_row>& rows);
+    void select_meshes          (const std::vector<std::weak_ptr<erhe::scene::Mesh>>& meshes);
+    // D7: computed in the queued call of the button press and kept until the next press.
+    void queue_spatial_query    (const std::shared_ptr<Scene_root>& scene_root, Spatial_query query);
+    void run_support_report     (Scene_root& scene_root);
+    void run_region_contents    (Scene_root& scene_root);
+    void run_height_map         (Scene_root& scene_root);
+    void run_overlap_report     (Scene_root& scene_root);
+    void run_level_check        (Scene_root& scene_root);
+    void collect_selected_meshes(const Scene_root& scene_root, std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes) const;
 
     [[nodiscard]] auto find_selected_piece(const Scene_root& scene_root) const -> std::shared_ptr<erhe::scene::Mesh>;
     [[nodiscard]] auto count_selected_meshes(const Scene_root& scene_root) const -> std::size_t;
+    [[nodiscard]] auto count_selected_nodes (const Scene_root& scene_root) const -> std::size_t;
+    // The active item when it is a selected group node (an Xform) of the scene, else the first selected one.
+    [[nodiscard]] auto find_selected_group  (const Scene_root& scene_root) const -> std::shared_ptr<erhe::scene::Node>;
+    // The active item when it is a selected kit layout node of the scene, else the first selected one.
+    [[nodiscard]] auto find_selected_layout (const Scene_root& scene_root) const -> std::shared_ptr<erhe::scene::Node>;
 
     App_context& m_context;
 
-    // The shape to place and its parameter values.
+    // The shape to place, its parameter values and its slots' palette materials (names, in slot order).
     const Kit_shape_definition* m_shape{nullptr};
     Kit_parameter_values        m_place_values;
+    std::vector<std::string>    m_place_slot_materials;
     std::string                 m_place_message; // validate() of m_place_values; empty when valid
 
     // The line naming the Brush tool's place and rotate bindings; rebuilt when the bindings change.
@@ -79,10 +135,42 @@ private:
     // The selected piece's values as last read from its record.
     Kit_piece_editor m_piece_editor;
 
+    // The Layout section (D4.9).
+    Kit_layout_editor m_layout_editor;
+
+    // The Group section: the new group's name, the copy's offset (the group's width by default) and the last result.
+    std::string                            m_group_name{"Group"};
+    glm::vec3                              m_duplicate_offset{1.0f, 0.0f, 0.0f};
+    std::weak_ptr<erhe::scene::Node>       m_duplicate_source;
+    bool                                   m_group_selection_changed{true};
+    std::string                            m_group_message;
+    bool                                   m_group_failed{false};
+
+    // Spatial query results; the scratch vectors keep their capacity between presses.
+    std::string                                     m_support_summary;
+    std::vector<std::weak_ptr<erhe::scene::Mesh>>   m_unsupported;
+    std::string                                     m_region_summary;
+    std::vector<std::weak_ptr<erhe::scene::Mesh>>   m_region_meshes;
+    std::string                                     m_height_map_summary;
+    std::string                                     m_height_map_text;
+    std::string                                     m_island_text;
+    std::string                                     m_overlap_summary;
+    std::vector<Spatial_query_row>                  m_overlap_rows;
+    std::string                                     m_check_summary;
+    std::vector<Spatial_query_row>                  m_check_rows;
+    std::string                                     m_exclude_tags_text; // comma separated, as the Properties window's Tags row
+    std::vector<std::string>                        m_exclude_tags;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> m_query_meshes;
+    std::vector<Support_result>                     m_support_results;
+    Height_map                                      m_height_map;
+    Overlap_report                                  m_overlap_report;
+    Level_check                                     m_level_check;
+
     erhe::message_bus::Subscription<Selection_message>             m_selection_subscription;
     erhe::message_bus::Subscription<Active_item_changed_message>   m_active_item_subscription;
     erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
     erhe::message_bus::Subscription<Kit_values_changed_message>    m_kit_values_changed_subscription;
+    erhe::message_bus::Subscription<Kit_layout_changed_message>    m_kit_layout_changed_subscription;
 };
 
 } // namespace editor

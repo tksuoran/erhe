@@ -1,4 +1,5 @@
 #include "tools/mesh_component_selection_tool.hpp"
+#include "level/kit_layout.hpp"
 
 #include "tools/mesh_component_selection.hpp"
 
@@ -1241,7 +1242,7 @@ auto Mesh_component_selection_tool::pick(Scene_view& scene_view) const -> Pick_r
     // Edit-locked meshes (e.g. the room floor) are not valid component-selection
     // targets. pick() is the single choke point for try_ready(), on_select() and
     // the hover highlight, so rejecting here suppresses selection and hover both.
-    if (mesh->is_lock_edit()) {
+    if (mesh->is_lock_edit() || find_locking_kit_layout(*mesh)) {
         return result;
     }
 
@@ -4779,7 +4780,7 @@ void apply_scan_hits_to_selection(
         if (mesh->skin) {
             continue; // skinned meshes deform on the GPU; CPU geometry does not match
         }
-        if (mesh->is_lock_edit()) {
+        if (mesh->is_lock_edit() || find_locking_kit_layout(*mesh)) {
             continue;
         }
         const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();

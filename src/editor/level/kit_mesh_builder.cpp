@@ -54,19 +54,27 @@ auto Kit_mesh_builder::add_vertex(const glm::vec3& position) -> uint32_t
     return static_cast<uint32_t>(m_positions.size() - 1);
 }
 
+void Kit_mesh_builder::set_slot(const uint32_t slot)
+{
+    m_slot = slot;
+}
+
 void Kit_mesh_builder::add_triangle(const uint32_t a, const uint32_t b, const uint32_t c)
 {
     m_facets.push_back({a, b, c});
+    m_facet_slots.push_back(m_slot);
 }
 
 void Kit_mesh_builder::add_quad(const uint32_t a, const uint32_t b, const uint32_t c, const uint32_t d)
 {
     m_facets.push_back({a, b, c, d});
+    m_facet_slots.push_back(m_slot);
 }
 
 void Kit_mesh_builder::add_polygon(const std::span<const uint32_t> corners)
 {
     m_facets.emplace_back(corners.begin(), corners.end());
+    m_facet_slots.push_back(m_slot);
 }
 
 void Kit_mesh_builder::add_box(const glm::vec3& lo, const glm::vec3& hi)
@@ -189,17 +197,52 @@ void Kit_mesh_builder::write(GEO::Mesh& mesh) const
         const glm::vec3& p = m_positions[i];
         erhe::geometry::set_pointf(mesh.vertices, first_vertex + static_cast<GEO::index_t>(i), GEO::vec3f{p.x, p.y, p.z});
     }
-    for (const std::vector<uint32_t>& facet : m_facets) {
+    GEO::Attribute<GEO::index_t> slots{mesh.facets.attributes(), c_kit_slot_attribute};
+    for (std::size_t i = 0, end = m_facets.size(); i < end; ++i) {
+        const std::vector<uint32_t>& facet = m_facets[i];
         const GEO::index_t f = mesh.facets.create_polygon(static_cast<GEO::index_t>(facet.size()));
-        for (std::size_t c = 0, end = facet.size(); c < end; ++c) {
+        for (std::size_t c = 0, corner_end = facet.size(); c < corner_end; ++c) {
             mesh.facets.set_vertex(f, static_cast<GEO::index_t>(c), first_vertex + static_cast<GEO::index_t>(facet[c]));
         }
+        slots[f] = static_cast<GEO::index_t>(m_facet_slots[i]);
     }
 }
 
 auto Kit_mesh_builder::get_positions() const -> const std::vector<glm::vec3>&
 {
     return m_positions;
+}
+
+void read_kit_facet_slots(const GEO::Mesh& mesh, std::vector<uint32_t>& out_slots)
+{
+    out_slots.assign(mesh.facets.nb(), 0u);
+    GEO::Attribute<GEO::index_t> slots;
+    if (!slots.bind_if_is_defined(mesh.facets.attributes(), c_kit_slot_attribute)) {
+        return;
+    }
+    for (GEO::index_t f = 0, end = mesh.facets.nb(); f < end; ++f) {
+        out_slots[f] = static_cast<uint32_t>(slots[f]);
+    }
+}
+
+void extract_kit_slot_mesh(const GEO::Mesh& source, const std::span<const uint32_t> facet_slots, const uint32_t slot, GEO::Mesh& out_mesh)
+{
+    std::vector<GEO::index_t> vertex_map(source.vertices.nb(), GEO::NO_INDEX);
+    for (GEO::index_t f = 0, end = source.facets.nb(); f < end; ++f) {
+        if (facet_slots[f] != slot) {
+            continue;
+        }
+        const GEO::index_t corner_count = source.facets.nb_vertices(f);
+        const GEO::index_t new_facet    = out_mesh.facets.create_polygon(corner_count);
+        for (GEO::index_t c = 0; c < corner_count; ++c) {
+            const GEO::index_t v = source.facets.vertex(f, c);
+            if (vertex_map[v] == GEO::NO_INDEX) {
+                vertex_map[v] = out_mesh.vertices.create_vertex();
+                erhe::geometry::set_pointf(out_mesh.vertices, vertex_map[v], erhe::geometry::get_pointf(source.vertices, v));
+            }
+            out_mesh.facets.set_vertex(new_facet, c, vertex_map[v]);
+        }
+    }
 }
 
 } // namespace editor

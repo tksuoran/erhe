@@ -375,6 +375,12 @@ erhe_target_sources_grouped(
     items.hpp
     ImViewGuizmo.cpp
     ImViewGuizmo.h
+    level/kit_layout.cpp
+    level/kit_layout.hpp
+    level/kit_layout_editor.cpp
+    level/kit_layout_editor.hpp
+    level/kit_layout_values.cpp
+    level/kit_layout_values.hpp
     level/kit_mesh_builder.cpp
     level/kit_mesh_builder.hpp
     level/kit_parameter_rows.cpp
@@ -397,8 +403,15 @@ erhe_target_sources_grouped(
     level/level_kit_window.hpp
     level/level_kits.cpp
     level/level_kits.hpp
+    level/level_kits_layout.cpp
+    level/level_group.cpp
+    level/level_group.hpp
     level/level_queries.cpp
     level/level_queries.hpp
+    level/level_region.cpp
+    level/level_region.hpp
+    level/level_repeat.cpp
+    level/level_repeat.hpp
     level/surface_settings_ui.cpp
     level/surface_settings_ui.hpp
     main.cpp

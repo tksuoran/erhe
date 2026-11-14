@@ -9,6 +9,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::physics`: `ICollision_shape::get_penetration_depth()`: the greatest
+  penetration depth of two shapes at node-space transforms, nothing when the
+  backend cannot collide the pair (`doc/erhe/physics.md` "Key Types");
+  `Jolt_collision_shape::get_jolt_shape()` is const.
 - `erhe::property`: `Property_ui::group_id` and
   `Property_registry::get_group_id()`: one number per property group name,
   given at registration, for user interface ids that do not hash the name

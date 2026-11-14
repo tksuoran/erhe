@@ -57,10 +57,17 @@ public:
     float        apex_offset       {0.0f};  // horizontal apex offset, +- this times the nearest ring radius
 };
 
+// The facet attribute of a generated mesh that names each facet's material slot, an index into
+// Kit_shape_definition::material_slots (D1.11).
+constexpr const char* c_kit_slot_attribute = "kit_slot";
+
 // Collects positions and convex counter-clockwise facets, then writes them into a GEO::Mesh.
 class Kit_mesh_builder
 {
 public:
+    // The material slot of the facets added after this call; 0 until set.
+    void set_slot    (uint32_t slot);
+
     auto add_vertex  (const glm::vec3& position) -> uint32_t;
     void add_triangle(uint32_t a, uint32_t b, uint32_t c);
     void add_quad    (uint32_t a, uint32_t b, uint32_t c, uint32_t d);
@@ -71,6 +78,7 @@ public:
     void add_prism   (int segments, float radius, float y0, float y1, float phase_radians);
     void add_blob    (const Kit_blob& blob, Kit_random& random);
 
+    // Writes the facets and their slots (c_kit_slot_attribute).
     void write       (GEO::Mesh& mesh) const;
 
     [[nodiscard]] auto get_positions() const -> const std::vector<glm::vec3>&;
@@ -78,6 +86,14 @@ public:
 private:
     std::vector<glm::vec3>             m_positions;
     std::vector<std::vector<uint32_t>> m_facets;
+    std::vector<uint32_t>              m_facet_slots;
+    uint32_t                           m_slot{0};
 };
+
+// The slot of every facet of a generated mesh; 0 for every facet of a mesh without c_kit_slot_attribute.
+void read_kit_facet_slots(const GEO::Mesh& mesh, std::vector<uint32_t>& out_slots);
+
+// The facets of one slot with the vertices they use, into an empty mesh.
+void extract_kit_slot_mesh(const GEO::Mesh& source, std::span<const uint32_t> facet_slots, uint32_t slot, GEO::Mesh& out_mesh);
 
 } // namespace editor

@@ -5,6 +5,8 @@
 // so enumerations travel as their labels.
 
 #include "mcp/mcp_server.hpp"
+#include "level/kit_layout.hpp"
+#include "level/level_kits.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
@@ -358,11 +360,18 @@ auto Mcp_server::action_set_item_property(const json& args) -> std::string
     if (target->is_write_sealed(*property)) { // D24; lock_edit itself stays writable
         return make_error_content("Item '" + item->get_name() + "' is sealed (lock_edit): set lock_edit false or unlock_items first, or edit the prefab's source scene");
     }
+    if (const std::optional<std::string> refusal = locked_layout_refusal(*item); refusal.has_value()) {
+        return make_error_content(refusal.value() + "; nothing was changed");
+    }
+    const bool kit_layout_value = is_kit_layout_property(*property) && !sub_object.has_value();
     const bool computed_writable = property->get_metadata(target->get_property_owner_type()).is_computed_writable(); // D26
 
     // An expression (doc/erhe/property_system.md D22) instead of a value.
     const auto expression_it = args.find("expression");
     if ((expression_it != args.end()) && !expression_it->is_null()) {
+        if (kit_layout_value) {
+            return make_error_content("Property '" + property_name + "' is a kit layout value: an expression cannot drive it (level_set_layout changes kit layout values)");
+        }
         if (computed_writable) {
             return make_error_content("Property '" + property_name + "' is computed: an expression cannot drive it (set '" + std::string{property->get_metadata(target->get_property_owner_type()).compute_writes->get_name()} + "' instead)");
         }
@@ -480,6 +489,16 @@ auto Mcp_server::action_set_item_property(const json& args) -> std::string
         };
         return make_json_content(result).dump();
     }
+    // A kit layout value of a locked node regenerates its children in the same entry; one the values cannot take is refused here.
+    if (kit_layout_value && (m_context.level_kits != nullptr)) {
+        if (!after.has_value()) {
+            return make_error_content("Property '" + property_name + "' is a kit layout value: it is not cleared (level_set_layout changes kit layout values)");
+        }
+        const std::string refusal = m_context.level_kits->check_layout_value_write(*item, *property, after.value());
+        if (!refusal.empty()) {
+            return make_error_content("set_item_property: " + refusal + "; nothing was changed (level_set_layout changes kit layout values)");
+        }
+    }
     const std::optional<erhe::property::Local_state> before = target->read_local_state(*property);
     m_context.operation_stack->queue(std::make_shared<Property_set_operation>(item, sub_object, *property, before, to_local_state(after)));
 
@@ -519,6 +538,9 @@ auto Mcp_server::action_set_item_style(const json& args) -> std::string
     }
     if (item->is_sealed()) {
         return make_error_content("Item '" + item->get_name() + "' is sealed (lock_edit): unlock_items first");
+    }
+    if (const std::optional<std::string> refusal = locked_layout_refusal(*item); refusal.has_value()) {
+        return make_error_content(refusal.value() + "; nothing was changed");
     }
     const erhe::property::Property_set source_values = erhe::property::Property_set::read_local_values(*source);
     const std::shared_ptr<Compound_operation> compound = make_style_from_values(m_context, {item}, source_values, source->get_name());
@@ -591,6 +613,9 @@ auto Mcp_server::action_clear_item_style(const json& args) -> std::string
     }
     if (item->is_sealed()) {
         return make_error_content("Item '" + item->get_name() + "' is sealed (lock_edit): unlock_items first");
+    }
+    if (const std::optional<std::string> refusal = locked_layout_refusal(*item); refusal.has_value()) {
+        return make_error_content(refusal.value() + "; nothing was changed");
     }
     if (!item->get_style()) {
         return make_error_content("Item '" + item->get_name() + "' has no style");

@@ -28,7 +28,7 @@ public:
     auto get_mass_properties    () const -> Mass_properties            override;
     auto describe               () const -> std::string                override;
 
-    [[nodiscard]] auto get_jolt_shape() -> JPH::ShapeRefC;
+    [[nodiscard]] auto get_jolt_shape() const -> JPH::ShapeRefC;
 
     virtual auto get_shape_settings() -> JPH::ShapeSettings& = 0;
 

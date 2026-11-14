@@ -4,7 +4,10 @@ add_executable(${_target}
     # The editor sources under test are compiled directly into the test
     # executable: the editor itself is an executable, so there is no editor
     # library to link against. The kit shape library needs erhe::geometry
-    # (with its erhe::math headers), glm and fmt only.
+    # (with its erhe::math headers), glm and fmt only; the region and height
+    # map helpers need glm and erhe::math; the repeat expansion glm and fmt; the
+    # group mirror glm and erhe::math; the kit layout values nlohmann_json.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_values.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_mesh_builder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shape.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shape_checks.cpp
@@ -12,7 +15,14 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_architecture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_basic.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_nature.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../level_group.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../level_region.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../level_repeat.cpp
+    test_kit_layout_values.cpp
     test_kit_shapes.cpp
+    test_level_group.cpp
+    test_level_region.cpp
+    test_level_repeat.cpp
 )
 
 # "level/kit_shape.hpp" is reached relative to the editor source root.
@@ -27,6 +37,7 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm-header-only
         GTest::gtest
+        nlohmann_json::nlohmann_json
 )
 
 erhe_target_settings(${_target} "erhe/tests")

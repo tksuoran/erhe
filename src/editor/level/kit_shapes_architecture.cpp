@@ -193,10 +193,11 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("thickness", "Size along Z", 0.25f, Kit_default_scale::meters,       0.02f, 4.0f),  0.15f, 0.4f,  0.05f),
             make_seed_parameter()
         };
-        shape.material_slot   = "wall";
+        shape.material_slots  = {"wall"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 12;
         shape.generator       = generate_wall;
+        shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_seam_sides  = [](const Kit_parameter_values&) { return all_sides(); };
         shapes.push_back(std::move(shape));
     }
@@ -216,11 +217,12 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("opening_height", "Clear height of the door",2.2f,  Kit_default_scale::meters,       0.5f,  2.4f),  2.0f,  2.4f,  0.05f),
             make_seed_parameter()
         };
-        shape.material_slot   = "wall";
+        shape.material_slots  = {"wall"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 44;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_door_wall;
+        shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_seam_sides  = [](const Kit_parameter_values&) {
             return std::vector<Kit_side>{Kit_side::x_neg, Kit_side::x_pos, Kit_side::y_pos};
         };
@@ -243,11 +245,12 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter ("segments", "Sides of a round pillar", 12, 3, 64),
             make_seed_parameter  ()
         };
-        shape.material_slot           = "trim";
+        shape.material_slots          = {"trim"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
         shape.triangle_budget         = 12;
         shape.generator               = generate_pillar;
+        shape.mirror_planes           = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_seam_sides          = [](const Kit_parameter_values& values) {
             return (values.get_enum("profile") == "square") ? all_sides() : std::vector<Kit_side>{};
         };
@@ -271,12 +274,13 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter ("segments",  "Segments along the curve",               12, 2, 48),
             make_seed_parameter  ()
         };
-        shape.material_slot           = "trim";
+        shape.material_slots          = {"trim"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
         shape.triangle_budget         = 100;
         shape.collision               = Kit_collision::triangle_mesh;
         shape.generator               = generate_arch;
+        shape.mirror_planes           = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.check_walkability       = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             const float clear_height = agent.height + kit_opening_margin;
             return check_opening(*values.get_shape(), get_arch_clear_width(values, clear_height), values.get_float("rise"), agent);

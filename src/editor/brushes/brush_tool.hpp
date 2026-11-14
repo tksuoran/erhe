@@ -14,6 +14,9 @@
 
 #include <memory>
 #include <mutex>
+#include <span>
+#include <string>
+#include <vector>
 
 struct Scene_config;
 
@@ -118,15 +121,17 @@ public:
 
     [[nodiscard]] auto get_hover_brush() const -> std::shared_ptr<Brush>;
 
-    // Kit mode (doc/editor/brushes.md "Kit mode", D4.4): places the kit brush of the values
-    // through Level_kits::place(). A different shape resets the rotation steps.
-    void set_kit_brush (const Kit_parameter_values& values, const std::shared_ptr<Brush>& brush);
+    // Kit mode (doc/editor/brushes.md "Kit mode", D4.4): places the kit brush of the values with the palette
+    // materials of the slots (by name, in slot order; a missing or empty name: the slot's default) through
+    // Level_kits::place(). A different shape resets the rotation steps.
+    void set_kit_brush (const Kit_parameter_values& values, const std::shared_ptr<Brush>& brush, std::span<const std::string> slot_materials);
     void leave_kit_mode();
     [[nodiscard]] auto is_kit_mode         () const -> bool;
     // The shape of kit mode; null outside it.
     [[nodiscard]] auto get_kit_shape       () const -> const Kit_shape_definition*;
     [[nodiscard]] auto get_kit_values      () const -> const Kit_parameter_values&;
     [[nodiscard]] auto get_kit_brush       () const -> const std::shared_ptr<Brush>&;
+    [[nodiscard]] auto get_kit_slot_materials() const -> const std::vector<std::string>&;
     [[nodiscard]] auto get_kit_yaw_steps   () const -> int;
     // The pose the preview shows and a click places; none while there is no preview.
     [[nodiscard]] auto get_kit_pose        () const -> std::optional<Kit_placement_pose>;
@@ -223,7 +228,8 @@ private:
     // Kit mode: active while m_kit_brush is set.
     Kit_parameter_values                       m_kit_values;
     std::shared_ptr<Brush>                     m_kit_brush;
-    std::shared_ptr<erhe::primitive::Material> m_kit_material;
+    std::vector<std::string>                   m_kit_slot_materials;    // palette names, one per slot
+    std::vector<std::shared_ptr<erhe::primitive::Material>> m_kit_preview_materials; // their preview materials
     int                                        m_kit_yaw_steps{0};
     std::optional<Kit_placement_pose>          m_kit_pose;
     ///std::unique_ptr<Item_tree>         m_brush_item_tree;

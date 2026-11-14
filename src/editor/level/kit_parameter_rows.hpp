@@ -1,9 +1,17 @@
 #pragma once
 
 #include "level/kit_shape.hpp"
+#include "level/kit_shape_library.hpp"
 
+#include "erhe_imgui/imgui_item_recorder.hpp"
+
+#include <fmt/format.h>
+#include <imgui/imgui.h>
+
+#include <array>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace erhe::scene { class Mesh; }
@@ -39,6 +47,53 @@ void kit_stairs_line(const Kit_parameter_values& values);
 
 // A validate() or record problem message in red; nothing when empty.
 void kit_message_line(const std::string& message);
+
+// One combo per material slot of the shape, keyed by the slot's name, offering the slot's default and alternatives
+// (D3.4); returns the slot whose choice changed this frame, its new palette material name in out_name.
+template <typename Current_name>
+[[nodiscard]] auto slot_material_combos(
+    const Kit_shape_library&    library,
+    const Kit_shape_definition& shape,
+    const Current_name&         current_name,
+    std::string&                out_name
+) -> std::optional<std::size_t>
+{
+    std::optional<std::size_t> changed;
+    std::array<char, 64> label{};
+    for (std::size_t slot = 0, end = shape.material_slots.size(); slot < end; ++slot) {
+        const std::string&            slot_name = shape.material_slots[slot];
+        const Kit_slot_palette* const palette   = library.find_slot_palette(slot_name);
+        const std::string&            current   = current_name(slot);
+        const fmt::format_to_n_result<char*> label_end = fmt::format_to_n(label.data(), label.size() - 1, "{} material", slot_name);
+        *label_end.out = '\0';
+        ImGui::PushID(slot_name.c_str());
+        const bool open = ImGui::BeginCombo(label.data(), current.c_str());
+        if (!open) {
+            // Dear ImGui reports no label for a combo (doc/agents/mcp_ui_driving.md "How an item gets a label").
+            erhe::imgui::set_item_debug_label(label.data());
+        }
+        if (open) {
+            const auto option = [&](const std::string& name) {
+                if (ImGui::Selectable(name.c_str(), name == current) && (name != current)) {
+                    changed  = slot;
+                    out_name = name;
+                }
+            };
+            if (palette != nullptr) {
+                option(palette->default_material);
+                for (const std::string& alternative : palette->alternatives) {
+                    option(alternative);
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip("%s", "The palette material of this slot: its default first, then its alternatives.");
+        }
+        ImGui::PopID();
+    }
+    return changed;
+}
 
 // The parameter rows of one placed piece (doc/editor/level_tools.md "Parameter rows"): the values
 // read from its record, and an edit that ends with valid values queued as one set_parameters().

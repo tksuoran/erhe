@@ -2,10 +2,12 @@
 
 #include "app_context.hpp"
 #include "assets/asset_manager.hpp"
+#include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "items.hpp"
+#include "level/kit_layout.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -289,6 +291,11 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
     if (!target_parent) {
         return false;
     }
+    const std::optional<std::string> layout_refusal = locked_layout_child_refusal(*target_parent);
+    if (layout_refusal.has_value()) {
+        log_tools->info("Paste refused: {}", layout_refusal.value());
+        return false;
+    }
     // TODO Paste into content library
 
     Compound_operation::Parameters compound_parameters{};
@@ -364,6 +371,9 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
     }
 
     for (const std::shared_ptr<erhe::Hierarchy>& pasted_hierarchy : pasted_hierarchies) {
+        if (target_scene_root != nullptr) {
+            set_copied_brush_collision_shapes(*target_scene_root, *pasted_hierarchy);
+        }
         compound_parameters.operations.push_back(
             std::make_shared<Item_insert_remove_operation>(
                 Item_insert_remove_operation::Parameters{

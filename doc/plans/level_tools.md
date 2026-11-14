@@ -47,6 +47,11 @@ The user's rulings (2026-11-13):
   viewport toolbar and in the Transform tool, and apply to the Transform
   tool's moves (R5.11).
 
+The user's ruling (2026-11-14):
+
+- U17: a run of pieces is a kit layout node that owns its children, with
+  a lock that says who edits them (R5.12).
+
 ## Terms
 
 - Level: one scene made mostly of kit pieces, meant to be walked through.
@@ -278,6 +283,32 @@ the starter set.
   Transform tool's settings, and they also apply to the Transform tool: a
   move of the selection with them on rests each moved mesh on the surface
   under it, and tilts it with orient on, at every step of the drag.
+- R5.12 `[must]` Kit layout node. A run of pieces (R5.4, and the scatter
+  of R5.5) is a node in the scene graph, the kit layout node, with the
+  pieces as its children.
+  - R5.12.1 Its properties state the arrangement (line, grid, ring,
+    polyline; scatter when R5.5 is built) with that arrangement's values,
+    which kit item or items are placed (shape, parameter values and slot
+    materials each), the snap settings used (module, snap to surface,
+    orient to surface), whether each piece gets its own random seed, and
+    the seed mask (which parameters derive from the seed, R3.9).
+  - R5.12.7 A line, a ring and a polyline each have two count modes: the
+    author states the piece count, or the author states the gap between
+    neighboring pieces and the layout determines the count from the space
+    of the arrangement (the line's length, the ring's arc, the path's
+    length).
+  - R5.12.8 The path arrangement follows a curve node, and a polyline is
+    a curve of corner points (`doc/plans/curves.md` C6).
+  - R5.12.2 The kit layout node owns its children and has a lock setting.
+  - R5.12.3 Locked: the kit layout node creates, removes and adjusts its
+    children as its properties need, and the children cannot be edited
+    directly.
+  - R5.12.4 Unlocked: the kit layout node leaves its children alone, and
+    the children are edited directly as any piece is.
+  - R5.12.5 Unlocking changes no child. Locking discards the edits made
+    while unlocked: the children become what the properties state.
+  - R5.12.6 Locking and unlocking are each one undoable operation; undoing
+    a lock restores the children as the user left them.
 - R5.10 `[must]` Every tool of this section is one undoable operation and
   leaves the scene valid when undone or redone.
 

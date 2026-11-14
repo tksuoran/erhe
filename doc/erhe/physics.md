@@ -24,7 +24,13 @@ a specific engine.
   uniform scaling, non-uniform scaled and center-of-mass offset wrappers; introspection for
   serialization/export: `get_shape_type()`, primitive parameters (`get_half_extents()`,
   `get_radius()`, `get_axis()`, `get_length()`, ...), wrapper `get_inner_shape()` /
-  `get_scale()` / `get_offset()`, compound `get_children()`
+  `get_scale()` / `get_offset()`, compound `get_children()`; `get_penetration_depth()`, the
+  greatest penetration depth of two shapes at node-space transforms without a world or a body
+  (0 when apart or touching). The Jolt backend runs `CollisionDispatch::sCollideShapeVsShape()`
+  and has no answer for two shapes that both hold a triangle surface (mesh, height field),
+  which Jolt does not collide; against one triangle mesh the depth is the deepest penetration
+  through one of its triangles. The Box3D and null backends have no answer for any pair (Box3D
+  geometry exists only on a body)
 - `IConstraint` -- joint constraints: point-to-point and the generic six-DOF constraint
   (`Six_dof_constraint_settings`: per-axis limits incl. translation soft limits, position /
   velocity motors; frames in body node space, axes 0..2 translation, 3..5 rotation).

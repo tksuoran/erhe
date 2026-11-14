@@ -26,6 +26,7 @@
 #include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/property_set_operation.hpp"
+#include "level/kit_layout.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "preview/brush_preview.hpp"
@@ -1543,8 +1544,13 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 
         // Like the clipboard entries, Rename on a selected row acts on the
         // selection: with several items selected, the one added last.
-        if (ImGui::MenuItem("Rename", "F2")) {
+        // A child of a locked kit layout node is not renamed (doc/editor/level_tools.md "Kit layout nodes").
+        const std::optional<std::string> rename_refusal = locked_layout_refusal(*item);
+        if (ImGui::MenuItem("Rename", "F2", false, !rename_refusal.has_value())) {
             begin_rename(item->is_selected() ? get_rename_target() : item);
+        }
+        if (rename_refusal.has_value() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip("%s", rename_refusal.value().c_str());
         }
 
         if (hierarchy) {
@@ -1734,6 +1740,10 @@ auto Item_tree::try_commit_rename() -> bool
     const std::shared_ptr<erhe::Item_base> item = m_rename_item.lock();
     if (!item || (m_rename_buffer == item->get_name())) {
         return true;
+    }
+    if (const std::optional<std::string> refusal = locked_layout_refusal(*item); refusal.has_value()) {
+        m_rename_error = refusal.value();
+        return false;
     }
     if (m_rename_buffer.empty()) {
         m_rename_error = "Name must not be empty";

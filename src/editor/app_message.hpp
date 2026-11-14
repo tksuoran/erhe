@@ -114,6 +114,11 @@ class Kit_values_changed_message
 {
 };
 
+// A Kit_layout value of a node was written by an operation (execute, undo, redo; App_context::on_item_property_changed()).
+class Kit_layout_changed_message
+{
+};
+
 // A COMMITTED change of a scene's light transport: a content-layer mesh or
 // a light entered or left the scene (Scene_root::register_mesh() and
 // friends), a Node_transform_operation moved content or a light (execute,

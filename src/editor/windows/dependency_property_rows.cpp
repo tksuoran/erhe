@@ -9,6 +9,8 @@
 #include "app_context.hpp"
 #include "app_settings.hpp"
 #include "editor_log.hpp"
+#include "level/kit_layout.hpp"
+#include "level/level_kits.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/property_set_operation.hpp"
@@ -25,6 +27,7 @@
 #include "erhe_property/property_set.hpp"
 #include "erhe_property/property_style.hpp"
 #include "erhe_property/property_string.hpp"
+#include "erhe_scene/node.hpp"
 
 #include <fmt/format.h>
 #include <glm/gtc/quaternion.hpp>
@@ -1471,11 +1474,15 @@ void Dependency_property_rows::end_edit(const Dependency_property& property)
     } else {
         Compound_operation::Parameters parameters;
         for (std::size_t i = 0; i < m_items->size(); ++i) {
-            parameters.operations.push_back(
-                std::make_shared<Property_set_operation>((*m_items)[i], m_sub_object, recorded, m_edit_before[i], target(i)->read_local_state(recorded))
-            );
+            const std::optional<erhe::property::Local_state> after = target(i)->read_local_state(recorded);
+            if (refuse_layout_write(i, recorded, after)) {
+                continue;
+            }
+            parameters.operations.push_back(std::make_shared<Property_set_operation>((*m_items)[i], m_sub_object, recorded, m_edit_before[i], after));
         }
-        m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
+        if (!parameters.operations.empty()) {
+            m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
+        }
     }
     m_edit_property = nullptr;
 }
@@ -1509,14 +1516,45 @@ void Dependency_property_rows::queue_set(const Dependency_property& property, co
         return;
     }
     if (m_items->size() == 1) {
-        m_context.operation_stack->queue(std::make_shared<Property_set_operation>(m_items->front(), m_sub_object, property, m_edit_before.front(), after));
+        if (!refuse_layout_write(0, property, after)) {
+            m_context.operation_stack->queue(std::make_shared<Property_set_operation>(m_items->front(), m_sub_object, property, m_edit_before.front(), after));
+        }
         return;
     }
     Compound_operation::Parameters parameters;
     for (std::size_t i = 0; i < m_items->size(); ++i) {
+        if (refuse_layout_write(i, property, after)) {
+            continue;
+        }
         parameters.operations.push_back(std::make_shared<Property_set_operation>((*m_items)[i], m_sub_object, property, m_edit_before[i], after));
     }
-    m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
+    if (!parameters.operations.empty()) {
+        m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
+    }
+}
+
+auto Dependency_property_rows::refuse_layout_write(
+    const std::size_t                                 i,
+    const Dependency_property&                        property,
+    const std::optional<erhe::property::Local_state>& after
+) -> bool
+{
+    erhe::Item_base& item = *(*m_items)[i];
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&item);
+    if (m_sub_object.has_value() || (m_context.level_kits == nullptr) || !is_kit_layout_property(property) || (node == nullptr) || !carries_kit_layout(*node)) {
+        return false;
+    }
+    const erhe::property::Property_value* const value = after.has_value() ? std::get_if<erhe::property::Property_value>(&after.value()) : nullptr;
+    const std::string refusal = (value != nullptr)
+        ? m_context.level_kits->check_layout_value_write(item, property, *value)
+        : std::string{"a kit layout value is neither cleared nor driven by an expression"};
+    if (refusal.empty()) {
+        return false;
+    }
+    // The row's live edit already wrote the value: it is taken back, and no undo entry is recorded.
+    log_operations->warn("Kit layout value '{}' of '{}' not set: {}", property.get_name(), item.get_name(), refusal);
+    static_cast<void>(apply_item_property(m_context, item, *target(i), property, m_edit_before[i]));
+    return true;
 }
 
 void Dependency_property_rows::context_menu(const Dependency_property& property, const Property_metadata& metadata)

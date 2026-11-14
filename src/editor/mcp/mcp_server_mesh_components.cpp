@@ -2,6 +2,7 @@
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
+#include "level/kit_layout.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
@@ -302,6 +303,9 @@ auto Mcp_server::action_select_mesh_components(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("select_mesh_components: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
@@ -478,6 +482,9 @@ auto Mcp_server::action_select_all_mesh_components(const json& args) -> std::str
             return make_error_content("Scene not found: " + scene_name);
         }
         const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+        if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+            return make_error_content("select_all_mesh_components: " + layout_refusal.value() + "; nothing was changed");
+        }
         if (!node) {
             return make_error_content("Node not found (give node_id or node_name)");
         }
@@ -528,6 +535,9 @@ auto Mcp_server::action_select_linked_mesh_components(const json& args) -> std::
         return make_error_content("Give from_selection=true, or scene_name + node + vertices. Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("select_linked_mesh_components: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
@@ -602,6 +612,9 @@ auto Mcp_server::action_select_mesh_loop(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("select_mesh_loop: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
@@ -894,6 +907,9 @@ auto Mcp_server::action_set_mesh_attribute_values(const json& args) -> std::stri
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("set_mesh_attribute_values: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
@@ -974,6 +990,9 @@ auto Mcp_server::action_set_edge_sharpness(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("set_edge_sharpness: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
@@ -1193,6 +1212,10 @@ auto Mcp_server::run_geometry_op_with_target(const json& args, const std::functi
         targets.push_back(node);
     }
 
+    if (const std::optional<std::string> layout_refusal = locked_layout_refusal_of_any(std::span<const std::shared_ptr<erhe::Item_base>>{targets}); layout_refusal.has_value()) {
+        return layout_refusal.value() + "; nothing was changed";
+    }
+
     // Snapshot - retarget - run - restore. The geometry operations snapshot
     // the selection synchronously (Operations::resolve_operation_items) even
     // though the mesh work itself is async, so the caller-visible selection
@@ -1303,6 +1326,9 @@ auto Mcp_server::action_csg(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> target_node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = target_node ? locked_layout_refusal(*target_node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("csg: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!target_node) {
         return make_error_content("Target node not found (give node_id or node_name)");
     }
@@ -1329,6 +1355,10 @@ auto Mcp_server::action_csg(const json& args) -> std::string
             return make_error_content("Tool node not found (give tool_node_id / tool_node_name / tool_node_ids)");
         }
         tool_nodes.push_back(tool_node);
+    }
+    // A tool operand is consumed by the operation.
+    if (const std::optional<std::string> layout_refusal = locked_layout_refusal_of_any(std::span<const std::shared_ptr<erhe::scene::Node>>{tool_nodes}); layout_refusal.has_value()) {
+        return make_error_content("csg: " + layout_refusal.value() + "; nothing was changed");
     }
     for (const std::shared_ptr<erhe::scene::Node>& tool_node : tool_nodes) {
         if (target_node == tool_node) {
@@ -1939,6 +1969,9 @@ auto Mcp_server::action_loop_cut_mesh(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("loop_cut_mesh: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }
@@ -2023,6 +2056,9 @@ auto Mcp_server::action_knife_cut_mesh(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (const std::optional<std::string> layout_refusal = node ? locked_layout_refusal(*node) : std::optional<std::string>{}; layout_refusal.has_value()) {
+        return make_error_content("knife_cut_mesh: " + layout_refusal.value() + "; nothing was changed");
+    }
     if (!node) {
         return make_error_content("Node not found (give node_id or node_name)");
     }

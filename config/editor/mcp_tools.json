@@ -1357,7 +1357,7 @@
     "name": "place_brush_instances"
   },
   {
-    "description": "The level kit catalog (doc/editor/level_tools.md \"MCP\"): the kits (name, display_name, triangle_ceiling, shape ids) and per shape its id (<kit>.<shape>), kit, name, kind, description, tags, parameters (name, description, type float|int|enum, unit, default, min, max; a float default resolved against the scene's level settings, with its default_scale meters|modules|wall_heights and default_factor; an enum's values; derive fixed|derivable, default_derived (in the shape's default mask) and for a derivable float or int derive_min and derive_max (a float's in meters, resolved against the level settings, with its derive_step); an enum derives over all its values), default_derive (the default mask's parameter names), default_size and default_bounds (the mesh at the defaults, meters), material_slots (slot and default palette material), connectors (none yet), normal_style, triangle_budget and collision (convex_hull | triangle_mesh). Also the scene's level {module, wall_height}, shape_count and the palette (slot, material name, linear base_color, roughness). cached_brush_count: the kit brushes alive in the cache (held by a piece or an undo entry; doc/editor/level_tools.md \"Kit brushes\").",
+    "description": "The level kit catalog (doc/editor/level_tools.md \"MCP\"): the kits (name, display_name, triangle_ceiling, shape ids) and per shape its id (<kit>.<shape>), kit, name, kind, description, tags, parameters (name, description, type float|int|enum, unit, default, min, max; a float default resolved against the scene's level settings, with its default_scale meters|modules|wall_heights and default_factor; an enum's values; derive fixed|derivable, default_derived (in the shape's default mask) and for a derivable float or int derive_min and derive_max (a float's in meters, resolved against the level settings, with its derive_step); an enum derives over all its values), default_derive (the default mask's parameter names), default_size and default_bounds (the mesh at the defaults, meters), material_slots (in slot order: slot, default_material and alternatives, palette material names; nature.tree has bark and foliage), connectors (none yet), normal_style, triangle_budget, collision (convex_hull | triangle_mesh) and mirror_planes (x, z: the planes through the origin the mesh is symmetric about at every parameter value, which level_mirror_group uses for an exact mirror image; empty for the seeded nature shapes). Also the scene's level {module, wall_height}, shape_count and the palette (name, linear base_color, roughness). cached_brush_count: the kit brushes alive in the cache (held by a piece or an undo entry; doc/editor/level_tools.md \"Kit brushes\").",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -1373,7 +1373,7 @@
     "name": "level_get_kits"
   },
   {
-    "description": "Place kit pieces (doc/editor/level_tools.md \"Placing\") as ONE undo entry. Each piece is a mesh node sharing the mesh of every piece of the same shape and parameter values, with its kit record (Kit_piece.shape, Kit_piece.parameters), the default palette material of its shape's slot unless 'material' names one, and a static physics body (convex hull, or a triangle mesh for stairs, door wall, arch, land mass and tree). Parameters not given take their defaults at the scene's level settings (set_scene_settings settings.level). Derive from seed (doc/editor/level_tools.md \"Derive from seed\"): the parameters named in parameters.derive (default: the shape's default mask) take values derived from the seed and their derive range; giving a value for such a parameter is an error naming it. Every piece is checked before any is placed: an unknown key, an unknown shape or parameter, a value outside its range (the message names the parameter and its range), a bad rotation or a missing material fails the call naming the piece index, and nothing is placed. Positions and rotations are in the scene root's space (meters). The module snap applies first, then the surface options (doc/editor/level_tools.md \"Surface placement\"): rays start one piece height back against surface_direction, so a piece rests on the highest surface within its own height above its base or anywhere below (a sunk piece rises); surface_snap rests the piece's base on the highest such surface under its base center and corners; surface_orient tilts the piece's up axis to the surface normal under its base center (heading kept) and rests the base center there; both = orient. Pieces of the same call are not surfaces for each other. No surface found: the piece stays at the given point and reports surface_found false. Returns scene_name, snap, level {module, wall_height}, count and per piece id, name, shape, parameters (effective values and derive, the derived names), position and rotation_xyzw (after snapping and the surface options), surface_found (false also when no surface option applied), world_aabb {min, max}, triangle_count, material, brush_id (pieces with equal brush_id share one mesh) and mesh_key (shape id + canonical parameter text).",
+    "description": "Place kit pieces (doc/editor/level_tools.md \"Placing\") as ONE undo entry. Each piece is a mesh node sharing the mesh of every piece of the same shape and parameter values, with its kit record (Kit_piece.shape, Kit_piece.parameters), one mesh primitive per material slot of its shape with that slot's material (materials: slot name to material name; a slot not named takes its default palette material), and a static physics body (convex hull, or a triangle mesh for stairs, door wall, arch, land mass and tree). Parameters not given take their defaults at the scene's level settings (set_scene_settings settings.level). Derive from seed (doc/editor/level_tools.md \"Derive from seed\"): the parameters named in parameters.derive (default: the shape's default mask) take values derived from the seed and their derive range; giving a value for such a parameter is an error naming it. Every piece is checked before any is placed: an unknown key, an unknown shape or parameter, a value outside its range (the message names the parameter and its range), a bad rotation, an unknown slot or a material neither in the scene nor in the palette fails the call naming the piece index, and nothing is placed. Positions and rotations are in the scene root's space (meters). The module snap applies first, then the surface options (doc/editor/level_tools.md \"Surface placement\"): rays start one piece height back against surface_direction, so a piece rests on the highest surface within its own height above its base or anywhere below (a sunk piece rises); surface_snap rests the piece's base on the highest such surface under its base center and corners; surface_orient tilts the piece's up axis to the surface normal under its base center (heading kept) and rests the base center there; both = orient. Pieces of the same call are not surfaces for each other. No surface found: the piece stays at the given point and reports surface_found false. Returns scene_name, snap, level {module, wall_height}, count and per piece id, name, shape, parameters (effective values and derive, the derived names), position and rotation_xyzw (after snapping and the surface options), surface_found (false also when no surface option applied), world_aabb {min, max}, triangle_count, materials (slot name to material name), brush_id (pieces with equal brush_id share one mesh) and mesh_key (shape id + canonical parameter text).",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -1440,9 +1440,9 @@
                 "description": "Node name, default the shape's name",
                 "type": "string"
               },
-              "material": {
-                "description": "Name of a material of the scene; default the palette material of the shape's slot, added to the scene the first time it is needed",
-                "type": "string"
+              "materials": {
+                "description": "Slot name to material name (level_get_kits lists each shape's material_slots with their default and alternatives): a material of the scene, else a kit palette material, added to the scene the first time it is needed; a slot not named takes its default palette material",
+                "type": "object"
               },
               "parent_id": {
                 "description": "Id of the prim to parent the piece under (default the scene root); the piece keeps the given world transform",
@@ -1479,7 +1479,332 @@
     "name": "level_place_pieces"
   },
   {
-    "description": "Every kit piece of a scene (nodes carrying Kit_piece), in node id order: id, name, shape, known_shape, parameters (the values and derive, the names derived from the seed) and parameters_text (the saved canonical text with hexadecimal floats), mesh_key, position and rotation_xyzw (world), world_aabb {min, max}, material, brush_id (equal ids share one mesh), shares_brush_primitive (the node's mesh primitive is its brush's), follows_kit (the piece's mesh and collision shape are its kit brush's: true for every placed piece and for a loaded piece the load refreshed) and problem (why it does not follow: an unknown shape or parameter values that do not read or are out of range - such a piece keeps the mesh the file holds; empty when it follows) and physics {motion_mode, collision_shape, has_body}.",
+    "description": "Group nodes under a new group node (doc/editor/level_tools.md \"Groups\") as ONE undo entry: an empty Xform node, named name (default \"Group\"), placed at the center of the base of the nodes' combined world bounds (of their meshes; of their origins when there is no mesh) with no rotation, becomes the parent of the given nodes (kit pieces or any other nodes of the scene). Every node keeps its world transform. A node whose ancestor is also given goes with that ancestor. The group goes under the nodes' common parent, at the first node's place, else under the scene root. Groups nest: a group can be grouped again. Move the group as a unit with set_node_transform / transform_selection on its id, delete it with its pieces with delete_nodes. A node listed twice, the scene root, a node of another scene or one inside a reference instance fails the call and nothing changes. Returns scene_name, id, name and position of the group, parent_id, count, piece_count and nodes: the group and every node below it, parents first, each with id, name, kind (group: an Xform node, piece: a kit piece, mesh, node), parent_id, position and rotation_xyzw (world), world_aabb (null without a mesh), for a piece shape, parameters_text and materials (slot name to material name), brush_id (equal ids share one mesh) and physics {collision_shape, has_body}.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_ids": {
+          "description": "Ids of the nodes to group",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "name": {
+          "description": "Name of the group node (default \"Group\")",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "node_ids"
+      ],
+      "type": "object"
+    },
+    "name": "level_group_nodes"
+  },
+  {
+    "description": "Ungroup (doc/editor/level_tools.md \"Groups\") as ONE undo entry: the group node's children move to the group's parent, appended after its other children, keeping their world transforms, and the group node is removed. Only an Xform node (a group made by level_group_nodes or create_node) is ungrouped: a mesh, light or camera fails the call. Returns scene_name, group_id, parent_id, child_count and nodes: the former children and the nodes below them, each with id, name, kind (group: an Xform node, piece: a kit piece, mesh, node), parent_id, position and rotation_xyzw (world), world_aabb (null without a mesh), for a piece shape, parameters_text and materials (slot name to material name), brush_id (equal ids share one mesh) and physics {collision_shape, has_body}.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "group_id": {
+          "description": "Id of the group node",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scene_name",
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "name": "level_ungroup"
+  },
+  {
+    "description": "Duplicate a group (doc/editor/level_tools.md \"Groups\") as ONE undo entry: a copy of the node's whole subtree, nested groups included, inserted after the node under the same parent and named name (default '<name> Copy'; the nodes below keep their names). Every copied kit piece is a full piece: its kit record, the mesh shared with every piece of equal values (the same brush_id), its static body with the kit brush's collision shape, so level_set_piece_parameters on a copy changes the copy alone. Give exactly one of offset (the copy is the source moved by it in world space) and position (the copy's world origin); the rotation is the source's. The node may be any node but the scene root. Returns scene_name, source_id, id, name and position of the copy, count, piece_count and nodes: the copy and every node below it, parents first, each with id, name, kind (group: an Xform node, piece: a kit piece, mesh, node), parent_id, position and rotation_xyzw (world), world_aabb (null without a mesh), for a piece shape, parameters_text and materials (slot name to material name), brush_id (equal ids share one mesh) and physics {collision_shape, has_body}.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "group_id": {
+          "description": "Id of the node to copy with its subtree",
+          "type": "integer"
+        },
+        "offset": {
+          "description": "World offset of the copy from the source",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "position": {
+          "description": "World position of the copy's origin",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "name": {
+          "description": "Name of the copy's root node (default '<source name> Copy')",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "name": "level_duplicate_group"
+  },
+  {
+    "description": "Mirror a group (doc/editor/level_tools.md \"Groups\") as ONE undo entry: every node below the group node is reflected across the plane through the group node's origin whose normal is the group's local axis (x, y or z); the group node itself stays. Positions are reflected; no node gets a negative scale: each rotation is the reflection composed with a reflection in the node's own frame across a plane its shape is symmetric about (the declared plane of the shape whose normal is closest to the mirror's, level_get_kits mirror_planes), which is again a rotation and gives the exact mirror image. A kit piece whose shape declares no plane (the seeded nature shapes), and a mesh that is not a kit piece, use their local x plane and are listed in not_exact_ids: their image is not the exact mirror image. A node without a mesh is moved by the same rule. Mirroring twice gives the original transforms. The pieces stay kit pieces with their records, shared meshes and static bodies. Returns scene_name, group_id, axis, plane_point and plane_normal (world), count, not_exact_count, not_exact_ids and per node id, name, kind, position and rotation_xyzw (the new world transform), local_plane (x or z, the node's own plane used), exact_mirror and world_aabb.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "group_id": {
+          "description": "Id of the group node",
+          "type": "integer"
+        },
+        "axis": {
+          "description": "The group's local axis that is the mirror plane's normal",
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "group_id",
+        "axis"
+      ],
+      "type": "object"
+    },
+    "name": "level_mirror_group"
+  },
+  {
+    "description": "Create a kit layout node (doc/editor/level_tools.md \"Kit layout nodes\", R5.12) as ONE undo entry: an Xform node carrying the Kit_layout values at position / rotation_xyzw (world; it keeps scale 1) under parent_id (default the scene root), or in the place of the piece from_piece_id names, and the pieces its values make as its children, element i at the pattern's i-th pose in the node's frame. locked (default true): the node makes its children and they cannot be edited directly (selecting one selects the layout node; transform, parameter, material, reparent, delete and paste tools refuse it naming the node); unlocked, the children are ordinary pieces. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the path length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "inputSchema": {
+      "properties": {
+        "from_piece_id": {
+          "description": "Id of a placed kit piece the layout is made from (the Level Kit window's Make Layout): its shape, parameter values (seed mask included) and slot materials are the one item, the node takes its parent, place among the parent's children and world transform, and the piece is removed in the same undo entry, element 0 taking its place. Not with items, position, rotation_xyzw or parent_id. The reply adds replaced_piece_id.",
+          "type": "integer"
+        },
+        "items": {
+          "description": "The kit items, element i taking item i modulo the item count: [{shape, parameters (over the shape's defaults; 'derive' names the item's seed mask), materials ({slot: scene or palette material name})}]; required unless from_piece_id is given",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "locked": {
+          "description": "Lock state (default true)",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Name of the node (default \"Kit Layout\")",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Id of the parent node",
+          "type": "integer"
+        },
+        "pattern": {
+          "description": "The arrangement in the layout node's frame, element 0 at its origin (doc/editor/level_tools.md \"Kit layout nodes\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|polyline. count_mode (line, ring, polyline): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring floor(circumference / step) spread evenly, so the stated gap is a minimum; at least element 0). count (line, ring, polyline in count mode), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), points (polyline: [[x,y,z],...] after the origin, layout frame; count mode spreads count elements evenly over the path, both ends holding one).",
+          "type": "object"
+        },
+        "position": {
+          "description": "World position [x,y,z]",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "random_seeds": {
+          "description": "Each element takes a seed derived from the layout seed and its index, and the item's masked parameters derive from it (default false: each element keeps its item's seed)",
+          "type": "boolean"
+        },
+        "rotation_xyzw": {
+          "description": "World rotation quaternion [x,y,z,w]",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "seed": {
+          "description": "The layout seed, 0 - 1000000 (default 0)",
+          "type": "integer"
+        },
+        "snap": {
+          "description": "none (default) or module: element positions round to the module",
+          "enum": [
+            "none",
+            "module"
+          ],
+          "type": "string"
+        },
+        "surface_orient": {
+          "description": "Each element's up axis takes the surface normal (default false)",
+          "type": "boolean"
+        },
+        "surface_snap": {
+          "description": "Each element rests on the surface under it (default false)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scene_name",
+        "pattern"
+      ],
+      "type": "object"
+    },
+    "name": "level_create_layout"
+  },
+  {
+    "description": "Change a kit layout node's values as ONE undo entry (D4.9): the values given merge over the node's (a pattern object merges key by key; items replace the list). A locked node makes its children equal the new values in the same entry, keeping each child that already matches (same shape, parameters, materials and pose); an unlocked node changes its values alone and leaves its children untouched. No entry when nothing changes. The lock is set by level_set_layout_lock. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the path length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "inputSchema": {
+      "properties": {
+        "items": {
+          "description": "The kit items, element i taking item i modulo the item count: [{shape, parameters (over the shape's defaults; 'derive' names the item's seed mask), materials ({slot: scene or palette material name})}]",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "layout_id": {
+          "description": "Id of the kit layout node",
+          "type": "integer"
+        },
+        "pattern": {
+          "description": "The arrangement in the layout node's frame, element 0 at its origin (doc/editor/level_tools.md \"Kit layout nodes\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|polyline. count_mode (line, ring, polyline): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring floor(circumference / step) spread evenly, so the stated gap is a minimum; at least element 0). count (line, ring, polyline in count mode), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), points (polyline: [[x,y,z],...] after the origin, layout frame; count mode spreads count elements evenly over the path, both ends holding one).",
+          "type": "object"
+        },
+        "random_seeds": {
+          "description": "Each element takes a seed derived from the layout seed and its index, and the item's masked parameters derive from it (default false: each element keeps its item's seed)",
+          "type": "boolean"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "seed": {
+          "description": "The layout seed, 0 - 1000000 (default 0)",
+          "type": "integer"
+        },
+        "snap": {
+          "description": "none (default) or module: element positions round to the module",
+          "enum": [
+            "none",
+            "module"
+          ],
+          "type": "string"
+        },
+        "surface_orient": {
+          "description": "Each element's up axis takes the surface normal (default false)",
+          "type": "boolean"
+        },
+        "surface_snap": {
+          "description": "Each element rests on the surface under it (default false)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scene_name",
+        "layout_id"
+      ],
+      "type": "object"
+    },
+    "name": "level_set_layout"
+  },
+  {
+    "description": "Every kit layout node of the scene, by id, with its values, the run they make and its children (as level_create_layout replies). Returns scene_name, count and layouts.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "level_get_layouts"
+  },
+  {
+    "description": "Lock or unlock a kit layout node as ONE undo entry (R5.12.5, R5.12.6). Unlocking writes the lock value alone and changes no child. Locking discards the edits made while unlocked: every child is replaced by the pieces the values make; undo puts the children back exactly as they were (the same nodes, ids, transforms, parameters and materials). No entry when the node already has the state. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the path length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "inputSchema": {
+      "properties": {
+        "layout_id": {
+          "description": "Id of the kit layout node",
+          "type": "integer"
+        },
+        "locked": {
+          "description": "true locks, false unlocks",
+          "type": "boolean"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "layout_id",
+        "locked"
+      ],
+      "type": "object"
+    },
+    "name": "level_set_layout_lock"
+  },
+  {
+    "description": "Make a locked kit layout node's children equal its values again (after a level settings change or a kit change), as ONE undo entry; no entry when they already are. An unlocked node is refused: it leaves its children alone. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, run {count, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length or the path length), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "inputSchema": {
+      "properties": {
+        "layout_id": {
+          "description": "Id of the kit layout node",
+          "type": "integer"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "layout_id"
+      ],
+      "type": "object"
+    },
+    "name": "level_refresh_layout"
+  },
+  {
+    "description": "Every kit piece of a scene (nodes carrying Kit_piece), in node id order: id, name, shape, known_shape, parameters (the values and derive, the names derived from the seed) and parameters_text (the saved canonical text with hexadecimal floats), mesh_key, position and rotation_xyzw (world), world_aabb {min, max}, materials (slot name to material name, from the mesh primitives in slot order), brush_id (equal ids share one mesh), shares_brush_primitive (each mesh primitive is its brush's part of that slot), follows_kit (the piece's mesh and collision shape are its kit brush's: true for every placed piece and for a loaded piece the load refreshed) and problem (why it does not follow: an unknown shape or parameter values that do not read or are out of range - such a piece keeps the mesh the file holds; empty when it follows) and physics {motion_mode, collision_shape, has_body}.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -1495,7 +1820,7 @@
     "name": "level_get_pieces"
   },
   {
-    "description": "Change a kit piece's parameter values (doc/editor/level_tools.md \"Parameter changes\") as ONE undo entry: the given parameters merge over the piece's current values (derive, when given, replaces the mask; a value for a derived parameter is an error naming it; a changed seed or mask derives the masked values again, otherwise the saved values stand), and the piece takes the mesh and collision shape of the kit brush for the new values (shared with every piece of equal values), keeping its id, name, transform, children, material and static body. An unknown key or parameter, a value of the wrong type or outside its range (the message names the parameter and its range), or a node that is not a kit piece fails the call and nothing changes. Values equal to the current ones change nothing and record no undo entry. Returns scene_name, id, name, shape, changed, parameters (effective values and derive), mesh_key, brush_id, world_aabb {min, max} and triangle_count.",
+    "description": "Change a kit piece's parameter values (doc/editor/level_tools.md \"Parameter changes\") as ONE undo entry: the given parameters merge over the piece's current values (derive, when given, replaces the mask; a value for a derived parameter is an error naming it; a changed seed or mask derives the masked values again, otherwise the saved values stand), and the piece takes the mesh and collision shape of the kit brush for the new values (shared with every piece of equal values), keeping its id, name, transform, children, the material of every slot and its static body. An unknown key or parameter, a value of the wrong type or outside its range (the message names the parameter and its range), or a node that is not a kit piece fails the call and nothing changes. Values equal to the current ones change nothing and record no undo entry. Returns scene_name, id, name, shape, changed, parameters (effective values and derive), mesh_key, brush_id, world_aabb {min, max}, triangle_count and materials.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -1519,6 +1844,37 @@
       "type": "object"
     },
     "name": "level_set_piece_parameters"
+  },
+  {
+    "description": "Set the material of one material slot of a kit piece (doc/editor/level_tools.md \"Materials\") as ONE undo entry: the piece's mesh primitive of that slot takes the material, the other slots keep theirs. material names a material of the scene, else a kit palette material (level_get_kits lists each slot's default and alternatives), which is added to the scene's content library in the same entry the first time it is needed. A material equal to the slot's current one changes nothing and records no undo entry. assign_mesh_material does the same for a scene material by primitive_index (the slot index). An unknown key, a node that is not a kit piece, a slot the shape does not have or a material neither in the scene nor in the palette fails the call and nothing changes. Returns scene_name, id, name, shape, slot, material, previous_material, changed and materials (slot name to material name).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_id": {
+          "description": "Id of the piece's node",
+          "type": "integer"
+        },
+        "slot": {
+          "description": "Material slot name of the piece's shape, for example bark or foliage of nature.tree",
+          "type": "string"
+        },
+        "material": {
+          "description": "Name of a material of the scene or of the kit palette",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "node_id",
+        "slot",
+        "material"
+      ],
+      "type": "object"
+    },
+    "name": "level_set_piece_material"
   },
   {
     "description": "Snap mesh nodes (kit pieces or any other mesh) to the surface along a direction (doc/editor/level_tools.md \"Surface placement\") as ONE undo entry for all of them. Rays start one piece height back against direction (the top plane of the mesh bounds), so a node rests on the highest surface within its own height above its base or anywhere below, and distance (measured from the base) is negative when it rises. Without orient each node moves along direction by the smallest such distance over its base center and base corners; with orient its up axis turns by the shortest rotation to the normal under its base center (heading kept) and its base center rests on that hit. The listed nodes are not surfaces for each other. A node with no surface keeps its transform and reports surface_found false. query_only returns the resting transforms and changes nothing. Returns scene_name, orient, direction, query_only, moved_count and per node id, name, position and rotation_xyzw (the resting world transform), distance and surface_found. Positions are in the scene root's space.",
@@ -1563,7 +1919,217 @@
     "name": "level_snap_to_surface"
   },
   {
-    "description": "Read the Brush tool's kit mode placement preview (doc/editor/level_tools.md \"Level Kit window\", doc/editor/brushes.md \"Kit mode\"). Read-only. Returns active (kit mode on: a shape chosen in the Level Kit window and the Brush tool not left since), tool_active (the Brush tool is the priority tool), rotation_step_degrees, yaw_steps, hover_position (the world point the Brush tool hovers, null without a hover) and visible (a preview is shown). In kit mode also shape, parameters (the values of the kit brush), mesh_key, brush_id and bounds {min, max} (the brush's mesh bounds in its own space); with a visible preview also position, rotation_xyzw, surface_found and world_aabb: the transform a click in the viewport places the next piece at, in the scene root's space.",
+    "description": "List the content mesh nodes (kit pieces and any other mesh) whose world bounds intersect a box or a sphere (doc/editor/level_tools.md \"Spatial queries\", R10.2). Read-only. Give box {min, max} or sphere {center, radius}, one of them; touching counts as intersecting. Positions are in the scene root's space, in meters. Returns scene_name, the region echoed (box or sphere), count and nodes by id, each with id, name, kit_piece, shape (the kit shape id, null for a mesh that is not a kit piece), position, rotation_xyzw, scale (the world transform) and world_aabb {min, max}.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "box": {
+          "description": "Axis-aligned box: min and max corners [x, y, z], min not above max",
+          "properties": {
+            "min": {
+              "description": "Smallest corner",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "max": {
+              "description": "Largest corner",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            }
+          },
+          "required": [
+            "min",
+            "max"
+          ],
+          "type": "object"
+        },
+        "sphere": {
+          "description": "Sphere: center [x, y, z] and a positive radius",
+          "properties": {
+            "center": {
+              "description": "Center",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "radius": {
+              "description": "Radius in meters, positive",
+              "type": "number"
+            }
+          },
+          "required": [
+            "center",
+            "radius"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "level_get_region_contents"
+  },
+  {
+    "description": "A grid of top surface heights over a rectangular region (doc/editor/level_tools.md \"Spatial queries\", R10.6). Read-only. One downward ray per cell center from max y to min y through the content meshes; faces seen from behind are passed through, so a ray starting inside a solid finds the first upward face below. Cells of cell_size cover min..max in x (columns) and z (rows), a partial last cell included; at most 65536 cells, more fails the call naming the count. Positions are in the scene root's space, in meters. Returns scene_name, min, max, cell_size, columns, rows, first_cell_center [x, z] (cell (column c, row r) has its center at first_cell_center + cell_size * [c, r]), hit_count, height_min and height_max over the hits (null without one), heights (rows of the smallest z first, each a list of heights by column; null for a cell without a hit) and navigation_available. With a navigation mesh also navigation_stale, walkable_count, walkable (rows of booleans: the hit lies on a navigation polygon within the agent's climb) and islands (rows of island ids of get_navigation_summary, null where not walkable). With text true also height_text (one string per row, smallest z first, x to the right: digit 0-9 maps the height linearly from height_min (0) to height_max (9), '.' marks a cell without a hit) and, with a navigation mesh, island_text (island id as 0-9 then a-z modulo 36 per walkable cell, '#' a hit that is not walkable, '.' no hit).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "min": {
+          "description": "Region corner [x, y, z] with the smallest values; rays end at its y",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "max": {
+          "description": "Region corner [x, y, z] with the largest values; rays start at its y",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "cell_size": {
+          "description": "Cell edge in meters, positive",
+          "type": "number"
+        },
+        "text": {
+          "description": "Also return the text pictures (default false)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scene_name",
+        "min",
+        "max",
+        "cell_size"
+      ],
+      "type": "object"
+    },
+    "name": "level_get_height_map"
+  },
+  {
+    "description": "List mesh nodes that rest on nothing (doc/editor/level_tools.md \"Spatial queries\", R10.4). Read-only. Per node the snap rays of level_snap_to_surface (straight down, from the top plane of the mesh bounds above the base center and the base corners) with only the node itself passed through, so other pieces count as support; distance is the smallest distance from the base down to a hit (negative when the base is below the surface). A node is supported when a hit exists and distance <= tolerance. Without node_ids every kit piece of the scene is checked. Returns scene_name, tolerance, all_kit_pieces, count, unsupported_count, unsupported_ids and nodes by id, each with id, name, supported, surface_found and distance (null without a hit).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_ids": {
+          "description": "Ids of the mesh nodes to check (default: every kit piece of the scene)",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "tolerance": {
+          "description": "Largest gap in meters under the base that still counts as support, positive (default 0.01)",
+          "type": "number"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "level_get_support_report"
+  },
+  {
+    "description": "List pairs of mesh nodes that interpenetrate by more than a tolerance, with the penetration depth (doc/editor/level_tools.md \"Spatial queries\", R10.3). Read-only. A first pass keeps the pairs whose world bounds overlap by more than the tolerance on every axis; the exact pass measures each such pair's collision shapes at the nodes' world rotation and translation (as their bodies stand; node scale is not applied) with the physics backend's shape collision. measure: exact (the nodes' own collision shapes), convex_hull (a convex hull of the mesh stood in: for a node without a collision shape, and for two triangle mesh shapes, which the backend cannot collide - then each mesh against the other's hull and the smaller depth, an upper bound) or not_measured (the backend collides neither form; depth is the bounds overlap). Without node_ids every kit piece of the scene is tested. Returns scene_name, tolerance, exclude_tags, all_kit_pieces, count, tested_count, excluded_ids, bounds_pair_count, overlap_count and overlaps (by the pair's ids), each with ids [a, b] (a < b), names, depth (meters), measure and position (center of the box both world bounds cover).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_ids": {
+          "description": "Ids of the mesh nodes to test (default: every kit piece of the scene)",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "tolerance": {
+          "description": "Penetration depth in meters that still counts as touching, positive (default 0.01)",
+          "type": "number"
+        },
+        "exclude_tags": {
+          "description": "Pieces carrying any of these tags take no part (for example a rock sunk into the ground on purpose)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "level_get_overlap_report"
+  },
+  {
+    "description": "Level check (doc/editor/level_tools.md \"Spatial queries\", R10.7). Read-only. Runs over every kit piece of the scene, in this order: the support report (level_get_support_report at support_tolerance), the overlap report (level_get_overlap_report at overlap_tolerance), the unreachable islands of the scene's navigation mesh larger than min_island_area, and R2.10: each walkable shape's walkability check over the piece's parameter values for the agent of the scene's navigation build settings. Pieces carrying a tag of exclude_tags take no part in the support and overlap parts. Returns one list of findings, each with kind (unsupported, overlap, unreachable_island, unwalkable_parameters, unreadable_piece: a record naming no known shape or parameters that do not parse), position (scene root space: a piece's base center, the overlap's center, the island's point, a piece's origin), ids and names of the pieces involved (an island: the piece under its point, when one is), detail, and distance (unsupported; null without a surface), depth and measure (overlap) or area and island (island). Also scene_name, the effective tolerances, min_island_area, exclude_tags, piece_count, excluded_count, agent, navigation_available and navigation_stale (without a navigation mesh no island is checked; a stale mesh is checked as it stands), island_count, finding_count and counts per kind.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "support_tolerance": {
+          "description": "Largest gap in meters under a base that still counts as support, positive (default 0.01)",
+          "type": "number"
+        },
+        "overlap_tolerance": {
+          "description": "Penetration depth in meters that still counts as touching, positive (default 0.01)",
+          "type": "number"
+        },
+        "min_island_area": {
+          "description": "Unreachable islands larger than this, in square meters, are findings; 0 or more (default 1)",
+          "type": "number"
+        },
+        "exclude_tags": {
+          "description": "Pieces carrying any of these tags take no part in the support and overlap parts (for example ground pieces, which rest on nothing)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "level_check"
+  },
+  {
+    "description": "Read the Brush tool's kit mode placement preview (doc/editor/level_tools.md \"Level Kit window\", doc/editor/brushes.md \"Kit mode\"). Read-only. Returns active (kit mode on: a shape chosen in the Level Kit window and the Brush tool not left since), tool_active (the Brush tool is the priority tool), rotation_step_degrees, yaw_steps, hover_position (the world point the Brush tool hovers, null without a hover) and visible (a preview is shown). In kit mode also shape, parameters (the values of the kit brush), mesh_key, brush_id, bounds {min, max} (the brush's mesh bounds in its own space) and materials (slot name to the palette material the next piece gets, chosen in the Level Kit window); with a visible preview also position, rotation_xyzw, surface_found and world_aabb: the transform a click in the viewport places the next piece at, in the scene root's space.",
     "inputSchema": {
       "properties": {},
       "type": "object"

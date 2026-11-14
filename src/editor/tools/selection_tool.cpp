@@ -14,6 +14,7 @@
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
 #include "input_state.hpp"
+#include "level/kit_layout.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -36,6 +37,7 @@
 #include "erhe_hash/xxhash.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
 #include <functional>
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -836,6 +838,20 @@ auto item_set_sort_predicate(const std::shared_ptr<erhe::Item_base>& lhs, const 
     return out_items;
 }
 
+namespace {
+
+// A child of a locked kit layout node is not selected: its layout node is (doc/editor/level_tools.md "Kit layout nodes").
+[[nodiscard]] auto get_selectable(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<erhe::Item_base>
+{
+    if (!item) {
+        return item;
+    }
+    const std::shared_ptr<erhe::scene::Node> layout = find_locking_kit_layout(*item);
+    return layout ? std::shared_ptr<erhe::Item_base>{layout} : item;
+}
+
+} // anonymous namespace
+
 void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item_base>>& selection)
 {
     // The last listed item is the active item (doc/editor/active_item.md D3.2);
@@ -844,11 +860,28 @@ void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item_base>
 }
 
 void Selection::set_selection(
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selection,
-    const std::shared_ptr<erhe::Item_base>&              active
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selection_in,
+    const std::shared_ptr<erhe::Item_base>&              active_in
 )
 {
     Scoped_selection_change selection_change{*this};
+
+    // Children of locked kit layout nodes stand for their layout node, each item once.
+    const bool redirects = std::any_of(
+        selection_in.begin(), selection_in.end(),
+        [](const std::shared_ptr<erhe::Item_base>& item) -> bool { return item && static_cast<bool>(find_locking_kit_layout(*item)); }
+    );
+    std::vector<std::shared_ptr<erhe::Item_base>> redirected;
+    if (redirects) {
+        for (const std::shared_ptr<erhe::Item_base>& item : selection_in) {
+            const std::shared_ptr<erhe::Item_base> selectable = get_selectable(item);
+            if (std::find(redirected.begin(), redirected.end(), selectable) == redirected.end()) {
+                redirected.push_back(selectable);
+            }
+        }
+    }
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selection = redirects ? redirected : selection_in;
+    const std::shared_ptr<erhe::Item_base> active = get_selectable(active_in);
 
     // Membership of the incoming selection by pointer: Item_tree::select_all()
     // hands in every item of a tree, and a linear scan of `selection` per
@@ -919,8 +952,9 @@ void Selection::send_active_item_message(
     );
 }
 
-void Selection::set_active_item(const std::shared_ptr<erhe::Item_base>& item)
+void Selection::set_active_item(const std::shared_ptr<erhe::Item_base>& item_in)
 {
+    const std::shared_ptr<erhe::Item_base> item     = get_selectable(item_in);
     const std::shared_ptr<erhe::Item_base> old_item = m_active_item.lock();
     if (old_item == item) {
         return;
@@ -1339,8 +1373,15 @@ void Selection::toggle_node_selection(const std::shared_ptr<erhe::scene::Node>& 
     // and must not block that redirection; the redirected target's own lock
     // flags still apply.
     erhe::scene::Node* const prefab_instance_root = get_outermost_prefab_instance_node(node);
-    const bool redirected = (prefab_instance_root != nullptr) && (prefab_instance_root != node);
-    erhe::scene::Node* const target_node = redirected ? prefab_instance_root : node;
+    bool               redirected  = (prefab_instance_root != nullptr) && (prefab_instance_root != node);
+    erhe::scene::Node* target_node = redirected ? prefab_instance_root : node;
+
+    // A child of a locked kit layout node selects the layout node.
+    const std::shared_ptr<erhe::scene::Node> layout = find_locking_kit_layout(*target_node);
+    if (layout) {
+        target_node = layout.get();
+        redirected  = true;
+    }
 
     if (!redirected) {
         const bool picked_lock_viewport_select = test_bit_set(picked->get_flag_bits(), editor::Editor_item_flags::lock_viewport_selection);
@@ -1400,9 +1441,11 @@ auto Selection::is_in_selection(const std::shared_ptr<erhe::Item_base>& item) co
     return std::find(m_selection.begin(), m_selection.end(), item) != m_selection.end();
 }
 
-auto Selection::add_to_selection(const std::shared_ptr<erhe::Item_base>& item) -> bool
+auto Selection::add_to_selection(const std::shared_ptr<erhe::Item_base>& item_in) -> bool
 {
     Scoped_selection_change selection_change{*this};
+
+    const std::shared_ptr<erhe::Item_base> item = get_selectable(item_in);
 
     if (!item) {
         log_selection->warn("Trying to add empty item to selection");

@@ -1,5 +1,7 @@
 #include "level/level_kits.hpp"
 
+#include "level/kit_layout.hpp"
+#include "level/kit_mesh_builder.hpp"
 #include "level/kit_piece.hpp"
 #include "level/kit_piece_operation.hpp"
 
@@ -12,10 +14,14 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/item_parent_change_operation.hpp"
 #include "operations/library_attach_operation.hpp"
+#include "operations/mesh_material_assign_operation.hpp"
 #include "operations/mesh_primitive_swap.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "prefabs/instance_structure.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
@@ -32,6 +38,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/trs_transform.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <fmt/format.h>
@@ -88,12 +95,9 @@ void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float c
     }
 }
 
-[[nodiscard]] auto make_kit_geometry(const Kit_parameter_values& values) -> std::shared_ptr<erhe::geometry::Geometry>
+void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geometry& geometry)
 {
-    const Kit_shape_definition& shape = *values.get_shape();
-    std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(shape.display_name);
-    shape.generator(values, geometry->get_mesh());
-    geometry->process(
+    geometry.process(
         {
             .flags =
                 erhe::geometry::Geometry::process_flag_connect |
@@ -102,11 +106,56 @@ void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float c
         }
     );
     if (shape.normal_style == Kit_normal_style::smooth) {
-        set_crease_corner_normals(*geometry.get(), c_smooth_crease_angle_degrees);
+        set_crease_corner_normals(geometry, c_smooth_crease_angle_degrees);
     } else if (shape.normal_style == Kit_normal_style::smooth_with_hard_edges) {
-        set_crease_corner_normals(*geometry.get(), shape.hard_edge_angle_degrees);
+        set_crease_corner_normals(geometry, shape.hard_edge_angle_degrees);
     }
+}
+
+// The whole mesh of the values, every slot; the brush's geometry, hull and triangle mesh collision shape.
+[[nodiscard]] auto make_kit_geometry(const Kit_parameter_values& values) -> std::shared_ptr<erhe::geometry::Geometry>
+{
+    const Kit_shape_definition& shape = *values.get_shape();
+    std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(shape.display_name);
+    GEO::Mesh& mesh = geometry->get_mesh();
+    shape.generator(values, mesh);
+    // The parts carry the slots; the whole geometry keeps no kit attribute.
+    if (mesh.facets.attributes().is_defined(c_kit_slot_attribute)) {
+        mesh.facets.attributes().delete_attribute_store(c_kit_slot_attribute);
+    }
+    process_kit_geometry(shape, *geometry.get());
     return geometry;
+}
+
+// One geometry per material slot of the shape (D2.1); returns the problem, empty when every slot has facets.
+[[nodiscard]] auto make_kit_part_geometries(
+    const Kit_parameter_values&                             values,
+    std::vector<std::shared_ptr<erhe::geometry::Geometry>>& out_parts
+) -> std::string
+{
+    const Kit_shape_definition& shape = *values.get_shape();
+    out_parts.clear();
+    GEO::Mesh mesh{3, true};
+    shape.generator(values, mesh);
+    std::vector<uint32_t> facet_slots;
+    read_kit_facet_slots(mesh, facet_slots);
+    for (const uint32_t slot : facet_slots) {
+        if (slot >= shape.material_slots.size()) {
+            return fmt::format("a facet names slot {}, the shape has {} slots", slot, shape.material_slots.size());
+        }
+    }
+    for (std::size_t slot = 0, end = shape.material_slots.size(); slot < end; ++slot) {
+        std::shared_ptr<erhe::geometry::Geometry> part = std::make_shared<erhe::geometry::Geometry>(
+            fmt::format("{} {}", shape.display_name, shape.material_slots[slot])
+        );
+        extract_kit_slot_mesh(mesh, facet_slots, static_cast<uint32_t>(slot), part->get_mesh());
+        if (part->get_mesh().facets.nb() == 0) {
+            return fmt::format("slot '{}' has no facets", shape.material_slots[slot]);
+        }
+        process_kit_geometry(shape, *part.get());
+        out_parts.push_back(std::move(part));
+    }
+    return {};
 }
 
 [[nodiscard]] auto find_material_by_name(
@@ -130,6 +179,103 @@ void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float c
     material_values.metallic   = 0.0f;
     return std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{.name = palette.name, .values = material_values}
+    );
+}
+
+// The given slot materials of a placement; returns the problem, empty when each resolves (Kit_slot_material).
+[[nodiscard]] auto check_slot_materials(
+    const Kit_shape_library&             library,
+    const Kit_shape_definition&          shape,
+    const std::vector<Kit_slot_material>& materials
+) -> std::string
+{
+    if (materials.size() > shape.material_slots.size()) {
+        return fmt::format("{} materials for the {} material slots of {}", materials.size(), shape.material_slots.size(), shape.id);
+    }
+    for (std::size_t slot = 0, end = shape.material_slots.size(); slot < end; ++slot) {
+        const bool given = (slot < materials.size()) && (materials[slot].material || !materials[slot].palette_name.empty());
+        if (given && !materials[slot].material && (library.find_palette_material(materials[slot].palette_name) == nullptr)) {
+            return fmt::format("slot '{}': no palette material '{}'", shape.material_slots[slot], materials[slot].palette_name);
+        }
+        if (!given && (library.find_slot_default(shape.material_slots[slot]) == nullptr)) {
+            return fmt::format("no palette material for slot '{}'", shape.material_slots[slot]);
+        }
+    }
+    return {};
+}
+
+// Palette materials by name: found in the content library, else made once with its insert operation kept for the caller's entry.
+class Palette_material_resolver
+{
+public:
+    Palette_material_resolver(App_context& context, const std::shared_ptr<Content_library>& library)
+        : m_context{context}
+        , m_library{library}
+    {
+    }
+
+    // The checks of check_slot_materials() have passed.
+    [[nodiscard]] auto resolve(const Kit_shape_library& kits, const std::string_view slot, const Kit_slot_material& given) -> std::shared_ptr<erhe::primitive::Material>
+    {
+        if (given.material) {
+            return given.material;
+        }
+        const Kit_palette_material* const palette = given.palette_name.empty()
+            ? kits.find_slot_default(slot)
+            : kits.find_palette_material(given.palette_name);
+        const std::map<std::string, std::shared_ptr<erhe::primitive::Material>>::iterator made = m_made.find(palette->name);
+        if (made != m_made.end()) {
+            return made->second;
+        }
+        std::shared_ptr<erhe::primitive::Material> material = find_material_by_name(m_library, palette->name);
+        if (!material) {
+            material = make_palette_material(*palette);
+            m_operations.push_back(make_resource_insert_operation(m_context, m_library, material, {}));
+        }
+        m_made.emplace(palette->name, material);
+        return material;
+    }
+
+    [[nodiscard]] auto take_operations() -> std::vector<std::shared_ptr<Operation>>
+    {
+        return std::move(m_operations);
+    }
+
+private:
+    App_context&                                                      m_context;
+    std::shared_ptr<Content_library>                                  m_library;
+    std::map<std::string, std::shared_ptr<erhe::primitive::Material>> m_made;
+    std::vector<std::shared_ptr<Operation>>                           m_operations;
+};
+
+// Primitive i of the piece takes the brush's part i, its material kept; the counts are equal (one per slot).
+[[nodiscard]] auto with_brush_primitives(const std::vector<erhe::scene::Mesh_primitive>& primitives, const Brush::Scaled& scaled) -> std::vector<erhe::scene::Mesh_primitive>
+{
+    std::vector<erhe::scene::Mesh_primitive> result = primitives;
+    for (std::size_t i = 0, end = std::min(result.size(), scaled.part_primitives.size()); i < end; ++i) {
+        result[i].primitive = scaled.part_primitives[i];
+    }
+    return result;
+}
+
+[[nodiscard]] auto shares_part_primitives(const erhe::scene::Mesh& mesh, const Brush::Scaled& scaled) -> bool
+{
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh.get_primitives();
+    if (primitives.empty() || (primitives.size() != scaled.part_primitives.size())) {
+        return false;
+    }
+    for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
+        if (primitives[i].primitive != scaled.part_primitives[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] auto part_count_problem(const erhe::scene::Mesh& mesh, const Brush::Scaled& scaled) -> std::string
+{
+    return fmt::format(
+        "the mesh has {} primitives, the shape {} material slots", mesh.get_primitives().size(), scaled.part_primitives.size()
     );
 }
 
@@ -255,9 +401,18 @@ auto Level_kits::make_placement_pose(
     };
 }
 
-auto Level_kits::get_preview_material(const Kit_shape_definition& shape) -> std::shared_ptr<erhe::primitive::Material>
+void Level_kits::get_default_slot_materials(const Kit_shape_definition& shape, std::vector<std::string>& out_names) const
 {
-    const Kit_palette_material* const palette = m_library.find_palette_material(shape.material_slot);
+    out_names.clear();
+    for (const std::string& slot : shape.material_slots) {
+        const Kit_palette_material* const palette = m_library.find_slot_default(slot);
+        out_names.push_back((palette != nullptr) ? palette->name : std::string{});
+    }
+}
+
+auto Level_kits::get_preview_material(const std::string_view palette_name) -> std::shared_ptr<erhe::primitive::Material>
+{
+    const Kit_palette_material* const palette = m_library.find_palette_material(palette_name);
     if (palette == nullptr) {
         return {};
     }
@@ -314,6 +469,14 @@ auto Level_kits::make_brush(const Kit_parameter_values& values) -> std::shared_p
         },
         .density            = 1.0f
     };
+    // Several slots make several parts, one mesh primitive each (D2.1); one slot is the whole geometry.
+    if (shape.material_slots.size() > 1) {
+        const std::string problem = make_kit_part_geometries(values, brush_data.part_geometries);
+        if (!problem.empty()) {
+            log_scene->warn("Kit shape '{}' made no parts for {}: {}", shape.id, values.to_canonical_text(), problem);
+            return {};
+        }
+    }
     // A convex shape takes the brush's convex hull (Brush::late_initialize); the others their own triangles (D2.3).
     if (shape.collision == Kit_collision::triangle_mesh) {
         brush_data.collision_shape_generator = [values](const float scale) -> std::shared_ptr<erhe::physics::ICollision_shape> {
@@ -395,12 +558,7 @@ auto Level_kits::check_piece(const erhe::scene::Node& node) const -> Kit_piece_c
     const Brush::Scaled* const                scaled    = brush ? brush->get_scaled(1.0) : nullptr;
     const std::optional<Brush_placement_data> placement = read_brush_placement(node);
     const erhe::scene::Mesh* const            mesh      = dynamic_cast<const erhe::scene::Mesh*>(&node);
-    bool shares_primitive = (mesh != nullptr) && (scaled != nullptr) && !mesh->get_primitives().empty();
-    if (shares_primitive) {
-        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
-            shares_primitive = shares_primitive && (mesh_primitive.primitive == scaled->primitive);
-        }
-    }
+    const bool shares_primitive = (mesh != nullptr) && (scaled != nullptr) && shares_part_primitives(*mesh, *scaled);
     result.follows_kit =
         shares_primitive && placement.has_value() && (placement.value().brush == brush);
     if (!result.follows_kit) {
@@ -433,16 +591,16 @@ auto Level_kits::refresh_scene(Scene_root& scene_root) -> Kit_refresh_report
         if (problem.empty() && (scaled == nullptr)) {
             problem = "the shape made no geometry";
         }
+        if (problem.empty() && (mesh->get_primitives().size() != scaled->part_primitives.size())) {
+            problem = part_count_problem(*mesh, *scaled);
+        }
         if (!problem.empty()) {
             ++report.problem_count;
             log_scene->warn("Kit piece '{}' (id {}) keeps its loaded mesh: {}", mesh->get_name(), mesh->get_id(), problem);
             continue;
         }
         // As Kit_piece_parameters_operation applies it, without an undo entry: loading is not an edit.
-        std::vector<erhe::scene::Mesh_primitive> primitives = mesh->get_primitives();
-        for (erhe::scene::Mesh_primitive& mesh_primitive : primitives) {
-            mesh_primitive.primitive = scaled->primitive;
-        }
+        const std::vector<erhe::scene::Mesh_primitive> primitives = with_brush_primitives(mesh->get_primitives(), *scaled);
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
         swap_mesh_primitives(mesh, primitives);
         if (carries_node_physics(*mesh)) {
@@ -529,11 +687,39 @@ auto Level_kits::get_cached_brush_count() const -> std::size_t
 auto Level_kits::place(Scene_root& scene_root, const std::span<const Kit_placement> placements, const Kit_snap snap) -> Kit_place_result
 {
     Kit_place_result result;
-    const auto fail = [&result](const std::size_t index, std::string message) -> Kit_place_result& {
+    for (std::size_t i = 0, end = placements.size(); i < end; ++i) {
+        const std::optional<std::string> refusal = placements[i].parent
+            ? locked_layout_child_refusal(*placements[i].parent)
+            : std::optional<std::string>{};
+        if (refusal.has_value()) {
+            result.error       = refusal.value();
+            result.error_index = i;
+            return result;
+        }
+    }
+    std::vector<std::shared_ptr<Operation>> operations;
+    if (!prepare_placements(scene_root, placements, snap, result, operations) || result.pieces.empty()) {
+        return result;
+    }
+    m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+    return result;
+}
+
+auto Level_kits::prepare_placements(
+    Scene_root&                              scene_root,
+    const std::span<const Kit_placement>     placements,
+    const Kit_snap                           snap,
+    Kit_place_result&                        result,
+    std::vector<std::shared_ptr<Operation>>& out_operations
+) -> bool
+{
+    out_operations.clear();
+    result = Kit_place_result{};
+    const auto fail = [&result](const std::size_t index, std::string message) -> bool {
         result.pieces.clear();
         result.error       = std::move(message);
         result.error_index = index;
-        return result;
+        return false;
     };
 
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
@@ -569,14 +755,15 @@ auto Level_kits::place(Scene_root& scene_root, const std::span<const Kit_placeme
         if (any_surface_option(placement.surface) && !(std::abs(glm::length(placement.surface.direction) - 1.0f) < 1.0e-3f)) {
             return fail(i, "the surface direction must be a unit vector");
         }
-        if (!placement.material && (m_library.find_palette_material(placement.shape->material_slot) == nullptr)) {
-            return fail(i, fmt::format("no palette material for slot '{}'", placement.shape->material_slot));
+        const std::string material_problem = check_slot_materials(m_library, *placement.shape, placement.materials);
+        if (!material_problem.empty()) {
+            return fail(i, material_problem);
         }
         values.push_back(std::move(piece_values));
     }
 
-    std::vector<std::shared_ptr<Operation>>                           material_operations;
-    std::map<std::string, std::shared_ptr<erhe::primitive::Material>> palette_materials;
+    Palette_material_resolver                                         resolver{m_context, library};
+    std::vector<std::shared_ptr<erhe::primitive::Material>>           materials;
     std::vector<std::shared_ptr<Operation>>                           insert_operations;
     std::map<const erhe::Hierarchy*, std::size_t>                     batch_children;
     for (std::size_t i = 0, end = placements.size(); i < end; ++i) {
@@ -588,20 +775,11 @@ auto Level_kits::place(Scene_root& scene_root, const std::span<const Kit_placeme
             return fail(i, fmt::format("{}: the shape made no geometry", shape.id));
         }
 
-        std::shared_ptr<erhe::primitive::Material> material = placement.material;
-        if (!material) {
-            const Kit_palette_material& palette = *m_library.find_palette_material(shape.material_slot);
-            const std::map<std::string, std::shared_ptr<erhe::primitive::Material>>::iterator made = palette_materials.find(palette.name);
-            if (made != palette_materials.end()) {
-                material = made->second;
-            } else {
-                material = find_material_by_name(library, palette.name);
-                if (!material) {
-                    material = make_palette_material(palette);
-                    material_operations.push_back(make_resource_insert_operation(m_context, library, material, {}));
-                }
-                palette_materials.emplace(palette.name, material);
-            }
+        materials.clear();
+        for (std::size_t slot = 0, slot_end = shape.material_slots.size(); slot < slot_end; ++slot) {
+            const Kit_slot_material none{};
+            const Kit_slot_material& given = (slot < placement.materials.size()) ? placement.materials[slot] : none;
+            materials.push_back(resolver.resolve(m_library, shape.material_slots[slot], given));
         }
 
         // The earlier pieces of this call are not surfaces yet.
@@ -619,13 +797,15 @@ auto Level_kits::place(Scene_root& scene_root, const std::span<const Kit_placeme
         if (!parent) {
             parent = scene_root.get_scene().get_root_node();
         }
-        // Appended after the parent's children and the earlier pieces of this call under it.
+        // Appended after the parent's children and the earlier pieces of this call under it, unless placed at an index.
         std::size_t& earlier = batch_children[parent.get()];
-        const std::size_t index_in_parent = parent->get_children().size() + earlier;
+        const std::size_t index_in_parent = placement.index_in_parent.has_value()
+            ? placement.index_in_parent.value()
+            : (parent->get_children().size() + earlier);
         ++earlier;
 
         const Brush_instance_insert insert = make_brush_instance_insert(
-            m_context, *brush.get(), scene_root, world_from_node, material, 1.0,
+            m_context, *brush.get(), scene_root, world_from_node, materials, 1.0,
             erhe::physics::Motion_mode::e_static, parent, index_in_parent
         );
         if (!insert.node) {
@@ -638,7 +818,7 @@ auto Level_kits::place(Scene_root& scene_root, const std::span<const Kit_placeme
             Kit_placed_piece{
                 .node          = insert.node,
                 .brush         = brush,
-                .material      = material,
+                .materials     = materials,
                 .values        = values[i],
                 .position      = position,
                 .rotation      = rotation,
@@ -647,30 +827,304 @@ auto Level_kits::place(Scene_root& scene_root, const std::span<const Kit_placeme
         );
     }
 
-    if (result.pieces.empty()) {
-        return result;
-    }
     // Materials are inserted first, so an undo takes the pieces out before the materials they use.
-    Compound_operation::Parameters parameters;
-    parameters.operations = std::move(material_operations);
+    out_operations = resolver.take_operations();
     for (std::shared_ptr<Operation>& operation : insert_operations) {
-        parameters.operations.push_back(std::move(operation));
+        out_operations.push_back(std::move(operation));
     }
-    m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters)));
-    return result;
+    return true;
 }
 
 namespace {
 
-// The state of the piece with the brush's primitive in each of its primitives (materials kept).
-[[nodiscard]] auto with_brush_primitive(const std::vector<erhe::scene::Mesh_primitive>& primitives, const Brush::Scaled& scaled) -> std::vector<erhe::scene::Mesh_primitive>
+// A node of the scene other than its root whose place in the tree may change; returns the refusal.
+[[nodiscard]] auto check_scene_node(const Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node) -> std::string
 {
-    std::vector<erhe::scene::Mesh_primitive> result = primitives;
-    for (erhe::scene::Mesh_primitive& mesh_primitive : result) {
-        mesh_primitive.primitive = scaled.primitive;
+    if (!node) {
+        return "no node";
     }
+    if (node->get_item_host() != &scene_root) {
+        return fmt::format("node '{}' is not in scene '{}'", node->get_name(), scene_root.get_name());
+    }
+    if (!node->get_parent().lock()) {
+        return fmt::format("'{}' is the scene root", node->get_name());
+    }
+    const std::optional<std::string> refusal = instance_structure_refusal(*node);
+    return refusal.has_value() ? refusal.value() : std::string{};
+}
+
+void include_subtree_bounds(const erhe::Hierarchy& hierarchy, erhe::math::Aabb& mesh_bounds, erhe::math::Aabb& origin_bounds)
+{
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&hierarchy);
+    if (node != nullptr) {
+        origin_bounds.include(glm::vec3{node->world_from_node()[3]});
+        const erhe::scene::Mesh* const mesh = dynamic_cast<const erhe::scene::Mesh*>(node);
+        if (mesh != nullptr) {
+            const erhe::math::Aabb world = mesh->get_aabb_world();
+            if (world.is_valid_3d()) {
+                mesh_bounds.include(world);
+            }
+        }
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : hierarchy.get_children()) {
+        include_subtree_bounds(*child, mesh_bounds, origin_bounds);
+    }
+}
+
+// The node descendants of the hierarchy, parents before their children; a locked kit layout node's children ride with it.
+void collect_descendant_nodes(const erhe::Hierarchy& hierarchy, std::vector<std::shared_ptr<erhe::scene::Node>>& out_nodes)
+{
+    for (const std::shared_ptr<erhe::Hierarchy>& child : hierarchy.get_children()) {
+        std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+        const bool locked_layout = node && is_locked_kit_layout(*node);
+        if (node) {
+            out_nodes.push_back(std::move(node));
+        }
+        if (!locked_layout) {
+            collect_descendant_nodes(*child, out_nodes);
+        }
+    }
+}
+
+} // anonymous namespace
+
+auto Level_kits::get_subtree_bounds(const erhe::scene::Node& node) -> erhe::math::Aabb
+{
+    erhe::math::Aabb mesh_bounds{};
+    erhe::math::Aabb origin_bounds{};
+    include_subtree_bounds(node, mesh_bounds, origin_bounds);
+    return mesh_bounds.is_valid_3d() ? mesh_bounds : origin_bounds;
+}
+
+auto Level_kits::group(Scene_root& scene_root, const std::span<const std::shared_ptr<erhe::scene::Node>> nodes, const std::string_view name) -> Kit_group_result
+{
+    Kit_group_result result;
+    if (nodes.empty()) {
+        result.error = "no nodes to group";
+        return result;
+    }
+    for (std::size_t i = 0, end = nodes.size(); i < end; ++i) {
+        result.error = check_scene_node(scene_root, nodes[i]);
+        if (!result.error.empty()) {
+            return result;
+        }
+        for (std::size_t j = 0; j < i; ++j) {
+            if (nodes[j] == nodes[i]) {
+                result.error = fmt::format("node '{}' is listed twice", nodes[i]->get_name());
+                return result;
+            }
+        }
+    }
+    // A node whose ancestor is in the set goes with that ancestor.
+    std::vector<std::shared_ptr<erhe::scene::Node>> top_level;
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        const bool has_listed_ancestor = std::any_of(
+            nodes.begin(), nodes.end(),
+            [&node](const std::shared_ptr<erhe::scene::Node>& other) -> bool { return (other != node) && node->is_ancestor(other.get()); }
+        );
+        if (!has_listed_ancestor) {
+            top_level.push_back(node);
+        }
+    }
+    std::shared_ptr<erhe::Hierarchy> parent = top_level.front()->get_parent().lock();
+    for (const std::shared_ptr<erhe::scene::Node>& node : top_level) {
+        if (node->get_parent().lock() != parent) {
+            parent = scene_root.get_scene().get_root_node();
+            break;
+        }
+    }
+    const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
+    if (child_refusal.has_value()) {
+        result.error = child_refusal.value();
+        return result;
+    }
+
+    erhe::math::Aabb mesh_bounds{};
+    erhe::math::Aabb origin_bounds{};
+    for (const std::shared_ptr<erhe::scene::Node>& node : top_level) {
+        include_subtree_bounds(*node, mesh_bounds, origin_bounds);
+    }
+    const glm::vec3 origin = get_group_origin(mesh_bounds.is_valid_3d() ? mesh_bounds : origin_bounds);
+
+    std::shared_ptr<erhe::scene::Xform> group_node = std::make_shared<erhe::scene::Xform>(name.empty() ? std::string_view{"Group"} : name);
+    group_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    // Detached, the world transform is the local one; the insert keeps it.
+    group_node->set_world_from_node(erhe::math::create_translation<float>(origin));
+    const std::size_t index_in_parent = (top_level.front()->get_parent().lock() == parent)
+        ? top_level.front()->get_index_in_parent()
+        : parent->get_child_count();
+
+    Compound_operation::Parameters parameters;
+    parameters.operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context         = m_context,
+                .item            = group_node,
+                .parent          = parent,
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = index_in_parent
+            }
+        )
+    );
+    for (const std::shared_ptr<erhe::scene::Node>& node : top_level) {
+        // A parent change keeps the world transform (Xformable::set_parent).
+        parameters.operations.push_back(
+            std::make_shared<Item_parent_change_operation>(group_node, node, std::shared_ptr<erhe::Hierarchy>{}, std::shared_ptr<erhe::Hierarchy>{})
+        );
+    }
+    m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters)));
+    result.node = group_node;
     return result;
 }
+
+auto Level_kits::ungroup(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& group) -> Kit_ungroup_result
+{
+    Kit_ungroup_result result;
+    result.error = check_scene_node(scene_root, group);
+    if (!result.error.empty()) {
+        return result;
+    }
+    if (dynamic_cast<const erhe::scene::Xform*>(group.get()) == nullptr) {
+        result.error = fmt::format("'{}' is a {}, not a group node (an Xform)", group->get_name(), group->get_class_type_name());
+        return result;
+    }
+    result.parent   = group->get_parent().lock();
+    result.children = group->get_children();
+    // Removing a node moves its children to its parent, world transforms kept, and restores them on undo.
+    m_context.operation_stack->execute_now(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = group,
+                .parent  = result.parent,
+                .mode    = Item_insert_remove_operation::Mode::remove
+            }
+        )
+    );
+    return result;
+}
+
+auto Level_kits::duplicate(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node, const Kit_group_copy& copy) -> Kit_group_result
+{
+    Kit_group_result result;
+    result.error = check_scene_node(scene_root, node);
+    if (!result.error.empty()) {
+        return result;
+    }
+    const std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+    const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
+    if (child_refusal.has_value()) {
+        result.error = child_refusal.value();
+        return result;
+    }
+    // The clone holds every node of the subtree with its values: records, brush placements and bodies.
+    std::shared_ptr<erhe::scene::Node> clone = std::dynamic_pointer_cast<erhe::scene::Node>(node->clone());
+    if (!clone) {
+        result.error = fmt::format("'{}' cannot be copied", node->get_name());
+        return result;
+    }
+    clone->set_name(copy.name.empty() ? (node->get_name() + " Copy") : copy.name);
+    glm::mat4 world_from_node = node->world_from_node();
+    const glm::vec3 source_position{world_from_node[3]};
+    const glm::vec3 position = (copy.placement == Kit_copy_placement::position) ? copy.value : (source_position + copy.value);
+    world_from_node[3] = glm::vec4{position, 1.0f};
+    clone->set_world_from_node(world_from_node);
+    set_copied_brush_collision_shapes(scene_root, *clone);
+    m_context.operation_stack->execute_now(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context         = m_context,
+                .item            = clone,
+                .parent          = parent,
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = node->get_index_in_parent() + 1
+            }
+        )
+    );
+    result.node = clone;
+    return result;
+}
+
+auto Level_kits::mirror(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& group, const Mirror_axis axis) -> Kit_mirror_result
+{
+    Kit_mirror_result result;
+    result.error = check_scene_node(scene_root, group);
+    if (!result.error.empty()) {
+        return result;
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+    collect_descendant_nodes(*group, nodes);
+    if (nodes.empty()) {
+        result.error = fmt::format("'{}' has no child nodes to mirror", group->get_name());
+        return result;
+    }
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        const std::optional<std::string> refusal = instance_structure_refusal(*node);
+        if (refusal.has_value()) {
+            result.error = refusal.value();
+            return result;
+        }
+    }
+    const erhe::scene::Trs_transform group_world = group->world_from_node_transform();
+    result.plane_point  = group_world.get_translation();
+    result.plane_normal = glm::normalize(group_world.get_rotation() * get_axis_vector(axis));
+
+    // Every node's new world transform first, then its local transform under its parent's new one.
+    std::map<const erhe::scene::Node*, glm::mat4> new_worlds;
+    std::vector<std::shared_ptr<Operation>>       operations;
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        const erhe::scene::Trs_transform world = node->world_from_node_transform();
+        const erhe::scene::Mesh* const   mesh  = dynamic_cast<const erhe::scene::Mesh*>(node.get());
+        const std::optional<Kit_piece_data> record = read_kit_piece(*node);
+        const Kit_shape_definition* const shape = record.has_value() ? m_library.find(record.value().shape) : nullptr;
+        const Mirrored_pose mirrored = mirror_pose(
+            Group_pose{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()},
+            result.plane_point,
+            result.plane_normal,
+            (shape != nullptr) ? std::span<const Kit_mirror_plane>{shape->mirror_planes} : std::span<const Kit_mirror_plane>{}
+        );
+        // A node without a mesh has no image to be exact about; a locked kit layout's run keeps its own direction.
+        const Mirror_image image = is_locked_kit_layout(*node)
+            ? Mirror_image::not_exact
+            : ((mesh == nullptr) ? Mirror_image::exact : mirrored.image);
+        const glm::mat4 new_world =
+            erhe::math::create_translation<float>(mirrored.pose.position) *
+            glm::mat4_cast(mirrored.pose.rotation) *
+            erhe::math::create_scale<float>(mirrored.pose.scale);
+        new_worlds.emplace(node.get(), new_world);
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        const std::map<const erhe::scene::Node*, glm::mat4>::const_iterator parent_new = new_worlds.find(parent.get());
+        const glm::mat4 parent_world = (parent_new != new_worlds.end())
+            ? parent_new->second
+            : (parent ? parent->world_from_node() : glm::mat4{1.0f});
+        operations.push_back(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = node,
+                    .parent_from_node_before = node->parent_from_node_transform(),
+                    .parent_from_node_after  = erhe::scene::Trs_transform{glm::inverse(parent_world) * new_world},
+                    .xform_op_stack_before   = node->copy_xform_op_stack()
+                }
+            )
+        );
+        result.nodes.push_back(
+            Kit_mirrored_node{
+                .node     = node,
+                .position = mirrored.pose.position,
+                .rotation = mirrored.pose.rotation,
+                .plane    = mirrored.plane,
+                .image    = image
+            }
+        );
+        if (image == Mirror_image::not_exact) {
+            ++result.not_exact_count;
+        }
+    }
+    m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+    return result;
+}
+
+namespace {
 
 void apply_preview_primitives(App_context& context, const std::shared_ptr<erhe::scene::Mesh>& mesh, const std::vector<erhe::scene::Mesh_primitive>& primitives)
 {
@@ -698,6 +1152,10 @@ void apply_preview_primitives(App_context& context, const std::shared_ptr<erhe::
     out_mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
     if (!out_mesh || (out_mesh->get_item_host() == nullptr)) {
         return "the node is not a mesh of a scene";
+    }
+    const std::optional<std::string> refusal = locked_layout_refusal(*out_mesh);
+    if (refusal.has_value()) {
+        return refusal.value();
     }
     const std::optional<Kit_piece_data> record = read_kit_piece(*out_mesh);
     if (!record.has_value()) {
@@ -763,6 +1221,9 @@ auto Level_kits::preview_parameters(const std::shared_ptr<erhe::scene::Node>& no
     if (scaled == nullptr) {
         return fmt::format("{}: the shape made no geometry", record.shape);
     }
+    if (mesh->get_primitives().size() != scaled->part_primitives.size()) {
+        return part_count_problem(*mesh, *scaled);
+    }
     if (m_parameter_preview.has_value() && (m_parameter_preview.value().mesh != mesh)) {
         cancel_parameter_preview();
     }
@@ -781,7 +1242,7 @@ auto Level_kits::preview_parameters(const std::shared_ptr<erhe::scene::Node>& no
     }
     // The brush shown holds its cache entry; the previous step's brush goes with its last holder (D2.2).
     m_parameter_preview.value().brush = brush;
-    apply_preview_primitives(m_context, mesh, with_brush_primitive(m_parameter_preview.value().before.primitives, *scaled));
+    apply_preview_primitives(m_context, mesh, with_brush_primitives(m_parameter_preview.value().before.primitives, *scaled));
     log_scene->trace(
         "Kit piece '{}' preview step {}: {:.3f} ms", mesh->get_name(), get_mesh_key(values),
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count()
@@ -811,6 +1272,14 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
         }
         return result;
     }
+    if (mesh->get_primitives().size() != scaled->part_primitives.size()) {
+        result.brush.reset();
+        result.error = part_count_problem(*mesh, *scaled);
+        if (is_previewing(*node)) {
+            cancel_parameter_preview();
+        }
+        return result;
+    }
 
     // With a live preview the change goes from the state before the drag (D3.6).
     Kit_piece_mesh_state before;
@@ -833,15 +1302,84 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
         return result;
     }
 
-    // The piece keeps its materials; only the shared primitive changes.
+    // The piece keeps its materials, slot by slot; only the shared primitives change.
     Kit_piece_mesh_state after{
-        .primitives      = with_brush_primitive(before.primitives, *scaled),
+        .primitives      = with_brush_primitives(before.primitives, *scaled),
         .collision_shape = carries_node_physics(*mesh) ? scaled->collision_shape : before.collision_shape,
         .brush           = result.brush,
         .parameters      = parameters
     };
     m_context.operation_stack->execute_now(
         std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after))
+    );
+    return result;
+}
+
+auto Level_kits::set_slot_material(
+    Scene_root&                               scene_root,
+    const std::shared_ptr<erhe::scene::Node>& node,
+    const std::size_t                         slot,
+    const Kit_slot_material&                  material
+) -> Kit_set_material_result
+{
+    Kit_set_material_result result;
+    const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
+    if (!mesh || (mesh->get_item_host() != &scene_root)) {
+        result.error = fmt::format("the node is not a mesh of scene '{}'", scene_root.get_name());
+        return result;
+    }
+    const std::optional<std::string> refusal = locked_layout_refusal(*mesh);
+    if (refusal.has_value()) {
+        result.error = refusal.value();
+        return result;
+    }
+    const std::optional<Kit_piece_data> record = read_kit_piece(*mesh);
+    if (!record.has_value()) {
+        result.error = fmt::format("node '{}' is not a kit piece", mesh->get_name());
+        return result;
+    }
+    const Kit_shape_definition* const shape = m_library.find(record.value().shape);
+    if (shape == nullptr) {
+        result.error = fmt::format("the kits have no shape '{}'", record.value().shape);
+        return result;
+    }
+    if (slot >= shape->material_slots.size()) {
+        result.error = fmt::format("{} has {} material slots, not slot {}", shape->id, shape->material_slots.size(), slot);
+        return result;
+    }
+    if (mesh->get_primitives().size() != shape->material_slots.size()) {
+        result.error = fmt::format(
+            "the mesh has {} primitives, the shape {} material slots", mesh->get_primitives().size(), shape->material_slots.size()
+        );
+        return result;
+    }
+    const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+    if (!library) {
+        result.error = "the scene has no content library";
+        return result;
+    }
+    std::vector<Kit_slot_material> given(slot + 1);
+    given[slot] = material;
+    result.error = check_slot_materials(m_library, *shape, given);
+    if (!result.error.empty()) {
+        return result;
+    }
+    result.previous = mesh->get_primitives()[slot].material;
+    Palette_material_resolver resolver{m_context, library};
+    result.material = resolver.resolve(m_library, shape->material_slots[slot], material);
+    // A palette material already in the library is found there: an unchanged slot records nothing.
+    const std::shared_ptr<Mesh_material_assign_operation> assign = make_mesh_material_assign_operation(mesh, slot, result.material);
+    if (!assign) {
+        return result;
+    }
+    result.changed = true;
+    Compound_operation::Parameters parameters;
+    parameters.operations = resolver.take_operations();
+    parameters.operations.push_back(assign);
+    m_context.operation_stack->execute_now(
+        (parameters.operations.size() == 1)
+            ? parameters.operations.front()
+            : std::make_shared<Compound_operation>(std::move(parameters))
     );
     return result;
 }
