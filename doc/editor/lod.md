@@ -283,14 +283,13 @@ level's edge lines, the same level the view's fill draws (under "LOD CPU
 Selection" on_demand the level of the newest completed frame, above);
 otherwise (the
 selection off, a view without a column or without draw-list passes) the
-record draws the forced level it was prepared with. Edge lines are not
-content: the view's shader debug mode and the path its fill takes do not
-change them. The selection silhouette the outline is masked by is drawn at
-the same level: the selected fills and, with the selection fill off or for
-proxy-hidden sources, the selection stencil masks
-(`doc/editor/rendering.md` "Selection stencil mask") all draw through the
-draw lists. A fill on the bucket path (`use_draw_lists` off) draws level 0,
-so the outline then shows the mesh's level over a level-0 fill. The viewports feed in
+record draws the forced level it was prepared with. The selection
+silhouette the outline is masked by is drawn at the same level: the
+selected fills and, with the selection fill off or for proxy-hidden
+sources, the selection stencil masks (`doc/editor/rendering.md` "Selection
+stencil mask") all draw through the draw lists. A view whose content fill
+takes the bucket path (`use_draw_lists` off) draws level 0, and its feed is prepared without a `Draw_list_scene`,
+so its edge lines draw level 0 too and match the fill. The viewports feed in
 their composition prepare and the headset in `Headset_view::
 prepare_wide_line_feed()`, both in the prepare phase; the render phase only
 queues the frame's feed. The draw list entries take their variant at the

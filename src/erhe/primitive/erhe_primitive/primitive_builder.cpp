@@ -1962,8 +1962,8 @@ void Build_context::build_edge_lines()
             // Per-edge surface frame for the tent wide-line method. Endpoint 0
             // carries face A's geometric normal plus the interior-tangent sign
             // (in normal.w); endpoint 1 carries face B's normal. Both normals are
-            // object-local; compute_before_content_line.comp lifts them to world
-            // and builds the two coplanar half-quads. Boundary edge (one facet)
+            // object-local; content_line_ribbon.vert lifts them to world
+            // and builds the edge quad. Boundary edge (one facet)
             // -> normal_b = normal_a (single-plane hug). Facet-less edge -> fall
             // back to the smooth/vertex normal so the (toggle-off) simple-quad
             // path still has a usable normal. Mirrors compute_edge_surface_frame()

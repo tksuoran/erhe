@@ -19,7 +19,6 @@
 namespace erhe::graphics {
     class Base_render_pipeline;
     class Color_blend_state;
-    class Compute_command_encoder;
     class Device;
     class Render_command_encoder;
     class Sampler;
@@ -64,35 +63,14 @@ public:
     Cull_view              cull_view      {Cull_view::none};
 };
 
-// Tent wide-line method controls, passed per frame to
-// Content_wide_line_renderer::set_view_params(). use_tent selects between the
-// simple single-plane quad (false) and the two-face surface tent (true); both
-// are kept because each wins in different cases. line_bias_margin is the
-// tent's surface-line depth-bias headroom in depth-buffer resolvable units
-// (ULPs). line_bias_clamp is the max toward-camera face-plane extrapolation
-// per tent corner (ULPs); it bounds show-through where thin geometry overlaps
-// in screen space. Defaults: tent off (the simple quad is the no-regression
-// default), a 1024-ULP bias headroom matching Debug_renderer's default, and a
-// 2048-ULP clamp.
-class Content_wide_line_tent_settings
-{
-public:
-    bool  use_tent        {false};
-    float line_bias_margin{1024.0f};
-    float line_bias_clamp {2048.0f};
-};
-
-// Abstract owner of the content wide-line rendering path. The editor
-// constructs the compute implementation via
-// make_content_wide_line_compute_renderer below; callers see only this
-// base class.
+// Abstract owner of the content wide-line rendering path; the editor
+// constructs the implementation with make_content_wide_line_renderer below.
 //
 // Frame protocol:
 //   renderer.begin_frame();
-//   renderer.set_view_params(views, tent_settings, reverse_depth, depth_range, conventions);
+//   renderer.set_view_params(views, reverse_depth, depth_range, conventions);
 //   renderer.set_joint_buffer(client, std::move(range));    // optional
 //   renderer.add_feed(feed, lod_view); // prepared by prepare_mesh(), or add_mesh() per mesh
-//   renderer.compute(compute_encoder);
 //   renderer.render (render_encoder, pipeline_state, blend, group, multiview);
 //   renderer.end_frame();
 //
@@ -112,14 +90,11 @@ public:
 
     void begin_frame();
 
-    // Cache the per-frame view + depth conventions and the tent settings of
-    // the frame (the caller passes the render phase's copy of its settings).
-    // Eagerly builds the Per_view_camera array consumed by the subclass's
-    // write_view_block calls. Call once per frame between begin_frame() and
-    // the first add_mesh() / compute() / render().
+    // Cache the per-frame views and depth conventions: the Per_view_camera
+    // array the view blocks are written from. Call once per frame between
+    // begin_frame() and the first render().
     void set_view_params(
         std::span<const Camera_view_input>        views,
-        const Content_wide_line_tent_settings&    tent_settings,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
         const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
@@ -191,10 +166,6 @@ public:
         uint32_t                            group
     );
 
-    // Run the compute pre-pass that pre-transforms edge endpoints into
-    // a triangle SSBO. Call AFTER add_mesh() / set_joint_buffer() and
-    // BEFORE any render pass that calls render().
-    virtual void compute(erhe::graphics::Compute_command_encoder& command_encoder) = 0;
 
     // Issue draw calls for all queued dispatches matching group.
     // pipeline_state supplies caller-controlled state (debug_label,
@@ -255,24 +226,23 @@ private:
     bool                                m_joint_buffer_set{false};
 };
 
-// Factory for the compute implementation (the only one): a compute
-// pre-pass expands edge lines into an SSBO of triangles that the
-// graphics stages then draw. Returns nullptr if any of the supplied
-// shader stages is null or not valid.
-//
-// compute_shader_stages_skinned may be null when the interface was
-// built without joint_block (skinned path disabled); non-skinned
-// dispatches still work in that case.
-//
-// multiview_graphics_shader_stages may be null for single-view-only
-// builds; the multiview render path will then no-op.
-auto make_content_wide_line_compute_renderer(
-    erhe::graphics::Device&        graphics_device,
-    Content_wide_line_interface&   interface_,
-    erhe::graphics::Shader_stages* compute_shader_stages,
-    erhe::graphics::Shader_stages* compute_shader_stages_skinned,
-    erhe::graphics::Shader_stages* graphics_shader_stages,
-    erhe::graphics::Shader_stages* multiview_graphics_shader_stages
+// The compiled content_line_ribbon.vert + content_line_after_compute.frag
+// variants. single_view is required; a null skinned variant draws skinned
+// meshes in bind pose, a null multiview variant leaves multiview draws empty.
+class Content_wide_line_shader_set
+{
+public:
+    erhe::graphics::Shader_stages* single_view        {nullptr};
+    erhe::graphics::Shader_stages* single_view_skinned{nullptr};
+    erhe::graphics::Shader_stages* multiview          {nullptr};
+    erhe::graphics::Shader_stages* multiview_skinned  {nullptr};
+};
+
+// Returns nullptr when shaders.single_view is null or not valid.
+auto make_content_wide_line_renderer(
+    erhe::graphics::Device&             graphics_device,
+    Content_wide_line_interface&        interface_,
+    const Content_wide_line_shader_set& shaders
 ) -> std::unique_ptr<Content_wide_line_renderer>;
 
 } // namespace erhe::scene_renderer

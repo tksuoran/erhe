@@ -67,7 +67,6 @@ void Content_wide_line_renderer::begin_frame()
 
 void Content_wide_line_renderer::set_view_params(
     std::span<const Camera_view_input>        views,
-    const Content_wide_line_tent_settings&    tent_settings,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
     const erhe::math::Coordinate_conventions& conventions
@@ -95,19 +94,11 @@ void Content_wide_line_renderer::set_view_params(
     const bool  top_left  = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
     const float vp_y_sign = top_left ? -1.0f : 1.0f;
 
-    // window_to_ndc_scale mirrors Debug_renderer: zero_to_one (reverse) depth has
-    // window == ndc z (scale 1), minus_one_to_one has window = 0.5*ndc + 0.5
-    // (scale 2). The tent measures the depth ULP in window space and converts
-    // with this factor.
     m_frame_params = Dispatch_per_frame_params{
         .per_view_cameras     = m_per_view_cameras,
         .view_count_runtime   = static_cast<uint32_t>(views.size()),
         .vp_y_sign            = vp_y_sign,
-        .clip_depth_direction = reverse_depth ? -1.0f : 1.0f,
-        .line_bias_margin     = tent_settings.line_bias_margin,
-        .window_to_ndc_scale  = reverse_depth ? 1.0f : 2.0f,
-        .use_tent             = tent_settings.use_tent ? 1u : 0u,
-        .line_bias_clamp      = tent_settings.line_bias_clamp,
+        .clip_depth_direction = reverse_depth ? -1.0f : 1.0f
     };
     m_view_params_set = true;
 }
@@ -323,17 +314,6 @@ void Content_wide_line_renderer::end_frame()
     }
     m_view_params_set = false;
     release_backend_state();
-
-    // No cross-frame memory_barrier is emitted here. Across device frames
-    // the triangle vertex buffer is accessed through a Ring_buffer_client
-    // that hands out disjoint byte ranges per dispatch: frame N writes
-    // range R_N, frame N-1 reads range R_(N-1), R_N != R_(N-1). Vulkan
-    // tracks hazards per byte range, so even if the GPU overlaps frame
-    // N-1's draws with frame N's compute across submit boundaries there
-    // is no WAR on the same bytes. Range reuse is gated by the ring
-    // buffer's per-frame bookkeeping, which is informed by the frame
-    // fence (so a range is only returned to the free pool after its
-    // frame is known complete on the GPU).
 }
 
 } // namespace erhe::scene_renderer

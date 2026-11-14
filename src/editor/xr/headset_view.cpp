@@ -1584,25 +1584,15 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = m_app_context.graphics_device->make_compute_command_encoder(views_cb);
                     if (drive_wide_lines) {
-                        const Content_edge_lines_config& edge_lines = m_app_context.render_settings->content_edge_lines;
                         content_wide_line_renderer->set_view_params(
                             std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
-                            erhe::scene_renderer::Content_wide_line_tent_settings{
-                                .use_tent         = edge_lines.use_tent,
-                                .line_bias_margin = edge_lines.line_bias_margin,
-                                .line_bias_clamp  = edge_lines.line_bias_clamp
-                            },
                             get_reverse_depth(),
                             get_depth_range(),
                             get_conventions()
                         );
-                        // Hand the per-frame joint UBO/SSBO range to the
-                        // renderer so the compute pre-pass poses skinned
-                        // content edge lines / selection outlines. Without
-                        // this the skinned line geometry is generated in
-                        // bind (T) pose. Mirrors viewport_scene_view: the
-                        // update allocates a disjoint ring range from the one
-                        // Forward_renderer's later render() requests.
+                        // The joint range the skinned ribbon vertex shader
+                        // poses edge lines with (bind pose without it);
+                        // disjoint from Forward_renderer's render() range.
                         if (m_app_context.forward_renderer != nullptr) {
                             m_render_joint_poses.capture(scene_root->get_scene().get_skins());
                             erhe::scene_renderer::Joint_buffer& joint_buffer = m_app_context.forward_renderer->get_joint_buffer();
@@ -1611,7 +1601,6 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                             );
                             content_wide_line_renderer->set_joint_buffer(&joint_buffer, std::move(joint_buffer_range));
                         }
-                        content_wide_line_renderer->compute(compute_encoder);
                     }
                     m_app_context.debug_renderer->compute(compute_encoder);
                 }

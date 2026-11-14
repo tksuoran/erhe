@@ -145,14 +145,15 @@ runs as a single dispatch that emits per-view-strided triangle output:
   view struct (in `Content_wide_line_renderer` and `Debug_renderer`).
 - Triangle output SSBO size is `view_count * line_count * 6`
   vertices, laid out as `[view][line][vertex]`.
-- `compute_before_line.comp` and `compute_before_content_line.comp`
-  loop over `view[]` (or unroll for stereo) and write each view's
+- `compute_before_line.comp` loops over `view[]` (or unroll for stereo) and write each view's
   output to the corresponding stride. The math for each view is
   unchanged: each view goes through the existing `clip_from_world`
   transform, z-clipping, and screen-space widening using its own
   per-eye projection -- output is bit-identical to the per-view path.
 - Line draw vertex shaders compile a multiview variant that indexes
-  the triangle SSBO by `gl_VertexID + gl_ViewIndex * stride_per_view`.
+  the triangle SSBO by `gl_VertexID + gl_ViewIndex * stride_per_view`;
+  the content edge-line ribbon shader (`content_line_ribbon.vert`)
+  expands each edge per view from `view.cameras[c_view_index]`.
 - CPU dispatch sites stop looping per view and dispatch once per
   primitive group.
 
@@ -214,7 +215,7 @@ per-eye renderer dispatches, single-view shaders).
 | `src/erhe/renderer/erhe_renderer/debug_renderer_bucket.{hpp,cpp}` | Single dispatch |
 | `res/shaders/erhe_camera_view.glsl` | `c_view_index` helper |
 | `res/shaders/compute_before_line.comp` | Per-view loop |
-| `res/shaders/compute_before_content_line.comp` | Per-view loop |
+| `res/shaders/content_line_ribbon.vert` | Per-view quad from `c_view_index` |
 | `res/shaders/*line*.vert` | Multiview SSBO indexing |
 | `res/shaders/standard.{vert,frag}`, `points.vert`, `id.vert`, `textured.vert`, `error.vert`, `wide_lines.{vert,geom}`, `edge_lines.{vert,frag}` | Use `c_view_index` |
 | `src/editor/editor.cpp` | Set `view_count` from XR cap |

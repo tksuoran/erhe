@@ -24,7 +24,6 @@ void Render_settings::snapshot(const Editor_settings_config& editor_settings, co
     ddgi                             = editor_settings.ddgi;
     radiance_cascades                = editor_settings.radiance_cascades;
     ray_trace                        = editor_settings.ray_trace;
-    content_edge_lines               = editor_settings.content_edge_lines;
     exclude_unlit_primitives         = editor_settings.exclude_unlit_primitives;
     indirect_diffuse_source          = editor_settings.indirect_diffuse_source;
     culling_classification           = editor_settings.culling_classification;

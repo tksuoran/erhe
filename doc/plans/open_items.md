@@ -166,6 +166,10 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Interactive checks for the user
 
+- Content edge lines on the vertex-shader ribbon (`content_line_ribbon.vert`,
+  `doc/erhe/scene_renderer.md`): the skinned variant (a posed skinned mesh's
+  edge lines follow the pose) and the multiview variant in the headset have
+  not run.
 - Viewport review: light visualization (spot cylinder, directional light at
   the vanishing point, light picking); the headset runtime of these is
   untested.
@@ -184,6 +188,19 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Performance and measurement
 
+- GPU memory on Bistro after Generate LODs (2026-11-09 out-of-memory abort on
+  a 12 GB card): the mesh vertex pools held 5.9 GB in 352 blocks of 32 MB
+  (index pools 384 MB), about 5 - 7x what Bistro's 3.8M level-0 + 3.0M LOD
+  triangles should need. Find what holds the vertex pool space: per-pool
+  `get_memory_usage` used / free bytes before and after `generate_lods`
+  (MCP), whether the original and optimized variants and the replaced
+  Buffer_mesh variants each keep full vertex copies. The out-of-memory log
+  (`Device_impl::log_memory_state_at_allocation_failure()`) gives each
+  allocator's blocks.
+- `Ring_buffer_pool` (`erhe_graphics/ring_buffer_pool.cpp`) has no upper
+  bound: while frames lag it creates a spill buffer sized to each request
+  (the content edge lines spilled 1.7 GB in seconds before they moved to the
+  vertex shader). Decide whether the pool needs a cap or back-pressure.
 - Bistro load decisions (`doc/plans/bistro_load_profiling.md` Status): KTX2
   transcode (step 5), lazy attribute stores (step 7c; about 1.3 GB of empty
   stores, blocked by store sharing between `Mesh_attributes`), geogram

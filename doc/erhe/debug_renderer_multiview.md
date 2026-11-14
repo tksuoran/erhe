@@ -10,12 +10,10 @@ manipulators, debug visualisations) render in both eyes on Quest in
 a single multiview render pass. Single-view callers keep working
 unchanged.
 
-It mirrors `erhe::scene_renderer::Content_wide_line_renderer`
-(read that side-by-side when extending the multiview path):
-
-- `src/erhe/scene_renderer/erhe_scene_renderer/content_wide_line_renderer.{hpp,cpp}`
-- `res/shaders/compute_before_content_line.comp`
-- `res/shaders/content_line_after_compute.{vert,frag}`
+Content edge lines (`erhe::scene_renderer::Content_wide_line_renderer`)
+take a different route: `content_line_ribbon.vert` expands each edge in
+the vertex shader from the mesh's edge-line vertex buffer, with no compute
+pass and no triangle SSBO (`doc/erhe/scene_renderer.md`).
 
 ## View UBO layout
 

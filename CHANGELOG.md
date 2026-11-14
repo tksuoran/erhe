@@ -109,6 +109,17 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: content wide lines expand each edge in the vertex
+  shader (`content_line_ribbon.vert`) from the edge-line vertex buffer instead
+  of a compute pre-pass into a per-frame triangle buffer:
+  `make_content_wide_line_renderer(device, interface, Content_wide_line_shader_set)`
+  replaces `make_content_wide_line_compute_renderer()`,
+  `Content_wide_line_renderer::compute()` is removed,
+  `Content_wide_line_interface` drops `triangle_vertex_format`, the triangle
+  vertex blocks and `graphics_bind_group_layout` (`bind_group_layout` and
+  `skinned_bind_group_layout` are the vertex-stage layouts), and
+  `write_view_block()` and `Content_wide_line_view_offsets` drop
+  `stride_per_view`.
 - `erhe::physics`: `ICollision_shape::create_convex_hull_shape()` and
   `create_convex_hull_shape_shared()` return null (logged) for a point set the
   Jolt backend refuses, such as a hull thinner than Jolt's tolerance; they

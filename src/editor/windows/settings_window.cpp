@@ -16,7 +16,6 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/present_calibration_cache.hpp"
 #include "config/generated/camera_controls_config_serialization.hpp"
-#include "config/generated/content_edge_lines_config_serialization.hpp"
 #include "config/generated/ddgi_config_serialization.hpp"
 #include "config/generated/radiance_cascades_config_serialization.hpp"
 #include "config/generated/debug_visualizations_settings_serialization.hpp"
@@ -878,9 +877,6 @@ void Settings_window::imgui()
         push_group("Viewport", ImGuiTreeNodeFlags_Framed);
         add_entry("Clear Color", [&settings](){ ImGui::ColorEdit4("##", &settings.clear_color.x, ImGuiColorEditFlags_Float); }, "Viewport background clear color.");
         pop_group();
-        // Editor-global content edge-line (wide-line) method + bias tuning;
-        // the render phase reads the frame's Render_settings copy.
-        add_config_section(settings.content_edge_lines);
         // Edge-line overlay for the preview thumbnails (same struct shown
         // twice; the label override gives each a distinct group header).
         add_config_section(settings.graph_node_preview_edge_lines, "Graph Node Preview Edge Lines");

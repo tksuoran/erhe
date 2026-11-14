@@ -1,6 +1,5 @@
 #pragma once
 
-#include "config/generated/content_edge_lines_config.hpp"
 #include "config/generated/culling_classification.hpp"
 #include "config/generated/ddgi_config.hpp"
 #include "config/generated/debug_visualizations_style.hpp"
@@ -58,7 +57,6 @@ public:
     Ddgi_config                ddgi                           {};
     Radiance_cascades_config   radiance_cascades              {};
     Ray_trace_config           ray_trace                      {};
-    Content_edge_lines_config  content_edge_lines             {};
     bool                       exclude_unlit_primitives       {true};
     Indirect_diffuse_source    indirect_diffuse_source        {Indirect_diffuse_source::ambient};
     Culling_classification     culling_classification         {Culling_classification::cpu};

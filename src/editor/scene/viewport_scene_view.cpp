@@ -539,9 +539,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             );
         }
 
-        // Content wide line compute path, all edge line passes
+        // Content wide lines, all edge line passes: queued here, drawn by
+        // the passes' render() calls.
         if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
-            ERHE_PROFILE_SCOPE("Edge line compute");
+            ERHE_PROFILE_SCOPE("Edge line feed");
             // The feed the prepare phase built for this view and frame
             // (App_rendering::prepare_wide_line_feed()); the render phase reads no mesh.
             ERHE_VERIFY(context.composer_prepared != nullptr);
@@ -562,29 +563,17 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             content_wide_line_mesh_count = wide_line_feed.mesh_count;
 
             {
-                // Cache per-frame view + depth conventions on the renderer
-                // so both compute() and render() consume the same Per_view_camera
-                // entries without rebuilding them.
-                const Content_edge_lines_config& edge_lines = m_context.render_settings->content_edge_lines;
+                // The views the render() calls write their view blocks from.
                 m_context.content_wide_line_renderer->set_view_params(
                     context.views,
-                    erhe::scene_renderer::Content_wide_line_tent_settings{
-                        .use_tent         = edge_lines.use_tent,
-                        .line_bias_margin = edge_lines.line_bias_margin,
-                        .line_bias_clamp  = edge_lines.line_bias_clamp
-                    },
                     get_reverse_depth(),
                     get_depth_range(),
                     get_conventions()
                 );
 
-                // Hand the per-frame joint UBO/SSBO range over to the renderer.
-                // Forward_renderer's later render() will call Joint_buffer::update()
-                // again with its own debug joint indices/colors; both updates
-                // allocate disjoint ring ranges. The renderer holds this range
-                // until end_frame() releases it -- the geometry-shader backend
-                // (future) needs the joint UBO bound at render time, which is
-                // after the compute encoder closes.
+                // The joint range the skinned ribbon vertex shader reads at
+                // draw time, held until end_frame(); disjoint from the range
+                // Forward_renderer's render() takes.
                 if ((content_wide_line_mesh_count > 0) && context.scene_root && (m_context.forward_renderer != nullptr)) {
                     erhe::scene_renderer::Joint_buffer& joint_buffer = m_context.forward_renderer->get_joint_buffer();
                     erhe::graphics::Ring_buffer_range   joint_buffer_range = joint_buffer.update(
@@ -593,26 +582,6 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                     m_context.content_wide_line_renderer->set_joint_buffer(&joint_buffer, std::move(joint_buffer_range));
                 }
 
-                // Compute pre-pass + compute->vertex barrier. Skipped when
-                // nothing was fed this frame (edge lines disabled in this
-                // view's Visual Style and no outline / ghost meshes): no
-                // ribbons to expand, no hazard.
-                if (content_wide_line_mesh_count > 0) {
-                    {
-                        erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
-                        m_context.content_wide_line_renderer->compute(compute_encoder);
-                    }
-                    // Compute -> vertex barrier. The unified content-line
-                    // vertex shader reads pre-transformed triangles via SSBO
-                    // (shader_storage_barrier_bit); legacy / non-content-wide-
-                    // line paths may still read through the input assembler
-                    // (vertex_attrib_array_barrier_bit). Must be emitted after
-                    // the compute encoder scope ends.
-                    command_buffer.memory_barrier(
-                        erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
-                        erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
-                    );
-                }
             }
         }
 

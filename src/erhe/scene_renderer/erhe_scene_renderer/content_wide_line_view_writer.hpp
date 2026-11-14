@@ -69,16 +69,6 @@ public:
     uint32_t                         view_count_runtime;
     float                            vp_y_sign;
     float                            clip_depth_direction;
-    // Tent wide-line method (see compute_before_content_line.comp):
-    // line_bias_margin = surface-line bias headroom in depth ULPs;
-    // window_to_ndc_scale = 1.0 for zero_to_one depth, 2.0 for minus_one_to_one;
-    // use_tent = 0 simple quad, 1 two-face tent;
-    // line_bias_clamp = max toward-camera face-plane extrapolation per corner
-    // (ULPs), bounding show-through on overlapping thin geometry.
-    float                            line_bias_margin;
-    float                            window_to_ndc_scale;
-    uint32_t                         use_tent;
-    float                            line_bias_clamp;
 };
 
 inline void write_view_block(
@@ -89,7 +79,6 @@ inline void write_view_block(
     const glm::vec4&                      color,
     float                                 line_width,
     uint32_t                              edge_count,
-    uint32_t                              stride_per_view,
     uint32_t                              base_joint_index,
     // Vertex position dequantization affine for this dispatch. The compute
     // renderer reads the separate, never quantized edge-line stream and
@@ -115,14 +104,9 @@ inline void write_view_block(
     write(view_data, offsets.line_color,           as_span(line_color_with_width          ));
     write(view_data, offsets.edge_count,           as_span(edge_count                     ));
     write(view_data, offsets.view_count,           as_span(frame_params.view_count_runtime));
-    write(view_data, offsets.stride_per_view,      as_span(stride_per_view                ));
     write(view_data, offsets.vp_y_sign,            as_span(frame_params.vp_y_sign         ));
     write(view_data, offsets.clip_depth_direction, as_span(frame_params.clip_depth_direction));
     write(view_data, offsets.base_joint_index,     as_span(base_joint_index               ));
-    write(view_data, offsets.line_bias_margin,     as_span(frame_params.line_bias_margin   ));
-    write(view_data, offsets.window_to_ndc_scale,  as_span(frame_params.window_to_ndc_scale));
-    write(view_data, offsets.use_tent,             as_span(frame_params.use_tent           ));
-    write(view_data, offsets.line_bias_clamp,      as_span(frame_params.line_bias_clamp    ));
     write(view_data, offsets.position_scale,       as_span(position_quantization.scale     ));
     write(view_data, offsets.position_offset,      as_span(position_quantization.offset    ));
 }

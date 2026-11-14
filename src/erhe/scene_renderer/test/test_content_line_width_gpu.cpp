@@ -4,8 +4,8 @@
 // width: -N draws an edge N logical pixels wide, and
 // Camera_view_input::pixel_scale converts logical pixels to framebuffer pixels.
 // The width must not depend on the viewport size or the projection. Each case
-// feeds one vertical edge through the renderer (compute expansion + graphics
-// draw, the same shaders the editor uses) into an offscreen target and counts
+// feeds one vertical edge through the renderer (ribbon vertex shader + fragment
+// shader, the same shaders the editor uses) into an offscreen target and counts
 // the lit pixels across the edge on the middle row.
 //
 // The edge sits at world x = 0, which the camera maps to NDC x = 0, the pixel
@@ -23,7 +23,6 @@
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 
 #include "erhe_graphics/command_buffer.hpp"
-#include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -97,50 +96,30 @@ protected:
         using namespace erhe::graphics;
         {
             Shader_stages_create_info create_info{
-                .name             = "compute_before_content_line",
+                .name             = "content_line_ribbon",
                 .struct_types     = {
                     m_interface->edge_line_vertex_struct.get(),
-                    m_interface->triangle_vertex_struct.get(),
                     &m_interface->view_camera_struct
                 },
                 .interface_blocks = {
                     m_interface->edge_line_vertex_buffer_block.get(),
-                    m_interface->triangle_vertex_buffer_block.get(),
-                    &m_interface->view_block
-                },
-                .shaders           = { { Shader_type::compute_shader, shader_path() / "compute_before_content_line.comp" } },
-                .bind_group_layout = m_interface->bind_group_layout.get(),
-            };
-            Shader_stages_prototype prototype = build_shader_stages(graphics_device, create_info);
-            ASSERT_TRUE(prototype.is_valid()) << "compute_before_content_line failed to compile";
-            m_compute_stages = std::make_unique<Shader_stages>(graphics_device, std::move(prototype));
-        }
-        {
-            Shader_stages_create_info create_info{
-                .name             = "content_line_after_compute",
-                .struct_types     = {
-                    m_interface->triangle_vertex_struct.get(),
-                    &m_interface->view_camera_struct
-                },
-                .interface_blocks = {
-                    m_interface->triangle_vertex_buffer_read_block.get(),
                     &m_interface->view_block
                 },
                 .fragment_outputs = &m_interface->fragment_outputs,
                 .no_vertex_input  = true,
                 .shaders = {
-                    { Shader_type::vertex_shader,   shader_path() / "line_after_compute.vert"         },
+                    { Shader_type::vertex_shader,   shader_path() / "content_line_ribbon.vert"        },
                     { Shader_type::fragment_shader, shader_path() / "content_line_after_compute.frag" }
                 },
-                .bind_group_layout = m_interface->graphics_bind_group_layout.get(),
+                .bind_group_layout = m_interface->bind_group_layout.get(),
             };
             Shader_stages_prototype prototype = build_shader_stages(graphics_device, create_info);
-            ASSERT_TRUE(prototype.is_valid()) << "content_line_after_compute failed to compile";
+            ASSERT_TRUE(prototype.is_valid()) << "content_line_ribbon failed to compile";
             m_graphics_stages = std::make_unique<Shader_stages>(graphics_device, std::move(prototype));
         }
 
-        m_renderer = make_content_wide_line_compute_renderer(
-            graphics_device, *m_interface, m_compute_stages.get(), nullptr, m_graphics_stages.get(), nullptr
+        m_renderer = make_content_wide_line_renderer(
+            graphics_device, *m_interface, Content_wide_line_shader_set{.single_view = m_graphics_stages.get()}
         );
         ASSERT_TRUE(m_renderer);
 
@@ -176,7 +155,6 @@ protected:
         m_renderer.reset();
         m_mesh_memory.reset();
         m_graphics_stages.reset();
-        m_compute_stages.reset();
         m_interface.reset();
         Gpu_test::TearDown();
     }
@@ -241,7 +219,6 @@ protected:
                 m_renderer->begin_frame();
                 m_renderer->set_view_params(
                     std::span<const Camera_view_input>{&view_input, 1},
-                    Content_wide_line_tent_settings{},
                     reverse_depth,
                     graphics_device.get_info().coordinate_conventions.native_depth_range,
                     graphics_device.get_info().coordinate_conventions
@@ -253,14 +230,6 @@ protected:
                     .constant_color0 = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
                 };
                 m_renderer->add_mesh(*m_mesh_memory, *m_mesh, 0, line_settings, edge_case.line_width, 0);
-                {
-                    erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
-                    m_renderer->compute(compute_encoder);
-                }
-                command_buffer.memory_barrier(
-                    erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
-                    erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
-                );
                 {
                     erhe::graphics::Render_pass            render_pass{graphics_device, descriptor};
                     erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
@@ -291,7 +260,6 @@ protected:
     }
 
     std::unique_ptr<Content_wide_line_interface>   m_interface;
-    std::unique_ptr<erhe::graphics::Shader_stages> m_compute_stages;
     std::unique_ptr<erhe::graphics::Shader_stages> m_graphics_stages;
     std::unique_ptr<Content_wide_line_renderer>    m_renderer;
     Mesh_memory_config                             m_mesh_memory_config{};

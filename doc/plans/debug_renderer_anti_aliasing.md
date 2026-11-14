@@ -39,7 +39,7 @@ handling. Independent segments meeting at a point (box corners, Jolt, any
 ## 3. Follow-ups
 
 - `erhe::scene_renderer` content wide lines
-  (`compute_before_content_line.comp`, `content_line_after_compute.frag`):
+  (`content_line_ribbon.vert`, `content_line_after_compute.frag`):
   the same distance test copied; apply the same coverage in a separate
   commit.
 - The direct tier (`line_simple.{vert,frag}`): thin lines are one-pixel

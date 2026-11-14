@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=17,
+    version=18,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -32,7 +32,6 @@ struct("Editor_settings_config",
         # Transform_tool_config in v17.
         field("clear_color",                      Vec4,  added_in=1, default="0.0f, 0.0f, 0.0f, 0.4f", short_desc="Clear Color", long_desc="Viewport background clear color."),
         # Editor-global content edge-line (wide-line) method and bias tuning.
-        field("content_edge_lines",               StructRef("Content_edge_lines_config"), added_in=1),
         # Edge-line overlay for the preview thumbnails: geometry graph node
         # previews (on by default) and brush previews (off by default; the
         # designated-initializer default overrides only 'enabled', the other
@@ -243,6 +242,8 @@ struct("Editor_settings_config",
             visible=True,
             developer=True
         ),
+        # content_edge_lines (v1 - v17) held the removed surface tent edge-line
+        # method's switch and bias tuning; an older file's key is ignored on load.
         # export_container (v15, v16) chose between the prepared glTF file and
         # the store until the store became the only prepared format in v17
         # (doc/plans/prepared_assets_design.md D8 step 13); an older file's key is

@@ -49,6 +49,7 @@
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/scoped_gpu_zone.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_scene_renderer/draw_list_renderer.hpp"
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_gl/wrapper_functions.hpp"
 #   include "erhe_gl/enum_bit_mask_operators.hpp"
@@ -1110,13 +1111,53 @@ void App_rendering::prepare_wide_line_feed(
     // The forced levels as the draw lists registered them (flushed earlier
     // in this M2), and the color entries of the lists published for this
     // frame, whose level the render phase reads in the view's culling view
-    // (Content_wide_line_renderer::add_feed()). Edge lines are not content:
-    // they draw the mesh's level whatever path and shader debug mode the
-    // view's fill takes.
-    const erhe::scene_renderer::Draw_list_scene* draw_list_scene = content_scene_root->get_draw_list_scene();
+    // (Content_wide_line_renderer::add_feed()). Edge lines draw the level the
+    // view's content fill draws: a fill on the bucket path (draw lists off)
+    // draws level 0, and so do its edge lines.
+    const bool content_fill_uses_draw_lists = m_context.render_settings->use_draw_lists;
+    const erhe::scene_renderer::Draw_list_scene* draw_list_scene = content_fill_uses_draw_lists
+        ? content_scene_root->get_draw_list_scene()
+        : nullptr;
     const erhe::scene_renderer::Content_wide_line_draw_lists draw_lists{
         .draw_list_scene = draw_list_scene,
         .frame_index     = m_context.graphics_device->get_frame_index()
+    };
+
+    // Only the meshes whose world box meets a view's frustum are fed.
+    constexpr std::size_t c_max_cull_views = 4;
+    std::array<std::array<glm::vec4, 6>, c_max_cull_views> view_planes{};
+    std::size_t view_plane_count = 0;
+    bool        cull             = (context.views.size() > 0) && (context.views.size() <= c_max_cull_views);
+    for (std::size_t i = 0; cull && (i < context.views.size()); ++i) {
+        const std::optional<glm::mat4> clip_from_world = erhe::scene_renderer::Draw_list_renderer::get_color_clip_from_world(
+            erhe::scene_renderer::Draw_list_renderer::Color_cull_view_parameters{
+                .views         = context.views.subspan(i, 1),
+                .reverse_depth = context.scene_view.get_reverse_depth(),
+                .depth_range   = context.scene_view.get_depth_range(),
+                .conventions   = context.scene_view.get_conventions()
+            }
+        );
+        if (!clip_from_world.has_value()) {
+            cull = false;
+            break;
+        }
+        const float clip_z_min = (context.scene_view.get_depth_range() == erhe::math::Depth_range::zero_to_one) ? 0.0f : -1.0f;
+        view_planes[view_plane_count++] = erhe::math::extract_frustum_planes(clip_from_world.value(), clip_z_min, 1.0f);
+    }
+    const auto in_any_view = [&](const erhe::scene::Mesh& mesh) -> bool {
+        if (!cull) {
+            return true;
+        }
+        const erhe::math::Aabb aabb = mesh.get_aabb_world();
+        if (!aabb.is_valid_3d()) {
+            return true;
+        }
+        for (std::size_t i = 0; i < view_plane_count; ++i) {
+            if (erhe::math::aabb_in_convex_volume(std::span<const glm::vec4>{view_planes[i]}, aabb)) {
+                return true;
+            }
+        }
+        return false;
     };
 
     // Feeds the meshes of one composition pass.
@@ -1130,8 +1171,8 @@ void App_rendering::prepare_wide_line_feed(
         }
         // Mirror Composition_pass::prepare's per-view Visual Style gate
         // (get_render_style + is_primitive_mode_enabled): when this view's
-        // style disables the pass's edge lines, do not feed its meshes - the
-        // ribbons would be expanded by the compute pass and then never drawn.
+        // style disables the pass's edge lines, do not feed its meshes - they
+        // would be queued and then never drawn.
         // Passes without a render style (selection / translucent outline,
         // ghost edge lines) stay ungated, matching the draw side.
         if (data.get_render_style && !is_primitive_mode_enabled(data.get_render_style(context), data.primitive_mode)) {
@@ -1148,7 +1189,7 @@ void App_rendering::prepare_wide_line_feed(
                 continue;
             }
             for (const auto& mesh : mesh_layer->meshes) {
-                if (filter(mesh->get_flag_bits())) {
+                if (filter(mesh->get_flag_bits()) && in_any_view(*mesh)) {
                     const std::size_t lod_level = (draw_list_scene != nullptr)
                         ? erhe::scene::get_forced_lod_level(draw_list_scene->get_mesh_lod(mesh.get()))
                         : std::size_t{0};

@@ -65,7 +65,7 @@ erhe_target_sources_grouped(
     res/editor/shaders/upsample.frag
 
     res/shaders/compute_before_line.comp
-    res/shaders/compute_before_content_line.comp
+    res/shaders/content_line_ribbon.vert
     res/shaders/edge_lines.frag
     res/shaders/edge_lines.vert
     res/shaders/erhe_bxdf.glsl
@@ -1232,9 +1232,6 @@ set(_config_sources
     ${_config_out}/selection_outline_style.hpp
     ${_config_out}/selection_outline_style_serialization.hpp
     ${_config_out}/selection_outline_style.cpp
-    ${_config_out}/content_edge_lines_config.hpp
-    ${_config_out}/content_edge_lines_config_serialization.hpp
-    ${_config_out}/content_edge_lines_config.cpp
     ${_config_out}/preview_edge_lines_config.hpp
     ${_config_out}/preview_edge_lines_config_serialization.hpp
     ${_config_out}/preview_edge_lines_config.cpp

@@ -7,9 +7,9 @@
 
 namespace erhe::primitive {
 
-// One edge-line endpoint as Content_wide_line_renderer's compute expansion
+// One edge-line endpoint as Content_wide_line_renderer's ribbon vertex shader
 // reads it (the edge_line_vertex SSBO struct of
-// compute_before_content_line.comp): vec4 position (w unused) and vec4 face
+// content_line_ribbon.vert): vec4 position (w unused) and vec4 face
 // normal, whose w packs the face's interior-tangent sign (the sign of w) and
 // its edge-traversal winding (|w| 1: the face walks the edge from endpoint 0
 // to endpoint 1, 2: the reverse). w 0 marks an edge without a face, which the
