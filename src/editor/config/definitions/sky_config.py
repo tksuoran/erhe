@@ -5,7 +5,7 @@ from erhe_codegen import *
 # Defaults match the previously hardcoded shader values.
 struct("Sky_config",
     reflect=True,
-    version=1,
+    version=2,
     short_desc="Sky",
     long_desc="Sky shader settings",
     developer=False,
@@ -42,5 +42,11 @@ struct("Sky_config",
         field("sun_disc_intensity",     Float, added_in=1, default="30.0f", short_desc="Sun Disc Intensity"),
         field("sun_elevation_deg",      Float, added_in=1, default="45.0f", short_desc="Sun Elevation (deg)", long_desc="Used when the scene has no directional light"),
         field("sun_azimuth_deg",        Float, added_in=1, default="0.0f",  short_desc="Sun Azimuth (deg)", long_desc="Used when the scene has no directional light"),
+        # Orthographic canvas: an orthographic camera shows a checkerboard in
+        # the grid plane the view shows instead of the sky (doc/editor/grid.md).
+        field("ortho_sky_color",           Vec4,  added_in=2, default="0.3f, 0.3f, 0.33f, 1.0f", short_desc="Ortho Sky Color", long_desc="Canvas color above world Y = 0 in orthographic views"),
+        field("ortho_ground_color",        Vec4,  added_in=2, default="0.2f, 0.2f, 0.2f, 1.0f",  short_desc="Ortho Ground Color", long_desc="Canvas color below world Y = 0 in orthographic views"),
+        field("ortho_checker_intensity_a", Float, added_in=2, default="0.92f", short_desc="Ortho Checker Intensity A", long_desc="Canvas checkerboard intensity of every other grid cell"),
+        field("ortho_checker_intensity_b", Float, added_in=2, default="1.0f",  short_desc="Ortho Checker Intensity B", long_desc="Canvas checkerboard intensity of the other grid cells"),
     ],
 )

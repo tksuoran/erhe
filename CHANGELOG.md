@@ -25,6 +25,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   draw-list entry per piece (`Draw_list_entry::piece_index`) culls and
   selects its level by the piece's box (`doc/erhe/primitive.md`
   "Pieces").
+- `erhe::scene_renderer`: `Sky_parameters::ortho_sky_color` and
+  `Sky_parameters::ortho_ground_color`, written to the camera UBO
+  (`Camera_struct`): the colors and checker intensities of the editor's
+  orthographic checkerboard canvas
+  (`doc/editor/grid.md` "Orthographic canvas").
 
 ### Removed
 

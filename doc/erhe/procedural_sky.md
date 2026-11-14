@@ -21,7 +21,9 @@ The atmosphere runs on Vulkan, OpenGL and Metal. OpenGL needs GL 4.3 or newer
 for compute and storage-image load-store; Metal needs Tier-2 read-write
 `RGBA16Float` (Apple Silicon). Where storage-image compute is unavailable,
 `Sky_renderer::is_atmosphere_supported()` returns false and
-`Sky_composition_pass` draws the gradient sky whatever `mode` says.
+`Sky_composition_pass` draws the gradient sky whatever `mode` says. An
+orthographic view draws the grid canvas of `sky.frag` in either mode
+(`doc/editor/grid.md` "Orthographic canvas").
 
 ## Why this shape
 

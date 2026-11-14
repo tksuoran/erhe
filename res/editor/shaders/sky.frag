@@ -1,6 +1,7 @@
 #include "erhe_camera_view.glsl"
 
 layout(location = 0) in highp vec4 v_position;
+layout(location = 1) in highp vec4 v_grid_position;
 
 highp float checkerboard(highp vec2 coord, highp vec2 frequency, highp float a, highp float b)
 {
@@ -33,8 +34,49 @@ highp float checkerboard(highp vec2 coord, highp vec2 frequency, highp float a, 
     return result;
 }
 
+// Orthographic canvas: a checkerboard in the view's grid plane (grid x / z),
+// one checker cell per grid cell, anchored at the grid origin; sky color
+// above world Y = 0, ground color below.
+highp vec3 ortho_canvas()
+{
+    // v_grid_position is in wrapped world space; uv is grid x / z minus
+    // grid_offset, a whole number of level 0 cells (see grid.frag).
+    highp mat4  world_from_grid = camera.cameras[c_view_index].world_from_grid;
+    highp mat4  grid_from_world = camera.cameras[c_view_index].grid_from_world;
+    highp vec3  view_forward    = -vec3(camera.cameras[c_view_index].world_from_node[2]);
+    highp vec3  p               = vec3(grid_from_world * vec4(v_grid_position.xyz / v_grid_position.w, 1.0));
+    highp vec3  d               = vec3(grid_from_world * vec4(view_forward, 0.0));
+    // Parallel view rays: move along the ray onto the grid plane (grid y = 0).
+    highp float d_y             = (abs(d.y) < 1e-4) ? 1e-4 : d.y;
+    highp vec2  uv              = p.xz - ((p.y / d_y) * d.xz);
+
+    highp vec4  sky_color       = camera.cameras[c_view_index].ortho_sky_color;
+    highp vec4  ground_color    = camera.cameras[c_view_index].ortho_ground_color;
+    highp float cell_size       = camera.cameras[c_view_index].grid_size[1];
+    highp float intensity       = checkerboard(uv, vec2(1.0 / cell_size), sky_color.w, ground_color.w);
+
+    // World Y of the canvas point; a canvas lying in a horizontal plane
+    // (top / bottom view) takes the side the view looks towards.
+    highp vec2  uvw             = uv + camera.cameras[c_view_index].grid_offset.xz;
+    highp float world_y         = (world_from_grid * vec4(uvw.x, 0.0, uvw.y, 1.0)).y;
+    highp float world_y_pixel   = max(fwidth(world_y), 1e-6);
+    highp float sky_weight      = (world_y_pixel > 1e-5)
+        ? clamp(0.5 + (world_y / world_y_pixel), 0.0, 1.0)
+        : ((world_y > 0.0) ? 1.0 : ((world_y < 0.0) ? 0.0 : ((view_forward.y < 0.0) ? 0.0 : 1.0)));
+    return intensity * mix(ground_color.rgb, sky_color.rgb, sky_weight);
+}
+
 void main()
 {
+    // An orthographic projection keeps clip w at 1: world_from_clip's last
+    // row is (0, 0, 0, 1), where a perspective one maps clip z into w.
+    highp mat4 world_from_clip = camera.cameras[c_view_index].world_from_clip;
+    if ((abs(world_from_clip[0][3]) + abs(world_from_clip[1][3]) + abs(world_from_clip[2][3])) < 1e-6) {
+        out_color.rgb = ortho_canvas() * camera.cameras[c_view_index].exposure;
+        out_color.a   = 1.0;
+        return;
+    }
+
     highp vec3 view_position_in_world = vec3(
         camera.cameras[c_view_index].world_from_node[3][0],
         camera.cameras[c_view_index].world_from_node[3][1],

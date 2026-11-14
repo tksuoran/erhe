@@ -62,6 +62,8 @@ public:
     std::size_t sky_zenith_color;     // vec4 rgb, w unused
     std::size_t ground_horizon_color; // vec4 rgb, w = horizon-to-nadir falloff power
     std::size_t ground_nadir_color;   // vec4 rgb, w unused
+    std::size_t ortho_sky_color;      // vec4 rgb = orthographic canvas color above world Y = 0, w = checker intensity a
+    std::size_t ortho_ground_color;   // vec4 rgb = orthographic canvas color below world Y = 0, w = checker intensity b
     // Atmosphere (Hillaire) sky mode. Read by sky_atmosphere.frag; ignored by
     // the gradient sky and other passes.
     std::size_t sun_direction;        // vec4 xyz = world dir toward sun, w = sun illuminance
@@ -148,6 +150,12 @@ public:
     // rgb = color at the horizon, w = horizon-to-nadir falloff power.
     glm::vec4 ground_horizon_color{ 0.2f,  0.2f, 0.2f,   8.0f};
     glm::vec4 ground_nadir_color  { 0.1f,  0.1f, 0.1f,   0.0f};
+    // Orthographic cameras draw a checkerboard canvas in the grid plane
+    // instead of the sky, one checker cell per grid cell (grid_size[1]).
+    // rgb = canvas color above / below world Y = 0, w = checker intensity
+    // a (sky) / b (ground).
+    glm::vec4 ortho_sky_color     { 0.3f,  0.3f, 0.33f, 0.92f};
+    glm::vec4 ortho_ground_color  { 0.2f,  0.2f, 0.2f,  1.0f};
     // Atmosphere (Hillaire) sky mode parameters. xyz = world-space direction
     // toward the sun, w = sun illuminance. Read by sky_atmosphere.frag only;
     // the gradient sky ignores these. Defaults give a mid-morning sun.

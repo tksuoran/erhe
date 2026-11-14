@@ -1,6 +1,7 @@
 #include "erhe_camera_view.glsl"
 
 layout(location = 0) out highp vec4 v_position;
+layout(location = 1) out highp vec4 v_grid_position; // wrapped world space (grid.frag)
 
 void main()
 {
@@ -42,4 +43,5 @@ void main()
 
     gl_Position = clip_position;
     v_position = world_from_clip * clip_position;
+    v_grid_position = camera.cameras[c_view_index].world_from_clip_for_grid * clip_position;
 }

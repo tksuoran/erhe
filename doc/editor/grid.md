@@ -42,7 +42,7 @@ grid tool records the view's tools in M2, and builds a `Grid_pass_state`
 `erhe::scene_renderer::Grid_parameters` with the appearance and the view's
 `Grid_frame` in `world_from_grid`, `grid_flags`). A viewport records it into
 its render state copy of the frame (`Viewport_scene_view::record_grid`), and
-the grid pass (`Composition_pass_data::grid_from_view`) takes enable and
+the grid pass (`Composition_pass_data::view_grid_use`) takes enable and
 parameters from the view's render state when it prepares that view, so every
 viewport draws its own grid; the headset, which has no viewport render
 state, sets the pass's own fields (`App_rendering::set_grid`). `write_camera_entry()` derives
@@ -68,6 +68,27 @@ The label shader draws glyph up along grid -z and reads along grid +x, so the
 camera-derived axes keep labels upright and unmirrored. `label_sign` (+1 / -1
 per labelled grid axis) multiplies the printed value, so labels show world
 coordinates when a grid axis runs along a negative world axis.
+
+## Orthographic canvas
+
+An orthographic camera shows a checkerboard canvas behind the scene in place
+of the sky: the sky pass (`Sky_composition_pass`, `app_rendering.cpp`) draws
+`res/editor/shaders/sky.frag` in every sky mode, and `sky.frag` detects the
+orthographic projection from the camera UBO (`world_from_clip` keeps clip w at
+1). The pass takes the view's `Grid_parameters` from its render state
+(`View_grid_use::parameters`; the grid pass uses `parameters_and_enable`), so
+the canvas lies in the view frame's plane with one checker cell per grid cell
+(`grid_size[1]`), anchored at the grid origin; the grid's own visibility does
+not hide it. Along parallel view rays the shader moves each pixel onto the
+plane. A canvas point above world Y = 0 takes the sky color, below it the
+ground color; a canvas in a horizontal plane (Top / Bottom) takes the side
+the view looks towards (ground from above). The colors and the two checker
+intensities are `Sky_config` settings of their own (`ortho_sky_color`,
+`ortho_ground_color`, `ortho_checker_intensity_a`, `ortho_checker_intensity_b`),
+carried in `Sky_parameters::ortho_sky_color` and `ortho_ground_color`;
+perspective views keep the gradient / checker sky. A render without a
+viewport render state (the headset, `render_scene_image`) uses the pass's own
+default grid parameters: the world XZ plane.
 
 ## Hover and snap
 

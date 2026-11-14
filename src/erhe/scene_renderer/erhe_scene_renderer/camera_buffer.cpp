@@ -48,6 +48,8 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, cons
         .sky_zenith_color         = camera_struct.add_vec4 ("sky_zenith_color"        )->get_offset_in_parent(),
         .ground_horizon_color     = camera_struct.add_vec4 ("ground_horizon_color"    )->get_offset_in_parent(),
         .ground_nadir_color       = camera_struct.add_vec4 ("ground_nadir_color"      )->get_offset_in_parent(),
+        .ortho_sky_color          = camera_struct.add_vec4 ("ortho_sky_color"         )->get_offset_in_parent(),
+        .ortho_ground_color       = camera_struct.add_vec4 ("ortho_ground_color"      )->get_offset_in_parent(),
         .sun_direction            = camera_struct.add_vec4 ("sun_direction"           )->get_offset_in_parent(),
         .atmosphere               = camera_struct.add_vec4 ("atmosphere"              )->get_offset_in_parent(),
         .frame_number             = camera_struct.add_uvec2("frame_number"            )->get_offset_in_parent(),
@@ -178,6 +180,8 @@ void write_camera_entry(
     write(gpu_data, write_offset + offsets.sky_zenith_color,     as_span(sky_parameters.sky_zenith_color     ));
     write(gpu_data, write_offset + offsets.ground_horizon_color, as_span(sky_parameters.ground_horizon_color ));
     write(gpu_data, write_offset + offsets.ground_nadir_color,   as_span(sky_parameters.ground_nadir_color   ));
+    write(gpu_data, write_offset + offsets.ortho_sky_color,      as_span(sky_parameters.ortho_sky_color      ));
+    write(gpu_data, write_offset + offsets.ortho_ground_color,   as_span(sky_parameters.ortho_ground_color   ));
     write(gpu_data, write_offset + offsets.sun_direction,        as_span(sky_parameters.sun_direction        ));
     write(gpu_data, write_offset + offsets.atmosphere,           as_span(sky_parameters.atmosphere           ));
     write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number                        ));

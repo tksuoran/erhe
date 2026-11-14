@@ -60,6 +60,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/camera_snapshot.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 
@@ -72,10 +73,11 @@ namespace editor {
 
 using erhe::graphics::Color_blend_state;
 
-// Composition pass for the "Sky" slot. In gradient/checker mode it renders the
-// usual fullscreen sky shader via the base Composition_pass; in atmosphere mode
-// (sky.mode == 1, Vulkan only) it delegates to the dedicated Sky_renderer which
-// ray-marches the physically-based atmosphere with its own pipeline + LUTs.
+// Composition pass for the "Sky" slot. In gradient/checker mode, and in every
+// orthographic view, it renders the fullscreen sky shader via the base
+// Composition_pass; in atmosphere mode (sky.mode == 1, Vulkan only) it
+// delegates to the dedicated Sky_renderer which ray-marches the
+// physically-based atmosphere with its own pipeline + LUTs.
 class Sky_composition_pass : public Composition_pass
 {
 public:
@@ -93,7 +95,12 @@ public:
         const int sky_mode = (scene_root != nullptr)
             ? scene_root->get_render_settings(app_context.graphics_device->get_frame_index()).sky.mode
             : app_context.render_settings->sky.mode;
+        // Orthographic views draw the grid canvas of sky.frag in every mode.
+        const bool orthographic =
+            (context.camera_snapshot != nullptr) &&
+            context.camera_snapshot->projection().is_orthographic();
         const bool atmosphere =
+            !orthographic &&
             (sky_mode == 1) &&
             (sky_renderer != nullptr) &&
             sky_renderer->is_atmosphere_supported();
@@ -612,6 +619,8 @@ App_rendering::App_rendering(
             .shader_stages{&programs.sky.shader_stages}
         };
         sky_pass->data.base_render_pipelines = { &m_pipeline_passes.sky };
+        // The orthographic canvas lies in the view's grid frame.
+        sky_pass->data.view_grid_use = View_grid_use::parameters;
         // Fills the pixels no surface covers; Render_content::scene_surfaces
         // (render_scene_image linear debug renders) leaves it out.
         sky_pass->data.kind = Composition_pass_kind::background;
@@ -634,7 +643,7 @@ App_rendering::App_rendering(
                 .require_all_bits_clear       = 0
             },
             .shader_stages{&programs.grid.shader_stages},
-            .grid_from_view{true}
+            .view_grid_use{View_grid_use::parameters_and_enable}
         },
         { &m_pipeline_passes.grid }
     );
@@ -1973,6 +1982,8 @@ void App_rendering::update_sky_parameters(const Render_context& context)
     parameters.sky_zenith_color     = glm::vec4{glm::vec3{sky.sky_zenith_color},     0.0f};
     parameters.ground_horizon_color = glm::vec4{glm::vec3{sky.ground_horizon_color}, sky.ground_power};
     parameters.ground_nadir_color   = glm::vec4{glm::vec3{sky.ground_nadir_color},   0.0f};
+    parameters.ortho_sky_color      = glm::vec4{glm::vec3{sky.ortho_sky_color},    sky.ortho_checker_intensity_a};
+    parameters.ortho_ground_color   = glm::vec4{glm::vec3{sky.ortho_ground_color}, sky.ortho_checker_intensity_b};
 }
 
 void App_rendering::process_end_capture()

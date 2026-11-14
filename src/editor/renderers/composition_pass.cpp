@@ -181,8 +181,10 @@ void Composition_pass::prepare(const Render_context& context, const int64_t host
     out.shader_debug       = erhe::scene_renderer::Shader_debug::none;
     out.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{};
     // The grid pass takes this view's grid (Viewport_render_state::grid).
-    const bool view_grid = data.grid_from_view && (context.render_state != nullptr);
-    const bool enabled   = view_grid ? context.render_state->grid.enabled : data.enabled;
+    const bool view_grid = (data.view_grid_use != View_grid_use::none) && (context.render_state != nullptr);
+    const bool enabled   = (view_grid && (data.view_grid_use == View_grid_use::parameters_and_enable))
+        ? context.render_state->grid.enabled
+        : data.enabled;
     out.grid_parameters    = view_grid ? context.render_state->grid.parameters : data.grid_parameters;
     out.sky_parameters     = data.sky_parameters;
     out.buckets.clear();

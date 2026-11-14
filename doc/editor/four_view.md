@@ -116,4 +116,5 @@ window input events, so they are driven by the input gesture tools
 ## Grid
 
 Each orthographic cell shows and hovers the grid on the axis plane it faces
-(`grid.md`, View frame).
+(`grid.md`, View frame), and the background is the checkerboard canvas in that plane
+(`grid.md`, Orthographic canvas).

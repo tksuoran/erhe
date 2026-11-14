@@ -67,6 +67,14 @@ enum class Composition_pass_output : unsigned int {
     depth_stencil
 };
 
+// What a fullscreen pass takes from the view's Grid_pass_state: the grid pass
+// its enable and parameters, the sky pass (orthographic canvas) the parameters.
+enum class View_grid_use : unsigned int {
+    none = 0,
+    parameters,
+    parameters_and_enable
+};
+
 class Composition_pass_data
 {
 public:
@@ -106,12 +114,11 @@ public:
     // Grid settings (cell sizes, line widths, per-level colors, axis
     // label settings) forwarded to the camera UBO; read by grid.frag.
     erhe::scene_renderer::Grid_parameters                                  grid_parameters{};
-    // The grid pass: with a viewport render state in the context
-    // (Render_context::render_state), enabled and grid_parameters come from
-    // the view's Grid_pass_state (Grid::render() records them per view and
-    // frame) instead of the two fields above, which serve the views without
-    // one (the headset).
-    bool                                                                   grid_from_view{false};
+    // With a viewport render state in the context (Render_context::render_state),
+    // what the pass takes from the view's Grid_pass_state (Grid::render()
+    // records it per view and frame) instead of the fields above, which serve
+    // the views without one (the headset).
+    View_grid_use                                                          view_grid_use{View_grid_use::none};
     // Sky settings (horizon / zenith / ground colors, checker pattern)
     // forwarded to the camera UBO; read by sky.frag.
     erhe::scene_renderer::Sky_parameters                                   sky_parameters{};
