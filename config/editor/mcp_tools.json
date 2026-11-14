@@ -4057,6 +4057,43 @@
     "name": "acquire_asset"
   },
   {
+    "description": "Start Asset_fetch of a source (doc/editor/asset_fetch.md): the same fetch as the Operations window's Scenes button. Returns the get_asset_fetch_status fields at once: state 'already present' when the source's marker file exists (nothing is downloaded), otherwise 'downloading' with running true; poll get_asset_fetch_status until running is false and state is completed, failed or cancelled. Refused while a fetch runs.",
+    "inputSchema": {
+      "properties": {
+        "source": {
+          "description": "Source to fetch",
+          "enum": [
+            "bistro",
+            "intel_sponza",
+            "khronos_sponza"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "name": "asset_fetch"
+  },
+  {
+    "description": "Request cancellation of the running Asset_fetch (as the Cancel Fetch button). Returns the get_asset_fetch_status fields; the fetch ends with state cancelled and leaves no staging directory. Refused when no fetch runs.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "cancel_asset_fetch"
+  },
+  {
+    "description": "Status of Asset_fetch: {state (idle|already present|downloading|extracting|completed|failed|cancelled), running, source (source name), archive_index, archive_count, file_index, file_count (loose-file part; 0 for a zip archive), bytes_done, bytes_total (current download or extraction), message (marker path when completed, the error when failed)}.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_asset_fetch_status"
+  },
+  {
     "description": "Release a named debug hold created by acquire_asset, dropping its usership of the held asset.",
     "inputSchema": {
       "properties": {

@@ -34,6 +34,10 @@ constexpr const char* c_bistro_google_drive_file_id = "1GlmOPAURKOgwAshlP8hhiUwg
 
 constexpr std::size_t c_max_html_page_size = 1024 * 1024;
 
+// The last commit that changed Models/Sponza, so the fetched file set is fixed.
+constexpr const char* c_khronos_sample_assets_url =
+    "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/4995a638c96dbc94376d3d6164e70fee3ac7f7a2";
+
 // Directory, glTF and license inside the Sponza base scene archive.
 constexpr const char* c_sponza_base_entry_prefix = "main_sponza";
 constexpr const char* c_sponza_base_gltf         = "NewSponza_Main_glTF_003.gltf";
@@ -51,19 +55,46 @@ auto get_android_ca_directory() -> std::string
 }
 #endif
 
+// False for a path that would land outside the directory it is relative to.
+auto is_safe_relative_path(const std::filesystem::path& normal_path) -> bool
+{
+    if (normal_path.empty() || normal_path.has_root_path() || normal_path.is_absolute()) {
+        return false;
+    }
+    const std::filesystem::path::const_iterator first = normal_path.begin();
+    return (first == normal_path.end()) || (*first != "..");
+}
+
 // Empty for an entry that would land outside the extraction directory.
 auto to_safe_relative_path(const char* entry_name) -> std::filesystem::path
 {
     const std::u8string u8_name{reinterpret_cast<const char8_t*>(entry_name)};
     const std::filesystem::path path = std::filesystem::path{u8_name}.lexically_normal();
-    if (path.empty() || path.has_root_path() || path.is_absolute()) {
-        return {};
+    return is_safe_relative_path(path) ? path : std::filesystem::path{};
+}
+
+// "https://host/a/b" -> "https://host" and "/a/b".
+auto split_url(const std::string& url, std::string& scheme_host, std::string& path) -> bool
+{
+    const std::size_t scheme_end = url.find("://");
+    if (scheme_end == std::string::npos) {
+        return false;
     }
-    const std::filesystem::path::iterator first = path.begin();
-    if ((first != path.end()) && (*first == "..")) {
-        return {};
-    }
-    return path;
+    const std::size_t path_begin = url.find('/', scheme_end + 3);
+    scheme_host = url.substr(0, path_begin);
+    path        = (path_begin == std::string::npos) ? std::string{} : url.substr(path_begin);
+    return true;
+}
+
+void configure_client(httplib::Client& client)
+{
+    client.set_follow_location(true);
+    client.set_connection_timeout(30, 0);
+    client.set_read_timeout(120, 0);
+    client.set_payload_max_length((std::numeric_limits<std::size_t>::max)());
+#if defined(__ANDROID__)
+    client.set_ca_cert_path(std::string{}, get_android_ca_directory());
+#endif
 }
 
 
@@ -180,13 +211,13 @@ auto get_bistro_fetch_source() -> Asset_fetch_source
 }
 
 // Intel Sample Library (CC BY 4.0); both archives share one Y-up space.
-auto get_sponza_fetch_source() -> Asset_fetch_source
+auto get_intel_sponza_fetch_source() -> Asset_fetch_source
 {
     const std::filesystem::path sponza_directory{"sponza"};
     const std::filesystem::path base_gltf    {c_sponza_base_gltf};
     const std::filesystem::path curtains_gltf{"NewSponza_Curtains_glTF.gltf"};
     return Asset_fetch_source{
-        .name         = "Sponza",
+        .name         = "Intel Sponza",
         .archive_root = std::filesystem::path{"res"} / "editor" / "assets",
         .marker_path  = sponza_directory / "sponza.gltf",
         .archives     = {
@@ -211,6 +242,31 @@ auto get_sponza_fetch_source() -> Asset_fetch_source
         .host_instances = {
             Asset_fetch_host_instance{.name = "Sponza",          .path = sponza_directory / "base" / base_gltf},
             Asset_fetch_host_instance{.name = "Sponza Curtains", .path = sponza_directory / "curtains" / curtains_gltf}
+        }
+    };
+}
+
+// Khronos glTF Sample Assets at a pinned commit; model files under the Cryengine Limited License Agreement.
+auto get_khronos_sponza_fetch_source() -> Asset_fetch_source
+{
+    const std::filesystem::path sponza_directory{"khronos_sponza"};
+    return Asset_fetch_source{
+        .name         = "Khronos Sponza",
+        .archive_root = std::filesystem::path{"res"} / "editor" / "assets",
+        .marker_path  = sponza_directory / "Sponza.gltf",
+        .archives     = {
+            Asset_fetch_archive{
+                .packaging        = Archive_packaging::loose_files,
+                .url              = c_khronos_sample_assets_url,
+                .entry_prefix     = std::filesystem::path{"Models"} / "Sponza" / "glTF",
+                .selection        = Archive_selection::gltf_dependencies,
+                .gltf_path        = "Sponza.gltf",
+                .root_extra_paths = {
+                    std::filesystem::path{"Models"} / "Sponza" / "LICENSE.md",
+                    std::filesystem::path{"LICENSES"} / "LicenseRef-CRYENGINE-Agreement.txt"
+                },
+                .destination      = sponza_directory
+            }
         }
     };
 }
@@ -301,8 +357,11 @@ void Asset_fetch::imgui(const Asset_fetch_source& source, const float button_wid
             ? static_cast<float>(static_cast<double>(m_status.bytes_done) / static_cast<double>(m_status.bytes_total))
             : 0.0f;
         char overlay[64];
+        const bool by_file = (m_status.file_count > 0);
         const fmt::format_to_n_result<char*> overlay_end = fmt::format_to_n(
-            overlay, sizeof(overlay) - 1, "{} {}/{}", c_str(m_status.state), m_status.archive_index + 1, m_status.archive_count
+            overlay, sizeof(overlay) - 1, "{} {}/{}", c_str(m_status.state),
+            (by_file ? m_status.file_index : m_status.archive_index) + 1,
+            by_file ? m_status.file_count : m_status.archive_count
         );
         *overlay_end.out = '\0';
         ImGui::ProgressBar(fraction, ImVec2{button_width, 0.0f}, overlay);
@@ -328,6 +387,18 @@ void Asset_fetch::imgui(const Asset_fetch_source& source, const float button_wid
     }
 }
 
+auto Asset_fetch::get_status() const -> Asset_fetch_status
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    return m_status;
+}
+
+auto Asset_fetch::is_running() const -> bool
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    return m_running;
+}
+
 auto Asset_fetch::is_cancel_requested() const -> bool
 {
     std::lock_guard<std::mutex> lock{m_mutex};
@@ -345,8 +416,19 @@ void Asset_fetch::set_archive_index(const std::size_t archive_index)
 {
     std::lock_guard<std::mutex> lock{m_mutex};
     m_status.archive_index = archive_index;
+    m_status.file_index    = 0;
+    m_status.file_count    = 0;
     m_status.bytes_done    = 0;
     m_status.bytes_total   = 0;
+}
+
+void Asset_fetch::set_file_index(const std::size_t file_index, const std::size_t file_count)
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+    m_status.file_index  = file_index;
+    m_status.file_count  = file_count;
+    m_status.bytes_done  = 0;
+    m_status.bytes_total = 0;
 }
 
 void Asset_fetch::set_progress(const std::uint64_t bytes_done, const std::uint64_t bytes_total)
@@ -375,6 +457,10 @@ void Asset_fetch::run(const Asset_fetch_source& source)
         const Asset_fetch_archive& archive = source.archives[i];
         set_archive_index(i);
         set_state(Asset_fetch_state::downloading, {});
+        if (archive.packaging == Archive_packaging::loose_files) {
+            error = download_loose_files(archive, extract_directory);
+            continue;
+        }
         error = download_archive(archive, archive_path);
         if (error.empty()) {
             log_asset->info("Fetch {}: archive {} downloaded, {} bytes", source.name, i, std::filesystem::file_size(archive_path, error_code));
@@ -498,26 +584,30 @@ auto Asset_fetch::download_google_drive_file(const std::string& file_id, const s
     return {};
 }
 
-// Streams a 200 response to target_path; HTML or another status goes to html_page.
 auto Asset_fetch::download_url(const std::string& url, const std::filesystem::path& target_path, std::string& html_page) -> std::string
 {
-    const std::size_t scheme_end = url.find("://");
-    if (scheme_end == std::string::npos) {
+    std::string scheme_host;
+    std::string path;
+    if (!split_url(url, scheme_host, path)) {
         return fmt::format("malformed URL {}", url);
     }
-    const std::size_t path_begin  = url.find('/', scheme_end + 3);
-    const std::string scheme_host = url.substr(0, path_begin);
-    const std::string path        = (path_begin == std::string::npos) ? std::string{"/"} : url.substr(path_begin);
-
+    if (path.empty()) {
+        path = "/";
+    }
     httplib::Client client{scheme_host};
-    client.set_follow_location(true);
-    client.set_connection_timeout(30, 0);
-    client.set_read_timeout(120, 0);
-    client.set_payload_max_length((std::numeric_limits<std::size_t>::max)());
-#if defined(__ANDROID__)
-    client.set_ca_cert_path(std::string{}, get_android_ca_directory());
-#endif
+    configure_client(client);
+    return download_with_client(client, scheme_host, path, target_path, html_page);
+}
 
+// Streams a 200 response to target_path; HTML or another status goes to html_page.
+auto Asset_fetch::download_with_client(
+    httplib::Client&             client,
+    const std::string&           scheme_host,
+    const std::string&           path,
+    const std::filesystem::path& target_path,
+    std::string&                 html_page
+) -> std::string
+{
     std::ofstream file;
     bool          to_page{false};
     const httplib::Result result = client.Get(
@@ -565,6 +655,96 @@ auto Asset_fetch::download_url(const std::string& url, const std::filesystem::pa
     if (result->status != 200) {
         return fmt::format("{}{}: HTTP status {}", scheme_host, path.substr(0, path.find('?')), result->status);
     }
+    return {};
+}
+
+// The glTF, then each file it names, extra_paths and root_extra_paths, over one connection.
+auto Asset_fetch::download_loose_files(const Asset_fetch_archive& archive, const std::filesystem::path& extract_root) -> std::string
+{
+    if (archive.selection != Archive_selection::gltf_dependencies) {
+        return fmt::format("{}: loose files take the glTF dependency selection only", archive.url);
+    }
+    std::string scheme_host;
+    std::string root_path;
+    if (!split_url(archive.url, scheme_host, root_path)) {
+        return fmt::format("malformed URL {}", archive.url);
+    }
+    httplib::Client client{scheme_host};
+    configure_client(client);
+    client.set_keep_alive(true);
+
+    const std::filesystem::path target_directory = extract_root / archive.destination;
+    const auto download_file = [&](const std::filesystem::path& remote_path, const std::filesystem::path& local_path) -> std::string {
+        if (is_cancel_requested()) {
+            return "cancelled";
+        }
+        std::error_code error_code;
+        std::filesystem::create_directories(local_path.parent_path(), error_code);
+        if (error_code) {
+            return fmt::format("cannot create {}: {}", erhe::file::to_string(local_path.parent_path()), error_code.message());
+        }
+        const std::string path = root_path + "/" + erhe::gltf::make_gltf_file_uri(remote_path);
+        std::string html_page;
+        std::string error = download_with_client(client, scheme_host, path, local_path, html_page);
+        if (error.empty() && !html_page.empty()) {
+            error = fmt::format("{}{} answered with a page instead of the file: {}", scheme_host, path, html_page.substr(0, 200));
+        }
+        return error;
+    };
+
+    const std::filesystem::path gltf_path = archive.gltf_path.lexically_normal();
+    if (!is_safe_relative_path(gltf_path)) {
+        return fmt::format("{} is not a relative path", erhe::file::to_string(gltf_path));
+    }
+    set_file_index(0, 1);
+    std::string error = download_file(archive.entry_prefix / gltf_path, target_directory / gltf_path);
+    if (!error.empty()) {
+        return error;
+    }
+    const std::optional<std::string> gltf_text = erhe::file::read("fetched glTF", target_directory / gltf_path);
+    if (!gltf_text.has_value()) {
+        return fmt::format("cannot read {}", erhe::file::to_string(target_directory / gltf_path));
+    }
+
+    // The glTF is downloaded data: each path it names is checked like a zip entry name.
+    std::set<std::filesystem::path> paths;
+    for (const std::filesystem::path& dependency : get_gltf_dependencies(gltf_text.value(), error)) {
+        const std::filesystem::path path = (gltf_path.parent_path() / dependency).lexically_normal();
+        if (!is_safe_relative_path(path)) {
+            return fmt::format("{} names {}, outside its directory", erhe::file::to_string(gltf_path), erhe::file::to_string(dependency));
+        }
+        paths.insert(path);
+    }
+    if (!error.empty()) {
+        return fmt::format("{}: {}", erhe::file::to_string(gltf_path), error);
+    }
+    for (const std::filesystem::path& extra_path : archive.extra_paths) {
+        paths.insert(extra_path.lexically_normal());
+    }
+    paths.erase(gltf_path);
+
+    class File_download
+    {
+    public:
+        std::filesystem::path remote_path;
+        std::filesystem::path local_path;
+    };
+    std::vector<File_download> downloads;
+    for (const std::filesystem::path& path : paths) {
+        downloads.push_back(File_download{.remote_path = archive.entry_prefix / path, .local_path = target_directory / path});
+    }
+    for (const std::filesystem::path& root_extra_path : archive.root_extra_paths) {
+        downloads.push_back(File_download{.remote_path = root_extra_path, .local_path = target_directory / root_extra_path.filename()});
+    }
+    const std::size_t file_count = 1 + downloads.size();
+    for (std::size_t i = 0, end = downloads.size(); i < end; ++i) {
+        set_file_index(1 + i, file_count);
+        error = download_file(downloads[i].remote_path, downloads[i].local_path);
+        if (!error.empty()) {
+            return error;
+        }
+    }
+    log_asset->info("Fetch: {} file(s) from {}", file_count, archive.url);
     return {};
 }
 

@@ -2,13 +2,15 @@
 // acquire_asset / release_asset / unload_asset test hooks that drive the
 // manager's debug holds, so usership bookkeeping and unload refusal /
 // exclusivity verification are exercisable headless. set_tool_asset (Phase
-// R3) drives the tool-held Asset_references the same way.
+// R3) drives the tool-held Asset_references the same way. asset_fetch /
+// cancel_asset_fetch / get_asset_fetch_status drive Asset_fetch.
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
+#include "assets/asset_fetch.hpp"
 #include "assets/asset_key.hpp"
 #include "assets/asset_manager.hpp"
 #include "assets/asset_reference.hpp"
@@ -51,6 +53,22 @@ auto asset_key_to_json(const Asset_key& key) -> json
 // Builds an Asset_key from the shared tool arguments {scope, type, path,
 // uid, name}. Returns false with error set when scope or type is missing /
 // unknown.
+auto asset_fetch_status_to_json(const Asset_fetch_status& status, const bool running) -> json
+{
+    return {
+        {"state",         c_str(status.state)},
+        {"running",       running},
+        {"source",        status.source_name},
+        {"archive_index", status.archive_index},
+        {"archive_count", status.archive_count},
+        {"file_index",    status.file_index},
+        {"file_count",    status.file_count},
+        {"bytes_done",    status.bytes_done},
+        {"bytes_total",   status.bytes_total},
+        {"message",       status.message}
+    };
+}
+
 auto parse_asset_key_args(const json& args, Asset_key& out_key, std::string& out_error) -> bool
 {
     const std::string scope_text = args.value("scope", "");
@@ -129,6 +147,52 @@ auto Mcp_server::query_asset_manager(const json& args) -> std::string
         {"debug_holds", debug_holds}
     };
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_asset_fetch(const json& args) -> std::string
+{
+    Asset_fetch* asset_fetch = m_context.asset_fetch;
+    if (asset_fetch == nullptr) {
+        return make_error_content("asset_fetch: Asset_fetch not available");
+    }
+    const std::string source_id = args.value("source", "");
+    Asset_fetch_source source;
+    if (source_id == "bistro") {
+        source = get_bistro_fetch_source();
+    } else if (source_id == "intel_sponza") {
+        source = get_intel_sponza_fetch_source();
+    } else if (source_id == "khronos_sponza") {
+        source = get_khronos_sponza_fetch_source();
+    } else {
+        return make_error_content("asset_fetch: 'source' must be one of: bistro, intel_sponza, khronos_sponza");
+    }
+    if (asset_fetch->is_running()) {
+        return make_error_content(fmt::format("asset_fetch: a fetch of {} is running", asset_fetch->get_status().source_name));
+    }
+    asset_fetch->fetch(source);
+    return make_json_content(asset_fetch_status_to_json(asset_fetch->get_status(), asset_fetch->is_running())).dump();
+}
+
+auto Mcp_server::action_cancel_asset_fetch(const json&) -> std::string
+{
+    Asset_fetch* asset_fetch = m_context.asset_fetch;
+    if (asset_fetch == nullptr) {
+        return make_error_content("cancel_asset_fetch: Asset_fetch not available");
+    }
+    if (!asset_fetch->is_running()) {
+        return make_error_content("cancel_asset_fetch: no fetch is running");
+    }
+    asset_fetch->request_cancel();
+    return make_json_content(asset_fetch_status_to_json(asset_fetch->get_status(), asset_fetch->is_running())).dump();
+}
+
+auto Mcp_server::query_asset_fetch_status(const json&) -> std::string
+{
+    Asset_fetch* asset_fetch = m_context.asset_fetch;
+    if (asset_fetch == nullptr) {
+        return make_error_content("get_asset_fetch_status: Asset_fetch not available");
+    }
+    return make_json_content(asset_fetch_status_to_json(asset_fetch->get_status(), asset_fetch->is_running())).dump();
 }
 
 auto Mcp_server::action_acquire_asset(const json& args) -> std::string

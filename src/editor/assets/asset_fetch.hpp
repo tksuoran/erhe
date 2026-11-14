@@ -7,6 +7,8 @@
 #include <thread>
 #include <vector>
 
+namespace httplib { class Client; }
+
 namespace editor {
 
 class App_context;
@@ -17,16 +19,23 @@ enum class Archive_selection : unsigned int {
     gltf_dependencies // the glTF, the buffers and images it names, and extra_paths
 };
 
-// One zip archive of a fetch (doc/editor/asset_fetch.md).
+enum class Archive_packaging : unsigned int {
+    zip = 0,
+    loose_files // url is the root of a directory tree; files are fetched one by one
+};
+
+// One zip archive or loose-file tree of a fetch (doc/editor/asset_fetch.md).
 class Asset_fetch_archive
 {
 public:
+    Archive_packaging                  packaging{Archive_packaging::zip};
     std::string                        url;                  // followed through redirects
     std::string                        google_drive_file_id; // used when url is empty
     std::filesystem::path              entry_prefix;         // archive directory taken as the archive's root
     Archive_selection                  selection{Archive_selection::all_entries};
     std::filesystem::path              gltf_path;            // relative to entry_prefix; required entry
     std::vector<std::filesystem::path> extra_paths;          // relative to entry_prefix
+    std::vector<std::filesystem::path> root_extra_paths;     // loose_files: relative to url, written as destination/<filename>
     std::filesystem::path              destination;          // relative to Asset_fetch_source::archive_root
 };
 
@@ -50,7 +59,8 @@ public:
 };
 
 [[nodiscard]] auto get_bistro_fetch_source() -> Asset_fetch_source;
-[[nodiscard]] auto get_sponza_fetch_source() -> Asset_fetch_source;
+[[nodiscard]] auto get_intel_sponza_fetch_source() -> Asset_fetch_source;
+[[nodiscard]] auto get_khronos_sponza_fetch_source() -> Asset_fetch_source;
 
 enum class Asset_fetch_state : unsigned int {
     idle = 0,
@@ -71,6 +81,8 @@ public:
     std::string       source_name  {};
     std::size_t       archive_index{0};
     std::size_t       archive_count{0};
+    std::size_t       file_index   {0};
+    std::size_t       file_count   {0}; // loose_files part; 0 for a zip archive
     std::uint64_t     bytes_done   {0};
     std::uint64_t     bytes_total  {0};
     std::string       message      {};
@@ -88,6 +100,8 @@ public:
     // Main thread. Does nothing when the marker file exists or a fetch runs.
     void fetch(const Asset_fetch_source& source);
     void request_cancel();
+    [[nodiscard]] auto get_status() const -> Asset_fetch_status;
+    [[nodiscard]] auto is_running() const -> bool;
 
     // ImGui time: the fetch button for source, or the running fetch's progress.
     void imgui(const Asset_fetch_source& source, float button_width);
@@ -97,11 +111,14 @@ private:
     void on_worker_done();
     void set_state(Asset_fetch_state state, const std::string& message);
     void set_archive_index(std::size_t archive_index);
+    void set_file_index(std::size_t file_index, std::size_t file_count);
     void set_progress(std::uint64_t bytes_done, std::uint64_t bytes_total);
     [[nodiscard]] auto is_cancel_requested() const -> bool;
     [[nodiscard]] auto download_archive(const Asset_fetch_archive& archive, const std::filesystem::path& target_path) -> std::string;
     [[nodiscard]] auto download_google_drive_file(const std::string& file_id, const std::filesystem::path& target_path) -> std::string;
     [[nodiscard]] auto download_url(const std::string& url, const std::filesystem::path& target_path, std::string& html_page) -> std::string;
+    [[nodiscard]] auto download_with_client(httplib::Client& client, const std::string& scheme_host, const std::string& path, const std::filesystem::path& target_path, std::string& html_page) -> std::string;
+    [[nodiscard]] auto download_loose_files(const Asset_fetch_archive& archive, const std::filesystem::path& extract_root) -> std::string;
     [[nodiscard]] auto extract_archive(const std::filesystem::path& archive_path, const Asset_fetch_archive& archive, const std::filesystem::path& extract_root) -> std::string;
 
     App_context&       m_context;

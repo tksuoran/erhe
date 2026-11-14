@@ -365,6 +365,9 @@ private:
     auto query_describe_usd_file(const nlohmann::json& args) -> std::string;
     auto query_asset_manager    (const nlohmann::json& args) -> std::string;
     auto action_acquire_asset   (const nlohmann::json& args) -> std::string;
+    auto action_asset_fetch     (const nlohmann::json& args) -> std::string;
+    auto action_cancel_asset_fetch(const nlohmann::json& args) -> std::string;
+    auto query_asset_fetch_status(const nlohmann::json& args) -> std::string;
     auto action_release_asset   (const nlohmann::json& args) -> std::string;
     auto action_unload_asset    (const nlohmann::json& args) -> std::string;
     auto action_set_tool_asset  (const nlohmann::json& args) -> std::string;

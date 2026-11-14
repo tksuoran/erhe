@@ -304,7 +304,7 @@ flowchart TD
 ### Editor (`editor/`)
 
 - [editor/active_item.md](editor/active_item.md) (stable): The one explicit active item in Selection: rules, message, undo, MCP
-- [editor/asset_fetch.md](editor/asset_fetch.md) (experimental): Fetch Bistro / Sponza Scene buttons: HTTPS download (httplib + Mbed TLS) and zip extraction (miniz) into res/editor/assets
+- [editor/asset_fetch.md](editor/asset_fetch.md) (experimental): Fetch Bistro / Intel Sponza / Khronos Sponza Scene buttons: HTTPS download (httplib + Mbed TLS), zip extraction (miniz) or loose glTF files into res/editor/assets
 - [editor/asset_browser_scan.md](editor/asset_browser_scan.md) (stable): Two-phase asset browser scan: worker directory walk, main-thread tree build
 - [editor/asset_manager.md](editor/asset_manager.md) (mostly stable): Single-loader asset manager: identity, ownership, usership, workflow verbs
 - [editor/async_asset_loading.md](editor/async_asset_loading.md) (mostly stable): Asynchronous glTF / asset loading pipeline: tasks, threads, budgets

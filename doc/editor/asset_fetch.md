@@ -2,19 +2,31 @@
 
 Stability: experimental
 
-`Asset_fetch` (`src/editor/assets/asset_fetch.{hpp,cpp}`) downloads zip
-archives of assets that are too large for the repository and extracts them
-into `res/editor/assets/`. The Operations window's Scenes group has one button
-per source:
+`Asset_fetch` (`src/editor/assets/asset_fetch.{hpp,cpp}`) downloads assets
+that are too large for the repository - zip archives it extracts, or loose
+files of a directory tree - into `res/editor/assets/`. The Operations window's
+Scenes group has one button per source:
 
 | Button | Archives | Result |
 |---|---|---|
 | Fetch Bistro Scene | Google Drive zip of `bistro_lights_compressed/` (the one `scripts/bistro_frame_bench.py` downloads) | `bistro_lights_compressed/bistro_lights_c.gltf` and every other entry |
-| Fetch Sponza Scene | Intel Sample Library "Sponza Base Scene" (`https://cdrdv2.intel.com/v1/dl/getContent/830833`) and "Colorful Curtains" (`.../getContent/726650`) | `sponza/base/` and `sponza/curtains/` (glTF + dependencies + `credits_license.txt`), and the host file `sponza/sponza.gltf` |
+| Fetch Intel Sponza Scene | Intel Sample Library "Sponza Base Scene" (`https://cdrdv2.intel.com/v1/dl/getContent/830833`) and "Colorful Curtains" (`.../getContent/726650`) | `sponza/base/` and `sponza/curtains/` (glTF + dependencies + `credits_license.txt`), and the host file `sponza/sponza.gltf` |
+| Fetch Khronos Sponza Scene | Loose files of `Models/Sponza/glTF/` in the Khronos glTF Sample Assets, from `raw.githubusercontent.com` at a pinned commit | `khronos_sponza/Sponza.gltf`, `Sponza.bin`, its 69 images, `LICENSE.md` and `LicenseRef-CRYENGINE-Agreement.txt` (73 files, 52.7 MB) |
 
 The Intel scenes are CC BY 4.0; `credits_license.txt` carries the required
 attribution. The cdrdv2 links redirect to signed CloudFront URLs that expire,
 so the source names the cdrdv2 link, never the redirect target.
+
+The Khronos Sponza model files are under the Cryengine Limited License
+Agreement (the fetched `LicenseRef-CRYENGINE-Agreement.txt` points to its
+terms), its metadata under CC BY 4.0 (`LICENSE.md`). The source is pinned to
+the last glTF-Sample-Assets commit that changed `Models/Sponza`
+(`4995a638c96d...`), so the file set does not change under the fetch. The
+model is one mesh under a node with a 0.008 scale (centimeters to meters),
+Y-up, without lights or cameras; it needs no host file.
+
+Every fetch is started by the user (or MCP); erhe never commits or
+redistributes the fetched files.
 
 ## Source
 
@@ -22,7 +34,11 @@ An `Asset_fetch_source` names the extraction root (working-directory
 relative, `res/editor/assets`), a marker file relative to that root, the
 archives, and optionally a host file. Each `Asset_fetch_archive` has:
 
-- a direct `url` (redirects followed) or a Google Drive file id;
+- a packaging: `zip`, or `loose_files` (a directory tree served file by
+  file; it takes the `gltf_dependencies` selection only, since there is no
+  listing to take every entry from);
+- a direct `url` (redirects followed) or a Google Drive file id; for
+  `loose_files` the `url` is the tree root;
 - an `entry_prefix`: the archive directory taken as the archive's root (only
   entries below it are considered, with the prefix stripped);
 - a `gltf_path` the archive must contain;
@@ -34,6 +50,9 @@ archives, and optionally a host file. Each `Asset_fetch_archive` has:
   6.7 GB in 156 entries; its glTF needs 74 of them (2.2 GB) - the 3ds Max /
   FBX / USD variants, unreferenced texture maps and the HDR environment map
   are not extracted;
+- `root_extra_paths` (`loose_files`): files relative to the tree root, outside
+  `entry_prefix`, written as `destination/<filename>` (the Khronos license
+  files);
 - a `destination` directory relative to the root.
 
 ## Host file
@@ -54,13 +73,18 @@ transform. The host file is the Sponza marker: it is written last.
 2. `fetch()` checks the marker file. When it exists nothing is downloaded and
    the status line reads "already present".
 3. Otherwise a worker thread (not a Taskflow worker: it blocks on the network
-   for minutes) handles the archives in order: download into
-   `res/editor/assets/.fetch_<name>/archive.zip`, extract the selected entries
-   into the staging `extracted/` directory, delete the zip. Google Drive
-   answers a large file with a virus-scan warning page; its form action plus
-   hidden fields (`confirm`, `uuid`, ...) is the download URL.
+   for minutes) handles the archives in order. A zip archive downloads into
+   `res/editor/assets/.fetch_<name>/archive.zip`, its selected entries are
+   extracted into the staging `extracted/` directory, and the zip is deleted.
+   Google Drive answers a large file with a virus-scan warning page; its form
+   action plus hidden fields (`confirm`, `uuid`, ...) is the download URL. A
+   `loose_files` part downloads straight into `extracted/<destination>/`
+   over one keep-alive connection: the glTF first, then every buffer and
+   image it names, `extra_paths` and `root_extra_paths`. A status other than
+   200 (a missing file answers 404) fails the fetch.
 4. Extraction refuses absolute entry paths and paths that leave the root;
-   miniz checks each entry's CRC32.
+   miniz checks each entry's CRC32. A `loose_files` part applies the same
+   check to every path its downloaded glTF names, before requesting it.
 5. After every archive (and the host file), the staging directory's top-level
    entries are moved into the root. A destination that already exists
    (without the marker) fails the fetch rather than merging into it. The
@@ -70,9 +94,20 @@ transform. The host file is the Sponza marker: it is written last.
    queue; on success the asset browser rescans.
 
 While a fetch runs its button is replaced by a progress bar (download bytes,
-then extracted bytes, per archive: "downloading 1/2") and a **Cancel Fetch**
-button; the other sources' buttons are disabled. Editor shutdown cancels and
+then extracted bytes, per archive: "downloading 1/2"; per file for a
+`loose_files` part: "downloading 12/73") and a **Cancel Fetch** button; the
+other sources' buttons are disabled. Editor shutdown cancels and
 joins a running fetch before the commit queue is cleared.
+
+## MCP
+
+- `asset_fetch {source: bistro | intel_sponza | khronos_sponza}` starts the
+  fetch the button starts and returns the status at once ("already present"
+  when the marker exists). Refused while a fetch runs.
+- `get_asset_fetch_status` returns `Asset_fetch_status`: state, running,
+  source, archive and file index / count, current bytes, message (the marker
+  path when completed, the error when failed).
+- `cancel_asset_fetch` is the Cancel Fetch button.
 
 ## Dependencies
 

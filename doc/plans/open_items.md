@@ -281,3 +281,9 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
   profiling (`doc/plans/shadow_robustness.md`).
 - Debug line anti-aliasing: joined polylines, content wide lines, a Metal run
   (`doc/plans/debug_renderer_anti_aliasing.md`).
+
+## Editor features
+
+- Asset fetch: show each source's license beside its Fetch button (the
+  Khronos Sponza's Cryengine Limited License Agreement, the Intel scenes'
+  CC BY 4.0; `doc/editor/asset_fetch.md`).

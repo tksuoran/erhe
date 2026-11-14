@@ -282,4 +282,4 @@ none
 >added::render_scene_image-lod_nodes{6a3463923;frame-exact-LOD-capture}✓
 >fixed::world-space-form-shadows{33e8660cd;per-view-caster-filter+caster-LOD-keys+per-filter-shadow-bounds;Fable-review}✓
 >fixed::CI-all-platforms-build{basis-fork+MSVC-C4458/C4099/C4100+SPIR-V-guards+near-macro+hexfloat-keys+GCC-ffp-contract-off}✓
-
+>added::asset-fetch-Khronos-Sponza{loose_files-packaging+MCP-asset_fetch-tools;headless+©User-windowed-verified}✓

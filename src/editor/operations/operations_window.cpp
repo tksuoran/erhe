@@ -1265,7 +1265,8 @@ void Operations::imgui()
         }
         if (m_context.asset_fetch != nullptr) {
             m_context.asset_fetch->imgui(m_bistro_fetch_source, button_size.x);
-            m_context.asset_fetch->imgui(m_sponza_fetch_source, button_size.x);
+            m_context.asset_fetch->imgui(m_intel_sponza_fetch_source, button_size.x);
+            m_context.asset_fetch->imgui(m_khronos_sponza_fetch_source, button_size.x);
         }
     }
 
