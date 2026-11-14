@@ -128,9 +128,9 @@ private:
     void animation_properties         (const std::shared_ptr<erhe::scene::Animation>& animation);
     void light_properties             (erhe::scene::Light& light);
     void geometry_properties          (erhe::geometry::Geometry& geometry);
-    void buffer_mesh_properties       (const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh);
+    void buffer_mesh_properties       (Property_row_id group, const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh);
     void primitive_raytrace_properties(erhe::primitive::Primitive_raytrace* primitive_raytrace);
-    void shape_properties             (const char* label, erhe::primitive::Primitive_shape* shape, Shape_kind shape_kind);
+    void shape_properties             (Property_row_id group, const char* label, erhe::primitive::Primitive_shape* shape, Shape_kind shape_kind);
     void mesh_properties              (erhe::scene::Mesh& mesh);
     void material_properties          (const std::vector<std::shared_ptr<erhe::Item_base>>& items);
     // Read-only rows of the node's rigid body, drawn inside the generic

@@ -19,29 +19,6 @@ Transform tool), are built and described in
 
 ## Next steps
 
-7f. A dragged parameter row freezes in the windowed editor: the value
-   stops changing after a few frames while the button is held, on every
-   slider row, in the Properties window and the Level Kit window. The
-   headless editor does not show it (a 300-frame held drag keeps
-   working). Suspect, unconfirmed: the window's relative hold cursor mode
-   (`Viewport_window::want_cursor_relative_hold()`, requested by the
-   navigation gizmo and by `Fly_camera_tool::set_cursor_relative_mode()`,
-   whose switch-off returns early when no viewport is hovered) is on
-   during the row drag, so every mouse move reports one fixed position
-   and ImGui sees no motion (`sdl_window.cpp` relative hold branch);
-   second suspect: `Imgui_windows::flush_queue()` runs queued operations
-   newest first, so an older preview step can run after a newer one.
-   Method: temporary `kitdrag:` info log lines along the row, the
-   editor, `Level_kits`, the cursor mode switches and the event handlers
-   (uncommitted, in the working tree of the machine that added them);
-   the user reproduces once in the windowed Debug editor, then
-   `grep "kitdrag:" logs/log.txt` shows which signature it is ("active
-   without change" with zero delta and the button down = no motion
-   reaches ImGui; "active id changed" / "not submitted" = the row lost
-   the drag; "re-read" during a drag = stored values overwrote it). Fix
-   the root cause, add a check that fails before the fix where the
-   headless editor can express it, remove every `kitdrag:` line and the
-   temporary reason arguments.
 8. Region contents, height map and support report (D7.1, D7.2, D7.4), as
    MCP tools and as actions of the Level Kit window.
 9. Overlap report and level check (D7.5, D7.6).

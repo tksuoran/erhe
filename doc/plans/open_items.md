@@ -52,10 +52,8 @@ ask the user which to pick. Item 14 starts with writing its plan.
 14. Triangle classification from walkable sample points: a plan to write,
     then build (`doc/plans/navigation_mesh.md` "Triangle classification from
     walkable sample points"; the navigation mesh it reads is built).
-15. Level tools: step 7f of `doc/plans/level_tools_implementation.md`
-    first (a dragged parameter row freezes in the windowed editor; it
-    waits for the user's reproduction with the diagnostic build), then
-    step 8. State: `memory-bank/topics/level_tools.md`.
+15. Level tools: step 8 of `doc/plans/level_tools_implementation.md`.
+    State: `memory-bank/topics/level_tools.md`.
 
 ## Quest session follow-ups
 
@@ -288,6 +286,10 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
 
 ## Editor features
 
+- Property rows: migrate the remaining hand-written `Property_editor` rows
+  (each named by a `Property_row_id` enumerator) into registered properties,
+  so every row is identified by its property; then remove `Property_row_id`
+  (`doc/editor/properties_window.md` "Row ids").
 - Asset fetch: show each source's license beside its Fetch button (the
   Khronos Sponza's Cryengine Limited License Agreement, the Intel scenes'
   CC BY 4.0; `doc/editor/asset_fetch.md`).

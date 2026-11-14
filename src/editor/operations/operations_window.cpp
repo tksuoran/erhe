@@ -1211,17 +1211,17 @@ void Operations::imgui()
     p.reset();
 
     bool scenes_open{false};
-    p.push_group("Scenes", ImGuiTreeNodeFlags_DefaultOpen, 0.0f, &scenes_open);
+    p.push_group(Property_row_id::operations_scenes, "Scenes", ImGuiTreeNodeFlags_DefaultOpen, 0.0f, &scenes_open);
 
     std::shared_ptr<erhe::primitive::Material> material = m_context.selection->get_last_selected<erhe::primitive::Material>();
     if (material) {
-        p.add_entry("Material", [material](){ ImGui::TextUnformatted(material->get_name().c_str()); });
+        p.add_entry(Property_row_id::operations_material, "Material", [material](){ ImGui::TextUnformatted(material->get_name().c_str()); });
     }
     m_make_mesh_config.material = material;
    
-    p.add_entry("Count", [this](){ ImGui::SliderInt  ("##", &m_make_mesh_config.instance_count, 1, 32); });
-    p.add_entry("Scale", [this](){ ImGui::SliderFloat("##", &m_make_mesh_config.object_scale,   0.2f, 2.0f, "%.2f"); });
-    p.add_entry("Gap",   [this](){ ImGui::SliderFloat("##", &m_make_mesh_config.instance_gap,   0.0f, 1.0f, "%.2f"); });
+    p.add_entry(Property_row_id::operations_count, "Count", [this](){ ImGui::SliderInt  ("##", &m_make_mesh_config.instance_count, 1, 32); });
+    p.add_entry(Property_row_id::operations_scale, "Scale", [this](){ ImGui::SliderFloat("##", &m_make_mesh_config.object_scale,   0.2f, 2.0f, "%.2f"); });
+    p.add_entry(Property_row_id::operations_gap, "Gap",   [this](){ ImGui::SliderFloat("##", &m_make_mesh_config.instance_gap,   0.0f, 1.0f, "%.2f"); });
     p.pop_group();
     p.show_entries("operations");
 

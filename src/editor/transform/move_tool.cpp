@@ -48,19 +48,19 @@ void Move_tool::imgui(Property_editor& property_editor)
 {
     Property_editor& p = property_editor;
     p.reset();
-    p.push_group("Move tool", ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.translate_snap_enable); });
+    p.push_group(Property_row_id::move_move_tool, "Move tool", ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry(Property_row_id::move_snap_enable, "Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.translate_snap_enable); });
     if (m_context.level_kits != nullptr) {
-        p.add_entry("Snap To Surface",   [this]() { surface_snap_checkbox  (*m_context.level_kits, Surface_widget_label::hidden); });
-        p.add_entry("Orient To Surface", [this]() { surface_orient_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_snap_to_surface, "Snap To Surface",   [this]() { surface_snap_checkbox  (*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_orient_to_surface, "Orient To Surface", [this]() { surface_orient_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
     }
-    p.add_entry("Bone IK", [this]() {
+    p.add_entry(Property_row_id::move_bone_ik, "Bone IK", [this]() {
         ImGui::Checkbox("##", &get_shared().settings.translate_ik_enable);
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Dragging a bone solves its ancestor chain with FABRIK IK (chain root: first IK Lock bone); off = plain translation");
         }
     });
-    p.add_entry("Effector Orientation", [this]() {
+    p.add_entry(Property_row_id::move_effector_orientation, "Effector Orientation", [this]() {
         Transform_tool_settings& settings = get_shared().settings;
         const int current = static_cast<int>(settings.ik_drag_options.effector_orientation);
         if (ImGui::BeginCombo("##", c_ik_effector_orientation_strings[current])) {
@@ -80,7 +80,7 @@ void Move_tool::imgui(Property_editor& property_editor)
             );
         }
     });
-    p.add_entry("Mid-Chain Drag", [this]() {
+    p.add_entry(Property_row_id::move_mid_chain_drag, "Mid-Chain Drag", [this]() {
         Transform_tool_settings& settings = get_shared().settings;
         const int current = static_cast<int>(settings.ik_drag_options.mid_chain_drag);
         if (ImGui::BeginCombo("##", c_ik_mid_chain_drag_strings[current])) {
@@ -101,7 +101,7 @@ void Move_tool::imgui(Property_editor& property_editor)
             );
         }
     });
-    p.add_entry("Solve From", [this]() {
+    p.add_entry(Property_row_id::move_solve_from, "Solve From", [this]() {
         Transform_tool_settings& settings = get_shared().settings;
         const int current = static_cast<int>(settings.ik_drag_options.solve_from);
         if (ImGui::BeginCombo("##", c_ik_solve_from_strings[current])) {
@@ -123,7 +123,7 @@ void Move_tool::imgui(Property_editor& property_editor)
             );
         }
     });
-    p.add_entry("Pole Alignment", [this]() {
+    p.add_entry(Property_row_id::move_pole_alignment, "Pole Alignment", [this]() {
         Transform_tool_settings& settings = get_shared().settings;
         const int current = static_cast<int>(settings.ik_drag_options.pole_alignment);
         if (ImGui::BeginCombo("##", c_ik_pole_alignment_strings[current])) {
@@ -146,7 +146,7 @@ void Move_tool::imgui(Property_editor& property_editor)
     });
     // doc/plans/rigging/ik_drag_options.md R30: only while Ease In is chosen.
     if (get_shared().settings.ik_drag_options.pole_alignment == Ik_pole_alignment::ease_in) {
-        p.add_entry("Pole Ease Distance", [this]() {
+        p.add_entry(Property_row_id::move_pole_ease_distance, "Pole Ease Distance", [this]() {
             Transform_tool_settings& settings = get_shared().settings;
             ImGui::SliderFloat(
                 "##", &settings.ik_drag_options.pole_ease_distance, 0.05f, 2.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp
@@ -160,7 +160,7 @@ void Move_tool::imgui(Property_editor& property_editor)
         });
     }
     // Persistent preference (Transform_tool_config); touch() schedules the autosave.
-    p.add_entry("Snap Absolute", [this]() {
+    p.add_entry(Property_row_id::move_snap_absolute, "Snap Absolute", [this]() {
         if (ImGui::Checkbox("##", &m_context.editor_settings->transform_tool.translate_snap_absolute)) {
             m_context.app_settings->settings_store().touch();
         }
@@ -168,7 +168,7 @@ void Move_tool::imgui(Property_editor& property_editor)
             ImGui::SetTooltip("Snap the anchor's resulting position coordinates to snap multiples; when off, snap the drag delta instead");
         }
     });
-    p.add_entry("Snap Value", [this]() {
+    p.add_entry(Property_row_id::move_snap_value, "Snap Value", [this]() {
         const float snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
         const char* snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
         if (ImGui::BeginCombo("##", snap_items[m_translate_snap_index])) {

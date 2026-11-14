@@ -47,5 +47,5 @@
 
 [TASK::level-tools]{started-2026-11-13;branch=main;doc/plans/level_tools_implementation.md(steps)+topics/level_tools.md(state)}
 ✓requirements+design+steps-1-7e{see-topics/level_tools.md[BUILT]}
-⚡step-7f{windowed-parameter-row-drag-freeze;kitdrag-diagnostics-in-working-tree(uncommitted);next=©User-reproduces-once->grep-"kitdrag:"-logs/log.txt->root-cause->fix->remove-diagnostics}
+✓step-7f{2026-11-14;cause=positional-ImGui-row-ids(PushID(m_row++))+developer-mode-rows-above-changing-count-during-preview->dragged-row-new-id->ImGui-NewFrame-clears-ActiveId;fix=Property_row_key-ids(item-id|Selection::get_selection_key+owner-type,property-index,Property_ui::group_id,Property_row_id-enum-for-hand-written-rows);©User-verified}
 ?next{step-8-region-contents+height-map+support-report}

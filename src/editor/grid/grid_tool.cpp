@@ -185,7 +185,7 @@ void Grid_tool::window_imgui()
         // generic rows, undo through Property_set_operation; a change
         // touches the settings store through the Grid's own callback.
         m_property_editor.reset();
-        m_property_editor.push_group("Grid", ImGuiTreeNodeFlags_DefaultOpen);
+        m_property_editor.push_group(Property_row_id::grid_grid, "Grid", ImGuiTreeNodeFlags_DefaultOpen);
         m_property_rows.add_rows(m_property_editor, std::vector<std::shared_ptr<erhe::Item_base>>{grid});
         m_property_editor.pop_group();
         m_property_editor.show_entries();

@@ -166,6 +166,10 @@ public:
     [[nodiscard]] auto get      (uint16_t index) const -> const Dependency_property&;
     [[nodiscard]] auto get_count() const -> std::size_t;
 
+    // The id of a Property_ui::group name: 0 for the empty name, else one
+    // number per distinct name, given at the first request and kept.
+    [[nodiscard]] auto get_group_id(std::string_view group) -> uint16_t;
+
     // Non-attached properties an object whose get_property_owner_type() is
     // object_type has: the root's registrations first, then each level down
     // to object_type's own, each level in registration order. A name
@@ -214,11 +218,14 @@ private:
         }
     };
 
+    [[nodiscard]] auto get_group_id_locked(std::string_view group) -> uint16_t;
+
     // Ancestor chain of object_type, nearest first, ending with the root.
     [[nodiscard]] auto owner_chain(Owner_type object_type) const -> std::vector<Owner_type>;
 
     mutable std::mutex                                                 m_mutex;
     std::deque<Owner_entry>                                            m_owner_types;
+    std::vector<std::string>                                           m_group_names; // group id - 1 indexes this
     std::vector<std::unique_ptr<Dependency_property>>                  m_properties;
     std::unordered_map<Owner_name_key, uint16_t, Owner_name_hash>      m_by_owner_and_name;
     std::vector<std::vector<uint16_t>>                                 m_by_owner; // indexed by owner type id, registration order

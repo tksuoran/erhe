@@ -486,7 +486,23 @@ void Dependency_property_rows::draw_rows(Property_editor& editor)
     Property_group_states& group_states = m_context.app_settings->property_group_states;
     group_states.order(groups);
     for (const std::string_view group : groups) {
-        editor.push_group(std::string{group}, editor.get_group_indent(), group_states);
+        uint16_t group_id = 0;
+        for (const Dependency_property* grouped : properties) {
+            const Property_ui& ui = grouped->get_metadata(owner_type).ui;
+            if (ui.group == group) {
+                group_id = ui.group_id;
+                break;
+            }
+        }
+        if (group_id == 0) {
+            for (const Property_group_rows& group_rows : m_group_rows) {
+                if (group_rows.group == group) {
+                    group_id = group_rows.group_id;
+                    break;
+                }
+            }
+        }
+        editor.push_group(Property_row_key{Property_row_key::Kind::property_group, group_id}, std::string{group}, editor.get_group_indent(), group_states);
         for (const Dependency_property* grouped : properties) {
             if (grouped->get_metadata(owner_type).ui.group == group) {
                 row(editor, *grouped);
@@ -518,6 +534,7 @@ void Dependency_property_rows::draw_rows(Property_editor& editor)
 void Dependency_property_rows::add_property_row(Property_editor& editor)
 {
     editor.add_entry(
+        Property_row_id::add_property,
         "Add Property",
         [this, items = m_items]() {
             m_items = items; // this row's items, bound for this lambda only
@@ -842,6 +859,7 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
     // read at a glance - the tooltip names the source in words.
     const uint32_t c_property_row_label_color = label_color(first.get_value_source(property), metadata.bridge.is_bound());
     editor.add_entry(
+        Property_row_key{Property_row_key::Kind::property, property.get_index()},
         std::move(label),
         [this, items = m_items, sub_object = m_sub_object, &property, &metadata, sealed]() {
             m_items      = items; // this row's items, bound for this lambda only
@@ -936,6 +954,7 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
             continue;
         }
         editor.add_entry(
+            Property_row_key{Property_row_key::Kind::property_action, static_cast<uint32_t>(&action - m_row_actions.data())},
             std::string{action.label},
             [items = m_items, &action, sealed]() {
                 ImGui::BeginDisabled(sealed);
@@ -956,6 +975,7 @@ void Dependency_property_rows::add_row_action(Property_row_action action)
 
 void Dependency_property_rows::add_group_rows(Property_group_rows rows)
 {
+    rows.group_id = erhe::property::Property_registry::get().get_group_id(rows.group);
     m_group_rows.push_back(std::move(rows));
 }
 

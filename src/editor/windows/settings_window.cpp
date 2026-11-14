@@ -173,8 +173,8 @@ void Settings_window::imgui()
     const float ui_scale = m_context.app_settings->get_ui_scale();
     const ImVec2 button_size{110.0f * ui_scale, 0.0f};
 
-    push_group("User Interface", ImGuiTreeNodeFlags_Framed);
-    add_entry("UI Font Size", [this](){
+    push_group(Property_row_id::settings_user_interface, "User Interface", ImGuiTreeNodeFlags_Framed);
+    add_entry(Property_row_id::settings_ui_font_size, "UI Font Size", [this](){
         auto& imgui = m_context.app_settings->imgui;
         const bool font_size_changed = ImGui::DragFloat("UI Font Size", &imgui.font_size, 0.1f, 6.0f, 100.0f, "%.1f");
         if (font_size_changed) {
@@ -182,7 +182,7 @@ void Settings_window::imgui()
         }
     });
 
-    add_entry("Material Design Font Size", [this](){
+    add_entry(Property_row_id::settings_material_design_font_size, "Material Design Font Size", [this](){
         auto& imgui = m_context.app_settings->imgui;
         const bool font_size_changed = ImGui::DragFloat("Material Design Font Size", &imgui.material_design_font_size, 0.1f, 6.0f, 100.0f, "%.1f");
         if (font_size_changed) {
@@ -190,7 +190,7 @@ void Settings_window::imgui()
         }
     });
 
-    add_entry("Icon Font Size", [this](){
+    add_entry(Property_row_id::settings_icon_font_size, "Icon Font Size", [this](){
         auto& imgui = m_context.app_settings->imgui;
         const bool font_size_changed = ImGui::DragFloat("Icon Font Size", &imgui.icon_font_size, 0.1f, 6.0f, 100.0f, "%.1f");
         if (font_size_changed) {
@@ -198,18 +198,18 @@ void Settings_window::imgui()
         }
     });
 
-    add_entry("Small Icon Size", [this](){
+    add_entry(Property_row_id::settings_small_icon_size, "Small Icon Size", [this](){
         ImGui::DragInt("##", &m_context.app_settings->icon_settings.small_icon_size, 0.1f, 6, 512);
     });
-    add_entry("Large Icon Size", [this](){
+    add_entry(Property_row_id::settings_large_icon_size, "Large Icon Size", [this](){
         ImGui::DragInt("##", &m_context.app_settings->icon_settings.large_icon_size, 0.1f, 6, 512);
     });
 
-    add_entry("Hotbar Icon Size", [this](){
+    add_entry(Property_row_id::settings_hotbar_icon_size, "Hotbar Icon Size", [this](){
         ImGui::DragInt("##", &m_context.app_settings->icon_settings.hotbar_icon_size, 0.1f, 6, 512);
     });
 
-    add_entry("Input Bindings", [this](){
+    add_entry(Property_row_id::settings_input_bindings, "Input Bindings", [this](){
         if (ImGui::Button("Edit Input Bindings...")) {
             m_context.input_bindings_window->show_window();
         }
@@ -217,14 +217,14 @@ void Settings_window::imgui()
 
     pop_group();
 
-    push_group("Graphics", ImGuiTreeNodeFlags_Framed);
+    push_group(Property_row_id::settings_graphics, "Graphics", ImGuiTreeNodeFlags_Framed);
 
     auto& graphics = m_context.app_settings->graphics;
-    add_entry("Currently Used Preset", [&graphics]() {
+    add_entry(Property_row_id::settings_currently_used_preset, "Currently Used Preset", [&graphics]() {
         ImGui::TextUnformatted(graphics.current_graphics_preset.name.c_str());
     });
     
-    add_entry("Headlight When Unlit", [&graphics]() {
+    add_entry(Property_row_id::settings_headlight_when_unlit, "Headlight When Unlit", [&graphics]() {
         ImGui::Checkbox("##", &graphics.headlight_when_unlit);
     });
 
@@ -232,7 +232,7 @@ void Settings_window::imgui()
     // cache"): where it came from, and an explicit re-measure - deleting the
     // cache entry makes the next start run the probes (a compositor that got
     // faster is not detectable live).
-    add_entry("Present Calibration", [this]() {
+    add_entry(Property_row_id::settings_present_calibration, "Present Calibration", [this]() {
         if (m_context.graphics_device == nullptr) {
             return;
         }
@@ -268,7 +268,7 @@ void Settings_window::imgui()
             m_graphics_preset_names.at(i) = graphics_presets.at(i).name.c_str();
         }
 
-        add_entry("Edit", [this](){
+        add_entry(Property_row_id::settings_edit, "Edit", [this](){
             const bool selection_changed = ImGui::Combo(
                 "##edit_preset",
                 &m_graphics_preset_index,
@@ -297,14 +297,14 @@ void Settings_window::imgui()
             m_graphics_preset_index = static_cast<int>(graphics_presets.size()) - 1;
         }
 
-        add_entry("Preset Name", [this](){
+        add_entry(Property_row_id::settings_preset_name, "Preset Name", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::InputText("##", &graphics_preset.name)) {
                 on_graphics_preset_edited();
             }
         });
 
-        add_entry("MSAA Sample Count", [this](){
+        add_entry(Property_row_id::settings_msaa_sample_count, "MSAA Sample Count", [this](){
             Graphics_preset_entry& graphics_preset                = get_graphics_preset();
             Graphics_settings&     graphics                       = m_context.app_settings->graphics;
             std::vector<int>&      msaa_sample_count_entry_values = graphics.msaa_sample_count_entry_values;
@@ -334,13 +334,13 @@ void Settings_window::imgui()
             }
         });
 
-        add_entry("Shadows Enabled", [this]() {
+        add_entry(Property_row_id::settings_shadows_enabled, "Shadows Enabled", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::Checkbox("##", &graphics_preset.shadow_enable)) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Shadow Filtering", [this]() {
+        add_entry(Property_row_id::settings_shadow_filtering, "Shadow Filtering", [this]() {
             Graphics_preset_entry&          graphics_preset = get_graphics_preset();
             const Shadow_filter_mode        current         = graphics_preset.shadow_filter;
             const erhe::codegen::Enum_info& enum_info        = get_enum_info(static_cast<const Shadow_filter_mode*>(nullptr));
@@ -359,7 +359,7 @@ void Settings_window::imgui()
                 ImGui::EndCombo();
             }
         });
-        add_entry("Shadow Bias", [this]() {
+        add_entry(Property_row_id::settings_shadow_bias, "Shadow Bias", [this]() {
             Graphics_preset_entry&          graphics_preset = get_graphics_preset();
             const Shadow_bias_mode          current         = graphics_preset.shadow_bias;
             const erhe::codegen::Enum_info& enum_info        = get_enum_info(static_cast<const Shadow_bias_mode*>(nullptr));
@@ -378,7 +378,7 @@ void Settings_window::imgui()
                 ImGui::EndCombo();
             }
         });
-        add_entry("Shadow Cull Mode", [this]() {
+        add_entry(Property_row_id::settings_shadow_cull_mode, "Shadow Cull Mode", [this]() {
             Graphics_preset_entry&          graphics_preset = get_graphics_preset();
             const Shadow_cull_mode          current         = graphics_preset.shadow_cull_mode;
             const erhe::codegen::Enum_info& enum_info        = get_enum_info(static_cast<const Shadow_cull_mode*>(nullptr));
@@ -397,7 +397,7 @@ void Settings_window::imgui()
                 ImGui::EndCombo();
             }
         });
-        add_entry("Shadow Technique", [this]() {
+        add_entry(Property_row_id::settings_shadow_technique, "Shadow Technique", [this]() {
             Graphics_preset_entry&          graphics_preset = get_graphics_preset();
             const Shadow_technique_mode     current         = graphics_preset.shadow_technique;
             const erhe::codegen::Enum_info& enum_info        = get_enum_info(static_cast<const Shadow_technique_mode*>(nullptr));
@@ -416,13 +416,13 @@ void Settings_window::imgui()
                 ImGui::EndCombo();
             }
         });
-        add_entry("Shadow Depth Bias (constant)", [this]() {
+        add_entry(Property_row_id::settings_shadow_depth_bias_constant, "Shadow Depth Bias (constant)", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::DragFloat("##", &graphics_preset.shadow_depth_bias_constant, 0.05f, -16.0f, 16.0f, "%.2f")) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Shadow Depth Bias (slope)", [this]() {
+        add_entry(Property_row_id::settings_shadow_depth_bias_slope, "Shadow Depth Bias (slope)", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::DragFloat("##", &graphics_preset.shadow_depth_bias_slope, 0.05f, -16.0f, 16.0f, "%.2f")) {
                 on_graphics_preset_edited();
@@ -430,32 +430,32 @@ void Settings_window::imgui()
         });
         // Receiver minimum bias scales (doc/erhe/shadows.md "Minimum bias");
         // 1 is the derived bound.
-        add_entry("Shadow Bias Texel Scale", [this]() {
+        add_entry(Property_row_id::settings_shadow_bias_texel_scale, "Shadow Bias Texel Scale", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::DragFloat("##", &graphics_preset.shadow_bias_texel_scale, 0.01f, 0.0f, 16.0f, "%.2f")) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Shadow Bias Origin Scale", [this]() {
+        add_entry(Property_row_id::settings_shadow_bias_origin_scale, "Shadow Bias Origin Scale", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::DragFloat("##", &graphics_preset.shadow_bias_origin_scale, 0.01f, 0.0f, 16.0f, "%.2f")) {
                 on_graphics_preset_edited();
             }
         });
         // The normal_offset bias mode's offsets in shadow texels.
-        add_entry("Shadow Normal Offset (texels)", [this]() {
+        add_entry(Property_row_id::settings_shadow_normal_offset_texels, "Shadow Normal Offset (texels)", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::DragFloat("##", &graphics_preset.shadow_normal_offset_texels, 0.01f, 0.0f, 16.0f, "%.2f")) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Shadow Constant Bias (texels)", [this]() {
+        add_entry(Property_row_id::settings_shadow_constant_bias_texels, "Shadow Constant Bias (texels)", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::DragFloat("##", &graphics_preset.shadow_constant_bias_texels, 0.01f, 0.0f, 16.0f, "%.2f")) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Shadow Resolution", [this](){
+        add_entry(Property_row_id::settings_shadow_resolution, "Shadow Resolution", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             const int   shadow_resolution_values[] = {  256, 512, 1024, 1024 * 2, 1024 * 3, 1024 * 4, 1024 * 5, 1024 * 6, 1024 * 7, 1024 * 8 };
             const char* shadow_resolution_items [] = { "256", "512", "1024", "2048", "3072", "4096", "5120", "6144", "7168", "8192" };
@@ -481,7 +481,7 @@ void Settings_window::imgui()
         });
         {
             add_entry(
-                "Shadow Depth Bits",
+                Property_row_id::settings_shadow_depth_bits, "Shadow Depth Bits",
                 [this]() {
                     Graphics_preset_entry& graphics_preset = get_graphics_preset();
                     std::vector<erhe::dataformat::Format> formats = m_context.graphics_device->get_supported_depth_stencil_formats();
@@ -528,35 +528,35 @@ void Settings_window::imgui()
         // share the 2D shadow map array, so their sum is bounded by its layer
         // limit) and lights shaded without a shadow map. The sum of all six is
         // bounded by the light UBO capacity (Graphics_settings::apply_limits).
-        add_entry("Directional Shadow Lights", [this](){
+        add_entry(Property_row_id::settings_directional_shadow_lights, "Directional Shadow Lights", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             Graphics_settings&     graphics        = m_context.app_settings->graphics;
             if (ImGui::SliderInt("##", &graphics_preset.directional_shadow_light_count, 0, std::min(graphics.max_depth_layers, graphics.max_light_count))) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Directional Lights (no shadow)", [this](){
+        add_entry(Property_row_id::settings_directional_lights_no_shadow, "Directional Lights (no shadow)", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             Graphics_settings&     graphics        = m_context.app_settings->graphics;
             if (ImGui::SliderInt("##", &graphics_preset.directional_unshadowed_light_count, 0, graphics.max_light_count)) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Spot Shadow Lights", [this](){
+        add_entry(Property_row_id::settings_spot_shadow_lights, "Spot Shadow Lights", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             Graphics_settings&     graphics        = m_context.app_settings->graphics;
             if (ImGui::SliderInt("##", &graphics_preset.spot_shadow_light_count, 0, std::min(graphics.max_depth_layers, graphics.max_light_count))) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Spot Lights (no shadow)", [this](){
+        add_entry(Property_row_id::settings_spot_lights_no_shadow, "Spot Lights (no shadow)", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             Graphics_settings&     graphics        = m_context.app_settings->graphics;
             if (ImGui::SliderInt("##", &graphics_preset.spot_unshadowed_light_count, 0, graphics.max_light_count)) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Point Lights (no shadow)", [this](){
+        add_entry(Property_row_id::settings_point_lights_no_shadow, "Point Lights (no shadow)", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             Graphics_settings&     graphics        = m_context.app_settings->graphics;
             if (ImGui::SliderInt("##", &graphics_preset.point_unshadowed_light_count, 0, graphics.max_light_count)) {
@@ -565,14 +565,14 @@ void Settings_window::imgui()
         });
         // Point lights use a separate R32F cube-map array for omnidirectional
         // shadows; these size that array independently of the 2D shadow map.
-        add_entry("Point Shadow Resolution", [this](){
+        add_entry(Property_row_id::settings_point_shadow_resolution, "Point Shadow Resolution", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             Graphics_settings&     graphics        = m_context.app_settings->graphics;
             if (ImGui::SliderInt("##", &graphics_preset.point_shadow_resolution, erhe::scene_renderer::c_min_point_shadow_resolution, std::min(graphics.max_shadow_resolution, 4096))) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Point Shadow Lights", [this](){
+        add_entry(Property_row_id::settings_point_shadow_lights, "Point Shadow Lights", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::SliderInt("##", &graphics_preset.point_shadow_light_count, 0, 8)) {
                 on_graphics_preset_edited();
@@ -581,7 +581,7 @@ void Settings_window::imgui()
         // Specular anti-aliasing of the anisotropic BRDF
         // (doc/erhe/scene_renderer.md "Specular anti-aliasing"); the
         // SPECULAR_ANTI_ALIASING variant axis of the anisotropic variants.
-        add_entry("Specular Anti-aliasing", [this]() {
+        add_entry(Property_row_id::settings_specular_anti_aliasing, "Specular Anti-aliasing", [this]() {
             Graphics_preset_entry&            graphics_preset = get_graphics_preset();
             const Specular_anti_aliasing_mode current         = graphics_preset.specular_anti_aliasing;
             const erhe::codegen::Enum_info&   enum_info       = get_enum_info(static_cast<const Specular_anti_aliasing_mode*>(nullptr));
@@ -602,7 +602,7 @@ void Settings_window::imgui()
         });
         // Flat draw color (the FLAT_DRAW_COLOR variant axis): unlit palette
         // color per draw, a fragment cost measurement mode.
-        add_entry("Flat Draw Color", [this]() {
+        add_entry(Property_row_id::settings_flat_draw_color, "Flat Draw Color", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::Checkbox("##", &graphics_preset.flat_draw_color)) {
                 on_graphics_preset_edited();
@@ -611,7 +611,7 @@ void Settings_window::imgui()
         // fp16 paths of the standard shader (doc/plans/shader_fp16.md), the
         // FP16_PATHS variant axis of the lit color variants: one checkbox per
         // erhe::scene_renderer::Fp16_path bit of the preset's mask.
-        add_entry("Shader fp16 Paths", [this]() {
+        add_entry(Property_row_id::settings_shader_fp16_paths, "Shader fp16 Paths", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             class Path_entry { public: const char* label; erhe::scene_renderer::Fp16_path path; };
             static constexpr Path_entry c_paths[] = {
@@ -639,26 +639,26 @@ void Settings_window::imgui()
         // Automatic level of detail selection (doc/editor/lod.md "Graphics
         // preset settings"): the switch, the pixel error threshold and the
         // global bias, read by the next frame's render settings snapshot.
-        add_entry("LOD Selection", [this]() {
+        add_entry(Property_row_id::settings_lod_selection, "LOD Selection", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::Checkbox("##", &graphics_preset.lod_enabled)) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("LOD Threshold (pixels)", [this]() {
+        add_entry(Property_row_id::settings_lod_threshold_pixels, "LOD Threshold (pixels)", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::SliderFloat("##", &graphics_preset.lod_threshold_pixels, 0.125f, 512.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
                 on_graphics_preset_edited();
             }
         });
-        add_entry("LOD Bias", [this]() {
+        add_entry(Property_row_id::settings_lod_bias, "LOD Bias", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::SliderInt("##", &graphics_preset.lod_bias, -7, 7)) {
                 on_graphics_preset_edited();
             }
         });
         // The hysteresis band (doc/editor/lod.md "Hysteresis"): 0 = none.
-        add_entry("LOD Hysteresis Band", [this]() {
+        add_entry(Property_row_id::settings_lod_hysteresis_band, "LOD Hysteresis Band", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::SliderFloat("##", &graphics_preset.lod_hysteresis_band, 0.0f, erhe::scene_renderer::max_lod_hysteresis_band, "%.2f")) {
                 on_graphics_preset_edited();
@@ -667,7 +667,7 @@ void Settings_window::imgui()
         // Where the CPU consumers read the levels (doc/editor/lod.md
         // "Graphics preset settings"): on_demand only under the GPU
         // culling classification.
-        add_entry("LOD CPU Selection", [this]() {
+        add_entry(Property_row_id::settings_lod_cpu_selection, "LOD CPU Selection", [this]() {
             Graphics_preset_entry&          graphics_preset = get_graphics_preset();
             const Lod_cpu_selection         current         = graphics_preset.lod_cpu_selection;
             const erhe::codegen::Enum_info& enum_info       = get_enum_info(static_cast<const Lod_cpu_selection*>(nullptr));
@@ -688,7 +688,7 @@ void Settings_window::imgui()
         });
     }
 
-    add_entry("", [this, button_size](){
+    add_entry(Property_row_id::settings_button_row, "", [this, button_size](){
         std::vector<Graphics_preset_entry>& graphics_presets = m_context.app_settings->graphics.graphics_presets;
 
         const bool add_pressed = ImGui::Button("Add", button_size);
@@ -724,7 +724,7 @@ void Settings_window::imgui()
         editor::add_config_section(*this, show_developer, section, label_override, on_edit);
     };
 
-    push_group("Startup Configuration", ImGuiTreeNodeFlags_Framed);
+    push_group(Property_row_id::settings_startup_configuration, "Startup Configuration", ImGuiTreeNodeFlags_Framed);
     if (m_context.graphics_config != nullptr) {
         add_config_section(*m_context.graphics_config);
         add_config_section(m_context.graphics_config->opengl);
@@ -742,7 +742,7 @@ void Settings_window::imgui()
     if (m_context.window_config != nullptr) {
         add_config_section(*m_context.window_config);
     }
-    add_entry("", [this, button_size](){
+    add_entry(Property_row_id::settings_button_row_2, "", [this, button_size](){
         if (ImGui::Button("Save Config", button_size)) {
             if (m_context.graphics_config != nullptr) {
                 erhe::codegen::save_config(*m_context.graphics_config, "config/editor/erhe_graphics.json");
@@ -766,8 +766,8 @@ void Settings_window::imgui()
     if (m_context.editor_settings != nullptr) {
         Editor_settings_config& settings = *m_context.editor_settings;
 
-        push_group("Editor Settings", ImGuiTreeNodeFlags_Framed);
-        add_entry("Post Processing", [&settings, this](){
+        push_group(Property_row_id::settings_editor_settings, "Editor Settings", ImGuiTreeNodeFlags_Framed);
+        add_entry(Property_row_id::settings_post_processing, "Post Processing", [&settings, this](){
             ImGui::BeginDisabled(m_context.force_post_processing_off);
             ImGui::Checkbox("##", &settings.post_processing);
             ImGui::EndDisabled();
@@ -776,7 +776,7 @@ void Settings_window::imgui()
                 ImGui::TextColored(ImVec4{1.0f, 0.8f, 0.2f, 1.0f}, "forced off (--no-post-processing)");
             }
         }, "Enable Post Processing. Takes effect on next viewport creation.");
-        add_entry("Draw Lists", [&settings, this](){
+        add_entry(Property_row_id::settings_draw_lists, "Draw Lists", [&settings, this](){
             // Shows the value in effect; an edit makes the stored value
             // authoritative again (clears an MCP session-only override).
             App_settings& app_settings = *m_context.app_settings;
@@ -786,39 +786,39 @@ void Settings_window::imgui()
                 app_settings.use_draw_lists_session_override.reset();
             }
         }, "Render content fill and shadow maps through persistent per-scene draw lists (doc/erhe/draw_list_renderer.md). Off = classic per-pass bucketing.");
-        add_entry("Exclude Unlit Primitives", [&settings, this](){
+        add_entry(Property_row_id::settings_exclude_unlit_primitives, "Exclude Unlit Primitives", [&settings, this](){
             if (ImGui::Checkbox("##", &settings.exclude_unlit_primitives) && (m_context.app_scenes != nullptr)) {
                 // The draw lists bake shadow membership; push the edit to
                 // them here, at the change site.
                 m_context.app_scenes->set_exclude_unlit_from_shadows(settings.exclude_unlit_primitives);
             }
         }, "Unlit (KHR_materials_unlit) primitives - sky domes, backdrops, emissive decals - do not cast shadows and are ignored when framing the camera on scene open. They still count toward the camera far plane.");
-        add_entry("Culling Classification", [&settings](){
+        add_entry(Property_row_id::settings_culling_classification, "Culling Classification", [&settings](){
             // The render settings snapshot carries the value to the draw
             // lists' publish (doc/plans/culling.md phase 5).
             static_cast<void>(imgui_enum_combo("##", settings.culling_classification));
         }, "Where the draw lists' culling classification runs: the CPU, or also a compute pass on the GPU (devices with native multi-draw indirect and first-instance record indexing; others use the CPU). The CPU result drives the draws in both modes.");
-        add_entry("Headset Culling", [this](){
+        add_entry(Property_row_id::settings_headset_culling, "Headset Culling", [this](){
             // Session only; the render settings snapshot carries it to the
             // headset's pre-execute hook (doc/plans/culling.md "Headset passes").
             static_cast<void>(ImGui::Checkbox("##", &m_context.app_settings->headset_culling_session));
         }, "Frustum-cull the headset's color passes against the union of the eye frusta (padded). Off draws every entry, for comparison. Session only, not saved.");
-        add_entry("Occlusion Culling", [&settings](){
+        add_entry(Property_row_id::settings_occlusion_culling, "Occlusion Culling", [&settings](){
             // The render settings snapshot carries the value to the draw
             // lists' publish (doc/plans/occlusion_culling.md).
             static_cast<void>(ImGui::Checkbox("##", &settings.occlusion_culling));
         }, "Run the raster occlusion test in the viewports (gpu culling classification only): the entries' boxes are drawn against each view's opaque depth and the visible entries are marked. The next frame skips the entries found hidden (one frame of lag).");
-        add_entry("PVS Culling", [&settings](){
+        add_entry(Property_row_id::settings_pvs_culling, "PVS Culling", [&settings](){
             // The render settings snapshot carries the value to the draw
             // lists' publish (doc/plans/pvs.md).
             static_cast<void>(ImGui::Checkbox("##", &settings.pvs_culling));
         }, "Cull the entries outside the potentially visible set of the cells around each viewport camera, when the scene has a ready PVS database (both culling classification paths). A stale or absent database culls nothing.");
-        add_entry("PVS Query Margin", [&settings](){
+        add_entry(Property_row_id::settings_pvs_query_margin, "PVS Query Margin", [&settings](){
             // Read by the viewports' culling views through the render
             // settings snapshot (doc/plans/pvs.md).
             static_cast<void>(ImGui::DragFloat("##", &settings.pvs_query_margin, 0.005f, 0.0f, 10.0f, "%.3f m"));
         }, "Half the size of the box around a viewport camera whose cells' potentially visible sets the PVS culling reads.");
-        add_entry("PVS Resident Pages", [this, &settings](){
+        add_entry(Property_row_id::settings_pvs_resident_pages, "PVS Resident Pages", [this, &settings](){
             // The change site (doc/plans/pvs.md "Residency and streaming"):
             // pushed to every scene's draw lists once the edit is done; a
             // change remakes the resident set.
@@ -831,7 +831,7 @@ void Settings_window::imgui()
                 m_context.app_scenes->set_pvs_streaming_settings(m_context.app_scenes->get_pvs_streaming_settings());
             }
         }, "Number of PVS database pages resident on the GPU at once. Pages without a slot read as everything visible; the pages around each viewport camera stream in from the scene file, one page per frame.");
-        add_entry("PVS Stream Radius", [this, &settings](){
+        add_entry(Property_row_id::settings_pvs_stream_radius, "PVS Stream Radius", [this, &settings](){
             static_cast<void>(ImGui::DragInt(
                 "##", &settings.pvs_stream_radius_pages, 0.05f, 0,
                 static_cast<int>(erhe::scene_renderer::Pvs_streaming_settings::max_stream_radius_pages)
@@ -840,7 +840,7 @@ void Settings_window::imgui()
                 m_context.app_scenes->set_pvs_streaming_settings(m_context.app_scenes->get_pvs_streaming_settings());
             }
         }, "The radius, in pages, around a viewport camera's PVS page that is requested when the camera enters another page (1: the 27 pages around it).");
-        add_entry("Content Draws", [this](){
+        add_entry(Property_row_id::settings_content_draws, "Content Draws", [this](){
             // Session only; the render settings snapshot carries it to the
             // alpha-tested and translucent composition passes
             // (renderers/content_draws.hpp).
@@ -850,7 +850,7 @@ void Settings_window::imgui()
                 content_draws = static_cast<Content_draws>(index);
             }
         }, "Which content draws the views make: all, or opaque only, which leaves out the alpha-tested (discarding) and translucent materials, to measure what they cost. Session only, not saved.");
-        add_entry("Light Cluster Binning", [&settings](){
+        add_entry(Property_row_id::settings_light_cluster_binning, "Light Cluster Binning", [&settings](){
             // The render settings snapshot carries the value to the shadow
             // render nodes' light binning (doc/plans/clustered_lights.md C4).
             static_cast<void>(imgui_enum_combo("##", settings.light_cluster_binning));
@@ -874,8 +874,8 @@ void Settings_window::imgui()
         // Editor-global viewport clear color (moved out of the per-view
         // Visual Style popup). Gizmo Scale lives in the Transform Tool
         // section (Transform_tool_config).
-        push_group("Viewport", ImGuiTreeNodeFlags_Framed);
-        add_entry("Clear Color", [&settings](){ ImGui::ColorEdit4("##", &settings.clear_color.x, ImGuiColorEditFlags_Float); }, "Viewport background clear color.");
+        push_group(Property_row_id::settings_viewport, "Viewport", ImGuiTreeNodeFlags_Framed);
+        add_entry(Property_row_id::settings_clear_color, "Clear Color", [&settings](){ ImGui::ColorEdit4("##", &settings.clear_color.x, ImGuiColorEditFlags_Float); }, "Viewport background clear color.");
         pop_group();
         // Edge-line overlay for the preview thumbnails (same struct shown
         // twice; the label override gives each a distinct group header).
@@ -896,8 +896,8 @@ void Settings_window::imgui()
         Debug_visualizations::style_imgui(*this, m_context, settings.debug_visualizations_style);
         // The indirect diffuse producer (doc/editor/radiance_cascades.md
         // "Source selection"), then each producer's settings.
-        push_group("Indirect Diffuse", ImGuiTreeNodeFlags_Framed);
-        add_entry("Source", [&settings, this](){
+        push_group(Property_row_id::settings_indirect_diffuse, "Indirect Diffuse", ImGuiTreeNodeFlags_Framed);
+        add_entry(Property_row_id::settings_source, "Source", [&settings, this](){
             Indirect_diffuse_source source = settings.indirect_diffuse_source;
             if (imgui_enum_combo("##", source)) {
                 set_indirect_diffuse_source(m_context, source);
@@ -923,7 +923,7 @@ void Settings_window::imgui()
         add_config_section(settings.thumbnails);
         add_config_section(settings.transform_tool);
 
-        add_entry("", [this, button_size, &settings](){
+        add_entry(Property_row_id::settings_button_row_3, "", [this, button_size, &settings](){
             if (ImGui::Button("Save Settings", button_size)) {
                 if (m_context.app_settings != nullptr) {
                     m_context.app_settings->settings_store().save();

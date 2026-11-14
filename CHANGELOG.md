@@ -9,6 +9,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::property`: `Property_ui::group_id` and
+  `Property_registry::get_group_id()`: one number per property group name,
+  given at registration, for user interface ids that do not hash the name
+  (`doc/editor/properties_window.md` "Row ids").
 - `erhe::imgui`: `Window_visibility`, `Imgui_window::set_default_visibility()`
   and `Imgui_windows::has_persistent_window_state()`: a window the persisted
   window-state config has no entry for can start hidden.

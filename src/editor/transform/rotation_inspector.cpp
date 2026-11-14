@@ -247,7 +247,7 @@ void Rotation_inspector::imgui(
         set_quaternion(rotation);
     }
     
-    p.add_entry("Mode", [this]() {
+    p.add_entry(Property_row_id::rotation_mode, "Mode", [this]() {
         // Matrix is not offered.
         int  mode  = static_cast<int>(m_representation);
         bool first = true;
@@ -268,7 +268,7 @@ void Rotation_inspector::imgui(
     });
 
     if (m_representation == Representation::e_euler_angles) {
-        p.add_entry("Order", [this]() {
+        p.add_entry(Property_row_id::rotation_order, "Order", [this]() {
             erhe::imgui::make_combo(
                 "##",
                 m_euler_angle_order,
@@ -280,14 +280,14 @@ void Rotation_inspector::imgui(
         // Decouples the viewport rings from the angles shown here: checked,
         // the rings stay orthogonal instead of forming the Euler gimbal. The
         // rings are rebuilt from this flag every frame they render.
-        p.add_entry("Orthogonal Gizmo", [this]() {
+        p.add_entry(Property_row_id::rotation_orthogonal_gizmo, "Orthogonal Gizmo", [this]() {
             ImGui::Checkbox("##", &m_orthogonal_gizmo);
         });
     }
 
     switch (m_representation) {
         case Representation::e_matrix: {
-            p.add_entry("Matrix", [this]() {
+            p.add_entry(Property_row_id::rotation_matrix, "Matrix", [this]() {
                 const glm::vec3 col0 = glm::vec3{m_matrix[0]};
                 const glm::vec3 col1 = glm::vec3{m_matrix[1]};
                 const glm::vec3 col2 = glm::vec3{m_matrix[2]};
@@ -308,7 +308,7 @@ void Rotation_inspector::imgui(
 
         case Representation::e_quaternion: {
             p.add_entry(
-                "Quaternion",
+                Property_row_id::rotation_quaternion, "Quaternion",
                 [this, &quaternion_state, matches_gizmo]() {
                     glm::vec4 q = glm::vec4{m_quaternion.w, m_quaternion.x, m_quaternion.y, m_quaternion.z};
                     const char* format_strings[4] = {"W:%.4f", "X:%.4f", "Y:%.4f", "Z:%.4f"};
@@ -324,6 +324,7 @@ void Rotation_inspector::imgui(
 
         case Representation::e_euler_angles: {
             p.add_entry(
+                Property_row_id::rotation_euler_angles,
                 c_euler_strings[static_cast<int>(m_euler_angle_order)],
                 [this, &euler_state, matches_gizmo]() {
                     const float warn = gimbal_lock_warning();
@@ -363,10 +364,10 @@ void Rotation_inspector::imgui(
         }
 
         case Representation::e_axis_angle: {
-            p.add_entry("Angle", get_label_color(3, true, false), get_label_color(3, false, false), [this, &axis_angle_state]() {
+            p.add_entry(Property_row_id::rotation_angle, "Angle", get_label_color(3, true, false), get_label_color(3, false, false), [this, &axis_angle_state]() {
                 axis_angle_state.combine(erhe::imgui::make_angle_button(m_angle, -10.0f * glm::pi<float>(), 10.0f * glm::pi<float>(), "##R.aa"));
             });
-            p.add_entry("Axis", [this, &axis_angle_state]() {
+            p.add_entry(Property_row_id::rotation_axis, "Axis", [this, &axis_angle_state]() {
                 ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(0, false));
                 ImGui::PushStyleColor(ImGuiCol_ColorMarker1, get_drag_color(1, false));
                 ImGui::PushStyleColor(ImGuiCol_ColorMarker2, get_drag_color(2, false));

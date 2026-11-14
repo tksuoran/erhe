@@ -85,6 +85,7 @@ void Dependency_property::override_metadata(const Owner_type owner_type, Propert
     if (!metadata.default_value.has_value()) {
         metadata.default_value = m_default_metadata.default_value;
     }
+    metadata.ui.group_id = Property_registry::get().get_group_id(metadata.ui.group);
     ERHE_VERIFY(type_of(metadata.default_value.value()) == m_type);
     ERHE_VERIFY(validate(metadata.default_value.value()));
     m_overrides.push_back(Override{.owner_type = owner_type, .metadata = std::move(metadata)});
@@ -174,6 +175,27 @@ auto is_owner_type_or_descendant(Owner_type id, const Owner_type ancestor) -> bo
     }
 }
 
+auto Property_registry::get_group_id(const std::string_view group) -> uint16_t
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    return get_group_id_locked(group);
+}
+
+auto Property_registry::get_group_id_locked(const std::string_view group) -> uint16_t
+{
+    if (group.empty()) {
+        return 0;
+    }
+    for (std::size_t i = 0, end = m_group_names.size(); i < end; ++i) {
+        if (m_group_names[i] == group) {
+            return static_cast<uint16_t>(i + 1);
+        }
+    }
+    ERHE_VERIFY(m_group_names.size() < std::numeric_limits<uint16_t>::max());
+    m_group_names.emplace_back(group);
+    return static_cast<uint16_t>(m_group_names.size());
+}
+
 auto Property_registry::register_property(Dependency_property::Registration&& registration) -> const Dependency_property&
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
@@ -184,6 +206,7 @@ auto Property_registry::register_property(Dependency_property::Registration&& re
         ERHE_FATAL("property '%s' is already registered for owner type %u (%s)", key.name.c_str(), static_cast<unsigned int>(key.owner_type), m_owner_types[key.owner_type].name.c_str());
     }
     const uint16_t index = static_cast<uint16_t>(m_properties.size());
+    registration.metadata.ui.group_id = get_group_id_locked(registration.metadata.ui.group);
     const Dependency_property* const default_from = registration.metadata.default_from;
     if (default_from != nullptr) {
         // D31: the source is registered already and of the same type.

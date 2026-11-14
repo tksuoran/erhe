@@ -419,7 +419,7 @@ void Transform_tool::window_imgui()
     {
         Property_editor& p = m_property_editor;
         p.reset();
-        p.add_entry("Coordinate System", [this, &settings]() {
+        p.add_entry(Property_row_id::transform_coordinate_system, "Coordinate System", [this, &settings]() {
             int mode = static_cast<int>(settings.reference_mode);
             bool changed = false;
             for (int i = 0, end = IM_ARRAYSIZE(c_transform_reference_mode_strings); i < end; ++i) {
@@ -480,7 +480,7 @@ void Transform_tool::window_imgui()
     {
         Property_editor& p = m_property_editor;
         p.reset();
-        p.add_entry("Scale Gizmo", [this, &settings]() {
+        p.add_entry(Property_row_id::transform_scale_gizmo, "Scale Gizmo", [this, &settings]() {
             int  mode    = static_cast<int>(settings.scale_gizmo_mode);
             bool changed = false;
             for (int i = 0, end = IM_ARRAYSIZE(c_scale_gizmo_mode_strings); i < end; ++i) {
@@ -3189,7 +3189,7 @@ Edit_state::Edit_state(
     p.reset();
 
     p.add_entry(
-        "Translation",
+        Property_row_id::transform_translation, "Translation",
         [this]() {
             const ImGuiSliderFlags flags =
                 ImGuiSliderFlags_NoRoundToFormat |
@@ -3207,7 +3207,7 @@ Edit_state::Edit_state(
         }
     );
 
-    p.push_group("Rotation", ImGuiTreeNodeFlags_DefaultOpen);
+    p.push_group(Property_row_id::transform_rotation, "Rotation", ImGuiTreeNodeFlags_DefaultOpen);
     // Per-component rotation disabling is not expressible in the rotation
     // inspector's widgets (quaternion / axis-angle views mix axes, and the
     // inspector registers deferred entries of its own); rotation locks are
@@ -3217,7 +3217,7 @@ Edit_state::Edit_state(
     p.pop_group();
 
     p.add_entry(
-        "Scale",
+        Property_row_id::transform_scale, "Scale",
         [this]() {
             const ImGuiSliderFlags flags =
                 ImGuiSliderFlags_NoRoundToFormat |
@@ -3236,7 +3236,7 @@ Edit_state::Edit_state(
     );
 
     p.add_entry(
-        "Skew",
+        Property_row_id::transform_skew, "Skew",
         [this]() {
             const ImGuiSliderFlags flags = ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_ColorMarkers;
             ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(0, false));

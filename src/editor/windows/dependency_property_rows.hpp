@@ -63,6 +63,7 @@ class Property_group_rows
 {
 public:
     std::string_view                                                                               group{};
+    uint16_t                                                                                       group_id{0}; // set by add_group_rows()
     std::function<bool(const std::vector<std::shared_ptr<erhe::Item_base>>&)>                     applies{};  // lists the group without property rows; unset = property rows only
     std::function<void(Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>&)>   add_rows{};
 };

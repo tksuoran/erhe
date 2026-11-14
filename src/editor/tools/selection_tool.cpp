@@ -458,6 +458,11 @@ auto Selection::get_selected_items() const -> const std::vector<std::shared_ptr<
     return m_selection;
 }
 
+auto Selection::get_selection_key() const -> uint64_t
+{
+    return m_selection_key;
+}
+
 auto Selection::get_hosted_selection(erhe::Item_host* host) -> const std::vector<std::shared_ptr<erhe::Item_base>>&
 {
     std::vector<std::shared_ptr<erhe::Item_base>>& bucket = m_hosted_selection[host];
@@ -1006,6 +1011,11 @@ void Selection::end_selection_change()
             set_active_scene_root(scene_root->shared_from_this());
             break;
         }
+    }
+
+    m_selection_key = 0;
+    for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
+        m_selection_key += combine_property_row_scope(0, item->get_id());
     }
 
     // One increment per dispatch, so a test can tell a single batched prune

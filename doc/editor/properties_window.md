@@ -134,3 +134,56 @@ physics materials, and a material plus a body, and check each type has
 one section in Combined mode, that dragging one mixed component changes
 only that component on every item, and that each edit is one undo entry;
 the user drives that check (doc/agents/editor_runs.md "Once the user starts testing").
+
+## 5. Row ids
+
+Every row and group header a `Property_editor` draws (this window, Settings,
+Debug Visualizations, the tool and graph windows) has an ImGui id made of
+numbers only, so the id of a row is the same whichever other rows and items
+the window shows. An edit in flight depends on it: ImGui ends a drag whose
+widget is not submitted under the same id in the next frame.
+
+Each entry carries a `Property_row_key`
+(`src/editor/windows/property_row_id.hpp`): a kind, an id and an instance.
+
+| Entry | Kind | Id | Instance |
+|---|---|---|---|
+| Row of a registered property | `property` | `Dependency_property::get_index()` | 0 |
+| Group of registered properties, hand-written group registered with `add_group_rows` | `property_group` | `Property_ui::group_id` (`Property_registry::get_group_id()`, one number per group name, given at registration) | 0 |
+| Action row below a property (`Property_row_action`) | `property_action` | index of the action in registration order | 0 |
+| Hand-written row or group | `row` | its `Property_row_id` enumerator, one per call site | what tells repeats of the call site apart: an index (primitive, vertex stream, LOD level, kit parameter), an item id, the address of the object shown |
+
+`Property_editor::show_entries` combines the keys from the outside in: the
+id of the table the rows are drawn in (which tells two windows showing one
+item apart), then the key of each enclosing group, then the entry's own key.
+The 64-bit result folds to the 32-bit ImGui id, which is pushed with
+`ImGui::PushOverrideID`, so the ImGui ID stack above the row plays no part.
+
+The item a row belongs to enters through the group that encloses its rows:
+
+- an item's own section is the group `Property_row_id::properties_item`
+  with the item's unique id as the instance;
+- a combined section is the group `Property_row_id::properties_combined_items`
+  whose instance is `Selection::get_selection_key()` combined with the
+  section's property owner type. The selection key is the sum of the mixed
+  ids of the selected items, so it does not depend on their order, and
+  `Selection::end_selection_change` computes it when the selection changes;
+- the rows of a property sub-object (a mesh primitive, D29) are added inside
+  a group whose instance is the sub-object's index.
+
+Uniqueness: a property is listed once for one object, so (item or selection
+key, sub-object, property index) names one row; a hand-written row is named
+by its enumerator within its group, plus the instance where one call site
+adds several rows. The key is unique by construction; the 32-bit id is its
+hash, as every ImGui id is. `show_entries` logs an error to
+`editor.frame` naming both rows when two entries of one call get the same
+id; the check runs in the frames where the set of rows changed.
+
+A new hand-written row gets a new enumerator in `Property_row_id`; a helper
+that adds rows for several objects takes the enumerator or the instance from
+its caller (`Properties::buffer_mesh_properties`, `add_config_section`).
+
+## Future work
+
+- The hand-written rows become registered properties, after which
+  `Property_row_id` goes away (`doc/plans/open_items.md` "Editor features").

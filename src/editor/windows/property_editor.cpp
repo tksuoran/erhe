@@ -1,34 +1,30 @@
 #include "windows/property_editor.hpp"
 #include "windows/property_group_states.hpp"
 
+#include "editor_log.hpp"
+
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace editor {
+#include <imgui/imgui_internal.h>
 
-void Property_editor::reset_row()
-{
-    m_row = 0;
-}
+#include <algorithm>
+
+namespace editor {
 
 void Property_editor::reset()
 {
     m_entries.clear();
-    m_row = 0;
 }
 
-void Property_editor::resume()
-{
-    m_entries.clear();
-}
-
-void Property_editor::push_group(std::string&& label, ImGuiTreeNodeFlags flags, float indent, bool* open_state)
+void Property_editor::push_group(const Property_row_key key, std::string&& label, ImGuiTreeNodeFlags flags, float indent, bool* open_state)
 {
     m_entries.push_back(
         Entry{
             .push_group = true,
+            .key        = key,
             .label      = std::move(label),
             .flags      = flags,
             .indent     = indent,
@@ -37,11 +33,12 @@ void Property_editor::push_group(std::string&& label, ImGuiTreeNodeFlags flags, 
     );
 }
 
-void Property_editor::push_group(std::string&& label, const float indent, Property_group_states& states)
+void Property_editor::push_group(const Property_row_key key, std::string&& label, const float indent, Property_group_states& states)
 {
     m_entries.push_back(
         Entry{
             .push_group   = true,
+            .key          = key,
             .label        = std::move(label),
             .indent       = indent,
             .group_states = &states
@@ -54,10 +51,11 @@ void Property_editor::pop_group()
     m_entries.push_back(Entry{.pop_group = true});
 }
 
-void Property_editor::add_entry(std::string&& label, std::function<void()> editor, std::string&& tooltip, std::optional<uint32_t> label_text_color)
+void Property_editor::add_entry(const Property_row_key key, std::string&& label, std::function<void()> editor, std::string&& tooltip, std::optional<uint32_t> label_text_color)
 {
     m_entries.push_back(
         Entry{
+            .key              = key,
             .label            = std::move(label),
             .tooltip          = std::move(tooltip),
             .editor           = std::move(editor),
@@ -66,10 +64,11 @@ void Property_editor::add_entry(std::string&& label, std::function<void()> edito
     );
 }
 
-void Property_editor::add_entry(std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor)
+void Property_editor::add_entry(const Property_row_key key, std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor)
 {
     m_entries.push_back(
         Entry{
+            .key                    = key,
             .label                  = std::move(label),
             .editor                 = std::move(editor),
             .label_text_color       = label_text_color,
@@ -184,18 +183,23 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
     ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 100.0f);
     ImGui::TableSetupColumn("editor", ImGuiTableColumnFlags_WidthStretch, 1.0f);
 
-    if (filtering) {
-        // Filtered rows are drawn in their own ID scope. Force-opening a group
-        // (below) writes the open state into ImGui's storage, so without a
-        // separate scope a filter would overwrite - and on clearing leave
-        // behind - the fold state the user had set. With the scope, the
-        // unfiltered rows keep their own storage entries untouched.
-        ImGui::PushID("##filtered");
-    }
+    // Row ids replace the ID stack, so the table's own id keeps two windows
+    // showing the same item apart. Filtered rows get ids of their own:
+    // force-opening a group (below) writes the open state into ImGui's
+    // storage, which must not overwrite the fold state the user had set.
+    ImGuiWindow* const window    = ImGui::GetCurrentWindow();
+    const uint64_t     root_scope = combine_property_row_scope(window->IDStack.back(), filtering ? 1u : 0u);
+    m_shown_ids.clear();
+    uint64_t signature = 0;
 
     for (std::size_t entry_index = 0, entry_end = m_entries.size(); entry_index < entry_end; ++entry_index) {
         const Entry& entry = m_entries[entry_index];
-        ImGui::PushID(m_row++);
+        const uint64_t entry_scope = entry.pop_group ? 0 : entry.key.combine(m_stack.empty() ? root_scope : m_stack.back().scope);
+        const ImGuiID  entry_id    = static_cast<ImGuiID>(entry_scope ^ (entry_scope >> 32));
+        if (!entry.pop_group) {
+            m_shown_ids.push_back(Shown_id{entry_id, entry_index});
+            signature += combine_property_row_scope(m_shown_ids.size(), entry_id);
+        }
         const bool filtered_in = m_entry_visible[entry_index] != 0;
         bool currently_open = m_stack.empty() || m_stack.back().subtree_open;
         float indent_amount = m_stack.empty() ? 0.0f : m_stack.back().indent_amount;
@@ -217,7 +221,7 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                     ImGui::SetNextItemOpen(true, ImGuiCond_Always);
                 }
                 const ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_LabelSpanAllColumns | entry.flags;
-                const bool subtree_open = ImGui::TreeNodeEx(entry.label.c_str(), flags);
+                const bool subtree_open = !window->SkipItems && ImGui::TreeNodeBehavior(entry_id, flags, entry.label.c_str());
                 if (entry.open_state != nullptr) {
                     *entry.open_state = subtree_open;
                 }
@@ -228,12 +232,12 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                     property_group_drag_drop(entry);
                 }
                 ImGui::PopStyleVar(1);
-                m_stack.emplace_back(subtree_open, entry.indent);
+                m_stack.emplace_back(subtree_open, entry.indent, entry_scope);
                 if (entry.indent != 0.0f) {
                     ImGui::Indent(entry.indent);
                 }
             } else {
-                m_stack.emplace_back(false, 0.0f);
+                m_stack.emplace_back(false, 0.0f, entry_scope);
             }
         } else if (entry.pop_group) {
             if (indent_amount != 0.0f) {
@@ -244,6 +248,7 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
             }
             m_stack.pop_back();
         } else if (currently_open && filtered_in) {
+            ImGui::PushOverrideID(entry_id);
             ImGui::TableNextRow(ImGuiTableRowFlags_None);
             ImGui::TableSetColumnIndex(0);
             if (entry.label_text_color.has_value()) {
@@ -304,18 +309,36 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                     ImGui::SetTooltip("%s", entry.tooltip.c_str());
                 }
             }
+            ImGui::PopID();
         }
-        ImGui::PopID();
     }
     ERHE_VERIFY(m_stack.empty());
-    if (filtering) {
-        ImGui::PopID();
+    // The duplicate check runs when the set of rows changed, not every frame.
+    if (signature != m_checked_signature) {
+        m_checked_signature = signature;
+        report_duplicate_ids();
     }
 
     ImGui::EndTable();
     ImGui::PopStyleVar(1);
 
     m_entries.clear();
+}
+
+void Property_editor::report_duplicate_ids()
+{
+    std::sort(
+        m_shown_ids.begin(), m_shown_ids.end(),
+        [](const Shown_id& lhs, const Shown_id& rhs) { return lhs.id < rhs.id; }
+    );
+    for (std::size_t i = 1, end = m_shown_ids.size(); i < end; ++i) {
+        if (m_shown_ids[i].id == m_shown_ids[i - 1].id) {
+            log_frame->error(
+                "Property rows '{}' and '{}' share the row id {:#x}",
+                m_entries[m_shown_ids[i - 1].entry_index].label, m_entries[m_shown_ids[i].entry_index].label, m_shown_ids[i].id
+            );
+        }
+    }
 }
 
 void Property_editor::set_entry_tooltip_extra(std::function<std::string()> provider)

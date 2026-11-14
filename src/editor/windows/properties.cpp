@@ -424,7 +424,7 @@ void Properties::animation_properties(const std::shared_ptr<erhe::scene::Animati
     // properties drawn by the generic rows (doc/erhe/property_system.md section
     // 4.16). Playback and curve editing live in the Animation window
     // (issue #243).
-    add_entry("Edit", [this, animation]() {
+    add_entry(Property_row_id::properties_edit, "Edit", [this, animation]() {
         if (ImGui::Button("Open in Animation Window")) {
             m_context.animation_window->set_animation(animation);
             m_context.animation_window->show_window();
@@ -458,7 +458,7 @@ void Properties::scene_override_properties(erhe::scene::Scene& scene)
     // scene's optional (seeded from the current editor value) or clears it,
     // followed by the group's editable fields when engaged.
     auto override_struct = [this, show_developer](auto& optional_field, const auto& editor_value, const char* name) {
-        add_entry(std::string{name}, [&optional_field, &editor_value]() {
+        add_entry({Property_row_id::properties_scene_override, reinterpret_cast<std::uintptr_t>(&optional_field)}, std::string{name}, [&optional_field, &editor_value]() {
             bool overridden = optional_field.has_value();
             if (ImGui::Checkbox("##", &overridden)) {
                 if (overridden) {
@@ -482,9 +482,9 @@ void Properties::scene_override_properties(erhe::scene::Scene& scene)
 
     // The scene's export settings, present or absent (doc/editor/prepared_assets.md "Export settings").
     std::optional<Scene_export_settings>& optional_export_settings = scene_settings.export_settings;
-    push_group("Export", ImGuiTreeNodeFlags_Framed);
+    push_group(Property_row_id::properties_export, "Export", ImGuiTreeNodeFlags_Framed);
     if (!optional_export_settings.has_value()) {
-        add_entry("Export Settings", [&optional_export_settings, &settings, scene_root]() {
+        add_entry(Property_row_id::properties_export_settings, "Export Settings", [&optional_export_settings, &settings, scene_root]() {
             ImGui::TextUnformatted("none");
             ImGui::SameLine();
             if (ImGui::Button("Add Export Settings")) {
@@ -498,71 +498,73 @@ void Properties::scene_override_properties(erhe::scene::Scene& scene)
     Scene_export_settings& export_settings = optional_export_settings.value();
     // The settings the World-space mesh keys and the bake's admission read (R8.6).
     add_config_section(*this, show_developer, export_settings.lod, "LOD", [scene_root]() { scene_root->on_export_settings_changed(); });
-    add_entry("Bake Static To World Space", [&export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_bake_static_to_world_space, "Bake Static To World Space", [&export_settings, scene_root]() {
         if (ImGui::Checkbox("##", &export_settings.bake_static_to_world_space)) {
             scene_root->on_export_settings_changed();
         }
     }, "Export writes the static mesh nodes under the World Space node with world-space vertices and identity transforms.");
-    add_entry("Instancing", [&export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_instancing, "Instancing", [&export_settings, scene_root]() {
         if (imgui_enum_combo("##", export_settings.instancing)) {
             scene_root->on_export_settings_changed();
         }
     }, "What the world-space bake does with a primitive several baked nodes share.");
     if (export_settings.instancing == Bake_instancing::duplicate_within_budget) {
-        add_entry("Instancing Budget (MiB)", [&export_settings, scene_root]() {
+        add_entry(Property_row_id::properties_instancing_budget_mib, "Instancing Budget (MiB)", [&export_settings, scene_root]() {
             ImGui::DragInt("##", &export_settings.instancing_budget_mib, 1.0f, 0, 4096);
             if (ImGui::IsItemDeactivatedAfterEdit()) {
                 scene_root->on_export_settings_changed();
             }
         }, "Vertex and index bytes the bake may add by duplicating shared primitives.");
     }
-    add_entry("PVS Region Min", [&export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_pvs_region_min, "PVS Region Min", [&export_settings, scene_root]() {
         ImGui::DragFloat3("##", &export_settings.pvs_region_min.x, 0.1f);
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             scene_root->on_export_settings_changed();
         }
     }, "Minimum corner of the PVS bake region; both corners zero: the union of the baked entries' bounds.");
-    add_entry("PVS Region Max", [&export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_pvs_region_max, "PVS Region Max", [&export_settings, scene_root]() {
         ImGui::DragFloat3("##", &export_settings.pvs_region_max.x, 0.1f);
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             scene_root->on_export_settings_changed();
         }
     }, "Maximum corner of the PVS bake region.");
-    add_entry("PVS Cell Size", [&export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_pvs_cell_size, "PVS Cell Size", [&export_settings, scene_root]() {
         ImGui::DragFloat("##", &export_settings.pvs_cell_size, 0.05f, 0.05f, 100.0f, "%.2f m");
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             scene_root->on_export_settings_changed();
         }
     }, "Edge length of one PVS bake grid cell.");
-    add_entry("Texture Supercompression", [&export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_texture_supercompression, "Texture Supercompression", [&export_settings, scene_root]() {
         if (imgui_enum_combo("##", export_settings.texture_supercompression)) {
             scene_root->on_export_settings_changed();
         }
     }, "How the raw block images transcoded for a target are written: Zstandard supercompressed, or stored as they upload.");
-    add_entry("Texture Encoding", [&export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_texture_encoding, "Texture Encoding", [&export_settings, scene_root]() {
         if (imgui_enum_combo("##", export_settings.texture_encoding)) {
             scene_root->on_export_settings_changed();
         }
     }, "What the Texture item of a PNG / JPEG image holds: target encodes it to the target's block format by way of a Basis texture item; source keeps the image bytes and the prepared run decodes them at load.");
-    add_entry("Raytrace BVH", [&export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_raytrace_bvh, "Raytrace BVH", [&export_settings, scene_root]() {
         if (ImGui::Checkbox("##", &export_settings.raytrace_bvh)) {
             scene_root->on_export_settings_changed();
         }
     }, "A prepared asset carries the Raytrace BVH of its meshes; off leaves it out and a prepared run builds it in memory.");
-    add_entry("PVS Mode", [&export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_pvs_mode, "PVS Mode", [&export_settings, scene_root]() {
         if (imgui_enum_combo("##", export_settings.pvs_mode)) {
             scene_root->on_export_settings_changed();
         }
     }, "What Export does about the PVS: off writes none; reuse copies the editor asset's PVS item as it is (unsafe: nothing checks it matches the exported geometry); rebake bakes it on the world-space form during every Export (needs the PVS region).");
     // The navigation mesh build settings (doc/editor/navigation.md "Settings"); a drag commits at its release.
     Navigation_settings& navigation = export_settings.navigation;
-    push_group("Navigation", ImGuiTreeNodeFlags_Framed);
-    for (const erhe::codegen::Field_info& field : get_fields(static_cast<const Navigation_settings*>(nullptr))) {
+    push_group(Property_row_id::properties_navigation, "Navigation", ImGuiTreeNodeFlags_Framed);
+    const std::span<const erhe::codegen::Field_info> navigation_fields = get_fields(static_cast<const Navigation_settings*>(nullptr));
+    for (const erhe::codegen::Field_info& field : navigation_fields) {
         if (field.removed_in != 0) {
             continue;
         }
         std::string tooltip = (field.long_desc != nullptr) ? std::string{field.long_desc} : std::string{};
-        add_entry(std::string{(field.short_desc != nullptr) ? field.short_desc : field.name}, [&navigation, &field, scene_root]() {
+        const Property_row_key field_key{Property_row_id::config_field, static_cast<uint64_t>(&field - navigation_fields.data())};
+        add_entry(field_key, std::string{(field.short_desc != nullptr) ? field.short_desc : field.name}, [&navigation, &field, scene_root]() {
             using erhe::codegen::Field_type;
             void* const base    = static_cast<void*>(&navigation);
             const bool  changed = (field.field_type == Field_type::vec3)
@@ -578,7 +580,7 @@ void Properties::scene_override_properties(erhe::scene::Scene& scene)
     navigation_mesh_properties(*scene_root);
     pop_group();
     // Last of the rows that read the settings: a removal leaves no later row reading them.
-    add_entry("Export Settings", [&optional_export_settings, scene_root]() {
+    add_entry(Property_row_id::properties_export_settings_2, "Export Settings", [&optional_export_settings, scene_root]() {
         if (ImGui::Button("Remove Export Settings")) {
             optional_export_settings.reset();
             scene_root->on_export_settings_changed();
@@ -628,13 +630,13 @@ void Properties::prepared_status_properties(Scene_root& scene_root)
         (scene_root.get_source_format() == Scene_source_format::usd) ||
         (m_context.scene_save_service == nullptr)
     ) {
-        add_entry("Prepared Status", []() {
+        add_entry(Property_row_id::properties_prepared_status, "Prepared Status", []() {
             ImGui::TextUnformatted("no editor asset (save the scene; USD and prepared runs have none)");
         }, "The editor asset lives beside the scene's source file.");
         return;
     }
     const std::weak_ptr<Scene_root> weak_scene_root = scene_root.shared_from_this();
-    add_entry("Prepared Status", [this, weak_scene_root]() {
+    add_entry(Property_row_id::properties_prepared_status_2, "Prepared Status", [this, weak_scene_root]() {
         const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
         if (!root) {
             return;
@@ -666,17 +668,17 @@ void Properties::prepared_status_properties(Scene_root& scene_root)
 
     const std::shared_ptr<const Prepared_status_report> status = scene_root.get_prepared_status();
     if (status) {
-        add_entry("Prepared Asset Matches", [status]() {
+        add_entry(Property_row_id::properties_prepared_asset_matches, "Prepared Asset Matches", [status]() {
             if (status->matches) {
                 ImGui::TextUnformatted("yes");
             } else {
                 ImGui::Text("no: %s", status->mismatch.c_str());
             }
         }, "Whether the prepared asset holds exactly the items Export would leave in it.");
-        add_entry("Editor Asset", [status]() {
+        add_entry(Property_row_id::properties_editor_asset, "Editor Asset", [status]() {
             ImGui::Text("%s (%s)", erhe::file::to_string(status->editor_asset_path).c_str(), format_bytes(status->editor_asset_bytes).c_str());
         });
-        add_entry("Prepared Asset", [status]() {
+        add_entry(Property_row_id::properties_prepared_asset, "Prepared Asset", [status]() {
             if (status->prepared_asset_exists) {
                 ImGui::Text(
                     "%s (%s, %llu items)",
@@ -697,7 +699,7 @@ void Properties::prepared_status_properties(Scene_root& scene_root)
                 (kind == erhe::asset_store::Item_kind::basis_texture) ? "Basis Texture Items" :
                 (kind == erhe::asset_store::Item_kind::scene)        ? "Scene Items" :
                 (kind == erhe::asset_store::Item_kind::navigation_mesh) ? "Navigation Mesh Items" : erhe::asset_store::c_str(kind);
-            add_entry(kind_label, [kind_status]() {
+            add_entry({Property_row_id::properties_prepared_item_kind, static_cast<uint64_t>(kind)}, kind_label, [kind_status]() {
                 ImGui::Text(
                     "present %zu, missing %zu; stored %llu (%s), unreferenced %llu (%s)",
                     kind_status.present, kind_status.missing,
@@ -708,7 +710,7 @@ void Properties::prepared_status_properties(Scene_root& scene_root)
         }
     }
 
-    add_entry("Drop", [this, weak_scene_root]() {
+    add_entry(Property_row_id::properties_drop, "Drop", [this, weak_scene_root]() {
         const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
         if (!root) {
             return;
@@ -793,6 +795,7 @@ void Properties::variant_properties(Scene_root& scene_root)
                 live ? "." : ", which is not the selected block: select it to bring this set in."
             );
         add_entry(
+            {Property_row_id::properties_variant_set, static_cast<uint64_t>(&set - sets.data())},
             std::move(label),
             [this, &scene_root, &set, key, live]() {
                 if (!live) {
@@ -833,7 +836,7 @@ void Properties::light_properties(erhe::scene::Light& light)
     // (doc/erhe/property_system.md D19). Only the diagnostic remains here.
     const erhe::scene::Light::Type type = light.get_light_type();
     if ((type == erhe::scene::Light::Type::point) && (light.get_range() <= 0.0f)) {
-        add_entry("Warning", [](){
+        add_entry(Property_row_id::properties_warning, "Warning", [](){
             ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 160, 32, 255));
             ImGui::TextWrapped("Point light range is 0: it reaches nowhere, so it emits no light and casts no shadow. Set a positive range.");
             ImGui::PopStyleColor();
@@ -851,11 +854,13 @@ void Properties::skin_properties(erhe::scene::Skin& skin)
     // The skeleton name and the joint count are the skin's computed
     // properties; the joint names follow as rows of the same "Skin" group.
     auto& skin_data = skin.skin_data;
-    for (auto& joint : skin_data.joints) {
+    for (std::size_t joint_index = 0, joint_end = skin_data.joints.size(); joint_index < joint_end; ++joint_index) {
+        auto& joint = skin_data.joints[joint_index];
+        const Property_row_key joint_key{Property_row_id::properties_skin_joint, joint_index};
         if (!joint) {
-            add_entry("", [](){ ImGui::TextUnformatted("(missing joint)"); });
+            add_entry(joint_key, "", [](){ ImGui::TextUnformatted("(missing joint)"); });
         } else {
-            add_entry("", [&](){ ImGui::TextUnformatted(joint->get_name().c_str()); });
+            add_entry(joint_key, "", [&joint](){ ImGui::TextUnformatted(joint->get_name().c_str()); });
         }
     }
 }
@@ -883,7 +888,7 @@ void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Textur
 
     // The size and format are the texture's computed properties, drawn as
     // the "Texture" group's property rows above this preview.
-    add_entry("Preview", [this, texture](){
+    add_entry(Property_row_id::properties_preview, "Preview", [this, texture](){
         // TODO Draw to available size respecting aspect ratio
         m_context.imgui_renderer->image(
             erhe::imgui::Draw_texture_parameters{
@@ -903,22 +908,22 @@ void Properties::geometry_properties(erhe::geometry::Geometry& geometry)
 {
     ERHE_PROFILE_FUNCTION();
 
-    push_group("Geometry", ImGuiTreeNodeFlags_None, m_indent);
+    push_group(Property_row_id::properties_geometry, "Geometry", ImGuiTreeNodeFlags_None, m_indent);
 
     const GEO::Mesh& geo_mesh = geometry.get_mesh();
-    add_entry("Vertices", [&geo_mesh](){
+    add_entry(Property_row_id::properties_vertices, "Vertices", [&geo_mesh](){
         int vertex_count = static_cast<int>(geo_mesh.vertices.nb());
         ImGui::InputInt("##", &vertex_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
     });
-    add_entry("Facets", [&geo_mesh](){
+    add_entry(Property_row_id::properties_facets, "Facets", [&geo_mesh](){
         int facet_count = static_cast<int>(geo_mesh.facets.nb());
         ImGui::InputInt("##", &facet_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
     });
-    add_entry("Edges", [&geo_mesh](){
+    add_entry(Property_row_id::properties_edges, "Edges", [&geo_mesh](){
         int edge_count = static_cast<int>(geo_mesh.edges.nb());
         ImGui::InputInt("##", &edge_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
     });
-    add_entry("Corners", [&geo_mesh](){
+    add_entry(Property_row_id::properties_corners, "Corners", [&geo_mesh](){
         int corner_count = static_cast<int>(geo_mesh.facet_corners.nb());
         ImGui::InputInt("##", &corner_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
     });
@@ -926,7 +931,7 @@ void Properties::geometry_properties(erhe::geometry::Geometry& geometry)
     pop_group();
 }
 
-void Properties::buffer_mesh_properties(const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh)
+void Properties::buffer_mesh_properties(const Property_row_id group, const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -934,25 +939,25 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
         return;
     }
 
-    push_group(label, ImGuiTreeNodeFlags_None, m_indent);
+    push_group(group, label, ImGuiTreeNodeFlags_None, m_indent);
 
-    add_entry("Fill Triangles", [=](){ ImGui::Text("%zu", buffer_mesh->triangle_fill_indices.get_triangle_count()); });
-    add_entry("Edge Lines",     [=](){ ImGui::Text("%zu", buffer_mesh->edge_line_indices.get_line_count()); });
-    add_entry("Corner Points",  [=](){ ImGui::Text("%zu", buffer_mesh->corner_point_indices.get_point_count()); });
+    add_entry(Property_row_id::properties_fill_triangles, "Fill Triangles", [=](){ ImGui::Text("%zu", buffer_mesh->triangle_fill_indices.get_triangle_count()); });
+    add_entry(Property_row_id::properties_edge_lines, "Edge Lines",     [=](){ ImGui::Text("%zu", buffer_mesh->edge_line_indices.get_line_count()); });
+    add_entry(Property_row_id::properties_corner_points, "Corner Points",  [=](){ ImGui::Text("%zu", buffer_mesh->corner_point_indices.get_point_count()); });
     if (m_context.developer_mode) {
-        add_entry("Centroid Points", [=](){ ImGui::Text("%zu", buffer_mesh->polygon_centroid_indices.get_point_count()); });
+        add_entry(Property_row_id::properties_centroid_points, "Centroid Points", [=](){ ImGui::Text("%zu", buffer_mesh->polygon_centroid_indices.get_point_count()); });
     }
-    add_entry("Indices",     [=](){ ImGui::Text("%zu", buffer_mesh->index_buffer_range.count); });
-    add_entry("Index Bytes", [=](){ ImGui::Text("%zu", buffer_mesh->index_buffer_range.get_byte_size()); });
+    add_entry(Property_row_id::properties_indices, "Indices",     [=](){ ImGui::Text("%zu", buffer_mesh->index_buffer_range.count); });
+    add_entry(Property_row_id::properties_index_bytes, "Index Bytes", [=](){ ImGui::Text("%zu", buffer_mesh->index_buffer_range.get_byte_size()); });
     for (size_t i = 0, end = buffer_mesh->vertex_buffer_ranges.size(); i < end; ++i) {
         const erhe::primitive::Buffer_range& vertex_buffer_range = buffer_mesh->vertex_buffer_ranges.at(i);
         if (vertex_buffer_range.count > 0) {
             while (m_vertex_stream_labels.size() <= i) {
                 m_vertex_stream_labels.push_back(fmt::format("Vertex stream {}", m_vertex_stream_labels.size()));
             }
-            push_group(m_vertex_stream_labels.at(i).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-            add_entry("Vertices",     [=](){ ImGui::Text("%zu", vertex_buffer_range.count); });
-            add_entry("Vertex Bytes", [=](){ ImGui::Text("%zu", vertex_buffer_range.get_byte_size()); });
+            push_group({Property_row_id::properties_vertex_stream, i}, m_vertex_stream_labels.at(i).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+            add_entry(Property_row_id::properties_vertices_2, "Vertices",     [=](){ ImGui::Text("%zu", vertex_buffer_range.count); });
+            add_entry(Property_row_id::properties_vertex_bytes, "Vertex Bytes", [=](){ ImGui::Text("%zu", vertex_buffer_range.get_byte_size()); });
             pop_group();
         }
     }
@@ -963,14 +968,14 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
         static constexpr std::array<const char*, erhe::primitive::max_lod_levels> c_level_labels{
             "Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7"
         };
-        push_group("Level of Detail", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        add_entry("Levels",             [=](){ ImGui::Text("%zu", lod_chain.level_count); });
+        push_group(Property_row_id::properties_level_of_detail, "Level of Detail", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        add_entry(Property_row_id::properties_levels, "Levels",             [=](){ ImGui::Text("%zu", lod_chain.level_count); });
         if (lod_chain.generation_seconds > 0.0f) { // 0 for a chain loaded from a file
-            add_entry("Generation Seconds", [=](){ ImGui::Text("%.3f", lod_chain.generation_seconds); });
+            add_entry(Property_row_id::properties_generation_seconds, "Generation Seconds", [=](){ ImGui::Text("%.3f", lod_chain.generation_seconds); });
         }
         for (std::size_t level = 0; level < lod_chain.level_count; ++level) {
             const erhe::primitive::Lod_level& lod_level = lod_chain.levels[level];
-            add_entry(c_level_labels[level], [=](){
+            add_entry({Property_row_id::properties_lod_level, level}, c_level_labels[level], [=](){
                 ImGui::Text("%zu triangles, error %.5f", lod_level.index_range.get_triangle_count(), lod_level.error);
             });
         }
@@ -980,12 +985,12 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
     if (buffer_mesh->bounding_box.is_valid_3d()) {
         const glm::vec3 size = buffer_mesh->bounding_box.max - buffer_mesh->bounding_box.min;
         const float volume = buffer_mesh->bounding_box.volume();
-        add_entry("Bounding box size",   [=](){ ImGui::Text("%f, %f, %f", size.x, size.y, size.z); });
-        add_entry("Bounding box volume", [=](){ ImGui::Text("%f", volume); });
+        add_entry(Property_row_id::properties_bounding_box_size, "Bounding box size",   [=](){ ImGui::Text("%f, %f, %f", size.x, size.y, size.z); });
+        add_entry(Property_row_id::properties_bounding_box_volume, "Bounding box volume", [=](){ ImGui::Text("%f", volume); });
     }
     if (buffer_mesh->bounding_sphere.radius > 0.0f) {
-        add_entry("Bounding sphere radius", [=](){ ImGui::Text("%f", buffer_mesh->bounding_sphere.radius); });
-        add_entry("Bounding sphere volume", [=](){ ImGui::Text("%f", buffer_mesh->bounding_sphere.volume()); });
+        add_entry(Property_row_id::properties_bounding_sphere_radius, "Bounding sphere radius", [=](){ ImGui::Text("%f", buffer_mesh->bounding_sphere.radius); });
+        add_entry(Property_row_id::properties_bounding_sphere_volume, "Bounding sphere volume", [=](){ ImGui::Text("%f", buffer_mesh->bounding_sphere.volume()); });
     }
 
     pop_group();
@@ -1000,10 +1005,10 @@ void Properties::primitive_raytrace_properties(erhe::primitive::Primitive_raytra
         return;
     }
     const erhe::primitive::Buffer_mesh& buffer_mesh = primitive_raytrace->get_raytrace_mesh();
-    buffer_mesh_properties("Raytrace Buffer Mesh", &buffer_mesh);
+    buffer_mesh_properties(Property_row_id::properties_raytrace_buffer_mesh, "Raytrace Buffer Mesh", &buffer_mesh);
 }
 
-void Properties::shape_properties(const char* label, erhe::primitive::Primitive_shape* shape, const Shape_kind shape_kind)
+void Properties::shape_properties(const Property_row_id group, const char* label, erhe::primitive::Primitive_shape* shape, const Shape_kind shape_kind)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1012,7 +1017,7 @@ void Properties::shape_properties(const char* label, erhe::primitive::Primitive_
     }
 
     if (m_context.developer_mode) {
-        push_group(label, ImGuiTreeNodeFlags_None, m_indent);
+        push_group(group, label, ImGuiTreeNodeFlags_None, m_indent);
     }
 
     // The render shape's geometry counts are the primitive's computed
@@ -1054,7 +1059,7 @@ void Properties::mesh_primitive_properties(erhe::scene::Mesh& mesh)
         while (m_primitive_labels.size() <= primitive_index) {
             m_primitive_labels.push_back(fmt::format("Primitive {}", m_primitive_labels.size()));
         }
-        push_group(m_primitive_labels.at(primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        push_group({Property_row_id::properties_primitive, primitive_index}, m_primitive_labels.at(primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
         // The primitive's registered properties (its material, the geometry
         // counts): generic rows on the property sub-object
         // (doc/erhe/property_system.md D29), undo through
@@ -1069,7 +1074,7 @@ void Properties::mesh_primitive_properties(erhe::scene::Mesh& mesh)
                 const std::optional<uint32_t> slot =
                     scene_root->get_material_set().get_slot(mesh_primitive.material.get());
                 add_entry(
-                    "Material Slot (forward set)",
+                    Property_row_id::properties_material_slot_forward_set, "Material Slot (forward set)",
                     [slot](){
                         if (slot.has_value()) {
                             ImGui::Text("%u", slot.value());
@@ -1083,17 +1088,17 @@ void Properties::mesh_primitive_properties(erhe::scene::Mesh& mesh)
 
         erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
         if (primitive.render_shape) {
-            shape_properties("Render shape", primitive.render_shape.get(), Shape_kind::render);
-            buffer_mesh_properties("Renderable Buffer Mesh", &primitive.render_shape->get_renderable_mesh());
+            shape_properties(Property_row_id::properties_render_shape, "Render shape", primitive.render_shape.get(), Shape_kind::render);
+            buffer_mesh_properties(Property_row_id::properties_renderable_buffer_mesh, "Renderable Buffer Mesh", &primitive.render_shape->get_renderable_mesh());
         }
         // Inspecting a primitive should show what is actually resident, so list
         // the optimized build separately whenever one is live.
         if (primitive.optimized_render_shape) {
-            shape_properties("Optimized render shape", primitive.optimized_render_shape.get(), Shape_kind::other);
-            buffer_mesh_properties("Optimized Buffer Mesh", &primitive.optimized_render_shape->get_renderable_mesh());
+            shape_properties(Property_row_id::properties_optimized_render_shape, "Optimized render shape", primitive.optimized_render_shape.get(), Shape_kind::other);
+            buffer_mesh_properties(Property_row_id::properties_optimized_buffer_mesh, "Optimized Buffer Mesh", &primitive.optimized_render_shape->get_renderable_mesh());
         }
         if (m_context.developer_mode && primitive.collision_shape) {
-            shape_properties("Collision shape", primitive.collision_shape.get(), Shape_kind::other);
+            shape_properties(Property_row_id::properties_collision_shape_group, "Collision shape", primitive.collision_shape.get(), Shape_kind::other);
         }
         pop_group();
     }
@@ -1107,12 +1112,12 @@ void Properties::mesh_raytrace_properties(erhe::scene::Mesh& mesh)
 
     const auto* mesh_rt_scene = mesh.get_rt_scene();
     if (mesh_rt_scene != nullptr) {
-        add_entry("RT Scene", [=](){ ImGui::TextUnformatted(mesh_rt_scene->debug_label().data()); });
+        add_entry(Property_row_id::properties_rt_scene, "RT Scene", [=](){ ImGui::TextUnformatted(mesh_rt_scene->debug_label().data()); });
     }
     const auto& rt_primitives = mesh.get_rt_primitives();
     const std::size_t rt_primitive_count = rt_primitives.size();
     if (!rt_primitives.empty()) {
-        push_group("Raytrace Primitives", ImGuiTreeNodeFlags_None, m_indent);
+        push_group(Property_row_id::properties_raytrace_primitives, "Raytrace Primitives", ImGuiTreeNodeFlags_None, m_indent);
         for (size_t rt_primitive_index = 0; rt_primitive_index < rt_primitive_count; ++rt_primitive_index) {
             while (m_rt_primitive_labels.size() <= rt_primitive_index) {
                 m_rt_primitive_labels.push_back(fmt::format("Raytrace Primitive {}", m_rt_primitive_labels.size()));
@@ -1121,11 +1126,11 @@ void Properties::mesh_raytrace_properties(erhe::scene::Mesh& mesh)
 
             const auto* rt_instance = rt_primitive->rt_instance.get();
             const auto* rt_scene    = rt_primitive->rt_scene.get();
-            push_group(m_rt_primitive_labels.at(rt_primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-            add_entry("Mesh",            [&](){ ImGui::TextUnformatted((rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)"); });
-            add_entry("Primitive Index", [&](){ ImGui::Text("%zu", rt_primitive->primitive_index); });
-            add_entry("RT Instance",     [=](){ ImGui::TextUnformatted((rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)"); });
-            add_entry("RT Scene",        [=](){ ImGui::TextUnformatted((rt_scene != nullptr) ? rt_scene->debug_label().data() : "(nullptr)"); });
+            push_group({Property_row_id::properties_raytrace_primitive, rt_primitive_index}, m_rt_primitive_labels.at(rt_primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+            add_entry(Property_row_id::properties_mesh, "Mesh",            [&](){ ImGui::TextUnformatted((rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)"); });
+            add_entry(Property_row_id::properties_primitive_index, "Primitive Index", [&](){ ImGui::Text("%zu", rt_primitive->primitive_index); });
+            add_entry(Property_row_id::properties_rt_instance, "RT Instance",     [=](){ ImGui::TextUnformatted((rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)"); });
+            add_entry(Property_row_id::properties_rt_scene_2, "RT Scene",        [=](){ ImGui::TextUnformatted((rt_scene != nullptr) ? rt_scene->debug_label().data() : "(nullptr)"); });
             pop_group();
         }
         pop_group();
@@ -1138,7 +1143,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
     ERHE_PROFILE_FUNCTION();
 
     if (m_context.developer_mode) {
-        add_entry("Layer ID", [&](){ ImGui::Text("%u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id)); });
+        add_entry(Property_row_id::properties_layer_id, "Layer ID", [&](){ ImGui::Text("%u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id)); });
     }
 }
 
@@ -1150,7 +1155,7 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
         return;
     }
     m_kit_piece_editor.update(piece);
-    add_entry("Shape", [this]() {
+    add_entry(Property_row_id::properties_shape, "Shape", [this]() {
         ImGui::TextUnformatted(m_kit_piece_editor.get_shape_text().c_str());
         const Kit_shape_definition* const shape = m_kit_piece_editor.get_shape();
         if ((shape != nullptr) && ImGui::IsItemHovered()) {
@@ -1159,19 +1164,19 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
     });
     const Kit_shape_definition* const shape = m_kit_piece_editor.get_shape();
     if (shape == nullptr) {
-        add_entry("Problem", [this]() { kit_message_line(m_kit_piece_editor.get_problem()); });
+        add_entry(Property_row_id::properties_problem, "Problem", [this]() { kit_message_line(m_kit_piece_editor.get_problem()); });
         return;
     }
     for (std::size_t i = 0, end = shape->parameters.size(); i < end; ++i) {
-        add_entry(std::string{shape->parameters[i].name}, [this, i]() {
+        add_entry({Property_row_id::properties_kit_parameter, i}, std::string{shape->parameters[i].name}, [this, i]() {
             m_kit_piece_editor.on_edit(kit_parameter_row(m_kit_piece_editor.get_values(), i, Kit_row_label::recorded, m_kit_piece_editor.get_lengths()));
         });
     }
     if (shape->id == "basic.stairs") {
-        add_entry("Layout", [this]() { kit_stairs_line(m_kit_piece_editor.get_values()); });
+        add_entry(Property_row_id::properties_layout, "Layout", [this]() { kit_stairs_line(m_kit_piece_editor.get_values()); });
     }
     if (!m_kit_piece_editor.get_message().empty()) {
-        add_entry("Message", [this]() { kit_message_line(m_kit_piece_editor.get_message()); });
+        add_entry(Property_row_id::properties_message, "Message", [this]() { kit_message_line(m_kit_piece_editor.get_message()); });
     }
 }
 
@@ -1200,6 +1205,7 @@ void Properties::brush_placement_properties(const erhe::scene::Node& node)
         }
 
         add_entry(
+            {Property_row_id::properties_ngon, corner_count},
             m_ngon_labels.at(corner_count).c_str(),
             [polygon_count]() {
                 ImGui::Text("%zu", polygon_count);
@@ -1230,8 +1236,8 @@ void Properties::node_physics_properties(const erhe::scene::Node& node)
     const glm::mat4 transform = rigid_body->get_world_transform();
     const glm::vec3 pos       = glm::vec3{transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
 
-    add_entry("Rigid Body", [=](){ ImGui::TextUnformatted(rigid_body->get_debug_label()); });
-    add_entry("Position",   [=](){ ImGui::Text("%.2f, %.2f, %.2f", pos.x, pos.y, pos.z); });
+    add_entry(Property_row_id::properties_rigid_body, "Rigid Body", [=](){ ImGui::TextUnformatted(rigid_body->get_debug_label()); });
+    add_entry(Property_row_id::properties_position, "Position",   [=](){ ImGui::Text("%.2f, %.2f, %.2f", pos.x, pos.y, pos.z); });
 
     //bool allow_sleeping = rigid_body->get_allow_sleeping();
     //ImGui::Text("Allow Sleeping: %s", allow_sleeping ? "Yes" : "No");
@@ -1245,13 +1251,13 @@ void Properties::node_physics_properties(const erhe::scene::Node& node)
     const std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = rigid_body->get_collision_shape();
     if (collision_shape) {
         const glm::vec3 com = collision_shape->get_center_of_mass();
-        add_entry("Collision Shape",      [=](){ ImGui::TextUnformatted(collision_shape->describe().c_str()); });
-        add_entry("Local Center of Mass", [=](){ ImGui::Text("%.2f, %.2f, %.2f", com.x, com.y, com.z); });
+        add_entry(Property_row_id::properties_collision_shape, "Collision Shape",      [=](){ ImGui::TextUnformatted(collision_shape->describe().c_str()); });
+        add_entry(Property_row_id::properties_local_center_of_mass, "Local Center of Mass", [=](){ ImGui::Text("%.2f, %.2f, %.2f", com.x, com.y, com.z); });
     }
 
     // Static bodies have no motion properties (Jolt).
     if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_static) {
-        add_entry("Local Inertia", [rigid_body](){
+        add_entry(Property_row_id::properties_local_inertia, "Local Inertia", [rigid_body](){
             const glm::mat4 local_inertia = rigid_body->get_local_inertia();
             ImGui::Text("%.3f, %.3f, %.3f", local_inertia[0][0], local_inertia[1][1], local_inertia[2][2]);
         });
@@ -1274,7 +1280,7 @@ void Properties::node_navigation_properties(const std::shared_ptr<erhe::scene::N
     if (!scene_root || (node == scene_root->get_scene().get_root_node())) {
         return;
     }
-    add_entry("Navigation Seed", [this, node]() {
+    add_entry(Property_row_id::properties_navigation_seed, "Navigation Seed", [this, node]() {
         bool is_seed = ((node->get_flag_bits() & Editor_item_flags::navigation_seed) != 0u);
         if (ImGui::Checkbox("##", &is_seed)) {
             const std::shared_ptr<Operation> operation = make_navigation_seed_operation(
@@ -1292,14 +1298,14 @@ void Properties::node_navigation_properties(const std::shared_ptr<erhe::scene::N
 void Properties::navigation_seed_properties(Scene_root& scene_root)
 {
     const std::weak_ptr<Scene_root> weak_scene_root = scene_root.shared_from_this();
-    add_entry("Seeds", [this, weak_scene_root]() {
+    add_entry(Property_row_id::properties_seeds, "Seeds", [this, weak_scene_root]() {
         const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
         if (!root) {
             return;
         }
         ImGui::Text("%zu", root->get_navigation_seed_count());
     }, "The scene's navigation seed nodes (Properties > Navigation Seed on a node).");
-    add_entry("Selected", [this, weak_scene_root]() {
+    add_entry(Property_row_id::properties_selected, "Selected", [this, weak_scene_root]() {
         const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
         if (!root) {
             return;
@@ -1312,7 +1318,7 @@ void Properties::navigation_seed_properties(Scene_root& scene_root)
             static_cast<void>(queue_mark_selected_navigation_seeds(m_context, *root, Navigation_seed_state::unmarked));
         }
     }, "Marks or unmarks the selected nodes of this scene as navigation seeds, one undo step.");
-    add_entry("Seed Nodes", [this, weak_scene_root]() {
+    add_entry(Property_row_id::properties_seed_nodes, "Seed Nodes", [this, weak_scene_root]() {
         const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
         if (!root) {
             return;
@@ -1335,14 +1341,14 @@ void Properties::navigation_mesh_properties(Scene_root& scene_root)
 {
 #if defined(ERHE_USE_DETOUR)
     const std::weak_ptr<Scene_root> weak_scene_root = scene_root.shared_from_this();
-    add_entry("Navigation Mesh", [weak_scene_root]() {
+    add_entry(Property_row_id::properties_navigation_mesh, "Navigation Mesh", [weak_scene_root]() {
         const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
         if (!root) {
             return;
         }
         ImGui::TextWrapped("%s", root->get_navigation().get_status_text().c_str());
     }, "The scene's navigation mesh: polygons, islands, reachable area, tiles and build time, and why it is stale.");
-    add_entry("Navigation Build", [this, weak_scene_root]() {
+    add_entry(Property_row_id::properties_navigation_build, "Navigation Build", [this, weak_scene_root]() {
         const std::shared_ptr<Scene_root> root = weak_scene_root.lock();
         if (!root) {
             return;
@@ -1379,7 +1385,7 @@ void Properties::joint_limits_portability(const erhe::physics::Physics_joint_set
     if (!note.has_value()) {
         return;
     }
-    add_entry("Box3D", [text = note.value()](){
+    add_entry(Property_row_id::properties_box3d, "Box3D", [text = note.value()](){
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 160, 32, 255));
         ImGui::TextWrapped("Not fully Box3D compatible: %s", text.c_str());
         ImGui::PopStyleColor();
@@ -1399,7 +1405,7 @@ void Properties::joint_properties(Joint& joint)
     // generic property rows (doc/erhe/property_system.md section 4.17); the
     // actions and the diagnostic remain here.
     add_entry(
-        "Connect",
+        Property_row_id::properties_connect, "Connect",
         [this, &joint]() {
             if (ImGui::Button("Connect to Selected Node", ImVec2{-FLT_MIN, 0.0f})) {
                 const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
@@ -1416,12 +1422,12 @@ void Properties::joint_properties(Joint& joint)
         "Names the first selected node other than the joint's first frame node as the second frame node"
     );
 
-    add_entry("Constraint", [&joint]() {
+    add_entry(Property_row_id::properties_constraint, "Constraint", [&joint]() {
         ImGui::TextUnformatted((joint.get_constraint() != nullptr) ? "Created" : "Pending");
     });
 
     add_entry(
-        "Rebuild",
+        Property_row_id::properties_rebuild, "Rebuild",
         [&joint]() {
             if (ImGui::Button("Rebuild Joint", ImVec2{-FLT_MIN, 0.0f})) {
                 joint.rebuild();
@@ -1439,7 +1445,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 {
     ERHE_PROFILE_FUNCTION();
 
-    add_entry("Flags", [item]() {
+    add_entry(Property_row_id::properties_flags, "Flags", [item]() {
         ImGui::TextWrapped("%s", erhe::Item_flags::to_string(item->get_flag_bits()).c_str());
     });
 }
@@ -1500,9 +1506,9 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
         item->get_type_name().data(),
         item->get_name()
     );
-    push_group(group_label.c_str(), flags, m_indent);
+    push_group({Property_row_id::properties_item, item->get_id()}, group_label.c_str(), flags, m_indent);
     if (show_item_details(item.get()) && m_context.developer_mode) {
-        add_entry("Id", [item]() { ImGui::Text("%u", static_cast<unsigned int>(item->get_id())); });
+        add_entry(Property_row_id::properties_id, "Id", [item]() { ImGui::Text("%u", static_cast<unsigned int>(item->get_id())); });
         item_flags(item);
     }
 
@@ -1669,8 +1675,9 @@ void Properties::imgui()
         }
         for (std::size_t group_index = 0; group_index < group_count; ++group_index) {
             const std::vector<std::shared_ptr<erhe::Item_base>>& group = m_type_groups[group_index];
-            // The rows carry their own ImGui ids (the first item's id).
+            // One section per owner type of the selection: its key and the type.
             push_group(
+                {Property_row_id::properties_combined_items, combine_property_row_scope(m_context.selection->get_selection_key(), group.front()->get_property_owner_type())},
                 (group_count == 1)
                     ? fmt::format("Properties ({} items)", group.size())
                     : fmt::format("{} Properties ({} item{})", group.front()->get_type_name(), group.size(), (group.size() == 1) ? "" : "s"),

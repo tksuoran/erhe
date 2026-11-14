@@ -53,10 +53,10 @@ void Rotate_tool::imgui(Property_editor& property_editor)
     Property_editor& p = property_editor;
     p.reset();
     //auto& shared = get_shared();
-    p.push_group("Rotate Tool", ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.rotate_snap_enable); });
+    p.push_group(Property_row_id::rotate_rotate_tool, "Rotate Tool", ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry(Property_row_id::rotate_snap_enable, "Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.rotate_snap_enable); });
     // Persistent preference (Transform_tool_config); touch() schedules the autosave.
-    p.add_entry("Snap Absolute", [this]() {
+    p.add_entry(Property_row_id::rotate_snap_absolute, "Snap Absolute", [this]() {
         if (ImGui::Checkbox("##", &m_context.editor_settings->transform_tool.rotate_snap_absolute)) {
             m_context.app_settings->settings_store().touch();
         }
@@ -64,7 +64,7 @@ void Rotate_tool::imgui(Property_editor& property_editor)
             ImGui::SetTooltip("Snap the resulting absolute angle around the rotation axis to snap multiples; when off, snap the drag delta instead");
         }
     });
-    p.add_entry("Snap Value", [this]() {
+    p.add_entry(Property_row_id::rotate_snap_value, "Snap Value", [this]() {
         const float snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
         const char* snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
         if (ImGui::BeginCombo("##", snap_items[m_rotate_snap_index])) {

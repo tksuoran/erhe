@@ -907,6 +907,7 @@ erhe_target_sources_grouped(
     windows/properties.hpp
     windows/property_editor.cpp
     windows/property_editor.hpp
+    windows/property_row_id.hpp
     windows/property_group_states.cpp
     windows/property_group_states.hpp
     windows/property_origin.cpp

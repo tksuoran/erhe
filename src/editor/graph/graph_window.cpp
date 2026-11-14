@@ -46,31 +46,30 @@ public:
         style.PinArrowWidth = 14.0f;
         style.LinkStrength  = 30.0f;
         style.NodePadding   = ImVec4{20.0f, 5.0f, 20.0f, 5.0f};
-        e.add_entry("Node Pad 0",    [&style](){ ImGui::DragFloat("##Node Pad 0",    &style.NodePadding.x,      0.1f, 0.0f, 20.0f); });
-        e.add_entry("Node Pad 1",    [&style](){ ImGui::DragFloat("##Node Pad 1",    &style.NodePadding.y,      0.1f, 0.0f, 20.0f); });
-        e.add_entry("Node Pad 2",    [&style](){ ImGui::DragFloat("##Node Pad 2",    &style.NodePadding.z,      0.1f, 0.0f, 20.0f); });
-        e.add_entry("Node Pad 3",    [&style](){ ImGui::DragFloat("##Node Pad 3",    &style.NodePadding.w,      0.1f, 0.0f, 20.0f); });
-        e.add_entry("Pin Round",     [&style](){ ImGui::DragFloat("##Pin Round",     &style.PinRounding,        0.1f, 0.0f, 40.0f); });
-        e.add_entry("Pin Border",    [&style](){ ImGui::DragFloat("##Pin Border",    &style.PinBorderWidth,     0.1f, 0.0f, 15.0f); });
-        e.add_entry("Pin Rad",       [&style](){ ImGui::DragFloat("##Pin Rad",       &style.PinRadius,          0.1f, 0.0f, 40.0f); });
-        e.add_entry("Pin Arrow S.",  [&style](){ ImGui::DragFloat("##Pin Arrow S.",  &style.PinArrowSize,       0.1f, 0.0f, 40.0f); });
-        e.add_entry("Pin Arrow W.",  [&style](){ ImGui::DragFloat("##Pin Arrow W.",  &style.PinArrowWidth,      0.1f, 0.0f, 40.0f); });
-        e.add_entry("Link Str",      [&style](){ ImGui::DragFloat("##Link Str",      &style.LinkStrength,       1.0f, 0.0f, 500.0f); });
-        e.add_entry("Source Dir X",  [&style](){ ImGui::DragFloat("##Source Dir X",  &style.SourceDirection.x,  0.1f, -1.0f, 1.0f); });
-        e.add_entry("Source Dir Y",  [&style](){ ImGui::DragFloat("##Source Dir Y",  &style.SourceDirection.y,  0.1f, -1.0f, 1.0f); });
-        e.add_entry("Target Dir X",  [&style](){ ImGui::DragFloat("##Target Dir X",  &style.TargetDirection.x,  0.1f, -1.0f, 1.0f); });
-        e.add_entry("Target Dir Y",  [&style](){ ImGui::DragFloat("##Target Dir Y",  &style.TargetDirection.y,  0.1f, -1.0f, 1.0f); });
-        e.add_entry("Pivot Align X", [&style](){ ImGui::DragFloat("##Pivot Align X", &style.PivotAlignment.x,   0.1f, -2.0f, 2.0f); });
-        e.add_entry("Pivot Align Y", [&style](){ ImGui::DragFloat("##Pivot Align Y", &style.PivotAlignment.y,   0.1f, -2.0f, 2.0f); });
-        e.add_entry("Pivot Size X",  [&style](){ ImGui::DragFloat("##Pivot Size X",  &style.PivotSize.x,        0.1f, -2.0f, 2.0f); });
-        e.add_entry("Pivot Size Y",  [&style](){ ImGui::DragFloat("##Pivot Size Y",  &style.PivotSize.y,        0.1f, -2.0f, 2.0f); });
-        e.add_entry("Pivot Scale X", [&style](){ ImGui::DragFloat("##Pivot Scale X", &style.PivotScale.x,       0.1f, -2.0f, 2.0f); });
-        e.add_entry("Pivot Scale Y", [&style](){ ImGui::DragFloat("##Pivot Scale Y", &style.PivotScale.y,       0.1f, -2.0f, 2.0f); });
+        e.add_entry(Property_row_id::graph_style_node_pad_0, "Node Pad 0",    [&style](){ ImGui::DragFloat("##Node Pad 0",    &style.NodePadding.x,      0.1f, 0.0f, 20.0f); });
+        e.add_entry(Property_row_id::graph_style_node_pad_1, "Node Pad 1",    [&style](){ ImGui::DragFloat("##Node Pad 1",    &style.NodePadding.y,      0.1f, 0.0f, 20.0f); });
+        e.add_entry(Property_row_id::graph_style_node_pad_2, "Node Pad 2",    [&style](){ ImGui::DragFloat("##Node Pad 2",    &style.NodePadding.z,      0.1f, 0.0f, 20.0f); });
+        e.add_entry(Property_row_id::graph_style_node_pad_3, "Node Pad 3",    [&style](){ ImGui::DragFloat("##Node Pad 3",    &style.NodePadding.w,      0.1f, 0.0f, 20.0f); });
+        e.add_entry(Property_row_id::graph_style_pin_round, "Pin Round",     [&style](){ ImGui::DragFloat("##Pin Round",     &style.PinRounding,        0.1f, 0.0f, 40.0f); });
+        e.add_entry(Property_row_id::graph_style_pin_border, "Pin Border",    [&style](){ ImGui::DragFloat("##Pin Border",    &style.PinBorderWidth,     0.1f, 0.0f, 15.0f); });
+        e.add_entry(Property_row_id::graph_style_pin_rad, "Pin Rad",       [&style](){ ImGui::DragFloat("##Pin Rad",       &style.PinRadius,          0.1f, 0.0f, 40.0f); });
+        e.add_entry(Property_row_id::graph_style_pin_arrow_s, "Pin Arrow S.",  [&style](){ ImGui::DragFloat("##Pin Arrow S.",  &style.PinArrowSize,       0.1f, 0.0f, 40.0f); });
+        e.add_entry(Property_row_id::graph_style_pin_arrow_w, "Pin Arrow W.",  [&style](){ ImGui::DragFloat("##Pin Arrow W.",  &style.PinArrowWidth,      0.1f, 0.0f, 40.0f); });
+        e.add_entry(Property_row_id::graph_style_link_str, "Link Str",      [&style](){ ImGui::DragFloat("##Link Str",      &style.LinkStrength,       1.0f, 0.0f, 500.0f); });
+        e.add_entry(Property_row_id::graph_style_source_dir_x, "Source Dir X",  [&style](){ ImGui::DragFloat("##Source Dir X",  &style.SourceDirection.x,  0.1f, -1.0f, 1.0f); });
+        e.add_entry(Property_row_id::graph_style_source_dir_y, "Source Dir Y",  [&style](){ ImGui::DragFloat("##Source Dir Y",  &style.SourceDirection.y,  0.1f, -1.0f, 1.0f); });
+        e.add_entry(Property_row_id::graph_style_target_dir_x, "Target Dir X",  [&style](){ ImGui::DragFloat("##Target Dir X",  &style.TargetDirection.x,  0.1f, -1.0f, 1.0f); });
+        e.add_entry(Property_row_id::graph_style_target_dir_y, "Target Dir Y",  [&style](){ ImGui::DragFloat("##Target Dir Y",  &style.TargetDirection.y,  0.1f, -1.0f, 1.0f); });
+        e.add_entry(Property_row_id::graph_style_pivot_align_x, "Pivot Align X", [&style](){ ImGui::DragFloat("##Pivot Align X", &style.PivotAlignment.x,   0.1f, -2.0f, 2.0f); });
+        e.add_entry(Property_row_id::graph_style_pivot_align_y, "Pivot Align Y", [&style](){ ImGui::DragFloat("##Pivot Align Y", &style.PivotAlignment.y,   0.1f, -2.0f, 2.0f); });
+        e.add_entry(Property_row_id::graph_style_pivot_size_x, "Pivot Size X",  [&style](){ ImGui::DragFloat("##Pivot Size X",  &style.PivotSize.x,        0.1f, -2.0f, 2.0f); });
+        e.add_entry(Property_row_id::graph_style_pivot_size_y, "Pivot Size Y",  [&style](){ ImGui::DragFloat("##Pivot Size Y",  &style.PivotSize.y,        0.1f, -2.0f, 2.0f); });
+        e.add_entry(Property_row_id::graph_style_pivot_scale_x, "Pivot Scale X", [&style](){ ImGui::DragFloat("##Pivot Scale X", &style.PivotScale.x,       0.1f, -2.0f, 2.0f); });
+        e.add_entry(Property_row_id::graph_style_pivot_scale_y, "Pivot Scale Y", [&style](){ ImGui::DragFloat("##Pivot Scale Y", &style.PivotScale.y,       0.1f, -2.0f, 2.0f); });
     }
 
     void imgui() override
     {
-        m_property_editor.reset_row();
         m_property_editor.show_entries();
     }
 

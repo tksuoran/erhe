@@ -84,7 +84,8 @@ void add_config_section(
         : (struct_info.short_desc != nullptr && struct_info.short_desc[0] != '\0')
             ? struct_info.short_desc
             : struct_info.name;
-    editor.push_group(label, ImGuiTreeNodeFlags_Framed);
+    // The section object is the group's identity: one struct type is shown for several sections.
+    editor.push_group({Property_row_id::config_section, reinterpret_cast<std::uintptr_t>(&section)}, label, ImGuiTreeNodeFlags_Framed);
     const std::span<const erhe::codegen::Field_info> fields = get_fields(static_cast<const std::remove_reference_t<T>*>(nullptr));
     for (const erhe::codegen::Field_info& field : fields) {
         if (field.removed_in != 0) {
@@ -102,7 +103,7 @@ void add_config_section(
         std::string tooltip = (field.long_desc != nullptr && field.long_desc[0] != '\0')
             ? std::string{field.long_desc}
             : std::string{};
-        editor.add_entry(std::string{entry_label}, [&section, &field, on_edit]() {
+        editor.add_entry({Property_row_id::config_field, static_cast<uint64_t>(&field - fields.data())}, std::string{entry_label}, [&section, &field, on_edit]() {
             if (imgui_field(&section, field) && on_edit) {
                 on_edit();
             }

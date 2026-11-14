@@ -4,7 +4,7 @@
 [DOCS]{read-in-this-order}
 requirements::doc/plans/level_tools.md{R-numbers;rulings-U1-U16;no-open-questions;"Later"-list}
 design::doc/plans/level_tools_design.md{D-numbers}
-steps::doc/plans/level_tools_implementation.md{"Built"=steps-1-7e;"Next steps"=7f-first-then-8..19}
+steps::doc/plans/level_tools_implementation.md{"Built"=steps-1-7e;"Next steps"=8..19}
 behavior::doc/editor/level_tools.md(what-is-built)+doc/editor/navigation.md"Islands and queries"+doc/editor/brushes.md"Kit mode"+doc/editor/transform.md
 
 [BUILT]{all-on-main;local-commits-cfd555376..febc96e90}
@@ -17,7 +17,7 @@ behavior::doc/editor/level_tools.md(what-is-built)+doc/editor/navigation.md"Isla
 ✓verify{scripts/level_tools_verify.py(199-checks-at-febc96e90;--only-transform;saves+restores-config/editor/{editor_settings,desktop_windows}.json)+scripts/navigation_verify.py(76)+editor_level_tests+editor_navigation_tests(16);mcp_server_tests=compiled-never-run(needs-display)}
 
 [OPEN]
-⚡step-7f::parameter-row-drag-freezes-in-WINDOWED-editor{©User-2026-11-13:"value in the row stops from changing, happens with all slider parameters"+"drag might get interrupted when the shape is live updated";headless-cannot-reproduce;suspects+method=doc/plans/level_tools_implementation.md-7f;WAITS-for-©User-reproduction-with-the-kitdrag-diagnostic-build(per-machine-state=memory-bank/local/context.md)}
+✓step-7f::DONE-2026-11-14{Properties-row-drag-froze-because-rows-had-positional-ImGui-ids+developer-mode-rows-above-changed-count-during-preview;fix=key-based-row-ids(doc/editor/properties_window.md-section-5);©User-verified-windowed;!trap:developer-mode-off-headless-hid-it->reproduce-UI-bugs-with-the-user's-config;gdb-logging-breakpoint-on-ImGui::SetActiveID(id!=ActiveId&&MouseDown)-gives-the-drag-loss-callstack}
 ?then::step-8(region-contents+height-map+support-report)+9..19
 
 [WORKFLOW]{©User-2026-11-13}

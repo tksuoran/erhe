@@ -122,6 +122,7 @@ public:
     Presentation         presentation  {Presentation::plain};
     bool                 logarithmic   {false}; // slider presentation: logarithmic scale (D20)
     std::string_view     group         {};
+    uint16_t             group_id      {0}; // set at registration: Property_registry::get_group_id(group)
     std::string_view     tooltip       {};
     bool                 developer_only{false};
     Array_size           array_size    {Array_size::fixed}; // array rows: may the user add and remove elements

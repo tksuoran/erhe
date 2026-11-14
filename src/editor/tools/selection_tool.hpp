@@ -203,6 +203,8 @@ public:
 
     // Public API
     [[nodiscard]] auto get_selected_items() const -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
+    // The ids of the selected items combined, whatever their order; updated when the selection changes.
+    [[nodiscard]] auto get_selection_key() const -> uint64_t;
     // Monotonic count of Selection_message dispatches. Lets a test assert
     // that a batched prune dispatches ONCE
     // (doc/editor/import_undo_reference_clearing.md).
@@ -348,6 +350,7 @@ private:
 
     Scene_view*                                   m_hover_scene_view{nullptr};
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection;
+    uint64_t                                      m_selection_key{0};
     // get_hosted_selection() buckets, one per Item_host (nullptr: the items
     // with no host); each is cleared and refilled at query time, capacity kept.
     std::unordered_map<erhe::Item_host*, std::vector<std::shared_ptr<erhe::Item_base>>> m_hosted_selection;

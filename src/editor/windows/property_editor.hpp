@@ -1,5 +1,7 @@
 #pragma once
 
+#include "windows/property_row_id.hpp"
+
 #include <imgui/imgui.h>
 
 #include <cstddef>
@@ -24,24 +26,24 @@ enum class Editor_state : unsigned int
 class Property_editor
 {
 public:
-    void reset_row          ();
     void reset              ();
-    void resume             ();
-    void push_group         (std::string&& label, ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None, float indent = 0.0f, bool* open_state = nullptr);
+    // Every entry carries a Property_row_key; its ImGui id is made of the keys
+    // of its enclosing groups and its own (doc/editor/properties_window.md "Row ids").
+    void push_group         (Property_row_key key, std::string&& label, ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None, float indent = 0.0f, bool* open_state = nullptr);
     // A property group shared by every Properties window: its header reads
     // and writes the persisted fold state in `states` (closed until the
     // user opens it), and dragging the header onto another such header
     // reorders the groups in `states` (a yellow line shows the drop slot).
-    void push_group         (std::string&& label, float indent, Property_group_states& states);
+    void push_group         (Property_row_key key, std::string&& label, float indent, Property_group_states& states);
     void pop_group          ();
     // The indent the window gives the rows of a group below the group header.
     [[nodiscard]] auto get_group_indent() const -> float { return m_indent; }
     // label_text_color tints the label text (IM_COL32); a row of a
     // registered property (Dependency_property_rows) is tinted so the
     // rows still hand-written for an item are told apart at a glance.
-    void add_entry          (std::string&& label, std::function<void()> editor, std::string&& tooltip = {}, std::optional<uint32_t> label_text_color = {});
+    void add_entry          (Property_row_key key, std::string&& label, std::function<void()> editor, std::string&& tooltip = {}, std::optional<uint32_t> label_text_color = {});
     // Axis-style label: a small button in label_background_color.
-    void add_entry          (std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor);
+    void add_entry          (Property_row_key key, std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor);
     // Extra tooltip text for the entry just added, produced only while that
     // row is hovered: the composition origin of a property value
     // (doc/erhe/usd_compatibility_design.md X5) costs an ancestor walk and a few
@@ -62,6 +64,7 @@ protected:
     public:
         bool                    push_group{false};
         bool                    pop_group{false};
+        Property_row_key        key{};
         std::string             label{};
         std::string             tooltip{};
         std::function<std::string()> tooltip_extra{};
@@ -91,7 +94,6 @@ protected:
     };
 
     float                    m_indent{10.0f};
-    int                      m_row   {0};
     Editor_state*            m_state {nullptr};
     std::vector<Entry>       m_entries;
     std::string              m_tooltip_scratch; // built while a row with a tooltip_extra is hovered
@@ -104,9 +106,21 @@ protected:
     {
         bool subtree_open;
         float indent_amount;
+        uint64_t scope; // of the group's entries: the keys of the enclosing groups and its own, combined
     };
 
     std::vector<Stack_entry> m_stack;
+    class Shown_id
+    {
+    public:
+        ImGuiID     id;
+        std::size_t entry_index;
+    };
+    // Logs the entries of m_shown_ids that share an id; sorts m_shown_ids.
+    void report_duplicate_ids();
+
+    std::vector<Shown_id>    m_shown_ids;            // the ids of one show_entries(); capacity kept
+    uint64_t                 m_checked_signature{0}; // of the id set last checked for duplicates
 };
 
 }

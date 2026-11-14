@@ -2573,12 +2573,12 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
 
     // Top-level framed group, matching how the Settings window renders the
     // other editor config sections (add_config_section).
-    p.push_group("Debug Visualizations Style", ImGuiTreeNodeFlags_Framed);
+    p.push_group(Property_row_id::debug_debug_visualizations_style, "Debug Visualizations Style", ImGuiTreeNodeFlags_Framed);
 
     // Debug renderer configuration. The checkbox is the change site: the
     // renderer is updated on the edit, not per frame.
-    p.push_group("Lines", ImGuiTreeNodeFlags_None);
-    p.add_entry("Anti-aliased", [&context, &style]() {
+    p.push_group(Property_row_id::debug_lines, "Lines", ImGuiTreeNodeFlags_None);
+    p.add_entry(Property_row_id::debug_anti_aliased, "Anti-aliased", [&context, &style]() {
         if (ImGui::Checkbox("##", &style.anti_aliased_lines) && (context.debug_renderer != nullptr)) {
             apply_debug_renderer_style(*context.debug_renderer, style);
         }
@@ -2588,9 +2588,9 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     });
     p.pop_group();
 
-    p.push_group("Shadow Fit", ImGuiTreeNodeFlags_None);
+    p.push_group(Property_row_id::debug_shadow_fit, "Shadow Fit", ImGuiTreeNodeFlags_None);
     // Casters: affecting color, culled color, line width.
-    p.add_entry("Casters", [&style]() {
+    p.add_entry(Property_row_id::debug_casters, "Casters", [&style]() {
         ImGui::ColorEdit4("##affecting", &style.shadow_fit_casters_color.x,        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
         ImGui::SameLine();
         ImGui::ColorEdit4("##culled",    &style.shadow_fit_casters_culled_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
@@ -2598,10 +2598,10 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
         ImGui::SetNextItemWidth(80.0f);
         ImGui::DragFloat("##w", &style.shadow_fit_casters_width, 0.1f, -100.0f, 100.0f, "%.1f");
     });
-    p.add_entry("Caster Hull",  [style_row, &style](){ style_row(&style.shadow_fit_caster_hull_color,  &style.shadow_fit_caster_hull_width); });
-    p.add_entry("View Frustum", [style_row, &style](){ style_row(&style.shadow_fit_view_frustum_color, &style.shadow_fit_view_frustum_width); });
+    p.add_entry(Property_row_id::debug_caster_hull, "Caster Hull",  [style_row, &style](){ style_row(&style.shadow_fit_caster_hull_color,  &style.shadow_fit_caster_hull_width); });
+    p.add_entry(Property_row_id::debug_view_frustum, "View Frustum", [style_row, &style](){ style_row(&style.shadow_fit_view_frustum_color, &style.shadow_fit_view_frustum_width); });
     // Receivers: passing color, culled color, line width.
-    p.add_entry("Receivers", [&style]() {
+    p.add_entry(Property_row_id::debug_receivers, "Receivers", [&style]() {
         ImGui::ColorEdit4("##pass",   &style.shadow_fit_receivers_color.x,        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
         ImGui::SameLine();
         ImGui::ColorEdit4("##culled", &style.shadow_fit_receivers_culled_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
@@ -2609,48 +2609,48 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
         ImGui::SetNextItemWidth(80.0f);
         ImGui::DragFloat("##w", &style.shadow_fit_receivers_width, 0.1f, -100.0f, 100.0f, "%.1f");
     });
-    p.add_entry("Receiver Hull Unclipped", [style_row, &style](){ style_row(&style.shadow_fit_receiver_hull_unclipped_color, &style.shadow_fit_receiver_hull_unclipped_width); });
-    p.add_entry("Receiver Hull Clipped",   [style_row, &style](){ style_row(&style.shadow_fit_receiver_hull_color,           &style.shadow_fit_receiver_hull_width); });
-    p.add_entry("Volume Planes",    [style_row, &style](){ style_row(&style.shadow_fit_volume_planes_color,    &style.shadow_fit_volume_planes_width); });
-    p.add_entry("Far Plane Hull",   [style_row, &style](){ style_row(&style.shadow_fit_far_plane_hull_color,   &style.shadow_fit_far_plane_hull_width); });
-    p.add_entry("Fit Points",       [style_row, &style](){ style_row(&style.shadow_fit_points_color,           &style.shadow_fit_points_width); });
-    p.add_entry("Light Plane Hull", [style_row, &style](){ style_row(&style.shadow_fit_light_plane_hull_color, &style.shadow_fit_light_plane_hull_width); });
-    p.add_entry("OBB",              [style_row, &style](){ style_row(&style.shadow_fit_obb_color,              &style.shadow_fit_obb_width); });
-    p.add_entry("OBB Edge",         [style_row, &style](){ style_row(&style.shadow_fit_obb_edge_color,         &style.shadow_fit_obb_edge_width); });
-    p.add_entry("Box: Points",      [style_row, &style](){ style_row(&style.shadow_fit_box_fit_color,          nullptr); });
-    p.add_entry("Box: Frustum",     [style_row, &style](){ style_row(&style.shadow_fit_box_frustum_color,      nullptr); });
-    p.add_entry("Box: Range Cap",   [style_row, &style](){ style_row(&style.shadow_fit_box_cap_color,          nullptr); });
-    p.add_entry("Box: Final",       [style_row, &style](){ style_row(&style.shadow_fit_box_final_color,        nullptr); });
-    p.add_entry("Box Width",        [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.shadow_fit_box_width, 0.1f, -100.0f, 100.0f, "%.1f"); });
+    p.add_entry(Property_row_id::debug_receiver_hull_unclipped, "Receiver Hull Unclipped", [style_row, &style](){ style_row(&style.shadow_fit_receiver_hull_unclipped_color, &style.shadow_fit_receiver_hull_unclipped_width); });
+    p.add_entry(Property_row_id::debug_receiver_hull_clipped, "Receiver Hull Clipped",   [style_row, &style](){ style_row(&style.shadow_fit_receiver_hull_color,           &style.shadow_fit_receiver_hull_width); });
+    p.add_entry(Property_row_id::debug_volume_planes, "Volume Planes",    [style_row, &style](){ style_row(&style.shadow_fit_volume_planes_color,    &style.shadow_fit_volume_planes_width); });
+    p.add_entry(Property_row_id::debug_far_plane_hull, "Far Plane Hull",   [style_row, &style](){ style_row(&style.shadow_fit_far_plane_hull_color,   &style.shadow_fit_far_plane_hull_width); });
+    p.add_entry(Property_row_id::debug_fit_points, "Fit Points",       [style_row, &style](){ style_row(&style.shadow_fit_points_color,           &style.shadow_fit_points_width); });
+    p.add_entry(Property_row_id::debug_light_plane_hull, "Light Plane Hull", [style_row, &style](){ style_row(&style.shadow_fit_light_plane_hull_color, &style.shadow_fit_light_plane_hull_width); });
+    p.add_entry(Property_row_id::debug_obb, "OBB",              [style_row, &style](){ style_row(&style.shadow_fit_obb_color,              &style.shadow_fit_obb_width); });
+    p.add_entry(Property_row_id::debug_obb_edge, "OBB Edge",         [style_row, &style](){ style_row(&style.shadow_fit_obb_edge_color,         &style.shadow_fit_obb_edge_width); });
+    p.add_entry(Property_row_id::debug_box_points, "Box: Points",      [style_row, &style](){ style_row(&style.shadow_fit_box_fit_color,          nullptr); });
+    p.add_entry(Property_row_id::debug_box_frustum, "Box: Frustum",     [style_row, &style](){ style_row(&style.shadow_fit_box_frustum_color,      nullptr); });
+    p.add_entry(Property_row_id::debug_box_range_cap, "Box: Range Cap",   [style_row, &style](){ style_row(&style.shadow_fit_box_cap_color,          nullptr); });
+    p.add_entry(Property_row_id::debug_box_final, "Box: Final",       [style_row, &style](){ style_row(&style.shadow_fit_box_final_color,        nullptr); });
+    p.add_entry(Property_row_id::debug_box_width, "Box Width",        [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.shadow_fit_box_width, 0.1f, -100.0f, 100.0f, "%.1f"); });
     p.pop_group();
 
-    p.push_group("Selection", ImGuiTreeNodeFlags_None);
-    p.add_entry("Selection Major Color", [&style](){ ImGui::ColorEdit4 ("##", &style.selection_major_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Selection Minor Color", [&style](){ ImGui::ColorEdit4 ("##", &style.selection_minor_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Group Major Color",     [&style](){ ImGui::ColorEdit4 ("##", &style.group_selection_major_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Group Minor Color",     [&style](){ ImGui::ColorEdit4 ("##", &style.group_selection_minor_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Selection Major Width", [&style](){ ImGui::SliderFloat("##", &style.selection_major_width, 0.1f, 100.0f); });
-    p.add_entry("Selection Minor Width", [&style](){ ImGui::SliderFloat("##", &style.selection_minor_width, 0.1f, 100.0f); });
+    p.push_group(Property_row_id::debug_selection, "Selection", ImGuiTreeNodeFlags_None);
+    p.add_entry(Property_row_id::debug_selection_major_color, "Selection Major Color", [&style](){ ImGui::ColorEdit4 ("##", &style.selection_major_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_selection_minor_color, "Selection Minor Color", [&style](){ ImGui::ColorEdit4 ("##", &style.selection_minor_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_group_major_color, "Group Major Color",     [&style](){ ImGui::ColorEdit4 ("##", &style.group_selection_major_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_group_minor_color, "Group Minor Color",     [&style](){ ImGui::ColorEdit4 ("##", &style.group_selection_minor_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_selection_major_width, "Selection Major Width", [&style](){ ImGui::SliderFloat("##", &style.selection_major_width, 0.1f, 100.0f); });
+    p.add_entry(Property_row_id::debug_selection_minor_width, "Selection Minor Width", [&style](){ ImGui::SliderFloat("##", &style.selection_minor_width, 0.1f, 100.0f); });
     p.pop_group();
 
-    p.add_entry("Sphere Step Count", [&style](){ ImGui::SliderInt  ("##", &style.sphere_step_count,    1,    200); });
-    p.add_entry("Light Line Width",  [&style](){ ImGui::SliderFloat("##", &style.light_line_width,     0.1f, 100.0f); });
-    p.add_entry("Light Ray Count",   [&style](){ ImGui::SliderInt  ("##", &style.light_ray_count,        0,    64); });
-    p.add_entry("Light Ray Inner Radius (px)", [&style](){ ImGui::SliderFloat("##", &style.light_ray_inner_radius, 0.0f, 100.0f); });
-    p.add_entry("Light Ray Length (px)",       [&style](){ ImGui::SliderFloat("##", &style.light_ray_length,       0.0f, 100.0f); });
-    p.add_entry("Light Ray Width (px)",        [&style](){ ImGui::SliderFloat("##", &style.light_ray_width,        0.1f, 20.0f); });
-    p.add_entry("Spot Light Ring",             [&style](){ ImGui::Checkbox   ("##", &style.spot_light_ring); });
-    p.add_entry("Spot Light Cone",             [&style](){ ImGui::Checkbox   ("##", &style.spot_light_cone); });
-    p.add_entry("Spot Light Cylinder",         [&style](){ ImGui::Checkbox   ("##", &style.spot_light_cylinder); });
-    p.add_entry("Point Light Range Sphere",    [&style](){ ImGui::Checkbox   ("##", &style.point_light_range_sphere); });
-    p.add_entry("Camera Line Width", [&style](){ ImGui::SliderFloat("##", &style.camera_line_width,    0.1f, 100.0f); });
-    p.add_entry("Camera Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.camera_line_color.x,  ImGuiColorEditFlags_Float); });
-    p.add_entry("Layout Line Width", [&style](){ ImGui::SliderFloat("##", &style.layout_line_width,    0.1f, 100.0f); });
-    p.add_entry("Layout Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.layout_line_color.x,  ImGuiColorEditFlags_Float); });
-    p.add_entry("Primitive Boxes",   [style_row, &style](){ style_row(&style.mesh_primitive_box_color, &style.mesh_primitive_box_width); });
-    p.add_entry("Bone Boxes",        [style_row, &style](){ style_row(&style.bone_box_color,           &style.bone_box_width); });
+    p.add_entry(Property_row_id::debug_sphere_step_count, "Sphere Step Count", [&style](){ ImGui::SliderInt  ("##", &style.sphere_step_count,    1,    200); });
+    p.add_entry(Property_row_id::debug_light_line_width, "Light Line Width",  [&style](){ ImGui::SliderFloat("##", &style.light_line_width,     0.1f, 100.0f); });
+    p.add_entry(Property_row_id::debug_light_ray_count, "Light Ray Count",   [&style](){ ImGui::SliderInt  ("##", &style.light_ray_count,        0,    64); });
+    p.add_entry(Property_row_id::debug_light_ray_inner_radius_px, "Light Ray Inner Radius (px)", [&style](){ ImGui::SliderFloat("##", &style.light_ray_inner_radius, 0.0f, 100.0f); });
+    p.add_entry(Property_row_id::debug_light_ray_length_px, "Light Ray Length (px)",       [&style](){ ImGui::SliderFloat("##", &style.light_ray_length,       0.0f, 100.0f); });
+    p.add_entry(Property_row_id::debug_light_ray_width_px, "Light Ray Width (px)",        [&style](){ ImGui::SliderFloat("##", &style.light_ray_width,        0.1f, 20.0f); });
+    p.add_entry(Property_row_id::debug_spot_light_ring, "Spot Light Ring",             [&style](){ ImGui::Checkbox   ("##", &style.spot_light_ring); });
+    p.add_entry(Property_row_id::debug_spot_light_cone, "Spot Light Cone",             [&style](){ ImGui::Checkbox   ("##", &style.spot_light_cone); });
+    p.add_entry(Property_row_id::debug_spot_light_cylinder, "Spot Light Cylinder",         [&style](){ ImGui::Checkbox   ("##", &style.spot_light_cylinder); });
+    p.add_entry(Property_row_id::debug_point_light_range_sphere, "Point Light Range Sphere",    [&style](){ ImGui::Checkbox   ("##", &style.point_light_range_sphere); });
+    p.add_entry(Property_row_id::debug_camera_line_width, "Camera Line Width", [&style](){ ImGui::SliderFloat("##", &style.camera_line_width,    0.1f, 100.0f); });
+    p.add_entry(Property_row_id::debug_camera_line_color, "Camera Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.camera_line_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_layout_line_width, "Layout Line Width", [&style](){ ImGui::SliderFloat("##", &style.layout_line_width,    0.1f, 100.0f); });
+    p.add_entry(Property_row_id::debug_layout_line_color, "Layout Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.layout_line_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_primitive_boxes, "Primitive Boxes",   [style_row, &style](){ style_row(&style.mesh_primitive_box_color, &style.mesh_primitive_box_width); });
+    p.add_entry(Property_row_id::debug_bone_boxes, "Bone Boxes",        [style_row, &style](){ style_row(&style.bone_box_color,           &style.bone_box_width); });
     // Skin bone visualization: colors alternate by joint hierarchy depth (A = even, B = odd) + line width.
-    p.add_entry("Skin Bones", [&style, &context]() {
+    p.add_entry(Property_row_id::debug_skin_bones, "Skin Bones", [&style, &context]() {
         // Color A also feeds the unselected bone proxy material.
         if (ImGui::ColorEdit4("##a", &style.skin_bone_color_a.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float)) {
             if (context.bone_visualization != nullptr) {
@@ -2676,13 +2676,13 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     // proxy materials, which Bone_visualization owns - so the edit is pushed
     // into it here, on the frame the color actually changed, rather than
     // re-applied every frame. Color A above feeds the same materials.
-    p.add_entry("Bone Selected Color", [&style, &context]() {
+    p.add_entry(Property_row_id::debug_bone_selected_color, "Bone Selected Color", [&style, &context]() {
         const bool changed = ImGui::ColorEdit4("##", &style.bone_selected_color.x, ImGuiColorEditFlags_Float);
         if (changed && (context.bone_visualization != nullptr)) {
             context.bone_visualization->apply_style_colors();
         }
     });
-    p.add_entry("Bone Hover Color", [&style, &context]() {
+    p.add_entry(Property_row_id::debug_bone_hover_color, "Bone Hover Color", [&style, &context]() {
         if (ImGui::ColorEdit4("##", &style.bone_hover_color.x, ImGuiColorEditFlags_Float)) {
             if (context.bone_visualization != nullptr) {
                 context.bone_visualization->apply_style_colors();
@@ -2692,7 +2692,7 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     // Solid style and width are pushed into Bone_visualization at the edit,
     // like the colors above: solid re-derives proxy visibility, width rebuilds
     // the proxy transforms.
-    p.add_entry("Solid Bones", [&style, &context]() {
+    p.add_entry(Property_row_id::debug_solid_bones, "Solid Bones", [&style, &context]() {
         if (ImGui::Checkbox("##", &style.bone_solid)) {
             if (context.bone_visualization != nullptr) {
                 context.bone_visualization->apply_style_shape();
@@ -2706,7 +2706,7 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
             );
         }
     });
-    p.add_entry("Bone Aspect Ratio", [&style, &context]() {
+    p.add_entry(Property_row_id::debug_bone_aspect_ratio, "Bone Aspect Ratio", [&style, &context]() {
         if (ImGui::DragFloat("##", &style.bone_aspect_ratio, 0.005f, 0.005f, 2.0f, "%.3f")) {
             if (context.bone_visualization != nullptr) {
                 context.bone_visualization->apply_style_shape();
@@ -2714,51 +2714,51 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
         }
     });
 
-    p.push_group("Annotations", ImGuiTreeNodeFlags_None);
-    p.add_entry("Vertex Label Text Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.vertex_label_text_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Vertex Label Line Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.vertex_label_line_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Vertex Label Line Width",  [&style](){ ImGui::SliderFloat("##", &style.vertex_label_line_width,   0.0f, 4.0f); });
-    p.add_entry("Vertex Label Line Length", [&style](){ ImGui::SliderFloat("##", &style.vertex_label_line_length,  0.0f, 1.0f); });
-    p.add_entry("Edge Label Text Color",    [&style](){ ImGui::ColorEdit4 ("##", &style.edge_label_text_color.x,   ImGuiColorEditFlags_Float); });
-    p.add_entry("Edge Label Text Offset",   [&style](){ ImGui::SliderFloat("##", &style.edge_label_text_offset,    0.0f, 1.0f); });
-    p.add_entry("Edge Label Line Color",    [&style](){ ImGui::ColorEdit4 ("##", &style.edge_label_line_color.x,   ImGuiColorEditFlags_Float); });
-    p.add_entry("Edge Label Line Width",    [&style](){ ImGui::SliderFloat("##", &style.edge_label_line_width,     0.0f, 4.0f); });
-    p.add_entry("Edge Label Line Length",   [&style](){ ImGui::SliderFloat("##", &style.edge_label_line_length,    0.0f, 1.0f); });
-    p.add_entry("Facet Label Text Color",   [&style](){ ImGui::ColorEdit4 ("##", &style.facet_label_text_color.x,  ImGuiColorEditFlags_Float); });
-    p.add_entry("Facet Label Line Color",   [&style](){ ImGui::ColorEdit4 ("##", &style.facet_label_line_color.x,  ImGuiColorEditFlags_Float); });
-    p.add_entry("Facet Label Line Width",   [&style](){ ImGui::SliderFloat("##", &style.facet_label_line_width,    0.0f, 4.0f); });
-    p.add_entry("Facet Label Line Length",  [&style](){ ImGui::SliderFloat("##", &style.facet_label_line_length,   0.0f, 1.0f); });
-    p.add_entry("Corner Label Text Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.corner_label_text_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Corner Label Line Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.corner_label_line_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Corner Label Line Width",  [&style](){ ImGui::SliderFloat("##", &style.corner_label_line_width,   0.0f, 4.0f); });
-    p.add_entry("Corner Label Line Length", [&style](){ ImGui::SliderFloat("##", &style.corner_label_line_length,  0.0f, 1.0f); });
+    p.push_group(Property_row_id::debug_annotations, "Annotations", ImGuiTreeNodeFlags_None);
+    p.add_entry(Property_row_id::debug_vertex_label_text_color, "Vertex Label Text Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.vertex_label_text_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_vertex_label_line_color, "Vertex Label Line Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.vertex_label_line_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_vertex_label_line_width, "Vertex Label Line Width",  [&style](){ ImGui::SliderFloat("##", &style.vertex_label_line_width,   0.0f, 4.0f); });
+    p.add_entry(Property_row_id::debug_vertex_label_line_length, "Vertex Label Line Length", [&style](){ ImGui::SliderFloat("##", &style.vertex_label_line_length,  0.0f, 1.0f); });
+    p.add_entry(Property_row_id::debug_edge_label_text_color, "Edge Label Text Color",    [&style](){ ImGui::ColorEdit4 ("##", &style.edge_label_text_color.x,   ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_edge_label_text_offset, "Edge Label Text Offset",   [&style](){ ImGui::SliderFloat("##", &style.edge_label_text_offset,    0.0f, 1.0f); });
+    p.add_entry(Property_row_id::debug_edge_label_line_color, "Edge Label Line Color",    [&style](){ ImGui::ColorEdit4 ("##", &style.edge_label_line_color.x,   ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_edge_label_line_width, "Edge Label Line Width",    [&style](){ ImGui::SliderFloat("##", &style.edge_label_line_width,     0.0f, 4.0f); });
+    p.add_entry(Property_row_id::debug_edge_label_line_length, "Edge Label Line Length",   [&style](){ ImGui::SliderFloat("##", &style.edge_label_line_length,    0.0f, 1.0f); });
+    p.add_entry(Property_row_id::debug_facet_label_text_color, "Facet Label Text Color",   [&style](){ ImGui::ColorEdit4 ("##", &style.facet_label_text_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_facet_label_line_color, "Facet Label Line Color",   [&style](){ ImGui::ColorEdit4 ("##", &style.facet_label_line_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_facet_label_line_width, "Facet Label Line Width",   [&style](){ ImGui::SliderFloat("##", &style.facet_label_line_width,    0.0f, 4.0f); });
+    p.add_entry(Property_row_id::debug_facet_label_line_length, "Facet Label Line Length",  [&style](){ ImGui::SliderFloat("##", &style.facet_label_line_length,   0.0f, 1.0f); });
+    p.add_entry(Property_row_id::debug_corner_label_text_color, "Corner Label Text Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.corner_label_text_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_corner_label_line_color, "Corner Label Line Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.corner_label_line_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry(Property_row_id::debug_corner_label_line_width, "Corner Label Line Width",  [&style](){ ImGui::SliderFloat("##", &style.corner_label_line_width,   0.0f, 4.0f); });
+    p.add_entry(Property_row_id::debug_corner_label_line_length, "Corner Label Line Length", [&style](){ ImGui::SliderFloat("##", &style.corner_label_line_length,  0.0f, 1.0f); });
     p.pop_group();
 
     // Joint constraint visualization (doc/editor/tools.md "Debug_visualizations").
-    p.push_group("Joint Constraints", ImGuiTreeNodeFlags_None);
-    p.add_entry("Joint Size", [&style](){
+    p.push_group(Property_row_id::debug_joint_constraints, "Joint Constraints", ImGuiTreeNodeFlags_None);
+    p.add_entry(Property_row_id::debug_joint_size, "Joint Size", [&style](){
         ImGui::DragFloat("##", &style.joint_size, 0.005f, 0.0f, 10.0f, "%.3f");
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("World-space size; 0 derives it per joint from the body size or the bone length");
         }
     });
-    p.add_entry("Line Widths", [&style](){
+    p.add_entry(Property_row_id::debug_line_widths, "Line Widths", [&style](){
         ImGui::SetNextItemWidth(80.0f);
         ImGui::DragFloat("##w", &style.joint_line_width, 0.1f, -100.0f, 100.0f, "%.1f");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0f);
         ImGui::DragFloat("##t", &style.joint_thin_line_width, 0.1f, -100.0f, 100.0f, "%.1f");
     });
-    p.add_entry("Limit",        [style_row, &style](){ style_row(&style.joint_limit_color,        nullptr); });
-    p.add_entry("Free",         [style_row, &style](){ style_row(&style.joint_free_color,         nullptr); });
-    p.add_entry("Value",        [style_row, &style](){ style_row(&style.joint_value_color,        nullptr); });
-    p.add_entry("Violation",    [style_row, &style](){ style_row(&style.joint_violation_color,    nullptr); });
-    p.add_entry("Pending",      [style_row, &style](){ style_row(&style.joint_pending_color,      nullptr); });
-    p.add_entry("Approximated", [style_row, &style](){ style_row(&style.joint_approximated_color, nullptr); });
-    p.add_entry("Backend",      [style_row, &style](){ style_row(&style.joint_backend_color,      nullptr); });
-    p.add_entry("Body Link",    [style_row, &style](){ style_row(&style.joint_body_link_color,    nullptr); });
-    p.add_entry("IK Swing",     [style_row, &style](){ style_row(&style.ik_limit_swing_color,     nullptr); });
-    p.add_entry("IK Twist",     [style_row, &style](){ style_row(&style.ik_limit_twist_color,     nullptr); });
+    p.add_entry(Property_row_id::debug_limit, "Limit",        [style_row, &style](){ style_row(&style.joint_limit_color,        nullptr); });
+    p.add_entry(Property_row_id::debug_free, "Free",         [style_row, &style](){ style_row(&style.joint_free_color,         nullptr); });
+    p.add_entry(Property_row_id::debug_value, "Value",        [style_row, &style](){ style_row(&style.joint_value_color,        nullptr); });
+    p.add_entry(Property_row_id::debug_violation, "Violation",    [style_row, &style](){ style_row(&style.joint_violation_color,    nullptr); });
+    p.add_entry(Property_row_id::debug_pending, "Pending",      [style_row, &style](){ style_row(&style.joint_pending_color,      nullptr); });
+    p.add_entry(Property_row_id::debug_approximated, "Approximated", [style_row, &style](){ style_row(&style.joint_approximated_color, nullptr); });
+    p.add_entry(Property_row_id::debug_backend, "Backend",      [style_row, &style](){ style_row(&style.joint_backend_color,      nullptr); });
+    p.add_entry(Property_row_id::debug_body_link, "Body Link",    [style_row, &style](){ style_row(&style.joint_body_link_color,    nullptr); });
+    p.add_entry(Property_row_id::debug_ik_swing, "IK Swing",     [style_row, &style](){ style_row(&style.ik_limit_swing_color,     nullptr); });
+    p.add_entry(Property_row_id::debug_ik_twist, "IK Twist",     [style_row, &style](){ style_row(&style.ik_limit_twist_color,     nullptr); });
     p.pop_group();
 
     p.pop_group();
@@ -2782,8 +2782,8 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
     }
 
     p.reset();
-    p.add_entry("Node Axises", [this](){ make_combo("##", m_settings.node_axises); });
-    p.add_entry("Animation Paths", [this](){
+    p.add_entry(Property_row_id::debug_node_axises, "Node Axises", [this](){ make_combo("##", m_settings.node_axises); });
+    p.add_entry(Property_row_id::debug_animation_paths, "Animation Paths", [this](){
         // The targeted animation's paths: no hovered mode, a path is per
         // target node and hover picks meshes.
         static constexpr const char* c_animation_path_mode_strings[] = { "Off", "Selected", "All" };
@@ -2805,11 +2805,11 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
             );
         }
     });
-    p.add_entry("Path Interval", [this](){ ImGui::DragFloat("##", &m_settings.animation_path_interval, 0.01f, 0.001f, 10.0f, "%.3f s"); });
-    p.add_entry("Navigation Seeds", [this](){ ImGui::Checkbox("##", &m_settings.navigation_seeds); });
+    p.add_entry(Property_row_id::debug_path_interval, "Path Interval", [this](){ ImGui::DragFloat("##", &m_settings.animation_path_interval, 0.01f, 0.001f, 10.0f, "%.3f s"); });
+    p.add_entry(Property_row_id::debug_navigation_seeds, "Navigation Seeds", [this](){ ImGui::Checkbox("##", &m_settings.navigation_seeds); });
 #if defined(ERHE_USE_DETOUR)
     // The edit is the change site: the navigation passes read the view's setting as they prepare (doc/editor/navigation.md "Visualization").
-    p.add_entry("Navigation Mesh", [this](){
+    p.add_entry(Property_row_id::debug_navigation_mesh, "Navigation Mesh", [this](){
         static constexpr const char* c_navigation_mesh_strings[] = { "Off", "Reachable", "All" };
         erhe::imgui::make_combo("##", m_settings.navigation_mesh, c_navigation_mesh_strings, IM_ARRAYSIZE(c_navigation_mesh_strings));
         if (ImGui::IsItemHovered()) {
@@ -2817,11 +2817,11 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
         }
     });
 #endif
-    p.add_entry("Physics",     [this](){ make_combo("##", m_settings.physics  ); });
-    p.add_entry("Raytrace",    [this](){ make_combo("##", m_settings.raytrace ); });
+    p.add_entry(Property_row_id::debug_physics, "Physics",     [this](){ make_combo("##", m_settings.physics  ); });
+    p.add_entry(Property_row_id::debug_raytrace, "Raytrace",    [this](){ make_combo("##", m_settings.raytrace ); });
     // Joint constraints (doc/editor/tools.md "Debug_visualizations"):
     // which ones are drawn, and which kinds.
-    p.add_entry("Joint Constraints", [this](){
+    p.add_entry(Property_row_id::debug_joint_constraints_2, "Joint Constraints", [this](){
         static constexpr const char* c_joint_constraint_filter_strings[] = {
             "Off",
             "All",
@@ -2839,27 +2839,27 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
         }
     });
     if (m_settings.joint_constraints != Joint_constraint_filter::off) {
-        p.add_entry("Physics Joints", [this](){ ImGui::Checkbox("##", &m_settings.joint_constraints_physics); });
+        p.add_entry(Property_row_id::debug_physics_joints, "Physics Joints", [this](){ ImGui::Checkbox("##", &m_settings.joint_constraints_physics); });
         if (m_settings.joint_constraints_physics) {
-            p.add_entry("Contract Level", [this](){
+            p.add_entry(Property_row_id::debug_contract_level, "Contract Level", [this](){
                 ImGui::Checkbox("##", &m_settings.joint_constraints_contract);
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("The limits as the erhe::physics joint contract states them (D6: twist about X, swing about Y and Z),\nthe same on every physics backend.");
                 }
             });
-            p.add_entry("Backend Level", [this](){
+            p.add_entry(Property_row_id::debug_backend_level, "Backend Level", [this](){
                 ImGui::Checkbox("##", &m_settings.joint_constraints_backend);
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("The limits as the built physics backend simulates them, in the backend color;\nmagenta where the backend differs from the contract.");
                 }
             });
         }
-        p.add_entry("IK Limits",      [this](){ ImGui::Checkbox("##", &m_settings.joint_constraints_ik); });
+        p.add_entry(Property_row_id::debug_ik_limits, "IK Limits",      [this](){ ImGui::Checkbox("##", &m_settings.joint_constraints_ik); });
     }
 
-    p.add_entry("World Axes",   [this](){ ImGui::Checkbox   ("##", &m_settings.world_axes); });
-    p.add_entry("Shadow Debug", [this](){ ImGui::Checkbox   ("##", &m_settings.shadow_debug); }); // shadow texel visualization
-    p.add_entry("Shadow Fit",   [this](){ ImGui::Checkbox   ("##", &m_settings.shadow_fit_debug); });
+    p.add_entry(Property_row_id::debug_world_axes, "World Axes",   [this](){ ImGui::Checkbox   ("##", &m_settings.world_axes); });
+    p.add_entry(Property_row_id::debug_shadow_debug, "Shadow Debug", [this](){ ImGui::Checkbox   ("##", &m_settings.shadow_debug); }); // shadow texel visualization
+    p.add_entry(Property_row_id::debug_shadow_fit_2, "Shadow Fit",   [this](){ ImGui::Checkbox   ("##", &m_settings.shadow_fit_debug); });
 
     if (m_settings.shadow_fit_debug) {
         // Shadow frustum fit visualizations; data is collected per light only
@@ -2868,7 +2868,7 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
         // widths) is editor-global and edited in the Settings window
         // (Debug_visualizations_style, via Debug_visualizations::style_imgui).
         const std::shared_ptr<Scene_root> shadow_fit_scene_root = scene_view.get_scene_root();
-        p.push_group("Shadow Fit", ImGuiTreeNodeFlags_None);
+        p.push_group(Property_row_id::debug_shadow_fit_3, "Shadow Fit", ImGuiTreeNodeFlags_None);
         // Master switch for the fit's debug-data collection
         // (Shadow_frustum_fit_settings::collect_debug; the same setting as in
         // the Settings window, edited live). Every element below renders from
@@ -2877,19 +2877,19 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
         // debug-related work at all.
         Editor_settings_config* const editor_settings = app_context.editor_settings;
         if (editor_settings != nullptr) {
-            p.add_entry("Collect Debug Data", [editor_settings]() {
+            p.add_entry(Property_row_id::debug_collect_debug_data, "Collect Debug Data", [editor_settings]() {
                 ImGui::Checkbox("##", &editor_settings->shadow_frustum_fit.collect_debug);
             });
         }
         // Dump the current view's fit debug geometry once to the log (also
         // available over MCP as get_shadow_fit_debug). Needs Collect Debug on.
-        p.add_entry("Dump", [this]() {
+        p.add_entry(Property_row_id::debug_dump, "Dump", [this]() {
             if (ImGui::Button("Dump to Log")) {
                 m_shadow_fit_dump_requested = true;
             }
         });
         // The fit and its caster classification target a single light.
-        p.add_entry("Fit Light", [this, shadow_fit_scene_root]() {
+        p.add_entry(Property_row_id::debug_fit_light, "Fit Light", [this, shadow_fit_scene_root]() {
             const std::shared_ptr<erhe::scene::Light> current = m_shadow_fit_light.lock();
             ImGui::SetNextItemWidth(180.0f);
             if (ImGui::BeginCombo("##fit_light", current ? current->get_name().c_str() : "(first shadow light)")) {
@@ -2910,73 +2910,73 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
                 ImGui::EndCombo();
             }
         });
-        p.add_entry("Casters",                 [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_casters); });
-        p.add_entry("Caster Hull",             [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_caster_hull); });
-        p.add_entry("View Frustum",            [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_view_frustum); });
-        p.add_entry("Receivers",               [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_receivers); });
-        p.add_entry("Receiver Hull Unclipped", [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_receiver_hull_unclipped); });
-        p.add_entry("Receiver Hull Clipped",   [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_receiver_hull); });
-        p.add_entry("Volume Planes",           [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_volume_planes); });
-        p.add_entry("Far Plane Hull",          [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_far_plane_hull); });
-        p.add_entry("Fit Points",              [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_points); });
-        p.add_entry("Light Plane Hull",        [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_light_plane_hull); });
-        p.add_entry("Box: Points",             [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_fit); });
-        p.add_entry("Box: Frustum",            [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_frustum); });
-        p.add_entry("Box: Range Cap",          [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_cap); });
-        p.add_entry("Box: Final",              [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_final); });
+        p.add_entry(Property_row_id::debug_casters_2, "Casters",                 [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_casters); });
+        p.add_entry(Property_row_id::debug_caster_hull_2, "Caster Hull",             [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_caster_hull); });
+        p.add_entry(Property_row_id::debug_view_frustum_2, "View Frustum",            [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_view_frustum); });
+        p.add_entry(Property_row_id::debug_receivers_2, "Receivers",               [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_receivers); });
+        p.add_entry(Property_row_id::debug_receiver_hull_unclipped_2, "Receiver Hull Unclipped", [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_receiver_hull_unclipped); });
+        p.add_entry(Property_row_id::debug_receiver_hull_clipped_2, "Receiver Hull Clipped",   [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_receiver_hull); });
+        p.add_entry(Property_row_id::debug_volume_planes_2, "Volume Planes",           [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_volume_planes); });
+        p.add_entry(Property_row_id::debug_far_plane_hull_2, "Far Plane Hull",          [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_far_plane_hull); });
+        p.add_entry(Property_row_id::debug_fit_points_2, "Fit Points",              [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_points); });
+        p.add_entry(Property_row_id::debug_light_plane_hull_2, "Light Plane Hull",        [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_light_plane_hull); });
+        p.add_entry(Property_row_id::debug_box_points_2, "Box: Points",             [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_fit); });
+        p.add_entry(Property_row_id::debug_box_frustum_2, "Box: Frustum",            [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_frustum); });
+        p.add_entry(Property_row_id::debug_box_range_cap_2, "Box: Range Cap",          [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_cap); });
+        p.add_entry(Property_row_id::debug_box_final_2, "Box: Final",              [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_final); });
         p.pop_group();
     }
 
-    p.push_group("Selection",  ImGuiTreeNodeFlags_DefaultOpen); //ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("Selection",       [this](){ ImGui::Checkbox   ("##", &m_settings.selection); });
-    p.add_entry("Bounding points", [this](){ ImGui::Checkbox   ("##", &m_settings.selection_bounding_points); });
+    p.push_group(Property_row_id::debug_selection_2, "Selection",  ImGuiTreeNodeFlags_DefaultOpen); //ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry(Property_row_id::debug_selection_3, "Selection",       [this](){ ImGui::Checkbox   ("##", &m_settings.selection); });
+    p.add_entry(Property_row_id::debug_bounding_points, "Bounding points", [this](){ ImGui::Checkbox   ("##", &m_settings.selection_bounding_points); });
     if (m_settings.selection_bounding_points) {
         erhe::math::Aabb   selection_bounding_box;
         erhe::math::Sphere selection_bounding_sphere;
         erhe::math::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
         const float box_volume    = selection_bounding_box.volume();
         const float sphere_volume = selection_bounding_sphere.volume();
-        p.add_entry("Box Volume",    [this, box_volume               ](){ ImGui::Text("%f", box_volume); });
-        p.add_entry("Sphere radius", [this, selection_bounding_sphere](){ ImGui::Text("%f", selection_bounding_sphere.radius); });
-        p.add_entry("Sphere Volume", [this, sphere_volume            ](){ ImGui::Text("%f", sphere_volume); });
+        p.add_entry(Property_row_id::debug_box_volume, "Box Volume",    [this, box_volume               ](){ ImGui::Text("%f", box_volume); });
+        p.add_entry(Property_row_id::debug_sphere_radius, "Sphere radius", [this, selection_bounding_sphere](){ ImGui::Text("%f", selection_bounding_sphere.radius); });
+        p.add_entry(Property_row_id::debug_sphere_volume, "Sphere Volume", [this, sphere_volume            ](){ ImGui::Text("%f", sphere_volume); });
     }
-    p.add_entry("Selection Box",            [this](){ ImGui::Checkbox   ("##", &m_settings.selection_box); });
-    p.add_entry("Selection Sphere",         [this](){ ImGui::Checkbox   ("##", &m_settings.selection_sphere); });
-    p.add_entry("Selection Parts",          [this](){ ImGui::Checkbox   ("##", &m_settings.selection_parts); });
-    p.add_entry("Selection Convex Hull",    [this](){ ImGui::Checkbox   ("##", &m_settings.selection_convex_hull); });
-    p.add_entry("Selection Projected Hull", [this](){ ImGui::Checkbox   ("##", &m_settings.selection_convex_hull_projected); });
-    p.add_entry("Debug Convex Hull",        [this](){ ImGui::Checkbox   ("##", &m_settings.debug_convex_hull); });
-    p.add_entry("Convex Hull Edge",         [this](){ ImGui::InputInt("##", &m_settings.convex_hull_edge, 1, 10, ImGuiInputTextFlags_None); });
+    p.add_entry(Property_row_id::debug_selection_box, "Selection Box",            [this](){ ImGui::Checkbox   ("##", &m_settings.selection_box); });
+    p.add_entry(Property_row_id::debug_selection_sphere, "Selection Sphere",         [this](){ ImGui::Checkbox   ("##", &m_settings.selection_sphere); });
+    p.add_entry(Property_row_id::debug_selection_parts, "Selection Parts",          [this](){ ImGui::Checkbox   ("##", &m_settings.selection_parts); });
+    p.add_entry(Property_row_id::debug_selection_convex_hull, "Selection Convex Hull",    [this](){ ImGui::Checkbox   ("##", &m_settings.selection_convex_hull); });
+    p.add_entry(Property_row_id::debug_selection_projected_hull, "Selection Projected Hull", [this](){ ImGui::Checkbox   ("##", &m_settings.selection_convex_hull_projected); });
+    p.add_entry(Property_row_id::debug_debug_convex_hull, "Debug Convex Hull",        [this](){ ImGui::Checkbox   ("##", &m_settings.debug_convex_hull); });
+    p.add_entry(Property_row_id::debug_convex_hull_edge, "Convex Hull Edge",         [this](){ ImGui::InputInt("##", &m_settings.convex_hull_edge, 1, 10, ImGuiInputTextFlags_None); });
     p.pop_group();
 
-    p.add_entry("Gap",                   [this](){ ImGui::SliderFloat("##", &m_settings.gap, 0.0001f, 0.1f); });
-    p.add_entry("Tool Hide",             [this](){ ImGui::Checkbox   ("##", &m_settings.tool_hide); });
+    p.add_entry(Property_row_id::debug_gap, "Gap",                   [this](){ ImGui::SliderFloat("##", &m_settings.gap, 0.0001f, 0.1f); });
+    p.add_entry(Property_row_id::debug_tool_hide, "Tool Hide",             [this](){ ImGui::Checkbox   ("##", &m_settings.tool_hide); });
     //ImGui::Checkbox   ("Raytrace",              &m_settings.raytrace);
 
-    p.add_entry("Frustum Box",       [this](){ ImGui::Checkbox("##", &m_settings.frustum_box); });
-    p.add_entry("Frustum Planes",    [this](){ ImGui::Checkbox("##", &m_settings.frustum_planes); });
-    p.add_entry("Lights",            [this](){ make_combo("##", m_settings.lights); });
-    p.add_entry("Cameras",           [this](){ make_combo("##", m_settings.cameras); });
+    p.add_entry(Property_row_id::debug_frustum_box, "Frustum Box",       [this](){ ImGui::Checkbox("##", &m_settings.frustum_box); });
+    p.add_entry(Property_row_id::debug_frustum_planes, "Frustum Planes",    [this](){ ImGui::Checkbox("##", &m_settings.frustum_planes); });
+    p.add_entry(Property_row_id::debug_lights, "Lights",            [this](){ make_combo("##", m_settings.lights); });
+    p.add_entry(Property_row_id::debug_cameras, "Cameras",           [this](){ make_combo("##", m_settings.cameras); });
     if (m_settings.cameras != Visualization_mode::off) {
-        p.add_entry("Camera Cull Test",  [this](){ ImGui::Checkbox   ("##", &m_settings.camera_cull_test); });
+        p.add_entry(Property_row_id::debug_camera_cull_test, "Camera Cull Test",  [this](){ ImGui::Checkbox   ("##", &m_settings.camera_cull_test); });
     }
 
-    p.add_entry("Layouts",           [this](){ make_combo("##", m_settings.layouts); });
+    p.add_entry(Property_row_id::debug_layouts, "Layouts",           [this](){ make_combo("##", m_settings.layouts); });
 
-    p.add_entry("Primitive Boxes", [this](){ ImGui::Checkbox("##", &m_settings.mesh_primitive_boxes); });
-    p.add_entry("Bone Boxes",      [this](){ ImGui::Checkbox("##", &m_settings.bone_boxes); });
+    p.add_entry(Property_row_id::debug_primitive_boxes_2, "Primitive Boxes", [this](){ ImGui::Checkbox("##", &m_settings.mesh_primitive_boxes); });
+    p.add_entry(Property_row_id::debug_bone_boxes_2, "Bone Boxes",      [this](){ ImGui::Checkbox("##", &m_settings.bone_boxes); });
 
-    p.add_entry("Skins",          [this](){ make_combo("##", m_settings.skins); });
+    p.add_entry(Property_row_id::debug_skins, "Skins",          [this](){ make_combo("##", m_settings.skins); });
     // Bone display. Both only have an effect while Skins is showing something.
 
-    p.push_group("Annotiations", ImGuiTreeNodeFlags_DefaultOpen); //ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("Max Labels", [this](){ ImGui::SliderInt("##", &m_settings.max_labels, 0, 2000); });
+    p.push_group(Property_row_id::debug_annotiations, "Annotiations", ImGuiTreeNodeFlags_DefaultOpen); //ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry(Property_row_id::debug_max_labels, "Max Labels", [this](){ ImGui::SliderInt("##", &m_settings.max_labels, 0, 2000); });
     
-    p.add_entry("Show Vertices",    [this](){ make_combo("##", m_settings.vertex_labels); });
-    p.add_entry("Vertex Positions", [this](){ ImGui::Checkbox("##", &m_settings.vertex_positions); });
-    p.add_entry("Show Facets",      [this](){ make_combo("##", m_settings.facet_labels ); });
-    p.add_entry("Show Edges",       [this](){ make_combo("##", m_settings.edge_labels  ); });
-    p.add_entry("Show Corners",     [this](){ make_combo("##", m_settings.corner_labels); });
+    p.add_entry(Property_row_id::debug_show_vertices, "Show Vertices",    [this](){ make_combo("##", m_settings.vertex_labels); });
+    p.add_entry(Property_row_id::debug_vertex_positions, "Vertex Positions", [this](){ ImGui::Checkbox("##", &m_settings.vertex_positions); });
+    p.add_entry(Property_row_id::debug_show_facets, "Show Facets",      [this](){ make_combo("##", m_settings.facet_labels ); });
+    p.add_entry(Property_row_id::debug_show_edges, "Show Edges",       [this](){ make_combo("##", m_settings.edge_labels  ); });
+    p.add_entry(Property_row_id::debug_show_corners, "Show Corners",     [this](){ make_combo("##", m_settings.corner_labels); });
     p.pop_group();
     p.show_entries();
 }

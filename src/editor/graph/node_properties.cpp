@@ -59,7 +59,7 @@ void Node_properties_window::item_flags(const std::shared_ptr<erhe::Item_base>& 
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_property_editor.push_group("Flags", ImGuiTreeNodeFlags_None, 0.0f);
+    m_property_editor.push_group(Property_row_id::graph_flags, "Flags", ImGuiTreeNodeFlags_None, 0.0f);
 
     using namespace erhe::utility;
     using Item_flags = erhe::Item_flags;
@@ -73,7 +73,7 @@ void Node_properties_window::item_flags(const std::shared_ptr<erhe::Item_base>& 
         if (bit_label == nullptr) {
             continue; // a bit neither the library nor the editor defines
         }
-        m_property_editor.add_entry(bit_label, [item, bit_position, flags, this]() {
+        m_property_editor.add_entry({Property_row_id::graph_item_flag, bit_position}, bit_label, [item, bit_position, flags, this]() {
             const uint64_t bit_mask = uint64_t{1} << bit_position;
             bool           value    = test_bit_set(flags, bit_mask);
             if (ImGui::Checkbox("##Node_properties_window::item_flags(", &value)) {
@@ -113,9 +113,9 @@ void Node_properties_window::item_properties(const std::shared_ptr<erhe::Item_ba
     // (heap-buffer-overflow) - and were never cleared, so they accumulated text
     // every frame and across every selected item. Passing the string_views to
     // fmt (not their .data()) also avoids a strlen on a non-terminated view.
-    m_property_editor.push_group(fmt::format("{} {}", item->get_type_name(), item->get_name()), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
+    m_property_editor.push_group({Property_row_id::graph_item, item->get_id()}, fmt::format("{} {}", item->get_type_name(), item->get_name()), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
     {
-        m_property_editor.add_entry(fmt::format("{} Name", item->get_type_name()), [item]() {
+        m_property_editor.add_entry(Property_row_id::graph_item_name, fmt::format("{} Name", item->get_type_name()), [item]() {
             std::string name = item->get_name();
             const bool enter_pressed = ImGui::InputText("##Node_properties_window::item_properties()", &name, ImGuiInputTextFlags_EnterReturnsTrue);
             if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO
@@ -125,7 +125,7 @@ void Node_properties_window::item_properties(const std::shared_ptr<erhe::Item_ba
             }
         });
 
-        m_property_editor.add_entry("Id", [item]() { ImGui::Text("%u", static_cast<unsigned int>(item->get_id())); });
+        m_property_editor.add_entry(Property_row_id::graph_id, "Id", [item]() { ImGui::Text("%u", static_cast<unsigned int>(item->get_id())); });
 
         item_flags(item);
     }
@@ -139,9 +139,9 @@ void Node_properties_window::item_properties(const std::shared_ptr<erhe::Item_ba
 
 void Node_properties_window::node_properties(Shader_graph_node& node)
 {
-    m_property_editor.push_group("Node", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
+    m_property_editor.push_group(Property_row_id::graph_node, "Node", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
     m_property_editor.add_entry(
-        "Inputs",
+        Property_row_id::graph_inputs, "Inputs",
         [&node]() {
             if (ImGui::BeginCombo("##inputs", get_node_edge_name(node.m_input_pin_edge))) {
                 for (int i = 0; i < Node_edge::count; ++i) {
@@ -156,7 +156,7 @@ void Node_properties_window::node_properties(Shader_graph_node& node)
         }
     );
     m_property_editor.add_entry(
-        "Outputs",
+        Property_row_id::graph_outputs, "Outputs",
         [&node]() {
             if (ImGui::BeginCombo("##outputs", get_node_edge_name(node.m_output_pin_edge))) {
                 for (int i = 0; i < Node_edge::count; ++i) {
@@ -171,7 +171,7 @@ void Node_properties_window::node_properties(Shader_graph_node& node)
         }
     );
     m_property_editor.add_entry(
-        "Size",
+        Property_row_id::graph_size, "Size",
         [&node]() {
             // Requested node size in canvas units; 0 = automatic
             // (content-derived). Content is not scaled.
@@ -245,9 +245,9 @@ void Node_properties_window::collect_graph_editor_selection()
 
 void Node_properties_window::graph_editor_node_properties(Graph_editor_window_base& window, const std::shared_ptr<Graph_editor_node>& node)
 {
-    m_property_editor.push_group(fmt::format("Node {}", node->get_name()), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
+    m_property_editor.push_group({Property_row_id::graph_editor_node, reinterpret_cast<std::uintptr_t>(node.get())}, fmt::format("Node {}", node->get_name()), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
 
-    m_property_editor.add_entry("Name", [node]() {
+    m_property_editor.add_entry(Property_row_id::graph_name, "Name", [node]() {
         std::string name = node->get_name();
         const bool enter_pressed = ImGui::InputText("##name", &name, ImGuiInputTextFlags_EnterReturnsTrue);
         if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) {
@@ -256,17 +256,17 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
             }
         }
     });
-    m_property_editor.add_entry("Type",   [node]() { ImGui::TextUnformatted(node->get_factory_type_name().c_str()); });
-    m_property_editor.add_entry("Id",     [node]() { ImGui::Text("%u", static_cast<unsigned int>(node->get_id())); });
-    m_property_editor.add_entry("Window", [&window]() { ImGui::TextUnformatted(window.get_title().c_str()); });
-    m_property_editor.add_entry("Position", [&window, node]() {
+    m_property_editor.add_entry(Property_row_id::graph_type, "Type",   [node]() { ImGui::TextUnformatted(node->get_factory_type_name().c_str()); });
+    m_property_editor.add_entry(Property_row_id::graph_id_2, "Id",     [node]() { ImGui::Text("%u", static_cast<unsigned int>(node->get_id())); });
+    m_property_editor.add_entry(Property_row_id::graph_window, "Window", [&window]() { ImGui::TextUnformatted(window.get_title().c_str()); });
+    m_property_editor.add_entry(Property_row_id::graph_position, "Position", [&window, node]() {
         const ImVec2 position = window.get_node_position(*node.get());
         float xy[2] = {position.x, position.y};
         if (ImGui::DragFloat2("##position", xy, 1.0f)) {
             window.set_node_position(*node.get(), ImVec2{xy[0], xy[1]});
         }
     });
-    m_property_editor.add_entry("Size", [&window, node]() {
+    m_property_editor.add_entry(Property_row_id::graph_size_2, "Size", [&window, node]() {
         // Requested node size in canvas units; automatic (content-derived)
         // when unset, in which case the drags start from the actual on-canvas
         // extent. Content is not scaled - the node just gets more room (a
@@ -289,7 +289,7 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
         }
         ImGui::EndDisabled();
     });
-    m_property_editor.add_entry("Pin labels", [node]() {
+    m_property_editor.add_entry(Property_row_id::graph_pin_labels, "Pin labels", [node]() {
         // Width of the pin label columns on the node edges (canvas units);
         // labels wider than this clip.
         float width = node->get_pin_label_width();
@@ -299,7 +299,7 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
     });
     // Pin layout: only left / right are implemented by the node renderer, so
     // the combos offer just those two edges (unlike the shader graph's).
-    m_property_editor.add_entry("Inputs", [node]() {
+    m_property_editor.add_entry(Property_row_id::graph_inputs_2, "Inputs", [node]() {
         if (ImGui::BeginCombo("##inputs", get_node_edge_name(node->get_input_pin_edge()))) {
             for (int edge : {Node_edge::left, Node_edge::right}) {
                 bool selected = (node->get_input_pin_edge() == edge);
@@ -311,7 +311,7 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
             ImGui::EndCombo();
         }
     });
-    m_property_editor.add_entry("Outputs", [node]() {
+    m_property_editor.add_entry(Property_row_id::graph_outputs_2, "Outputs", [node]() {
         if (ImGui::BeginCombo("##outputs", get_node_edge_name(node->get_output_pin_edge()))) {
             for (int edge : {Node_edge::left, Node_edge::right}) {
                 bool selected = (node->get_output_pin_edge() == edge);
@@ -330,12 +330,12 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
         // draws through unregistered_parameters_imgui().
         m_dependency_rows.add_rows(m_property_editor, std::vector<std::shared_ptr<erhe::Item_base>>{node});
         if (node->has_unregistered_parameters()) {
-            m_property_editor.add_entry("Extra", [this, node]() {
+            m_property_editor.add_entry(Property_row_id::graph_extra, "Extra", [this, node]() {
                 node->unregistered_parameters_imgui(m_context);
             });
         }
     } else {
-        m_property_editor.add_entry("Parameters", [this, node]() {
+        m_property_editor.add_entry(Property_row_id::graph_parameters, "Parameters", [this, node]() {
             node->properties_imgui(m_context);
         });
     }
@@ -346,6 +346,7 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
 void Node_properties_window::graph_editor_link_properties(Graph_editor_window_base& window, erhe::graph::Link* link)
 {
     m_property_editor.push_group(
+        {Property_row_id::graph_link, reinterpret_cast<std::uintptr_t>(link)},
         fmt::format(
             "Link {} -> {}",
             link->get_source()->get_owner_node()->get_name(),
@@ -355,15 +356,15 @@ void Node_properties_window::graph_editor_link_properties(Graph_editor_window_ba
         0.0f
     );
 
-    m_property_editor.add_entry("Source", [link]() {
+    m_property_editor.add_entry(Property_row_id::graph_source, "Source", [link]() {
         const std::string label = fmt::format("{}.{}", link->get_source()->get_owner_node()->get_name(), link->get_source()->get_name());
         ImGui::TextUnformatted(label.c_str());
     });
-    m_property_editor.add_entry("Sink", [link]() {
+    m_property_editor.add_entry(Property_row_id::graph_sink, "Sink", [link]() {
         const std::string label = fmt::format("{}.{}", link->get_sink()->get_owner_node()->get_name(), link->get_sink()->get_name());
         ImGui::TextUnformatted(label.c_str());
     });
-    m_property_editor.add_entry("Window", [&window]() { ImGui::TextUnformatted(window.get_title().c_str()); });
+    m_property_editor.add_entry(Property_row_id::graph_window_2, "Window", [&window]() { ImGui::TextUnformatted(window.get_title().c_str()); });
 
     // Per-link curve shape (Kochanek-Bartels): the values live in the
     // window's canvas (ax::NodeEditor link), like the routing mid points.
@@ -376,10 +377,10 @@ void Node_properties_window::graph_editor_link_properties(Graph_editor_window_ba
             node_editor->SetLinkCurveParams(link_id, params[0], params[1], params[2]);
         }
     };
-    m_property_editor.add_entry("Tension",    [curve_slider]() { curve_slider("##tension",    0); });
-    m_property_editor.add_entry("Continuity", [curve_slider]() { curve_slider("##continuity", 1); });
-    m_property_editor.add_entry("Bias",       [curve_slider]() { curve_slider("##bias",       2); });
-    m_property_editor.add_entry("Mid points", [&window, link_id]() {
+    m_property_editor.add_entry(Property_row_id::graph_tension, "Tension",    [curve_slider]() { curve_slider("##tension",    0); });
+    m_property_editor.add_entry(Property_row_id::graph_continuity, "Continuity", [curve_slider]() { curve_slider("##continuity", 1); });
+    m_property_editor.add_entry(Property_row_id::graph_bias, "Bias",       [curve_slider]() { curve_slider("##bias",       2); });
+    m_property_editor.add_entry(Property_row_id::graph_mid_points, "Mid points", [&window, link_id]() {
         ax::NodeEditor::EditorContext* node_editor = window.get_node_editor();
         ImGui::Text("%d", node_editor->GetLinkMidPointCount(link_id));
         ImGui::SameLine();
@@ -397,7 +398,7 @@ void Node_properties_window::graph_editor_link_properties(Graph_editor_window_ba
     static const char* const c_mid_point_mode_names[4] = { "Auto", "Mirrored", "Aligned", "Free" };
     const int mid_point_count = window.get_node_editor()->GetLinkMidPointCount(link_id);
     for (int i = 0; i < mid_point_count; ++i) {
-        m_property_editor.add_entry(fmt::format("Point {}", i), [&window, link_id, i]() {
+        m_property_editor.add_entry({Property_row_id::graph_link_point, static_cast<uint64_t>(i)}, fmt::format("Point {}", i), [&window, link_id, i]() {
             ax::NodeEditor::EditorContext* node_editor = window.get_node_editor();
             const int mode = node_editor->GetLinkMidPointMode(link_id, i);
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
