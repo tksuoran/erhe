@@ -9,6 +9,7 @@
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 
 namespace editor {
@@ -439,10 +440,12 @@ auto parse_hexfloat(const std::string_view text, float& out_value) -> bool
     if ((rest.size() < 3) || (rest[0] != '0') || ((rest[1] != 'x') && (rest[1] != 'X'))) {
         return false;
     }
-    rest.remove_prefix(2);
-    float value = 0.0f;
-    const std::from_chars_result result = std::from_chars(rest.data(), rest.data() + rest.size(), value, std::chars_format::hex);
-    if ((result.ec != std::errc{}) || (result.ptr != rest.data() + rest.size())) {
+    // Floating point std::from_chars is missing from the Android NDK libc++;
+    // strtof on a null-terminated copy parses the same "0x" literal.
+    const std::string copy{rest};
+    char* end = nullptr;
+    const float value = std::strtof(copy.c_str(), &end);
+    if ((end != (copy.c_str() + copy.size())) || !std::isfinite(value)) {
         return false;
     }
     out_value = negative ? -value : value;

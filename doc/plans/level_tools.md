@@ -61,6 +61,58 @@ The user's ruling (2026-11-14):
   defect of a placement tool, and the overlap report (R10.3) stays a read
   the author asks for.
 
+The user's rulings (2026-11-15):
+
+- U21: transformed pieces snap to connectors within a set distance and
+  unsnap beyond it, without interrupting the drag (R5.13). In the user's
+  words: "We want 'snap to connectors' setting, as float max distance, 0
+  meaning disabled, when transformed node a connector closer than the value
+  to connector from other node in scene below the distance setting, the
+  transformed node shall snap (translate) so that connectors are co-located
+  - drag shall not be interrupted, and if the unsnapped position moves
+  further than distance setting, the transformed node shall unsnap."
+- U22: a connector is a point and frame of its node and follows the node's
+  full world transform, scale included; connectors have visual indicators
+  (R5.3, R5.13). In the user's words: "Connectors should have visual
+  indicators. When I scale wall node a bit, it no longer connects; the
+  connectors should be transforms along with the node"
+- U23 (2026-11-15), snap to surface. The surface options are called "snap
+  to surface" (not "surface rest"). In the user's words, for a piece buried
+  in a solid: "raycast to both up and down, and as future work custom
+  raycast direction, snap to nearest"; for a piece that would climb a stack
+  or a coursed wall in one snap: "Add max distance setting to surface rest,
+  and lets call it "snap to surface" from now on".
+- U24 (2026-11-15), replace. A replaced piece is snapped to the surface again
+  when Snap To Surface is on, and keeps its transform otherwise. "Children
+  of locked layout should not be selectable without unlocking the layout node
+  - replace selected should skip and report." A selected group or kit layout
+  node is left out of replace for now. On seeds: "Layout kit nodes shall have
+  boolean property "Per Piece Seed"".
+- U25 (2026-11-15), scatter. Each point takes an item by a seeded random pick
+  with a weight per item. The minimum spacing is the gap between piece
+  bounds, not between piece centers. A change of the spacing or the region
+  decides every point again, and the Run row's "n of m pieces fit" is the
+  only report of a short scatter (both as built).
+- U26 (2026-11-15), connectors. In the Connect rows the active piece is the
+  target and the other selected piece moves (as built). On where a floor
+  slab's side connectors sit: "Add property/properties so connectors can be
+  enabled/disabled (per node)".
+- U27 (2026-11-15), snap to connectors. "Any pair when both connectors are
+  enabled" snaps. An axis or plane drag snaps by the full offset by default,
+  and a setting keeps the piece on the dragged axis or plane instead ("Snap
+  setting, default as built today, also enable stay on axis via setting
+  change"). A modifier key held during the drag suspends the snap. The snap
+  starts only after the pointer has moved: a press without motion changes
+  nothing. A locked translate channel the offset needs leaves the step
+  unsnapped (as built). Rotate and scale drags snap too. Scripted drags
+  (`drag_selection`, `transform_selection`) snap only when the call passes
+  the option (as built).
+- U28 (2026-11-15), kit layout visualization. Line, grid, ring and scatter
+  layout nodes draw their shape; the scatter also shows its minimum spacing,
+  and its region has viewport handles to resize it.
+- U29 (2026-11-15), window defaults. The PVS, LOD and Light Mixer windows
+  are hidden by default.
+
 ## Terms
 
 - Level: one scene made mostly of kit pieces, meant to be walked through.
@@ -263,6 +315,13 @@ the starter set.
   of stairs, both ends of a wall, the opening of a door wall). The author
   places a piece by naming a connector of the new piece and a connector of
   an existing piece; the tool computes the transform that joins them.
+- R5.13 `[should]` Snap to connectors. A setting, a maximum distance in
+  meters, 0 disabled. While a node is transformed, when one of its
+  connectors comes closer than the distance to a connector of another node
+  of the scene, the node snaps by translation so the two connectors are
+  co-located; the drag goes on. The snap is judged from the unsnapped drag
+  pose: when that pose's connector is farther than the distance from the
+  other connector, the node unsnaps (U21).
 - R5.4 `[must]` Repeat. The author places a run of pieces in one step: a
   line (count and spacing), a grid, a ring, or pieces along a polyline (a
   wall run that turns corners, a fence, a path of stepping stones).

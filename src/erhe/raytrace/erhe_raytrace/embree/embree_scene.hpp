@@ -51,6 +51,7 @@ public:
     //void set_dirty();
     auto get_rtc_scene() -> RTCScene;
     auto get_geometry_from_id(const unsigned int id) -> Embree_geometry*;
+    [[nodiscard]] auto make_hit(const RTCHit& rtc_hit) -> Hit;
 
 private:
     RTCScene    m_scene{nullptr};

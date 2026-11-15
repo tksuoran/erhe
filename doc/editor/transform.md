@@ -164,6 +164,12 @@ the gizmo rests each moved mesh on the surface under it at every step;
 `transform_selection` and `drag_selection` do so with their `surface_snap` /
 `surface_orient` arguments. The rules (the axis rule, rotate and scale left
 alone, the anchor, undo) are in `doc/editor/level_tools.md` "Surface settings".
+With Connector Snap above 0 a translate drag then moves the dragged nodes so
+that their connector nearest another kit piece's connector meets it within
+the distance; `drag_selection` and `transform_selection` take
+`connector_snap_distance`. A translate step's order is the tool's translate,
+the surface rest, the connector snap, then the live layout preview
+(`doc/editor/level_tools.md` "Connector snap").
 
 ## Rigid descendants
 
@@ -172,6 +178,53 @@ target whose ancestor is also a target the drag moves
 (`has_moved_ancestor_entry()`; a locked ancestor does not count): it rides on
 the ancestor, so a parent and child selected together move rigidly whatever
 the order of the targets.
+
+## Undo record
+
+A node edit - a gizmo drag on any handle, a Transform window value edit, a
+`drag_selection` or `transform_selection` call - records one undo entry at
+its end (`Transform_tool::record_transform_operation()`) exactly when at
+least one entry's local transform or xform op stack differs, bit for bit,
+from its drag-start value; otherwise it records nothing (autokey keys nothing
+either, `all_paths` included), and a moved layout's preview ends as at any
+record. An identity delta - an unmoved pointer, a pointer back on the press
+pixel, an unmoved box scale face, a value edited back to its start - puts
+every entry back at its drag-start pose exactly (`restore_start_pose()`)
+rather than recomposing it, so it compares equal. A zero translate step with
+surface snap or orient on then rests as any step does (`doc/editor/level_tools.md`
+"Transform tool"), and the connector snap snaps it ("Connector snap"): a
+hovering piece rests and records, a resting one stays equal. The move and scale subtools take their pointer baseline from the
+line or plane projection their updates use, at the press (`Move_tool::begin()`,
+`Scale_tool::begin()`). The Transform window's rotation fields give back the
+shown rotation exactly when their values equal the ones shown at the edit
+start (`Rotation_inspector`: the Euler field edits the degrees it shows).
+
+## Drag cancel
+
+`Transform_tool::cancel_node_drag()` cancels a node drag - a gizmo drag on
+any handle (translate axis or plane, rotate ring, scale) or a held scripted
+drag - and records nothing. It ends the subtool without its record
+(`Subtool::cancel()`), ends the live layout preview (the moved locked
+layouts get their children from before the drag back, `doc/editor/level_tools.md`
+"Live layout preview"), hands the bodies the drag took over back (springs
+detached, kinematic holds ended), restores every entry's
+`parent_from_node_before` and xform op stack (so surface rests, orients and
+an IK chain's joints are undone too), snaps each restored node's rigid
+body to that pose at rest as an undo does, ends the IK part and rebuilds the
+entries from the selection. For a jointed body pulled by a spring only the
+dragged node's body returns (at rest); the bodies the simulation moved keep
+their simulated pose, as after an undo of such a drag. A pointer drag's command goes inactive, so the
+rest of the held drag moves nothing and its release records nothing; the
+next press starts a new drag.
+
+- Escape (`Transform_tool.cancel_drag`, exact modifier mask 0, so it
+  dispatches before the mask-less Escape bindings) cancels a pointer drag of
+  nodes; it consumes the key only then.
+- MCP `cancel_transform_drag` cancels a pointer drag of nodes or a held
+  `drag_selection` drag (refused while one is still stepping) and replies
+  `cancelled` and `drag` (`pointer`, `drag_selection` or `none`).
+- A mesh component or point drag cancels through `cancel_component_edit()`
+  ("Scalar edits").
 
 ## Snap to vertices / edges
 

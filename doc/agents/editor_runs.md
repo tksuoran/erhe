@@ -208,19 +208,27 @@ ini, and relaunch; a present ini always wins untouched. A run that is not
 AI-driven rewrites tracked config files such as
 `config/editor/desktop_windows.json`; an AI-driven run leaves them untouched.
 
-## Unexpected test results: check the config first
+## Config files: reset before testing
 
-Interactive sessions leave state in the working tree's config files
-(`config/editor/desktop_windows.json`, `editor_settings.json`, the ImGui ini):
-extra viewport windows, changed settings, windows shown or hidden. A headless
-or AI-driven run reads them, so they change what the run renders and what
-`capture_screenshot` shows - an extra viewport window adds views, render
-passes and per-frame work, and can poison screenshot comparisons. When a test
-gives unexpected results, compare these files against the committed versions
-(`git diff config/`) and rerun with the committed config (back up the user's
-copies and restore them afterwards) before investigating the code. Prefer
-`render_scene_image` for scene checks: it renders through an explicit camera
-into its own target, independent of the viewport windows the config opens.
+The tracked files under `config/` (`config/editor/desktop_windows.json`,
+`editor_settings.json`, ...) are free for an agent to change or reset: they
+are in git, and the user commits the changes they want to keep. Interactive
+sessions leave state in them - extra viewport windows, changed settings,
+windows shown or hidden - and a headless or AI-driven run reads them, so they
+change what the run renders and what `capture_screenshot` shows (an extra
+viewport window adds views, render passes and per-frame work, and can poison
+screenshot comparisons).
+
+Before any testing - a verify script, a headless run, launching the windowed
+editor for the user - put the config files in a known good state, for example
+`git checkout -- config/` (the latest commit). A commit includes a config
+change only when that change is the point of the commit. The gitignored ImGui
+ini is the user's own layout state and stays as it is (above).
+
+When a test gives unexpected results, look at `git diff config/` first.
+Prefer `render_scene_image` for scene checks: it renders through an explicit
+camera into its own target, independent of the viewport windows the config
+opens.
 
 ## Interactive runs need the user
 
@@ -231,6 +239,31 @@ gesture while the file sink records to `logs/log.txt`. Prompt the user to get
 ready and wait for their go-ahead before launching the windowed editor; after
 launch, tell them the exact gesture to perform and the log prefix you will
 grep for, then read `logs/log.txt` once they confirm.
+
+## Handing the editor to the user
+
+A hand-off is a sequence in which each step can fail without a visible
+sign: the build tree misses a new source file, the MCP port in `logs/log.txt`
+belongs to an earlier editor, a tool refuses a call and leaves the scene half
+built, the viewport shows another scene's tab. Check every step, and tell the
+user the editor is ready only after looking at the result:
+
+- Reset `config/` (above), configure and build the windowed tree
+  (`doc/agents/macos.md` on new source files), and confirm no editor is
+  running before the launch.
+- Read the MCP port from the `MCP server: listening` line that names the pid
+  just launched, never from the last such line in the log.
+- Treat every refused MCP call as a stop: a refused placement places nothing,
+  and what is created after it (a surface-snapped layout before its ground)
+  is wrong.
+- Bring the viewport of the prepared scene to the front
+  (`set_window_visibility` with `focus` on the title `get_viewports` reports
+  for that scene), then read a `capture_screenshot` of it.
+
+`scripts/level_test_session.py` does this for the level tools test level
+(`--editor <build>/bin/Debug/editor`, `--build <tree>` to configure and build
+first): it stops at the first failed step with the reason and prints the
+editor's pid and port when the level is on screen.
 
 ## Once the user starts testing, stop headless testing yourself
 

@@ -3544,7 +3544,7 @@ public:
                 m_texture_graph_window   = std::make_unique<Texture_graph_window            >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_texture_graph_palette_window  = std::make_unique<Graph_editor_palette_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(), *m_texture_graph_window.get(), "Texture Graph Palette", "texture_graph_palette");
                 m_graph_window           = std::make_unique<Graph_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
-                m_node_properties_window = std::make_unique<Node_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_node_properties_window = std::make_unique<Node_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_gradient_editor        = std::make_unique<Gradient_editor                 >(*m_imgui_renderer.get(), *m_imgui_windows.get());
                 m_icon_browser           = std::make_unique<Icon_browser                    >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_sheet_window           = std::make_unique<Sheet_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());

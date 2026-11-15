@@ -266,9 +266,10 @@ fewer than two points, and refuse to edit a curve inside a reference instance
   commands, the MCP point edits and refusals, the change message count of a
   drag, the selection clearing on deselect and delete) with a screenshot of
   a selected point and its handles (`logs/curve_point_selection.png`).
-  `--sections base,lattice,viewport` picks parts. Scripted gizmo drags land
-  about 1 px short (`doc/plans/level_tools_implementation.md` step 20); the
-  drag checks allow 1.5 px of the pointer travel and print the shortfall.
+  `--sections base,lattice,viewport` picks parts. Scripted gizmo drags press
+  and release at whole pixels (`doc/agents/mcp_ui_driving.md` "Coordinate
+  space"); the drag checks allow 0.75 px of the pointer travel and print the
+  shortfall.
 
 ## Future work
 

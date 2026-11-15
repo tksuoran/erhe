@@ -2,6 +2,9 @@
 
 #include "windows/dependency_property_rows.hpp"
 #include "windows/property_editor.hpp"
+#include "app_message.hpp"
+
+#include "erhe_message_bus/message_bus.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 
@@ -16,6 +19,7 @@ namespace erhe::imgui { class Imgui_windows; }
 namespace editor {
 
 class App_context;
+class App_message_bus;
 class Graph_editor_node;
 class Graph_editor_window_base;
 class Shader_graph_node;
@@ -26,7 +30,8 @@ public:
     Node_properties_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        App_context&                 app_context
+        App_context&                 app_context,
+        App_message_bus&             app_message_bus
     );
 
     // Implements Imgui_window
@@ -52,6 +57,8 @@ private:
     // Generic rows (property-system D12) for a graph node's registered
     // parameter properties (D27 subtype registrations).
     Dependency_property_rows m_dependency_rows;
+    erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     // Scratch, cleared + refilled every frame (capacity persists): the canvas
     // selection of every graph editor window, with the owning window. Links
     // are kept per window (no cross-window dedup): curve routing is canvas

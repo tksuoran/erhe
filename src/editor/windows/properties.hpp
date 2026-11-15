@@ -73,6 +73,7 @@ public:
 
     // Implements Imgui_window
     void imgui   () override;
+    void hidden  () override; // a row edit the hidden window leaves open is given up
     void on_begin() override;
     void on_end  () override;
 

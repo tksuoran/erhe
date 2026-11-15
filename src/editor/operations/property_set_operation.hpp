@@ -22,7 +22,7 @@ class App_context;
 // Whether a Property_set_operation records the operations its write implies (the follow-ups below).
 enum class Property_set_follow_ups : unsigned int {
     record = 0,
-    none        // the caller's own operation carries them (Level_kits writing Kit_layout values)
+    none        // the caller's own operations carry them (Level_kits writing Kit_layout values, a row edit hook's commit)
 };
 
 // Undoable write of one property on one item (doc/erhe/property_system.md
@@ -40,6 +40,8 @@ enum class Property_set_follow_ups : unsigned int {
 // Rig.tail or Rig.connected edit moves, rig/bone_connect.hpp) and runs them;
 // a Kit_layout value of a locked kit layout node regenerates its children
 // (Level_kits::append_layout_value_follow_ups(), doc/editor/level_tools.md);
+// a node translation, rotation or scale runs the kit layout move hook
+// (Level_kits::append_layout_transform_follow_ups());
 // a redo runs them again after the write and an undo undoes them before
 // restoring the value, so the edit and its consequences are one undo step.
 class Property_set_operation : public Operation
@@ -103,7 +105,8 @@ private:
 
 // Applies a Property_set to several items (paste, multi-selection edit) as
 // one undo step: every entry becomes a local value on every item, and undo
-// restores each item's previous local value (or clears it).
+// restores each item's previous local value (or clears it). A transform entry
+// records the kit layout move hook as Property_set_operation does.
 class Property_set_apply_operation : public Operation
 {
 public:
@@ -125,11 +128,14 @@ private:
         std::vector<std::optional<erhe::property::Property_value>> before; // one per m_values entry
     };
     void adopt_userships(App_context& context);
+    void record_follow_ups(App_context& context);
 
     std::vector<Target>          m_targets;
     erhe::property::Property_set m_values;
     std::vector<Asset_reference> m_userships; // as Property_set_operation
     bool                         m_userships_adopted{false};
+    std::vector<std::shared_ptr<Operation>> m_follow_ups;
+    bool                         m_follow_ups_recorded{false};
 };
 
 // Applies `state` (a value, an expression, or nullopt = clear) as the

@@ -20,6 +20,7 @@ namespace erhe::property { class Dependency_property; class Property_metadata; }
 namespace editor {
 
 class App_context;
+class Operation;
 class Property_editor;
 
 // Generic Properties-window rows for the registered properties of one or
@@ -68,6 +69,19 @@ public:
     std::function<void(Property_editor&, const std::vector<std::shared_ptr<erhe::Item_base>>&)>   add_rows{};
 };
 
+// The live writes of a row edit (a drag, typed input) for the code owning
+// what the value drives (doc/editor/properties_window.md "Where rows come from").
+class Property_edit_hook
+{
+public:
+    using Items = std::vector<std::shared_ptr<erhe::Item_base>>;
+    std::function<void(const Items&, const erhe::property::Dependency_property&)>                                          begin{};
+    std::function<void()>                                                                                                  step{};
+    std::function<void()>                                                                                                  end{};
+    // Appends the operations the committed edit implies after its writes; when any are appended, the writes record none.
+    std::function<void(const Items&, const erhe::property::Dependency_property&, std::vector<std::shared_ptr<Operation>>&)> commit{};
+};
+
 class Dependency_property_rows
 {
 public:
@@ -75,6 +89,12 @@ public:
 
     void add_row_action(Property_row_action action);
     void add_group_rows(Property_group_rows rows);
+    void add_edit_hook (Property_edit_hook hook);
+
+    // An edit the window gives up (doc/editor/properties_window.md "Where rows come from").
+    void abandon_edit      ();
+    void end_lost_edit     (); // after the rows are drawn: a session whose row was not drawn this frame is given up
+    void release_edit_items(const std::function<bool(const erhe::Item_base&)>& gone);
 
     // Adds rows to `editor` for the properties every item's type has, in
     // registration order, grouped by Property_ui::group. Call between the
@@ -115,6 +135,10 @@ private:
     void draw_expression(const erhe::property::Dependency_property& property, std::string_view text);
 
     void begin_edit (const erhe::property::Dependency_property& property);
+    void step_edit_hooks(const erhe::property::Dependency_property& property); // after a live write
+    void end_edit_hooks ();
+    void clear_edit_session();
+    [[nodiscard]] auto is_session_row(const erhe::property::Dependency_property& property) const -> bool;
     void end_edit   (const erhe::property::Dependency_property& property);
     void queue_set  (const erhe::property::Dependency_property& property, const std::optional<erhe::property::Local_state>& after);
     // D3.9: a Kit_layout write of item i its node cannot take is taken back here and not queued; true when refused.
@@ -155,6 +179,7 @@ private:
     std::vector<std::vector<std::string_view>> m_groups_scratch;
     std::size_t                                m_draw_depth{0};
     std::vector<Property_group_rows> m_group_rows;
+    std::vector<Property_edit_hook>  m_edit_hooks;
 
     // Items the currently executing code operates on, bound only while
     // add_rows() / add_sub_object_rows() build the rows and while a row
@@ -171,6 +196,14 @@ private:
     const erhe::property::Dependency_property*               m_edit_property{nullptr};
     std::vector<std::optional<erhe::property::Local_state>>  m_edit_before;
     glm::vec3                                                m_edit_euler_degrees{0.0f}; // quaternion rows edit in Euler space
+    bool                                                     m_edit_hooks_begun{false};  // the session's first live write reached the hooks
+    const erhe::property::Dependency_property*               m_edit_recorded{nullptr};
+    // The session's items, kept past the draw only while the session is open; released when their scene closes.
+    std::shared_ptr<const std::vector<std::shared_ptr<erhe::Item_base>>> m_edit_items;
+    std::optional<std::size_t>                               m_edit_sub_object;
+    int                                                      m_edit_seen_frame{0};       // ImGui frame the session's row was last drawn in
+    bool                                                     m_edit_written{false};      // a live write changed the items
+    bool                                                     m_edit_abandoned{false};    // release_edit_items() gave the session up
     std::string                                              m_text_scratch;
     // Array rows (D34): the element fields edit these, cleared and refilled
     // from the row's value each frame so no steady frame allocates.

@@ -52,11 +52,11 @@ ask the user which to pick. Item 14 starts with writing its plan.
 14. Triangle classification from walkable sample points: a plan to write,
     then build (`doc/plans/navigation_mesh.md` "Triangle classification from
     walkable sample points"; the navigation mesh it reads is built).
-15. Level tools and curves: the "Next steps" of
-    `doc/plans/level_tools_implementation.md` and the "Steps" of
-    `doc/plans/curves.md` (the user tests each change hands-on in the
-    windowed Debug editor and rules on what comes next). State:
-    `memory-bank/topics/level_tools.md`.
+15. Level tools and curves: the user's rulings U23 - U29 of 2026-11-15
+    first (`doc/plans/level_tools_implementation.md` steps 44 - 56), then its
+    other "Next steps" and the "Steps" of `doc/plans/curves.md` (the user
+    tests each change hands-on in the windowed Debug editor and rules on
+    what comes next). State: `memory-bank/topics/level_tools.md`.
 
 ## Quest session follow-ups
 
@@ -145,6 +145,40 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- `erhe::raytrace` hit filters (`doc/erhe/raytrace.md` "Hit filters"): the
+  tinybvh and embree paths are verified only by `erhe_raytrace_tests` in
+  macOS arm64 Debug scratch builds (tinybvh 55/55, embree 36/36 without the
+  `Hierarchy` tests, which abort in Embree's instance stack on nested
+  instances); the editor has not run on either backend.
+  `scripts/test_raytrace_all_backends.bat` covers the backends on Windows.
+- A runtime flip of a registered mesh's world determinant to negative (a
+  node scaled through zero to a negative scale: `set_node_transform`, a
+  scale gizmo drag) aborts a Debug editor on the `ERHE_VERIFY` in
+  `draw_list_scene.cpp` `flush_pending()`
+  (`observed_negative_determinant == object.negative_determinant`); the
+  draw list supports the flip only at registration.
+- `scripts/level_test_session.py` (the hand-off script of
+  `doc/agents/editor_runs.md` "Handing the editor to the user") has not been
+  run end to end: it was written on 2026-11-15 while the user's editor was
+  open, and only its read-only queries were checked against that editor. Run
+  it at the next hand-off and fix what fails.
+- The Hotbar's rendertarget node outlives its scene: after a Hotbar slot
+  key is pressed with a scene active, "Hotbar imgui host RT node" and
+  "Rendertarget Node" are still alive 60 frames after that scene closes
+  (repro: place a piece, select it, `Hotbar.activate_slot_1`, close the
+  scene; the scene-close watchdog logs them).
+- SPIRV-Tools `MergeReturnPass` aborts in a Debug editor (assertion in
+  `Instruction::unique_id()` from `UserEntryLess` during a def-use update in
+  `MergeReturnPass::BranchToBlock`), reached from the shader statistics job
+  (`Shader_session_programs::run_stats_job()` -> `make_report_stage()` ->
+  `optimize_spirv()`). Seen once, 2026-11-15; the shader is not identified.
+  Same signature as KhronosGroup/SPIRV-Tools issue 6711 (open); the pin
+  already holds the one merged fix (PR 6885). Next: capture the module that
+  triggers it.
+- `Hit::normal` points outward for mirrored instances since the hit filter
+  work, which changes the PVS baker's front / back tests for scenes with
+  negative-determinant nodes: re-check the PVS reference hashes
+  (`doc/editor/pvs.md`) on a scene that has such nodes.
 - With `load.async_gltf_load` off, a failed synchronous load is not
   recorded in `Asset_manager::get_failed_loads()` (Operations and MCP
   `get_async_status` report nothing for it).
@@ -301,3 +335,7 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
 - Asset fetch: show each source's license beside its Fetch button (the
   Khronos Sponza's Cryengine Limited License Agreement, the Intel scenes'
   CC BY 4.0; `doc/editor/asset_fetch.md`).
+- Window defaults: the PVS, LOD and Light Mixer windows are hidden by
+  default (user, 2026-11-15; `Imgui_window::set_default_visibility`). Today
+  they are visible by default and open floating over the viewport when
+  `desktop_windows.json` has no entry for them.

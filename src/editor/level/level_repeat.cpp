@@ -1,5 +1,7 @@
 #include "level/level_repeat.hpp"
 
+#include "level/kit_mesh_builder.hpp"
+
 #include "erhe_math/curve_path.hpp"
 
 #include <fmt/format.h>
@@ -122,6 +124,94 @@ void expand_path(const Repeat_pattern& pattern, const Repeat_pose& start, std::v
     }
 }
 
+// Grid cells per side at most: a scatter's spacing checks look at the 3 x 3 cells around a candidate.
+constexpr int c_scatter_cells_per_side = 64;
+// A cell a little wider than the spacing: a cell index rounded at an edge never hides a pair closer than the spacing.
+constexpr float c_scatter_cell_margin = 1.0f + (1.0f / 1024.0f);
+
+// Dart throwing over one candidate stream of the seed (doc/editor/level_tools.md "Scatter layouts"). Each product and
+// sum is its own statement, which the fp-contract policy of doc/cmake_conventions.md keeps unfused on every compiler.
+void expand_scatter(const Repeat_pattern& pattern, const Repeat_pose& start, std::vector<Repeat_pose>& out_poses)
+{
+    const bool  disc            = (pattern.scatter_region == Repeat_scatter_region::disc);
+    const float size_x          = disc ? (2.0f * pattern.scatter_radius) : pattern.scatter_size_x;
+    const float size_z          = disc ? (2.0f * pattern.scatter_radius) : pattern.scatter_size_z;
+    const float half_x          = 0.5f * size_x;
+    const float half_z          = 0.5f * size_z;
+    const float radius_squared  = pattern.scatter_radius * pattern.scatter_radius;
+    const float spacing         = pattern.scatter_spacing;
+    const float spacing_squared = spacing * spacing;
+    const float cell            = std::max(spacing * c_scatter_cell_margin, std::max(size_x, size_z) / static_cast<float>(c_scatter_cells_per_side));
+    const int   cells_x         = static_cast<int>(size_x / cell) + 1;
+    const int   cells_z         = static_cast<int>(size_z / cell) + 1;
+    const float yaw_range       = pattern.yaw_max_degrees - pattern.yaw_min_degrees;
+    const glm::vec3 up          = start.rotation * c_axis_y;
+
+    // Leaf scratch: the first point of each cell (-1: none), the next point of the same cell, the accepted points.
+    static thread_local std::vector<int>       cell_heads;
+    static thread_local std::vector<int>       next_in_cell;
+    static thread_local std::vector<glm::vec2> points;
+    cell_heads.assign(static_cast<std::size_t>(cells_x) * static_cast<std::size_t>(cells_z), -1);
+    next_in_cell.clear();
+    points.clear();
+
+    const std::size_t wanted   = static_cast<std::size_t>(pattern.count);
+    const std::size_t attempts = wanted * c_scatter_attempts_per_piece;
+    Kit_random random{pattern.scatter_seed, "layout scatter"};
+    for (std::size_t attempt = 0; (attempt < attempts) && (points.size() < wanted); ++attempt) {
+        // Every candidate draws three values, taken or not, so the stream does not depend on the spacing.
+        const float u = random.next_unit() - 0.5f;
+        const float v = random.next_unit() - 0.5f;
+        const float w = random.next_unit();
+        const float x = u * size_x;
+        const float z = v * size_z;
+        if (disc) {
+            const float xx = x * x;
+            const float zz = z * z;
+            const float rr = xx + zz;
+            if (rr > radius_squared) {
+                continue;
+            }
+        }
+        const int cell_x = std::clamp(static_cast<int>((x + half_x) / cell), 0, cells_x - 1);
+        const int cell_z = std::clamp(static_cast<int>((z + half_z) / cell), 0, cells_z - 1);
+        bool too_close = false;
+        if (spacing > 0.0f) {
+            for (int nz = std::max(cell_z - 1, 0), end_z = std::min(cell_z + 1, cells_z - 1); (nz <= end_z) && !too_close; ++nz) {
+                for (int nx = std::max(cell_x - 1, 0), end_x = std::min(cell_x + 1, cells_x - 1); (nx <= end_x) && !too_close; ++nx) {
+                    for (int j = cell_heads[static_cast<std::size_t>((nz * cells_x) + nx)]; j >= 0; j = next_in_cell[static_cast<std::size_t>(j)]) {
+                        const float dx  = x - points[static_cast<std::size_t>(j)].x;
+                        const float dz  = z - points[static_cast<std::size_t>(j)].y;
+                        const float dxx = dx * dx;
+                        const float dzz = dz * dz;
+                        const float dd  = dxx + dzz;
+                        if (dd < spacing_squared) {
+                            too_close = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (too_close) {
+            continue;
+        }
+        const std::size_t cell_index = static_cast<std::size_t>((cell_z * cells_x) + cell_x);
+        next_in_cell.push_back(cell_heads[cell_index]);
+        cell_heads[cell_index] = static_cast<int>(points.size());
+        points.push_back(glm::vec2{x, z});
+
+        const float yaw_offset = yaw_range * w;
+        const float yaw        = pattern.yaw_min_degrees + yaw_offset;
+        out_poses.push_back(
+            Repeat_pose{
+                .position = start.position + (start.rotation * glm::vec3{x, 0.0f, z}),
+                .rotation = glm::normalize(glm::angleAxis(glm::radians(yaw), up) * start.rotation)
+            }
+        );
+    }
+}
+
 [[nodiscard]] auto check_pattern(const Repeat_pattern& pattern, const Repeat_pose& start) -> std::string
 {
     if (!is_finite(start.position) || !std::isfinite(start.rotation.w) || !std::isfinite(start.rotation.x) ||
@@ -191,6 +281,35 @@ void expand_path(const Repeat_pattern& pattern, const Repeat_pose& start, std::v
             }
             return {};
         }
+        case Repeat_pattern_kind::scatter: {
+            const std::string refusal = count_refusal("count", pattern.count);
+            if (!refusal.empty()) {
+                return refusal;
+            }
+            if (pattern.scatter_region == Repeat_scatter_region::disc) {
+                if (!std::isfinite(pattern.scatter_radius) || !(pattern.scatter_radius > 0.0f)) {
+                    return fmt::format("the scatter radius is {} m, it must be positive", pattern.scatter_radius);
+                }
+            } else if (
+                !std::isfinite(pattern.scatter_size_x) || !(pattern.scatter_size_x > 0.0f) ||
+                !std::isfinite(pattern.scatter_size_z) || !(pattern.scatter_size_z > 0.0f)
+            ) {
+                return fmt::format("the scatter region is {} x {} m, each side must be positive", pattern.scatter_size_x, pattern.scatter_size_z);
+            }
+            if (!std::isfinite(pattern.scatter_spacing) || (pattern.scatter_spacing < 0.0f)) {
+                return fmt::format("the minimum spacing is {} m, it must be zero or more", pattern.scatter_spacing);
+            }
+            if (
+                !std::isfinite(pattern.yaw_min_degrees) || !std::isfinite(pattern.yaw_max_degrees) ||
+                (pattern.yaw_min_degrees < -360.0f) || (pattern.yaw_max_degrees > 360.0f) || (pattern.yaw_min_degrees > pattern.yaw_max_degrees)
+            ) {
+                return fmt::format(
+                    "the yaw range is {} - {} degrees, it must lie in -360 - 360 with its minimum not above its maximum",
+                    pattern.yaw_min_degrees, pattern.yaw_max_degrees
+                );
+            }
+            return {};
+        }
         default: {
             return "unknown pattern";
         }
@@ -206,6 +325,7 @@ auto c_str(const Repeat_pattern_kind kind) -> const char*
         case Repeat_pattern_kind::grid:     return "grid";
         case Repeat_pattern_kind::ring:     return "ring";
         case Repeat_pattern_kind::path:     return "path";
+        case Repeat_pattern_kind::scatter:  return "scatter";
         default:                            return "?";
     }
 }
@@ -215,6 +335,15 @@ auto c_str(const Repeat_path_orientation orientation) -> const char*
     switch (orientation) {
         case Repeat_path_orientation::upright: return "upright";
         case Repeat_path_orientation::tangent: return "tangent";
+        default:                               return "?";
+    }
+}
+
+auto c_str(const Repeat_scatter_region region) -> const char*
+{
+    switch (region) {
+        case Repeat_scatter_region::rectangle: return "rectangle";
+        case Repeat_scatter_region::disc:      return "disc";
         default:                               return "?";
     }
 }
@@ -231,6 +360,7 @@ auto expand_repeat(const Repeat_pattern& pattern, const Repeat_pose& start, std:
         case Repeat_pattern_kind::grid: expand_grid(pattern, start, out_poses); return {};
         case Repeat_pattern_kind::ring: expand_ring(pattern, start, out_poses); return {};
         case Repeat_pattern_kind::path: expand_path(pattern, start, out_poses); return {};
+        case Repeat_pattern_kind::scatter: expand_scatter(pattern, start, out_poses); return {};
         default: return "unknown pattern";
     }
 }

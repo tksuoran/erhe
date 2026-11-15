@@ -24,6 +24,7 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "tinybvh")
         erhe_raytrace/tinybvh/tinybvh_instance.hpp
         erhe_raytrace/tinybvh/tinybvh_scene.cpp
         erhe_raytrace/tinybvh/tinybvh_scene.hpp
+        erhe_raytrace/tinybvh/tinybvh_traversal.hpp
     )
     set(impl_link_libraries tinybvh)
     target_compile_definitions(${_target} PRIVATE ERHE_TINYBVH_LIBRARY_TAG="${ERHE_TINYBVH_GIT_TAG}")
@@ -69,6 +70,7 @@ erhe_target_sources_grouped(
     erhe_raytrace/igeometry.hpp
     erhe_raytrace/iinstance.hpp
     erhe_raytrace/iscene.hpp
+    erhe_raytrace/normal_transform.hpp
     erhe_raytrace/prebuilt_bvh.cpp
     erhe_raytrace/prebuilt_bvh.hpp
     erhe_raytrace/ray.cpp

@@ -32,6 +32,14 @@ dependencies. The configure options themselves are tabulated in
   bit-equal - welded vertices, content hashes, keys - would differ from the
   Clang and MSVC builds. Geogram gets the same flag on every non-MSVC
   compiler (`doc/erhe/geogram.md`).
+- Clang keeps its default `-ffp-contract=on`, which fuses a multiply-add
+  within one expression only, and MSVC builds with `/fp:precise` (its
+  default, also set by `cmake/JoltPhysicsCompatibility.cmake` through
+  `CROSS_PLATFORM_DETERMINISTIC`), which does not contract. Float code meant
+  to give the same bits on every platform therefore writes each product and
+  each sum as its own statement (precedent: the scatter sampler in
+  `src/editor/level/level_repeat.cpp`, `doc/editor/level_tools.md` "Scatter
+  layouts").
 
 ## Dependencies
 

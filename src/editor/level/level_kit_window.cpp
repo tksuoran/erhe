@@ -104,13 +104,17 @@ Level_kit_window::Level_kit_window(
     m_selection_subscription = app_message_bus.selection.subscribe(
         [this](Selection_message&) {
             m_piece_editor.mark_dirty();
-            m_group_selection_changed  = true;
+            m_group_selection_changed   = true;
+            m_replace_selection_changed = true;
+            m_connect_selection_changed = true;
         }
     );
     m_active_item_subscription = app_message_bus.active_item.subscribe(
         [this](Active_item_changed_message&) {
             m_piece_editor.mark_dirty();
-            m_group_selection_changed  = true;
+            m_group_selection_changed   = true;
+            m_replace_selection_changed = true;
+            m_connect_selection_changed = true;
         }
     );
     // The Brush tool took the next seed after a placed piece: the rows show its values.
@@ -124,7 +128,8 @@ Level_kit_window::Level_kit_window(
         [this](Mesh_geometry_changed_message&) {
             m_piece_editor.mark_dirty();
             m_duplicate_source.reset();
-            m_group_selection_changed = true;
+            m_group_selection_changed   = true;
+            m_connect_selection_changed = true;
         }
     );
 }
@@ -195,6 +200,8 @@ void Level_kit_window::select_shape(const Kit_shape_definition& shape, const Sce
     m_place_values  = m_context.level_kits->make_default_values(scene_root, shape);
     m_place_message = m_place_values.validate();
     m_context.level_kits->get_default_slot_materials(shape, m_place_slot_materials);
+    get_shape_connectors(m_place_values, m_connect_place_connectors);
+    m_connect_place_connector = m_connect_place_connectors.empty() ? std::string{} : m_connect_place_connectors.front().name;
     queue_kit_brush();
 }
 
@@ -424,6 +431,308 @@ void Level_kit_window::selection_imgui(const std::shared_ptr<Scene_root>& scene_
     }
     tooltip("Rests the selected meshes of this scene on the surface under them with their up axis on its normal, one undo step.");
     ImGui::EndDisabled();
+    replace_imgui(scene_root);
+    connect_imgui(scene_root);
+}
+
+namespace {
+
+// A combo of connector names; returns true when the choice changed. Its ImGui id is the label.
+auto connector_combo(const char* label, const std::vector<Kit_connector>& connectors, std::string& in_out_name) -> bool
+{
+    bool changed = false;
+    const bool open = ImGui::BeginCombo(label, in_out_name.empty() ? "(none)" : in_out_name.c_str());
+    if (!open) {
+        // Dear ImGui reports no label for a combo (doc/agents/mcp_ui_driving.md "How an item gets a label").
+        erhe::imgui::set_item_debug_label(label);
+        return false;
+    }
+    for (const Kit_connector& connector : connectors) {
+        if (ImGui::Selectable(connector.name, in_out_name == connector.name)) {
+            in_out_name = connector.name;
+            changed     = true;
+        }
+    }
+    ImGui::EndCombo();
+    return changed;
+}
+
+// The chosen name when the connectors still have it, else the first connector's.
+void keep_connector_choice(const std::vector<Kit_connector>& connectors, std::string& in_out_name)
+{
+    if (find_connector(connectors, in_out_name) == nullptr) {
+        in_out_name = connectors.empty() ? std::string{} : connectors.front().name;
+    }
+}
+
+} // anonymous namespace
+
+void Level_kit_window::update_connect_pieces(const Scene_root& scene_root)
+{
+    m_connect_selection_changed = false;
+    m_connect_scene             = &scene_root;
+    m_connect_target.reset();
+    m_connect_moved.reset();
+    m_connect_target_connectors.clear();
+    m_connect_moved_connectors.clear();
+    m_connect_target_label.clear();
+    m_connect_moved_label.clear();
+
+    std::shared_ptr<erhe::scene::Node> target;
+    std::shared_ptr<erhe::scene::Node> moved;
+    std::size_t                        piece_count = 0;
+    const std::shared_ptr<erhe::Item_base> active = m_context.selection->get_active_item();
+    for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+        std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (!node || (node->get_item_host() != &scene_root) || !carries_kit_piece(*node)) {
+            continue;
+        }
+        ++piece_count;
+        if (!target || (item == active)) {
+            if (target) {
+                moved = target;
+            }
+            target = node;
+        } else {
+            moved = node;
+        }
+    }
+    if (!target) {
+        return;
+    }
+    m_connect_target = target;
+    const std::string target_error = m_context.level_kits->get_local_connectors(*target, m_connect_target_connectors);
+    m_connect_target_label = target_error.empty() ? fmt::format("Target: {}", target->get_name()) : target_error;
+    keep_connector_choice(m_connect_target_connectors, m_connect_target_connector);
+    if (piece_count != 2) {
+        m_connect_moved_label = "Select two kit pieces to connect one to the other.";
+        publish_connect_choice();
+        return;
+    }
+    m_connect_moved = moved;
+    const std::string moved_error = m_context.level_kits->get_local_connectors(*moved, m_connect_moved_connectors);
+    m_connect_moved_label = moved_error.empty() ? fmt::format("Moved: {}", moved->get_name()) : moved_error;
+    keep_connector_choice(m_connect_moved_connectors, m_connect_moved_connector);
+    publish_connect_choice();
+}
+
+void Level_kit_window::publish_connect_choice()
+{
+    m_context.level_kits->get_connector_indicators().set_connect_choice(
+        m_connect_target.lock(), m_connect_target_connector, m_connect_moved.lock(), m_connect_moved_connector
+    );
+}
+
+void Level_kit_window::connect_imgui(const std::shared_ptr<Scene_root>& scene_root)
+{
+    if (m_connect_selection_changed || (m_connect_scene != scene_root.get())) {
+        update_connect_pieces(*scene_root);
+    }
+    ImGui::SeparatorText("Connect");
+    if (m_connect_target.expired()) {
+        ImGui::TextDisabled("Select a kit piece to connect to (the active piece is the target).");
+        return;
+    }
+    ImGui::TextWrapped("%s", m_connect_target_label.c_str());
+    if (connector_combo("Target Connector", m_connect_target_connectors, m_connect_target_connector)) {
+        publish_connect_choice();
+    }
+    tooltip("The connector of the target piece (the active selected piece); the target does not move.");
+    ImGui::SliderInt("Twist Steps", &m_connect_twist_steps, 0, 3);
+    tooltip("Quarter turns of the joined piece about the target connector's outward axis.");
+    ImGui::DragFloat("Gap", &m_connect_gap, 0.01f, -16.0f, 16.0f, "%.3f m");
+    tooltip("Distance between the joined connectors along the target connector's outward axis.");
+
+    ImGui::TextWrapped("%s", m_connect_moved_label.c_str());
+    if (!m_connect_moved.expired()) {
+        if (connector_combo("Moved Connector", m_connect_moved_connectors, m_connect_moved_connector)) {
+            publish_connect_choice();
+        }
+        tooltip("The connector of the other selected piece, which moves (its children with it) onto the target connector.");
+    }
+    const bool can_move = !m_connect_moved.expired() && !m_connect_moved_connector.empty() && !m_connect_target_connector.empty();
+    ImGui::BeginDisabled(!can_move);
+    if (ImGui::Button("Connect Selected") && can_move) {
+        queue_connect(scene_root, Connect_action::move_piece);
+    }
+    ImGui::EndDisabled();
+    tooltip("Moves the other selected piece so its connector meets the target connector, one undo step.");
+
+    if ((m_shape != nullptr) && !m_connect_place_connectors.empty()) {
+        connector_combo("New Piece Connector", m_connect_place_connectors, m_connect_place_connector);
+        tooltip("The connector of a new piece of the shape to place that meets the target connector.");
+    }
+    const bool can_place = (m_shape != nullptr) && m_place_message.empty() && !m_connect_place_connector.empty() && !m_connect_target_connector.empty();
+    ImGui::BeginDisabled(!can_place);
+    if (ImGui::Button("Place Connected") && can_place) {
+        queue_connect(scene_root, Connect_action::place_shape);
+    }
+    ImGui::EndDisabled();
+    tooltip("Places a piece of the shape to place with its values and slot materials on the target connector, one undo step; the new piece is selected.");
+    if (m_shape == nullptr) {
+        ImGui::TextDisabled("Choose a shape to place a connected piece.");
+    } else if (m_connect_place_connectors.empty()) {
+        ImGui::TextDisabled("%s has no connectors.", m_shape->display_name.c_str());
+    }
+    if (m_connect_failed) {
+        kit_message_line(m_connect_message);
+    } else if (!m_connect_message.empty()) {
+        ImGui::TextWrapped("%s", m_connect_message.c_str());
+    }
+}
+
+void Level_kit_window::queue_connect(const std::shared_ptr<Scene_root>& scene_root, const Connect_action action)
+{
+    std::vector<Kit_slot_material> materials;
+    for (const std::string& name : m_place_slot_materials) {
+        materials.push_back(Kit_slot_material{.material = {}, .palette_name = name});
+    }
+    m_context.imgui_windows->queue(
+        [
+            this, action, weak_scene_root = std::weak_ptr<Scene_root>{scene_root},
+            moved = m_connect_moved, shape = m_shape, values = m_place_values,
+            materials = std::move(materials),
+            connect = Kit_connect{
+                .connector        = (action == Connect_action::move_piece) ? m_connect_moved_connector : m_connect_place_connector,
+                .target           = m_connect_target.lock(),
+                .target_connector = m_connect_target_connector,
+                .twist_steps      = m_connect_twist_steps,
+                .gap              = m_connect_gap
+            }
+        ]() {
+            const std::shared_ptr<Scene_root> scene = weak_scene_root.lock();
+            if (!scene || !m_context.app_scenes->is_host_registered(scene.get()) || !connect.target) {
+                return;
+            }
+            if (action == Connect_action::move_piece) {
+                const std::shared_ptr<erhe::scene::Node> node = moved.lock();
+                if (!node) {
+                    return;
+                }
+                const Kit_connect_result result = m_context.level_kits->connect_piece(*scene, node, connect);
+                m_connect_failed  = !result.error.empty();
+                m_connect_message = m_connect_failed
+                    ? result.error
+                    : fmt::format("Connected {} '{}' to {} '{}'.", node->get_name(), connect.connector, connect.target->get_name(), connect.target_connector);
+            } else {
+                if (shape == nullptr) {
+                    return;
+                }
+                const Kit_placement placement{
+                    .shape     = shape,
+                    .values    = values,
+                    .materials = materials,
+                    .connect   = connect
+                };
+                const Kit_place_result result = m_context.level_kits->place(*scene, std::span<const Kit_placement>{&placement, 1}, Kit_snap::none);
+                m_connect_failed  = !result.error.empty();
+                m_connect_message = m_connect_failed
+                    ? result.error
+                    : fmt::format("Placed {} with '{}' on {} '{}'.", shape->display_name, connect.connector, connect.target->get_name(), connect.target_connector);
+                if (!m_connect_failed && !result.pieces.empty()) {
+                    m_context.selection->set_selection({result.pieces.front().node}, result.pieces.front().node);
+                }
+            }
+            if (m_connect_failed) {
+                log_scene->warn("Level Kit: connect refused: {}", m_connect_message);
+            } else {
+                log_scene->info("Level Kit: {}", m_connect_message);
+            }
+            m_connect_selection_changed = true;
+        }
+    );
+}
+
+void Level_kit_window::replace_imgui(const std::shared_ptr<Scene_root>& scene_root)
+{
+    if (m_replace_selection_changed || (m_replace_scene != scene_root.get())) {
+        m_replace_selection_changed = false;
+        m_replace_scene             = scene_root.get();
+        m_replace_piece_count       = 0;
+        m_replace_message.clear();
+        m_replace_failed            = false;
+        for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+            const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(item.get());
+            if ((node != nullptr) && (node->get_item_host() == scene_root.get()) && carries_kit_piece(*node)) {
+                ++m_replace_piece_count;
+            }
+        }
+    }
+    const std::vector<Kit_shape_definition>& shapes = m_context.level_kits->get_library().get_shapes();
+    if (m_replace_labels.empty()) {
+        for (const Kit_shape_definition& shape : shapes) {
+            m_replace_labels.push_back(fmt::format("{} ({})", shape.display_name, shape.id));
+        }
+    }
+    const bool replace_open = ImGui::BeginCombo("Replace With", m_replace_preview.c_str(), ImGuiComboFlags_HeightLargest);
+    if (!replace_open) {
+        // Dear ImGui reports no label for a combo (doc/agents/mcp_ui_driving.md "How an item gets a label").
+        erhe::imgui::set_item_debug_label("Replace With");
+        tooltip("The shape Replace Selected gives the selected kit pieces.");
+    } else {
+        for (std::size_t i = 0, end = shapes.size(); i < end; ++i) {
+            const Kit_shape_definition& shape = shapes[i];
+            ImGui::PushID(shape.id.c_str());
+            if (ImGui::Selectable(m_replace_labels[i].c_str(), &shape == m_replace_shape)) {
+                m_replace_shape   = &shape;
+                m_replace_preview = m_replace_labels[i];
+                m_replace_message.clear();
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    const char* const reason =
+        (m_replace_piece_count == 0) ? "No kit piece of this scene is selected." :
+        (m_replace_shape == nullptr) ? "Choose the shape to replace with." :
+        nullptr;
+    ImGui::BeginDisabled(reason != nullptr);
+    if (ImGui::Button("Replace Selected") && (m_replace_shape != nullptr)) {
+        queue_replace(scene_root, *m_replace_shape);
+    }
+    ImGui::EndDisabled();
+    tooltip(
+        "Gives the selected kit pieces the shape, one undo step: transforms kept, parameters of the same name kept "
+        "(clamped to the new range), materials of same-named slots kept, the rest the shape's defaults."
+    );
+    if (reason != nullptr) {
+        ImGui::TextDisabled("%s", reason);
+    } else if (m_replace_failed) {
+        kit_message_line(m_replace_message);
+    } else if (!m_replace_message.empty()) {
+        ImGui::TextWrapped("%s", m_replace_message.c_str());
+    }
+}
+
+void Level_kit_window::queue_replace(const std::shared_ptr<Scene_root>& scene_root, const Kit_shape_definition& shape)
+{
+    m_context.imgui_windows->queue(
+        [this, weak_scene_root = std::weak_ptr<Scene_root>{scene_root}, shape = &shape]() {
+            const std::shared_ptr<Scene_root> target = weak_scene_root.lock();
+            if (!target || !m_context.app_scenes->is_host_registered(target.get())) {
+                return;
+            }
+            std::vector<Kit_replacement> replacements;
+            for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+                const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                if (node && (node->get_item_host() == target.get()) && carries_kit_piece(*node)) {
+                    replacements.push_back(Kit_replacement{.node = node, .values = {}, .materials = {}});
+                }
+            }
+            const Kit_replace_result result = m_context.level_kits->replace_shape(*target, *shape, replacements);
+            m_replace_failed  = !result.error.empty();
+            m_replace_message = m_replace_failed
+                ? result.error
+                : (result.replaced_count == 0)
+                    ? fmt::format("The selected pieces are {} already.", shape->display_name)
+                    : fmt::format("Replaced {} pieces with {}.", result.replaced_count, shape->display_name);
+            if (m_replace_failed) {
+                log_scene->warn("Level Kit: replace refused: {}", m_replace_message);
+            } else {
+                log_scene->info("Level Kit: {}", m_replace_message);
+            }
+        }
+    );
 }
 
 void Level_kit_window::queue_slot_material(

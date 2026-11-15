@@ -66,6 +66,7 @@ Grid_tool::Grid_tool(
 
 void Grid_tool::on_close_scene(erhe::Item_host* const closing_host)
 {
+    m_property_rows.release_edit_items([closing_host](const erhe::Item_base& item) { return item.get_item_host() == closing_host; });
     for (const std::shared_ptr<Grid>& grid : m_grids) {
         const std::shared_ptr<erhe::scene::Node> frame_node = grid->get_frame_node();
         if (frame_node && (frame_node->get_item_host() == closing_host)) {
@@ -76,6 +77,7 @@ void Grid_tool::on_close_scene(erhe::Item_host* const closing_host)
 
 void Grid_tool::on_items_removed(const Removed_items& removed)
 {
+    m_property_rows.release_edit_items([&removed](const erhe::Item_base& item) { return removed.lookup.contains(&item); });
     for (const std::shared_ptr<Grid>& grid : m_grids) {
         const std::shared_ptr<erhe::scene::Node> frame_node = grid->get_frame_node();
         if (frame_node && removed.lookup.contains(frame_node.get())) {
@@ -190,6 +192,7 @@ void Grid_tool::window_imgui()
         m_property_editor.pop_group();
         m_property_editor.show_entries();
     }
+    m_property_rows.end_lost_edit();
 
     ImGui::NewLine();
 

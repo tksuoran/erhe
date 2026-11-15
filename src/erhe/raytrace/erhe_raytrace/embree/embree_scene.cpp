@@ -3,6 +3,7 @@
 #include "erhe_raytrace/embree/embree_geometry.hpp"
 #include "erhe_raytrace/embree/embree_instance.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
+#include "erhe_raytrace/normal_transform.hpp"
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -42,6 +43,8 @@ Embree_scene::Embree_scene(const std::string_view debug_label)
         return;
     }
     rtcSetSceneBuildQuality(m_scene, RTC_BUILD_QUALITY_LOW);
+    // Ray::filter is an argument filter; Embree invokes those only in scenes with this flag.
+    rtcSetSceneFlags(m_scene, RTC_SCENE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS);
 }
 
 Embree_scene::~Embree_scene() noexcept
@@ -130,6 +133,44 @@ void Embree_scene::commit()
     rtcCommitScene(m_scene);
 }
 
+namespace {
+
+// Standard layout with the Embree context first: the filter callback casts the context back.
+class Embree_filter_context
+{
+public:
+    RTCRayQueryContext rtc_context;
+    Embree_scene*      scene {nullptr};
+    const IHit_filter* filter{nullptr};
+};
+
+void s_filter_function(const RTCFilterFunctionNArguments* args)
+{
+    const Embree_filter_context* const context = reinterpret_cast<const Embree_filter_context*>(args->context);
+    for (unsigned int i = 0; i < args->N; ++i) {
+        if (args->valid[i] == 0) {
+            continue;
+        }
+        const RTCHit rtc_hit{
+            .Ng_x   = RTCHitN_Ng_x  (args->hit, args->N, i),
+            .Ng_y   = RTCHitN_Ng_y  (args->hit, args->N, i),
+            .Ng_z   = RTCHitN_Ng_z  (args->hit, args->N, i),
+            .u      = RTCHitN_u     (args->hit, args->N, i),
+            .v      = RTCHitN_v     (args->hit, args->N, i),
+            .primID = RTCHitN_primID(args->hit, args->N, i),
+            .geomID = RTCHitN_geomID(args->hit, args->N, i),
+            .instID = {
+                RTCHitN_instID(args->hit, args->N, i, 0)
+            }
+        };
+        if (!context->filter->accept(context->scene->make_hit(rtc_hit))) {
+            args->valid[i] = 0;
+        }
+    }
+}
+
+} // anonymous namespace
+
 auto Embree_scene::intersect(Ray& ray, Hit& hit) -> bool
 {
     ERHE_PROFILE_FUNCTION();
@@ -164,24 +205,47 @@ auto Embree_scene::intersect(Ray& ray, Hit& hit) -> bool
     };
 
     SPDLOG_LOGGER_TRACE(log_embree, "rtcIntersect1({})", m_debug_label);
-    rtcIntersect1(m_scene, &ray_hit, nullptr);
+    if (ray.filter != nullptr) {
+        Embree_filter_context context{
+            .rtc_context = {},
+            .scene       = this,
+            .filter      = ray.filter
+        };
+        rtcInitRayQueryContext(&context.rtc_context);
+        RTCIntersectArguments arguments;
+        rtcInitIntersectArguments(&arguments);
+        arguments.flags   = static_cast<RTCRayQueryFlags>(arguments.flags | RTC_RAY_QUERY_FLAG_INVOKE_ARGUMENT_FILTER);
+        arguments.context = &context.rtc_context;
+        arguments.filter  = s_filter_function;
+        rtcIntersect1(m_scene, &ray_hit, &arguments);
+    } else {
+        rtcIntersect1(m_scene, &ray_hit, nullptr);
+    }
 
     if (ray_hit.hit.geomID == RTC_INVALID_GEOMETRY_ID)
     {
         return false;
     }
 
-    ray.t_near       = ray_hit.ray.tnear;
-    ray.t_far        = ray_hit.ray.tfar;
-    hit.normal       = glm::vec3{ray_hit.hit.Ng_x, ray_hit.hit.Ng_y, ray_hit.hit.Ng_z};
-    hit.uv           = glm::vec2{ray_hit.hit.u, ray_hit.hit.v};
-    hit.triangle_id  = ray_hit.hit.primID;
-    hit.geometry     = nullptr;
-    hit.instance     = nullptr;
+    ray.t_near = ray_hit.ray.tnear;
+    ray.t_far  = ray_hit.ray.tfar;
+    hit        = make_hit(ray_hit.hit);
+    return true;
+}
 
-    if (ray_hit.hit.instID[0] != RTC_INVALID_GEOMETRY_ID)
+auto Embree_scene::make_hit(const RTCHit& rtc_hit) -> Hit
+{
+    Hit hit{
+        .normal      = glm::vec3{rtc_hit.Ng_x, rtc_hit.Ng_y, rtc_hit.Ng_z},
+        .uv          = glm::vec2{rtc_hit.u, rtc_hit.v},
+        .triangle_id = rtc_hit.primID,
+        .geometry    = nullptr,
+        .instance    = nullptr
+    };
+
+    if (rtc_hit.instID[0] != RTC_INVALID_GEOMETRY_ID)
     {
-        const RTCGeometry instance_geometry = rtcGetGeometry(m_scene, ray_hit.hit.instID[0]);
+        const RTCGeometry instance_geometry = rtcGetGeometry(m_scene, rtc_hit.instID[0]);
         if (instance_geometry != nullptr)
         {
             void* user_data                    = rtcGetGeometryUserData(instance_geometry);
@@ -189,22 +253,23 @@ auto Embree_scene::intersect(Ray& ray, Hit& hit) -> bool
             hit.instance = embree_instance;
             if (embree_instance != nullptr)
             {
+                // Embree reports Ng in the instanced geometry's object space; the other backends in the instance's parent space.
+                hit.normal = glm::vec3{get_normal_transform(embree_instance->get_transform()) * glm::vec4{hit.normal, 0.0f}};
                 Embree_scene* embree_instance_scene = embree_instance->get_embree_scene();
                 if (embree_instance_scene != nullptr)
                 {
-                    hit.geometry = embree_instance_scene->get_geometry_from_id(ray_hit.hit.geomID);
+                    hit.geometry = embree_instance_scene->get_geometry_from_id(rtc_hit.geomID);
                 }
             }
         }
     }
     else
     {
-        hit.geometry = (ray_hit.hit.geomID != RTC_INVALID_GEOMETRY_ID)
-            ? get_geometry_from_id(ray_hit.hit.geomID)
+        hit.geometry = (rtc_hit.geomID != RTC_INVALID_GEOMETRY_ID)
+            ? get_geometry_from_id(rtc_hit.geomID)
             : nullptr;
     }
-
-    return true;
+    return hit;
 }
 
 auto Embree_scene::get_rtc_scene() -> RTCScene

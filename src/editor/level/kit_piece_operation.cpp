@@ -29,7 +29,11 @@ Kit_piece_parameters_operation::Kit_piece_parameters_operation(
     , m_before{std::move(before)}
     , m_after {std::move(after)}
 {
-    set_description(fmt::format("[{}] Kit piece parameters {} {}", get_serial(), mesh->get_name(), m_after.parameters));
+    set_description(
+        (m_before.shape == m_after.shape)
+            ? fmt::format("[{}] Kit piece parameters {} {}", get_serial(), mesh->get_name(), m_after.parameters)
+            : fmt::format("[{}] Kit piece replace {} {} -> {} {}", get_serial(), mesh->get_name(), m_before.shape, m_after.shape, m_after.parameters)
+    );
 }
 
 Kit_piece_parameters_operation::~Kit_piece_parameters_operation() noexcept = default;
@@ -46,6 +50,7 @@ void Kit_piece_parameters_operation::apply(App_context& context, const Kit_piece
     swap_mesh_primitives(m_mesh, state.primitives);
     set_node_collision_shape(*m_mesh, state.collision_shape);
     set_brush_placement(*m_mesh, state.brush, GEO::NO_INDEX, GEO::NO_INDEX);
+    m_mesh->set_value(Kit_piece::shape_property,      state.shape);
     m_mesh->set_value(Kit_piece::parameters_property, state.parameters);
     context.app_message_bus->mesh_geometry_changed.send_message(Mesh_geometry_changed_message{.mesh = m_mesh});
 }

@@ -3,6 +3,7 @@
 #include "graph/shader_graph_node.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "developer/rendergraph_window.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "graph_editor/graph_editor_node.hpp"
@@ -37,12 +38,26 @@ namespace editor {
 Node_properties_window::Node_properties_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    App_context&                 app_context
+    App_context&                 app_context,
+    App_message_bus&             app_message_bus
 )
     : Imgui_window      {imgui_renderer, imgui_windows, "Node Properties", "node_pproperties", true}
     , m_context         {app_context}
     , m_dependency_rows {app_context}
 {
+    // An edit of a graph node of a closing scene or a removed item lets the node go (Dependency_property_rows::release_edit_items()).
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            const erhe::Item_host* const closing_host = static_cast<const erhe::Item_host*>(message.scene_root.get());
+            m_dependency_rows.release_edit_items([closing_host](const erhe::Item_base& item) { return item.get_item_host() == closing_host; });
+        }
+    );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            const Removed_items& removed = *message.removed.get();
+            m_dependency_rows.release_edit_items([&removed](const erhe::Item_base& item) { return removed.lookup.contains(&item); });
+        }
+    );
 }
 
 void Node_properties_window::on_begin()
@@ -487,6 +502,7 @@ void Node_properties_window::imgui()
     }
 
     m_property_editor.show_entries();
+    m_dependency_rows.end_lost_edit();
 }
 
 }

@@ -39,9 +39,10 @@ an empty scene and checks:
   drag, the selection clearing, and a screenshot of a selected point with its
   handles (logs/curve_point_selection.png).
 
-Scripted gizmo drags land about 1 px short (doc/plans/level_tools_implementation.md
-step 20); the drag checks allow GIZMO_SHORTFALL_PX of the pointer travel and
-print the measured shortfall.
+Scripted gizmo drags press and release at whole pixels (the editor floors
+pointer positions), so a drag lands within half a pixel per axis of its aim; the
+drag checks allow GIZMO_SHORTFALL_PX of the pointer travel and print the
+measured shortfall.
 
 The run restores config/editor/editor_settings.json, desktop_windows.json,
 user_state.json and desktop_window_imgui_host_imgui.ini. The viewport cameras
@@ -530,8 +531,8 @@ def check_properties(editor, scene):
         return curve_id
     depth = undo_depth(editor)
     editor.call("imgui_scroll_to_item", {"window": window, "id": drags[0]["id"]})
-    editor.call("imgui_click", {"window": window, "id": drags[0]["id"], "modifiers": ["ctrl"]})
-    editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    editor.call("imgui_click", {"window": window, "id": drags[0]["id"], "modifiers": ltv.IMGUI_CTRL})
+    editor.call("key_press", {"key": "a", "modifiers": ltv.IMGUI_CTRL})
     editor.call("type_text", {"text": "0.75"})
     editor.call("key_press", {"key": "enter"})
     editor.wait_idle()
@@ -655,7 +656,7 @@ def choose_move_tool(editor, viewport):
 
 
 TRANSLATE_Z = (5, 6)
-GIZMO_SHORTFALL_PX = 1.5  # scripted gizmo drags land about 1 px short (doc/plans/level_tools_implementation.md step 20)
+GIZMO_SHORTFALL_PX = 0.75  # the drag end is rounded to a whole pixel: at most half a pixel per axis
 
 
 def gizmo_drag(editor, viewport, values, delta, hold=False):
@@ -1134,18 +1135,7 @@ def hover(editor, viewport, world):
 
 def gizmo_drag_with(editor, viewport, values, delta, modifiers):
     """A released gizmo drag with modifier keys held for the whole gesture."""
-    handle = ltv.gizmo_handle(editor, viewport, values)
-    if handle is None:
-        raise RuntimeError(f"no gizmo handle {values} on screen")
-    start = point_at(viewport, handle["world"])
-    probe = editor.call("get_transform_handles", {"viewport": viewport["title"], "probe_points": [[start[0], start[1]]]})["probes"][0]
-    if probe.get("handle_value") != handle["handle_value"]:
-        start = (handle["x"], handle["y"])
-    to = point_at(viewport, [handle["world"][i] + delta[i] for i in range(3)])
-    editor.call("mouse_drag", {"from": [start[0], start[1]], "to": [to[0], to[1]], "frames": 10, "hold": True, "modifiers": modifiers})
-    editor.wait_idle()
-    editor.call("mouse_release", {})
-    editor.wait_idle()
+    ltv.gizmo_drag(editor, viewport, values, delta, modifiers=modifiers)
     settle(editor)
 
 
@@ -1220,7 +1210,8 @@ def look_at_curve(editor, scene, curve_name, height=14.0, back=16.0, index=None)
 
 def residue_state(editor, scene, layout_name):
     layout = level_layouts(editor, scene)[layout_name]
-    nodes = sorted(n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"])
+    # Content nodes only: a viewport's Hotbar rendertarget node enters and leaves the scene with the window layout.
+    nodes = sorted(n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n.get("content"))
     return {
         "children":   children_of(layout),
         "nodes":      nodes,
@@ -1231,10 +1222,26 @@ def residue_state(editor, scene, layout_name):
     }
 
 
+def residue_diff(before, after):
+    """The differing residue keys; node and child lists as what is gone and what is new."""
+    diff = {}
+    for key in before:
+        if before[key] == after[key]:
+            continue
+        if isinstance(before[key], list) and (key in ("nodes", "children")):
+            a = [json.dumps(x, sort_keys=True) for x in before[key]]
+            b = [json.dumps(x, sort_keys=True) for x in after[key]]
+            diff[key] = {"gone": [x for x in a if x not in b][:4], "new": [x for x in b if x not in a][:4], "counts": [len(a), len(b)]}
+        else:
+            diff[key] = [before[key], after[key]]
+    return json.dumps(diff)[:1200]
+
+
 def check_level_drag(editor, scene, viewport, curve_name, layout_name, point_index, delta, label, count_change):
     """A held gizmo drag of one curve point: the layout follows mid-drag, Escape restores it exactly, a release records one entry."""
     curve_id, points = look_at_curve(editor, scene, curve_name, index=point_index)
     viewport = viewport_of(editor, scene)
+    ltv.hide_windows_over_viewports(editor)  # the drags' pointer path stays in the viewport
     # Selecting a piece of the locked layout selects the layout node, the curve the tool edits (R5.12.8).
     piece_id = level_layouts(editor, scene)[layout_name]["children"][0]["id"]
     editor.call("select_items", {"scene_name": scene, "ids": [piece_id]})
@@ -1270,7 +1277,7 @@ def check_level_drag(editor, scene, viewport, curve_name, layout_name, point_ind
     after_cancel = residue_state(editor, scene, layout_name)
     check(f"{label}: Escape mid-drag restores the curve and the children exactly (ids, transforms), the node ids, cached brush count, navigation staleness, selection and undo depth",
           (after_cancel == before) and (get_curve(editor, scene, curve_id)["length"] == before_length),
-          json.dumps({k: (before[k], after_cancel[k]) for k in before if before[k] != after_cancel[k]})[:600])
+          residue_diff(before, after_cancel))
 
     # The release: one entry equal to the last mid-drag step; undo and redo exact.
     click_world(editor, viewport, points[point_index]["world_position"])
@@ -1343,6 +1350,7 @@ def check_level(editor):
     settle(editor)
 
     # The mid-drag screenshot: the curve and the fence posts moved with the held point.
+    ltv.hide_windows_over_viewports(editor)
     click_world(editor, viewport, points[1]["world_position"])
     gizmo_drag(editor, viewport, ltv.TRANSLATE_X, [3.0, 0.0, 0.0], hold=True)
     settle(editor, 5)
@@ -1435,8 +1443,8 @@ def check_level(editor):
         check("the Settings window shows the Curves > Selected width field", False, json.dumps([(i.get("display_label"), i.get("type")) for i in widths])[:400])
         return
     editor.call("imgui_scroll_to_item", {"window": "Settings", "id": width_item["id"]})
-    editor.call("imgui_click", {"window": "Settings", "id": width_item["id"], "modifiers": ["ctrl"]})
-    editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    editor.call("imgui_click", {"window": "Settings", "id": width_item["id"], "modifiers": ltv.IMGUI_CTRL})
+    editor.call("key_press", {"key": "a", "modifiers": ltv.IMGUI_CTRL})
     editor.call("type_text", {"text": f"{LOUD_WIDTH:.1f}"})
     editor.call("key_press", {"key": "enter"})
     editor.wait_idle()
@@ -1465,6 +1473,9 @@ def check_style_file(editor_path):
     with open(settings_path, "w") as handle:
         json.dump(settings, handle, indent=4)
     editor = Editor(editor_path)
+    ltv.hide_windows_over_viewports(editor)  # a window without a saved state opens floating over the viewport
+    # The fence's pieces are below the selected curve: their connector indicators would cover curve pixels.
+    editor.call("level_set_connector_visualization", {"mode": "off"})
     scene = load_level(editor)
     curve_id, _ = look_at_curve(editor, scene, "Fence")
     viewport_of(editor, scene)
@@ -1528,6 +1539,9 @@ def main():
     print(f"work directory {work}", flush=True)
     try:
         editor = Editor(args.editor)
+        ltv.hide_windows_over_viewports(editor)
+        # The pointer drags assume no connector snap; the saved editor_settings.json may hold a distance.
+        editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.0})
         sections = set(args.sections.split(","))
         run(editor, work, args.image, sections)
         if "level" in sections:

@@ -3,7 +3,9 @@
 #include "erhe_raytrace/tinybvh/tinybvh_instance.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
+#include "erhe_raytrace/normal_transform.hpp"
 #include "erhe_raytrace/ray.hpp"
+#include "erhe_raytrace/tinybvh/tinybvh_traversal.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -206,7 +208,7 @@ auto Tinybvh_scene::intersect(Ray& ray, Hit& hit) -> bool
 
     if (s_use_tlas && m_tlas_valid && !m_tlas_data->instances.empty()) {
         // Use TLAS for instances, then linear scan for direct geometries
-        bool is_hit = intersect_tlas(ray, hit);
+        bool is_hit = (ray.filter != nullptr) ? intersect_tlas_filtered(ray, hit) : intersect_tlas(ray, hit);
         for (Tinybvh_geometry* geometry : m_geometries) {
             const bool geometry_is_hit = geometry->intersect_instance(ray, hit, nullptr);
             if (geometry_is_hit) {
@@ -278,10 +280,7 @@ auto Tinybvh_scene::intersect_tlas(Ray& ray, Hit& hit) -> bool
             ray.t_far       = tinybvh_ray.hit.t;
             hit.triangle_id = prim_id;
             hit.uv          = glm::vec2{tinybvh_ray.hit.u, tinybvh_ray.hit.v};
-            // Cofactor matrix, not the instance transform: see the note in
-            // Tinybvh_geometry::intersect. A non-uniformly scaled instance
-            // (a bone proxy, say) otherwise reports a sheared normal.
-            hit.normal      = glm::vec3{glm::transpose(glm::adjugate(transform)) * glm::vec4{local_normal, 0.0f}};
+            hit.normal      = glm::vec3{get_normal_transform(transform) * glm::vec4{local_normal, 0.0f}};
             hit.instance    = erhe_instance;
             hit.geometry    = erhe_geometry;
             return true;
@@ -289,6 +288,31 @@ auto Tinybvh_scene::intersect_tlas(Ray& ray, Hit& hit) -> bool
     }
 
     return false;
+}
+
+// tinybvh's TLAS traversal takes no per-hit filter: this walks the TLAS nodes and each reached BLAS with it.
+auto Tinybvh_scene::intersect_tlas_filtered(Ray& ray, Hit& hit) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const Tlas_data& td = *m_tlas_data;
+    bool is_hit = false;
+    traverse_tinybvh_nodes(td.tlas, ray, [&](const uint32_t first, const uint32_t count) {
+        for (uint32_t i = 0; i < count; ++i) {
+            const uint32_t tlas_instance_index = td.tlas.primIdx[first + i];
+            if ((td.instances[tlas_instance_index].mask & ray.mask) == 0) {
+                continue;
+            }
+            Tinybvh_instance* const erhe_instance = td.instance_map[tlas_instance_index];
+            Tinybvh_geometry* const erhe_geometry = td.geometry_map[tlas_instance_index];
+            Ray local_ray = ray.transform(glm::inverse(erhe_instance->get_transform()));
+            if (erhe_geometry->intersect_instance(local_ray, hit, erhe_instance)) {
+                ray.t_far = local_ray.t_far;
+                is_hit    = true;
+            }
+        }
+    });
+    return is_hit;
 }
 
 auto Tinybvh_scene::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* in_instance) -> bool

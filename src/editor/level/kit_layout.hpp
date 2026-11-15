@@ -65,7 +65,7 @@ public:
 
 [[nodiscard]] auto carries_kit_layout(const erhe::scene::Node& node) -> bool;
 
-// The kind's node type (R5.12.8): a path layout is a Curve prim, a line, grid or ring an Xform; returns the refusal.
+// The kind's node type (R5.12.8): a path layout is a Curve prim, a line, grid, ring or scatter an Xform; returns the refusal.
 [[nodiscard]] auto check_layout_kind(const erhe::scene::Node& node, Repeat_pattern_kind kind) -> std::string;
 
 // Reads the node's values; returns the problem (not a layout node, a text that does not read), empty when read.

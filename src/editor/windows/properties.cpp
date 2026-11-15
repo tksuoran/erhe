@@ -160,6 +160,33 @@ Properties::Properties(
         }
     );
 
+    // A transform row drag of a node at or above a locked surface-snapped kit layout previews its children and its
+    // commit records their regeneration (doc/editor/level_tools.md "Live layout preview").
+    m_dependency_rows.add_edit_hook(
+        Property_edit_hook{
+            .begin = [this](const Property_edit_hook::Items& items, const erhe::property::Dependency_property& property) {
+                if (m_context.level_kits != nullptr) {
+                    m_context.level_kits->begin_layout_transform_preview(items, property);
+                }
+            },
+            .step = [this]() {
+                if (m_context.level_kits != nullptr) {
+                    m_context.level_kits->step_layout_transform_preview();
+                }
+            },
+            .end = [this]() {
+                if (m_context.level_kits != nullptr) {
+                    m_context.level_kits->end_layout_transform_preview();
+                }
+            },
+            .commit = [this](const Property_edit_hook::Items& items, const erhe::property::Dependency_property& property, std::vector<std::shared_ptr<Operation>>& operations) {
+                if (m_context.level_kits != nullptr) {
+                    m_context.level_kits->append_layout_transform_follow_ups(items, property, operations);
+                }
+            }
+        }
+    );
+
     // At the end of a node's "Rigid Body" group (doc/erhe/property_system.md
     // 4.26): the read-only state of the body the group implies, read back
     // from the scene's Node_physics_system. One item only - the readouts
@@ -436,6 +463,7 @@ auto Properties::get_inspected_material() const -> const std::shared_ptr<erhe::p
 
 void Properties::on_items_removed(const Removed_items& removed)
 {
+    m_dependency_rows.release_edit_items([&removed](const erhe::Item_base& item) { return removed.lookup.contains(&item); });
     const std::shared_ptr<erhe::Item_base> target = m_target.lock();
     if (target && removed.lookup.contains(target.get())) {
         m_target.reset();
@@ -456,6 +484,7 @@ void Properties::on_items_removed(const Removed_items& removed)
 
 void Properties::on_close_scene(erhe::Item_host* const closing_host)
 {
+    m_dependency_rows.release_edit_items([closing_host](const erhe::Item_base& item) { return item.get_item_host() == closing_host; });
     // The target can be scene content (host comparison) or a managed asset
     // the manager's defining-container lookup covers both through is_hosted_or_defined_by).
     Asset_manager* const asset_manager = m_context.asset_manager;
@@ -1855,6 +1884,11 @@ void Properties::target_selector_imgui()
     ImGui::Separator();
 }
 
+void Properties::hidden()
+{
+    m_dependency_rows.abandon_edit();
+}
+
 void Properties::imgui()
 {
     ERHE_PROFILE_FUNCTION();
@@ -1932,6 +1966,7 @@ void Properties::imgui()
     }
 
     show_entries();
+    m_dependency_rows.end_lost_edit();
 
     material_properties(items);
 

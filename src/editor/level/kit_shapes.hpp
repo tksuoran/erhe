@@ -1,5 +1,6 @@
 #pragma once
 
+#include "level/kit_connector.hpp"
 #include "level/kit_shape.hpp"
 
 #include <vector>
@@ -44,6 +45,11 @@ void add_nature_shapes      (std::vector<Kit_shape_definition>& shapes);
 [[nodiscard]] auto make_seed_parameter    () -> Kit_parameter;
 [[nodiscard]] auto make_enum_parameter    (const char* name, const char* description, std::vector<std::string> value_names, int default_index) -> Kit_parameter;
 [[nodiscard]] auto all_sides              () -> std::vector<Kit_side>;
+
+// Connector builders shared by the kit files (D1.12): "base" at the origin facing -Y, then "top" at top_y facing +Y,
+// both with up +Z; a side connector at the given point, with up +Y. A shape lists first the connector it attaches by.
+void add_base_and_top_connectors(std::vector<Kit_connector>& out_connectors, float top_y);
+void add_side_connector         (std::vector<Kit_connector>& out_connectors, const char* name, const glm::vec3& position, const glm::vec3& outward);
 
 // Derive ranges (D1.8): a float's range and step are in the parameter's default scale; an enum derives over all its values.
 [[nodiscard]] auto derive_float        (Kit_parameter parameter, float min_value, float max_value, float step) -> Kit_parameter;

@@ -170,6 +170,15 @@ void collect_meshes(const erhe::Hierarchy& hierarchy, std::vector<const erhe::sc
     }
 }
 
+// The stored transform properties a Property_set_operation of a node move writes.
+auto is_node_transform_property(const erhe::property::Dependency_property& property) -> bool
+{
+    return
+        (&property == &erhe::scene::Xformable::translation_property.get()) ||
+        (&property == &erhe::scene::Xformable::rotation_property.get()) ||
+        (&property == &erhe::scene::Xformable::scale_property.get());
+}
+
 } // anonymous namespace
 
 auto Level_kits::read_layout_item(Scene_root& scene_root, const Kit_layout_item& item, Kit_placement& out_placement) const -> std::string
@@ -223,6 +232,18 @@ auto Level_kits::get_layout_item_bounds(Scene_root& scene_root, const Kit_layout
     return brush ? brush->get_bounding_box() : erhe::math::Aabb{};
 }
 
+namespace {
+
+// Called where a generation is recorded; preview steps do not log.
+void log_unsettled_rests(const erhe::scene::Node& layout, const Kit_layout_result& result)
+{
+    if (result.unsettled_count > 0) {
+        log_scene->warn("Kit layout '{}': {} pieces still rose at their last surface cast (unsettled rest recorded)", layout.get_name(), result.unsettled_count);
+    }
+}
+
+} // anonymous namespace
+
 auto Level_kits::build_layout_generation(
     Scene_root&                                     scene_root,
     const std::shared_ptr<erhe::scene::Node>&       node,
@@ -235,10 +256,11 @@ auto Level_kits::build_layout_generation(
 ) -> std::string
 {
     out_operations.clear();
+    result.unsettled_count = 0;
     if (data.items.empty()) {
         return "a kit layout needs at least one item";
     }
-    // The items, their brushes held until the pieces hold them, and the largest extent along x (D3.9).
+    // The items, their brushes (and the per-element seeded ones) held until the pieces hold them, and the largest extent along x (D3.9).
     std::vector<Kit_placement>          items(data.items.size());
     std::vector<std::shared_ptr<Brush>> item_brushes;
     std::vector<erhe::math::Aabb>       item_bounds;
@@ -264,11 +286,8 @@ auto Level_kits::build_layout_generation(
         return error;
     }
     const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(node.get());
-    error = resolve_layout_pattern(data.pattern, extent, (curve != nullptr) ? &curve->get_table() : nullptr, result.run);
     std::vector<Repeat_pose> poses;
-    if (error.empty()) {
-        error = expand_repeat(result.run.pattern, Repeat_pose{}, poses);
-    }
+    error = resolve_layout_pattern(data.pattern, data.seed, extent, (curve != nullptr) ? &curve->get_table() : nullptr, result.run, &poses);
     // The run outlives no curve edit.
     result.run.pattern.path = nullptr;
     if (!error.empty()) {
@@ -294,6 +313,9 @@ auto Level_kits::build_layout_generation(
 
     std::vector<Kit_placement> elements;
     elements.reserve(poses.size());
+    if (data.seeds == Kit_layout_seeds::per_element) {
+        item_brushes.reserve(item_brushes.size() + poses.size());
+    }
     for (std::size_t i = 0, end = poses.size(); i < end; ++i) {
         const std::size_t item_index = get_layout_item_index(i, items.size());
         Kit_placement placement = items[item_index];
@@ -307,6 +329,16 @@ auto Level_kits::build_layout_generation(
             }
             placement.values = values;
         }
+        // A piece rests on its own bounds; a per-element seed makes other geometry than the item's.
+        erhe::math::Aabb bounds = item_bounds[item_index];
+        if (data.seeds == Kit_layout_seeds::per_element) {
+            std::shared_ptr<Brush> brush = get_brush(placement.values.value());
+            if (!brush) {
+                return fmt::format("element {}: {} made no geometry", i, placement.shape->id);
+            }
+            bounds = brush->get_bounding_box();
+            item_brushes.push_back(std::move(brush));
+        }
         glm::vec3 position = layout_position + (layout_rotation * poses[i].position);
         glm::quat rotation = glm::normalize(layout_rotation * poses[i].rotation);
         if (data.snap == Kit_snap::module) {
@@ -314,10 +346,13 @@ auto Level_kits::build_layout_generation(
         }
         if (any_surface_option(surface)) {
             const Surface_placement rest = find_surface_placement(
-                scene_root, item_bounds[item_index], Surface_pose{.position = position, .rotation = rotation}, surface, excluded
+                scene_root, bounds, Surface_pose{.position = position, .rotation = rotation}, surface, excluded
             );
             position = rest.pose.position;
             rotation = rest.pose.rotation;
+            if (!rest.settled) {
+                ++result.unsettled_count;
+            }
         }
         placement.position        = position;
         placement.rotation        = rotation;
@@ -471,6 +506,7 @@ auto Level_kits::create_layout_after(
     if (!result.error.empty()) {
         return result;
     }
+    log_unsettled_rests(*node, result);
     Compound_operation::Parameters parameters;
     for (std::shared_ptr<Operation>& operation : leading_operations) {
         parameters.operations.push_back(std::move(operation));
@@ -664,6 +700,7 @@ auto Level_kits::set_layout(Scene_root& scene_root, const std::shared_ptr<erhe::
     if (!result.error.empty()) {
         return result;
     }
+    log_unsettled_rests(*node, result);
     for (std::shared_ptr<Operation>& operation : generation) {
         operations.push_back(std::move(operation));
     }
@@ -702,6 +739,7 @@ auto Level_kits::set_layout_lock(Scene_root& scene_root, const std::shared_ptr<e
         if (!result.error.empty()) {
             return result;
         }
+        log_unsettled_rests(*node, result);
         for (std::shared_ptr<Operation>& operation : generation) {
             operations.push_back(std::move(operation));
         }
@@ -737,6 +775,7 @@ auto Level_kits::refresh_layout(Scene_root& scene_root, const std::shared_ptr<er
     if (!result.error.empty() || operations.empty()) {
         return result;
     }
+    log_unsettled_rests(*node, result);
     m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
     result.changed = true;
     return result;
@@ -773,6 +812,7 @@ auto Level_kits::append_layout_value_follow_ups(
     if (!error.empty()) {
         return error;
     }
+    log_unsettled_rests(*node, result);
     for (std::shared_ptr<Operation>& operation : generation) {
         out_operations.push_back(std::move(operation));
     }
@@ -847,6 +887,7 @@ void Level_kits::append_layout_regenerations(
             log_scene->warn("Kit layout '{}' keeps its children {}: {}", layout->get_name(), reason, error);
             continue;
         }
+        log_unsettled_rests(*layout, result);
         for (std::shared_ptr<Operation>& operation : generation) {
             out_operations.push_back(std::move(operation));
         }
@@ -862,6 +903,37 @@ void Level_kits::append_layout_move_operations(
     std::vector<std::shared_ptr<erhe::scene::Node>> layouts;
     collect_moved_layouts(scene_root, moved_nodes, layouts);
     append_layout_regenerations(scene_root, layouts, "after the move", out_operations);
+}
+
+void Level_kits::append_layout_transform_follow_ups(
+    const std::span<const std::shared_ptr<erhe::Item_base>> items,
+    const erhe::property::Dependency_property&              property,
+    std::vector<std::shared_ptr<Operation>>&                out_operations
+)
+{
+    if (!is_node_transform_property(property)) {
+        return;
+    }
+    // One hook per scene, so every generation is built before any runs and a layout below two of the nodes is built once.
+    std::vector<Scene_root*>                        scene_roots;
+    std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+    for (const std::shared_ptr<erhe::Item_base>& item : items) {
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        Scene_root* const scene_root = (node != nullptr) ? dynamic_cast<Scene_root*>(node->get_item_host()) : nullptr;
+        if ((scene_root != nullptr) && (std::find(scene_roots.begin(), scene_roots.end(), scene_root) == scene_roots.end())) {
+            scene_roots.push_back(scene_root);
+        }
+    }
+    for (Scene_root* const scene_root : scene_roots) {
+        nodes.clear();
+        for (const std::shared_ptr<erhe::Item_base>& item : items) {
+            std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if ((node != nullptr) && (node->get_item_host() == scene_root)) {
+                nodes.push_back(std::move(node));
+            }
+        }
+        append_layout_move_operations(*scene_root, nodes, out_operations);
+    }
 }
 
 void Level_kits::append_curve_follow_ups(const erhe::scene::Curve& curve, std::vector<std::shared_ptr<Operation>>& out_operations)
@@ -934,6 +1006,53 @@ void Level_kits::begin_layout_move_preview(Scene_root& scene_root, const std::sp
     collect_moved_layouts(scene_root, moved_nodes, m_layout_preview_layouts);
     begin_layout_preview(m_layout_preview_layouts);
     m_layout_preview_layouts.clear();
+}
+
+void Level_kits::begin_layout_transform_preview(
+    const std::span<const std::shared_ptr<erhe::Item_base>> items,
+    const erhe::property::Dependency_property&              property
+)
+{
+    if (!is_node_transform_property(property)) {
+        return;
+    }
+    // One scene: the preview's entries go with their scene when it closes (on_close_scene()).
+    Scene_root*                                     scene_root = nullptr;
+    std::vector<std::shared_ptr<erhe::scene::Node>>& nodes     = m_layout_preview_collected;
+    nodes.clear();
+    for (const std::shared_ptr<erhe::Item_base>& item : items) {
+        std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        Scene_root* const node_scene_root = (node != nullptr) ? dynamic_cast<Scene_root*>(node->get_item_host()) : nullptr;
+        if (node_scene_root == nullptr) {
+            continue;
+        }
+        if ((scene_root != nullptr) && (node_scene_root != scene_root)) {
+            nodes.clear();
+            return;
+        }
+        scene_root = node_scene_root;
+        nodes.push_back(std::move(node));
+    }
+    if (scene_root == nullptr) {
+        return;
+    }
+    begin_layout_move_preview(*scene_root, nodes);
+    nodes.clear();
+    m_layout_transform_preview = !m_layout_preview.empty();
+}
+
+void Level_kits::step_layout_transform_preview()
+{
+    if (m_layout_transform_preview) {
+        static_cast<void>(step_layout_preview());
+    }
+}
+
+void Level_kits::end_layout_transform_preview()
+{
+    if (m_layout_transform_preview) {
+        end_layout_preview();
+    }
 }
 
 auto Level_kits::is_layout_previewing(const erhe::scene::Node& node) const -> bool
@@ -1066,6 +1185,7 @@ auto Level_kits::step_layout_preview_entries(const erhe::scene::Node* const valu
 
 void Level_kits::end_layout_preview()
 {
+    m_layout_transform_preview = false;
     if (m_layout_preview.empty()) {
         return;
     }
@@ -1120,7 +1240,7 @@ auto Level_kits::resolve_layout_run(
         return error;
     }
     const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(&layout);
-    const std::string run_error = resolve_layout_pattern(data.pattern, item_extent, (curve != nullptr) ? &curve->get_table() : nullptr, out_run);
+    const std::string run_error = resolve_layout_pattern(data.pattern, data.seed, item_extent, (curve != nullptr) ? &curve->get_table() : nullptr, out_run, nullptr);
     out_run.pattern.path = nullptr;
     return run_error;
 }
@@ -1165,6 +1285,7 @@ auto Level_kits::make_layout_on_curve(Scene_root& scene_root, const std::shared_
         return result;
     }
     if (data.lock == Kit_layout_lock::locked) {
+        log_unsettled_rests(*curve, result);
         for (std::shared_ptr<Operation>& operation : generation) {
             operations.push_back(std::move(operation));
         }

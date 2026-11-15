@@ -38,6 +38,8 @@ public:
     virtual void imgui(Property_editor& property_editor);
 
     void end();
+    // Ends the drag without recording its operation (the caller restored the start state).
+    void cancel();
 
     [[nodiscard]] auto is_active    () const -> bool;
     [[nodiscard]] auto get_axis_mask() const -> unsigned int;

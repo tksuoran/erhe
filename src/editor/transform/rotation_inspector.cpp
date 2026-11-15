@@ -206,10 +206,19 @@ void Rotation_inspector::update_euler_angles_from_quaternion()
             m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]
         );
     }
+    m_euler_degrees = glm::degrees(glm::vec3{m_euler_angles[0], m_euler_angles[1], m_euler_angles[2]});
 }
 
 void Rotation_inspector::update_matrix_and_quaternion_from_euler_angles()
 {
+    if ((m_euler_angle_order == m_start_euler_angle_order) && (m_euler_degrees == m_start_euler_degrees)) {
+        for (int i = 0; i < 3; ++i) {
+            m_euler_angles[i] = m_start_euler_angles[i];
+        }
+        m_quaternion = m_start_quaternion;
+        m_matrix     = mat4{mat3_cast(m_quaternion)};
+        return;
+    }
     m_quaternion = erhe::math::euler_angles_to_quaternion(
         get_euler_axis(m_euler_angle_order, 0),
         get_euler_axis(m_euler_angle_order, 1),
@@ -223,6 +232,10 @@ void Rotation_inspector::update_matrix_and_quaternion_from_euler_angles()
 
 void Rotation_inspector::update_from_axis_angle()
 {
+    if ((m_axis == m_start_axis) && (m_angle == m_start_angle)) {
+        set_quaternion(m_start_quaternion);
+        return;
+    }
     set_axis_angle(m_axis, m_angle);
 }
 
@@ -243,8 +256,17 @@ void Rotation_inspector::imgui(
 {
     Property_editor& p = property_editor;
 
+    // The start values ride on the display pull from the node, which runs while no edit is active.
     if (!m_active) {
         set_quaternion(rotation);
+        m_start_quaternion        = m_quaternion;
+        m_start_euler_angle_order = m_euler_angle_order;
+        m_start_axis              = m_axis;
+        m_start_angle             = m_angle;
+        m_start_euler_degrees     = m_euler_degrees;
+        for (int i = 0; i < 3; ++i) {
+            m_start_euler_angles[i] = m_euler_angles[i];
+        }
     }
     
     p.add_entry(Property_row_id::rotation_mode, "Mode", [this]() {
@@ -331,11 +353,8 @@ void Rotation_inspector::imgui(
                     if (warn > 0.0f) {
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 1.0f - warn, 0.0f, 1.0f});
                     }
-                    glm::vec3 e = glm::vec3{
-                        glm::degrees<float>(m_euler_angles[0]),
-                        glm::degrees<float>(m_euler_angles[1]),
-                        glm::degrees<float>(m_euler_angles[2])
-                    };
+                    // The widget edits the degrees it shows; converting from radians each frame would drift them.
+                    glm::vec3 e = m_euler_degrees;
                     ImGui::PushStyleColor(ImGuiCol_ColorMarker0, get_drag_color(get_euler_axis2(m_euler_angle_order, 0), false));
                     ImGui::PushStyleColor(ImGuiCol_ColorMarker1, get_drag_color(get_euler_axis2(m_euler_angle_order, 1), false));
                     ImGui::PushStyleColor(ImGuiCol_ColorMarker2, get_drag_color(get_euler_axis2(m_euler_angle_order, 2), false));
@@ -344,6 +363,7 @@ void Rotation_inspector::imgui(
                     erhe::imgui::Value_edit_state e_edit_state = erhe::imgui::make_drag_vec3(e, {}, {}, 1.0f, flags, "##Euler", "%.2f\xc2\xb0");
                     ImGui::PopStyleColor(3);
                     if (e_edit_state.value_changed) {
+                        m_euler_degrees   = e;
                         m_euler_angles[0] = glm::radians<float>(e.x);
                         m_euler_angles[1] = glm::radians<float>(e.y);
                         m_euler_angles[2] = glm::radians<float>(e.z);
@@ -389,7 +409,8 @@ auto Rotation_inspector::get_matrix() const -> mat4
 
 auto Rotation_inspector::get_quaternion() const -> quat
 {
-    return glm::normalize(m_quaternion);
+    // The start rotation is the node's own; normalizing it again may change its bits.
+    return (m_quaternion == m_start_quaternion) ? m_quaternion : glm::normalize(m_quaternion);
 }
 
 auto Rotation_inspector::get_euler_value(const std::size_t i) const -> float

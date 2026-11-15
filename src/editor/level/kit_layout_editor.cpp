@@ -76,6 +76,19 @@ constexpr std::array<Kit_layout_row, 6> c_ring_count_rows{kind, count_mode, coun
 constexpr std::array<Kit_layout_row, 6> c_ring_gap_rows  {kind, count_mode, gap,   radius, arc, facing};
 constexpr std::array<Kit_layout_row, 4> c_path_count_rows{kind, count_mode, count, orientation};
 constexpr std::array<Kit_layout_row, 4> c_path_gap_rows  {kind, count_mode, gap,   orientation};
+constexpr std::array<Kit_layout_row, 9> c_scatter_rectangle_count_rows  {kind, scatter_mode, count,   region, size_x, size_z, min_spacing, yaw_min, yaw_max};
+constexpr std::array<Kit_layout_row, 9> c_scatter_rectangle_density_rows{kind, scatter_mode, density, region, size_x, size_z, min_spacing, yaw_min, yaw_max};
+constexpr std::array<Kit_layout_row, 8> c_scatter_disc_count_rows       {kind, scatter_mode, count,   region, region_radius, min_spacing, yaw_min, yaw_max};
+constexpr std::array<Kit_layout_row, 8> c_scatter_disc_density_rows     {kind, scatter_mode, density, region, region_radius, min_spacing, yaw_min, yaw_max};
+
+[[nodiscard]] auto get_scatter_rows(const Kit_layout_pattern& pattern) -> std::span<const Kit_layout_row>
+{
+    const bool density_mode = (pattern.scatter_mode == Kit_scatter_mode::density);
+    if (pattern.region == Repeat_scatter_region::disc) {
+        return density_mode ? std::span<const Kit_layout_row>{c_scatter_disc_density_rows} : std::span<const Kit_layout_row>{c_scatter_disc_count_rows};
+    }
+    return density_mode ? std::span<const Kit_layout_row>{c_scatter_rectangle_density_rows} : std::span<const Kit_layout_row>{c_scatter_rectangle_count_rows};
+}
 
 [[nodiscard]] auto kind_radio(int& kind, const Repeat_pattern_kind value, const char* name, const Kit_row_label label, const char* text) -> bool
 {
@@ -95,6 +108,8 @@ constexpr std::array<Kit_layout_row, 4> c_path_gap_rows  {kind, count_mode, gap,
         ended = kind_radio(kind, Repeat_pattern_kind::grid, "Grid", label, "Count X by Count Z pieces along the node's x and z axes.") || ended;
         ImGui::SameLine();
         ended = kind_radio(kind, Repeat_pattern_kind::ring, "Ring", label, "Pieces on a ring about the node's up axis, its center Radius behind the node's front.") || ended;
+        ImGui::SameLine();
+        ended = kind_radio(kind, Repeat_pattern_kind::scatter, "Scatter", label, "Pieces at seeded random points of a region centred on the node's origin, at least Min Spacing apart; Surface Snap rests them on the ground.") || ended;
     }
     if (kinds == Kit_layout_kinds::all) {
         ImGui::SameLine();
@@ -102,13 +117,13 @@ constexpr std::array<Kit_layout_row, 4> c_path_gap_rows  {kind, count_mode, gap,
     if (kinds != Kit_layout_kinds::xform) {
         ended = kind_radio(kind, Repeat_pattern_kind::path, "Path", label,
             (kinds == Kit_layout_kinds::curve)
-                ? "This layout node is a curve: its pieces follow its own points. A line, grid or ring layout is an Xform node."
+                ? "This layout node is a curve: its pieces follow its own points. A line, grid, ring or scatter layout is an Xform node."
                 : "Pieces along the layout node's own curve by distance; the new node is a curve node, a polyline a curve of corner points.") || ended;
     }
     if (kinds == Kit_layout_kinds::xform) {
         ImGui::SameLine();
         ImGui::TextDisabled("(Path: a curve node)");
-        tooltip("A path layout is a curve node carrying the layout values; this node is an Xform, so it takes a line, grid or ring.");
+        tooltip("A path layout is a curve node carrying the layout values; this node is an Xform, so it takes a line, grid, ring or scatter.");
     }
     pattern.kind = static_cast<Repeat_pattern_kind>(kind);
     return ended;
@@ -132,6 +147,7 @@ auto get_layout_rows(const Kit_layout_pattern& pattern) -> std::span<const Kit_l
         case Repeat_pattern_kind::grid: return c_grid_rows;
         case Repeat_pattern_kind::ring: return gap_mode ? std::span<const Kit_layout_row>{c_ring_gap_rows} : std::span<const Kit_layout_row>{c_ring_count_rows};
         case Repeat_pattern_kind::path: return gap_mode ? std::span<const Kit_layout_row>{c_path_gap_rows} : std::span<const Kit_layout_row>{c_path_count_rows};
+        case Repeat_pattern_kind::scatter: return get_scatter_rows(pattern);
         default:                        return {};
     }
 }
@@ -154,6 +170,15 @@ auto get_layout_row_name(const Kit_layout_row row) -> const char*
         case Kit_layout_row::arc:         return "Arc";
         case Kit_layout_row::facing:      return "Face Outward";
         case Kit_layout_row::orientation: return "Orientation";
+        case Kit_layout_row::scatter_mode:  return "Scatter Mode";
+        case Kit_layout_row::density:       return "Density";
+        case Kit_layout_row::region:        return "Region";
+        case Kit_layout_row::size_x:        return "Size X";
+        case Kit_layout_row::size_z:        return "Size Z";
+        case Kit_layout_row::region_radius: return "Region Radius";
+        case Kit_layout_row::min_spacing:   return "Min Spacing";
+        case Kit_layout_row::yaw_min:       return "Yaw Min";
+        case Kit_layout_row::yaw_max:       return "Yaw Max";
         default:                          return "?";
     }
 }
@@ -284,6 +309,72 @@ auto layout_pattern_row(Kit_layout_pattern& pattern, const Kit_layout_row row, c
             pattern.orientation = static_cast<Repeat_path_orientation>(orientation);
             break;
         }
+        case Kit_layout_row::scatter_mode: {
+            int mode = static_cast<int>(pattern.scatter_mode);
+            ended = ImGui::RadioButton("By Count", &mode, static_cast<int>(Kit_scatter_mode::count)) || ended;
+            name_role(label, "count");
+            tooltip("The piece count is stated.");
+            ImGui::SameLine();
+            ended = ImGui::RadioButton("By Density", &mode, static_cast<int>(Kit_scatter_mode::density)) || ended;
+            name_role(label, "density");
+            tooltip("Pieces per square meter are stated; the region's area gives the count.");
+            pattern.scatter_mode = static_cast<Kit_scatter_mode>(mode);
+            break;
+        }
+        case Kit_layout_row::density: {
+            const bool changed = ImGui::DragFloat(name, &pattern.density, 0.001f, 0.0001f, 100.0f, "%.4f /m2", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("Pieces per square meter of the region; fewer are placed when no more fit the spacing.");
+            break;
+        }
+        case Kit_layout_row::region: {
+            int region = static_cast<int>(pattern.region);
+            ended = ImGui::RadioButton("Rectangle", &region, static_cast<int>(Repeat_scatter_region::rectangle)) || ended;
+            name_role(label, "rectangle");
+            tooltip("Size X by Size Z, centred on the node's origin.");
+            ImGui::SameLine();
+            ended = ImGui::RadioButton("Disc", &region, static_cast<int>(Repeat_scatter_region::disc)) || ended;
+            name_role(label, "disc");
+            tooltip("Region Radius about the node's origin.");
+            pattern.region = static_cast<Repeat_scatter_region>(region);
+            break;
+        }
+        case Kit_layout_row::size_x: {
+            const bool changed = ImGui::DragFloat(name, &pattern.size_x, 0.01f, 0.01f, 10000.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The region's extent along the node's x axis.");
+            break;
+        }
+        case Kit_layout_row::size_z: {
+            const bool changed = ImGui::DragFloat(name, &pattern.size_z, 0.01f, 0.01f, 10000.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The region's extent along the node's z axis.");
+            break;
+        }
+        case Kit_layout_row::region_radius: {
+            const bool changed = ImGui::DragFloat(name, &pattern.region_radius, 0.01f, 0.01f, 10000.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The disc's radius about the node's origin.");
+            break;
+        }
+        case Kit_layout_row::min_spacing: {
+            const bool changed = ImGui::DragFloat(name, &pattern.min_spacing, 0.01f, 0.0f, 1000.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The least distance between two piece centers in the node's xz plane.");
+            break;
+        }
+        case Kit_layout_row::yaw_min: {
+            const bool changed = ImGui::DragFloat(name, &pattern.yaw_min, 0.5f, -360.0f, pattern.yaw_max, "%.1f deg", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("Each piece turns about the node's up axis by a seeded angle from Yaw Min to Yaw Max.");
+            break;
+        }
+        case Kit_layout_row::yaw_max: {
+            const bool changed = ImGui::DragFloat(name, &pattern.yaw_max, 0.5f, pattern.yaw_min, 360.0f, "%.1f deg", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("Each piece turns about the node's up axis by a seeded angle from Yaw Min to Yaw Max.");
+            break;
+        }
         default: {
             break;
         }
@@ -326,7 +417,7 @@ auto layout_setting_row(Kit_layout_data& data, const Kit_layout_setting_row row,
         case Kit_layout_setting_row::seed: {
             const bool changed = ImGui::DragInt(name, &data.seed, 1.0f, 0, kit_seed_max, "%d", ImGuiSliderFlags_AlwaysClamp);
             const Kit_row_edit edit = drag_edit(changed);
-            tooltip("The seed the per-piece seeds come from.");
+            tooltip("The seed the per-piece seeds and a scatter's points come from.");
             return edit;
         }
         default: {
@@ -418,6 +509,13 @@ void Kit_layout_editor::run_line()
         kit_message_line(m_run_problem);
     } else if (m_data.pattern.kind == Repeat_pattern_kind::grid) {
         ImGui::Text("%zu pieces", m_run.count);
+    } else if (m_data.pattern.kind == Repeat_pattern_kind::scatter) {
+        if (m_run.count < m_run.requested) {
+            ImGui::Text("%zu of %zu pieces fit over %.3f m2", m_run.count, m_run.requested, m_run.space);
+            tooltip("No more pieces fit the region at Min Spacing; the scatter places the ones that do.");
+        } else {
+            ImGui::Text("%zu pieces over %.3f m2", m_run.count, m_run.space);
+        }
     } else if (m_data.pattern.count_mode == Kit_layout_count_mode::gap) {
         ImGui::Text("%zu pieces, actual gap %.3f m over %.3f m", m_run.count, (m_run.count > 1) ? (m_run.step - m_item_extent) : 0.0f, m_run.space);
         tooltip("The count the space holds at the stated gap, the gap once the remainder is spread, and the space (a path: its curve's length).");

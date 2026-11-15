@@ -12,7 +12,8 @@ intersection tests.
 - `IScene` -- ray tracing scene: attach geometries/instances, commit, intersect rays
 - `IGeometry` -- triangle mesh geometry: set vertex/index buffers, enable/disable, user data
 - `IInstance` -- instanced reference to an IScene with a transform, mask, and user data
-- `Ray` -- ray with origin, direction, t_near/t_far, mask, and flags
+- `Ray` -- ray with origin, direction, t_near/t_far, mask, flags and an optional hit filter
+- `IHit_filter` -- per-candidate accept / reject of hits, see "Hit filters"
 - `Hit` -- intersection result: normal, UV, triangle ID, geometry pointer, instance pointer
 - `Buffer_type` -- enum for buffer slot types (index, vertex, normal, etc.)
 - `Geometry_type` -- enum: triangle, quad, subdivision
@@ -36,6 +37,39 @@ if (scene->intersect(ray, hit)) { /* hit.geometry, hit.triangle_id, etc. */ }
 ```
 
 `IGeometry::get_memory_statistics()` reports the CPU bytes the backend holds for a committed geometry (BVH nodes, primitive ids, precomputed triangles, a supplied BVH not yet consumed); the bvh backend fills it, the others report zeros. The vertex / index `Cpu_buffer`s passed to `set_buffer()` are the caller's and are read only by `commit()`.
+
+## Hit filters
+
+`Ray::filter` (default null) points to an `IHit_filter` the caller owns for
+the duration of `intersect()`. Every backend calls its `accept()` for each
+candidate hit within the ray's interval, in any order, with a `Hit` holding
+the fields `intersect()` would return for that candidate (normal, uv,
+triangle id, geometry, instance). A rejected candidate is passed as if absent:
+it does not narrow `t_far`, and `intersect()` returns the nearest accepted
+candidate. Faces at the same distance are therefore each judged on their own,
+so the answer does not depend on which of two coincident faces the traversal
+meets first, where restarting a ray past a hit would skip a coincident face
+together with it. The filter runs on the intersecting thread and must not
+modify the scene.
+
+- `bvh` tests the filter in the triangle loop of its leaf callback.
+- `tinybvh` has no per-hit callback: a filtered ray walks the TLAS nodes
+  and each reached geometry's Wald nodes itself, nearer child first
+  (`tinybvh/tinybvh_traversal.hpp`), with a two-sided Moeller-Trumbore
+  triangle test.
+- `embree` passes the filter as an argument filter function
+  (`RTCIntersectArguments`, `RTC_RAY_QUERY_FLAG_INVOKE_ARGUMENT_FILTER`);
+  every scene is created with `RTC_SCENE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS`.
+- `none` has no hits to filter.
+
+`Hit::normal`, returned and handed to a filter, is the unnormalized
+geometric normal of the hit triangle in the space of the instance's parent
+(world space for an instance in the root scene): the local normal
+`cross(v1 - v0, v2 - v0)` transformed by the cofactor matrix of the instance
+transform, negated when the transform mirrors (negative determinant), so it
+points out of the solid as the local normal does
+(`get_normal_transform()`, `normal_transform.hpp`). Embree reports `Ng` in
+object space; its backend applies the same transform.
 
 ## Releasing the input buffers
 
@@ -189,6 +223,7 @@ Backend selected at CMake time via `ERHE_RAYTRACE_LIBRARY`:
 
 Tests in `test/` using Google Test, run via `scripts/test_raytrace_all_backends.bat`:
 - **test_geometry.cpp** -- basic intersection: hit/miss, normal, UV, closest hit, cube
+- **test_hit_filter.cpp** -- hit filters: a rejected instance leaves a coincident face of another, a front face coincident with a rejected back face is hit, either attach order; all rejected is a miss with `t_far` unchanged; a mirrored instance keeps its outward normal; a rotated and translated instance hands the filter its world-space normal; `t_near` skips closer faces
 - **test_masking.cpp** -- mask filtering, enable/disable toggle
 - **test_instance.cpp** -- identity/translated/scaled transforms, instance mask, multiple instances
 - **test_hierarchy.cpp** -- multi-level nesting: nested translation, rotation+translation, scale propagation, three-level nesting

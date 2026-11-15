@@ -31,7 +31,7 @@ behavior::doc/editor/level_tools.md(what-is-built)+doc/editor/navigation.md"Isla
 !layout-recompute-on-need::doc/plans/open_items.md"Performance and measurement"(©User-2026-11-14;Layout_system-recomputes-every-frame-today)
 !test-level::res/editor/scenes/level_kit_test.glb(built-over-MCP-2026-11-14;findings:polyline-wall-runs-overlap-0.125m-at-corners+hollow-platform-inner-island+1m-height-map-misses-0.25m-walls+duplicated-groups-keep-piece-names)
 ?step-21::exact-overlap-depth-for-two-triangle-mesh-pieces(now-convex-hull-stand-in->false-positive-for-a-piece-inside-an-opening)
-?step-20::gizmo-X-drags-land-~1px-short-in-a-wide-viewport(cause-unknown:script-window_point|Transform-tool-drag-mapping);check_spatial_queries-closes-its-scene-until-found
+?step-20::cause-of-the-~1px-short-gizmo-drags=ImGui-floors-io.MousePos(scripts-now-press+release-on-whole-pixels;errors<=0.46px-mixed-sign);wide-1395x535-viewport-layout-unmeasured(needs-the-machine-whose-layout-splits-viewports)->then-remove-the-scene-closes-in-level_tools_verify.py
 
 [WORKFLOW]{©User-2026-11-13}
 orchestrator-writes-brief->one-opus-coder-at-a-time->orchestrator-reviews-diff+re-runs-one-check->commits-explicit-paths(doc/agents/orchestration_harness.md)
@@ -54,3 +54,9 @@ live-preview::Level_kits::begin_layout_preview|begin_layout_move_preview|step_la
 selection::Item_insert_remove_operation-remove-keeps-the-remaining-selection(was-emptying-it->curve-tool-lost-its-point-selection)
 verify-scripts::frame-cameras-from-the-real-viewport-size(curve_verify.frame_camera)+restore-user_state.json+imgui-ini;NEVER-run-while-the-user's-editor-is-open
 
+[STATE_2026_11_15_END]{supersedes-older-lines-where-they-differ}
+built-this-session::step-27(Properties-transform-rows-run-layout-move-hook+preview;Property_edit_hook)+30(Escape-cancels-Transform-node-drag)+29/34/35(snap-to-surface:re-cast-until-settled;filtered-surface-ray=erhe::raytrace-IHit_filter;oriented-rest-fixed-point)+33(undo-recorded-only-when-a-transform-changed)+Replace-R5.8+scatter-kind-R5.5+connectors-R5.3+snap-to-connectors-R5.13+U22(connectors-follow-node-world-transform;indicators)
+rulings::U21-U29-in-doc/plans/level_tools.md;work-they-imply=plan-steps-44-56;"not yet asked"-lists-under-plan-step-12
+verify::always---editor-build_xcode_metal_headless/bin/Debug/editor;level_tools_verify.py-895+curve_verify.py-147+navigation_verify.py-76+editor_level_tests-104+erhe_raytrace_tests-72;--only-replace|--only-scatter|--only-connectors|--only-connector-snap|--only-surface-resting|--only-drag-cancel|--only-transform-rows
+hand-off::scripts/level_test_session.py(--editor+--build;resets-config;checks-every-step;NOT-yet-run-end-to-end)+doc/agents/editor_runs.md"Handing the editor to the user"
+!traps{Xcode-tree-misses-new-source-files-until-cmake-<tree>(each-tree-separately)+read-MCP-port-from-the-log-line-naming-the-launched-pid+a-refused-MCP-call-places-nothing(check-every-reply)+viewport-may-show-another-scene-tab(set_window_visibility-focus-on-get_viewports-title)+windowed-non-AI-driver-run-rewrites-config/editor/*.json(reset-config-before-testing)+scaling-a-placed-piece-to-negative-aborts-Debug(draw_list_scene-VERIFY)+ImGui-floors-io.MousePos(whole-pixel-gizmo-presses)+ImGui-swaps-Ctrl/Cmd-on-macOS(IMGUI_CTRL)}

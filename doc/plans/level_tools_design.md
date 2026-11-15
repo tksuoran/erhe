@@ -62,6 +62,48 @@ R-numbers). The build order is in
   signature stays `(values, GEO::Mesh&)`. `editor_level_tests` checks every
   shape at its defaults and at a seed-derived second parameter set: each facet
   names a declared slot, each slot has facets and the slot names are unique.
+- D1.12 Connectors (R5.3). A connector (`Kit_connector`,
+  `level/kit_connector.hpp`) is a name and a frame in the piece's local space:
+  a position, a unit outward axis (away from the piece) and a unit up axis
+  normal to it. `Kit_shape_definition::get_connectors` computes them from the
+  current values, so a frame follows its parameters (a wall's end moves with
+  its length, the stairs' top with rise and run); the names and their order are
+  the same at every value. A side connector has up +Y; "top" (+Y) and "base"
+  (-Y, at the origin) have up +Z, so stacking keeps the heading. A shape
+  lists first the connector a new piece of it most often attaches by (base for
+  what stands on a surface, start for a wall, bottom for a climb), which the
+  window offers by default. The list:
+  - `basic.block`: base, top, front, back, left (-X), right, the sides at the
+    center of each side's base edge;
+  - `basic.floor_slab`: the same names, the sides at the top edge (the walking
+    surface, so stairs and slabs meet it flush);
+  - `basic.stairs`, `basic.wedge`: bottom (front base edge, +Z), top (back top
+    edge, -Z), base;
+  - `basic.cylinder`, `architecture.pillar`: base, top;
+  - `architecture.wall`: start (-X end), end, base, top, front, back (the faces'
+    base centers);
+  - `architecture.door_wall`: start, end, base, top, opening_front and
+    opening_back (the opening's threshold on each face);
+  - `architecture.arch`: start and end (the outer foot ends), base, top (the
+    crown's top);
+  - the nature shapes: none (their seeded outlines have no stated frame).
+  `editor_level_tests` checks every frame unit and orthogonal, the names equal
+  at two parameter sets and unique, the first connector of each shape, and
+  every shape's frames against the parameters its generator reads.
+  - World frames (U22): a connector is a point and frame of its node and
+    follows the node's full world matrix, whatever its scale (uniform,
+    non-uniform, a parent's, shear, mirror): `transform_connector(connector,
+    world_from_node)` carries the position by the matrix, the outward axis
+    as a face normal (by the inverse transpose of the linear part) and the
+    up axis, which lies in the connector's face, as a direction; both are
+    normalized. The outward axis therefore stays normal to the transformed
+    face, so two joined end faces are flush under any scale or shear, and up
+    is normal to it without a projection. The frame (outward, up, outward x
+    up) is right-handed; under a mirror (negative determinant) the third axis
+    is that cross product, not the image of the local one. A singular matrix
+    (a zero scale axis: the determinant within 1e-6 of the product of the
+    column lengths) degenerates the frame: the piece has no world
+    connectors, and explicit calls refuse it naming the zero scale axis.
 - D1.3 `Kit_parameter_values` holds the values of one piece in the
   definition's parameter order. `validate()` checks each against its range
   and returns the R3.6 message. `to_canonical_text()` writes the values as
@@ -216,11 +258,13 @@ R-numbers). The build order is in
   children are its pieces. The group's serialized values:
   - `Kit_layout.pattern` (the key value): the canonical text of a
     `Kit_layout_pattern` (`level/kit_layout_values.hpp`, scene-free and tested
-    in `editor_level_tests`): the kind (line, grid, ring, path; scatter joins
-    as a further kind), every kind's values (kept across a kind change), a
-    path's orientation; a line, grid or ring in the node's own frame with
-    element 0 at its origin, a path along its curve in world space; JSON with
-    sorted keys and hexadecimal floats as D1.3;
+    in `editor_level_tests`): the kind (line, grid, ring, path, scatter
+    (D3.11)), every kind's values (kept across a kind change), a path's
+    orientation; a line, grid or ring in the node's own frame with element 0
+    at its origin, a scatter in its frame about its origin, a path along its
+    curve in world space; JSON with sorted keys and hexadecimal floats as
+    D1.3, a key a text written before its value existed lacks reading as the
+    default;
   - `Kit_layout.items`: the canonical text of a list of `Kit_layout_item`s,
     each a shape id, the canonical parameter text (D1.3) and a material name
     per slot (D1.11, empty for the slot's default); element i takes item
@@ -388,6 +432,223 @@ R-numbers). The build order is in
     transform under its parent's new one, one `Node_transform_operation` per
     node in one `Compound_operation`.
 
+- D3.10 Replace (R5.8, R5.10). `Level_kits::replace_shape(scene_root, shape,
+  replacements)` gives placed pieces another shape as one undo entry: one
+  `Kit_piece_parameters_operation` (D3.3) per piece, which also swaps
+  `Kit_piece.shape`, after the inserts of the palette materials the new slots
+  need, in one `Compound_operation`. The node stays: its id, name, transform
+  (bit for bit, not rested again: a caller that wants the new bounds on the
+  surface runs the surface tool of D7.3 after, so replace has no surface
+  option), parent, children, group and selection. Undo puts back the shape,
+  parameters, mesh primitives with their materials, brush and collision
+  shape exactly.
+  - Parameters (`carry_parameter_values()`, `level/kit_replace.hpp`,
+    scene-free and tested in `editor_level_tests`): a parameter of the new
+    shape that the old shape has with the same name and type keeps its value,
+    a float or int clamped to the new range, an enum by its value name (a
+    name the new shape lacks takes the default); a carried parameter that
+    derives from the seed on the old shape derives on the new one where it is
+    derivable, from the carried seed in the new range; every other parameter
+    takes the new shape's default, its default derive mask included. The
+    seed is a parameter of every shape, so it carries. A caller's values,
+    given per piece, replace the carried ones; values the new shape refuses
+    refuse the call. Each parameter is reported carried, clamped or
+    defaulted; a value derived again from the seed is carried, whatever its
+    old value.
+  - Material slots (`match_material_slots()`): a slot of the new shape keeps
+    the material of the old slot of the same name, the others take their
+    palette default (D3.4); a caller's material per slot overrides both.
+  - Physics and navigation: the brush's collision shape replaces the old one
+    through the node's physics system, which rebuilds the static body, as a
+    parameter change does; the primitive swap reaches the navigation mesh's
+    staleness hook like every mesh edit.
+  - All or nothing: a node that is not a kit piece of the scene, a kit layout
+    node (its items' shapes are its values, D3.9), a child of a locked kit
+    layout node (`locked_layout_refusal()`), a node listed twice, a record
+    that does not read and a mesh whose primitive count is not its shape's
+    slot count (a piece that keeps a loaded mesh, D3.5) refuse the call,
+    naming the piece, and nothing changes. A piece of the shape already is
+    left as it is; when every piece is, no entry is recorded.
+- D3.11 Scatter (R5.5). A scatter is the kit layout kind `scatter`
+  (`Repeat_pattern_kind::scatter`), an Xform kind: its pieces are the node's
+  children and it generates, locks, refreshes, previews and undoes through
+  D3.9 unchanged.
+  - Region: a rectangle `size_x` by `size_z` or a disc of `region_radius`
+    (`Repeat_scatter_region`), centred on the node's origin in its xz plane;
+    a piece's center lies inside it. "Over a surface" is the layout's
+    surface snap and orient (D7.3) resting each piece on what is under it.
+  - Count: `scatter_mode` `count` (the shared `count`) or `density` (pieces
+    per square meter times the region's area, rounded, at least 1); a count
+    above `c_max_repeat_count` is refused. A line's `count_mode` does not
+    apply to a scatter.
+  - Points (`expand_repeat()`, scene-free, tested in `editor_level_tests`):
+    dart throwing over one candidate stream, `Kit_random(Kit_layout.seed,
+    "layout scatter")` of D1.4, each candidate three 24-bit `next_unit()`
+    draws (x, z, yaw) taken or not; x = (u - 0.5) size_x, a disc's candidate
+    outside it rejected; a candidate closer than `min_spacing` to an accepted
+    point (squared distance in float, a grid of cells 1 + 2^-10 times the
+    spacing or wider, so an index rounded at a cell edge hides no pair) is
+    rejected; it stops at the count or after
+    `c_scatter_attempts_per_piece` (64) candidates per piece asked for and
+    holds the points that fit, `Kit_layout_run::requested` reporting the
+    count asked for. Every product and sum is its own statement, so no
+    multiply-add is fused under the fp-contract policy of
+    `doc/cmake_conventions.md` and the positions in the node's frame are the
+    same bits on every platform (the world pose takes the node's rotation as
+    every kind's does). `resolve_layout_pattern()` returns the poses it made
+    to the generation, so a generation samples once. The stream does not depend on the count or the spacing, so a
+    raised count keeps the first pieces.
+  - Yaw: each piece turns about the node's up axis by yaw_min + (yaw_max -
+    yaw_min) w degrees (within -360 - 360, `yaw_min` <= `yaw_max`); the angle is exact, its
+    rotation takes the platform's sine and cosine as every kind's does.
+  - Items: element i takes item i modulo the item count, as every kind; with
+    random seeds on, its seed is `derive_layout_element_seed(seed, i)`, a
+    stream apart from the points.
+  - Scale: a scatter places every piece at scale 1. Per-piece random scale
+    needs a scaled brush per piece (a node scale leaves the collision shape
+    unscaled, since bodies take no scale) and a scale in the piece record so
+    that follows-kit, load and replace keep it: plan step 39
+    (`doc/plans/level_tools_implementation.md`).
+
+- D3.12 Connector joins (R5.3, R5.10). `join_connectors()` (scene-free, tested
+  in `editor_level_tests`) gives the pose that puts connector A of a piece on
+  connector B of a target, both frames given: the piece's outward axis opposes
+  B's, its up axis agrees with B's up turned by `twist_steps` quarter turns
+  about B's outward axis (right-handed), and A's point lands on B's point moved
+  `gap` meters along B's outward axis. Both frames are right-handed
+  orthonormal, so the rotation between them always exists and is proper
+  (determinant +1, no reflection); there is no case of up axes that cannot
+  agree. A side connector against a top connector tips the piece (a wall's end
+  on a floor's top lays the wall down), deterministically; the twist picks one
+  of the four headings about the joined axis. The translation uses the
+  rotation the node gets from its quaternion, so A's world point is B's.
+  - World frames: `Level_kits::get_world_connectors(node)` carries the local
+    frames of the piece's record values by its world matrix (D1.12 "World
+    frames"). The target is not edited, so any kit piece of the scene is a
+    target, a child of a locked kit layout node and a scaled piece included.
+  - Scaled pieces (U22): `join_motion()` takes the moved piece's connector
+    under its current world matrix and gives the rigid world motion (rotation
+    and translation) that carries that frame onto the target's: positions
+    coincide, outward axes oppose, up axes agree after the twist, the gap
+    along the target's world outward axis. The moved piece's new world matrix
+    is the motion times its old one, so it keeps its own scale; the new local
+    transform is the parent's inverse times that. A Trs local transform holds
+    it exactly when its axes stay orthogonal (`has_orthogonal_axes()`): always
+    under rotation-only or uniformly scaled parents, and under a non-uniformly
+    scaled or sheared parent chain when the motion's turn keeps the axes
+    orthogonal (no turn, or a turn about an axis of the scale). Otherwise the
+    join is refused naming the piece and parent: the joined pose would need a
+    sheared local transform. The local transform keeps the node's stored
+    scale outright, a mirrored one included, when the new local matrix is a
+    rotation times that scale (columns divided by it unit and orthogonal
+    within 1e-5, determinant +1); otherwise it is decomposed. A motion of at
+    most 0.1 mm and 1e-4 rad is no change.
+  - Placing (`Kit_placement::connect`): the join replaces the position and
+    rotation; module snap and the surface options are not applied, because the
+    join is exact. It is resolved and refused in the checking pass of `place()`,
+    so the call stays all or nothing; the new piece has world scale 1, and a
+    parent under which that pose would need a sheared local transform is
+    refused there with Moving's message. The target is an existing node, not a
+    piece of the same call.
+  - Moving (`Level_kits::connect_piece()`): a placed kit piece moves by one
+    `Node_transform_operation` to the joined world pose (local under its
+    parent), its children riding with it; no entry when it is there already.
+    Refused: a node that is not a kit piece (a group or kit layout node has no
+    connectors), a child of a locked kit layout node (`locked_layout_refusal()`),
+    the piece itself or a node below it as the target, an unknown connector
+    name, whose message lists the shape's connectors, a piece or target with a
+    zero scale axis, and a join that would need a sheared local transform
+    ("Scaled pieces" above). The piece is moved first and the locked-layout move
+    hook of D3.9 appended in the same `Compound_operation`, as every move path
+    does, so a surface-snapped locked layout below the piece rests again.
+  - A joined piece is an ordinary piece afterwards: no link to the target is
+    stored, so moving or changing the target does not move it; a connect again
+    lands it on the target's new frame. A persistent attachment is plan step 41.
+  - Drag-time use: connectors serve both the explicit join and a snap during
+    Transform drags (R5.13, plan step 43), so the queries are pure and
+    repeatable, not one-shot. `get_shape_connectors()` and
+    `transform_connectors()` fill caller-owned vectors and allocate nothing
+    once their capacity is reached (a connector's name is a literal);
+    `Level_kits::get_local_connectors()` parses a piece's record and is the
+    drag-begin read. A drag consumer gathers once at drag begin the kit pieces
+    of the scene that carry connectors (the nodes with a `Kit_piece`, excluding
+    the moved nodes and their descendants) with their local frames into its
+    own cache, and per step only carries those frames by each node's world
+    transform; no per-scene list is kept, because the targets do not change
+    during a drag and a list maintained on every place, remove, open and
+    parameter change would cost every edit for the one consumer.
+  - Mirrored pieces: `mirror()` gives a piece a rotation (D3.8), so its
+    connectors are its local frames under that rotation. On a mirrored piece of
+    a declared symmetry plane the frames sit exactly on the mirrored mesh, but a
+    pair named across the plane changes sides (a wall mirrored across its x
+    plane has its start where the end was); a piece without a declared plane
+    has frames of its rotated, not mirrored, mesh.
+
+- D3.13 Connector snap (R5.13, U21). One setting, `connector_snap_distance`
+  in `Surface_snap_config` (meters, 0 = off), shared by the toolbar, the Move
+  rows and the Level Kit window as the surface pair is (D4.6), and explicit
+  `connector_snap_distance` arguments on `drag_selection` and
+  `transform_selection` (default 0).
+  - Scene-free search: `find_connector_snap(moved, others, max_distance)`
+    (`level/kit_connector.hpp`, tested in `editor_level_tests`) returns the
+    closest pair at most `max_distance` apart (inclusive), none for a
+    distance that is not positive and finite; equal squared distances take
+    the smallest (moved piece id, moved connector index, other piece id,
+    other connector index), a total order independent of the input order.
+  - Drag consumer: `Kit_connector_drag_snap` (`level/kit_connector_snap.hpp`),
+    owned by the Transform tool, gathers at a translate drag's begin, as
+    D3.12 foresees: the moved roots (targets not locked and without a moved
+    ancestor), the connector positions of every kit piece at or below a root
+    in that root's frame, and per other kit piece of the scene (not a drag
+    target, not below one) a weak node reference and its local connector
+    positions, each through the piece's full world matrix (D1.12 "World
+    frames": scaled pieces, scaled targets and pieces under scaled or sheared
+    parents take part; a piece whose frames degenerate does not). The snap is
+    translation only, so it co-locates the transformed positions. A step multiplies the
+    positions by each root's and target's world matrix into reserved
+    vectors and searches; no allocation, no per-scene list.
+  - Step order: grid snap, translate, surface rest (D4.6), connector snap,
+    layout preview (D3.9). Last because co-located connectors define the
+    pose; resting after it would separate them. Each step starts from the
+    step's unsnapped pose, so release beyond the distance needs no latch.
+  - Apply: every moved root translates by the pair's offset (translation
+    only), the anchor with it; the undo record and cancel are those of any
+    drag. A snap that cannot co-locate is not made: a moved root whose locked
+    translate channel (in its parent's space) the offset needs leaves the
+    step unsnapped. A drag pulling a body through physics does not snap (the
+    simulation writes that node).
+  - Pairs: any orientation; the outward axes are not compared.
+  - Indicators (U22): the drag's gathered points also keep their axes (the
+    moved ones in the root's frame, the targets' local), so the connector
+    indicators of a drag read them with the current world matrices
+    (`collect_indicators()`), and the last step's pair is kept by index.
+
+- D3.14 Connector indicators (U22, plan step 42). `Kit_connector_indicators`
+  (`level/kit_connector_indicators.hpp`, owned by `Level_kits`) collects what
+  a view draws; `Debug_visualizations::connectors_visualization()` draws it
+  and `level_get_connector_indicators` reads the same collection.
+  - What: in the views of the drag's scene, during a translate drag with a
+    connector snap, the drag's moved connectors, the targets within 4 snap distances of one and the snapped
+    pair, whatever the setting; otherwise by the per-view setting
+    `Debug_visualizations_settings::connectors` (off, selected (default),
+    all) the connectors of the selected kit pieces and of those below
+    selected nodes, or of every kit piece of the view's scene. The two
+    connectors chosen in the Level Kit window's Connect rows are marked.
+  - Cache: the local frames per piece by node id, parsed from the record on
+    the first draw and dropped on the changes that rewrite the record: a
+    `Mesh_geometry_changed_message` of the piece (parameters, replace, their
+    undo, the live parameter drag), a raw record write
+    (`App_context::on_item_property_changed()`), the piece's removal
+    (`Items_removed_message`, looked up in its set: a regenerated layout's
+    old children go) and a scene close (all). World matrices are read at
+    draw time; no per-frame comparison, and the scratch vectors keep their
+    capacity, so a steady frame allocates nothing.
+  - Connect choice: the window hands its chosen target and moved connectors
+    over when its pair or a choice changes; a selection message clears it,
+    and the window hands it over again when it next lists the pair.
+  - No name labels: the editor's label path draws per-mesh text and would
+    need a per-frame text layout per connector.
+
 ## D4 Exposure
 
 - D4.1 UI (R6.2): the "Level Kit" window (`level/level_kit_window.hpp`)
@@ -524,6 +785,34 @@ R-numbers). The build order is in
   nodes with ids and world transforms as `level_place_pieces` lists pieces,
   and the mirror's lists the nodes whose image is not exact. Move and delete
   have no level tool of their own (D3.8).
+- D4.10 Replace (R5.8, R6.1). The Level Kit window's Selection section has
+  Replace With (a combo of every shape, `<display name> (<id>)`) and Replace
+  Selected, which queues `replace_shape()` for the selected kit pieces of the
+  scene with the carried values and matched slots, and writes the result or
+  refusal under it (and to the log). The button is disabled with its reason
+  shown while no kit piece of the scene is selected or no shape is chosen;
+  the count of selected pieces is taken again on the selection messages, not
+  per frame. MCP: `level_replace_pieces {scene_name, node_ids, shape,
+  parameters, materials}` (no `node_ids`: the selected kit pieces of the
+  scene; `parameters` merge over each piece's carried values as
+  `level_set_piece_parameters` merges them; `materials` as
+  `level_place_pieces` takes them), one undo entry; the reply gives per piece
+  its `id`, `name`, `old_shape`, `shape`, `replaced`, the effective
+  `parameters`, the names `carried`, `clamped`, `defaulted` and `given`, the
+  `materials`, the `kept_materials` slots, `world_aabb` and `collision_shape`.
+- D4.11 Connectors (R5.3, R6.1). The Level Kit window's Connect rows
+  (`doc/editor/level_tools.md` "Level Kit window") take the active selected
+  piece as the target, which every press keeps still, and move the other of
+  two selected pieces or place the shape to place; the rows hold connector
+  names only (the record's local connectors), and the queued
+  `connect_piece()` or `place()` refuses what the scene no longer allows, so
+  the rows read nothing per frame and need no message beyond the selection,
+  active item and mesh ones. MCP: `level_get_kits` connectors at the defaults,
+  `level_get_connectors` the world frames, `level_place_pieces` per piece
+  `connect` (refused with a position, rotation or surface option) and
+  `level_connect_pieces` for `connect_piece()`. Viewport placement by the
+  Brush tool's preview is plan step 40; the frames are drawn as connector
+  indicators (D3.14).
 - D4.2 MCP (R6.3 - R6.5; handlers in `mcp/mcp_server_level.cpp`):
   - `level_get_kits {scene_name}`: the catalog of R6.3, with the float
     defaults resolved against the scene's level settings; per shape its
@@ -606,20 +895,30 @@ scene root's space (R10.1).
 - D7.3 Surface placement (R5.11, R10.5): `find_surface_placement()`
   takes a piece's mesh bounds, a start transform, a direction (down by
   default) and the two options, and returns the resting transform. It
-  casts one ray along the direction from the base center, and from the
-  base corners too when only snapping, through the scene's raytrace scene
-  with the moved pieces masked out. Each ray starts one piece height
-  back from the base, against the direction, so a piece sunk into a
-  surface rises onto it. Snap moves the piece by the smallest hit
-  distance, so its base rests on the highest surface under it. A ray
-  that passes through a moved piece's own face and then leaves a solid
-  takes the passed face's position as the surface, so a piece already
-  resting on a surface stays on it. Orient
-  rotates the piece by the shortest rotation that takes its up axis to the
-  center hit's normal, which keeps its heading, and then rests the base
-  center on the hit point. Placement (D3.2) applies it to the new piece
-  before the insert; the tool form applies it to placed pieces as one
-  transform operation.
+  casts rays along the direction through the scene's raytrace scene: for
+  the base center, and for the base corners too when only snapping. Its
+  surface is the nearest front face of a mesh that is not moved, each
+  candidate hit judged on its own (a hit filter), so the moved pieces are
+  invisible to it and the answer does not depend on which of two coincident
+  faces the traversal meets first. A snap ray starts on the bounds' top
+  face above its base point, the orient ray one piece height back from the
+  base center against the direction, each at least 1 mm back from its base
+  point, so a piece sunk into a surface by less than its own height rises
+  onto it, and one cast never lifts it more than its own height. Snap moves
+  the piece by the smallest hit distance, so its base rests on the highest
+  surface under it, and casts again after a rise until a cast rises no
+  more, so a piece climbs a chain of surfaces each within its height of the
+  one before (a coursed wall it overlaps) to the top; resting the rested
+  pose again with the same excluded meshes moves it by nothing
+  (`doc/editor/level_tools.md` "Surface placement", which also names each
+  caller's excluded meshes and the order that picks the normal where faces
+  tie at an edge). Orient rotates the piece about its base center by the
+  shortest rotation that takes its up axis to the center hit's normal,
+  which keeps the heading of an upright piece, and rests the base center on
+  the hit point; the turn moves no ray, so a rested oriented pose turns and
+  moves by nothing, and orient casts again after a rise as snap does.
+  Placement (D3.2) applies it to the new piece before the insert; the tool
+  form applies it to placed pieces as one transform operation.
 - D7.4 Support report (R10.4): the snap rays of D7.3 without the move; a piece
   whose smallest distance exceeds the tolerance is unsupported.
 - D7.5 Overlap report (R10.3): bounds as the first pass, then the physics

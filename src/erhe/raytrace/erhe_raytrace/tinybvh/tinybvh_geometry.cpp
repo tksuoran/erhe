@@ -8,7 +8,9 @@
 #include "erhe_raytrace/tinybvh/tinybvh_instance.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_raytrace/prebuilt_bvh.hpp"
+#include "erhe_raytrace/normal_transform.hpp"
 #include "erhe_raytrace/ray.hpp"
+#include "erhe_raytrace/tinybvh/tinybvh_traversal.hpp"
 
 #include "erhe_hash/hash.hpp"
 #include "erhe_profile/profile.hpp"
@@ -17,6 +19,9 @@
 
 #include <glm/gtx/matrix_operation.hpp>
 
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstring>
 
 namespace erhe::raytrace {
@@ -356,6 +361,10 @@ auto Tinybvh_geometry::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* 
         return false;
     }
 
+    if (ray.filter != nullptr) {
+        return intersect_filtered(ray, hit, instance);
+    }
+
     const glm::mat4 transform = (instance != nullptr) ? instance->get_transform() : glm::mat4{1.0f};
 
     // tinybvh keeps the direction as given (NORMALIZE_RAY_DIR undefined), so t is in the caller's units.
@@ -382,16 +391,65 @@ auto Tinybvh_geometry::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* 
         ray.t_far       = tinybvh_ray.hit.t;
         hit.triangle_id = prim_id;
         hit.uv          = glm::vec2{tinybvh_ray.hit.u, tinybvh_ray.hit.v};
-        // A normal is a covector: transforming it by the instance transform
-        // shears it whenever the scale is non-uniform, tilting it toward the
-        // longest axis. transpose(adjugate(M)) is the cofactor matrix, the
-        // same normal transform used throughout the renderer.
-        hit.normal      = glm::vec3{glm::transpose(glm::adjugate(transform)) * glm::vec4{local_normal, 0.0f}};
+        hit.normal      = glm::vec3{get_normal_transform(transform) * glm::vec4{local_normal, 0.0f}};
         hit.instance    = instance;
         hit.geometry    = this;
         return true;
     }
     return false;
+}
+
+// tinybvh::BVH::Intersect() takes no per-hit filter: this walks its Wald nodes with one.
+auto Tinybvh_geometry::intersect_filtered(Ray& ray, Hit& hit, Tinybvh_instance* instance) -> bool
+{
+    const glm::mat4 normal_transform = get_normal_transform((instance != nullptr) ? instance->get_transform() : glm::mat4{1.0f});
+    bool is_hit{false};
+    traverse_tinybvh_nodes(*m_bvh, ray, [&](const uint32_t first, const uint32_t count) {
+        for (uint32_t i = 0; i < count; ++i) {
+            const uint32_t    prim_id = m_bvh->primIdx[first + i];
+            const std::size_t base    = static_cast<std::size_t>(prim_id) * 3;
+            const glm::vec3   v0{m_triangles[base + 0].x, m_triangles[base + 0].y, m_triangles[base + 0].z};
+            const glm::vec3   v1{m_triangles[base + 1].x, m_triangles[base + 1].y, m_triangles[base + 1].z};
+            const glm::vec3   v2{m_triangles[base + 2].x, m_triangles[base + 2].y, m_triangles[base + 2].z};
+            // Moeller-Trumbore, two sided.
+            const glm::vec3 edge1 = v1 - v0;
+            const glm::vec3 edge2 = v2 - v0;
+            const glm::vec3 p     = glm::cross(ray.direction, edge2);
+            const float     det   = glm::dot(edge1, p);
+            if (std::abs(det) < 1.0e-12f) {
+                continue;
+            }
+            const float     inv_det = 1.0f / det;
+            const glm::vec3 s       = ray.origin - v0;
+            const float     u       = glm::dot(s, p) * inv_det;
+            if ((u < 0.0f) || (u > 1.0f)) {
+                continue;
+            }
+            const glm::vec3 q = glm::cross(s, edge1);
+            const float     v = glm::dot(ray.direction, q) * inv_det;
+            if ((v < 0.0f) || ((u + v) > 1.0f)) {
+                continue;
+            }
+            const float t = glm::dot(edge2, q) * inv_det;
+            if (!((t >= ray.t_near) && (t < ray.t_far))) {
+                continue;
+            }
+            const Hit candidate{
+                .normal      = glm::vec3{normal_transform * glm::vec4{glm::cross(edge1, edge2), 0.0f}},
+                .uv          = glm::vec2{u, v},
+                .triangle_id = prim_id,
+                .geometry    = this,
+                .instance    = instance
+            };
+            if (!ray.filter->accept(candidate)) {
+                continue;
+            }
+            ray.t_far = t;
+            hit       = candidate;
+            is_hit    = true;
+        }
+    });
+    return is_hit;
 }
 
 auto Tinybvh_geometry::get_bvh() -> tinybvh::BVH*

@@ -8,7 +8,7 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=10,
+    version=11,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
@@ -94,6 +94,15 @@ struct("Debug_visualizations_style",
         field("point_hover_size",                  Float, added_in=10, default="0.008f",                  short_desc="Point Hover Size",         long_desc="Half size of the hovered point quad per metre of distance to the camera"),
         field("point_selected_color",              Vec4,  added_in=10, default="1.0f, 1.0f, 0.0f, 1.0f",  short_desc="Point Selected Color",     long_desc="Quad of a selected point"),
         field("point_selected_size",               Float, added_in=10, default="0.009f",                  short_desc="Point Selected Size",      long_desc="Half size of a selected point quad per metre of distance to the camera"),
+
+        # Connector indicators of kit pieces (doc/editor/level_tools.md "Connector indicators").
+        field("connector_color",                   Vec4,  added_in=11, default="0.4f, 0.9f, 0.4f, 1.0f",  short_desc="Connector Color",          long_desc="Connector of a shown kit piece"),
+        field("connector_chosen_color",            Vec4,  added_in=11, default="1.0f, 0.85f, 0.2f, 1.0f", short_desc="Connector Chosen Color",   long_desc="Connector chosen in the Level Kit window's Connect rows"),
+        field("connector_moved_color",             Vec4,  added_in=11, default="0.3f, 0.7f, 1.0f, 1.0f",  short_desc="Connector Moved Color",    long_desc="Connector of the dragged pieces during a snapping drag"),
+        field("connector_target_color",            Vec4,  added_in=11, default="0.8f, 0.8f, 0.8f, 1.0f",  short_desc="Connector Target Color",   long_desc="Connector within reach of a dragged connector during a snapping drag"),
+        field("connector_snapped_color",           Vec4,  added_in=11, default="1.0f, 0.2f, 0.9f, 1.0f",  short_desc="Connector Snapped Color",  long_desc="The connector pair the drag snapped by"),
+        field("connector_size",                    Float, added_in=11, default="0.04f",                   short_desc="Connector Size",           long_desc="Outward arrow length per metre of distance to the camera; the up tick is half of it"),
+        field("connector_width",                   Float, added_in=11, default="-2.0f",                   short_desc="Connector Width",          long_desc="Line width of the connector indicators; negative is pixels"),
 
         field("skin_bone_color_a",                 Vec4,  added_in=1, default="0.0f, 1.0f, 1.0f, 1.0f", short_desc="Skin Bone Color A", long_desc="Color for joints at even hierarchy depth; alternates with Skin Bone Color B"),
         field("skin_bone_color_b",                 Vec4,  added_in=1, default="1.0f, 0.0f, 1.0f, 1.0f", short_desc="Skin Bone Color B", long_desc="Color for joints at odd hierarchy depth; alternates with Skin Bone Color A"),

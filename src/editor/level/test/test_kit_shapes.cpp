@@ -384,6 +384,15 @@ TEST(Kit_parameter_values, canonical_text_form)
     ASSERT_TRUE(editor::parse_hexfloat("0x1.99999ap-4", parsed));
     EXPECT_EQ(parsed, 0.1f);
     EXPECT_FALSE(editor::parse_hexfloat("0.1", parsed));
+    ASSERT_TRUE(editor::parse_hexfloat("-0x1p+1", parsed));
+    EXPECT_EQ(parsed, -2.0f);
+    EXPECT_FALSE(editor::parse_hexfloat("0x", parsed));
+    EXPECT_FALSE(editor::parse_hexfloat("0x1p+2 ", parsed));
+    EXPECT_FALSE(editor::parse_hexfloat("0x 1p+2", parsed));
+    EXPECT_FALSE(editor::parse_hexfloat("0x-1p+2", parsed));
+    EXPECT_FALSE(editor::parse_hexfloat("0x0x1p+2", parsed));
+    EXPECT_FALSE(editor::parse_hexfloat("0xinf", parsed));
+    EXPECT_FALSE(editor::parse_hexfloat("0x1p+200", parsed));
 }
 
 TEST(Kit_parameter_values, canonical_text_rejects_malformed_input)

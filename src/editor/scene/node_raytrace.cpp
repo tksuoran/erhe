@@ -11,6 +11,7 @@
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/iscene.hpp"
+#include "erhe_raytrace/normal_transform.hpp"
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -110,7 +111,7 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
     const GEO::vec3f facet_normal           = GEO::normalize(mesh_facet_normalf(geo_mesh, facet));
     const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
     const glm::mat4  world_from_node        = mesh->world_from_node();
-    const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
+    const glm::mat4  normal_world_from_node = erhe::raytrace::get_normal_transform(world_from_node);
     return glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
 }
 

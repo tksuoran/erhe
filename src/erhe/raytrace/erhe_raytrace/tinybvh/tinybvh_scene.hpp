@@ -38,6 +38,7 @@ public:
 private:
     auto intersect_linear(Ray& ray, Hit& hit) -> bool;
     auto intersect_tlas  (Ray& ray, Hit& hit) -> bool;
+    auto intersect_tlas_filtered(Ray& ray, Hit& hit) -> bool;
     void build_tlas();
 
     std::vector<Tinybvh_geometry*> m_geometries;

@@ -17,7 +17,8 @@ enum class Repeat_pattern_kind : unsigned int {
     line = 0,
     grid,
     ring,
-    path
+    path,
+    scatter
 };
 
 [[nodiscard]] auto c_str(Repeat_pattern_kind kind) -> const char*;
@@ -34,6 +35,17 @@ enum class Repeat_path_orientation : unsigned int {
 };
 
 [[nodiscard]] auto c_str(Repeat_path_orientation orientation) -> const char*;
+
+// The region a scatter fills, centred on the start in its xz plane.
+enum class Repeat_scatter_region : unsigned int {
+    rectangle = 0, // scatter_size_x by scatter_size_z
+    disc           // scatter_radius
+};
+
+[[nodiscard]] auto c_str(Repeat_scatter_region region) -> const char*;
+
+// Candidate points a scatter draws per piece asked for before it stops with what fits.
+inline constexpr std::size_t c_scatter_attempts_per_piece = 64;
 
 inline constexpr std::size_t c_max_repeat_count = 1024;
 
@@ -61,6 +73,14 @@ public:
     const erhe::math::Curve_path_table* path{nullptr};         // path: the curve in the start frame, not owned
     float                   path_step       {0.0f};            // path: distance from one element to the next
     Repeat_path_orientation path_orientation{Repeat_path_orientation::upright};
+    Repeat_scatter_region  scatter_region {Repeat_scatter_region::rectangle}; // scatter: count is the pieces asked for
+    float                  scatter_size_x {8.0f};
+    float                  scatter_size_z {8.0f};
+    float                  scatter_radius {4.0f};
+    float                  scatter_spacing{1.0f};   // scatter: the least distance between two piece centers
+    float                  yaw_min_degrees{0.0f};   // scatter: each piece turns about the start's up axis within the range
+    float                  yaw_max_degrees{360.0f};
+    int                    scatter_seed   {0};
 };
 
 // The poses of the run, element 0 at the start; cleared and filled. Returns the refusal (empty when expanded),

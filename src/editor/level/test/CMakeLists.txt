@@ -7,8 +7,10 @@ add_executable(${_target}
     # (with its erhe::math headers), glm and fmt only; the region and height
     # map helpers need glm and erhe::math; the repeat expansion glm and fmt; the
     # group mirror glm and erhe::math; the kit layout values nlohmann_json.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_values.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_mesh_builder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_replace.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shape.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shape_checks.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shape_library.cpp
@@ -18,7 +20,9 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_group.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_region.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_repeat.cpp
+    test_kit_connector.cpp
     test_kit_layout_values.cpp
+    test_kit_replace.cpp
     test_kit_shapes.cpp
     test_level_group.cpp
     test_level_region.cpp

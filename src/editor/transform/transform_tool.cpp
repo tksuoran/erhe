@@ -21,6 +21,7 @@
 #include "operations/operation_stack.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp" // need to be able to pass to visualization
 #include "renderers/render_context.hpp"
+#include "scene/node_physics_system.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
@@ -118,6 +119,16 @@ constexpr erhe::renderer::Debug_renderer_config offscreen_indicator_fill_config{
     .xray              = true
 };
 
+// Transform setters update only the set node's own cached world transform; this refreshes the ancestor chain too.
+void refresh_world_from_root(erhe::scene::Node* const node)
+{
+    if (node == nullptr) {
+        return;
+    }
+    refresh_world_from_root(node->get_parent_node().get());
+    node->update_world_from_node();
+}
+
 }
 
 #pragma region Commands
@@ -161,6 +172,19 @@ void Transform_tool_drag_command::on_inactive()
     }
 }
 
+Transform_tool_cancel_drag_command::Transform_tool_cancel_drag_command(erhe::commands::Commands& commands, App_context& app_context)
+    : Command  {commands, "Transform_tool.cancel_drag"}
+    , m_context{app_context}
+{
+}
+
+auto Transform_tool_cancel_drag_command::try_call() -> bool
+{
+    // A drag_selection drag is MCP's to end (cancel_transform_drag); Escape cancels the pointer drag only.
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    return (transform_tool != nullptr) && transform_tool->is_node_pointer_drag_active() && transform_tool->cancel_node_drag();
+}
+
 Create_frame_node_command::Create_frame_node_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Transform_tool.create_frame_node"}
     , m_context{app_context}
@@ -193,6 +217,7 @@ Transform_tool::Transform_tool(
     : Tool                          {app_context, tools}
     , m_window                      {imgui_renderer, imgui_windows, "Transform", "transform", [this]() { window_imgui(); }}
     , m_drag_command                {commands, app_context}
+    , m_cancel_drag_command         {commands, app_context}
     , m_drag_redirect_update_command{commands, m_drag_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
     , m_create_frame_node_command   {commands, app_context}
@@ -214,6 +239,10 @@ Transform_tool::Transform_tool(
 
     commands.register_command(&m_drag_command);
     commands.bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_left, true);
+    // Exact mask 0 dispatches before the mask-less Escape bindings; it consumes the key only while it cancels.
+    commands.register_command(&m_cancel_drag_command);
+    commands.bind_command_to_key(&m_cancel_drag_command, erhe::window::Key_escape, erhe::commands::Button_trigger::Button_pressed, 0u);
+    m_cancel_drag_command.set_host(this);
 
     commands.register_command(&m_create_frame_node_command);
     commands.bind_command_to_key(&m_create_frame_node_command, erhe::window::Key_n);
@@ -708,17 +737,8 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
     // changes a target's ANCESTORS, the target's cache is stale until the
     // scene's next update_node_transforms() pass - and the anchor would be
     // computed from the old position, leaving the gizmo behind.
-    const std::function<void(erhe::scene::Node*)> refresh_from_root =
-        [&refresh_from_root](erhe::scene::Node* node)
-        {
-            if (node == nullptr) {
-                return;
-            }
-            refresh_from_root(node->get_parent_node().get());
-            node->update_world_from_node();
-        };
     for (const std::shared_ptr<erhe::scene::Node>& node : m_target_nodes) {
-        refresh_from_root(node.get());
+        refresh_world_from_root(node.get());
     }
 
     const bool use_bounding_box_center = shared.settings.is_bbox();
@@ -844,7 +864,10 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
 {
     using namespace erhe::utility;
 
-    touch();
+    if (updated_world_from_anchor == shared.world_from_anchor_initial_state.get_matrix()) {
+        restore_start_pose();
+        return;
+    }
     for (auto& entry : shared.entries) {
         const auto& node = entry.node;
         if (!node) {
@@ -894,10 +917,18 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
         );
         return;
     }
+    if (translation == glm::vec3{0.0f}) {
+        // The step's pose is the start pose exactly; the surface options rest it as any step.
+        restore_start_entries();
+        apply_drag_surface_step();
+        apply_drag_connector_step();
+        follow_layout_preview();
+        update_transforms();
+        return;
+    }
     if (try_translate_ik(translation)) {
         return;
     }
-    touch();
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
         if (!node) {
@@ -917,6 +948,7 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
     apply_drag_surface_step();
+    apply_drag_connector_step();
     follow_layout_preview();
     update_transforms();
 }
@@ -928,11 +960,136 @@ void Transform_tool::apply_drag_surface_step()
     }
     if (is_surface_axis_drag(m_drag_surface.direction)) {
         for (Transform_entry& entry : shared.entries) {
-            entry.surface_found = false;
+            entry.surface_found   = false;
+            entry.surface_settled = true;
         }
         return;
     }
     static_cast<void>(rest_on_surface(m_drag_surface));
+}
+
+void Transform_tool::begin_connector_snap(const float distance)
+{
+    using namespace erhe::utility;
+    m_connector_snap.clear();
+    if (!(distance > 0.0f) || shared.component_mode || shared.entries.empty() || (m_context.level_kits == nullptr)) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    const bool timed = log_trs_tool->should_log(spdlog::level::trace);
+    const std::chrono::steady_clock::time_point start_time = timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    m_moved_nodes.clear();
+    m_connector_roots.clear();
+    for (const Transform_entry& entry : shared.entries) {
+        if (!entry.node) {
+            continue;
+        }
+        m_moved_nodes.push_back(entry.node);
+        if (test_bit_set(entry.node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform) || has_moved_ancestor_entry(*entry.node)) {
+            continue; // not moved, or carried rigidly by a moved ancestor
+        }
+        if (m_physics_drag.is_spring_driven(entry.node.get())) {
+            // The simulation writes a pulled body's node, so the set could not move by one offset.
+            m_moved_nodes.clear();
+            m_connector_roots.clear();
+            return;
+        }
+        m_connector_roots.push_back(entry.node);
+    }
+    m_connector_snap.begin(*m_context.level_kits, *scene_root, m_connector_roots, m_moved_nodes, distance);
+    m_moved_nodes.clear();
+    m_connector_roots.clear();
+    if (timed) {
+        log_trs_tool->trace(
+            "connector snap begin: {} moved connectors, {} target connectors: {:.3f} ms",
+            m_connector_snap.get_moved_count(), m_connector_snap.get_target_count(),
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count()
+        );
+    }
+}
+
+void Transform_tool::apply_drag_connector_step()
+{
+    using namespace erhe::utility;
+    if (!m_connector_snap.is_active()) {
+        return;
+    }
+    const bool timed = log_trs_tool->should_log(spdlog::level::trace);
+    const std::chrono::steady_clock::time_point start_time = timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    std::optional<glm::vec3> offset = m_connector_snap.step();
+    // A snap that cannot co-locate is not a snap: a root whose locked translate channel the offset needs keeps the step unsnapped.
+    if (offset.has_value() && !can_translate_moved_roots(offset.value())) {
+        m_connector_snap.reject_step();
+        offset.reset();
+    }
+    if (timed) {
+        log_trs_tool->trace(
+            "connector snap step: {} moved connectors, {} target connectors, snapped {}: {:.4f} ms",
+            m_connector_snap.get_moved_count(), m_connector_snap.get_target_count(), offset.has_value(),
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count()
+        );
+    }
+    if (!offset.has_value() || (offset.value() == glm::vec3{0.0f})) {
+        return;
+    }
+    // No root is spring-driven here: begin_connector_snap() does not start the snap for such a drag.
+    for (const Transform_entry& entry : shared.entries) {
+        const std::shared_ptr<erhe::scene::Node>& node = entry.node;
+        if (!node || test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform) || has_moved_ancestor_entry(*node)) {
+            continue;
+        }
+        node->set_world_from_node(erhe::scene::translate(node->world_from_node_transform(), offset.value()));
+        enforce_channel_locks(*node, entry.parent_from_node_before);
+    }
+    shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor, offset.value());
+}
+
+auto Transform_tool::can_translate_moved_roots(const glm::vec3& offset) const -> bool
+{
+    using namespace erhe::utility;
+    constexpr float c_locked_component_tolerance = 1.0e-5f;
+    constexpr std::array<uint64_t, 3> c_axis_locks{
+        erhe::Item_flags::lock_translation_x, erhe::Item_flags::lock_translation_y, erhe::Item_flags::lock_translation_z
+    };
+    for (const Transform_entry& entry : shared.entries) {
+        const std::shared_ptr<erhe::scene::Node>& node = entry.node;
+        if (!node || test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform) || has_moved_ancestor_entry(*node)) {
+            continue;
+        }
+        const uint64_t locks = node->get_flag_bits() & erhe::Item_flags::lock_translation_mask;
+        if (locks == 0) {
+            continue;
+        }
+        // Channel locks hold local components, so the offset is taken into the parent's space.
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        const glm::vec3 local_offset = parent ? glm::vec3{parent->node_from_world() * glm::vec4{offset, 0.0f}} : offset;
+        for (int axis = 0; axis < 3; ++axis) {
+            if (((locks & c_axis_locks[axis]) != 0) && (std::abs(local_offset[axis]) > c_locked_component_tolerance)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+auto Transform_tool::snap_to_connectors(const float distance) -> bool
+{
+    begin_connector_snap(distance);
+    apply_drag_connector_step();
+    const bool snapped = m_connector_snap.get_state().snapped;
+    m_connector_snap.end();
+    if (snapped) {
+        update_transforms();
+    }
+    return snapped;
+}
+
+auto Transform_tool::get_connector_snap() const -> const Kit_connector_drag_snap&
+{
+    return m_connector_snap;
 }
 
 void Transform_tool::follow_layout_preview()
@@ -1004,7 +1161,8 @@ auto Transform_tool::rest_on_surface(const Surface_options& options) -> std::siz
     ERHE_PROFILE_FUNCTION();
 
     for (Transform_entry& entry : shared.entries) {
-        entry.surface_found = false;
+        entry.surface_found   = false;
+        entry.surface_settled = true;
     }
     if (!any_surface_option(options) || shared.component_mode || shared.entries.empty()) {
         return 0;
@@ -1060,12 +1218,19 @@ auto Transform_tool::rest_on_surface(const Surface_options& options) -> std::siz
         if (!placement.surface_found) {
             continue;
         }
-        Trs_transform rested = world;
-        rested.set_translation_and_rotation(placement.pose.position, placement.pose.rotation);
-        node->set_world_from_node(rested);
-        enforce_channel_locks(*node, entry.parent_from_node_before);
+        // A piece already at rest keeps its transform: the world-to-parent round trip is not exact.
+        const bool at_rest =
+            (placement.pose.position == glm::vec3{world.get_translation()}) &&
+            (placement.pose.rotation == world.get_rotation());
+        if (!at_rest) {
+            Trs_transform rested = world;
+            rested.set_translation_and_rotation(placement.pose.position, placement.pose.rotation);
+            node->set_world_from_node(rested);
+            enforce_channel_locks(*node, entry.parent_from_node_before);
+        }
         m_surface_deltas[i] = glm::vec3{node->world_from_node_transform().get_translation()} - glm::vec3{world.get_translation()};
-        entry.surface_found = true;
+        entry.surface_found   = true;
+        entry.surface_settled = placement.settled;
         ++found_count;
     }
     log_trs_tool->trace(
@@ -1155,7 +1320,6 @@ auto Transform_tool::try_translate_ik(const glm::vec3 translation) -> bool
         return false;
     }
 
-    touch();
     // The target is absolute: the effector's drag-start position plus the
     // drag delta. The anchor mirrors the FK path, so the gizmo follows the
     // drag target even when the target is out of the chain's reach and the
@@ -1178,8 +1342,11 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
         );
         return;
     }
+    if (rotation == glm::identity<glm::quat>()) {
+        restore_start_pose();
+        return;
+    }
     if (shared.settings.is_local() && shared.entries.size() == 1) {
-        touch();
         for (auto& entry : shared.entries) {
             auto& node = entry.node;
             if (!node) {
@@ -1220,8 +1387,11 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
         );
         return;
     }
+    if (scale == glm::vec3{1.0f}) {
+        restore_start_pose();
+        return;
+    }
     if (shared.settings.is_local() && shared.entries.size() == 1) {
-        touch();
         for (auto& entry : shared.entries) {
             auto& node = entry.node;
             if (!node) {
@@ -1267,9 +1437,12 @@ void Transform_tool::apply_translation_edit(const glm::vec3 translation, const b
     }
     // In local mode the edited value is in parent space; apply it directly
     // to parent_from_node instead of treating it as a world space value.
-    touch();
     Transform_entry& entry = shared.entries.front();
     if (!entry.node) {
+        return;
+    }
+    if (translation == entry.parent_from_node_before.get_translation()) {
+        restore_start_pose();
         return;
     }
     Trs_transform parent_from_node = entry.parent_from_node_before;
@@ -1295,12 +1468,15 @@ void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool lo
     if (shared.entries.empty()) {
         return;
     }
-    touch();
     if (!local || (shared.entries.size() > 1)) {
         for (auto& entry : shared.entries) {
             auto& node = entry.node;
             if (!node) {
                 return;
+            }
+            if (rotation == entry.world_from_node_before.get_rotation()) {
+                node->restore_local_transform(entry.parent_from_node_before, entry.xform_op_stack_before);
+                continue;
             }
             Trs_transform world_from_node = entry.world_from_node_before;
             world_from_node.set_rotation(rotation);
@@ -1317,10 +1493,14 @@ void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool lo
             if (!node) {
                 return;
             }
-            Trs_transform parent_from_node = entry.parent_from_node_before;
-            parent_from_node.set_rotation(rotation);
-            node->set_parent_from_node(parent_from_node);
-            enforce_channel_locks(*node, entry.parent_from_node_before);
+            if (rotation == entry.parent_from_node_before.get_rotation()) {
+                node->restore_local_transform(entry.parent_from_node_before, entry.xform_op_stack_before);
+            } else {
+                Trs_transform parent_from_node = entry.parent_from_node_before;
+                parent_from_node.set_rotation(rotation);
+                node->set_parent_from_node(parent_from_node);
+                enforce_channel_locks(*node, entry.parent_from_node_before);
+            }
             shared.set_anchor_from_origin(node->world_from_node_transform());
         }
     }
@@ -1344,15 +1524,22 @@ void Transform_tool::apply_scale_edit(const glm::vec3 scale, const bool local)
     }
     if (!local || (shared.entries.size() > 1)) {
         Trs_transform updated_world_from_origin = shared.get_world_from_origin_initial_state();
+        if (scale == updated_world_from_origin.get_scale()) {
+            restore_start_pose();
+            return;
+        }
         updated_world_from_origin.set_scale(scale);
         adjust_from_origin(updated_world_from_origin);
         return;
     }
     // In local mode the edited value is in parent space; apply it directly
     // to parent_from_node instead of treating it as a world space value.
-    touch();
     Transform_entry& entry = shared.entries.front();
     if (!entry.node) {
+        return;
+    }
+    if (scale == entry.parent_from_node_before.get_scale()) {
+        restore_start_pose();
         return;
     }
     Trs_transform parent_from_node = entry.parent_from_node_before;
@@ -1380,15 +1567,22 @@ void Transform_tool::apply_skew_edit(const glm::vec3 skew, const bool local)
     }
     if (!local || (shared.entries.size() > 1)) {
         Trs_transform updated_world_from_origin = shared.get_world_from_origin_initial_state();
+        if (skew == updated_world_from_origin.get_skew()) {
+            restore_start_pose();
+            return;
+        }
         updated_world_from_origin.set_skew(skew);
         adjust_from_origin(updated_world_from_origin);
         return;
     }
     // In local mode the edited value is in parent space; apply it directly
     // to parent_from_node instead of treating it as a world space value.
-    touch();
     Transform_entry& entry = shared.entries.front();
     if (!entry.node) {
+        return;
+    }
+    if (skew == entry.parent_from_node_before.get_skew()) {
+        restore_start_pose();
         return;
     }
     Trs_transform parent_from_node = entry.parent_from_node_before;
@@ -1724,6 +1918,11 @@ auto Transform_tool::on_drag_ready() -> bool
             ((kind == Transform_drag_kind::translate) && (m_context.level_kits != nullptr))
                 ? m_context.level_kits->get_surface_settings()
                 : Surface_options{};
+        begin_connector_snap(
+            ((kind == Transform_drag_kind::translate) && (m_context.level_kits != nullptr))
+                ? m_context.level_kits->get_connector_snap_distance()
+                : 0.0f
+        );
     }
     if (started && shared.component_mode) {
         begin_component_edit();
@@ -1742,6 +1941,7 @@ void Transform_tool::end_drag()
     // released bodies keep their velocity.
     m_physics_drag.end();
     end_layout_preview();
+    m_connector_snap.end();
 
     // In component mode the node record path (record_transform_operation, called via
     // Subtool::end above) is a no-op because shared.entries is empty; queue the mesh
@@ -2766,8 +2966,7 @@ void Transform_tool::update_transforms()
 
 void Transform_tool::apply_component_transform(const glm::mat4& updated_world_from_anchor)
 {
-    // Note: the component path does not use shared.touched (which gates the node
-    // record path); commit is driven by the producer's is_active().
+    // The component path commits through the producer's is_active(), not record_transform_operation().
     if (m_component_source == Component_source::point_set) {
         m_point_set_transform.apply(shared, updated_world_from_anchor);
     } else {
@@ -3006,23 +3205,52 @@ auto Transform_tool::run_scalar_edit(
     return true;
 }
 
-void Transform_tool::touch()
+void Transform_tool::restore_start_entries()
 {
-    if (!shared.touched) {
-        log_trs_tool->trace("TRS touch - not touched");
-        shared.touched = true;
+    using namespace erhe::utility;
+    for (const Transform_entry& entry : shared.entries) {
+        const std::shared_ptr<erhe::scene::Node>& node = entry.node;
+        if (!node || test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform)) {
+            continue;
+        }
+        // A target carried by a moved ancestor is not driven, as in adjust_translation().
+        if (!has_moved_ancestor_entry(*node) && m_physics_drag.drive(node.get(), entry.world_from_node_before.get_matrix())) {
+            continue; // pulled through physics; the simulation writes the node
+        }
+        node->restore_local_transform(entry.parent_from_node_before, entry.xform_op_stack_before);
     }
+    shared.world_from_anchor = shared.world_from_anchor_initial_state;
+}
+
+void Transform_tool::restore_start_pose()
+{
+    restore_start_entries();
+    follow_layout_preview();
+    update_transforms();
 }
 
 void Transform_tool::record_transform_operation()
 {
     // The moved layouts get their children from before the drag back; the move hook below records their generation.
     end_layout_preview();
-    if (!shared.touched || shared.entries.empty()) {
+    const bool changed = std::any_of(
+        shared.entries.begin(), shared.entries.end(), [](const Transform_entry& entry) -> bool {
+            return entry.node &&
+                ((entry.node->parent_from_node_transform() != entry.parent_from_node_before) ||
+                 (entry.node->copy_xform_op_stack() != entry.xform_op_stack_before));
+        }
+    );
+    if (!changed) {
         return;
     }
 
     log_trs_tool->trace("creating transform operation");
+    const std::size_t unsettled_count = static_cast<std::size_t>(std::count_if(
+        shared.entries.begin(), shared.entries.end(), [](const Transform_entry& entry) -> bool { return !entry.surface_settled; }
+    ));
+    if (unsettled_count > 0) {
+        log_trs_tool->warn("Transform: {} of {} moved pieces still rose at their last surface cast (unsettled rest recorded)", unsettled_count, shared.entries.size());
+    }
 
     Compound_operation::Parameters compompound_parameters;
     for (auto& entry : shared.entries) {
@@ -3101,7 +3329,7 @@ void Transform_tool::record_transform_operation()
     );
 }
 
-auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind, const Surface_options& surface) -> bool
+auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind, const Surface_options& surface, const float connector_snap_distance) -> bool
 {
     if ((m_active_handle != Handle::e_handle_none) || m_scripted_drag_active) {
         return false;
@@ -3121,6 +3349,7 @@ auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind, const S
                                                 static_cast<Subtool*>(m_context.move_tool);
     m_physics_drag.begin(m_context, shared.entries, kind);
     m_drag_surface = (kind == Transform_drag_kind::translate) ? surface : Surface_options{};
+    begin_connector_snap((kind == Transform_drag_kind::translate) ? connector_snap_distance : 0.0f);
     return true;
 }
 
@@ -3132,6 +3361,7 @@ void Transform_tool::end_scripted_drag()
     record_transform_operation();
     m_physics_drag.end();
     end_layout_preview();
+    m_connector_snap.end();
     m_scripted_drag_active = false;
     m_active_tool          = nullptr;
     m_drag_surface         = Surface_options{};
@@ -3141,6 +3371,60 @@ void Transform_tool::end_scripted_drag()
 auto Transform_tool::is_scripted_drag_active() const -> bool
 {
     return m_scripted_drag_active;
+}
+
+auto Transform_tool::is_node_pointer_drag_active() const -> bool
+{
+    return !m_scripted_drag_active && !shared.component_mode && is_transform_tool_active();
+}
+
+auto Transform_tool::cancel_node_drag() -> bool
+{
+    const bool pointer_drag = is_node_pointer_drag_active();
+    if (!pointer_drag && !m_scripted_drag_active) {
+        return false;
+    }
+    if (m_active_tool != nullptr) {
+        m_active_tool->cancel();
+    }
+    // The moved layouts get their children from before the drag back.
+    end_layout_preview();
+    m_physics_drag.end();
+    m_connector_snap.end();
+    for (const Transform_entry& entry : shared.entries) {
+        if (entry.node) {
+            entry.node->restore_local_transform(entry.parent_from_node_before, entry.xform_op_stack_before);
+        }
+    }
+    // After every entry is restored (an IK drag's entries are a joint chain): bodies at rest at the start pose, as an undo leaves them.
+    for (const Transform_entry& entry : shared.entries) {
+        if (!entry.node) {
+            continue;
+        }
+        Node_physics_system* const system = find_node_physics_system(*entry.node.get());
+        if (system != nullptr) {
+            refresh_world_from_root(entry.node.get());
+            system->teleport_to_node(*entry.node.get());
+        }
+    }
+    m_scripted_drag_active = false;
+    m_active_handle        = Handle::e_handle_none;
+    m_active_tool          = nullptr;
+    m_drag_scene_view      = nullptr;
+    m_drag_surface         = Surface_options{};
+    shared.initial_drag_position_distance_to_camera = 0.0;
+    // end_ik_drag() rebuilds the entries when the IK drag appended joints; otherwise the rebuild is here.
+    const bool entries_rebuilt = m_ik_entries_appended;
+    end_ik_drag();
+    if (!entries_rebuilt) {
+        update_target_nodes(nullptr);
+    }
+    if (pointer_drag) {
+        // The held button moves nothing more and its release records nothing.
+        m_drag_command.set_inactive();
+    }
+    log_trs_tool->info("Transform drag cancelled");
+    return true;
 }
 
 auto Transform_tool::is_node_pulled_through_physics(const erhe::scene::Node* const node) const -> bool
@@ -3374,7 +3658,7 @@ Edit_state::Edit_state(
     if (edit_state.edit_ended) {
         if (component_mode) {
             transform_tool.commit_component_edit();
-        } else if (shared.touched) {
+        } else {
             transform_tool.record_transform_operation();
         }
     }

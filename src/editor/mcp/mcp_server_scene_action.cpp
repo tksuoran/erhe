@@ -1502,6 +1502,57 @@ namespace {
     return true;
 }
 
+// The optional connector_snap_distance argument (D3.13): meters, 0 (the default) = off.
+[[nodiscard]] auto read_connector_snap_distance(const json& args, float& out_distance, std::string& out_error) -> bool
+{
+    out_distance = 0.0f;
+    if (!args.contains("connector_snap_distance")) {
+        return true;
+    }
+    const json& value = args.at("connector_snap_distance");
+    if (!value.is_number() || !std::isfinite(value.get<double>()) || (value.get<double>() < 0.0)) {
+        out_error = "connector_snap_distance must be a number >= 0, not " + value.dump();
+        return false;
+    }
+    out_distance = value.get<float>();
+    return true;
+}
+
+[[nodiscard]] auto node_id_json(const std::weak_ptr<erhe::scene::Node>& weak_node) -> json
+{
+    const std::shared_ptr<erhe::scene::Node> node = weak_node.lock();
+    return node ? json(node->get_id()) : json(nullptr);
+}
+
+[[nodiscard]] auto node_name_json(const std::weak_ptr<erhe::scene::Node>& weak_node) -> json
+{
+    const std::shared_ptr<erhe::scene::Node> node = weak_node.lock();
+    return node ? json(node->get_name()) : json(nullptr);
+}
+
+// The last connector snap step (D3.13): whether it snapped, the pair and the offset.
+[[nodiscard]] auto connector_snap_json(const Kit_connector_drag_snap& snap) -> json
+{
+    const Kit_connector_snap_state& state = snap.get_state();
+    json reply{
+        {"active",            snap.is_active()},
+        {"moved_connectors",  snap.get_moved_count()},
+        {"target_connectors", snap.get_target_count()},
+        {"snapped",           state.snapped}
+    };
+    if (state.snapped) {
+        reply["distance"]         = state.distance;
+        reply["offset"]           = {state.offset.x, state.offset.y, state.offset.z};
+        reply["piece_id"]         = node_id_json(state.piece);
+        reply["piece"]            = node_name_json(state.piece);
+        reply["connector"]        = state.connector;
+        reply["target_id"]        = node_id_json(state.target);
+        reply["target"]           = node_name_json(state.target);
+        reply["target_connector"] = state.target_connector;
+    }
+    return reply;
+}
+
 } // anonymous namespace
 
 auto Mcp_server::action_transform_selection(const json& args) -> std::string
@@ -1583,6 +1634,13 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     if (any_surface_option(surface) && (!translation.has_value() || shared.component_mode)) {
         return make_error_content("transform_selection: surface_snap and surface_orient rest moved meshes; they need a translation of a node selection");
     }
+    float connector_snap_distance = 0.0f;
+    if (!read_connector_snap_distance(args, connector_snap_distance, parse_error)) {
+        return make_error_content("transform_selection: " + parse_error);
+    }
+    if ((connector_snap_distance > 0.0f) && (!translation.has_value() || shared.component_mode)) {
+        return make_error_content("transform_selection: connector_snap_distance snaps moved nodes; it needs a translation of a node selection");
+    }
 
     json applied = json::object();
     if (translation.has_value()) {
@@ -1603,6 +1661,10 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     }
     // After every edit of the call, so the rested transform is the one recorded.
     const std::size_t surface_found_count = transform_tool->rest_on_surface(surface);
+    // After the rest, as a drag step orders them (doc/editor/level_tools.md "Connector snap").
+    if (connector_snap_distance > 0.0f) {
+        static_cast<void>(transform_tool->snap_to_connectors(connector_snap_distance));
+    }
 
     const bool end_edit = args.value("end_edit", true);
     if (end_edit) {
@@ -1652,6 +1714,8 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         {"surface_snap",        surface.snap == Surface_snap::on},
         {"surface_orient",      surface.orient == Surface_orient::on},
         {"surface_found_count", surface_found_count},
+        {"connector_snap_distance", connector_snap_distance},
+        {"connector_snap",      connector_snap_json(transform_tool->get_connector_snap())},
         {"nodes",               nodes}
     }).dump();
 }
@@ -1723,7 +1787,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
             json nodes = nodes_json();
             transform_tool->end_scripted_drag();
             m_held_selection_drag.reset();
-            return make_json_content({{"released", true}, {"nodes", nodes}}).dump();
+            return make_json_content({{"released", true}, {"nodes", nodes}, {"connector_snap", connector_snap_json(transform_tool->get_connector_snap())}}).dump();
         }
         if ((action != "drag") && (action != "move")) {
             return make_error_content("Invalid action '" + action + "' (expected 'drag', 'move' or 'release')");
@@ -1795,7 +1859,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
                 held.center = steps.center;
             }
             apply_step(held, 1.0f);
-            return make_json_content({{"moved", true}, {"nodes", nodes_json()}}).dump();
+            return make_json_content({{"moved", true}, {"nodes", nodes_json()}, {"connector_snap", connector_snap_json(transform_tool->get_connector_snap())}}).dump();
         }
         steps.frame_count = args.value("frames", 30);
         if (steps.frame_count < 1) {
@@ -1808,6 +1872,12 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         if (any_surface_option(steps.surface) && (steps.kind != Transform_drag_kind::translate)) {
             return make_error_content("drag_selection: surface_snap and surface_orient apply to translate drags only");
         }
+        if (!read_connector_snap_distance(args, steps.connector_snap_distance, parse_error)) {
+            return make_error_content("drag_selection: " + parse_error);
+        }
+        if ((steps.connector_snap_distance > 0.0f) && (steps.kind != Transform_drag_kind::translate)) {
+            return make_error_content("drag_selection: connector_snap_distance applies to translate drags only");
+        }
 
         if (shared.component_mode) {
             return make_error_content("drag_selection drags node selections; a mesh component selection is active");
@@ -1818,7 +1888,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         if (!has_center) {
             steps.center = shared.world_from_anchor_initial_state.get_translation();
         }
-        if (!transform_tool->begin_scripted_drag(steps.kind, steps.surface)) {
+        if (!transform_tool->begin_scripted_drag(steps.kind, steps.surface, steps.connector_snap_distance)) {
             return make_error_content("Drag refused: a pointer drag is active");
         }
         steps.request = m_current_request;
@@ -1847,8 +1917,40 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         {"released",       finished.release},
         {"surface_snap",   finished.surface.snap == Surface_snap::on},
         {"surface_orient", finished.surface.orient == Surface_orient::on},
+        {"connector_snap_distance", finished.connector_snap_distance},
+        {"connector_snap", connector_snap_json(transform_tool->get_connector_snap())},
         {"nodes",          nodes}
     }).dump();
+}
+
+auto Mcp_server::query_connector_snap(const json& args) -> std::string
+{
+    if (args.is_object() && !args.empty()) {
+        return make_error_content("get_connector_snap: accepts no arguments, got " + args.dump());
+    }
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        return make_error_content("Transform tool not available");
+    }
+    return make_json_content(connector_snap_json(transform_tool->get_connector_snap())).dump();
+}
+
+auto Mcp_server::action_cancel_transform_drag(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        return make_error_content("Transform tool not available");
+    }
+    if (m_selection_drag_steps.has_value()) {
+        return make_error_content("A drag_selection drag is still stepping; cancel after it returns");
+    }
+    const bool scripted  = transform_tool->is_scripted_drag_active();
+    const bool cancelled = transform_tool->cancel_node_drag();
+    if (scripted) {
+        m_held_selection_drag.reset();
+    }
+    return make_json_content(json{{"cancelled", cancelled}, {"drag", cancelled ? (scripted ? "drag_selection" : "pointer") : "none"}}).dump();
 }
 
 auto Mcp_server::action_physics_drag(const json& args) -> std::string

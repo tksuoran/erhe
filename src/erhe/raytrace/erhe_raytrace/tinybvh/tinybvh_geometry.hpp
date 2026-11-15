@@ -72,6 +72,7 @@ public:
     auto get_triangles     () const -> const std::vector<tinybvh::bvhvec4>&;
 
 private:
+    [[nodiscard]] auto intersect_filtered(Ray& ray, Hit& hit, Tinybvh_instance* instance) -> bool;
     [[nodiscard]] auto try_use_prebuilt_bvh(const Prebuilt_bvh& prebuilt, uint64_t hash_code, std::size_t triangle_count) -> bool;
 
     class Buffer_info

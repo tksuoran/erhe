@@ -118,6 +118,7 @@ private:
     [[nodiscard]] auto gimbal_lock_warning() const -> float;
 
     float             m_euler_angles     [3];
+    glm::vec3         m_euler_degrees    {0.0f}; // what the Euler widget shows and edits
     Representation    m_representation   {Representation::e_euler_angles};
     Euler_angle_order m_euler_angle_order{Euler_angle_order::e_zyx};
     glm::mat4         m_matrix           {1.0f};
@@ -127,6 +128,13 @@ private:
     bool              m_matrix_dirty     {false};
     bool              m_active           {false};
     bool              m_orthogonal_gizmo {false};
+    // The shown rotation and its field values while no edit is active: fields edited back to these give back the exact quaternion.
+    glm::quat         m_start_quaternion       {1.0f, 0.0f, 0.0f, 0.0f};
+    float             m_start_euler_angles  [3]{0.0f, 0.0f, 0.0f};
+    glm::vec3         m_start_euler_degrees    {0.0f};
+    Euler_angle_order m_start_euler_angle_order{Euler_angle_order::e_zyx};
+    glm::vec3         m_start_axis             {1.0f, 0.0f, 0.0f};
+    float             m_start_angle            {0.0f};
 };
 
 }

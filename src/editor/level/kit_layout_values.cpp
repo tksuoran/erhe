@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <numbers>
 
 namespace editor {
 
@@ -33,7 +34,7 @@ constexpr double c_fit_epsilon = 1.0e-4;
 
 [[nodiscard]] auto parse_kind(const std::string& name, Repeat_pattern_kind& out_kind) -> bool
 {
-    for (const Repeat_pattern_kind kind : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path}) {
+    for (const Repeat_pattern_kind kind : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path, Repeat_pattern_kind::scatter}) {
         if (name == c_str(kind)) {
             out_kind = kind;
             return true;
@@ -54,6 +55,19 @@ public:
         if ((value == nullptr) || !value->is_string() || !parse_hexfloat(value->get<std::string>(), out_value)) {
             fail(fmt::format("'{}' is not a hexadecimal float string", key));
         }
+    }
+
+    // A key a pattern text written before it existed lacks: missing keeps the default.
+    void read_optional_float(const char* key, float& out_value)
+    {
+        if (m_object.contains(key)) {
+            read_float(key, out_value);
+        }
+    }
+
+    [[nodiscard]] auto find_optional_string(const char* key) -> std::string
+    {
+        return m_object.contains(key) ? find_string(key) : std::string{};
     }
 
     void read_int(const char* key, int& out_value)
@@ -150,6 +164,58 @@ private:
     return {};
 }
 
+// The pieces a scatter asks for and the ones its spacing lets in (doc/editor/level_tools.md "Scatter layouts").
+[[nodiscard]] auto resolve_scatter(const Kit_layout_pattern& pattern, const int seed, Kit_layout_run& out_run, std::vector<Repeat_pose>* const out_poses) -> std::string
+{
+    Repeat_pattern& run = out_run.pattern;
+    run.scatter_region  = pattern.region;
+    run.scatter_size_x  = pattern.size_x;
+    run.scatter_size_z  = pattern.size_z;
+    run.scatter_radius  = pattern.region_radius;
+    run.scatter_spacing = pattern.min_spacing;
+    run.yaw_min_degrees = pattern.yaw_min;
+    run.yaw_max_degrees = pattern.yaw_max;
+    run.scatter_seed    = seed;
+    const double area = (pattern.region == Repeat_scatter_region::disc)
+        ? (std::numbers::pi * static_cast<double>(pattern.region_radius) * static_cast<double>(pattern.region_radius))
+        : (static_cast<double>(pattern.size_x) * static_cast<double>(pattern.size_z));
+    if (pattern.scatter_mode == Kit_scatter_mode::density) {
+        if (!std::isfinite(pattern.density) || !(pattern.density > 0.0f)) {
+            return fmt::format("density is {} pieces per square meter, it must be positive", pattern.density);
+        }
+        if (!std::isfinite(area)) {
+            return "the scatter region's area is not finite";
+        }
+        // At least one piece, as a space shorter than one step holds element 0 alone.
+        const double asked  = static_cast<double>(pattern.density) * area; // its own statement: no fused multiply-add
+        const double wanted = std::max(1.0, std::floor(asked + 0.5));
+        if (wanted > static_cast<double>(c_max_repeat_count)) {
+            return fmt::format(
+                "density {} over {:.3f} square meters asks for {:.0f} pieces, more than the {} pieces one layout places",
+                pattern.density, area, wanted, c_max_repeat_count
+            );
+        }
+        run.count = static_cast<int>(wanted);
+    } else {
+        const std::string refusal = stated_count_refusal(pattern.count);
+        if (!refusal.empty()) {
+            return refusal;
+        }
+        run.count = pattern.count;
+    }
+    // The count is what the sampling lets in; without out_poses the points go to leaf scratch.
+    static thread_local std::vector<Repeat_pose> scratch;
+    std::vector<Repeat_pose>& poses = (out_poses != nullptr) ? *out_poses : scratch;
+    const std::string error = expand_repeat(run, Repeat_pose{}, poses);
+    if (!error.empty()) {
+        return error;
+    }
+    out_run.count     = poses.size();
+    out_run.requested = static_cast<std::size_t>(run.count);
+    out_run.space     = static_cast<float>(area);
+    return {};
+}
+
 // Element centers spanning the space from the first to the last: floor(space / step) + 1.
 [[nodiscard]] auto span_count(const double space, const double step) -> double
 {
@@ -164,6 +230,15 @@ auto c_str(const Kit_layout_count_mode mode) -> const char*
         case Kit_layout_count_mode::count: return "count";
         case Kit_layout_count_mode::gap:   return "gap";
         default:                           return "?";
+    }
+}
+
+auto c_str(const Kit_scatter_mode mode) -> const char*
+{
+    switch (mode) {
+        case Kit_scatter_mode::count:   return "count";
+        case Kit_scatter_mode::density: return "density";
+        default:                        return "?";
     }
 }
 
@@ -193,7 +268,16 @@ auto to_canonical_text(const Kit_layout_pattern& pattern) -> std::string
         {"radius",      hex_json(pattern.radius)},
         {"arc_degrees", hex_json(pattern.arc_degrees)},
         {"facing",      c_str(pattern.facing)},
-        {"orientation", c_str(pattern.orientation)}
+        {"orientation", c_str(pattern.orientation)},
+        {"scatter_mode",  c_str(pattern.scatter_mode)},
+        {"density",       hex_json(pattern.density)},
+        {"region",        c_str(pattern.region)},
+        {"size_x",        hex_json(pattern.size_x)},
+        {"size_z",        hex_json(pattern.size_z)},
+        {"region_radius", hex_json(pattern.region_radius)},
+        {"min_spacing",   hex_json(pattern.min_spacing)},
+        {"yaw_min",       hex_json(pattern.yaw_min)},
+        {"yaw_max",       hex_json(pattern.yaw_max)}
     };
     return object.dump();
 }
@@ -245,6 +329,29 @@ auto parse_layout_pattern(const std::string_view text, Kit_layout_pattern& out_p
     } else if (!orientation.empty()) {
         reader.fail(fmt::format("unknown path orientation '{}'", orientation));
     }
+    const std::string scatter_mode = reader.find_optional_string("scatter_mode");
+    if (scatter_mode == c_str(Kit_scatter_mode::count)) {
+        pattern.scatter_mode = Kit_scatter_mode::count;
+    } else if (scatter_mode == c_str(Kit_scatter_mode::density)) {
+        pattern.scatter_mode = Kit_scatter_mode::density;
+    } else if (!scatter_mode.empty()) {
+        reader.fail(fmt::format("unknown scatter mode '{}'", scatter_mode));
+    }
+    const std::string region = reader.find_optional_string("region");
+    if (region == c_str(Repeat_scatter_region::rectangle)) {
+        pattern.region = Repeat_scatter_region::rectangle;
+    } else if (region == c_str(Repeat_scatter_region::disc)) {
+        pattern.region = Repeat_scatter_region::disc;
+    } else if (!region.empty()) {
+        reader.fail(fmt::format("unknown scatter region '{}'", region));
+    }
+    reader.read_optional_float("density",       pattern.density);
+    reader.read_optional_float("size_x",        pattern.size_x);
+    reader.read_optional_float("size_z",        pattern.size_z);
+    reader.read_optional_float("region_radius", pattern.region_radius);
+    reader.read_optional_float("min_spacing",   pattern.min_spacing);
+    reader.read_optional_float("yaw_min",       pattern.yaw_min);
+    reader.read_optional_float("yaw_max",       pattern.yaw_max);
     const std::string error = reader.finish("pattern");
     if (!error.empty()) {
         return error;
@@ -331,17 +438,21 @@ void transform_curve_path(const erhe::math::Curve_path& path, const glm::mat4& t
     }
 }
 
-auto resolve_layout_pattern(
+namespace {
+
+[[nodiscard]] auto resolve_pattern_run(
     const Kit_layout_pattern&                 pattern,
+    const int                                 seed,
     const float                               item_extent,
     const erhe::math::Curve_path_table* const path_table,
-    Kit_layout_run&                           out_run
+    Kit_layout_run&                           out_run,
+    std::vector<Repeat_pose>* const           out_poses
 ) -> std::string
 {
-    out_run = Kit_layout_run{};
     Repeat_pattern& run = out_run.pattern;
     run.kind = pattern.kind;
-    const bool gap_mode = (pattern.count_mode == Kit_layout_count_mode::gap) && (pattern.kind != Repeat_pattern_kind::grid);
+    const bool counted  = (pattern.kind == Repeat_pattern_kind::line) || (pattern.kind == Repeat_pattern_kind::ring) || (pattern.kind == Repeat_pattern_kind::path);
+    const bool gap_mode = (pattern.count_mode == Kit_layout_count_mode::gap) && counted;
     double     step_min = 0.0;
     if (gap_mode) {
         if (!std::isfinite(pattern.gap)) {
@@ -357,7 +468,7 @@ auto resolve_layout_pattern(
                 pattern.gap, item_extent, item_extent
             );
         }
-    } else if (pattern.kind != Repeat_pattern_kind::grid) {
+    } else if (counted) {
         const std::string refusal = stated_count_refusal(pattern.count);
         if (!refusal.empty()) {
             return refusal;
@@ -471,10 +582,42 @@ auto resolve_layout_pattern(
             out_run.step         = (count > 1.0) ? static_cast<float>(step) : 0.0f;
             return {};
         }
+        case Repeat_pattern_kind::scatter: {
+            return resolve_scatter(pattern, seed, out_run, out_poses);
+        }
         default: {
             return "unknown pattern kind";
         }
     }
+}
+
+} // anonymous namespace
+
+auto resolve_layout_pattern(
+    const Kit_layout_pattern&                 pattern,
+    const int                                 seed,
+    const float                               item_extent,
+    const erhe::math::Curve_path_table* const path_table,
+    Kit_layout_run&                           out_run,
+    std::vector<Repeat_pose>* const           out_poses
+) -> std::string
+{
+    out_run = Kit_layout_run{};
+    if (out_poses != nullptr) {
+        out_poses->clear();
+    }
+    std::string error = resolve_pattern_run(pattern, seed, item_extent, path_table, out_run, out_poses);
+    if (!error.empty()) {
+        return error;
+    }
+    if (out_run.requested == 0) {
+        out_run.requested = out_run.count;
+    }
+    // A scatter's poses are made while resolving it; the other kinds expand here.
+    if ((out_poses != nullptr) && (pattern.kind != Repeat_pattern_kind::scatter)) {
+        error = expand_repeat(out_run.pattern, Repeat_pose{}, *out_poses);
+    }
+    return error;
 }
 
 auto get_layout_item_index(const std::size_t element, const std::size_t item_count) -> std::size_t

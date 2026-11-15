@@ -14,17 +14,18 @@ namespace editor {
 
 class Brush;
 
-// What a parameter change of a piece swaps (D3.3).
+// What a parameter change (D3.3) or a replace (D3.10) of a piece swaps.
 class Kit_piece_mesh_state
 {
 public:
+    std::string                                      shape;      // Kit_piece.shape
     std::vector<erhe::scene::Mesh_primitive>         primitives;
     std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
     std::shared_ptr<Brush>                           brush;      // Brush_placement.brush
     std::string                                      parameters; // Kit_piece.parameters
 };
 
-// Replaces a piece's mesh primitives, collision shape, brush and parameter text; undo restores them.
+// Replaces a piece's shape id, mesh primitives, collision shape, brush and parameter text; undo restores them.
 class Kit_piece_parameters_operation : public Operation
 {
 public:

@@ -27,7 +27,14 @@ enum class Kit_layout_count_mode : unsigned int {
     gap        // the free distance between neighbors is stated, the space gives the count
 };
 
+// How a scatter gets its piece count: stated, or the density times the region's area.
+enum class Kit_scatter_mode : unsigned int {
+    count = 0,
+    density
+};
+
 [[nodiscard]] auto c_str(Kit_layout_count_mode mode) -> const char*;
+[[nodiscard]] auto c_str(Kit_scatter_mode mode) -> const char*;
 [[nodiscard]] auto c_str(Repeat_ring_facing facing) -> const char*;
 
 // The arrangement in the layout node's own frame, element 0 at its origin; every kind's values are kept.
@@ -36,7 +43,7 @@ class Kit_layout_pattern
 public:
     Repeat_pattern_kind    kind       {Repeat_pattern_kind::line};
     Kit_layout_count_mode  count_mode {Kit_layout_count_mode::count};
-    int                    count      {3};                  // line, ring, path in count mode
+    int                    count      {3};                  // line, ring, path, scatter in count mode
     float                  gap        {0.0f};               // line, ring, path in gap mode
     glm::vec3              direction  {1.0f, 0.0f, 0.0f};   // line
     float                  step       {1.0f};               // line in count mode: center to center
@@ -49,6 +56,15 @@ public:
     float                  arc_degrees{360.0f};             // ring: 360 is a full ring
     Repeat_ring_facing     facing     {Repeat_ring_facing::outward};
     Repeat_path_orientation orientation{Repeat_path_orientation::upright}; // path; its curve is the layout node itself
+    Kit_scatter_mode       scatter_mode {Kit_scatter_mode::count};          // scatter, centred on the node's origin
+    float                  density      {0.25f};                            // scatter in density mode: pieces per square meter
+    Repeat_scatter_region  region       {Repeat_scatter_region::rectangle}; // scatter
+    float                  size_x       {8.0f};                             // scatter rectangle
+    float                  size_z       {8.0f};                             // scatter rectangle
+    float                  region_radius{4.0f};                             // scatter disc
+    float                  min_spacing  {1.0f};                             // scatter: between piece centers
+    float                  yaw_min      {0.0f};                             // scatter: degrees about the node's up axis
+    float                  yaw_max      {360.0f};                           // scatter
 
     [[nodiscard]] auto operator==(const Kit_layout_pattern& other) const -> bool = default;
 };
@@ -83,16 +99,20 @@ public:
     Repeat_pattern pattern;
     std::size_t    count{0};
     float          step {0.0f}; // center to center along the space (the arc for a ring); 0 for one element and a grid
-    float          space{0.0f}; // line: first to last center; ring: arc length; path: curve length; grid: 0
+    float          space{0.0f}; // line: first to last center; ring: arc length; path: curve length; grid: 0; scatter: area
+    std::size_t    requested{0}; // the pieces the values ask for; a scatter holds fewer when no more fit the spacing
 };
 
-// item_extent: the largest extent along x of the items placed, read in gap mode; path_table: a path's curve (the run
-// refers to it), null for the other kinds. Returns the refusal, empty when resolved.
+// seed: the layout seed, a scatter's point stream; item_extent: the largest extent along x of the items placed, read in
+// gap mode; path_table: a path's curve (the run refers to it), null for the other kinds; out_poses: when given, the run's
+// poses from the node's origin, cleared and filled. Returns the refusal, empty when resolved.
 [[nodiscard]] auto resolve_layout_pattern(
     const Kit_layout_pattern&           pattern,
+    int                                 seed,
     float                               item_extent,
     const erhe::math::Curve_path_table* path_table,
-    Kit_layout_run&                     out_run
+    Kit_layout_run&                     out_run,
+    std::vector<Repeat_pose>*           out_poses
 ) -> std::string;
 
 // The path with every position and handle end taken through the transform; cleared and filled.

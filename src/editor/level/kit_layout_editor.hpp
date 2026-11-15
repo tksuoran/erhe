@@ -28,7 +28,7 @@ class Scene_root;
 // The kinds a pattern's Kind row offers (R5.12.8): every kind (initial values), an Xform node's or a curve node's.
 enum class Kit_layout_kinds : unsigned int {
     all = 0,
-    xform, // line, grid, ring
+    xform, // line, grid, ring, scatter
     curve  // path
 };
 
@@ -48,7 +48,16 @@ enum class Kit_layout_row : unsigned int {
     radius,
     arc,
     facing,
-    orientation
+    orientation,
+    scatter_mode,
+    density,
+    region,
+    size_x,
+    size_z,
+    region_radius,
+    min_spacing,
+    yaw_min,
+    yaw_max
 };
 
 // One row of a layout's snap and seed values.

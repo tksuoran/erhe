@@ -3,10 +3,14 @@
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 #include "app_context.hpp"
+#include "editor_log.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
 #include "brushes/brush_tool.hpp"
 #include "content_library/content_library.hpp"
+#include "level/kit_connector_indicators.hpp"
+#include "level/kit_connector_snap.hpp"
 #include "level/kit_layout.hpp"
 #include "level/kit_piece.hpp"
 #include "level/kit_shape_checks.hpp"
@@ -16,6 +20,12 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
+#include "transform/transform_tool.hpp"
+#include "windows/viewport_window.hpp"
+#include "tools/debug_visualizations.hpp"
+#include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -339,6 +349,25 @@ namespace {
     return direction / length;
 }
 
+[[nodiscard]] auto connector_json(const Kit_connector& connector) -> json
+{
+    return json{
+        {"name",     connector.name},
+        {"position", vec3_json(connector.position)},
+        {"outward",  vec3_json(connector.outward)},
+        {"up",       vec3_json(connector.up)}
+    };
+}
+
+[[nodiscard]] auto connectors_json(const std::vector<Kit_connector>& connectors) -> json
+{
+    json result = json::array();
+    for (const Kit_connector& connector : connectors) {
+        result.push_back(connector_json(connector));
+    }
+    return result;
+}
+
 [[nodiscard]] auto mirror_planes_json(const std::vector<Kit_mirror_plane>& planes) -> json
 {
     json result = json::array();
@@ -397,6 +426,8 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
                 {"alternatives",     (slot_palette != nullptr) ? json(slot_palette->alternatives) : json::array()}
             });
         }
+        std::vector<Kit_connector> connectors;
+        get_shape_connectors(defaults, connectors);
         json default_derive = json::array();
         for (const Kit_parameter& parameter : shape.parameters) {
             if ((parameter.derive == Kit_derive::derivable) && (parameter.default_source == Kit_value_source::seed)) {
@@ -415,7 +446,7 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
             {"default_size",    vec3_json(bounds.max - bounds.min)},
             {"default_bounds",  aabb_json(bounds)},
             {"material_slots",  material_slots},
-            {"connectors",      json::array()},
+            {"connectors",      connectors_json(connectors)},
             {"normal_style",    c_str(shape.normal_style)},
             {"triangle_budget", shape.triangle_budget},
             {"collision",       c_str(shape.collision)},
@@ -613,6 +644,39 @@ public:
     return {};
 }
 
+// connector, to_piece_id, to_connector, twist_steps and gap of a connector join (D3.12).
+[[nodiscard]] auto read_connect_json(Scene_root& scene_root, const json& object, Kit_connect& out_connect) -> std::string
+{
+    if (!object.contains("connector") || !object.at("connector").is_string()) {
+        return "connector must be the name of a connector of the piece (level_get_kits: connectors)";
+    }
+    if (!object.contains("to_connector") || !object.at("to_connector").is_string()) {
+        return "to_connector must be the name of a connector of the target piece (level_get_connectors)";
+    }
+    if (!object.contains("to_piece_id") || !object.at("to_piece_id").is_number_unsigned()) {
+        return "to_piece_id must be the node id of a kit piece";
+    }
+    out_connect.connector        = object.at("connector").get<std::string>();
+    out_connect.target_connector = object.at("to_connector").get<std::string>();
+    out_connect.target           = find_node_in_scene(scene_root, json{{"node_id", object.at("to_piece_id")}}, "node_id", "node_name");
+    if (!out_connect.target) {
+        return "no node " + object.at("to_piece_id").dump() + " in scene " + scene_root.get_name();
+    }
+    if (object.contains("twist_steps")) {
+        if (!object.at("twist_steps").is_number_integer()) {
+            return "twist_steps must be an integer (quarter turns)";
+        }
+        out_connect.twist_steps = object.at("twist_steps").get<int>();
+    }
+    if (object.contains("gap")) {
+        if (!object.at("gap").is_number() || !std::isfinite(object.at("gap").get<float>())) {
+            return "gap must be a finite number (meters)";
+        }
+        out_connect.gap = object.at("gap").get<float>();
+    }
+    return {};
+}
+
 // The keys of a level_place_pieces piece (parent_index aside).
 [[nodiscard]] auto read_piece_json(
     Level_kits&              level_kits,
@@ -676,7 +740,7 @@ auto Mcp_server::action_level_place_pieces(const json& args) -> std::string
 {
     const std::vector<std::string_view> top_keys{"scene_name", "snap", "surface_snap", "surface_orient", "surface_direction", "pieces"};
     const std::vector<std::string_view> piece_keys{
-        "shape", "parameters", "position", "rotation_xyzw", "name", "materials", "parent_id", "parent_index", "surface_snap", "surface_orient"
+        "shape", "parameters", "position", "rotation_xyzw", "name", "materials", "parent_id", "parent_index", "surface_snap", "surface_orient", "connect"
     };
     {
         const std::string unrecognized = unrecognized_keys(args, top_keys);
@@ -719,7 +783,7 @@ auto Mcp_server::action_level_place_pieces(const json& args) -> std::string
         if (!unrecognized.empty()) {
             return make_error_content(
                 prefix + "unrecognized key(s): " + unrecognized +
-                " (accepted: shape, parameters, position, rotation_xyzw, name, materials, parent_id, parent_index, surface_snap, surface_orient)" + tail
+                " (accepted: shape, parameters, position, rotation_xyzw, name, materials, parent_id, parent_index, surface_snap, surface_orient, connect)" + tail
             );
         }
         if (piece.contains("parent_id") && piece.contains("parent_index")) {
@@ -729,6 +793,25 @@ auto Mcp_server::action_level_place_pieces(const json& args) -> std::string
         const std::string error = read_piece_json(level_kits, *scene_root, piece, options, "name", placement);
         if (!error.empty()) {
             return make_error_content(prefix + error + tail);
+        }
+        if (piece.contains("connect")) {
+            const json& connect = piece.at("connect");
+            if (piece.contains("position") || piece.contains("rotation_xyzw") || piece.contains("surface_snap") || piece.contains("surface_orient")) {
+                return make_error_content(prefix + "a connected piece takes its pose from the join: give no position, rotation_xyzw, surface_snap or surface_orient" + tail);
+            }
+            if (!connect.is_object()) {
+                return make_error_content(prefix + "connect must be an object {connector, to_piece_id, to_connector, twist_steps, gap}" + tail);
+            }
+            const std::string unrecognized_connect = unrecognized_keys(connect, {"connector", "to_piece_id", "to_connector", "twist_steps", "gap"});
+            if (!unrecognized_connect.empty()) {
+                return make_error_content(prefix + "connect: unrecognized key(s): " + unrecognized_connect + " (accepted: connector, to_piece_id, to_connector, twist_steps, gap)" + tail);
+            }
+            Kit_connect connect_value;
+            const std::string connect_error = read_connect_json(*scene_root, connect, connect_value);
+            if (!connect_error.empty()) {
+                return make_error_content(prefix + "connect: " + connect_error + tail);
+            }
+            placement.connect = std::move(connect_value);
         }
         if (piece.contains("parent_index")) {
             const json& parent_index = piece.at("parent_index");
@@ -764,6 +847,203 @@ namespace {
 }
 
 } // anonymous namespace
+
+auto Mcp_server::query_level_connectors(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "node_ids"});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_get_connectors: unrecognized argument(s): " + unrecognized + " (accepted: scene_name, node_ids)");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+    if (args.contains("node_ids")) {
+        const json& node_ids = args.at("node_ids");
+        if (!node_ids.is_array() || node_ids.empty()) {
+            return make_error_content("level_get_connectors: node_ids must be a non-empty array of node ids");
+        }
+        for (const json& id : node_ids) {
+            const std::shared_ptr<erhe::scene::Node> node = id.is_number_unsigned()
+                ? find_node_in_scene(*scene_root, json{{"node_id", id}}, "node_id", "node_name")
+                : std::shared_ptr<erhe::scene::Node>{};
+            if (!node) {
+                return make_error_content("level_get_connectors: no node " + id.dump() + " in scene " + scene_root->get_name());
+            }
+            nodes.push_back(node);
+        }
+    } else {
+        for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+            const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (node && (node->get_item_host() == scene_root) && carries_kit_piece(*node)) {
+                nodes.push_back(node);
+            }
+        }
+        if (nodes.empty()) {
+            return make_error_content("level_get_connectors: no node_ids given and no kit piece of scene " + scene_root->get_name() + " is selected");
+        }
+    }
+    json pieces = json::array();
+    std::vector<Kit_connector> connectors;
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        const std::string error = m_context.level_kits->get_world_connectors(*node, connectors);
+        if (!error.empty()) {
+            return make_error_content("level_get_connectors: node " + std::to_string(node->get_id()) + ": " + error);
+        }
+        const std::optional<Kit_piece_data> record = read_kit_piece(*node);
+        pieces.push_back({
+            {"id",         node->get_id()},
+            {"name",       node->get_name()},
+            {"shape",      record.has_value() ? record->shape : std::string{}},
+            {"connectors", connectors_json(connectors)}
+        });
+    }
+    return make_json_content({
+        {"scene_name", scene_root->get_name()},
+        {"count",      pieces.size()},
+        {"pieces",     pieces}
+    }).dump();
+}
+
+// The per-view Connectors setting of the Debug Visualization popup (doc/editor/level_tools.md "Connector indicators").
+auto Mcp_server::action_level_set_connector_visualization(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"mode", "viewport"});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_set_connector_visualization: unrecognized argument(s): " + unrecognized + " (accepted: mode, viewport)");
+    }
+    if (m_context.scene_views == nullptr) {
+        return make_error_content("No scene views available");
+    }
+    const std::string mode_name = (args.contains("mode") && args.at("mode").is_string()) ? args.at("mode").get<std::string>() : std::string{};
+    Visualization_mode mode{Visualization_mode::selected};
+    if (!from_string(mode_name, mode) || (mode == Visualization_mode::hovered)) {
+        return make_error_content("level_set_connector_visualization: 'mode' must be \"off\", \"selected\" or \"all\"");
+    }
+    const std::string viewport_title = args.value("viewport", std::string{});
+    json viewports = json::array();
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+        const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+        if (!scene_view || (!viewport_title.empty() && (viewport_window->get_title() != viewport_title))) {
+            continue;
+        }
+        scene_view->get_debug_visualizations().edit_settings().connectors = mode;
+        viewports.push_back(json{{"viewport", viewport_window->get_title()}, {"mode", std::string{to_string(mode)}}});
+    }
+    if (viewports.empty()) {
+        return make_error_content(
+            viewport_title.empty()
+                ? std::string{"No viewport scene views available"}
+                : ("No viewport window titled '" + viewport_title + "' (see get_viewports)")
+        );
+    }
+    log_mcp->info("level_set_connector_visualization: {} in {} viewport(s)", to_string(mode), viewports.size());
+    return make_json_content(json{{"viewports", viewports}}).dump();
+}
+
+// What a viewport draws as connector indicators this frame, collected as connectors_visualization() collects it.
+auto Mcp_server::query_level_connector_indicators(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"viewport"});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_get_connector_indicators: unrecognized argument(s): " + unrecognized + " (accepted: viewport)");
+    }
+    if ((m_context.scene_views == nullptr) || (m_context.level_kits == nullptr) || (m_context.selection == nullptr)) {
+        return make_error_content("No scene views available");
+    }
+    const std::string viewport_title = args.value("viewport", std::string{});
+    std::shared_ptr<Viewport_window>      window;
+    std::shared_ptr<Viewport_scene_view> scene_view;
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+        const std::shared_ptr<Viewport_scene_view> view = viewport_window->viewport_scene_view();
+        if (view && (viewport_title.empty() || (viewport_window->get_title() == viewport_title))) {
+            window     = viewport_window;
+            scene_view = view;
+            break;
+        }
+    }
+    if (!scene_view) {
+        return make_error_content(
+            viewport_title.empty()
+                ? std::string{"No viewport scene views available"}
+                : ("No viewport window titled '" + viewport_title + "' (see get_viewports)")
+        );
+    }
+    const Visualization_mode mode = scene_view->get_debug_visualizations().get_settings().connectors;
+    const std::shared_ptr<Scene_root> scene_root = scene_view->get_scene_root();
+    const Kit_connector_drag_snap* const drag_snap = (m_context.transform_tool != nullptr) ? &m_context.transform_tool->get_connector_snap() : nullptr;
+    const bool drag_active = scene_root && (drag_snap != nullptr) && (drag_snap->get_scene_root() == scene_root.get());
+    std::vector<Kit_connector_indicator> indicators;
+    if (scene_root && ((mode != Visualization_mode::off) || drag_active)) {
+        m_context.level_kits->get_connector_indicators().collect(*scene_root, mode, *m_context.selection, drag_snap, indicators);
+    }
+    const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
+    json list = json::array();
+    for (const Kit_connector_indicator& indicator : indicators) {
+        const glm::vec4& color = get_connector_indicator_color(style, indicator.role);
+        json entry = connector_json(indicator.frame);
+        entry["piece_id"] = indicator.piece_id;
+        entry["role"]     = c_str(indicator.role);
+        entry["color"]    = json::array({color.r, color.g, color.b, color.a});
+        list.push_back(std::move(entry));
+    }
+    return make_json_content({
+        {"viewport",    window->get_title()},
+        {"scene_name",  scene_root ? scene_root->get_name() : std::string{}},
+        {"mode",        std::string{to_string(mode)}},
+        {"drag_active", drag_active},
+        {"cached_pieces", m_context.level_kits->get_connector_indicators().get_cached_piece_count()},
+        {"count",       list.size()},
+        {"indicators",  list}
+    }).dump();
+}
+
+auto Mcp_server::action_level_connect_pieces(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "node_id", "connector", "to_piece_id", "to_connector", "twist_steps", "gap"});
+    if (!unrecognized.empty()) {
+        return make_error_content(
+            "level_connect_pieces: unrecognized argument(s): " + unrecognized +
+            " (accepted: scene_name, node_id, connector, to_piece_id, to_connector, twist_steps, gap)"
+        );
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::string tail = "; nothing changed";
+    if (!args.contains("node_id") || !args.at("node_id").is_number_unsigned()) {
+        return make_error_content("level_connect_pieces: node_id must be the node id of the kit piece to move" + tail);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*scene_root, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("level_connect_pieces: no node " + args.at("node_id").dump() + " in scene " + scene_root->get_name() + tail);
+    }
+    Kit_connect connect;
+    const std::string connect_error = read_connect_json(*scene_root, args, connect);
+    if (!connect_error.empty()) {
+        return make_error_content("level_connect_pieces: " + connect_error + tail);
+    }
+    const Kit_connect_result result = m_context.level_kits->connect_piece(*scene_root, node, connect);
+    if (!result.error.empty()) {
+        return make_error_content("level_connect_pieces: " + result.error + tail);
+    }
+    std::vector<Kit_connector> connectors;
+    const std::string connectors_error = m_context.level_kits->get_world_connectors(*node, connectors);
+    return make_json_content({
+        {"scene_name",    scene_root->get_name()},
+        {"id",            node->get_id()},
+        {"name",          node->get_name()},
+        {"position",      vec3_json(result.position)},
+        {"rotation_xyzw", quat_json(result.rotation)},
+        {"changed",       result.changed},
+        {"world_aabb",    world_aabb_json(*node)},
+        {"connectors",    connectors_error.empty() ? connectors_json(connectors) : json::array()}
+    }).dump();
+}
 
 auto Mcp_server::query_level_pieces(const json& args) -> std::string
 {
@@ -986,6 +1266,156 @@ auto Mcp_server::action_level_set_piece_material(const json& args) -> std::strin
     }).dump();
 }
 
+auto Mcp_server::action_level_replace_pieces(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "node_ids", "shape", "parameters", "materials"});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_replace_pieces: unrecognized argument(s): " + unrecognized + " (accepted: scene_name, node_ids, shape, parameters, materials)");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::string tail = "; nothing was changed";
+    Level_kits& level_kits = *m_context.level_kits;
+    if (!args.contains("shape") || !args.at("shape").is_string()) {
+        return make_error_content("level_replace_pieces: shape must be a shape id (level_get_kits)" + tail);
+    }
+    const Kit_shape_definition* const shape = level_kits.get_library().find(args.at("shape").get<std::string>());
+    if (shape == nullptr) {
+        return make_error_content("level_replace_pieces: unknown shape " + args.at("shape").dump() + " (level_get_kits lists the shapes)" + tail);
+    }
+
+    // node_ids, else the kit pieces of the scene's selection.
+    std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+    if (args.contains("node_ids")) {
+        const json& node_ids = args.at("node_ids");
+        if (!node_ids.is_array() || node_ids.empty()) {
+            return make_error_content("level_replace_pieces: node_ids must be a non-empty array of node ids" + tail);
+        }
+        for (const json& id : node_ids) {
+            if (!id.is_number_unsigned()) {
+                return make_error_content("level_replace_pieces: node_ids holds " + id.dump() + ", not a node id" + tail);
+            }
+            const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*scene_root, json{{"node_id", id}}, "node_id", "node_name");
+            if (!node) {
+                return make_error_content("level_replace_pieces: no node " + id.dump() + " in scene " + scene_root->get_name() + tail);
+            }
+            nodes.push_back(node);
+        }
+    } else {
+        for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+            const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (node && (node->get_item_host() == scene_root) && carries_kit_piece(*node)) {
+                nodes.push_back(node);
+            }
+        }
+        if (nodes.empty()) {
+            return make_error_content("level_replace_pieces: no node_ids given and no kit piece of scene " + scene_root->get_name() + " is selected" + tail);
+        }
+    }
+
+    Kit_placement material_reader;
+    material_reader.shape = shape;
+    const std::string material_error = read_piece_materials(level_kits, *scene_root, args, material_reader);
+    if (!material_error.empty()) {
+        return make_error_content("level_replace_pieces: " + material_error + tail);
+    }
+    std::vector<std::string> given;
+    if (args.contains("parameters") && args.at("parameters").is_object()) {
+        for (const auto& [key, value] : args.at("parameters").items()) {
+            static_cast<void>(value);
+            if (key != "derive") {
+                given.push_back(key);
+            }
+        }
+    }
+
+    // The given parameters merge over each piece's carried values, as level_set_piece_parameters merges them.
+    const Kit_lengths            lengths = level_kits.get_lengths(*scene_root);
+    std::vector<Kit_replacement> replacements;
+    for (std::size_t i = 0, end = nodes.size(); i < end; ++i) {
+        Kit_replacement replacement{.node = nodes[i], .values = {}, .materials = material_reader.materials};
+        // A node that is no piece gets replace_shape()'s refusal.
+        if (args.contains("parameters") && carries_kit_piece(*nodes[i])) {
+            Kit_parameter_values             values;
+            std::vector<Kit_parameter_carry> carry;
+            const std::string carry_error = level_kits.make_replace_values(*scene_root, *nodes[i], *shape, values, carry);
+            if (!carry_error.empty()) {
+                return make_error_content("level_replace_pieces: piece " + std::to_string(i) + " (id " + std::to_string(nodes[i]->get_id()) + "): " + carry_error + tail);
+            }
+            const int      carried_seed = values.get_seed();
+            const uint64_t carried_mask = values.get_derive_mask();
+            const std::string apply_error = apply_parameters_json(args.at("parameters"), values);
+            if (!apply_error.empty()) {
+                return make_error_content("level_replace_pieces: piece " + std::to_string(i) + " (id " + std::to_string(nodes[i]->get_id()) + "): " + apply_error + tail);
+            }
+            if ((values.get_seed() != carried_seed) || (values.get_derive_mask() != carried_mask)) {
+                values.resolve_derived(lengths.module, lengths.wall_height);
+            }
+            replacement.values = std::move(values);
+        }
+        replacements.push_back(std::move(replacement));
+    }
+
+    const Kit_replace_result result = level_kits.replace_shape(*scene_root, *shape, replacements);
+    if (!result.error.empty()) {
+        const std::string which = result.failed_index.has_value()
+            ? ("piece " + std::to_string(result.failed_index.value()) + " (id " + std::to_string(nodes[result.failed_index.value()]->get_id()) + "): ")
+            : std::string{};
+        return make_error_content("level_replace_pieces: " + which + result.error + tail);
+    }
+
+    json pieces = json::array();
+    for (const Kit_replaced_piece& piece : result.pieces) {
+        json carried   = json::array();
+        json clamped   = json::array();
+        json defaulted = json::array();
+        for (const Kit_parameter_carry& carry : piece.parameters) {
+            if (std::find(given.begin(), given.end(), carry.name) != given.end()) {
+                continue;
+            }
+            switch (carry.carry) {
+                case Kit_carry::carried:   carried.push_back(carry.name); break;
+                case Kit_carry::clamped:   clamped.push_back(carry.name); break;
+                case Kit_carry::defaulted: defaulted.push_back(carry.name); break;
+                default: break;
+            }
+        }
+        json kept_materials = json::array();
+        for (std::size_t slot = 0, end = piece.slot_matches.size(); slot < end; ++slot) {
+            if (piece.slot_matches[slot].has_value()) {
+                kept_materials.push_back(shape->material_slots[slot]);
+            }
+        }
+        const std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = get_node_collision_shape(*piece.mesh);
+        const Kit_shape_definition* const piece_shape = level_kits.get_library().find(piece.replaced ? shape->id : piece.old_shape);
+        pieces.push_back({
+            {"id",               piece.mesh->get_id()},
+            {"name",             piece.mesh->get_name()},
+            {"old_shape",        piece.old_shape},
+            {"shape",            piece_shape->id},
+            {"replaced",         piece.replaced},
+            {"parameters",       values_json(piece.values)},
+            {"carried",          carried},
+            {"clamped",          clamped},
+            {"defaulted",        defaulted},
+            {"given",            piece.replaced ? json(given) : json::array()},
+            {"materials",        piece_materials_json(*piece.mesh, piece_shape)},
+            {"kept_materials",   kept_materials},
+            {"world_aabb",       world_aabb_json(*piece.mesh)},
+            {"collision_shape",  collision_shape ? collision_shape->describe() : std::string{}}
+        });
+    }
+    return make_json_content({
+        {"scene_name",     scene_root->get_name()},
+        {"shape",          shape->id},
+        {"replaced_count", result.replaced_count},
+        {"pieces",         pieces}
+    }).dump();
+}
+
 auto Mcp_server::action_level_snap_to_surface(const json& args) -> std::string
 {
     const std::string unrecognized = unrecognized_keys(args, {"scene_name", "node_ids", "orient", "direction", "query_only"});
@@ -1050,7 +1480,8 @@ auto Mcp_server::action_level_snap_to_surface(const json& args) -> std::string
             {"position",      vec3_json(result.placement.pose.position)},
             {"rotation_xyzw", quat_json(result.placement.pose.rotation)},
             {"distance",      result.placement.distance},
-            {"surface_found", result.placement.surface_found}
+            {"surface_found", result.placement.surface_found},
+            {"settled",       result.placement.settled}
         });
     }
     return make_json_content({
@@ -1609,11 +2040,13 @@ auto Mcp_server::query_level_check(const json& args) -> std::string
 
 namespace {
 
-[[nodiscard]] auto surface_settings_json(const Surface_options& options) -> json
+[[nodiscard]] auto surface_settings_json(const Level_kits& level_kits) -> json
 {
+    const Surface_options options = level_kits.get_surface_settings();
     return json{
-        {"snap",   options.snap   == Surface_snap::on},
-        {"orient", options.orient == Surface_orient::on}
+        {"snap",                    options.snap   == Surface_snap::on},
+        {"orient",                  options.orient == Surface_orient::on},
+        {"connector_snap_distance", level_kits.get_connector_snap_distance()}
     };
 }
 
@@ -1625,18 +2058,24 @@ auto Mcp_server::query_surface_snap_settings(const json& args) -> std::string
     if (!unrecognized.empty()) {
         return make_error_content("get_surface_snap_settings: unrecognized argument(s): " + unrecognized + " (accepts none)");
     }
-    return make_json_content(surface_settings_json(m_context.level_kits->get_surface_settings())).dump();
+    return make_json_content(surface_settings_json(*m_context.level_kits)).dump();
 }
 
 auto Mcp_server::action_set_surface_snap_settings(const json& args) -> std::string
 {
-    const std::string unrecognized = unrecognized_keys(args, {"snap", "orient"});
+    const std::string unrecognized = unrecognized_keys(args, {"snap", "orient", "connector_snap_distance"});
     if (!unrecognized.empty()) {
-        return make_error_content("set_surface_snap_settings: unrecognized argument(s): " + unrecognized + " (accepted: snap, orient)");
+        return make_error_content("set_surface_snap_settings: unrecognized argument(s): " + unrecognized + " (accepted: snap, orient, connector_snap_distance)");
     }
     for (const char* key : {"snap", "orient"}) {
         if (args.contains(key) && !args.at(key).is_boolean()) {
             return make_error_content(std::string{"set_surface_snap_settings: "} + key + " must be a boolean, not " + args.at(key).dump());
+        }
+    }
+    if (args.contains("connector_snap_distance")) {
+        const json& value = args.at("connector_snap_distance");
+        if (!value.is_number() || !std::isfinite(value.get<double>()) || (value.get<double>() < 0.0)) {
+            return make_error_content("set_surface_snap_settings: connector_snap_distance must be a number >= 0, not " + value.dump());
         }
     }
     Level_kits& level_kits = *m_context.level_kits;
@@ -1646,7 +2085,10 @@ auto Mcp_server::action_set_surface_snap_settings(const json& args) -> std::stri
     if (args.contains("orient")) {
         level_kits.set_surface_orient(args.at("orient").get<bool>() ? Surface_orient::on : Surface_orient::off);
     }
-    return make_json_content(surface_settings_json(level_kits.get_surface_settings())).dump();
+    if (args.contains("connector_snap_distance")) {
+        level_kits.set_connector_snap_distance(args.at("connector_snap_distance").get<float>());
+    }
+    return make_json_content(surface_settings_json(level_kits)).dump();
 }
 
 namespace {
@@ -1963,7 +2405,16 @@ namespace {
         {"radius",      pattern.radius},
         {"arc_degrees", pattern.arc_degrees},
         {"facing",      c_str(pattern.facing)},
-        {"orientation", c_str(pattern.orientation)}
+        {"orientation", c_str(pattern.orientation)},
+        {"scatter_mode",  c_str(pattern.scatter_mode)},
+        {"density",       pattern.density},
+        {"region",        c_str(pattern.region)},
+        {"size_x",        pattern.size_x},
+        {"size_z",        pattern.size_z},
+        {"region_radius", pattern.region_radius},
+        {"min_spacing",   pattern.min_spacing},
+        {"yaw_min",       pattern.yaw_min},
+        {"yaw_max",       pattern.yaw_max}
     };
 }
 
@@ -1981,7 +2432,7 @@ namespace {
     };
 }
 
-// The given keys over the pattern; "kind", "count_mode", "facing" and "orientation" by name.
+// The given keys over the pattern; "kind", "count_mode", "facing", "orientation", "scatter_mode" and "region" by name.
 [[nodiscard]] auto read_layout_pattern_json(const json& object, Kit_layout_pattern& pattern) -> std::string
 {
     if (!object.is_object()) {
@@ -1989,24 +2440,28 @@ namespace {
     }
     const std::string unrecognized = unrecognized_keys(
         object,
-        {"kind", "count_mode", "count", "gap", "direction", "step", "length", "count_x", "count_z", "spacing_x", "spacing_z", "radius", "arc_degrees", "facing", "orientation"}
+        {
+            "kind", "count_mode", "count", "gap", "direction", "step", "length", "count_x", "count_z", "spacing_x", "spacing_z", "radius", "arc_degrees", "facing", "orientation",
+            "scatter_mode", "density", "region", "size_x", "size_z", "region_radius", "min_spacing", "yaw_min", "yaw_max"
+        }
     );
     if (!unrecognized.empty()) {
         return "pattern: unrecognized key(s): " + unrecognized +
-            " (accepted: kind, count_mode, count, gap, direction, step, length, count_x, count_z, spacing_x, spacing_z, radius, arc_degrees, facing, orientation;"
+            " (accepted: kind, count_mode, count, gap, direction, step, length, count_x, count_z, spacing_x, spacing_z, radius, arc_degrees, facing, orientation,"
+            " scatter_mode, density, region, size_x, size_z, region_radius, min_spacing, yaw_min, yaw_max;"
             " a path layout is its own curve node: level_create_layout takes points and closed, or curve_id of a plain curve)";
     }
     if (object.contains("kind")) {
         const json& kind = object.at("kind");
         bool found = false;
-        for (const Repeat_pattern_kind candidate : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path}) {
+        for (const Repeat_pattern_kind candidate : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path, Repeat_pattern_kind::scatter}) {
             if (kind == json(c_str(candidate))) {
                 pattern.kind = candidate;
                 found = true;
             }
         }
         if (!found) {
-            return "pattern: kind is " + kind.dump() + " (line, grid, ring, path; a polyline is a path along a curve of corner points)";
+            return "pattern: kind is " + kind.dump() + " (line, grid, ring, path, scatter; a polyline is a path along a curve of corner points)";
         }
     }
     if (object.contains("orientation")) {
@@ -2029,6 +2484,26 @@ namespace {
             return "pattern: count_mode is " + mode.dump() + " (count, gap)";
         }
     }
+    if (object.contains("scatter_mode")) {
+        const json& mode = object.at("scatter_mode");
+        if (mode == json(c_str(Kit_scatter_mode::count))) {
+            pattern.scatter_mode = Kit_scatter_mode::count;
+        } else if (mode == json(c_str(Kit_scatter_mode::density))) {
+            pattern.scatter_mode = Kit_scatter_mode::density;
+        } else {
+            return "pattern: scatter_mode is " + mode.dump() + " (count, density)";
+        }
+    }
+    if (object.contains("region")) {
+        const json& region = object.at("region");
+        if (region == json(c_str(Repeat_scatter_region::rectangle))) {
+            pattern.region = Repeat_scatter_region::rectangle;
+        } else if (region == json(c_str(Repeat_scatter_region::disc))) {
+            pattern.region = Repeat_scatter_region::disc;
+        } else {
+            return "pattern: region is " + region.dump() + " (rectangle, disc)";
+        }
+    }
     for (const char* const key : {"count", "count_x", "count_z"}) {
         if (!object.contains(key)) {
             continue;
@@ -2048,7 +2523,14 @@ namespace {
         !read_number(object, "spacing_x",   pattern.spacing_x,   error) ||
         !read_number(object, "spacing_z",   pattern.spacing_z,   error) ||
         !read_number(object, "radius",      pattern.radius,      error) ||
-        !read_number(object, "arc_degrees", pattern.arc_degrees, error)
+        !read_number(object, "arc_degrees", pattern.arc_degrees, error) ||
+        !read_number(object, "density",       pattern.density,       error) ||
+        !read_number(object, "size_x",        pattern.size_x,        error) ||
+        !read_number(object, "size_z",        pattern.size_z,        error) ||
+        !read_number(object, "region_radius", pattern.region_radius, error) ||
+        !read_number(object, "min_spacing",   pattern.min_spacing,   error) ||
+        !read_number(object, "yaw_min",       pattern.yaw_min,       error) ||
+        !read_number(object, "yaw_max",       pattern.yaw_max,       error)
     ) {
         return "pattern: " + error;
     }
@@ -2203,7 +2685,7 @@ namespace {
     Kit_layout_run    run;
     const std::string run_error = level_kits.resolve_layout_run(node, data, extent, run);
     reply["run"] = run_error.empty()
-        ? json{{"count", run.count}, {"step", run.step}, {"space", run.space}, {"item_extent", extent}}
+        ? json{{"count", run.count}, {"requested", run.requested}, {"step", run.step}, {"space", run.space}, {"item_extent", extent}}
         : json{{"problem", run_error}, {"item_extent", extent}};
     json children = json::array();
     for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {

@@ -51,6 +51,11 @@ void Subtool::end()
     m_active = false;
 }
 
+void Subtool::cancel()
+{
+    m_active = false;
+}
+
 void Subtool::set_transform_shared(Transform_tool_shared& shared, std::function<void()> record_operation)
 {
     m_shared           = &shared;

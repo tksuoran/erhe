@@ -1,7 +1,10 @@
 #pragma once
 
+#include "level/kit_connector.hpp"
+#include "level/kit_connector_indicators.hpp"
 #include "level/kit_layout.hpp"
 #include "level/kit_piece_operation.hpp"
+#include "level/kit_replace.hpp"
 #include "level/level_group.hpp"
 #include "level/kit_shape.hpp"
 #include "level/kit_shape_library.hpp"
@@ -50,6 +53,27 @@ public:
     std::string                                palette_name;
 };
 
+// A connector join (R5.3, D3.12): the piece's connector meets a connector of the target piece.
+class Kit_connect
+{
+public:
+    std::string                        connector;        // of the new or moved piece
+    std::shared_ptr<erhe::scene::Node> target;           // a kit piece of the scene; not edited
+    std::string                        target_connector;
+    int                                twist_steps{0};   // quarter turns about the target connector's outward axis
+    float                              gap        {0.0f}; // along the target connector's outward axis
+};
+
+class Kit_connect_result
+{
+public:
+    std::shared_ptr<erhe::scene::Node> node;
+    glm::vec3                          position{0.0f}; // the piece's new world pose
+    glm::quat                          rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    bool                               changed{false}; // an undo entry was recorded
+    std::string                        error;          // empty on success; with an error nothing changed
+};
+
 // One piece to place (D3.2); positions and rotations are in the scene root's space.
 class Kit_placement
 {
@@ -64,6 +88,7 @@ public:
     std::vector<Kit_slot_material>             materials;    // by slot index; a slot without an entry takes its default
     Surface_options                            surface;      // applied after the module snap (D7.3)
     std::optional<std::size_t>                 index_in_parent; // none: after the parent's children
+    std::optional<Kit_connect>                 connect;      // the pose is the join (D3.12): position, rotation, module snap and surface unused
 };
 
 // Whether the Brush tool's kit values take the next seed after each placed piece (D4.5).
@@ -207,6 +232,36 @@ public:
     std::string            error; // empty on success; with an error nothing changed
 };
 
+// One piece to give another shape (D3.10).
+class Kit_replacement
+{
+public:
+    std::shared_ptr<erhe::scene::Node>  node;
+    std::optional<Kit_parameter_values> values;    // none: the values carried over (carry_parameter_values())
+    std::vector<Kit_slot_material>      materials; // per slot of the new shape; an empty entry: the same-named slot's material, else the default
+};
+
+class Kit_replaced_piece
+{
+public:
+    std::shared_ptr<erhe::scene::Mesh>                      mesh;
+    std::string                                             old_shape;
+    bool                                                    replaced{false}; // false: the piece has the shape already
+    Kit_parameter_values                                    values;
+    std::vector<Kit_parameter_carry>                        parameters;      // per parameter of the new shape
+    std::vector<std::optional<std::size_t>>                 slot_matches;    // per new slot: the old slot whose material it kept, else none
+    std::vector<std::shared_ptr<erhe::primitive::Material>> materials;       // per new slot
+};
+
+class Kit_replace_result
+{
+public:
+    std::vector<Kit_replaced_piece> pieces;         // per replacement, in order
+    std::size_t                     replaced_count{0};
+    std::optional<std::size_t>      failed_index;   // the replacement the error names
+    std::string                     error;          // empty on success; with an error nothing changed
+};
+
 // Which children a kit layout regeneration keeps (D3.9): the ones that already match, or none (a lock, R5.12.5).
 enum class Kit_layout_reuse : unsigned int {
     keep_matching = 0,
@@ -274,6 +329,7 @@ public:
     std::size_t                        kept_count   {0};
     std::size_t                        added_count  {0};
     std::size_t                        removed_count{0};
+    std::size_t                        unsettled_count{0}; // pieces whose surface rest still rose at its last cast
     bool                               changed{false};    // an undo entry was recorded
     std::string                        error;             // empty on success; with an error nothing changed
 };
@@ -302,6 +358,9 @@ public:
     [[nodiscard]] auto get_surface_settings() const -> Surface_options;
     void set_surface_snap  (Surface_snap snap);
     void set_surface_orient(Surface_orient orient);
+    // D3.13: the connector snap distance of translate drags in meters, 0 = off; set clamps a negative or non-finite value to 0.
+    [[nodiscard]] auto get_connector_snap_distance() const -> float;
+    void set_connector_snap_distance(float distance);
 
     // D4.4: the origin at the point (module-rounded), upright, turned by yaw_steps rotation steps
     // about the up axis, then the surface options; no allocation, raytrace scene committed here.
@@ -327,6 +386,30 @@ public:
 
     // Validates every placement, then places all of them as one Compound_operation (one undo entry).
     [[nodiscard]] auto place(Scene_root& scene_root, std::span<const Kit_placement> placements, Kit_snap snap) -> Kit_place_result;
+
+    // The connector frames the views draw, with their per-piece cache (doc/editor/level_tools.md "Connector indicators").
+    [[nodiscard]] auto get_connector_indicators() -> Kit_connector_indicators&;
+    // A Kit_piece record value of the node was written (App_context::on_item_property_changed()).
+    void on_kit_piece_record_changed(const erhe::scene::Node& node);
+
+    // D3.12: the connectors of the piece's record values in its local space (parses the record: once per drag, not per step).
+    [[nodiscard]] auto get_local_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors) const -> std::string;
+
+    // D1.12: the piece's connectors under its world matrix; returns the refusal (not a kit piece, unreadable record, a zero scale axis), empty on success.
+    [[nodiscard]] auto get_world_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors) const -> std::string;
+
+    // D3.12: the rigid world motion putting the connector of a piece of the values, under world_from_node, on the target's;
+    // returns the refusal, empty on success. With world_from_node identity the motion is the new piece's world pose.
+    [[nodiscard]] auto resolve_connect(
+        const Scene_root&           scene_root,
+        const Kit_parameter_values& values,
+        const Kit_connect&          connect,
+        const glm::mat4&            world_from_node,
+        Kit_join_pose&              out_motion
+    ) const -> std::string;
+
+    // D3.12: moves the piece, its children riding with it, so its connector meets the target's; one undo entry.
+    [[nodiscard]] auto connect_piece(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node, const Kit_connect& connect) -> Kit_connect_result;
 
     // D3.8: a new group node at the base center of the nodes' combined world bounds, under their common parent
     // (else the scene root), takes the top-level nodes of the set as children, world transforms kept; one undo entry.
@@ -387,6 +470,22 @@ public:
         const Kit_slot_material&                  material
     ) -> Kit_set_material_result;
 
+    // D3.10: the values a piece carries over to the shape at the scene's lengths; returns the refusal, empty on success.
+    [[nodiscard]] auto make_replace_values(
+        const Scene_root&                 scene_root,
+        const erhe::scene::Node&          node,
+        const Kit_shape_definition&       shape,
+        Kit_parameter_values&             out_values,
+        std::vector<Kit_parameter_carry>& out_carry
+    ) const -> std::string;
+
+    // D3.10: gives the pieces the shape as one undo entry (none when every piece has it already); all or nothing.
+    [[nodiscard]] auto replace_shape(
+        Scene_root&                       scene_root,
+        const Kit_shape_definition&       shape,
+        std::span<const Kit_replacement>  replacements
+    ) -> Kit_replace_result;
+
     [[nodiscard]] static auto get_mesh_key   (const Kit_parameter_values& values) -> std::string;
     [[nodiscard]] static auto snap_to_module (const glm::vec3& position, float module) -> glm::vec3;
 
@@ -423,6 +522,14 @@ public:
         std::vector<std::shared_ptr<Operation>>&            out_operations
     );
 
+    // D3.9: the items' translation, rotation or scale written outside the Transform tool (a Properties row, a paste,
+    // set_item_property), already applied: one move hook (append_layout_move_operations()) per scene for the item nodes.
+    void append_layout_transform_follow_ups(
+        std::span<const std::shared_ptr<erhe::Item_base>> items,
+        const erhe::property::Dependency_property&        property,
+        std::vector<std::shared_ptr<Operation>>&          out_operations
+    );
+
     // D3.9: the regeneration of the curve when it is a locked path layout and its path has just changed; appended to the
     // curve edit's operations (Curve_set_operation). A layout the new curve refuses keeps its children (a warning).
     void append_curve_follow_ups(const erhe::scene::Curve& curve, std::vector<std::shared_ptr<Operation>>& out_operations);
@@ -434,6 +541,14 @@ public:
 
     // Begins a preview of every locked layout at or below the moved nodes whose surface settings are on (the move hook's set).
     void begin_layout_move_preview(Scene_root& scene_root, std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes);
+
+    // The move preview of a Properties transform row drag (doc/editor/level_tools.md "Live layout preview").
+    void begin_layout_transform_preview(
+        std::span<const std::shared_ptr<erhe::Item_base>> items,
+        const erhe::property::Dependency_property&        property
+    );
+    void step_layout_transform_preview();
+    void end_layout_transform_preview();
 
     // Lays every previewed layout out again from its live values, transform and curve; returns the first refusal.
     auto step_layout_preview() -> std::string;
@@ -575,14 +690,18 @@ private:
     std::vector<std::shared_ptr<erhe::Item_base>>   m_held_selection;
     std::shared_ptr<erhe::Item_base>                m_held_active_item;
     bool                                            m_layout_preview_end_queued{false};
+    bool                                            m_layout_transform_preview{false}; // the live preview is begin_layout_transform_preview()'s
     std::vector<Layout_preview_entry>               m_layout_preview;
     std::vector<const erhe::scene::Mesh*>           m_layout_preview_excluded;
     std::vector<std::shared_ptr<erhe::scene::Node>> m_layout_preview_layouts;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_layout_preview_collected;
 
     erhe::message_bus::Subscription<Selection_message>     m_selection_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
     erhe::message_bus::Subscription<Curve_changed_message> m_curve_changed_subscription;
+    erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
+    Kit_connector_indicators                                m_connector_indicators;
 };
 
 } // namespace editor

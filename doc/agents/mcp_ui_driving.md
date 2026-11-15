@@ -35,6 +35,10 @@ One space throughout: editor window pixels, origin at the top left, the space
 a `capture_screenshot` PNG is in. `get_viewports`, `get_imgui_windows`,
 `get_imgui_items`, `get_imgui_item_rect` and `get_transform_handles` all
 report rectangles in it, and every `x` / `y` argument takes it.
+Dear ImGui floors the pointer position to whole pixels each frame, and the
+viewport tools read that floored position: a pointer argument of 1642.49
+acts at 1642. Aim gizmo presses and drag ends at integer points, and probe
+those same points with `probe_points`.
 
 ## Addressing an item
 
@@ -111,7 +115,7 @@ these rather than clicking at a guessed offset. See
 | `type_text` | `text` | UTF-8 text events to whatever holds keyboard focus, one 31-byte chunk per frame |
 | `inject_input_events` | `events` | The raw form: `erhe::window::Input_event` values with a `frame` offset each. Field names are the `*_event` member names; `modifiers` is a list of `ctrl` / `shift` / `super` / `menu` |
 | `get_input_state` | - | Pointer position, held buttons, modifier mask, whether cursor-enter / focus were sent, and the stepping gesture if one runs |
-| `get_transform_handles` | `viewport`, `probe_points` | Per shown gizmo handle, a window point that picks it, the world point under it, its name and `handle_value`, and for a rotate ring `ring_axis` (the world axis it turns about) and `euler_gimbal`; plus the gizmo anchor and radius. `probe_points` adds `probes`: the handle each given window point picks. Needs a selection |
+| `get_transform_handles` | `viewport`, `probe_points` | Per shown gizmo handle, a window point that picks it, the world point under it, its name and `handle_value`, and for a rotate ring `ring_axis` (the world axis it turns about) and `euler_gimbal`; plus the gizmo anchor and radius. `probe_points` adds `probes`: the handle each given window point picks and, when it picks one, the world point the press grabs. Needs a selection |
 | `get_transform_rotation` | - | What the Transform window's Rotation group shows: representation, Euler order, the Euler angles in degrees as displayed, and the quaternion. The values a widget shows are not in `get_imgui_items`, which records labels and rectangles |
 | `capture_screenshot` | `path`, `annotate_imgui_items`, `annotate_window`, `annotate_limit` | The frame as a PNG; with annotation, numbered magenta rectangles over the recorded items and the number -> item table |
 
@@ -156,7 +160,9 @@ these rather than clicking at a guessed offset. See
   `drag_selection` runs the Transform tool's drag with exact world deltas -
   as the active Move / Rotate / Scale subtool, so a translate drag of a bone
   solves IK - and a held drag (`release: false`) is retargeted per step with
-  `action: "move"`, so the scene can be read between steps. Keep pointer
+  `action: "move"`, so the scene can be read between steps;
+  `cancel_transform_drag` cancels a held `drag_selection` drag or a held
+  pointer drag of nodes back to the drag start. Keep pointer
   drags on the handles for checks of the input path itself (hover, pick,
   press, ray-plane mapping).
 - **The windowed build interleaves injected and real input.** Every tool works

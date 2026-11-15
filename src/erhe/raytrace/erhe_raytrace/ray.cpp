@@ -12,7 +12,8 @@ auto Ray::transform(const glm::mat4& matrix) const -> Ray
         .t_far     = t_far,
         .mask      = mask,
         .id        = id,
-        .flags     = flags
+        .flags     = flags,
+        .filter    = filter
     };
 }
 

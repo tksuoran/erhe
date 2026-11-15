@@ -4,6 +4,8 @@
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
 #include "level/kit_layout.hpp"
+#include "level/kit_piece.hpp"
+#include "level/level_kits.hpp"
 #include "tools/selection_tool.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_commit_queue.hpp"
@@ -65,6 +67,14 @@ void App_context::on_item_property_changed(erhe::Item_base& item, const erhe::pr
 
     if ((app_message_bus != nullptr) && is_kit_layout_property(property)) {
         app_message_bus->kit_layout_changed.queue_message(Kit_layout_changed_message{});
+    }
+
+    // A raw write of a piece record (a developer-mode row, set_item_property): the connector frames are read again.
+    if ((level_kits != nullptr) && ((&property == &Kit_piece::shape_property.get()) || (&property == &Kit_piece::parameters_property.get()))) {
+        const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&item);
+        if (node != nullptr) {
+            level_kits->on_kit_piece_record_changed(*node);
+        }
     }
 
     // A kit layout node that becomes locked (a lock, the undo of an unlock) takes over its selected children.

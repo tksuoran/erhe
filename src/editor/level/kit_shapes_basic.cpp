@@ -122,7 +122,35 @@ void generate_floor_slab(const Kit_parameter_values& values, GEO::Mesh& mesh)
     builder.write(mesh);
 }
 
+// Front (+Z), back, left (-X) and right side connectors at the centers of the box sides' edges at height y.
+void add_box_side_connectors(std::vector<Kit_connector>& out_connectors, const float half_x, const float half_z, const float y)
+{
+    add_side_connector(out_connectors, "front", glm::vec3{0.0f, y,  half_z}, glm::vec3{ 0.0f, 0.0f,  1.0f});
+    add_side_connector(out_connectors, "back",  glm::vec3{0.0f, y, -half_z}, glm::vec3{ 0.0f, 0.0f, -1.0f});
+    add_side_connector(out_connectors, "left",  glm::vec3{-half_x, y, 0.0f}, glm::vec3{-1.0f, 0.0f,  0.0f});
+    add_side_connector(out_connectors, "right", glm::vec3{ half_x, y, 0.0f}, glm::vec3{ 1.0f, 0.0f,  0.0f});
+}
+
+// The foot at the front edge of the base and the top at the back edge of the top, then the base (stairs, wedge).
+void add_climb_connectors(std::vector<Kit_connector>& out_connectors, const float run, const float rise)
+{
+    add_side_connector(out_connectors, "bottom", glm::vec3{0.0f, 0.0f,  0.5f * run}, glm::vec3{0.0f, 0.0f,  1.0f});
+    add_side_connector(out_connectors, "top",    glm::vec3{0.0f, rise, -0.5f * run}, glm::vec3{0.0f, 0.0f, -1.0f});
+    out_connectors.push_back(Kit_connector{.name = "base", .position = glm::vec3{0.0f}, .outward = glm::vec3{0.0f, -1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}});
+}
+
 } // anonymous namespace
+
+void add_base_and_top_connectors(std::vector<Kit_connector>& out_connectors, const float top_y)
+{
+    out_connectors.push_back(Kit_connector{.name = "base", .position = glm::vec3{0.0f},              .outward = glm::vec3{0.0f, -1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}});
+    out_connectors.push_back(Kit_connector{.name = "top",  .position = glm::vec3{0.0f, top_y, 0.0f}, .outward = glm::vec3{0.0f,  1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}});
+}
+
+void add_side_connector(std::vector<Kit_connector>& out_connectors, const char* const name, const glm::vec3& position, const glm::vec3& outward)
+{
+    out_connectors.push_back(Kit_connector{.name = name, .position = position, .outward = outward, .up = glm::vec3{0.0f, 1.0f, 0.0f}});
+}
 
 auto get_stairs_layout(const Kit_parameter_values& values) -> Kit_stairs_layout
 {
@@ -162,6 +190,10 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.generator       = generate_block;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_seam_sides  = [](const Kit_parameter_values&) { return all_sides(); };
+        shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            add_base_and_top_connectors(out_connectors, values.get_float("height"));
+            add_box_side_connectors(out_connectors, 0.5f * values.get_float("width"), 0.5f * values.get_float("depth"), 0.0f);
+        };
         shapes.push_back(std::move(shape));
     }
     {
@@ -192,6 +224,9 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             }
             return check_walk_width(self, "width", values.get_float("width"), agent);
         };
+        shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            add_climb_connectors(out_connectors, values.get_float("run"), values.get_float("rise"));
+        };
         shapes.push_back(std::move(shape));
     }
     {
@@ -213,6 +248,9 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget         = 60;
         shape.generator               = generate_cylinder;
         shape.mirror_planes           = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
+        shape.get_connectors          = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            add_base_and_top_connectors(out_connectors, values.get_float("height"));
+        };
         shapes.push_back(std::move(shape));
     }
     {
@@ -259,6 +297,9 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             }
             return check_walk_width(self, "width", values.get_float("width"), agent);
         };
+        shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            add_climb_connectors(out_connectors, get_stairs_layout(values).run, values.get_float("rise"));
+        };
         shapes.push_back(std::move(shape));
     }
     {
@@ -284,6 +325,11 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             const Kit_shape_definition& self = *values.get_shape();
             const float narrow = std::min(values.get_float("width"), values.get_float("depth"));
             return check_walk_width(self, "width", narrow, agent);
+        };
+        shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            const float thickness = values.get_float("thickness");
+            add_base_and_top_connectors(out_connectors, thickness);
+            add_box_side_connectors(out_connectors, 0.5f * values.get_float("width"), 0.5f * values.get_float("depth"), thickness);
         };
         shapes.push_back(std::move(shape));
     }

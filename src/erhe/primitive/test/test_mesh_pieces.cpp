@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <vector>

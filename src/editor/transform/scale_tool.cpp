@@ -118,6 +118,8 @@ auto Scale_tool::begin(const unsigned int axis_mask, Scene_view* scene_view) -> 
         // taken from the exact same projection subsequent frames use - making the first
         // frame a guaranteed no-op.
         m_box_need_initial_proj = true;
+    } else if (scene_view != nullptr) {
+        m_drag_origin = project(*scene_view).value_or(get_shared().get_initial_drag_position_in_world());
     }
 
     return (axis_mask != 0) && (scene_view != nullptr);
@@ -135,37 +137,34 @@ auto Scale_tool::update(Scene_view* scene_view) -> bool
         return update_box(scene_view);
     }
 
+    if (std::popcount(m_axis_mask) == 3) {
+        return update_uniform(scene_view);
+    }
+    const std::optional<vec3> drag_position = project(*scene_view);
+    if (!drag_position.has_value()) {
+        return false;
+    }
+    update(drag_position.value());
+    return true;
+}
+
+auto Scale_tool::project(Scene_view& scene_view) const -> std::optional<glm::vec3>
+{
     const auto& shared = get_shared();
     switch (std::popcount(m_axis_mask)) {
         case 1: {
-            const vec3 drag_world_direction = get_axis_direction();
-            const vec3 P0                   = shared.get_initial_drag_position_in_world() - drag_world_direction;
-            const vec3 P1                   = shared.get_initial_drag_position_in_world() + drag_world_direction;
-            const auto closest_point        = scene_view->get_closest_point_on_line(P0, P1);
-            if (closest_point.has_value()) {
-                update(closest_point.value());
-                return true;
-            }
-            return false;
+            const glm::vec3 drag_world_direction = get_axis_direction();
+            const glm::vec3 P0                   = shared.get_initial_drag_position_in_world() - drag_world_direction;
+            const glm::vec3 P1                   = shared.get_initial_drag_position_in_world() + drag_world_direction;
+            return scene_view.get_closest_point_on_line(P0, P1);
         }
-
         case 2: {
-            const vec3 P             = shared.get_initial_drag_position_in_world();
-            const vec3 N             = get_plane_normal(!shared.settings.use_anchor_orientation());
-            const auto closest_point = scene_view->get_closest_point_on_plane(N, P);
-            if (closest_point.has_value()) {
-                update(closest_point.value());
-                return true;
-            }
-            return false;
+            const glm::vec3 P = shared.get_initial_drag_position_in_world();
+            const glm::vec3 N = get_plane_normal(!shared.settings.use_anchor_orientation());
+            return scene_view.get_closest_point_on_plane(N, P);
         }
-
-        case 3: {
-            return update_uniform(scene_view);
-        }
-
         default: {
-            return false;
+            return {};
         }
     }
 }
@@ -174,7 +173,7 @@ void Scale_tool::update(const vec3 drag_position_in_world)
 {
     const auto& shared           = get_shared();
     const vec3  center_of_scale  = shared.world_from_anchor_initial_state.get_translation();
-    const float initial_distance = glm::distance(center_of_scale, shared.get_initial_drag_position_in_world());
+    const float initial_distance = glm::distance(center_of_scale, m_drag_origin);
     if (initial_distance < 1e-6f) {
         return;
     }
@@ -293,6 +292,11 @@ auto Scale_tool::update_box(Scene_view* scene_view) -> bool
     const float new_face = moving_face + (cur_proj - m_box_initial_proj);
 
     const float old_size = m_box_aabb.max[axis] - m_box_aabb.min[axis];
+    if (new_face == moving_face) {
+        // An unmoved face is the drag-start pose on either path, collapsed nodes included.
+        m_context.transform_tool->restore_start_pose();
+        return true;
+    }
 
     float pivot   {0.0f};
     float new_size{0.0f};
@@ -423,9 +427,6 @@ auto Scale_tool::apply_box_per_node(const float pivot, const float old_size, con
             if (!node_collapsed) {
                 const float origin_box = (box_inv * glm::vec4{translation, 1.0f})[axis];
                 const float shift      = (pivot + (origin_box - pivot) * s) - origin_box;
-                if (!any) {
-                    m_context.transform_tool->touch();
-                }
                 node->set_world_from_node(erhe::scene::Trs_transform{translation + u * shift, rotation, scale, skew});
                 any = true;
             }
@@ -467,9 +468,6 @@ auto Scale_tool::apply_box_per_node(const float pivot, const float old_size, con
         // matrix: decomposing a zero/low-rank matrix would lose the rotation.
         const glm::vec3 final_translation = translation + u * (target - reference);
 
-        if (!any) {
-            m_context.transform_tool->touch();
-        }
         node->set_world_from_node(erhe::scene::Trs_transform{final_translation, rotation, new_scale, skew});
         any = true;
     }

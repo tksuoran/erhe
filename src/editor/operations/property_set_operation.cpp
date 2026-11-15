@@ -232,6 +232,7 @@ void Property_set_operation::execute(App_context& context)
                     static_cast<void>(apply(context, m_before));
                     return;
                 }
+                context.level_kits->append_layout_transform_follow_ups(std::span<const std::shared_ptr<erhe::Item_base>>{&m_item, 1}, m_property, m_follow_ups);
             }
         }
     }
@@ -349,11 +350,39 @@ void Property_set_apply_operation::execute(App_context& context)
             apply_item_property(context, *target.item, *entry.property, erhe::property::Local_state{entry.value});
         }
     }
+    if (!m_follow_ups_recorded) {
+        m_follow_ups_recorded = true;
+        record_follow_ups(context);
+    }
+    for (const std::shared_ptr<Operation>& follow_up : m_follow_ups) {
+        follow_up->execute(context);
+    }
+}
+
+void Property_set_apply_operation::record_follow_ups(App_context& context)
+{
+    if (context.level_kits == nullptr) {
+        return;
+    }
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    for (const Target& target : m_targets) {
+        items.push_back(target.item);
+    }
+    // A pasted transform runs the kit layout move hook once for every target: the first entry that regenerates stands for all.
+    for (const erhe::property::Property_set::Entry& entry : m_values.entries()) {
+        context.level_kits->append_layout_transform_follow_ups(items, *entry.property, m_follow_ups);
+        if (!m_follow_ups.empty()) {
+            break;
+        }
+    }
 }
 
 void Property_set_apply_operation::undo(App_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
+    for (auto i = m_follow_ups.rbegin(), end = m_follow_ups.rend(); i != end; ++i) {
+        (*i)->undo(context);
+    }
     for (const Target& target : m_targets) {
         const erhe::property::Dependency_object::Change_batch batch{*target.item};
         const std::vector<erhe::property::Property_set::Entry>& entries = m_values.entries();
@@ -377,6 +406,9 @@ void Property_set_apply_operation::collect_item_references(std::unordered_set<co
         if (const std::shared_ptr<erhe::Item_base> referenced = referenced_item(std::optional<erhe::property::Property_value>{entry.value}); referenced) {
             out_items.insert(referenced.get());
         }
+    }
+    for (const std::shared_ptr<Operation>& follow_up : m_follow_ups) {
+        follow_up->collect_item_references(out_items);
     }
 }
 

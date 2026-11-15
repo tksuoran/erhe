@@ -54,9 +54,10 @@ public:
 class Surface_placement
 {
 public:
-    Surface_pose pose;          // the resting pose; the start pose when no surface was found
+    Surface_pose pose;          // the resting pose; the start pose itself when no surface was found or the start already rests
     float        distance{0.0f}; // how far the base moved along the direction; negative when it rose
     bool         surface_found{false};
+    bool         settled{true};  // false when the rest still rose at its last allowed cast (doc/editor/level_tools.md "Surface placement")
 };
 
 [[nodiscard]] auto any_surface_option(const Surface_options& options) -> bool;

@@ -53,6 +53,7 @@ void Move_tool::imgui(Property_editor& property_editor)
     if (m_context.level_kits != nullptr) {
         p.add_entry(Property_row_id::move_snap_to_surface, "Snap To Surface",   [this]() { surface_snap_checkbox  (*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_orient_to_surface, "Orient To Surface", [this]() { surface_orient_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_connector_snap, "Connector Snap", [this]() { connector_snap_distance_input(*m_context.level_kits, Surface_widget_label::hidden); });
     }
     p.add_entry(Property_row_id::move_bone_ik, "Bone IK", [this]() {
         ImGui::Checkbox("##", &get_shared().settings.translate_ik_enable);
@@ -196,9 +197,12 @@ void Move_tool::imgui(Property_editor& property_editor)
 
 auto Move_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
 {
-    static_cast<void>(scene_view);
     m_axis_mask = axis_mask;
-    return (axis_mask != 0) && (scene_view != nullptr);
+    if ((axis_mask == 0) || (scene_view == nullptr)) {
+        return false;
+    }
+    m_drag_origin = project(*scene_view).value_or(get_shared().get_initial_drag_position_in_world());
+    return true;
 }
 
 auto Move_tool::update(Scene_view* scene_view) -> bool
@@ -213,33 +217,31 @@ auto Move_tool::update(Scene_view* scene_view) -> bool
         return true;
     }
 
+    const std::optional<vec3> drag_position = project(*scene_view);
+    if (!drag_position.has_value()) {
+        return false;
+    }
+    update(drag_position.value());
+    return true;
+}
+
+auto Move_tool::project(Scene_view& scene_view) const -> std::optional<vec3>
+{
     const auto& shared = get_shared();
     switch (std::popcount(m_axis_mask)) {
         case 1: {
             const vec3 drag_world_direction = get_axis_direction();
             const vec3 P0                   = shared.get_initial_drag_position_in_world() - drag_world_direction;
             const vec3 P1                   = shared.get_initial_drag_position_in_world() + drag_world_direction;
-            const auto closest_point        = scene_view->get_closest_point_on_line(P0, P1);
-            if (closest_point.has_value()) {
-                update(closest_point.value());
-                return true;
-            }
-            return false;
+            return scene_view.get_closest_point_on_line(P0, P1);
         }
-
         case 2: {
-            const vec3 P             = shared.get_initial_drag_position_in_world();
-            const vec3 N             = get_plane_normal(!shared.settings.use_anchor_orientation());
-            const auto closest_point = scene_view->get_closest_point_on_plane(N, P);
-            if (closest_point.has_value()) {
-                update(closest_point.value());
-                return true;
-            }
-            return false;
+            const vec3 P = shared.get_initial_drag_position_in_world();
+            const vec3 N = get_plane_normal(!shared.settings.use_anchor_orientation());
+            return scene_view.get_closest_point_on_plane(N, P);
         }
-
         default: {
-            return false;
+            return {};
         }
     }
 }
@@ -356,9 +358,7 @@ auto Move_tool::get_component_snap_translation(Scene_view& scene_view) -> std::o
 
 void Move_tool::update(const vec3 drag_position_in_world)
 {
-    const auto& shared = get_shared();
-
-    const vec3 translation_vector  = drag_position_in_world - shared.get_initial_drag_position_in_world();
+    const vec3 translation_vector  = drag_position_in_world - m_drag_origin;
     const vec3 snapped_translation = snap(translation_vector);
 
     m_context.transform_tool->adjust_translation(snapped_translation);

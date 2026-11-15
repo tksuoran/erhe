@@ -35,6 +35,8 @@ public:
 
 private:
     void update              (glm::vec3 drag_position);
+    // The pointer on the drag's axis line or plane (axis and plane handles).
+    [[nodiscard]] auto project(Scene_view& scene_view) const -> std::optional<glm::vec3>;
     auto update_uniform      (Scene_view* scene_view) -> bool;
     auto update_box          (Scene_view* scene_view) -> bool;
     auto box_axis_projection (Scene_view* scene_view) const -> std::optional<float>;
@@ -48,6 +50,8 @@ private:
     bool             m_box_positive         {true};
     float            m_box_initial_proj     {0.0f};
     bool             m_box_need_initial_proj{false};
+    // project() at the press: an unmoved pointer gives a scale of exactly one.
+    glm::vec3        m_drag_origin          {0.0f};
     glm::vec3        m_uniform_initial_point{0.0f};
     bool             m_uniform_need_initial_point{false};
 };

@@ -16,11 +16,13 @@ enum class Surface_widget_label : unsigned int {
 
 void surface_snap_checkbox  (Level_kits& level_kits, Surface_widget_label label);
 void surface_orient_checkbox(Level_kits& level_kits, Surface_widget_label label);
+// The connector snap distance in meters (D3.13), 0 = off.
+void connector_snap_distance_input(Level_kits& level_kits, Surface_widget_label label);
 
-// Both checkboxes with their labels (the Level Kit window).
+// Both checkboxes and the connector snap distance with their labels (the Level Kit window).
 void surface_settings_checkboxes(Level_kits& level_kits);
 
-// Two toggle buttons of the viewport toolbar; text buttons without the icon font.
+// Two toggle buttons and the connector snap distance of the viewport toolbar; text buttons without the icon font.
 void surface_settings_toolbar_buttons(Level_kits& level_kits, ImFont* icon_font, float font_size);
 
 } // namespace editor

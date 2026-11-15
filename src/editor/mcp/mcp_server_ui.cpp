@@ -1369,9 +1369,8 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
         handles.push_back(entry);
     }
 
-    // probe_points: the handle each given window point picks, so a caller can
-    // confirm a grab point (and its neighbourhood) before pressing there - a
-    // rotate ring is only a few pixels wide where it crosses another.
+    // probe_points: the handle and grab point each window point picks, to
+    // confirm a press point and its neighbours before a drag.
     nlohmann::json probes = nlohmann::json::array();
     if (args.contains("probe_points")) {
         const nlohmann::json& points = args.at("probe_points");
@@ -1391,12 +1390,16 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
             };
             const std::optional<Handle_pick> pick = pick_at(position_in_viewport);
             const Handle handle = pick.has_value() ? pick->handle : Handle::e_handle_none;
-            probes.push_back({
+            nlohmann::json probe = {
                 {"x",            x},
                 {"y",            y},
                 {"handle",       c_str(handle)},
                 {"handle_value", static_cast<unsigned int>(handle)}
-            });
+            };
+            if (pick.has_value()) {
+                probe["world"] = {pick->position.x, pick->position.y, pick->position.z};
+            }
+            probes.push_back(probe);
         }
     }
 

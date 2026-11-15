@@ -12,6 +12,7 @@
 #include "erhe_raytrace/bvh/bvh_scene.hpp"
 #include "erhe_raytrace/bvh/glm_conversions.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
+#include "erhe_raytrace/normal_transform.hpp"
 #include "erhe_raytrace/ray.hpp"
 
 #include "erhe_hash/hash.hpp"
@@ -29,6 +30,7 @@
 #include <bvh/v2/thread_pool.h>
 
 #include <algorithm>
+#include <optional>
 
 namespace erhe::raytrace {
 
@@ -458,6 +460,15 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
     float u{0.0f};
     float v{0.0f};
 
+    // Computed at the first filtered candidate or at the hit only: most visited geometries have neither.
+    std::optional<glm::mat4> normal_transform;
+    const auto get_hit_normal_transform = [&normal_transform, &transform]() -> const glm::mat4& {
+        if (!normal_transform.has_value()) {
+            normal_transform = get_normal_transform(transform);
+        }
+        return normal_transform.value();
+    };
+
     // Traverse the BVH and get the u, v coordinates of the closest intersection.
     bvh::v2::SmallStack<Bvh::Index, stack_size> stack;
     m_bvh.intersect<false, use_robust_traversal>(
@@ -468,6 +479,18 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
             for (size_t i = begin; i < end; ++i) {
                 size_t j = should_permute ? i : m_bvh.prim_ids[i];
                 if (auto hit = m_precomputed_triangles[j].intersect(bvh_ray)) {
+                    if (ray.filter != nullptr) {
+                        const Hit candidate{
+                            .normal      = glm::vec3{get_hit_normal_transform() * glm::vec4{from_bvh(m_precomputed_triangles[j].n), 0.0f}},
+                            .uv          = glm::vec2{std::get<1>(*hit), std::get<2>(*hit)},
+                            .triangle_id = static_cast<unsigned int>(m_bvh.prim_ids[i]),
+                            .geometry    = this,
+                            .instance    = instance
+                        };
+                        if (!ray.filter->accept(candidate)) {
+                            continue;
+                        }
+                    }
                     prim_id = i;
                     std::tie(bvh_ray.tmax, u, v) = *hit;
                 }
@@ -484,10 +507,7 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
         ray.t_far       = bvh_ray.tmax;
         hit.triangle_id = static_cast<unsigned int>(m_bvh.prim_ids[prim_id]);
         hit.uv          = glm::vec2{u, v};
-        // Cofactor matrix, not the instance transform: a normal transformed by
-        // M is sheared toward the longest axis whenever the scale is
-        // non-uniform (a bone proxy, say).
-        hit.normal      = glm::vec3{glm::transpose(glm::adjugate(transform)) * glm::vec4{from_bvh(triangle.n), 0.0f}};
+        hit.normal      = glm::vec3{get_hit_normal_transform() * glm::vec4{from_bvh(triangle.n), 0.0f}};
         hit.instance    = instance;
         hit.geometry    = this;
         return true;

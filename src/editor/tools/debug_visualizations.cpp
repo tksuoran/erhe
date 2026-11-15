@@ -28,6 +28,9 @@
 #include "tools/bone_visualization.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/selection_tool.hpp"
+#include "level/kit_connector_indicators.hpp"
+#include "level/kit_connector_snap.hpp"
+#include "level/level_kits.hpp"
 #include "transform/transform_tool.hpp"
 #include "windows/pvs_window.hpp"
 
@@ -1784,6 +1787,63 @@ void Debug_visualizations::navigation_seeds_visualization(const Render_context& 
     m_navigation_seed_nodes.clear();
 }
 
+void Debug_visualizations::connectors_visualization(const Render_context& context, const Scene_root& scene_root)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    App_context& app_context = context.app_context;
+    if ((app_context.level_kits == nullptr) || (app_context.selection == nullptr)) {
+        return;
+    }
+    const Kit_connector_drag_snap* const drag_snap = (app_context.transform_tool != nullptr) ? &app_context.transform_tool->get_connector_snap() : nullptr;
+    if ((m_settings.connectors == Visualization_mode::off) && ((drag_snap == nullptr) || (drag_snap->get_scene_root() != &scene_root))) {
+        return;
+    }
+    app_context.level_kits->get_connector_indicators().collect(scene_root, m_settings.connectors, *app_context.selection, drag_snap, m_connector_indicators);
+    if (m_connector_indicators.empty()) {
+        return;
+    }
+    const Debug_visualizations_style& style = app_context.editor_settings->debug_visualizations_style;
+    const erhe::scene::Node* const camera_node = context.get_camera_node();
+    const glm::vec3 camera_position = (camera_node != nullptr) ? glm::vec3{camera_node->world_from_node()[3]} : glm::vec3{0.0f};
+
+    // X-ray, as the curves: a connector on a face stays visible.
+    erhe::renderer::Primitive_renderer line_renderer = context.get(
+        {
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .thin_lines        = false,
+            .xray              = true
+        }
+    );
+    const float width = style.connector_width;
+    for (const Kit_connector_indicator& indicator : m_connector_indicators) {
+        const glm::vec4& color = get_connector_indicator_color(style, indicator.role);
+        const glm::vec3  p     = indicator.frame.position;
+        const glm::vec3  o     = indicator.frame.outward;
+        const glm::vec3  up    = indicator.frame.up;
+        const glm::vec3  side  = glm::cross(o, up);
+        const float      size  = style.connector_size * std::max(glm::distance(camera_position, p), 0.1f);
+        const glm::vec3  tip   = p + (size * o);
+        const glm::vec3  back  = tip - ((0.25f * size) * o);
+        const float      h     = 0.12f * size;
+        line_renderer.add_line(color, width, p,   color, width, tip);
+        line_renderer.add_line(color, width, tip, color, width, back + ((0.15f * size) * side));
+        line_renderer.add_line(color, width, tip, color, width, back - ((0.15f * size) * side));
+        line_renderer.add_line(color, width, p,   color, width, p + ((0.5f * size) * up));
+        const glm::vec3 a = p + (h * side) + (h * up);
+        const glm::vec3 b = p - (h * side) + (h * up);
+        const glm::vec3 c = p - (h * side) - (h * up);
+        const glm::vec3 d = p + (h * side) - (h * up);
+        line_renderer.add_line(color, width, a, color, width, b);
+        line_renderer.add_line(color, width, b, color, width, c);
+        line_renderer.add_line(color, width, c, color, width, d);
+        line_renderer.add_line(color, width, d, color, width, a);
+    }
+}
+
 void Debug_visualizations::animation_paths_visualization(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
@@ -2406,6 +2466,8 @@ void Debug_visualizations::render(const Render_context& context)
         curves_visualization(context, *scene_root);
     }
 
+    connectors_visualization(context, *scene_root);
+
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
         for (const auto& mesh : layer->meshes) {
             mesh_labels(context, mesh.get());
@@ -2752,6 +2814,28 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     p.add_entry(Property_row_id::debug_point_selected, "Selected", [point_row, &style](){ point_row(&style.point_selected_color, &style.point_selected_size); });
     p.pop_group();
 
+    // Kit piece connector indicators (doc/editor/level_tools.md "Connector indicators").
+    p.push_group(Property_row_id::debug_connectors_style, "Connectors", ImGuiTreeNodeFlags_None);
+    p.add_entry(Property_row_id::debug_connector_roles, "Colors", [&style]() {
+        ImGui::ColorEdit4("##piece",   &style.connector_color.x,         ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##chosen",  &style.connector_chosen_color.x,  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##moved",   &style.connector_moved_color.x,   ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##target",  &style.connector_target_color.x,  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##snapped", &style.connector_snapped_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##w", &style.connector_width, 0.1f, -100.0f, 100.0f, "%.1f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Piece, chosen, moved, target and snapped connectors; line width (negative is pixels)");
+        }
+    });
+    p.add_entry(Property_row_id::debug_connector_size, "Size", [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.connector_size, 0.001f, 0.0f, 0.5f, "%.3f"); });
+    p.pop_group();
+
     p.add_entry(Property_row_id::debug_primitive_boxes, "Primitive Boxes",   [style_row, &style](){ style_row(&style.mesh_primitive_box_color, &style.mesh_primitive_box_width); });
     p.add_entry(Property_row_id::debug_bone_boxes, "Bone Boxes",        [style_row, &style](){ style_row(&style.bone_box_color,           &style.bone_box_width); });
     // Skin bone visualization: colors alternate by joint hierarchy depth (A = even, B = odd) + line width.
@@ -2924,6 +3008,22 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Curve prims: a selected curve with its control points and handles,\nan unselected one (All) as a thin dim line.");
+        }
+    });
+    p.add_entry(Property_row_id::debug_connectors, "Connectors", [this](){
+        static constexpr const char* c_connector_mode_strings[] = { "Off", "Selected", "All" };
+        static constexpr Visualization_mode c_connector_modes[] = { Visualization_mode::off, Visualization_mode::selected, Visualization_mode::all };
+        int index = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (c_connector_modes[i] == m_settings.connectors) {
+                index = i;
+            }
+        }
+        if (ImGui::Combo("##", &index, c_connector_mode_strings, 3)) {
+            m_settings.connectors = c_connector_modes[index];
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Kit piece connectors: an outward arrow and an up tick.\nA translate drag with Connector Snap shows its own: the moved ones,\nthe targets in reach and the snapped pair.");
         }
     });
     p.add_entry(Property_row_id::debug_path_interval, "Path Interval", [this](){ ImGui::DragFloat("##", &m_settings.animation_path_interval, 0.01f, 0.001f, 10.0f, "%.3f s"); });

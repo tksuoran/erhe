@@ -34,6 +34,8 @@ public:
 
 private:
     void update(glm::vec3 drag_position);
+    // The pointer on the drag's axis line or plane.
+    [[nodiscard]] auto project(Scene_view& scene_view) const -> std::optional<glm::vec3>;
 
     [[nodiscard]] auto snap(glm::vec3 translation) const -> glm::vec3;
 
@@ -44,6 +46,8 @@ private:
     // lies within the radius.
     [[nodiscard]] auto get_component_snap_translation(Scene_view& scene_view) -> std::optional<glm::vec3>;
 
+    // project() at the press: an unmoved pointer gives a translation of exactly zero.
+    glm::vec3                 m_drag_origin{0.0f};
     int                       m_translate_snap_index{2};
     Screen_snap               m_screen_snap{};
     std::vector<std::uint8_t> m_snap_excluded_vertices{}; // per vertex of the hovered geometry (cleared at use, capacity kept)

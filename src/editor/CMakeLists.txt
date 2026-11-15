@@ -375,6 +375,12 @@ erhe_target_sources_grouped(
     items.hpp
     ImViewGuizmo.cpp
     ImViewGuizmo.h
+    level/kit_connector.cpp
+    level/kit_connector.hpp
+    level/kit_connector_indicators.cpp
+    level/kit_connector_indicators.hpp
+    level/kit_connector_snap.cpp
+    level/kit_connector_snap.hpp
     level/kit_layout.cpp
     level/kit_layout.hpp
     level/kit_layout_editor.cpp
@@ -389,6 +395,8 @@ erhe_target_sources_grouped(
     level/kit_piece.hpp
     level/kit_piece_operation.cpp
     level/kit_piece_operation.hpp
+    level/kit_replace.cpp
+    level/kit_replace.hpp
     level/kit_shape.cpp
     level/kit_shape.hpp
     level/kit_shape_checks.cpp

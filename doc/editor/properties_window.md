@@ -42,6 +42,32 @@ migrated" table lists the hand-written rows that are authored state; section
    and a kit layout node's "Kit Layout" group, whose value rows stand for the
    developer-only raw `Kit_layout` rows (`doc/editor/level_tools.md` "Kit
    layout rows"). The editing ones are the R5 exception.
+4. Edit hooks (`Property_edit_hook`, registered in the `Properties`
+   constructor through `Dependency_property_rows::add_edit_hook()`) follow
+   the live writes of a generic row's drag or typed input: `begin` at the
+   edit's first write with the items and the property it records, `step`
+   after each write, `end` when the widget deactivates, and `commit`, which
+   appends the operations the edit implies after the edit's writes in its
+   one undo entry; when a hook appends any, the writes record no follow-ups
+   of their own (`Property_set_follow_ups::none`). A hook ignores the
+   properties it does not drive; a combo, a checkbox and the context menu's
+   writes commit at once and reach no hook. The one hook is the kit layout
+   move preview and move hook of a transform row drag
+   (`doc/editor/level_tools.md` "Live layout preview").
+5. An edit the window gives up records nothing: the live-written values go
+   back to the ones from before the edit and the hooks end. Every owner of
+   a `Dependency_property_rows` (the Properties window, the Node Properties
+   window, the Grid tool) calls `end_lost_edit()` after drawing its rows,
+   which gives up a session whose row was not drawn in that frame (a
+   selection change, a collapsed group, a clipped row: ImGui reports no
+   deactivation for a widget that stops being drawn), and
+   `release_edit_items()` on the close-scene and items-removed messages,
+   which takes the gone items out of the session at once and gives the rest
+   up at the next `end_lost_edit()`, outside the message's dispatch. The
+   Properties window also gives an edit up when it is hidden
+   (`Properties::hidden()`). An edit that ends normally is handled before a
+   new one begins in the same frame, so Tab from one component of a row to
+   the next records the first edit.
 
 ## 2. Requirements
 

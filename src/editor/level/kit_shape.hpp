@@ -12,6 +12,7 @@ namespace GEO { class Mesh; }
 
 namespace editor {
 
+class Kit_connector;
 class Kit_shape_definition;
 
 enum class Kit_parameter_type : unsigned int {
@@ -227,6 +228,7 @@ using Kit_generator           = std::function<void(const Kit_parameter_values& v
 using Kit_values_check        = std::function<std::string(const Kit_parameter_values& values)>;
 using Kit_walkability_check   = std::function<std::string(const Kit_parameter_values& values, const Kit_agent& agent)>;
 using Kit_seam_sides_function = std::function<std::vector<Kit_side>(const Kit_parameter_values& values)>;
+using Kit_connectors_function = std::function<void(const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors)>;
 
 class Kit_shape_definition
 {
@@ -244,6 +246,7 @@ public:
     Kit_collision              collision              {Kit_collision::convex_hull};
     Kit_randomness             randomness             {Kit_randomness::none};
     std::vector<Kit_mirror_plane> mirror_planes;       // empty: no exact mirror image (D1.10)
+    Kit_connectors_function    get_connectors;         // optional: the connectors at the values, the same names at every value (D1.12)
     Kit_generator              generator;
     Kit_values_check           check_combination;      // optional: limits between parameters
     Kit_walkability_check      check_walkability;      // set for shapes meant to be walked on or through

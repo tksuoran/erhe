@@ -291,6 +291,11 @@ private:
     auto query_level_pieces                   (const nlohmann::json& args) -> std::string;
     auto action_level_set_piece_parameters    (const nlohmann::json& args) -> std::string;
     auto action_level_set_piece_material      (const nlohmann::json& args) -> std::string;
+    auto action_level_replace_pieces          (const nlohmann::json& args) -> std::string;
+    auto query_level_connectors               (const nlohmann::json& args) -> std::string;
+    auto action_level_connect_pieces          (const nlohmann::json& args) -> std::string;
+    auto action_level_set_connector_visualization(const nlohmann::json& args) -> std::string;
+    auto query_level_connector_indicators     (const nlohmann::json& args) -> std::string;
     auto action_level_snap_to_surface         (const nlohmann::json& args) -> std::string;
     auto query_level_region_contents          (const nlohmann::json& args) -> std::string;
     auto query_level_height_map               (const nlohmann::json& args) -> std::string;
@@ -329,6 +334,8 @@ private:
     auto action_set_active_scene(const nlohmann::json& args) -> std::string;
     auto action_transform_selection(const nlohmann::json& args) -> std::string;
     auto action_drag_selection     (const nlohmann::json& args) -> std::string;
+    auto action_cancel_transform_drag(const nlohmann::json& args) -> std::string;
+    auto query_connector_snap        (const nlohmann::json& args) -> std::string;
     auto action_physics_drag       (const nlohmann::json& args) -> std::string;
     auto action_set_node_transform(const nlohmann::json& args) -> std::string;
     // Curve prims (mcp_server_curves.cpp, doc/editor/curves.md "MCP").
@@ -790,6 +797,7 @@ private:
         int                   frame          {0};
         bool                  release        {true};
         Surface_options       surface        {}; // translate drags only (D4.6)
+        float                 connector_snap_distance{0.0f}; // translate drags only (D3.13)
     };
     std::optional<Selection_drag_steps>              m_selection_drag_steps;
     // The deltas of the held drag_selection drag (release=false), which

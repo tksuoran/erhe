@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "level/kit_connector.hpp"
 #include "level/kit_layout_editor.hpp"
 #include "level/kit_parameter_rows.hpp"
 #include "level/kit_shape.hpp"
@@ -53,6 +54,12 @@ enum class Group_action : unsigned int {
     mirror_z
 };
 
+// A press of the Connect rows (D4.11): move the other selected piece, or place the shape to place.
+enum class Connect_action : unsigned int {
+    move_piece = 0,
+    place_shape
+};
+
 // A result row of the overlap report or the level check: a click selects its meshes.
 class Spatial_query_row
 {
@@ -91,6 +98,14 @@ private:
     void queue_kit_brush        ();
     void update_place_hint      ();
     void queue_snap_selected    (const std::shared_ptr<Scene_root>& scene_root, Surface_orient orient);
+    void replace_imgui          (const std::shared_ptr<Scene_root>& scene_root);
+    void queue_replace          (const std::shared_ptr<Scene_root>& scene_root, const Kit_shape_definition& shape);
+    void connect_imgui          (const std::shared_ptr<Scene_root>& scene_root);
+    void update_connect_pieces  (const Scene_root& scene_root);
+    // Hands the chosen pair to the connector indicators (doc/editor/level_tools.md "Connector indicators").
+    void publish_connect_choice ();
+    // D3.12: in the queued call, joins the moved piece or a new piece of the shape to place to the target's connector.
+    void queue_connect          (const std::shared_ptr<Scene_root>& scene_root, Connect_action action);
     void layout_imgui           (const std::shared_ptr<Scene_root>& scene_root);
     void group_imgui            (const std::shared_ptr<Scene_root>& scene_root);
     // D3.8: runs the action in the queued call on the selected nodes (group) or the selected group node.
@@ -136,6 +151,35 @@ private:
 
     // The Layout section: the initial values of a new kit layout node (R5.12.9).
     Kit_layout_initial_editor m_layout_editor;
+
+    // Replace (D4.10): the target shape and the count of selected pieces, counted again on the selection and active item messages.
+    const Kit_shape_definition* m_replace_shape{nullptr};
+    std::string                 m_replace_preview{"(choose a shape)"};
+    std::vector<std::string>    m_replace_labels; // per library shape, made once
+    const Scene_root*           m_replace_scene{nullptr};
+    std::size_t                 m_replace_piece_count{0};
+    bool                        m_replace_selection_changed{true};
+    std::string                 m_replace_message;
+    bool                        m_replace_failed{false};
+
+    // Connect (D4.11): the target is the active selected piece (else the first), the moved piece the other of two selected
+    // pieces; both and their connectors are read again on the selection, active item and mesh messages.
+    std::weak_ptr<erhe::scene::Node> m_connect_target;
+    std::weak_ptr<erhe::scene::Node> m_connect_moved;
+    std::vector<Kit_connector>       m_connect_target_connectors;
+    std::vector<Kit_connector>       m_connect_moved_connectors;
+    std::vector<Kit_connector>       m_connect_place_connectors; // of the shape to place, read when it is chosen
+    std::string                      m_connect_target_connector;
+    std::string                      m_connect_moved_connector;
+    std::string                      m_connect_place_connector;
+    std::string                      m_connect_target_label;
+    std::string                      m_connect_moved_label;
+    const Scene_root*                m_connect_scene{nullptr};
+    int                              m_connect_twist_steps{0};
+    float                            m_connect_gap{0.0f};
+    bool                             m_connect_selection_changed{true};
+    std::string                      m_connect_message;
+    bool                             m_connect_failed{false};
 
     // The Group section: the new group's name, the copy's offset (the group's width by default) and the last result.
     std::string                            m_group_name{"Group"};

@@ -56,6 +56,27 @@ namespace editor {
 
 namespace {
 
+// D3.12: the local transform of a joined piece, keeping its stored scale when the matrix allows, else decomposed.
+[[nodiscard]] auto make_joined_local_transform(const glm::mat4& parent_from_node, const glm::vec3& scale) -> erhe::scene::Trs_transform
+{
+    const glm::vec3 translation{parent_from_node[3]};
+    const std::optional<glm::quat> rotation = rotation_for_scale(glm::mat3{parent_from_node}, scale);
+    if (rotation.has_value()) {
+        return erhe::scene::Trs_transform{translation, rotation.value(), scale};
+    }
+    const erhe::scene::Trs_transform decomposed{parent_from_node};
+    return erhe::scene::Trs_transform{decomposed.get_translation(), decomposed.get_rotation(), decomposed.get_scale()};
+}
+
+[[nodiscard]] auto sheared_join_message(const std::string_view piece, const std::string_view parent) -> std::string
+{
+    return fmt::format(
+        "'{}' under '{}': the parent chain has non-uniform scale or shear, so the joined pose would need a sheared local transform",
+        piece, parent
+    );
+}
+
+
 // Smooth shapes keep their base rims hard: an edge sharper than this is a crease.
 constexpr float c_smooth_crease_angle_degrees = 80.0f;
 
@@ -300,7 +321,8 @@ private:
 } // anonymous namespace
 
 Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
-    : m_context{context}
+    : m_context             {context}
+    , m_connector_indicators{*this}
 {
     // A live parameter drag ends without an entry when its piece is deselected, removed or its scene closes (D3.6).
     m_selection_subscription = app_message_bus.selection.subscribe(
@@ -325,6 +347,24 @@ Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
             }
         }
     );
+    // A parameter change, replace or live parameter drag swaps the piece's primitives with its record.
+    m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
+        [this](Mesh_geometry_changed_message& message) {
+            if (message.mesh) {
+                m_connector_indicators.forget_piece(*message.mesh);
+            }
+        }
+    );
+}
+
+auto Level_kits::get_connector_indicators() -> Kit_connector_indicators&
+{
+    return m_connector_indicators;
+}
+
+void Level_kits::on_kit_piece_record_changed(const erhe::scene::Node& node)
+{
+    m_connector_indicators.forget_piece(node);
 }
 
 Level_kits::~Level_kits() noexcept = default;
@@ -433,6 +473,22 @@ void Level_kits::set_surface_orient(const Surface_orient orient)
         return;
     }
     m_context.editor_settings->surface_snap.orient_to_surface = (orient == Surface_orient::on);
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
+}
+
+auto Level_kits::get_connector_snap_distance() const -> float
+{
+    return (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.connector_snap_distance : 0.0f;
+}
+
+void Level_kits::set_connector_snap_distance(const float distance)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.connector_snap_distance = (std::isfinite(distance) && (distance > 0.0f)) ? distance : 0.0f;
     if (m_context.app_settings != nullptr) {
         m_context.app_settings->settings_store().touch();
     }
@@ -720,7 +776,13 @@ auto Level_kits::snap_to_surface(
             )
         );
     }
-    const std::size_t moved_count = operations.size();
+    const std::size_t moved_count     = operations.size();
+    const std::size_t unsettled_count = static_cast<std::size_t>(std::count_if(
+        out_results.begin(), out_results.end(), [](const Kit_snap_result& result) -> bool { return !result.placement.settled; }
+    ));
+    if ((apply == Kit_snap_apply::move) && (unsettled_count > 0)) {
+        log_scene->warn("Level Kit: snap to surface moved {} pieces, {} still rose at their last surface cast (unsettled rest recorded)", moved_count, unsettled_count);
+    }
     if (!operations.empty()) {
         m_context.operation_stack->execute_now(
             (operations.size() == 1)
@@ -789,8 +851,10 @@ auto Level_kits::prepare_placements(
     }
 
     // Every placement is checked before anything is made, so a failing one leaves the scene unchanged.
-    std::vector<Kit_parameter_values> values;
+    std::vector<Kit_parameter_values>         values;
+    std::vector<std::optional<Kit_join_pose>> joins;
     values.reserve(placements.size());
+    joins.reserve(placements.size());
     for (std::size_t i = 0, end = placements.size(); i < end; ++i) {
         const Kit_placement& placement = placements[i];
         if (placement.shape == nullptr) {
@@ -816,6 +880,21 @@ auto Level_kits::prepare_placements(
         if (!material_problem.empty()) {
             return fail(i, material_problem);
         }
+        std::optional<Kit_join_pose> join{};
+        if (placement.connect.has_value()) {
+            Kit_join_pose pose{};
+            const std::string connect_problem = resolve_connect(scene_root, piece_values, placement.connect.value(), glm::mat4{1.0f}, pose);
+            if (!connect_problem.empty()) {
+                return fail(i, connect_problem);
+            }
+            // D3.12: the joined world pose has scale 1; under the parent it must be a local transform without shear.
+            const std::shared_ptr<erhe::scene::Node> parent_node = std::dynamic_pointer_cast<erhe::scene::Node>(placement.parent);
+            if (parent_node && !has_orthogonal_axes(glm::mat3{parent_node->node_from_world() * apply_motion(pose, glm::mat4{1.0f})})) {
+                return fail(i, sheared_join_message(placement.name.empty() ? placement.shape->display_name : placement.name, parent_node->get_name()));
+            }
+            join = pose;
+        }
+        joins.push_back(join);
         values.push_back(std::move(piece_values));
     }
 
@@ -823,6 +902,7 @@ auto Level_kits::prepare_placements(
     std::vector<std::shared_ptr<erhe::primitive::Material>>           materials;
     std::vector<std::shared_ptr<Operation>>                           insert_operations;
     std::map<const erhe::Hierarchy*, std::size_t>                     batch_children;
+    std::size_t                                                       unsettled_count{0};
     for (std::size_t i = 0, end = placements.size(); i < end; ++i) {
         const Kit_placement&        placement = placements[i];
         const Kit_shape_definition& shape     = *placement.shape;
@@ -839,10 +919,13 @@ auto Level_kits::prepare_placements(
             materials.push_back(resolver.resolve(m_library, shape.material_slots[slot], given));
         }
 
-        // The earlier pieces of this call are not surfaces yet.
-        const Surface_placement surface = rest_pose(
-            scene_root, brush->get_bounding_box(), placement.position, placement.rotation, snap, lengths.module, placement.surface
-        );
+        // The earlier pieces of this call are not surfaces yet; a connector join is exact, so it is not rested.
+        const Surface_placement surface = joins[i].has_value()
+            ? Surface_placement{.pose = Surface_pose{.position = joins[i]->position, .rotation = joins[i]->rotation, .scale = glm::vec3{1.0f}}}
+            : rest_pose(scene_root, brush->get_bounding_box(), placement.position, placement.rotation, snap, lengths.module, placement.surface);
+        if (!surface.settled) {
+            ++unsettled_count;
+        }
         const glm::vec3 position        = surface.pose.position;
         const glm::quat rotation        = surface.pose.rotation;
         const glm::mat4 world_from_node = erhe::math::create_translation<float>(position) * glm::mat4_cast(rotation);
@@ -884,6 +967,9 @@ auto Level_kits::prepare_placements(
         );
     }
 
+    if (unsettled_count > 0) {
+        log_scene->warn("Level Kit: {} of {} placed pieces still rose at their last surface cast (unsettled rest recorded)", unsettled_count, placements.size());
+    }
     // Materials are inserted first, so an undo takes the pieces out before the materials they use.
     out_operations = resolver.take_operations();
     for (std::shared_ptr<Operation>& operation : insert_operations) {
@@ -944,6 +1030,167 @@ void collect_descendant_nodes(const erhe::Hierarchy& hierarchy, std::vector<std:
 }
 
 } // anonymous namespace
+
+auto Level_kits::get_local_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors) const -> std::string
+{
+    out_connectors.clear();
+    const std::optional<Kit_piece_data> record = read_kit_piece(node);
+    if (!record.has_value()) {
+        return fmt::format("'{}' is not a kit piece", node.get_name());
+    }
+    Kit_parameter_values values;
+    const std::string problem = read_piece_values(record.value(), values);
+    if (!problem.empty()) {
+        return fmt::format("'{}': {}", node.get_name(), problem);
+    }
+    get_shape_connectors(values, out_connectors);
+    return {};
+}
+
+auto Level_kits::get_world_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors) const -> std::string
+{
+    out_connectors.clear();
+    std::vector<Kit_connector> local_connectors;
+    const std::string problem = get_local_connectors(node, local_connectors);
+    if (!problem.empty()) {
+        return problem;
+    }
+    if (!transform_connectors(local_connectors, node.world_from_node(), out_connectors)) {
+        return fmt::format("'{}' has a zero scale axis in its world transform: its connector frames degenerate", node.get_name());
+    }
+    return {};
+}
+
+auto Level_kits::resolve_connect(
+    const Scene_root&           scene_root,
+    const Kit_parameter_values& values,
+    const Kit_connect&          connect,
+    const glm::mat4&            world_from_node,
+    Kit_join_pose&              out_motion
+) const -> std::string
+{
+    const Kit_shape_definition* const shape = values.get_shape();
+    if (shape == nullptr) {
+        return "no shape";
+    }
+    std::vector<Kit_connector> connectors;
+    get_shape_connectors(values, connectors);
+    const Kit_connector* const piece_connector = find_connector(connectors, connect.connector);
+    if (piece_connector == nullptr) {
+        return fmt::format("{} has no connector '{}' (its connectors: {})", shape->id, connect.connector, connector_names_text(connectors));
+    }
+    if (!connect.target) {
+        return "no target piece";
+    }
+    if (connect.target->get_item_host() != &scene_root) {
+        return fmt::format("target '{}' is not in scene '{}'", connect.target->get_name(), scene_root.get_name());
+    }
+    if (!std::isfinite(connect.gap)) {
+        return "the gap must be a finite number";
+    }
+    std::vector<Kit_connector> target_connectors;
+    const std::string target_problem = get_world_connectors(*connect.target, target_connectors);
+    if (!target_problem.empty()) {
+        return "target " + target_problem;
+    }
+    const Kit_connector* const target_connector = find_connector(target_connectors, connect.target_connector);
+    if (target_connector == nullptr) {
+        const std::optional<Kit_piece_data> record = read_kit_piece(*connect.target);
+        return fmt::format(
+            "target '{}' ({}) has no connector '{}' (its connectors: {})",
+            connect.target->get_name(), record.has_value() ? record->shape : std::string{}, connect.target_connector,
+            connector_names_text(target_connectors)
+        );
+    }
+    const std::optional<Kit_join_pose> motion = join_motion(*piece_connector, world_from_node, *target_connector, connect.twist_steps, connect.gap);
+    if (!motion.has_value()) {
+        return fmt::format("{} connector '{}' degenerates under a zero scale axis", shape->id, connect.connector);
+    }
+    out_motion = motion.value();
+    return {};
+}
+
+auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node, const Kit_connect& connect) -> Kit_connect_result
+{
+    Kit_connect_result result;
+    result.node  = node;
+    result.error = check_scene_node(scene_root, node);
+    if (!result.error.empty()) {
+        return result;
+    }
+    const std::optional<std::string> refusal = locked_layout_refusal(*node);
+    if (refusal.has_value()) {
+        result.error = refusal.value();
+        return result;
+    }
+    const std::optional<Kit_piece_data> record = read_kit_piece(*node);
+    if (!record.has_value()) {
+        result.error = fmt::format("'{}' is not a kit piece", node->get_name());
+        return result;
+    }
+    Kit_parameter_values values;
+    const std::string problem = read_piece_values(record.value(), values);
+    if (!problem.empty()) {
+        result.error = fmt::format("'{}': {}", node->get_name(), problem);
+        return result;
+    }
+    // The target stays where it is, so it may not move with the piece.
+    for (std::shared_ptr<erhe::Hierarchy> ancestor = connect.target; ancestor; ancestor = ancestor->get_parent().lock()) {
+        if (ancestor.get() == node.get()) {
+            result.error = (connect.target == node)
+                ? fmt::format("'{}' cannot connect to itself", node->get_name())
+                : fmt::format("target '{}' is below '{}' and would move with it", connect.target->get_name(), node->get_name());
+            return result;
+        }
+    }
+    Kit_join_pose motion{};
+    result.error = resolve_connect(scene_root, values, connect, node->world_from_node(), motion);
+    if (!result.error.empty()) {
+        return result;
+    }
+    // D3.12: the piece keeps its own scale; the rigid motion is applied to its world matrix.
+    const glm::mat4                  world_from_node = apply_motion(motion, node->world_from_node());
+    const erhe::scene::Trs_transform world_after{world_from_node};
+    result.position = glm::vec3{world_from_node[3]};
+    result.rotation = world_after.get_rotation();
+    if (is_identity_motion(motion)) {
+        return result;
+    }
+
+    // The local transform is stored as translation, rotation and scale, so a local matrix with shear cannot be held.
+    const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+    const glm::mat4 parent_from_node = parent ? (parent->node_from_world() * world_from_node) : world_from_node;
+    if (!has_orthogonal_axes(glm::mat3{parent_from_node})) {
+        result.error = sheared_join_message(node->get_name(), parent ? parent->get_name() : std::string{});
+        return result;
+    }
+    const erhe::scene::Trs_transform before = node->parent_from_node_transform();
+    // Rebuilt from its components, so the stored local matrix is an exact TRS; the node's own scale is kept as stored.
+    const erhe::scene::Trs_transform after = make_joined_local_transform(parent_from_node, before.get_scale());
+    const std::optional<erhe::scene::Xform_op_stack> xform_op_stack_before = node->copy_xform_op_stack();
+    // Applied first, so the layout move hook sees the moved pose (as set_node_transform does); the operation re-applies it.
+    node->set_parent_from_node(after);
+    node->update_world_from_node();
+    std::vector<std::shared_ptr<Operation>> operations;
+    operations.push_back(
+        std::make_shared<Node_transform_operation>(
+            Node_transform_operation::Parameters{
+                .node                    = node,
+                .parent_from_node_before = before,
+                .parent_from_node_after  = after,
+                .xform_op_stack_before   = xform_op_stack_before
+            }
+        )
+    );
+    append_layout_move_operations(scene_root, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, operations);
+    m_context.operation_stack->execute_now(
+        (operations.size() == 1)
+            ? operations.front()
+            : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
+    );
+    result.changed = true;
+    return result;
+}
 
 auto Level_kits::get_subtree_bounds(const erhe::scene::Node& node) -> erhe::math::Aabb
 {
@@ -1253,6 +1500,8 @@ void Level_kits::cancel_parameter_preview()
 
 void Level_kits::on_selection()
 {
+    // The Level Kit window publishes its Connect choice again for the new selection.
+    m_connector_indicators.clear_connect_choice();
     if (m_parameter_preview.has_value() && !m_parameter_preview.value().mesh->is_selected()) {
         cancel_parameter_preview();
     }
@@ -1291,6 +1540,8 @@ void Level_kits::queue_end_layout_preview()
 
 void Level_kits::on_items_removed(const Removed_items& removed)
 {
+    // The cached connector frames of removed pieces go (a regenerated layout's children are new nodes).
+    m_connector_indicators.forget_removed(removed);
     if (m_parameter_preview.has_value() && removed.lookup.contains(m_parameter_preview.value().mesh.get())) {
         cancel_parameter_preview();
     }
@@ -1304,12 +1555,14 @@ void Level_kits::on_items_removed(const Removed_items& removed)
 
 void Level_kits::on_close_scene(const erhe::Item_host* const closing_host)
 {
+    m_connector_indicators.forget_all();
     if (m_parameter_preview.has_value() && (m_parameter_preview.value().mesh->get_item_host() == closing_host)) {
         cancel_parameter_preview();
     }
     // The closing scene's layouts go with it; nothing is restored.
     if (!m_layout_preview.empty() && (m_layout_preview.front().node->get_item_host() == closing_host)) {
         m_layout_preview.clear();
+        m_layout_transform_preview = false;
     }
 }
 
@@ -1338,6 +1591,7 @@ auto Level_kits::preview_parameters(const std::shared_ptr<erhe::scene::Node>& no
         m_parameter_preview = Parameter_preview{
             .mesh   = mesh,
             .before = Kit_piece_mesh_state{
+                .shape           = record.shape,
                 .primitives      = mesh->get_primitives(),
                 .collision_shape = get_node_collision_shape(*mesh),
                 .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
@@ -1395,6 +1649,7 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
     } else {
         const std::optional<Brush_placement_data> placement = read_brush_placement(*mesh);
         before = Kit_piece_mesh_state{
+            .shape           = record.shape,
             .primitives      = mesh->get_primitives(),
             .collision_shape = get_node_collision_shape(*mesh),
             .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
@@ -1410,6 +1665,7 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
 
     // The piece keeps its materials, slot by slot; only the shared primitives change.
     Kit_piece_mesh_state after{
+        .shape           = record.shape,
         .primitives      = with_brush_primitives(before.primitives, *scaled),
         .collision_shape = carries_node_physics(*mesh) ? scaled->collision_shape : before.collision_shape,
         .brush           = result.brush,
@@ -1482,6 +1738,198 @@ auto Level_kits::set_slot_material(
     Compound_operation::Parameters parameters;
     parameters.operations = resolver.take_operations();
     parameters.operations.push_back(assign);
+    m_context.operation_stack->execute_now(
+        (parameters.operations.size() == 1)
+            ? parameters.operations.front()
+            : std::make_shared<Compound_operation>(std::move(parameters))
+    );
+    return result;
+}
+
+auto Level_kits::make_replace_values(
+    const Scene_root&                 scene_root,
+    const erhe::scene::Node&          node,
+    const Kit_shape_definition&       shape,
+    Kit_parameter_values&             out_values,
+    std::vector<Kit_parameter_carry>& out_carry
+) const -> std::string
+{
+    const std::optional<Kit_piece_data> record = read_kit_piece(node);
+    if (!record.has_value()) {
+        return fmt::format("node '{}' is not a kit piece", node.get_name());
+    }
+    Kit_parameter_values old_values;
+    const std::string problem = read_piece_values(record.value(), old_values);
+    if (!problem.empty()) {
+        return fmt::format("piece '{}': {}", node.get_name(), problem);
+    }
+    carry_parameter_values(old_values, shape, get_lengths(scene_root), out_values, out_carry);
+    return {};
+}
+
+auto Level_kits::replace_shape(
+    Scene_root&                            scene_root,
+    const Kit_shape_definition&            shape,
+    const std::span<const Kit_replacement> replacements
+) -> Kit_replace_result
+{
+    Kit_replace_result result;
+    const auto fail = [](const std::size_t index, std::string message) -> Kit_replace_result {
+        Kit_replace_result failed;
+        failed.failed_index = index;
+        failed.error        = std::move(message);
+        return failed;
+    };
+    if (replacements.empty()) {
+        result.error = "no pieces to replace";
+        return result;
+    }
+    const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+    if (!library) {
+        result.error = "the scene has no content library";
+        return result;
+    }
+    const Kit_lengths lengths = get_lengths(scene_root);
+
+    // Every piece is checked before anything changes.
+    for (std::size_t i = 0, end = replacements.size(); i < end; ++i) {
+        const Kit_replacement& replacement = replacements[i];
+        if (!replacement.node) {
+            return fail(i, "no node");
+        }
+        const erhe::scene::Node& node = *replacement.node;
+        if (carries_kit_layout(node)) {
+            return fail(i, fmt::format("'{}' is a kit layout node: the shapes of its items are its own values (level_set_layout)", node.get_name()));
+        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(replacement.node);
+        if (!mesh || (mesh->get_item_host() != &scene_root)) {
+            return fail(i, fmt::format("'{}' is not a mesh of scene '{}'", node.get_name(), scene_root.get_name()));
+        }
+        for (std::size_t j = 0; j < i; ++j) {
+            if (replacements[j].node == replacement.node) {
+                return fail(i, fmt::format("'{}' is listed twice", node.get_name()));
+            }
+        }
+        const std::optional<std::string> refusal = locked_layout_refusal(*mesh);
+        if (refusal.has_value()) {
+            return fail(i, refusal.value());
+        }
+        const std::optional<Kit_piece_data> record = read_kit_piece(*mesh);
+        if (!record.has_value()) {
+            return fail(i, fmt::format("'{}' is not a kit piece", node.get_name()));
+        }
+        Kit_replaced_piece piece;
+        piece.mesh      = mesh;
+        piece.old_shape = record.value().shape;
+        Kit_parameter_values old_values;
+        const std::string problem = read_piece_values(record.value(), old_values);
+        if (!problem.empty()) {
+            return fail(i, fmt::format("piece '{}': {}", node.get_name(), problem));
+        }
+        const Kit_shape_definition& old_shape = *old_values.get_shape();
+        if (mesh->get_primitives().size() != old_shape.material_slots.size()) {
+            return fail(i, fmt::format(
+                "piece '{}' keeps a loaded mesh: it has {} primitives, its shape {} material slots",
+                node.get_name(), mesh->get_primitives().size(), old_shape.material_slots.size()
+            ));
+        }
+        if (&old_shape == &shape) {
+            piece.values = std::move(old_values);
+            result.pieces.push_back(std::move(piece));
+            continue;
+        }
+        carry_parameter_values(old_values, shape, lengths, piece.values, piece.parameters);
+        if (replacement.values.has_value()) {
+            if (replacement.values.value().get_shape() != &shape) {
+                return fail(i, fmt::format("the parameter values are not of shape {}", shape.id));
+            }
+            piece.values = replacement.values.value();
+        }
+        const std::string message = piece.values.validate();
+        if (!message.empty()) {
+            return fail(i, fmt::format("piece '{}': {}", node.get_name(), message));
+        }
+        const std::string material_problem = check_slot_materials(m_library, shape, replacement.materials);
+        if (!material_problem.empty()) {
+            return fail(i, material_problem);
+        }
+        match_material_slots(old_shape.material_slots, shape.material_slots, piece.slot_matches);
+        piece.replaced = true;
+        result.pieces.push_back(std::move(piece));
+    }
+
+    // The brushes last: a call refused by a check above builds none.
+    std::vector<std::shared_ptr<Brush>> brushes;
+    for (std::size_t i = 0, end = result.pieces.size(); i < end; ++i) {
+        if (!result.pieces[i].replaced) {
+            brushes.push_back({});
+            continue;
+        }
+        std::shared_ptr<Brush>     brush  = get_brush(result.pieces[i].values);
+        const Brush::Scaled* const scaled = brush ? brush->get_scaled(1.0) : nullptr;
+        if ((scaled == nullptr) || (scaled->part_primitives.size() != shape.material_slots.size())) {
+            return fail(i, fmt::format("{}: the shape made no geometry of one part per material slot", shape.id));
+        }
+        brushes.push_back(std::move(brush));
+    }
+
+    Palette_material_resolver               resolver{m_context, library};
+    std::vector<std::shared_ptr<Operation>> piece_operations;
+    for (std::size_t i = 0, end = result.pieces.size(); i < end; ++i) {
+        Kit_replaced_piece& piece = result.pieces[i];
+        if (!piece.replaced) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Mesh>& mesh   = piece.mesh;
+        const Brush::Scaled&                      scaled = *brushes[i]->get_scaled(1.0);
+        if (is_previewing(*mesh)) {
+            cancel_parameter_preview();
+        }
+        const std::optional<Brush_placement_data> placement = read_brush_placement(*mesh);
+        Kit_piece_mesh_state before{
+            .shape           = piece.old_shape,
+            .primitives      = mesh->get_primitives(),
+            .collision_shape = get_node_collision_shape(*mesh),
+            .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
+            .parameters      = read_kit_piece(*mesh).value().parameters
+        };
+        const std::vector<Kit_slot_material>& given = replacements[i].materials;
+        std::vector<erhe::scene::Mesh_primitive> primitives;
+        for (std::size_t slot = 0, slot_end = shape.material_slots.size(); slot < slot_end; ++slot) {
+            const bool is_given = (slot < given.size()) && (given[slot].material || !given[slot].palette_name.empty());
+            std::optional<std::size_t>& match = piece.slot_matches[slot];
+            std::shared_ptr<erhe::primitive::Material> material;
+            if (is_given) {
+                material = resolver.resolve(m_library, shape.material_slots[slot], given[slot]);
+                match.reset();
+            } else if (match.has_value() && before.primitives[match.value()].material) {
+                material = before.primitives[match.value()].material;
+            } else {
+                material = resolver.resolve(m_library, shape.material_slots[slot], Kit_slot_material{});
+                match.reset();
+            }
+            piece.materials.push_back(material);
+            primitives.emplace_back(scaled.part_primitives[slot], material);
+        }
+        Kit_piece_mesh_state after{
+            .shape           = shape.id,
+            .primitives      = std::move(primitives),
+            .collision_shape = carries_node_physics(*mesh) ? scaled.collision_shape : before.collision_shape,
+            .brush           = brushes[i],
+            .parameters      = piece.values.to_canonical_text()
+        };
+        piece_operations.push_back(std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after)));
+        ++result.replaced_count;
+    }
+    if (piece_operations.empty()) {
+        return result;
+    }
+    // Materials are inserted first, so an undo takes them out after the pieces stop using them.
+    Compound_operation::Parameters parameters;
+    parameters.operations = resolver.take_operations();
+    for (std::shared_ptr<Operation>& operation : piece_operations) {
+        parameters.operations.push_back(std::move(operation));
+    }
     m_context.operation_stack->execute_now(
         (parameters.operations.size() == 1)
             ? parameters.operations.front()

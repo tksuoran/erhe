@@ -87,6 +87,16 @@ an empty scene and checks over MCP:
   width row changes the placement preview without an entry; the cached brush
   count returns to its start after clear_undo_history; the preview step times
   (editor.scene trace) of the heaviest shape are printed;
+- surface resting (doc/editor/level_tools.md "Surface placement"), in a scene of
+  its own (closed afterwards): layouts of blocks (at the rule's heights), seeded
+  trees and overlapping rocks over hills answer 0 to level_snap_to_surface
+  query_only and the support report, snapping them again moves nothing, held
+  Transform drags rest as the release does, a block against a taller wall and
+  a block buried in a hill keep their height, a block climbs a stack of thin
+  slabs in one rest and a stack taller than the cast cap answers unsettled;
+  oriented rests on a wedge (snap + orient) answer 0 and keep their rotation
+  when rested again, from placement, a held drag and its release, a layout and
+  a crease between the slope and the ground, and climb a slab stack;
 - spatial queries (doc/editor/level_tools.md "Spatial queries"), in a scene of
   its own (closed afterwards): level_get_support_report over a ground slab, a
   block resting on it, one stacked on that, a floating block and one over
@@ -168,6 +178,14 @@ an empty scene and checks over MCP:
   form not reading; save and reopen; a capture_screenshot of the selected
   path layout with the Properties window's Curve and Kit Layout groups is
   written and its path printed.
+- scatter layouts (doc/editor/level_tools.md "Scatter layouts"), in a scene of
+  their own: count and density modes over a rectangle and a disc (count,
+  region, spacing, yaw), the same placement for the same seed through undo,
+  redo, save, reopen and refresh, another seed elsewhere, a raised count
+  keeping the first pieces, what fits of an impossible request, refusals,
+  lock / unlock / refresh, surface snap over the hill, the Properties rows
+  clicked by id, a held Yaw Max drag of 200 pieces (its median preview step
+  printed) and the Level Kit window's scatter rows.
 
 The run restores config/editor/editor_settings.json, desktop_windows.json,
 user_state.json and desktop_window_imgui_host_imgui.ini, which the window's
@@ -179,7 +197,7 @@ layout.
 Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png path>] [--surface-image <png path>]
        [--walkable-image <png path>] [--window-image <png path>] [--properties-image <png path>] [--queries-image <png path>]
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
-       [--only-path-layouts] [--only-window-layout]
+       [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-scatter] [--only-connectors] [--only-connector-snap]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
 
@@ -213,6 +231,8 @@ DEFAULT_MATERIALS_IMAGE = os.path.join("logs", "level_tools_material_slots.png")
 DEFAULT_PATH_IMAGE = os.path.join("logs", "level_tools_path_layout.png")
 DEFAULT_LAYOUT_DRAG_IMAGE = os.path.join("logs", "level_tools_layout_drag.png")
 WINDOW          = "Level Kit"
+# ImGui's Ctrl (text input on a drag, select all): with io.ConfigMacOSXBehaviors it is the Cmd (super) key on macOS.
+IMGUI_CTRL      = ["super"] if sys.platform == "darwin" else ["ctrl"]
 IMAGE_WIDTH     = 1600
 IMAGE_HEIGHT    = 600
 TOLERANCE       = 1.0e-3
@@ -1016,7 +1036,7 @@ def check_spatial_queries(editor):
     ]:
         error = call_error(editor, "level_get_height_map", arguments)
         check(f"level_get_height_map refuses {label}", error is not None, str(error))
-    # Left open, it moves the Transform checks' scene to a wide viewport where X drags land short (level_tools_implementation.md step 20).
+    # Closed, so the gizmo drag checks keep their viewport; a wide one was never measured with whole-pixel drags.
     editor.close(scene)
 
 
@@ -1187,7 +1207,361 @@ def check_level_check(editor):
           (job.get("state") == "done") and (clean["finding_count"] == 0) and clean["navigation_available"] and (not clean["navigation_stale"]),
           json.dumps({k: clean.get(k) for k in ("finding_count", "counts", "navigation_stale")}) + " " +
           "; ".join(f"{f['kind']}: {f['detail']}" for f in clean["findings"]))
-    # Left open, it would change the viewport layout of the later gizmo drag checks (level_tools_implementation.md step 20).
+    # Closed, so the gizmo drag checks keep their viewport; a wide one was never measured with whole-pixel drags.
+    editor.close(scene)
+
+
+def check_surface_resting(editor):
+    """D7.3 (doc/editor/level_tools.md "Surface placement"): a rest is idempotent, the layout generation, a held Transform drag,
+    its release, level_snap_to_surface (query_only and applied) and the support report agree, and a piece never rises onto a
+    surface more than its own height above its base (a block against a taller wall stays on the slab)."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    # The hills sit flush on the slab: each hill bottom is coincident with the slab top.
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}},
+        {"shape": "nature.hill", "position": [6.0, 0.0, 6.0], "name": "hill", "parameters": {"seed": 2}},
+        {"shape": "nature.hill", "position": [-8.0, 0.0, 6.0], "name": "hill b", "parameters": {"seed": 2}},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -10.0], "name": "wall"}]})
+    editor.wait_idle()
+
+    def create(arguments):
+        made = editor.call("level_create_layout", dict({"scene_name": scene, "surface_snap": True, "locked": True}, **arguments))
+        editor.wait_idle()
+        return made["id"]
+
+    def lay(layout_id):
+        return layouts_by_id(editor, scene)[layout_id]
+
+    def query_ids(ids):
+        return [(n.get("surface_found"), n.get("distance", 9.0)) for n in editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": ids, "query_only": True})["nodes"]]
+
+    def query(layout):
+        return query_ids([c["id"] for c in layout["children"]])
+
+    def rested(distances):
+        return bool(distances) and all(found and (abs(d) <= TOLERANCE) for found, d in distances)
+
+    def support(layout):
+        ids = [c["id"] for c in layout["children"]]
+        return editor.call("level_get_support_report", {"scene_name": scene, "node_ids": ids})["nodes"]
+
+    def worst(distances):
+        return max((abs(d) for _, d in distances), default=9.0)
+
+    def height_at(x, z):
+        return editor.call("level_get_height_map", {"scene_name": scene, "min": [x - 0.05, -1.0, z - 0.05], "max": [x + 0.05, 4.0, z + 0.05], "cell_size": 0.1})["heights"][0][0]
+
+    # Blocks first, so no canopy is over them when the hill is sampled; a block deeper in the hill than its height stays.
+    half = 0.25
+    blocks_id = create({"name": "rest blocks", "position": [6.0, 0.0, 9.5], "items": [{"shape": "basic.block", "parameters": {"width": 2 * half, "depth": 2 * half}}],
+                        "pattern": {"kind": "ring", "count": 8, "radius": 2.0}})
+    blocks = lay(blocks_id)
+    footprints = [[[c["position"][0] + r[0], c["position"][2] + r[2]] for r in (q_rotate(c["rotation_xyzw"], [dx, 0.0, dz]) for dx, dz in
+                   ((0.0, 0.0), (-half, -half), (half, -half), (-half, half), (half, half)))] for c in blocks["children"]]
+    editor.call("undo")
+    editor.wait_idle()
+    def rest_height(samples, base, height):
+        """The rule on one hill: rise to the highest sample within the block's height above the base, again until none rises."""
+        while True:
+            reached = max([h for h in samples if h <= base + height] + [base])
+            if reached <= base + TOLERANCE:
+                return base
+            base = reached
+
+    expected = [rest_height([height_at(x, z) for x, z in points], 0.0, 1.0) for points in footprints]
+    editor.call("redo")
+    editor.wait_idle()
+    blocks = lay(blocks_id)
+    heights = [c["position"][1] for c in blocks["children"]]
+    check("a ring of blocks snapped onto a hill whose rays start inside it rests each block where the rule does (rise onto the highest hill height under its base center and corners within its height, repeated)",
+          (len(heights) == len(expected)) and all(abs(h - e) <= TOLERANCE for h, e in zip(heights, expected)) and (max(expected) > 0.2),
+          f"heights {[round(h, 4) for h in heights]}, expected {[round(e, 4) for e in expected]}")
+    distances = query(blocks)
+    block_support = support(blocks)
+    check("the rested blocks answer 0 to level_snap_to_surface query_only (a rest is idempotent)",
+          rested(distances), f"largest distance {worst(distances):.6f}, distances {[round(d, 4) for _, d in distances]}")
+    check("the support report answers distance 0 for every block of the ring",
+          all(n["supported"] and (abs(n["distance"]) <= TOLERANCE) for n in block_support), json.dumps([(n["id"], round(n["distance"], 4)) for n in block_support]))
+    before = [c["position"] for c in blocks["children"]]
+    ids = [c["id"] for c in blocks["children"]]
+    editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": blocks_id, "locked": False})
+    editor.wait_idle()
+    editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": ids})
+    editor.wait_idle()
+    after = [c["position"] for c in lay(blocks_id)["children"]]
+    check("level_snap_to_surface applied to the rested blocks moves none of them", positions_match(after, before, TOLERANCE),
+          f"largest move {max(math.dist(a, b) for a, b in zip(after, before)):.6f}")
+
+    # A block flush against a rested block of the ring, on its downhill side (one side face in the other's face plane).
+    hill_center = [6.0, 6.0]
+    neighbour = max(lay(blocks_id)["children"], key=lambda c: c["position"][1])
+    offsets = [q_rotate(neighbour["rotation_xyzw"], o) for o in ([2 * half, 0.0, 0.0], [-2 * half, 0.0, 0.0], [0.0, 0.0, 2 * half], [0.0, 0.0, -2 * half])]
+    offset = max(offsets, key=lambda o: math.dist([neighbour["position"][0] + o[0], neighbour["position"][2] + o[2]], hill_center))
+    flush = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "basic.block", "name": "flush block", "parameters": {"width": 2 * half, "depth": 2 * half}, "rotation_xyzw": neighbour["rotation_xyzw"],
+         "position": [neighbour["position"][0] + offset[0], neighbour["position"][1], neighbour["position"][2] + offset[2]]}]})["pieces"][0]
+    editor.wait_idle()
+    flush_distances = query_ids([neighbour["id"], flush["id"]])
+    flush_support = editor.call("level_get_support_report", {"scene_name": scene, "node_ids": [flush["id"]]})["nodes"]
+    check("a block placed flush against a rested block of the ring on its downhill side rests on the hill below it; level_snap_to_surface query_only "
+          "over both answers 0 and the support report answers distance 0 for it",
+          (flush["position"][1] < neighbour["position"][1] - TOLERANCE) and rested(flush_distances) and
+          all(n["supported"] and (abs(n["distance"]) <= TOLERANCE) for n in flush_support),
+          f"flush block y {flush['position'][1]:.4f}, neighbour y {neighbour['position'][1]:.4f}, query {flush_distances}, "
+          f"support {[(n['supported'], round(n['distance'], 4)) for n in flush_support]}")
+
+    trees_id = create({"name": "rest trees", "position": [6.0, 0.0, 6.0], "random_seeds": True, "seed": 3,
+                       "items": [{"shape": "nature.tree"}], "pattern": {"kind": "ring", "count": 8, "radius": 2.0}})
+    trees = lay(trees_id)
+    by_id = pieces_by_id(editor, scene)
+    tree_boxes = [by_id[c["id"]]["world_aabb"] for c in trees["children"]]
+    editor.call("undo")
+    editor.wait_idle()
+    # The rule's bounds: no lower than the hill under the base center, no higher than the hill's top under the footprint.
+    # The world box of a yaw-turned tree is centered on its base center and covers its base corners; its edge cells reach 5 cm past it.
+    lowest = [height_at(0.5 * (b["min"][0] + b["max"][0]), 0.5 * (b["min"][2] + b["max"][2])) for b in tree_boxes]
+    highest = [max(max(row) for row in editor.call("level_get_height_map", {"scene_name": scene, "min": [b["min"][0] - 0.05, -1.0, b["min"][2] - 0.05],
+                                                                             "max": [b["max"][0] + 0.05, 4.0, b["max"][2] + 0.05], "cell_size": 0.1})["heights"])
+               for b in tree_boxes]
+    editor.call("redo")
+    editor.wait_idle()
+    trees = lay(trees_id)
+    tree_heights = [c["position"][1] for c in trees["children"]]
+    check("each tree of the ring rests no lower than the hill under its base center and no higher than the hill's top under its footprint",
+          (len(tree_heights) == len(lowest)) and all((lo - TOLERANCE <= h <= hi + TOLERANCE) for h, lo, hi in zip(tree_heights, lowest, highest)),
+          f"heights {[round(h, 4) for h in tree_heights]}, lowest {[round(v, 4) for v in lowest]}, highest {[round(v, 4) for v in highest]}")
+    distances = query(trees)
+    tree_support = support(trees)
+    check("a ring of trees with per-element seeds snapped onto a hill: level_snap_to_surface query_only answers 0 for every tree (each rests on its own bounds)",
+          rested(distances), f"largest distance {worst(distances):.6f}, distances {[round(d, 4) for _, d in distances]}")
+    check("the support report lists every tree of the ring as supported, none above the surface (a neighbour's canopy within a tree's height reads as sunk)",
+          all(n["supported"] and (n["distance"] <= TOLERANCE) for n in tree_support), json.dumps([(n["id"], round(n["distance"], 4)) for n in tree_support]))
+    repeats = [query(trees) for _ in range(3)]
+    check("three more level_snap_to_surface query_only calls over the tree ring answer 0 for every tree, the tree at the hill's top included",
+          all(rested(r) for r in repeats), f"largest distances {[round(worst(r), 6) for r in repeats]}")
+
+    rocks_id = create({"name": "rest rocks", "position": [-12.0, 0.0, 4.0], "items": [{"shape": "nature.rock", "parameters": {"seed": 3, "size": 1.4, "derive": []}}],
+                       "pattern": {"kind": "line", "count": 10, "step": 0.8}})
+    distances = query(lay(rocks_id))
+    check("overlapping 1.4 m rocks laid over a hill whose rays start inside it: level_snap_to_surface query_only answers 0 for every rock",
+          rested(distances), f"largest distance {worst(distances):.6f}")
+    for delta in ([0.0, 0.0, 1.3], [0.0, 0.0, 1.7], [0.3, 0.0, 2.1]):
+        editor.call("select_items", {"scene_name": scene, "ids": [rocks_id]})
+        editor.wait_idle()
+        editor.call("drag_selection", {"translation": delta, "frames": 10, "release": False})
+        editor.wait_idle()
+        mid = lay(rocks_id)
+        mid_distances = query(mid)
+        editor.call("drag_selection", {"action": "release"})
+        editor.wait_idle()
+        released = lay(rocks_id)
+        released_distances = query(released)
+        check(f"a held Transform drag by {delta} of the rock layout over the hill rests every rock where the release rests it, and both answer 0 to the query",
+              positions_match(child_positions(mid), child_positions(released), TOLERANCE) and rested(mid_distances) and rested(released_distances),
+              f"largest difference {max((math.dist(a, b) for a, b in zip(child_positions(mid), child_positions(released))), default=9.0):.6f}, "
+              f"largest distance mid {worst(mid_distances):.6f}, released {worst(released_distances):.6f}")
+
+    # The wall's faces are at z -10.125 and -9.875; a 0.5 m block flush against it and one 5 cm into it stay on the slab.
+    for label, z in (("flush against", -9.625), ("overlapping by 5 cm", -9.675)):
+        block = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+            {"shape": "basic.block", "position": [0.0, 0.0, z], "name": f"wall block {label}", "parameters": {"width": 0.5, "depth": 0.5, "height": 0.5}}]})["pieces"][0]
+        editor.wait_idle()
+        snapped = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [block["id"]]})["nodes"][0]
+        editor.wait_idle()
+        check(f"a 0.5 m block {label} a 3 m wall on the same slab, rested by level_snap_to_surface, keeps y 0 (never onto a surface higher than its own height)",
+              snapped.get("surface_found") and snapped.get("settled") and (abs(snapped["position"][1]) <= TOLERANCE) and (abs(snapped["distance"]) <= TOLERANCE),
+              f"{fmt3(snapped['position'])}, distance {snapped.get('distance')}, settled {snapped.get('settled')}")
+        editor.call("select_items", {"scene_name": scene, "ids": [block["id"]]})
+        editor.wait_idle()
+        editor.call("drag_selection", {"translation": [0.5, 0.0, 0.0], "frames": 10, "surface_snap": True})
+        editor.wait_idle()
+        moved = piece_by_id(editor, scene, block["id"])
+        check(f"the block {label} the wall, dragged 0.5 m along it with surface snap, keeps y 0 and its z",
+              close(moved["position"], [0.5, 0.0, z], TOLERANCE), fmt3(moved["position"]))
+
+    # Snap casts again after each rise: a 0.5 m block with one base edge over a stack of 0.25 m slabs (tops 0.3 m apart,
+    # 5 cm gaps between them) climbs one slab per cast to the top.
+    def stack(x, count):
+        editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+            {"shape": "basic.floor_slab", "position": [x + 1.1, 0.05 + 0.3 * k, -15.0], "name": f"stack {x} {k}", "parameters": {"width": 2.0, "depth": 2.0, "thickness": 0.25}}
+            for k in range(count)]})
+        block = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+            {"shape": "basic.block", "position": [x, 0.0, -15.0], "name": f"stack block {x}", "parameters": {"width": 0.5, "depth": 0.5, "height": 0.5}}]})["pieces"][0]
+        editor.wait_idle()
+        snapped = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [block["id"]]})["nodes"][0]
+        editor.wait_idle()
+        return snapped
+
+    snapped = stack(10.0, 3)
+    check("a 0.5 m block overlapping a stack of three slabs, each top 0.3 m over the one below, rests on the top slab (y 0.9) in one "
+          "level_snap_to_surface, settled", snapped.get("surface_found") and snapped.get("settled") and (abs(snapped["position"][1] - 0.9) <= TOLERANCE),
+          f"{fmt3(snapped['position'])}, settled {snapped.get('settled')}")
+    snapped = stack(14.0, 20)
+    check("over a stack of twenty such slabs the rest stops at the cast cap (16 casts, y 4.8) and level_snap_to_surface replies settled false",
+          snapped.get("surface_found") and (snapped.get("settled") is False) and (abs(snapped["position"][1] - 4.8) <= TOLERANCE),
+          f"{fmt3(snapped['position'])}, settled {snapped.get('settled')}")
+
+    # Step 15 stays open: a piece buried deeper than its own height keeps its pose (its rays start inside the hill).
+    buried = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "basic.block", "position": [-8.0, 0.0, 6.0], "name": "buried block", "parameters": {"width": 0.3, "depth": 0.3, "height": 0.2}}]})["pieces"][0]
+    editor.wait_idle()
+    nodes = query_ids([buried["id"]])
+    check("a 0.2 m block placed at the foot of a hill's center, buried deeper than its own height, keeps y 0 and answers 0 to the query (plan step 15)",
+          (height_at(-8.0, 6.0) > 0.5) and (abs(buried["position"][1]) <= TOLERANCE) and rested(nodes), f"block at {fmt3(buried['position'])}, query {nodes}")
+    # Its rays start inside the hill: the hill's bottom faces along them, and the slab top coincident with it is the first surface.
+    sunk = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "basic.block", "position": [-7.5, 0.3, 6.0], "name": "sunk block", "parameters": {"width": 0.3, "depth": 0.3, "height": 0.2}}]})["pieces"][0]
+    editor.wait_idle()
+    nodes = query_ids([sunk["id"]])
+    check("a 0.2 m block placed with surface snap 0.3 m above the slab inside a hill flush on the slab (its rays start inside the hill) rests on the slab top "
+          "under the hill (y 0) and answers 0 to the query", (height_at(-7.5, 6.0) > 0.6) and (abs(sunk["position"][1]) <= TOLERANCE) and rested(nodes),
+          f"block at {fmt3(sunk['position'])}, hill height {height_at(-7.5, 6.0):.3f}, query {nodes}")
+    editor.close(scene)
+    check_oriented_resting(editor)
+
+
+def check_oriented_resting(editor):
+    """D7.3 with orient (doc/editor/level_tools.md "Surface placement"): the ray passes through the base center, so an oriented rest
+    is a fixed point (resting again answers 0, rotation kept), climbs like snap after a rise, and every caller agrees."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    # Ground top at y 0; a wedge rising toward -z: slope y = 1 - z / 2 over z in [-2, 2], normal (0, 2, 1) / sqrt(5).
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}},
+        {"shape": "basic.wedge", "position": [0.0, 0.0, 0.0], "name": "slope", "parameters": {"run": 4.0, "rise": 2.0, "width": 4.0}}] + [
+        {"shape": "basic.floor_slab", "position": [10.0, 0.05 + 0.3 * k, 0.0], "name": f"stack {k}", "parameters": {"width": 2.0, "depth": 2.0, "thickness": 0.25}}
+        for k in range(3)]})
+    editor.wait_idle()
+    slope_normal = normalize([0.0, 2.0, 1.0])
+    up_axis = [0.0, 1.0, 0.0]
+
+    def slope_y(z):
+        return 1.0 - 0.5 * z
+
+    hit = editor.call("raycast", {"scene_name": scene, "origin": [0.0, 5.0, 0.0], "direction": [0.0, -1.0, 0.0], "mask": 1})
+    check("the oriented-rest wedge has slope normal (0, 2, 1) / sqrt(5) and height 1 at its center",
+          hit.get("hit") and close(normalize(hit["normal"]), slope_normal) and (abs(hit["position"][1] - 1.0) <= TOLERANCE), json.dumps(hit)[:200])
+
+    block = {"width": 0.5, "depth": 0.5, "height": 0.5}
+    yaw = q_yaw(30.0)
+
+    def place(name, position, rotation=None):
+        piece = {"shape": "basic.block", "name": name, "position": position, "parameters": block}
+        if rotation is not None:
+            piece["rotation_xyzw"] = rotation
+        placed = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "surface_orient": True, "pieces": [piece]})["pieces"][0]
+        editor.wait_idle()
+        return placed
+
+    def again(ids, query_only=True):
+        nodes = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": ids, "orient": True, "query_only": query_only})["nodes"]
+        editor.wait_idle()
+        return nodes
+
+    def unmoved(node, pose):
+        return (node.get("surface_found") and node.get("settled") and (abs(node["distance"]) <= TOLERANCE) and
+                close(node["position"], pose["position"]) and same_rotation(node["rotation_xyzw"], pose["rotation_xyzw"]))
+
+    def up_of(pose):
+        return q_rotate(pose["rotation_xyzw"], up_axis)
+
+    def pose_text(pose):
+        return f"{fmt3(pose['position'])} up {fmt3(up_of(pose))}"
+
+    # A yawed block dropped onto the slope: base center on the slope under it, up axis on the normal, heading kept.
+    first = place("oriented on slope", [-1.5, 3.0, 0.0], yaw)
+    check("a yawed block placed with snap + orient over the slope rests its base center on the slope under it (y 1) with up = slope normal and its heading",
+          first["surface_found"] and close(first["position"], [-1.5, 1.0, 0.0]) and close(up_of(first), slope_normal) and tilt_only(yaw, first["rotation_xyzw"], slope_normal),
+          pose_text(first))
+    answers = [again([first["id"]])[0] for _ in range(3)]
+    check("level_snap_to_surface orient query_only after the oriented rest answers 0 and the same pose, three times",
+          all(unmoved(a, first) for a in answers), "; ".join(f"{a['distance']:.6f} {fmt3(a['position'])}" for a in answers))
+    applied = again([first["id"]], query_only=False)[0]
+    after = piece_by_id(editor, scene, first["id"])
+    check("level_snap_to_surface orient applied to the oriented rest moves and turns nothing",
+          unmoved(applied, first) and close(after["position"], first["position"]) and same_rotation(after["rotation_xyzw"], first["rotation_xyzw"]), pose_text(after))
+
+    # A held oriented Transform drag 0.5 m uphill: the base center moves to the slope at z -0.5 (y 1.25, a rise of 0.25 within the block's height).
+    editor.call("select_items", {"scene_name": scene, "ids": [first["id"]]})
+    editor.wait_idle()
+    editor.call("drag_selection", {"translation": [0.0, 0.0, -0.5], "frames": 10, "release": False, "surface_snap": True, "surface_orient": True})
+    editor.wait_idle()
+    held = piece_by_id(editor, scene, first["id"])
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    released = piece_by_id(editor, scene, first["id"])
+    check("an oriented held drag 0.5 m uphill rests the block where its release does: base center on the slope (y 1.25), up = slope normal",
+          close(held["position"], released["position"]) and same_rotation(held["rotation_xyzw"], released["rotation_xyzw"]) and
+          close(released["position"], [-1.5, slope_y(-0.5), -0.5]) and close(up_of(released), slope_normal),
+          f"held {pose_text(held)}, released {pose_text(released)}")
+    check("the released oriented drag answers 0 to level_snap_to_surface orient query_only", unmoved(again([first["id"]])[0], released), "")
+
+    # Layout generation with orient and level_snap_to_surface with orient agree on the same pieces.
+    made = editor.call("level_create_layout", {"scene_name": scene, "name": "oriented line", "position": [-0.5, 2.5, 0.5], "surface_snap": True, "surface_orient": True,
+                                               "items": [{"shape": "basic.block", "parameters": block}], "pattern": {"kind": "line", "count": 3, "step": 0.75}})
+    editor.wait_idle()
+    children = layouts_by_id(editor, scene)[made["id"]]["children"]
+    answers = again([c["id"] for c in children])
+    check("a layout of 3 blocks generated with surface orient rests each on the slope under its base center with up = slope normal",
+          (len(children) == 3) and all((abs(c["position"][1] - slope_y(c["position"][2])) <= TOLERANCE) and close(up_of(c), slope_normal) for c in children),
+          "; ".join(pose_text(c) for c in children))
+    check("level_snap_to_surface orient query_only over the oriented layout answers 0 and each layout pose",
+          (len(answers) == 3) and all(unmoved(a, c) for a, c in zip(answers, children)), "; ".join(f"{a['distance']:.6f}" for a in answers))
+
+    # Sunk 0.3 m into the slope (less than its height): rises onto it.
+    sunk = place("oriented sunk", [1.5, slope_y(-1.0) - 0.3, -1.0])
+    check("a block placed with orient 0.3 m into the slope rises to the slope under its base center (y 1.5) with up = slope normal; rested again answers 0",
+          close(sunk["position"], [1.5, slope_y(-1.0), -1.0]) and close(up_of(sunk), slope_normal) and unmoved(again([sunk["id"]])[0], sunk), pose_text(sunk))
+    # Over a stack of 0.25 m slabs with tops 0.3 m apart: casts again after each rise, like snap, to the top (y 0.9).
+    stacked = place("oriented on stack", [10.0, 0.0, 0.0])
+    check("a 0.5 m block placed with orient at y 0 inside a stack of three slabs (tops 0.3, 0.6, 0.9) climbs to the top slab, upright, settled; rested again answers 0",
+          stacked["surface_found"] and close(stacked["position"], [10.0, 0.9, 0.0]) and close(up_of(stacked), up_axis) and unmoved(again([stacked["id"]])[0], stacked),
+          pose_text(stacked))
+
+    # Over the crease where the slope's low edge (z 2) meets the ground: the base center decides, and repeated rests answer the same.
+    over_slope = place("crease slope side", [-1.0, 1.0, 1.9])
+    over_ground = place("crease ground side", [1.0, 1.0, 2.1])
+    check("a block straddling the crease with its base center 0.1 m on the slope side rests on the slope (y 0.05, up = slope normal)",
+          close(over_slope["position"], [-1.0, slope_y(1.9), 1.9]) and close(up_of(over_slope), slope_normal), pose_text(over_slope))
+    check("a block straddling the crease with its base center 0.1 m on the ground side rests on the ground (y 0, upright)",
+          close(over_ground["position"], [1.0, 0.0, 2.1]) and close(up_of(over_ground), up_axis), pose_text(over_ground))
+    repeats = [again([over_slope["id"], over_ground["id"]]) for _ in range(3)]
+    check("three level_snap_to_surface orient query_only calls over both crease blocks answer 0 and the identical pose each time",
+          all(unmoved(r[0], over_slope) and unmoved(r[1], over_ground) for r in repeats) and
+          all((r[i]["position"] == repeats[0][i]["position"]) and (r[i]["rotation_xyzw"] == repeats[0][i]["rotation_xyzw"]) for r in repeats for i in range(2)),
+          "; ".join(f"{r[0]['distance']:.6f} {r[1]['distance']:.6f}" for r in repeats))
+    # The base center exactly on a slope's low edge (a module grid line): the slope and the ground tie at the same
+    # distance; the tie order takes the normal most against the ray (the ground's), so the block stands upright at y 0.
+    # The same with the ramp turned 180 and 90 degrees (low edges at z 6 and x 10), so the traversal order differs.
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.wedge", "position": [0.0, 0.0, 8.0], "rotation_xyzw": q_yaw(180.0), "name": "slope 180", "parameters": {"run": 4.0, "rise": 2.0, "width": 4.0}},
+        {"shape": "basic.wedge", "position": [8.0, 0.0, 8.0], "rotation_xyzw": q_yaw(90.0), "name": "slope 90", "parameters": {"run": 4.0, "rise": 2.0, "width": 4.0}}]})
+    editor.wait_idle()
+    for label, edge_point in (("low edge", [0.0, 0.0, 2.0]), ("low edge of the 180 degree ramp", [0.0, 0.0, 6.0]), ("low edge of the 90 degree ramp", [10.0, 0.0, 8.0])):
+        on_edge = place(f"crease {label}", [edge_point[0], 1.0, edge_point[2]])
+        edge_repeats = [again([on_edge["id"]])[0] for _ in range(3)]
+        check(f"a block with its base center exactly on the slope's {label} rests upright on the ground (y 0), and three rests again answer 0 with the identical pose",
+              close(on_edge["position"], edge_point) and close(up_of(on_edge), up_axis) and
+              all(unmoved(r, on_edge) and (r["position"] == edge_repeats[0]["position"]) and (r["rotation_xyzw"] == edge_repeats[0]["rotation_xyzw"]) for r in edge_repeats),
+              f"{pose_text(on_edge)}; again {[(round(r['distance'], 6), fmt3(r['position'])) for r in edge_repeats]}")
+
+    # A flat piece (Y scale 0) on the ground and on the stack's top slab: its rays start 1 mm back, so it finds the surface it rests on.
+    def scaled(name, position, scale):
+        piece = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+            {"shape": "basic.block", "name": name, "position": position, "parameters": block}]})["pieces"][0]
+        editor.wait_idle()
+        editor.call("set_node_transform", {"scene_name": scene, "node_id": piece["id"], "translation": position, "rotation_xyzw": [0.0, 0.0, 0.0, 1.0], "scale": scale})
+        editor.wait_idle()
+        return piece["id"]
+
+    flat_ids = [scaled("flat on ground", [6.0, 0.0, 0.0], [1.0, 0.0, 1.0]), scaled("flat on slab", [10.6, 0.9, 0.0], [1.0, 0.0, 1.0])]
+    for orient in (False, True):
+        nodes = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": flat_ids, "orient": orient, "query_only": True})["nodes"]
+        check(f"a flat block (Y scale 0) on the ground and one on the stack's top slab answer 0 to level_snap_to_surface{' orient' if orient else ''} query_only",
+              all(n.get("surface_found") and (abs(n["distance"]) <= TOLERANCE) for n in nodes),
+              "; ".join(f"{n.get('surface_found')} {n.get('distance', 9.0):.4f} {fmt3(n['position'])}" for n in nodes))
+    print(f"oriented rests: first {pose_text(first)}, held drag {pose_text(released)}, stack {pose_text(stacked)}, crease {pose_text(over_slope)} / {pose_text(over_ground)}", flush=True)
     editor.close(scene)
 
 
@@ -1338,7 +1712,7 @@ def check_layout_patterns(editor):
     check("the refused calls placed nothing and recorded no undo entry",
           (len(pieces(editor, scene)) == count) and (undo_depth(editor) == depth) and (source["id"] in scene_tree(editor, scene)),
           f"{len(pieces(editor, scene))} vs {count}, depth {undo_depth(editor)} vs {depth}")
-    # Left open, it moves the Transform checks' scene to a wide viewport (level_tools_implementation.md step 20).
+    # Closed, so the gizmo drag checks keep their viewport; a wide one was never measured with whole-pixel drags.
     editor.close(scene)
 
 
@@ -2307,8 +2681,8 @@ def click_item(editor, label, index=0, modifiers=None):
 
 def type_into(editor, label, text, index=0):
     """Ctrl+click a drag row of the Level Kit window, type the value and enter it."""
-    click_item(editor, label, index, ["ctrl"])
-    editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    click_item(editor, label, index, IMGUI_CTRL)
+    editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
     editor.call("type_text", {"text": text})
     editor.call("key_press", {"key": "enter"})
     editor.wait_idle()
@@ -2506,8 +2880,8 @@ def check_properties_layout(editor, scene):
         if target is None:
             raise RuntimeError(f"no {label!r} in the Properties window")
         editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
-        editor.call("imgui_click", {"window": properties, "id": target["id"], "modifiers": ["ctrl"]})
-        editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+        editor.call("imgui_click", {"window": properties, "id": target["id"], "modifiers": IMGUI_CTRL})
+        editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
         editor.call("type_text", {"text": text})
         editor.call("key_press", {"key": "enter"})
         editor.wait_idle()
@@ -2673,7 +3047,7 @@ def check_properties_layout_write(editor, scene):
         depth = undo_depth(editor)
         editor.call("imgui_scroll_to_item", {"window": properties, "label": pattern_label})
         editor.call("imgui_click", {"window": properties, "label": pattern_label})
-        editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+        editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
         editor.call("type_text", {"text": "{}"})
         editor.call("key_press", {"key": "enter"})
         editor.wait_idle()
@@ -2711,6 +3085,7 @@ def check_layout_live_drags(editor, image_path):
     properties = "Properties"
     scene = create_scene(editor)
     editor.call("set_active_scene", {"scene_name": scene})
+    # The hill sits flush on the slab: its bottom is coincident with the slab top.
     editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
         {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}},
         {"shape": "nature.hill", "position": [6.0, 0.0, 6.0], "name": "hill", "parameters": {"seed": 2}}]})
@@ -3024,6 +3399,501 @@ def check_layout_live_drags(editor, image_path):
     editor.wait_idle()
 
 
+def check_layout_transform_rows(editor):
+    """D3.9 move hook through the Properties window's generic transform rows (doc/editor/level_tools.md "Live layout preview"):
+    a held drag of a Local Transform row of a locked surface-snapped layout node, of its ancestor, of two layouts together, a
+    Rotation row, a selection change that abandons the drag, Paste Properties of a transform and set_item_property."""
+    properties = "Properties"
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}},
+        {"shape": "nature.hill", "position": [6.0, 0.0, 6.0], "name": "hill", "parameters": {"seed": 2}}]})
+    editor.wait_idle()
+
+    def create(name, position):
+        made = editor.call("level_create_layout", {"scene_name": scene, "name": name, "position": position, "surface_snap": True,
+                                                   "items": [{"shape": "basic.block", "parameters": {"width": 0.5, "depth": 0.5}}],
+                                                   "pattern": {"kind": "ring", "count": 8, "radius": 2.0}})
+        editor.wait_idle()
+        return made["id"]
+
+    ring_id = create("row ring", [6.0, 0.0, 9.5])
+    second_id = create("row ring b", [1.5, 0.0, 6.0])
+    grouped_id = create("row ring grouped", [10.5, 0.0, 6.0])
+    group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [grouped_id], "name": "row ring parent"})
+    editor.wait_idle()
+    editor.call("set_window_visibility", {"title": properties, "visible": True, "focus": True})
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+
+    def lay(layout_id):
+        return layouts_by_id(editor, scene)[layout_id]
+
+    def select(ids):
+        # Other scenes keep their selections, and Properties lists their items above this scene's.
+        for other in editor.scene_names():
+            if other != scene:
+                editor.call("select_items", {"scene_name": other, "ids": []})
+        editor.call("select_items", {"scene_name": scene, "ids": ids})
+        editor.wait_idle()
+        open_property_groups(editor, ["Local Transform"])
+
+    def rest_distances(layout):
+        ids = [c["id"] for c in layout["children"]]
+        nodes = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": ids, "query_only": True}).get("nodes", [])
+        return [(n.get("surface_found"), round(n.get("distance", 9.0), 4)) for n in nodes]
+
+    def rested(layout):
+        """Every child rests: level_snap_to_surface query_only and the support report answer distance 0."""
+        distances = rest_distances(layout)
+        ids = [c["id"] for c in layout["children"]]
+        report = editor.call("level_get_support_report", {"scene_name": scene, "node_ids": ids}).get("nodes", [])
+        return (bool(distances) and all(found and (abs(d) <= TOLERANCE) for found, d in distances) and (len(report) == len(ids)) and
+                all(n["supported"] and (abs(n["distance"]) <= TOLERANCE) for n in report))
+
+    def ride_differs(before, after, shift):
+        """Children that did not ride rigidly: their height differs from the rigid ride's by more than 5 cm."""
+        return [i for i in range(min(len(before["children"]), len(after["children"])))
+                if abs(after["children"][i]["position"][1] - (before["children"][i]["position"][1] + shift[1])) > 0.05]
+
+    def row_item(name):
+        """The Local Transform group's component row by its name (Translation.z, Rotation.y, ...), never the World Transform one."""
+        items = editor.call("get_imgui_items", {"window": properties, "limit": 3000, "visible_only": False}).get("items", [])
+        start = next(k for k, i in enumerate(items) if i.get("display_label") == "Local Transform")
+        return next(i for i in items[start + 1:] if (i.get("display_label") or "").lstrip("* ") == name)
+
+    def hold_drag(name, pixels):
+        target = row_item(name)
+        editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
+        rect = editor.call("get_imgui_item_rect", {"window": properties, "id": target["id"]})
+        x, y = rect["center_x"], rect["center_y"]
+        editor.call("mouse_drag", {"from": [x, y], "to": [x + pixels, y], "frames": 10, "hold": True})
+        editor.wait_idle()
+
+    def release():
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+
+    def same_pieces(mid, mid_distances, released):
+        """Preview and release agree: count, poses, records and the support query (ids may differ: the release makes its own pieces)."""
+        a, b = child_snapshot(mid), child_snapshot(released)
+        return ((len(a) == len(b)) and all(m[2:] == r[2:] for m, r in zip(a, b)) and
+                positions_match(child_positions(mid), child_positions(released), 1.0e-3) and (mid_distances == rest_distances(released)))
+
+    def drag_case(label, selected, row, pixels, layout_ids, translates=True):
+        """A held drag of `row` with `selected` selected re-rests every layout of `layout_ids` mid-drag as the release does, one entry."""
+        select(selected)
+        before = [lay(i) for i in layout_ids]
+        depth = undo_depth(editor)
+        hold_drag(row, pixels)
+        mid = [lay(i) for i in layout_ids]
+        mid_distances = [rest_distances(m) for m in mid]
+        mid_rested = [rested(m) for m in mid]
+        mid_depth = undo_depth(editor)
+        release()
+        released = [lay(i) for i in layout_ids]
+        moved = [math.dist(m["position"], b["position"]) for b, m in zip(before, mid)]
+        changed = [child_snapshot(m) != child_snapshot(b) for b, m in zip(before, mid)]
+        check(f"{label}, button held: every layout's pieces already re-rested on the surface under them, no undo entry",
+              all(mid_rested) and all(changed) and (mid_depth == depth) and
+              ((not translates) or all(bool(ride_differs(b, m, [m["position"][k] - b["position"][k] for k in range(3)])) for b, m in zip(before, mid))),
+              f"moved {[round(d, 3) for d in moved]}, rested {mid_rested}, changed {changed}, undo {mid_depth - depth}, distances {mid_distances}")
+        check(f"{label}: the live preview equals the release result", all(same_pieces(m, d, r) for m, d, r in zip(mid, mid_distances, released)), "")
+        check(f"{label}: the release is one undo entry", undo_depth(editor) == depth + 1, f"undo {undo_depth(editor) - depth}")
+        editor.call("undo")
+        editor.wait_idle()
+        undone = [lay(i) for i in layout_ids]
+        check(f"{label}: undo restores every layout's transform and pre-drag children exactly",
+              all(close(u["position"], b["position"]) and (child_snapshot(u) == child_snapshot(b)) for b, u in zip(before, undone)), "")
+        return before, released
+
+    # Translation.z of the ring: -250 px at 0.01 m/px is 2.5 m toward the hill's foot.
+    before, released = drag_case("Properties Translation.z row drag of a locked surface-snapped ring", [ring_id], "Translation.z", -250.0, [ring_id])
+    editor.call("redo")
+    editor.wait_idle()
+    redone = lay(ring_id)
+    check("redo of the transform row edit gives the released transform and children exactly",
+          close(redone["position"], released[0]["position"]) and (child_snapshot(redone) == child_snapshot(released[0])), "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    drag_case("Properties Translation.x row drag of the parent of a locked surface-snapped ring", [group["id"]], "Translation.x", -200.0, [grouped_id])
+    drag_case("Properties Rotation.y row drag of a locked surface-snapped ring", [ring_id], "Rotation.y", 120.0, [ring_id], translates=False)
+    drag_case("Properties Translation.z row drag of two selected surface-snapped rings together", [ring_id, second_id], "Translation.z", 200.0, [ring_id, second_id])
+
+    # Typed input on a transform row: each way of ending the typing commits the value as one entry and re-rests the pieces.
+    def window_title_click(title):
+        items = editor.call("get_imgui_items", {"window": title, "limit": 5, "visible_only": False}).get("items", [])
+        frame = next(i for i in items if i.get("display_label") == title)
+        editor.call("mouse_click", {"x": frame["center_x"], "y": frame["center_y"] - (0.5 * frame["height"]) + 8.0})
+
+    for title in ("Node Properties", "Level Kit"):
+        editor.call("set_window_visibility", {"title": title, "visible": True})
+    editor.call("set_window_visibility", {"title": properties, "visible": True, "focus": True})
+    editor.wait_idle()
+    endings = (("Enter", "Translation.z", 2, lambda: editor.call("key_press", {"key": "enter"})),
+               ("a click on a window drawn before Properties", "Translation.z", 2, lambda: window_title_click("Node Properties")),
+               ("a click on a window drawn after Properties", "Translation.z", 2, lambda: window_title_click("Level Kit")),
+               ("Tab to the next component", "Translation.x", 0, lambda: editor.call("key_press", {"key": "tab"})))
+    for ending, row, axis, finish in endings:
+        select([ring_id])
+        before = lay(ring_id)
+        depth = undo_depth(editor)
+        value = before["position"][axis] - 2.5
+        target = row_item(row)
+        editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
+        editor.call("imgui_click", {"window": properties, "id": target["id"], "modifiers": IMGUI_CTRL})
+        editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
+        editor.call("type_text", {"text": f"{value:.3f}"})
+        finish()
+        editor.wait_idle()
+        if ending.startswith("Tab"):
+            editor.call("key_press", {"key": "escape"})
+            editor.wait_idle()
+        typed = lay(ring_id)
+        delta = [typed["position"][k] - before["position"][k] for k in range(3)]
+        check(f"typing {row} and ending with {ending} keeps the value as one undo entry and re-rests the ring's pieces",
+              (abs(typed["position"][axis] - value) < 1.0e-3) and (undo_depth(editor) == depth + 1) and rested(typed) and bool(ride_differs(before, typed, delta)),
+              f"{row} {typed['position'][axis]:.3f} (typed {value:.3f}), undo {undo_depth(editor) - depth}")
+        editor.call("undo")
+        editor.wait_idle()
+        check(f"undo of the typed {row} ({ending}) restores the ring and its children exactly",
+              close(lay(ring_id)["position"], before["position"]) and (child_snapshot(lay(ring_id)) == child_snapshot(before)), "")
+
+    # A selection change while the drag is held gives the drag up: the node and its children are as before, no entry.
+    select([ring_id])
+    before = lay(ring_id)
+    depth = undo_depth(editor)
+    hold_drag("Translation.z", -250.0)
+    held = lay(ring_id)
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    editor.wait_idle()
+    release()
+    after = lay(ring_id)
+    check("a selection change during a held transform row drag gives it up: the ring's transform and its pre-drag children are back, no undo entry",
+          (not close(held["position"], before["position"])) and close(after["position"], before["position"]) and
+          (child_snapshot(after) == child_snapshot(before)) and (undo_depth(editor) == depth),
+          f"held {held['position']}, after {after['position']}, undo {undo_depth(editor) - depth}")
+
+    # Paste Properties of a node's transform onto the ring: the paste re-rests the pieces in its entry.
+    source = editor.call("create_node", {"scene_name": scene, "name": "transform source", "position": [before["position"][0], before["position"][1], before["position"][2] - 2.5]})
+    editor.wait_idle()
+    for node_id, label in ((source.get("node_id", source.get("id")), "Copy Properties"), (ring_id, "Paste Properties")):
+        select([node_id])
+        depth = undo_depth(editor)
+        target = row_item("Translation.z")
+        editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
+        rect = editor.call("get_imgui_item_rect", {"window": properties, "id": target["id"]})
+        editor.call("mouse_click", {"x": rect["center_x"], "y": rect["center_y"], "button": "right"})
+        time.sleep(0.2)
+        editor.wait_idle()
+        editor.call("imgui_click", {"label": label})
+        editor.wait_idle()
+    pasted = lay(ring_id)
+    check("Paste Properties of a node's translation onto the ring re-rests its pieces in the paste's one undo entry",
+          close(pasted["position"], [before["position"][0], before["position"][1], before["position"][2] - 2.5]) and rested(pasted) and
+          bool(ride_differs(before, pasted, [0.0, 0.0, -2.5])) and (undo_depth(editor) == depth + 1),
+          f"position {pasted['position']}, undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the paste restores the ring's transform and children exactly",
+          close(lay(ring_id)["position"], before["position"]) and (child_snapshot(lay(ring_id)) == child_snapshot(before)), "")
+
+    # set_item_property commits the same Property_set_operation of the transform.
+    target = [before["position"][0], before["position"][1], before["position"][2] - 2.5]
+    depth = undo_depth(editor)
+    editor.call("set_item_property", {"item_id": ring_id, "property": "translation", "value": target})
+    editor.wait_idle()
+    written = lay(ring_id)
+    check("set_item_property of the ring's translation re-rests its pieces in the same undo entry",
+          close(written["position"], target) and rested(written) and bool(ride_differs(before, written, [0.0, 0.0, -2.5])) and (undo_depth(editor) == depth + 1),
+          f"undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the set_item_property write restores the transform and the children exactly",
+          close(lay(ring_id)["position"], before["position"]) and (child_snapshot(lay(ring_id)) == child_snapshot(before)), "")
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    # The title click cases showed Node Properties and Level Kit floating over the viewport, where later pointer drags press.
+    hide_windows_over_viewports(editor)
+    editor.close(scene)
+
+
+def scatter_local(layout):
+    """The children's positions in the layout node's frame (the scatter layouts here are not turned)."""
+    origin = layout["position"]
+    return [[c["position"][0] - origin[0], c["position"][1] - origin[1], c["position"][2] - origin[2]] for c in layout["children"]]
+
+
+def min_xz_distance(points):
+    best = float("inf")
+    for i in range(len(points)):
+        for j in range(i + 1, len(points)):
+            best = min(best, math.hypot(points[i][0] - points[j][0], points[i][2] - points[j][2]))
+    return best
+
+
+def heading_degrees(rotation_xyzw):
+    x_axis = x_axis_of(rotation_xyzw)
+    return math.degrees(math.atan2(-x_axis[2], x_axis[0]))
+
+
+def check_scatter_layouts(editor, directory):
+    """R5.5 / D3.11: scatter layouts - count and density modes, region, spacing and yaw over flat ground, the same placement for the
+    same seed through undo, redo, save and reopen, another seed elsewhere, surface snap over the hill, what fits of an impossible
+    request, lock / unlock / refresh, the Properties and Level Kit window rows and a held value drag (scene closed afterwards)."""
+    properties = "Properties"
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 60.0, "depth": 60.0, "thickness": 0.2}},
+        {"shape": "nature.hill", "position": [12.0, 0.0, 12.0], "name": "hill", "parameters": {"seed": 2}}]})
+    editor.wait_idle()
+    editor.call("set_log_levels", {"loggers": {"editor.scene": "trace"}})
+    small = [{"shape": "basic.block", "parameters": {"width": 0.3, "depth": 0.3, "height": 0.3}}]
+
+    def create(arguments):
+        made = editor.call("level_create_layout", dict({"scene_name": scene}, **arguments))
+        editor.wait_idle()
+        return made
+
+    def lay(layout_id):
+        return layouts_by_id(editor, scene)[layout_id]
+
+    def set_layout(layout_id, arguments):
+        changed = editor.call("level_set_layout", dict({"scene_name": scene, "layout_id": layout_id}, **arguments))
+        editor.wait_idle()
+        return changed
+
+    def undo():
+        editor.call("undo")
+        editor.wait_idle()
+
+    def redo():
+        editor.call("redo")
+        editor.wait_idle()
+
+    # Count mode over a rectangle of flat ground.
+    depth = undo_depth(editor)
+    counted = create({"name": "scatter count", "position": [-12.0, 0.0, -12.0], "items": small,
+                      "pattern": {"kind": "scatter", "count": 30, "region": "rectangle", "size_x": 8.0, "size_z": 6.0, "min_spacing": 0.8, "yaw_min": -45.0, "yaw_max": 45.0}})
+    local = scatter_local(counted)
+    headings = [heading_degrees(c["rotation_xyzw"]) for c in counted["children"]]
+    check("a count-mode scatter of 30 over an 8 x 6 m rectangle is one undo entry and holds 30 pieces, every one inside the region on the ground, every pair at least 0.8 m apart, each yaw within -45 - 45 degrees",
+          (counted["child_count"] == 30) and (counted["run"]["count"] == 30) and (counted["run"]["requested"] == 30) and (undo_depth(editor) == depth + 1) and
+          all((abs(p[0]) <= 4.0 + 1.0e-4) and (abs(p[2]) <= 3.0 + 1.0e-4) and (abs(p[1]) < 1.0e-4) for p in local) and
+          (min_xz_distance(local) >= 0.8 - 1.0e-4) and all(-45.0 - 1.0e-3 <= h <= 45.0 + 1.0e-3 for h in headings) and
+          (abs(counted["run"]["space"] - 48.0) < TOLERANCE) and (counted["pattern"]["kind"] == "scatter"),
+          f"{counted['child_count']} pieces, run {counted['run']}, min distance {min_xz_distance(local):.4f}, headings {min(headings):.2f} - {max(headings):.2f}")
+    counted_id = counted["id"]
+    start_snapshot = child_snapshot(counted)
+
+    # Density mode over a disc: round(0.5 * pi * 3^2) = 14 pieces.
+    dense = create({"name": "scatter density", "position": [-12.0, 0.0, 4.0], "items": small,
+                    "pattern": {"kind": "scatter", "scatter_mode": "density", "density": 0.5, "region": "disc", "region_radius": 3.0, "min_spacing": 0.5}})
+    dense_local = scatter_local(dense)
+    check("a density-mode scatter of 0.5 per square meter over a disc of radius 3 m holds round(0.5 pi 9) = 14 pieces inside the disc, 0.5 m apart",
+          (dense["child_count"] == 14) and (dense["run"]["requested"] == 14) and
+          all(math.hypot(p[0], p[2]) <= 3.0 + 1.0e-4 for p in dense_local) and (min_xz_distance(dense_local) >= 0.5 - 1.0e-4),
+          f"{dense['child_count']} pieces, run {dense['run']}")
+
+    # The same seed gives the same placement after undo and redo; another seed another one.
+    reseeded = set_layout(counted_id, {"seed": 5})
+    reseeded_snapshot = child_snapshot(reseeded)
+    check("another layout seed places the scatter elsewhere (one undo entry), the count and spacing kept",
+          (reseeded["child_count"] == 30) and (scatter_local(reseeded)[0] != local[0]) and (min_xz_distance(scatter_local(reseeded)) >= 0.8 - 1.0e-4),
+          f"first {fmt3(scatter_local(reseeded)[0])} vs {fmt3(local[0])}")
+    undo()
+    after_undo = child_snapshot(lay(counted_id))
+    check("undo of the seed change gives the first placement back exactly", after_undo == start_snapshot, "")
+    redo()
+    check("redo gives the same placement as the seed change made", [s[2:4] for s in child_snapshot(lay(counted_id))] == [s[2:4] for s in reseeded_snapshot], "")
+    undo()
+
+    # More pieces keep the first ones (the candidate stream does not depend on the count).
+    grown = set_layout(counted_id, {"pattern": {"count": 40}})
+    check("raising the count from 30 to 40 keeps the first 30 pieces where they were",
+          (grown["child_count"] == 40) and (scatter_local(grown)[:30] == local) and (grown["kept_count"] == 30),
+          f"{grown['child_count']} pieces, kept {grown.get('kept_count')}")
+    undo()
+
+    # An impossible request: 200 pieces 2 m apart in 8 x 6 m; the scatter holds what fits and reports both.
+    crowded = set_layout(counted_id, {"pattern": {"count": 200, "min_spacing": 2.0}})
+    check("200 pieces 2 m apart over 8 x 6 m: the scatter places the ones that fit and reports the 200 asked for",
+          (crowded["run"]["requested"] == 200) and (crowded["child_count"] == crowded["run"]["count"]) and (5 < crowded["child_count"] < 30) and
+          (min_xz_distance(scatter_local(crowded)) >= 2.0 - 1.0e-4), f"run {crowded['run']}")
+    undo()
+    error = call_error(editor, "level_set_layout", {"scene_name": scene, "layout_id": counted_id, "pattern": {"scatter_mode": "density", "density": 50.0}})
+    check("a density asking for more than 1024 pieces is refused naming the limit", (error is not None) and ("1024" in error), str(error))
+    for label, pattern, needle in [
+        ("a yaw range whose minimum is above its maximum", {"yaw_min": 50.0, "yaw_max": 10.0}, "yaw"),
+        ("a yaw beyond 360 degrees", {"yaw_max": 400.0}, "-360 - 360"),
+        ("a negative minimum spacing", {"min_spacing": -1.0}, "spacing"),
+        ("an unknown region", {"region": "square"}, "region"),
+    ]:
+        error = call_error(editor, "level_set_layout", {"scene_name": scene, "layout_id": counted_id, "pattern": pattern})
+        check(f"level_set_layout refuses {label}", (error is not None) and (needle in error), str(error))
+    check("the scatter is unchanged after the refusals", child_snapshot(lay(counted_id)) == start_snapshot, "")
+
+    # Lock, unlock and refresh as for every kind.
+    depth = undo_depth(editor)
+    editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": counted_id, "locked": False})
+    editor.wait_idle()
+    set_layout(counted_id, {"pattern": {"count": 10}})
+    check("unlocking changes no child and an unlocked scatter takes a count change as a value alone",
+          (child_snapshot(lay(counted_id)) == start_snapshot) and (lay(counted_id)["pattern"]["count"] == 10), "")
+    editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": counted_id, "locked": True})
+    editor.wait_idle()
+    relocked = lay(counted_id)
+    check("locking makes the children what the values state: the first 10 points of the stream",
+          (relocked["child_count"] == 10) and positions_match(child_positions(relocked), [s[2] for s in start_snapshot[:10]], 1.0e-3), f"{relocked['child_count']} pieces")
+    refreshed = editor.call("level_refresh_layout", {"scene_name": scene, "layout_id": counted_id})
+    editor.wait_idle()
+    check("level_refresh_layout of the unchanged locked scatter keeps every child and records no entry",
+          (not refreshed.get("changed", True)) and (refreshed["kept_count"] == 10) and (undo_depth(editor) == depth + 3),
+          f"{refreshed.get('changed')}, kept {refreshed.get('kept_count')}, depth {undo_depth(editor) - depth}")
+    while undo_depth(editor) > depth:
+        undo()
+    check("undo of lock, value and unlock gives the 30 pieces back", child_snapshot(lay(counted_id)) == start_snapshot, "")
+
+    # Over the hill with surface snap: every piece rests on the surface under it.
+    hill = create({"name": "scatter hill", "position": [12.0, 0.0, 12.0], "surface_snap": True, "items": small,
+                   "pattern": {"kind": "scatter", "count": 16, "region": "disc", "region_radius": 2.5, "min_spacing": 0.6}})
+    ids = [c["id"] for c in hill["children"]]
+    nodes = editor.call("level_get_support_report", {"scene_name": scene, "node_ids": ids})["nodes"]
+    check("a scatter over the hill with surface snap rests every piece: the support report finds each supported at distance 0, and some stand above the base",
+          (len(nodes) == 16) and all(n.get("supported") and (n.get("distance") is not None) and (abs(n["distance"]) < TOLERANCE) for n in nodes) and
+          (sum(1 for c in hill["children"] if c["position"][1] > 0.05) >= 4),
+          f"{[(n.get('supported'), n.get('distance')) for n in nodes]}, heights {[round(c['position'][1], 3) for c in hill['children']]}")
+
+    # Save and reopen: the locked scatters come back as saved and a refresh regenerates them identically.
+    before = {l["name"]: child_snapshot(l) for l in layouts_by_id(editor, scene).values()}
+    path = os.path.join(directory, "scatter_level.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    name = editor.load(path)
+    after_layouts = list(editor.call("level_get_layouts", {"scene_name": name})["layouts"])
+    after = {l["name"]: l for l in after_layouts}
+    check("save and reopen keep every scatter's children",
+          all([s[1:] for s in before[n]] == [s[1:] for s in child_snapshot(after[n])] for n in before), f"{sorted(after.keys())}")
+    same = True
+    for layout in after_layouts:
+        refreshed = editor.call("level_refresh_layout", {"scene_name": name, "layout_id": layout["id"]})
+        same = same and (not refreshed.get("changed", True)) and (refreshed["kept_count"] == layout["child_count"])
+    editor.wait_idle()
+    check("a refresh of each reopened locked scatter regenerates it identically (every child kept, no entry)", same, "")
+    scene = name
+    editor.call("set_active_scene", {"scene_name": scene})
+    counted_id = after["scatter count"]["id"]
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+
+    # Properties rows: select the scatter, edit its values by clicking rows by id; each edit is one entry.
+    editor.call("set_window_visibility", {"title": properties, "visible": True, "focus": True})
+    editor.call("select_items", {"scene_name": scene, "ids": [counted_id]})
+    editor.wait_idle()
+    open_property_groups(editor, ["Kit Layout"])
+
+    def find(window, label):
+        matches = [i for i in editor.call("get_imgui_items", {"window": window, "limit": 3000, "visible_only": False, "label_contains": label}).get("items", [])
+                   if i.get("display_label") == label]
+        return matches[-1] if matches else None
+
+    def p_click(label):
+        target = find(properties, label)
+        if target is None:
+            raise RuntimeError(f"no {label!r} in the Properties window")
+        editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
+        editor.call("imgui_click", {"window": properties, "id": target["id"]})
+        editor.wait_idle()
+
+    def p_type(label, text):
+        target = find(properties, label)
+        if target is None:
+            raise RuntimeError(f"no {label!r} in the Properties window")
+        editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
+        editor.call("imgui_click", {"window": properties, "id": target["id"], "modifiers": IMGUI_CTRL})
+        editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
+        editor.call("type_text", {"text": text})
+        editor.call("key_press", {"key": "enter"})
+        editor.wait_idle()
+
+    labels = {i.get("display_label") or "" for i in editor.call("get_imgui_items", {"window": properties, "limit": 3000, "visible_only": False}).get("items", [])}
+    wanted = {"Kind.scatter", "Scatter Mode.count", "Scatter Mode.density", "Count", "Region.rectangle", "Region.disc", "Size X", "Size Z", "Min Spacing", "Yaw Min", "Yaw Max", "Layout Seed"}
+    check("the Properties Kit Layout group shows the scatter rows for a scatter layout", wanted <= labels, f"missing {sorted(wanted - labels)}")
+
+    def entry(label, action, predicate):
+        depth = undo_depth(editor)
+        action()
+        current = lay(counted_id)
+        check(label, predicate(current) and (undo_depth(editor) == depth + 1), f"depth {undo_depth(editor) - depth}, pattern {current['pattern']}, {current['child_count']} pieces")
+
+    entry("Properties: Region.disc makes the scatter a disc as one undo entry, every piece inside Region Radius",
+          lambda: p_click("Region.disc"),
+          lambda l: (l["pattern"]["region"] == "disc") and all(math.hypot(p[0], p[2]) <= l["pattern"]["region_radius"] + 1.0e-4 for p in scatter_local(l)))
+    labels = {i.get("display_label") or "" for i in editor.call("get_imgui_items", {"window": properties, "limit": 3000, "visible_only": False}).get("items", [])}
+    check("a disc scatter shows Region Radius instead of Size X and Size Z", ("Region Radius" in labels) and ("Size X" not in labels), "")
+    entry("Properties: Region Radius typed 6 widens the disc as one undo entry", lambda: p_type("Region Radius", "6"),
+          lambda l: abs(l["pattern"]["region_radius"] - 6.0) < TOLERANCE)
+    entry("Properties: Scatter Mode.density switches to density as one undo entry (round(0.25 pi 36) = 28 pieces)", lambda: p_click("Scatter Mode.density"),
+          lambda l: (l["pattern"]["scatter_mode"] == "density") and (l["run"]["requested"] == 28))
+    entry("Properties: Min Spacing typed 1.5 keeps every pair 1.5 m apart as one undo entry", lambda: p_type("Min Spacing", "1.5"),
+          lambda l: min_xz_distance(scatter_local(l)) >= 1.5 - 1.0e-4)
+    entry("Properties: Kind.line makes the node a line as one undo entry, the scatter values kept", lambda: p_click("Kind.line"),
+          lambda l: (l["pattern"]["kind"] == "line") and (abs(l["pattern"]["min_spacing"] - 1.5) < TOLERANCE) and (l["pattern"]["region"] == "disc"))
+    entry("Properties: Kind.scatter makes it a scatter again with the kept values as one undo entry", lambda: p_click("Kind.scatter"),
+          lambda l: (l["pattern"]["kind"] == "scatter") and (l["run"]["requested"] == 28))
+
+    # A held value drag: the children follow at every step, the release records one entry equal to the last preview step.
+    big = create({"name": "scatter drag", "position": [-12.0, 0.0, 20.0], "items": small,
+                  "pattern": {"kind": "scatter", "count": 200, "size_x": 30.0, "size_z": 30.0, "min_spacing": 1.0, "yaw_min": 0.0, "yaw_max": 90.0}})
+    check("a scatter of 200 over 30 x 30 m holds 200 pieces", big["child_count"] == 200, f"{big['child_count']}")
+    editor.call("select_items", {"scene_name": scene, "ids": [big["id"]]})
+    editor.wait_idle()
+    open_property_groups(editor, ["Kit Layout"])
+    depth = undo_depth(editor)
+    target = find(properties, "Yaw Max")
+    editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
+    rect = editor.call("get_imgui_item_rect", {"window": properties, "id": target["id"]})
+    x, y = rect["center_x"], rect["center_y"]
+    editor.call("mouse_drag", {"from": [x, y], "to": [x + 80.0, y], "frames": 10, "hold": True})
+    editor.wait_idle()
+    mid = layouts_by_id(editor, scene)[big["id"]]
+    mid_snapshot = [s[2:4] for s in child_snapshot(mid)]
+    check("Yaw Max row mid-drag: the 200 pieces already turn by the dragged range, no undo entry",
+          (mid["pattern"]["yaw_max"] > 90.0) and (mid_snapshot != [s[2:4] for s in child_snapshot(big)]) and (undo_depth(editor) == depth),
+          f"yaw_max {mid['pattern']['yaw_max']}, undo {undo_depth(editor) - depth}")
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    end = layouts_by_id(editor, scene)[big["id"]]
+    check("the release records one entry and its children equal the last preview step",
+          (undo_depth(editor) == depth + 1) and ([s[2:4] for s in child_snapshot(end)] == mid_snapshot), f"undo {undo_depth(editor) - depth}")
+    times = layout_step_times(pav.read_log(), 200)
+    check("the 200-piece scatter drag ran preview steps", len(times) > 0, f"{len(times)} steps")
+    print(f"200-piece scatter preview step: median {median(times):.3f} ms over {len(times)} steps", flush=True)
+
+    # The Level Kit window's Layout section offers the scatter kind and rows as initial values; it acts on the last hovered viewport.
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    viewport = cv.frame_camera(editor, scene, [-12.0, 12.0, 30.0], [-12.0, 0.0, 20.0], [[-27.0, 0.0, 5.0], [3.0, 0.0, 5.0], [-27.0, 0.0, 35.0], [3.0, 0.0, 35.0]])
+    hover(editor, viewport, [-12.0, 0.0, 20.0])
+    if open_window(editor, WINDOW):
+        click(editor, "Scatter")
+        editor.wait_idle()
+        window_labels = {i.get("display_label") or "" for i in imgui_items(editor)}
+        check("the Level Kit window Layout section offers Scatter and shows the scatter rows for it",
+              {"Scatter", "By Density", "Rectangle", "Disc", "Size X", "Min Spacing", "Yaw Min", "Yaw Max"} <= window_labels,
+              f"missing {sorted({'By Density', 'Rectangle', 'Disc', 'Size X', 'Min Spacing', 'Yaw Min', 'Yaw Max'} - window_labels)}")
+        click(editor, "Line")
+        editor.wait_idle()
+    else:
+        check("the Level Kit window opens", False, "")
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+    editor.close(scene)
+
+
 def scene_tree(editor, scene):
     """Every prim of the scene by id: name, type and parent_id."""
     return {n["id"]: n for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
@@ -3310,7 +4180,7 @@ def check_groups(editor, directory):
     reloaded = editor.call("level_mirror_group", {"scene_name": name, "group_id": reloaded_group, "axis": "z"})
     editor.wait_idle()
     check("group level: a reloaded group mirrors like the original", (reloaded["count"] == 4) and (reloaded["not_exact_count"] == 1), "")
-    # Left open, it moves the Transform checks' scene to a wide viewport (level_tools_implementation.md step 20).
+    # Closed, so the gizmo drag checks keep their viewport; a wide one was never measured with whole-pixel drags.
     editor.close(name)
 
 
@@ -3494,7 +4364,7 @@ def check_material_slots(editor, directory):
     after = {p["name"]: p["materials"] for p in pieces(editor, name)}
     check("material slots level: every piece's slot materials are back by name after save and reopen",
           after == before, f"{[(n, before.get(n), after.get(n)) for n in sorted(set(before) | set(after)) if before.get(n) != after.get(n)][:4]}")
-    # Left open, it moves the Transform checks' scene to a wide viewport (level_tools_implementation.md step 20).
+    # Closed, so the gizmo drag checks keep their viewport; a wide one was never measured with whole-pixel drags.
     editor.close(name)
 
 
@@ -3611,7 +4481,7 @@ def check_window_group(editor, scene, image_path):
     check("the Level Kit window shows the Group section with Group Name and Group Selected", not missing, f"missing {missing}")
     editor.call("imgui_scroll_to_item", {"window": WINDOW, "label": "Group Name"})
     editor.call("imgui_click", {"window": WINDOW, "label": "Group Name"})
-    editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
     editor.call("type_text", {"text": "window group"})
     editor.call("key_press", {"key": "enter"})
     editor.wait_idle()
@@ -3802,7 +4672,7 @@ def check_window_overlaps(editor, scene, slab_top, selected_ids):
     rows = [i.get("display_label") for i in imgui_items(editor, "query overlap a - query overlap b")]
     check("with Exclude Tags 'window skip' (block a carries it) the Overlap Report lists nothing", rows == [], f"rows {rows}")
     editor.call("imgui_click", {"window": WINDOW, "label": "Exclude Tags"})
-    editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
     editor.call("key_press", {"key": "backspace"})
     editor.call("key_press", {"key": "enter"})
     editor.wait_idle()
@@ -4005,6 +4875,32 @@ def wait_preview(editor, predicate, timeout=10.0):
         time.sleep(0.1)
         reply = preview(editor)
     return reply
+
+
+def hide_windows_over_viewports(editor):
+    """Hides the floating windows that cover a viewport, so viewport clicks reach the viewport.
+
+    A window without an entry in desktop_windows.json opens floating over the viewport area; the run restores the file.
+    """
+    viewports = editor.call("get_viewports")["viewports"]
+    viewport_names = {v["title"].split("###")[0] for v in viewports}
+    hidden = []
+    for w in editor.call("get_imgui_windows").get("windows", []):
+        name = w.get("display_name", "")
+        if w.get("docked") or (not name) or ("/" in name) or name.startswith("erhe root window") or (name in viewport_names):
+            continue
+        over = any((w["x"] < v["x"] + v["width"]) and (v["x"] < w["x"] + w["width"]) and
+                   (w["y"] < v["y"] + v["height"]) and (v["y"] < w["y"] + w["height"]) for v in viewports)
+        if not over:
+            continue
+        try:
+            editor.call("set_window_visibility", {"title": name, "visible": False})
+            hidden.append(name)
+        except RuntimeError as error:
+            print(f"could not hide window {name}: {error}", flush=True)
+    editor.wait_idle()
+    if hidden:
+        print(f"hid floating windows over the viewport: {', '.join(hidden)}", flush=True)
 
 
 def window_point(viewport, point):
@@ -4302,6 +5198,7 @@ def check_level_kit_window(editor, image_path):
     if shown_window() is None:
         editor.call("imgui_click", {"label": "Window"})
         editor.call("imgui_click", {"window": "Window###Menu_00", "label": WINDOW})
+        editor.wait_idle()  # the window shows from the next frame
     shown = shown_window()
     check("the Level Kit window is open (from the Window menu when it was closed; get_imgui_windows)",
           (shown is not None) and shown.get("active") and not shown.get("hidden"), json.dumps(shown)[:300])
@@ -4432,8 +5329,8 @@ def check_level_kit_window(editor, image_path):
     # A parameter row edit hands the Brush tool the brush of the new values.
     before_key = preview(editor).get("mesh_key")
     editor.call("imgui_scroll_to_item", {"window": WINDOW, "label": "width"})
-    editor.call("imgui_click", {"window": WINDOW, "label": "width", "index": 0, "modifiers": ["ctrl"]})
-    editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    editor.call("imgui_click", {"window": WINDOW, "label": "width", "index": 0, "modifiers": IMGUI_CTRL})
+    editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
     editor.call("type_text", {"text": "2"})
     editor.call("key_press", {"key": "enter"})
     wide_aim = [0.1, slab_top, -0.1]
@@ -4564,8 +5461,8 @@ def check_properties_rows(editor, scene, stairs, image_path):
     before = next(p for p in pieces(editor, scene) if p["id"] == stairs["id"])
     depth = undo_depth(editor)
     editor.call("imgui_scroll_to_item", {"window": properties, "label": "rise"})
-    editor.call("imgui_click", {"window": properties, "label": "rise", "modifiers": ["ctrl"]})
-    editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    editor.call("imgui_click", {"window": properties, "label": "rise", "modifiers": IMGUI_CTRL})
+    editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
     editor.call("type_text", {"text": "1"})
     editor.call("key_press", {"key": "enter"})
     editor.wait_idle()
@@ -4665,8 +5562,8 @@ def check_live_drags(editor, scene, stairs, catalog_scene, message_image_path=No
 
     # A typed value outside the range shows the message and changes nothing.
     editor.call("imgui_scroll_to_item", {"window": properties, "label": "rise"})
-    editor.call("imgui_click", {"window": properties, "label": "rise", "modifiers": ["ctrl"]})
-    editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    editor.call("imgui_click", {"window": properties, "label": "rise", "modifiers": IMGUI_CTRL})
+    editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
     editor.call("type_text", {"text": "100"})
     editor.call("key_press", {"key": "enter"})
     editor.wait_idle()
@@ -4702,8 +5599,8 @@ def check_live_drags(editor, scene, stairs, catalog_scene, message_image_path=No
     editor.wait_idle()
     depth = undo_depth(editor)
     editor.call("imgui_scroll_to_item", {"window": properties, "label": "rise"})
-    editor.call("imgui_click", {"window": properties, "label": "rise", "modifiers": ["ctrl"]})
-    editor.call("key_press", {"key": "a", "modifiers": ["ctrl"]})
+    editor.call("imgui_click", {"window": properties, "label": "rise", "modifiers": IMGUI_CTRL})
+    editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
     editor.call("type_text", {"text": "5"})
     editor.wait_idle()
     editor.call("key_press", {"key": "escape"})
@@ -4841,20 +5738,45 @@ def gizmo_handle(editor, viewport, values):
     return next((h for h in handles.get("handles", []) if (h.get("handle_value") in values) and ("world" in h)), None)
 
 
-def gizmo_drag(editor, viewport, values, delta, hold=False):
-    """Presses on a translate handle and pulls the pointer to where the grab point plus delta projects."""
+def gizmo_grab(editor, viewport, values):
+    """An integer window pixel that picks the handle, with its neighbours, and the world grab point under it.
+
+    The editor floors pointer positions to whole pixels, so the press goes to an integer point the probe confirmed.
+    """
     handle = gizmo_handle(editor, viewport, values)
     if handle is None:
         handles = editor.call("get_transform_handles", {"viewport": viewport["title"]})
         raise RuntimeError(f"no gizmo handle {values} on screen: {json.dumps(handles)[:600]}")
-    # The grab point's own projection, so the pointer's travel maps to exactly delta along the handle.
-    start = window_point(viewport, handle["world"])
-    probe = editor.call("get_transform_handles", {"viewport": viewport["title"], "probe_points": [[start[0], start[1]]]})["probes"][0]
-    if probe.get("handle_value") != handle["handle_value"]:
-        start = (handle["x"], handle["y"])
-    to = window_point(viewport, [handle["world"][i] + delta[i] for i in range(3)])
+    center = window_point(viewport, handle["world"])
+    cx, cy = round(center[0]), round(center[1])
+    reach = 6
+    points = [[cx + dx, cy + dy] for dy in range(-reach, reach + 1) for dx in range(-reach, reach + 1)]
+    probes = editor.call("get_transform_handles", {"viewport": viewport["title"], "probe_points": points})["probes"]
+    picks = {(int(p["x"]), int(p["y"])): p for p in probes}
+
+    def holds(x, y):
+        probe = picks.get((x, y))
+        return (probe is not None) and (probe.get("handle_value") == handle["handle_value"]) and ("world" in probe)
+
+    # Nearest to the handle's own point first; a point whose four neighbours pick the handle too is not on its edge.
+    order = sorted(((dx * dx) + (dy * dy), dx, dy) for dy in range(-reach + 1, reach) for dx in range(-reach + 1, reach))
+    for _, dx, dy in order:
+        x, y = cx + dx, cy + dy
+        if holds(x, y) and holds(x - 1, y) and holds(x + 1, y) and holds(x, y - 1) and holds(x, y + 1):
+            return (x, y), picks[(x, y)]["world"]
+    raise RuntimeError(f"no pixel within {reach} px of {fmt3(handle['world'])} picks gizmo handle {values} with its neighbours")
+
+
+def gizmo_drag(editor, viewport, values, delta, hold=False, modifiers=None):
+    """Presses on a translate handle and pulls the pointer to where the grab point plus delta projects."""
+    start, grab = gizmo_grab(editor, viewport, values)
+    target = window_point(viewport, [grab[i] + delta[i] for i in range(3)])
+    to = (round(target[0]), round(target[1]))
     # Held, so the drag takes the last move before the release (a release in the same frame does not).
-    editor.call("mouse_drag", {"from": [start[0], start[1]], "to": [to[0], to[1]], "frames": 10, "hold": True})
+    arguments = {"from": [start[0], start[1]], "to": [to[0], to[1]], "frames": 10, "hold": True}
+    if modifiers:
+        arguments["modifiers"] = modifiers
+    editor.call("mouse_drag", arguments)
     editor.wait_idle()
     if not hold:
         editor.call("mouse_release", {})
@@ -5066,6 +5988,16 @@ def check_transform_surface(editor, image_path):
           (rested == 50) and reply.get("surface_snap") and (reply.get("surface_orient") is False), f"{rested} rested")
     check("the surface step of a 50-piece selection is timed", len(times) >= 20, f"{len(times)} steps")
     print(f"surface step, 50 pieces: median {median:.3f} ms, max {max(times) if times else -1.0:.3f} ms over {len(times)} steps", flush=True)
+    log_start = len(pav.read_log())
+    editor.call("set_log_levels", {"loggers": {"editor.transform_tool": "trace"}})
+    reply = editor.call("drag_selection", {"translation": [-0.5, 0.0, 0.0], "frames": 20, "surface_snap": True, "surface_orient": True})
+    editor.wait_idle()
+    editor.call("set_log_levels", {"loggers": {"editor.transform_tool": "info"}})
+    times = surface_step_times(pav.read_log()[log_start:], 50)
+    median = sorted(times)[len(times) // 2] if times else -1.0
+    check("drag_selection with surface snap + orient rests all 50 blocks and the oriented surface step is timed",
+          (sum(1 for n in reply.get("nodes", []) if n.get("surface_found")) == 50) and reply.get("surface_orient") and (len(times) >= 20), f"{len(times)} steps, {sum(1 for n in reply.get('nodes', []) if n.get('surface_found'))} rested, reply {json.dumps({k: v for k, v in reply.items() if k != 'nodes'})[:300]}")
+    print(f"oriented surface step, 50 pieces: median {median:.3f} ms, max {max(times) if times else -1.0:.3f} ms over {len(times)} steps", flush=True)
 
     # Screenshot of the toolbar buttons and the Move rows with both settings on.
     select(editor, scene, [mover["id"]])
@@ -5074,6 +6006,1763 @@ def check_transform_surface(editor, image_path):
     check("capture_screenshot of the toolbar buttons and the Move rows is written", os.path.isfile(image_path), image_path)
     print(f"surface settings screenshot: {image_path}", flush=True)
     editor.call("set_surface_snap_settings", {"snap": False, "orient": False})
+
+
+ROTATE_Y = (11,)
+SCALE_X  = (13,)
+SCALE_UNIFORM = (19,)
+
+
+def is_checked_in(editor, window, label, index=0):
+    items = editor.call("get_imgui_items", {"window": window, "label_contains": label, "limit": 50, "visible_only": False}).get("items", [])
+    matching = [i for i in items if i.get("display_label") == label]
+    return (len(matching) > index) and bool(matching[index].get("status", {}).get("checked"))
+
+
+def check_transform_drag_cancel(editor):
+    """Escape / cancel_transform_drag during a Transform tool node drag (doc/editor/transform.md "Drag cancel"): every handle
+    kind, a held drag_selection drag and a locked surface-snapped layout return bit-exact to the drag start, nothing recorded."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    editor.call("set_surface_snap_settings", {"snap": False, "orient": False})
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    fixtures = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "cancel ground", "parameters": {"width": 30.0, "depth": 30.0, "thickness": 0.2}},
+        {"shape": "nature.hill", "position": [6.0, 0.0, 0.0], "name": "cancel hill", "parameters": {"seed": 2}},
+        {"shape": "basic.block", "position": [-3.0, 1.5, 0.0], "name": "cancel mover"},
+        {"shape": "basic.block", "position": [3.0, 1.0, -2.5], "name": "cancel rider", "parameters": {"width": 0.5, "depth": 0.5}},
+        {"shape": "basic.block", "position": [-3.0, 2.0, -3.0], "name": "cancel parent"},
+        {"shape": "basic.block", "position": [-2.0, 3.0, -3.0], "name": "cancel child", "parent_index": 4},
+        {"shape": "basic.block", "position": [-5.0, 0.0, 3.0], "name": "cancel body"}]})["pieces"]
+    editor.wait_idle()
+    mover, rider, parent, child, body = fixtures[2:7]
+    layout_id = editor.call("level_create_layout", {"scene_name": scene, "name": "cancel hill line", "position": [2.0, 0.0, 0.0], "surface_snap": True,
+                                                    "items": [{"shape": "basic.block", "parameters": {"width": 0.5, "depth": 0.5}}],
+                                                    "pattern": {"kind": "line", "count": 8, "step": 0.6}})["id"]
+    editor.wait_idle()
+    viewport = cv.frame_camera(editor, scene, [0.0, 9.0, 12.0], [1.0, 0.0, 0.0],
+                               [[-5.5, 0.0, -3.0], [-5.5, 0.0, 3.5], [8.0, 0.0, -3.0], [8.0, 0.0, 3.0], [-3.0, 2.5, 0.0], [-2.0, 3.5, -3.0]], limit=0.92)
+    hover(editor, viewport, [0.0, 0.0, 0.0])
+    editor.call("key_press", {"key": binding_input(editor, "Hotbar.activate_slot_1", "key")})
+    editor.wait_idle()
+    gizmo_state = editor.call("set_gizmo_visibility", {})
+    escape = binding_input(editor, "Transform_tool.cancel_drag", "key")
+    check("Transform_tool.cancel_drag is bound to Escape", escape.lower() == "escape", escape)
+
+    def transforms(node_id):
+        details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+        return json.dumps([details["local_transform"], details["world_transform"]], sort_keys=True)
+
+    def layout_state():
+        layout = layouts_by_id(editor, scene)[layout_id]
+        return json.dumps([layout["children"], [transforms(c["id"]) for c in layout["children"]], transforms(layout_id)], sort_keys=True)
+
+    def gizmo_set(kind):
+        editor.call("set_gizmo_visibility", {"translate": kind == "translate", "rotate": kind == "rotate", "scale": kind == "scale", "scale_gizmo_mode": "basic"})
+        editor.wait_idle()
+
+    def press_and_pull(values, pixels):
+        """A held pointer drag from a whole pixel that picks the handle, pulled by pixels."""
+        start, _ = gizmo_grab(editor, viewport, values)
+        editor.call("mouse_drag", {"from": [start[0], start[1]], "to": [start[0] + pixels[0], start[1] + pixels[1]], "frames": 10, "hold": True})
+        editor.wait_idle()
+        return start
+
+    def pull_held(start, pixels):
+        """More pointer motion with the button still down."""
+        editor.call("inject_input_events", {"events": [
+            {"type": "mouse_move", "x": start[0] + pixels[0] * k / 4.0, "y": start[1] + pixels[1] * k / 4.0, "frame": k} for k in range(1, 5)]})
+        editor.wait_idle()
+
+    def cancel_by(how):
+        if how == "escape":
+            editor.call("key_press", {"key": escape})
+            editor.wait_idle()
+            return True
+        reply = editor.call("cancel_transform_drag", {})
+        editor.wait_idle()
+        return reply.get("cancelled") and (reply.get("drag") == "pointer")
+
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+
+    # Pointer drags of the plain block on each handle kind, cancelled while the button is down.
+    for kind, values, pixels, how in (("translate X", TRANSLATE_X, None, "escape"), ("rotate Y ring", ROTATE_Y, (40, 25), "mcp"), ("scale X", SCALE_X, (45, 0), "escape")):
+        select(editor, scene, [mover["id"]])
+        gizmo_set(kind.split(" ")[0])
+        before = transforms(mover["id"])
+        depth = undo_depth(editor)
+        if pixels is None:
+            start, grab = gizmo_grab(editor, viewport, values)
+            target = window_point(viewport, [grab[0] + 1.0, grab[1], grab[2]])
+            pixels = (round(target[0]) - start[0], round(target[1]) - start[1])
+        start = press_and_pull(values, pixels)
+        mid = transforms(mover["id"])
+        cancelled = cancel_by(how)
+        after_cancel = transforms(mover["id"])
+        pull_held(start, (pixels[0] * 2, pixels[1] * 2))
+        held = transforms(mover["id"])
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        released = transforms(mover["id"])
+        check(f"{kind} pointer drag of a block cancelled with {'Escape' if how == 'escape' else 'cancel_transform_drag'} while held: the block moved mid-drag, "
+              "is bit-equal to its drag start after the cancel, more held motion and the release move nothing, no undo entry",
+              cancelled and (mid != before) and (after_cancel == before) and (held == before) and (released == before) and (undo_depth(editor) == depth),
+              f"cancelled {cancelled}, moved {mid != before}, cancel {after_cancel == before}, held {held == before}, release {released == before}, undo {undo_depth(editor) - depth}")
+        start = press_and_pull(values, pixels)
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        check(f"after the cancelled {kind} drag a normal drag of the same handle moves the block and records one entry",
+              (transforms(mover["id"]) != before) and (undo_depth(editor) == depth + 1), f"undo {undo_depth(editor) - depth}")
+        editor.call("undo")
+        editor.wait_idle()
+        check(f"undo of that {kind} drag restores the block", transforms(mover["id"]) == before, "")
+
+    # A held drag_selection drag cancelled over MCP; the next drag_selection works.
+    select(editor, scene, [mover["id"]])
+    before = transforms(mover["id"])
+    depth = undo_depth(editor)
+    editor.call("drag_selection", {"translation": [0.0, 0.0, 1.0], "frames": 5, "release": False})
+    editor.wait_idle()
+    mid = transforms(mover["id"])
+    reply = editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    after_cancel = transforms(mover["id"])
+    check("a held drag_selection drag cancelled with cancel_transform_drag: bit-equal to the drag start, no undo entry, the reply names the drag",
+          (mid != before) and (after_cancel == before) and (undo_depth(editor) == depth) and reply.get("cancelled") and (reply.get("drag") == "drag_selection"),
+          f"{json.dumps(reply)}, undo {undo_depth(editor) - depth}")
+    editor.call("drag_selection", {"translation": [0.0, 0.0, 1.0], "frames": 5, "release": True})
+    editor.wait_idle()
+    check("after the cancel a drag_selection drag records one entry", (transforms(mover["id"]) != before) and (undo_depth(editor) == depth + 1), f"undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # No drag: both are no-ops.
+    depth = undo_depth(editor)
+    before = transforms(mover["id"])
+    reply = editor.call("cancel_transform_drag", {})
+    editor.call("key_press", {"key": escape})
+    editor.wait_idle()
+    check("cancel_transform_drag and Escape without a drag change nothing (cancelled false, drag none)",
+          (reply.get("cancelled") is False) and (reply.get("drag") == "none") and (transforms(mover["id"]) == before) and (undo_depth(editor) == depth), json.dumps(reply))
+
+    def pixels_for(values, delta):
+        start, grab = gizmo_grab(editor, viewport, values)
+        target = window_point(viewport, [grab[i] + delta[i] for i in range(3)])
+        return (round(target[0]) - start[0], round(target[1]) - start[1])
+
+    def cancelled_drag(ids, kind, values, pixels, how):
+        """A held pointer drag of the selection cancelled; per-node (before, mid, after cancel, after release) and the undo change."""
+        select(editor, scene, ids)
+        gizmo_set(kind)
+        before = [transforms(i) for i in ids]
+        depth = undo_depth(editor)
+        start = press_and_pull(values, pixels)
+        mid = [transforms(i) for i in ids]
+        ok = cancel_by(how)
+        after = [transforms(i) for i in ids]
+        pull_held(start, (pixels[0] * 2, pixels[1] * 2))
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        released = [transforms(i) for i in ids]
+        return ok, before, mid, after, released, undo_depth(editor) - depth
+
+    # Surface snap and orient on: the drag onto the hill rests and tilts the block; the cancel undoes both, bit-exact.
+    editor.call("set_surface_snap_settings", {"snap": True, "orient": True})
+    select(editor, scene, [rider["id"]])
+    gizmo_set("translate")
+    ok, before, mid, after, released, undo = cancelled_drag([rider["id"]], "translate", TRANSLATE_X, pixels_for(TRANSLATE_X, [2.0, 0.0, 0.0]), "escape")
+    editor.call("set_surface_snap_settings", {"snap": False, "orient": False})
+    mid_rotation = json.loads(mid[0])[1]["rotation_xyzw"]
+    before_rotation = json.loads(before[0])[1]["rotation_xyzw"]
+    check("with surface snap and orient on, a pointer drag onto the hill rests and tilts the block mid-drag; after the Escape cancel its position and "
+          "rotation are bit-equal to the drag start through the held motion and the release, no undo entry",
+          ok and (mid_rotation != before_rotation) and (after == before) and (released == before) and (undo == 0),
+          f"tilted {mid_rotation != before_rotation}, cancel {after == before}, release {released == before}, undo {undo}")
+
+    # A parent and its child selected together, rotated on the Y ring and cancelled.
+    ok, before, mid, after, released, undo = cancelled_drag([parent["id"], child["id"]], "rotate", ROTATE_Y, (40, 25), "escape")
+    check("a rotate drag of a parent and its child selected together, cancelled with Escape: both moved mid-drag, both bit-equal to the drag start "
+          "after the cancel and the release, no undo entry",
+          ok and all(m != b for m, b in zip(mid, before)) and (after == before) and (released == before) and (undo == 0),
+          f"moved {[m != b for m, b in zip(mid, before)]}, cancel {after == before}, release {released == before}, undo {undo}")
+
+    # A dynamic body (gravity off, so it stays where it is placed) held kinematic by the drag: the cancel puts it back at rest at the start pose.
+    physics_reply = editor.call("toggle_physics", {"enabled": True})
+    editor.call("edit_physics_body", {"scene_name": scene, "node_id": body["id"], "motion_mode": "dynamic", "gravity_factor": 0.0})
+    editor.wait_idle()
+
+    def body_state():
+        return editor.call("get_physics_state", {"scene_name": scene, "node_id": body["id"]})
+
+    def speed(state):
+        return max(state.get("linear_speed", 9.0), state.get("angular_speed", 9.0))
+
+    for _ in range(60):
+        if speed(body_state()) < 1.0e-4:
+            break
+        editor.wait_idle()
+    start_state = body_state()
+    select(editor, scene, [body["id"]])
+    gizmo_set("translate")
+    ok, before, mid, after, released, undo = cancelled_drag([body["id"]], "translate", TRANSLATE_X, pixels_for(TRANSLATE_X, [1.0, 0.0, 0.0]), "escape")
+    for _ in range(30):
+        editor.wait_idle()
+    settled = body_state()
+    drift = math.dist(settled.get("position", [9.0, 9.0, 9.0]), start_state.get("position", [0.0, 0.0, 0.0]))
+    check("a pointer drag of a dynamic body cancelled with Escape: the node is bit-equal to the drag start after the cancel, and 30 frames later the "
+          "body is at rest where it started, no undo entry",
+          ok and (mid[0] != before[0]) and (after == before) and (drift < 1.0e-3) and (speed(settled) < 1.0e-3) and (undo == 0),
+          f"moved {mid[0] != before[0]}, cancel {after == before}, drift {drift:.6f} m, speed {speed(settled):.6f}, motion {settled.get('motion_mode')}, "
+          f"undo {undo}, physics {json.dumps(physics_reply)}")
+    editor.call("toggle_physics", {"enabled": False})
+    editor.wait_idle()
+
+    # A locked surface-snapped layout dragged toward the hill: the preview re-rests its children; the cancel gives back the pre-drag children.
+    gizmo_set("translate")
+    select(editor, scene, [layout_id])
+    before = layout_state()
+    before_children = layouts_by_id(editor, scene)[layout_id]["children"]
+    depth = undo_depth(editor)
+    start, grab = gizmo_grab(editor, viewport, TRANSLATE_X)
+    target = window_point(viewport, [grab[0] + 1.5, grab[1], grab[2]])
+    pixels = (round(target[0]) - start[0], round(target[1]) - start[1])
+    start = press_and_pull(TRANSLATE_X, pixels)
+    mid_layout = layouts_by_id(editor, scene)[layout_id]
+    rerested = sum(1 for a, b in zip(mid_layout["children"], before_children) if abs((a["position"][1] - b["position"][1])) > 0.05)
+    previewed = (abs(mid_layout["position"][0] - 2.0) > 0.5) and (rerested > 0)
+    key_ok = cancel_by("escape")
+    after_cancel = layout_state()
+    pull_held(start, (pixels[0] * 2, pixels[1] * 2))
+    held = layout_state()
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    released = layout_state()
+    check("a pointer drag of a locked surface-snapped layout node cancelled with Escape: mid-drag the node moved and its pieces re-rested; after the cancel the node "
+          "and its children (ids, records, local and world transforms) are bit-equal to the drag start, the held motion and the release change nothing, no undo entry",
+          key_ok and previewed and (after_cancel == before) and (held == before) and (released == before) and (undo_depth(editor) == depth),
+          f"previewed {previewed} ({rerested} re-rested), cancel {after_cancel == before}, held {held == before}, release {released == before}, undo {undo_depth(editor) - depth}")
+    press_and_pull(TRANSLATE_X, pixels)
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    check("after the cancelled layout drag a normal drag records one entry", (layout_state() != before) and (undo_depth(editor) == depth + 1), f"undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of that layout drag restores the node and the pre-drag children exactly", layout_state() == before, "")
+
+    editor.call("set_gizmo_visibility", {k: gizmo_state[k] for k in ("translate", "rotate", "scale", "scale_gizmo_mode") if k in gizmo_state})
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+
+def check_transform_record_rule(editor):
+    """An edit records an undo entry exactly when an entry's local transform at its end differs from its start
+    (doc/editor/transform.md "Undo record"): no-motion presses, drags out and exactly back and unchanged values record nothing."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    editor.call("set_surface_snap_settings", {"snap": False, "orient": False})
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    fixtures = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "record ground", "parameters": {"width": 30.0, "depth": 30.0, "thickness": 0.2}},
+        {"shape": "nature.hill", "position": [6.0, 0.0, 0.0], "name": "record hill", "parameters": {"seed": 2}},
+        {"shape": "basic.block", "position": [-3.0, 1.5, 0.0], "name": "record mover"},
+        {"shape": "basic.block", "position": [-5.0, 1.0, 3.0], "name": "record hoverer"},
+        {"shape": "basic.block", "position": [-2.0, 0.0, 3.0], "name": "record rested"},
+        {"shape": "basic.block", "position": [-3.0, 1.5, -3.0], "name": "record window"},
+        {"shape": "basic.wedge", "position": [-6.0, 0.0, -3.0], "name": "record wedge"},
+        {"shape": "basic.block", "position": [-6.0, 2.0, -3.0], "name": "record slope rider", "parameters": {"width": 0.3, "depth": 0.3}},
+        {"shape": "basic.block", "position": [0.0, 0.5, -3.0], "name": "record turned parent"},
+        {"shape": "basic.block", "position": [0.5, 2.0, 0.0], "name": "record turned child", "parent_index": 8, "parameters": {"width": 0.4, "depth": 0.4}}]})["pieces"]
+    editor.wait_idle()
+    mover, hoverer, rested, windowed = fixtures[2:6]
+    slope_rider, turned_parent, turned_child = fixtures[7:10]
+    place_at(editor, scene, turned_parent["id"], (0.0, 0.5, -3.0), q_yaw(30.0))
+    layout_id = editor.call("level_create_layout", {"scene_name": scene, "name": "record hill line", "position": [2.0, 0.0, 0.0], "surface_snap": True,
+                                                    "items": [{"shape": "basic.block", "parameters": {"width": 0.5, "depth": 0.5}}],
+                                                    "pattern": {"kind": "line", "count": 8, "step": 0.6}})["id"]
+    editor.wait_idle()
+    viewport = cv.frame_camera(editor, scene, [0.0, 9.0, 12.0], [1.0, 0.0, 0.0],
+                               [[-5.5, 0.0, -3.0], [-5.5, 0.0, 3.5], [8.0, 0.0, -3.0], [8.0, 0.0, 3.0], [-3.0, 2.5, 0.0], [-5.5, 2.0, 3.0]], limit=0.92)
+    hover(editor, viewport, [0.0, 0.0, 0.0])
+    editor.call("key_press", {"key": binding_input(editor, "Hotbar.activate_slot_1", "key")})
+    editor.wait_idle()
+    gizmo_state = editor.call("set_gizmo_visibility", {})
+
+    def transforms(node_id):
+        details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+        return json.dumps([details["local_transform"], details["world_transform"]], sort_keys=True)
+
+    def layout_state():
+        layout = layouts_by_id(editor, scene)[layout_id]
+        return json.dumps([layout["children"], [transforms(c["id"]) for c in layout["children"]], transforms(layout_id)], sort_keys=True)
+
+    def gizmo_set(kind):
+        editor.call("set_gizmo_visibility", {"translate": kind == "translate", "rotate": kind == "rotate", "scale": kind == "scale", "scale_gizmo_mode": "basic"})
+        editor.wait_idle()
+
+    def pixels_for(values, delta):
+        start, grab = gizmo_grab(editor, viewport, values)
+        target = window_point(viewport, [grab[i] + delta[i] for i in range(3)])
+        return (round(target[0]) - start[0], round(target[1]) - start[1])
+
+    def press_release(values):
+        """A press on the handle and a release with no pointer motion between."""
+        start, _ = gizmo_grab(editor, viewport, values)
+        editor.call("mouse_drag", {"from": [start[0], start[1]], "to": [start[0], start[1]], "frames": 4, "hold": True})
+        editor.wait_idle()
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+
+    def out_and_back(values, pixels):
+        """A held drag out by pixels and back to the press pixel, then the release; returns whether it moved mid-drag."""
+        start, _ = gizmo_grab(editor, viewport, values)
+        before = editor.call("get_node_details", {"scene_name": scene, "node_id": selected[0]})["world_transform"]
+        editor.call("mouse_drag", {"from": [start[0], start[1]], "to": [start[0] + pixels[0], start[1] + pixels[1]], "frames": 6, "hold": True})
+        editor.wait_idle()
+        mid = editor.call("get_node_details", {"scene_name": scene, "node_id": selected[0]})["world_transform"]
+        editor.call("inject_input_events", {"events": [
+            {"type": "mouse_move", "x": start[0] + pixels[0] * (4 - k) / 4.0, "y": start[1] + pixels[1] * (4 - k) / 4.0, "frame": k} for k in range(1, 5)]})
+        editor.wait_idle()
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        return mid != before
+
+    def real_drag(values, pixels):
+        start, _ = gizmo_grab(editor, viewport, values)
+        editor.call("mouse_drag", {"from": [start[0], start[1]], "to": [start[0] + pixels[0], start[1] + pixels[1]], "frames": 6, "hold": True})
+        editor.wait_idle()
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+    selected = [mover["id"]]
+    select(editor, scene, selected)
+
+    # Each handle kind: a no-motion press first in the session, a real drag, the no-motion press again (an earlier edit leaves nothing behind),
+    # then a drag out and exactly back.
+    first = True
+    for kind, values, delta, pixels in (("translate X", TRANSLATE_X, [1.0, 0.0, 0.0], None), ("translate XZ plane", TRANSLATE_XZ, [1.0, 0.0, 1.0], None),
+                                        ("rotate Y ring", ROTATE_Y, None, (40, 25)), ("scale X", SCALE_X, None, (45, 0)),
+                                        ("scale uniform", SCALE_UNIFORM, None, (30, -30))):
+        gizmo_set(kind.split(" ")[0])
+        if pixels is None:
+            pixels = pixels_for(values, delta)
+        if first:
+            before = transforms(mover["id"])
+            depth = undo_depth(editor)
+            press_release(values)
+            check(f"{kind}: a press and release without motion as the first edit of the session records nothing and leaves the block bit-equal",
+                  (transforms(mover["id"]) == before) and (undo_depth(editor) == depth), f"undo {undo_depth(editor) - depth}")
+            first = False
+        before = transforms(mover["id"])
+        depth = undo_depth(editor)
+        real_drag(values, pixels)
+        check(f"{kind}: a real drag moves the block and records exactly one entry", (transforms(mover["id"]) != before) and (undo_depth(editor) == depth + 1),
+              f"undo {undo_depth(editor) - depth}")
+        before = transforms(mover["id"])
+        depth = undo_depth(editor)
+        press_release(values)
+        check(f"{kind}: a press and release without motion after a real drag records nothing and leaves the block bit-equal",
+              (transforms(mover["id"]) == before) and (undo_depth(editor) == depth), f"undo {undo_depth(editor) - depth}")
+        moved = out_and_back(values, pixels)
+        check(f"{kind}: a drag out (the block moves) and exactly back to the press pixel records nothing and leaves the block bit-equal",
+              moved and (transforms(mover["id"]) == before) and (undo_depth(editor) == depth), f"moved {moved}, undo {undo_depth(editor) - depth}")
+
+    # Scripted edits: a zero drag_selection and a transform_selection to the current values record nothing; a real drag_selection records one.
+    before = transforms(mover["id"])
+    depth = undo_depth(editor)
+    editor.call("drag_selection", {"translation": [0.0, 0.0, 0.0], "frames": 3, "release": True})
+    editor.wait_idle()
+    local = editor.call("get_node_details", {"scene_name": scene, "node_id": mover["id"]})["local_transform"]
+    editor.call("transform_selection", {"space": "local", "translation": local["translation"], "rotation_xyzw": local["rotation_xyzw"], "scale": local["scale"]})
+    editor.wait_idle()
+    check("a zero-translation drag_selection and a transform_selection to the current local values record nothing and leave the block bit-equal",
+          (transforms(mover["id"]) == before) and (undo_depth(editor) == depth), f"undo {undo_depth(editor) - depth}")
+    editor.call("drag_selection", {"translation": [0.0, 0.0, 1.0], "frames": 3, "release": True})
+    editor.wait_idle()
+    check("a real drag_selection records exactly one entry", (transforms(mover["id"]) != before) and (undo_depth(editor) == depth + 1), f"undo {undo_depth(editor) - depth}")
+
+    # Surface snap on: a zero step rests like any step. A hovering block rests on the press; a rested one stays bit-equal.
+    def world_y(node_id):
+        return editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})["world_transform"]["translation"][1]
+
+    editor.call("set_surface_snap_settings", {"snap": True, "orient": False})
+    gizmo_set("translate")
+    selected = [hoverer["id"]]
+    select(editor, scene, selected)
+    before = transforms(hoverer["id"])
+    depth = undo_depth(editor)
+    press_release(TRANSLATE_X)
+    rested_y = world_y(hoverer["id"])
+    check("surface snap on, a no-motion press on a block hovering 1 m up rests it on the ground and records one entry",
+          (abs(rested_y) < 1.0e-3) and (undo_depth(editor) == depth + 1), f"y {rested_y:.6f}, undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of that press gives the hover back exactly", transforms(hoverer["id"]) == before, "")
+    moved = out_and_back(TRANSLATE_X, pixels_for(TRANSLATE_X, [1.0, 0.0, 0.0]))
+    check("surface snap on, a drag of the hovering block out and back to the press pixel ends rested (not hovering), one entry",
+          moved and (abs(world_y(hoverer["id"])) < 1.0e-3) and (undo_depth(editor) == depth + 1), f"y {world_y(hoverer['id']):.6f}, undo {undo_depth(editor) - depth}")
+    selected = [rested["id"]]
+    select(editor, scene, selected)
+    before = transforms(rested["id"])
+    depth = undo_depth(editor)
+    press_release(TRANSLATE_X)
+    moved = out_and_back(TRANSLATE_X, pixels_for(TRANSLATE_X, [1.0, 0.0, 0.0]))
+    editor.call("drag_selection", {"translation": [0.0, 0.0, 0.0], "frames": 3, "release": True, "surface_snap": True})
+    editor.wait_idle()
+    check("surface snap on, a resting block: a no-motion press, a drag out and back and a zero drag_selection with surface_snap leave it bit-equal, nothing recorded",
+          moved and (transforms(rested["id"]) == before) and (undo_depth(editor) == depth), f"moved {moved}, undo {undo_depth(editor) - depth}")
+    # Pieces at rest where the world-to-parent round trip or the slope is inexact: a no-motion press writes nothing.
+    for label, piece, orient in (("on the wedge slope (snap)", slope_rider, False), ("on the wedge slope (snap and orient)", slope_rider, True),
+                                 ("under a turned parent (snap)", turned_child, False)):
+        editor.call("set_surface_snap_settings", {"snap": True, "orient": orient})
+        selected = [piece["id"]]
+        select(editor, scene, selected)
+        placed = transforms(piece["id"])
+        editor.call("drag_selection", {"translation": [0.0, 0.0, 0.0], "frames": 2, "release": True, "surface_snap": True, "surface_orient": orient})
+        editor.wait_idle()
+        before = transforms(piece["id"])
+        depth = undo_depth(editor)
+        press_release(TRANSLATE_X)
+        editor.call("drag_selection", {"translation": [0.0, 0.0, 0.0], "frames": 2, "release": True, "surface_snap": True, "surface_orient": orient})
+        editor.wait_idle()
+        check(f"a piece resting {label} (rested by a first zero drag_selection): a no-motion press and a zero drag_selection with the surface options on "
+              "leave it bit-equal, nothing recorded",
+              (placed != before) and (transforms(piece["id"]) == before) and (undo_depth(editor) == depth),
+              f"rested {placed != before}, undo {undo_depth(editor) - depth}")
+    editor.call("set_surface_snap_settings", {"snap": True, "orient": False})
+
+    # Move grid snap on: a drag shorter than half a grid step is a zero step, which rests the hovering block; back under it, still rested.
+    open_window(editor, TRANSFORM_WINDOW)
+    editor.call("imgui_click", {"window": TRANSFORM_WINDOW, "label": "Snap Enable", "index": 0})
+    editor.wait_idle()
+    snap_on = is_checked_in(editor, TRANSFORM_WINDOW, "Snap Enable")
+    selected = [hoverer["id"]]
+    select(editor, scene, selected)
+    editor.call("undo")
+    editor.wait_idle()
+    hover_before = transforms(hoverer["id"])
+    start, _ = gizmo_grab(editor, viewport, TRANSLATE_X)
+    small = pixels_for(TRANSLATE_X, [0.03, 0.0, 0.0])
+    far = pixels_for(TRANSLATE_X, [1.0, 0.0, 0.0])
+    editor.call("mouse_drag", {"from": [start[0], start[1]], "to": [start[0] + small[0], start[1] + small[1]], "frames": 4, "hold": True})
+    editor.wait_idle()
+    y_small = world_y(hoverer["id"])
+    x_small = editor.call("get_node_details", {"scene_name": scene, "node_id": hoverer["id"]})["world_transform"]["translation"][0]
+    editor.call("inject_input_events", {"events": [
+        {"type": "mouse_move", "x": start[0] + far[0] * k / 4.0, "y": start[1] + far[1] * k / 4.0, "frame": k} for k in range(1, 5)]})
+    editor.wait_idle()
+    editor.call("inject_input_events", {"events": [
+        {"type": "mouse_move", "x": start[0] + small[0], "y": start[1] + small[1], "frame": 1}]})
+    editor.wait_idle()
+    y_back = world_y(hoverer["id"])
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    editor.call("imgui_click", {"window": TRANSFORM_WINDOW, "label": "Snap Enable", "index": 0})
+    editor.wait_idle()
+    editor.call("set_surface_snap_settings", {"snap": False, "orient": False})
+    check("move grid snap and surface snap on: a sub-step drag of a hovering block rests it in place (x unchanged), a drag on and back under half a step "
+          "keeps it rested",
+          snap_on and (abs(y_small) < 1.0e-3) and (x_small == json.loads(hover_before)[1]["translation"][0]) and (abs(y_back) < 1.0e-3),
+          f"snap {snap_on}, y {y_small:.6f} / {y_back:.6f}, x {x_small} vs {json.loads(hover_before)[1]['translation'][0]}")
+
+    # Transform window edits: a value dragged out and back, and the same value typed, record nothing.
+    selected = [windowed["id"]]
+    select(editor, scene, selected)
+    for row in ("Translation.x", "ZYX.y", "Scale.z"):
+        before = transforms(windowed["id"])
+        depth = undo_depth(editor)
+        x, y = drag_row(editor, TRANSFORM_WINDOW, row, 30)
+        editor.wait_idle()
+        mid = transforms(windowed["id"])
+        editor.call("inject_input_events", {"events": [{"type": "mouse_move", "x": x + 30 - (30 * k / 4.0), "y": y, "frame": k} for k in range(1, 5)]})
+        editor.wait_idle()
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        check(f"Transform window {row} dragged out (the block changes) and back to the press point records nothing, block bit-equal",
+              (mid != before) and (transforms(windowed["id"]) == before) and (undo_depth(editor) == depth), f"moved {mid != before}, undo {undo_depth(editor) - depth}")
+    before = transforms(windowed["id"])
+    depth = undo_depth(editor)
+    for row, text in (("Translation.x", "-3"), ("ZYX.y", "0"), ("Scale.z", "1")):
+        editor.call("imgui_click", {"window": TRANSFORM_WINDOW, "label": row, "modifiers": IMGUI_CTRL})
+        editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
+        editor.call("type_text", {"text": text})
+        editor.call("key_press", {"key": "enter"})
+        editor.wait_idle()
+    check("Transform window: the current values typed into Translation.x, ZYX.y and Scale.z record nothing, block bit-equal",
+          (transforms(windowed["id"]) == before) and (undo_depth(editor) == depth), f"undo {undo_depth(editor) - depth}")
+
+    # A locked surface-snapped layout node: a no-motion press keeps the children, records nothing, and the next real drag works.
+    gizmo_set("translate")
+    selected = [layout_id]
+    select(editor, scene, selected)
+    before = layout_state()
+    depth = undo_depth(editor)
+    press_release(TRANSLATE_X)
+    check("a press and release without motion on a locked surface-snapped layout node: node and children (ids, records, transforms) bit-equal, nothing recorded",
+          (layout_state() == before) and (undo_depth(editor) == depth), f"same {layout_state() == before}, undo {undo_depth(editor) - depth}")
+    real_drag(TRANSLATE_X, pixels_for(TRANSLATE_X, [1.5, 0.0, 0.0]))
+    check("the next real drag of the layout node records exactly one entry", (layout_state() != before) and (undo_depth(editor) == depth + 1), f"undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of that layout drag restores the node and its children exactly", layout_state() == before, "")
+
+    editor.call("set_gizmo_visibility", {k: gizmo_state[k] for k in ("translate", "rotate", "scale", "scale_gizmo_mode") if k in gizmo_state})
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+
+def replace_state(editor, scene, node_id):
+    """What a replace changes and its undo restores: record, mesh, materials, collision and the node's transform and place."""
+    piece = piece_by_id(editor, scene, node_id)
+    details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+    return {
+        "shape": piece["shape"], "parameters_text": piece["parameters_text"], "materials": piece["materials"],
+        "mesh_key": piece.get("mesh_key"), "brush_id": piece.get("brush_id"), "follows_kit": piece["follows_kit"],
+        "collision_shape": piece["physics"]["collision_shape"], "has_body": piece["physics"]["has_body"],
+        "world_aabb": piece["world_aabb"], "name": piece["name"],
+        "local_transform": details["local_transform"], "world_transform": details["world_transform"], "parent": details["parent"],
+        "primitive_count": (details.get("mesh") or {}).get("primitive_count"),
+    }
+
+
+def kept_place(before, after):
+    """The node kept its name, parent and transform bit for bit."""
+    return all(before[key] == after[key] for key in ("name", "parent", "local_transform", "world_transform"))
+
+
+def check_replace(editor):
+    """R5.8, D3.10: level_replace_pieces gives pieces another shape, one undo entry, keeping the node, its transform and matched slots."""
+    scene = create_scene(editor)
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    by_id = {shape["id"]: shape for shape in kits["shapes"]}
+    defaults = {shape_id: {s["slot"]: s["default_material"] for s in shape["material_slots"]} for shape_id, shape in by_id.items()}
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [0.25, 0.5, -1.125], "rotation_xyzw": yaw_xyzw(30.0), "name": "r block",
+         "parameters": {"width": 2.0, "seed": 77}, "materials": {"stone": "Kit Wood"}},
+        {"shape": "nature.tree", "position": [4.0, 0.0, 0.0], "rotation_xyzw": yaw_xyzw(-75.0), "name": "r tree",
+         "materials": {"foliage": "Kit Autumn Foliage"}},
+        {"shape": "basic.block", "position": [-4.0, 0.0, 0.0], "name": "r wide", "parameters": {"width": 40.0}},
+    ]})["pieces"]
+    editor.wait_idle()
+    block, tree, wide = (p["id"] for p in placed)
+
+    # A block by a rock: the seed carries, the rock's parameters take their defaults, the stone slot has no rock namesake.
+    before = replace_state(editor, scene, block)
+    depth = undo_depth(editor)
+    reply = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [block], "shape": "nature.rock"})
+    editor.wait_idle()
+    after = replace_state(editor, scene, block)
+    entry = reply["pieces"][0]
+    expected_rock = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.rock", "position": [20.0, 0.0, 0.0], "name": "r expected", "parameters": {"seed": 77}}]})["pieces"][0]
+    editor.wait_idle()
+    expected_text = piece_by_id(editor, scene, expected_rock["id"])["parameters_text"]
+    editor.call("undo")
+    editor.wait_idle()
+    check("level_replace_pieces gives a block the rock shape as one undo entry: same id, name, parent and transform bit for bit",
+          (reply["replaced_count"] == 1) and entry["replaced"] and (entry["id"] == block) and (entry["old_shape"] == "basic.block") and
+          (entry["shape"] == "nature.rock") and (after["shape"] == "nature.rock") and kept_place(before, after) and (undo_depth(editor) == depth + 1),
+          f"reply {json.dumps({k: entry.get(k) for k in ('id', 'old_shape', 'shape', 'replaced')})} undo {undo_depth(editor) - depth}")
+    check("the rock carries the block's seed and takes the rock defaults for the rest (the size derived from that seed), as a rock placed with that seed",
+          (entry["carried"] == ["seed"]) and (sorted(entry["defaulted"]) == sorted(["form", "size", "roughness", "bevels"])) and
+          (entry["parameters"]["seed"] == 77) and (after["parameters_text"] == expected_text) and (entry["given"] == []),
+          f"carried {entry['carried']} defaulted {entry['defaulted']} text {after['parameters_text']} expected {expected_text}")
+    check("the rock slot has no namesake on the block: it takes its palette default; the mesh is the rock brush's with a collision shape and body",
+          (after["materials"] == defaults["nature.rock"]) and (entry["kept_materials"] == []) and after["follows_kit"] and
+          after["collision_shape"] and after["has_body"] and (after["primitive_count"] == 1) and (entry["collision_shape"] == after["collision_shape"]),
+          f"materials {after['materials']} collision {after['collision_shape']} follows {after['follows_kit']}")
+    editor.call("undo")
+    editor.wait_idle()
+    undone = replace_state(editor, scene, block)
+    editor.call("redo")
+    editor.wait_idle()
+    redone = replace_state(editor, scene, block)
+    check("undo gives the block back exactly (record, mesh, materials, collision shape, transform); redo the rock exactly",
+          (undone == before) and (redone == after), f"undone differs in {[k for k in before if before[k] != undone.get(k)]}, redone in {[k for k in after if after[k] != redone.get(k)]}")
+
+    # A tree by a rock and back: the tree comes back with its parameters (the seed carried both ways) and slot defaults.
+    tree_before = replace_state(editor, scene, tree)
+    depth = undo_depth(editor)
+    to_rock = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [tree], "shape": "nature.rock"})["pieces"][0]
+    editor.wait_idle()
+    as_rock = replace_state(editor, scene, tree)
+    back = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [tree], "shape": "nature.tree"})["pieces"][0]
+    editor.wait_idle()
+    as_tree = replace_state(editor, scene, tree)
+    check("a tree by a rock and back: two entries, the node and transform kept, a two-primitive tree again with the original parameters",
+          (as_rock["shape"] == "nature.rock") and (as_rock["primitive_count"] == 1) and (as_tree["shape"] == "nature.tree") and
+          (as_tree["primitive_count"] == 2) and kept_place(tree_before, as_rock) and kept_place(tree_before, as_tree) and
+          (as_tree["parameters_text"] == tree_before["parameters_text"]) and (as_tree["mesh_key"] == tree_before["mesh_key"]) and
+          (undo_depth(editor) == depth + 2) and (to_rock["carried"] == ["seed"]) and ("seed" in back["carried"]),
+          f"{as_rock['shape']} -> {as_tree['shape']} text {as_tree['parameters_text']} vs {tree_before['parameters_text']} undo {undo_depth(editor) - depth}")
+    check("the tree back from the rock has its slot defaults (bark and foliage have no namesake on the rock)",
+          (as_tree["materials"] == defaults["nature.tree"]) and (back["kept_materials"] == []), json.dumps(as_tree["materials"]))
+    editor.call("undo")
+    editor.call("undo")
+    editor.wait_idle()
+    check("two undos give the tree back exactly, its chosen foliage included", replace_state(editor, scene, tree) == tree_before, "")
+
+    # Slots match by name: the tree's foliage keeps its material on a bush.
+    bush = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [tree], "shape": "nature.bush"})["pieces"][0]
+    editor.wait_idle()
+    check("a tree by a bush keeps the chosen Kit Autumn Foliage in the bush's foliage slot (matched by name)",
+          (piece_by_id(editor, scene, tree)["materials"] == {"foliage": "Kit Autumn Foliage"}) and (bush["kept_materials"] == ["foliage"]),
+          f"{piece_by_id(editor, scene, tree)['materials']} kept {bush['kept_materials']}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Clamping, overrides and material overrides.
+    clamp = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [wide], "shape": "architecture.pillar"})["pieces"][0]
+    editor.wait_idle()
+    check("a 40 m wide block by a pillar: width clamped to the pillar's 16 m, height carried",
+          (clamp["parameters"]["width"] == 16.0) and ("width" in clamp["clamped"]) and ("height" in clamp["carried"]) and
+          (clamp["parameters"]["height"] == 1.0), json.dumps({k: clamp[k] for k in ("carried", "clamped", "defaulted")}))
+    editor.call("undo")
+    editor.wait_idle()
+    given = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [wide], "shape": "nature.rock",
+                                                 "parameters": {"size": 1.5, "derive": []}, "materials": {"rock": "Kit Stone"}})["pieces"][0]
+    editor.wait_idle()
+    check("parameters merge over the carried values (given lists them) and materials override a slot",
+          (given["parameters"]["size"] == 1.5) and (given["given"] == ["size"]) and ("size" not in given["defaulted"]) and
+          (given["materials"] == {"rock": "Kit Stone"}), json.dumps({k: given[k] for k in ("parameters", "given", "materials")}))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Same shape: no-op, no entry.
+    depth = undo_depth(editor)
+    same = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [wide], "shape": "basic.block"})
+    editor.wait_idle()
+    check("replacing a block by a block changes nothing and records no undo entry",
+          (same["replaced_count"] == 0) and (not same["pieces"][0]["replaced"]) and (undo_depth(editor) == depth), json.dumps(same["pieces"][0].get("replaced")))
+    same_given = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [wide], "shape": "basic.block",
+                                                      "parameters": {"height": 2.0}, "materials": {"stone": "Kit Wood"}})
+    editor.wait_idle()
+    check("a same-shape replace with parameters and materials given changes nothing either (no entry; set_parameters is the edit for that)",
+          (same_given["replaced_count"] == 0) and (undo_depth(editor) == depth) and
+          (piece_by_id(editor, scene, wide)["parameters"]["height"] == 1.0), json.dumps(same_given["pieces"][0].get("parameters")))
+
+    # The selection, several pieces in one entry.
+    editor.call("select_items", {"scene_name": scene, "ids": [block, tree]})
+    editor.wait_idle()
+    states = {i: replace_state(editor, scene, i) for i in (block, tree)}
+    depth = undo_depth(editor)
+    multi = editor.call("level_replace_pieces", {"scene_name": scene, "shape": "basic.cylinder"})
+    editor.wait_idle()
+    now = {i: replace_state(editor, scene, i) for i in (block, tree)}
+    selection = {item["id"] for item in editor.call("get_selection").get("items", [])}
+    check("without node_ids the selected pieces are replaced, both in one undo entry, and stay selected",
+          (multi["replaced_count"] == 2) and all(now[i]["shape"] == "basic.cylinder" and kept_place(states[i], now[i]) for i in now) and
+          (undo_depth(editor) == depth + 1) and ({block, tree} <= selection), f"{[now[i]['shape'] for i in now]} undo {undo_depth(editor) - depth} selection {selection}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("one undo gives both back exactly", all(replace_state(editor, scene, i) == states[i] for i in states), "")
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+    # Refusals: a locked layout's child and the layout node, all or nothing.
+    layout = editor.call("level_create_layout", {"scene_name": scene, "name": "r layout", "position": [0.0, 0.0, 8.0],
+                                                 "pattern": {"kind": "line", "count": 3}, "items": [{"shape": "basic.block"}], "locked": True})
+    editor.wait_idle()
+    child = layout["children"][0]["id"]
+    depth = undo_depth(editor)
+    child_error = call_error(editor, "level_replace_pieces", {"scene_name": scene, "node_ids": [wide, child], "shape": "nature.rock"})
+    layout_error = call_error(editor, "level_replace_pieces", {"scene_name": scene, "node_ids": [layout["id"]], "shape": "nature.rock"})
+    twice_error = call_error(editor, "level_replace_pieces", {"scene_name": scene, "node_ids": [wide, wide], "shape": "nature.rock"})
+    unknown_error = call_error(editor, "level_replace_pieces", {"scene_name": scene, "node_ids": [wide], "shape": "nature.nothing"})
+    check("a child of a locked layout is refused with the layout refusal, and nothing changes (the other listed piece neither)",
+          (child_error is not None) and ("locked kit layout" in child_error) and ("piece 1" in child_error) and
+          (piece_by_id(editor, scene, wide)["shape"] == "basic.block") and (undo_depth(editor) == depth), str(child_error))
+    check("the layout node itself, a piece listed twice and an unknown shape are refused, no entry",
+          (layout_error is not None) and ("kit layout node" in layout_error) and (twice_error is not None) and ("twice" in twice_error) and
+          (unknown_error is not None) and (undo_depth(editor) == depth), f"{layout_error} | {twice_error} | {unknown_error}")
+
+    # A child of an unlocked layout is an ordinary piece; locking again lays the layout out over it.
+    editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": layout["id"], "locked": False})
+    editor.wait_idle()
+    unlocked = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [child], "shape": "nature.rock"})
+    editor.wait_idle()
+    check("a child of an unlocked layout is replaced like an ordinary piece and stays the layout's child",
+          (unlocked["replaced_count"] == 1) and (piece_by_id(editor, scene, child)["shape"] == "nature.rock") and
+          (scene_tree(editor, scene)[child]["parent_id"] == layout["id"]), "")
+    editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": layout["id"], "locked": True})
+    editor.wait_idle()
+    children = layouts_by_id(editor, scene)[layout["id"]]["children"]
+    check("locking the layout again discards the replace: its children are its blocks",
+          all(piece_by_id(editor, scene, c["id"])["shape"] == "basic.block" for c in children) and (len(children) == 3), "")
+
+    # A piece that keeps a loaded mesh: a tree's two primitives under a block record (written raw).
+    odd = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "nature.tree", "position": [-8.0, 0.0, -8.0], "name": "r odd"}]})["pieces"][0]
+    editor.wait_idle()
+    block_text = piece_by_id(editor, scene, wide)["parameters_text"]
+    editor.call("set_item_property", {"scene_name": scene, "item_id": odd["id"], "property": "Kit_piece.parameters", "value": block_text})
+    editor.call("set_item_property", {"scene_name": scene, "item_id": odd["id"], "property": "Kit_piece.shape", "value": "basic.block"})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    odd_error = call_error(editor, "level_replace_pieces", {"scene_name": scene, "node_ids": [odd["id"]], "shape": "nature.rock"})
+    check("a piece whose mesh has another primitive count than its shape's slots (a loaded mesh) is refused, no entry",
+          (odd_error is not None) and ("loaded mesh" in odd_error) and (undo_depth(editor) == depth), str(odd_error))
+
+    # A piece in a group stays in its group.
+    editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [wide], "name": "r group"})
+    editor.wait_idle()
+    group_id = scene_tree(editor, scene)[wide]["parent_id"]
+    grouped = replace_state(editor, scene, wide)
+    editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [wide], "shape": "nature.rock"})
+    editor.wait_idle()
+    check("a piece in a group is replaced in place: it stays the group's child with its transform",
+          (scene_tree(editor, scene)[wide]["parent_id"] == group_id) and kept_place(grouped, replace_state(editor, scene, wide)) and
+          (scene_tree(editor, scene)[group_id]["name"] == "r group"), f"parent {scene_tree(editor, scene)[wide]['parent_id']} group {group_id}")
+    editor.close(scene)
+
+
+def check_window_replace(editor, scene):
+    """The Level Kit window's Replace With combo and Replace Selected button (D4.10), clicked by id."""
+    slab = next(p for p in pieces(editor, scene) if p["name"] == "slab")
+    top = slab["world_aabb"]["max"][1]
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [-3.0, top, 3.0], "name": "wr a"},
+        {"shape": "basic.wedge", "position": [-1.0, top, 3.0], "name": "wr b"},
+    ]})["pieces"]
+    editor.wait_idle()
+    ids = [p["id"] for p in placed]
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    button = next((i for i in imgui_items(editor, "Replace Selected") if i.get("display_label") == "Replace Selected"), None)
+    check("the Selection section shows Replace With and a disabled Replace Selected without selected pieces",
+          (button is not None) and button["status"].get("disabled") and any(i.get("display_label") == "Replace With" for i in imgui_items(editor, "Replace With")),
+          json.dumps((button or {}).get("status")))
+    editor.call("select_items", {"scene_name": scene, "ids": ids})
+    editor.wait_idle()
+    before = {i: replace_state(editor, scene, i) for i in ids}
+    click_item(editor, "Replace With")
+    editor.wait_idle()
+    editor.call("imgui_click", {"label": "Rock (nature.rock)"})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    click_item(editor, "Replace Selected")
+    editor.wait_idle()
+    after = {i: replace_state(editor, scene, i) for i in ids}
+    check("choosing Rock and pressing Replace Selected gives both selected pieces the rock shape in one undo entry, transforms kept",
+          all((after[i]["shape"] == "nature.rock") and kept_place(before[i], after[i]) for i in ids) and (undo_depth(editor) == depth + 1),
+          f"{[after[i]['shape'] for i in ids]} undo {undo_depth(editor) - depth}")
+    check("the section reports the replace (its message, logged with it)", "Level Kit: Replaced 2 pieces with Rock." in pav.read_log(), "")
+    editor.call("undo")
+    editor.wait_idle()
+    check("one undo gives both pieces back exactly", all(replace_state(editor, scene, i) == before[i] for i in ids), "")
+    # A refused replace: a tree record (two slots, written raw) over the block's one-primitive mesh.
+    tree_text = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "nature.tree", "position": [3.0, top, 3.0], "name": "wr t"}]})["pieces"][0]
+    editor.wait_idle()
+    ids.append(tree_text["id"])
+    editor.call("set_item_property", {"scene_name": scene, "item_id": ids[0], "property": "Kit_piece.parameters",
+                                      "value": piece_by_id(editor, scene, tree_text["id"])["parameters_text"]})
+    editor.call("set_item_property", {"scene_name": scene, "item_id": ids[0], "property": "Kit_piece.shape", "value": "nature.tree"})
+    editor.call("select_items", {"scene_name": scene, "ids": ids[:2]})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    click_item(editor, "Replace Selected")
+    editor.wait_idle()
+    log_text = pav.read_log()
+    check("a refused window replace records no entry and reports the refusal (its red message, logged with it)",
+          (undo_depth(editor) == depth) and ("Level Kit: replace refused:" in log_text) and
+          ("loaded mesh" in log_text.split("Level Kit: replace refused:")[-1].splitlines()[0]) and
+          (piece_by_id(editor, scene, ids[1])["shape"] == "basic.wedge"), "")
+    editor.call("delete_nodes", {"scene_name": scene, "ids": ids})
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+
+def connectors_of(editor, scene, node_id):
+    """A placed piece's connectors in world space by name."""
+    reply = editor.call("level_get_connectors", {"scene_name": scene, "node_ids": [node_id]})
+    return {c["name"]: c for c in reply["pieces"][0]["connectors"]}
+
+
+def same_xyzw(a, b, tolerance=1.0e-4):
+    """Equal rotations: q and -q are the same rotation."""
+    return close(a, b, tolerance) or close(a, [-x for x in b], tolerance)
+
+
+def joined_position(target_position, target_rotation, target_local, piece_rotation, piece_local, gap_vector=(0.0, 0.0, 0.0)):
+    """Where a piece's origin lands when its local connector point meets the target's (D3.12)."""
+    point = [target_position[i] + q_rotate(target_rotation, target_local)[i] + gap_vector[i] for i in range(3)]
+    offset = q_rotate(piece_rotation, piece_local)
+    return [point[i] - offset[i] for i in range(3)]
+
+
+def node_transforms(editor, scene, node_id):
+    details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+    return details["local_transform"], details["world_transform"]
+
+
+def check_connectors(editor):
+    """R5.3, D3.12: connectors in the catalog, level_get_connectors, level_place_pieces connect and level_connect_pieces."""
+    scene = create_scene(editor)
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    by_id = {shape["id"]: shape for shape in kits["shapes"]}
+    names = {shape_id: [c["name"] for c in shape["connectors"]] for shape_id, shape in by_id.items()}
+    check("level_get_kits lists the connectors of the architecture and basic shapes, none for the nature shapes",
+          (names["architecture.wall"] == ["start", "end", "base", "top", "front", "back"]) and
+          (names["architecture.door_wall"] == ["start", "end", "base", "top", "opening_front", "opening_back"]) and
+          (names["basic.stairs"] == ["bottom", "top", "base"]) and (names["basic.block"] == ["base", "top", "front", "back", "left", "right"]) and
+          (names["architecture.pillar"] == ["base", "top"]) and all(not names[i] for i in names if i.startswith("nature.")),
+          json.dumps({k: v for k, v in names.items() if k in ("architecture.wall", "basic.stairs", "nature.rock")}))
+    wall_end = next(c for c in by_id["architecture.wall"]["connectors"] if c["name"] == "end")
+    check("the catalog's wall end connector sits at half the default length on the base, outward +X, up +Y",
+          close(wall_end["position"], [2.0, 0.0, 0.0]) and close(wall_end["outward"], [1.0, 0.0, 0.0]) and close(wall_end["up"], [0.0, 1.0, 0.0]),
+          json.dumps(wall_end))
+
+    # A wall, a second wall's start on its end: collinear and touching.
+    a = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "position": [1.0, 0.0, 2.0], "name": "c a"}]})["pieces"][0]
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    b = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "name": "c b", "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    half_a = 0.5 * a["parameters"]["length"]
+    half_b = 0.5 * b["parameters"]["length"]
+    check("a wall placed with its start on another wall's end lands collinear and touching, one undo entry",
+          close(b["position"], [1.0 + half_a + half_b, 0.0, 2.0]) and same_xyzw(b["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]) and
+          (abs(b["world_aabb"]["min"][0] - a["world_aabb"]["max"][0]) < TOLERANCE) and
+          close([b["world_aabb"]["min"][2], b["world_aabb"]["max"][2]], [a["world_aabb"]["min"][2], a["world_aabb"]["max"][2]]) and
+          (undo_depth(editor) == depth + 1), f"position {fmt3(b['position'])} rotation {b['rotation_xyzw']}")
+    gapped = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "name": "c gap", "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end", "gap": 0.5}}]})["pieces"][0]
+    editor.wait_idle()
+    check("a gap of 0.5 m moves the joined wall 0.5 m along the target connector's outward axis",
+          close(gapped["position"], [1.0 + half_a + half_b + 0.5, 0.0, 2.0]), fmt3(gapped["position"]))
+    snapped = editor.call("level_place_pieces", {"scene_name": scene, "snap": "module", "surface_snap": True, "pieces": [
+        {"shape": "architecture.wall", "name": "c snapped", "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end", "gap": 0.3}}]})["pieces"][0]
+    editor.wait_idle()
+    check("module snap and surface snap of the call do not apply to a connected piece (the join is exact)",
+          close(snapped["position"], [1.0 + half_a + half_b + 0.3, 0.0, 2.0]) and not snapped["surface_found"], fmt3(snapped["position"]))
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [gapped["id"], snapped["id"]]})
+    editor.wait_idle()
+
+    # Twist: a pillar stacked on a block's top, one quarter turn.
+    block = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "basic.block", "position": [-6.0, 0.0, 0.0], "name": "c block"}]})["pieces"][0]
+    editor.wait_idle()
+    pillar = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.pillar", "name": "c pillar", "connect": {"connector": "base", "to_piece_id": block["id"], "to_connector": "top", "twist_steps": 1}}]})["pieces"][0]
+    editor.wait_idle()
+    check("a pillar's base on a block's top with twist_steps 1 stands on the block turned a quarter turn about +Y",
+          close(pillar["position"], [-6.0, block["parameters"]["height"], 0.0]) and same_xyzw(pillar["rotation_xyzw"], yaw_xyzw(90.0)),
+          f"{fmt3(pillar['position'])} {pillar['rotation_xyzw']}")
+
+    # Stairs: top on a floor's front edge, bottom on its back edge.
+    floor = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "basic.floor_slab", "position": [0.0, 3.0, -10.0], "name": "c floor"}]})["pieces"][0]
+    editor.wait_idle()
+    thickness = floor["parameters"]["thickness"]
+    depth_z = floor["parameters"]["depth"]
+    stairs_size = by_id["basic.stairs"]["default_size"]
+    rise, run = stairs_size[1], stairs_size[2]
+    stairs = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.stairs", "name": "c up", "connect": {"connector": "top", "to_piece_id": floor["id"], "to_connector": "front"}},
+        {"shape": "basic.stairs", "name": "c on", "connect": {"connector": "bottom", "to_piece_id": floor["id"], "to_connector": "back"}}]})["pieces"]
+    editor.wait_idle()
+    up_expected = [0.0, 3.0 + thickness - rise, -10.0 + (0.5 * depth_z) + (0.5 * run)]
+    on_expected = [0.0, 3.0 + thickness, -10.0 - (0.5 * depth_z) - (0.5 * run)]
+    check("stairs with their top on a floor's front edge climb to its top surface; stairs with their bottom on its back edge start there",
+          close(stairs[0]["position"], up_expected) and close(stairs[1]["position"], on_expected) and
+          same_xyzw(stairs[0]["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]) and same_xyzw(stairs[1]["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]) and
+          (abs(stairs[0]["world_aabb"]["max"][1] - floor["world_aabb"]["max"][1]) < TOLERANCE),
+          f"{fmt3(stairs[0]['position'])} vs {fmt3(up_expected)}, {fmt3(stairs[1]['position'])} vs {fmt3(on_expected)}")
+
+    # The target moved and turned: level_get_connectors follows, level_connect_pieces lands b on the new end.
+    target_rotation = yaw_xyzw(90.0)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": a["id"], "space": "world", "translation": [1.0, 0.0, 2.0], "rotation_xyzw": target_rotation})
+    editor.wait_idle()
+    frames = connectors_of(editor, scene, a["id"])
+    expected_end = [[1.0, 0.0, 2.0][i] + q_rotate(target_rotation, [half_a, 0.0, 0.0])[i] for i in range(3)]
+    check("level_get_connectors gives the turned wall's end in world space (position, outward, up)",
+          close(frames["end"]["position"], expected_end) and close(frames["end"]["outward"], q_rotate(target_rotation, [1.0, 0.0, 0.0])) and
+          close(frames["end"]["up"], [0.0, 1.0, 0.0]), json.dumps(frames["end"]))
+    before = node_transforms(editor, scene, b["id"])
+    depth = undo_depth(editor)
+    moved = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": b["id"], "connector": "start", "to_piece_id": a["id"], "to_connector": "end"})
+    editor.wait_idle()
+    expected_b = joined_position([1.0, 0.0, 2.0], target_rotation, [half_a, 0.0, 0.0], target_rotation, [-half_b, 0.0, 0.0])
+    after = node_transforms(editor, scene, b["id"])
+    check("level_connect_pieces moves the existing wall onto the turned wall's end, one undo entry",
+          moved["changed"] and close(moved["position"], expected_b) and same_xyzw(moved["rotation_xyzw"], target_rotation) and
+          (undo_depth(editor) == depth + 1) and close(connectors_of(editor, scene, b["id"])["start"]["position"], frames["end"]["position"]),
+          f"{fmt3(moved['position'])} vs {fmt3(expected_b)} undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    undone = node_transforms(editor, scene, b["id"])
+    editor.call("redo")
+    editor.wait_idle()
+    redone = node_transforms(editor, scene, b["id"])
+    check("undo puts the moved wall back exactly; redo moves it again exactly", (undone == before) and (redone == after), "")
+    again = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": b["id"], "connector": "start", "to_piece_id": a["id"], "to_connector": "end"})
+    editor.wait_idle()
+    check("connecting a piece that is joined already records no entry", (not again["changed"]) and (undo_depth(editor) == depth + 1), "")
+
+    # A parameter change of the target, then a re-connect lands at the new end.
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": a["id"], "parameters": {"length": 6.0}})
+    editor.wait_idle()
+    longer = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": b["id"], "connector": "start", "to_piece_id": a["id"], "to_connector": "end"})
+    editor.wait_idle()
+    long_half = 0.5 * piece_by_id(editor, scene, a["id"])["parameters"]["length"]
+    expected_long = joined_position([1.0, 0.0, 2.0], target_rotation, [long_half, 0.0, 0.0], target_rotation, [-half_b, 0.0, 0.0])
+    check("after the target's length becomes 6 m, a re-connect lands at its new end", close(longer["position"], expected_long),
+          f"{fmt3(longer['position'])} vs {fmt3(expected_long)}")
+
+    # Refusals: nothing placed, nothing moved.
+    count = len(pieces(editor, scene))
+    depth = undo_depth(editor)
+    unknown = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "connect": {"connector": "side", "to_piece_id": a["id"], "to_connector": "end"}}]})
+    unknown_target = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": b["id"], "connector": "start", "to_piece_id": a["id"], "to_connector": "middle"})
+    posed = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 0.0], "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end"}}]})
+    itself = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": b["id"], "connector": "start", "to_piece_id": b["id"], "to_connector": "end"})
+    group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [block["id"]], "name": "c group"})
+    editor.wait_idle()
+    group_id = scene_tree(editor, scene)[block["id"]]["parent_id"]
+    depth = undo_depth(editor)
+    not_piece = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": b["id"], "connector": "start", "to_piece_id": group_id, "to_connector": "top"})
+    group_moved = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": group_id, "connector": "base", "to_piece_id": a["id"], "to_connector": "top"})
+    check("an unknown connector of the new piece or the target fails listing the valid ones, nothing placed or moved",
+          (unknown is not None) and ("start, end, base, top, front, back" in unknown) and ("nothing was placed" in unknown) and
+          (unknown_target is not None) and ("middle" in unknown_target) and ("start, end, base, top, front, back" in unknown_target) and
+          (len(pieces(editor, scene)) == count), f"{unknown} | {unknown_target}")
+    check("a connected piece with a position, a piece connected to itself, a group as target or moved node are refused, no entry",
+          (posed is not None) and ("position" in posed) and (itself is not None) and ("itself" in itself) and
+          (not_piece is not None) and ("not a kit piece" in not_piece) and (group_moved is not None) and ("not a kit piece" in group_moved) and
+          (undo_depth(editor) == depth), f"{posed} | {itself} | {not_piece} | {group_moved}")
+
+    # A locked layout's child: refused as the moved piece, fine as a target.
+    layout = editor.call("level_create_layout", {"scene_name": scene, "name": "c layout", "position": [0.0, 0.0, 12.0],
+                                                 "pattern": {"kind": "line", "count": 2}, "items": [{"shape": "architecture.wall"}], "locked": True})
+    editor.wait_idle()
+    child = layout["children"][0]["id"]
+    depth = undo_depth(editor)
+    locked = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": child, "connector": "start", "to_piece_id": a["id"], "to_connector": "end"})
+    check("a child of a locked kit layout is refused as the moved piece, no entry",
+          (locked is not None) and ("locked kit layout" in locked) and (undo_depth(editor) == depth), str(locked))
+    child_before = node_transforms(editor, scene, child)
+    on_child = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.pillar", "name": "c on child", "connect": {"connector": "base", "to_piece_id": child, "to_connector": "top"}}]})["pieces"][0]
+    editor.wait_idle()
+    child_frames = connectors_of(editor, scene, child)
+    check("a child of a locked kit layout is a target: the pillar stands on it, the child is not edited",
+          close(on_child["position"], child_frames["top"]["position"]) and (node_transforms(editor, scene, child) == child_before), fmt3(on_child["position"]))
+    check_connector_hierarchies(editor, scene)
+    check_connector_scale(editor, scene)
+    editor.close(scene)
+
+
+def expected_frames(local_connectors, translation, rotation, scale):
+    """D1.12: a connector under a translation, rotation and axis scale: position by the matrix, axes normalized."""
+    def unit(v):
+        length = math.sqrt(sum(x * x for x in v))
+        return [x / length for x in v]
+    frames = {}
+    for c in local_connectors:
+        position = q_rotate(rotation, [c["position"][i] * scale[i] for i in range(3)])
+        frames[c["name"]] = {
+            "position": [translation[i] + position[i] for i in range(3)],
+            "outward": unit(q_rotate(rotation, [c["outward"][i] * scale[i] for i in range(3)])),
+            "up": unit(q_rotate(rotation, [c["up"][i] * scale[i] for i in range(3)])),
+        }
+    return frames
+
+
+def frames_match(actual, expected, tolerance=1.0e-4):
+    return all(close(actual[name][key], expected[name][key], tolerance) for name in expected for key in ("position", "outward", "up"))
+
+
+def check_connector_scale(editor, scene):
+    """D1.12, D3.12 (U22): a connector follows its node's full world transform, scale included."""
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    wall_local = next(shape for shape in kits["shapes"] if shape["id"] == "architecture.wall")["connectors"]
+    uniform, stretched, plain, other = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [100.0, 0.0, 0.0], "name": "s uniform"},
+        {"shape": "architecture.wall", "position": [100.0, 0.0, 10.0], "name": "s stretched"},
+        {"shape": "architecture.wall", "position": [100.0, 0.0, 20.0], "name": "s plain"},
+        {"shape": "architecture.wall", "position": [100.0, 0.0, 30.0], "name": "s other"}]})["pieces"]
+    editor.wait_idle()
+    yaw = yaw_xyzw(30.0)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": uniform["id"], "translation": [100.0, 0.0, 0.0], "rotation_xyzw": yaw, "scale": [1.2, 1.2, 1.2]})
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": stretched["id"], "scale": [1.5, 1.0, 0.5]})
+    editor.wait_idle()
+    got_uniform = connectors_of(editor, scene, uniform["id"])
+    got_stretched = connectors_of(editor, scene, stretched["id"])
+    expected_uniform = expected_frames(wall_local, [100.0, 0.0, 0.0], yaw, [1.2, 1.2, 1.2])
+    expected_stretched = expected_frames(wall_local, [100.0, 0.0, 10.0], [0.0, 0.0, 0.0, 1.0], [1.5, 1.0, 0.5])
+    check("level_get_connectors gives a wall scaled 1.2 (turned 30 degrees) and one scaled (1.5, 1, 0.5) their local frames through the node transform",
+          frames_match(got_uniform, expected_uniform) and frames_match(got_stretched, expected_stretched),
+          f"end {fmt3(got_uniform['end']['position'])} vs {fmt3(expected_uniform['end']['position'])}, front {fmt3(got_stretched['front']['position'])} vs {fmt3(expected_stretched['front']['position'])}")
+
+    def joined_check(label, moved_id, target_id):
+        local_before = editor.call("get_node_details", {"scene_name": scene, "node_id": moved_id})["local_transform"]
+        depth = undo_depth(editor)
+        reply = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": moved_id, "connector": "start", "to_piece_id": target_id, "to_connector": "end"})
+        editor.wait_idle()
+        start = connectors_of(editor, scene, moved_id)["start"]
+        end = connectors_of(editor, scene, target_id)["end"]
+        local_after = editor.call("get_node_details", {"scene_name": scene, "node_id": moved_id})["local_transform"]
+        check(label + ": start on end, outward axes opposed, up agreeing, the moved piece's scale unchanged, one undo entry",
+              reply["changed"] and close(start["position"], end["position"], 1.0e-4) and close(start["outward"], [-x for x in end["outward"]], 1.0e-4) and
+              close(start["up"], end["up"], 1.0e-4) and close(local_after["scale"], local_before["scale"], 1.0e-6) and (undo_depth(editor) == depth + 1),
+              f"start {fmt3(start['position'])} end {fmt3(end['position'])} scale {local_before['scale']} -> {local_after['scale']} undo {undo_depth(editor) - depth}")
+        again = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": moved_id, "connector": "start", "to_piece_id": target_id, "to_connector": "end"})
+        editor.wait_idle()
+        check(label + ": connecting again records nothing", (not again["changed"]) and (undo_depth(editor) == depth + 1), "")
+
+    joined_check("level_connect_pieces joins the wall scaled 1.2 to an unscaled wall", uniform["id"], plain["id"])
+    joined_check("level_connect_pieces joins an unscaled wall to the wall scaled (1.5, 1, 0.5)", other["id"], stretched["id"])
+
+    # Under a uniformly scaled, turned parent: expressible exactly.
+    held = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "position": [120.0, 0.0, 0.0], "name": "s held"}]})["pieces"][0]
+    editor.wait_idle()
+    group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [held["id"]], "name": "s uniform group"})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": group["id"], "rotation_xyzw": yaw_xyzw(-50.0), "scale": [2.0, 2.0, 2.0]})
+    editor.wait_idle()
+    joined_check("level_connect_pieces joins a wall under a parent scaled 2 and turned -50 degrees", held["id"], plain["id"])
+
+    # Under a non-uniformly scaled, turned parent the turn the join needs would shear the local transform: refused.
+    sheared_wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "position": [140.0, 0.0, 0.0], "name": "s sheared"}]})["pieces"][0]
+    editor.wait_idle()
+    sheared_group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [sheared_wall["id"]], "name": "s sheared group"})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": sheared_group["id"], "rotation_xyzw": yaw_xyzw(30.0), "scale": [2.0, 1.0, 1.0]})
+    editor.wait_idle()
+    before = node_transforms(editor, scene, sheared_wall["id"])
+    depth = undo_depth(editor)
+    refused = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": sheared_wall["id"], "connector": "start", "to_piece_id": plain["id"], "to_connector": "end"})
+    check("a wall under a parent scaled (2, 1, 1) and turned 30 degrees is refused (the join's turn would need a sheared local transform), nothing moved",
+          (refused is not None) and ("sheared local transform" in refused) and ("s sheared group" in refused) and
+          (node_transforms(editor, scene, sheared_wall["id"]) == before) and (undo_depth(editor) == depth), str(refused))
+    # The same parent with no turn needed: a connected placement under an unturned (2, 1, 1) parent is placed.
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": sheared_group["id"], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0], "scale": [2.0, 1.0, 1.0]})
+    editor.wait_idle()
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "name": "s under stretched", "parent_id": sheared_group["id"],
+         "connect": {"connector": "start", "to_piece_id": plain["id"], "to_connector": "end", "gap": 1.0}}]})["pieces"][0]
+    editor.wait_idle()
+    placed_start = connectors_of(editor, scene, placed["id"])["start"]
+    plain_end = connectors_of(editor, scene, plain["id"])["end"]
+    check("a connected wall placed under a parent scaled (2, 1, 1) without a turn lands on the join (gap 1 m along the target's outward)",
+          close(placed_start["position"], [plain_end["position"][i] + plain_end["outward"][i] for i in range(3)], 1.0e-4),
+          f"{fmt3(placed_start['position'])} vs {fmt3(plain_end['position'])} + outward")
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [uniform["id"], stretched["id"], plain["id"], other["id"], group["id"], sheared_group["id"]]})
+    editor.wait_idle()
+
+
+def check_connector_hierarchies(editor, scene):
+    """Joins under rotated parents, mirrored connectors and the layout move hook (D3.12); scale in check_connector_scale()."""
+    # A moved wall in a turned, moved group; the target in another turned group.
+    walls = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [30.0, 0.0, 0.0], "name": "h moved"},
+        {"shape": "architecture.wall", "position": [40.0, 0.0, 5.0], "name": "h target"}]})["pieces"]
+    editor.wait_idle()
+    moved, target = walls
+    moved_group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [moved["id"]], "name": "h moved group"})
+    target_group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [target["id"]], "name": "h target group"})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": moved_group["id"], "space": "world", "translation": [31.0, 0.5, -2.0], "rotation_xyzw": yaw_xyzw(-35.0)})
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": target_group["id"], "space": "world", "translation": [42.0, 0.0, 6.0], "rotation_xyzw": yaw_xyzw(60.0)})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    reply = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": moved["id"], "connector": "start", "to_piece_id": target["id"], "to_connector": "end"})
+    editor.wait_idle()
+    start = connectors_of(editor, scene, moved["id"])["start"]
+    end = connectors_of(editor, scene, target["id"])["end"]
+    check("a wall in a turned, moved group joins a wall in another turned group: start on end, outward axes opposed, one entry, still in its group",
+          reply["changed"] and close(start["position"], end["position"]) and close(start["outward"], [-x for x in end["outward"]]) and
+          close(start["up"], end["up"]) and (undo_depth(editor) == depth + 1) and (scene_tree(editor, scene)[moved["id"]]["parent_id"] == moved_group["id"]),
+          f"start {fmt3(start['position'])} end {fmt3(end['position'])}")
+
+    # Mirror: a wall in an unturned group mirrored across the group's x plane has its start where its end's image is.
+    mirror_wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "position": [52.0, 0.0, 0.0], "rotation_xyzw": yaw_xyzw(20.0), "name": "h mirror"}]})["pieces"][0]
+    editor.wait_idle()
+    mirror_group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [mirror_wall["id"]], "name": "h mirror group"})
+    editor.wait_idle()
+    origin_x = editor.call("get_node_details", {"scene_name": scene, "node_id": mirror_group["id"]})["world_transform"]["translation"][0]
+    end_before = connectors_of(editor, scene, mirror_wall["id"])["end"]
+    editor.call("level_mirror_group", {"scene_name": scene, "group_id": mirror_group["id"], "axis": "x"})
+    editor.wait_idle()
+    start_after = connectors_of(editor, scene, mirror_wall["id"])["start"]
+    reflected = [(2.0 * origin_x) - end_before["position"][0], end_before["position"][1], end_before["position"][2]]
+    reflected_outward = [-end_before["outward"][0], end_before["outward"][1], end_before["outward"][2]]
+    check("a mirrored wall's start sits at its end's mirror image (the paired names change sides)",
+          close(start_after["position"], reflected) and close(start_after["outward"], reflected_outward),
+          f"start {fmt3(start_after['position'])} reflected end {fmt3(reflected)}")
+
+    # The layout move hook: a locked surface-snapped layout under the moved piece rests again in the same entry.
+    ground = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [70.0, -0.2, 0.0], "name": "h ground", "parameters": {"width": 30.0, "depth": 30.0, "thickness": 0.2}},
+        {"shape": "basic.block", "position": [75.0, 0.0, 5.0], "name": "h pedestal"},
+        {"shape": "basic.block", "position": [62.0, 0.0, -5.0], "name": "h carrier"}]})["pieces"]
+    editor.wait_idle()
+    pedestal, carrier = ground[1], ground[2]
+    layout = editor.call("level_create_layout", {"scene_name": scene, "name": "h layout", "parent_id": carrier["id"], "position": [65.0, 0.0, -5.0],
+                                                 "pattern": {"kind": "line", "count": 2}, "items": [{"shape": "basic.block"}], "surface_snap": True, "locked": True})
+    editor.wait_idle()
+    children = [c["id"] for c in layout["children"]]
+    rest_before = [piece_by_id(editor, scene, c)["world_aabb"]["min"][1] for c in children]
+    depth = undo_depth(editor)
+    editor.call("level_connect_pieces", {"scene_name": scene, "node_id": carrier["id"], "connector": "base", "to_piece_id": pedestal["id"], "to_connector": "top"})
+    editor.wait_idle()
+    carrier_after = piece_by_id(editor, scene, carrier["id"])
+    children_after = [c["id"] for c in layouts_by_id(editor, scene)[layout["id"]]["children"]]
+    rest_after = [piece_by_id(editor, scene, c)["world_aabb"]["min"][1] for c in children_after]
+    check("connecting a piece onto a pedestal rests the locked surface-snapped layout below it on the ground again, one undo entry",
+          (abs(carrier_after["world_aabb"]["min"][1] - 1.0) < TOLERANCE) and all(abs(y) < TOLERANCE for y in rest_before + rest_after) and
+          (len(rest_after) == 2) and (undo_depth(editor) == depth + 1), f"before {rest_before} after {rest_after} carrier {carrier_after['world_aabb']['min'][1]}")
+    editor.call("undo")
+    editor.wait_idle()
+    rest_undone = [piece_by_id(editor, scene, c["id"])["world_aabb"]["min"][1] for c in layouts_by_id(editor, scene)[layout["id"]]["children"]]
+    check("undo puts the carrier and the layout's pieces back", (abs(piece_by_id(editor, scene, carrier["id"])["world_aabb"]["min"][1]) < TOLERANCE) and
+          all(abs(y) < TOLERANCE for y in rest_undone), str(rest_undone))
+
+
+def check_window_connect(editor, scene):
+    """The Level Kit window's Connect rows (D4.11): Connect Selected and Place Connected, clicked by id."""
+    slab = next(p for p in pieces(editor, scene) if p["name"] == "slab")
+    top = slab["world_aabb"]["max"][1]
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [-2.0, top, -2.0], "name": "wc target"},
+        {"shape": "architecture.wall", "position": [2.0, top, 2.5], "rotation_xyzw": yaw_xyzw(30.0), "name": "wc moved"},
+    ]})["pieces"]
+    editor.wait_idle()
+    target, moved = placed
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    button = next((i for i in imgui_items(editor, "Connect Selected") if i.get("display_label") == "Connect Selected"), None)
+    check("the Connect rows have no Connect Selected button without a selected piece", button is None, json.dumps((button or {}).get("status")))
+    editor.call("select_items", {"scene_name": scene, "ids": [moved["id"], target["id"]], "active": target["id"]})
+    editor.wait_idle()
+    combos = [i.get("display_label") for i in imgui_items(editor) if i.get("display_label") in ("Target Connector", "Moved Connector")]
+    check("with two pieces selected the section shows the Target Connector and Moved Connector combos", sorted(combos) == ["Moved Connector", "Target Connector"], str(combos))
+    click_item(editor, "Target Connector")
+    editor.wait_idle()
+    editor.call("imgui_click", {"label": "end"})
+    editor.wait_idle()
+    click_item(editor, "Moved Connector")
+    editor.wait_idle()
+    editor.call("imgui_click", {"label": "start"})
+    editor.wait_idle()
+    import curve_verify as cv  # noqa: E402 - a viewport showing the scene draws its connector indicators
+    title = cv.viewport_of(editor, scene)["title"]
+    editor.call("level_set_connector_visualization", {"mode": "selected", "viewport": title})
+    editor.wait_idle()
+    shown = editor.call("level_get_connector_indicators", {"viewport": title})
+    chosen = sorted((i["piece_id"], i["name"]) for i in shown["indicators"] if i["role"] == "chosen")
+    check("the two connectors chosen in the Connect rows are drawn highlighted, the others of the two pieces plain",
+          (chosen == sorted([(target["id"], "end"), (moved["id"], "start")])) and (shown["count"] == 12), f"{shown['scene_name']} {chosen} {shown['count']}")
+    depth = undo_depth(editor)
+    click_item(editor, "Connect Selected")
+    editor.wait_idle()
+    after = piece_by_id(editor, scene, moved["id"])
+    expected = [target["position"][0] + 4.0, top, target["position"][2]]
+    check("Connect Selected moves the other selected wall's start onto the active wall's end, one undo entry",
+          close(after["position"], expected) and same_xyzw(after["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]) and (undo_depth(editor) == depth + 1),
+          f"{fmt3(after['position'])} vs {fmt3(expected)} undo {undo_depth(editor) - depth}")
+    check("the section reports the connect (logged with it)", "Level Kit: Connected wc moved 'start' to wc target 'end'." in pav.read_log(), "")
+
+    # Place Connected: the shape to place (chosen in the window) on the target's top.
+    editor.call("select_items", {"scene_name": scene, "ids": [target["id"]]})
+    editor.wait_idle()
+    click_item(editor, "Pillar")
+    editor.wait_idle()
+    click_item(editor, "Target Connector")
+    editor.wait_idle()
+    editor.call("imgui_click", {"label": "top"})
+    editor.wait_idle()
+    click_item(editor, "New Piece Connector")
+    editor.wait_idle()
+    editor.call("imgui_click", {"label": "base"})
+    editor.wait_idle()
+    known = {p["id"] for p in pieces(editor, scene)}
+    depth = undo_depth(editor)
+    click_item(editor, "Place Connected")
+    editor.wait_idle()
+    added = [p for p in pieces(editor, scene) if p["id"] not in known]
+    target_top = connectors_of(editor, scene, target["id"])["top"]["position"]
+    check("Place Connected places a pillar with its base on the target wall's top, one undo entry, and selects it",
+          (len(added) == 1) and (added[0]["shape"] == "architecture.pillar") and close(added[0]["position"], target_top) and
+          (undo_depth(editor) == depth + 1) and bool(added) and ([i["id"] for i in editor.call("get_selection")["items"]] == [added[0]["id"]]),
+          f"{[fmt3(p['position']) for p in added]} vs {fmt3(target_top)}")
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [target["id"], moved["id"]] + [p["id"] for p in added]})
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+
+def connector_snap_sites(editor):
+    """Where the Connector Snap distance shows: {'kit': {...}, 'move': {...}, 'toolbar': {...}}."""
+    found = {}
+    for item in editor.call("get_imgui_items", {"label_contains": "Connector Snap", "limit": 50, "visible_only": False}).get("items", []):
+        if item.get("display_label") != "Connector Snap":
+            continue
+        window = item.get("window", "")
+        site = "kit" if window.startswith(WINDOW) else "move" if window.startswith(TRANSFORM_WINDOW) else "toolbar"
+        found[site] = {"id": item.get("id"), "window": window}
+    return found
+
+
+def type_into_site(editor, site, text):
+    """Ctrl+click the Connector Snap drag of one site, type the value and enter it."""
+    entry = connector_snap_sites(editor)[site]
+    editor.call("imgui_scroll_to_item", {"window": entry["window"], "id": entry["id"], "align": "nearest"})
+    editor.call("imgui_click", {"window": entry["window"], "id": entry["id"], "modifiers": IMGUI_CTRL})
+    editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
+    editor.call("type_text", {"text": text})
+    editor.call("key_press", {"key": "enter"})
+    editor.wait_idle()
+
+
+def connector_step_times(log_text, marker):
+    times = []
+    for line in log_text.splitlines():
+        if (marker in line) and line.rstrip().endswith(" ms"):
+            try:
+                times.append(float(line.rstrip()[:-3].rsplit(" ", 1)[-1]))
+            except ValueError:
+                pass
+    return times
+
+
+def close_without_leak(editor, scene, label):
+    """Closes the scene and reads the scene-close watchdog's verdict (doc/editor/coding_rules.md) from the log."""
+    log_start = len(pav.read_log())
+    editor.close(scene)
+    marker = f"closed scene '{scene}'"
+    verdict = None
+    deadline = time.monotonic() + 20.0
+    while (verdict is None) and (time.monotonic() < deadline):
+        lines = [line for line in pav.read_log()[log_start:].splitlines() if marker in line]
+        if any("scene-close leak" in line for line in lines):
+            verdict = "leak"
+        elif any(("scene-close check: all" in line) and ("released" in line) for line in lines):
+            verdict = "released"
+        else:
+            time.sleep(0.2)
+    time.sleep(0.5)
+    leaks = [line for line in pav.read_log()[log_start:].splitlines() if ("scene-close leak" in line) and (marker in line)]
+    # The Hotbar's rendertarget node outlives any scene the Hotbar was shown in (found in passing; not the snap's).
+    hotbar = ("'Hotbar imgui host RT node'", "'Rendertarget Node'")
+    others = [line for line in leaks if not any(name in line for name in hotbar)]
+    check(f"closing the {label} scene after snapped drags: the scene-close watchdog names no leaked item but the Hotbar's rendertarget",
+          (verdict is not None) and not others, f"{verdict} {others[:3]}")
+
+
+def check_connector_snap(editor):
+    """R5.13, D3.13: snap to connectors during Transform tool translate drags (doc/editor/level_tools.md "Connector snap")."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    editor.call("set_surface_snap_settings", {"snap": False, "orient": False, "connector_snap_distance": 0.0})
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    wall_shape = next(shape for shape in kits["shapes"] if shape["id"] == "architecture.wall")
+    local = {c["name"]: c["position"] for c in wall_shape["connectors"]}
+    distance = 0.5
+    # A at the origin; B 1.5 m past A's end along +X; C beside B for the multi-selection.
+    a, b, c = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 0.0], "name": "snap a"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 0.0], "name": "snap b"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 6.0], "name": "snap c"}]})["pieces"]
+    editor.wait_idle()
+    a_end = [local["end"][i] for i in range(3)]
+    b_start_x = a_end[0] + 1.5 - local["start"][0]
+    b_start = [b_start_x, 0.0, 0.0]
+    c_start = [b_start_x, 0.0, 6.0]
+    place_at(editor, scene, b["id"], b_start)
+    place_at(editor, scene, c["id"], c_start)
+    # A step of -1.2 m leaves B's start 0.3 m past A's end; the snap then moves B by -0.3 m.
+    snapped_x = a_end[0] - local["start"][0]
+
+    def b_start_world():
+        return connectors_of(editor, scene, b["id"])["start"]["position"]
+
+    def world(node_id):
+        details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+        return details["world_transform"]["translation"], details["world_transform"]["rotation_xyzw"]
+
+    def transforms(node_id):
+        details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+        return json.dumps([details["local_transform"], details["world_transform"]], sort_keys=True)
+
+    a_end_world = connectors_of(editor, scene, a["id"])["end"]["position"]
+    check("the fixture: A's end connector is at the catalog's local end, B's start 1.5 m past it",
+          close(a_end_world, a_end, 1.0e-5) and close(b_start_world(), [a_end[0] + 1.5, 0.0, 0.0], 1.0e-5), f"{fmt3(a_end_world)} {fmt3(b_start_world())}")
+
+    # Settings: MCP round trip, refusals, the three UI sites and the saved file.
+    reply = editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.75})
+    got = editor.call("get_surface_snap_settings", {})
+    check("set_surface_snap_settings connector_snap_distance 0.75 is read back by get_surface_snap_settings, snap and orient kept",
+          (abs(reply["connector_snap_distance"] - 0.75) < 1.0e-6) and (abs(got["connector_snap_distance"] - 0.75) < 1.0e-6) and
+          (got["snap"] is False) and (got["orient"] is False), json.dumps(got))
+    negative = call_error(editor, "set_surface_snap_settings", {"connector_snap_distance": -1.0})
+    textual = call_error(editor, "set_surface_snap_settings", {"connector_snap_distance": "far"})
+    check("a negative or non-number connector_snap_distance is refused, the setting kept",
+          (negative is not None) and (textual is not None) and (abs(editor.call("get_surface_snap_settings", {})["connector_snap_distance"] - 0.75) < 1.0e-6),
+          f"{negative} | {textual}")
+    kit_open = open_window(editor, WINDOW)
+    transform_open = open_window(editor, TRANSFORM_WINDOW)
+    viewport = cv.frame_camera(editor, scene, [1.0, 7.0, 12.0], [1.0, 0.0, 2.0],
+                               [[-2.5, 0.0, -0.5], [-2.5, 0.0, 6.5], [8.0, 0.0, -0.5], [8.0, 0.0, 6.5], [1.0, 3.0, 0.0]], limit=0.92)
+    hover(editor, viewport, [1.0, 0.0, 2.0])
+    select(editor, scene, [b["id"]])
+    editor.call("key_press", {"key": binding_input(editor, "Hotbar.activate_slot_1", "key")})
+    editor.wait_idle()
+    editor.call("set_gizmo_visibility", {"translate": True, "rotate": False, "scale": False})
+    editor.wait_idle()
+    sites = connector_snap_sites(editor)
+    check("Connector Snap shows in the Level Kit window, the Transform window's Move rows and the viewport toolbar",
+          kit_open and transform_open and (set(sites.keys()) == {"kit", "move", "toolbar"}), json.dumps(sites))
+    for site, text, value in (("kit", "0.4", 0.4), ("move", "0.6", 0.6), ("toolbar", "0.5", 0.5)):
+        if site in sites:
+            type_into_site(editor, site, text)
+        got = editor.call("get_surface_snap_settings", {})["connector_snap_distance"]
+        check(f"typing {text} into the {site} Connector Snap sets the shared distance", abs(got - value) < 1.0e-5, f"{got}")
+    # Pointer gizmo drags with the UI distance 0.5.
+    escape = binding_input(editor, "Transform_tool.cancel_drag", "key")
+    before = transforms(b["id"])
+    depth = undo_depth(editor)
+    gizmo_drag(editor, viewport, TRANSLATE_X, [-1.2, 0.0, 0.0], hold=True)
+    held = editor.call("get_connector_snap", {})
+    position, rotation = world(b["id"])
+    check("a pointer X drag of B toward A snaps B's start onto A's end mid-drag (co-located, rotation unchanged), no entry yet",
+          held["active"] and held["snapped"] and (held["piece_id"] == b["id"]) and (held["connector"] == "start") and (held["target_id"] == a["id"]) and
+          (held["target_connector"] == "end") and close(b_start_world(), a_end_world, 1.0e-5) and close(position, [snapped_x, 0.0, 0.0], 1.0e-5) and
+          same_xyzw(rotation, [0.0, 0.0, 0.0, 1.0]) and (undo_depth(editor) == depth), f"{json.dumps(held)} start {fmt3(b_start_world())}")
+    editor.call("key_press", {"key": escape})
+    editor.wait_idle()
+    after_cancel = transforms(b["id"])
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    check("Escape while snapped puts B back at its drag start bit-exact, the release records nothing",
+          (after_cancel == before) and (transforms(b["id"]) == before) and (undo_depth(editor) == depth), "")
+    gizmo_drag(editor, viewport, TRANSLATE_X, [-1.2, 0.0, 0.0])
+    released_start = b_start_world()
+    check("a pointer drag released while snapped records the snapped pose, one undo entry",
+          close(released_start, a_end_world, 1.0e-5) and (undo_depth(editor) == depth + 1), f"{fmt3(released_start)} undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo restores B's drag start", transforms(b["id"]) == before, "")
+    gizmo_drag(editor, viewport, TRANSLATE_X, [-0.8, 0.0, 0.0], hold=True)
+    outside = editor.call("get_connector_snap", {})
+    position, _ = world(b["id"])
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    check("a pointer drag leaving the pair 0.7 m apart (outside 0.5) stays unsnapped and follows the pointer",
+          (not outside["snapped"]) and close(position, [b_start_x - 0.8, 0.0, 0.0], 0.02), f"{json.dumps(outside)} {fmt3(position)}")
+    editor.call("undo")
+    editor.wait_idle()
+    # A press without motion on a wall resting 0.3 m from the pair: the zero step snaps and records one entry.
+    place_at(editor, scene, b["id"], [snapped_x + 0.3, 0.0, 0.0])
+    resting = transforms(b["id"])
+    depth = undo_depth(editor)
+    gizmo_drag(editor, viewport, TRANSLATE_X, [0.0, 0.0, 0.0])
+    check("a press and release without motion on a wall resting within the distance snaps it and records one entry (the zero step rule)",
+          close(b_start_world(), a_end_world, 1.0e-5) and (undo_depth(editor) == depth + 1), f"{fmt3(b_start_world())} undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo puts the pressed wall back where it rested", transforms(b["id"]) == resting, "")
+    place_at(editor, scene, b["id"], b_start)
+    before = transforms(b["id"])
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.0})
+
+    # Held scripted drags: snap, unsnap past the target, snap again, release / cancel.
+    depth = undo_depth(editor)
+    dragged = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 4, "release": False, "connector_snap_distance": distance})
+    position, rotation = world(b["id"])
+    snap = dragged["connector_snap"]
+    check("a held drag_selection with connector_snap_distance 0.5 that leaves the pair 0.3 m apart snaps B's start onto A's end",
+          snap["snapped"] and (snap["piece_id"] == b["id"]) and (snap["target_id"] == a["id"]) and (abs(snap["distance"] - 0.3) < 1.0e-4) and
+          close(snap["offset"], [-0.3, 0.0, 0.0], 1.0e-4) and close(b_start_world(), a_end_world, 1.0e-5) and close(position, [snapped_x, 0.0, 0.0], 1.0e-5) and
+          same_xyzw(rotation, [0.0, 0.0, 0.0, 1.0]) and (abs(dragged["connector_snap_distance"] - distance) < 1.0e-6), json.dumps(snap))
+    for label, step, snaps in (("0.51 m apart (just outside)", -0.99, False), ("exactly 0.5 m apart (inclusive)", -1.0, True),
+                               ("past the target (B's start 1 m beyond A's end, no pair within 0.5)", -2.5, False), ("back to 0.3 m", -1.2, True)):
+        moved = editor.call("drag_selection", {"action": "move", "translation": [step, 0.0, 0.0]})
+        position, _ = world(b["id"])
+        expected = [snapped_x, 0.0, 0.0] if snaps else [b_start_x + step, 0.0, 0.0]
+        check(f"moving the held drag to {label} {'snaps' if snaps else 'unsnaps: B is at the unsnapped drag pose'}",
+              (moved["connector_snap"]["snapped"] == snaps) and close(position, expected, 1.0e-5) and (undo_depth(editor) == depth),
+              f"{fmt3(position)} vs {fmt3(expected)} {json.dumps(moved['connector_snap'])}")
+    released = editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    check("the release while snapped records one entry with B's start on A's end",
+          released["connector_snap"]["snapped"] and close(b_start_world(), a_end_world, 1.0e-5) and (undo_depth(editor) == depth + 1), json.dumps(released["connector_snap"]))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo puts B back at the drag start", transforms(b["id"]) == before, "")
+    editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "connector_snap_distance": distance})
+    mid_snapped = close(b_start_world(), a_end_world, 1.0e-5)
+    cancelled = editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("cancel_transform_drag while snapped puts B back at its drag start bit-exact, no entry",
+          mid_snapped and cancelled["cancelled"] and (transforms(b["id"]) == before) and (undo_depth(editor) == depth), json.dumps(cancelled))
+    zero = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False})
+    position, _ = world(b["id"])
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("without connector_snap_distance (0) the drag never snaps",
+          (not zero["connector_snap"]["snapped"]) and (not zero["connector_snap"]["active"]) and close(position, [b_start_x - 1.2, 0.0, 0.0], 1.0e-5), fmt3(position))
+    error = call_error(editor, "drag_selection", {"rotation_axis": [0, 1, 0], "rotation_angle_deg": 10, "connector_snap_distance": 0.5})
+    negative = call_error(editor, "drag_selection", {"translation": [1.0, 0.0, 0.0], "connector_snap_distance": -0.5})
+    check("drag_selection refuses connector_snap_distance on a rotate drag and a negative distance",
+          (error is not None) and ("translate" in error) and (negative is not None) and (">= 0" in negative), f"{error} | {negative}")
+
+    # Multi-selection: B and C move by one offset.
+    select(editor, scene, [b["id"], c["id"]])
+    multi = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "connector_snap_distance": distance})
+    b_position, _ = world(b["id"])
+    c_position, _ = world(c["id"])
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("with B and C selected both move by the one snap offset (C keeps its place relative to B)",
+          multi["connector_snap"]["snapped"] and (multi["connector_snap"]["piece_id"] == b["id"]) and close(b_position, [snapped_x, 0.0, 0.0], 1.0e-5) and
+          close(c_position, [snapped_x, 0.0, 6.0], 1.0e-5), f"{fmt3(b_position)} {fmt3(c_position)}")
+
+    # A dragged group snaps by its member's connector.
+    group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [b["id"]], "name": "snap group"})
+    editor.wait_idle()
+    select(editor, scene, [group["id"]])
+    grouped = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "connector_snap_distance": distance})
+    grouped_start = b_start_world()
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("a dragged group snaps by its member wall's start connector",
+          grouped["connector_snap"]["snapped"] and (grouped["connector_snap"]["piece_id"] == b["id"]) and close(grouped_start, a_end_world, 1.0e-5),
+          f"{json.dumps(grouped['connector_snap'])} {fmt3(grouped_start)}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # The nearest of two candidates: D's end 0.35 m to the side of A's end.
+    d = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "position": [0.0, 0.0, 0.35], "name": "snap d"}]})["pieces"][0]
+    editor.wait_idle()
+    d_end_world = connectors_of(editor, scene, d["id"])["end"]["position"]
+    select(editor, scene, [b["id"]])
+    for label, step, target, point in (("A's end (0.3 m) over D's end (0.46 m)", [-1.2, 0.0, 0.0], a["id"], a_end_world),
+                                       ("D's end (0.30 m) over A's end (0.42 m)", [-1.2, 0.0, 0.3], d["id"], d_end_world)):
+        reply = editor.call("drag_selection", {"translation": step, "frames": 3, "release": False, "connector_snap_distance": distance})
+        start_world = b_start_world()
+        editor.call("cancel_transform_drag", {})
+        editor.wait_idle()
+        check(f"of two connectors in reach the nearer wins: {label}",
+              reply["connector_snap"]["snapped"] and (reply["connector_snap"]["target_id"] == target) and close(start_world, point, 1.0e-5),
+              f"{json.dumps(reply['connector_snap'])} {fmt3(start_world)}")
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [d["id"]]})
+    editor.wait_idle()
+
+    # A locked translate channel the offset needs: no snap (the pair could not co-locate); one it does not need: a snap.
+    place_at(editor, scene, b["id"], [b_start_x, 0.2, 0.0])
+    for lock, snaps in (("lock_translation_y", False), ("lock_translation_z", True)):
+        editor.call("set_item_property", {"item_id": b["id"], "property": lock, "value": "true"})
+        editor.wait_idle()
+        reply = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "connector_snap_distance": distance})
+        position, _ = world(b["id"])
+        start_world = b_start_world()
+        editor.call("cancel_transform_drag", {})
+        editor.wait_idle()
+        editor.call("set_item_property", {"item_id": b["id"], "property": lock, "value": "false"})
+        editor.wait_idle()
+        expected = [snapped_x, 0.0, 0.0] if snaps else [b_start_x - 1.2, 0.2, 0.0]
+        check(f"with {lock} on a wall 0.2 m above A's end the snap {'(needing no z) co-locates the pair' if snaps else '(needing y) is not made: the wall stays at the unsnapped pose, reported unsnapped'}",
+              (reply["connector_snap"]["snapped"] == snaps) and close(position, expected, 1.0e-5) and ((not snaps) or close(start_world, a_end_world, 1.0e-5)),
+              f"{fmt3(position)} vs {fmt3(expected)} {json.dumps(reply['connector_snap'])}")
+    place_at(editor, scene, b["id"], b_start)
+
+    # A moved wall under a turned parent: the pair still co-locates in world space.
+    e = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "position": [0.0, 0.0, -8.0], "name": "snap e"}]})["pieces"][0]
+    editor.wait_idle()
+    turned = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [e["id"]], "name": "snap turned"})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": turned["id"], "rotation_xyzw": yaw_xyzw(30.0)})
+    editor.wait_idle()
+    e_start = connectors_of(editor, scene, e["id"])["start"]["position"]
+    reach = [a_end_world[i] - e_start[i] + [0.3, 0.0, 0.0][i] for i in range(3)]
+    select(editor, scene, [e["id"]])
+    reply = editor.call("drag_selection", {"translation": reach, "frames": 3, "release": False, "connector_snap_distance": distance})
+    e_start_snapped = connectors_of(editor, scene, e["id"])["start"]["position"]
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("a wall under a parent turned 30 degrees, dragged to leave its start 0.3 m from A's end, snaps it onto A's end (level_get_connectors)",
+          reply["connector_snap"]["snapped"] and (reply["connector_snap"]["piece_id"] == e["id"]) and close(e_start_snapped, a_end_world, 1.0e-5),
+          f"{fmt3(e_start_snapped)} {json.dumps(reply['connector_snap'])}")
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [turned["id"]]})
+    editor.wait_idle()
+    select(editor, scene, [b["id"]])
+
+    # Scale (U22): scaled moved pieces and scaled targets take part; a piece under a sheared parent chain too.
+    t, f, g, h, k = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -40.0], "name": "snap plain target"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -50.0], "name": "snap scaled moved"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -60.0], "name": "snap scaled target"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -70.0], "name": "snap plain moved"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -80.0], "name": "snap sheared moved"}]})["pieces"]
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": f["id"], "scale": [1.2, 1.2, 1.2]})
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": g["id"], "scale": [1.5, 1.0, 0.5]})
+    sheared_parent = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [k["id"]], "name": "snap sheared parent"})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": sheared_parent["id"], "rotation_xyzw": yaw_xyzw(30.0), "scale": [2.0, 1.0, 1.0]})
+    editor.wait_idle()
+    for label, moved_id, target_id in (("a wall scaled 1.2 snaps its start onto an unscaled wall's end", f["id"], t["id"]),
+                                       ("an unscaled wall snaps its start onto the end of a wall scaled (1.5, 1, 0.5)", h["id"], g["id"]),
+                                       ("a wall under a parent scaled (2, 1, 1) and turned 30 degrees snaps its start onto a wall's end", k["id"], t["id"])):
+        target_end = connectors_of(editor, scene, target_id)["end"]["position"]
+        moved_start = connectors_of(editor, scene, moved_id)["start"]["position"]
+        select(editor, scene, [moved_id])
+        reach = [target_end[i] - moved_start[i] + [0.2, 0.0, 0.0][i] for i in range(3)]
+        reply = editor.call("drag_selection", {"translation": reach, "frames": 3, "release": False, "connector_snap_distance": distance})
+        snapped_start = connectors_of(editor, scene, moved_id)["start"]["position"]
+        editor.call("cancel_transform_drag", {})
+        editor.wait_idle()
+        check(f"{label} (co-located through the node transforms)",
+              reply["connector_snap"]["snapped"] and (reply["connector_snap"]["piece_id"] == moved_id) and (reply["connector_snap"]["target_id"] == target_id) and
+              close(snapped_start, target_end, 1.0e-4), f"{fmt3(snapped_start)} vs {fmt3(target_end)} {json.dumps(reply['connector_snap'])}")
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [t["id"], f["id"], g["id"], h["id"], sheared_parent["id"]]})
+    editor.wait_idle()
+    select(editor, scene, [b["id"]])
+    check_connector_indicators(editor, scene, a, b, distance, viewport["title"])
+
+    # transform_selection: the snap after the call's edits.
+    depth = undo_depth(editor)
+    reply = editor.call("transform_selection", {"translation": [b_start_x - 1.2, 0.0, 0.0], "connector_snap_distance": distance})
+    editor.wait_idle()
+    check("transform_selection with connector_snap_distance snaps the moved wall, one undo entry",
+          reply["connector_snap"]["snapped"] and close(b_start_world(), a_end_world, 1.0e-5) and (undo_depth(editor) == depth + 1), json.dumps(reply["connector_snap"]))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Per-step cost with 200 other connector pieces (6 connectors each).
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [-20.0 + 2.0 * (i % 20), 0.0, 30.0 + 2.0 * (i // 20)], "name": f"snap timed {i}"} for i in range(200)]})
+    editor.wait_idle()
+    log_start = len(pav.read_log())
+    editor.call("set_log_levels", {"loggers": {"editor.transform_tool": "trace"}})
+    timed = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 20, "release": False, "connector_snap_distance": distance})
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    editor.call("set_log_levels", {"loggers": {"editor.transform_tool": "info"}})
+    log_text = pav.read_log()[log_start:]
+    steps = connector_step_times(log_text, "connector snap step:")
+    begins = connector_step_times(log_text, "connector snap begin:")
+    median = sorted(steps)[len(steps) // 2] if steps else -1.0
+    check("with 200 more block pieces the drag gathers their connectors and still snaps; the steps are timed",
+          timed["connector_snap"]["snapped"] and (timed["connector_snap"]["target_connectors"] >= 1200 + 12) and (len(steps) >= 20),
+          f"{len(steps)} steps {json.dumps(timed['connector_snap'])}")
+    print(f"connector snap, {timed['connector_snap']['target_connectors']} target connectors: begin {begins[-1] if begins else -1.0:.3f} ms, "
+          f"step median {median:.4f} ms, max {max(steps) if steps else -1.0:.4f} ms over {len(steps)} steps", flush=True)
+
+    # The refusal of a connected placement whose pose would need a sheared local transform under its parent.
+    holder = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "basic.block", "position": [0.0, 0.0, -10.0], "name": "snap holder"}]})["pieces"][0]
+    editor.wait_idle()
+    scaled = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [holder["id"]], "name": "snap scaled"})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": scaled["id"], "rotation_xyzw": yaw_xyzw(30.0), "scale": [2.0, 1.0, 1.0]})
+    editor.wait_idle()
+    count = len(pieces(editor, scene))
+    depth = undo_depth(editor)
+    refused = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "name": "snap under scaled", "parent_id": scaled["id"],
+         "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end"}}]})
+    check("level_place_pieces with connect under a parent scaled (2, 1, 1) and turned is refused with connect_piece()'s message, nothing placed",
+          (refused is not None) and ("sheared local transform" in refused) and ("snap scaled" in refused) and
+          (len(pieces(editor, scene)) == count) and (undo_depth(editor) == depth), str(refused))
+    close_without_leak(editor, scene, "connector snap")
+    check_connector_snap_surface(editor)
+    check_connector_snap_persistence(editor)
+
+
+def check_connector_indicators(editor, scene, a, b, distance, title):
+    """Connector indicators (doc/editor/level_tools.md "Connector indicators"): what the view of the scene draws, read over MCP."""
+    def indicators():
+        return editor.call("level_get_connector_indicators", {"viewport": title})
+
+    editor.call("level_set_connector_visualization", {"mode": "selected", "viewport": title})
+    editor.wait_idle()
+    b_frames = connectors_of(editor, scene, b["id"])
+    shown = indicators()
+    # The open Level Kit window's Connect rows choose a target connector of the selected wall: that one is "chosen".
+    check("with Connectors 'selected' and a wall selected, its six connectors are drawn at their world frames",
+          (shown["mode"] == "selected") and (shown["count"] == 6) and (not shown["drag_active"]) and
+          ([i["role"] for i in shown["indicators"]].count("chosen") <= 1) and
+          all((i["piece_id"] == b["id"]) and (i["role"] in ("piece", "chosen")) and close(i["position"], b_frames[i["name"]]["position"], 1.0e-5) and
+              close(i["outward"], b_frames[i["name"]]["outward"], 1.0e-5) for i in shown["indicators"]), json.dumps(shown)[:400])
+    editor.call("level_set_connector_visualization", {"mode": "off", "viewport": title})
+    editor.wait_idle()
+    off = indicators()
+    check("with Connectors 'off' none are drawn", (off["mode"] == "off") and (off["count"] == 0), json.dumps(off)[:200])
+    editor.call("level_set_connector_visualization", {"mode": "all", "viewport": title})
+    editor.wait_idle()
+    every = indicators()
+    ids = [p["id"] for p in pieces(editor, scene)]
+    total = sum(len(piece["connectors"]) for piece in editor.call("level_get_connectors", {"scene_name": scene, "node_ids": ids})["pieces"])
+    check("with Connectors 'all' every kit piece's connectors are drawn", (every["count"] == total) and (total > 6), f"{every['count']} vs {total}")
+    # The lines reach the screen: a screenshot with All differs from one with Off around the connectors.
+    images = {}
+    for mode in ("all", "off"):
+        editor.call("level_set_connector_visualization", {"mode": mode, "viewport": title})
+        editor.wait_idle()
+        editor.wait_idle()
+        images[mode] = os.path.join(pav.REPO_ROOT, "logs", f"connector_indicators_{mode}.png")
+        editor.call("capture_screenshot", {"path": images[mode]})
+    _, differing, _ = pav.compare_images(images["all"], images["off"])
+    check("a screenshot with Connectors 'all' differs from one with 'off' (the indicator lines are drawn)", differing > 200, f"{differing} pixels differ")
+    editor.call("level_set_connector_visualization", {"mode": "all", "viewport": title})
+    editor.wait_idle()
+    refused = call_error(editor, "level_set_connector_visualization", {"mode": "hovered"})
+    check("level_set_connector_visualization refuses a mode other than off, selected and all", refused is not None, str(refused))
+    editor.call("level_set_connector_visualization", {"mode": "off", "viewport": title})
+    editor.wait_idle()
+
+    # Regenerating a selected locked layout replaces its children with new nodes: the frame cache stays bounded.
+    layout = editor.call("level_create_layout", {"scene_name": scene, "name": "indicator layout", "position": [0.0, 0.0, 20.0],
+                                                 "pattern": {"kind": "line", "count": 3}, "items": [{"shape": "architecture.wall"}], "locked": True})
+    editor.wait_idle()
+    editor.call("level_set_connector_visualization", {"mode": "selected", "viewport": title})
+    select(editor, scene, [layout["id"]])
+    cached = []
+    for count in (4, 3, 4, 3):
+        editor.call("level_set_layout", {"scene_name": scene, "layout_id": layout["id"], "pattern": {"count": count}})
+        editor.wait_idle()
+        editor.wait_idle()
+        cached.append(indicators()["cached_pieces"])
+    check("a selected locked layout regenerated four times: its children's indicators are drawn and the frame cache does not grow",
+          (indicators()["count"] == 18) and (cached[2] == cached[0]) and (cached[3] == cached[1]), str(cached))
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [layout["id"]]})
+    editor.wait_idle()
+    select(editor, scene, [b["id"]])
+    editor.call("level_set_connector_visualization", {"mode": "off", "viewport": title})
+    editor.wait_idle()
+
+    # A held snapped drag shows the moved set, the targets in reach and the snapped pair, even with the setting off.
+    editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "connector_snap_distance": distance})
+    held = indicators()
+    roles = [i["role"] for i in held["indicators"]]
+    snapped = sorted((i["piece_id"], i["name"]) for i in held["indicators"] if i["role"] == "snapped")
+    moved_positions = [i["position"] for i in held["indicators"] if i["role"] in ("moved", "snapped") and (i["piece_id"] == b["id"])]
+    targets = [i for i in held["indicators"] if i["role"] == "target"]
+    in_reach = all(any(math.dist(t["position"], m) <= (4.0 * distance) + 1.0e-4 for m in moved_positions) for t in targets)
+    colors = {i["role"]: i["color"] for i in held["indicators"]}
+    check("during a held snapped drag (Connectors off) the moved wall's connectors, the targets within 4 snap distances and the snapped pair are drawn, the pair in its own color",
+          held["drag_active"] and (roles.count("moved") == 5) and (snapped == sorted([(b["id"], "start"), (a["id"], "end")])) and in_reach and
+          ("snapped" in colors) and ("moved" in colors) and (colors["snapped"] != colors["moved"]),
+          json.dumps({"roles": roles, "snapped": snapped})[:400])
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    after = indicators()
+    check("after the drag ends the highlight ends (nothing drawn with Connectors off)", (not after["drag_active"]) and (after["count"] == 0), json.dumps(after)[:200])
+    editor.call("level_set_connector_visualization", {"mode": "selected", "viewport": title})
+    editor.wait_idle()
+
+
+def check_connector_snap_persistence(editor):
+    """The distance loads from editor_settings.json with the surface pair; a second editor reads a file stating them.
+
+    An AI-driven run writes no configuration file (doc/agents/editor_runs.md), so the load side is what a run can observe.
+    """
+    path = os.path.join(pav.REPO_ROOT, "config", "editor", "editor_settings.json")
+    with open(path, "rb") as f:
+        original = f.read()
+    try:
+        settings = json.loads(original.decode("utf-8"))
+        # surface_snap is read from editor settings version 20 on (editor_settings_config.py).
+        settings["_version"] = max(settings.get("_version", 1), 20)
+        settings["surface_snap"] = {"_version": 2, "snap_to_surface": True, "orient_to_surface": False, "connector_snap_distance": 0.3}
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=4)
+        second = Editor(editor.exe)
+        try:
+            loaded = second.call("get_surface_snap_settings", {})
+        finally:
+            second.stop()
+            if second in pav.LAUNCHED:
+                pav.LAUNCHED.remove(second)
+    finally:
+        with open(path, "wb") as f:
+            f.write(original)
+    check("an editor started with surface_snap {snap_to_surface: true, connector_snap_distance: 0.3} in editor_settings.json reads both",
+          loaded["snap"] and (abs(loaded["connector_snap_distance"] - 0.3) < 1.0e-6), json.dumps(loaded))
+
+
+def check_connector_snap_surface(editor):
+    """The connector snap after the surface rest, and a locked surface-snapped layout below the dragged wall."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    wall_shape = next(shape for shape in kits["shapes"] if shape["id"] == "architecture.wall")
+    local = {c["name"]: c["position"] for c in wall_shape["connectors"]}
+    distance = 0.5
+    ground, a, b = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "snap ground", "parameters": {"width": 30.0, "depth": 30.0, "thickness": 0.2}},
+        {"shape": "architecture.wall", "position": [0.0, 0.2, 0.0], "name": "snap raised a"},
+        {"shape": "architecture.wall", "position": [0.0, 0.5, 0.0], "name": "snap carrier b"}]})["pieces"]
+    editor.wait_idle()
+    b_start_x = local["end"][0] + 1.5 - local["start"][0]
+    place_at(editor, scene, b["id"], [b_start_x, 0.5, 0.0])
+    a_end_world = connectors_of(editor, scene, a["id"])["end"]["position"]
+    select(editor, scene, [b["id"]])
+
+    # Surface rest first (B's base to y 0), then the snap lifts it to A's raised end; no rest after the snap.
+    rested = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "surface_snap": True})
+    rested_y = editor.call("get_node_details", {"scene_name": scene, "node_id": b["id"]})["world_transform"]["translation"][1]
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    both = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "surface_snap": True, "connector_snap_distance": distance})
+    b_world = editor.call("get_node_details", {"scene_name": scene, "node_id": b["id"]})["world_transform"]["translation"]
+    b_start = connectors_of(editor, scene, b["id"])["start"]["position"]
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    oriented = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "surface_snap": True, "surface_orient": True,
+                                              "connector_snap_distance": distance})
+    oriented_world = editor.call("get_node_details", {"scene_name": scene, "node_id": b["id"]})["world_transform"]
+    oriented_start = connectors_of(editor, scene, b["id"])["start"]["position"]
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("with Orient To Surface too the oriented rest (upright on the flat ground) is kept and the snap co-locates the pair",
+          oriented["connector_snap"]["snapped"] and close(oriented_start, a_end_world, 1.0e-5) and same_xyzw(oriented_world["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]) and
+          (abs(oriented_world["translation"][1] - 0.2) < 1.0e-5), f"{json.dumps(oriented_world)} {json.dumps(oriented['connector_snap'])}")
+    check("with surface snap alone the dragged wall rests on the ground (y 0)", abs(rested_y) < TOLERANCE, f"{rested_y}")
+    check("with surface snap and the connector snap the rest comes first and the snap last: B's start is on A's raised end (y 0.2), not re-rested",
+          both["connector_snap"]["snapped"] and close(b_start, a_end_world, 1.0e-5) and (abs(b_world[1] - 0.2) < 1.0e-5) and
+          (abs(both["connector_snap"]["offset"][1] - 0.2) < 1.0e-4), f"{fmt3(b_world)} {json.dumps(both['connector_snap'])}")
+
+    # A locked surface-snapped layout under B, 3 m to its side on the ground.
+    place_at(editor, scene, b["id"], [b_start_x, 0.0, 0.0])
+    layout = editor.call("level_create_layout", {"scene_name": scene, "name": "snap layout", "parent_id": b["id"], "position": [b_start_x, 0.0, 3.0],
+                                                 "pattern": {"kind": "line", "count": 2}, "items": [{"shape": "basic.block"}], "surface_snap": True, "locked": True})
+    editor.wait_idle()
+
+    def layout_relative():
+        b_x = editor.call("get_node_details", {"scene_name": scene, "node_id": b["id"]})["world_transform"]["translation"][0]
+        children = layouts_by_id(editor, scene)[layout["id"]]["children"]
+        return [[child["position"][0] - b_x, child["position"][1], child["position"][2]] for child in children], b_x
+
+    relative_before, _ = layout_relative()
+    select(editor, scene, [b["id"]])
+    depth = undo_depth(editor)
+    editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "connector_snap_distance": distance})
+    relative_mid, mid_x = layout_relative()
+    mid_start = connectors_of(editor, scene, b["id"])["start"]["position"]
+    released = editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    relative_after, after_x = layout_relative()
+    check("the locked surface-snapped layout below the dragged wall follows the snapped pose in the preview and at the release, resting on the ground",
+          close(mid_start, a_end_world, 1.0e-5) and (len(relative_mid) == 2) and all(close(p, q, 1.0e-4) for p, q in zip(relative_mid, relative_before)) and
+          all(close(p, q, 1.0e-4) for p, q in zip(relative_after, relative_before)) and all(abs(p[1]) < TOLERANCE for p in relative_after) and
+          released["connector_snap"]["snapped"] and (abs(mid_x - after_x) < 1.0e-5) and (undo_depth(editor) == depth + 1),
+          f"before {relative_before} mid {relative_mid} after {relative_after} undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    reply = editor.call("transform_selection", {"translation": [b_start_x - 1.2, 0.0, 0.0], "connector_snap_distance": distance})
+    editor.wait_idle()
+    relative_set, _ = layout_relative()
+    check("transform_selection with connector_snap_distance moves the wall onto A's end and the locked surface-snapped layout below it follows, one entry",
+          reply["connector_snap"]["snapped"] and close(connectors_of(editor, scene, b["id"])["start"]["position"], a_end_world, 1.0e-5) and
+          (len(relative_set) == 2) and all(close(p, q, 1.0e-4) for p, q in zip(relative_set, relative_before)) and
+          all(abs(p[1]) < TOLERANCE for p in relative_set) and (undo_depth(editor) == depth + 1),
+          f"before {relative_before} set {relative_set} {json.dumps(reply['connector_snap'])} undo {undo_depth(editor) - depth}")
+    close_without_leak(editor, scene, "connector snap surface")
 
 
 def main():
@@ -5097,6 +7786,13 @@ def main():
     parser.add_argument("--only-path-layouts", action="store_true", help="run the path layout checks alone")
     parser.add_argument("--only-window-layout", action="store_true", help="run the Level Kit window checks up to its Layout section alone")
     parser.add_argument("--only-layout-drags", action="store_true", help="run the live layout preview checks alone")
+    parser.add_argument("--only-transform-rows", action="store_true", help="run the Properties transform row move hook checks alone")
+    parser.add_argument("--only-drag-cancel", action="store_true", help="run the Transform tool drag cancel checks alone")
+    parser.add_argument("--only-surface-resting", action="store_true", help="run the surface resting agreement checks alone")
+    parser.add_argument("--only-replace", action="store_true", help="run the replace checks (MCP and the Level Kit window) alone")
+    parser.add_argument("--only-scatter", action="store_true", help="run the scatter layout checks alone")
+    parser.add_argument("--only-connectors", action="store_true", help="run the connector checks (MCP and the Level Kit window) alone")
+    parser.add_argument("--only-connector-snap", action="store_true", help="run the connector snap checks of Transform tool drags alone")
     parser.add_argument("--layout-drag-image", default=DEFAULT_LAYOUT_DRAG_IMAGE, help="mid-drag layout screenshot PNG (relative to the repository root or absolute)")
     args = parser.parse_args()
     image_path = args.image if os.path.isabs(args.image) else os.path.join(pav.REPO_ROOT, args.image)
@@ -5124,6 +7820,9 @@ def main():
     start = time.monotonic()
     try:
         editor = Editor(args.editor)
+        hide_windows_over_viewports(editor)
+        # The pointer drags assume no connector snap; the saved editor_settings.json may hold a distance.
+        editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.0})
         scene = None
         if args.only_transform:
             check_transform_surface(editor, transform_image_path)
@@ -5141,6 +7840,26 @@ def main():
             check_properties_layout_write(editor, window_scene)
         elif args.only_layout_drags:
             check_layout_live_drags(editor, layout_drag_image_path)
+            check_layout_transform_rows(editor)
+        elif args.only_transform_rows:
+            check_layout_transform_rows(editor)
+        elif args.only_drag_cancel:
+            check_transform_drag_cancel(editor)
+            check_transform_record_rule(editor)
+        elif args.only_surface_resting:
+            check_surface_resting(editor)
+        elif args.only_scatter:
+            check_scatter_layouts(editor, work)
+        elif args.only_connectors:
+            check_connectors(editor)
+            window_scene, _ = check_level_kit_window(editor, window_image_path)
+            check_window_connect(editor, window_scene)
+        elif args.only_connector_snap:
+            check_connector_snap(editor)
+        elif args.only_replace:
+            check_replace(editor)
+            window_scene, _ = check_level_kit_window(editor, window_image_path)
+            check_window_replace(editor, window_scene)
         else:
             if not args.only_walkable:
                 scene = create_scene(editor)
@@ -5162,6 +7881,8 @@ def main():
                 check_layout_patterns(editor)
                 check_groups(editor, work)
                 check_material_slots(editor, work)
+                check_replace(editor)
+                check_connectors(editor)
                 check_layouts(editor, work)
                 check_path_layouts(editor, work, path_image_path)
                 check_layout_tree(editor)
@@ -5177,9 +7898,17 @@ def main():
             check_properties_layout_write(editor, window_scene)
             check_window_group(editor, window_scene, group_image_path)
             check_window_materials(editor, window_scene, materials_image_path)
+            check_window_replace(editor, window_scene)
+            check_window_connect(editor, window_scene)
             check_transform_surface(editor, transform_image_path)
             # Last: it makes its own scene the active one.
             check_layout_live_drags(editor, layout_drag_image_path)
+            check_layout_transform_rows(editor)
+            check_transform_drag_cancel(editor)
+            check_transform_record_rule(editor)
+            check_surface_resting(editor)
+            check_scatter_layouts(editor, work)
+            check_connector_snap(editor)
     except Exception as error:  # noqa: BLE001 - a failed step is a failed check
         check("run completed without an error", False, f"{type(error).__name__}: {error}")
     finally:

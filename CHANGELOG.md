@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::raytrace`: `ray.hpp` - `IHit_filter` and `Ray::filter`; `intersect()`
+  returns the nearest candidate hit the filter accepts, on every backend
+  (`doc/erhe/raytrace.md` "Hit filters").
 - `erhe::math`: `curve_path.hpp` - `insert_curve_point()` (splits a span by
   de Casteljau keeping the shape), `make_curve_end_point()` /
   `add_curve_point()` with `Curve_end`, and
@@ -151,6 +154,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::raytrace`: `Hit::normal` points out of the solid also for a mirrored
+  instance (negative determinant), and the embree backend reports it in the
+  instance's parent space as the other backends do (`normal_transform.hpp`).
 - `erhe::geometry`: `make_convex_hull()` winds every hull triangle
   counter-clockwise seen from outside and returns an identical mesh for
   equal points (each triangle from its lowest vertex, triangles sorted).

@@ -160,6 +160,13 @@ auto check_opening(const Kit_shape_definition& shape, const float width, const f
     return {};
 }
 
+// "start" (-X) and "end" (+X) at the centers of the base's end edges, half_length from the origin.
+void add_end_connectors(std::vector<Kit_connector>& out_connectors, const float half_length)
+{
+    add_side_connector(out_connectors, "start", glm::vec3{-half_length, 0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f});
+    add_side_connector(out_connectors, "end",   glm::vec3{ half_length, 0.0f, 0.0f}, glm::vec3{ 1.0f, 0.0f, 0.0f});
+}
+
 } // anonymous namespace
 
 auto get_arch_clear_width(const Kit_parameter_values& values, const float height) -> float
@@ -199,6 +206,13 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.generator       = generate_wall;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_seam_sides  = [](const Kit_parameter_values&) { return all_sides(); };
+        shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            const float half_t = 0.5f * values.get_float("thickness");
+            add_end_connectors(out_connectors, 0.5f * values.get_float("length"));
+            add_base_and_top_connectors(out_connectors, values.get_float("height"));
+            add_side_connector(out_connectors, "front", glm::vec3{0.0f, 0.0f,  half_t}, glm::vec3{0.0f, 0.0f,  1.0f});
+            add_side_connector(out_connectors, "back",  glm::vec3{0.0f, 0.0f, -half_t}, glm::vec3{0.0f, 0.0f, -1.0f});
+        };
         shapes.push_back(std::move(shape));
     }
     {
@@ -229,6 +243,13 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             return check_opening(*values.get_shape(), values.get_float("opening_width"), values.get_float("opening_height"), agent);
         };
+        shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            const float half_t = 0.5f * values.get_float("thickness");
+            add_end_connectors(out_connectors, 0.5f * values.get_float("length"));
+            add_base_and_top_connectors(out_connectors, values.get_float("height"));
+            add_side_connector(out_connectors, "opening_front", glm::vec3{0.0f, 0.0f,  half_t}, glm::vec3{0.0f, 0.0f,  1.0f});
+            add_side_connector(out_connectors, "opening_back",  glm::vec3{0.0f, 0.0f, -half_t}, glm::vec3{0.0f, 0.0f, -1.0f});
+        };
         shapes.push_back(std::move(shape));
     }
     {
@@ -253,6 +274,9 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.mirror_planes           = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_seam_sides          = [](const Kit_parameter_values& values) {
             return (values.get_enum("profile") == "square") ? all_sides() : std::vector<Kit_side>{};
+        };
+        shape.get_connectors          = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            add_base_and_top_connectors(out_connectors, values.get_float("height"));
         };
         shapes.push_back(std::move(shape));
     }
@@ -284,6 +308,11 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.check_walkability       = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             const float clear_height = agent.height + kit_opening_margin;
             return check_opening(*values.get_shape(), get_arch_clear_width(values, clear_height), values.get_float("rise"), agent);
+        };
+        shape.get_connectors          = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            const float thickness = values.get_float("thickness");
+            add_end_connectors(out_connectors, (0.5f * values.get_float("span")) + thickness);
+            add_base_and_top_connectors(out_connectors, values.get_float("rise") + thickness);
         };
         shapes.push_back(std::move(shape));
     }

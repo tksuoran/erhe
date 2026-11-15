@@ -905,24 +905,31 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
                 if (changed) {
                     begin_edit(property);
                     queue_set(property, value);
-                    m_edit_property = nullptr;
+                    clear_edit_session();
                 }
             } else {
-                if (ImGui::IsItemActivated()) {
-                    begin_edit(property);
+                // A session whose row skipped a frame stays unstamped, so end_lost_edit() gives it up.
+                if (is_session_row(property) && (m_edit_seen_frame >= (ImGui::GetFrameCount() - 1))) {
+                    m_edit_seen_frame = ImGui::GetFrameCount();
                 }
                 if (changed) {
-                    if (m_edit_property != &property) {
+                    if (!is_session_row(property)) {
                         begin_edit(property); // keyboard edits can change without a separate activation frame
                     }
                     for (std::size_t i = 0; i < m_items->size(); ++i) {
                         target(i)->set_value(property, merge_components(target(i)->get_value(property), original, value));
                     }
+                    m_edit_written = true;
+                    step_edit_hooks(property);
                 }
+                // Before the activation: Tab to the next component of a row ends one edit and begins the next in one frame.
                 if (ImGui::IsItemDeactivatedAfterEdit()) {
                     end_edit(property);
-                } else if ((m_edit_property == &property) && ImGui::IsItemDeactivated()) {
-                    m_edit_property = nullptr; // activated, never edited
+                } else if (is_session_row(property) && ImGui::IsItemDeactivated()) {
+                    abandon_edit(); // activated, never edited
+                }
+                if (ImGui::IsItemActivated() && !is_session_row(property)) {
+                    begin_edit(property);
                 }
             }
             context_menu(property, metadata);
@@ -974,6 +981,42 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
 void Dependency_property_rows::add_row_action(Property_row_action action)
 {
     m_row_actions.push_back(std::move(action));
+}
+
+void Dependency_property_rows::add_edit_hook(Property_edit_hook hook)
+{
+    m_edit_hooks.push_back(std::move(hook));
+}
+
+void Dependency_property_rows::step_edit_hooks(const Dependency_property& property)
+{
+    if (!m_edit_hooks_begun) {
+        m_edit_hooks_begun = true;
+        const Dependency_property& recorded = recorded_property(property);
+        for (const Property_edit_hook& hook : m_edit_hooks) {
+            if (hook.begin) {
+                hook.begin(*m_items, recorded);
+            }
+        }
+    }
+    for (const Property_edit_hook& hook : m_edit_hooks) {
+        if (hook.step) {
+            hook.step();
+        }
+    }
+}
+
+void Dependency_property_rows::end_edit_hooks()
+{
+    if (!m_edit_hooks_begun) {
+        return;
+    }
+    m_edit_hooks_begun = false;
+    for (const Property_edit_hook& hook : m_edit_hooks) {
+        if (hook.end) {
+            hook.end();
+        }
+    }
 }
 
 void Dependency_property_rows::add_group_rows(Property_group_rows rows)
@@ -1401,7 +1444,10 @@ auto Dependency_property_rows::draw_widget(
 void Dependency_property_rows::draw_expression(const Dependency_property& property, const std::string_view text)
 {
     const std::string_view error   = target(0)->get_expression_error(property);
-    const bool             editing = (m_edit_property == &property);
+    const bool             editing = is_session_row(property);
+    if (editing) {
+        m_edit_seen_frame = ImGui::GetFrameCount();
+    }
     // The row mirrors the item's formula until the field is activated;
     // from then on the typed text lives in m_expression_scratch (rows of
     // other driven properties keep mirroring their own text).
@@ -1436,9 +1482,9 @@ void Dependency_property_rows::draw_expression(const Dependency_property& proper
         } else {
             queue_set(property, erhe::property::Local_state{erhe::property::Expression_text{m_expression_scratch}});
         }
-        m_edit_property = nullptr;
+        clear_edit_session();
     } else if (ImGui::IsItemDeactivated()) {
-        m_edit_property = nullptr; // escaped
+        clear_edit_session(); // escaped
     }
 }
 
@@ -1451,16 +1497,98 @@ auto Dependency_property_rows::recorded_property(const Dependency_property& prop
 void Dependency_property_rows::begin_edit(const Dependency_property& property)
 {
     const Dependency_property& recorded = recorded_property(property);
-    m_edit_property = &property;
+    abandon_edit(); // a session the previous widget left open
+    m_edit_property   = &property;
+    m_edit_recorded   = &recorded;
+    m_edit_items      = m_items;
+    m_edit_sub_object = m_sub_object;
+    m_edit_seen_frame = ImGui::GetFrameCount();
+    m_edit_written    = false;
     m_edit_before.clear();
     for (std::size_t i = 0; i < m_items->size(); ++i) {
         m_edit_before.push_back(target(i)->read_local_state(recorded));
     }
 }
 
+void Dependency_property_rows::clear_edit_session()
+{
+    m_edit_property   = nullptr;
+    m_edit_recorded   = nullptr;
+    m_edit_items.reset();
+    m_edit_sub_object.reset();
+    m_edit_seen_frame = 0;
+    m_edit_written    = false;
+    m_edit_abandoned  = false;
+}
+
+void Dependency_property_rows::abandon_edit()
+{
+    if (m_edit_property == nullptr) {
+        return;
+    }
+    end_edit_hooks();
+    if (m_edit_written && m_edit_items && (m_edit_before.size() == m_edit_items->size())) {
+        for (std::size_t i = 0; i < m_edit_items->size(); ++i) {
+            erhe::Item_base& item = *(*m_edit_items)[i];
+            erhe::property::Dependency_object* const object = m_edit_sub_object.has_value() ? item.get_property_sub_object(m_edit_sub_object.value()) : &item;
+            if (object != nullptr) {
+                static_cast<void>(apply_item_property(m_context, item, *object, *m_edit_recorded, m_edit_before[i]));
+            }
+        }
+    }
+    clear_edit_session();
+}
+
+auto Dependency_property_rows::is_session_row(const Dependency_property& property) const -> bool
+{
+    return
+        (m_edit_property == &property) && (m_sub_object == m_edit_sub_object) &&
+        m_items && m_edit_items && (*m_items == *m_edit_items);
+}
+
+void Dependency_property_rows::end_lost_edit()
+{
+    // ImGui reports no deactivation of a widget that stops being drawn (selection change, collapsed group, clipped row).
+    if ((m_edit_property != nullptr) && (m_edit_abandoned || (m_edit_seen_frame != ImGui::GetFrameCount()))) {
+        abandon_edit();
+    }
+}
+
+void Dependency_property_rows::release_edit_items(const std::function<bool(const erhe::Item_base&)>& gone)
+{
+    if (!m_edit_items) {
+        return;
+    }
+    bool any_gone = false;
+    for (const std::shared_ptr<erhe::Item_base>& item : *m_edit_items) {
+        any_gone = any_gone || gone(*item);
+    }
+    if (!any_gone) {
+        return;
+    }
+    // The gone items leave the session now; the rest get their values back where every abandoned edit ends, out of the
+    // message's dispatch (end_lost_edit()).
+    std::shared_ptr<std::vector<std::shared_ptr<erhe::Item_base>>> remaining = std::make_shared<std::vector<std::shared_ptr<erhe::Item_base>>>();
+    std::vector<std::optional<erhe::property::Local_state>>         before;
+    for (std::size_t i = 0; i < m_edit_items->size(); ++i) {
+        if (!gone(*(*m_edit_items)[i]) && (i < m_edit_before.size())) {
+            remaining->push_back((*m_edit_items)[i]);
+            before.push_back(m_edit_before[i]);
+        }
+    }
+    m_edit_items     = std::move(remaining);
+    m_edit_before    = std::move(before);
+    m_edit_abandoned = true;
+}
+
 void Dependency_property_rows::end_edit(const Dependency_property& property)
 {
-    if (m_edit_property != &property) {
+    if (!is_session_row(property)) {
+        return;
+    }
+    end_edit_hooks();
+    if (m_context.operation_stack == nullptr) {
+        clear_edit_session();
         return;
     }
     // Live edits already wrote the local value (of the recorded property:
@@ -1469,22 +1597,34 @@ void Dependency_property_rows::end_edit(const Dependency_property& property)
     // after and re-applies after (idempotent) so the consequence hook runs
     // once per completed edit.
     const Dependency_property& recorded = recorded_property(property);
-    if (m_items->size() == 1) {
-        queue_set(recorded, target(0)->read_local_state(recorded));
-    } else {
-        Compound_operation::Parameters parameters;
-        for (std::size_t i = 0; i < m_items->size(); ++i) {
-            const std::optional<erhe::property::Local_state> after = target(i)->read_local_state(recorded);
-            if (refuse_layout_write(i, recorded, after)) {
-                continue;
-            }
-            parameters.operations.push_back(std::make_shared<Property_set_operation>((*m_items)[i], m_sub_object, recorded, m_edit_before[i], after));
+    std::vector<std::shared_ptr<Operation>> operations;
+    for (std::size_t i = 0; i < m_items->size(); ++i) {
+        const std::optional<erhe::property::Local_state> after = target(i)->read_local_state(recorded);
+        if (refuse_layout_write(i, recorded, after)) {
+            continue;
         }
-        if (!parameters.operations.empty()) {
-            m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
+        operations.push_back(std::make_shared<Property_set_operation>((*m_items)[i], m_sub_object, recorded, m_edit_before[i], after));
+    }
+    const std::size_t write_count = operations.size();
+    if (write_count > 0) {
+        for (const Property_edit_hook& hook : m_edit_hooks) {
+            if (hook.commit) {
+                hook.commit(*m_items, recorded, operations);
+            }
         }
     }
-    m_edit_property = nullptr;
+    if (operations.size() > write_count) {
+        // The hooks' operations are the edit's follow-ups, made once for every item.
+        for (std::size_t i = 0; i < write_count; ++i) {
+            std::static_pointer_cast<Property_set_operation>(operations[i])->set_follow_ups(Property_set_follow_ups::none);
+        }
+    }
+    if (operations.size() == 1) {
+        m_context.operation_stack->queue(operations.front());
+    } else if (!operations.empty()) {
+        m_context.operation_stack->queue(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+    }
+    clear_edit_session();
 }
 
 // Queues after = `after` for every item, with the before values captured by
@@ -1615,7 +1755,7 @@ void Dependency_property_rows::reset_to_default(const Dependency_property& prope
 {
     begin_edit(property);
     queue_set(property, std::nullopt);
-    m_edit_property = nullptr;
+    clear_edit_session();
 }
 
 // Starts a formula from the current value in formula form (components
@@ -1650,7 +1790,7 @@ void Dependency_property_rows::edit_as_expression(const Dependency_property& pro
     }
     begin_edit(property);
     queue_set(property, erhe::property::Local_state{erhe::property::Expression_text{std::move(text)}});
-    m_edit_property = nullptr;
+    clear_edit_session();
 }
 
 // Bakes the current result as the local value.
@@ -1658,7 +1798,7 @@ void Dependency_property_rows::remove_expression(const Dependency_property& prop
 {
     begin_edit(property);
     queue_set(property, erhe::property::Local_state{target(0)->get_value(property)});
-    m_edit_property = nullptr;
+    clear_edit_session();
 }
 
 void Dependency_property_rows::copy_properties()

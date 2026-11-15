@@ -7,22 +7,34 @@
 
 namespace erhe::raytrace {
 
+class Hit;
 class IGeometry;
 class IInstance;
+
+// Decides per candidate hit whether a ray stops there (doc/erhe/raytrace.md "Hit filters").
+class IHit_filter
+{
+public:
+    virtual ~IHit_filter() noexcept = default;
+
+    // The candidate holds the fields intersect() would return for it; called from the intersecting thread.
+    [[nodiscard]] virtual auto accept(const Hit& candidate) const -> bool = 0;
+};
 
 class Ray
 {
 public:
     auto transform(const glm::mat4& matrix) const -> Ray;
 
-    glm::vec3 origin   {0.0f};
-    float     t_near   {0.0f};
-    glm::vec3 direction{0.0f};
-    float     time     {0.0f};
-    float     t_far    {0.0f};
-    uint32_t  mask     {0xfffffffu};
-    uint32_t  id       {0};
-    uint32_t  flags    {0};
+    glm::vec3          origin   {0.0f};
+    float              t_near   {0.0f};
+    glm::vec3          direction{0.0f};
+    float              time     {0.0f};
+    float              t_far    {0.0f};
+    uint32_t           mask     {0xfffffffu};
+    uint32_t           id       {0};
+    uint32_t           flags    {0};
+    const IHit_filter* filter   {nullptr};
 };
 
 class Hit

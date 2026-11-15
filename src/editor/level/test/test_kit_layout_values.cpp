@@ -5,10 +5,13 @@
 
 #include <gtest/gtest.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <nlohmann/json.hpp>
 
 #include <glm/gtc/constants.hpp>
 
+#include <bit>
 #include <cmath>
+#include <cstdint>
 #include <set>
 #include <string>
 #include <vector>
@@ -23,16 +26,36 @@ using editor::Repeat_path_orientation;
 using editor::Repeat_pattern_kind;
 using editor::Repeat_pose;
 using editor::Repeat_ring_facing;
+using editor::Repeat_scatter_region;
+using editor::Kit_scatter_mode;
 
 constexpr float c_tolerance = 1.0e-4f;
 
 auto run_of(const Kit_layout_pattern& pattern, const float extent, Kit_layout_run& run, std::vector<Repeat_pose>& poses, const erhe::math::Curve_path_table* table = nullptr) -> std::string
 {
-    const std::string error = editor::resolve_layout_pattern(pattern, extent, table, run);
+    const std::string error = editor::resolve_layout_pattern(pattern, 0, extent, table, run, nullptr);
     if (!error.empty()) {
         return error;
     }
     return editor::expand_repeat(run.pattern, Repeat_pose{}, poses);
+}
+
+auto run_of_seeded(const Kit_layout_pattern& pattern, const int seed, Kit_layout_run& run, std::vector<Repeat_pose>& poses) -> std::string
+{
+    return editor::resolve_layout_pattern(pattern, seed, 0.0f, nullptr, run, &poses);
+}
+
+// The bits of every position, so a changed accept decision anywhere changes the value.
+auto position_bits_hash(const std::vector<Repeat_pose>& poses) -> uint64_t
+{
+    uint64_t hash = 0xcbf29ce484222325ull;
+    for (const Repeat_pose& pose : poses) {
+        for (glm::vec3::length_type i = 0; i < 3; ++i) {
+            hash ^= static_cast<uint64_t>(std::bit_cast<uint32_t>(pose.position[i]));
+            hash *= 0x100000001b3ull;
+        }
+    }
+    return hash;
 }
 
 auto make_pattern(const Repeat_pattern_kind kind, const Kit_layout_count_mode mode) -> Kit_layout_pattern
@@ -314,30 +337,249 @@ TEST(Kit_layout_values, refusals)
     Kit_layout_pattern line = make_pattern(Repeat_pattern_kind::line, Kit_layout_count_mode::gap);
     line.length = 5000.0f;
     line.gap    = 0.0f;
-    EXPECT_NE(editor::resolve_layout_pattern(line, 1.0f, nullptr, run).find("more than the 1024"), std::string::npos);
+    EXPECT_NE(editor::resolve_layout_pattern(line, 0, 1.0f, nullptr, run, nullptr).find("more than the 1024"), std::string::npos);
     line.length = 4.0f;
     line.gap    = -1.0f;
-    EXPECT_NE(editor::resolve_layout_pattern(line, 1.0f, nullptr, run).find("not positive"), std::string::npos);
+    EXPECT_NE(editor::resolve_layout_pattern(line, 0, 1.0f, nullptr, run, nullptr).find("not positive"), std::string::npos);
     line.gap    = 0.0f;
     line.length = -1.0f;
-    EXPECT_NE(editor::resolve_layout_pattern(line, 1.0f, nullptr, run), "");
+    EXPECT_NE(editor::resolve_layout_pattern(line, 0, 1.0f, nullptr, run, nullptr), "");
     Kit_layout_pattern counted = make_pattern(Repeat_pattern_kind::ring, Kit_layout_count_mode::count);
     counted.count = 0;
-    EXPECT_NE(editor::resolve_layout_pattern(counted, 1.0f, nullptr, run), "");
+    EXPECT_NE(editor::resolve_layout_pattern(counted, 0, 1.0f, nullptr, run, nullptr), "");
     counted.count = 1025;
-    EXPECT_NE(editor::resolve_layout_pattern(counted, 1.0f, nullptr, run), "");
+    EXPECT_NE(editor::resolve_layout_pattern(counted, 0, 1.0f, nullptr, run, nullptr), "");
     Kit_layout_pattern path = make_pattern(Repeat_pattern_kind::path, Kit_layout_count_mode::count);
-    EXPECT_NE(editor::resolve_layout_pattern(path, 1.0f, nullptr, run).find("needs a curve"), std::string::npos);
+    EXPECT_NE(editor::resolve_layout_pattern(path, 0, 1.0f, nullptr, run, nullptr).find("needs a curve"), std::string::npos);
     const erhe::math::Curve_path_table point = make_table(corner_path({glm::vec3{0.0f}, glm::vec3{0.0f}}, erhe::math::Curve_closure::open));
     path.count  = 3;
-    EXPECT_NE(editor::resolve_layout_pattern(path, 1.0f, &point, run).find("no length"), std::string::npos);
+    EXPECT_NE(editor::resolve_layout_pattern(path, 0, 1.0f, &point, run, nullptr).find("no length"), std::string::npos);
     const erhe::math::Curve_path_table long_line = make_table(corner_path({glm::vec3{0.0f}, glm::vec3{2000.0f, 0.0f, 0.0f}}, erhe::math::Curve_closure::open));
     path.count_mode = Kit_layout_count_mode::gap;
-    EXPECT_NE(editor::resolve_layout_pattern(path, 1.0f, &long_line, run).find("1024"), std::string::npos);
+    EXPECT_NE(editor::resolve_layout_pattern(path, 0, 1.0f, &long_line, run, nullptr).find("1024"), std::string::npos);
     Kit_layout_pattern grid = make_pattern(Repeat_pattern_kind::grid, Kit_layout_count_mode::gap);
     grid.count_x = 40;
     grid.count_z = 40;
-    EXPECT_NE(editor::resolve_layout_pattern(grid, 1.0f, nullptr, run), "");
+    EXPECT_NE(editor::resolve_layout_pattern(grid, 0, 1.0f, nullptr, run, nullptr), "");
+}
+
+auto make_scatter(const Repeat_scatter_region region, const int count, const float spacing) -> Kit_layout_pattern
+{
+    Kit_layout_pattern pattern;
+    pattern.kind          = Repeat_pattern_kind::scatter;
+    pattern.region        = region;
+    pattern.count         = count;
+    pattern.size_x        = 10.0f;
+    pattern.size_z        = 6.0f;
+    pattern.region_radius = 5.0f;
+    pattern.min_spacing   = spacing;
+    pattern.yaw_min       = -30.0f;
+    pattern.yaw_max       = 45.0f;
+    return pattern;
+}
+
+// Every pair at least the spacing apart, with the sampler's own float arithmetic.
+void expect_spacing_holds(const std::vector<Repeat_pose>& poses, const float spacing)
+{
+    const float spacing_squared = spacing * spacing;
+    for (std::size_t i = 0; i < poses.size(); ++i) {
+        for (std::size_t j = i + 1; j < poses.size(); ++j) {
+            const float dx  = poses[i].position.x - poses[j].position.x;
+            const float dz  = poses[i].position.z - poses[j].position.z;
+            const float dxx = dx * dx;
+            const float dzz = dz * dz;
+            const float dd  = dxx + dzz;
+            ASSERT_GE(dd, spacing_squared) << i << " " << j;
+        }
+    }
+}
+
+TEST(Kit_layout_values, scatter_text_round_trips_and_old_texts_read)
+{
+    Kit_layout_pattern pattern = make_scatter(Repeat_scatter_region::disc, 17, 0.75f);
+    pattern.scatter_mode = Kit_scatter_mode::density;
+    pattern.density      = 0.3f;
+    const std::string text = editor::to_canonical_text(pattern);
+    Kit_layout_pattern read;
+    ASSERT_EQ(editor::parse_layout_pattern(text, read), "");
+    EXPECT_EQ(read, pattern);
+    EXPECT_EQ(editor::to_canonical_text(read), text);
+
+    // A text written before scatter existed lacks its keys and reads with the scatter defaults.
+    nlohmann::json old_text = nlohmann::json::parse(editor::to_canonical_text(Kit_layout_pattern{}));
+    for (const char* key : {"scatter_mode", "density", "region", "size_x", "size_z", "region_radius", "min_spacing", "yaw_min", "yaw_max"}) {
+        ASSERT_EQ(old_text.erase(key), 1u) << key;
+    }
+    Kit_layout_pattern old_read = pattern;
+    ASSERT_EQ(editor::parse_layout_pattern(old_text.dump(), old_read), "");
+    EXPECT_EQ(old_read, Kit_layout_pattern{});
+
+    // The scatter values ride a kind change.
+    Kit_layout_pattern line = pattern;
+    line.kind = Repeat_pattern_kind::line;
+    ASSERT_EQ(editor::parse_layout_pattern(editor::to_canonical_text(line), read), "");
+    read.kind = Repeat_pattern_kind::scatter;
+    EXPECT_EQ(read, pattern);
+
+    nlohmann::json bad = nlohmann::json::parse(text);
+    bad["region"] = "square";
+    EXPECT_NE(editor::parse_layout_pattern(bad.dump(), read).find("unknown scatter region"), std::string::npos);
+}
+
+TEST(Kit_layout_values, scatter_is_deterministic_and_prefix_stable)
+{
+    Kit_layout_run           run;
+    std::vector<Repeat_pose> poses;
+    const Kit_layout_pattern pattern = make_scatter(Repeat_scatter_region::rectangle, 20, 1.0f);
+    ASSERT_EQ(run_of_seeded(pattern, 7, run, poses), "");
+    ASSERT_EQ(poses.size(), 20u);
+    EXPECT_EQ(run.count, 20u);
+    EXPECT_EQ(run.requested, 20u);
+    // The first points of seed 7, the same bits on every platform.
+    const char* const expected[3][2] = {
+        {"0x1.291acap+1", "-0x1.35d6ccp+1"}, {"-0x1.9195bp+1", "0x1.3f8a1cp+1"}, {"-0x1.241d4p+2", "0x1.669cbcp-1"}
+    };
+    for (std::size_t i = 0; i < 3; ++i) {
+        EXPECT_EQ(editor::format_hexfloat(poses[i].position.x), expected[i][0]) << i;
+        EXPECT_EQ(editor::format_hexfloat(poses[i].position.z), expected[i][1]) << i;
+        EXPECT_EQ(poses[i].position.y, 0.0f);
+    }
+    std::vector<Repeat_pose> again;
+    ASSERT_EQ(run_of_seeded(pattern, 7, run, again), "");
+    for (std::size_t i = 0; i < poses.size(); ++i) {
+        EXPECT_EQ(poses[i].position, again[i].position);
+        EXPECT_EQ(poses[i].rotation, again[i].rotation);
+    }
+    // More pieces keep the first ones.
+    Kit_layout_pattern more = pattern;
+    more.count = 30;
+    ASSERT_EQ(run_of_seeded(more, 7, run, again), "");
+    ASSERT_EQ(again.size(), 30u);
+    for (std::size_t i = 0; i < poses.size(); ++i) {
+        EXPECT_EQ(poses[i].position, again[i].position) << i;
+    }
+    // Another seed places them elsewhere.
+    ASSERT_EQ(run_of_seeded(pattern, 8, run, again), "");
+    EXPECT_NE(poses[0].position, again[0].position);
+}
+
+TEST(Kit_layout_values, scatter_holds_spacing_region_and_yaw)
+{
+    for (const Repeat_scatter_region region : {Repeat_scatter_region::rectangle, Repeat_scatter_region::disc}) {
+        Kit_layout_run           run;
+        std::vector<Repeat_pose> poses;
+        const Kit_layout_pattern pattern = make_scatter(region, 25, 0.9f);
+        ASSERT_EQ(run_of_seeded(pattern, 3, run, poses), "");
+        ASSERT_EQ(poses.size(), 25u);
+        expect_spacing_holds(poses, pattern.min_spacing);
+        for (const Repeat_pose& pose : poses) {
+            if (region == Repeat_scatter_region::disc) {
+                EXPECT_LE((pose.position.x * pose.position.x) + (pose.position.z * pose.position.z), (5.0f * 5.0f) + c_tolerance);
+            } else {
+                EXPECT_LE(std::abs(pose.position.x), 5.0f);
+                EXPECT_LE(std::abs(pose.position.z), 3.0f);
+            }
+            // The yaw about +y: the rotated x axis's heading.
+            const glm::vec3 x_axis = pose.rotation * glm::vec3{1.0f, 0.0f, 0.0f};
+            EXPECT_NEAR(x_axis.y, 0.0f, c_tolerance);
+            const float yaw = glm::degrees(std::atan2(-x_axis.z, x_axis.x));
+            EXPECT_GE(yaw, -30.0f - 1.0e-3f);
+            EXPECT_LE(yaw,  45.0f + 1.0e-3f);
+        }
+    }
+}
+
+TEST(Kit_layout_values, scatter_density_mode_limit_and_what_fits)
+{
+    Kit_layout_run           run;
+    std::vector<Repeat_pose> poses;
+    Kit_layout_pattern pattern = make_scatter(Repeat_scatter_region::rectangle, 1, 0.0f);
+    pattern.scatter_mode = Kit_scatter_mode::density;
+    pattern.density      = 0.25f; // 60 square meters: 15 pieces
+    ASSERT_EQ(run_of_seeded(pattern, 1, run, poses), "");
+    EXPECT_EQ(poses.size(), 15u);
+    EXPECT_EQ(run.requested, 15u);
+    EXPECT_NEAR(run.space, 60.0f, c_tolerance);
+    pattern.density = 0.001f; // rounds to none: element 0 alone
+    ASSERT_EQ(run_of_seeded(pattern, 1, run, poses), "");
+    EXPECT_EQ(poses.size(), 1u);
+    pattern.density = 20.0f; // 1200 pieces
+    EXPECT_NE(editor::resolve_layout_pattern(pattern, 1, 0.0f, nullptr, run, nullptr).find("more than the 1024"), std::string::npos);
+    pattern.density = 0.0f;
+    EXPECT_NE(editor::resolve_layout_pattern(pattern, 1, 0.0f, nullptr, run, nullptr), "");
+
+    // 2 m apart over 10 x 6 m: far fewer than 200 fit; the ones that do are placed and the request is reported.
+    pattern.scatter_mode = Kit_scatter_mode::count;
+    pattern.count        = 200;
+    pattern.min_spacing  = 2.0f;
+    ASSERT_EQ(run_of_seeded(pattern, 1, run, poses), "");
+    EXPECT_EQ(run.requested, 200u);
+    EXPECT_EQ(run.count, poses.size());
+    EXPECT_LT(poses.size(), 30u);
+    EXPECT_GT(poses.size(), 5u);
+    expect_spacing_holds(poses, 2.0f);
+
+    pattern.count = 1025;
+    EXPECT_NE(editor::resolve_layout_pattern(pattern, 1, 0.0f, nullptr, run, nullptr), "");
+    pattern.count   = 3;
+    pattern.yaw_min = 50.0f;
+    EXPECT_NE(editor::resolve_layout_pattern(pattern, 1, 0.0f, nullptr, run, nullptr).find("yaw"), std::string::npos);
+    pattern.yaw_min = 0.0f;
+    pattern.size_x  = 0.0f;
+    EXPECT_NE(editor::resolve_layout_pattern(pattern, 1, 0.0f, nullptr, run, nullptr), "");
+    // A line ignores the scatter values; a scatter's count mode ignores the line's gap mode.
+    pattern.size_x     = 10.0f;
+    pattern.count_mode = Kit_layout_count_mode::gap;
+    ASSERT_EQ(run_of_seeded(pattern, 1, run, poses), "");
+    EXPECT_EQ(poses.size(), 3u);
+}
+
+TEST(Kit_layout_values, scatter_crowded_runs_are_pinned)
+{
+    // Most candidates are rejected here, so the count, the last point and the hash pin every accept decision.
+    Kit_layout_run           run;
+    std::vector<Repeat_pose> poses;
+    const Kit_layout_pattern rectangle = make_scatter(Repeat_scatter_region::rectangle, 200, 2.0f);
+    ASSERT_EQ(run_of_seeded(rectangle, 1, run, poses), "");
+    EXPECT_EQ(poses.size(), 16u);
+    EXPECT_EQ(editor::format_hexfloat(poses.back().position.x), "0x1.3231e4p+2");
+    EXPECT_EQ(editor::format_hexfloat(poses.back().position.z), "-0x1.06e828p-2");
+    EXPECT_EQ(position_bits_hash(poses), 10911083436214235026ull);
+    const Kit_layout_pattern disc = make_scatter(Repeat_scatter_region::disc, 200, 1.5f);
+    ASSERT_EQ(run_of_seeded(disc, 4, run, poses), "");
+    EXPECT_EQ(poses.size(), 27u);
+    EXPECT_EQ(editor::format_hexfloat(poses.back().position.x), "0x1.080da8p+0");
+    EXPECT_EQ(editor::format_hexfloat(poses.back().position.z), "0x1.385c64p+2");
+    EXPECT_EQ(position_bits_hash(poses), 15888938417198337083ull);
+    // Resolving without poses and expanding the run gives the same points.
+    std::vector<Repeat_pose> expanded;
+    ASSERT_EQ(editor::resolve_layout_pattern(disc, 4, 0.0f, nullptr, run, nullptr), "");
+    ASSERT_EQ(editor::expand_repeat(run.pattern, Repeat_pose{}, expanded), "");
+    EXPECT_EQ(position_bits_hash(expanded), position_bits_hash(poses));
+}
+
+TEST(Kit_layout_values, scatter_edge_values)
+{
+    Kit_layout_run           run;
+    std::vector<Repeat_pose> poses;
+    // Spacing 0: every candidate is taken.
+    ASSERT_EQ(run_of_seeded(make_scatter(Repeat_scatter_region::rectangle, 50, 0.0f), 2, run, poses), "");
+    EXPECT_EQ(poses.size(), 50u);
+    // A spacing wider than the region holds one piece.
+    ASSERT_EQ(run_of_seeded(make_scatter(Repeat_scatter_region::rectangle, 5, 20.0f), 2, run, poses), "");
+    EXPECT_EQ(poses.size(), 1u);
+    EXPECT_EQ(run.requested, 5u);
+    ASSERT_EQ(run_of_seeded(make_scatter(Repeat_scatter_region::disc, 1, 1.0f), 2, run, poses), "");
+    EXPECT_EQ(poses.size(), 1u);
+    // A yaw outside -360 - 360 is refused.
+    Kit_layout_pattern wide = make_scatter(Repeat_scatter_region::disc, 3, 1.0f);
+    wide.yaw_max = 400.0f;
+    EXPECT_NE(editor::resolve_layout_pattern(wide, 2, 0.0f, nullptr, run, nullptr).find("-360 - 360"), std::string::npos);
+    // A scatter key of the wrong type is refused as any key of the pattern is.
+    nlohmann::json text = nlohmann::json::parse(editor::to_canonical_text(Kit_layout_pattern{}));
+    text["density"] = 0.5;
+    Kit_layout_pattern read;
+    EXPECT_NE(editor::parse_layout_pattern(text.dump(), read).find("'density' is not a hexadecimal float string"), std::string::npos);
 }
 
 TEST(Kit_layout_values, spacing_from_extent)
