@@ -28,5 +28,6 @@ std140/std430::explicit-alignment{UBO/SSBO}
 DiagFloats::hexfloat{%a,bit-exact}
 
 [GIT_WORKFLOW]
-!¬switch/create-branch{askFirst}→work-current-branch{main}
+!¬switch-branch-of-main-checkout{askFirst}→work-current-branch{main}
+WorktreesPreferred{©User-2026-11-16;parallel|isolated-work→git-worktree-add-../<name>-b-local/<name>;local/*-never-pushed;integrate-into-main(cherry-pick|ff);remove-when-done}
 CommitVerifiedWork¬askFirst

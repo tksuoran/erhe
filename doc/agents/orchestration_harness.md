@@ -47,9 +47,44 @@ that context anyway.
 
 One brief covers one commit: a plan step of size S, or one commit of a
 larger step split along the step's own list of what it touches. Coders
-run strictly one at a time because they share the build trees and the
-headless editor's MCP port; a second coder waits for the first one's
-review to close.
+that share a checkout run strictly one at a time, because they share its
+working tree and build trees; a second coder in the same checkout waits
+for the first one's review to close. Units that do not depend on each
+other run at the same time in worktrees ("Parallel coders").
+
+## Parallel coders
+
+Independent units of work run at the same time, each coder in its own
+git worktree:
+
+- One worktree per parallel coder, beside the main clone: `git worktree
+  add ../<name> -b local/<name>` from the current branch's head. The
+  branch is local only and is never pushed. A worktree is reused for the
+  coder's next unit after its work is integrated (`git reset --hard` to
+  the main clone's head, in the worktree only).
+- Each worktree has its own build trees and its own `logs/`. It is
+  configured with the `CPM_SOURCE_CACHE` environment variable set to the
+  main clone's `.cpm_cache`, so the dependencies are not downloaded again.
+  The first build of a worktree is a full build.
+- Editors of different worktrees run at the same time: an editor whose
+  MCP port is taken binds the next free one and logs it, and each run
+  reads the port from its own `logs/log.txt`.
+- The units are cut so that their files do not overlap. Shared lists
+  that every unit would append to (CMake source lists, test tables,
+  script tables) are prepared on the main clone first, in a commit of
+  its own: the files of every planned unit are created and listed, and
+  tables are derived from the code where they can be. Documents that
+  every unit adds lines to are written by the orchestrator at
+  integration, from the lines each coder puts in its report.
+- A coder commits nothing; the review reads the worktree's diff. The
+  orchestrator integrates one unit at a time: it commits the approved
+  diff on the worktree's branch, cherry-picks that commit onto the main
+  clone's branch, builds there and runs the unit's gates again, since
+  the units meet for the first time on the main clone.
+- At most two coders run at once on a 12-core, 24 GB machine: each
+  runs builds and a headless editor.
+- When the work is done the worktrees and their branches are removed
+  (`git worktree remove`, `git branch -D`).
 
 ## Brief contents
 
