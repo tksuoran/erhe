@@ -18,7 +18,7 @@ a specific engine.
 - `IRigid_body_create_info` -- parameters for creating a rigid body (shape, mass, physics material,
   initial velocities, gravity factor, sensor flag, shared material / filter, etc.); explicit mass 0
   means infinite mass (KHR_physics_rigid_bodies convention); without an explicit mass the body's
-  mass is its shape mass scaled by the material density
+  mass is its shape volume times the material density
 - `ICollision_shape` -- factory for shapes: box, sphere, capsule, tapered capsule, cylinder,
   tapered cylinder, convex hull, triangle mesh (static/kinematic bodies only), compound,
   uniform scaling, non-uniform scaled and center-of-mass offset wrappers; introspection for
@@ -125,6 +125,23 @@ a specific engine.
 - Factory pattern: `IWorld::create()`, `ICollision_shape::create_box_shape_shared()`, etc.
 - `IWorld::add_rigid_body()`, `remove_rigid_body()`, `update_fixed_step(dt)`
 - `IRigid_body::set_world_transform()`, `teleport()`, `set_linear_velocity()`, `set_motion_mode()`
+  (Jolt: the body's object layer follows the motion mode, so a static body made dynamic
+  collides with static bodies)
+- `IRigid_body::set_collision_shape()` replaces a body's shape in place, outside
+  `update_fixed_step()`: the broadphase bounds follow and constraints stay; an explicit mass
+  is kept with the new shape's inertia, an implicit one is re-derived (Jolt: `SetShape()` plus
+  new mass properties, a dynamic body is woken; Box3D: the shapes are destroyed and attached
+  again, an inertia override is dropped). The editor swaps a node's scaled shape this way when
+  the node's world scale changes (`doc/editor/physics.md`)
+- `ICollision_shape::is_valid_scale()` / `make_scale_valid()`: whether the backend represents
+  the shape under a scale exactly, and the nearest scale it does. Jolt answers with
+  `Shape::IsValidScale()` / `MakeScaleValid()` (a sphere or capsule takes only a uniform scale,
+  a cylinder only an equal scale across its axis, a compound no non-uniform scale of a rotated
+  child, no shape a zero component); Box3D and the null backend take every scale (Box3D
+  promotes a non-uniformly scaled sphere or capsule to a convex hull itself)
+- The implicit mass (no explicit mass) is the shape volume times the material density on every
+  backend: Jolt's shape mass properties, computed at Jolt's own density, are scaled to the
+  shape volume first (`get_unit_density_mass_properties()` in `jolt/jolt_rigid_body.cpp`)
 - `ICollision_shape` static factories for all primitive shapes plus convex hull and compound
 - The convex hull factories return null for a point set the backend refuses (Jolt: an initial
   triangle too small, a hull error beyond its tolerance), with the backend's reason logged;

@@ -1804,6 +1804,16 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         if (rigid_body != nullptr) {
             physics_json["mass"]      = rigid_body->get_mass();
             physics_json["is_active"] = rigid_body->is_active();
+            // The live body's own shape: the scale its wrappers carry and the shape below them.
+            glm::vec3 body_shape_scale{1.0f};
+            const std::shared_ptr<erhe::physics::ICollision_shape> body_shape = rigid_body->get_collision_shape();
+            const erhe::physics::ICollision_shape* base_shape = body_shape.get();
+            while ((base_shape != nullptr) && base_shape->get_inner_shape()) {
+                body_shape_scale *= base_shape->get_scale().value_or(glm::vec3{1.0f});
+                base_shape = base_shape->get_inner_shape().get();
+            }
+            physics_json["body_shape_scale"] = {body_shape_scale.x, body_shape_scale.y, body_shape_scale.z};
+            physics_json["body_shape_base"]  = (base_shape != nullptr) ? base_shape->describe() : "";
             // The live body's damping: the physics material's values as the
             // backend applied them (0 for a static body).
             physics_json["linear_damping"]  = rigid_body->get_linear_damping();

@@ -14,10 +14,12 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
+#include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -531,30 +533,24 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
         if (m_data.collision_shape || m_data.collision_shape_generator) {
             ERHE_PROFILE_SCOPE("make brush node physics");
 
-            // Inertia scales linearly with mass for a fixed shape, so a mass
-            // override rescales the precomputed local inertia by the ratio.
-            const float default_mass = m_data.density * scaled.volume;
-            float     mass    = default_mass;
-            glm::mat4 inertia = scaled.local_inertia;
-            if (instance_create_info.mass_override.has_value() && (default_mass > 0.0f)) {
+            // Without a mass value the body's mass is its shape volume times the material density, at the node's world
+            // scale (doc/editor/physics.md "Collision shapes follow the node's scale"); a brush of the default density
+            // writes none. Another density writes its mass at the placed scale, and a massless brush (density 0, the
+            // floor) none: it is only valid as a static body, and the mass property rejects 0.
+            std::optional<float> mass{};
+            if (instance_create_info.mass_override.has_value()) {
                 mass = instance_create_info.mass_override.value();
-                const float ratio = mass / default_mass;
-                inertia = glm::mat4{glm::mat3{scaled.local_inertia} * ratio};
+            } else if ((m_data.density != erhe::physics::c_default_density) && (m_data.density > 0.0f)) {
+                const glm::vec3 world_scale = glm::abs(erhe::scene::Trs_transform{instance_create_info.world_from_node}.get_scale());
+                mass = m_data.density * scaled.volume * world_scale.x * world_scale.y * world_scale.z;
             }
-            // A massless brush (density 0, the floor) is only valid as a static
-            // body, and the mass property rejects 0: such an instance writes no
-            // mass. Every other instance writes its brush mass, which a static
-            // body keeps for a later switch to dynamic.
-            const bool is_static_massless =
-                (instance_create_info.motion_mode == erhe::physics::Motion_mode::e_static) && !(mass > 0.0f);
             const erhe::physics::IRigid_body_create_info rigid_body_create_info{
                 .collision_shape  = scaled.collision_shape,
-                .mass             = is_static_massless ? std::optional<float>{} : std::optional<float>{mass},
-                .inertia_override = inertia,
+                .mass             = mass,
                 .debug_label      = std::string{name},
                 .motion_mode      = instance_create_info.motion_mode,
             };
-            // The shape is runtime state of the node's physics system; the
+            // The shape is runtime state of the node's physics system, which scales it to the node's world scale; the
             // create info's fields become values of the node (D1).
             // The instance is not in the scene yet, so the system is named
             // through the destination scene root rather than through the node.
@@ -680,7 +676,8 @@ void set_copied_brush_collision_shapes(Scene_root& scene_root, erhe::Hierarchy& 
             ? placement.value().brush->find_scaled(mesh->get_primitives().front().primitive)
             : nullptr;
         if ((scaled != nullptr) && scaled->collision_shape) {
-            // The copy is not in the scene yet, so the system is named through the destination (as make_instance()).
+            // The copy is not in the scene yet, so the system is named through the destination (as make_instance()),
+            // which scales the shape to the copy's world scale when the copy enters the scene.
             scene_root.get_node_physics_system().set_collision_shape(*mesh, scaled->collision_shape);
         }
     }

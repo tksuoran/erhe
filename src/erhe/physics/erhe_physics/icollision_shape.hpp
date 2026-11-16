@@ -139,6 +139,12 @@ public:
     [[nodiscard]] virtual auto get_inner_shape () const -> std::shared_ptr<ICollision_shape>           { return {}; }
     [[nodiscard]] virtual auto get_children    () const -> const std::vector<Compound_child>&          { static const std::vector<Compound_child> empty; return empty; }
 
+    // Whether the backend represents the shape under `scale` exactly (Jolt: a sphere takes only a uniform scale, a
+    // compound no non-uniform scale of a rotated child, no shape a zero component); true where the backend takes any.
+    [[nodiscard]] virtual auto is_valid_scale  (glm::vec3 scale) const -> bool                           { static_cast<void>(scale); return true; }
+    // The nearest scale is_valid_scale() accepts.
+    [[nodiscard]] virtual auto make_scale_valid(glm::vec3 scale) const -> glm::vec3                      { return scale; }
+
     //virtual void calculate_principal_axis_transform(
     //    const std::vector<float>& child_masses,
     //    Transform&                principal_transform,

@@ -382,6 +382,8 @@ erhe_target_sources_grouped(
     level/kit_connector_snap.cpp
     level/kit_connector_snap.hpp
     level/kit_layout.cpp
+    level/kit_layout_connectors.cpp
+    level/kit_layout_connectors.hpp
     level/kit_layout.hpp
     level/kit_layout_editor.cpp
     level/kit_layout_editor.hpp
@@ -414,6 +416,7 @@ erhe_target_sources_grouped(
     level/kit_shapes.hpp
     level/kit_shapes_architecture.cpp
     level/kit_shapes_basic.cpp
+    level/kit_shapes_basic_v2.cpp
     level/kit_shapes_classical.cpp
     level/kit_shapes_japanese.cpp
     level/kit_shapes_medieval.cpp
@@ -435,6 +438,10 @@ erhe_target_sources_grouped(
     level/level_region.hpp
     level/level_repeat.cpp
     level/level_repeat.hpp
+    level/stairs_fit.cpp
+    level/stairs_fit.hpp
+    level/stairs_mesh.cpp
+    level/stairs_mesh.hpp
     level/surface_settings_ui.cpp
     level/surface_settings_ui.hpp
     main.cpp

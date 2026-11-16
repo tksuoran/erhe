@@ -70,7 +70,7 @@ public:
     void cancel_point_edit() override;
 
 protected:
-    void render_extras(const Render_context& context) override;
+    void render_extras(const Render_context& context, std::optional<std::size_t> hovered) override;
 
 private:
     [[nodiscard]] auto point_from_index(std::size_t index) const -> glm::ivec3;

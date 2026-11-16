@@ -114,6 +114,16 @@ public:
     [[nodiscard]] auto get_target_curve() const -> std::shared_ptr<erhe::scene::Curve>;
     // False for an index that is no editable point (a corner's handle).
     [[nodiscard]] auto get_point_world_position(std::size_t index, glm::vec3& out_position) const -> bool;
+    // Segment handles (doc/editor/level_tools.md "Segment handles"): the target is a segments kit layout.
+    [[nodiscard]] auto has_segment_handles() const -> bool;
+    [[nodiscard]] auto get_segment_count  () const -> std::size_t;
+    [[nodiscard]] auto get_selected_segment() const -> std::optional<std::size_t>;
+    // A gizmo gesture of the tool is editing curve's path.
+    [[nodiscard]] auto is_editing(const erhe::scene::Curve& curve) const -> bool;
+    // The point set index of a segment handle (after the three entries of every control point).
+    [[nodiscard]] auto get_segment_point_index(std::size_t segment) const -> std::size_t;
+    // Makes curve the only selected item and the tool's target, then selects the segment (nullopt clears it).
+    auto select_curve_segment(const std::shared_ptr<erhe::scene::Curve>& curve, std::optional<std::size_t> segment) -> bool;
     void get_selected_points(std::vector<Curve_point_ref>& out_refs) const;
     // The control points with the position or a handle end selected, ascending.
     void get_selected_point_indices(std::vector<std::size_t>& out_indices) const;
@@ -143,9 +153,12 @@ public:
 protected:
     [[nodiscard]] auto try_ready_miss(Viewport_scene_view& viewport_scene_view, const glm::vec2& pointer) -> bool override;
     auto on_select_miss() -> bool override;
+    void render_extras(const Render_context& context, std::optional<std::size_t> hovered) override;
 
 private:
     void set_target       (const std::shared_ptr<erhe::scene::Curve>& curve);
+    void update_segment_handles();
+    [[nodiscard]] auto get_segment_of(std::size_t index) const -> std::optional<std::size_t>;
     void prune_selection  ();
     void execute          (const std::shared_ptr<Curve_set_operation>& operation);
     [[nodiscard]] auto is_valid_index(const erhe::math::Curve_path& path, std::size_t index) const -> bool;
@@ -155,11 +168,14 @@ private:
     erhe::message_bus::Subscription<Curve_changed_message> m_curve_changed_subscription;
     erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
+    erhe::message_bus::Subscription<Kit_layout_changed_message> m_kit_layout_changed_subscription;
 
     std::vector<std::unique_ptr<Curve_tool_command>> m_commands;
     std::weak_ptr<erhe::scene::Curve>                m_target;
     bool                                             m_target_stale{true};
     std::vector<std::size_t>                         m_selection; // point set indices, ascending
+    bool                                             m_segment_handles{false}; // the target is a segments kit layout
+    std::optional<std::size_t>                       m_selected_segment;       // exclusive with m_selection
 
     enum class Miss_action : unsigned int { none = 0, insert, clear };
     Miss_action                               m_miss_action{Miss_action::none};
@@ -172,6 +188,9 @@ private:
         erhe::math::Curve_path              before;
         glm::mat4                           world_from_node{1.0f};
         glm::mat4                           node_from_world{1.0f};
+        std::optional<std::size_t>          segment;               // a segment handle drag
+        glm::vec3                           segment_midpoint{0.0f}; // node frame, at the press
+        glm::vec3                           segment_normal  {0.0f}; // node frame, unit
         bool                                active{false};
     };
     Edit                   m_edit;

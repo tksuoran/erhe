@@ -175,7 +175,9 @@ entering a scene its body would be built from the convex hull of its mesh
 instance with a body in a detached copy the shape of its brush scale, the
 `Brush::Scaled` entry whose primitive or first part primitive the mesh shares
 (`Brush::find_scaled()`), through the destination scene's system, as
-`Brush::make_instance()` does. Clipboard paste and the level tools' group
+`Brush::make_instance()` does; the system scales it to the copy's world scale
+once the copy is in the scene (`doc/editor/physics.md` "Collision shapes follow
+the node's scale"). Clipboard paste and the level tools' group
 duplicate (`doc/editor/level_tools.md` "Groups") call it before their insert.
 
 ## Public API / Integration Points

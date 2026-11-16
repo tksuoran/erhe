@@ -2744,14 +2744,16 @@ void Operations::make_geometry()
                     Mesh_operation::Entry{
                         .scene_mesh = scene_mesh,
                         .before = {
-                            .collision_shape = physics_state.collision_shape,
-                            .motion_mode     = physics_state.motion_mode,
-                            .primitives      = primitives_before
+                            .collision_shape       = physics_state.collision_shape,
+                            .motion_mode           = physics_state.motion_mode,
+                            .primitives            = primitives_before,
+                            .collision_shape_scale = physics_state.collision_shape_scale
                         },
                         .after = {
-                            .collision_shape = physics_state.collision_shape,
-                            .motion_mode     = physics_state.motion_mode,
-                            .primitives      = primitives_after
+                            .collision_shape       = physics_state.collision_shape,
+                            .motion_mode           = physics_state.motion_mode,
+                            .primitives            = primitives_after,
+                            .collision_shape_scale = physics_state.collision_shape_scale
                         }
                     }
                 );

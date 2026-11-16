@@ -35,6 +35,10 @@ using editor::Kit_scatter_mode;
 
 constexpr float c_tolerance = 1.0e-4f;
 
+// The canonical text of the default pattern, written before segments existed: it must not change.
+constexpr const char* c_default_pattern_text =
+    R"({"arc_degrees":"0x1.68p+8","count":3,"count_mode":"count","count_x":3,"count_z":3,"density":"0x1p-2","direction":["0x1p+0","0x0p+0","0x0p+0"],"facing":"outward","gap":"0x0p+0","kind":"line","length":"0x1p+2","min_spacing":"0x1p+0","orientation":"upright","radius":"0x1p+2","region":"rectangle","region_radius":"0x1p+2","scatter_mode":"count","size_x":"0x1p+3","size_z":"0x1p+3","spacing_x":"0x1p+0","spacing_z":"0x1p+0","step":"0x1p+0","yaw_max":"0x1.68p+8","yaw_min":"0x0p+0"})";
+
 // One item of weight 1 and no footprint with this extent along x.
 auto sizes_of(const float extent) -> Kit_layout_item_sizes
 {
@@ -742,6 +746,127 @@ TEST(Kit_layout_values, spacing_from_extent)
     editor::set_layout_spacing_from_extent(pattern, glm::vec3{0.0f});
     EXPECT_EQ(pattern.step, 1.0f);
     EXPECT_EQ(pattern.spacing_z, 1.0f);
+}
+
+
+TEST(Kit_layout_values, segments_text_and_resolve)
+{
+    // The kind reads and writes as 'segments'; a pattern of another kind keeps its canonical text.
+    Kit_layout_pattern pattern;
+    pattern.kind        = Repeat_pattern_kind::segments;
+    pattern.orientation = Repeat_path_orientation::tangent;
+    const std::string text = editor::to_canonical_text(pattern);
+    EXPECT_NE(text.find("\"kind\":\"segments\""), std::string::npos) << text;
+    Kit_layout_pattern read;
+    ASSERT_EQ(editor::parse_layout_pattern(text, read), "");
+    EXPECT_EQ(read, pattern);
+    EXPECT_EQ(editor::to_canonical_text(Kit_layout_pattern{}), std::string{c_default_pattern_text});
+
+    // Each item's own x bounds: the run is one element per segment, the space the chords' sum.
+    const erhe::math::Curve_path_table room = make_table(
+        corner_path({{0.0f, 0.0f, 0.0f}, {5.0f, 0.0f, 0.0f}, {5.0f, 0.0f, 3.0f}}, erhe::math::Curve_closure::closed)
+    );
+    Kit_layout_item_sizes sizes;
+    Kit_layout_item wall;
+    sizes.add(wall, erhe::math::Aabb{glm::vec3{-1.0f, 0.0f, -0.1f}, glm::vec3{1.0f, 3.0f, 0.1f}});
+    ASSERT_EQ(sizes.segment_items.size(), 1u);
+    EXPECT_EQ(sizes.segment_items[0].min_x, -1.0f);
+    EXPECT_EQ(sizes.segment_items[0].max_x, 1.0f);
+    pattern.orientation = Repeat_path_orientation::upright;
+    pattern.count_mode  = Kit_layout_count_mode::gap; // not used by segments
+    pattern.count       = 99;
+    Kit_layout_run           run;
+    std::vector<Repeat_pose> poses;
+    ASSERT_EQ(editor::resolve_layout_pattern(pattern, 0, sizes, &room, run, &poses), "");
+    ASSERT_EQ(run.count, 3u);
+    ASSERT_EQ(poses.size(), 3u);
+    EXPECT_NEAR(run.space, 5.0f + 3.0f + std::sqrt(34.0f), c_tolerance);
+    EXPECT_NEAR(poses[0].scale.x, 2.5f, c_tolerance);
+    EXPECT_NEAR(poses[1].scale.x, 1.5f, c_tolerance);
+    EXPECT_NEAR(poses[0].position.x, 2.5f, c_tolerance);
+
+    // Without poses, and without a curve.
+    ASSERT_EQ(editor::resolve_layout_pattern(pattern, 0, sizes, &room, run, nullptr), "");
+    EXPECT_EQ(run.count, 3u);
+    EXPECT_NE(editor::resolve_layout_pattern(pattern, 0, sizes, nullptr, run, &poses).find("curve"), std::string::npos);
+    EXPECT_TRUE(poses.empty());
+    EXPECT_TRUE(editor::is_curve_layout_kind(Repeat_pattern_kind::segments));
+    EXPECT_TRUE(editor::is_curve_layout_kind(Repeat_pattern_kind::path));
+    EXPECT_FALSE(editor::is_curve_layout_kind(Repeat_pattern_kind::line));
+}
+
+TEST(Kit_layout_values, stairs_text_and_resolve)
+{
+    // The kind reads and writes as 'stairs'; default stairs values are left out, so the texts written before them stay canonical.
+    Kit_layout_pattern pattern;
+    pattern.kind = Repeat_pattern_kind::stairs;
+    std::string text = editor::to_canonical_text(pattern);
+    EXPECT_NE(text.find("\"kind\":\"stairs\""), std::string::npos) << text;
+    EXPECT_EQ(text.find("stairs_width"), std::string::npos) << text;
+    Kit_layout_pattern read;
+    ASSERT_EQ(editor::parse_layout_pattern(text, read), "");
+    EXPECT_EQ(read, pattern);
+    EXPECT_EQ(editor::to_canonical_text(Kit_layout_pattern{}), std::string{c_default_pattern_text});
+    EXPECT_TRUE(editor::is_curve_layout_kind(Repeat_pattern_kind::stairs));
+
+    // Values off the defaults ride the text, of every kind, bit for bit.
+    pattern.stairs          = editor::Stairs_values{.width = 1.7f, .max_rise = 0.17f, .min_tread = 0.29f, .thickness = 0.11f, .tolerance = 0.003f};
+    pattern.stairs_material = "Kit Wood";
+    text = editor::to_canonical_text(pattern);
+    ASSERT_EQ(editor::parse_layout_pattern(text, read), "");
+    EXPECT_EQ(read, pattern);
+    EXPECT_EQ(editor::to_canonical_text(read), text);
+    Kit_layout_pattern path = pattern;
+    path.kind = Repeat_pattern_kind::path;
+    ASSERT_EQ(editor::parse_layout_pattern(editor::to_canonical_text(path), read), "");
+    read.kind = Repeat_pattern_kind::stairs;
+    EXPECT_EQ(read, pattern);
+    nlohmann::json bad = nlohmann::json::parse(text);
+    bad["stairs_width"] = 1.7;
+    EXPECT_NE(editor::parse_layout_pattern(bad.dump(), read).find("stairs_width"), std::string::npos);
+
+    // The run is the one generated child at the node's origin, the space the curve's plan length; items are not read.
+    const erhe::math::Curve_path_table slope = make_table(corner_path({{0.0f, 0.0f, 0.0f}, {3.0f, 1.0f, 4.0f}}, erhe::math::Curve_closure::open));
+    const Kit_layout_item_sizes none;
+    Kit_layout_run           run;
+    std::vector<Repeat_pose> poses;
+    pattern.stairs = editor::Stairs_values{};
+    ASSERT_EQ(editor::resolve_layout_pattern(pattern, 0, none, &slope, run, &poses), "");
+    EXPECT_EQ(run.count, 1u);
+    EXPECT_EQ(run.requested, 1u);
+    EXPECT_NEAR(run.space, 5.0f, c_tolerance);
+    ASSERT_EQ(poses.size(), 1u);
+    EXPECT_EQ(poses[0].position, glm::vec3{0.0f});
+    EXPECT_NE(editor::resolve_layout_pattern(pattern, 0, none, nullptr, run, &poses).find("curve"), std::string::npos);
+    // A refusal of the fit is the refusal of the run.
+    const erhe::math::Curve_path_table steep = make_table(corner_path({{0.0f, 0.0f, 0.0f}, {1.0f, 3.0f, 0.0f}}, erhe::math::Curve_closure::open));
+    EXPECT_NE(editor::resolve_layout_pattern(pattern, 0, none, &steep, run, &poses).find("too short"), std::string::npos);
+
+    // The source text names the curve and the values: equal inputs give equal text, any change another.
+    const erhe::math::Curve_path curve = corner_path({{0.0f, 0.0f, 0.0f}, {3.0f, 1.0f, 4.0f}}, erhe::math::Curve_closure::open);
+    const std::string source = editor::make_stairs_source_text(curve, editor::Stairs_values{});
+    EXPECT_EQ(editor::make_stairs_source_text(curve, editor::Stairs_values{}), source);
+    erhe::math::Curve_path moved = curve;
+    moved.points[1].position.y = std::nextafter(1.0f, 2.0f);
+    EXPECT_NE(editor::make_stairs_source_text(moved, editor::Stairs_values{}), source);
+    erhe::math::Curve_path handled = curve;
+    handled.points[0].out_handle = glm::vec3{0.5f, 0.0f, 0.0f};
+    EXPECT_NE(editor::make_stairs_source_text(handled, editor::Stairs_values{}), source);
+    EXPECT_NE(editor::make_stairs_source_text(curve, editor::Stairs_values{.tolerance = 0.02f}), source);
+
+    // It reads back bit for bit; a text of another generator version does not, so its staircase is regenerated.
+    erhe::math::Curve_path read_path;
+    editor::Stairs_values  read_values;
+    const editor::Stairs_values odd{.width = 1.7f, .max_rise = 0.17f, .min_tread = 0.29f, .thickness = 0.11f, .tolerance = 0.003f};
+    ASSERT_EQ(editor::parse_stairs_source_text(editor::make_stairs_source_text(handled, odd), read_path, read_values), "");
+    EXPECT_EQ(read_values, odd);
+    EXPECT_EQ(editor::make_stairs_source_text(read_path, read_values), editor::make_stairs_source_text(handled, odd));
+    nlohmann::json other = nlohmann::json::parse(source);
+    EXPECT_EQ(other.at("generator"), editor::c_stairs_generator_version);
+    other["generator"] = editor::c_stairs_generator_version + 1;
+    EXPECT_NE(editor::parse_stairs_source_text(other.dump(), read_path, read_values).find("generator version"), std::string::npos);
+    EXPECT_NE(other.dump(), source);
+    EXPECT_NE(editor::parse_stairs_source_text("{}", read_path, read_values), "");
 }
 
 } // anonymous namespace

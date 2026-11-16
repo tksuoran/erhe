@@ -35,6 +35,7 @@
 #include <vector>
 
 namespace erhe           { class Hierarchy; class Item_base; class Item_host; }
+namespace erhe::geometry { class Geometry; }
 namespace erhe::property { class Dependency_property; }
 namespace erhe::primitive { class Material; }
 namespace erhe::math     { class Curve_path_table; }
@@ -117,6 +118,7 @@ public:
     std::optional<std::size_t>                 parent_index; // an earlier placement of the same call
     glm::vec3                                  position{0.0f};
     glm::quat                                  rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3                                  scale{1.0f};  // the node's own scale (a segments layout's piece); 1 with a connect
     std::string                                name;         // empty: the shape's display name
     std::vector<Kit_slot_material>             materials;    // by slot index; a slot without an entry takes its default
     Surface_options                            surface;      // applied after the module snap (D7.3)
@@ -360,6 +362,7 @@ public:
     Kit_layout_seeds                   seeds         {Kit_layout_seeds::item};
     int                                seed          {0};
     Kit_layout_lock                    lock          {Kit_layout_lock::locked};
+    Kit_layout_connector_hiding        connector_hiding;
     std::string                        name;          // empty: the piece's name followed by " Layout"
     std::optional<erhe::math::Curve_path> path;          // a path layout's curve; none: straight along the piece's x axis
 };
@@ -391,6 +394,7 @@ class Kit_layout_result
 public:
     std::shared_ptr<erhe::scene::Node> node;
     Kit_layout_run                     run;               // the run the values make
+    Stairs_report                      stairs;            // a stairs layout's fit; empty for another kind
     float                              item_extent{0.0f}; // the largest item extent along x
     std::size_t                        kept_count   {0};
     std::size_t                        added_count  {0};
@@ -470,6 +474,14 @@ public:
     // D3.12: the connectors of the piece's record values in its local space, all or the enabled ones (U33) in the
     // shape's order (parses the record: once per drag, not per step).
     [[nodiscard]] auto get_local_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors, Kit_connector_set set) const -> std::string;
+
+    // The piece's connector switches with the connectors its locked path or segments layout hides (U39): the one query
+    // every connector consumer reads. local_connectors: the piece's connectors (all, the shape's order) when at hand.
+    [[nodiscard]] auto get_connector_switches(const erhe::scene::Node& node) const -> Kit_connector_switches;
+    [[nodiscard]] auto get_connector_switches(const erhe::scene::Node& node, std::span<const Kit_connector> local_connectors) const -> Kit_connector_switches;
+
+    // U39: the node as a child of a locked path or segments layout (a Curve node); nullopt for any other node.
+    [[nodiscard]] auto get_layout_child(const erhe::scene::Node& node) const -> std::optional<Kit_layout_child>;
 
     // D1.12: the piece's connectors under its world matrix; returns the refusal (not a kit piece, unreadable record, a zero scale axis), empty on success.
     [[nodiscard]] auto get_world_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors, Kit_connector_set set) const -> std::string;
@@ -744,6 +756,32 @@ private:
         std::vector<std::shared_ptr<Operation>>&    out_operations,
         Kit_layout_result&                          result
     ) -> std::string;
+
+    // R5.12.13: the generation of a stairs layout: the one generated child the curve and the values make.
+    [[nodiscard]] auto build_stairs_generation(
+        Scene_root&                               scene_root,
+        const std::shared_ptr<erhe::scene::Node>& node,
+        const Kit_layout_data&                    data,
+        const glm::mat4&                          world_from_layout,
+        Kit_layout_reuse                          reuse,
+        std::vector<std::shared_ptr<Operation>>&  out_operations,
+        Kit_layout_result&                        result
+    ) -> std::string;
+
+    // The insert of a stairs layout's child at the layout's transform: a static triangle mesh body, the material by
+    // name (empty: the stone slot's default), the source text on the node. Appends; returns the refusal.
+    [[nodiscard]] auto make_stairs_insert(
+        Scene_root&                                      scene_root,
+        const std::shared_ptr<erhe::scene::Node>&        layout,
+        const glm::mat4&                                 world_from_layout,
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+        const std::string&                               material_name,
+        const std::string&                               source,
+        std::vector<std::shared_ptr<Operation>>&         out_operations
+    ) -> std::string;
+
+    // The refusal of a stairs material name: neither a scene material nor a palette material.
+    [[nodiscard]] auto check_stairs_material(const Scene_root& scene_root, const std::string& material_name) const -> std::string;
 
     // The regeneration of each locked layout of the list, warned about and skipped where its values refuse.
     void append_layout_regenerations(

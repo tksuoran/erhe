@@ -77,6 +77,8 @@ constexpr std::array<Kit_layout_row, 6> c_ring_count_rows{kind, count_mode, coun
 constexpr std::array<Kit_layout_row, 6> c_ring_gap_rows  {kind, count_mode, gap,   radius, arc, facing};
 constexpr std::array<Kit_layout_row, 4> c_path_count_rows{kind, count_mode, count, orientation};
 constexpr std::array<Kit_layout_row, 4> c_path_gap_rows  {kind, count_mode, gap,   orientation};
+constexpr std::array<Kit_layout_row, 2> c_segments_rows  {kind, orientation};
+constexpr std::array<Kit_layout_row, 7> c_stairs_rows    {kind, stairs_width, stairs_rise, stairs_tread, stairs_thickness, stairs_tolerance, stairs_material};
 constexpr std::array<Kit_layout_row, 9> c_scatter_rectangle_count_rows  {kind, scatter_mode, count,   region, size_x, size_z, min_spacing, yaw_min, yaw_max};
 constexpr std::array<Kit_layout_row, 9> c_scatter_rectangle_density_rows{kind, scatter_mode, density, region, size_x, size_z, min_spacing, yaw_min, yaw_max};
 constexpr std::array<Kit_layout_row, 8> c_scatter_disc_count_rows       {kind, scatter_mode, count,   region, region_radius, min_spacing, yaw_min, yaw_max};
@@ -120,11 +122,19 @@ constexpr std::array<Kit_layout_row, 8> c_scatter_disc_density_rows     {kind, s
             (kinds == Kit_layout_kinds::curve)
                 ? "This layout node is a curve: its pieces follow its own points. A line, grid, ring or scatter layout is an Xform node."
                 : "Pieces along the layout node's own curve by distance; the new node is a curve node, a polyline a curve of corner points.") || ended;
+        ImGui::SameLine();
+        ended = kind_radio(kind, Repeat_pattern_kind::segments, "Segments", label,
+            "One piece per segment between two neighbouring points of the layout node's own curve, scaled along its x axis to span "
+            "the straight chord (walls between room corners); handles do not bend the pieces.") || ended;
+        ImGui::SameLine();
+        ended = kind_radio(kind, Repeat_pattern_kind::stairs, "Stairs", label,
+            "A staircase generated along the layout node's own curve: flights of equal steps and level landings that stay within one step rise "
+            "of the curve's height, its side edges following the curve in plan.") || ended;
     }
     if (kinds == Kit_layout_kinds::xform) {
         ImGui::SameLine();
-        ImGui::TextDisabled("(Path: a curve node)");
-        tooltip("A path layout is a curve node carrying the layout values; this node is an Xform, so it takes a line, grid, ring or scatter.");
+        ImGui::TextDisabled("(Path, Segments, Stairs: a curve node)");
+        tooltip("A path, segments or stairs layout is a curve node carrying the layout values; this node is an Xform, so it takes a line, grid, ring or scatter.");
     }
     pattern.kind = static_cast<Repeat_pattern_kind>(kind);
     return ended;
@@ -149,6 +159,8 @@ auto get_layout_rows(const Kit_layout_pattern& pattern) -> std::span<const Kit_l
         case Repeat_pattern_kind::ring: return gap_mode ? std::span<const Kit_layout_row>{c_ring_gap_rows} : std::span<const Kit_layout_row>{c_ring_count_rows};
         case Repeat_pattern_kind::path: return gap_mode ? std::span<const Kit_layout_row>{c_path_gap_rows} : std::span<const Kit_layout_row>{c_path_count_rows};
         case Repeat_pattern_kind::scatter: return get_scatter_rows(pattern);
+        case Repeat_pattern_kind::segments: return c_segments_rows;
+        case Repeat_pattern_kind::stairs:   return c_stairs_rows;
         default:                        return {};
     }
 }
@@ -180,6 +192,12 @@ auto get_layout_row_name(const Kit_layout_row row) -> const char*
         case Kit_layout_row::min_spacing:   return "Min Spacing";
         case Kit_layout_row::yaw_min:       return "Yaw Min";
         case Kit_layout_row::yaw_max:       return "Yaw Max";
+        case Kit_layout_row::stairs_width:     return "Width";
+        case Kit_layout_row::stairs_rise:      return "Step Rise Limit";
+        case Kit_layout_row::stairs_tread:     return "Tread Depth";
+        case Kit_layout_row::stairs_thickness: return "Thickness";
+        case Kit_layout_row::stairs_tolerance: return "Edge Tolerance";
+        case Kit_layout_row::stairs_material:  return "Material";
         default:                          return "?";
     }
 }
@@ -193,11 +211,69 @@ auto get_layout_setting_name(const Kit_layout_setting_row row) -> const char*
         case Kit_layout_setting_row::per_piece_seed: return "Per Piece Seed";
         case Kit_layout_setting_row::seed:           return "Layout Seed";
         case Kit_layout_setting_row::surface_max_distance: return "Surface Max Distance";
+        case Kit_layout_setting_row::hide_all_connectors:            return "Hide All Connectors";
+        case Kit_layout_setting_row::hide_plus_tangent_connectors:   return "Hide +Tangent Connectors";
+        case Kit_layout_setting_row::hide_minus_tangent_connectors:  return "Hide -Tangent Connectors";
+        case Kit_layout_setting_row::hide_plus_normal_connectors:    return "Hide +Normal Connectors";
+        case Kit_layout_setting_row::hide_minus_normal_connectors:   return "Hide -Normal Connectors";
+        case Kit_layout_setting_row::hide_plus_binormal_connectors:  return "Hide +Binormal Connectors";
+        case Kit_layout_setting_row::hide_minus_binormal_connectors: return "Hide -Binormal Connectors";
         default:                                     return "?";
     }
 }
 
-auto layout_pattern_row(Kit_layout_pattern& pattern, const Kit_layout_row row, const Kit_layout_kinds kinds, const Kit_row_label label) -> Kit_row_edit
+auto get_layout_setting_rows(const Kit_layout_pattern& pattern) -> std::span<const Kit_layout_setting_row>
+{
+    static constexpr std::array<Kit_layout_setting_row, 13> rows{
+        Kit_layout_setting_row::module_snap, Kit_layout_setting_row::surface_snap, Kit_layout_setting_row::surface_max_distance,
+        Kit_layout_setting_row::surface_orient, Kit_layout_setting_row::per_piece_seed, Kit_layout_setting_row::seed,
+        Kit_layout_setting_row::hide_all_connectors,
+        Kit_layout_setting_row::hide_plus_tangent_connectors,  Kit_layout_setting_row::hide_minus_tangent_connectors,
+        Kit_layout_setting_row::hide_plus_normal_connectors,   Kit_layout_setting_row::hide_minus_normal_connectors,
+        Kit_layout_setting_row::hide_plus_binormal_connectors, Kit_layout_setting_row::hide_minus_binormal_connectors
+    };
+    constexpr std::size_t c_rows_of_every_kind = 6; // the connector switches follow
+    const std::span<const Kit_layout_setting_row> all{rows};
+    // A stairs layout places no piece: nothing snaps, takes a seed or has connectors.
+    if (pattern.kind == Repeat_pattern_kind::stairs) {
+        return {};
+    }
+    return is_curve_layout_kind(pattern.kind) ? all : all.first(c_rows_of_every_kind);
+}
+
+namespace {
+
+[[nodiscard]] auto get_hide_row_direction(const Kit_layout_setting_row row) -> Kit_layout_direction
+{
+    switch (row) {
+        case Kit_layout_setting_row::hide_plus_tangent_connectors:   return Kit_layout_direction::plus_tangent;
+        case Kit_layout_setting_row::hide_minus_tangent_connectors:  return Kit_layout_direction::minus_tangent;
+        case Kit_layout_setting_row::hide_plus_normal_connectors:    return Kit_layout_direction::plus_normal;
+        case Kit_layout_setting_row::hide_minus_normal_connectors:   return Kit_layout_direction::minus_normal;
+        case Kit_layout_setting_row::hide_plus_binormal_connectors:  return Kit_layout_direction::plus_binormal;
+        case Kit_layout_setting_row::hide_minus_binormal_connectors:
+        default:                                                     return Kit_layout_direction::minus_binormal;
+    }
+}
+
+[[nodiscard]] auto get_hide_row_tooltip(const Kit_layout_direction direction) -> const char*
+{
+    switch (direction) {
+        case Kit_layout_direction::plus_tangent:  return "Hides the children's connectors facing along the curve (each piece's +x); an open curve's first piece hides only this one of its six directions.";
+        case Kit_layout_direction::minus_tangent: return "Hides the children's connectors facing back along the curve (each piece's -x); an open curve's last piece hides only this one of its six directions.";
+        case Kit_layout_direction::plus_normal:   return "Hides the inner children's connectors facing the right of the curve's direction (each piece's +z).";
+        case Kit_layout_direction::minus_normal:  return "Hides the inner children's connectors facing the left of the curve's direction (each piece's -z).";
+        case Kit_layout_direction::plus_binormal: return "Hides the inner children's connectors facing up (each piece's +y).";
+        case Kit_layout_direction::minus_binormal:
+        default:                                  return "Hides the inner children's connectors facing down (each piece's -y).";
+    }
+}
+
+} // anonymous namespace
+
+auto layout_pattern_row(
+    Kit_layout_pattern& pattern, const Kit_layout_row row, const Kit_layout_kinds kinds, const Kit_row_label label, const Kit_slot_palette* const stairs_palette
+) -> Kit_row_edit
 {
     const int    max_count = static_cast<int>(c_max_repeat_count);
     const char*  name      = widget_label(get_layout_row_name(row), label);
@@ -377,6 +453,60 @@ auto layout_pattern_row(Kit_layout_pattern& pattern, const Kit_layout_row row, c
             tooltip("Each piece turns about the node's up axis by a seeded angle from Yaw Min to Yaw Max.");
             break;
         }
+        case Kit_layout_row::stairs_width: {
+            const bool changed = ImGui::DragFloat(name, &pattern.stairs.width, 0.01f, c_min_stairs_width, c_max_stairs_width, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The stairs' width across the curve; the curve's plan radius must be at least 0.75 times it.");
+            break;
+        }
+        case Kit_layout_row::stairs_rise: {
+            const bool changed = ImGui::DragFloat(name, &pattern.stairs.max_rise, 0.005f, c_min_stairs_rise, c_max_stairs_rise, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The highest allowed single step; each climb takes the least count of equal steps within it, and the walking surface stays within it of the curve.");
+            break;
+        }
+        case Kit_layout_row::stairs_tread: {
+            const bool changed = ImGui::DragFloat(name, &pattern.stairs.min_tread, 0.005f, c_min_stairs_tread, c_max_stairs_tread, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The depth of a flight's treads, measured along the curve; a landing is deeper. With the rise limit it sets the steepest curve the stairs follow.");
+            break;
+        }
+        case Kit_layout_row::stairs_thickness: {
+            const bool changed = ImGui::DragFloat(name, &pattern.stairs.thickness, 0.005f, c_min_stairs_thickness, c_max_stairs_thickness, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The underside lies this far below a landing and below the foot of each riser, sloping under a flight.");
+            break;
+        }
+        case Kit_layout_row::stairs_tolerance: {
+            const bool changed = ImGui::DragFloat(name, &pattern.stairs.tolerance, 0.001f, c_min_stairs_tolerance, c_max_stairs_tolerance, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The most a straight piece of a curved side edge leaves its curve: smaller makes smoother edges of more triangles. Straight parts take none.");
+            break;
+        }
+        case Kit_layout_row::stairs_material: {
+            // Views of the pattern's and the palette's names: nothing is copied per frame.
+            const char* const shown_text = !pattern.stairs_material.empty()
+                ? pattern.stairs_material.c_str()
+                : ((stairs_palette != nullptr) ? stairs_palette->default_material.c_str() : "(default)");
+            if (ImGui::BeginCombo(name, shown_text)) {
+                const std::string shown{shown_text}; // while the combo is open: the selection below replaces the viewed name
+                const auto option = [&pattern, &ended, &shown](const std::string& material) {
+                    if (ImGui::Selectable(material.c_str(), material == shown) && (material != shown)) {
+                        pattern.stairs_material = material;
+                        ended = true;
+                    }
+                };
+                if (stairs_palette != nullptr) {
+                    option(stairs_palette->default_material);
+                    for (const std::string& alternative : stairs_palette->alternatives) {
+                        option(alternative);
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            tooltip("The staircase's material: the stone slot's default first, then its alternatives.");
+            break;
+        }
         default: {
             break;
         }
@@ -427,6 +557,32 @@ auto layout_setting_row(Kit_layout_data& data, const Kit_layout_setting_row row,
             const Kit_row_edit edit = drag_edit(changed);
             tooltip("The seed the per-piece seeds and a scatter's points come from.");
             return edit;
+        }
+        case Kit_layout_setting_row::hide_all_connectors: {
+            bool value = (data.connector_hiding.all == Kit_layout_connector_visibility::hidden);
+            const bool pressed = ImGui::Checkbox(name, &value);
+            tooltip(
+                "Hides the connectors of the children of a closed curve and of an open curve's inner children; an open curve's "
+                "first and last piece hide only the connectors facing their neighbour. Hidden connectors are not drawn, snapped to or joined."
+            );
+            data.connector_hiding.all = value ? Kit_layout_connector_visibility::hidden : Kit_layout_connector_visibility::shown;
+            return pressed_edit(pressed);
+        }
+        case Kit_layout_setting_row::hide_plus_tangent_connectors:
+        case Kit_layout_setting_row::hide_minus_tangent_connectors:
+        case Kit_layout_setting_row::hide_plus_normal_connectors:
+        case Kit_layout_setting_row::hide_minus_normal_connectors:
+        case Kit_layout_setting_row::hide_plus_binormal_connectors:
+        case Kit_layout_setting_row::hide_minus_binormal_connectors: {
+            const Kit_layout_direction direction = get_hide_row_direction(row);
+            bool value = data.connector_hiding.is_hidden(direction);
+            // Hide All hides every direction: the six keep their values and take effect when it is off.
+            ImGui::BeginDisabled(data.connector_hiding.all == Kit_layout_connector_visibility::hidden);
+            const bool pressed = ImGui::Checkbox(name, &value);
+            ImGui::EndDisabled();
+            tooltip(get_hide_row_tooltip(direction));
+            data.connector_hiding.set(direction, value ? Kit_layout_connector_visibility::hidden : Kit_layout_connector_visibility::shown);
+            return pressed_edit(pressed);
         }
         default: {
             return Kit_row_edit::none;
@@ -507,7 +663,8 @@ void Kit_layout_editor::state_line()
 
 void Kit_layout_editor::pattern_row(const Kit_layout_row row)
 {
-    const Kit_row_edit edit = layout_pattern_row(m_data.pattern, row, m_kinds, Kit_row_label::recorded);
+    const Kit_slot_palette* const palette = m_context.level_kits->get_library().find_slot_palette(c_stairs_material_slot);
+    const Kit_row_edit edit = layout_pattern_row(m_data.pattern, row, m_kinds, Kit_row_label::recorded, palette);
     on_row_edit(edit, m_data);
 }
 
@@ -515,6 +672,14 @@ void Kit_layout_editor::run_line()
 {
     if (!m_run_problem.empty()) {
         kit_message_line(m_run_problem);
+    } else if (m_data.pattern.kind == Repeat_pattern_kind::stairs) {
+        const Stairs_fit& fit = m_stairs.fit;
+        ImGui::Text(
+            "%d steps in %zu flights, %zu landings; rise %.3f m over %.3f m", fit.step_count, fit.flights.size(), fit.landings.size(), fit.total_rise, fit.length
+        );
+        tooltip("The steps, the flights of equal steps and the level landings the curve takes, its end height minus its start height and its length in plan.");
+        ImGui::Text("within %.3f m of the curve", fit.max_deviation);
+        tooltip("The largest height difference between the walking surface and the curve; at most the step rise limit.");
     } else if (m_data.pattern.kind == Repeat_pattern_kind::grid) {
         ImGui::Text("%zu pieces", m_run.count);
     } else if (m_data.pattern.kind == Repeat_pattern_kind::scatter) {
@@ -524,6 +689,9 @@ void Kit_layout_editor::run_line()
         } else {
             ImGui::Text("%zu pieces over %.3f m2", m_run.count, m_run.space);
         }
+    } else if (m_data.pattern.kind == Repeat_pattern_kind::segments) {
+        ImGui::Text("%zu pieces over %.3f m", m_run.count, m_run.space);
+        tooltip("One piece per segment of the curve, and the chord lengths they span (Upright: measured in plan).");
     } else if (m_data.pattern.count_mode == Kit_layout_count_mode::gap) {
         ImGui::Text("%zu pieces, actual gap %.3f m over %.3f m", m_run.count, (m_run.count > 1) ? (m_run.step - m_item_extent) : 0.0f, m_run.space);
         tooltip("The count the space holds at the stated gap, the gap once the remainder is spread, and the space (a path: its curve's length).");
@@ -737,6 +905,17 @@ void Kit_layout_editor::read_layout(Scene_root& scene_root, const erhe::scene::N
     }
     m_item_extent = m_item_sizes.extent;
     m_run_problem = level_kits.resolve_layout_run(layout, m_data, m_item_sizes, m_run);
+    read_stairs(layout, m_data);
+}
+
+void Kit_layout_editor::read_stairs(const erhe::scene::Node& layout, const Kit_layout_data& data)
+{
+    m_stairs.clear();
+    const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(&layout);
+    if ((data.pattern.kind == Repeat_pattern_kind::stairs) && (curve != nullptr)) {
+        // A refusal is the run problem; the report then stays empty.
+        static_cast<void>(make_stairs(curve->get_table(), data.pattern.stairs, m_stairs, nullptr));
+    }
 }
 
 void Kit_layout_editor::queue_read()
@@ -839,6 +1018,7 @@ void Kit_layout_editor::queue_preview(const Kit_layout_data& data)
                 m_run         = result.run;
                 m_item_extent = result.item_extent;
                 m_run_problem.clear();
+                m_stairs = result.stairs;
             }
         }
     );
@@ -962,10 +1142,11 @@ void Kit_layout_initial_editor::imgui(const std::shared_ptr<Scene_root>& scene_r
     ImGui::PushID("layout");
     ImGui::TextWrapped("The values a new kit layout node starts with; a selected layout node's values are edited in the Properties window.");
     bool changed = false;
+    const Kit_slot_palette* const stairs_palette = m_context.level_kits->get_library().find_slot_palette(c_stairs_material_slot);
     for (const Kit_layout_row row : get_layout_rows(m_values.data.pattern)) {
         const bool spaced = (row == Kit_layout_row::step) || (row == Kit_layout_row::spacing_x) || (row == Kit_layout_row::spacing_z);
         ImGui::BeginDisabled(spaced && (m_values.spacing == Kit_layout_spacing::from_item));
-        changed = (layout_pattern_row(m_values.data.pattern, row, Kit_layout_kinds::all, Kit_row_label::beside) == Kit_row_edit::committed) || changed;
+        changed = (layout_pattern_row(m_values.data.pattern, row, Kit_layout_kinds::all, Kit_row_label::beside, stairs_palette) == Kit_row_edit::committed) || changed;
         ImGui::EndDisabled();
     }
     bool from_item = (m_values.spacing == Kit_layout_spacing::from_item);
@@ -974,7 +1155,7 @@ void Kit_layout_initial_editor::imgui(const std::shared_ptr<Scene_root>& scene_r
         changed = true;
     }
     tooltip("The new layout's line step and grid spacings are its item's extent, a contiguous run; off, Step and Spacing are as given.");
-    for (const Kit_layout_setting_row row : c_layout_setting_rows) {
+    for (const Kit_layout_setting_row row : get_layout_setting_rows(m_values.data.pattern)) {
         changed = (layout_setting_row(m_values.data, row, Kit_row_label::beside) == Kit_row_edit::committed) || changed;
     }
     bool locked = (m_values.data.lock == Kit_layout_lock::locked);
@@ -994,7 +1175,7 @@ void Kit_layout_initial_editor::imgui(const std::shared_ptr<Scene_root>& scene_r
     ImGui::EndDisabled();
     tooltip(
         "Makes a kit layout node in the selected piece's place with the piece's shape, values and slot materials as its item and the values above; "
-        "the piece becomes its element 0 (a path layout is a curve node, straight along the piece's x axis). One undo step; selects the node."
+        "the piece becomes its element 0 (a path or segments layout is a curve node, straight along the piece's x axis). One undo step; selects the node."
     );
     if (piece) {
         ImGui::SameLine();

@@ -51,6 +51,8 @@ public:
 
     // The record or connector switches of the piece may have changed: its enabled local frames are read again when next drawn.
     void forget_piece(const erhe::scene::Node& node);
+    // The layout's connector switches, lock, children or curve may have changed (U39): its children are read again.
+    void forget_children_of(std::uint64_t layout_id);
     void forget_all  ();
     void forget_removed(const Removed_items& removed);
     [[nodiscard]] auto get_cached_piece_count() const -> std::size_t;
@@ -72,10 +74,12 @@ private:
     {
     public:
         const erhe::Item_base*     item{nullptr}; // compared with removal sets only, never dereferenced
+        std::uint64_t              parent_id{0};  // when cached
         std::vector<Kit_connector> connectors;
     };
     std::unordered_map<std::uint64_t, Cached_piece>              m_local_connectors; // by node id
     std::vector<Kit_connector>                                   m_world_connectors;
+    std::vector<std::uint64_t>                                   m_removed_parent_ids; // forget_removed() scratch
     Choice                                                       m_target_choice;
     Choice                                                       m_moved_choice;
 };

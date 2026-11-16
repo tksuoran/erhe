@@ -1,5 +1,7 @@
 #include "level/kit_layout_outline.hpp"
 
+#include "erhe_math/curve_path.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -124,6 +126,40 @@ void make_scatter(const Kit_layout_run& run, const std::span<const Repeat_pose> 
     }
 }
 
+// The chords through the curve's points and a tick at each point across the heading of the segments beside it.
+void make_segments(const erhe::math::Curve_path_table& table, Kit_layout_outline& out)
+{
+    const std::size_t span_count = table.get_span_count();
+    if (span_count == 0) {
+        return;
+    }
+    const bool closed = (table.get_closure() == erhe::math::Curve_closure::closed);
+    const std::size_t point_count = closed ? span_count : (span_count + 1);
+    for (std::size_t i = 0; i < point_count; ++i) {
+        out.polyline.push_back((i < span_count) ? table.get_span(i).control[0] : table.get_span(span_count - 1).control[3]);
+    }
+    out.closed = closed;
+    for (std::size_t i = 0; i < point_count; ++i) {
+        const bool has_before = closed || (i > 0);
+        const bool has_after  = closed || (i < span_count);
+        // The unit headings' sum: a corner's tick bisects it.
+        const auto unit_chord = [&table](const std::size_t span_index) -> glm::vec3 {
+            const erhe::math::Curve_span& span   = table.get_span(span_index);
+            const glm::vec3               chord  = span.control[3] - span.control[0];
+            const float                   length = glm::length(chord);
+            return (length > 0.0f) ? (chord / length) : glm::vec3{0.0f};
+        };
+        glm::vec3 heading{0.0f};
+        if (has_before) {
+            heading += unit_chord((i + span_count - 1) % span_count);
+        }
+        if (has_after) {
+            heading += unit_chord(i % span_count);
+        }
+        out.ticks.push_back(Kit_layout_tick{.position = out.polyline[i], .direction = get_line_tick_direction(heading)});
+    }
+}
+
 } // anonymous namespace
 
 void Kit_layout_outline::clear()
@@ -186,6 +222,7 @@ void make_layout_outline(
     const Kit_layout_run&                      run,
     const std::span<const Repeat_pose>         poses,
     const std::span<const Repeat_scatter_item> items,
+    const erhe::math::Curve_path_table* const  path_table,
     Kit_layout_outline&                        out_outline
 )
 {
@@ -196,6 +233,12 @@ void make_layout_outline(
         case Repeat_pattern_kind::grid:    make_grid   (run, out_outline); break;
         case Repeat_pattern_kind::ring:    make_ring   (run, poses, out_outline); break;
         case Repeat_pattern_kind::scatter: make_scatter(run, poses, items, out_outline); break;
+        case Repeat_pattern_kind::segments: {
+            if (path_table != nullptr) {
+                make_segments(*path_table, out_outline);
+            }
+            break;
+        }
         case Repeat_pattern_kind::path:
         default:                           break;
     }

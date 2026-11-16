@@ -16,12 +16,32 @@
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace editor {
 
 using erhe::physics::ICollision_shape;
 using erhe::physics::IRigid_body;
 using erhe::physics::Motion_mode;
+
+namespace {
+
+// Decomposed world scales carry rounding: within the tolerance two scales are the same.
+constexpr float c_scale_tolerance = 1.0e-5f;
+// Jolt refuses a scale with a component below this (ScaleHelpers::cMinScale).
+constexpr float c_min_scale = 1.0e-6f;
+
+[[nodiscard]] auto is_same_scale(const glm::vec3& lhs, const glm::vec3& rhs) -> bool
+{
+    const glm::vec3 difference = glm::abs(lhs - rhs);
+    const glm::vec3 magnitude  = glm::max(glm::vec3{1.0f}, glm::max(glm::abs(lhs), glm::abs(rhs)));
+    return
+        (difference.x <= (c_scale_tolerance * magnitude.x)) &&
+        (difference.y <= (c_scale_tolerance * magnitude.y)) &&
+        (difference.z <= (c_scale_tolerance * magnitude.z));
+}
+
+} // anonymous namespace
 
 Node_physics_system::Node_physics_system(Scene_root& scene_root)
     : m_scene_root{scene_root}
@@ -63,6 +83,18 @@ auto Node_physics_system::get_collision_shape(const erhe::scene::Node& node) con
     return (entry != nullptr) ? entry->collision_shape : std::shared_ptr<ICollision_shape>{};
 }
 
+auto Node_physics_system::get_source_collision_shape(const erhe::scene::Node& node) const -> std::shared_ptr<ICollision_shape>
+{
+    const Node_physics_entry* const entry = find(node);
+    return (entry != nullptr) ? entry->source_shape : std::shared_ptr<ICollision_shape>{};
+}
+
+auto Node_physics_system::get_source_scale(const erhe::scene::Node& node) const -> glm::vec3
+{
+    const Node_physics_entry* const entry = find(node);
+    return (entry != nullptr) ? entry->source_scale : glm::vec3{1.0f};
+}
+
 auto Node_physics_system::get_or_create(erhe::scene::Node& node) -> Node_physics_entry&
 {
     const std::unordered_map<const erhe::scene::Node*, Node_physics_entry>::iterator i = m_entries.find(&node);
@@ -82,7 +114,7 @@ void Node_physics_system::drop_if_empty(erhe::scene::Node& node)
     if (i == m_entries.end()) {
         return;
     }
-    if (i->second.rigid_body || i->second.collision_shape) {
+    if (i->second.rigid_body || i->second.source_shape) {
         return;
     }
     m_entries.erase(i);
@@ -140,15 +172,17 @@ void Node_physics_system::create_body(erhe::scene::Node& node, Node_physics_entr
     if (node.get_item_host() != &m_scene_root) {
         return;
     }
-    if (!entry.collision_shape) {
+    if (!entry.source_shape) {
         // The key property alone is enough to make a body: the shape is the
         // convex hull of the node's own mesh, and a 0.5 box when the node has
         // no usable geometry - the same fallback the Create menu used.
-        entry.collision_shape = build_shape_from_node_mesh(&node, true);
-        if (!entry.collision_shape) {
-            entry.collision_shape = ICollision_shape::create_box_shape_shared(glm::vec3{0.5f});
+        entry.source_shape = build_shape_from_node_mesh(&node, true);
+        if (!entry.source_shape) {
+            entry.source_shape = ICollision_shape::create_box_shape_shared(glm::vec3{0.5f});
         }
+        entry.source_scale = glm::vec3{1.0f};
     }
+    build_body_shape(node, entry);
     refresh_create_info(node, entry);
     const erhe::scene::Trs_transform& world_from_node = node.world_from_node_transform();
     entry.create_info.position    = world_from_node.get_translation();
@@ -207,6 +241,68 @@ void Node_physics_system::recreate_body(erhe::scene::Node& node, Node_physics_en
     }
     destroy_body(entry);
     create_body(node, entry);
+}
+
+void Node_physics_system::build_body_shape(const erhe::scene::Node& node, Node_physics_entry& entry)
+{
+    const glm::vec3 world_scale = glm::abs(node.world_from_node_transform().get_scale());
+    entry.shape_scale = world_scale;
+    if (!entry.source_shape) {
+        entry.collision_shape.reset();
+        return;
+    }
+    const glm::vec3 scale = world_scale / glm::max(entry.source_scale, glm::vec3{c_min_scale});
+    std::shared_ptr<ICollision_shape> shape{};
+    if ((scale.x < c_min_scale) || (scale.y < c_min_scale) || (scale.z < c_min_scale)) {
+        // A node flattened to a zero extent has no volume to collide with.
+        shape = ICollision_shape::create_empty_shape_shared();
+        entry.inexact_scale = false;
+    } else if (entry.source_shape->is_valid_scale(scale)) {
+        shape = make_node_scaled_collision_shape(entry.source_shape, scale);
+        entry.inexact_scale = false;
+    } else {
+        // A convex primitive the backend cannot scale this way (a sphere or capsule under a non-uniform scale): the
+        // hull of the node's own mesh at the scale is exact for the geometry the node shows.
+        const std::shared_ptr<ICollision_shape> hull = entry.source_shape->is_convex()
+            ? build_shape_from_node_mesh(&node, true)
+            : std::shared_ptr<ICollision_shape>{};
+        if (hull && hull->is_valid_scale(world_scale)) {
+            shape = make_node_scaled_collision_shape(hull, world_scale); // the mesh is in node space
+            entry.inexact_scale = false;
+        } else {
+            const glm::vec3 valid_scale = entry.source_shape->make_scale_valid(scale);
+            if (!entry.inexact_scale) {
+                log_physics->warn(
+                    "Node '{}': its {} collision shape cannot take the scale ({}, {}, {}); the body uses ({}, {}, {})",
+                    node.get_name(), entry.source_shape->describe(),
+                    scale.x, scale.y, scale.z, valid_scale.x, valid_scale.y, valid_scale.z
+                );
+            }
+            entry.inexact_scale = true;
+            shape = make_node_scaled_collision_shape(entry.source_shape, valid_scale);
+        }
+    }
+    const glm::vec3 offset = node.get_value(Node_physics::center_of_mass_offset_property);
+    if (shape && (offset != glm::vec3{0.0f})) {
+        shape = ICollision_shape::create_offset_center_of_mass_shape_shared(shape, offset);
+    }
+    entry.collision_shape             = shape;
+    entry.create_info.collision_shape = shape;
+}
+
+void Node_physics_system::follow_world_scale(Node_physics_entry& entry)
+{
+    if (!entry.rigid_body || !entry.source_shape || (entry.node == nullptr)) {
+        return;
+    }
+    const glm::vec3 world_scale = glm::abs(entry.node->world_from_node_transform().get_scale());
+    if (is_same_scale(world_scale, entry.shape_scale)) {
+        return;
+    }
+    build_body_shape(*entry.node, entry);
+    if (entry.collision_shape) {
+        entry.rigid_body->set_collision_shape(entry.collision_shape);
+    }
 }
 
 void Node_physics_system::on_node_registered(erhe::scene::Node& node)
@@ -308,21 +404,13 @@ void Node_physics_system::on_values_changed(erhe::scene::Node& node, const erhe:
         entry->create_info.angular_velocity = node.get_value(Node_physics::initial_angular_velocity_property);
     } else if (changed == Node_physics::center_of_mass_offset_property.get_ptr()) {
         const glm::vec3 offset = node.get_value(Node_physics::center_of_mass_offset_property);
-        std::shared_ptr<ICollision_shape> shape = entry->collision_shape;
-        if (!shape) {
+        if (!entry->source_shape || !entry->collision_shape) {
             return;
         }
-        if (offset == shape->get_offset().value_or(glm::vec3{0.0f})) {
+        if (offset == entry->collision_shape->get_offset().value_or(glm::vec3{0.0f})) {
             return;
         }
-        if (shape->get_offset().has_value()) {
-            shape = shape->get_inner_shape(); // unwrap the existing wrapper
-        }
-        if (offset != glm::vec3{0.0f}) {
-            shape = ICollision_shape::create_offset_center_of_mass_shape_shared(shape, offset);
-        }
-        entry->collision_shape            = shape;
-        entry->create_info.collision_shape = shape;
+        build_body_shape(node, *entry);
         recreate_body(node, *entry);
     } else if (changed == Node_physics::physics_material_property.get_ptr()) {
         entry->create_info.physics_material = erhe::property::Member_value_traits<std::shared_ptr<erhe::physics::Physics_material>>::from_value(
@@ -357,20 +445,25 @@ void Node_physics_system::on_node_active_changed(erhe::scene::Node& node)
     }
 }
 
-void Node_physics_system::set_collision_shape(erhe::scene::Node& node, const std::shared_ptr<ICollision_shape>& collision_shape)
+void Node_physics_system::set_collision_shape(
+    erhe::scene::Node&                       node,
+    const std::shared_ptr<ICollision_shape>& collision_shape,
+    const glm::vec3&                         source_scale
+)
 {
     Node_physics_entry& entry = get_or_create(node);
-    // The effective center-of-mass offset stays what the node says: the new
-    // shape gets the wrapper the old one carried.
-    const glm::vec3 offset = node.get_value(Node_physics::center_of_mass_offset_property);
-    const std::shared_ptr<ICollision_shape> wrapped = ((offset != glm::vec3{0.0f}) && collision_shape)
-        ? ICollision_shape::create_offset_center_of_mass_shape_shared(collision_shape, offset)
+    // The effective center-of-mass offset stays what the node says, so a wrapper handed in is dropped.
+    const std::shared_ptr<ICollision_shape> source = (collision_shape && collision_shape->get_offset().has_value())
+        ? collision_shape->get_inner_shape()
         : collision_shape;
-    if (entry.collision_shape == wrapped) {
+    const glm::vec3 scale = glm::abs(source_scale);
+    if ((entry.source_shape == source) && (entry.source_scale == scale)) {
         return;
     }
-    entry.collision_shape             = wrapped;
-    entry.create_info.collision_shape = wrapped;
+    entry.source_shape  = source;
+    entry.source_scale  = scale;
+    entry.inexact_scale = false;
+    build_body_shape(node, entry);
     if (entry.rigid_body) {
         recreate_body(node, entry);
     } else {
@@ -479,6 +572,10 @@ void Node_physics_system::observe_node_transform(Node_physics_entry& entry)
 void Node_physics_system::queue_node_pose(Node_physics_entry& entry)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_pending_mutex};
+    if (!entry.shape_scale_pending) {
+        entry.shape_scale_pending = true;
+        m_pending_shape_scales.push_back(&entry);
+    }
     if (entry.node_pose_pending) {
         return;
     }
@@ -489,6 +586,13 @@ void Node_physics_system::queue_node_pose(Node_physics_entry& entry)
 void Node_physics_system::unqueue_node_pose(Node_physics_entry& entry)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_pending_mutex};
+    if (entry.shape_scale_pending) {
+        entry.shape_scale_pending = false;
+        m_pending_shape_scales.erase(
+            std::remove(m_pending_shape_scales.begin(), m_pending_shape_scales.end(), &entry),
+            m_pending_shape_scales.end()
+        );
+    }
     if (!entry.node_pose_pending) {
         return;
     }
@@ -584,6 +688,24 @@ void Node_physics_system::apply_pending_node_poses()
     }
 }
 
+void Node_physics_system::apply_pending_shape_scales()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    m_pending_shape_processing.clear();
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_pending_mutex};
+        std::swap(m_pending_shape_scales, m_pending_shape_processing);
+        for (Node_physics_entry* const entry : m_pending_shape_processing) {
+            entry->shape_scale_pending = false;
+        }
+    }
+    for (Node_physics_entry* const entry : m_pending_shape_processing) {
+        follow_world_scale(*entry);
+    }
+    m_pending_shape_processing.clear();
+}
+
 void Node_physics_system::after_physics_simulation(Node_physics_entry& entry)
 {
     ERHE_PROFILE_FUNCTION();
@@ -600,6 +722,9 @@ void Node_physics_system::after_physics_simulation(Node_physics_entry& entry)
 
     // The node's transform observer sees these writes; the flag tells it
     // the body already holds the pose.
+    // The body carries no scale: the node keeps its world scale, which the body's shape already has.
+    const glm::vec3 world_scale = entry.node->world_from_node_transform().get_scale();
+    const bool      is_scaled   = (world_scale != glm::vec3{1.0f});
     ERHE_VERIFY(!m_writing_nodes_from_bodies);
     m_writing_nodes_from_bodies = true;
     if (world_position.y < -100.0f) {
@@ -607,9 +732,10 @@ void Node_physics_system::after_physics_simulation(Node_physics_entry& entry)
         entry.rigid_body->set_world_transform (erhe::physics::Transform{glm::mat3{1.0f}, respawn_location});
         entry.rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
         entry.rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
-        entry.node->set_world_from_node(erhe::math::create_translation<float>(respawn_location));
+        const glm::mat4 respawn_transform = erhe::math::create_translation<float>(respawn_location);
+        entry.node->set_world_from_node(is_scaled ? (respawn_transform * erhe::math::create_scale<float>(world_scale)) : respawn_transform);
     } else {
-        entry.node->set_world_from_node(transform);
+        entry.node->set_world_from_node(is_scaled ? (transform * erhe::math::create_scale<float>(world_scale)) : transform);
     }
     m_writing_nodes_from_bodies = false;
 }
@@ -747,10 +873,34 @@ auto get_node_collision_shape(const erhe::scene::Node& node) -> std::shared_ptr<
     return (system != nullptr) ? system->get_collision_shape(node) : std::shared_ptr<ICollision_shape>{};
 }
 
+auto get_node_source_collision_shape(const erhe::scene::Node& node) -> std::shared_ptr<ICollision_shape>
+{
+    Node_physics_system* const system = find_node_physics_system(node);
+    return (system != nullptr) ? system->get_source_collision_shape(node) : std::shared_ptr<ICollision_shape>{};
+}
+
 auto get_node_rigid_body(const erhe::scene::Node& node) -> IRigid_body*
 {
     Node_physics_system* const system = find_node_physics_system(node);
     return (system != nullptr) ? system->get_rigid_body(node) : nullptr;
+}
+
+auto make_node_scaled_collision_shape(const std::shared_ptr<ICollision_shape>& shape, const glm::vec3& world_scale) -> std::shared_ptr<ICollision_shape>
+{
+    // Decomposed world scales carry rounding: within the tolerance a component is equal to another and to 1.
+    constexpr float tolerance = 1.0e-5f;
+    const glm::vec3 scale = glm::abs(world_scale);
+    if (!shape || (scale == glm::vec3{0.0f})) {
+        return {};
+    }
+    const bool uniform = (std::abs(scale.x - scale.y) <= tolerance) && (std::abs(scale.y - scale.z) <= tolerance);
+    if (uniform) {
+        if (std::abs(scale.x - 1.0f) <= tolerance) {
+            return shape;
+        }
+        return ICollision_shape::create_uniform_scaling_shape_shared(shape, scale.x);
+    }
+    return ICollision_shape::create_scaled_shape_shared(shape, scale);
 }
 
 void set_node_collision_shape(erhe::scene::Node& node, const std::shared_ptr<ICollision_shape>& collision_shape)

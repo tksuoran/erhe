@@ -4,6 +4,7 @@
 #include "level/kit_shape.hpp"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace editor {
@@ -25,13 +26,30 @@ constexpr int   kit_stairs_max_steps      = 128;
 
 [[nodiscard]] auto get_stairs_layout(const Kit_parameter_values& values) -> Kit_stairs_layout;
 
+// R2.10 for stairs of this step rise, tread depth and width, named in the message: empty when the agent walks them.
+[[nodiscard]] auto check_stairs_walkability(std::string_view name, float step_rise, float tread_depth, float width, const Kit_agent& agent) -> std::string;
+
 // Clear width of the arch opening at the given height above its base, 0 above the crown.
 [[nodiscard]] auto get_arch_clear_width(const Kit_parameter_values& values, float height) -> float;
 
 // Empty when the default agent passes the opening (R2.10); otherwise the message naming the shape and the shortfall.
 [[nodiscard]] auto check_kit_opening(const Kit_shape_definition& shape, float width, float height, const Kit_agent& agent) -> std::string;
 
+// A recreated shape's id is its original's plus this, its display name its original's plus the mark.
+constexpr const char* c_kit_recreated_id_suffix   = ".v2";
+constexpr const char* c_kit_recreated_name_suffix = " (F)";
+
+// The original's definition with the recreated id, name and `recreates`, the given generator and triangle budget.
+[[nodiscard]] auto make_recreated_shape(
+    const std::vector<Kit_shape_definition>& shapes,
+    std::string_view                         original_id,
+    Kit_generator                            generator,
+    unsigned int                             triangle_budget
+) -> Kit_shape_definition;
+
 void add_basic_shapes       (std::vector<Kit_shape_definition>& shapes);
+// The recreated shapes (doc/editor/level_tools.md "Recreated shapes"); each call follows its originals' call.
+void add_basic_shapes_v2    (std::vector<Kit_shape_definition>& shapes);
 void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes);
 void add_nature_shapes      (std::vector<Kit_shape_definition>& shapes);
 // Called by add_nature_shapes(): the terrain (cliff, shore, water, dune, ground patch), the rocks and the plants.

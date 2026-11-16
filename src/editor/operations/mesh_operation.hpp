@@ -97,6 +97,8 @@ public:
             std::shared_ptr<erhe::physics::ICollision_shape> collision_shape{};
             erhe::physics::Motion_mode                       motion_mode{erhe::physics::Motion_mode::e_none};
             std::vector<erhe::scene::Mesh_primitive>         primitives{};
+            // The world scale collision_shape already carries (Node_physics_system::get_source_scale()).
+            glm::vec3                                        collision_shape_scale{1.0f};
         };
         Version before{};
         Version after{};

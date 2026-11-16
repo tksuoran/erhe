@@ -90,27 +90,19 @@ namespace {
     }
 }
 
-// Applies the node's world scale to a collider shape per the spec: negative
-// scale components use their absolute value; an all-zero scale disables the
-// shape (returns nullptr); uniform scale != 1 uses the uniform scaling
-// wrapper; non-uniform scale uses the scaled-shape wrapper.
+// Applies the node's world scale to a collider shape per the spec
+// (make_node_scaled_collision_shape()); an all-zero scale disables the shape.
 [[nodiscard]] auto apply_node_scale(
     const std::shared_ptr<erhe::physics::ICollision_shape>& shape,
     const erhe::scene::Node&                                node
 ) -> std::shared_ptr<erhe::physics::ICollision_shape>
 {
-    const glm::vec3 scale = glm::abs(node.world_from_node_transform().get_scale());
-    if (scale == glm::vec3{0.0f}) {
+    const glm::vec3 scale = node.world_from_node_transform().get_scale();
+    if (glm::abs(scale) == glm::vec3{0.0f}) {
         log_parsers->info("physics import: node '{}' has all-zero scale - collision shape disabled", node.get_name());
         return {};
     }
-    if ((scale.x == scale.y) && (scale.y == scale.z)) {
-        if (scale.x == 1.0f) {
-            return shape;
-        }
-        return erhe::physics::ICollision_shape::create_uniform_scaling_shape_shared(shape, scale.x);
-    }
-    return erhe::physics::ICollision_shape::create_scaled_shape_shared(shape, scale);
+    return make_node_scaled_collision_shape(shape, scale);
 }
 
 // One collision shape contributed to a body, with the transform of the
@@ -121,6 +113,7 @@ class Body_shape_entry
 public:
     const erhe::scene::Node*                         node{nullptr};
     std::shared_ptr<erhe::physics::ICollision_shape> shape;
+    std::shared_ptr<erhe::physics::ICollision_shape> node_space_shape; // without the node's scale
 };
 
 // Rotation / translation of child_node expressed in the (unscaled) node space
@@ -173,11 +166,10 @@ public:
         return filter_items[index.value()];
     }
 
-    // Builds the (node-scale adjusted) collision shape for one collider /
-    // trigger geometry. Returns nullptr when the geometry cannot be built
-    // (degenerate scale, missing mesh geometry, unsupported geometry form);
-    // failures are logged.
-    [[nodiscard]] auto build_geometry_shape(
+    // Builds the node-space collision shape for one collider / trigger
+    // geometry. Returns nullptr when the geometry cannot be built (missing
+    // mesh geometry, unsupported geometry form); failures are logged.
+    [[nodiscard]] auto build_node_space_shape(
         const erhe::scene::Physics_node_geometry& geometry,
         const erhe::scene::Node&                  collider_node,
         const bool                                dynamic_body
@@ -224,10 +216,18 @@ public:
             );
             return {};
         }
-        if (!shape) {
-            return {};
-        }
-        return apply_node_scale(shape, collider_node);
+        return shape;
+    }
+
+    // The node-space shape at the node's world scale; nullptr also for a degenerate scale.
+    [[nodiscard]] auto build_geometry_shape(
+        const erhe::scene::Physics_node_geometry& geometry,
+        const erhe::scene::Node&                  collider_node,
+        const bool                                dynamic_body
+    ) const -> std::shared_ptr<erhe::physics::ICollision_shape>
+    {
+        const std::shared_ptr<erhe::physics::ICollision_shape> shape = build_node_space_shape(geometry, collider_node, dynamic_body);
+        return shape ? apply_node_scale(shape, collider_node) : std::shared_ptr<erhe::physics::ICollision_shape>{};
     }
 
     [[nodiscard]] auto make_body_create_info(
@@ -540,9 +540,10 @@ void import_physics(
     const auto make_body = [&find_body, &node_physics_system](
         erhe::scene::Node*                                  node,
         const erhe::physics::IRigid_body_create_info&       create_info,
-        const std::shared_ptr<erhe::scene::Mesh>&           collision_mesh
+        const std::shared_ptr<erhe::scene::Mesh>&           collision_mesh,
+        const glm::vec3&                                    source_scale
     ) {
-        node_physics_system.set_collision_shape(*node, create_info.collision_shape);
+        node_physics_system.set_collision_shape(*node, create_info.collision_shape, source_scale);
         write_node_physics_create_info(*node, create_info);
         if (collision_mesh) {
             node->set_value(Node_physics::collision_mesh_property, erhe::property::Weak_object_reference{collision_mesh});
@@ -749,12 +750,21 @@ void import_physics(
                         filter_conflict = true;
                     }
                 }
-                std::shared_ptr<erhe::physics::ICollision_shape> shape =
-                    importer.build_geometry_shape(collider.geometry, *description->node.get(), dynamic_body);
+                std::shared_ptr<erhe::physics::ICollision_shape> node_space_shape =
+                    importer.build_node_space_shape(collider.geometry, *description->node.get(), dynamic_body);
+                std::shared_ptr<erhe::physics::ICollision_shape> shape = node_space_shape
+                    ? apply_node_scale(node_space_shape, *description->node.get())
+                    : std::shared_ptr<erhe::physics::ICollision_shape>{};
                 if (!shape) {
                     continue;
                 }
-                entries.push_back(Body_shape_entry{.node = description->node.get(), .shape = std::move(shape)});
+                entries.push_back(
+                    Body_shape_entry{
+                        .node             = description->node.get(),
+                        .shape            = std::move(shape),
+                        .node_space_shape = std::move(node_space_shape)
+                    }
+                );
                 if (collider.geometry.mesh || collider.geometry.node) {
                     ++mesh_geometry_count;
                     if (description->node.get() != root) {
@@ -775,10 +785,14 @@ void import_physics(
             log_parsers->warn("physics import: body '{}' compound colliders use differing collision filters - using the first", root->get_name());
         }
 
+        // The body's shape is a node-space source the scene's physics system scales to the root's world scale; a
+        // folded compound carries the world scales of its colliders, so it states the root scale it was built at.
         std::shared_ptr<erhe::physics::ICollision_shape> body_shape{};
+        glm::vec3 body_source_scale{1.0f};
         if ((entries.size() == 1) && (entries.front().node == root)) {
-            body_shape = entries.front().shape;
+            body_shape = entries.front().node_space_shape;
         } else if (!entries.empty()) {
+            body_source_scale = glm::abs(root->world_from_node_transform().get_scale());
             // Descendant colliders fold into a compound on the body root with
             // their transforms relative to the root baked in. Known
             // limitation: editing a child node transform after import does
@@ -833,7 +847,7 @@ void import_physics(
         // trigger of the body prim, which has no place for a source mesh of
         // its own, so only a collider body remembers one.
         const bool remembers_mesh = !body_is_trigger && (mesh_geometry_count == 1) && collision_mesh;
-        make_body(root, create_info, remembers_mesh ? collision_mesh : std::shared_ptr<erhe::scene::Mesh>{});
+        make_body(root, create_info, remembers_mesh ? collision_mesh : std::shared_ptr<erhe::scene::Mesh>{}, body_source_scale);
         nodes_with_body.insert(root);
         if (body_is_trigger) {
             nodes_with_trigger_body.insert(root);
@@ -866,6 +880,7 @@ void import_physics(
         const erhe::scene::Physics_node_trigger& trigger = description.trigger.value();
 
         std::shared_ptr<erhe::physics::ICollision_shape> trigger_shape{};
+        glm::vec3 trigger_source_scale{1.0f};
         std::shared_ptr<erhe::physics::Collision_filter> trigger_filter = importer.get_filter(trigger.filter_index);
         if (!trigger.compound_nodes.empty()) {
             erhe::physics::Compound_shape_create_info compound_create_info{};
@@ -907,10 +922,11 @@ void import_physics(
                 log_parsers->warn("physics import: compound trigger '{}' has no usable member geometry - skipping", node->get_name());
                 continue;
             }
-            trigger_shape = erhe::physics::ICollision_shape::create_compound_shape_shared(compound_create_info);
+            trigger_shape        = erhe::physics::ICollision_shape::create_compound_shape_shared(compound_create_info);
+            trigger_source_scale = glm::abs(node->world_from_node_transform().get_scale());
         } else if (trigger.geometry.has_value()) {
-            trigger_shape = importer.build_geometry_shape(trigger.geometry.value(), *node, false);
-            if (!trigger_shape) {
+            trigger_shape = importer.build_node_space_shape(trigger.geometry.value(), *node, false);
+            if (!trigger_shape || !apply_node_scale(trigger_shape, *node)) {
                 continue;
             }
         } else {
@@ -921,7 +937,7 @@ void import_physics(
         erhe::physics::IRigid_body_create_info create_info =
             importer.make_body_create_info(*node, description.motion, trigger_shape, {}, trigger_filter, true);
         apply_physics_overrides(create_info, node);
-        make_body(node, create_info, {});
+        make_body(node, create_info, {}, trigger_source_scale);
         nodes_with_body.insert(node);
         ++trigger_count;
     }
@@ -945,7 +961,7 @@ void import_physics(
             false
         );
         apply_physics_overrides(create_info, node);
-        make_body(node, create_info, {});
+        make_body(node, create_info, {}, glm::vec3{1.0f});
         nodes_with_body.insert(node);
         ++body_count;
     }

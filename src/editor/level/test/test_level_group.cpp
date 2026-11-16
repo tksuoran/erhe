@@ -219,7 +219,9 @@ TEST(Kit_shape_library, declared_mirror_planes_hold_for_the_generated_meshes)
         if (shape.mirror_planes.empty()) {
             continue;
         }
-        ++declaring;
+        if (shape.recreates.empty()) {
+            ++declaring; // a recreated shape declares its original's planes
+        }
         std::vector<Kit_parameter_values> value_sets{editor::make_default_values(shape, c_module, c_wall_height), second_values(shape)};
         // Every value of an enum parameter, the others at their defaults.
         for (const Kit_parameter& parameter : shape.parameters) {

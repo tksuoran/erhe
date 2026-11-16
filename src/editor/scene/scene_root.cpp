@@ -2590,6 +2590,15 @@ void Scene_root::apply_queued_body_activations()
     m_node_physics_system->apply_queued_body_activations();
 }
 
+void Scene_root::apply_pending_shape_scales()
+{
+    // A hull fallback reads mesh primitives a brush geometry worker may swap. Item host, then physics step: no section
+    // that holds the physics step mutex takes the item host mutex, so the order cannot invert.
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> item_host_lock{item_host_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> physics_step_lock{m_physics_step_mutex};
+    m_node_physics_system->apply_pending_shape_scales();
+}
+
 void Scene_root::before_physics_simulation_steps()
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> physics_step_lock{m_physics_step_mutex};

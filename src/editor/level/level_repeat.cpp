@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <span>
 
 namespace editor {
@@ -119,6 +120,25 @@ void expand_path(const Repeat_pattern& pattern, const Repeat_pose& start, std::v
             Repeat_pose{
                 .position = start.position + (start.rotation * frame.position),
                 .rotation = glm::normalize(start.rotation * local_rotation)
+            }
+        );
+    }
+}
+
+void expand_segments(const Repeat_pattern& pattern, const Repeat_pose& start, std::vector<Repeat_pose>& out_poses)
+{
+    const erhe::math::Curve_path_table& table = *pattern.path;
+    for (std::size_t i = 0, end = table.get_span_count(); i < end; ++i) {
+        const erhe::math::Curve_span& span = table.get_span(i);
+        Repeat_pose local;
+        // check_pattern() made every pose already, so this cannot refuse.
+        static_cast<void>(make_segment_pose(i, span.control[0], span.control[3], pattern.segment_items[i % pattern.segment_items.size()], pattern.path_orientation, local));
+        out_poses.push_back(
+            Repeat_pose{
+                .position = start.position + (start.rotation * local.position),
+                .rotation = glm::normalize(start.rotation * local.rotation),
+                .scale    = local.scale,
+                .item     = i % pattern.segment_items.size()
             }
         );
     }
@@ -309,6 +329,32 @@ void expand_scatter(const Repeat_pattern& pattern, const Repeat_pose& start, std
             }
             return {};
         }
+        case Repeat_pattern_kind::segments: {
+            if (pattern.path == nullptr) {
+                return "a segments run needs a curve";
+            }
+            const std::size_t count = pattern.path->get_span_count();
+            if (count < 1) {
+                return "the curve has fewer than 2 points: a segments run needs at least one segment";
+            }
+            if (count > c_max_repeat_count) {
+                return fmt::format("the curve has {} segments, more than the {} pieces one repeat places", count, c_max_repeat_count);
+            }
+            if (pattern.segment_items.empty()) {
+                return "a segments run needs at least one item";
+            }
+            for (std::size_t i = 0; i < count; ++i) {
+                const erhe::math::Curve_span& span = pattern.path->get_span(i);
+                Repeat_pose pose;
+                const std::string refusal = make_segment_pose(
+                    i, span.control[0], span.control[3], pattern.segment_items[i % pattern.segment_items.size()], pattern.path_orientation, pose
+                );
+                if (!refusal.empty()) {
+                    return refusal;
+                }
+            }
+            return {};
+        }
         case Repeat_pattern_kind::scatter: {
             const std::string refusal = count_refusal("count", pattern.count);
             if (!refusal.empty()) {
@@ -373,8 +419,15 @@ auto c_str(const Repeat_pattern_kind kind) -> const char*
         case Repeat_pattern_kind::ring:     return "ring";
         case Repeat_pattern_kind::path:     return "path";
         case Repeat_pattern_kind::scatter:  return "scatter";
+        case Repeat_pattern_kind::segments: return "segments";
+        case Repeat_pattern_kind::stairs:   return "stairs";
         default:                            return "?";
     }
+}
+
+auto is_curve_layout_kind(const Repeat_pattern_kind kind) -> bool
+{
+    return (kind == Repeat_pattern_kind::path) || (kind == Repeat_pattern_kind::segments) || (kind == Repeat_pattern_kind::stairs);
 }
 
 auto c_str(const Repeat_path_orientation orientation) -> const char*
@@ -408,6 +461,144 @@ auto pick_scatter_item(const std::span<const Repeat_scatter_item> items, const u
     return 0;
 }
 
+auto make_segment_pose(
+    const std::size_t                segment,
+    const glm::vec3&                 p0,
+    const glm::vec3&                 p1,
+    const Repeat_segment_item&       item,
+    const Repeat_path_orientation    orientation,
+    Repeat_pose&                     out_pose
+) -> std::string
+{
+    const float extent = item.max_x - item.min_x;
+    if (!std::isfinite(extent) || !(extent > 0.0f)) {
+        return fmt::format("segment {}: its item has no extent along x ({} m), so no scale spans the segment", segment, extent);
+    }
+    if (!is_finite(p0) || !is_finite(p1)) {
+        return fmt::format("segment {}: a point is not finite", segment);
+    }
+    const glm::vec3 chord = p1 - p0;
+    // Upright spans the chord's plan length at point i's height; tangent spans the chord itself.
+    const glm::vec3 spanned = (orientation == Repeat_path_orientation::upright) ? glm::vec3{chord.x, 0.0f, chord.z} : chord;
+    const float     length  = glm::length(spanned);
+    if (!(length >= c_min_segment_length)) {
+        if (glm::length(chord) >= c_min_segment_length) {
+            return fmt::format("segment {} (points {} - {}) is vertical: an upright piece has no heading along it", segment, segment, segment + 1);
+        }
+        return fmt::format("segment {} (points {} - {}) is {} m long, shorter than the {} m a piece spans", segment, segment, segment + 1, glm::length(chord), c_min_segment_length);
+    }
+    const glm::vec3 x_axis = spanned / length;
+    glm::vec3       y_axis = c_axis_y;
+    if (orientation == Repeat_path_orientation::tangent) {
+        const float along = glm::dot(c_axis_y, x_axis);
+        const glm::vec3 up_rest = c_axis_y - (along * x_axis);
+        const float     rest    = glm::length(up_rest);
+        if (!(rest >= 1.0e-4f)) {
+            return fmt::format("segment {} (points {} - {}) is vertical: a tangent piece has no up axis across it", segment, segment, segment + 1);
+        }
+        y_axis = up_rest / rest;
+    }
+    const float scale  = length / extent;
+    const float offset = scale * item.min_x;
+    out_pose.position = p0 - (offset * x_axis);
+    out_pose.rotation = rotation_from_axes(x_axis, y_axis);
+    out_pose.scale    = glm::vec3{scale, 1.0f, 1.0f};
+    out_pose.item     = 0;
+    return {};
+}
+
+namespace {
+
+[[nodiscard]] auto plan_of(const glm::vec3& v) -> glm::vec2
+{
+    return glm::vec2{v.x, v.z};
+}
+
+// The end point moved onto the moved segment's line: along the neighbour's plan line through it, or along the normal.
+[[nodiscard]] auto slide_end_point(
+    const glm::vec3&                path_point,
+    const std::optional<glm::vec3>& neighbour_point,
+    const glm::vec2&                normal,
+    const float                     offset
+) -> glm::vec3
+{
+    glm::vec2 moved = plan_of(path_point) + (offset * normal);
+    if (neighbour_point.has_value()) {
+        const glm::vec2 direction = plan_of(path_point) - plan_of(neighbour_point.value());
+        const float     length    = glm::length(direction);
+        if (length >= c_min_segment_length) {
+            const glm::vec2 unit   = direction / length;
+            const float     across = glm::dot(unit, normal);
+            if (std::abs(across) >= c_segment_slide_min_sine) {
+                moved = plan_of(path_point) + ((offset / across) * unit);
+            }
+        }
+    }
+    return glm::vec3{moved.x, path_point.y, moved.y};
+}
+
+} // anonymous namespace
+
+auto get_segment_normal(const erhe::math::Curve_path& path, const std::size_t segment, glm::vec3& out_normal) -> std::string
+{
+    const std::size_t count = erhe::math::get_span_count(path);
+    if (segment >= count) {
+        return fmt::format("segment {} is outside the curve's {} segments", segment, count);
+    }
+    const glm::vec3& p0 = path.points[segment].position;
+    const glm::vec3& p1 = path.points[(segment + 1) % path.points.size()].position;
+    if (!is_finite(p0) || !is_finite(p1)) {
+        return fmt::format("segment {}: a point is not finite", segment);
+    }
+    const glm::vec2 chord  = plan_of(p1) - plan_of(p0);
+    const float     length = glm::length(chord);
+    if (!(length >= c_min_segment_length)) {
+        return fmt::format("segment {} (points {} - {}) has a plan length of {} m: it has no normal", segment, segment, (segment + 1) % path.points.size(), length);
+    }
+    const glm::vec2 unit = chord / length;
+    // The right of the direction with y up: cross(direction, y).
+    out_normal = glm::vec3{-unit.y, 0.0f, unit.x};
+    return {};
+}
+
+auto move_curve_segment(const erhe::math::Curve_path& path, const std::size_t segment, const float offset, Segment_move& out_move) -> std::string
+{
+    glm::vec3 normal{0.0f};
+    const std::string refusal = get_segment_normal(path, segment, normal);
+    if (!refusal.empty()) {
+        return refusal;
+    }
+    if (!std::isfinite(offset)) {
+        return fmt::format("the offset {} is not finite", offset);
+    }
+    const std::size_t point_count = path.points.size();
+    const bool        closed      = (path.closure == erhe::math::Curve_closure::closed);
+    const std::size_t first       = segment;
+    const std::size_t second      = (segment + 1) % point_count;
+    std::optional<glm::vec3> before_first;
+    std::optional<glm::vec3> after_second;
+    if (closed || (first > 0)) {
+        before_first = path.points[(first + point_count - 1) % point_count].position;
+    }
+    if (closed || ((second + 1) < point_count)) {
+        after_second = path.points[(second + 1) % point_count].position;
+    }
+    const glm::vec2 plan_normal{normal.x, normal.z};
+    out_move.first_point  = first;
+    out_move.second_point = second;
+    out_move.first        = slide_end_point(path.points[first].position,  before_first, plan_normal, offset);
+    out_move.second       = slide_end_point(path.points[second].position, after_second, plan_normal, offset);
+    return {};
+}
+
+void apply_segment_move(const Segment_move& move, erhe::math::Curve_path& path)
+{
+    if ((move.first_point < path.points.size()) && (move.second_point < path.points.size())) {
+        path.points[move.first_point].position  = move.first;
+        path.points[move.second_point].position = move.second;
+    }
+}
+
 auto expand_repeat(const Repeat_pattern& pattern, const Repeat_pose& start, std::vector<Repeat_pose>& out_poses) -> std::string
 {
     out_poses.clear();
@@ -421,6 +612,9 @@ auto expand_repeat(const Repeat_pattern& pattern, const Repeat_pose& start, std:
         case Repeat_pattern_kind::ring: expand_ring(pattern, start, out_poses); return {};
         case Repeat_pattern_kind::path: expand_path(pattern, start, out_poses); return {};
         case Repeat_pattern_kind::scatter: expand_scatter(pattern, start, out_poses); return {};
+        case Repeat_pattern_kind::segments: expand_segments(pattern, start, out_poses); return {};
+        // The staircase is one generated child in the node's own frame.
+        case Repeat_pattern_kind::stairs: out_poses.push_back(start); return {};
         default: return "unknown pattern";
     }
 }

@@ -1,9 +1,62 @@
 #include "level/kit_shape_library.hpp"
 #include "level/kit_shapes.hpp"
 
+#include "erhe_verify/verify.hpp"
+
+#include <algorithm>
 #include <utility>
 
 namespace editor {
+
+auto make_recreated_shape(
+    const std::vector<Kit_shape_definition>& shapes,
+    const std::string_view                   original_id,
+    Kit_generator                            generator,
+    const unsigned int                       triangle_budget
+) -> Kit_shape_definition
+{
+    const std::vector<Kit_shape_definition>::const_iterator original = std::find_if(
+        shapes.begin(), shapes.end(), [original_id](const Kit_shape_definition& candidate) { return candidate.id == original_id; }
+    );
+    ERHE_VERIFY(original != shapes.end());
+    ERHE_VERIFY(original->recreates.empty());
+    Kit_shape_definition shape = *original;
+    shape.id              = original->id + c_kit_recreated_id_suffix;
+    shape.recreates       = original->id;
+    shape.display_name    = original->display_name + c_kit_recreated_name_suffix;
+    shape.generator       = std::move(generator);
+    shape.triangle_budget = triangle_budget;
+    return shape;
+}
+
+namespace {
+
+// Each recreated shape directly after its original, the order otherwise kept.
+void place_recreated_after_originals(std::vector<Kit_shape_definition>& shapes)
+{
+    std::vector<std::size_t> order;
+    order.reserve(shapes.size());
+    for (std::size_t i = 0, end = shapes.size(); i < end; ++i) {
+        if (!shapes[i].recreates.empty()) {
+            continue;
+        }
+        order.push_back(i);
+        for (std::size_t j = 0; j < end; ++j) {
+            if (shapes[j].recreates == shapes[i].id) {
+                order.push_back(j);
+            }
+        }
+    }
+    std::vector<Kit_shape_definition> ordered;
+    ordered.reserve(shapes.size());
+    for (const std::size_t i : order) {
+        ordered.push_back(std::move(shapes[i]));
+    }
+    ERHE_VERIFY(ordered.size() == shapes.size());
+    shapes = std::move(ordered);
+}
+
+} // anonymous namespace
 
 auto make_length_parameter(
     const char*             name,
@@ -140,6 +193,8 @@ Kit_shape_library::Kit_shape_library()
     add_basic_shapes       (m_shapes);
     add_architecture_shapes(m_shapes);
     add_nature_shapes      (m_shapes);
+    add_basic_shapes_v2    (m_shapes);
+    place_recreated_after_originals(m_shapes);
     // Base colors are linear.
     m_palette = {
         Kit_palette_material{.name = "Kit Stone",          .base_color = glm::vec3{0.50f, 0.50f, 0.47f}, .roughness = 0.85f},

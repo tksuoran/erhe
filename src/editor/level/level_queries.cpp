@@ -1,6 +1,8 @@
 #include "level/level_queries.hpp"
 
+#include "level/kit_layout.hpp"
 #include "level/kit_piece.hpp"
+#include "level/kit_shapes.hpp"
 #include "level/kit_shape_library.hpp"
 #include "level/surface_snap_search.hpp"
 #include "editor_item_bits.hpp"
@@ -13,6 +15,7 @@
 #   include "scene/scene_navigation.hpp"
 #endif
 
+#include "erhe_math/curve_path.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/transform.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -614,7 +617,10 @@ namespace {
 [[nodiscard]] auto get_hull(Overlap_report& report, const std::size_t index) -> const erhe::physics::ICollision_shape*
 {
     if (!report.hulls[index]) {
-        report.hulls[index] = build_shape_from_mesh(report.tested[index].get(), true);
+        // In mesh space; the body's view carries no scale, so the hull takes the node's world scale as a body shape does.
+        report.hulls[index] = make_node_scaled_collision_shape(
+            build_shape_from_mesh(report.tested[index].get(), true), report.tested[index]->world_from_node_transform().get_scale()
+        );
     }
     return report.hulls[index].get();
 }
@@ -897,6 +903,50 @@ void run_level_check(
             .meshes     = {mesh, {}},
             .mesh_count = 1,
             .detail     = std::move(problem)
+        });
+    }
+    // R2.10 for the staircase a stairs layout generated: its largest step, its flight slope and its width, as basic.stairs.
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> staircases;
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{scene_root.item_host_mutex};
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
+            if (mesh && !read_layout_generated_source(*mesh).empty() && !has_any_tag(mesh->get_tags(), options.exclude_tags)) {
+                staircases.push_back(mesh);
+            }
+        }
+    }
+    std::sort(staircases.begin(), staircases.end(), by_id);
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : staircases) {
+        erhe::math::Curve_path path;
+        Stairs_values          values;
+        Level_finding_kind     kind    = Level_finding_kind::unwalkable_parameters;
+        std::string            problem = parse_stairs_source_text(read_layout_generated_source(*mesh), path, values);
+        if (problem.empty()) {
+            erhe::math::Curve_path_table table;
+            Stairs_report                report;
+            table.build(path);
+            problem = make_stairs(table, values, report, nullptr);
+            if (problem.empty()) {
+                float step_rise = 0.0f;
+                for (const Stairs_flight& flight : report.fit.flights) {
+                    step_rise = std::max(step_rise, std::abs(flight.rise));
+                }
+                problem = check_stairs_walkability("stairs layout", step_rise, values.min_tread, values.width, out_check.agent);
+            } else {
+                kind = Level_finding_kind::unreadable_piece;
+            }
+        } else {
+            kind = Level_finding_kind::unreadable_piece;
+        }
+        if (problem.empty()) {
+            continue;
+        }
+        add_finding(out_check, Level_finding{
+            .kind       = kind,
+            .position   = mesh->world_from_node_transform().get_translation(),
+            .meshes     = {mesh, {}},
+            .mesh_count = 1,
+            .detail     = fmt::format("{}: {}", mesh->get_name(), problem)
         });
     }
     out_check.tested.clear();

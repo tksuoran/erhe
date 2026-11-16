@@ -249,7 +249,8 @@ using Kit_connectors_function = std::function<void(const Kit_parameter_values& v
 class Kit_shape_definition
 {
 public:
-    std::string                id;           // <kit>.<shape>
+    std::string                id;           // <kit>.<shape>, a recreated shape's <kit>.<shape>.v2
+    std::string                recreates;    // the id of the original this shape recreates; empty for an original
     std::string                kit;
     std::string                display_name;
     std::string                description;
@@ -273,6 +274,9 @@ public:
     [[nodiscard]] auto find_parameter(std::string_view name) const -> std::optional<std::size_t>;
     [[nodiscard]] auto has_tag       (std::string_view tag) const -> bool;
 };
+
+// The id a shape's contract is known by: its original's for a recreated shape, else its own.
+[[nodiscard]] auto get_contract_id(const Kit_shape_definition& shape) -> const std::string&;
 
 // The bounds of the values' mesh from the generator's CPU geometry alone (no renderable mesh, no upload): the min and
 // max of the facet corners' single precision points, the box a brush of the values reports. Invalid without facets.

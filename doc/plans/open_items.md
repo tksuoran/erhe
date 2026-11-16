@@ -54,7 +54,8 @@ ask the user which to pick. Item 14 starts with writing its plan.
     walkable sample points"; the navigation mesh it reads is built).
 15. Level tools and curves: the "Active" steps of
     `doc/plans/level_tools_implementation.md` "Next steps", in their order
-    (62, 63); its "On hold" steps and the "Steps" of
+    (70, 62, 63; kit shape coders run on the Fable model at medium effort,
+    U41); its "On hold" steps and the "Steps" of
     `doc/plans/curves.md` wait for the user to make them active (the user
     tests each change hands-on in the windowed Debug editor and rules on
     what comes next). State: `memory-bank/topics/level_tools.md`.
@@ -146,6 +147,15 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- Collision under scale, what remains (`doc/editor/physics.md` "Collision
+  shapes follow the node's scale"): a brush of a density other than the
+  default writes the mass of its placed volume, which a later scale change
+  does not follow; a body loaded from a scene saved before 2026-11-16 keeps
+  the explicit mass its brush wrote then. An implicit imported collider on a
+  node without a mesh, or a compound with a rotated child, under a scale the
+  backend cannot take, gets the nearest valid scale with a warning. The
+  Box3D backend's `set_collision_shape()` and the shape scale paths have not
+  been compiled or run (no Box3D tree on the machines used).
 - Derived walkability at other level lengths: the derive ranges of six built
   kit shapes are stated in modules or wall heights while their walkability
   checks use the agent's fixed size, so at other level lengths derived

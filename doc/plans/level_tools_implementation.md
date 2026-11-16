@@ -101,7 +101,49 @@ symmetrically about the node's origin, the live layout preview of a locked
 layout or the pending outline of an unlocked one during the drag, one undo
 entry per release, Escape restoring the start; shown while the node is the
 only selected item whatever the Kit Layouts setting, the coder's choice, for
-the user's review),
+the user's review), and step 66, the segments kit layout (U37,
+R5.12.10: a kind `segments` on a Curve node, switched in place with
+`path`, one piece per segment between two neighbouring control points,
+scaled along its own x axis so its item's x bounds span the straight chord;
+laid out again in the entry of each curve edit and live during a point drag;
+the collision shape at the piece's scale; the orchestrator's choices listed
+under U37, for the user's review), and step 67, the segment handles (U38,
+R5.12.11: on a segments layout that is the curve tool's target, a handle at
+each segment's chord midpoint beside the point handles; one segment
+selected at a time, exclusive with the point selection; the gizmo drag
+moves the segment along its horizontal normal alone, each end point sliding
+along its neighbouring segment's line or along the normal where there is
+none or it is parallel; live layout preview, one `Curve_set_operation` per
+release, Escape restoring the start; MCP `level_select_segment_handle`,
+`level_get_segment_handles`, `level_move_segment`; the orchestrator's
+choices listed under U38, for the user's review), and step 68, the
+layout connector switches (U39, R5.12.12: seven values on a path or
+segments layout node, Hide All and one per direction, +/- tangent, normal
+and binormal in each child's own frame; a locked layout's inner children,
+every child of a closed curve, follow them, an open curve's first and last
+child only for the connector facing its neighbour; the hiding is part of
+the one connector query, `Level_kits::get_connector_switches()`, so a
+hidden connector is not drawn, snapped to or joined; the values in the
+Properties window's Kit Layout group, the Level Kit window's initial values
+and over MCP; the orchestrator's choices listed under U39, for the user's
+review; switches per layout item stay step 60, on hold), and step 69,
+collision follows scale (U40: every body's shape is its source shape at the
+node's world scale, rebuilt in a pass each frame when that scale changes, by
+any writer, also while the simulation is off; the implicit mass follows the scaled shape; a sphere or capsule
+under a non-uniform scale becomes its mesh's hull; the orchestrator's and
+the coder's choices listed under U40, for the user's review), and step 71,
+the spline staircase (U42, R5.12.13: a kit layout kind `stairs` on a Curve
+node, switched in place with `path` and `segments`, whose one child is a
+staircase generated along the curve: flights of equal steps and level
+landings that keep the walking surface within one step rise of the curve's
+height, risers square to the curve's plan direction, side edges following
+the curve at an edge tolerance, a mitred landing at a corner point, a
+soffit at a stated thickness; a curve too steep, too tight or closed is
+refused naming the place and the previous staircase stays; a static
+triangle mesh body, navigation input; regenerated in the entry of each
+curve edit and live during a drag; the fit readback over MCP and in the
+Properties Run line; the orchestrator's and the coder's choices listed
+under U42, for the user's review),
 are built and described in
 `doc/editor/level_tools.md` and `doc/editor/navigation.md`.
 
@@ -135,6 +177,28 @@ The steps to build, in this order (user, 2026-11-15).
     shows; read it before starting and before each further shape. The
     inventory, with the rulings of U34, is
     `doc/plans/level_kit_extra_shapes.md`.
+70. Recreate the kit shapes (user, 2026-11-16, U41): every existing shape
+    written afresh from its description by a coder on the Fable model at
+    medium effort, registered beside its original
+    (`doc/editor/level_tools.md` "Recreated shapes"), one commit per batch,
+    each with the batch's rows in `generated_meshes_are_pinned`, its checks
+    in `scripts/level_tools_verify.py` and its images from
+    `scripts/level_shape_compare.py`. Built: the parallel-version
+    infrastructure (`recreates`, the pairing rule and its test, the
+    comparison script) and the basic kit. Batches to build, in this order:
+    architecture (wall, door wall, pillar, arch); japanese and classical
+    (torii, column, entablature); medieval and roof (battlement, tower,
+    roof); nature (rock, land mass, hill, tree, bush); nature rocks (rock
+    spire, basalt columns); nature terrain (cliff, shore, water, dune,
+    ground patch); nature plants (palm, leaf plant, palm clump, palm
+    shrub). The user then rules per shape which version keeps the
+    canonical id. The ruling step (to build): the kept version takes the
+    canonical id, the other definition is removed, and the dropped id
+    becomes a former id of the kept shape that `Kit_shape_library::find()`
+    resolves, so saved pieces and layout item texts of either id keep
+    loading, as `erhe::property` former names do. A later batch extends
+    `recreated_originals()` in `test_kit_shapes.cpp` and `RECREATED_SHAPES`
+    in `scripts/level_tools_verify.py`.
 
 ### On hold
 
@@ -302,7 +366,8 @@ is started from this list alone.
     seed depends on i alone.
 60. Connector switches per kit layout item (a follow-up of the built step
     52, U33): a locked layout's children cannot be edited, so their
-    connectors are all enabled; an item could carry `connectors_enabled` and
+    own switches are all on (a path or segments layout hides connectors by
+    direction through its own values, step 68); an item could carry `connectors_enabled` and
     the disabled names, written on each generated child and compared by the
     kept-child rule.
 61. Connector snap on axis, the candidate choice (U27 follow-up, for the user

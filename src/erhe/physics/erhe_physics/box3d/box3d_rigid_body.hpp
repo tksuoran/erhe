@@ -56,6 +56,7 @@ public:
     void set_gravity_factor  (float gravity_factor)                                override;
     void set_linear_velocity (const glm::vec3& velocity)                           override;
     void set_mass_properties (float mass, const glm::mat4& local_inertia)          override;
+    void set_collision_shape (const std::shared_ptr<ICollision_shape>& collision_shape) override;
     void set_motion_mode     (Motion_mode motion_mode)                             override;
     void set_restitution     (float restitution)                                   override;
     void set_world_transform (const Transform& transform)                          override;
@@ -87,6 +88,7 @@ public:
     void set_reported_awake(bool value) { m_reported_awake = value; }
 
 private:
+    [[nodiscard]] auto make_shape_def() const -> b3ShapeDef;
     void attach_shapes  (b3ShapeDef& shape_def);
     // Derives mass and inertia from the shapes (whose density is the
     // material's), then applies the explicit mass and inertia override.

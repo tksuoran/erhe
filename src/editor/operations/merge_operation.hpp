@@ -53,6 +53,7 @@ private:
         // The node's physics state as the merge found it, restored by undo
         // (doc/erhe/property_system.md section 4.26).
         std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
+        glm::vec3                                        collision_shape_scale{1.0f};
         erhe::physics::Motion_mode                       motion_mode{erhe::physics::Motion_mode::e_none};
     };
 

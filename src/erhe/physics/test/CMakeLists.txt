@@ -7,13 +7,15 @@ add_executable(${_target}
     test_joint_limits.cpp
     test_joint_reach.cpp
     test_joint_settings_properties.cpp
+    test_motion_mode_change.cpp
     test_overlap_query.cpp
+    test_rigid_body_shape_swap.cpp
     test_six_dof_classifier.cpp
 )
 
 # The limits each backend enforces (erhe::physics::get_enforced_joint_limits).
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
-    target_sources(${_target} PRIVATE test_convex_hull_jolt.cpp test_enforced_joint_limits_jolt.cpp test_penetration_depth_jolt.cpp)
+    target_sources(${_target} PRIVATE test_convex_hull_jolt.cpp test_enforced_joint_limits_jolt.cpp test_penetration_depth_jolt.cpp test_shape_scale_jolt.cpp)
 endif ()
 
 # Box3d_world internals (collision filter interning, hull point generation,

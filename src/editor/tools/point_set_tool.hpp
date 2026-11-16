@@ -133,8 +133,8 @@ protected:
     // A click that hits no point: true arms on_select_miss() (the click is consumed).
     [[nodiscard]] virtual auto try_ready_miss(Viewport_scene_view& viewport_scene_view, const glm::vec2& pointer) -> bool;
     virtual auto on_select_miss() -> bool;
-    // Drawing of the tool's own beyond the point handles (the lattice cage).
-    virtual void render_extras(const Render_context& context);
+    // Drawing of the tool's own beyond the point handles (the lattice cage); hovered is the point under the pointer.
+    virtual void render_extras(const Render_context& context, std::optional<std::size_t> hovered);
     [[nodiscard]] auto is_view_of_target_scene(const Scene_view& scene_view) const -> bool;
 
 private:

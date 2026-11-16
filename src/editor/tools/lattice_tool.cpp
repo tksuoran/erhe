@@ -347,7 +347,7 @@ void Lattice_tool::cancel_point_edit()
     }
 }
 
-void Lattice_tool::render_extras(const Render_context& context)
+void Lattice_tool::render_extras(const Render_context& context, std::optional<std::size_t>)
 {
     glm::vec3 cage_min{0.0f};
     glm::vec3 cage_max{0.0f};

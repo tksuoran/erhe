@@ -82,8 +82,94 @@ const Property<bool> Kit_layout::locked_property = Property<bool>::register_atta
     make_metadata(false, "Locked", "Locked, the layout makes its children and they are not edited directly", false)
 );
 
+const Property<bool> Kit_layout::hide_all_connectors_property = Property<bool>::register_attached(
+    "hide_all_connectors", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(false, "Hide All Connectors", "Path and segments: the children's connectors are hidden, an open curve's first and last child keeping all but the one facing its neighbour", false)
+);
+const Property<bool> Kit_layout::hide_plus_tangent_connectors_property = Property<bool>::register_attached(
+    "hide_plus_tangent_connectors", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(false, "Hide +Tangent Connectors", "Path and segments: the children's connectors facing along the curve are hidden (an open curve's first child included)", false)
+);
+const Property<bool> Kit_layout::hide_minus_tangent_connectors_property = Property<bool>::register_attached(
+    "hide_minus_tangent_connectors", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(false, "Hide -Tangent Connectors", "Path and segments: the children's connectors facing back along the curve are hidden (an open curve's last child included)", false)
+);
+const Property<bool> Kit_layout::hide_plus_normal_connectors_property = Property<bool>::register_attached(
+    "hide_plus_normal_connectors", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(false, "Hide +Normal Connectors", "Path and segments: the inner children's connectors facing the right of the curve's direction are hidden", false)
+);
+const Property<bool> Kit_layout::hide_minus_normal_connectors_property = Property<bool>::register_attached(
+    "hide_minus_normal_connectors", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(false, "Hide -Normal Connectors", "Path and segments: the inner children's connectors facing the left of the curve's direction are hidden", false)
+);
+const Property<bool> Kit_layout::hide_plus_binormal_connectors_property = Property<bool>::register_attached(
+    "hide_plus_binormal_connectors", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(false, "Hide +Binormal Connectors", "Path and segments: the inner children's connectors facing up are hidden", false)
+);
+const Property<bool> Kit_layout::hide_minus_binormal_connectors_property = Property<bool>::register_attached(
+    "hide_minus_binormal_connectors", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(false, "Hide -Binormal Connectors", "Path and segments: the inner children's connectors facing down are hidden", false)
+);
+
+auto Kit_layout::get_hide_direction_property(const Kit_layout_direction direction) -> const Property<bool>&
+{
+    switch (direction) {
+        case Kit_layout_direction::plus_tangent:   return hide_plus_tangent_connectors_property;
+        case Kit_layout_direction::minus_tangent:  return hide_minus_tangent_connectors_property;
+        case Kit_layout_direction::plus_normal:    return hide_plus_normal_connectors_property;
+        case Kit_layout_direction::minus_normal:   return hide_minus_normal_connectors_property;
+        case Kit_layout_direction::plus_binormal:  return hide_plus_binormal_connectors_property;
+        case Kit_layout_direction::minus_binormal:
+        default:                                   return hide_minus_binormal_connectors_property;
+    }
+}
+
+auto is_layout_connector_switch_property(const erhe::property::Dependency_property& property) -> bool
+{
+    for (const erhe::property::Dependency_property* const member : {
+        &Kit_layout::hide_all_connectors_property.get(),
+        &Kit_layout::hide_plus_tangent_connectors_property.get(),
+        &Kit_layout::hide_minus_tangent_connectors_property.get(),
+        &Kit_layout::hide_plus_normal_connectors_property.get(),
+        &Kit_layout::hide_minus_normal_connectors_property.get(),
+        &Kit_layout::hide_plus_binormal_connectors_property.get(),
+        &Kit_layout::hide_minus_binormal_connectors_property.get()
+    }) {
+        if (member == &property) {
+            return true;
+        }
+    }
+    return false;
+}
+
+auto read_layout_connector_hiding(const erhe::scene::Node& node) -> Kit_layout_connector_hiding
+{
+    Kit_layout_connector_hiding hiding;
+    hiding.all = node.get_value(Kit_layout::hide_all_connectors_property) ? Kit_layout_connector_visibility::hidden : Kit_layout_connector_visibility::shown;
+    for (std::size_t i = 0; i < c_layout_direction_count; ++i) {
+        const Kit_layout_direction direction = static_cast<Kit_layout_direction>(i);
+        hiding.set(
+            direction,
+            node.get_value(Kit_layout::get_hide_direction_property(direction)) ? Kit_layout_connector_visibility::hidden : Kit_layout_connector_visibility::shown
+        );
+    }
+    return hiding;
+}
+
+void write_layout_connector_hiding(erhe::scene::Node& node, const Kit_layout_connector_hiding& hiding)
+{
+    node.set_value(Kit_layout::hide_all_connectors_property, hiding.all == Kit_layout_connector_visibility::hidden);
+    for (std::size_t i = 0; i < c_layout_direction_count; ++i) {
+        const Kit_layout_direction direction = static_cast<Kit_layout_direction>(i);
+        node.set_value(Kit_layout::get_hide_direction_property(direction), hiding.is_hidden(direction));
+    }
+}
+
 auto is_kit_layout_property(const erhe::property::Dependency_property& property) -> bool
 {
+    if (is_layout_connector_switch_property(property)) {
+        return true;
+    }
     for (const erhe::property::Dependency_property* const member : {
         &Kit_layout::pattern_property.get(),
         &Kit_layout::items_property.get(),
@@ -102,6 +188,36 @@ auto is_kit_layout_property(const erhe::property::Dependency_property& property)
     return false;
 }
 
+auto Kit_layout_generated::property_owner_type() -> erhe::property::Owner_type
+{
+    static const erhe::property::Owner_type s_id = erhe::property::allocate_owner_type(
+        erhe::property::root_owner_type, "Kit_layout_generated"
+    );
+    return s_id;
+}
+
+const Property<std::string> Kit_layout_generated::source_property = Property<std::string>::register_attached(
+    "source", Kit_layout_generated::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    Property_metadata{
+        .default_value = std::string{},
+        .inherits      = false,
+        .ui            = Property_ui{
+            .group          = "Kit Layout Generated",
+            .tooltip        = "The curve and the values a stairs layout generated this child from (doc/editor/level_tools.md \"Stairs layouts\")",
+            .developer_only = true,
+            .label          = "Source"
+        }
+    }
+);
+
+auto read_layout_generated_source(const erhe::scene::Node& node) -> std::string
+{
+    if (!erhe::property::carries_attached_group(node, Kit_layout_generated::source_property.get())) {
+        return {};
+    }
+    return node.get_value(Kit_layout_generated::source_property);
+}
+
 auto carries_kit_layout(const erhe::scene::Node& node) -> bool
 {
     return erhe::property::carries_attached_group(node, Kit_layout::pattern_property.get());
@@ -110,11 +226,11 @@ auto carries_kit_layout(const erhe::scene::Node& node) -> bool
 auto check_layout_kind(const erhe::scene::Node& node, const Repeat_pattern_kind kind) -> std::string
 {
     const bool is_curve = (dynamic_cast<const erhe::scene::Curve*>(&node) != nullptr);
-    if ((kind == Repeat_pattern_kind::path) && !is_curve) {
-        return fmt::format("'{}' is not a curve node: a path layout is the curve node itself, carrying the layout values", node.get_name());
+    if (is_curve_layout_kind(kind) && !is_curve) {
+        return fmt::format("'{}' is not a curve node: a {} layout is the curve node itself, carrying the layout values", node.get_name(), c_str(kind));
     }
-    if ((kind != Repeat_pattern_kind::path) && is_curve) {
-        return fmt::format("'{}' is a curve node: it carries a path layout only (a {} layout is an Xform node)", node.get_name(), c_str(kind));
+    if (!is_curve_layout_kind(kind) && is_curve) {
+        return fmt::format("'{}' is a curve node: it carries a path, segments or stairs layout only (a {} layout is an Xform node)", node.get_name(), c_str(kind));
     }
     return {};
 }
@@ -148,6 +264,7 @@ auto read_kit_layout(const erhe::scene::Node& node, Kit_layout_data& out_data) -
     data.seeds          = node.get_value(Kit_layout::per_piece_seed_property)   ? Kit_layout_seeds::per_element : Kit_layout_seeds::item;
     data.seed           = node.get_value(Kit_layout::seed_property);
     data.lock           = node.get_value(Kit_layout::locked_property)         ? Kit_layout_lock::locked    : Kit_layout_lock::unlocked;
+    data.connector_hiding = read_layout_connector_hiding(node);
     out_data = std::move(data);
     return {};
 }
@@ -163,6 +280,7 @@ void write_kit_layout(erhe::scene::Node& node, const Kit_layout_data& data)
     node.set_value(Kit_layout::per_piece_seed_property,   data.seeds == Kit_layout_seeds::per_element);
     node.set_value(Kit_layout::seed_property,           data.seed);
     node.set_value(Kit_layout::locked_property,         data.lock == Kit_layout_lock::locked);
+    write_layout_connector_hiding(node, data.connector_hiding);
 }
 
 auto is_locked_kit_layout(const erhe::scene::Node& node) -> bool

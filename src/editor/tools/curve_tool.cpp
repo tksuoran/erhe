@@ -4,7 +4,9 @@
 #include "app_message_bus.hpp"
 #include "editor_log.hpp"
 #include "input_state.hpp"
+#include "level/kit_layout.hpp"
 #include "level/level_kits.hpp"
+#include "level/level_repeat.hpp"
 #include "operations/curve_set_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "prefabs/instance_structure.hpp"
@@ -14,10 +16,15 @@
 #include "tools/tools.hpp"
 #include "transform/transform_tool.hpp"
 
+#include "config/generated/editor_settings_config.hpp"
+#include "renderers/render_context.hpp"
+
 #include "erhe_commands/commands.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/curve.hpp"
 
 #include <fmt/format.h>
+#include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
 #include <limits>
@@ -57,6 +64,22 @@ namespace {
 [[nodiscard]] auto make_operation(const std::shared_ptr<erhe::scene::Curve>& curve, Curve_path after, std::string what) -> std::shared_ptr<Curve_set_operation>
 {
     return std::make_shared<Curve_set_operation>(curve, curve->get_path(), std::move(after), std::move(what));
+}
+
+// The node frame of a segment handle: x the segment's normal, y the node's up axis.
+[[nodiscard]] auto segment_frame_rotation(const glm::vec3& normal) -> glm::quat
+{
+    const glm::vec3 up{0.0f, 1.0f, 0.0f};
+    return glm::quat_cast(glm::mat3{normal, up, glm::cross(normal, up)});
+}
+
+[[nodiscard]] auto is_segments_layout(const erhe::scene::Curve& curve) -> bool
+{
+    if (!carries_kit_layout(curve)) {
+        return false;
+    }
+    Kit_layout_data data;
+    return read_kit_layout(curve, data).empty() && (data.pattern.kind == Repeat_pattern_kind::segments);
 }
 
 [[nodiscard]] auto part_of(const std::size_t index) -> Curve_point_part
@@ -291,6 +314,15 @@ Curve_tool::Curve_tool(
             }
         }
     );
+    m_kit_layout_changed_subscription = app_message_bus.kit_layout_changed.subscribe(
+        [this](Kit_layout_changed_message& message) {
+            const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
+            // A drag of the tool's own changes no kind; a value write during it (MCP) is taken now, the edit keeps its own snapshot.
+            if (curve && (static_cast<uint64_t>(curve->get_id()) == message.node_id)) {
+                update_segment_handles();
+            }
+        }
+    );
 }
 
 auto Curve_tool::get_target_curve() const -> std::shared_ptr<erhe::scene::Curve>
@@ -306,6 +338,84 @@ void Curve_tool::set_target(const std::shared_ptr<erhe::scene::Curve>& curve)
     on_cancel_edit();
     m_target = curve;
     m_selection.clear();
+    m_selected_segment.reset();
+    update_segment_handles();
+}
+
+void Curve_tool::update_segment_handles()
+{
+    const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
+    m_segment_handles = curve && is_segments_layout(*curve);
+    if (m_selected_segment.has_value() && (m_selected_segment.value() >= get_segment_count())) {
+        m_selected_segment.reset();
+    }
+}
+
+auto Curve_tool::has_segment_handles() const -> bool
+{
+    return m_segment_handles && has_point_set_target();
+}
+
+auto Curve_tool::get_segment_count() const -> std::size_t
+{
+    const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
+    return (curve && m_segment_handles) ? erhe::math::get_span_count(curve->get_path()) : 0;
+}
+
+auto Curve_tool::is_editing(const erhe::scene::Curve& curve) const -> bool
+{
+    return m_edit.active && (m_edit.curve.get() == &curve);
+}
+
+auto Curve_tool::get_selected_segment() const -> std::optional<std::size_t>
+{
+    return has_point_set_target() ? m_selected_segment : std::nullopt;
+}
+
+auto Curve_tool::get_segment_point_index(const std::size_t segment) const -> std::size_t
+{
+    const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
+    const std::size_t point_count = curve ? curve->get_path().points.size() : 0;
+    return (point_count * parts_per_point) + segment;
+}
+
+auto Curve_tool::get_segment_of(const std::size_t index) const -> std::optional<std::size_t>
+{
+    const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
+    if (!curve || !m_segment_handles) {
+        return std::nullopt;
+    }
+    const std::size_t first = curve->get_path().points.size() * parts_per_point;
+    if ((index < first) || ((index - first) >= erhe::math::get_span_count(curve->get_path()))) {
+        return std::nullopt;
+    }
+    return index - first;
+}
+
+auto Curve_tool::select_curve_segment(const std::shared_ptr<erhe::scene::Curve>& curve, const std::optional<std::size_t> segment) -> bool
+{
+    if (!curve || (m_context.selection == nullptr)) {
+        return false;
+    }
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected = m_context.selection->get_selected_items();
+    if ((selected.size() != 1) || (selected.front() != curve)) {
+        m_context.selection->set_selection(std::vector<std::shared_ptr<erhe::Item_base>>{curve});
+    }
+    m_target_stale = true;
+    static_cast<void>(update_point_set());
+    if (m_target.lock() != curve) {
+        return false;
+    }
+    if (!segment.has_value()) {
+        m_selected_segment.reset();
+        return true;
+    }
+    if (segment.value() >= get_segment_count()) {
+        return false;
+    }
+    m_selection.clear();
+    m_selected_segment = segment;
+    return true;
 }
 
 auto Curve_tool::update_point_set() -> bool
@@ -355,7 +465,8 @@ void Curve_tool::get_point_world_positions(std::vector<std::optional<glm::vec3>>
         return;
     }
     const glm::mat4 world_from_node = curve->world_from_node();
-    for (const Curve_point& point : curve->get_path().points) {
+    const Curve_path& path = curve->get_path();
+    for (const Curve_point& point : path.points) {
         out_positions.push_back(glm::vec3{world_from_node * glm::vec4{point.position, 1.0f}});
         if (point.kind == Curve_point_kind::corner) {
             out_positions.push_back(std::nullopt);
@@ -365,12 +476,28 @@ void Curve_tool::get_point_world_positions(std::vector<std::optional<glm::vec3>>
             out_positions.push_back(glm::vec3{world_from_node * glm::vec4{point.position + point.out_handle, 1.0f}});
         }
     }
+    // The segment handles at the chord midpoints.
+    const std::size_t segment_count = get_segment_count();
+    for (std::size_t segment = 0; segment < segment_count; ++segment) {
+        const glm::vec3 midpoint = 0.5f * (path.points[segment].position + path.points[(segment + 1) % path.points.size()].position);
+        out_positions.push_back(glm::vec3{world_from_node * glm::vec4{midpoint, 1.0f}});
+    }
 }
 
 auto Curve_tool::get_point_world_position(const std::size_t index, glm::vec3& out_position) const -> bool
 {
     const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
-    if (!curve || !is_valid_index(curve->get_path(), index)) {
+    if (!curve) {
+        return false;
+    }
+    const std::optional<std::size_t> segment = get_segment_of(index);
+    if (segment.has_value()) {
+        const Curve_path& path = curve->get_path();
+        const glm::vec3 midpoint = 0.5f * (path.points[segment.value()].position + path.points[(segment.value() + 1) % path.points.size()].position);
+        out_position = glm::vec3{curve->world_from_node() * glm::vec4{midpoint, 1.0f}};
+        return true;
+    }
+    if (!is_valid_index(curve->get_path(), index)) {
         return false;
     }
     const Curve_point& point = curve->get_path().points[index / parts_per_point];
@@ -385,20 +512,36 @@ auto Curve_tool::get_point_world_position(const std::size_t index, glm::vec3& ou
 
 auto Curve_tool::is_point_selected(const std::size_t index) const -> bool
 {
+    if (m_selected_segment.has_value()) {
+        const std::optional<std::size_t> segment = get_segment_of(index);
+        return segment.has_value() && (segment.value() == m_selected_segment.value());
+    }
     return std::binary_search(m_selection.begin(), m_selection.end(), index);
 }
 
 auto Curve_tool::has_point_selection() const -> bool
 {
-    return has_point_set_target() && !m_selection.empty();
+    return has_point_set_target() && (!m_selection.empty() || m_selected_segment.has_value());
 }
 
 void Curve_tool::select_point(const std::size_t index, const Point_select select)
 {
     const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
-    if (!curve || !is_valid_index(curve->get_path(), index)) {
+    if (!curve) {
         return;
     }
+    // One segment at a time and never with points: each drags the other ways.
+    const std::optional<std::size_t> segment = get_segment_of(index);
+    if (segment.has_value()) {
+        m_selection.clear();
+        const bool deselect = (select == Point_select::toggle) && (m_selected_segment == segment);
+        m_selected_segment = deselect ? std::nullopt : segment;
+        return;
+    }
+    if (!is_valid_index(curve->get_path(), index)) {
+        return;
+    }
+    m_selected_segment.reset();
     if (select == Point_select::replace) {
         m_selection.clear();
         m_selection.push_back(index);
@@ -414,10 +557,11 @@ void Curve_tool::select_point(const std::size_t index, const Point_select select
 
 auto Curve_tool::clear_point_selection() -> bool
 {
-    if (m_selection.empty()) {
+    if (m_selection.empty() && !m_selected_segment.has_value()) {
         return false;
     }
     m_selection.clear();
+    m_selected_segment.reset();
     return true;
 }
 
@@ -430,6 +574,9 @@ void Curve_tool::prune_selection()
     }
     const Curve_path& path = curve->get_path();
     std::erase_if(m_selection, [this, &path](const std::size_t index) { return !is_valid_index(path, index); });
+    if (m_selected_segment.has_value() && (m_selected_segment.value() >= get_segment_count())) {
+        m_selected_segment.reset();
+    }
 }
 
 void Curve_tool::get_selected_points(std::vector<Curve_point_ref>& out_refs) const
@@ -465,6 +612,9 @@ auto Curve_tool::select_curve_points(const std::shared_ptr<erhe::scene::Curve>& 
     if (m_target.lock() != curve) {
         return false;
     }
+    if ((select == Point_select::replace) || !refs.empty()) {
+        m_selected_segment.reset();
+    }
     if (select == Point_select::replace) {
         m_selection.clear();
     }
@@ -483,7 +633,16 @@ auto Curve_tool::select_curve_points(const std::shared_ptr<erhe::scene::Curve>& 
 auto Curve_tool::get_point_frame_rotation() const -> glm::quat
 {
     const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
-    return curve ? curve->world_from_node_transform().get_rotation() : glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
+    if (!curve) {
+        return glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
+    }
+    const glm::quat node_rotation = curve->world_from_node_transform().get_rotation();
+    // A segment handle's Local frame: x along the segment's normal, the one axis its drag moves along.
+    glm::vec3 normal{0.0f};
+    if (m_selected_segment.has_value() && get_segment_normal(curve->get_path(), m_selected_segment.value(), normal).empty()) {
+        return node_rotation * segment_frame_rotation(normal);
+    }
+    return node_rotation;
 }
 
 auto Curve_tool::get_point_drawing() const -> Point_drawing
@@ -496,7 +655,7 @@ auto Curve_tool::begin_point_edit() -> bool
 {
     m_edit = Edit{};
     const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
-    if (!curve || m_selection.empty()) {
+    if (!curve || (m_selection.empty() && !m_selected_segment.has_value())) {
         return false;
     }
     const std::string refusal = edit_refusal(*curve);
@@ -508,6 +667,17 @@ auto Curve_tool::begin_point_edit() -> bool
     m_edit.before          = curve->get_path();
     m_edit.world_from_node = curve->world_from_node();
     m_edit.node_from_world = curve->node_from_world();
+    if (m_selected_segment.has_value()) {
+        const std::size_t segment = m_selected_segment.value();
+        const std::string problem = get_segment_normal(m_edit.before, segment, m_edit.segment_normal);
+        if (!problem.empty()) {
+            log_tools->warn("Curve segment move refused: {}", problem);
+            m_edit = Edit{};
+            return false;
+        }
+        m_edit.segment          = segment;
+        m_edit.segment_midpoint = 0.5f * (m_edit.before.points[segment].position + m_edit.before.points[(segment + 1) % m_edit.before.points.size()].position);
+    }
     m_edit.active          = true;
     if (m_context.level_kits != nullptr) {
         m_context.level_kits->begin_layout_preview(curve);
@@ -528,6 +698,21 @@ void Curve_tool::apply_point_edit(const std::optional<glm::mat4>& world_delta)
     }
     // The delta in the prim's frame; handles are offsets, so they take its linear part.
     const glm::mat4 delta  = m_edit.node_from_world * world_delta.value() * m_edit.world_from_node;
+    if (m_edit.segment.has_value()) {
+        // Only the midpoint's motion along the normal moves the segment; the end points slide along the neighbours.
+        const glm::vec3 moved  = glm::vec3{delta * glm::vec4{m_edit.segment_midpoint, 1.0f}};
+        const float     offset = glm::dot(moved - m_edit.segment_midpoint, m_edit.segment_normal);
+        Segment_move move;
+        if (!move_curve_segment(m_edit.before, m_edit.segment.value(), offset, move).empty()) {
+            return;
+        }
+        m_scratch_path = m_edit.before;
+        apply_segment_move(move, m_scratch_path);
+        if (!paths_equal(m_scratch_path, m_edit.curve->get_path())) {
+            m_edit.curve->set_path(m_scratch_path);
+        }
+        return;
+    }
     const glm::mat3 linear{delta};
     // Alt frees the dragged handle of a smooth point (the point becomes free), read live as the animation window does.
     const bool free_side = (m_context.input_state != nullptr) && m_context.input_state->alt;
@@ -578,8 +763,9 @@ void Curve_tool::commit_point_edit()
     if (!curve || (m_context.operation_stack == nullptr) || paths_equal(curve->get_path(), m_edit.before)) {
         return;
     }
+    std::string what = m_edit.segment.has_value() ? fmt::format("move segment {}", m_edit.segment.value()) : std::string{"move points"};
     m_context.operation_stack->execute_now(
-        std::make_shared<Curve_set_operation>(curve, std::move(m_edit.before), curve->get_path(), "move points")
+        std::make_shared<Curve_set_operation>(curve, std::move(m_edit.before), curve->get_path(), std::move(what))
     );
 }
 
@@ -595,6 +781,47 @@ void Curve_tool::cancel_point_edit()
     const std::shared_ptr<erhe::scene::Curve> curve = std::move(m_edit.curve);
     if (curve && !paths_equal(curve->get_path(), m_edit.before)) {
         curve->set_path(m_edit.before);
+    }
+}
+
+void Curve_tool::render_extras(const Render_context& context, const std::optional<std::size_t> hovered)
+{
+    const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
+    if (!curve || !m_segment_handles) {
+        return;
+    }
+    const std::optional<std::size_t> hovered_segment = hovered.has_value() ? get_segment_of(hovered.value()) : std::nullopt;
+    if (!hovered_segment.has_value() && !m_selected_segment.has_value()) {
+        return;
+    }
+    // The hovered and the selected segment's chord, thicker, in the point handles' colors; x-ray as the curves are.
+    erhe::renderer::Primitive_renderer line_renderer = context.get(
+        {
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .thin_lines        = false,
+            .xray              = true
+        }
+    );
+    const Debug_visualizations_style& style = context.app_context.editor_settings->debug_visualizations_style;
+    const float      width           = 2.0f * style.curve_selected_width;
+    const Curve_path& path           = curve->get_path();
+    const glm::mat4  world_from_node = curve->world_from_node();
+    const auto draw_chord = [&](const std::size_t segment, const glm::vec4& color) {
+        if (segment >= erhe::math::get_span_count(path)) {
+            return;
+        }
+        const glm::vec3 a{world_from_node * glm::vec4{path.points[segment].position, 1.0f}};
+        const glm::vec3 b{world_from_node * glm::vec4{path.points[(segment + 1) % path.points.size()].position, 1.0f}};
+        line_renderer.add_line(color, width, a, color, width, b);
+    };
+    if (hovered_segment.has_value() && (hovered_segment != m_selected_segment)) {
+        draw_chord(hovered_segment.value(), style.point_hover_color);
+    }
+    if (m_selected_segment.has_value()) {
+        draw_chord(m_selected_segment.value(), style.point_selected_color);
     }
 }
 

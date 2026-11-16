@@ -9,6 +9,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::physics`: `irigid_body.hpp` - `IRigid_body::set_collision_shape()`, a body's shape
+  replaced in place (broadphase bounds follow; an explicit mass stays, an implicit one is
+  re-derived) (`doc/erhe/physics.md`).
+- `erhe::physics`: `icollision_shape.hpp` - `ICollision_shape::is_valid_scale()` and
+  `make_scale_valid()`, whether the backend represents the shape under a scale exactly
+  (`doc/erhe/physics.md`).
 - `erhe::commands`: `command.hpp` - `Command::accepts_binding()`, a command's
   refusal of user bindings it cannot serve; `Commands::set_binding_override()`
   fails with its reason (`doc/erhe/commands.md`).
@@ -166,6 +172,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::physics` (Jolt): mass convention - a body without an explicit mass weighs its shape
+  volume times the material density, as `IRigid_body_create_info` documents and Box3D does; it
+  was 1000 times that through Jolt's default convex density. This changes the mass of imported
+  bodies without a mass, of editor bodies made by the key property alone and of
+  `create_physics_body` without a mass; brush bodies keep their mass value.
+- `erhe::physics` (Jolt): `set_motion_mode()` moves the body to the object layer of the new mode;
+  mass properties (`set_mass_properties()`, `set_collision_shape()`, a material's density) are
+  written to a static body's motion properties too, so a body made dynamic later simulates the
+  mass `get_mass()` reports. Box3D: `set_motion_mode()` applies the explicit mass and inertia
+  override again after the type change.
 - `erhe::geometry`: `shapes/sweep.hpp` - `make_sweep()` creates on the given mesh only the attribute
   store it writes (corner texture coordinates 0), no longer every `Mesh_attributes` store.
 - `erhe::math`: `math_util.hpp` - `angle_of_rotation()` is the atan2 of the

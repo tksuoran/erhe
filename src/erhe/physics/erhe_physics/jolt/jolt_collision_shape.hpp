@@ -27,6 +27,8 @@ public:
     auto get_center_of_mass     () const -> glm::vec3                  override;
     auto get_mass_properties    () const -> Mass_properties            override;
     auto describe               () const -> std::string                override;
+    auto is_valid_scale         (glm::vec3 scale) const -> bool        override;
+    auto make_scale_valid       (glm::vec3 scale) const -> glm::vec3   override;
 
     [[nodiscard]] auto get_jolt_shape() const -> JPH::ShapeRefC;
 

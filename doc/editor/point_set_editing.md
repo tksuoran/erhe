@@ -3,8 +3,9 @@
 Stability: experimental
 
 Viewport editing of points that belong to one target - a lattice node's
-control points, a curve prim's control points and handle ends, a scatter kit
-layout node's region handles - shares one interface and one gizmo path. The
+control points, a curve prim's control points and handle ends (and a
+segments kit layout's segment handles), a scatter kit layout node's region
+handles - shares one interface and one gizmo path. The
 three users are described in
 `doc/editor/lattice_deform_geometry_node.md` "Viewport editing",
 `doc/editor/curves.md` "Viewport editing" and `doc/editor/level_tools.md`
@@ -58,7 +59,9 @@ three users are described in
   also MCP `cancel_component_edit`); the rest of the drag moves nothing and
   its release records nothing.
 - `tool_render()` draws the points as camera-facing quads: orange, white when
-  hovered, yellow when selected, after the provider's `render_extras()`. The
+  hovered, yellow when selected, after the provider's `render_extras()`,
+  which is given the hovered point (the curve tool draws the hovered and the
+  selected segment's chord). The
   colors and sizes (half size per metre of distance to the camera) are the
   `point_*` fields of `Debug_visualizations_style`, one group for both tools
   (Settings window, Debug Visualizations Style > Point Handles), read at draw
@@ -87,6 +90,10 @@ next drag needs no new click.
   between.
 - The lattice tool's selected point is a value of the lattice node and is
   always one point; a drag leaves it selected.
+- The curve tool's segment handles: one segment at a time, exclusive with
+  the point selection (selecting either clears the other); kept through its
+  drags and their undo and redo, dropped when a change leaves fewer
+  segments or the target changes.
 - The region tool holds at most one selected handle, kept through its drags
   and their undo and redo, and cleared when the target changes or its
   region or kind does (the indices then name other handles). Its drag gives

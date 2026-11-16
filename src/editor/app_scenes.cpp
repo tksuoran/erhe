@@ -176,7 +176,12 @@ void App_scenes::before_physics_simulation_steps()
     // (after_physics_simulation_steps()).
     for (const auto& scene_root : m_scene_roots) {
         const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
-        if (!physics.static_enable || !physics.dynamic_enable || is_saving(*scene_root)) {
+        if (!physics.static_enable || is_saving(*scene_root)) {
+            continue;
+        }
+        // Shapes follow node scale even while the simulation is off (doc/editor/physics.md).
+        scene_root->apply_pending_shape_scales();
+        if (!physics.dynamic_enable) {
             continue;
         }
         scene_root->before_physics_simulation_steps();

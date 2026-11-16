@@ -6,6 +6,7 @@
 #include "tools/selection_tool.hpp"
 
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
@@ -28,8 +29,11 @@ void Kit_layout_indicators::make_layout(Scene_root& scene_root, const erhe::scen
     out_layout.outline.kind = data.pattern.kind;
     // The generation's own refusal test; the node's scale is checked as it is drawn, so the cache takes no transform.
     out_layout.refusal = m_level_kits.prepare_layout_generation(scene_root, node, data, glm::mat4{1.0f}, *m_prepared);
-    if (out_layout.refusal.empty() && (data.pattern.kind != Repeat_pattern_kind::path)) {
-        make_layout_outline(data.pattern, m_prepared->run, m_prepared->poses, m_prepared->sizes.items, out_layout.outline);
+    if (out_layout.refusal.empty() && (data.pattern.kind != Repeat_pattern_kind::path) && (data.pattern.kind != Repeat_pattern_kind::stairs)) {
+        const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(&node);
+        make_layout_outline(
+            data.pattern, m_prepared->run, m_prepared->poses, m_prepared->sizes.items, (curve != nullptr) ? &curve->get_table() : nullptr, out_layout.outline
+        );
     }
     m_prepared->clear();
 }

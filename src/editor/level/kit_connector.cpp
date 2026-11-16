@@ -73,9 +73,22 @@ auto Kit_connector_switches::is_disabled(const std::string_view connector_name) 
     return for_each_listed_name(disabled_connectors, [connector_name](const std::string_view name) { return name == connector_name; });
 }
 
-auto Kit_connector_switches::is_enabled(const std::string_view connector_name) const -> bool
+auto Kit_connector_switches::is_enabled(const std::string_view connector_name, const std::size_t connector_index) const -> bool
 {
-    return connectors_enabled && !is_disabled(connector_name);
+    return connectors_enabled && !is_disabled(connector_name) && !is_hidden_by_layout(connector_index);
+}
+
+auto Kit_connector_switches::is_hidden_by_layout(const std::size_t connector_index) const -> bool
+{
+    return (connector_index < c_max_shape_connectors) && ((layout_hidden_bits & (std::uint64_t{1} << connector_index)) != 0);
+}
+
+void Kit_connector_switches::hide_by_layout(const std::size_t connector_index)
+{
+    // A connector past the bound stays shown; the unit test keeps every shape within it.
+    if (connector_index < c_max_shape_connectors) {
+        layout_hidden_bits |= (std::uint64_t{1} << connector_index);
+    }
 }
 
 auto parse_connector_names(const std::string_view text) -> std::vector<std::string>
@@ -131,7 +144,13 @@ auto set_connector_state(const std::string_view disabled_connectors, const std::
 
 void remove_disabled_connectors(const Kit_connector_switches& switches, std::vector<Kit_connector>& connectors)
 {
-    std::erase_if(connectors, [&switches](const Kit_connector& connector) { return !switches.is_enabled(connector.name); });
+    std::size_t kept = 0;
+    for (std::size_t i = 0, end = connectors.size(); i < end; ++i) {
+        if (switches.is_enabled(connectors[i].name, i)) {
+            connectors[kept++] = connectors[i];
+        }
+    }
+    connectors.resize(kept);
 }
 
 auto transform_connector(const Kit_connector& connector, const glm::vec3& position, const glm::quat& rotation) -> Kit_connector

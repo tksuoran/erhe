@@ -156,6 +156,199 @@ The user's rulings (2026-11-15):
   a shape carries is a light node, and its values are that node's own
   properties, not shape parameters. No limit on the number of kit lights
   for now ("we may end up baking lights to vertices").
+- U37 (2026-11-16), segments layout. The user's request: "Add a new curve
+  mode - works a bit like polyline - for wall-like structures. Only one
+  child for each segment between two control points. Children are scaled
+  (non-uniform scale, one axis only) to fill space between control points
+  (for example wall length is adjusted by editing room corner points)." The
+  control points stay movable in the viewport as for a path layout, the
+  pieces following live during a drag. The orchestrator's choices, for the
+  user's review: a kind `segments` beside `path` on a Curve node, switched
+  in place; n - 1 pieces on an open curve, n on a closed one; each piece
+  spans the straight chord (handles do not bend it); element i takes item i
+  modulo the item count and is scaled by its own item's x bounds; upright
+  keeps the piece vertical at point i's height spanning the chord's plan
+  length, tangent spans the chord itself; a vertical or shorter than 1e-4 m
+  chord is refused naming the segment; count, count mode and gap are not
+  used; module snap and surface orient are not applied, surface snap is; a
+  new segments layout without points spans the first item at scale 1; the
+  collision shape takes the piece's scale as an imported collider's does.
+- U38 (2026-11-16), segment handles. The user's request: "This curve type
+  should also make the line segments themselves selectable handles;
+  dragging the line handle shall move the line segment along the line
+  segment normal, by moving both control points of the segment
+  accordingly." Asked whether the two end points move by the same offset or
+  slide along the neighbouring walls: "Yes the end points shall move along
+  the neighbor walls lines". The orchestrator's choices, for the user's
+  review: a segment's handle is a point handle at its chord's midpoint
+  beside the control point handles, the hovered and the selected segment's
+  chord drawn thicker; one segment is selected at a time, and selecting a
+  segment clears the point selection and selecting a point clears the
+  segment; the drag goes through the Transform gizmo as a point drag does,
+  only the motion along the normal counting; the normal is horizontal (the
+  node's xz plane) and is the right of the segment's direction from point i
+  to i + 1; an end point with no neighbouring segment, or a neighbour within
+  15 degrees of parallel (so an end point slides at most about 3.9 times
+  the offset; a flatter kink would throw the shared point far along the
+  neighbour), moves straight along the normal; each point
+  keeps its height; the gizmo's Local frame turns its x axis onto the
+  normal; MCP `level_select_segment_handle`, `level_get_segment_handles`
+  and `level_move_segment` (a signed offset, one undo entry).
+
+- U39 (2026-11-16), layout connector switches. The user's request: "A
+  curve with many children can show a lot of connectors, many of which are
+  not actually useful - the connectors between children in curve are
+  unlikely to be useful. To mitigate this, we want to have a way in kit
+  layout node to disable the connectors between children via property or
+  properties. Connectors that face curve normal (or negative normal)
+  direction might still be useful, so there shall be dedicated settings
+  for
+  - hide all connectors for non head/tail children
+  - hide the connectors facing curve +/- tangent direction for non
+    head/tail children
+  - hide the connectors facing curve +/- normal direction for non
+    head/tail children
+  - hide the connectors facing curve +/- binormal direction for non
+    head/tail children
+  Settings for tangent, normal and binormal shall be independent from each
+  other, all combinations should use possible, separate hide/show for
+  positive and negative so total 6 directions to show/hide. For open
+  curves, head and tail connectors should not be hidden. Closed curves head
+  and tail should be considered the same way as non head/tail children."
+  On the head and tail of an open curve: "Head and tail: the one (1 out of
+  6) facing their neighbor shall be hidden". Asked whether that connector
+  follows the switches or is hidden always: "they should follow switches;
+  The switches semantics is to target 'inter-child' connectors". So the
+  switches target the connectors between a layout's children: the head's
+  +tangent and the tail's -tangent connectors are hidden when Hide All or
+  the matching tangent switch is on. The orchestrator's choices, for the
+  user's review: seven boolean values on the layout node, all off by default, so
+  older layouts and files read unchanged; they apply to path and segments
+  layouts only (line, grid, ring and scatter keep and ignore them, their
+  rows hidden); a layout of one child hides nothing; a child's frame is
+  its own local rotation as generated (tangent its x axis, the direction of
+  travel; binormal its y axis, up; normal its z axis, the right of the
+  direction of travel as the segment handle normal of U38, the opposite of
+  the curve frame's side); a connector faces the axis of the largest
+  absolute component of its outward (carried as a face normal by the
+  child's local transform, scale and mirror included) in that frame, ties
+  going to tangent, then normal, then binormal - by its outward direction
+  alone, so a roof's connectors, which all face down, follow only the
+  -binormal switch; a hidden connector is
+  disabled as a switched-off one (U33): not drawn, not snapped to, not
+  joinable; only a locked layout hides, an unlocked layout's children
+  being ordinary pieces with their own switches; per-item switches stay
+  plan step 60.
+
+- U40 (2026-11-16), collision follows scale. The defect as reported to the
+  user: "Scaling any piece with the Transform tool still leaves its
+  collision shape unscaled." The user: "This shall be fixed; simple shapes
+  like walls could use box collision shapes; in the future, static geometry
+  will get dedicated collisions baked in world space, so transforms do not
+  matter after that". The orchestrator's and the coder's choices, for the
+  user's review: the fix is for every body, not kit pieces alone - the
+  node's physics system keeps each body's source shape and rebuilds the
+  scaled shape in a pass each frame (also while the simulation is off)
+  whenever the node's world scale changed,
+  whatever changed it (`doc/editor/physics.md` "Collision shapes follow the
+  node's scale"); during a Transform tool scale drag the shape follows at
+  every frame the scale changed (a shape swap in place, which the physics
+  world takes cheaply, broadphase bounds included); a body without an
+  explicit mass weighs its shape volume, so a scaled dynamic piece's mass
+  follows, and brushes of the default density write no mass value; a
+  sphere or capsule under a non-uniform scale becomes the convex hull of
+  its mesh at that scale; the box-like kit shapes (wall, block, floor
+  slab, square pillar) keep their convex hull collision rather than a box:
+  the hull of their eight corners is exact under any scale already, and a
+  box placed off the node's origin (their origin is at the center of the
+  base) is a one-child compound that the glTF and USD exports write as a
+  synthesized collider node, a change of the saved files left for the
+  user to rule on.
+  The user on the mass convention (a Jolt body without an explicit mass
+  weighs its shape volume times the material density, where it weighed
+  1000 times that): "The mass change is good, we can keep it".
+
+- U41 (2026-11-16), recreated kit shapes. The user's request: "Kit shapes:
+  Existing kit shapes were created using Opus model. We want to recreate
+  all existing kit models using Fable model with medium effort, and all new
+  kit shapes should be created with same model settings." Asked how the
+  two versions are compared: "Can we keep both versions, old opus version
+  parallel to the new fable version so I can visually compare the
+  results?" - yes. The orchestrator's choices, for the user's review: a
+  recreated shape is a separate shape with a parallel id (the original's
+  plus `.v2`, its name marked "(F)"), listed directly after its original;
+  the original keeps its id, generator, tests and pinned mesh, so saved
+  scenes read unchanged; a recreated shape states its original's contract
+  (kit, parameters, material slots, connectors, origin rule, collision
+  kind, mesh kind, randomness, walkability), so Replace swaps one for the
+  other piece for piece; a comparison scene with every pair side by side
+  and an image per pair (`scripts/level_shape_compare.py`); the user rules
+  per shape which version keeps the canonical id; kit shape coders run on
+  the Fable model at medium effort. Built as
+  `doc/editor/level_tools.md` "Recreated shapes".
+
+- U42 (2026-11-16), spline staircase. The user's request: "Add spline
+  staircase support: The spline may curve on both XZ plane and height (Y) -
+  fit the curve with runs of steps and level platform, followed by more
+  steps, alternating as needed to stay within the curve. The edges of the
+  staircase should be smooth and curved if there is XZ plane curving." The
+  orchestrator's choices, for the user's review: a kit layout kind `stairs`
+  on a Curve node beside `path` and `segments`, switched in place among the
+  three, whose one child is the generated staircase; the fit works along
+  the curve's plan length, each step within the level's step rules (the
+  defaults of `basic.stairs`: rise limit 0.2 m, tread depth 0.3 m); the
+  walking surface stays within one step rise of the curve; risers are
+  straight lines square to the curve's plan direction and the side edges
+  the curve's plan offset by half the width, subdivided by a tolerance; a
+  curve the steps cannot follow is refused naming the place and the
+  previous staircase stays; a closed solid with an underside at a stated
+  thickness; walkable; the values Width, Step Rise Limit, Tread Depth,
+  Thickness, Edge Tolerance and Material; regenerated in the entry of each
+  curve edit and live during a drag. The coder's choices, for the user's
+  review:
+  - The bound is two-sided: the surface is at most one rise limit above or
+    below the curve. A flight therefore starts one rise below the curve and
+    ends one rise above it, so a slope gentler than a flight gives short
+    flights (two steps at a third of the flight slope, three at half, five
+    at three quarters) between landings, and a staircase on a gentle curve
+    starts with a landing. Flights start as late as the bound lets them,
+    which makes each as long as it can be.
+  - A flight's treads are exactly the tread depth; a deeper tread is a
+    landing. The steps of one climb (between two turns of the curve's
+    height) are equal, the least count within the rise limit, so the end
+    height is reached exactly; a rise or dip below the rise limit makes no
+    step, a curve ending a few centimeters above its start has one low
+    step, and a change below 5 % of the rise limit makes none (the end
+    height is then met to within that).
+  - A short part steeper than a flight is followed as long as the bound
+    holds (the steps catch up within one rise); beyond that the curve is
+    refused, as is a vertical part. A turn from up to down or down to up
+    needs a tread's depth of level top or bottom.
+  - The tread depth is measured on the curve (the centre line), not on an
+    inner-third walking line. The curve's plan radius must be at least 0.75
+    times the width, so a winder's inner edge keeps a third of its depth.
+  - A corner control point gets a level mitred landing (no winders), half
+    the width times tan(turn / 2) and 2 cm to each side.
+  - A closed curve is refused (a ring staircase is future work).
+  - The underside is a soffit: the thickness below each riser's foot and
+    below a landing, sloping under a flight; hard edges where its slope
+    changes by more than 20 degrees. One material slot, `stone`, as
+    `basic.stairs` has.
+  - The child is a generated mesh node, not a kit piece: it carries the
+    text of the curve and values it was made from
+    (`Kit_layout_generated.source`) in place of a `Kit_piece` record, is
+    saved with its mesh, and regenerates at the next edit after a load. The
+    stairs values ride the pattern text; the layout's items, snap values,
+    seeds and connector switches are kept and not used.
+  - A new stairs layout without a curve is a flight of ten steps; Make
+    Layout from a piece refuses the kind.
+  - The step rules are values, not limits of the agent: Level Check reports
+    a staircase whose step rise, flight slope or width the agent does not
+    pass, as it does for `basic.stairs`, and the staircase is built.
+  - A stairs layout node tilted off the vertical is refused (the other
+    layout kinds allow a tilted node; slanted treads are no stairs). A
+    curve too short for its steps is refused with the plan length it needs.
+  Built as `doc/editor/level_tools.md` "Stairs layouts".
 
 ## Terms
 
@@ -414,6 +607,28 @@ the starter set.
     pieces as its children, so the author selects one node to edit the
     path's points and the layout's values. A polyline is a curve of corner
     points.
+  - R5.12.10 A kit layout along a curve can instead hold one piece per
+    segment between two neighbouring control points, each scaled along one
+    axis to fill the segment (U37), so a wall's length follows its room's
+    corner points.
+  - R5.12.11 Each segment of such a layout is a handle in the viewport: a
+    drag moves the segment parallel to itself along its normal, its two
+    control points sliding along the neighbouring segments' lines (U38).
+  - R5.12.12 A kit layout along a curve has connector switches that hide
+    the connectors between its children: one hiding them all, and one for
+    each of the six directions a connector can face in a child's frame
+    (plus and minus tangent, normal and binormal), independent of each
+    other. On a closed curve every child follows them; on an open curve the
+    first and last child keep every connector but the one facing their
+    neighbour (U39).
+  - R5.12.13 A staircase can be generated along a curve (U42): the curve
+    may bend in plan and in height, and the staircase fits it with runs of
+    equal steps and level landings, alternating as needed so that its
+    walking surface stays within one step rise of the curve; each step
+    keeps the level's step rules (R3.5); on a curved plan the side edges are
+    smooth curves. It follows every edit of the curve, is walkable
+    (navigation input, a collision body), and a curve it cannot follow is
+    refused naming the place.
   - R5.12.9 The values of a kit layout node (R5.12.1, the lock included)
     are edited in the Properties window with the node selected. The Level
     Kit window keeps a set of the same values as well: they are the

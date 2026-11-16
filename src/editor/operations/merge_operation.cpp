@@ -16,6 +16,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/trs_transform.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <iterator>
@@ -81,7 +82,8 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         source_entry.mesh            = mesh;
         source_entry.node            = std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this());
         source_entry.before_parent   = node->get_parent_node();
-        source_entry.collision_shape = physics_state.collision_shape;
+        source_entry.collision_shape       = physics_state.collision_shape;
+        source_entry.collision_shape_scale = physics_state.collision_shape_scale;
         source_entry.motion_mode     = physics_state.motion_mode;
 
         ERHE_VERIFY(source_entry.before_parent);
@@ -98,12 +100,18 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         if (physics_state.collision_shape) {
-            compound_shape_create_info.children.push_back(
-                erhe::physics::Compound_child{
-                    .shape     = physics_state.collision_shape,
-                    .transform = erhe::physics::Transform{transform}
-                }
-            );
+            // In the first node's space, as the merged geometry: the child takes its scale relative to that node.
+            const erhe::scene::Trs_transform relative{transform};
+            const glm::vec3 relative_scale = glm::abs(relative.get_scale()) / physics_state.collision_shape_scale;
+            const std::shared_ptr<erhe::physics::ICollision_shape> child_shape = make_node_scaled_collision_shape(physics_state.collision_shape, relative_scale);
+            if (child_shape) {
+                compound_shape_create_info.children.push_back(
+                    erhe::physics::Compound_child{
+                        .shape     = child_shape,
+                        .transform = erhe::physics::Transform{glm::mat3_cast(relative.get_rotation()), relative.get_translation()}
+                    }
+                );
+            }
         }
 
         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
@@ -265,7 +273,8 @@ void Merge_operation::undo(App_context& context)
             swap_mesh_primitives(entry.mesh, m_first_mesh_primitives_before);
 
             Mesh_operation::Entry::Version before_version{};
-            before_version.collision_shape = entry.collision_shape;
+            before_version.collision_shape       = entry.collision_shape;
+            before_version.collision_shape_scale = entry.collision_shape_scale;
             before_version.motion_mode     = entry.motion_mode;
             Mesh_operation::restore_physics(*node, before_version);
         } else {

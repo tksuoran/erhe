@@ -3,7 +3,7 @@ from erhe_codegen import *
 # Placement settings of the Level Kit window and the initial values of a new kit layout node
 # (doc/editor/level_tools.md "Level Kit window").
 struct("Level_kit_config",
-    version=7,
+    version=8,
     short_desc="Level Kit",
     long_desc="Placement settings of the Brush tool's kit mode (Level Kit window).",
     developer=False,
@@ -23,6 +23,13 @@ struct("Level_kit_config",
         field("layout_per_piece_seed",    Bool,   added_in=5, default="false", renamed_from=[(7, "layout_random_seeds")], short_desc="Layout Per Piece Seed", long_desc="A new kit layout node gives each element a seed of its own from the layout seed."),
         field("layout_seed",              Int,    added_in=5, default="0",     short_desc="Layout Seed",          long_desc="The layout seed of a new kit layout node."),
         field("layout_locked",            Bool,   added_in=5, default="true",  short_desc="Layout Locked",        long_desc="A new kit layout node is locked: it makes its children."),
+        field("layout_hide_all_connectors",            Bool, added_in=8, default="false", short_desc="Layout Hide All Connectors",       long_desc="A new path or segments layout hides its children's connectors, an open curve's first and last child keeping all but the one facing its neighbour."),
+        field("layout_hide_plus_tangent_connectors",   Bool, added_in=8, default="false", short_desc="Layout Hide +Tangent Connectors",  long_desc="A new path or segments layout hides its children's connectors facing along the curve."),
+        field("layout_hide_minus_tangent_connectors",  Bool, added_in=8, default="false", short_desc="Layout Hide -Tangent Connectors",  long_desc="A new path or segments layout hides its children's connectors facing back along the curve."),
+        field("layout_hide_plus_normal_connectors",    Bool, added_in=8, default="false", short_desc="Layout Hide +Normal Connectors",   long_desc="A new path or segments layout hides its inner children's connectors facing the right of the curve's direction."),
+        field("layout_hide_minus_normal_connectors",   Bool, added_in=8, default="false", short_desc="Layout Hide -Normal Connectors",   long_desc="A new path or segments layout hides its inner children's connectors facing the left of the curve's direction."),
+        field("layout_hide_plus_binormal_connectors",  Bool, added_in=8, default="false", short_desc="Layout Hide +Binormal Connectors", long_desc="A new path or segments layout hides its inner children's connectors facing up."),
+        field("layout_hide_minus_binormal_connectors", Bool, added_in=8, default="false", short_desc="Layout Hide -Binormal Connectors", long_desc="A new path or segments layout hides its inner children's connectors facing down."),
         field("place_as_layout",          Bool,   added_in=5, default="false", short_desc="Place As Layout",      long_desc="A click of the Brush tool in kit mode places a kit layout node of the chosen shape with these values instead of one piece."),
     ],
 )

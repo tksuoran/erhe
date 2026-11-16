@@ -33,16 +33,23 @@ enum class Kit_connector_state : unsigned int
     disabled
 };
 
+// Shape authors: at most this many connectors per shape (a unit test checks every shape); a layout hides by index bits.
+inline constexpr std::size_t c_max_shape_connectors = 64;
+
 // The connector switches of a placed piece (U33, doc/editor/level_tools.md "Connector switches"): a connector is
-// enabled when the piece switch is on and its name is not in the disabled list.
+// enabled when the piece switch is on, its name is not in the disabled list and its layout does not hide it (U39).
 class Kit_connector_switches
 {
 public:
-    bool        connectors_enabled{true};
-    std::string disabled_connectors; // names separated by commas; canonical: sorted, unique, no spaces
+    bool          connectors_enabled{true};
+    std::string   disabled_connectors;   // names separated by commas; canonical: sorted, unique, no spaces
+    std::uint64_t layout_hidden_bits{0}; // bit i: the shape's connector i hidden by its layout (Level_kits::get_connector_switches())
 
-    [[nodiscard]] auto is_enabled (std::string_view connector_name) const -> bool;
-    [[nodiscard]] auto is_disabled(std::string_view connector_name) const -> bool; // listed, whatever the piece switch
+    // connector_index: the connector's index in the shape's declared order (get_shape_connectors()).
+    [[nodiscard]] auto is_enabled         (std::string_view connector_name, std::size_t connector_index) const -> bool;
+    [[nodiscard]] auto is_disabled        (std::string_view connector_name) const -> bool; // listed, whatever the piece switch
+    [[nodiscard]] auto is_hidden_by_layout(std::size_t connector_index) const -> bool;
+    void               hide_by_layout     (std::size_t connector_index);
 };
 
 // The names of a disabled list text, read leniently (spaces trimmed, empty entries skipped); allocates.
@@ -58,7 +65,7 @@ public:
 // The disabled list text with the name's switch set to the state, canonical.
 [[nodiscard]] auto set_connector_state(std::string_view disabled_connectors, std::string_view connector_name, Kit_connector_state state) -> std::string;
 
-// Removes the connectors that the switches disable, keeping the others in their order.
+// Removes the connectors that the switches disable, keeping the others in their order; connectors in the shape's order.
 void remove_disabled_connectors(const Kit_connector_switches& switches, std::vector<Kit_connector>& connectors);
 
 // The pose (rotation, then translation) that joins a piece's connector to a target connector (D3.12).

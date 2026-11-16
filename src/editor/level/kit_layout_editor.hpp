@@ -23,13 +23,14 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
+class Kit_slot_palette;
 class Scene_root;
 
 // The kinds a pattern's Kind row offers (R5.12.8): every kind (initial values), an Xform node's or a curve node's.
 enum class Kit_layout_kinds : unsigned int {
     all = 0,
     xform, // line, grid, ring, scatter
-    curve  // path
+    curve  // path, segments, stairs
 };
 
 // One row of a pattern's values; get_layout_rows() lists the rows the pattern's kind and count mode show.
@@ -57,7 +58,13 @@ enum class Kit_layout_row : unsigned int {
     region_radius,
     min_spacing,
     yaw_min,
-    yaw_max
+    yaw_max,
+    stairs_width,
+    stairs_rise,
+    stairs_tread,
+    stairs_thickness,
+    stairs_tolerance,
+    stairs_material
 };
 
 // One row of a layout's snap and seed values.
@@ -67,13 +74,18 @@ enum class Kit_layout_setting_row : unsigned int {
     surface_orient,
     per_piece_seed,
     seed,
-    surface_max_distance
+    surface_max_distance,
+    hide_all_connectors,           // U39: path and segments only
+    hide_plus_tangent_connectors,
+    hide_minus_tangent_connectors,
+    hide_plus_normal_connectors,
+    hide_minus_normal_connectors,
+    hide_plus_binormal_connectors,
+    hide_minus_binormal_connectors
 };
 
-inline constexpr std::array<Kit_layout_setting_row, 6> c_layout_setting_rows{
-    Kit_layout_setting_row::module_snap, Kit_layout_setting_row::surface_snap, Kit_layout_setting_row::surface_max_distance,
-    Kit_layout_setting_row::surface_orient, Kit_layout_setting_row::per_piece_seed, Kit_layout_setting_row::seed
-};
+// The setting rows the pattern's kind shows: the connector switches for a path or segments layout only.
+[[nodiscard]] auto get_layout_setting_rows(const Kit_layout_pattern& pattern) -> std::span<const Kit_layout_setting_row>;
 
 [[nodiscard]] auto get_layout_rows       (const Kit_layout_pattern& pattern) -> std::span<const Kit_layout_row>;
 [[nodiscard]] auto get_layout_row_name   (Kit_layout_row row) -> const char*;
@@ -81,7 +93,10 @@ inline constexpr std::array<Kit_layout_setting_row, 6> c_layout_setting_rows{
 
 // The widget of one pattern row (doc/editor/level_tools.md "Kit layout rows"): changed during a drag or typing, committed
 // when a drag is released, a value entered, a radio button or checkbox pressed.
-[[nodiscard]] auto layout_pattern_row(Kit_layout_pattern& pattern, Kit_layout_row row, Kit_layout_kinds kinds, Kit_row_label label) -> Kit_row_edit;
+// stairs_palette: the materials the Stairs Material row offers (the stone slot's), null for none.
+[[nodiscard]] auto layout_pattern_row(
+    Kit_layout_pattern& pattern, Kit_layout_row row, Kit_layout_kinds kinds, Kit_row_label label, const Kit_slot_palette* stairs_palette
+) -> Kit_row_edit;
 [[nodiscard]] auto layout_setting_row(Kit_layout_data& data, Kit_layout_setting_row row, Kit_row_label label) -> Kit_row_edit;
 
 // One item of the shown layout node as its rows show it.
@@ -140,6 +155,8 @@ public:
 private:
     void end_edit_session();
     void read_layout  (Scene_root& scene_root, const erhe::scene::Node& layout);
+    // A stairs layout's fit for the Run line; cleared for another kind.
+    void read_stairs  (const erhe::scene::Node& layout, const Kit_layout_data& data);
     void queue_read   ();
     void on_row_edit  (Kit_row_edit edit, const Kit_layout_data& data);
     void commit       (const Kit_layout_data& data);
@@ -165,6 +182,7 @@ private:
     std::vector<Kit_layout_item_rows> m_items;
     Kit_lengths                       m_lengths;
     Kit_layout_run                    m_run;
+    Stairs_report                     m_stairs; // a stairs layout's fit, shown in the Run line
     std::string                       m_run_problem;
     float                             m_item_extent{0.0f};
     Kit_layout_item_sizes             m_item_sizes;

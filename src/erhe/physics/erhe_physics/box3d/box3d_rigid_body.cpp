@@ -126,6 +126,14 @@ Box3d_rigid_body::Box3d_rigid_body(Box3d_world& world, const IRigid_body_create_
     // custom filter callback resolves pairs from the two bodies' indices.
     m_filter_index = m_world.get_filter_table().get_or_compile(m_collision_filter);
 
+    m_enable_collisions = create_info.enable_collisions;
+    b3ShapeDef shape_def = make_shape_def();
+    attach_shapes(shape_def);
+    apply_mass();
+}
+
+auto Box3d_rigid_body::make_shape_def() const -> b3ShapeDef
+{
     b3ShapeDef shape_def = b3DefaultShapeDef();
     // Without an explicit mass the body's mass is its shape volume times the
     // material density, which is what Box3D derives from shape density.
@@ -139,14 +147,29 @@ Box3d_rigid_body::Box3d_rigid_body(Box3d_world& world, const IRigid_body_create_
     // set_collision_filter() is a normal editor operation, so every shape opts
     // in. The callback early-outs when neither body has a filter.
     shape_def.enableCustomFiltering  = true;
-    shape_def.filter                 = make_box3d_filter(m_filter_index, create_info.enable_collisions);
-    m_enable_collisions              = create_info.enable_collisions;
+    shape_def.filter                 = make_box3d_filter(m_filter_index, m_enable_collisions);
     // Box3D only reports sensor overlaps when the flag is set on BOTH shapes
     // (src/sensor.c), and it defaults to false even for sensors, so every shape
     // opts in or triggers silently never fire.
     shape_def.enableSensorEvents     = true;
     shape_def.updateBodyMass         = false; // mass is applied once, after all shapes are attached
+    return shape_def;
+}
 
+void Box3d_rigid_body::set_collision_shape(const std::shared_ptr<ICollision_shape>& collision_shape)
+{
+    if (!m_is_valid || !collision_shape) {
+        log_physics->error("box3d body '{}': set_collision_shape() without a shape or a body", m_debug_label);
+        return;
+    }
+    for (const b3ShapeId shape_id : m_shape_ids) {
+        b3DestroyShape(shape_id, false);
+    }
+    m_shape_ids.clear();
+    m_derived_hulls.clear(); // after the shapes that referenced them
+    m_collision_shape = collision_shape;
+    m_inertia_override.reset(); // the override was the old shape's inertia
+    b3ShapeDef shape_def = make_shape_def();
     attach_shapes(shape_def);
     apply_mass();
 }
@@ -542,6 +565,8 @@ void Box3d_rigid_body::set_motion_mode(const Motion_mode motion_mode)
     }
     m_motion_mode = motion_mode;
     b3Body_SetType(m_body, to_box3d_body_type(motion_mode));
+    // The type change derives the mass from the shapes again; the explicit mass and inertia override go back on.
+    apply_mass();
     if (motion_mode == Motion_mode::e_dynamic) {
         b3Body_SetAwake(m_body, true);
     }

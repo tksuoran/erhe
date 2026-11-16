@@ -200,7 +200,7 @@ auto Point_set_tool::on_select_miss() -> bool
     return false;
 }
 
-void Point_set_tool::render_extras(const Render_context&)
+void Point_set_tool::render_extras(const Render_context&, std::optional<std::size_t>)
 {
 }
 
@@ -237,8 +237,6 @@ void Point_set_tool::tool_render(const Render_context& context)
     if (!has_point_set_target() || !is_view_of_target_scene(context.scene_view)) {
         return;
     }
-    render_extras(context);
-
     glm::vec3 camera_position{0.0f};
     glm::vec3 camera_right   {1.0f, 0.0f, 0.0f};
     glm::vec3 camera_up      {0.0f, 1.0f, 0.0f};
@@ -257,6 +255,7 @@ void Point_set_tool::tool_render(const Render_context& context)
             hovered = pick_point(*context.viewport_scene_view, pointer.value(), m_scratch_world);
         }
     }
+    render_extras(context, hovered);
 
     // stencil_reference must be non-zero (function=greater against a zero-cleared stencil buffer); 2 matches the other debug tools.
     erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 2, true, false});

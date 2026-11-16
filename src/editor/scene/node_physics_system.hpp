@@ -56,10 +56,16 @@ public:
     // the weak reference tells whether the node is still alive after it left.
     erhe::scene::Node*                               node{nullptr};
     std::weak_ptr<erhe::scene::Node>                 node_weak{};
-    // The shape as the body uses it: the built shape, wrapped in the
-    // offset-center-of-mass wrapper while the node's center_of_mass_offset is
-    // non-zero.
+    // The shape the body's shape is made from: in node space at source_scale (1 for every caller but a folded import
+    // compound), without the center-of-mass wrapper.
+    std::shared_ptr<erhe::physics::ICollision_shape> source_shape{};
+    glm::vec3                                        source_scale{1.0f};
+    // The shape as the body uses it: the source at the node's world scale, wrapped in the offset-center-of-mass
+    // wrapper while the node's center_of_mass_offset is non-zero; shape_scale is the absolute world scale it was built for.
     std::shared_ptr<erhe::physics::ICollision_shape> collision_shape{};
+    glm::vec3                                        shape_scale{1.0f};
+    // Set while the body shape uses a scale the source cannot take exactly (warned once).
+    bool                                             inexact_scale{false};
     std::shared_ptr<erhe::physics::IRigid_body>      rigid_body{};
     erhe::physics::IRigid_body_create_info           create_info{};
     // The intended motion mode: always the value the node holds, even while
@@ -75,6 +81,8 @@ public:
     // m_pending_node_poses) for the next apply_pending_node_poses().
     erhe::scene::Transform_observer_token            transform_observer{};
     bool                                             node_pose_pending{false};
+    // Queued for apply_pending_shape_scales(), which runs whether or not the simulation does.
+    bool                                             shape_scale_pending{false};
     // The apply_pending_node_poses() pass that last wrote this body, so a
     // kinematic physical body moved by its node is not re-targeted twice.
     std::uint64_t                                    node_pose_applied_pass{0};
@@ -109,13 +117,17 @@ public:
     [[nodiscard]] auto find      (const erhe::scene::Node& node)       ->       Node_physics_entry*;
     // The live rigid body of `node`, or nullptr.
     [[nodiscard]] auto get_rigid_body    (const erhe::scene::Node& node) const -> erhe::physics::IRigid_body*;
-    [[nodiscard]] auto get_collision_shape(const erhe::scene::Node& node) const -> std::shared_ptr<erhe::physics::ICollision_shape>;
+    // The shape as the body uses it (at the node's world scale), and the source it is made from (node space).
+    [[nodiscard]] auto get_collision_shape       (const erhe::scene::Node& node) const -> std::shared_ptr<erhe::physics::ICollision_shape>;
+    [[nodiscard]] auto get_source_collision_shape(const erhe::scene::Node& node) const -> std::shared_ptr<erhe::physics::ICollision_shape>;
+    [[nodiscard]] auto get_source_scale          (const erhe::scene::Node& node) const -> glm::vec3;
 
-    // Gives the node the collision shape its body is made from. Recreates a
-    // live body. The shape is remembered whether or not the node carries the
-    // group yet, so a caller may supply it before writing the key property and
-    // before the node enters the scene.
-    void set_collision_shape(erhe::scene::Node& node, const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape);
+    // The node's source shape, in node space or at source_scale (doc/editor/physics.md "Collision shapes follow the node's scale").
+    void set_collision_shape(
+        erhe::scene::Node&                                      node,
+        const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape,
+        const glm::vec3&                                        source_scale = glm::vec3{1.0f}
+    );
 
     void set_wake_on_attach(erhe::scene::Node& node, Wake_on_attach wake_on_attach);
 
@@ -145,8 +157,12 @@ public:
     // body whose node stopped moving must be told to stay. Dirt queued while
     // the simulation is paused is applied by the first pass after resume.
     void apply_pending_node_poses();
+    // The bodies whose node transform was written since the previous call get their shape rebuilt where the node's
+    // world scale changed. Called by Scene_root each frame (overlap phase, M1) also while the simulation is off, so a
+    // body's shape never waits for the simulation to resume.
+    void apply_pending_shape_scales();
     // Body -> node, called by Scene_root after the steps (prepare phase, M2)
-    // for every active body. The writes it makes do not queue the body.
+    // for every active body. The writes keep the node's world scale and do not queue the body.
     void after_physics_simulation(Node_physics_entry& entry);
 
     // Body activation changes drive Item_flags::no_transform_update on the
@@ -180,6 +196,10 @@ private:
     void destroy_body(Node_physics_entry& entry);
     // Destroy plus create, for a change only a fresh body realizes.
     void recreate_body(erhe::scene::Node& node, Node_physics_entry& entry);
+    // Makes the body shape from the source at the node's current world scale.
+    void build_body_shape(const erhe::scene::Node& node, Node_physics_entry& entry);
+    // The pose pass's half of the transform change: swaps the body's shape in place when the world scale changed.
+    void follow_world_scale(Node_physics_entry& entry);
 
     // Sets or clears the body's node flag for one activation change.
     void apply_body_activation(erhe::physics::IRigid_body& rigid_body, Body_activation activation);
@@ -236,6 +256,8 @@ private:
     ERHE_PROFILE_MUTEX(std::mutex, m_pending_mutex);
     std::vector<Node_physics_entry*>                                  m_pending_node_poses;
     std::vector<Node_physics_entry*>                                  m_pending_processing;
+    std::vector<Node_physics_entry*>                                  m_pending_shape_scales;
+    std::vector<Node_physics_entry*>                                  m_pending_shape_processing;
     std::vector<Node_physics_entry*>                                  m_kinematic_physical_bodies;
     std::uint64_t                                                     m_node_pose_pass{0};
     // True while after_physics_simulation() writes a node, so the node's
@@ -250,10 +272,19 @@ private:
 // The collision shape built for `node`, through its scene's system; null when
 // the node is in no scene or has none.
 [[nodiscard]] auto get_node_collision_shape(const erhe::scene::Node& node) -> std::shared_ptr<erhe::physics::ICollision_shape>;
+// The source of that shape (Node_physics_system::get_source_collision_shape()), for a caller that hands it back later.
+[[nodiscard]] auto get_node_source_collision_shape(const erhe::scene::Node& node) -> std::shared_ptr<erhe::physics::ICollision_shape>;
 
 // The live rigid body of `node`, through its scene's system; null when there
 // is none.
 [[nodiscard]] auto get_node_rigid_body(const erhe::scene::Node& node) -> erhe::physics::IRigid_body*;
+
+// The shape at a node's world scale (absolute values): the shape itself at scale 1, a uniform scaling wrapper for
+// a uniform scale, else a non-uniform scaled wrapper; null for an all-zero scale (doc/erhe/physics.md).
+[[nodiscard]] auto make_node_scaled_collision_shape(
+    const std::shared_ptr<erhe::physics::ICollision_shape>& shape,
+    const glm::vec3&                                        world_scale
+) -> std::shared_ptr<erhe::physics::ICollision_shape>;
 
 // Hands `node`'s scene's system the collision shape. A no-op when the node is
 // in no scene.

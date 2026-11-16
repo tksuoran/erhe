@@ -45,8 +45,9 @@ public:
 
 void write_kit_piece(erhe::scene::Node& node, const Kit_piece_data& data);
 
-// The piece's connector switches; the defaults (all enabled) for a node without values.
-[[nodiscard]] auto read_connector_switches(const erhe::scene::Node& node) -> Kit_connector_switches;
+// The piece's own connector switches, the defaults (all enabled) for a node without values; its layout's hiding (U39) is
+// added by Level_kits::get_connector_switches().
+[[nodiscard]] auto read_piece_connector_switches(const erhe::scene::Node& node) -> Kit_connector_switches;
 
 // True for Kit_piece.connectors_enabled and Kit_piece.disabled_connectors.
 [[nodiscard]] auto is_connector_switch_property(const erhe::property::Dependency_property& property) -> bool;

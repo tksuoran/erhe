@@ -203,6 +203,11 @@ auto Kit_shape_definition::find_parameter(const std::string_view name) const -> 
     return {};
 }
 
+auto get_contract_id(const Kit_shape_definition& shape) -> const std::string&
+{
+    return shape.recreates.empty() ? shape.id : shape.recreates;
+}
+
 auto Kit_shape_definition::has_tag(const std::string_view tag) const -> bool
 {
     for (const std::string& t : tags) {

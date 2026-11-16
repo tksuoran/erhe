@@ -78,6 +78,7 @@ public:
     void set_gravity_factor          (float gravity_factor)                        override;
     void set_linear_velocity         (const glm::vec3& velocity)                   override;
     void set_mass_properties         (float mass, const glm::mat4& local_inertia)  override;
+    void set_collision_shape         (const std::shared_ptr<ICollision_shape>& collision_shape) override;
     void set_motion_mode             (Motion_mode motion_mode)                     override;
     void set_restitution             (float restitution)                           override;
     void set_world_transform         (const Transform& transform)                  override;
@@ -101,6 +102,8 @@ private:
     // Pushes the snapshot's damping to the body and, while the body has no
     // explicit mass, re-derives the mass from the snapshot's density.
     void apply_material_to_body();
+    // m_mass_properties into the body's motion properties, whatever its motion type; an explicit 0 is infinite mass.
+    void write_mass_properties_to_body();
 
     JPH::Body*                            m_body            {nullptr};
     void*                                 m_owner           {nullptr};

@@ -1173,14 +1173,16 @@ auto Binary_mesh_operation::make_operations(
     Mesh_operation::Entry entry{
         .scene_mesh = target_mesh,
         .before = {
-            .collision_shape = physics_before.collision_shape,
-            .motion_mode     = physics_before.motion_mode,
-            .primitives      = target_mesh->get_primitives()
+            .collision_shape       = physics_before.collision_shape,
+            .motion_mode           = physics_before.motion_mode,
+            .primitives            = target_mesh->get_primitives(),
+            .collision_shape_scale = physics_before.collision_shape_scale
         },
         .after = {
-            .collision_shape = physics_before.collision_shape,
-            .motion_mode     = physics_before.motion_mode,
-            .primitives      = { erhe::scene::Mesh_primitive{primitive, material} }
+            .collision_shape       = physics_before.collision_shape,
+            .motion_mode           = physics_before.motion_mode,
+            .primitives            = { erhe::scene::Mesh_primitive{primitive, material} },
+            .collision_shape_scale = physics_before.collision_shape_scale
         }
     };
 
@@ -1203,7 +1205,8 @@ auto Binary_mesh_operation::make_operations(
                 static_cast<int>(convex_hull.vertices.nb()),
                 static_cast<int>(3 * sizeof(float))
             );
-            entry.after.collision_shape = collision_shape;
+            entry.after.collision_shape       = collision_shape;
+            entry.after.collision_shape_scale = glm::vec3{1.0f};
         }
     }
 

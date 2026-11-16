@@ -1,5 +1,6 @@
 #pragma once
 
+#include "level/kit_layout_connectors.hpp"
 #include "level/kit_layout_values.hpp"
 #include "level/level_queries.hpp"
 
@@ -42,6 +43,7 @@ public:
     Kit_layout_seeds             seeds         {Kit_layout_seeds::item};
     int                          seed          {0};
     Kit_layout_lock              lock          {Kit_layout_lock::locked};
+    Kit_layout_connector_hiding  connector_hiding; // path and segments (U39); the other kinds keep and ignore it
 };
 
 // The attached value group of a kit layout node (doc/erhe/property_system.md sections 4.11 and 4.23), qualified
@@ -63,11 +65,37 @@ public:
     static const erhe::property::Property<bool>        per_piece_seed_property;
     static const erhe::property::Property<int>         seed_property;
     static const erhe::property::Property<bool>        locked_property;
+    // U39: the connector switches of a path or segments layout's children; all off by default.
+    static const erhe::property::Property<bool>        hide_all_connectors_property;
+    static const erhe::property::Property<bool>        hide_plus_tangent_connectors_property;
+    static const erhe::property::Property<bool>        hide_minus_tangent_connectors_property;
+    static const erhe::property::Property<bool>        hide_plus_normal_connectors_property;
+    static const erhe::property::Property<bool>        hide_minus_normal_connectors_property;
+    static const erhe::property::Property<bool>        hide_plus_binormal_connectors_property;
+    static const erhe::property::Property<bool>        hide_minus_binormal_connectors_property;
+
+    [[nodiscard]] static auto get_hide_direction_property(Kit_layout_direction direction) -> const erhe::property::Property<bool>&;
 };
+
+// The attached value of a child a stairs layout generates (R5.12.13), qualified Kit_layout_generated.source: the text
+// of the curve and the values it was generated from. The child is no kit piece; it is saved with its mesh.
+class Kit_layout_generated
+{
+public:
+    Kit_layout_generated() = delete;
+
+    [[nodiscard]] static auto property_owner_type() -> erhe::property::Owner_type;
+
+    static const erhe::property::Property<std::string> source_property;
+};
+
+// The text a generated child carries; empty for any other node.
+[[nodiscard]] auto read_layout_generated_source(const erhe::scene::Node& node) -> std::string;
 
 [[nodiscard]] auto carries_kit_layout(const erhe::scene::Node& node) -> bool;
 
-// The kind's node type (R5.12.8): a path layout is a Curve prim, a line, grid, ring or scatter an Xform; returns the refusal.
+// The kind's node type (R5.12.8): a path, segments or stairs layout is a Curve prim, a line, grid, ring or scatter an Xform;
+// returns the refusal.
 [[nodiscard]] auto check_layout_kind(const erhe::scene::Node& node, Repeat_pattern_kind kind) -> std::string;
 
 // Reads the node's values; returns the problem (not a layout node, a text that does not read), empty when read.
@@ -104,5 +132,14 @@ template <typename T>
 
 // True for the properties of the Kit_layout group.
 [[nodiscard]] auto is_kit_layout_property(const erhe::property::Dependency_property& property) -> bool;
+
+// True for the seven connector switches of the Kit_layout group (U39).
+[[nodiscard]] auto is_layout_connector_switch_property(const erhe::property::Dependency_property& property) -> bool;
+
+// The seven switches as the node holds them; all shown for a node without values.
+[[nodiscard]] auto read_layout_connector_hiding(const erhe::scene::Node& node) -> Kit_layout_connector_hiding;
+
+// Writes the seven switches without an operation.
+void write_layout_connector_hiding(erhe::scene::Node& node, const Kit_layout_connector_hiding& hiding);
 
 } // namespace editor

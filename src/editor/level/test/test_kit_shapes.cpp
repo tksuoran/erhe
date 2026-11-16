@@ -53,6 +53,19 @@ auto get_shape(const char* id) -> const Kit_shape_definition&
     return *shape;
 }
 
+// The id the tests key a shape's expectations by: a recreated shape shares its original's.
+auto contract_id(const Kit_shape_definition& shape) -> const std::string&
+{
+    return editor::get_contract_id(shape);
+}
+
+// The originals that have a recreated shape beside them; a batch of recreated shapes adds its originals here.
+auto recreated_originals() -> const std::vector<std::string>&
+{
+    static const std::vector<std::string> ids{"basic.block", "basic.wedge", "basic.cylinder", "basic.stairs", "basic.floor_slab"};
+    return ids;
+}
+
 auto defaults(const Kit_shape_definition& shape) -> Kit_parameter_values
 {
     return editor::make_default_values(shape, default_module, default_wall_height);
@@ -123,8 +136,15 @@ TEST(Kit_shape_library, library_has_the_starter_set_and_the_more_shapes)
         "nature.rock_spire", "nature.basalt_columns", "architecture.roof", "nature.palm_clump", "nature.palm_shrub",
         "nature.dune", "nature.ground_patch"
     };
+    // The recreated shapes stand beside them (doc/editor/level_tools.md "Recreated shapes").
+    const std::vector<std::string>& recreated = recreated_originals();
     const Kit_shape_library& library = get_library();
-    ASSERT_EQ(library.get_shapes().size(), expected.size());
+    ASSERT_EQ(library.get_shapes().size(), expected.size() + recreated.size());
+    for (const std::string& id : recreated) {
+        const Kit_shape_definition* const shape = library.find(id + editor::c_kit_recreated_id_suffix);
+        ASSERT_NE(shape, nullptr) << id;
+        EXPECT_EQ(shape->recreates, id);
+    }
     std::set<std::string> ids;
     for (const Kit_shape_definition& shape : library.get_shapes()) {
         SCOPED_TRACE(shape.id);
@@ -253,18 +273,19 @@ TEST(Kit_shape_library, every_shape_passes_the_mesh_checks_at_defaults)
         EXPECT_LE(report.triangle_count, shape.triangle_budget);
         EXPECT_LE(shape.triangle_budget, kit->triangle_ceiling);
         EXPECT_EQ(kit->triangle_ceiling, 2000u);
+        const std::string& id = contract_id(shape);
         // The palms and the leaf plant are trunks and one closed part per leaf or leaf half, the basalt one part per
         // column; the column, entablature, torii and roof are closed parts that overlap (base, shaft, capital; profile,
         // triglyphs; posts, beams; slab, body, tile courses, caps).
-        if ((shape.id == "nature.palm") || (shape.id == "nature.leaf_plant") || (shape.id == "nature.palm_clump") ||
-            (shape.id == "nature.palm_shrub") || (shape.id == "nature.basalt_columns")) {
+        if ((id == "nature.palm") || (id == "nature.leaf_plant") || (id == "nature.palm_clump") ||
+            (id == "nature.palm_shrub") || (id == "nature.basalt_columns")) {
             EXPECT_GT(report.component_count, 10u);
-        } else if ((shape.id == "architecture.column") || (shape.id == "architecture.entablature") || (shape.id == "architecture.torii") ||
-                   (shape.id == "architecture.roof")) {
+        } else if ((id == "architecture.column") || (id == "architecture.entablature") || (id == "architecture.torii") ||
+                   (id == "architecture.roof")) {
             EXPECT_GT(report.component_count, 3u);
         } else {
             // The tree: trunk and canopy; the tower: its walls and the lintel over its doorway.
-            const unsigned int expected_components = ((shape.id == "nature.tree") || (shape.id == "architecture.tower")) ? 2u : 1u;
+            const unsigned int expected_components = ((id == "nature.tree") || (id == "architecture.tower")) ? 2u : 1u;
             EXPECT_EQ(report.component_count, expected_components);
         }
     }
@@ -274,6 +295,7 @@ TEST(Kit_shape_library, triangle_counts_at_defaults)
 {
     const std::vector<std::pair<std::string, unsigned int>> expected{
         {"basic.block", 12}, {"basic.wedge", 8}, {"basic.cylinder", 60}, {"basic.stairs", 124}, {"basic.floor_slab", 12},
+        {"basic.block.v2", 12}, {"basic.wedge.v2", 8}, {"basic.cylinder.v2", 60}, {"basic.stairs.v2", 180}, {"basic.floor_slab.v2", 12},
         {"architecture.wall", 12}, {"architecture.door_wall", 44}, {"architecture.pillar", 12}, {"architecture.arch", 100},
         {"nature.rock", rock_default_triangles}, {"nature.land_mass", 128}, {"nature.hill", 128}, {"nature.tree", 68}, {"nature.bush", 48},
         {"nature.cliff", 428}, {"nature.shore", 238}, {"nature.water", 2}, {"nature.palm", 1510},
@@ -539,7 +561,7 @@ TEST(Kit_shape_library, walkable_shapes_suit_the_default_agent_at_defaults)
 // D1.7: stairs and the wedge rise toward -Z from their front edge at +Z.
 TEST(Kit_shape_library, stairs_and_wedge_rise_toward_minus_z)
 {
-    for (const char* id : {"basic.stairs", "basic.wedge"}) {
+    for (const char* id : {"basic.stairs", "basic.wedge", "basic.stairs.v2", "basic.wedge.v2"}) {
         SCOPED_TRACE(id);
         const std::unique_ptr<GEO::Mesh> mesh = generate(defaults(get_shape(id)));
         float max_y = 0.0f;
@@ -966,10 +988,15 @@ TEST(Kit_shape_library, generated_meshes_are_pinned)
     constexpr float area_tolerance     = 1.0e-4f; // relative
     const std::vector<Mesh_pin> expected{
         {"basic.block 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 6.00000f},
+        {"basic.block.v2 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 6.00000f},
         {"basic.wedge 1", 6, 5, 18, 0x2d401a55eec16520ull, {-0.50000f, 0.00000f, -1.00000f}, {0.50000f, 1.00000f, 1.00000f}, {0.00000f, 0.33333f, -0.33333f}, 7.23607f},
+        {"basic.wedge.v2 1", 6, 5, 18, 0x2d401a55eec16520ull, {-0.50000f, 0.00000f, -1.00000f}, {0.50000f, 1.00000f, 1.00000f}, {0.00000f, 0.33333f, -0.33333f}, 7.23607f},
         {"basic.cylinder 1", 32, 18, 96, 0x8cc58f15ad955627ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 4.65218f},
+        {"basic.cylinder.v2 1", 32, 18, 96, 0x8cc58f15ad955627ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 4.65218f},
         {"basic.stairs 1", 64, 92, 308, 0xcb65e93be76ff389ull, {-0.50000f, 0.00000f, -2.25000f}, {0.50000f, 3.00000f, 2.25000f}, {0.00000f, 1.50000f, 0.00000f}, 29.40000f},
+        {"basic.stairs.v2 1", 92, 104, 388, 0x4c5057cd16338a9dull, {-0.50000f, 0.00000f, -2.25000f}, {0.50000f, 3.00000f, 2.25000f}, {0.00000f, 1.04348f, 0.00000f}, 29.40000f},
         {"basic.floor_slab 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-1.00000f, 0.00000f, -1.00000f}, {1.00000f, 0.20000f, 1.00000f}, {0.00000f, 0.10000f, 0.00000f}, 9.60000f},
+        {"basic.floor_slab.v2 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-1.00000f, 0.00000f, -1.00000f}, {1.00000f, 0.20000f, 1.00000f}, {0.00000f, 0.10000f, 0.00000f}, 9.60000f},
         {"architecture.wall 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-2.00000f, 0.00000f, -0.12500f}, {2.00000f, 3.00000f, 0.12500f}, {0.00000f, 1.50000f, 0.00000f}, 27.50000f},
         {"architecture.door_wall 1", 24, 22, 88, 0x0cdadef454be63e3ull, {-2.00000f, 0.00000f, -0.12500f}, {2.00000f, 3.00000f, 0.12500f}, {0.00000f, 1.73333f, 0.00000f}, 23.32000f},
         {"architecture.pillar 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-0.25000f, 0.00000f, -0.25000f}, {0.25000f, 3.00000f, 0.25000f}, {0.00000f, 1.50000f, 0.00000f}, 6.50000f},
@@ -1586,7 +1613,7 @@ TEST(Kit_derive, derived_values_are_accepted_and_walkable_at_other_level_lengths
             }
             SCOPED_TRACE(fmt::format("{} at module {} m, wall height {} m", shape.id, lengths.first, lengths.second));
             EXPECT_EQ(refused, 0);
-            if (!walkability_open.contains(shape.id)) {
+            if (!walkability_open.contains(contract_id(shape))) {
                 EXPECT_EQ(unwalkable, 0);
             } else {
                 testing::Test::RecordProperty(fmt::format("{}_unwalkable_at_{}_{}", shape.id, lengths.first, lengths.second), unwalkable);
@@ -1872,3 +1899,184 @@ TEST_P(Kit_dune_widths, long_narrow_and_tall_dunes_pass_the_checks)
 }
 
 INSTANTIATE_TEST_SUITE_P(Kit_dune, Kit_dune_widths, testing::Values(2.0f, 2.75f, 4.0f));
+
+namespace {
+
+auto get_connectors(const Kit_parameter_values& values) -> std::vector<editor::Kit_connector>
+{
+    std::vector<editor::Kit_connector> connectors;
+    if (values.get_shape()->get_connectors) {
+        values.get_shape()->get_connectors(values, connectors);
+    }
+    return connectors;
+}
+
+void expect_equal_parameters(const Kit_parameter& a, const Kit_parameter& b)
+{
+    SCOPED_TRACE(a.name);
+    EXPECT_EQ(a.name,              b.name);
+    EXPECT_EQ(a.type,              b.type);
+    EXPECT_EQ(a.unit,              b.unit);
+    EXPECT_EQ(a.default_scale,     b.default_scale);
+    EXPECT_EQ(a.float_default,     b.float_default);
+    EXPECT_EQ(a.float_min,         b.float_min);
+    EXPECT_EQ(a.float_max,         b.float_max);
+    EXPECT_EQ(a.int_default,       b.int_default);
+    EXPECT_EQ(a.int_min,           b.int_min);
+    EXPECT_EQ(a.int_max,           b.int_max);
+    EXPECT_EQ(a.enum_values,       b.enum_values);
+    EXPECT_EQ(a.derive,            b.derive);
+    EXPECT_EQ(a.derive_float_min,  b.derive_float_min);
+    EXPECT_EQ(a.derive_float_max,  b.derive_float_max);
+    EXPECT_EQ(a.derive_float_step, b.derive_float_step);
+    EXPECT_EQ(a.derive_int_min,    b.derive_int_min);
+    EXPECT_EQ(a.derive_int_max,    b.derive_int_max);
+    EXPECT_EQ(a.default_source,    b.default_source);
+}
+
+// A recreated shape stands directly after its original and states the same contract, so a piece of one is replaced
+// by the other value for value (doc/editor/level_tools.md "Recreated shapes").
+TEST(Kit_recreated, every_recreated_shape_pairs_with_its_original)
+{
+    const std::vector<Kit_shape_definition>& shapes = get_library().get_shapes();
+    std::vector<std::string> paired;
+    for (std::size_t i = 0; i < shapes.size(); ++i) {
+        const Kit_shape_definition& shape = shapes[i];
+        if (shape.recreates.empty()) {
+            continue;
+        }
+        paired.push_back(shape.recreates);
+        SCOPED_TRACE(shape.id);
+        const Kit_shape_definition* const original = get_library().find(shape.recreates);
+        ASSERT_NE(original, nullptr);
+        EXPECT_TRUE(original->recreates.empty());
+        ASSERT_GT(i, 0u);
+        EXPECT_EQ(&shapes[i - 1], original);
+        EXPECT_EQ(shape.id,           original->id + editor::c_kit_recreated_id_suffix);
+        EXPECT_EQ(shape.display_name, original->display_name + editor::c_kit_recreated_name_suffix);
+        EXPECT_EQ(shape.kit,            original->kit);
+        EXPECT_EQ(shape.material_slots, original->material_slots);
+        EXPECT_EQ(shape.origin_rule,    original->origin_rule);
+        EXPECT_EQ(shape.collision,      original->collision);
+        EXPECT_EQ(shape.mesh_kind,      original->mesh_kind);
+        EXPECT_EQ(shape.randomness,     original->randomness);
+        EXPECT_EQ(shape.mirror_planes,  original->mirror_planes);
+        EXPECT_EQ(shape.tags,           original->tags);
+        EXPECT_EQ(shape.description,    original->description);
+        EXPECT_EQ(shape.normal_style,   original->normal_style);
+        EXPECT_EQ(shape.hard_edge_angle_degrees, original->hard_edge_angle_degrees);
+        EXPECT_EQ(static_cast<bool>(shape.check_walkability), static_cast<bool>(original->check_walkability));
+        EXPECT_EQ(static_cast<bool>(shape.check_combination), static_cast<bool>(original->check_combination));
+        ASSERT_EQ(shape.parameters.size(), original->parameters.size());
+        for (std::size_t p = 0; p < shape.parameters.size(); ++p) {
+            expect_equal_parameters(shape.parameters[p], original->parameters[p]);
+        }
+        // Equal parameters derive equal values, so the connectors are compared at the same values.
+        for (const int seed : {1, 3, 17}) {
+            const Kit_parameter_values values          = all_derived(shape, seed);
+            const Kit_parameter_values original_values = all_derived(*original, seed);
+            ASSERT_EQ(values.get_values(), original_values.get_values());
+            const std::vector<editor::Kit_connector> connectors          = get_connectors(values);
+            const std::vector<editor::Kit_connector> original_connectors = get_connectors(original_values);
+            ASSERT_EQ(connectors.size(), original_connectors.size());
+            for (std::size_t c = 0; c < connectors.size(); ++c) {
+                EXPECT_EQ(std::string_view{connectors[c].name}, std::string_view{original_connectors[c].name});
+                EXPECT_LT(glm::distance(connectors[c].position, original_connectors[c].position), 1.0e-5f) << connectors[c].name;
+                EXPECT_LT(glm::distance(connectors[c].outward,  original_connectors[c].outward),  1.0e-5f) << connectors[c].name;
+                EXPECT_LT(glm::distance(connectors[c].up,       original_connectors[c].up),       1.0e-5f) << connectors[c].name;
+            }
+            if (shape.get_seam_sides) {
+                ASSERT_TRUE(static_cast<bool>(original->get_seam_sides));
+                EXPECT_EQ(shape.get_seam_sides(values), original->get_seam_sides(original_values));
+            }
+        }
+    }
+    std::vector<std::string> expected = recreated_originals();
+    std::sort(paired.begin(), paired.end());
+    std::sort(expected.begin(), expected.end());
+    EXPECT_EQ(paired, expected);
+}
+
+// The plain building blocks keep their originals' bounds at every value, so the two tile and stack alike.
+TEST(Kit_recreated, basic_shapes_keep_their_originals_bounds)
+{
+    int checked = 0;
+    int basic_count = 0;
+    for (const Kit_shape_definition& shape : get_library().get_shapes()) {
+        if (shape.recreates.empty() || (shape.kit != "basic")) {
+            continue;
+        }
+        ++basic_count;
+        const Kit_shape_definition& original = get_shape(shape.recreates.c_str());
+        std::vector<std::pair<Kit_parameter_values, Kit_parameter_values>> cases;
+        cases.emplace_back(defaults(shape), defaults(original));
+        cases.emplace_back(range_corner(shape, Range_end::min), range_corner(original, Range_end::min));
+        cases.emplace_back(range_corner(shape, Range_end::max), range_corner(original, Range_end::max));
+        for (const int seed : {1, 3, 17, 4242}) {
+            cases.emplace_back(all_derived(shape, seed), all_derived(original, seed));
+        }
+        for (const std::pair<Kit_parameter_values, Kit_parameter_values>& entry : cases) {
+            SCOPED_TRACE(fmt::format("{} {}", shape.id, entry.first.to_canonical_text()));
+            const Kit_mesh_report report          = editor::check_kit_shape(entry.first);
+            const Kit_mesh_report original_report = editor::check_kit_shape(entry.second);
+            EXPECT_TRUE(report.is_valid()) << describe(report);
+            const float tolerance = 1.0e-5f * std::max(1.0f, glm::length(original_report.bounds_max - original_report.bounds_min));
+            EXPECT_LT(glm::distance(report.bounds_min, original_report.bounds_min), tolerance);
+            EXPECT_LT(glm::distance(report.bounds_max, original_report.bounds_max), tolerance);
+            ++checked;
+        }
+    }
+    EXPECT_GT(basic_count, 0);
+    EXPECT_EQ(checked, basic_count * 7);
+}
+
+// The recreated stairs' side walls are a column per step: no vertex gathers a fan of facets, at any step count.
+TEST(Kit_recreated, stairs_sides_have_no_fan)
+{
+    const Kit_shape_definition& stairs = get_shape("basic.stairs.v2");
+    for (const float rise : {0.2f, 1.0f, 3.0f, 16.0f}) {
+        Kit_parameter_values values = defaults(stairs);
+        ASSERT_TRUE(values.set_float("rise", rise));
+        ASSERT_TRUE(values.set_float("step_rise_limit", (rise > 8.0f) ? 0.125f : 0.2f));
+        ASSERT_EQ(values.validate(), "");
+        const Kit_stairs_layout          layout = editor::get_stairs_layout(values);
+        const std::unique_ptr<GEO::Mesh> mesh   = generate(values);
+        SCOPED_TRACE(fmt::format("rise {}: {} steps", rise, layout.step_count));
+        EXPECT_EQ(editor::count_kit_triangles(*mesh), static_cast<unsigned int>(12 * layout.step_count));
+        std::vector<int> facets_at(mesh->vertices.nb(), 0);
+        for (GEO::index_t f = 0; f < mesh->facets.nb(); ++f) {
+            for (GEO::index_t c = 0; c < mesh->facets.nb_vertices(f); ++c) {
+                ++facets_at[mesh->facets.vertex(f, c)];
+            }
+        }
+        // A riser foot: its riser, the tread before it, two columns and two step triangles.
+        EXPECT_LE(*std::max_element(facets_at.begin(), facets_at.end()), 6);
+    }
+}
+
+// The recreated cylinder's mirror images are equal to the bit: about z = 0 always, about x = 0 at an even segment count.
+TEST(Kit_recreated, cylinder_is_exactly_symmetric)
+{
+    const Kit_shape_definition& cylinder = get_shape("basic.cylinder.v2");
+    for (const int segments : {3, 4, 5, 6, 7, 12, 16, 33, 64}) {
+        Kit_parameter_values values = defaults(cylinder);
+        ASSERT_TRUE(values.set_int("segments", segments));
+        ASSERT_TRUE(values.set_float("radius", 0.7f));
+        const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+        std::set<std::array<float, 3>> points;
+        for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
+            const GEO::vec3f p = erhe::geometry::get_pointf(mesh->vertices, v);
+            points.insert({p.x, p.y, p.z});
+        }
+        SCOPED_TRACE(fmt::format("{} segments", segments));
+        EXPECT_EQ(points.size(), static_cast<std::size_t>(2 * segments));
+        for (const std::array<float, 3>& p : points) {
+            EXPECT_TRUE(points.contains({p[0], p[1], -p[2]}));
+            if ((segments % 2) == 0) {
+                EXPECT_TRUE(points.contains({-p[0], p[1], p[2]}));
+            }
+        }
+    }
+}
+
+} // anonymous namespace

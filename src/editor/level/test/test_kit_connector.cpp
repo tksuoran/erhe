@@ -492,20 +492,20 @@ TEST(Kit_connector_join, orthogonal_axes)
 TEST(Kit_connector_switches, default_enables_every_connector)
 {
     const editor::Kit_connector_switches switches{};
-    EXPECT_TRUE(switches.is_enabled("top"));
-    EXPECT_TRUE(switches.is_enabled("left"));
+    EXPECT_TRUE(switches.is_enabled("top", 0));
+    EXPECT_TRUE(switches.is_enabled("left", 0));
     EXPECT_FALSE(switches.is_disabled("top"));
 }
 
 TEST(Kit_connector_switches, enabled_needs_both_switches)
 {
     editor::Kit_connector_switches switches{.connectors_enabled = true, .disabled_connectors = "left,right"};
-    EXPECT_FALSE(switches.is_enabled("left"));
-    EXPECT_FALSE(switches.is_enabled("right"));
-    EXPECT_TRUE (switches.is_enabled("front"));
-    EXPECT_TRUE (switches.is_enabled("lef")); // whole names only
+    EXPECT_FALSE(switches.is_enabled("left", 0));
+    EXPECT_FALSE(switches.is_enabled("right", 0));
+    EXPECT_TRUE (switches.is_enabled("front", 0));
+    EXPECT_TRUE (switches.is_enabled("lef", 0)); // whole names only
     switches.connectors_enabled = false;
-    EXPECT_FALSE(switches.is_enabled("front"));
+    EXPECT_FALSE(switches.is_enabled("front", 0));
     EXPECT_TRUE (switches.is_disabled("left"));
     EXPECT_FALSE(switches.is_disabled("front"));
 }

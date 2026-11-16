@@ -17,6 +17,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_math/curve_path.hpp"
 #include "erhe_math/math_util.hpp"
@@ -91,15 +92,24 @@ void add_value_operations(const std::shared_ptr<erhe::scene::Node>& node, const 
     add_value_operation(node, Kit_layout::surface_max_distance_property, data.surface_max_distance, out_operations);
     add_value_operation(node, Kit_layout::per_piece_seed_property,   data.seeds == Kit_layout_seeds::per_element, out_operations);
     add_value_operation(node, Kit_layout::seed_property,           data.seed, out_operations);
+    add_value_operation(node, Kit_layout::hide_all_connectors_property, data.connector_hiding.all == Kit_layout_connector_visibility::hidden, out_operations);
+    for (std::size_t i = 0; i < c_layout_direction_count; ++i) {
+        const Kit_layout_direction direction = static_cast<Kit_layout_direction>(i);
+        add_value_operation(node, Kit_layout::get_hide_direction_property(direction), data.connector_hiding.is_hidden(direction), out_operations);
+    }
 }
 
 // The values add_value_operations() writes, in its order.
 [[nodiscard]] auto get_layout_value_properties() -> std::span<const erhe::property::Dependency_property* const>
 {
-    static const std::array<const erhe::property::Dependency_property*, 8> properties{
+    static const std::array<const erhe::property::Dependency_property*, 15> properties{
         &Kit_layout::pattern_property.get(), &Kit_layout::items_property.get(), &Kit_layout::module_snap_property.get(),
         &Kit_layout::surface_snap_property.get(), &Kit_layout::surface_orient_property.get(), &Kit_layout::surface_max_distance_property.get(),
-        &Kit_layout::per_piece_seed_property.get(), &Kit_layout::seed_property.get()
+        &Kit_layout::per_piece_seed_property.get(), &Kit_layout::seed_property.get(),
+        &Kit_layout::hide_all_connectors_property.get(),
+        &Kit_layout::hide_plus_tangent_connectors_property.get(), &Kit_layout::hide_minus_tangent_connectors_property.get(),
+        &Kit_layout::hide_plus_normal_connectors_property.get(), &Kit_layout::hide_minus_normal_connectors_property.get(),
+        &Kit_layout::hide_plus_binormal_connectors_property.get(), &Kit_layout::hide_minus_binormal_connectors_property.get()
     };
     return properties;
 }
@@ -115,6 +125,7 @@ void write_layout_values(erhe::scene::Node& node, const Kit_layout_data& data)
     node.set_value(Kit_layout::surface_max_distance_property, data.surface_max_distance);
     node.set_value(Kit_layout::per_piece_seed_property,   data.seeds == Kit_layout_seeds::per_element);
     node.set_value(Kit_layout::seed_property,           data.seed);
+    write_layout_connector_hiding(node, data.connector_hiding);
 }
 
 // The length a new curve for the pattern gets: the line its count and step make, else its gap-mode length.
@@ -132,6 +143,15 @@ void write_layout_values(erhe::scene::Node& node, const Kit_layout_data& data)
     erhe::math::Curve_path path;
     path.points.push_back(erhe::math::Curve_point{.position = glm::vec3{0.0f}});
     path.points.push_back(erhe::math::Curve_point{.position = glm::vec3{length, 0.0f, 0.0f}});
+    return path;
+}
+
+// Two corner points on the x axis.
+[[nodiscard]] auto make_x_path(const float x0, const float x1) -> erhe::math::Curve_path
+{
+    erhe::math::Curve_path path;
+    path.points.push_back(erhe::math::Curve_point{.position = glm::vec3{x0, 0.0f, 0.0f}});
+    path.points.push_back(erhe::math::Curve_point{.position = glm::vec3{x1, 0.0f, 0.0f}});
     return path;
 }
 
@@ -266,6 +286,19 @@ auto Level_kits::prepare_layout_generation(
 ) -> std::string
 {
     out_preparation.clear();
+    // A stairs layout places no item: its child is generated from the curve (R5.12.13).
+    if (data.pattern.kind == Repeat_pattern_kind::stairs) {
+        std::string stairs_error = check_layout_kind(node, data.pattern.kind);
+        if (stairs_error.empty()) {
+            const erhe::scene::Curve* const stairs_curve = dynamic_cast<const erhe::scene::Curve*>(&node);
+            stairs_error = resolve_layout_pattern(data.pattern, data.seed, out_preparation.sizes, &stairs_curve->get_table(), out_preparation.run, &out_preparation.poses);
+        }
+        if (stairs_error.empty() && !is_layout_scale_kept(world_from_layout)) {
+            const glm::vec3 scale = erhe::scene::Trs_transform{world_from_layout}.get_scale();
+            stairs_error = fmt::format("'{}' is scaled ({}, {}, {}): a kit layout node keeps scale 1", node.get_name(), scale.x, scale.y, scale.z);
+        }
+        return stairs_error;
+    }
     if (data.items.empty()) {
         return "a kit layout needs at least one item";
     }
@@ -295,6 +328,7 @@ auto Level_kits::prepare_layout_generation(
     // The run outlives no curve edit and no item edit.
     out_preparation.run.pattern.path          = nullptr;
     out_preparation.run.pattern.scatter_items = {};
+    out_preparation.run.pattern.segment_items = {};
     if (!error.empty()) {
         return error;
     }
@@ -316,6 +350,21 @@ auto Level_kits::prepare_layout_generation(
         const std::string range_error = values.validate();
         if (!range_error.empty()) {
             return fmt::format("element {}: {}", i, range_error);
+        }
+        // A segments piece spans its chord by the bounds of its own geometry, which its seed may change.
+        if (data.pattern.kind == Repeat_pattern_kind::segments) {
+            const erhe::math::Aabb element_bounds = get_kit_geometry_bounds(values);
+            const erhe::math::Curve_span& span = curve->get_table().get_span(i);
+            const Repeat_segment_item item = element_bounds.is_valid_3d()
+                ? Repeat_segment_item{.min_x = element_bounds.min.x, .max_x = element_bounds.max.x}
+                : Repeat_segment_item{};
+            Repeat_pose& pose = out_preparation.poses[i];
+            const std::size_t item_index = pose.item;
+            const std::string segment_error = make_segment_pose(i, span.control[0], span.control[3], item, data.pattern.orientation, pose);
+            if (!segment_error.empty()) {
+                return segment_error;
+            }
+            pose.item = item_index;
         }
         out_preparation.element_values.push_back(std::move(values));
     }
@@ -351,6 +400,9 @@ auto Level_kits::build_layout_generation(
 ) -> std::string
 {
     out_operations.clear();
+    if (data.pattern.kind == Repeat_pattern_kind::stairs) {
+        return build_stairs_generation(scene_root, node, data, world_from_layout, reuse, out_operations, result);
+    }
     Kit_layout_preparation&   prepared = m_generation_preparation;
     const Preparation_release release{prepared};
     const std::string error = prepare_layout_generation(scene_root, *node, data, world_from_layout, prepared);
@@ -374,7 +426,12 @@ auto Level_kits::build_layout_generation(
     const glm::quat   layout_rotation   = layout_world.get_rotation();
     const glm::mat4   layout_from_world = glm::inverse(world_from_layout);
     const Kit_lengths lengths = get_lengths(scene_root);
-    const Surface_options surface{.snap = data.surface_snap, .orient = data.surface_orient, .max_distance = data.surface_max_distance};
+    const bool            segments = (data.pattern.kind == Repeat_pattern_kind::segments);
+    const Surface_options element_surface{
+        .snap         = data.surface_snap,
+        .orient       = segments ? Surface_orient::off : data.surface_orient,
+        .max_distance = data.surface_max_distance
+    };
     // The node's current children are no surface for the new ones.
     std::vector<const erhe::scene::Mesh*> excluded{excluded_meshes.begin(), excluded_meshes.end()};
     collect_meshes(*node, excluded);
@@ -398,18 +455,20 @@ auto Level_kits::build_layout_generation(
         }
         glm::vec3 position = layout_position + (layout_rotation * poses[i].position);
         glm::quat rotation = glm::normalize(layout_rotation * poses[i].rotation);
-        if (data.snap == Kit_snap::module) {
+        // A segments piece stands on its control points: no module snap, and no orient, which would tilt it off them.
+        if ((data.snap == Kit_snap::module) && !segments) {
             position = snap_to_module(position, lengths.module);
         }
-        if (any_surface_option(surface)) {
+        if (any_surface_option(element_surface)) {
             const Surface_placement snapped = find_surface_placement(
-                scene_root, bounds, Surface_pose{.position = position, .rotation = rotation}, surface, excluded
+                scene_root, bounds, Surface_pose{.position = position, .rotation = rotation, .scale = poses[i].scale}, element_surface, excluded
             );
             position = snapped.pose.position;
             rotation = snapped.pose.rotation;
         }
         placement.position        = position;
         placement.rotation        = rotation;
+        placement.scale           = poses[i].scale;
         placement.parent          = node;
         placement.index_in_parent = i;
         placement.name            = fmt::format("{} {}", placement.shape->display_name, i + 1);
@@ -446,6 +505,7 @@ auto Level_kits::build_layout_generation(
                 return false;
             }
         }
+        // The layout keeps scale 1, so the element's scale is its local scale.
         const erhe::scene::Trs_transform desired{
             layout_from_world * erhe::math::create_translation<float>(element.position) * glm::mat4_cast(element.rotation)
         };
@@ -453,7 +513,7 @@ auto Level_kits::build_layout_generation(
         return
             (glm::length(actual.get_translation() - desired.get_translation()) < c_pose_tolerance) &&
             (std::abs(glm::dot(actual.get_rotation(), desired.get_rotation())) > (1.0f - c_rotation_tolerance)) &&
-            !glm::any(glm::greaterThan(glm::abs(actual.get_scale() - glm::vec3{1.0f}), glm::vec3{c_pose_tolerance}));
+            !glm::any(glm::greaterThan(glm::abs(actual.get_scale() - element.scale), glm::vec3{c_pose_tolerance}));
     };
 
     const std::vector<std::shared_ptr<erhe::Hierarchy>> children = node->get_children();
@@ -511,6 +571,103 @@ auto Level_kits::build_layout_generation(
     return {};
 }
 
+auto Level_kits::build_stairs_generation(
+    Scene_root&                               scene_root,
+    const std::shared_ptr<erhe::scene::Node>& node,
+    const Kit_layout_data&                    data,
+    const glm::mat4&                          world_from_layout,
+    const Kit_layout_reuse                    reuse,
+    std::vector<std::shared_ptr<Operation>>&  out_operations,
+    Kit_layout_result&                        result
+) -> std::string
+{
+    std::string error = check_layout_kind(*node, data.pattern.kind);
+    if (!error.empty()) {
+        return error;
+    }
+    if (!is_layout_scale_kept(world_from_layout)) {
+        const glm::vec3 scale = erhe::scene::Trs_transform{world_from_layout}.get_scale();
+        return fmt::format("'{}' is scaled ({}, {}, {}): a kit layout node keeps scale 1", node->get_name(), scale.x, scale.y, scale.z);
+    }
+    error = check_stairs_material(scene_root, data.pattern.stairs_material);
+    if (!error.empty()) {
+        return error;
+    }
+    // Treads are level in the node's frame, so the node stays upright; a turn about the up axis is free.
+    const glm::vec3 layout_up = erhe::scene::Trs_transform{world_from_layout}.get_rotation() * glm::vec3{0.0f, 1.0f, 0.0f};
+    if (layout_up.y < (1.0f - c_rotation_tolerance)) {
+        return fmt::format(
+            "'{}' is tilted (its up axis is ({:.3f}, {:.3f}, {:.3f})): a stairs layout node stays upright, so its treads are level",
+            node->get_name(), layout_up.x, layout_up.y, layout_up.z
+        );
+    }
+    const erhe::scene::Curve& curve = dynamic_cast<const erhe::scene::Curve&>(*node);
+    result.run           = Kit_layout_run{};
+    result.run.count     = 1;
+    result.run.requested = 1;
+
+    // The one child is kept when it was generated from this curve and these values with this material, at the node's origin.
+    const std::string source = make_stairs_source_text(curve.get_path(), data.pattern.stairs);
+    const std::vector<std::shared_ptr<erhe::Hierarchy>> children = node->get_children();
+    bool kept = false;
+    if ((reuse == Kit_layout_reuse::keep_matching) && (children.size() == 1)) {
+        const erhe::scene::Mesh* const mesh = dynamic_cast<const erhe::scene::Mesh*>(children.front().get());
+        const Kit_palette_material* const palette = m_library.find_slot_default(c_stairs_material_slot);
+        const std::string_view expected_material = !data.pattern.stairs_material.empty()
+            ? std::string_view{data.pattern.stairs_material}
+            : ((palette != nullptr) ? std::string_view{palette->name} : std::string_view{});
+        if (
+            (mesh != nullptr) && (mesh->get_child_count() == 0) && (read_layout_generated_source(*mesh) == source) &&
+            (mesh->get_primitives().size() == 1) && mesh->get_primitives().front().material &&
+            (mesh->get_primitives().front().material->get_name() == expected_material)
+        ) {
+            const erhe::scene::Trs_transform& local = mesh->parent_from_node_transform();
+            kept =
+                (glm::length(local.get_translation()) < c_pose_tolerance) &&
+                (std::abs(local.get_rotation().w) > (1.0f - c_rotation_tolerance)) &&
+                !glm::any(glm::greaterThan(glm::abs(local.get_scale() - glm::vec3{1.0f}), glm::vec3{c_pose_tolerance}));
+        }
+    }
+    // A kept child needs the fit alone (the run and the readback); a new one its mesh.
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = kept ? std::shared_ptr<erhe::geometry::Geometry>{} : std::make_shared<erhe::geometry::Geometry>("Stairs");
+    error = make_stairs(curve.get_table(), data.pattern.stairs, result.stairs, geometry ? &geometry->get_mesh() : nullptr);
+    if (!error.empty()) {
+        return error;
+    }
+    result.run.space = result.stairs.fit.length;
+    if (kept) {
+        result.kept_count = 1;
+        return {};
+    }
+    // Removed from the last child back, each subtree deepest first, so an undo puts every node back at its index.
+    std::vector<std::shared_ptr<Operation>>       operations;
+    std::vector<std::shared_ptr<erhe::Hierarchy>> subtree;
+    for (std::size_t j = children.size(); j > 0; --j) {
+        ++result.removed_count;
+        subtree.clear();
+        collect_subtree_deepest_first(children[j - 1], subtree);
+        for (const std::shared_ptr<erhe::Hierarchy>& item : subtree) {
+            operations.push_back(
+                std::make_shared<Item_insert_remove_operation>(
+                    Item_insert_remove_operation::Parameters{
+                        .context = m_context,
+                        .item    = item,
+                        .parent  = item->get_parent().lock(),
+                        .mode    = Item_insert_remove_operation::Mode::remove
+                    }
+                )
+            );
+        }
+    }
+    error = make_stairs_insert(scene_root, node, world_from_layout, geometry, data.pattern.stairs_material, source, operations);
+    if (!error.empty()) {
+        return error;
+    }
+    result.added_count = 1;
+    out_operations = std::move(operations);
+    return {};
+}
+
 auto Level_kits::create_layout(Scene_root& scene_root, const Kit_layout_create& create) -> Kit_layout_result
 {
     std::vector<std::shared_ptr<Operation>> no_leading;
@@ -539,12 +696,32 @@ auto Level_kits::create_layout_after(
     // R5.12.8: a path layout is a curve node carrying the values, the other kinds an Xform.
     const std::string_view name = create.name.empty() ? std::string_view{"Kit Layout"} : std::string_view{create.name};
     std::shared_ptr<erhe::scene::Node> node;
-    if (create.data.pattern.kind == Repeat_pattern_kind::path) {
+    if (is_curve_layout_kind(create.data.pattern.kind)) {
         std::shared_ptr<erhe::scene::Curve> curve = std::make_shared<erhe::scene::Curve>(name);
-        curve->set_path(create.path.has_value() ? create.path.value() : make_straight_path(get_new_curve_length(create.data.pattern)));
+        if (create.path.has_value()) {
+            curve->set_path(create.path.value());
+        } else if (create.data.pattern.kind == Repeat_pattern_kind::segments) {
+            // One segment spanning the first item at scale 1, so element 0 stands at the node's origin.
+            const erhe::math::Aabb bounds = create.data.items.empty() ? erhe::math::Aabb{} : get_layout_item_bounds(scene_root, create.data.items.front());
+            curve->set_path(
+                bounds.is_valid_3d()
+                    ? make_x_path(bounds.min.x, bounds.max.x)
+                    : make_straight_path(1.0f)
+            );
+        } else if (create.data.pattern.kind == Repeat_pattern_kind::stairs) {
+            // A flight of ten steps at the values' slope along the x axis.
+            erhe::math::Curve_path flight;
+            flight.points.push_back(erhe::math::Curve_point{.position = glm::vec3{0.0f}});
+            flight.points.push_back(
+                erhe::math::Curve_point{.position = glm::vec3{10.0f * create.data.pattern.stairs.min_tread, 10.0f * create.data.pattern.stairs.max_rise, 0.0f}}
+            );
+            curve->set_path(flight);
+        } else {
+            curve->set_path(make_straight_path(get_new_curve_length(create.data.pattern)));
+        }
         node = curve;
     } else if (create.path.has_value()) {
-        result.error = fmt::format("a curve's points are given for a {} layout: only a path layout is a curve node", c_str(create.data.pattern.kind));
+        result.error = fmt::format("a curve's points are given for a {} layout: only a path, segments or stairs layout is a curve node", c_str(create.data.pattern.kind));
         return result;
     } else {
         node = std::make_shared<erhe::scene::Xform>(name);
@@ -621,6 +798,10 @@ auto Level_kits::make_layout_from_piece(Scene_root& scene_root, const Kit_layout
         result.error = fmt::format("piece '{}' is not in scene '{}'", piece->get_name(), scene_root.get_name());
         return result;
     }
+    if (from_piece.pattern.kind == Repeat_pattern_kind::stairs) {
+        result.error = "a stairs layout places no piece: it is made on a curve (level_create_layout with points or curve_id)";
+        return result;
+    }
     const std::shared_ptr<erhe::Hierarchy> parent = piece->get_parent().lock();
     if (!parent) {
         result.error = fmt::format("'{}' has no parent", piece->get_name());
@@ -656,6 +837,7 @@ auto Level_kits::make_layout_from_piece(Scene_root& scene_root, const Kit_layout
     create.data.seeds          = from_piece.seeds;
     create.data.seed           = from_piece.seed;
     create.data.lock           = from_piece.lock;
+    create.data.connector_hiding = from_piece.connector_hiding;
     create.path                = from_piece.path;
     create.parent              = parent;
     create.position            = world.get_translation();
@@ -692,6 +874,7 @@ auto Level_kits::make_layout_from_piece_initial(Scene_root& scene_root, const st
         .seeds          = initial.data.seeds,
         .seed           = initial.data.seed,
         .lock           = initial.data.lock,
+        .connector_hiding = initial.data.connector_hiding,
         .name           = {},
         .path           = {}
     };
@@ -750,6 +933,7 @@ auto Level_kits::set_layout(Scene_root& scene_root, const std::shared_ptr<erhe::
         result.error = build_layout_generation(scene_root, node, data, node->world_from_node(), Kit_layout_reuse::replace_all, {}, generation, check);
         result.run         = check.run;
         result.item_extent = check.item_extent;
+        result.stairs      = check.stairs;
         generation.clear();
     }
     if (!result.error.empty()) {
@@ -852,7 +1036,8 @@ auto Level_kits::append_layout_value_follow_ups(
     if (!read_error.empty()) {
         return read_error;
     }
-    if (data.lock != Kit_layout_lock::locked) {
+    // The connector switches change no child (U39): the connector readers follow Kit_layout_changed_message.
+    if ((data.lock != Kit_layout_lock::locked) || is_layout_connector_switch_property(property)) {
         return {};
     }
     // Writing the lock locks as set_layout_lock() does; any other value regenerates as set_layout() does.
@@ -899,6 +1084,7 @@ auto Level_kits::check_layout_value_write(
     else if ((&property == &Kit_layout::per_piece_seed_property.get())   && (flag != nullptr))    { data.seeds = *flag ? Kit_layout_seeds::per_element : Kit_layout_seeds::item; }
     else if ((&property == &Kit_layout::seed_property.get())           && (integer != nullptr)) { data.seed = *integer; }
     else if ((&property == &Kit_layout::locked_property.get())         && (flag != nullptr))    { data.lock = *flag ? Kit_layout_lock::locked : Kit_layout_lock::unlocked; }
+    else if (is_layout_connector_switch_property(property)             && (flag != nullptr))    { return {}; } // changes no child
     else { error = "the value is not of the property's type"; }
     if (error.empty()) {
         error = check_layout_kind(*node, data.pattern.kind);
@@ -1205,6 +1391,7 @@ auto Level_kits::step_layout_preview_entries(const erhe::scene::Node* const valu
             }
             write_layout_values(*entry.node, data);
             m_layout_indicators.forget_layout(*entry.node);
+            m_connector_indicators.forget_children_of(static_cast<std::uint64_t>(entry.node->get_id()));
         }
     }
     std::size_t piece_count = 0;
@@ -1253,6 +1440,7 @@ void Level_kits::end_layout_preview()
                 static_cast<void>(i->node->apply_local_state(*properties[k], i->values_before[k]));
             }
             m_layout_indicators.forget_layout(*i->node);
+            m_connector_indicators.forget_children_of(static_cast<std::uint64_t>(i->node->get_id()));
         }
     }
     m_layout_preview.clear();
@@ -1297,6 +1485,7 @@ auto Level_kits::resolve_layout_run(
     const std::string run_error = resolve_layout_pattern(data.pattern, data.seed, items, (curve != nullptr) ? &curve->get_table() : nullptr, out_run, nullptr);
     out_run.pattern.path          = nullptr;
     out_run.pattern.scatter_items = {};
+    out_run.pattern.segment_items = {};
     return run_error;
 }
 
@@ -1324,8 +1513,8 @@ auto Level_kits::make_layout_on_curve(Scene_root& scene_root, const std::shared_
         result.error = fmt::format("'{}' has children; a kit layout node makes its own children", curve->get_name());
         return result;
     }
-    if (data.pattern.kind != Repeat_pattern_kind::path) {
-        result.error = fmt::format("a curve node carries a path layout only, not a {} layout", c_str(data.pattern.kind));
+    if (!is_curve_layout_kind(data.pattern.kind)) {
+        result.error = fmt::format("a curve node carries a path, segments or stairs layout only, not a {} layout", c_str(data.pattern.kind));
         return result;
     }
     result.node = curve;

@@ -458,6 +458,8 @@ public:
     void unregister_physics_drag(Physics_drag_constraint* drag);
 
     void before_physics_simulation_steps     ();
+    // Each frame with static physics, before the steps and whether or not they run (Node_physics_system).
+    void apply_pending_shape_scales          ();
     void update_physics_simulation_fixed_step(double dt, const Physics_config& physics);
     void after_physics_simulation_steps      ();
 

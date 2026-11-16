@@ -167,6 +167,16 @@ auto Jolt_collision_shape::describe() const -> std::string
     return "Jolt_collision_shape";
 }
 
+auto Jolt_collision_shape::is_valid_scale(const glm::vec3 scale) const -> bool
+{
+    return m_jolt_shape && m_jolt_shape->IsValidScale(to_jolt(scale));
+}
+
+auto Jolt_collision_shape::make_scale_valid(const glm::vec3 scale) const -> glm::vec3
+{
+    return m_jolt_shape ? from_jolt(m_jolt_shape->MakeScaleValid(to_jolt(scale))) : scale;
+}
+
 //
 
 Jolt_box_shape::Jolt_box_shape(const glm::vec3 half_extents)

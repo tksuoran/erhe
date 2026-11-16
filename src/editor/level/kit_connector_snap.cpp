@@ -62,7 +62,7 @@ void Kit_connector_drag_snap::begin(
                     if (!level_kits.get_local_connectors(node, m_local_connectors, Kit_connector_set::all).empty()) {
                         return true;
                     }
-                    const Kit_connector_switches switches = read_connector_switches(node);
+                    const Kit_connector_switches switches = level_kits.get_connector_switches(node, m_local_connectors);
                     if (!switches.connectors_enabled) {
                         return true;
                     }
@@ -74,7 +74,7 @@ void Kit_connector_drag_snap::begin(
                     const std::shared_ptr<erhe::scene::Node> shared_node = as_node(node);
                     for (std::size_t k = 0, k_end = m_local_connectors.size(); k < k_end; ++k) {
                         // U27: a disabled connector is neither a source nor a target; k stays the shape's index.
-                        if (!switches.is_enabled(m_local_connectors[k].name)) {
+                        if (!switches.is_enabled(m_local_connectors[k].name, k)) {
                             continue;
                         }
                         const Kit_connector in_root = connector_in_root(m_local_connectors[k], root_from_node);
@@ -114,7 +114,7 @@ void Kit_connector_drag_snap::begin(
             if (!level_kits.get_local_connectors(*node, m_local_connectors, Kit_connector_set::all).empty() || m_local_connectors.empty()) {
                 return true;
             }
-            const Kit_connector_switches switches = read_connector_switches(*node);
+            const Kit_connector_switches switches = level_kits.get_connector_switches(*node, m_local_connectors);
             if (!switches.connectors_enabled) {
                 return true;
             }
@@ -124,7 +124,7 @@ void Kit_connector_drag_snap::begin(
             const std::size_t piece_index = m_target_pieces.size();
             const std::size_t first_point = m_target_points.size();
             for (std::size_t k = 0, k_end = m_local_connectors.size(); k < k_end; ++k) {
-                if (!switches.is_enabled(m_local_connectors[k].name)) {
+                if (!switches.is_enabled(m_local_connectors[k].name, k)) {
                     continue;
                 }
                 m_target_points.push_back(

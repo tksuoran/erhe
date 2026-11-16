@@ -17,8 +17,12 @@
 #include "level/kit_layout_region_tool.hpp"
 #include "level/kit_piece.hpp"
 #include "level/kit_shape_checks.hpp"
+#include "level/kit_shapes.hpp"
 #include "level/level_kits.hpp"
 #include "level/level_queries.hpp"
+#include "level/level_repeat.hpp"
+#include "operations/curve_set_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
@@ -27,6 +31,7 @@
 #include "scene/viewport_scene_views.hpp"
 #include "transform/transform_tool.hpp"
 #include "windows/viewport_window.hpp"
+#include "tools/curve_tool.hpp"
 #include "tools/debug_visualizations.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -389,10 +394,64 @@ namespace {
 [[nodiscard]] auto piece_connectors_json(const std::vector<Kit_connector>& connectors, const Kit_connector_switches& switches) -> json
 {
     json result = json::array();
-    for (const Kit_connector& connector : connectors) {
-        json entry = connector_json(connector);
-        entry["enabled"] = switches.is_enabled(connector.name);
+    for (std::size_t i = 0, end = connectors.size(); i < end; ++i) {
+        json entry = connector_json(connectors[i]);
+        entry["enabled"] = switches.is_enabled(connectors[i].name, i);
         result.push_back(std::move(entry));
+    }
+    return result;
+}
+
+// U39: the seven connector switches of a path or segments layout, by name.
+constexpr std::array<std::pair<const char*, std::optional<Kit_layout_direction>>, 7> c_connector_hiding_keys{{
+    {"all",            std::nullopt},
+    {"plus_tangent",   Kit_layout_direction::plus_tangent},
+    {"minus_tangent",  Kit_layout_direction::minus_tangent},
+    {"plus_normal",    Kit_layout_direction::plus_normal},
+    {"minus_normal",   Kit_layout_direction::minus_normal},
+    {"plus_binormal",  Kit_layout_direction::plus_binormal},
+    {"minus_binormal", Kit_layout_direction::minus_binormal}
+}};
+
+// The switches given merge over hiding; returns the problem, empty when read.
+[[nodiscard]] auto read_connector_hiding_json(const json& value, Kit_layout_connector_hiding& hiding) -> std::string
+{
+    const char* const accepted = "all, plus_tangent, minus_tangent, plus_normal, minus_normal, plus_binormal, minus_binormal";
+    if (!value.is_object()) {
+        return std::string{"connector_hiding must be an object of switch name: true (hidden) or false ("} + accepted + ")";
+    }
+    Kit_layout_connector_hiding result = hiding;
+    for (const auto& [key, flag] : value.items()) {
+        const std::pair<const char*, std::optional<Kit_layout_direction>>* found = nullptr;
+        for (const std::pair<const char*, std::optional<Kit_layout_direction>>& entry : c_connector_hiding_keys) {
+            if (key == entry.first) {
+                found = &entry;
+            }
+        }
+        if (found == nullptr) {
+            return "connector_hiding has no switch '" + key + "' (" + accepted + ")";
+        }
+        if (!flag.is_boolean()) {
+            return "connector_hiding." + key + " must be true or false";
+        }
+        const Kit_layout_connector_visibility visibility = flag.get<bool>() ? Kit_layout_connector_visibility::hidden : Kit_layout_connector_visibility::shown;
+        if (found->second.has_value()) {
+            result.set(found->second.value(), visibility);
+        } else {
+            result.all = visibility;
+        }
+    }
+    hiding = result;
+    return {};
+}
+
+[[nodiscard]] auto connector_hiding_json(const Kit_layout_connector_hiding& hiding) -> json
+{
+    json result = json::object();
+    for (const std::pair<const char*, std::optional<Kit_layout_direction>>& entry : c_connector_hiding_keys) {
+        result[entry.first] = entry.second.has_value()
+            ? hiding.is_hidden(entry.second.value())
+            : (hiding.all == Kit_layout_connector_visibility::hidden);
     }
     return result;
 }
@@ -465,6 +524,7 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
         }
         shapes.push_back({
             {"id",              shape.id},
+            {"recreates",       shape.recreates},
             {"default_derive",  default_derive},
             {"kit",             shape.kit},
             {"name",            shape.display_name},
@@ -480,6 +540,7 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
             {"triangle_budget", shape.triangle_budget},
             {"collision",       c_str(shape.collision)},
             {"mesh_kind",       c_str(shape.mesh_kind)},
+            {"seeded",          shape.randomness == Kit_randomness::seeded},
             {"mirror_planes",   mirror_planes_json(shape.mirror_planes)}
         });
     }
@@ -921,21 +982,40 @@ auto Mcp_server::query_level_connectors(const json& args) -> std::string
     }
     json pieces = json::array();
     std::vector<Kit_connector> connectors;
+    std::vector<Kit_connector> local_connectors;
     for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
         const std::string error = m_context.level_kits->get_world_connectors(*node, connectors, Kit_connector_set::all);
         if (!error.empty()) {
             return make_error_content("level_get_connectors: node " + std::to_string(node->get_id()) + ": " + error);
         }
-        const std::optional<Kit_piece_data> record   = read_kit_piece(*node);
-        const Kit_connector_switches        switches = read_connector_switches(*node);
-        pieces.push_back({
+        const std::optional<Kit_piece_data> record = read_kit_piece(*node);
+        static_cast<void>(m_context.level_kits->get_local_connectors(*node, local_connectors, Kit_connector_set::all));
+        const Kit_connector_switches switches = m_context.level_kits->get_connector_switches(*node, local_connectors);
+        json connectors_json = piece_connectors_json(connectors, switches);
+        json entry{
             {"id",                  node->get_id()},
             {"name",                node->get_name()},
             {"shape",               record.has_value() ? record->shape : std::string{}},
             {"connectors_enabled",  switches.connectors_enabled},
-            {"disabled_connectors", parse_connector_names(switches.disabled_connectors)},
-            {"connectors",          piece_connectors_json(connectors, switches)}
-        });
+            {"disabled_connectors", parse_connector_names(switches.disabled_connectors)}
+        };
+        // U39: a locked path or segments layout's child: each connector's direction in its element frame and why it is hidden.
+        const std::optional<Kit_layout_child> child = m_context.level_kits->get_layout_child(*node);
+        if (child.has_value()) {
+            for (std::size_t i = 0, end = std::min(local_connectors.size(), connectors_json.size()); i < end; ++i) {
+                const Kit_layout_connector_verdict verdict = get_layout_connector_verdict(child.value(), local_connectors[i].outward);
+                connectors_json[i]["layout_direction"]   = verdict.direction.has_value() ? json(c_str(verdict.direction.value())) : json(nullptr);
+                connectors_json[i]["hidden_by_layout"]   = (verdict.reason != Kit_layout_hide_reason::shown);
+                connectors_json[i]["layout_hide_reason"] = c_str(verdict.reason);
+            }
+            entry["layout"] = {
+                {"id",               child->layout_id},
+                {"role",             c_str(child->role)},
+                {"connector_hiding", connector_hiding_json(child->hiding)}
+            };
+        }
+        entry["connectors"] = std::move(connectors_json);
+        pieces.push_back(std::move(entry));
     }
     return make_json_content({
         {"scene_name", scene_root->get_name()},
@@ -1221,7 +1301,7 @@ auto Mcp_server::action_level_connect_pieces(const json& args) -> std::string
         {"rotation_xyzw", quat_json(result.rotation)},
         {"changed",       result.changed},
         {"world_aabb",    world_aabb_json(*node)},
-        {"connectors",    connectors_error.empty() ? piece_connectors_json(connectors, read_connector_switches(*node)) : json::array()}
+        {"connectors",    connectors_error.empty() ? piece_connectors_json(connectors, m_context.level_kits->get_connector_switches(*node)) : json::array()}
     }).dump();
 }
 
@@ -1345,6 +1425,16 @@ auto Mcp_server::query_level_pieces(const json& args) -> std::string
             if (error.empty()) {
                 piece["parameters"] = values_json(values);
                 piece["mesh_key"]   = Level_kits::get_mesh_key(values);
+                if (get_contract_id(*shape) == "basic.stairs") {
+                    const Kit_stairs_layout layout = get_stairs_layout(values);
+                    piece["stairs"] = {
+                        {"step_count",    layout.step_count},
+                        {"step_rise",     layout.step_rise},
+                        {"tread_depth",   layout.tread_depth},
+                        {"run",           layout.run},
+                        {"slope_degrees", layout.slope_degrees}
+                    };
+                }
             } else {
                 piece["parameters_error"] = error;
             }
@@ -2716,7 +2806,68 @@ namespace {
         {"region_radius", pattern.region_radius},
         {"min_spacing",   pattern.min_spacing},
         {"yaw_min",       pattern.yaw_min},
-        {"yaw_max",       pattern.yaw_max}
+        {"yaw_max",       pattern.yaw_max},
+        {"stairs",        json{
+            {"width",          pattern.stairs.width},
+            {"step_rise",      pattern.stairs.max_rise},
+            {"tread_depth",    pattern.stairs.min_tread},
+            {"thickness",      pattern.stairs.thickness},
+            {"edge_tolerance", pattern.stairs.tolerance},
+            {"material",       pattern.stairs_material}
+        }}
+    };
+}
+
+// A stairs layout's fit and mesh as the curve and the values make them now (R5.12.13); a refusal as its problem.
+[[nodiscard]] auto layout_stairs_json(const erhe::scene::Node& node, const Kit_layout_pattern& pattern) -> json
+{
+    const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(&node);
+    if (curve == nullptr) {
+        return json{{"problem", "the node is not a curve"}};
+    }
+    Stairs_report     report;
+    GEO::Mesh         mesh{3, true};
+    const std::string refusal = make_stairs(curve->get_table(), pattern.stairs, report, &mesh);
+    if (!refusal.empty()) {
+        return json{{"problem", refusal}};
+    }
+    const Stairs_fit& fit = report.fit;
+    json flights = json::array();
+    for (const Stairs_flight& flight : fit.flights) {
+        flights.push_back(json{{"step_count", flight.step_count}, {"rise", flight.rise}, {"tread", flight.tread}, {"begin", flight.begin}, {"end", flight.end}});
+    }
+    json landings = json::array();
+    for (const Stairs_landing& landing : fit.landings) {
+        landings.push_back(json{{"begin", landing.begin}, {"length", landing.length}, {"level", landing.level}});
+    }
+    json risers = json::array();
+    for (const Stairs_riser& riser : fit.risers) {
+        risers.push_back(json{{"distance", riser.distance}, {"level_before", riser.level_before}, {"level_after", riser.level_after}, {"flight", riser.flight}});
+    }
+    const Kit_mesh_report mesh_report = check_kit_mesh(mesh);
+    return json{
+        {"summary",       fmt::format("{} steps in {} flights, {} landings", fit.step_count, fit.flights.size(), fit.landings.size())},
+        {"step_count",    fit.step_count},
+        {"flight_count",  fit.flights.size()},
+        {"landing_count", fit.landings.size()},
+        {"flights",       flights},
+        {"landings",      landings},
+        {"risers",        risers},
+        {"plan_length",   fit.length},
+        {"start_level",   fit.start_level},
+        {"end_level",     fit.end_level},
+        {"total_rise",    fit.total_rise},
+        {"max_deviation", fit.max_deviation},
+        {"section_count", report.section_count},
+        {"mesh", json{
+            {"valid",          mesh_report.is_valid()},
+            {"problems",       mesh_report.problems},
+            {"triangle_count", mesh_report.triangle_count},
+            {"vertex_count",   mesh_report.vertex_count},
+            {"components",     mesh_report.component_count},
+            {"bounds_min",     vec3_json(mesh_report.bounds_min)},
+            {"bounds_max",     vec3_json(mesh_report.bounds_max)}
+        }}
     };
 }
 
@@ -2744,26 +2895,56 @@ namespace {
         object,
         {
             "kind", "count_mode", "count", "gap", "direction", "step", "length", "count_x", "count_z", "spacing_x", "spacing_z", "radius", "arc_degrees", "facing", "orientation",
-            "scatter_mode", "density", "region", "size_x", "size_z", "region_radius", "min_spacing", "yaw_min", "yaw_max"
+            "scatter_mode", "density", "region", "size_x", "size_z", "region_radius", "min_spacing", "yaw_min", "yaw_max", "stairs"
         }
     );
     if (!unrecognized.empty()) {
         return "pattern: unrecognized key(s): " + unrecognized +
             " (accepted: kind, count_mode, count, gap, direction, step, length, count_x, count_z, spacing_x, spacing_z, radius, arc_degrees, facing, orientation,"
-            " scatter_mode, density, region, size_x, size_z, region_radius, min_spacing, yaw_min, yaw_max;"
-            " a path layout is its own curve node: level_create_layout takes points and closed, or curve_id of a plain curve)";
+            " scatter_mode, density, region, size_x, size_z, region_radius, min_spacing, yaw_min, yaw_max, stairs;"
+            " a path, segments or stairs layout is its own curve node: level_create_layout takes points and closed, or curve_id of a plain curve)";
     }
     if (object.contains("kind")) {
         const json& kind = object.at("kind");
         bool found = false;
-        for (const Repeat_pattern_kind candidate : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path, Repeat_pattern_kind::scatter}) {
+        for (const Repeat_pattern_kind candidate : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path, Repeat_pattern_kind::scatter, Repeat_pattern_kind::segments, Repeat_pattern_kind::stairs}) {
             if (kind == json(c_str(candidate))) {
                 pattern.kind = candidate;
                 found = true;
             }
         }
         if (!found) {
-            return "pattern: kind is " + kind.dump() + " (line, grid, ring, path, scatter; a polyline is a path along a curve of corner points)";
+            return "pattern: kind is " + kind.dump() + " (line, grid, ring, path, scatter, segments, stairs; a polyline is a path along a curve of corner points)";
+        }
+    }
+    if (object.contains("stairs")) {
+        const json& stairs = object.at("stairs");
+        if (!stairs.is_object()) {
+            return "pattern: stairs must be an object {width, step_rise, tread_depth, thickness, edge_tolerance, material}";
+        }
+        const std::string unrecognized_stairs = unrecognized_keys(stairs, {"width", "step_rise", "tread_depth", "thickness", "edge_tolerance", "material"});
+        if (!unrecognized_stairs.empty()) {
+            return "pattern: stairs: unrecognized key(s): " + unrecognized_stairs + " (accepted: width, step_rise, tread_depth, thickness, edge_tolerance, material)";
+        }
+        std::string stairs_error;
+        if (
+            !read_number(stairs, "width",          pattern.stairs.width,     stairs_error) ||
+            !read_number(stairs, "step_rise",      pattern.stairs.max_rise,  stairs_error) ||
+            !read_number(stairs, "tread_depth",    pattern.stairs.min_tread, stairs_error) ||
+            !read_number(stairs, "thickness",      pattern.stairs.thickness, stairs_error) ||
+            !read_number(stairs, "edge_tolerance", pattern.stairs.tolerance, stairs_error)
+        ) {
+            return "pattern: stairs: " + stairs_error;
+        }
+        if (stairs.contains("material")) {
+            if (!stairs.at("material").is_string()) {
+                return "pattern: stairs: material must be a scene or palette material name (empty: the stone slot's default)";
+            }
+            pattern.stairs_material = stairs.at("material").get<std::string>();
+        }
+        stairs_error = check_stairs_values(pattern.stairs);
+        if (!stairs_error.empty()) {
+            return "pattern: " + stairs_error;
         }
     }
     if (object.contains("orientation")) {
@@ -2940,6 +3121,9 @@ namespace {
         }
         data.seed = seed.get<int>();
     }
+    if (args.contains("connector_hiding")) {
+        return read_connector_hiding_json(args.at("connector_hiding"), data.connector_hiding);
+    }
     return {};
 }
 
@@ -2997,6 +3181,7 @@ namespace {
     reply["surface_max_distance"] = data.surface_max_distance;
     reply["per_piece_seed"] = (data.seeds == Kit_layout_seeds::per_element);
     reply["seed"]           = data.seed;
+    reply["connector_hiding"] = connector_hiding_json(data.connector_hiding);
     // The run the values make now, from the items' extents, weights and footprints.
     Kit_layout_item_sizes sizes;
     level_kits.get_layout_item_sizes(scene_root, data.items, sizes);
@@ -3006,6 +3191,9 @@ namespace {
     reply["run"] = run_error.empty()
         ? json{{"count", run.count}, {"requested", run.requested}, {"step", run.step}, {"space", run.space}, {"item_extent", extent}}
         : json{{"problem", run_error}, {"item_extent", extent}};
+    if (data.pattern.kind == Repeat_pattern_kind::stairs) {
+        reply["stairs"] = layout_stairs_json(node, data.pattern);
+    }
     json children = json::array();
     for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
         const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
@@ -3017,8 +3205,23 @@ namespace {
             {"id",            child_node->get_id()},
             {"name",          child_node->get_name()},
             {"position",      vec3_json(child_world.get_translation())},
-            {"rotation_xyzw", quat_json(child_world.get_rotation())}
+            {"rotation_xyzw", quat_json(child_world.get_rotation())},
+            {"scale",         vec3_json(child_node->parent_from_node_transform().get_scale())}
         };
+        const std::string generated_source = read_layout_generated_source(*child_node);
+        if (!generated_source.empty()) {
+            // A stairs layout's generated child: no kit piece, its mesh and body made from the curve.
+            entry["generated"]  = true;
+            entry["world_aabb"] = world_aabb_json(*child_node);
+            const std::shared_ptr<erhe::scene::Mesh> child_mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(child_node);
+            json materials = json::array();
+            if (child_mesh) {
+                for (const erhe::scene::Mesh_primitive& primitive : child_mesh->get_primitives()) {
+                    materials.push_back(primitive.material ? primitive.material->get_name() : std::string{});
+                }
+            }
+            entry["materials"] = materials;
+        }
         const std::optional<Kit_piece_data> record = read_kit_piece(*child_node);
         if (record.has_value()) {
             entry["shape"]           = record.value().shape;
@@ -3066,12 +3269,12 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
 {
     const std::string tail = "; nothing was placed";
     const std::string unrecognized = unrecognized_keys(
-        args, {"scene_name", "name", "parent_id", "position", "rotation_xyzw", "pattern", "items", "from_piece_id", "curve_id", "points", "closed", "snap", "surface_snap", "surface_orient", "surface_max_distance", "per_piece_seed", "random_seeds", "seed", "locked"}
+        args, {"scene_name", "name", "parent_id", "position", "rotation_xyzw", "pattern", "items", "from_piece_id", "curve_id", "points", "closed", "snap", "surface_snap", "surface_orient", "surface_max_distance", "per_piece_seed", "random_seeds", "seed", "connector_hiding", "locked"}
     );
     if (!unrecognized.empty()) {
         return make_error_content(
             "level_create_layout: unrecognized argument(s): " + unrecognized +
-            " (accepted: scene_name, name, parent_id, position, rotation_xyzw, pattern, items, from_piece_id, curve_id, points, closed, snap, surface_snap, surface_orient, surface_max_distance, per_piece_seed (random_seeds: its former name), seed, locked)"
+            " (accepted: scene_name, name, parent_id, position, rotation_xyzw, pattern, items, from_piece_id, curve_id, points, closed, snap, surface_snap, surface_orient, surface_max_distance, per_piece_seed (random_seeds: its former name), seed, connector_hiding, locked)"
         );
     }
     const std::string scene_name = args.value("scene_name", "");
@@ -3084,6 +3287,8 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
     std::string       error;
     std::shared_ptr<erhe::scene::Mesh>  piece;
     std::shared_ptr<erhe::scene::Curve> on_curve; // curve_id: this plain curve node becomes the path layout
+    // A stairs layout places no item: its staircase is generated from the curve.
+    const bool stairs_kind = args.contains("pattern") && args.at("pattern").is_object() && (args.at("pattern").value("kind", json()) == json("stairs"));
     if (args.contains("curve_id")) {
         for (const char* const key : {"from_piece_id", "position", "rotation_xyzw", "parent_id", "name", "points", "closed"}) {
             if (args.contains(key)) {
@@ -3114,7 +3319,7 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
         }
         create.data.items.emplace_back();
         error = level_kits.read_piece_layout_item(*piece, create.data.items.front());
-    } else {
+    } else if (args.contains("items") || !stairs_kind) {
         error = read_layout_items_json(level_kits, *scene_root, args.value("items", json()), create.data.items);
     }
     if (error.empty()) {
@@ -3135,8 +3340,8 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
     }
     // A path layout is a curve node (R5.12.8): its points and closure, else a straight curve along its x axis.
     if (error.empty() && (args.contains("points") || args.contains("closed"))) {
-        if (create.data.pattern.kind != Repeat_pattern_kind::path) {
-            error = std::string{"points and closed are a path layout's curve; a "} + c_str(create.data.pattern.kind) + " layout is an Xform node";
+        if (!is_curve_layout_kind(create.data.pattern.kind)) {
+            error = std::string{"points and closed are a path, segments or stairs layout's curve; a "} + c_str(create.data.pattern.kind) + " layout is an Xform node";
         } else if (!args.contains("points")) {
             error = "closed needs points: the default curve is a straight open one";
         } else {
@@ -3187,6 +3392,7 @@ auto Mcp_server::action_level_create_layout(const json& args) -> std::string
                 .seeds          = create.data.seeds,
                 .seed           = create.data.seed,
                 .lock           = create.data.lock,
+                .connector_hiding = create.data.connector_hiding,
                 .name           = create.name,
                 .path           = create.path
             }
@@ -3207,12 +3413,12 @@ auto Mcp_server::action_level_set_layout(const json& args) -> std::string
 {
     const std::string tail = "; nothing was changed";
     const std::string unrecognized = unrecognized_keys(
-        args, {"scene_name", "layout_id", "pattern", "items", "snap", "surface_snap", "surface_orient", "surface_max_distance", "per_piece_seed", "random_seeds", "seed"}
+        args, {"scene_name", "layout_id", "pattern", "items", "snap", "surface_snap", "surface_orient", "surface_max_distance", "per_piece_seed", "random_seeds", "seed", "connector_hiding"}
     );
     if (!unrecognized.empty()) {
         return make_error_content(
             "level_set_layout: unrecognized argument(s): " + unrecognized +
-            " (accepted: scene_name, layout_id, pattern, items, snap, surface_snap, surface_orient, surface_max_distance, per_piece_seed (random_seeds: its former name), seed; the lock: level_set_layout_lock)"
+            " (accepted: scene_name, layout_id, pattern, items, snap, surface_snap, surface_orient, surface_max_distance, per_piece_seed (random_seeds: its former name), seed, connector_hiding; the lock: level_set_layout_lock)"
         );
     }
     const std::string scene_name = args.value("scene_name", "");
@@ -3396,6 +3602,182 @@ auto Mcp_server::query_level_region_handles(const json& args) -> std::string
         return make_error_content("level_get_region_handles: no region tool");
     }
     return make_json_content(region_handle_selection_json(*m_context.kit_layout_region_tool, m_context.transform_tool)).dump();
+}
+
+namespace {
+
+// The curve tool's segment handles (doc/editor/level_tools.md "Segment handles"): its target when that is a segments layout.
+[[nodiscard]] auto segment_handle_selection_json(Curve_tool& tool, Transform_tool* transform_tool) -> json
+{
+    static_cast<void>(tool.update_point_set());
+    const std::shared_ptr<erhe::scene::Curve> curve = tool.get_target_curve();
+    json reply = json::object();
+    if (!curve || !tool.has_segment_handles()) {
+        reply["layout"]   = nullptr;
+        reply["handles"]  = json::array();
+        reply["selected"] = nullptr;
+        reply["gizmo_on_handle"] = false;
+        return reply;
+    }
+    const std::shared_ptr<Scene_root> scene_root = get_hosting_scene_root(curve.get());
+    reply["layout"] = json{
+        {"id",         curve->get_id()},
+        {"name",       curve->get_name()},
+        {"scene_name", scene_root ? scene_root->get_name() : std::string{}}
+    };
+    const erhe::math::Curve_path& path = curve->get_path();
+    const glm::mat4 world_from_node = curve->world_from_node();
+    json list = json::array();
+    for (std::size_t i = 0, end = tool.get_segment_count(); i < end; ++i) {
+        glm::vec3 position{0.0f};
+        static_cast<void>(tool.get_point_world_position(tool.get_segment_point_index(i), position));
+        glm::vec3 normal{0.0f};
+        const bool has_normal = get_segment_normal(path, i, normal).empty();
+        list.push_back({
+            {"index",    i},
+            {"points",   json::array({i, (i + 1) % path.points.size()})},
+            {"position", vec3_json(position)},
+            {"normal",   has_normal ? vec3_json(glm::normalize(glm::vec3{world_from_node * glm::vec4{normal, 0.0f}})) : json(nullptr)}
+        });
+    }
+    reply["handles"] = std::move(list);
+    const std::optional<std::size_t> selected = tool.get_selected_segment();
+    reply["selected"] = selected.has_value() ? json(selected.value()) : json(nullptr);
+    // Whether the selected handle anchors the gizmo (it does from the next idle frame of a viewport).
+    reply["gizmo_on_handle"] = (transform_tool != nullptr) && transform_tool->is_component_mode() && selected.has_value();
+    return reply;
+}
+
+// The segments layout node of args as a Curve; returns the refusal.
+[[nodiscard]] auto find_segments_layout(Scene_root& scene_root, const json& args, const char* tool, std::shared_ptr<erhe::scene::Curve>& out_curve) -> std::string
+{
+    std::shared_ptr<erhe::scene::Node> node;
+    const std::string error = find_layout_node(scene_root, args, tool, node);
+    if (!error.empty()) {
+        return error;
+    }
+    out_curve = std::dynamic_pointer_cast<erhe::scene::Curve>(node);
+    Kit_layout_data data;
+    if (!out_curve || !read_kit_layout(*node, data).empty() || (data.pattern.kind != Repeat_pattern_kind::segments)) {
+        return fmt::format("{}: '{}' is not a segments kit layout node (segment handles belong to the segments kind)", tool, node->get_name());
+    }
+    return {};
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_level_select_segment_handle(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "layout_id", "index"});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_select_segment_handle: unrecognized argument(s): " + unrecognized + " (accepted: scene_name, layout_id, index)");
+    }
+    if (m_context.curve_tool == nullptr) {
+        return make_error_content("level_select_segment_handle: no curve tool");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    std::shared_ptr<erhe::scene::Curve> curve;
+    const std::string error = find_segments_layout(*scene_root, args, "level_select_segment_handle", curve);
+    if (!error.empty()) {
+        return make_error_content(error);
+    }
+    std::optional<std::size_t> index;
+    if (args.contains("index") && !args.at("index").is_null()) {
+        if (!args.at("index").is_number_unsigned()) {
+            return make_error_content("level_select_segment_handle: 'index' must be a segment index (see level_get_segment_handles) or null to clear");
+        }
+        index = args.at("index").get<std::size_t>();
+    }
+    Curve_tool& tool = *m_context.curve_tool;
+    if (!tool.select_curve_segment(curve, index)) {
+        return make_error_content(fmt::format(
+            "level_select_segment_handle: '{}' has {} segments; index {} was not selected",
+            curve->get_name(), erhe::math::get_span_count(curve->get_path()), index.has_value() ? fmt::format("{}", index.value()) : std::string{"null"}
+        ));
+    }
+    return make_json_content(segment_handle_selection_json(tool, m_context.transform_tool)).dump();
+}
+
+auto Mcp_server::query_level_segment_handles(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_get_segment_handles: unrecognized argument(s): " + unrecognized + " (it takes none)");
+    }
+    if (m_context.curve_tool == nullptr) {
+        return make_error_content("level_get_segment_handles: no curve tool");
+    }
+    return make_json_content(segment_handle_selection_json(*m_context.curve_tool, m_context.transform_tool)).dump();
+}
+
+auto Mcp_server::action_level_move_segment(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "layout_id", "segment", "offset"});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_move_segment: unrecognized argument(s): " + unrecognized + " (accepted: scene_name, layout_id, segment, offset)");
+    }
+    if (m_context.operation_stack == nullptr) {
+        return make_error_content("Operation stack not available");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    std::shared_ptr<erhe::scene::Curve> curve;
+    const std::string error = find_segments_layout(*scene_root, args, "level_move_segment", curve);
+    if (!error.empty()) {
+        return make_error_content(error);
+    }
+    if (!args.contains("segment") || !args.at("segment").is_number_unsigned()) {
+        return make_error_content("level_move_segment: 'segment' must be a segment index (see level_get_segment_handles)");
+    }
+    if (!args.contains("offset") || !args.at("offset").is_number()) {
+        return make_error_content("level_move_segment: 'offset' must be a number (along the segment's normal in the node's frame, meters as a layout node keeps scale 1; negative against it)");
+    }
+    if (is_instance_structure_protected(*curve)) {
+        return make_error_content(fmt::format("level_move_segment: '{}' is inside a reference instance; its path is not an override", curve->get_name()));
+    }
+    if ((m_context.curve_tool != nullptr) && m_context.curve_tool->is_editing(*curve)) {
+        return make_error_content(fmt::format(
+            "level_move_segment: a curve tool drag of '{}' is held; release it or cancel it (cancel_component_edit) first; nothing was changed", curve->get_name()
+        ));
+    }
+    const std::size_t segment = args.at("segment").get<std::size_t>();
+    const float       offset  = args.at("offset").get<float>();
+    const erhe::math::Curve_path& before = curve->get_path();
+    Segment_move move;
+    const std::string refusal = move_curve_segment(before, segment, offset, move);
+    if (!refusal.empty()) {
+        return make_error_content("level_move_segment: " + refusal + "; nothing was changed");
+    }
+    erhe::math::Curve_path after = before;
+    apply_segment_move(move, after);
+    glm::vec3 normal{0.0f};
+    static_cast<void>(get_segment_normal(before, segment, normal));
+    const glm::mat4 world_from_node = curve->world_from_node();
+    json reply = json::object();
+    reply["scene_name"] = scene_root->get_name();
+    reply["layout_id"]  = curve->get_id();
+    reply["segment"]    = segment;
+    reply["offset"]     = offset;
+    reply["normal"]     = vec3_json(glm::normalize(glm::vec3{world_from_node * glm::vec4{normal, 0.0f}}));
+    reply["moved_points"] = json::array({
+        json{{"index", move.first_point},  {"position", vec3_json(move.first)}},
+        json{{"index", move.second_point}, {"position", vec3_json(move.second)}}
+    });
+    const bool changed = (move.first != before.points[move.first_point].position) || (move.second != before.points[move.second_point].position);
+    if (changed) {
+        m_context.operation_stack->execute_now(
+            std::make_shared<Curve_set_operation>(curve, before, std::move(after), fmt::format("move segment {}", segment))
+        );
+    }
+    reply["changed"] = changed;
+    return make_json_content(reply).dump();
 }
 
 auto Mcp_server::query_level_layouts(const json& args) -> std::string

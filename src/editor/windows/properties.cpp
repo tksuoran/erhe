@@ -1260,7 +1260,7 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
             m_kit_piece_editor.on_edit(kit_parameter_row(m_kit_piece_editor.get_values(), i, Kit_row_label::recorded, m_kit_piece_editor.get_lengths()));
         });
     }
-    if (shape->id == "basic.stairs") {
+    if (get_contract_id(*shape) == "basic.stairs") {
         add_entry(Property_row_id::properties_layout, "Layout", [this]() { kit_stairs_line(m_kit_piece_editor.get_values()); });
     }
     if (!m_kit_piece_editor.get_message().empty()) {
@@ -1318,7 +1318,9 @@ void Properties::kit_layout_properties(const std::shared_ptr<erhe::scene::Node>&
         add_entry({Property_row_id::properties_kit_layout_pattern, static_cast<uint64_t>(row)}, get_layout_row_name(row), [&editor, row]() { editor.pattern_row(row); });
     }
     add_entry(Property_row_id::properties_kit_layout_run, "Run", [&editor]() { editor.run_line(); });
-    const std::span<const Kit_layout_item_rows> items = editor.get_items();
+    // A stairs layout places no item: its staircase is generated from the curve.
+    const bool stairs = (editor.get_pattern().kind == Repeat_pattern_kind::stairs);
+    const std::span<const Kit_layout_item_rows> items = stairs ? std::span<const Kit_layout_item_rows>{} : editor.get_items();
     for (std::size_t i = 0, end = items.size(); i < end; ++i) {
         push_group({Property_row_id::properties_kit_layout_item, i}, std::string{items[i].label}, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
         add_entry(Property_row_id::properties_kit_layout_item_shape, "Shape", [&editor, i]() { editor.item_shape_line(i); });
@@ -1335,8 +1337,10 @@ void Properties::kit_layout_properties(const std::shared_ptr<erhe::scene::Node>&
         add_entry(Property_row_id::properties_kit_layout_item_remove, "Remove Item", [&editor, i]() { editor.item_remove_button(i); });
         pop_group();
     }
-    add_entry(Property_row_id::properties_kit_layout_add_item, "Add Shape Item", [&editor]() { editor.add_item_button(); });
-    for (const Kit_layout_setting_row row : c_layout_setting_rows) {
+    if (!stairs) {
+        add_entry(Property_row_id::properties_kit_layout_add_item, "Add Shape Item", [&editor]() { editor.add_item_button(); });
+    }
+    for (const Kit_layout_setting_row row : get_layout_setting_rows(editor.get_pattern())) {
         add_entry({Property_row_id::properties_kit_layout_setting, static_cast<uint64_t>(row)}, get_layout_setting_name(row), [&editor, row]() { editor.setting_row(row); });
     }
     add_entry(Property_row_id::properties_kit_layout_lock, "Lock", [&editor]() { editor.lock_buttons(); });

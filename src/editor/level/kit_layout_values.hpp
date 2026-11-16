@@ -1,6 +1,7 @@
 #pragma once
 
 #include "level/level_repeat.hpp"
+#include "level/stairs_mesh.hpp"
 
 #include <glm/glm.hpp>
 
@@ -60,7 +61,7 @@ public:
     float                  radius     {4.0f};               // ring
     float                  arc_degrees{360.0f};             // ring: 360 is a full ring
     Repeat_ring_facing     facing     {Repeat_ring_facing::outward};
-    Repeat_path_orientation orientation{Repeat_path_orientation::upright}; // path; its curve is the layout node itself
+    Repeat_path_orientation orientation{Repeat_path_orientation::upright}; // path, segments; the curve is the layout node itself
     Kit_scatter_mode       scatter_mode {Kit_scatter_mode::count};          // scatter, centred on the node's origin
     float                  density      {0.25f};                            // scatter in density mode: pieces per square meter
     Repeat_scatter_region  region       {Repeat_scatter_region::rectangle}; // scatter
@@ -70,6 +71,8 @@ public:
     float                  min_spacing  {1.0f};                             // scatter: between piece footprints
     float                  yaw_min      {0.0f};                             // scatter: degrees about the node's up axis
     float                  yaw_max      {360.0f};                           // scatter
+    Stairs_values          stairs;                                          // stairs, along the node's own curve
+    std::string            stairs_material;                                 // stairs: a scene or palette material; empty: the stone slot's default
 
     [[nodiscard]] auto operator==(const Kit_layout_pattern& other) const -> bool = default;
 };
@@ -98,12 +101,13 @@ void set_layout_spacing_from_extent(Kit_layout_pattern& pattern, const glm::vec3
 [[nodiscard]] auto parse_layout_pattern(std::string_view text, Kit_layout_pattern& out_pattern) -> std::string;
 [[nodiscard]] auto parse_layout_items  (std::string_view text, std::vector<Kit_layout_item>& out_items) -> std::string;
 
-// What a pattern reads of the items: the largest extent along x (gap mode), and per item its weight and footprint.
+// What a pattern reads of the items: the largest extent along x (gap mode), and per item its weight, footprint and x bounds.
 class Kit_layout_item_sizes
 {
 public:
     float                            extent{0.0f};
     std::vector<Repeat_scatter_item> items;
+    std::vector<Repeat_segment_item> segment_items; // per item its x bounds (a segments run)
 
     void clear();
     // bounds: the item's brush bounds; invalid bounds (an item that does not read) count as a point.
@@ -121,12 +125,16 @@ public:
     Repeat_pattern pattern;
     std::size_t    count{0};
     float          step {0.0f}; // center to center along the space (the arc for a ring); 0 for one element and a grid
-    float          space{0.0f}; // line: first to last center; ring: arc length; path: curve length; grid: 0; scatter: area
+    float          space{0.0f}; // line: first to last center; ring: arc length; path: curve length; grid: 0; scatter: area;
+                                // segments: the spanned chord lengths' sum; stairs: the curve's plan length
     std::size_t    requested{0}; // the pieces the values ask for; a scatter holds fewer when no more fit the spacing
 };
 
+// The material slot of a stairs layout's staircase, the one of basic.stairs.
+inline constexpr const char* c_stairs_material_slot = "stone";
+
 // seed: the layout seed, a scatter's point stream; items: one entry per layout item (the run refers to them);
-// path_table: a path's curve (the run refers to it), null for the other kinds; out_poses: when given, the run's poses
+// path_table: a path's, a segments run's or the stairs' curve (the run refers to it), null for the other kinds; out_poses: when given, the run's poses
 // from the node's origin with each pose's item, cleared and filled. Returns the refusal, empty when resolved.
 [[nodiscard]] auto resolve_layout_pattern(
     const Kit_layout_pattern&           pattern,
@@ -139,6 +147,13 @@ public:
 
 // The path with every position and handle end taken through the transform; cleared and filled.
 void transform_curve_path(const erhe::math::Curve_path& path, const glm::mat4& transform, erhe::math::Curve_path& out_path);
+
+// What a stairs layout's staircase is generated from, as text: the curve and the stairs values, hexadecimal floats, so
+// equal inputs give equal text.
+[[nodiscard]] auto make_stairs_source_text(const erhe::math::Curve_path& path, const Stairs_values& values) -> std::string;
+
+// Reads a source text of the current generator version; returns the problem, empty when read.
+[[nodiscard]] auto parse_stairs_source_text(std::string_view text, erhe::math::Curve_path& out_path, Stairs_values& out_values) -> std::string;
 
 [[nodiscard]] auto get_layout_item_index(std::size_t element, std::size_t item_count) -> std::size_t;
 

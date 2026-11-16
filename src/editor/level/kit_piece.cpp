@@ -117,7 +117,7 @@ void write_kit_piece(erhe::scene::Node& node, const Kit_piece_data& data)
     node.set_value(Kit_piece::parameters_property, data.parameters);
 }
 
-auto read_connector_switches(const erhe::scene::Node& node) -> Kit_connector_switches
+auto read_piece_connector_switches(const erhe::scene::Node& node) -> Kit_connector_switches
 {
     return Kit_connector_switches{
         .connectors_enabled  = node.get_value(Kit_piece::connectors_enabled_property),

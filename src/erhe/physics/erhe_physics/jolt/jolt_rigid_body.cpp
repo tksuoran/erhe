@@ -32,6 +32,22 @@ IRigid_body::~IRigid_body() noexcept
 {
 }
 
+namespace {
+
+// Jolt derives a convex shape's mass at the shape's own density (1000); the shape mass erhe scales by the material
+// density is the shape volume (IRigid_body_create_info), as the Box3D backend derives it.
+[[nodiscard]] auto get_unit_density_mass_properties(const JPH::Shape& shape) -> JPH::MassProperties
+{
+    JPH::MassProperties mass_properties = shape.GetMassProperties();
+    const float volume = shape.GetVolume();
+    if ((mass_properties.mMass > 0.0f) && (volume > 0.0f)) {
+        mass_properties.ScaleToMass(volume);
+    }
+    return mass_properties;
+}
+
+} // anonymous namespace
+
 auto Jolt_rigid_body::get_body_interface() const -> JPH::BodyInterface&
 {
     return reinterpret_cast<Jolt_world&>(m_world).get_physics_system().GetBodyInterface();
@@ -75,7 +91,7 @@ Jolt_rigid_body::Jolt_rigid_body(
     // KHR_physics_rigid_bodies convention: an explicitly provided mass of 0 means infinite mass.
     const bool infinite_mass = create_info.mass.has_value() && (create_info.mass.value() == 0.0f);
 
-    m_shape_mass_properties = jolt_shape->GetMassProperties();
+    m_shape_mass_properties = get_unit_density_mass_properties(*jolt_shape);
     if (create_info.inertia_override.has_value()) {
         m_shape_mass_properties.mInertia = to_jolt(create_info.inertia_override.value());
     }
@@ -133,14 +149,10 @@ Jolt_rigid_body::Jolt_rigid_body(
         m_debug_label = fmt::format("{} (CreateBody() returned nullptr)", create_info.debug_label);
     } else {
         m_debug_label = fmt::format("{} ({})", create_info.debug_label, m_body->GetID().GetIndex());
-        if (infinite_mass && !m_body->IsStatic()) {
+        if (infinite_mass) {
             // KHR_physics_rigid_bodies infinite-mass convention: the body can still be
             // moved kinematically but does not respond to forces or impulses.
-            JPH::MotionProperties* motion_properties = m_body->GetMotionProperties();
-            if (motion_properties != nullptr) {
-                motion_properties->SetInverseMass(0.0f);
-                motion_properties->SetInverseInertia(JPH::Vec3::sZero(), JPH::Quat::sIdentity());
-            }
+            write_mass_properties_to_body();
         }
     }
 }
@@ -312,6 +324,11 @@ void Jolt_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 
     m_motion_mode = motion_mode;
     m_body->SetMotionType(to_jolt(motion_mode));
+    // The object layer goes with the motion type: a static body made dynamic in the static layer would pass through
+    // every static body. A body created without collisions stays out of them.
+    if (m_body->GetObjectLayer() != Layers::NON_COLLIDING) {
+        body_interface.SetObjectLayer(m_body->GetID(), Layers::get_layer(motion_mode));
+    }
 
     if (motion_mode == Motion_mode::e_dynamic) {
         // If body does not in world, this check will return false
@@ -550,15 +567,53 @@ void Jolt_rigid_body::set_mass_properties(
 
     SPDLOG_LOGGER_TRACE(log_physics, "{} set mass = {}", m_debug_label, mass);
 
-    if (m_body->IsStatic()) {
-        return;
-    }
+    write_mass_properties_to_body();
+}
 
-    auto* motion_properties = m_body->GetMotionProperties();
+void Jolt_rigid_body::write_mass_properties_to_body()
+{
+    // A static body has motion properties too (mAllowDynamicOrKinematic): written always, a later switch to dynamic
+    // simulates the mass get_mass() reports.
+    JPH::MotionProperties* const motion_properties = (m_body != nullptr) ? m_body->GetMotionPropertiesUnchecked() : nullptr;
     if (motion_properties == nullptr) {
         return;
     }
+    if (m_has_explicit_mass && (m_mass_properties.mMass == 0.0f)) {
+        motion_properties->SetInverseMass(0.0f);
+        motion_properties->SetInverseInertia(JPH::Vec3::sZero(), JPH::Quat::sIdentity());
+        return;
+    }
     motion_properties->SetMassProperties(JPH::EAllowedDOFs::All, m_mass_properties);
+}
+
+void Jolt_rigid_body::set_collision_shape(const std::shared_ptr<ICollision_shape>& collision_shape)
+{
+    std::shared_ptr<Jolt_collision_shape> jolt_collision_shape = std::static_pointer_cast<Jolt_collision_shape>(collision_shape);
+    if (!jolt_collision_shape || (m_body == nullptr)) {
+        log_physics->error("{} set_collision_shape() without a shape or a body", m_debug_label);
+        return;
+    }
+    m_collision_shape = std::move(jolt_collision_shape);
+    const JPH::ShapeRefC jolt_shape = m_collision_shape->get_jolt_shape();
+
+    // The inertia follows the new shape; an explicit mass stays, an implicit one is the new shape's.
+    const bool infinite_mass = m_has_explicit_mass && (m_mass_properties.mMass == 0.0f);
+    m_shape_mass_properties = get_unit_density_mass_properties(*jolt_shape.GetPtr());
+    const float mass = m_has_explicit_mass
+        ? m_mass_properties.mMass
+        : (m_shape_mass_properties.mMass * m_material_snapshot.density);
+    m_mass_properties = m_shape_mass_properties;
+    m_mass_properties.ScaleToMass(mass);
+    if ((m_mass_properties.mMass == 0.0f) && !infinite_mass) {
+        m_mass_properties.mMass = 1.0f;
+    }
+
+    const JPH::EActivation activation = (m_motion_mode == Motion_mode::e_dynamic)
+        ? JPH::EActivation::Activate
+        : JPH::EActivation::DontActivate;
+    get_body_interface().SetShape(m_body->GetID(), jolt_shape.GetPtr(), false, activation);
+
+    write_mass_properties_to_body();
 }
 
 auto Jolt_rigid_body::get_debug_label() const -> const char*
@@ -629,10 +684,8 @@ void Jolt_rigid_body::set_physics_material(const std::shared_ptr<Physics_materia
 
 void Jolt_rigid_body::apply_material_to_body()
 {
-    if ((m_body == nullptr) || (m_motion_mode == Motion_mode::e_static) || m_body->IsStatic()) {
-        return; // a static body has no motion properties
-    }
-    JPH::MotionProperties* motion_properties = m_body->GetMotionProperties();
+    // A static body keeps motion properties too, so a later switch to dynamic has the material's values.
+    JPH::MotionProperties* motion_properties = (m_body != nullptr) ? m_body->GetMotionPropertiesUnchecked() : nullptr;
     if (motion_properties == nullptr) {
         return;
     }
@@ -641,7 +694,7 @@ void Jolt_rigid_body::apply_material_to_body()
     if (!m_has_explicit_mass && (m_shape_mass_properties.mMass > 0.0f)) {
         m_mass_properties = m_shape_mass_properties;
         m_mass_properties.ScaleToMass(m_shape_mass_properties.mMass * m_material_snapshot.density);
-        motion_properties->SetMassProperties(JPH::EAllowedDOFs::All, m_mass_properties);
+        write_mass_properties_to_body();
     }
 }
 

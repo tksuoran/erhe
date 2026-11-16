@@ -16,13 +16,18 @@ auto to_degrees(const float radians) -> float
     return radians * (180.0f / std::numbers::pi_v<float>);
 }
 
-auto check_walk_width(const Kit_shape_definition& shape, const char* name, const float width, const Kit_agent& agent) -> std::string
+auto check_walk_width(const std::string_view id, const char* name, const float width, const Kit_agent& agent) -> std::string
 {
     const float min_width = (2.0f * agent.radius) + kit_opening_margin;
     if (width < min_width) {
-        return fmt::format("{}: '{}' {} m is narrower than the agent's {} m", shape.id, name, width, min_width);
+        return fmt::format("{}: '{}' {} m is narrower than the agent's {} m", id, name, width, min_width);
     }
     return {};
+}
+
+auto check_walk_width(const Kit_shape_definition& shape, const char* name, const float width, const Kit_agent& agent) -> std::string
+{
+    return check_walk_width(std::string_view{shape.id}, name, width, agent);
 }
 
 void generate_block(const Kit_parameter_values& values, GEO::Mesh& mesh)
@@ -169,6 +174,18 @@ auto get_stairs_layout(const Kit_parameter_values& values) -> Kit_stairs_layout
     return layout;
 }
 
+auto check_stairs_walkability(const std::string_view name, const float step_rise, const float tread_depth, const float width, const Kit_agent& agent) -> std::string
+{
+    if (step_rise > agent.max_climb) {
+        return fmt::format("{}: step rise {} m is higher than the agent's climb {} m", name, step_rise, agent.max_climb);
+    }
+    const float slope_degrees = to_degrees(std::atan2(step_rise, tread_depth));
+    if (slope_degrees > agent.max_slope_degrees) {
+        return fmt::format("{}: slope {} degrees is steeper than the agent's {} degrees", name, slope_degrees, agent.max_slope_degrees);
+    }
+    return check_walk_width(name, "width", width, agent);
+}
+
 void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
 {
     {
@@ -287,15 +304,8 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             return {};
         };
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
-            const Kit_shape_definition& self   = *values.get_shape();
-            const Kit_stairs_layout     layout = get_stairs_layout(values);
-            if (layout.step_rise > agent.max_climb) {
-                return fmt::format("{}: step rise {} m is higher than the agent's climb {} m", self.id, layout.step_rise, agent.max_climb);
-            }
-            if (layout.slope_degrees > agent.max_slope_degrees) {
-                return fmt::format("{}: slope {} degrees is steeper than the agent's {} degrees", self.id, layout.slope_degrees, agent.max_slope_degrees);
-            }
-            return check_walk_width(self, "width", values.get_float("width"), agent);
+            const Kit_stairs_layout layout = get_stairs_layout(values);
+            return check_stairs_walkability(values.get_shape()->id, layout.step_rise, layout.tread_depth, values.get_float("width"), agent);
         };
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             add_climb_connectors(out_connectors, get_stairs_layout(values).run, values.get_float("rise"));

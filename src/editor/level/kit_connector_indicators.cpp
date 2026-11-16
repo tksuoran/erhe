@@ -13,6 +13,8 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
+#include <algorithm>
+
 namespace editor {
 
 namespace {
@@ -43,7 +45,9 @@ auto Kit_connector_indicators::get_local_connectors(const erhe::scene::Node& nod
     }
     Cached_piece& piece = m_local_connectors[id];
     piece.item = &node;
-    // An unreadable record caches no frames, as get_world_connectors() refuses it; a disabled connector is not drawn (U33).
+    const std::shared_ptr<erhe::scene::Node> parent = node.get_parent_node();
+    piece.parent_id = parent ? static_cast<std::uint64_t>(parent->get_id()) : 0;
+    // An unreadable record caches no frames, as get_world_connectors() refuses it; a disabled or layout-hidden connector is not drawn (U33, U39).
     static_cast<void>(m_level_kits.get_local_connectors(node, piece.connectors, Kit_connector_set::enabled));
     return piece.connectors;
 }
@@ -139,6 +143,16 @@ void Kit_connector_indicators::forget_piece(const erhe::scene::Node& node)
     m_local_connectors.erase(static_cast<std::uint64_t>(node.get_id()));
 }
 
+void Kit_connector_indicators::forget_children_of(const std::uint64_t layout_id)
+{
+    std::erase_if(
+        m_local_connectors,
+        [layout_id](const std::pair<const std::uint64_t, Cached_piece>& entry) -> bool {
+            return entry.second.parent_id == layout_id;
+        }
+    );
+}
+
 auto get_connector_indicator_color(const Debug_visualizations_style& style, const Kit_connector_indicator_role role) -> const glm::vec4&
 {
     switch (role) {
@@ -153,10 +167,20 @@ auto get_connector_indicator_color(const Debug_visualizations_style& style, cons
 
 void Kit_connector_indicators::forget_removed(const Removed_items& removed)
 {
+    // A removed piece's siblings go too: a layout child's head or tail role depends on the child count (U39).
+    std::vector<std::uint64_t>& parent_ids = m_removed_parent_ids;
+    parent_ids.clear();
+    for (const std::pair<const std::uint64_t, Cached_piece>& entry : m_local_connectors) {
+        if (removed.lookup.contains(entry.second.item) && (entry.second.parent_id != 0)) {
+            parent_ids.push_back(entry.second.parent_id);
+        }
+    }
     std::erase_if(
         m_local_connectors,
-        [&removed](const std::pair<const std::uint64_t, Cached_piece>& entry) -> bool {
-            return removed.lookup.contains(entry.second.item);
+        [&removed, &parent_ids](const std::pair<const std::uint64_t, Cached_piece>& entry) -> bool {
+            return
+                removed.lookup.contains(entry.second.item) ||
+                (std::find(parent_ids.begin(), parent_ids.end(), entry.second.parent_id) != parent_ids.end());
         }
     );
 }

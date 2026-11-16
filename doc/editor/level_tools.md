@@ -15,7 +15,7 @@ All in namespace `editor`, depending on `erhe::geometry`, glm and fmt only, so
 the editor.
 
 - `Kit_shape_definition` (`kit_shape.hpp`): one shape: `id` (`<kit>.<shape>`),
-  kit, display name, description, tags, parameters, its material slots
+  `recreates` ("Recreated shapes"), kit, display name, description, tags, parameters, its material slots
   ("Materials"), normal style (`faceted`, `smooth`, `smooth_with_hard_edges` with its angle),
   triangle budget, collision kind (`Kit_collision::convex_hull`,
   `triangle_mesh` or `none`, "Kit brushes"), mesh kind (`Kit_mesh_kind::solid`,
@@ -44,6 +44,7 @@ the editor.
   entablature, torii, battlement, tower, leaf plant, rock spire, basalt
   columns, roof, palm clump, palm shrub, dune and ground patch of
   `doc/plans/level_kit_more_shapes.md` ("Cliff" to "Dune and ground patch" below) -
+  a recreated shape beside each original that has one ("Recreated shapes"),
   and the palette ("Materials"). Adding a shape is one generator and one
   table entry.
 - Shape conventions: Y up, front toward +Z, the origin at the center of the
@@ -705,6 +706,77 @@ At the defaults the dune has 284 triangles (budget 290), about 0.3 ms, the
 most 860 (48 segments); the patch 144 (budget 150), about 0.2 ms, the most
 288.
 
+## Recreated shapes
+
+A recreated shape is a second version of a shape, written afresh from the
+shape's description, registered beside its original so the two can be
+compared in one scene (`doc/plans/level_tools.md` U41). The original keeps
+its id, generator and pinned mesh.
+
+- Id and name: the original's id plus `.v2` (`basic.block.v2`), the
+  original's display name plus ` (F)` (`c_kit_recreated_id_suffix`,
+  `c_kit_recreated_name_suffix` in `kit_shapes.hpp`).
+- `Kit_shape_definition::recreates` holds the original's id; it is empty for
+  an original. Tools, tests and the comparison script pair the two by this
+  field, never by parsing ids.
+- Pairing rule: a recreated shape has its original's kit, parameters
+  (names, types, units, ranges, defaults, derive ranges, default mask),
+  material slots, connectors, origin rule, collision kind, mesh kind,
+  randomness, mirror planes, seam sides and checks.
+  `make_recreated_shape()` builds the definition as a copy of the original's
+  with the new id, name, generator and triangle budget, so the contract is
+  stated once. A piece of either shape is replaced by the other ("Replace")
+  with every parameter value and slot material carried.
+- Order: the library places each recreated shape directly after its
+  original, which is the order of the Level Kit window's rows, the Replace
+  With list and `level_get_kits`.
+- Source files: the recreated generators of `kit_shapes_<name>.cpp` are in
+  `kit_shapes_<name>_v2.cpp`, added by `add_<name>_shapes_v2()` after the
+  originals.
+- `get_contract_id(shape)` (`kit_shape.hpp`) is the original's id for a
+  recreated shape and the shape's own otherwise. Code that acts on what a
+  shape is - the stairs' "steps, step rise, tread depth" line of the
+  parameter rows and the Properties window, `level_get_pieces`' `stairs` -
+  compares this id, so it treats both versions alike.
+- Which version keeps the canonical id is the user's ruling per shape; both
+  ids exist until that ruling, and a saved piece or layout item names the
+  one it was placed with.
+
+Recreated so far, the basic kit:
+
+- `basic.block.v2`, `basic.floor_slab.v2`: the box, six quads over eight
+  corners.
+- `basic.wedge.v2`: the triangular prism, five facets over six corners.
+- `basic.cylinder.v2`: the sides one quad per segment, each cap one polygon.
+  The ring's points are mirror images of each other to the bit (about
+  z = 0 at every segment count, about x = 0 at an even one), the points on
+  the axes are exact, and a side edge uses one (x, z) at both ends.
+- `basic.stairs.v2`: the side walls are a column per step - a trapezoid
+  from the base up to the line of the riser feet and the step's triangle
+  above it - and the base a strip per step, 12 triangles a step (180 at the
+  defaults, 1536 at 128 steps). No vertex has more than six facets; the
+  original's side walls fan from one corner, 8 triangles a step plus 4. The
+  riser feet lie on one line, so a side wall without a fan needs vertices
+  on the base, and each one costs four triangles.
+
+These five have their originals' forms, bounds and shading: a plain
+building block's description leaves no room for a bevel that would keep it
+tiling flush.
+
+`scripts/level_shape_compare.py [--editor <binary>] [--only <id prefix>]
+[--gap <meters>] [--save <path>] [--keep-open]` launches the editor, lists
+the pairs from `level_get_kits` (`recreates`), and builds one scene with a
+row per pair at the default values: the original on the left (-X), the
+recreated shape on the right (+X), their bounds `--gap` (1 m) apart on a
+ground pad of the row's own (floor slabs, tiled where the pad is wider
+than a slab's 64 m); a seeded shape makes three rows, at seeds 1, 3
+and 17. The rows run toward -Z. It writes one three-quarter view per row,
+`logs/shape_compare_<original id>.png` (a seeded shape's
+`..._<seed>.png`), every row of one size class through the same camera, its
+far plane ending the view behind the row. `--save` writes the scene for the
+windowed editor to open; `--keep-open` leaves the launched editor running
+with the scene.
+
 ## Pieces
 
 A piece is a mesh node carrying the attached value group `Kit_piece`
@@ -862,10 +934,11 @@ added.
 The arrangement of a kit layout node ("Kit layout nodes", R5.4, D3.7) is a
 pattern expanded from a start transform into one pose per element.
 `level_repeat.hpp` is that scene-free part, built into `editor_level_tests`:
-`Repeat_pattern` (kind `Repeat_pattern_kind` line, grid, ring, path or
-scatter ("Scatter layouts") and the fields of each) and `expand_repeat(pattern, start, out_poses)`, which
+`Repeat_pattern` (kind `Repeat_pattern_kind` line, grid, ring, path,
+scatter ("Scatter layouts") or segments and the fields of each) and `expand_repeat(pattern, start, out_poses)`, which
 returns the poses of the run with element 0 at the start, or a refusal and no
-poses. A kit layout node expands from its own origin
+poses. A pose is a position, a rotation and a scale, which only segments
+sets (to (s, 1, 1)); the other kinds keep 1. A kit layout node expands from its own origin
 (`resolve_layout_pattern()` turns its values into a `Repeat_pattern`); the
 axes are the start rotation's.
 
@@ -895,11 +968,31 @@ axes are the start rotation's.
   (the table's fallback). With `tangent` the x axis is the tangent and the up
   axis the frame's up, so a piece pitches with the curve. A polyline is a
   path along a curve of corner points.
+- segments: one element per segment of `path` (a span between two
+  neighbouring control points: n - 1 for an open curve of n points, n for a
+  closed one, the last from the last point back to the first), element i
+  taking `segment_items[i modulo the item count]` (`Repeat_segment_item`,
+  the item's bounds `min_x` and `max_x` along its own x axis). Each element
+  spans the straight chord from point i to point i + 1; handles and point
+  kinds do not bend it (`make_segment_pose()`). With `upright` its x axis is
+  the chord's heading in the start frame's xz plane and its up axis the start
+  frame's, its scale (s, 1, 1) with s the chord's plan length over
+  `max_x - min_x`, and its origin placed so that the scaled `min_x` lands on
+  point i: the piece stands upright at point i's height and its scaled
+  `max_x` lands above or below point i + 1 by the chord's rise. With
+  `tangent` its x axis is the chord itself, its up axis the start frame's up
+  made perpendicular to it, and s the chord's length over the extent, so both
+  ends land on the points.
 
 A count below 1, a run of more than `c_max_repeat_count` (1024) elements, a
 zero spacing along a repeated axis, a radius that is not positive, an arc
 outside (0, 360], a path without a curve, a negative path step and a value
-that is not finite are refused with a message naming the value.
+that is not finite are refused with a message naming the value. Segments
+refuse a curve of fewer than 2 points, no item, an item whose x extent is
+not positive, a chord shorter than `c_min_segment_length` (1e-4 m) and a
+vertical chord (under `upright` it has no heading, under `tangent` no up
+axis across it), naming the segment and its points ("segment 1 (points 1 -
+2) ...").
 
 ## Scatter layouts
 
@@ -1062,17 +1155,21 @@ A kit layout node is a run of pieces kept as one node of the scene graph, the
 pieces its children (R5.12, D3.9). It carries the attached property group
 `Kit_layout` (`level/kit_layout.hpp`, the pattern of `Kit_piece`), so its values
 ride the node's `ERHE_node` properties like a piece record. A line, grid, ring or
-scatter layout is an ordinary `erhe::scene::Xform`; a path layout is an
-`erhe::scene::Curve` prim, the curve its pieces follow (R5.12.8, "Path
+scatter layout is an ordinary `erhe::scene::Xform`; a path or segments
+layout is an `erhe::scene::Curve` prim, the curve its pieces follow (R5.12.8,
+"Path layouts", R5.12.10, "Segment layouts"), and so is a stairs layout,
+whose one child is a staircase generated along the curve (R5.12.13, "Stairs
 layouts"). Locked, the node makes its children from its values and they are not
 edited directly; unlocked, it leaves them alone and they are ordinary pieces.
 
-- The kind and the node type agree (`check_layout_kind()`): `path` only on a
-  Curve prim, `line`, `grid` and `ring` only on an Xform. A change of the kind
-  between path and the others is refused naming the node type (it would replace
-  the node), so the Properties window's Kind row offers the kinds of the node's
-  type; a node whose stored kind is not of its type does not read ("Values that
-  do not read" below).
+- The kind and the node type agree (`check_layout_kind()`,
+  `is_curve_layout_kind()`): `path`, `segments` and `stairs` only on a Curve prim,
+  `line`, `grid`, `ring` and `scatter` only on an Xform. A change among path,
+  segments and stairs is made in place; a change between a curve kind and the others
+  is refused naming the node type (it would replace the node), so the
+  Properties window's Kind row offers the kinds of the node's type; a node
+  whose stored kind is not of its type does not read ("Values that do not
+  read" below).
 
 - The values (`Kit_layout_data`): `Kit_layout.pattern`, the canonical text of
   a `Kit_layout_pattern`; `Kit_layout.items`, the canonical text of the
@@ -1082,7 +1179,9 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
   applies them (`Kit_snap`, `Surface_options` with the downward direction);
   `Kit_layout.per_piece_seed` (its former name `Kit_layout.random_seeds`
   still reads, in scene files and property writes) and `Kit_layout.seed`;
-  `Kit_layout.locked`. The
+  `Kit_layout.locked`; and the seven connector switches of a path or
+  segments layout ("Layout connector switches"; a write of one changes no
+  child, so it adds no generation). The
   pattern text is the key value: a node carries the group while it holds one.
   The Properties window edits them in its "Kit Layout" group ("Kit layout
   rows"); the raw rows are developer-only. A write of a
@@ -1112,12 +1211,17 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
   scatter keys, which a text written before scatter lacks and which then
   read as their defaults.
   - `Kit_layout_pattern` holds every kind's values, so switching the kind and
-    back keeps them: `kind` (line, grid, ring, path, scatter), `count_mode`
+    back keeps them: `kind` (line, grid, ring, path, scatter, segments, stairs), `count_mode`
     (`Kit_layout_count_mode::count` or `gap`), `count`, `gap`, the line's
     `direction`, `step` and `length`, the grid's `count_x`, `count_z`,
     `spacing_x` and `spacing_z`, the ring's `radius`, `arc_degrees` and
-    `facing`, and the path's `orientation` (`Repeat_path_orientation`,
-    `upright` or `tangent`), and the scatter's values ("Scatter layouts").
+    `facing`, and the path's and segments' `orientation` (`Repeat_path_orientation`,
+    `upright` or `tangent`), the scatter's values ("Scatter layouts") and the
+    stairs' values and material name ("Stairs layouts"; written into the text
+    only when one is off its default, so a text written before them stays the
+    canonical text of its values).
+    Segments use `orientation` alone; their stored `count_mode`, `count` and
+    `gap` are kept and not used.
     Every kind is in the node's own frame: element 0
     is at the node's origin with its rotation (a path: at its curve's start;
     a scatter's region is centred on it),
@@ -1129,18 +1233,20 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     written as the key `weight` only when it is not 1, so an item text written
     before weights reads with weight 1 and stays the canonical text of its
     values. The parameter text's `derive` list is the item's seed mask
-    (R3.9). In a line, grid, ring or path element i takes item
+    (R3.9). In a line, grid, ring, path or segments layout element i takes item
     `get_layout_item_index(i, n)` = i modulo n.
   - `resolve_layout_pattern(pattern, seed, items, path_table, out_run)`
     (the seed: the layout seed, a scatter's point stream; `items` a
     `Kit_layout_item_sizes`: the largest item extent along x and per item its
-    weight and footprint radius, which `Level_kits::get_layout_item_sizes()`
+    weight, footprint radius and x bounds, which `Level_kits::get_layout_item_sizes()`
     reads from the items' brushes; the run refers to them) turns
     the pattern into a count mode `Repeat_pattern` that `expand_repeat()`
-    expands from the node's origin ("Pattern expansion"), a path's along
-    `path_table` (the node's own curve table, which the run refers to; null
-    for the other kinds), and reports the element count, the step and the space
-    (`Kit_layout_run`). In count mode a line is `count` elements `step` apart
+    expands from the node's origin ("Pattern expansion"), a path's and a
+    segments run's along `path_table` (the node's own curve table, which the
+    run refers to; null for the other kinds), and reports the element count,
+    the step and the space (`Kit_layout_run`; for segments the count is the
+    segment count, the step 0 and the space the sum of the spanned chord
+    lengths, plan lengths under `upright`). In count mode a line is `count` elements `step` apart
     along `direction`, a ring `count` elements over its arc and a path `count`
     elements spread evenly over the curve: an open curve holds the first at
     its start and the last at its end (length / (count - 1) apart), a closed
@@ -1165,8 +1271,8 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     above `c_max_repeat_count` (1024) or below 1, a gap that leaves no
     positive step, a negative length, a zero direction, a zero step with more
     than one element, a radius that is not positive, an arc outside
-    (0, 360], a path without a curve, a curve of no length holding more than
-    one element, and every refusal of `expand_repeat()`.
+    (0, 360], a path or segments layout without a curve, a curve of no length
+    holding more than one element, and every refusal of `expand_repeat()`.
   - `transform_curve_path(path, transform, out_path)` takes every control
     point and handle end of a curve through a transform; `mirror()` reflects
     a curve's points with it.
@@ -1182,14 +1288,15 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
   the scene or the palette), checks the kind against the node's type,
   resolves and expands the pattern (a path along the node's own curve), and
   makes one `Kit_placement` per element at the node's world transform times
-  the element's pose, the module snap and then the surface options applied
+  the element's pose (`Kit_placement::scale` the pose's scale), the module snap and then the surface options applied
   with the node's current children excluded from the rays, each element
   snapping by its own brush's bounds. With per-element seeds
   the element's values take `derive_layout_element_seed()` as their seed and
   derive their masked parameters from it, so the run's derived values are
-  stable across regenerations. Child i is kept when it already is element i:
+  stable across regenerations; a segments element then spans its chord by
+  the x bounds of its own seeded geometry. Child i is kept when it already is element i:
   a piece without children whose record (shape and parameter text), slot
-  materials by name and local pose (scale 1) equal the element's. The other
+  materials by name and local pose (translation, rotation and scale) equal the element's. The other
   children are removed with their subtrees, last child first, and the
   missing elements are placed at their indices through the placement path
   of `place()` (`prepare_placements()`), named after the shape and the
@@ -1201,15 +1308,19 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     is a new Curve prim with `Kit_layout_create::path`, else a straight open
     curve of two corner points along its x axis, as long as the pattern's
     count and step make a line (count - 1 steps, at least one; in gap mode its
-    length); a path given for another kind is refused.
+    length). A segments layout is a new Curve prim with the path, else two
+    corner points on its x axis at the first item's `min_x` and `max_x`, so
+    its one element stands at the node's origin at scale 1. A path given for
+    another kind is refused.
   - `make_layout_from_piece(scene_root, Kit_layout_from_piece)`: a node in a
     placed piece's place - under its parent at its index, at its world
     translation and rotation, named after it followed by " Layout" unless a
     name is given - with the piece as the one item
     (`read_piece_layout_item()`: its shape, its record's parameter text with
     its seed mask, and the name of each primitive's material), the given
-    pattern, snap settings, seeds and lock; a path layout is a Curve prim of
-    the given path, else straight along the piece's x axis as above. One
+    pattern, snap settings, seeds and lock; a path or segments layout is a
+    Curve prim of the given path, else straight along the piece's x axis as
+    above. One
     `Compound_operation`: the piece's remove, the node's insert and its
     generated children, the piece
     excluded from the surface rays, so element 0 takes the piece's place
@@ -1240,7 +1351,7 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     children, no layout values, not inside a reference instance or a locked
     layout) becomes a path layout in place: the values, one
     `Property_set_operation` each, and a locked layout's generated children,
-    one entry. The kind must be path. Taking the values off a layout node is
+    one entry. The kind must be path or segments. Taking the values off a layout node is
     not offered: an unlocked layout's children are ordinary pieces already.
   - `make_layout_from_piece_initial()` and `add_layout_initial()`: Make
     Layout and the Brush tool's Place As Layout with the initial values of a
@@ -1257,7 +1368,8 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     (`Property_set_operation`). Without a surface
     setting the children of every kind, a path's included, ride with the node
     rigidly and nothing regenerates.
-  - A curve edit: see "Path layouts".
+  - A curve edit: see "Path layouts" (a segments layout follows its curve the
+    same way).
 - A locked node's children cannot be edited directly (R5.12.3):
   - Selection (U24): `Selection` never holds a child of a locked layout
     node: `get_selectable()` puts the outermost locked layout node above it
@@ -1360,12 +1472,41 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     generation from the children before the drag, one entry. A curve edit the
     new values refuse (more than 1024 pieces) leaves the children and logs a
     warning. An unlocked layout is not laid out by a curve edit.
+- Segment layouts (U37, R5.12.10): a segments layout is a Curve prim like a
+  path layout - one node carrying the values with the pieces as its children
+  and its own curve - that puts one piece on each segment between two
+  neighbouring control points, scaled along the piece's x axis alone so that
+  its item's x extent fills the chord ("Pattern expansion" has the pose); a
+  wall's length follows its room's corner points. Everything "Path layouts"
+  states holds for it: the curve tool shows and drags its points and
+  handles (a handle changes no piece), each curve edit is one
+  `Curve_set_operation` whose follow-up lays the layout out again (only the
+  pieces of the changed segments are new nodes; the others match and are
+  kept), a point drag previews live, a move of the node carries the pieces
+  rigidly. Points the curve tool and `curve_add_point` add between corner
+  points are corners. Each segment is a handle as well: a drag moves a wall
+  along its normal ("Segment handles").
+  - The pieces carry their scale as their local scale (s, 1, 1); the layout
+    node itself keeps world scale 1. Module snap is not applied (the pieces
+    stand on the control points) and neither is surface orient (it would tilt
+    a piece off its points); surface snap moves each piece along the
+    downward direction by the bounds of its scaled geometry, which keeps its
+    ends above its points in plan.
+  - A piece's collision shape is its brush's shape at the node's world scale,
+    as every body's is (`doc/editor/physics.md` "Collision shapes follow the
+    node's scale"), so the body, the overlap report's exact depth (and its
+    convex hull stand-in, scaled the same) and the physics export match the
+    scaled mesh.
+  - Connectors follow the scaled node's world transform (U22); duplicate,
+    copy and paste, delete, mirror and the selection redirect treat the node
+    as they treat a path layout.
 - Live layout preview: while a drag changes what a locked layout's children
   depend on, the children follow at every step without an undo entry, and
   the gesture's commit records one entry from the children before the drag
   (`Level_kits::begin_layout_preview()`, `step_layout_preview()`,
   `preview_layout_values()`, `end_layout_preview()`). Five drags drive it:
-  a curve point drag of a path layout ("Path layouts"), a drag of a value
+  a curve point drag of a path or segments layout ("Path layouts") or a
+  segment handle drag ("Segment handles"), a drag of a value
   row of the Properties window's "Kit Layout" group ("Kit layout rows"), a
   Transform tool drag of nodes at or above locked layouts with surface
   snap or orient on (the set `append_layout_move_operations()` regenerates,
@@ -1449,11 +1590,12 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
 
 ## Kit layout drawing
 
-Line, grid, ring and scatter kit layout nodes draw their shape in the
+Line, grid, ring, scatter and segments kit layout nodes draw their shape in the
 viewports (U28, `level/kit_layout_outline.hpp`,
 `level/kit_layout_indicators.hpp`,
 `Debug_visualizations::kit_layouts_visualization()`), flat in the node's xz
-plane and taken through its world matrix, x-ray as the curves are. A path
+plane (segments: through the curve's points) and taken through its world
+matrix, x-ray as the curves are. A path
 layout draws its curve ("Drawing" in `doc/editor/curves.md`) and nothing of
 its own. The outline comes from the node's values and the run they resolve
 to (`Kit_layout_run` and its poses), so the ticks and points sit where the
@@ -1477,7 +1619,13 @@ pieces are generated, before Module Snap and Surface Snap move them:
   `min_spacing`. Two points exactly the minimum gap apart show touching
   spacing circles, and accepted points' spacing circles never overlap. An
   unselected scatter shown by All draws its region alone, which keeps a view
-  of many large scatters to their outlines.
+  of many large scatters to their outlines;
+- segments: the chords through the curve's control points (closed for a
+  closed curve) and a tick at each point across the bisector of the unit
+  headings of the segments beside it, so a smooth curve's own drawing and
+  its straight pieces' chords show apart. The outline is made from the
+  node's curve table (`make_layout_outline()` takes it), and the cache drops
+  a node's entry at each shape `Curve_changed_message` of it.
 
 - Which: the Debug Visualization popup's Kit Layouts (per view, saved with
   the view's settings): Off, Selected (the default: the kit layout nodes that
@@ -1627,6 +1775,249 @@ viewport, and a drag of one resizes the region (U28,
   `get_transform_handles` and `mouse_drag` as a user does, or moves it
   exactly with `transform_selection` (the anchor's world translation;
   `end_edit` false holds the edit as a held drag).
+
+## Segment handles
+
+A segments layout that is the curve tool's target (the only selected item;
+a piece of a locked layout selects the node) has a handle per segment beside
+its control point handles, and a drag of one moves that segment parallel to
+itself along its normal (U38, R5.12.11). The curve tool
+(`tools/curve_tool.hpp`) holds them as further entries of its point set
+(`doc/editor/point_set_editing.md`): after the three entries of every
+control point, entry 3n + i is segment i. A layout of either lock state has
+them; another curve or another kind has none (the tool reads the kind when
+its target changes and at each `Kit_layout_changed_message` of it).
+
+- Which handles: segment i runs from control point i to i + 1, the last
+  segment of a closed curve to point 0; its handle sits at the chord's
+  midpoint. It is drawn and picked as a point handle (orange, white
+  hovered, yellow selected, within 12 px), and the hovered and the selected
+  segment's chord is drawn over the curve twice the selected curve width,
+  in those colors.
+- Selection: a click on a segment handle selects it, one segment at a time;
+  Ctrl or Shift on the selected one deselects it, on another selects that
+  one. Selecting a segment clears the point selection and selecting a point
+  or handle end clears the segment, since each drags in its own way. A plain
+  click off the handles clears the selection first, as for points. The
+  segment stays selected through its drags and their undo and redo; like
+  the point selection, its index is kept across point inserts and removals
+  and dropped only when it is out of range, or when the target changes or
+  stops being a segments layout. Delete (`Curve.remove_points`) with a
+  segment selected does nothing.
+- The normal: horizontal in the node's frame (perpendicular to the chord
+  and to the node's y axis), the right of the segment's direction from point
+  i to i + 1 (`get_segment_normal()`, `level/level_repeat.hpp`); a segment
+  of no plan length has none and does not drag. With a segment selected the
+  gizmo sits on its midpoint, and its Local frame turns x onto the normal
+  and y onto the node's up axis.
+- The drag: the gizmo's world-space delta moves the midpoint from the
+  press; only its motion along the normal counts, so an axis, a plane or a
+  free drag gives the same offset for the same motion across the segment,
+  and a rotate or scale drag moves nothing. `move_curve_segment()` (scene
+  free) gives the two new points: each end point moves onto the moved line
+  along its neighbouring segment's line in the node's xz plane (the
+  segment before point i, the segment after point i + 1), keeping its own
+  height, so every other segment keeps its direction and only lengths
+  change. An end point with no neighbouring segment (the first or last
+  point of an open curve) or a neighbour that meets the segment at less than
+  15 degrees (`c_segment_slide_min_sine`; a slide is then at most about 3.9
+  times the offset) moves straight along the normal. Handles of the two
+  points are kept as offsets. On a closed curve of two points the two
+  segments lie on one line, so both ends move along the normal; their two
+  handles coincide and the viewport picks segment 0. The offset is in the
+  node's frame, meters as a layout node keeps scale 1. A move that carries
+  an end point past its neighbour's far end (that neighbour's length passing
+  through zero) gives a curve the layout may refuse; the pieces then stay as
+  a refused curve edit leaves them.
+- Steps and end: as a point drag ("Path layouts"): the path is written at
+  each step that changes it, the layout follows live, the release records
+  one `Curve_set_operation` ("move segment i") whose follow-up lays out a
+  locked layout again, Escape and `cancel_component_edit` restore the start
+  and record nothing; a curve the layout then refuses keeps the pieces and
+  logs a warning.
+- MCP: `level_select_segment_handle {scene_name, layout_id, index}` makes
+  the node the only selected item and selects the segment (`index` omitted
+  clears it); `level_get_segment_handles {}` returns the target `layout`
+  (`id`, `name`, `scene_name`; null when the curve tool's target is not a
+  segments layout), its `handles` (`index`, `points`, world `position` and
+  unit world `normal`), `selected` and `gizmo_on_handle`;
+  `level_move_segment {scene_name, layout_id, segment, offset}` moves a
+  segment by a signed offset along its normal through the same
+  `move_curve_segment()`, as one undo entry; it is refused while a curve
+  tool drag of the same curve is held. A script drags a handle with
+  `get_transform_handles` and `mouse_drag` as a user does.
+
+## Stairs layouts
+
+A stairs layout (U42, R5.12.13) is a Curve prim like a path layout - one node
+carrying the `Kit_layout` values and its own curve - whose generation makes
+one child: a staircase that follows the curve in plan and in height. The
+author edits the curve's points and handles and the staircase follows. The
+scene-free parts are `level/stairs_fit.hpp` (the fit of flights and landings
+to a height profile) and `level/stairs_mesh.hpp` (the staircase mesh along a
+`Curve_path_table`), both built into `editor_level_tests`.
+
+- The values (`Stairs_values`, in `Kit_layout_pattern::stairs`, meters):
+  `width` (1; 0.3 - 32), `max_rise`, the step rise limit (0.2; 0.05 - 1),
+  `min_tread`, the tread depth of a flight (0.3; 0.1 - 4), `thickness` (0.2;
+  0.02 - 4) and `tolerance`, the edge tolerance (0.01; 0.001 - 1); and
+  `Kit_layout_pattern::stairs_material`, the name of a scene or palette
+  material, empty for the default of the `stone` slot, the slot of
+  `basic.stairs`. The rise limit and the tread depth default to the step
+  rules of `basic.stairs` (R3.5: 0.2 m, and 1.5 times it). The items, the
+  snap values, the seeds and the connector switches are kept and not used.
+- The curve is read in the node's own frame with y up. A station is a
+  distance along the curve's plan (its xz projection); the curve's height at
+  a station is its y there. Each cubic span is sampled at 32 parameter steps
+  (a line span at its ends) and the plan length integrated per step.
+- The fit (`fit_stairs()`), stated exactly:
+  1. The height profile is cut where it turns from rising to falling or
+     back by at least the rise limit (a hysteresis; a bump or dip below the
+     rise limit makes no step). The first stretch starts at the curve's
+     start and the last ends at its end.
+  2. Each stretch climbs (or descends) from the walking surface's level at
+     its begin to the curve's height at its end in the least count of equal
+     steps within the rise limit, `ceil(change / max_rise)` (a quotient
+     above an integer by less than a millionth of itself takes no further
+     step, so no step is higher than the limit beyond rounding). A change
+     below 5 % of the rise limit (`c_stairs_min_step_share`, 1 cm at the
+     default) makes no step: the tread stays level. So the first tread is at
+     the curve's start height, and the last tread at its end height or, where
+     the last change is below that share, within that share of it.
+  3. Each riser has a window of stations: from the last station where the
+     curve is more than the rise limit below the tread after the riser, to
+     the first station where it is more than the rise limit above the tread
+     before it. Risers stand at least a tread depth apart and in no corner
+     landing (below). A riser going up may stand at the curve's very start
+     and one going down at its very end (the foot of the stairs, as the
+     front of `basic.stairs`); at a top end the tread is at least a tread
+     depth deep.
+  4. A flight starts as late as these rules let it and runs on, one tread
+     depth per step, while each next riser is in its window (to within 1e-4
+     m of station); then the tread stays level - a landing - until the next
+     flight starts, again as late as it may.
+  So every point of the walking surface is within the rise limit of the
+  curve's height at its station, to 0.2 mm (`c_stairs_deviation_slack`, for
+  the station tolerance of step 4; a fit that would leave the curve by more
+  is refused): a flight starts one rise below the curve
+  and ends one rise above it. A curve at the flight slope (`max_rise` per
+  `min_tread`) is one flight; at half that slope flights of three steps
+  alternate with landings; a level curve is one landing; a curve climbing
+  less than a rise over its whole length has one step.
+- `Stairs_fit` is the readback: the risers (station, the levels before and
+  after, the flight), the flights (step count, rise per step - negative
+  going down -, tread, begin and end stations; each riser has its tread on
+  its upper side), the landings (begin, length, level: the part of a tread
+  no flight's step uses), the plan length, the start and end levels, the
+  total rise (the curve's end height minus its start height), the step count
+  and `max_deviation`, the largest height difference between the walking
+  surface and the curve.
+- The step shape: a riser is a straight vertical face across the stairs,
+  square to the curve's plan tangent at its station; treads are level; the
+  two side edges are the curve's plan offset by half the width to each side.
+  On a curved span a tread is a winder, deeper at the outer edge; the tread
+  depth is measured on the curve itself (the centre line). Between the ends,
+  the risers, the underside's knots and the ends of the corner landings,
+  cross-sections are added so that a straight piece of the outer side edge
+  leaves its arc by at most the edge tolerance (from the largest plan
+  curvature of the interval); a straight part has no cross-section beyond
+  those, and a subdivision that would take more than 4096 cross-sections
+  is refused. Every tread and landing is made of convex quads between
+  neighbouring cross-sections.
+- A corner (control points where the plan tangent turns by more than 1e-3
+  rad) gets a level mitred landing: the cross-section there is the mitre
+  line, the landing reaches half the width times tan(turn / 2), and 2 cm, to
+  each side of the corner along the plan, both of its ends are
+  cross-sections, and no riser and no other cross-section stands between
+  them. The landing's side edges are the straight lines from its ends to the
+  mitre line's ends: the edge tolerance does not apply within a landing,
+  whose edges leave a curved span's offset by what that span bends over the
+  landing's reach.
+- The body is a closed solid (`check_kit_mesh` holds for it). The underside
+  lies the thickness below a landing and below the foot of each riser, and
+  under a flight slopes at the flight's slope from one riser's foot to the
+  next, reaching the landing's level one tread depth into it; the two ends
+  are vertical faces. Side faces and undersides shade smooth along the curve
+  and every edge sharper than 20 degrees is hard
+  (`c_stairs_crease_angle_degrees`: tread, riser and side boundaries, and
+  the underside's change of slope at a default flight). The texture
+  coordinates are the kit's per-facet ones.
+- Refused, each naming the distance along the plan and the nearest control
+  point (its index): a curve too steep for its steps to stay within the
+  rise limit of it (steeper than the flight slope over more than about a
+  step, or a turn from up to down or down to up without a tread's depth of
+  room); a curve too short for its steps (N steps need N treads of plan
+  length, also where the curve is gentler than a flight: "it needs N steps
+  with treads of at least T m, X m of plan, and has Y m"); a curve that is
+  vertical or stops in plan; a layout node tilted off the vertical (its
+  treads are level in its own frame; a turn about the up axis is free); a plan radius below 0.75 times the width
+  (`c_stairs_min_radius_per_width`, so a winder's inner edge keeps a third of
+  its depth); a corner sharper than 2.8 rad or without room for its landing
+  before the neighbouring corner or the curve's end; a closed curve; more
+  than 512 steps or 4096 cross-sections; a value out of its range; a
+  material name that is neither a scene nor a palette material. A refused
+  curve edit leaves the previous staircase and logs the warning `Kit layout
+  '<node>' keeps its children after the curve edit: <refusal>`; a refused
+  value edit or creation changes nothing.
+- The child (`Level_kits::build_stairs_generation()`,
+  `make_stairs_insert()`) is a Mesh node named "Stairs" at the layout's
+  origin, an instance of a brush of its own made from the generated
+  geometry, with a static triangle mesh body (the collision kind of
+  `basic.stairs`) and one primitive with the material; it is navigation
+  input and a snap surface as any piece of such a body is. It is no kit
+  piece: it carries no `Kit_piece` record, and instead the attached value
+  `Kit_layout_generated.source`, the text of the curve's points and the
+  stairs values it was generated from and the generator's version
+  (`make_stairs_source_text()`, hexadecimal floats,
+  `c_stairs_generator_version`). A generation keeps the child when its
+  source text, its material's name and its identity local transform match -
+  tested before any mesh is made, so a kept child costs the fit alone - and
+  else replaces every child by a new one; so `refresh_layout()` and an edit
+  that changes nothing record nothing.
+- Level Check (R2.10) tests each generated staircase of the scene as it
+  tests `basic.stairs`, through the one `check_stairs_walkability()`: the
+  largest step rise of its fit above the agent's climb, the flight slope
+  `atan(rise / tread depth)` above the agent's slope, the width below the
+  agent's walk width; each is an `unwalkable_parameters` finding on the
+  staircase node ("Stairs: stairs layout: step rise 0.5 m is higher than the
+  agent's climb 0.4 m"). The values are read from the child's source text, so
+  the finding is about the mesh that stands there; a text that does not read
+  (another generator version) is an `unreadable_piece` finding. The values
+  are not refused: as for the kit stairs, the author may build stairs the
+  agent cannot climb and is told.
+- Everything "Path layouts" states about edits holds: each curve edit is one
+  `Curve_set_operation` whose follow-up regenerates the staircase, a point
+  or handle drag previews it live ("Live layout preview"), a value edit is
+  `set_layout()`, undo and redo give back the same nodes, selecting the
+  staircase of a locked layout selects the layout node, unlocked the child
+  is left alone. A new stairs layout without points gets a curve of two
+  corner points, a flight of ten steps at the values' slope along +x;
+  `make_layout_from_piece()` refuses the kind (it places no piece), and the
+  Brush tool's Place As Layout with the kind places that default staircase.
+- A level saves the child with its mesh, material and body like any mesh
+  node, and its source text; at load nothing regenerates: the loaded child
+  is the saved mesh. A refresh keeps it while its source text is the one the
+  curve, the values and the current generator version make, and replaces it
+  otherwise (a staircase saved by an earlier generator version); the next
+  curve or value edit replaces it.
+- The Properties window's Kit Layout group shows for the kind the rows Kind,
+  Width, Step Rise Limit, Tread Depth, Thickness, Edge Tolerance and
+  Material (a combo of the `stone` slot's palette materials), the Run line
+  "N steps in F flights, L landings; rise R m over P m" with "within D m of
+  the curve" (or the refusal), and Lock; the item groups, Add Shape Item and
+  the snap, seed and connector rows are not shown. A drag of a value row
+  previews the staircase live.
+- `level_get_layouts` and every layout reply report `pattern.stairs`
+  (`width`, `step_rise`, `tread_depth`, `thickness`, `edge_tolerance`,
+  `material`) and, for the kind, `stairs`: the `summary` ("N steps in F
+  flights, L landings"), the fit as above and `mesh` (`valid`, `problems`,
+  `triangle_count`, `vertex_count`, `components`, the bounds) of the mesh the
+  curve and the values make now, or `problem`, the refusal; the child is
+  listed with `generated` true, its `world_aabb` and its material names.
+- A regeneration makes a new brush, mesh and body. A Debug build takes about
+  95 ms for a staircase of 100 steps (1500 triangles), 7 ms of it the fit,
+  the mesh and its normals and the rest the brush, its render and ray
+  tracing meshes and the body.
 
 ## Parameter changes
 
@@ -1819,10 +2210,13 @@ connectors.
   connector on carries neither value in the file, and a node without them
   (an older scene) has every connector enabled. The list keeps the names off
   rather than on, so a connector a shape gains later is on.
-- One query: `Level_kits::get_local_connectors()` and
-  `get_world_connectors()` take `Kit_connector_set::all` or `enabled`, the
-  latter dropping the disabled connectors in the shape's order; every consumer
-  reads through them or through `Kit_connector_switches::is_enabled()`:
+- One query: `Level_kits::get_connector_switches()` reads a piece's
+  switches (`read_piece_connector_switches()`, the piece's own values) and
+  adds the connectors its layout hides ("Layout connector switches");
+  `Level_kits::get_local_connectors()` and `get_world_connectors()` take
+  `Kit_connector_set::all` or `enabled`, the latter dropping the disabled
+  connectors in the shape's order; every consumer reads through them or
+  through `Kit_connector_switches::is_enabled()` of that query:
   - Connector indicators: a disabled connector is not drawn. A distinct
     "disabled" style would put connectors in the view that nothing can join,
     and the Properties rows already show which are off.
@@ -1888,13 +2282,80 @@ connectors.
 - Mirror and duplicate: a duplicated piece copies its switches; a mirrored
   piece keeps them by name, so a switch follows its name to the other side
   of the mirror plane.
-- Kit layout children: a generated child has every connector enabled (the
-  placement writes no switches). The kept-child rule compares record,
-  materials and pose only, so a child kept by a regeneration keeps its
-  switches and a child made again has every connector on. A locked layout's
-  children are not edited directly, so their switches are refused while it
-  is locked; switches per layout item are a later step
-  (`doc/plans/level_tools_implementation.md`).
+- Kit layout children: a generated child's own switches are all on (the
+  placement writes none); a path or segments layout hides connectors of its
+  children by direction ("Layout connector switches"). The kept-child rule
+  compares record, materials and pose only, so a child kept by a
+  regeneration keeps its switches and a child made again has every
+  connector on. A locked layout's children are not edited directly, so their
+  switches are refused while it is locked; switches per layout item are a
+  later step (`doc/plans/level_tools_implementation.md`).
+
+### Layout connector switches
+
+A path or segments layout hides the connectors between its children, which
+a long run would otherwise offer in the dozens (U39, R5.12.12): the
+switches target those inter-child connectors, so an open curve's first and
+last child follow them only for the connector facing their neighbour.
+
+- Values: seven `Kit_layout` booleans on the layout node, all off by
+  default and saved with it, so a node without them hides nothing:
+  `hide_all_connectors`, `hide_plus_tangent_connectors`,
+  `hide_minus_tangent_connectors`, `hide_plus_normal_connectors`,
+  `hide_minus_normal_connectors`, `hide_plus_binormal_connectors` and
+  `hide_minus_binormal_connectors` (`Kit_layout_connector_hiding`,
+  `Kit_layout_data::connector_hiding`). The six direction switches are
+  independent; Hide All hides every direction whatever they hold.
+- Which children: only a locked layout hides; an unlocked layout's
+  children are ordinary pieces. Every child of a closed curve is inner. On
+  an open curve the children between the first (head) and the last (tail)
+  are inner; the head follows the switches for its +tangent connectors only
+  (facing the second child) and the tail for its -tangent ones only (facing
+  the second-to-last), each keeping its other five directions; a layout of
+  one child hides nothing (`get_layout_child_role()`,
+  `get_layout_hide_reason()`). Line, grid, ring and scatter layouts keep the
+  values and ignore them.
+- Direction: a child's element frame is its own local rotation as the
+  layout made it: tangent its x axis (the direction of travel: a path
+  element's heading or tangent, a segment's chord from point i to i + 1),
+  binormal its y axis (up) and normal its z axis, the right of the direction
+  of travel as a segment handle's normal ("Segment handles") and the
+  opposite of the curve frame's side. A connector's outward, carried by the
+  child's local transform as a face normal (scale and mirror included, as
+  `transform_connector()` carries it; in the element frame only the local
+  scale acts, dividing it), faces the axis of its largest absolute
+  component in that frame with that component's sign; ties go to tangent,
+  then normal, then binormal (`classify_layout_direction()`,
+  `get_outward_in_element()`). A connector is classified by its outward
+  direction alone, not by where it sits: a roof's connectors, which all face
+  down, follow only the -binormal switch. A child with a zero scale axis
+  hides nothing.
+- The scene-free part is `level/kit_layout_connectors.hpp`, built into
+  `editor_level_tests`; `Level_kits::get_layout_child()` reads a child's
+  layout, role and local scale, and `get_connector_switches()` sets a bit
+  per hidden connector index (the shape's declared order) in
+  `Kit_connector_switches::layout_hidden_bits`, which `is_enabled(name,
+  index)` reads; a shape has at most `c_max_shape_connectors` (64)
+  connectors, which `editor_level_tests` checks for every shape at its
+  defaults, its range corners and each parameter's range ends: a hidden connector is
+  disabled for every consumer above - not drawn, no snap candidate, not
+  offered by the Connect rows, a join to it refused (`... is hidden by its
+  kit layout's connector switches ...`).
+- Change: a switch write is one `Property_set_operation` (one undo entry,
+  no regeneration: the children stay the same nodes). The connector
+  indicators drop the cached frames of a layout's children on each
+  `Kit_layout_changed_message` of it (a switch, the lock, a regeneration's
+  values), on each `Curve_changed_message` of it (closure and point count
+  move the head and tail) and during a live value preview; a removed piece
+  drops its siblings' frames too, as the child count decides the head and
+  tail. A drag gathers the switches at its start.
+- Editing: the Properties window's Kit Layout group and the Level Kit
+  window's initial values show Hide All Connectors and Hide +Tangent,
+  -Tangent, +Normal, -Normal, +Binormal and -Binormal Connectors for a
+  path or segments kind ("Kit layout rows"); over MCP `connector_hiding` of
+  `level_create_layout` and `level_set_layout`, read back by every layout
+  reply, and `level_get_connectors` reports each child's direction and
+  reason ("MCP").
 
 ## Parameter rows
 
@@ -1942,16 +2403,18 @@ checkbox at once). `get_layout_rows(pattern)` lists the pattern rows the kind
 and count mode show: Kind; for a line, ring and path Count Mode (By Count, By
 Gap) and Count or Gap; for a line Direction and Step or Length; for a grid
 Count X, Count Z, Spacing X and Spacing Z; for a ring Radius, Arc and Face
-Outward; for a path Orientation (Upright, Follow Tangent); for a scatter
+Outward; for a path Orientation (Upright, Follow Tangent); for segments
+Orientation alone; for stairs Width, Step Rise Limit, Tread Depth,
+Thickness, Edge Tolerance and Material ("Stairs layouts"); for a scatter
 Scatter Mode (By Count, By Density) and Count or Density, Region (Rectangle,
 Disc) and Size X and Size Z or Region Radius, Min Spacing, Yaw Min and Yaw
 Max. The Kind row offers `Kit_layout_kinds`: every kind (the Level Kit
-window's initial values), Line, Grid, Ring and Scatter on an Xform node (Path
-shown as not offered), Path alone on a Curve node. Beside a widget (`Kit_row_label::beside`, the Level Kit window)
+window's initial values), Line, Grid, Ring and Scatter on an Xform node (Path,
+Segments and Stairs shown as not offered), Path, Segments and Stairs on a Curve node. Beside a widget (`Kit_row_label::beside`, the Level Kit window)
 the row's name is the widget's label; in the Properties window
 (`Kit_row_label::recorded`) a row's widgets take its name, those of a row of
 several as `<row>.<role>`: `Kind.line`, `Kind.grid`, `Kind.ring`,
-`Kind.path`, `Kind.scatter`, `Count Mode.count`, `Count Mode.gap`,
+`Kind.path`, `Kind.scatter`, `Kind.segments`, `Kind.stairs`, `Count Mode.count`, `Count Mode.gap`,
 `Scatter Mode.count`, `Scatter Mode.density`, `Region.rectangle`,
 `Region.disc`, `Orientation.upright`,
 `Orientation.tangent`, `Lock.lock`, `Lock.unlock` and `Lock.refresh`.
@@ -1960,7 +2423,8 @@ The Properties window's "Kit Layout" group (`Kit_layout_editor`) shows a
 single selected kit layout node (a locked layout's piece selects it, "Kit
 layout nodes"): Layout (locked or unlocked and the piece count), the pattern
 rows, Run (the count, the step or the actual gap once the remainder is
-spread, and the space - a path's curve length; the Curve group beside it
+spread, and the space - a path's curve length; segments: the piece count
+and the spanned chord lengths' sum; the Curve group beside it
 shows the curve's own rows), per item a group "Item <n>: <shape>" with its
 Shape line (and the stairs line and a refusal), its parameter rows
 ("Parameter rows", seed mask toggles included), one `<slot> material` combo
@@ -1970,7 +2434,10 @@ count) and Remove Item
 (disabled for the last item); Add Shape Item (the shape the Brush tool
 places, chosen in the Level Kit window, with its rows' values and slot
 materials); Module Snap, Surface Snap, Surface Max Distance, Surface Orient,
-Per Piece Seed and Layout Seed; Lock (its tooltip warns that it discards the edits made to the
+Per Piece Seed and Layout Seed; for a path or segments layout the connector
+switches (`get_layout_setting_rows()`: Hide All Connectors, then Hide
++Tangent, -Tangent, +Normal, -Normal, +Binormal and -Binormal Connectors,
+the six disabled while Hide All is on); Lock (its tooltip warns that it discards the edits made to the
 children), Unlock and Refresh; a Message row with the last result or refusal
 in red. A drag commits when it ends, a radio button, checkbox, combo entry or
 button at once; each commit queues one `set_layout()`, `set_layout_lock()` or
@@ -2475,7 +2942,8 @@ Top to bottom:
   the scene's `Scene_settings.level` in place (creating it on the first edit),
   as the Properties window and `set_scene_settings` write scene settings.
 - One collapsing section per kit, one row per shape (the tooltip is its id and
-  description). Choosing a shape fills the parameter rows with its defaults at
+  description), a recreated shape's row directly after its original's.
+  Choosing a shape fills the parameter rows with its defaults at
   the scene's lengths, makes the Brush tool the active tool and hands it the kit
   brush of those values: the Brush tool is then in kit mode. The row of the
   shape the Brush tool places shows as chosen; the window reads that from the
@@ -2544,14 +3012,17 @@ Top to bottom:
   the initial values of a kit layout node the author adds to the scene. They
   edit no node: a selected layout node's values are edited in the Properties
   window ("Kit layout rows"). The rows: the pattern rows of the shown kind
-  ("Kit layout rows", every kind offered: Line, Grid, Ring and Path, each
-  kind keeping its values), Spacing From Item (on by default: the new
+  ("Kit layout rows", every kind offered: Line, Grid, Ring, Scatter, Path,
+  Segments and Stairs, each kind keeping its values; a stairs layout's
+  values ride the pattern text), Spacing From Item (on by default: the new
   layout's line step and grid spacings are its item's extent, so Step,
   Spacing X and Spacing Z show disabled), Module Snap, Surface Snap, Surface
-  Max Distance (1 m by default), Surface Orient, Per Piece Seed, Layout Seed and
-  Locked (on by default). They are the
-  editor setting `level_kit` (`Level_kit_config` version 7, the pattern as
-  its canonical text in `layout_pattern`; a version 6 file's
+  Max Distance (1 m by default), Surface Orient, Per Piece Seed, Layout Seed,
+  for a path or segments kind the seven connector switches (off by default)
+  and Locked (on by default). They are the
+  editor setting `level_kit` (`Level_kit_config` version 8, the pattern as
+  its canonical text in `layout_pattern`, the switches as
+  `layout_hide_<all|plus_tangent|...>_connectors`; a version 6 file's
   `layout_random_seeds` reads as `layout_per_piece_seed`), read once and written at each
   edit, as the placement settings are. The window adds layout nodes with
   them (`Level_kits::get_layout_initial_values()`), and the new node is
@@ -2619,7 +3090,8 @@ stays in kit mode for the next piece.
 
 ## MCP
 
-- `level_get_kits {scene_name}`: the kits and, per shape, its id, kind,
+- `level_get_kits {scene_name}`: the kits and, per shape, its id, `recreates`
+  (the original's id, empty for an original: "Recreated shapes"), kind,
   description, tags, parameters (type, unit, range, the default resolved
   against the scene's level settings, its scale and factor, an enum's values;
   `derive` `fixed` or `derivable`, `default_derived`, and for a derivable float
@@ -2629,8 +3101,8 @@ stays in kit mode for the next piece.
   mask, default seed), `material_slots` (in slot order: `slot`,
   `default_material` and `alternatives`, palette names), `connectors` (at the
   defaults, in the piece's local space: `name`, `position`, `outward`, `up`),
-  normal style, triangle budget, collision and `mirror_planes`
-  ("Groups"); the scene's level lengths and the `palette` (`name`,
+  normal style, triangle budget, collision, `seeded` (the generator draws
+  from the seed) and `mirror_planes` ("Groups"); the scene's level lengths and the `palette` (`name`,
   `base_color`, `roughness`).
 - `level_place_pieces {scene_name, snap, surface_snap, surface_orient,
   surface_direction, surface_max_distance, pieces: [{shape, parameters, position, rotation_xyzw,
@@ -2678,7 +3150,7 @@ stays in kit mode for the next piece.
 - `level_create_layout {scene_name, name, parent_id, position,
   rotation_xyzw, pattern, items | from_piece_id | curve_id, points, closed,
   snap, surface_snap, surface_orient, surface_max_distance, per_piece_seed, seed,
-  locked}` (`random_seeds`, the former name of `per_piece_seed`, still reads;
+  connector_hiding, locked}` (`random_seeds`, the former name of `per_piece_seed`, still reads;
   both together are refused): `create_layout()` ("Kit layout nodes"), locked by default; with
   `from_piece_id` `make_layout_from_piece()`, as the Level Kit window's Make
   Layout, which takes the item, parent, place and world transform from the
@@ -2691,21 +3163,27 @@ stays in kit mode for the next piece.
   `length`, `count_x`, `count_z`, `spacing_x`, `spacing_z`, `radius`,
   `arc_degrees`, `facing`, `orientation`, and a scatter's `scatter_mode`,
   `density`, `region`, `size_x`, `size_z`, `region_radius`, `min_spacing`,
-  `yaw_min`, `yaw_max`, "Scatter layouts") over the defaults, `step` and the
+  `yaw_min`, `yaw_max`, "Scatter layouts", and `stairs`, an object of a
+  stairs layout's values, "Stairs layouts") over the defaults, `step` and the
   grid spacings defaulting to the largest item's extent. A path layout is a
   Curve node: `points` (as `create_curve` takes them, in the node's frame)
   and `closed` (which needs `points`) give its curve, else it is straight
-  along its x axis; they are refused for another kind. `items` is a list of
+  along its x axis; they are refused for another kind. A stairs layout takes
+  `points` the same way (else a flight of ten steps along its x axis) and
+  needs no `items`. `items` is a list of
   `{shape, parameters, materials, weight}` read as a `level_place_pieces` piece reads
   them, `weight` an integer in 0 - 1000, 1 when not given ("Scatter
-  layouts"). The reply: the node's `id`, `name`, `type` (`Curve` for a path
+  layouts"). `connector_hiding` is an object of the switches given, merged
+  over the node's (or the defaults): `all`, `plus_tangent`, `minus_tangent`,
+  `plus_normal`, `minus_normal`, `plus_binormal`, `minus_binormal`, each a
+  boolean (true hides); an unknown key or a non-boolean is refused. The reply: the node's `id`, `name`, `type` (`Curve` for a path
   layout, else `Xform`), world `position` and `rotation_xyzw`, `curve` (a
   path layout's own curve: `point_count`, `closed` and `length`; null for an
   Xform), `locked`, `pattern`, `pattern_text`, `items` (`shape`,
   `parameters`, `parameters_text`, `materials`, `weight`, `extent`,
   `bounds` (the item's mesh box in its own frame, from its CPU geometry),
   `footprint_radius`), the snap and seed
-  values, `run {count, requested, step, space, item_extent}` (or
+  values, `connector_hiding` (all seven), `run {count, requested, step, space, item_extent}` (or
   `{problem}`; `requested` is the count the values ask for, more than `count`
   when a scatter's spacing lets fewer in),
   `child_count` and
@@ -2713,8 +3191,8 @@ stays in kit mode for the next piece.
   `parameters`, `parameters_text`, `materials`), and `changed`,
   `kept_count`, `added_count` and `removed_count`.
 - `level_set_layout {scene_name, layout_id, pattern, items, snap,
-  surface_snap, surface_orient, surface_max_distance, per_piece_seed, seed}`
-  (`random_seeds` as above): `set_layout()`; the
+  surface_snap, surface_orient, surface_max_distance, per_piece_seed, seed,
+  connector_hiding}` (`random_seeds` as above): `set_layout()`; the
   values given merge over the node's (the pattern key by key, the items as a
   whole list). The reply as above.
 - `level_get_layouts {scene_name}`: every kit layout node as above; a node
@@ -2773,7 +3251,12 @@ stays in kit mode for the next piece.
   selected kit pieces of the scene) `id`, `name`, `shape`,
   `connectors_enabled`, `disabled_connectors` and `connectors`, every
   connector of the shape in world space (`name`, `position`, `outward`, `up`,
-  `enabled`).
+  `enabled`). A child of a locked path or segments layout adds `layout`
+  (`id`, `role`: `head`, `tail`, `inner` or `only`, and `connector_hiding`)
+  and per connector `layout_direction` (`+tangent`, `-tangent`, `+normal`,
+  `-normal`, `+binormal`, `-binormal`, null when the frame degenerates),
+  `hidden_by_layout` and `layout_hide_reason` (`shown`, `hide_all`,
+  `direction`).
 - `level_connect_pieces {scene_name, node_id, connector, to_piece_id,
   to_connector, twist_steps, gap}`: `connect_piece()`; the reply gives the new
   world `position` and `rotation_xyzw`, `changed`, `world_aabb` and the
@@ -2852,7 +3335,9 @@ stays in kit mode for the next piece.
   `brush_id`, `shares_brush_primitive` (each mesh primitive is its brush's
   part of that slot),
   `follows_kit` and `problem` ("Persistence") and `physics` (motion mode,
-  collision shape, whether the body exists).
+  collision shape, whether the body exists); straight stairs, original or
+  recreated, also `stairs` (`step_count`, `step_rise`, `tread_depth`, `run`,
+  `slope_degrees`: the layout their values produce, R3.5).
 
 ## Walkable area reads
 
@@ -3012,7 +3497,17 @@ Kit window and the MCP tools both call; their scene-free parts are in
   multiply-add within an expression where GCC and MSVC do not
   (`doc/cmake_conventions.md`), and sine and cosine differ between C
   libraries - and the order of a convex hull's vertices and facets (the
-  rock) follows those bits. The spatial query
+  rock) follows those bits. The recreated shapes ("Recreated shapes") are in
+  every test that goes over the library (a test that keys an expectation by
+  shape id uses the original's for both). `Kit_recreated`: every shape with
+  `recreates` stands directly after an original of its kit and equals it in
+  parameters, slots, origin rule, collision kind, mesh kind, randomness,
+  mirror planes, the presence of its checks, and at three seeds of derived
+  values in its connectors and seam sides; the recreated basic shapes have
+  their originals' bounds at the defaults, both range corners and four
+  derived seeds; the recreated stairs have 12 triangles a step and no vertex
+  with more than six facets; the recreated cylinder's points are exact
+  mirror images at nine segment counts. The spatial query
   helpers: box and sphere intersection with touching, containing, separate and
   invalid bounds; the grid's columns, rows and cell centers, a partial last
   cell and refused sizes; the height digits; both text pictures of a known
@@ -3070,7 +3565,16 @@ Kit window and the MCP tools both call; their scene-free parts are in
   ring keeping the start rotation, a path along corner points turning at a
   corner (and at a distance a rounding short of it), a slope upright and
   pitched, a vertical span keeping the heading, a closed square and a path
-  from a turned start pose, the refusals (with the counts and the limit in the messages).
+  from a turned start pose, the refusals (with the counts and the limit in the messages);
+  segments: a closed room of four corners with two items of other x bounds,
+  each element's scale (s, 1, 1) and its scaled bounds ending on its two
+  corners, an open curve one segment fewer, a slope upright (plan length at
+  the first point's height) and tangent (the chord, pitched), a start pose,
+  and the refusals (no curve, one point, a zero-length segment naming it, a
+  vertical segment in both orientations, an item without x extent, no
+  item); the `segments` pattern text, the default pattern's canonical text
+  pinned as written before segments, `resolve_layout_pattern()` of a closed
+  triangle (count, chord sum, per item x bounds) and `is_curve_layout_kind()`.
   Replace: a parameter of the same name and type carried and clamped to
   the new range (float and int, both ends), an enum by name, an enum name the
   new shape lacks, another type and a missing name defaulted, a seed-derived
@@ -3096,14 +3600,26 @@ Kit window and the MCP tools both call; their scene-free parts are in
   outward opposed, the motion's rotation determinant +1, the moved
   matrix's column lengths kept), a wall mirrored by scale (-1, 1, 1) joined
   and rebuilt with that scale as stored, a joined piece needing no motion, and the
-  rotation-matrix and orthogonal-axes tests. `get_kit_geometry_bounds()` of
+  rotation-matrix and orthogonal-axes tests. Layout connector switches
+  (`test_kit_layout_connectors.cpp`): each axis direction classified, ties
+  to tangent, then normal, then binormal, the head, tail, inner and only
+  roles of open and closed curves of one, two and five children, nothing
+  hidden by default, each switch alone on an inner child, a combination,
+  Hide All, every switch on a head, tail and only child (only the
+  neighbour-facing direction follows them), two children facing each
+  other, a turned, a stretched (a diagonal outward reweighed) and a
+  mirrored child, a child with a zero scale axis hiding nothing, every
+  shape's connector count within `c_max_shape_connectors` at its defaults,
+  range corners and each parameter's range ends, and the layout-hidden bits
+  read by `Kit_connector_switches::is_enabled()`. `get_kit_geometry_bounds()` of
   every shape at three seeds equal bit for bit to the corner box of the
   geometry processed as a brush's is. Kit layout outlines
   (`make_layout_outline()`): a line's segment and ticks across it (and along
   z for a vertical line), a grid's cell outline and its column and row ticks,
   a half ring's arc through its elements with radial ticks, a rectangle and a
   disc scatter's region with a footprint and spacing circle per point whose
-  spacing circles do not overlap, and a path drawing nothing; a scatter's
+  spacing circles do not overlap, a path drawing nothing, and a segments
+  outline's chords and ticks on an open and a closed curve; a scatter's
   region handles (a rectangle's corners at the polyline's points and edge
   midpoints between them, a disc's on its circle, none for a line) and
   `apply_region_handle()` (an edge's size twice its reach with the other
@@ -3641,7 +4157,24 @@ Kit window and the MCP tools both call; their scene-free parts are in
   not read (the problem reported, a refresh refused, the pieces kept); a
   `capture_screenshot` of the selected path layout with the Properties
   window's Curve and Kit Layout groups goes to
-  `logs/level_tools_path_layout.png` (`--path-image`). Live layout
+  `logs/level_tools_path_layout.png` (`--path-image`).
+  Segment layouts, in a scene of their own (closed afterwards): a 4 m wall on
+  a closed curve of four corners as one Curve node of 4 pieces, each scaled
+  (s, 1, 1) with its scaled x bounds ending on its corners; a probe block
+  inside a scaled wall's far end overlapping it exactly (the collision shape
+  scaled); `set_curve` moving one corner laying out the two adjacent pieces
+  in one entry with the other two the same nodes, undo and redo exact;
+  `curve_add_point` and `curve_remove_points` changing the count; kind path
+  and back to segments in place, a line kind refused; a zero-length segment
+  leaving the pieces (the run's problem naming it) and the refusals of a
+  zero-length segment, a vertical one and a line kind on a plain curve; a new
+  segments layout without points holding one wall at its origin at scale 1;
+  save and reload keeping the scaled pieces, their collision shapes and the
+  layout following a corner edit; a piece selected selecting the node, the
+  curve tool's target, and a viewport gizmo drag of a corner with the two
+  adjacent pieces spanning it mid-drag, no entry, the release one entry
+  and its undo exact; a `render_scene_image` of the room goes to
+  `logs/level_tools_segments_layout.png` (`--segments-image`). Live layout
   preview, last, in a scene of its own (a ground slab and a hill): with the
   button held on a Properties row of a locked 12-pillar line, the pillars
   already have the dragged height and the values report it, no entry; the
@@ -3767,10 +4300,38 @@ Kit window and the MCP tools both call; their scene-free parts are in
   region again, the release recording the pending size as one entry with the
   children unchanged; and a screenshot with the handles of the selected
   turned rectangle (`logs/level_region_handles.png`).
+  Segment handles, in a scene of their own (closed afterwards): a room, a
+  trapezoid and an open 3-point segments layout and a line layout; the
+  room's 4 handles at its chord midpoints with their normals; a line
+  layout without handles and the refusals of a line layout and an index
+  past the segments; `level_move_segment` of wall 0 by -1 m moving its two
+  corners 1 m along the normal with the opposite corners unchanged, piece 0's
+  scale kept and its neighbours' grown to 7 m, one entry, undo and redo
+  exact; the trapezoid's base corners on its slanted sides' lines; the open
+  curve's free end moving along the normal; in the viewport a click on a
+  midpoint selecting the segment with the gizmo there, a click on a corner
+  selecting the point and clearing the segment, Ctrl+clicks selecting one
+  segment at a time; a held XZ plane drag of wall 0 by (0.7, 0, 1) moving
+  its corners along z alone with the pieces following and no entry, the
+  release one entry, undo exact, Escape mid-drag restoring exactly; a point
+  still dragging alone; and a screenshot with a selected segment handle
+  (`logs/level_tools_segment_handles.png`, `--segment-handles-image`).
   `--only-walkable` runs the walkable level, persistence (of the walkable
   level) and window checks alone, `--only-transform` the surface settings
   checks, `--only-layouts` the kit layout node checks (path layouts
-  included), `--only-path-layouts` the path layout checks and
+  included), `--only-path-layouts` the path layout checks,
+  `--only-segments` the segment layout checks,
+  `--only-stairs-layout` the stairs layout checks (a straight slope, a
+  flight, a level curve, the default curve, a smooth S-curve, a quarter turn
+  at a corner point and an up-and-down curve: the fit readback, the mesh
+  report, the body; the refusals at creation; a curve edit, a value edit and
+  their undo and redo; refused curve edits leaving the staircase; lock;
+  kind switches among stairs, path and segments; the navigation mesh joining
+  the S-curve staircase's first and last tread; Level Check findings for a
+  step rise, a slope and a width the agent does not pass; save and reload
+  with the loaded child matching a fresh generation; a viewport
+  drag of a control point with the staircase following; the pictures
+  `logs/level_tools_stairs_layout_<view>.png`, `--stairs-image-prefix`) and
   `--only-window-layout` the Level Kit window checks up to its Layout section,
   the Properties Kit Layout group and the Properties write, and
   `--only-layout-drags` the live layout preview checks,
@@ -3781,9 +4342,32 @@ Kit window and the MCP tools both call; their scene-free parts are in
   layout's children, `--only-scatter` the scatter layout checks,
   `--only-connector-snap` the connector snap checks,
   `--only-layout-indicators` the kit layout drawing checks,
-  `--only-region-handles` the scatter region handle checks and
+  `--only-region-handles` the scatter region handle checks,
+  `--only-segment-handles` the segment handle checks,
+  `--only-layout-connectors` the layout connector switch checks (an open
+  path of five walls and a closed segments room of four: nothing hidden by
+  default; each switch alone, Hide All and a combination hide exactly the
+  connectors whose direction the script computes from the readback's world
+  frames, the readback's directions and reasons agreeing; an inner wall faces
+  the six directions; the path's first and last wall keep all but the
+  neighbour-facing one; each change one undo entry, undo and redo exact; the
+  indicators draw exactly the enabled connectors after a change, its undo
+  and redo; a join to a hidden connector refused; a held drag's connector
+  snap picks the nearest enabled connector, a hidden one never; count 6
+  moves the tail; closing the curve makes the ends inner; unlocked children
+  hide nothing; line and grid layouts keep and ignore the values; save and
+  load keep them; and the screenshots
+  `logs/level_tools_layout_connectors_off.png` and `..._tangent.png`, the
+  path with Connectors "all" before and after +/- tangent are hidden) and
+  `--only-recreated-shapes` the checks of the recreated shapes (the catalog
+  lists each directly after its original with the same contract and default
+  bounds; each pair placed at values off the defaults has equal local
+  bounds, body kind, materials and connectors; the recreated stairs report
+  their original's `stairs` layout; Replace original ->
+  recreated -> original carries every parameter and material, keeps the
+  node's place and returns the original piece exactly) and
   `--only-more-shapes` the checks of the more shapes, first the cliff, palm, shore and water: the
-  catalog (31 shapes, ceilings 2000, each new shape's slots, collision and
+  catalog (36 shapes, ceilings 2000, each new shape's slots, collision and
   mesh kind and connectors, the sand and water palettes), the four at their
   defaults (bounds against their values, default materials, the static
   triangle mesh bodies, the water without a body and with

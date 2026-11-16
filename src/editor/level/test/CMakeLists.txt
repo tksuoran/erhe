@@ -6,9 +6,10 @@ add_executable(${_target}
     # library to link against. The kit shape library needs erhe::geometry
     # (with its erhe::math headers), glm and fmt only; the region and height
     # map helpers need glm and erhe::math; the repeat expansion glm and fmt; the
-    # group mirror glm and erhe::math; the kit layout values and outlines nlohmann_json; the snap to
+    # group mirror glm and erhe::math; the stairs fit and mesh erhe::math; the kit layout values and outlines nlohmann_json; the snap to
     # surface search (surface_snap_search.hpp) is header-only.
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_connectors.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_outline.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_values.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_leaf.cpp
@@ -19,6 +20,7 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shape_library.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_architecture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_basic.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_basic_v2.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_classical.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_japanese.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_medieval.cpp
@@ -30,7 +32,10 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_group.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_region.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_repeat.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../stairs_fit.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../stairs_mesh.cpp
     test_kit_connector.cpp
+    test_kit_layout_connectors.cpp
     test_kit_layout_outline.cpp
     test_kit_layout_values.cpp
     test_kit_replace.cpp
@@ -38,6 +43,8 @@ add_executable(${_target}
     test_level_group.cpp
     test_level_region.cpp
     test_level_repeat.cpp
+    test_stairs_fit.cpp
+    test_stairs_mesh.cpp
     test_surface_snap_search.cpp
 )
 

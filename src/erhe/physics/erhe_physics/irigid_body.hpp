@@ -121,6 +121,9 @@ public:
     virtual void set_gravity_factor  (float gravity_factor)                         = 0;
     virtual void set_linear_velocity (const glm::vec3& velocity)                    = 0;
     virtual void set_mass_properties (float mass, const glm::mat4& local_inertia)   = 0;
+    // Replaces the shape in place, outside update_fixed_step(): the broadphase bounds follow and constraints stay. An
+    // explicit mass is kept with the inertia of the new shape; without one the mass is re-derived from the new shape.
+    virtual void set_collision_shape (const std::shared_ptr<ICollision_shape>& collision_shape) = 0;
     virtual void set_motion_mode     (Motion_mode motion_mode)                      = 0;
     virtual void set_restitution     (float restitution)                            = 0;
     virtual void set_world_transform (const Transform& transform)                   = 0;

@@ -82,14 +82,20 @@ its consequences are one undo entry. Creating a curve is an
 
 ## Users of a curve
 
-A path kit layout is a curve node itself: the Curve prim carries the kit
-layout values and has the pieces as its children (`doc/editor/level_tools.md`
-"Path layouts", R5.12.8). Its pieces are laid out along its own path in its
-own frame, driven by the change, never by a poll:
+A path or segments kit layout is a curve node itself: the Curve prim carries
+the kit layout values and has the pieces as its children
+(`doc/editor/level_tools.md` "Path layouts", R5.12.8, and "Segment layouts",
+R5.12.10). A path layout's pieces are laid out along its own path in its own
+frame; a segments layout puts one piece, scaled along its x axis, on the
+straight chord between each two neighbouring control points (handles do not
+bend it). A stairs kit layout is a curve node the same way, with one
+generated child: a staircase that follows the curve in plan and in height,
+handles included (`doc/editor/level_tools.md` "Stairs layouts", R5.12.13).
+All three are driven by the change, never by a poll:
 
 - A path edit: `Curve_set_operation` asks
   `Level_kits::append_curve_follow_ups()` for the generation of the curve when
-  it is a locked path layout and holds it as its follow-ups, so every edit
+  it is a locked path, segments or stairs layout and holds it as its follow-ups, so every edit
   path (MCP, the curve tool's commands and its drag release, the Properties
   rows) lays the pieces out in the edit's own entry. A live drag (the curve
   tool, a Properties drag) writes the path without an operation and the
@@ -145,7 +151,9 @@ curve is the activation, as a lattice designation is for the lattice tool.
 - The point set holds three entries per control point (`Curve_point_part`):
   the point, its in handle end and its out handle end; the handles of a
   corner are not editable. The selection belongs to the tool; when it is kept
-  and cleared is `doc/editor/point_set_editing.md` "Point selection".
+  and cleared is `doc/editor/point_set_editing.md` "Point selection". A
+  curve that is a segments kit layout has one more entry per segment, its
+  segment handle (`doc/editor/level_tools.md` "Segment handles").
 - A click on a point or a handle end selects it; Ctrl or Shift toggles it. A
   plain click off the points clears the point selection first, so the next
   click reaches the object selection. Ctrl+click on the curve (within 12 px of

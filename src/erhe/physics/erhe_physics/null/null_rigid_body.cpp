@@ -202,6 +202,11 @@ void Null_rigid_body::set_mass_properties(const float mass, const glm::mat4& loc
     m_local_inertia = local_inertia;
 }
 
+void Null_rigid_body::set_collision_shape(const std::shared_ptr<ICollision_shape>& collision_shape)
+{
+    m_collision_shape = collision_shape;
+}
+
 auto Null_rigid_body::get_debug_label() const -> const char*
 {
     return m_debug_label.c_str();

@@ -35,7 +35,7 @@ constexpr double c_fit_epsilon = 1.0e-4;
 
 [[nodiscard]] auto parse_kind(const std::string& name, Repeat_pattern_kind& out_kind) -> bool
 {
-    for (const Repeat_pattern_kind kind : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path, Repeat_pattern_kind::scatter}) {
+    for (const Repeat_pattern_kind kind : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path, Repeat_pattern_kind::scatter, Repeat_pattern_kind::segments, Repeat_pattern_kind::stairs}) {
         if (name == c_str(kind)) {
             out_kind = kind;
             return true;
@@ -261,7 +261,7 @@ auto c_str(const Repeat_ring_facing facing) -> const char*
 
 auto to_canonical_text(const Kit_layout_pattern& pattern) -> std::string
 {
-    const json object{
+    json object{
         {"kind",        c_str(pattern.kind)},
         {"count_mode",  c_str(pattern.count_mode)},
         {"count",       pattern.count},
@@ -287,6 +287,15 @@ auto to_canonical_text(const Kit_layout_pattern& pattern) -> std::string
         {"yaw_min",       hex_json(pattern.yaw_min)},
         {"yaw_max",       hex_json(pattern.yaw_max)}
     };
+    // The stairs values at their defaults are left out, so a text written before stairs is the canonical text of its values.
+    if ((pattern.stairs != Stairs_values{}) || !pattern.stairs_material.empty()) {
+        object["stairs_width"]     = hex_json(pattern.stairs.width);
+        object["stairs_rise"]      = hex_json(pattern.stairs.max_rise);
+        object["stairs_tread"]     = hex_json(pattern.stairs.min_tread);
+        object["stairs_thickness"] = hex_json(pattern.stairs.thickness);
+        object["stairs_tolerance"] = hex_json(pattern.stairs.tolerance);
+        object["stairs_material"]  = pattern.stairs_material;
+    }
     return object.dump();
 }
 
@@ -360,6 +369,12 @@ auto parse_layout_pattern(const std::string_view text, Kit_layout_pattern& out_p
     reader.read_optional_float("min_spacing",   pattern.min_spacing);
     reader.read_optional_float("yaw_min",       pattern.yaw_min);
     reader.read_optional_float("yaw_max",       pattern.yaw_max);
+    reader.read_optional_float("stairs_width",     pattern.stairs.width);
+    reader.read_optional_float("stairs_rise",      pattern.stairs.max_rise);
+    reader.read_optional_float("stairs_tread",     pattern.stairs.min_tread);
+    reader.read_optional_float("stairs_thickness", pattern.stairs.thickness);
+    reader.read_optional_float("stairs_tolerance", pattern.stairs.tolerance);
+    pattern.stairs_material = reader.find_optional_string("stairs_material");
     const std::string error = reader.finish("pattern");
     if (!error.empty()) {
         return error;
@@ -608,6 +623,50 @@ namespace {
         case Repeat_pattern_kind::scatter: {
             return resolve_scatter(pattern, seed, items, out_run, out_poses);
         }
+        case Repeat_pattern_kind::segments: {
+            if (path_table == nullptr) {
+                return "a segments layout needs a curve";
+            }
+            run.path             = path_table;
+            run.path_orientation = pattern.orientation;
+            run.segment_items    = items.segment_items;
+            // The poses are checked here, so a refusal names its segment before any expansion.
+            static thread_local std::vector<Repeat_pose> scratch;
+            std::vector<Repeat_pose>& poses = (out_poses != nullptr) ? *out_poses : scratch;
+            const std::string error = expand_repeat(run, Repeat_pose{}, poses);
+            if (!error.empty()) {
+                poses.clear();
+                return error;
+            }
+            double space = 0.0;
+            for (std::size_t i = 0, end = path_table->get_span_count(); i < end; ++i) {
+                const erhe::math::Curve_span& span  = path_table->get_span(i);
+                const glm::vec3               chord = span.control[3] - span.control[0];
+                const glm::vec3 spanned = (pattern.orientation == Repeat_path_orientation::upright) ? glm::vec3{chord.x, 0.0f, chord.z} : chord;
+                space += static_cast<double>(glm::length(spanned));
+            }
+            out_run.count = poses.size();
+            out_run.space = static_cast<float>(space);
+            return {};
+        }
+        case Repeat_pattern_kind::stairs: {
+            if (path_table == nullptr) {
+                return "a stairs layout needs a curve";
+            }
+            // The fit is the check; the staircase is one generated child at the node's origin.
+            static thread_local Stairs_report report;
+            const std::string error = make_stairs(*path_table, pattern.stairs, report, nullptr);
+            if (!error.empty()) {
+                return error;
+            }
+            if (out_poses != nullptr) {
+                out_poses->clear();
+                out_poses->push_back(Repeat_pose{});
+            }
+            out_run.count = 1;
+            out_run.space = report.fit.length;
+            return {};
+        }
         default: {
             return "unknown pattern kind";
         }
@@ -636,8 +695,9 @@ auto resolve_layout_pattern(
     if (out_run.requested == 0) {
         out_run.requested = out_run.count;
     }
-    // A scatter's poses are made while resolving it; the other kinds expand here.
-    if ((out_poses != nullptr) && (pattern.kind != Repeat_pattern_kind::scatter)) {
+    // A scatter's, a segments run's and the stairs' poses are made while resolving it; the other kinds expand here.
+    const bool expanded = (pattern.kind == Repeat_pattern_kind::scatter) || (pattern.kind == Repeat_pattern_kind::segments) || (pattern.kind == Repeat_pattern_kind::stairs);
+    if ((out_poses != nullptr) && !expanded) {
         error = expand_repeat(out_run.pattern, Repeat_pose{}, *out_poses);
         for (std::size_t i = 0, end = out_poses->size(); i < end; ++i) {
             (*out_poses)[i].item = get_layout_item_index(i, items.items.size());
@@ -650,6 +710,7 @@ void Kit_layout_item_sizes::clear()
 {
     extent = 0.0f;
     items.clear();
+    segment_items.clear();
 }
 
 void Kit_layout_item_sizes::add(const Kit_layout_item& item, const erhe::math::Aabb& bounds)
@@ -658,6 +719,7 @@ void Kit_layout_item_sizes::add(const Kit_layout_item& item, const erhe::math::A
         extent = std::max(extent, bounds.max.x - bounds.min.x);
     }
     items.push_back(Repeat_scatter_item{.weight = item.weight, .radius = get_scatter_footprint_radius(bounds)});
+    segment_items.push_back(bounds.is_valid_3d() ? Repeat_segment_item{.min_x = bounds.min.x, .max_x = bounds.max.x} : Repeat_segment_item{});
 }
 
 auto get_scatter_footprint_radius(const erhe::math::Aabb& bounds) -> float
@@ -672,6 +734,69 @@ auto get_scatter_footprint_radius(const erhe::math::Aabb& bounds) -> float
     const float zz = z * z;
     const float rr = xx + zz;
     return std::sqrt(rr);
+}
+
+auto make_stairs_source_text(const erhe::math::Curve_path& path, const Stairs_values& values) -> std::string
+{
+    json points = json::array();
+    for (const erhe::math::Curve_point& point : path.points) {
+        points.push_back(json::array({vec3_json(point.position), vec3_json(point.in_handle), vec3_json(point.out_handle), static_cast<int>(point.kind)}));
+    }
+    const json object{
+        {"generator", c_stairs_generator_version},
+        {"closed",    path.closure == erhe::math::Curve_closure::closed},
+        {"points",    points},
+        {"width",     hex_json(values.width)},
+        {"rise",      hex_json(values.max_rise)},
+        {"tread",     hex_json(values.min_tread)},
+        {"thickness", hex_json(values.thickness)},
+        {"tolerance", hex_json(values.tolerance)}
+    };
+    return object.dump();
+}
+
+auto parse_stairs_source_text(const std::string_view text, erhe::math::Curve_path& out_path, Stairs_values& out_values) -> std::string
+{
+    const json object = json::parse(text, nullptr, false);
+    if (!object.is_object() || !object.contains("generator") || !object.at("generator").is_number_integer()) {
+        return "the stairs source text does not read";
+    }
+    if (object.at("generator").get<int>() != c_stairs_generator_version) {
+        return fmt::format("the staircase was generated by generator version {}, the current one is {}", object.at("generator").get<int>(), c_stairs_generator_version);
+    }
+    Object_reader        reader{object};
+    Stairs_values        values;
+    erhe::math::Curve_path path;
+    static_cast<void>(reader.find("generator"));
+    const json* const closed = reader.find("closed");
+    const json* const points = reader.find("points");
+    if ((closed == nullptr) || !closed->is_boolean() || (points == nullptr) || !points->is_array()) {
+        return "the stairs source text does not read";
+    }
+    path.closure = closed->get<bool>() ? erhe::math::Curve_closure::closed : erhe::math::Curve_closure::open;
+    for (const json& entry : *points) {
+        if (!entry.is_array() || (entry.size() != 4) || !entry[3].is_number_integer()) {
+            return "the stairs source text does not read";
+        }
+        erhe::math::Curve_point point;
+        reader.read_vec3(entry[0], "points", point.position);
+        reader.read_vec3(entry[1], "points", point.in_handle);
+        reader.read_vec3(entry[2], "points", point.out_handle);
+        point.kind = static_cast<erhe::math::Curve_point_kind>(entry[3].get<int>());
+        path.points.push_back(point);
+    }
+    reader.read_float("width",     values.width);
+    reader.read_float("rise",      values.max_rise);
+    reader.read_float("tread",     values.min_tread);
+    reader.read_float("thickness", values.thickness);
+    reader.read_float("tolerance", values.tolerance);
+    const std::string error = reader.finish("stairs source text");
+    if (!error.empty()) {
+        return error;
+    }
+    out_path   = std::move(path);
+    out_values = values;
+    return {};
 }
 
 auto get_layout_item_index(const std::size_t element, const std::size_t item_count) -> std::size_t

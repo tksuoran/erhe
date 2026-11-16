@@ -1,6 +1,8 @@
 #include "level/kit_layout_outline.hpp"
 #include "level/kit_layout_values.hpp"
 
+#include "erhe_math/curve_path.hpp"
+
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -39,7 +41,7 @@ constexpr float c_tolerance = 1.0e-5f;
     std::vector<Repeat_pose> poses;
     const std::string error = editor::resolve_layout_pattern(pattern, 7, sizes, nullptr, run, &poses);
     if (error.empty()) {
-        editor::make_layout_outline(pattern, run, poses, sizes.items, out_outline);
+        editor::make_layout_outline(pattern, run, poses, sizes.items, nullptr, out_outline);
     }
     return error;
 }
@@ -165,9 +167,37 @@ TEST(Kit_layout_outline, path_draws_nothing_of_its_own)
     pattern.kind = Repeat_pattern_kind::path;
     Kit_layout_outline outline;
     outline.ticks.push_back({});
-    editor::make_layout_outline(pattern, Kit_layout_run{}, {}, {}, outline);
+    editor::make_layout_outline(pattern, Kit_layout_run{}, {}, {}, nullptr, outline);
     EXPECT_EQ(outline.kind, Repeat_pattern_kind::path);
     EXPECT_TRUE(outline.polyline.empty() && outline.arcs.empty() && outline.ticks.empty() && outline.circles.empty());
+}
+
+TEST(Kit_layout_outline, segments_draw_the_chords_with_a_tick_at_each_point)
+{
+    erhe::math::Curve_path path;
+    for (const glm::vec3& position : {glm::vec3{0.0f, 0.0f, 0.0f}, glm::vec3{4.0f, 0.0f, 0.0f}, glm::vec3{4.0f, 0.0f, 2.0f}}) {
+        path.points.push_back(erhe::math::Curve_point{.position = position});
+    }
+    erhe::math::Curve_path_table table;
+    table.build(path);
+    Kit_layout_pattern pattern;
+    pattern.kind = Repeat_pattern_kind::segments;
+    Kit_layout_outline outline;
+    editor::make_layout_outline(pattern, Kit_layout_run{}, {}, {}, &table, outline);
+    ASSERT_EQ(outline.polyline.size(), 3u);
+    EXPECT_FALSE(outline.closed);
+    EXPECT_TRUE(is_near(outline.polyline[2], glm::vec3{4.0f, 0.0f, 2.0f}));
+    ASSERT_EQ(outline.ticks.size(), 3u);
+    // The end tick is across its one segment; the corner tick across the two segments' summed heading.
+    EXPECT_TRUE(is_near(outline.ticks[0].direction, glm::vec3{0.0f, 0.0f, -1.0f}) || is_near(outline.ticks[0].direction, glm::vec3{0.0f, 0.0f, 1.0f}));
+    EXPECT_NEAR(std::abs(glm::dot(outline.ticks[1].direction, glm::normalize(glm::vec3{1.0f, 0.0f, 1.0f}))), 0.0f, c_tolerance);
+
+    path.closure = erhe::math::Curve_closure::closed;
+    table.build(path);
+    editor::make_layout_outline(pattern, Kit_layout_run{}, {}, {}, &table, outline);
+    EXPECT_EQ(outline.polyline.size(), 3u);
+    EXPECT_TRUE(outline.closed);
+    EXPECT_EQ(outline.ticks.size(), 3u);
 }
 
 TEST(Kit_layout_outline, scatter_region_handles_on_the_outline)

@@ -8,6 +8,8 @@
 #include <span>
 #include <vector>
 
+namespace erhe::math { class Curve_path_table; }
+
 // Scene-free shape a kit layout node draws (doc/editor/level_tools.md "Kit layout drawing").
 
 namespace editor {
@@ -58,7 +60,8 @@ public:
     Kit_region_handle_value value   {Kit_region_handle_value::size_x};
 };
 
-// What a kit layout node draws, in its own frame; a path draws its curve instead, so its outline is empty.
+// What a kit layout node draws, in its own frame; a path draws its curve instead, so its outline is empty; segments draw
+// the chords through the curve's points with a tick at each point.
 class Kit_layout_outline
 {
 public:
@@ -74,13 +77,14 @@ public:
 };
 
 // From the pattern, its resolved run and the run's poses (a scatter's with each pose's item, from the node's origin);
-// items: the footprints the run was resolved with. Cleared and filled.
+// items: the footprints the run was resolved with; path_table: a segments layout's curve, else null. Cleared and filled.
 void make_layout_outline(
-    const Kit_layout_pattern&            pattern,
-    const Kit_layout_run&                run,
-    std::span<const Repeat_pose>         poses,
-    std::span<const Repeat_scatter_item> items,
-    Kit_layout_outline&                  out_outline
+    const Kit_layout_pattern&                 pattern,
+    const Kit_layout_run&                     run,
+    std::span<const Repeat_pose>              poses,
+    std::span<const Repeat_scatter_item>      items,
+    const erhe::math::Curve_path_table*       path_table,
+    Kit_layout_outline&                       out_outline
 );
 
 // The region values of the handle moved to point (the node's frame; y is ignored), symmetric about the node's origin

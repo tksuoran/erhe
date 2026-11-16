@@ -322,8 +322,9 @@ void Mesh_operation::make_entries(
                 if (has_body && m_parameters.context.editor_settings->physics.static_enable) {
                     std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = make_convex_hull_collision_shape(*after_geometry);
                     if (collision_shape) {
-                        entry.after.collision_shape = collision_shape;
-                        entry.after.motion_mode     = motion_mode;
+                        entry.after.collision_shape       = collision_shape;
+                        entry.after.collision_shape_scale = glm::vec3{1.0f};
+                        entry.after.motion_mode           = motion_mode;
                     }
                 }
 
@@ -436,7 +437,11 @@ auto Mesh_operation::capture_physics(const erhe::scene::Node& node) -> Mesh_oper
         return version;
     }
     version.motion_mode     = data.value().motion_mode;
-    version.collision_shape = get_node_collision_shape(node);
+    const Node_physics_system* const system = find_node_physics_system(node);
+    if (system != nullptr) {
+        version.collision_shape       = system->get_source_collision_shape(node);
+        version.collision_shape_scale = system->get_source_scale(node);
+    }
     return version;
 }
 
@@ -444,7 +449,7 @@ void Mesh_operation::restore_physics(erhe::scene::Node& node, const Mesh_operati
 {
     Node_physics_system* const system = find_node_physics_system(node);
     if (system != nullptr) {
-        system->set_collision_shape(node, version.collision_shape);
+        system->set_collision_shape(node, version.collision_shape, version.collision_shape_scale);
     }
     if (version.motion_mode == erhe::physics::Motion_mode::e_none) {
         clear_node_physics(node);

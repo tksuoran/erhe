@@ -35,6 +35,66 @@ Physics-related tools, UI, and collision shape generation for the editor.
 
 - **`Collision_volume_calculator`** / **`Collision_shape_generator`** -- Function types used by `Brush` to compute collision volumes and create `ICollision_shape` instances from geometry. Defined in `collision_generator.hpp`.
 
+## Collision shapes follow the node's scale
+
+A body carries no scale: the physics backend places it by the node's world
+rotation and translation. The scale lives in the body's shape. A node's
+`Node_physics_system` entry keeps the source shape (in node space, as a brush,
+a mesh hull or a single imported collider gives it) and the body's shape is
+`make_node_scaled_collision_shape(source, |world scale|)` - the source itself
+at scale 1, a uniform scaling wrapper for a uniform scale, else a non-uniform
+scaled wrapper - wrapped in the center-of-mass offset the node's value states.
+
+The shape follows every change of the node's world scale: a Transform tool
+drag (each frame of the drag, its undo, redo and cancel), `set_node_transform`,
+a `scale` property write, an ancestor's scale, a reparent, a paste or
+duplicate, a mirror and a load. All of these reach the node's transform
+observer, which queues the body for the shape pass
+(`Node_physics_system::apply_pending_shape_scales()`, each frame before the
+simulation steps, also while the simulation is off); the pass compares the
+node's world scale against the scale the body's shape was built for and, when
+it differs, builds the shape from the source again and swaps it into the live
+body
+(`IRigid_body::set_collision_shape()`: the broadphase bounds follow,
+constraints stay). A frame without a scale change builds nothing. The source is
+never wrapped twice, so scaling back to 1 gives the source object itself.
+
+A folded import compound (colliders of descendant nodes) already carries the
+world scales of its colliders; it is handed over with the root scale it was
+built at (`set_collision_shape(node, shape, source_scale)`) and scaled by the
+ratio.
+
+A scale the backend cannot represent on the source (`is_valid_scale()`: under
+Jolt a sphere or capsule takes only a uniform scale, a cylinder only an equal
+scale across its axis) replaces the collider: a sphere or capsule collider
+under a non-uniform scale becomes the convex hull of the node's own mesh at
+that scale, which is exact for the geometry the node shows. A source without a
+mesh to fall back on (an implicit imported collider on a node without
+geometry, or a compound whose rotated child cannot take a non-uniform scale)
+takes the backend's nearest valid scale and the node is named in a warning. A
+scale with a zero component gives the body an empty shape: nothing collides
+with it, and a dynamic body without an explicit mass then weighs 1 and falls
+through everything. The pass takes the scene's item host mutex before the
+physics step mutex, since the hull fallback reads mesh primitives a brush
+geometry worker may replace.
+
+Mass: without a `Node_physics.mass` value the body's mass is its shape volume
+times the material density, so it follows the scaled shape, and a save writes
+no mass for it, so it stays derived after a reload. An explicit mass - an
+authored value, a value a brush of a density other than the default writes
+for its placed volume, or a mass in a file saved before this rule - stays as
+written and does not follow the scale; the inertia follows the new shape. A
+brush of the default density writes no mass value. The body -> node writeback
+of a dynamic body keeps the node's world scale.
+
+The shape arguments of the MCP `create_physics_body` and `edit_physics_body`
+tools (`half_extents`, `radius`, `length`, ...) are in node space: the body's
+shape is that shape at the node's world scale.
+
+The direction for static level geometry is collision baked in world space,
+after which node transforms no longer matter; until then the shapes follow
+the scale as above.
+
 ## Public API / Integration Points
 
 - `Physics_tool::acquire_target()` / `release_target()` -- begin/end physics interaction

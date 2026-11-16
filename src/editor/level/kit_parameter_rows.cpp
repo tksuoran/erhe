@@ -222,7 +222,7 @@ auto kit_parameter_rows(Kit_parameter_values& values, const Kit_lengths& lengths
 void kit_stairs_line(const Kit_parameter_values& values)
 {
     const Kit_shape_definition* const shape = values.get_shape();
-    if ((shape == nullptr) || (shape->id != "basic.stairs")) {
+    if ((shape == nullptr) || (get_contract_id(*shape) != "basic.stairs")) {
         return;
     }
     const Kit_stairs_layout layout = get_stairs_layout(values);
@@ -271,7 +271,7 @@ void Kit_piece_editor::update(const std::shared_ptr<erhe::scene::Mesh>& piece)
     if (!m_problem.empty()) {
         m_connectors.clear();
     }
-    m_connector_switches = read_connector_switches(*piece);
+    m_connector_switches = read_piece_connector_switches(*piece);
 }
 
 void Kit_piece_editor::on_edit(const Kit_row_edit edit)

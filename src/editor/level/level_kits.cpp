@@ -312,13 +312,14 @@ private:
     const erhe::math::Aabb& local_bounds,
     const glm::vec3&        position,
     const glm::quat&        rotation,
+    const glm::vec3&        scale,
     const Kit_snap          snap,
     const float             module,
     const Surface_options&  surface
 ) -> Surface_placement
 {
     const glm::vec3 snapped = (snap == Kit_snap::module) ? Level_kits::snap_to_module(position, module) : position;
-    return find_surface_placement(scene_root, local_bounds, Surface_pose{.position = snapped, .rotation = rotation}, surface, {});
+    return find_surface_placement(scene_root, local_bounds, Surface_pose{.position = snapped, .rotation = rotation, .scale = scale}, surface, {});
 }
 
 } // anonymous namespace
@@ -346,8 +347,16 @@ Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
     );
     m_curve_changed_subscription = app_message_bus.curve_changed.subscribe(
         [this](Curve_changed_message& message) {
-            if (message.shape && message.curve && is_layout_previewing(*message.curve)) {
-                static_cast<void>(step_layout_preview());
+            if (message.curve) {
+                // A closure or point count change can make other children an open curve's head and tail (U39).
+                m_connector_indicators.forget_children_of(static_cast<std::uint64_t>(message.curve->get_id()));
+            }
+            if (message.shape && message.curve) {
+                // A segments layout draws its curve's chords.
+                m_layout_indicators.forget_layout(*message.curve);
+                if (is_layout_previewing(*message.curve)) {
+                    static_cast<void>(step_layout_preview());
+                }
             }
         }
     );
@@ -363,6 +372,8 @@ Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
     m_kit_layout_changed_subscription = app_message_bus.kit_layout_changed.subscribe(
         [this](Kit_layout_changed_message& message) {
             m_layout_indicators.forget_layout(message.node_id);
+            // The connector switches, the lock or a regeneration's child count (U39).
+            m_connector_indicators.forget_children_of(message.node_id);
         }
     );
 }
@@ -447,6 +458,14 @@ auto Level_kits::get_layout_initial_values() const -> Kit_layout_initial_values
     values.data.seeds          = config.layout_per_piece_seed   ? Kit_layout_seeds::per_element : Kit_layout_seeds::item;
     values.data.seed           = config.layout_seed;
     values.data.lock           = config.layout_locked         ? Kit_layout_lock::locked       : Kit_layout_lock::unlocked;
+    const auto visibility = [](const bool hidden) { return hidden ? Kit_layout_connector_visibility::hidden : Kit_layout_connector_visibility::shown; };
+    values.data.connector_hiding.all = visibility(config.layout_hide_all_connectors);
+    values.data.connector_hiding.set(Kit_layout_direction::plus_tangent,   visibility(config.layout_hide_plus_tangent_connectors));
+    values.data.connector_hiding.set(Kit_layout_direction::minus_tangent,  visibility(config.layout_hide_minus_tangent_connectors));
+    values.data.connector_hiding.set(Kit_layout_direction::plus_normal,    visibility(config.layout_hide_plus_normal_connectors));
+    values.data.connector_hiding.set(Kit_layout_direction::minus_normal,   visibility(config.layout_hide_minus_normal_connectors));
+    values.data.connector_hiding.set(Kit_layout_direction::plus_binormal,  visibility(config.layout_hide_plus_binormal_connectors));
+    values.data.connector_hiding.set(Kit_layout_direction::minus_binormal, visibility(config.layout_hide_minus_binormal_connectors));
     values.spacing             = config.layout_spacing_from_item ? Kit_layout_spacing::from_item : Kit_layout_spacing::as_given;
     values.place_as            = config.place_as_layout       ? Kit_place_as::layout          : Kit_place_as::piece;
     return values;
@@ -466,6 +485,14 @@ void Level_kits::set_layout_initial_values(const Kit_layout_initial_values& valu
     config.layout_per_piece_seed      = (values.data.seeds == Kit_layout_seeds::per_element);
     config.layout_seed              = values.data.seed;
     config.layout_locked            = (values.data.lock == Kit_layout_lock::locked);
+    const Kit_layout_connector_hiding& hiding = values.data.connector_hiding;
+    config.layout_hide_all_connectors            = (hiding.all == Kit_layout_connector_visibility::hidden);
+    config.layout_hide_plus_tangent_connectors   = hiding.is_hidden(Kit_layout_direction::plus_tangent);
+    config.layout_hide_minus_tangent_connectors  = hiding.is_hidden(Kit_layout_direction::minus_tangent);
+    config.layout_hide_plus_normal_connectors    = hiding.is_hidden(Kit_layout_direction::plus_normal);
+    config.layout_hide_minus_normal_connectors   = hiding.is_hidden(Kit_layout_direction::minus_normal);
+    config.layout_hide_plus_binormal_connectors  = hiding.is_hidden(Kit_layout_direction::plus_binormal);
+    config.layout_hide_minus_binormal_connectors = hiding.is_hidden(Kit_layout_direction::minus_binormal);
     config.layout_spacing_from_item = (values.spacing == Kit_layout_spacing::from_item);
     config.place_as_layout          = (values.place_as == Kit_place_as::layout);
     if (m_context.app_settings != nullptr) {
@@ -579,7 +606,7 @@ auto Level_kits::make_placement_pose(
     const Kit_snap    snap     = (lengths.module > 0.0f) ? settings.snap : Kit_snap::none;
     const float       yaw      = glm::radians(static_cast<float>(yaw_steps) * settings.rotation_step_degrees);
     const glm::quat   rotation = glm::angleAxis(yaw, glm::vec3{0.0f, 1.0f, 0.0f});
-    const Surface_placement placement = snapped_pose(scene_root, local_bounds, point, rotation, snap, lengths.module, settings.surface);
+    const Surface_placement placement = snapped_pose(scene_root, local_bounds, point, rotation, glm::vec3{1.0f}, snap, lengths.module, settings.surface);
     return Kit_placement_pose{
         .position      = placement.pose.position,
         .rotation      = placement.pose.rotation,
@@ -696,6 +723,95 @@ auto Level_kits::make_brush(const Kit_parameter_values& values) -> std::shared_p
         return {};
     }
     return brush;
+}
+
+auto Level_kits::check_stairs_material(const Scene_root& scene_root, const std::string& material_name) const -> std::string
+{
+    if (material_name.empty()) {
+        return (m_library.find_slot_default(c_stairs_material_slot) != nullptr)
+            ? std::string{}
+            : fmt::format("no palette material for slot '{}'", c_stairs_material_slot);
+    }
+    const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+    if ((library && find_material_by_name(library, material_name)) || (m_library.find_palette_material(material_name) != nullptr)) {
+        return {};
+    }
+    return fmt::format("stairs material: no material '{}' in the scene or the kit palette", material_name);
+}
+
+auto Level_kits::make_stairs_insert(
+    Scene_root&                                      scene_root,
+    const std::shared_ptr<erhe::scene::Node>&        layout,
+    const glm::mat4&                                 world_from_layout,
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+    const std::string&                               material_name,
+    const std::string&                               source,
+    std::vector<std::shared_ptr<Operation>>&         out_operations
+) -> std::string
+{
+    const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+    if (!library) {
+        return "the scene has no content library";
+    }
+    const std::string material_problem = check_stairs_material(scene_root, material_name);
+    if (!material_problem.empty()) {
+        return material_problem;
+    }
+    Kit_slot_material given;
+    if (!material_name.empty()) {
+        given.material = find_material_by_name(library, material_name);
+        if (!given.material) {
+            given.palette_name = material_name;
+        }
+    }
+    geometry->process(
+        {
+            .flags =
+                erhe::geometry::Geometry::process_flag_connect |
+                erhe::geometry::Geometry::process_flag_build_edges |
+                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+        }
+    );
+    // The sides and the underside shade smooth along the curve; treads, risers and the side edges stay hard.
+    set_crease_corner_normals(*geometry.get(), c_stairs_crease_angle_degrees);
+    Brush_data brush_data{
+        .context      = m_context,
+        .app_settings = *m_context.app_settings,
+        .name         = "Stairs",
+        .build_info   = erhe::primitive::Build_info{
+            .primitive_types = {
+                .fill_triangles          = true,
+                .fill_triangles_expanded = true,
+                .edge_lines              = true,
+                .corner_points           = true,
+                .centroid_points         = true
+            },
+            .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
+        },
+        .normal_style = erhe::primitive::Normal_style::corner_normals,
+        .geometry     = geometry,
+        .density      = 1.0f
+    };
+    brush_data.collision_shape_generator = [geometry](const float scale) -> std::shared_ptr<erhe::physics::ICollision_shape> {
+        return build_triangle_mesh_shape(geometry->get_mesh(), scale);
+    };
+    const std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_data);
+    Palette_material_resolver    resolver{m_context, library};
+    const std::array<std::shared_ptr<erhe::primitive::Material>, 1> materials{resolver.resolve(m_library, c_stairs_material_slot, given)};
+    const Brush_instance_insert insert = make_brush_instance_insert(
+        m_context, *brush.get(), scene_root, world_from_layout, materials, 1.0, erhe::physics::Motion_mode::e_static, layout, 0
+    );
+    if (!insert.node) {
+        return "the stairs made no node";
+    }
+    insert.node->set_name("Stairs");
+    insert.node->set_value(Kit_layout_generated::source_property, source);
+    // Materials are inserted first, so an undo takes the staircase out before the material it uses.
+    for (std::shared_ptr<Operation>& operation : resolver.take_operations()) {
+        out_operations.push_back(std::move(operation));
+    }
+    out_operations.push_back(insert.operation);
+    return {};
 }
 
 auto Level_kits::get_brush(const Kit_parameter_values& values) -> std::shared_ptr<Brush>
@@ -1094,7 +1210,14 @@ auto Level_kits::prepare_placements(
         if (!material_problem.empty()) {
             return fail(i, material_problem);
         }
+        if (!std::isfinite(placement.scale.x) || !std::isfinite(placement.scale.y) || !std::isfinite(placement.scale.z) ||
+            !(placement.scale.x > 0.0f) || !(placement.scale.y > 0.0f) || !(placement.scale.z > 0.0f)) {
+            return fail(i, fmt::format("the scale ({}, {}, {}) must be positive", placement.scale.x, placement.scale.y, placement.scale.z));
+        }
         std::optional<Kit_join_pose> join{};
+        if (placement.connect.has_value() && (placement.scale != glm::vec3{1.0f})) {
+            return fail(i, "a connector join places a piece at scale 1");
+        }
         if (placement.connect.has_value()) {
             Kit_join_pose pose{};
             // A new piece has every connector enabled (U33).
@@ -1136,10 +1259,11 @@ auto Level_kits::prepare_placements(
         // The earlier pieces of this call are not surfaces yet; a connector join is exact, so it is not snapped to the surface.
         const Surface_placement surface = joins[i].has_value()
             ? Surface_placement{.pose = Surface_pose{.position = joins[i]->position, .rotation = joins[i]->rotation, .scale = glm::vec3{1.0f}}}
-            : snapped_pose(scene_root, brush->get_bounding_box(), placement.position, placement.rotation, snap, lengths.module, placement.surface);
+            : snapped_pose(scene_root, brush->get_bounding_box(), placement.position, placement.rotation, placement.scale, snap, lengths.module, placement.surface);
         const glm::vec3 position        = surface.pose.position;
         const glm::quat rotation        = surface.pose.rotation;
-        const glm::mat4 world_from_node = erhe::math::create_translation<float>(position) * glm::mat4_cast(rotation);
+        const glm::mat4 world_from_node =
+            erhe::math::create_translation<float>(position) * glm::mat4_cast(rotation) * erhe::math::create_scale<float>(placement.scale);
 
         std::shared_ptr<erhe::Hierarchy> parent = placement.parent;
         if (placement.parent_index.has_value()) {
@@ -1256,9 +1380,52 @@ auto Level_kits::get_local_connectors(const erhe::scene::Node& node, std::vector
     }
     get_shape_connectors(values, out_connectors);
     if (set == Kit_connector_set::enabled) {
-        remove_disabled_connectors(read_connector_switches(node), out_connectors);
+        remove_disabled_connectors(get_connector_switches(node, out_connectors), out_connectors);
     }
     return {};
+}
+
+auto Level_kits::get_layout_child(const erhe::scene::Node& node) const -> std::optional<Kit_layout_child>
+{
+    // A Curve node carries a path, segments or stairs layout only (check_layout_kind()); unlocked, its children are ordinary pieces.
+    const std::shared_ptr<erhe::scene::Node> parent = node.get_parent_node();
+    const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(parent.get());
+    if ((curve == nullptr) || !is_locked_kit_layout(*curve)) {
+        return {};
+    }
+    const erhe::scene::Trs_transform& local = node.parent_from_node_transform();
+    return Kit_layout_child{
+        .layout_id        = static_cast<std::uint64_t>(curve->get_id()),
+        .hiding           = read_layout_connector_hiding(*curve),
+        .role             = get_layout_child_role(node.get_index_in_parent(), curve->get_child_count(), curve->get_path().closure),
+        .scale            = local.get_scale()
+    };
+}
+
+auto Level_kits::get_connector_switches(const erhe::scene::Node& node) const -> Kit_connector_switches
+{
+    const std::optional<Kit_layout_child> child = get_layout_child(node);
+    if (!child.has_value() || !child->hiding.hides_any()) {
+        return read_piece_connector_switches(node);
+    }
+    std::vector<Kit_connector> connectors;
+    static_cast<void>(get_local_connectors(node, connectors, Kit_connector_set::all));
+    return get_connector_switches(node, connectors);
+}
+
+auto Level_kits::get_connector_switches(const erhe::scene::Node& node, const std::span<const Kit_connector> local_connectors) const -> Kit_connector_switches
+{
+    Kit_connector_switches switches = read_piece_connector_switches(node);
+    const std::optional<Kit_layout_child> child = get_layout_child(node);
+    if (!child.has_value() || !child->hiding.hides_any()) {
+        return switches;
+    }
+    for (std::size_t i = 0, end = local_connectors.size(); i < end; ++i) {
+        if (get_layout_connector_verdict(child.value(), local_connectors[i].outward).reason != Kit_layout_hide_reason::shown) {
+            switches.hide_by_layout(i);
+        }
+    }
+    return switches;
 }
 
 auto Level_kits::get_world_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors, const Kit_connector_set set) const -> std::string
@@ -1294,9 +1461,14 @@ auto Level_kits::resolve_connect(
     if (piece_connector == nullptr) {
         return fmt::format("{} has no connector '{}' (its connectors: {})", shape->id, connect.connector, connector_names_text(connectors));
     }
-    if (!switches.is_enabled(connect.connector)) {
+    const std::size_t piece_index = static_cast<std::size_t>(piece_connector - connectors.data());
+    if (!switches.is_enabled(connect.connector, piece_index)) {
+        const bool by_layout = switches.is_hidden_by_layout(piece_index);
         remove_disabled_connectors(switches, connectors);
-        return fmt::format("{} connector '{}' is disabled (its enabled connectors: {})", shape->id, connect.connector, connector_names_text(connectors));
+        return fmt::format(
+            "{} connector '{}' is {} (its enabled connectors: {})",
+            shape->id, connect.connector, by_layout ? "hidden by its kit layout's connector switches" : "disabled", connector_names_text(connectors)
+        );
     }
     if (!connect.target) {
         return "no target piece";
@@ -1321,12 +1493,15 @@ auto Level_kits::resolve_connect(
             connector_names_text(target_connectors)
         );
     }
-    const Kit_connector_switches target_switches = read_connector_switches(*connect.target);
-    if (!target_switches.is_enabled(connect.target_connector)) {
+    const Kit_connector_switches target_switches = get_connector_switches(*connect.target);
+    const std::size_t target_index = static_cast<std::size_t>(target_connector - target_connectors.data());
+    if (!target_switches.is_enabled(connect.target_connector, target_index)) {
+        const bool by_layout = target_switches.is_hidden_by_layout(target_index);
         remove_disabled_connectors(target_switches, target_connectors);
         return fmt::format(
-            "target '{}' connector '{}' is disabled (its enabled connectors: {})",
-            connect.target->get_name(), connect.target_connector, connector_names_text(target_connectors)
+            "target '{}' connector '{}' is {} (its enabled connectors: {})",
+            connect.target->get_name(), connect.target_connector,
+            by_layout ? "hidden by its kit layout's connector switches" : "disabled", connector_names_text(target_connectors)
         );
     }
     const std::optional<Kit_join_pose> motion = join_motion(*piece_connector, world_from_node, *target_connector, connect.twist_steps, connect.gap);
@@ -1371,7 +1546,7 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
         }
     }
     Kit_join_pose motion{};
-    result.error = resolve_connect(scene_root, values, read_connector_switches(*node), connect, node->world_from_node(), motion);
+    result.error = resolve_connect(scene_root, values, get_connector_switches(*node), connect, node->world_from_node(), motion);
     if (!result.error.empty()) {
         return result;
     }
@@ -1533,7 +1708,7 @@ auto Level_kits::set_connector_switches(
         result.error = fmt::format("'{}' ({}) has no connectors to switch", node->get_name(), record.has_value() ? record->shape : std::string{});
         return result;
     }
-    const Kit_connector_switches before = read_connector_switches(*node);
+    const Kit_connector_switches before = read_piece_connector_switches(*node);
     Kit_connector_switches after = before;
     if (edit.piece.has_value()) {
         after.connectors_enabled = (edit.piece.value() == Kit_connector_state::enabled);
@@ -1988,7 +2163,7 @@ auto Level_kits::preview_parameters(const std::shared_ptr<erhe::scene::Node>& no
             .before = Kit_piece_mesh_state{
                 .shape           = record.shape,
                 .primitives      = mesh->get_primitives(),
-                .collision_shape = get_node_collision_shape(*mesh),
+                .collision_shape = get_node_source_collision_shape(*mesh),
                 .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
                 .parameters      = record.parameters,
                 .motion_mode     = get_piece_motion_mode(*mesh),
@@ -2048,7 +2223,7 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
         before = Kit_piece_mesh_state{
             .shape           = record.shape,
             .primitives      = mesh->get_primitives(),
-            .collision_shape = get_node_collision_shape(*mesh),
+            .collision_shape = get_node_source_collision_shape(*mesh),
             .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
             .parameters      = record.parameters,
             .motion_mode     = get_piece_motion_mode(*mesh),
@@ -2352,7 +2527,7 @@ auto Level_kits::replace_shape(
         Kit_piece_mesh_state before{
             .shape           = piece.old_shape,
             .primitives      = mesh->get_primitives(),
-            .collision_shape = get_node_collision_shape(*mesh),
+            .collision_shape = get_node_source_collision_shape(*mesh),
             .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
             .parameters      = read_kit_piece(*mesh).value().parameters,
             .motion_mode     = get_piece_motion_mode(*mesh),
@@ -2391,7 +2566,9 @@ auto Level_kits::replace_shape(
         Kit_piece_mesh_state after{
             .shape           = shape.id,
             .primitives      = std::move(primitives),
-            .collision_shape = (motion_mode != erhe::physics::Motion_mode::e_none) ? scaled.collision_shape : (fresh ? std::shared_ptr<erhe::physics::ICollision_shape>{} : before.collision_shape),
+            .collision_shape = (motion_mode != erhe::physics::Motion_mode::e_none)
+                ? scaled.collision_shape
+                : (fresh ? std::shared_ptr<erhe::physics::ICollision_shape>{} : before.collision_shape),
             .brush           = brushes[i],
             .parameters      = piece.values.to_canonical_text(),
             .motion_mode     = motion_mode,

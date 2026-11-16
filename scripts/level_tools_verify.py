@@ -4,10 +4,11 @@
 Launches a headless editor (ERHE_AI_DRIVER=1, stopped by its own pid), creates
 an empty scene and checks over MCP:
 
-- level_get_kits lists the 3 kits and their 31 shapes (the starter set and the
+- level_get_kits lists the 3 kits and their 36 shapes: 31 originals and the
+  recreated shapes beside them (doc/editor/level_tools.md "Recreated shapes"), (the starter set and the
   built shapes of the more shapes inventory);
-- the 31 shapes placed once each at their defaults in one call (the "catalog
-  row") are 31 pieces whose world_aabb matches the shape's default size, whose
+- the shapes placed once each at their defaults in one call (the "catalog
+  row") are as many pieces whose world_aabb matches the shape's default size, whose
   parameters echo the catalog defaults, and whose materials are the palette
   materials of the shape's slots; a piece has a static physics body, the stairs
   a triangle mesh shape, the block a convex hull; a render_scene_image of the
@@ -210,7 +211,7 @@ Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png p
        [--walkable-image <png path>] [--window-image <png path>] [--properties-image <png path>] [--queries-image <png path>]
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
        [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-connector-snap]
-       [--only-layout-indicators] [--only-region-handles] [--only-more-shapes]
+       [--only-layout-indicators] [--only-region-handles] [--only-segment-handles] [--only-more-shapes] [--only-recreated-shapes] [--only-layout-connectors] [--only-stairs-layout]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
 
@@ -243,7 +244,10 @@ DEFAULT_LAYOUT_IMAGE = os.path.join("logs", "level_tools_layout.png")
 DEFAULT_GROUP_IMAGE = os.path.join("logs", "level_tools_group.png")
 DEFAULT_MATERIALS_IMAGE = os.path.join("logs", "level_tools_material_slots.png")
 DEFAULT_PATH_IMAGE = os.path.join("logs", "level_tools_path_layout.png")
+DEFAULT_SEGMENTS_IMAGE = os.path.join("logs", "level_tools_segments_layout.png")
+DEFAULT_STAIRS_IMAGE_PREFIX = os.path.join("logs", "level_tools_stairs_layout")
 DEFAULT_LAYOUT_DRAG_IMAGE = os.path.join("logs", "level_tools_layout_drag.png")
+DEFAULT_SEGMENT_HANDLES_IMAGE = os.path.join("logs", "level_tools_segment_handles.png")
 WINDOW          = "Level Kit"
 # ImGui's Ctrl (text input on a drag, select all): with io.ConfigMacOSXBehaviors it is the Cmd (super) key on macOS.
 IMGUI_CTRL      = ["super"] if sys.platform == "darwin" else ["ctrl"]
@@ -280,6 +284,13 @@ NOMINAL_DEFAULT_SIZES = {
     "nature.bush":      (1.0, 0.6, 1.0),
 }
 NOMINAL_SHARE = 0.35
+# The recreated shapes (doc/editor/level_tools.md "Recreated shapes"): each stands directly after its original.
+# A later batch adds its originals here and, when a shape wants values off its defaults in check_recreated_shapes(),
+# an entry in that function's `values`.
+RECREATED_SUFFIX = ".v2"
+RECREATED_SHAPES = ("basic.block", "basic.wedge", "basic.cylinder", "basic.stairs", "basic.floor_slab")
+ORIGINAL_SHAPE_COUNT = 31
+SHAPE_COUNT = ORIGINAL_SHAPE_COUNT + len(RECREATED_SHAPES)
 
 
 def default_editor():
@@ -331,10 +342,14 @@ def create_scene(editor):
 def check_catalog(editor, scene):
     catalog = editor.call("level_get_kits", {"scene_name": scene})
     shapes = catalog["shapes"]
-    check("level_get_kits lists 31 shapes", (catalog["shape_count"] == 31) and (len(shapes) == 31), f"{catalog['shape_count']} shapes")
-    check("level_get_kits lists the basic, architecture and nature kits with 5, 10 and 16 shapes",
-          [(k["name"], len(k["shapes"])) for k in catalog["kits"]] == [("basic", 5), ("architecture", 10), ("nature", 16)],
-          json.dumps([(k["name"], len(k["shapes"])) for k in catalog["kits"]]))
+    originals = [shape for shape in shapes if not shape["recreates"]]
+    check(f"level_get_kits lists {SHAPE_COUNT} shapes: {ORIGINAL_SHAPE_COUNT} originals and {len(RECREATED_SHAPES)} recreated",
+          (catalog["shape_count"] == SHAPE_COUNT) and (len(shapes) == SHAPE_COUNT) and (len(originals) == ORIGINAL_SHAPE_COUNT),
+          f"{catalog['shape_count']} shapes, {len(originals)} originals")
+    recreates_of = {shape["id"]: shape["recreates"] for shape in shapes}
+    kit_originals = [(k["name"], len([i for i in k["shapes"] if not recreates_of[i]])) for k in catalog["kits"]]
+    check("level_get_kits lists the basic, architecture and nature kits with 5, 10 and 16 original shapes",
+          kit_originals == [("basic", 5), ("architecture", 10), ("nature", 16)], json.dumps(kit_originals))
     check("level_get_kits reports the default level lengths (module 1 m, wall height 3 m)",
           close([catalog["level"]["module"], catalog["level"]["wall_height"]], [1.0, 3.0]), json.dumps(catalog["level"]))
     every_field = all(all(key in shape for key in ("id", "kind", "description", "tags", "parameters", "default_size",
@@ -364,7 +379,7 @@ def echoes_defaults(shape, parameters):
 
 
 def check_catalog_row(editor, scene, catalog):
-    """The 31 shapes at their defaults in one row along X; returns (row pieces, row center x, row length)."""
+    """Every shape at its defaults in one row along X; returns (row pieces, row center x, row length)."""
     shapes = catalog["shapes"]
     gap = 1.0
     cursor = 0.0
@@ -381,8 +396,8 @@ def check_catalog_row(editor, scene, catalog):
     reply = editor.call("level_place_pieces", {"scene_name": scene, "pieces": requests})
     editor.wait_idle()
     placed = reply["pieces"]
-    check("the catalog row places 31 pieces in one call and one undo entry",
-          (reply["count"] == 31) and (undo_depth(editor) == depth_before + 1), f"count {reply['count']}, undo {depth_before} -> {undo_depth(editor)}")
+    check(f"the catalog row places {SHAPE_COUNT} pieces in one call and one undo entry",
+          (reply["count"] == SHAPE_COUNT) and (undo_depth(editor) == depth_before + 1), f"count {reply['count']}, undo {depth_before} -> {undo_depth(editor)}")
 
     by_id = {shape["id"]: shape for shape in shapes}
     size_problems = []
@@ -391,12 +406,14 @@ def check_catalog_row(editor, scene, catalog):
         catalog_size = by_id[piece["shape"]]["default_size"]
         if not close(size, catalog_size):
             size_problems.append(f"{piece['shape']} {fmt3(size)} vs catalog {fmt3(catalog_size)}")
-        if piece["shape"] in EXACT_DEFAULT_SIZES:
-            if not close(size, EXACT_DEFAULT_SIZES[piece["shape"]]):
-                size_problems.append(f"{piece['shape']} {fmt3(size)} vs expected {fmt3(EXACT_DEFAULT_SIZES[piece['shape']])}")
+        # A recreated shape has its original's sizes.
+        size_key = by_id[piece["shape"]]["recreates"] or piece["shape"]
+        if size_key in EXACT_DEFAULT_SIZES:
+            if not close(size, EXACT_DEFAULT_SIZES[size_key]):
+                size_problems.append(f"{piece['shape']} {fmt3(size)} vs expected {fmt3(EXACT_DEFAULT_SIZES[size_key])}")
         elif not by_id[piece["shape"]]["default_derive"]:
             # A shape with a default mask has derived sizes; its catalog default_size is the check.
-            nominal = NOMINAL_DEFAULT_SIZES[piece["shape"]]
+            nominal = NOMINAL_DEFAULT_SIZES[size_key]
             if not all(abs(s - n) <= NOMINAL_SHARE * n for s, n in zip(size, nominal)):
                 size_problems.append(f"{piece['shape']} {fmt3(size)} vs nominal {fmt3(nominal)}")
     check("every catalog row piece's world_aabb matches its shape's default size (exact sizes for the unseeded shapes)",
@@ -418,7 +435,7 @@ def check_catalog_row(editor, scene, catalog):
 
     listed = {p["id"]: p for p in pieces(editor, scene)}
     row_ids = [p["id"] for p in placed]
-    check("level_get_pieces lists the 31 pieces with their shape and record", all((i in listed) for i in row_ids) and
+    check("level_get_pieces lists the row's pieces with their shape and record", all((i in listed) for i in row_ids) and
           all(listed[p["id"]]["shape"] == p["shape"] and listed[p["id"]]["parameters"] == p["parameters"] for p in placed))
     stairs = next(listed[p["id"]] for p in placed if p["shape"] == "basic.stairs")
     block  = next(listed[p["id"]] for p in placed if p["shape"] == "basic.block")
@@ -2184,7 +2201,7 @@ def check_path_layouts(editor, directory, image_path):
         ("level_create_layout", "a curve_id naming a piece", {"items": block, "curve_id": corner["children"][0]["id"], "pattern": {"kind": "path"}}, "no curve node"),
         ("level_create_layout", "a curve_id naming a path layout already", {"items": block, "curve_id": corner["id"], "pattern": {"kind": "path"}}, "already"),
         ("level_create_layout", "a curve_id with a position", {"items": block, "curve_id": plain["id"], "position": [0.0, 0.0, 0.0], "pattern": {"kind": "path"}}, "not both"),
-        ("level_create_layout", "a curve_id with a line kind", {"items": block, "curve_id": plain["id"], "pattern": {"kind": "line"}}, "path layout only"),
+        ("level_create_layout", "a curve_id with a line kind", {"items": block, "curve_id": plain["id"], "pattern": {"kind": "line"}}, "stairs layout only"),
         ("level_create_layout", "an unknown orientation", {"items": block, "pattern": {"kind": "path", "orientation": "sideways"}}, "orientation"),
     ]:
         error = call_error(editor, tool, dict({"scene_name": scene}, **arguments))
@@ -2321,6 +2338,905 @@ def check_path_layouts(editor, directory, image_path):
     editor.call("select_items", {"scene_name": name, "ids": []})
     editor.wait_idle()
     editor.close(name)
+
+
+def segment_ends(child, min_x, max_x):
+    """The world points of a segments piece's scaled x bounds (its parent keeps scale 1)."""
+    scale_x = child["scale"][0]
+    return [[child["position"][i] + q_rotate(child["rotation_xyzw"], [scale_x * x, 0.0, 0.0])[i] for i in range(3)] for x in (min_x, max_x)]
+
+
+def segment_snapshot(layout):
+    """Ids, world transforms and local scales of a layout's children, in order."""
+    return [(c["id"], tuple(round(x, 4) for x in c["position"]), tuple(round(x, 4) for x in c["rotation_xyzw"]),
+             tuple(round(x, 4) for x in c["scale"]), c.get("parameters_text")) for c in layout["children"]]
+
+
+def spans_points(layout, points, min_x, max_x, origin=(0.0, 0.0, 0.0), closed=True, tolerance=TOLERANCE):
+    """Child i is scaled along x alone and its x bounds end on points i and i + 1 (world: origin + point)."""
+    children = layout["children"]
+    count = len(points) if closed else len(points) - 1
+    if len(children) != count:
+        return False
+    for i, child in enumerate(children):
+        start = [origin[k] + points[i][k] for k in range(3)]
+        end = [origin[k] + points[(i + 1) % len(points)][k] for k in range(3)]
+        length = math.dist(start, end)
+        ends = segment_ends(child, min_x, max_x)
+        if not (close(ends[0], start, tolerance) and close(ends[1], end, tolerance)):
+            return False
+        if not (close(child["scale"], [length / (max_x - min_x), 1.0, 1.0], tolerance)):
+            return False
+    return True
+
+
+def check_segment_layouts(editor, directory, image_path):
+    """U37, R5.12.10: a segments layout is a Curve node with one piece per segment between neighbouring points, each scaled along its x
+    axis alone so its item's x bounds span the chord: the room of four corners, the collision shape at the piece's scale, a point edit
+    over MCP changing the two adjacent pieces alone in one undo entry, undo and redo, adding and removing points, path <-> segments,
+    save and reload, a zero-length segment refused, the default curve of a new layout, a viewport drag of a corner through the curve
+    tool with the pieces following live, and a picture of the room."""
+    import curve_verify as cv  # noqa: E402 - the camera, viewport and Move tool helpers of the curve checks
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    wall = [{"shape": "architecture.wall", "parameters": {"length": 4.0}}]
+    min_x, max_x = -2.0, 2.0
+    corners = [[0.0, 0.0, 0.0], [8.0, 0.0, 0.0], [8.0, 0.0, 6.0], [0.0, 0.0, 6.0]]
+
+    def layout_of(layout_id, scene_name=None):
+        return layouts_by_id(editor, scene_name or scene)[layout_id]
+
+    def curve_points(layout_id, scene_name=None):
+        return [p["position"] for p in editor.call("get_curve", {"scene_name": scene_name or scene, "curve_id": layout_id})["points"]]
+
+    room = editor.call("level_create_layout", {"scene_name": scene, "name": "room", "position": [0.0, 0.0, 0.0], "items": wall,
+                                                "pattern": {"kind": "segments"}, "points": [{"position": c} for c in corners], "closed": True})
+    editor.wait_idle()
+    check("a segments layout of a 4 m wall on a closed curve of 4 corners is one Curve node with 4 pieces, one per segment",
+          (room["type"] == "Curve") and (room["child_count"] == 4) and (room["pattern"]["kind"] == "segments") and (room["run"]["count"] == 4) and
+          (abs(room["run"]["space"] - 28.0) < TOLERANCE), f"type {room['type']}, {room['child_count']} pieces, run {room['run']}")
+    check("each piece is scaled (s, 1, 1) with s = chord / 4 m and its scaled x bounds end on the segment's two corners",
+          spans_points(room, corners, min_x, max_x), json.dumps([(c["position"], c["scale"]) for c in room["children"]])[:400])
+
+    # The body's shape takes the piece's scale: a block inside the scaled wall's far end overlaps it, which the unscaled 4 m shape would not reach.
+    probe = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [7.0, 0.0, 0.0], "name": "probe", "parameters": {"width": 0.5, "depth": 0.5, "height": 0.5}}]})["pieces"][0]
+    editor.wait_idle()
+
+    def probe_overlap(scene_name, wall_id, probe_id):
+        report = editor.call("level_get_overlap_report", {"scene_name": scene_name, "node_ids": [wall_id, probe_id]})
+        return report["overlaps"][0] if report["overlap_count"] == 1 else None
+
+    overlap = probe_overlap(scene, room["children"][0]["id"], probe["id"])
+    check("the scaled wall's collision shape spans its 8 m: a probe 1 m from its end overlaps it (exact), 3 m past the unscaled shape's end",
+          (overlap is not None) and (overlap.get("measure") == "exact") and (overlap.get("depth", 0.0) > 0.1), json.dumps(overlap))
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [probe["id"]]})
+    editor.wait_idle()
+
+    # A point edit lays out the two adjacent pieces again; the others are the same nodes.
+    before = segment_snapshot(layout_of(room["id"]))
+    curve_before = editor.call("get_curve", {"scene_name": scene, "curve_id": room["id"]})["points"]
+    moved = json.loads(json.dumps(corners))
+    moved[1] = [10.0, 0.0, -1.0]
+    depth = undo_depth(editor)
+    editor.call("set_curve", {"scene_name": scene, "curve_id": room["id"], "points": [{"position": c} for c in moved]})
+    editor.wait_idle()
+    after_move = layout_of(room["id"])
+    after = segment_snapshot(after_move)
+    check("set_curve moving corner 1 lays out pieces 0 and 1 on the new chords, pieces 2 and 3 are the same nodes, one undo entry",
+          (undo_depth(editor) == depth + 1) and spans_points(after_move, moved, min_x, max_x) and (after[2] == before[2]) and (after[3] == before[3]) and
+          (after[0][0] != before[0][0]) and (after[1][0] != before[1][0]), f"depth {undo_depth(editor)} vs {depth + 1}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("one undo restores the corner and the four pieces exactly",
+          (editor.call("get_curve", {"scene_name": scene, "curve_id": room["id"]})["points"] == curve_before) and (segment_snapshot(layout_of(room["id"])) == before), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo moves the corner and gives the same pieces as the edit", segment_snapshot(layout_of(room["id"])) == after, "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Adding and removing points changes the count.
+    depth = undo_depth(editor)
+    editor.call("curve_add_point", {"scene_name": scene, "curve_id": room["id"], "at": "curve", "distance": 4.0})
+    editor.wait_idle()
+    added = layout_of(room["id"])
+    check("curve_add_point in the middle of segment 0 makes 5 segments and 5 pieces, each spanning its chord, one undo entry",
+          (undo_depth(editor) == depth + 1) and spans_points(added, curve_points(room["id"]), min_x, max_x) and (added["child_count"] == 5),
+          f"{added['child_count']} pieces")
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("curve_remove_points", {"scene_name": scene, "curve_id": room["id"], "indices": [3]})
+    editor.wait_idle()
+    removed = layout_of(room["id"])
+    check("curve_remove_points of corner 3 leaves a triangle of 3 pieces, each spanning its chord",
+          spans_points(removed, curve_points(room["id"]), min_x, max_x) and (removed["child_count"] == 3), f"{removed['child_count']} pieces")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the add and the remove gives the four pieces back exactly", segment_snapshot(layout_of(room["id"])) == before, "")
+
+    # Path <-> segments on the same Curve node.
+    as_path = editor.call("level_set_layout", {"scene_name": scene, "layout_id": room["id"], "pattern": {"kind": "path", "count": 6}})
+    editor.wait_idle()
+    check("level_set_layout kind path on the segments layout: the same Curve node, 6 pieces along the curve at scale 1",
+          (as_path["id"] == room["id"]) and (as_path["type"] == "Curve") and (as_path["child_count"] == 6) and
+          all(close(c["scale"], [1.0, 1.0, 1.0]) for c in as_path["children"]) and on_curve(editor, scene, as_path, room["id"]), f"{as_path['child_count']} pieces")
+    back = editor.call("level_set_layout", {"scene_name": scene, "layout_id": room["id"], "pattern": {"kind": "segments"}})
+    editor.wait_idle()
+    check("kind segments again gives 4 scaled pieces spanning the corners (count is not used by segments)",
+          spans_points(back, corners, min_x, max_x) and (back["pattern"]["count"] == 6), f"{back['child_count']} pieces")
+    error = call_error(editor, "level_set_layout", {"scene_name": scene, "layout_id": room["id"], "pattern": {"kind": "line"}})
+    check("a line kind on the segments layout's Curve node is refused naming the node type", (error is not None) and ("is a curve node" in error), str(error))
+    editor.call("undo")
+    editor.call("undo")
+    editor.wait_idle()
+    check("two undos give the segments layout's pieces back exactly", segment_snapshot(layout_of(room["id"])) == before, "")
+
+    # A zero-length segment: an edit of the curve leaves the pieces; a new layout with one is refused naming the segment.
+    zero = json.loads(json.dumps(corners))
+    zero[2] = list(zero[1])
+    editor.call("set_curve", {"scene_name": scene, "curve_id": room["id"], "points": [{"position": c} for c in zero]})
+    editor.wait_idle()
+    stuck = layout_of(room["id"])
+    check("a curve edit that makes a zero-length segment leaves the pieces as they were (the layout refuses it, naming segment 1)",
+          (segment_snapshot(stuck) == before) and ("segment 1" in stuck["run"].get("problem", "")), json.dumps(stuck["run"]))
+    editor.call("undo")
+    editor.wait_idle()
+    count = len(pieces(editor, scene))
+    depth = undo_depth(editor)
+    for label, arguments, needle in [
+        ("a zero-length segment", {"items": wall, "pattern": {"kind": "segments"}, "points": [{"position": c} for c in zero], "closed": True}, "segment 1"),
+        ("a vertical segment under upright", {"items": wall, "pattern": {"kind": "segments"}, "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [0.0, 3.0, 0.0]}]}, "vertical"),
+        ("a curve_id with a line kind", {"items": wall, "curve_id": create_curve(editor, scene, "plain", [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], position=[0.0, 0.0, 40.0])["id"], "pattern": {"kind": "line"}}, "stairs layout only"),
+    ]:
+        placed = {} if "curve_id" in arguments else {"position": [0.0, 0.0, 30.0]}
+        error = call_error(editor, "level_create_layout", dict({"scene_name": scene}, **placed, **arguments))
+        check(f"level_create_layout refuses {label}", (error is not None) and (needle in error), str(error))
+    check("the refused calls placed nothing", len(pieces(editor, scene)) == count, f"{len(pieces(editor, scene))} vs {count}")
+
+    # A new segments layout without points: two corners at the first item's x bounds, so element 0 stands at the node's origin at scale 1.
+    single = editor.call("level_create_layout", {"scene_name": scene, "name": "single wall", "position": [0.0, 0.0, 20.0], "items": wall, "pattern": {"kind": "segments"}})
+    editor.wait_idle()
+    check("a new segments layout without points is a curve of two corners at x -2 and 2 holding one wall at the node's origin at scale 1",
+          (single["child_count"] == 1) and close(single["children"][0]["position"], [0.0, 0.0, 20.0]) and close(single["children"][0]["scale"], [1.0, 1.0, 1.0]) and
+          positions_match(curve_points(single["id"]), [[-2.0, 0.0, 0.0], [2.0, 0.0, 0.0]]), json.dumps(single["children"])[:300])
+
+    # Save and reload: the scaled children, their collision shapes and the layout's response to a curve edit.
+    path = os.path.join(directory, "segment_layouts.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    name = editor.load(path)
+    reloaded = {l["name"]: l for l in editor.call("level_get_layouts", {"scene_name": name})["layouts"]}
+    room_again = reloaded.get("room")
+    check("save and reload: the segments layout is one Curve node with its 4 scaled pieces still spanning the corners",
+          (room_again is not None) and (room_again["type"] == "Curve") and (room_again["pattern"]["kind"] == "segments") and spans_points(room_again, corners, min_x, max_x),
+          f"{room_again and room_again['child_count']}")
+    if room_again is not None:
+        probe = editor.call("level_place_pieces", {"scene_name": name, "pieces": [
+            {"shape": "basic.block", "position": [7.0, 0.0, 0.0], "name": "probe", "parameters": {"width": 0.5, "depth": 0.5, "height": 0.5}}]})["pieces"][0]
+        editor.wait_idle()
+        overlap = probe_overlap(name, room_again["children"][0]["id"], probe["id"])
+        check("after reload the scaled wall's collision shape spans its 8 m again (the probe overlaps it, exact)",
+              (overlap is not None) and (overlap.get("measure") == "exact"), json.dumps(overlap))
+        editor.call("delete_nodes", {"scene_name": name, "ids": [probe["id"]]})
+        editor.wait_idle()
+        depth = undo_depth(editor)
+        editor.call("set_curve", {"scene_name": name, "curve_id": room_again["id"], "points": [{"position": c} for c in moved]})
+        editor.wait_idle()
+        check("after reload a corner edit lays out the reloaded layout in one undo entry",
+              (undo_depth(editor) == depth + 1) and spans_points(layout_of(room_again["id"], name), moved, min_x, max_x), "")
+        editor.call("undo")
+        editor.wait_idle()
+
+    # A viewport drag of corner 1 through the curve tool: the two adjacent pieces follow live; the release is one undo entry.
+    if room_again is not None:
+        layout_id = room_again["id"]
+        before = segment_snapshot(layout_of(layout_id, name))
+        curve_before = editor.call("get_curve", {"scene_name": name, "curve_id": layout_id})["points"]
+        editor.call("set_active_scene", {"scene_name": name})
+        viewport = cv.frame_camera(editor, name, [4.0, 14.0, 16.0], [4.0, 0.0, 3.0], corners + [[9.5, 0.0, 0.0]])
+        cv.choose_move_tool(editor, viewport)
+        editor.call("select_items", {"scene_name": name, "ids": [room_again["children"][2]["id"]]})
+        editor.wait_idle()
+        selection = [i["id"] for i in editor.call("get_selection")["items"]]
+        target = editor.call("get_curve_point_selection").get("curve")
+        check("selecting a wall of the locked segments layout selects the layout node, the curve tool's target",
+              (selection == [layout_id]) and (target is not None) and (target["id"] == layout_id), f"{selection}, target {target}")
+        editor.call("select_curve_points", {"scene_name": name, "curve_id": layout_id, "points": [{"index": 1}]})
+        editor.wait_idle()
+        cv.settle(editor)
+        depth = undo_depth(editor)
+        px_per_metre = cv.gizmo_drag(editor, viewport, TRANSLATE_X, [1.0, 0.0, 0.0], hold=True)
+        cv.settle(editor)
+        held = curve_points(layout_id, name)
+        held_layout = layout_of(layout_id, name)
+        held_snapshot = segment_snapshot(held_layout)
+        check("mid-drag (button held) of corner 1 along x: pieces 0 and 1 already span the moved corner, pieces 2 and 3 are the same nodes, no undo entry",
+              (held[1][0] > 8.5) and spans_points(held_layout, held, min_x, max_x) and (held_snapshot[2] == before[2]) and (held_snapshot[3] == before[3]) and
+              (undo_depth(editor) == depth), f"corner {fmt3(held[1])}, depth {undo_depth(editor)} vs {depth}")
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        cv.settle(editor)
+        dragged = curve_points(layout_id, name)
+        cv.report_shortfall("segments corner gizmo X drag", dragged[1][0] - 8.0, 1.0, px_per_metre)
+        check(f"the release of the corner drag (1 m along x, within {cv.GIZMO_SHORTFALL_PX} px) is one undo entry with the pieces spanning the final corner",
+              (abs(dragged[1][0] - 9.0) <= cv.drag_tolerance(px_per_metre)) and (undo_depth(editor) == depth + 1) and spans_points(layout_of(layout_id, name), dragged, min_x, max_x),
+              f"corner {fmt3(dragged[1])}, depth {undo_depth(editor)} vs {depth + 1}")
+        editor.call("undo")
+        editor.wait_idle()
+        check("one undo of the drag restores the corner and the four pieces",
+              (editor.call("get_curve", {"scene_name": name, "curve_id": layout_id})["points"] == curve_before) and (segment_snapshot(layout_of(layout_id, name)) == before), "")
+        editor.call("select_items", {"scene_name": name, "ids": []})
+        editor.wait_idle()
+
+        # The picture: the room of four walls from above a corner.
+        camera = {"eye": [-6.0, 9.0, 16.0], "target": [4.0, 0.5, 3.0], "fov_y_degrees": 45.0, "near": 0.1, "far": 200.0}
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        reply = editor.call("render_scene_image", {"scene": name, "camera": camera, "width": IMAGE_WIDTH, "height": IMAGE_HEIGHT, "output": "png", "path": image_path})
+        check("render_scene_image of the segments room is written", os.path.isfile(image_path) and (reply.get("width") == IMAGE_WIDTH), image_path)
+        print(f"segments layout image: {image_path}", flush=True)
+    editor.close(name)
+
+
+def check_stairs_layouts(editor, directory, image_prefix):
+    """U42, R5.12.13: a stairs layout is a Curve node with one generated staircase as its child: the fit readback (flights, landings,
+    total rise, the deviation bound), the mesh report and the body on a straight slope, a smooth S-curve, a quarter turn of corner
+    points and an up-and-down curve; the navigation mesh joining the S-curve stair's start and end; a curve edit over MCP changing
+    the step count in one undo entry with exact undo and redo; a viewport drag of a control point with the staircase following
+    live; curves too steep, too tight or cornered without room refused naming the place and leaving the previous staircase; the
+    values; kind switches among path, segments and stairs; save and load; and pictures."""
+    import curve_verify as cv  # noqa: E402 - the camera, viewport and Move tool helpers of the curve checks
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    rise_limit = 0.2
+    tread = 0.3
+
+    def layout_of(layout_id, scene_name=None):
+        return layouts_by_id(editor, scene_name or scene)[layout_id]
+
+    def smooth(position, out):
+        return {"position": position, "in": [-out[0], -out[1], -out[2]], "out": out, "kind": "smooth"}
+
+    def create(name, points, position, stairs=None, scene_name=None):
+        pattern = {"kind": "stairs"}
+        if stairs is not None:
+            pattern["stairs"] = stairs
+        made = editor.call("level_create_layout", {"scene_name": scene_name or scene, "name": name, "position": position, "pattern": pattern,
+                                                   "points": [p if isinstance(p, dict) else {"position": p} for p in points]})
+        editor.wait_idle()
+        return made
+
+    def fit_holds(layout, steps=None, limit=rise_limit, depth=tread):
+        """The rules every fit keeps: steps within the rise limit, risers a tread apart, the surface within one rise, a valid solid."""
+        stairs = layout.get("stairs", {})
+        if "problem" in stairs:
+            return False, stairs["problem"]
+        risers = stairs["risers"]
+        ok = (
+            (layout["type"] == "Curve") and (layout["child_count"] == 1) and layout["children"][0].get("generated") and
+            ("shape" not in layout["children"][0]) and
+            (stairs["step_count"] == len(risers)) and ((steps is None) or (stairs["step_count"] == steps)) and
+            (sum(f["step_count"] for f in stairs["flights"]) == stairs["step_count"]) and
+            (stairs["flight_count"] == len(stairs["flights"])) and (stairs["landing_count"] == len(stairs["landings"])) and
+            all(abs(r["level_after"] - r["level_before"]) <= limit + 1.0e-4 for r in risers) and
+            all(risers[i + 1]["distance"] - risers[i]["distance"] >= depth - 1.0e-3 for i in range(len(risers) - 1)) and
+            (stairs["max_deviation"] <= limit + 1.0e-3) and
+            (abs(stairs["total_rise"] - (stairs["end_level"] - stairs["start_level"])) < 1.0e-5) and
+            stairs["mesh"]["valid"] and (stairs["mesh"]["components"] == 1) and (stairs["mesh"]["triangle_count"] > 0) and
+            (stairs["summary"] == f"{stairs['step_count']} steps in {stairs['flight_count']} flights, {stairs['landing_count']} landings")
+        )
+        return ok, (f"{stairs['summary']}, rise {stairs['total_rise']:.3f}, deviation {stairs['max_deviation']:.4f}, "
+                    f"mesh {stairs['mesh']['triangle_count']} triangles valid {stairs['mesh']['valid']} {stairs['mesh']['problems'][:1]}")
+
+    def details(node_id, scene_name=None):
+        return editor.call("get_node_details", {"scene_name": scene_name or scene, "node_id": node_id})
+
+    def body_of(layout, scene_name=None):
+        return details(layout["children"][0]["id"], scene_name).get("physics") or {}
+
+    # (a) A straight slope at half the flight slope: 10 steps, flights of three alternating with landings.
+    straight = create("straight", [[0.0, 0.0, 0.0], [6.0, 2.0, 0.0]], [0.0, 0.0, 0.0])
+    ok, detail = fit_holds(straight, 10)
+    stairs = straight["stairs"]
+    check("a stairs layout on a straight curve climbing 2 m over 6 m is one Curve node with one generated child: 10 steps in 4 flights (3, 3, 3, 1) and 4 landings",
+          ok and ([f["step_count"] for f in stairs["flights"]] == [3, 3, 3, 1]) and (stairs["landing_count"] == 4) and
+          (abs(stairs["total_rise"] - 2.0) < 1.0e-5) and (abs(stairs["plan_length"] - 6.0) < 1.0e-4), detail)
+    check("its first tread is a landing at the curve's start height and its last tread ends at the curve's end height",
+          (abs(stairs["start_level"]) < 1.0e-6) and (abs(stairs["end_level"] - 2.0) < 1.0e-6) and (abs(stairs["landings"][0]["begin"]) < 1.0e-4) and
+          (abs(stairs["landings"][0]["level"]) < 1.0e-6) and (abs(stairs["risers"][-1]["level_after"] - 2.0) < 1.0e-6), json.dumps(stairs["landings"])[:300])
+    bounds = stairs["mesh"]
+    check("the straight staircase's mesh spans the curve at the width (1 m) and reaches the thickness (0.2 m) below the start",
+          close(bounds["bounds_min"], [0.0, -0.2, -0.5]) and close(bounds["bounds_max"], [6.0, 2.0, 0.5]), f"{fmt3(bounds['bounds_min'])} .. {fmt3(bounds['bounds_max'])}")
+    body = body_of(straight)
+    check("the generated child has a static triangle mesh body", bool(body) and ("static" in json.dumps(body).lower()), json.dumps(body)[:400])
+    probe = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [5.85, 1.9, 0.0], "name": "probe", "parameters": {"width": 0.3, "depth": 0.3, "height": 0.3}}]})["pieces"][0]
+    editor.wait_idle()
+    report = editor.call("level_get_overlap_report", {"scene_name": scene, "node_ids": [straight["children"][0]["id"], probe["id"]]})
+    check("a block standing 0.1 m into the top tread overlaps the staircase's body", report["overlap_count"] == 1, json.dumps(report)[:300])
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [probe["id"]]})
+    editor.wait_idle()
+
+    # A flight at exactly the flight slope is one flight without a landing; a level curve one landing.
+    flight = create("flight", [[0.0, 0.0, 0.0], [3.0, 2.0, 0.0]], [0.0, 0.0, 4.0])
+    ok, detail = fit_holds(flight, 10)
+    check("a curve at the flight slope (0.2 m per 0.3 m) is one flight of 10 steps and no landing; the first riser stands at the curve's start",
+          ok and (flight["stairs"]["flight_count"] == 1) and (flight["stairs"]["landing_count"] == 0) and (abs(flight["stairs"]["risers"][0]["distance"]) < 1.0e-4), detail)
+    level = create("level", [[0.0, 1.0, 0.0], [4.0, 1.0, 0.0]], [0.0, 0.0, 6.0])
+    ok, detail = fit_holds(level, 0)
+    check("a level curve is one landing: a walkway", ok and (level["stairs"]["flight_count"] == 0) and (level["stairs"]["landing_count"] == 1), detail)
+    default = editor.call("level_create_layout", {"scene_name": scene, "name": "default", "position": [0.0, 0.0, 8.0], "pattern": {"kind": "stairs"}})
+    editor.wait_idle()
+    ok, detail = fit_holds(default, 10)
+    check("a stairs layout without points gets a curve of a ten-step flight along +x", ok and (default["stairs"]["flight_count"] == 1) and
+          positions_match([p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": default["id"]})["points"]], [[0.0, 0.0, 0.0], [3.0, 2.0, 0.0]]), detail)
+
+    # (b) A smooth S-curve in plan that climbs, levels off and climbs again.
+    s_points = [smooth([0.0, 0.0, 0.0], [2.0, 0.5, 0.0]), smooth([5.0, 1.2, -3.0], [2.0, 0.0, -1.0]),
+                smooth([10.0, 1.2, -5.0], [2.0, 0.0, 1.0]), smooth([15.0, 2.4, -3.0], [2.0, 0.5, 0.0])]
+    s_origin = [0.0, 0.0, -10.0]
+    s_curve = create("s curve", s_points, s_origin, {"width": 1.2})
+    ok, detail = fit_holds(s_curve, 12)
+    s_stairs = s_curve["stairs"]
+    check("a stairs layout on a smooth S-curve that climbs 1.2 m, levels off and climbs 1.2 m again: 12 steps in several flights with landings, total rise 2.4 m",
+          ok and (s_stairs["flight_count"] >= 2) and (s_stairs["landing_count"] >= 2) and (abs(s_stairs["total_rise"] - 2.4) < 1.0e-5) and
+          any(l["length"] > 3.0 and abs(l["level"] - 1.2) < 1.0e-4 for l in s_stairs["landings"]), detail)
+    check("its curved side edges are subdivided: more cross-sections than the ends and the risers, and the mesh stays within 5000 triangles",
+          (s_stairs["section_count"] > s_stairs["step_count"] + 10) and (s_stairs["mesh"]["triangle_count"] < 5000),
+          f"{s_stairs['section_count']} cross-sections, {s_stairs['mesh']['triangle_count']} triangles")
+    coarse = editor.call("level_set_layout", {"scene_name": scene, "layout_id": s_curve["id"], "pattern": {"stairs": {"edge_tolerance": 0.2}}})
+    editor.wait_idle()
+    check("a coarser edge tolerance (0.2 m) takes fewer cross-sections; one undo entry regenerates the staircase",
+          coarse["changed"] and (coarse["stairs"]["section_count"] < s_stairs["section_count"]) and (coarse["added_count"] == 1) and (coarse["removed_count"] == 1),
+          f"{coarse['stairs']['section_count']} vs {s_stairs['section_count']}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # (c) A quarter turn at a corner point: a mitred landing, no riser in it.
+    corner_points = [[0.0, 0.0, 0.0], [4.0, 0.8, 0.0], [4.0, 1.6, -4.0]]
+    corner = create("corner", corner_points, [20.0, 0.0, 0.0], {"width": 1.2})
+    ok, detail = fit_holds(corner, 8)
+    reach = 0.6 + 0.02
+    check("a quarter turn at a corner point gets a level mitred landing: no riser within half the width (and 2 cm) of the corner along the plan",
+          ok and all(abs(r["distance"] - 4.0) >= reach - 1.0e-4 for r in corner["stairs"]["risers"]) and
+          close(corner["stairs"]["mesh"]["bounds_max"], [4.6, 1.6, 0.6]) and close(corner["stairs"]["mesh"]["bounds_min"][:1], [0.0]),
+          detail + f", risers {[round(r['distance'], 3) for r in corner['stairs']['risers']]}, max {fmt3(corner['stairs']['mesh']['bounds_max'])}")
+
+    # (d) Up then down.
+    hump = create("hump", [[0.0, 0.0, 0.0], [4.0, 1.0, 0.0], [8.0, 0.0, 0.0]], [20.0, 0.0, 6.0])
+    ok, detail = fit_holds(hump, 10)
+    rises = [f["rise"] for f in hump["stairs"]["flights"]]
+    check("a curve that goes up 1 m and down again: flights going up, then flights going down, total rise 0",
+          ok and (abs(hump["stairs"]["total_rise"]) < 1.0e-5) and any(r > 0.0 for r in rises) and any(r < 0.0 for r in rises) and
+          (rises == sorted(rises, key=lambda r: r < 0.0)) and (abs(max(r["level_after"] for r in hump["stairs"]["risers"]) - 1.0) < 1.0e-5), detail + f", flight rises {rises}")
+
+    # Refusals at creation name the place and make nothing.
+    count_before = len(layouts_by_id(editor, scene))
+    for label, arguments, expected in (
+        ("a curve steeper than a flight", {"points": [{"position": [0.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 0.0]}, {"position": [5.0, 3.0, 0.0]}]}, ("too steep", "nearest control point")),
+        ("a vertical curve", {"points": [{"position": [0.0, 0.0, 0.0]}, {"position": [2.0, 0.0, 0.0]}, {"position": [2.0, 1.0, 0.0]}]}, ("vertical", "control point")),
+        ("a turn tighter than the width allows", {"points": [smooth([0.0, 0.0, 0.0], [0.276, 0.0, 0.0]), smooth([0.5, 0.0, -0.5], [0.0, 0.0, -0.276])]}, ("too tightly", "control point")),
+        ("a corner without room for its landing", {"points": [{"position": [0.0, 0.0, 0.0]}, {"position": [3.0, 0.0, 0.0]}, {"position": [3.0, 0.0, -0.2]}]}, ("corner at control point 1",)),
+        ("a curve too short for its steps (1.9 m over 2.9 m, gentler than a flight)", {"points": [{"position": [0.0, 0.0, 0.0]}, {"position": [2.9, 1.9, 0.0]}]},
+         ("too short", "needs 10 steps with treads of at least 0.300 m, 3.000 m of plan", "has 2.900 m", "nearest control point")),
+        ("a tilted node", {"rotation_xyzw": [0.0871557, 0.0, 0.0, 0.9961947]}, ("tilted", "upright")),
+        ("a closed curve", {"points": [{"position": [0.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 4.0]}], "closed": True}, ("open curve",)),
+        ("a width out of range", {"pattern": {"kind": "stairs", "stairs": {"width": 0.0}}}, ("width",)),
+        ("an unknown material", {"pattern": {"kind": "stairs", "stairs": {"material": "No Such Material"}}}, ("No Such Material",)),
+        ("an unknown stairs key", {"pattern": {"kind": "stairs", "stairs": {"depth": 1.0}}}, ("depth",)),
+    ):
+        call = {"scene_name": scene, "name": "refused", "position": [40.0, 0.0, 0.0], "pattern": {"kind": "stairs"}}
+        call.update(arguments)
+        error = call_error(editor, "level_create_layout", call)
+        check(f"level_create_layout refuses {label}, naming it", (error is not None) and all(text in error for text in expected) and ("nothing was placed" in error), str(error)[:300])
+    check("the refused creations made no node", len(layouts_by_id(editor, scene)) == count_before, "")
+
+    # A curve edit over MCP: the end point 1 m higher takes 15 steps; one undo entry, exact undo and redo.
+    before = layout_of(straight["id"])
+    curve_before = editor.call("get_curve", {"scene_name": scene, "curve_id": straight["id"]})["points"]
+    depth = undo_depth(editor)
+    editor.call("set_curve", {"scene_name": scene, "curve_id": straight["id"], "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [6.0, 3.0, 0.0]}]})
+    editor.wait_idle()
+    raised = layout_of(straight["id"])
+    ok, detail = fit_holds(raised, 15)
+    check("set_curve raising the end point by 1 m regenerates the staircase with 15 steps in ONE undo entry (a new child node)",
+          ok and (undo_depth(editor) == depth + 1) and (raised["children"][0]["id"] != before["children"][0]["id"]) and (abs(raised["stairs"]["total_rise"] - 3.0) < 1.0e-5), detail)
+    editor.call("undo")
+    editor.wait_idle()
+    undone = layout_of(straight["id"])
+    check("one undo restores the curve and the same staircase node with its 10 steps",
+          (editor.call("get_curve", {"scene_name": scene, "curve_id": straight["id"]})["points"] == curve_before) and
+          (child_snapshot(undone) == child_snapshot(before)) and (undone["stairs"] == before["stairs"]), f"{undone['stairs'].get('summary')}")
+    editor.call("redo")
+    editor.wait_idle()
+    redone = layout_of(straight["id"])
+    check("redo makes the 15 steps again with the same node as the edit made",
+          (child_snapshot(redone) == child_snapshot(raised)) and (redone["stairs"] == raised["stairs"]), f"{redone['stairs'].get('summary')}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # A curve edit the stairs cannot follow leaves the previous staircase; the readback names the place.
+    for label, points, expected in (
+        ("too steep", [{"position": [0.0, 0.0, 0.0]}, {"position": [4.0, 0.0, 0.0]}, {"position": [5.0, 3.0, 0.0]}], ("too steep", "nearest control point")),
+        ("too tight", [smooth([0.0, 0.0, 0.0], [0.276, 0.0, 0.0]), smooth([0.5, 0.0, -0.5], [0.0, 0.0, -0.276])], ("too tightly", "nearest control point")),
+    ):
+        depth = undo_depth(editor)
+        editor.call("set_curve", {"scene_name": scene, "curve_id": straight["id"], "points": points})
+        editor.wait_idle()
+        refused = layout_of(straight["id"])
+        problem = refused["stairs"].get("problem", "")
+        check(f"a curve edit to a {label} curve is one undo entry that leaves the previous staircase node; the readback's problem names the place",
+              (undo_depth(editor) == depth + 1) and (child_snapshot(refused) == child_snapshot(before)) and all(text in problem for text in expected), problem[:300])
+        editor.call("undo")
+        editor.wait_idle()
+    with open(os.path.join(pav.REPO_ROOT, "logs", "log.txt"), "r", errors="replace") as f:
+        log_text = f.read()
+    check("each refused curve edit logs a warning that the layout keeps its children",
+          log_text.count("Kit layout 'straight' keeps its children after the curve edit") >= 2, "")
+
+    # The values: one undo entry each, a refused value changes nothing.
+    depth = undo_depth(editor)
+    wide = editor.call("level_set_layout", {"scene_name": scene, "layout_id": straight["id"],
+                                             "pattern": {"stairs": {"width": 2.0, "step_rise": 0.25, "tread_depth": 0.4, "thickness": 0.3, "material": "Kit Wood"}}})
+    editor.wait_idle()
+    wide_mesh = wide["stairs"]["mesh"]
+    wide_values = wide["pattern"]["stairs"]
+    ok, detail = fit_holds(wide, 8, 0.25, 0.4)
+    check("level_set_layout with width 2, step rise 0.25, tread depth 0.4, thickness 0.3 and the Kit Wood material regenerates the staircase in ONE undo entry",
+          ok and wide["changed"] and (undo_depth(editor) == depth + 1) and close(wide_mesh["bounds_min"], [0.0, -0.3, -1.0]) and
+          close(wide_mesh["bounds_max"], [6.0, 2.0, 1.0]) and (wide["children"][0]["materials"] == ["Kit Wood"]) and
+          close([wide_values["width"], wide_values["step_rise"], wide_values["tread_depth"], wide_values["thickness"], wide_values["edge_tolerance"]], [2.0, 0.25, 0.4, 0.3, 0.01], 1.0e-6) and
+          (wide_values["material"] == "Kit Wood"),
+          f"{detail}, {fmt3(wide_mesh['bounds_min'])} .. {fmt3(wide_mesh['bounds_max'])}, {wide['children'][0].get('materials')}, {wide_values}")
+    same = editor.call("level_set_layout", {"scene_name": scene, "layout_id": straight["id"], "pattern": {"stairs": {"width": 2.0}}})
+    check("level_set_layout with the values the node has records nothing and keeps the staircase node",
+          (not same["changed"]) and (undo_depth(editor) == depth + 1) and (same["kept_count"] == 1) and (same["children"][0]["id"] == wide["children"][0]["id"]), "")
+    refresh = editor.call("level_refresh_layout", {"scene_name": scene, "layout_id": straight["id"]})
+    check("level_refresh_layout of an unchanged stairs layout keeps the staircase and records nothing",
+          (not refresh["changed"]) and (refresh["kept_count"] == 1) and (undo_depth(editor) == depth + 1), "")
+    error = call_error(editor, "level_set_layout", {"scene_name": scene, "layout_id": straight["id"], "pattern": {"stairs": {"tread_depth": 4.0}}})
+    check("level_set_layout refuses a tread depth the curve is too short for, naming the place, and changes nothing",
+          (error is not None) and ("too short" in error) and ("nothing was changed" in error) and (undo_depth(editor) == depth + 1) and
+          (child_snapshot(layout_of(straight["id"])) == child_snapshot(wide)), str(error)[:300])
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the value edit restores the 1 m wide staircase node", child_snapshot(layout_of(straight["id"])) == child_snapshot(before), "")
+
+    # A child of the locked layout selects the layout node; unlocked, a curve edit leaves the staircase.
+    editor.call("select_items", {"scene_name": scene, "ids": [before["children"][0]["id"]]})
+    editor.wait_idle()
+    selection = [i["id"] for i in editor.call("get_selection")["items"]]
+    check("selecting the staircase of the locked stairs layout selects the layout node", selection == [straight["id"]], f"{selection}")
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    unlocked = editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": straight["id"], "locked": False})
+    editor.wait_idle()
+    editor.call("set_curve", {"scene_name": scene, "curve_id": straight["id"], "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [6.0, 3.0, 0.0]}]})
+    editor.wait_idle()
+    check("unlocked, a curve edit leaves the staircase node as it is",
+          (not unlocked["locked"]) and (child_snapshot(layout_of(straight["id"])) == child_snapshot(before)), "")
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Kind switches in place among stairs, path and segments.
+    block = [{"shape": "basic.block"}]
+    error = call_error(editor, "level_set_layout", {"scene_name": scene, "layout_id": flight["id"], "pattern": {"kind": "path", "count": 4}})
+    check("a stairs layout without items does not become a path layout: refused naming the items", (error is not None) and ("item" in error), str(error)[:200])
+    depth = undo_depth(editor)
+    as_path = editor.call("level_set_layout", {"scene_name": scene, "layout_id": flight["id"], "items": block, "pattern": {"kind": "path", "count": 4}})
+    editor.wait_idle()
+    check("stairs -> path in place with an item: the staircase goes, 4 blocks stand along the curve, one undo entry",
+          (as_path["pattern"]["kind"] == "path") and (as_path["child_count"] == 4) and all(c.get("shape") == "basic.block" for c in as_path["children"]) and
+          ("stairs" not in as_path) and (undo_depth(editor) == depth + 1), f"{as_path['child_count']} children")
+    as_segments = editor.call("level_set_layout", {"scene_name": scene, "layout_id": flight["id"], "pattern": {"kind": "segments", "orientation": "tangent"}})
+    editor.wait_idle()
+    check("path -> segments in place: one scaled block on the one segment", (as_segments["pattern"]["kind"] == "segments") and (as_segments["child_count"] == 1) and
+          (as_segments["children"][0].get("shape") == "basic.block"), f"{as_segments['child_count']} children")
+    as_stairs = editor.call("level_set_layout", {"scene_name": scene, "layout_id": flight["id"], "pattern": {"kind": "stairs"}})
+    editor.wait_idle()
+    ok, detail = fit_holds(as_stairs, 10)
+    check("segments -> stairs in place: one generated staircase again, the item kept in the values and not placed",
+          ok and (as_stairs["stairs"] == flight["stairs"]) and (len(as_stairs["items"]) == 1), detail)
+    for _ in range(3):
+        editor.call("undo")
+        editor.wait_idle()
+    check("three undos give the first staircase node back", child_snapshot(layout_of(flight["id"])) == child_snapshot(flight), "")
+    error = call_error(editor, "level_set_layout", {"scene_name": scene, "layout_id": flight["id"], "items": block, "pattern": {"kind": "line"}})
+    check("a stairs layout does not become a line layout: refused naming the node type", (error is not None) and ("curve node" in error), str(error)[:200])
+    line = editor.call("level_create_layout", {"scene_name": scene, "name": "line", "position": [40.0, 0.0, 0.0], "items": block, "pattern": {"kind": "line", "count": 2}})
+    editor.wait_idle()
+    error = call_error(editor, "level_set_layout", {"scene_name": scene, "layout_id": line["id"], "pattern": {"kind": "stairs"}})
+    check("a line layout (an Xform) does not become a stairs layout", (error is not None) and ("not a curve node" in error), str(error)[:200])
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [line["id"]]})
+    editor.wait_idle()
+    plain = create_curve(editor, scene, "plain", [[0.0, 0.0, 0.0], [3.0, 1.0, 0.0]], position=(40.0, 0.0, 4.0))
+    plain_id = plain.get("id", plain.get("node_id"))
+    on_plain = editor.call("level_create_layout", {"scene_name": scene, "curve_id": plain_id, "pattern": {"kind": "stairs"}})
+    editor.wait_idle()
+    ok, detail = fit_holds(on_plain, 5)
+    check("level_create_layout with curve_id makes a plain curve node a stairs layout in place", ok and (on_plain["id"] == plain_id), detail)
+
+    # The navigation mesh joins the S-curve stair's start and end.
+    start_point = [s_origin[0] + 0.3, s_origin[1] + 0.05, s_origin[2]]
+    end_point = [s_origin[0] + 14.8, s_origin[1] + 2.4, s_origin[2] - 3.0]
+    node = editor.call("create_node", {"scene_name": scene, "name": "seed", "position": start_point})
+    editor.wait_idle()
+    editor.call("navigation_set_seed", {"scene_name": scene, "node_id": node.get("node_id", node.get("id"))})
+    editor.set_export_settings(scene, {})
+    editor.wait_idle()
+    job = build_navigation(editor, scene)
+    status = editor.call("get_navigation_status", {"scene_name": scene})
+    layout_count = len(layouts_by_id(editor, scene))
+    check("the navigation mesh builds with every staircase as input", (job.get("state") == "done") and (status.get("input_mesh_count") == layout_count),
+          f"{job.get('state')} {job.get('error', '')} meshes {status.get('input_mesh_count')} of {layout_count} layouts")
+    path = editor.call("navigation_find_path", {"scene_name": scene, "start": start_point, "end": end_point})
+    climb = [c[1] for c in path.get("corners", [])]
+    check("a path from the S-curve stair's first tread to its last exists: the walking surface is walkable from start to end",
+          path.get("found") and path.get("complete") and climb and (max(climb) > s_origin[1] + 2.4 - 0.3) and (path["length"] >= 15.0),
+          f"found {path.get('found')}, complete {path.get('complete')}, length {path.get('length')}, {len(climb)} corners, reason {path.get('reason')}")
+    hump_origin = [20.0, 0.0, 6.0]
+    over = editor.call("navigation_find_point", {"scene_name": scene, "position": [hump_origin[0] + 4.0, 1.0, hump_origin[2]]})
+    check("the top of the up-and-down staircase is walkable area", over.get("found") and (abs(over["point"][1] - 1.0) < 0.3), json.dumps(over)[:200])
+
+    # Level Check (R2.10): a staircase within the agent has no finding; a step rise above the agent's climb is reported on its node.
+    def stairs_findings():
+        result = editor.call("level_check", {"scene_name": scene})
+        return [f for f in result["findings"] if f["kind"] in ("unwalkable_parameters", "unreadable_piece")], result
+    findings, result = stairs_findings()
+    check("level_check reports no walkability finding for the staircases at the default step rules (agent climb 0.4 m, slope 45 degrees)",
+          (findings == []) and (abs(result["agent"]["max_climb"] - 0.4) < 1.0e-6), json.dumps(findings)[:300])
+    high = editor.call("level_set_layout", {"scene_name": scene, "layout_id": straight["id"], "pattern": {"stairs": {"step_rise": 0.5}}})
+    editor.wait_idle()
+    findings, result = stairs_findings()
+    check("with a step rise limit of 0.5 m the staircase is built (4 steps of 0.5 m) and level_check reports its step rise above the agent's climb on the staircase node",
+          high["changed"] and (high["stairs"]["step_count"] == 4) and (len(findings) == 1) and (findings[0]["kind"] == "unwalkable_parameters") and
+          (findings[0]["ids"] == [high["children"][0]["id"]]) and ("step rise 0.5 m is higher than the agent's climb 0.4 m" in findings[0]["detail"]) and
+          findings[0]["detail"].startswith("Stairs: stairs layout:"), json.dumps(findings)[:400])
+    editor.call("undo")
+    editor.wait_idle()
+    narrow = editor.call("level_set_layout", {"scene_name": scene, "layout_id": straight["id"], "pattern": {"stairs": {"width": 0.5}}})
+    editor.wait_idle()
+    findings, result = stairs_findings()
+    check("a staircase 0.5 m wide is reported as narrower than the agent's 0.8 m",
+          (len(findings) == 1) and (findings[0]["ids"] == [narrow["children"][0]["id"]]) and ("narrower than the agent" in findings[0]["detail"]), json.dumps(findings)[:300])
+    editor.call("undo")
+    editor.wait_idle()
+    steep_flight = editor.call("level_set_layout", {"scene_name": scene, "layout_id": straight["id"], "pattern": {"stairs": {"step_rise": 0.35, "tread_depth": 0.3}}})
+    editor.wait_idle()
+    findings, result = stairs_findings()
+    check("a flight of 0.33 m steps on 0.3 m treads (48 degrees) is reported as steeper than the agent's 45 degrees",
+          (len(findings) == 1) and (findings[0]["ids"] == [steep_flight["children"][0]["id"]]) and ("steeper than the agent" in findings[0]["detail"]), json.dumps(findings)[:300])
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Pictures of the S-curve staircase and the corner.
+    os.makedirs(os.path.dirname(image_prefix), exist_ok=True)
+    o = s_origin
+    cameras = {
+        "three_quarter": {"eye": [o[0] - 3.0, o[1] + 5.5, o[2] + 7.0],  "target": [o[0] + 7.5, o[1] + 1.0, o[2] - 2.5]},
+        "plan":          {"eye": [o[0] + 7.5, o[1] + 21.0, o[2] - 2.4], "target": [o[0] + 7.5, o[1], o[2] - 2.5]},
+        "transition":    {"eye": [o[0] + 1.5, o[1] + 2.4, o[2] + 2.2],  "target": [o[0] + 4.5, o[1] + 0.9, o[2] - 2.2]},
+        "underside":     {"eye": [o[0] + 2.0, o[1] - 2.2, o[2] + 3.0],  "target": [o[0] + 6.0, o[1] + 1.0, o[2] - 2.6]},
+        "corner":        {"eye": [18.0, 6.0, 5.0],                       "target": [23.5, 0.8, -1.5]},
+    }
+    for name, camera in cameras.items():
+        camera.update({"fov_y_degrees": 45.0, "near": 0.1, "far": 200.0})
+        image_path = f"{image_prefix}_{name}.png"
+        reply = editor.call("render_scene_image", {"scene": scene, "camera": camera, "width": IMAGE_WIDTH, "height": 900, "output": "png", "path": image_path})
+        check(f"render_scene_image of the staircase ({name}) is written", os.path.isfile(image_path) and (reply.get("width") == IMAGE_WIDTH), image_path)
+        print(f"stairs layout image: {image_path}", flush=True)
+
+    # Save and reload: the staircase is saved as its mesh, the values and the curve with it; a curve edit regenerates it.
+    saved = {l["name"]: l for l in layouts_by_id(editor, scene).values()}
+    path = os.path.join(directory, "stairs_layouts.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    name = editor.load(path)
+    reloaded = {l["name"]: l for l in editor.call("level_get_layouts", {"scene_name": name})["layouts"]}
+    check("save and reload: every stairs layout is back as a Curve node with its values, its fit and one generated child",
+          (sorted(reloaded) == sorted(saved)) and all(
+              (reloaded[key]["pattern"] == saved[key]["pattern"]) and (reloaded[key]["stairs"] == saved[key]["stairs"]) and
+              (reloaded[key]["child_count"] == 1) and reloaded[key]["children"][0].get("generated") and
+              (reloaded[key]["children"][0]["materials"] == saved[key]["children"][0]["materials"]) for key in saved),
+          f"{sorted(reloaded)}")
+    s_again = reloaded.get("s curve")
+    if s_again is not None:
+        body = body_of(s_again, name)
+        check("after reload the staircase child has a static body", bool(body) and ("static" in json.dumps(body).lower()), json.dumps(body)[:300])
+        child = s_again["children"][0]
+        fresh = s_again["stairs"]["mesh"]
+        loaded_min = [child["world_aabb"]["min"][i] - s_origin[i] for i in range(3)] if child.get("world_aabb") else None
+        loaded_max = [child["world_aabb"]["max"][i] - s_origin[i] for i in range(3)] if child.get("world_aabb") else None
+        check("after reload the layout has exactly one child, whose loaded mesh has the bounds of a fresh generation from the curve and the values",
+              (s_again["child_count"] == 1) and (loaded_min is not None) and close(loaded_min, fresh["bounds_min"], 1.0e-3) and close(loaded_max, fresh["bounds_max"], 1.0e-3),
+              f"loaded {loaded_min} .. {loaded_max}, fresh {fresh['bounds_min']} .. {fresh['bounds_max']}")
+        refresh = editor.call("level_refresh_layout", {"scene_name": name, "layout_id": s_again["id"]})
+        check("after reload a refresh keeps the loaded staircase (it matches its curve and values) and records nothing",
+              (not refresh["changed"]) and (refresh["kept_count"] == 1), f"kept {refresh['kept_count']}, added {refresh['added_count']}")
+        depth = undo_depth(editor)
+        moved_points = json.loads(json.dumps(s_points))
+        moved_points[3]["position"] = [15.0, 3.0, -3.0]
+        editor.call("set_curve", {"scene_name": name, "curve_id": s_again["id"], "points": moved_points})
+        editor.wait_idle()
+        edited = layout_of(s_again["id"], name)
+        ok, detail = fit_holds(edited, 15)
+        check("after reload a curve edit regenerates the staircase in one undo entry (15 steps for 3 m)",
+              ok and (undo_depth(editor) == depth + 1) and (edited["children"][0]["id"] != s_again["children"][0]["id"]), detail)
+        editor.call("undo")
+        editor.wait_idle()
+        check("its undo gives the loaded staircase node back", child_snapshot(layout_of(s_again["id"], name)) == child_snapshot(s_again), "")
+
+    # A viewport drag of the straight stair's end point through the curve tool: the staircase follows live, the release is one entry.
+    straight_again = reloaded.get("straight")
+    if straight_again is not None:
+        layout_id = straight_again["id"]
+        before = layout_of(layout_id, name)
+        curve_before = editor.call("get_curve", {"scene_name": name, "curve_id": layout_id})["points"]
+        editor.call("set_active_scene", {"scene_name": name})
+        viewport = cv.frame_camera(editor, name, [3.0, 9.0, 12.0], [3.5, 1.0, 0.0], [[0.0, 0.0, 0.0], [6.0, 2.0, 0.0], [7.5, 2.0, 0.0]])
+        cv.choose_move_tool(editor, viewport)
+        editor.call("select_items", {"scene_name": name, "ids": [before["children"][0]["id"]]})
+        editor.wait_idle()
+        selection = [i["id"] for i in editor.call("get_selection")["items"]]
+        target = editor.call("get_curve_point_selection").get("curve")
+        check("selecting the staircase selects the stairs layout node, the curve tool's target",
+              (selection == [layout_id]) and (target is not None) and (target["id"] == layout_id), f"{selection}, target {target}")
+        editor.call("select_curve_points", {"scene_name": name, "curve_id": layout_id, "points": [{"index": 1}]})
+        editor.wait_idle()
+        cv.settle(editor)
+        depth = undo_depth(editor)
+        px_per_metre = cv.gizmo_drag(editor, viewport, TRANSLATE_X, [1.0, 0.0, 0.0], hold=True)
+        cv.settle(editor)
+        held_curve = editor.call("get_curve", {"scene_name": name, "curve_id": layout_id})["points"]
+        held = layout_of(layout_id, name)
+        ok, detail = fit_holds(held, 10)
+        check("mid-drag (button held) of the end point along x the staircase already spans the longer curve, with no undo entry",
+              ok and (held_curve[1]["position"][0] > 6.5) and (abs(held["stairs"]["plan_length"] - held_curve[1]["position"][0]) < 1.0e-3) and
+              (abs(held["stairs"]["mesh"]["bounds_max"][0] - held_curve[1]["position"][0]) < 1.0e-3) and
+              (held["children"][0]["id"] != before["children"][0]["id"]) and (undo_depth(editor) == depth),
+              detail + f", end x {held_curve[1]['position'][0]:.3f}, depth {undo_depth(editor)} vs {depth}")
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        cv.settle(editor)
+        dragged = editor.call("get_curve", {"scene_name": name, "curve_id": layout_id})["points"]
+        after = layout_of(layout_id, name)
+        cv.report_shortfall("stairs end point gizmo X drag", dragged[1]["position"][0] - 6.0, 1.0, px_per_metre)
+        ok, detail = fit_holds(after, 10)
+        check(f"the release of the drag (1 m along x, within {cv.GIZMO_SHORTFALL_PX} px) is ONE undo entry with the staircase along the final curve",
+              ok and (abs(dragged[1]["position"][0] - 7.0) <= cv.drag_tolerance(px_per_metre)) and (undo_depth(editor) == depth + 1) and
+              (abs(after["stairs"]["plan_length"] - dragged[1]["position"][0]) < 1.0e-3), detail + f", depth {undo_depth(editor)} vs {depth + 1}")
+        editor.call("undo")
+        editor.wait_idle()
+        check("one undo of the drag restores the curve and the staircase node from before it",
+              (editor.call("get_curve", {"scene_name": name, "curve_id": layout_id})["points"] == curve_before) and
+              (child_snapshot(layout_of(layout_id, name)) == child_snapshot(before)), "")
+        editor.call("redo")
+        editor.wait_idle()
+        check("redo makes the dragged staircase again", layout_of(layout_id, name)["stairs"] == after["stairs"], "")
+        editor.call("undo")
+        editor.wait_idle()
+        log_text = ""
+        with open(os.path.join(pav.REPO_ROOT, "logs", "log.txt"), "r", errors="replace") as f:
+            log_text = f.read()
+        times = layout_step_times(log_text, 1)
+        if times:
+            print(f"stairs layout preview steps: {len(times)}, median {median(times):.2f} ms, max {max(times):.2f} ms", flush=True)
+        editor.call("select_items", {"scene_name": name, "ids": []})
+        editor.wait_idle()
+    editor.close(name)
+
+
+def check_segment_handles(editor, image_path):
+    """U38, R5.12.11: the segment handles of a segments layout (doc/editor/level_tools.md "Segment handles"): one handle per segment at
+    its chord's midpoint, level_move_segment moving a wall along its normal with the end points sliding along the neighbouring walls
+    (a room, a trapezoid, an open curve's free end) as one undo entry with exact undo and redo, viewport clicks selecting segments
+    and points exclusively, a gizmo plane drag whose component along the chord is ignored with the pieces following live, Escape
+    restoring exactly, the point handles still dragging, and a screenshot of the selected handle."""
+    import curve_verify as cv  # noqa: E402 - the camera, viewport and Move tool helpers of the curve checks
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    editor.wait_idle()
+    wall = [{"shape": "architecture.wall", "parameters": {"length": 4.0}}]
+    min_x, max_x = -2.0, 2.0
+    corners = [[0.0, 0.0, 0.0], [8.0, 0.0, 0.0], [8.0, 0.0, 6.0], [0.0, 0.0, 6.0]]
+
+    def create(name, points, position, closed=True):
+        made = editor.call("level_create_layout", {"scene_name": scene, "name": name, "position": position, "items": wall,
+                                                    "pattern": {"kind": "segments"}, "points": [{"position": c} for c in points], "closed": closed})
+        editor.wait_idle()
+        return made
+
+    def curve_points(layout_id):
+        return [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": layout_id})["points"]]
+
+    def layout_of(layout_id):
+        return layouts_by_id(editor, scene)[layout_id]
+
+    def state_of(layout_id):
+        return {"points": curve_points(layout_id), "children": segment_snapshot(layout_of(layout_id)), "undo": undo_depth(editor)}
+
+    def handles_state():
+        return editor.call("level_get_segment_handles")
+
+    room = create("handle room", corners, [0.0, 0.0, 0.0])
+    trapezoid_points = [[0.0, 0.0, 0.0], [6.0, 0.0, 0.0], [4.0, 0.0, 3.0], [1.0, 0.0, 3.0]]
+    trapezoid = create("handle trapezoid", trapezoid_points, [30.0, 0.0, 0.0])
+    open_points = [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [6.0, 0.0, 2.0]]
+    opened = create("handle open", open_points, [0.0, 0.0, 30.0], closed=False)
+    line = editor.call("level_create_layout", {"scene_name": scene, "name": "handle line", "position": [-20.0, 0.0, 0.0], "items": wall,
+                                                "pattern": {"kind": "line", "count": 2, "step": 4.0}})
+    editor.wait_idle()
+    check("segment handles: the room, trapezoid and open segments layouts and a line layout are made",
+          all(m.get("id") is not None for m in (room, trapezoid, opened, line)), json.dumps([m.get("error") for m in (room, trapezoid, opened, line)]))
+
+    # The handles: one per segment at its chord midpoint, with the normal the right of the segment's direction.
+    select(editor, scene, [room["id"]])
+    state = handles_state()
+    midpoints = [[4.0, 0.0, 0.0], [8.0, 0.0, 3.0], [4.0, 0.0, 6.0], [0.0, 0.0, 3.0]]
+    normals = [[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]]
+    check("segment handles: with the room selected the curve tool lists 4 segment handles at the chord midpoints, normals the right of each wall (into the room), none selected",
+          (state["layout"] is not None) and (state["layout"]["id"] == room["id"]) and (len(state["handles"]) == 4) and (state["selected"] is None) and
+          all(close(h["position"], m, 1.0e-4) and close(h["normal"], n, 1.0e-4) and (h["points"] == [i, (i + 1) % 4])
+              for i, (h, m, n) in enumerate(zip(state["handles"], midpoints, normals))),
+          json.dumps(state)[:500])
+    refused = call_error(editor, "level_select_segment_handle", {"scene_name": scene, "layout_id": line["id"], "index": 0})
+    refused_index = call_error(editor, "level_select_segment_handle", {"scene_name": scene, "layout_id": room["id"], "index": 4})
+    refused_move = call_error(editor, "level_move_segment", {"scene_name": scene, "layout_id": line["id"], "segment": 0, "offset": 1.0})
+    check("segment handles: selecting a handle of a line layout, segment 4 of the room, and moving a line layout's segment are refused",
+          (refused is not None) and (refused_index is not None) and (refused_move is not None), f"{refused} | {refused_index} | {refused_move}")
+    select(editor, scene, [line["id"]])
+    check("segment handles: a line layout has no segment handles", handles_state()["layout"] is None, json.dumps(handles_state())[:200])
+
+    # Wall 0 moved outward (against its normal) by 1 m through level_move_segment.
+    before = state_of(room["id"])
+    reply = editor.call("level_move_segment", {"scene_name": scene, "layout_id": room["id"], "segment": 0, "offset": -1.0})
+    editor.wait_idle()
+    after_points = curve_points(room["id"])
+    after_layout = layout_of(room["id"])
+    expected = [[0.0, 0.0, -1.0], [8.0, 0.0, -1.0], [8.0, 0.0, 6.0], [0.0, 0.0, 6.0]]
+    scales = [c["scale"][0] for c in after_layout["children"]]
+    check("segment handles: level_move_segment of wall 0 by -1 m moves its two corners 1 m along the normal, the opposite wall's corners unchanged, one undo entry",
+          reply.get("changed") and positions_match(after_points, expected) and (undo_depth(editor) == before["undo"] + 1),
+          f"{fmt3(after_points[0])} {fmt3(after_points[1])}, undo {undo_depth(editor) - before['undo']}")
+    check("segment handles: piece 0 keeps its scale (8 m / 4 m), pieces 1 and 3 grow to 7 m / 4 m, piece 2 is the same node, the pieces span the moved corners",
+          (len(scales) == 4) and (abs(scales[0] - 2.0) < 1.0e-4) and (abs(scales[1] - 1.75) < 1.0e-4) and (abs(scales[3] - 1.75) < 1.0e-4) and
+          (segment_snapshot(after_layout)[2] == before["children"][2]) and spans_points(after_layout, expected, min_x, max_x),
+          f"scales {scales}")
+    after_state = state_of(room["id"])
+    editor.call("undo")
+    editor.wait_idle()
+    check("segment handles: one undo restores the corners and the four pieces exactly", state_of(room["id"]) == before, "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("segment handles: redo gives the moved corners and the same pieces as the move", state_of(room["id"]) == after_state, "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # The trapezoid: the base's end points slide along the slanted sides, whose directions stay.
+    t_before = curve_points(trapezoid["id"])
+    editor.call("level_move_segment", {"scene_name": scene, "layout_id": trapezoid["id"], "segment": 0, "offset": 1.0})
+    editor.wait_idle()
+    t_after = curve_points(trapezoid["id"])
+
+    def on_line(p, a, b):
+        return abs(((b[0] - a[0]) * (p[2] - a[2])) - ((b[2] - a[2]) * (p[0] - a[0]))) < 1.0e-4
+
+    check("segment handles: the trapezoid's base moved 1 m inward puts its corners at z = 1 on the slanted sides' lines, the other corners unchanged",
+          (abs(t_after[0][2] - 1.0) < 1.0e-4) and (abs(t_after[1][2] - 1.0) < 1.0e-4) and on_line(t_after[0], t_before[3], t_before[0]) and
+          on_line(t_after[1], t_before[1], t_before[2]) and positions_match(t_after[2:], t_before[2:]) and
+          spans_points(layout_of(trapezoid["id"]), t_after, min_x, max_x, origin=(30.0, 0.0, 0.0)),
+          f"{fmt3(t_after[0])} {fmt3(t_after[1])}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # The open curve: the free end of segment 0 moves along the normal, its other end slides along segment 1.
+    o_before = curve_points(opened["id"])
+    editor.call("level_move_segment", {"scene_name": scene, "layout_id": opened["id"], "segment": 0, "offset": 1.0})
+    editor.wait_idle()
+    o_after = curve_points(opened["id"])
+    check("segment handles: on an open curve of 3 points, moving segment 0 by 1 m moves the free end straight along the normal and the other end along segment 1",
+          positions_match(o_after, [[0.0, 0.0, 1.0], [5.0, 0.0, 1.0], o_before[2]]) and
+          spans_points(layout_of(opened["id"]), o_after, min_x, max_x, origin=(0.0, 0.0, 30.0), closed=False),
+          f"{[fmt3(p) for p in o_after]}")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Viewport: the room framed, the Move tool chosen.
+    viewport = cv.frame_camera(editor, scene, [4.0, 14.0, 16.0], [4.0, 0.0, 3.0], corners + [[4.0, 0.0, -1.5], [4.0, 0.0, 7.5]], min_px_per_metre=20.0)
+    hide_windows_over_viewports(editor)
+    cv.choose_move_tool(editor, viewport)
+    select(editor, scene, [room["id"]])
+    cv.settle(editor)
+    depth = undo_depth(editor)
+    cv.click_world(editor, viewport, midpoints[1])
+    picked = handles_state()
+    anchored = editor.call("get_transform_state")
+    check("segment handles: a click at wall 1's midpoint selects its handle, the gizmo on the midpoint, the room still the selected item, no undo entry",
+          (picked["selected"] == 1) and anchored["component_mode"] and close(anchored["anchor_frame"]["translation"], midpoints[1], 1.0e-4) and
+          ([i["id"] for i in editor.call("get_selection")["items"]] == [room["id"]]) and (undo_depth(editor) == depth),
+          f"selected {picked['selected']}, anchor {anchored['anchor_frame']['translation']}")
+    cv.click_world(editor, viewport, corners[1])
+    points_selection = editor.call("get_curve_point_selection")
+    check("segment handles: a click on corner 1 selects the point and clears the segment",
+          (handles_state()["selected"] is None) and ([p["index"] for p in points_selection["points"]] == [1]), json.dumps(points_selection)[:200])
+    cv.click_world(editor, viewport, midpoints[2], ["ctrl"])
+    points_selection = editor.call("get_curve_point_selection")
+    check("segment handles: a Ctrl+click on wall 2's midpoint selects the segment and clears the points",
+          (handles_state()["selected"] == 2) and (points_selection["points"] == []), json.dumps(points_selection)[:200])
+    cv.click_world(editor, viewport, midpoints[3], ["ctrl"])
+    check("segment handles: a Ctrl+click on wall 3's midpoint selects it in place of wall 2 (one segment at a time)", handles_state()["selected"] == 3, "")
+
+    # A held gizmo plane drag of wall 0: the pointer's component along the chord is ignored; the pieces follow live.
+    def held_plane_drag(delta):
+        editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": room["id"], "index": 0})
+        editor.wait_idle()
+        cv.settle(editor)
+        return cv.gizmo_drag(editor, viewport, TRANSLATE_XZ, delta, hold=True)
+
+    def release():
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        cv.settle(editor)
+
+    before = state_of(room["id"])
+    px_per_metre = held_plane_drag([0.7, 0.0, 1.0])
+    cv.settle(editor)
+    held = curve_points(room["id"])
+    held_layout = layout_of(room["id"])
+    tolerance = 2.0 * cv.drag_tolerance(px_per_metre)
+    check("segment handles: mid-drag (button held) of wall 0 by (0.7, 0, 1) on the XZ plane: its corners move along z alone (x exactly 0 and 8), the far wall stays, the pieces follow, no undo entry",
+          (abs(held[0][0]) < 1.0e-4) and (abs(held[1][0] - 8.0) < 1.0e-4) and (abs(held[0][2] - 1.0) <= tolerance) and (abs(held[1][2] - held[0][2]) < 1.0e-4) and
+          positions_match(held[2:], corners[2:]) and spans_points(held_layout, held, min_x, max_x) and (undo_depth(editor) == before["undo"]),
+          f"{fmt3(held[0])} {fmt3(held[1])}, undo {undo_depth(editor) - before['undo']}")
+    release()
+    released = curve_points(room["id"])
+    cv.report_shortfall("segment handle XZ plane drag", released[0][2], 1.0, px_per_metre)
+    check("segment handles: the release is one undo entry, wall 0 about 1 m in, the pieces spanning the released corners, the segment still selected",
+          (undo_depth(editor) == before["undo"] + 1) and (abs(released[0][2] - 1.0) <= tolerance) and spans_points(layout_of(room["id"]), released, min_x, max_x) and
+          (handles_state()["selected"] == 0),
+          f"{fmt3(released[0])}, undo {undo_depth(editor) - before['undo']}")
+    editor.call("undo")
+    editor.wait_idle()
+    cv.settle(editor)
+    check("segment handles: undo of the drag restores the room exactly", state_of(room["id"]) == before, "")
+
+    held_plane_drag([0.0, 0.0, -1.2])
+    cv.settle(editor)
+    moved_mid = curve_points(room["id"])
+    editor.call("key_press", {"key": "escape"})
+    editor.wait_idle()
+    release()
+    check("segment handles: Escape mid-drag (wall 0 out by about 1.2 m) restores the corners and the pieces exactly, no undo entry",
+          (moved_mid[0][2] < -0.5) and (state_of(room["id"]) == before), f"mid {fmt3(moved_mid[0])}")
+
+    # The point handles still select and drag on the same node.
+    editor.call("select_curve_points", {"scene_name": scene, "curve_id": room["id"], "points": [{"index": 2}]})
+    editor.wait_idle()
+    cv.settle(editor)
+    check("segment handles: selecting point 2 clears the segment selection", handles_state()["selected"] is None, "")
+    px_per_metre = cv.gizmo_drag(editor, viewport, TRANSLATE_X, [1.0, 0.0, 0.0])
+    cv.settle(editor)
+    dragged = curve_points(room["id"])
+    check("segment handles: a gizmo X drag of point 2 still moves the corner alone (1 m along x), one undo entry, the pieces following",
+          (abs(dragged[2][0] - 9.0) <= cv.drag_tolerance(px_per_metre)) and positions_match([dragged[0], dragged[1], dragged[3]], [corners[0], corners[1], corners[3]]) and
+          (undo_depth(editor) == before["undo"] + 1) and spans_points(layout_of(room["id"]), dragged, min_x, max_x),
+          f"{fmt3(dragged[2])}, undo {undo_depth(editor) - before['undo']}")
+    editor.call("undo")
+    editor.wait_idle()
+    cv.settle(editor)
+
+    # The screenshot: the room selected with wall 1's handle selected.
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": room["id"], "index": 1})
+    editor.wait_idle()
+    cv.settle(editor, 5)
+    os.makedirs(os.path.dirname(image_path), exist_ok=True)
+    editor.call("capture_screenshot", {"path": image_path})
+    check("capture_screenshot of the room with a selected segment handle is written", os.path.isfile(image_path), image_path)
+    print(f"segment handles image: {image_path}", flush=True)
+    select(editor, scene, [])
+    editor.close(scene)
 
 
 def check_layouts(editor, directory):
@@ -10080,8 +10996,8 @@ def check_more_shapes(editor):
     scene = create_scene(editor)
     kits = editor.call("level_get_kits", {"scene_name": scene})
     by_id = {shape["id"]: shape for shape in kits["shapes"]}
-    check("level_get_kits lists 31 shapes; every kit's triangle ceiling is 2000 (P1)",
-          (kits["shape_count"] == 31) and all(k["triangle_ceiling"] == 2000 for k in kits["kits"]) and all(s in by_id for s in MORE_SHAPES),
+    check(f"level_get_kits lists {SHAPE_COUNT} shapes; every kit's triangle ceiling is 2000 (P1)",
+          (kits["shape_count"] == SHAPE_COUNT) and all(k["triangle_ceiling"] == 2000 for k in kits["kits"]) and all(s in by_id for s in MORE_SHAPES),
           f"{kits['shape_count']} shapes, ceilings {[k['triangle_ceiling'] for k in kits['kits']]}")
     expected_catalog = {
         "nature.cliff": (["cliff", "grass"], "triangle_mesh", "solid", "start, end, base, top"),
@@ -10388,8 +11304,8 @@ def check_more_shapes_2(editor):
     scene = create_scene(editor)
     kits = editor.call("level_get_kits", {"scene_name": scene})
     by_id = {shape["id"]: shape for shape in kits["shapes"]}
-    check("level_get_kits lists 31 shapes, the six of the second batch among them",
-          (kits["shape_count"] == 31) and all(s in by_id for s in MORE_SHAPES_2), f"{kits['shape_count']} shapes")
+    check(f"level_get_kits lists {SHAPE_COUNT} shapes, the six of the second batch among them",
+          (kits["shape_count"] == SHAPE_COUNT) and all(s in by_id for s in MORE_SHAPES_2), f"{kits['shape_count']} shapes")
     expected_catalog = {
         "architecture.column":      (["trim"], "convex_hull", "base, top", "classical"),
         "architecture.entablature": (["trim"], "triangle_mesh", "base, top, start, end", "classical"),
@@ -10784,8 +11700,8 @@ def check_more_shapes_3(editor):
     scene = create_scene(editor)
     kits = editor.call("level_get_kits", {"scene_name": scene})
     by_id = {shape["id"]: shape for shape in kits["shapes"]}
-    check("level_get_kits lists 31 shapes, the seven of the third batch among them",
-          (kits["shape_count"] == 31) and all(s in by_id for s in MORE_SHAPES_3), f"{kits['shape_count']} shapes")
+    check(f"level_get_kits lists {SHAPE_COUNT} shapes, the seven of the third batch among them",
+          (kits["shape_count"] == SHAPE_COUNT) and all(s in by_id for s in MORE_SHAPES_3), f"{kits['shape_count']} shapes")
     expected_catalog = {
         "nature.rock_spire":     (["rock"], "triangle_mesh", "base", ["height", "radius", "lean"]),
         "nature.basalt_columns": (["rock"], "triangle_mesh", "base", ["radius", "height_spread"]),
@@ -11125,6 +12041,123 @@ def check_more_shapes_3(editor):
 REGION_HANDLE_IMAGE = os.path.join("logs", "level_region_handles.png")
 
 
+def check_recreated_shapes(editor):
+    """Step 70 of doc/plans/level_tools_implementation.md (U41): each recreated shape beside its original - the catalog
+    pairing, equal bounds, bodies, materials and connectors of placed pieces, and Replace original -> recreated -> original."""
+    scene = create_scene(editor)
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    by_id = {shape["id"]: shape for shape in kits["shapes"]}
+    order = [shape["id"] for shape in kits["shapes"]]
+    recreated = [shape for shape in kits["shapes"] if shape["recreates"]]
+    check(f"level_get_kits lists {len(RECREATED_SHAPES)} recreated shapes, each <original>{RECREATED_SUFFIX} naming its original in recreates",
+          ([s["recreates"] for s in recreated] == list(RECREATED_SHAPES)) and all(s["id"] == s["recreates"] + RECREATED_SUFFIX for s in recreated),
+          json.dumps([(s["id"], s["recreates"]) for s in recreated]))
+    kit_order = {k["name"]: k["shapes"] for k in kits["kits"]}
+    check("each recreated shape stands directly after its original in the shape list and in its kit's list, its name marked (F)",
+          all((order.index(s["id"]) == order.index(s["recreates"]) + 1) and
+              (kit_order[s["kit"]].index(s["id"]) == kit_order[s["kit"]].index(s["recreates"]) + 1) and
+              (s["name"] == by_id[s["recreates"]]["name"] + " (F)") for s in recreated),
+          json.dumps([s["name"] for s in recreated]))
+    same_keys = ("kit", "parameters", "default_derive", "material_slots", "collision", "mesh_kind", "mirror_planes", "tags", "description", "normal_style")
+    contract_problems = [f"{s['id']}: {key}" for s in recreated for key in same_keys if s[key] != by_id[s["recreates"]][key]]
+    contract_problems += [f"{s['id']}: connectors" for s in recreated
+                          if [(c["name"], c["position"], c["outward"], c["up"]) for c in s["connectors"]] !=
+                             [(c["name"], c["position"], c["outward"], c["up"]) for c in by_id[s["recreates"]]["connectors"]]]
+    contract_problems += [f"{s['id']}: default_bounds" for s in recreated
+                          if not (close(s["default_bounds"]["min"], by_id[s["recreates"]]["default_bounds"]["min"]) and
+                                  close(s["default_bounds"]["max"], by_id[s["recreates"]]["default_bounds"]["max"]))]
+    check("a recreated shape states its original's kit, parameters, default mask, slots, connectors, collision kind, mesh kind, mirror planes and default bounds",
+          not contract_problems, "; ".join(contract_problems))
+
+    # Each pair placed side by side with values off the defaults.
+    values = {
+        "basic.block":      {"width": 1.5, "height": 0.75, "depth": 2.0, "seed": 5},
+        "basic.wedge":      {"run": 3.0, "rise": 1.25, "width": 1.5, "seed": 5},
+        "basic.cylinder":   {"radius": 0.75, "height": 2.0, "segments": 12, "seed": 5},
+        "basic.stairs":     {"rise": 2.0, "width": 1.5, "step_rise_limit": 0.25, "seed": 5},
+        "basic.floor_slab": {"width": 3.0, "depth": 1.5, "thickness": 0.3, "seed": 5},
+    }
+    requests = []
+    for row, original in enumerate(RECREATED_SHAPES):
+        for column, shape_id in enumerate((original, original + RECREATED_SUFFIX)):
+            # A shape without an entry is compared at its defaults.
+            requests.append({"shape": shape_id, "position": [6.0 * column, 0.0, 8.0 * row], "name": f"rc {shape_id}", "parameters": values.get(original, {})})
+    depth = undo_depth(editor)
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": requests})["pieces"]
+    editor.wait_idle()
+    listed = {p["id"]: p for p in pieces(editor, scene)}
+    triangles = {p["id"]: p["triangle_count"] for p in placed}
+    pairs = [(listed[placed[2 * i]["id"]], listed[placed[(2 * i) + 1]["id"]]) for i in range(len(RECREATED_SHAPES))]
+
+    def local_box(piece):
+        return [[a - b for a, b in zip(piece["world_aabb"][end], piece["position"])] for end in ("min", "max")]
+
+    check("the pairs place in one call; each recreated piece has its original's parameter values and local bounds",
+          (len(placed) == 2 * len(RECREATED_SHAPES)) and (undo_depth(editor) == depth + 1) and
+          all((new["shape"] == old["shape"] + RECREATED_SUFFIX) and (new["parameters"] == old["parameters"]) and
+              close(local_box(new)[0], local_box(old)[0]) and close(local_box(new)[1], local_box(old)[1]) for old, new in pairs),
+          "; ".join(f"{new['shape']} {fmt3(local_box(new)[0])} .. {fmt3(local_box(new)[1])}" for _, new in pairs))
+    check("each recreated piece has a static body of its original's collision kind, its original's materials and is navigation input alike",
+          all(new["physics"]["has_body"] and (new["physics"]["motion_mode"] == "static") and
+              (new["physics"]["collision_shape"].split()[0] == old["physics"]["collision_shape"].split()[0]) and
+              (new["materials"] == old["materials"]) and (new["pass_through"] == old["pass_through"]) for old, new in pairs),
+          "; ".join(f"{new['shape']}: {new['physics']['collision_shape']} / {old['physics']['collision_shape']}" for old, new in pairs))
+    check("the recreated stairs are 12 triangles a step (8 steps: 96), the other recreated pieces have their originals' triangle counts",
+          all((triangles[new["id"]] == (96 if old["shape"] == "basic.stairs" else triangles[old["id"]])) for old, new in pairs),
+          "; ".join(f"{new['shape']} {triangles[new['id']]} / {triangles[old['id']]}" for old, new in pairs))
+    stairs_old, stairs_new = next((old, new) for old, new in pairs if old["shape"] == "basic.stairs")
+    check("level_get_pieces reports the recreated stairs' layout as the original's (8 steps of 0.25 m, treads 0.375 m, run 3 m); no other piece has one",
+          (stairs_new.get("stairs") == stairs_old.get("stairs")) and (stairs_new["stairs"]["step_count"] == 8) and
+          close([stairs_new["stairs"]["step_rise"], stairs_new["stairs"]["tread_depth"], stairs_new["stairs"]["run"]], [0.25, 0.375, 3.0]) and
+          all("stairs" not in p for pair in pairs for p in pair if not p["shape"].startswith("basic.stairs")),
+          json.dumps(stairs_new.get("stairs")))
+    connector_problems = []
+    for old, new in pairs:
+        a = connectors_of(editor, scene, old["id"])
+        b = connectors_of(editor, scene, new["id"])
+        offset = [n - o for n, o in zip(new["position"], old["position"])]
+        if (list(a) != list(b)) or not all(close([p - d for p, d in zip(b[name]["position"], offset)], a[name]["position"]) and
+                                           close(b[name]["outward"], a[name]["outward"]) and close(b[name]["up"], a[name]["up"]) for name in a):
+            connector_problems.append(new["shape"])
+    check("level_get_connectors gives each recreated piece its original's connectors (names, places, frames)", not connector_problems, ", ".join(connector_problems))
+
+    # Replace original -> recreated -> original: every value and material carries, the node keeps its place.
+    replace_problems = []
+    for old, new in pairs:
+        node_id = old["id"]
+        editor.call("level_set_piece_material", {"scene_name": scene, "node_id": node_id, "slot": by_id[old["shape"]]["material_slots"][0]["slot"], "material": "Kit Wood"})
+        editor.wait_idle()
+        before = replace_state(editor, scene, node_id)
+        depth = undo_depth(editor)
+        forward = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [node_id], "shape": new["shape"]})["pieces"][0]
+        editor.wait_idle()
+        as_new = replace_state(editor, scene, node_id)
+        expected = replace_state(editor, scene, new["id"])
+        back = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [node_id], "shape": old["shape"]})["pieces"][0]
+        editor.wait_idle()
+        as_old = replace_state(editor, scene, node_id)
+        names = sorted(p["name"] for p in by_id[old["shape"]]["parameters"])
+        slots = sorted(s["slot"] for s in by_id[old["shape"]]["material_slots"])
+        ok = (forward["replaced"] and back["replaced"] and (undo_depth(editor) == depth + 2) and
+              (sorted(forward["carried"]) == names) and (forward["defaulted"] == []) and (sorted(forward["kept_materials"]) == slots) and
+              (sorted(back["carried"]) == names) and (back["defaulted"] == []) and (sorted(back["kept_materials"]) == slots) and
+              (as_new["shape"] == new["shape"]) and (as_new["parameters_text"] == before["parameters_text"]) and
+              (as_new["mesh_key"] == expected["mesh_key"]) and (as_new["materials"] == before["materials"]) and
+              (as_new["collision_shape"].split()[0] == before["collision_shape"].split()[0]) and as_new["has_body"] and
+              kept_place(before, as_new) and close(as_new["world_aabb"]["min"], before["world_aabb"]["min"]) and
+              close(as_new["world_aabb"]["max"], before["world_aabb"]["max"]) and (as_old == before))
+        if not ok:
+            replace_problems.append(f"{old['shape']}: forward {json.dumps({k: forward.get(k) for k in ('replaced', 'carried', 'defaulted', 'kept_materials')})} "
+                                    f"differs back in {[k for k in before if before[k] != as_old.get(k)]}")
+    check("Replace original -> recreated -> original carries every parameter and material, keeps the node's place and bounds, "
+          "gives the recreated shape's mesh and returns the original piece exactly (two undo entries a pair)",
+          not replace_problems, "; ".join(replace_problems))
+    editor.call("undo")
+    editor.wait_idle()
+    last_old, last_new = pairs[-1]
+    check("undo of the last replace gives the recreated piece back", replace_state(editor, scene, last_old["id"])["shape"] == last_new["shape"])
+
+
 def check_region_handles(editor):
     """Scatter region handles (doc/editor/level_tools.md "Scatter region handles"): handle positions of a turned rectangle
     and a disc against the pattern and node transform, exact resizes through transform_selection (an edge, a corner, a
@@ -11435,6 +12468,657 @@ def check_region_handles(editor):
     close_without_leak(editor, scene, "region handles")
 
 
+LAYOUT_DIRECTIONS = ("plus_tangent", "minus_tangent", "plus_normal", "minus_normal", "plus_binormal", "minus_binormal")
+LAYOUT_DIRECTION_NAMES = {"plus_tangent": "+tangent", "minus_tangent": "-tangent", "plus_normal": "+normal",
+                          "minus_normal": "-normal", "plus_binormal": "+binormal", "minus_binormal": "-binormal"}
+
+
+def classify_layout_direction(v):
+    """U39: the element frame axis (tangent x, binormal y, normal z) of the largest absolute component; ties tangent, normal, binormal."""
+    t, b, n = v[0], v[1], v[2]
+    if (abs(t) >= abs(n)) and (abs(t) >= abs(b)):
+        return "plus_tangent" if t >= 0.0 else "minus_tangent"
+    if abs(n) >= abs(b):
+        return "plus_normal" if n >= 0.0 else "minus_normal"
+    return "plus_binormal" if b >= 0.0 else "minus_binormal"
+
+
+def layout_child_role(index, count, closed):
+    if count <= 1:
+        return "only"
+    if closed:
+        return "inner"
+    if index == 0:
+        return "head"
+    if index == count - 1:
+        return "tail"
+    return "inner"
+
+
+def layout_hides(hiding, role, direction):
+    """U39: whether the switches hide a connector of a child of the role facing the direction."""
+    if role == "only":
+        return False
+    if (role == "head") and (direction != "plus_tangent"):
+        return False
+    if (role == "tail") and (direction != "minus_tangent"):
+        return False
+    return bool(hiding.get("all")) or bool(hiding.get(direction))
+
+
+def check_layout_connectors(editor, image_prefix):
+    """U39, R5.12.12: the connector switches of path and segments layouts: an open path of 5 walls and a closed room of 4 walls hide
+    nothing by default; each switch alone, hide all and a combination hide exactly the connectors expected from the readback's world
+    frames; an open curve's first and last walls keep all but the neighbour-facing one; hidden connectors are not drawn, not snap
+    targets and not joinable; each change is one undo entry; a count change moves the head and tail; closing the curve makes them
+    inner; unlocked children are ordinary pieces; save and load keeps the switches; line and grid layouts ignore them; two screenshots."""
+    import curve_verify as cv  # noqa: E402 - the camera and viewport helpers of the curve checks
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    wall = [{"shape": "architecture.wall", "parameters": {"length": 4.0}}]
+    no_hiding = {key: False for key in ("all",) + LAYOUT_DIRECTIONS}
+    path = editor.call("level_create_layout", {"scene_name": scene, "name": "wall path", "position": [0.0, 0.0, 0.0], "items": wall,
+                                               "pattern": {"kind": "path", "count": 5},
+                                               "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [16.0, 0.0, 0.0]}]})
+    corners = [[0.0, 0.0, 0.0], [8.0, 0.0, 0.0], [8.0, 0.0, 6.0], [0.0, 0.0, 6.0]]
+    room = editor.call("level_create_layout", {"scene_name": scene, "name": "wall room", "position": [30.0, 0.0, 0.0], "items": wall,
+                                               "pattern": {"kind": "segments"}, "points": [{"position": c} for c in corners], "closed": True})
+    editor.wait_idle()
+    check("an open path layout of 5 walls and a closed segments room of 4 walls read back the seven connector switches all off",
+          (path["child_count"] == 5) and (room["child_count"] == 4) and (path["connector_hiding"] == no_hiding) and (room["connector_hiding"] == no_hiding),
+          f"{path['child_count']} / {room['child_count']} {path['connector_hiding']}")
+
+    def layout_of(layout_id, scene_name=None):
+        return layouts_by_id(editor, scene_name or scene)[layout_id]
+
+    def readback(layout_id, scene_name=None):
+        """Per child, in order: {name: connector} from level_get_connectors, and the layout entry."""
+        layout = layout_of(layout_id, scene_name)
+        ids = [c["id"] for c in layout["children"]]
+        reply = editor.call("level_get_connectors", {"scene_name": scene_name or scene, "node_ids": ids})
+        return layout, reply["pieces"]
+
+    def expectation_problems(layout_id, scene_name=None, expect_layout_entry=True):
+        """The connectors whose state differs from the switches applied to directions computed here from the world frames."""
+        layout, pieces_reply = readback(layout_id, scene_name)
+        hiding = layout["connector_hiding"]
+        closed = bool(layout["curve"]["closed"])
+        count = layout["child_count"]
+        problems = []
+        for index, (child, piece) in enumerate(zip(layout["children"], pieces_reply)):
+            role = layout_child_role(index, count, closed)
+            entry = piece.get("layout")
+            if expect_layout_entry and ((entry is None) or (entry["role"] != role) or (entry["id"] != layout_id)):
+                problems.append(f"child {index}: layout entry {entry} (expected role {role})")
+            if (not expect_layout_entry) and (entry is not None):
+                problems.append(f"child {index}: has a layout entry {entry}")
+            world_rotation = child["rotation_xyzw"]
+            for connector in piece["connectors"]:
+                in_element = q_rotate(q_conj(world_rotation), normalize(connector["outward"]))
+                direction = classify_layout_direction(in_element)
+                hidden = expect_layout_entry and layout_hides(hiding, role, direction)
+                if connector["enabled"] == hidden:
+                    problems.append(f"child {index} {connector['name']} ({direction}, {role}): enabled {connector['enabled']}")
+                if expect_layout_entry and ((connector.get("layout_direction") != LAYOUT_DIRECTION_NAMES[direction]) or
+                                            (connector.get("hidden_by_layout") != hidden)):
+                    problems.append(f"child {index} {connector['name']}: reply {connector.get('layout_direction')} / {connector.get('hidden_by_layout')}, "
+                                    f"expected {direction} / {hidden}")
+        return problems
+
+    def hidden_count(layout_id):
+        _, pieces_reply = readback(layout_id)
+        return sum(1 for piece in pieces_reply for c in piece["connectors"] if not c["enabled"])
+
+    def set_hiding(layout_id, hiding):
+        return editor.call("level_set_layout", {"scene_name": scene, "layout_id": layout_id, "connector_hiding": hiding})
+
+    for name, layout_id in (("path", path["id"]), ("room", room["id"])):
+        problems = expectation_problems(layout_id)
+        check(f"defaults: every connector of the {name}'s children is enabled, each reported with its element frame direction and role",
+              (not problems) and (hidden_count(layout_id) == 0), "; ".join(problems[:4]))
+    # The six walls' connectors face the six directions: start -x, end +x, base -y, top +y, front +z, back -z.
+    _, path_pieces = readback(path["id"])
+    faced = {c["name"]: c.get("layout_direction") for c in path_pieces[2]["connectors"]}
+    check("an inner wall of the path faces the six directions: end +tangent, start -tangent, front +normal, back -normal, top +binormal, base -binormal",
+          faced == {"end": "+tangent", "start": "-tangent", "front": "+normal", "back": "-normal", "top": "+binormal", "base": "-binormal"}, json.dumps(faced))
+
+    for direction in LAYOUT_DIRECTIONS:
+        for name, layout_id, inner_count, ends in (("path", path["id"], 3, 1), ("room", room["id"], 4, 0)):
+            depth = undo_depth(editor)
+            reply = set_hiding(layout_id, {direction: True})
+            editor.wait_idle()
+            problems = expectation_problems(layout_id)
+            expected_hidden = inner_count + (ends if direction in ("plus_tangent", "minus_tangent") else 0)
+            check(f"{name}: hide {LAYOUT_DIRECTION_NAMES[direction]} alone hides exactly the inner children's connectors facing it"
+                  f"{' and the end child facing its neighbour' if (ends and direction in ('plus_tangent', 'minus_tangent')) else ''}; one undo entry",
+                  (not problems) and (hidden_count(layout_id) == expected_hidden) and (undo_depth(editor) == depth + 1) and
+                  reply["connector_hiding"][direction] and (reply.get("added_count", 0) == 0) and (reply.get("removed_count", 0) == 0),
+                  f"{'; '.join(problems[:3])} hidden {hidden_count(layout_id)} vs {expected_hidden}, undo {undo_depth(editor) - depth}")
+            set_hiding(layout_id, {direction: False})
+            editor.wait_idle()
+
+    # Hide all: inner walls hide all six, the path's first and last only the one facing their neighbour.
+    depth = undo_depth(editor)
+    set_hiding(path["id"], {"all": True})
+    editor.wait_idle()
+    problems = expectation_problems(path["id"])
+    _, path_pieces = readback(path["id"])
+    head_hidden = sorted(c["name"] for c in path_pieces[0]["connectors"] if not c["enabled"])
+    tail_hidden = sorted(c["name"] for c in path_pieces[4]["connectors"] if not c["enabled"])
+    reasons = {c.get("layout_hide_reason") for c in path_pieces[2]["connectors"]}
+    check("path: hide all hides the inner walls' six connectors each (reason hide_all), the first wall only its end and the last only its start",
+          (not problems) and (head_hidden == ["end"]) and (tail_hidden == ["start"]) and (hidden_count(path["id"]) == 20) and (reasons == {"hide_all"}),
+          f"{'; '.join(problems[:3])} head {head_hidden} tail {tail_hidden} reasons {reasons}")
+    set_hiding(room["id"], {"all": True})
+    editor.wait_idle()
+    check("room (closed): hide all hides every connector of all four walls alike",
+          (not expectation_problems(room["id"])) and (hidden_count(room["id"]) == 24), f"{hidden_count(room['id'])} hidden")
+    hidden_all_state = readback(path["id"])[1]
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the room's hide all gives every room connector back, the path keeps its hide all",
+          (hidden_count(room["id"]) == 0) and (hidden_count(path["id"]) == 20), "")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the path's hide all gives the path back exactly (every connector enabled, two undo entries for two changes)",
+          (hidden_count(path["id"]) == 0) and (undo_depth(editor) == depth) and (layout_of(path["id"])["connector_hiding"] == no_hiding), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo hides the path's connectors again, exactly as the edit did", readback(path["id"])[1] == hidden_all_state, "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # A combination: +/- tangent and -normal.
+    combination = {"plus_tangent": True, "minus_tangent": True, "minus_normal": True}
+    set_hiding(path["id"], combination)
+    editor.wait_idle()
+    problems = expectation_problems(path["id"])
+    _, path_pieces = readback(path["id"])
+    head_hidden = sorted(c["name"] for c in path_pieces[0]["connectors"] if not c["enabled"])
+    check("path: +tangent, -tangent and -normal together hide the inner walls' end, start and back, the first wall's end, the last wall's start",
+          (not problems) and (hidden_count(path["id"]) == 11) and (head_hidden == ["end"]), f"{'; '.join(problems[:3])} {hidden_count(path['id'])} hidden")
+
+    # Indicators: a hidden connector is not drawn.
+    title = cv.viewport_of(editor, scene)["title"]
+    editor.call("level_set_connector_visualization", {"mode": "all", "viewport": title})
+    editor.wait_idle()
+    editor.wait_idle()
+    def drawn_mismatches():
+        shown = editor.call("level_get_connector_indicators", {"viewport": title})
+        drawn = {}
+        for indicator in shown["indicators"]:
+            drawn.setdefault(indicator["piece_id"], set()).add(indicator["name"])
+        _, layout_pieces = readback(path["id"])
+        return [f"{p['name']}: {sorted(drawn.get(p['id'], set()))}" for p in layout_pieces
+                if drawn.get(p["id"], set()) != {c["name"] for c in p["connectors"] if c["enabled"]}]
+
+    mismatched = drawn_mismatches()
+    check("with Connectors 'all' each path wall draws exactly its enabled connectors (the hidden ones are not drawn)",
+          not mismatched, ", ".join(mismatched))
+    # The drawn frames are cached: a switch change, its undo and redo draw the new state at once.
+    set_hiding(path["id"], dict(no_hiding, plus_binormal=True))
+    editor.wait_idle()
+    editor.wait_idle()
+    changed = drawn_mismatches()
+    editor.call("undo")
+    editor.wait_idle()
+    editor.wait_idle()
+    undone = drawn_mismatches()
+    editor.call("redo")
+    editor.wait_idle()
+    editor.wait_idle()
+    redone = drawn_mismatches()
+    check("after a switch change, its undo and its redo each path wall draws exactly its enabled connectors (the cache follows the change)",
+          (not changed) and (not undone) and (not redone), f"{changed[:2]} | {undone[:2]} | {redone[:2]}")
+    set_hiding(path["id"], dict(no_hiding, **combination))
+    editor.wait_idle()
+    _, path_pieces = readback(path["id"])
+
+    # Joins and snaps: a free wall behind the middle wall.
+    middle = path_pieces[2]
+    middle_connectors = {c["name"]: c for c in middle["connectors"]}
+    probe = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "parameters": {"length": 4.0}, "name": "probe", "position": [8.0, 0.0, -2.0]}]})["pieces"][0]
+    editor.wait_idle()
+    refused = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": probe["id"], "connector": "front",
+                                                          "to_piece_id": middle["id"], "to_connector": "back"})
+    check("level_connect_pieces to the middle wall's hidden back connector is refused naming the layout's connector switches",
+          (refused is not None) and ("hidden by its kit layout" in refused), str(refused))
+    set_hiding(path["id"], no_hiding)
+    editor.wait_idle()
+    joined = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": probe["id"], "connector": "front",
+                                                  "to_piece_id": middle["id"], "to_connector": "back"})
+    editor.wait_idle()
+    check("with the switches off the probe joins the middle wall's back connector", joined["changed"], "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # The snap of a held drag: the probe's front 0.15 m behind the middle wall's back after the move.
+    back = middle_connectors["back"]["position"]
+    probe_front_local = connectors_of(editor, scene, probe["id"])["front"]["position"]
+    probe_position = probe["position"]
+    front_offset = [probe_front_local[i] - probe_position[i] for i in range(3)]
+    start_position = [back[0] - front_offset[0], back[1] - front_offset[1], back[2] - front_offset[2] - 0.25]
+    place_at(editor, scene, probe["id"], start_position)
+    snap_distance = 0.3
+    delta = [0.0, 0.0, 0.1]
+
+    def expected_snap():
+        """The nearest (probe connector, enabled layout connector) pair within the distance after the move, by this script's reading."""
+        probe_frames = connectors_of(editor, scene, probe["id"])
+        _, layout_pieces = readback(path["id"])
+        best = None
+        for p_name, p in probe_frames.items():
+            moved = [p["position"][i] + delta[i] for i in range(3)]
+            for piece in layout_pieces:
+                for c in piece["connectors"]:
+                    if not c["enabled"]:
+                        continue
+                    distance = math.dist(moved, c["position"])
+                    if (distance <= snap_distance) and ((best is None) or (distance < best[0] - 1.0e-6)):
+                        best = (distance, piece["id"], c["name"])
+        return best
+
+    def held_snap():
+        select(editor, scene, [probe["id"]])
+        editor.call("drag_selection", {"translation": delta, "frames": 2, "release": False, "connector_snap_distance": snap_distance})
+        state = editor.call("get_connector_snap", {})
+        editor.call("cancel_transform_drag", {})
+        editor.wait_idle()
+        return state
+
+    for label, hiding in (("switches off", no_hiding), ("-normal hidden", {"minus_normal": True}), ("hide all", {"all": True})):
+        set_hiding(path["id"], hiding)
+        editor.wait_idle()
+        expected = expected_snap()
+        state = held_snap()
+        if expected is None:
+            ok = not state.get("snapped")
+        else:
+            ok = state.get("snapped") and (state.get("target_id") == expected[1]) and (state.get("target_connector") == expected[2])
+        check(f"connector snap with {label}: the held drag snaps to the nearest enabled layout connector "
+              f"({'none' if expected is None else expected[2]}); a hidden one is no candidate",
+              ok and ((label != "switches off") or ((expected is not None) and (expected[2] == "back"))),
+              f"{json.dumps(state)[:300]} expected {expected}")
+        set_hiding(path["id"], no_hiding)
+        editor.wait_idle()
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [probe["id"]]})
+    editor.wait_idle()
+
+    # A count change moves the head and tail; closing the curve makes them inner.
+    set_hiding(path["id"], {"all": True})
+    editor.wait_idle()
+    editor.call("level_set_layout", {"scene_name": scene, "layout_id": path["id"], "pattern": {"count": 6}})
+    editor.wait_idle()
+    problems = expectation_problems(path["id"])
+    _, path_pieces = readback(path["id"])
+    check("count 6: the sixth wall is the tail (only its start hidden), the fifth is inner (all six hidden)",
+          (not problems) and (len(path_pieces) == 6) and
+          (sorted(c["name"] for c in path_pieces[5]["connectors"] if not c["enabled"]) == ["start"]) and
+          all(not c["enabled"] for c in path_pieces[4]["connectors"]), "; ".join(problems[:3]))
+    editor.call("set_curve", {"scene_name": scene, "curve_id": path["id"], "closed": True})
+    editor.wait_idle()
+    problems = expectation_problems(path["id"])
+    check("closing the path's curve makes the first and last walls inner: hide all hides every connector",
+          (not problems) and bool(layout_of(path["id"])["curve"]["closed"]) and (hidden_count(path["id"]) == 6 * layout_of(path["id"])["child_count"]),
+          "; ".join(problems[:3]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the close and of the count gives the open path of 5 with its head and tail back",
+          (not expectation_problems(path["id"])) and (layout_of(path["id"])["child_count"] == 5) and (hidden_count(path["id"]) == 20), "")
+
+    # Unlocked, the children are ordinary pieces.
+    editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": path["id"], "locked": False})
+    editor.wait_idle()
+    problems = expectation_problems(path["id"], expect_layout_entry=False)
+    check("unlocked: the children have every connector enabled and no layout entry (the switches stay on the node)",
+          (not problems) and layout_of(path["id"])["connector_hiding"]["all"], "; ".join(problems[:3]))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the unlock hides them again", (not expectation_problems(path["id"])) and (hidden_count(path["id"]) == 20), "")
+
+    # Line and grid layouts keep the values and ignore them.
+    line = editor.call("level_create_layout", {"scene_name": scene, "name": "wall line", "position": [0.0, 0.0, -10.0], "items": wall,
+                                               "pattern": {"kind": "line", "count": 3, "step": 4.0}, "connector_hiding": {"all": True, "plus_normal": True}})
+    grid = editor.call("level_create_layout", {"scene_name": scene, "name": "wall grid", "position": [0.0, 0.0, -20.0], "items": wall,
+                                               "pattern": {"kind": "grid", "count_x": 2, "count_z": 2, "spacing_x": 4.0, "spacing_z": 2.0},
+                                               "connector_hiding": {"all": True}})
+    editor.wait_idle()
+    ignored = []
+    for layout in (line, grid):
+        _, pieces_reply = readback(layout["id"])
+        ignored += [p["name"] for p in pieces_reply if ("layout" in p) or not all(c["enabled"] for c in p["connectors"])]
+    check("line and grid layouts store the switches and ignore them: every child connector enabled, no layout entry",
+          (not ignored) and layout_of(line["id"])["connector_hiding"]["all"] and layout_of(line["id"])["connector_hiding"]["plus_normal"] and
+          layout_of(grid["id"])["connector_hiding"]["all"], ", ".join(ignored))
+    bad = call_error(editor, "level_set_layout", {"scene_name": scene, "layout_id": path["id"], "connector_hiding": {"sideways": True}})
+    check("level_set_layout refuses an unknown connector_hiding switch", (bad is not None) and ("sideways" in bad), str(bad))
+
+    # Two screenshots of the path with Connectors 'all': switches off, and +/- tangent hidden.
+    set_hiding(path["id"], no_hiding)
+    editor.wait_idle()
+    cv.frame_camera(editor, scene, [8.0, 5.0, 9.0], [8.0, 1.0, 0.0], [[-2.0, 0.0, 0.5], [18.0, 0.0, 0.5], [-2.0, 3.0, 0.0], [18.0, 3.0, 0.0]], limit=0.9)
+    images = {}
+    for label, hiding in (("off", no_hiding), ("tangent", {"plus_tangent": True, "minus_tangent": True})):
+        set_hiding(path["id"], hiding)
+        editor.wait_idle()
+        editor.wait_idle()
+        images[label] = f"{image_prefix}_{label}.png"
+        editor.call("capture_screenshot", {"path": images[label]})
+    _, differing, _ = pav.compare_images(images["off"], images["tangent"])
+    print(f"layout connector screenshots: {images['off']} {images['tangent']}", flush=True)
+    check("a screenshot with +/- tangent hidden differs from one with the switches off (the end connectors between walls are not drawn)",
+          differing > 50, f"{differing} pixels differ")
+    set_hiding(path["id"], dict(no_hiding, all=True, minus_normal=True))
+    editor.wait_idle()
+
+    # Save and load keep the switches.
+    directory = tempfile.mkdtemp(prefix="layout_connectors_")
+    try:
+        saved_path = os.path.join(directory, "layout_connectors.gltf")
+        editor.save(scene, saved_path)
+        editor.close(scene)
+        loaded = editor.load(saved_path)
+        by_name = {layout["name"]: layout for layout in editor.call("level_get_layouts", {"scene_name": loaded})["layouts"]}
+        reloaded = by_name.get("wall path")
+        check("save and load keep the path's switches (all and -normal) and its children hide as before",
+              (reloaded is not None) and reloaded["connector_hiding"]["all"] and reloaded["connector_hiding"]["minus_normal"] and
+              (not reloaded["connector_hiding"]["plus_tangent"]) and (not expectation_problems(reloaded["id"], loaded)) and
+              (by_name.get("wall room", {}).get("connector_hiding") == no_hiding),
+              json.dumps(reloaded["connector_hiding"] if reloaded else None))
+        editor.call("level_set_connector_visualization", {"mode": "off", "viewport": cv.viewport_of(editor, loaded)["title"]})
+        editor.close(loaded)
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+def check_collision_scale(editor, directory):
+    """U40, level plan step 69: a body's collision shape follows its node's world scale after every kind of scale change -
+    set_node_transform, a Transform tool scale drag with its undo, redo and Escape cancel, a scale property write, an ancestor's
+    scale, reparenting, a duplicate and a paste under a scaled parent, save and load, the mass of a dynamic piece, a convex hull,
+    a triangle mesh and a sphere under a non-uniform scale, and a body falling onto a scaled wall in the simulation. Read through
+    the live body (get_node_details physics.body_shape_scale, mass) and through shape collisions (level_get_overlap_report)."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    editor.call("set_surface_snap_settings", {"snap": False, "orient": False})
+    # With the simulation off, as in level editing: the shapes follow without it.
+    editor.call("toggle_physics", {"enabled": False})
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    block = {"width": 0.5, "depth": 0.5, "height": 0.5}
+    # The 2 m wall spans x -1..1; scaled 3 along x it spans -3..3: the near probe is inside only the scaled wall, the far one in neither.
+    wall, near, far = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 0.0], "name": "scale wall", "parameters": {"length": 2.0}},
+        {"shape": "basic.block", "position": [2.5, 0.5, 0.0], "name": "near probe", "parameters": block},
+        {"shape": "basic.block", "position": [3.6, 0.5, 0.0], "name": "far probe", "parameters": block}]})["pieces"]
+    editor.wait_idle()
+
+    def details(node_id, scene_name=None):
+        return editor.call("get_node_details", {"scene_name": scene_name or scene, "node_id": node_id})
+
+    def world_scale(node_id, scene_name=None):
+        return details(node_id, scene_name)["world_transform"]["scale"]
+
+    def body_scale(node_id, scene_name=None):
+        return details(node_id, scene_name)["physics"]["body_shape_scale"]
+
+    def follows(node_id, scene_name=None):
+        """The live body's shape carries the node's world scale."""
+        node = details(node_id, scene_name)
+        expected = [abs(x) for x in node["world_transform"]["scale"]]
+        return close(node["physics"]["body_shape_scale"], expected, 1.0e-4), f"body {fmt3(node['physics']['body_shape_scale'])} node {fmt3(expected)}"
+
+    def overlaps(a, b, scene_name=None):
+        report = editor.call("level_get_overlap_report", {"scene_name": scene_name or scene, "node_ids": [a, b]})
+        return (report["overlap_count"] == 1) and (report["overlaps"][0].get("measure") == "exact") and (report["overlaps"][0].get("depth", 0.0) > 0.05)
+
+    def state(node_id=None, scene_name=None, near_id=None, far_id=None):
+        node_id = node_id or wall["id"]
+        ok, detail = follows(node_id, scene_name)
+        return ok, overlaps(node_id, near_id or near["id"], scene_name), overlaps(node_id, far_id or far["id"], scene_name), detail
+
+    def set_scale(node_id, scale, scene_name=None):
+        editor.call("set_node_transform", {"scene_name": scene_name or scene, "node_id": node_id, "scale": scale})
+        editor.wait_idle()
+
+    ok, near_hit, far_hit, detail = state()
+    check("an unscaled 2 m wall: its body shape is at scale 1, neither probe beyond its end overlaps it", ok and not near_hit and not far_hit, detail)
+
+    # set_node_transform.
+    set_scale(wall["id"], [3.0, 1.0, 1.0])
+    ok, near_hit, far_hit, detail = state()
+    check("set_node_transform scale (3, 1, 1): the body shape takes it, the probe inside the scaled end overlaps (exact), the one beyond does not",
+          ok and near_hit and not far_hit and close(body_scale(wall["id"]), [3.0, 1.0, 1.0], 1.0e-4), detail)
+    set_scale(wall["id"], [1.0, 1.0, 1.0])
+    ok, near_hit, far_hit, detail = state()
+    check("set_node_transform back to scale 1: the body shape is the unscaled one again and the near probe no longer overlaps", ok and not near_hit, detail)
+
+    # A scale property write, its undo and redo.
+    editor.call("set_item_property", {"scene_name": scene, "item_id": wall["id"], "property": "scale", "value": [3.0, 1.0, 1.0]})
+    editor.wait_idle()
+    ok, near_hit, _, detail = state()
+    check("set_item_property scale (3, 1, 1): the body shape follows and the near probe overlaps", ok and near_hit and close(body_scale(wall["id"]), [3.0, 1.0, 1.0], 1.0e-4), detail)
+    editor.call("undo")
+    editor.wait_idle()
+    ok, near_hit, _, detail = state()
+    check("undo of the property write: scale 1 and no overlap", ok and not near_hit and close(body_scale(wall["id"]), [1.0, 1.0, 1.0], 1.0e-4), detail)
+    editor.call("redo")
+    editor.wait_idle()
+    ok, near_hit, _, detail = state()
+    check("redo of the property write: scale 3 and the overlap again", ok and near_hit, detail)
+    editor.call("undo")
+    editor.wait_idle()
+
+    # A parent Xform scaled with the wall as its child, reparenting out of it and back under it.
+    parent = editor.call("create_node", {"scene_name": scene, "name": "scale parent", "position": [0.0, 0.0, 0.0]})
+    editor.wait_idle()
+    parent_id = parent.get("id", parent.get("node_id"))
+    editor.call("reparent_item", {"scene_name": scene, "item_id": wall["id"], "parent_id": parent_id})
+    editor.wait_idle()
+    set_scale(parent_id, [3.0, 1.0, 1.0])
+    ok, near_hit, far_hit, detail = state()
+    check("the wall below a parent scaled (3, 1, 1): its body shape takes the ancestor's scale, the near probe overlaps, the far one does not",
+          ok and near_hit and not far_hit and close(body_scale(wall["id"]), [3.0, 1.0, 1.0], 1.0e-4), detail)
+    editor.call("reparent_item", {"scene_name": scene, "item_id": wall["id"], "parent_id": 0})
+    editor.wait_idle()
+    out_scale = world_scale(wall["id"])
+    ok, near_hit, _, detail = state()
+    check("reparented out from under the scaled parent (the reparent keeps the world transform): the body shape carries the wall's world scale",
+          ok and (near_hit == (abs(out_scale[0]) > 2.0)), f"{detail}, world {fmt3(out_scale)}")
+    set_scale(wall["id"], [1.0, 1.0, 1.0])
+    editor.call("reparent_item", {"scene_name": scene, "item_id": wall["id"], "parent_id": parent_id})
+    editor.wait_idle()
+    in_scale = world_scale(wall["id"])
+    ok, near_hit, _, detail = state()
+    check("an unscaled wall reparented under the scaled parent: the body shape carries the wall's world scale",
+          ok and (near_hit == (abs(in_scale[0]) > 2.0)), f"{detail}, world {fmt3(in_scale)}")
+    editor.call("reparent_item", {"scene_name": scene, "item_id": wall["id"], "parent_id": 0})
+    editor.wait_idle()
+    set_scale(wall["id"], [1.0, 1.0, 1.0])
+    set_scale(parent_id, [1.0, 1.0, 1.0])
+    ok, near_hit, _, detail = state()
+    check("parent and wall back at scale 1: no overlap", ok and not near_hit, detail)
+
+    # A duplicate of a scaled piece and a paste under the scaled parent.
+    set_scale(wall["id"], [3.0, 1.0, 1.0])
+    copy = editor.call("level_duplicate_group", {"scene_name": scene, "group_id": wall["id"], "offset": [0.0, 0.0, 5.0]})
+    editor.wait_idle()
+    near_copy, far_copy = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [2.5, 0.5, 5.0], "name": "near copy probe", "parameters": block},
+        {"shape": "basic.block", "position": [3.6, 0.5, 5.0], "name": "far copy probe", "parameters": block}]})["pieces"]
+    editor.wait_idle()
+    ok, near_hit, far_hit, detail = state(copy["id"], near_id=near_copy["id"], far_id=far_copy["id"])
+    check("level_duplicate_group of the scaled wall: the copy's body shape is at (3, 1, 1), the near probe beside the copy overlaps it, the far one not",
+          ok and near_hit and not far_hit, detail)
+    editor.call("clipboard_copy_nodes", {"scene_name": scene, "node_ids": [wall["id"]]})
+    set_scale(parent_id, [1.0, 1.0, 2.0])
+    before_pieces = {p["id"] for p in pieces(editor, scene)}
+    editor.call("clipboard_paste", {"scene_name": scene, "parent_id": parent_id})
+    editor.wait_idle()
+    pasted = [p["id"] for p in pieces(editor, scene) if p["id"] not in before_pieces]
+    if len(pasted) == 1:
+        ok, detail = follows(pasted[0])
+        check("the scaled wall pasted under a parent scaled (1, 1, 2): the copy's body shape carries the copy's world scale",
+              ok and (abs(world_scale(pasted[0])[0] - 3.0) < 1.0e-3), f"{detail}, world {fmt3(world_scale(pasted[0]))}")
+        editor.call("undo")
+        editor.wait_idle()
+    else:
+        check("clipboard_paste under the scaled parent makes one piece", False, f"new pieces {pasted}")
+    set_scale(wall["id"], [1.0, 1.0, 1.0])
+    set_scale(parent_id, [1.0, 1.0, 1.0])
+
+    # The Transform tool: a scale X handle drag, its undo and redo, and an Escape-cancelled drag.
+    viewport = cv.frame_camera(editor, scene, [0.0, 7.0, 10.0], [0.5, 1.0, 0.0],
+                               [[-3.0, 0.0, -1.0], [-3.0, 3.0, 1.0], [4.0, 0.0, -1.0], [4.0, 3.0, 1.0]], limit=0.9)
+    hover(editor, viewport, [0.0, 0.0, 0.0])
+    editor.call("key_press", {"key": binding_input(editor, "Hotbar.activate_slot_1", "key")})
+    editor.wait_idle()
+    gizmo_state = editor.call("set_gizmo_visibility", {})
+    editor.call("set_gizmo_visibility", {"translate": False, "rotate": False, "scale": True, "scale_gizmo_mode": "basic"})
+    select(editor, scene, [wall["id"]])
+    depth = undo_depth(editor)
+    start, _ = gizmo_grab(editor, viewport, SCALE_X)
+    editor.call("mouse_drag", {"from": [start[0], start[1]], "to": [start[0] + 60, start[1]], "frames": 10, "hold": True})
+    editor.wait_idle()
+    held_ok, _, _, held_detail = state()
+    held_scale = world_scale(wall["id"])
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    dragged = world_scale(wall["id"])
+    ok, _, _, detail = state()
+    check("a held Transform tool scale X drag: the body shape follows the scale during the drag and after the release, one undo entry",
+          held_ok and ok and (abs(held_scale[0] - 1.0) > 0.05) and (abs(dragged[0] - 1.0) > 0.05) and (undo_depth(editor) == depth + 1),
+          f"held {held_detail}; released {detail}; undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    ok, near_hit, _, detail = state()
+    check("undo of the scale drag: the body shape is back at scale 1", ok and not near_hit and close(body_scale(wall["id"]), [1.0, 1.0, 1.0], 1.0e-4), detail)
+    editor.call("redo")
+    editor.wait_idle()
+    ok, _, _, detail = state()
+    check("redo of the scale drag: the body shape takes the dragged scale again", ok and close(body_scale(wall["id"]), [abs(x) for x in dragged], 1.0e-4), detail)
+    editor.call("undo")
+    editor.wait_idle()
+    start, _ = gizmo_grab(editor, viewport, SCALE_X)
+    editor.call("mouse_drag", {"from": [start[0], start[1]], "to": [start[0] + 60, start[1]], "frames": 10, "hold": True})
+    editor.wait_idle()
+    mid_ok, _, _, mid_detail = state()
+    mid_scale = world_scale(wall["id"])
+    editor.call("key_press", {"key": binding_input(editor, "Transform_tool.cancel_drag", "key")})
+    editor.wait_idle()
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    ok, near_hit, _, detail = state()
+    check("an Escape-cancelled scale drag: the body shape followed the held scale and is back at scale 1 after the cancel",
+          mid_ok and (abs(mid_scale[0] - 1.0) > 0.05) and ok and not near_hit and close(body_scale(wall["id"]), [1.0, 1.0, 1.0], 1.0e-4),
+          f"mid {mid_detail}; after {detail}")
+    select(editor, scene, [])
+    editor.call("set_gizmo_visibility", {k: gizmo_state[k] for k in ("translate", "rotate", "scale", "scale_gizmo_mode") if k in gizmo_state})
+
+    # Other collision kinds under a non-uniform scale: a rock's convex hull, the door wall's triangle mesh (its probe pushes into the
+    # front face from outside: a convex inside a mesh's solid is behind every face, which a triangle collision does not report), a sphere.
+    rock, door, door_probe = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.rock", "position": [0.0, 0.0, -10.0], "name": "scale rock"},
+        {"shape": "architecture.door_wall", "position": [0.0, 0.0, -20.0], "name": "scale door wall", "parameters": {"length": 4.0}},
+        {"shape": "basic.block", "position": [3.5, 0.5, -19.75], "name": "door probe", "parameters": block}]})["pieces"]
+    editor.wait_idle()
+    set_scale(rock["id"], [3.0, 1.0, 0.5])
+    ok, detail = follows(rock["id"])
+    check("a rock (convex hull) scaled (3, 1, 0.5): the body is the hull at that scale",
+          ok and ("convex_hull" in details(rock["id"])["physics"]["body_shape_base"]), detail)
+    door_before = overlaps(door["id"], door_probe["id"])
+    set_scale(door["id"], [2.0, 1.0, 1.0])
+    ok, detail = follows(door["id"])
+    detail += f", before {door_before}, report {json.dumps(editor.call('level_get_overlap_report', {'scene_name': scene, 'node_ids': [door['id'], door_probe['id']]}))[:300]}, base {details(door['id'])['physics']['body_shape_base']}"
+    check("a door wall (triangle mesh) scaled (2, 1, 1): the body is the mesh at that scale and its far jamb reaches a probe the unscaled one did not",
+          ok and (not door_before) and overlaps(door["id"], door_probe["id"]) and ("mesh" in details(door["id"])["physics"]["body_shape_base"]), detail)
+    sphere = editor.call("create_shape", {"scene_name": scene, "shape": "uv_sphere", "radius": 0.5, "name": "scale sphere", "instance": True,
+                                          "position": [0.0, 1.0, -30.0], "motion_mode": "static"})
+    editor.wait_idle()
+    sphere_id = sphere.get("node_id", sphere.get("id"))
+    base_before = details(sphere_id)["physics"]["body_shape_base"]
+    set_scale(sphere_id, [2.0, 1.0, 1.0])
+    ok, detail = follows(sphere_id)
+    base_after = details(sphere_id)["physics"]["body_shape_base"]
+    check("a sphere brush scaled (2, 1, 1), which a sphere shape cannot take: the body is the hull of its mesh at that scale",
+          ok and ("sphere" in base_before) and ("convex_hull" in base_after), f"{detail}, {base_before} -> {base_after}")
+    set_scale(sphere_id, [2.0, 2.0, 2.0])
+    ok, detail = follows(sphere_id)
+    check("the sphere scaled uniformly (2, 2, 2): the body is the sphere shape again", ok and ("sphere" in details(sphere_id)["physics"]["body_shape_base"]), detail)
+
+    # A dynamic piece's mass follows its scale (volume times density 1).
+    mover = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [10.0, 0.0, 0.0], "name": "mass block", "parameters": block}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("edit_physics_body", {"scene_name": scene, "node_id": mover["id"], "motion_mode": "dynamic"})
+    editor.wait_idle()
+    mass_1 = details(mover["id"])["physics"]["mass"]
+    set_scale(mover["id"], [2.0, 2.0, 2.0])
+    mass_8 = details(mover["id"])["physics"]["mass"]
+    set_scale(mover["id"], [2.0, 1.0, 1.0])
+    mass_2 = details(mover["id"])["physics"]["mass"]
+    check("a dynamic 0.5 m block weighs 0.125, scaled (2, 2, 2) 1.0 and scaled (2, 1, 1) 0.25: the mass follows the scaled shape",
+          (abs(mass_1 - 0.125) < 1.0e-3) and (abs(mass_8 - 1.0) < 1.0e-3) and (abs(mass_2 - 0.25) < 1.0e-3), f"{mass_1}, {mass_8}, {mass_2}")
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [mover["id"]]})
+    editor.wait_idle()
+
+    # Through the simulation: a block dropped above the wall's middle and one above the far end of the scaled wall land on it.
+    set_scale(wall["id"], [3.0, 1.0, 1.0])
+    wall_top = details(wall["id"])["subtree_world_aabb"]["max"][1]
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [near["id"], far["id"]]})
+    editor.wait_idle()
+
+    def drop_onto_wall(x):
+        """The lowest height a dynamic block dropped above the wall at x reaches in 3 simulated seconds."""
+        faller = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+            {"shape": "basic.block", "position": [x, wall_top + 0.5, 0.0], "name": "faller", "parameters": block}]})["pieces"][0]
+        editor.wait_idle()
+        editor.call("edit_physics_body", {"scene_name": scene, "node_id": faller["id"], "motion_mode": "dynamic", "wake": True})
+        editor.wait_idle()
+        editor.call("advance_time", {"mode": "manual"})
+        editor.call("toggle_physics", {"enabled": True})
+        lowest = None
+        for _ in range(60):
+            editor.call("advance_time", {"seconds": 0.05})
+            deadline = time.monotonic() + 10.0
+            while (editor.call("advance_time", {}).get("pending_seconds", 0.0) > 0.0) and (time.monotonic() < deadline):
+                time.sleep(0.02)
+            position = editor.call("get_physics_state", {"scene_name": scene, "node_id": faller["id"]}).get("position", [0.0, 0.0, 0.0])
+            lowest = position[1] if (lowest is None) else min(lowest, position[1])
+        editor.call("toggle_physics", {"enabled": False})
+        editor.call("advance_time", {"mode": "wall_clock"})
+        editor.wait_idle()
+        editor.call("delete_nodes", {"scene_name": scene, "ids": [faller["id"]]})
+        editor.wait_idle()
+        return lowest
+
+    middle = drop_onto_wall(0.0)
+    end = drop_onto_wall(2.5)
+    check("simulated: a dynamic block dropped above the middle and one above the far end of the wall scaled (3, 1, 1) both come to rest on its top",
+          (middle is not None) and (end is not None) and (abs(middle - wall_top) < 0.1) and (abs(end - wall_top) < 0.1),
+          f"lowest y {middle} and {end}, wall top {wall_top}")
+
+    # Save and load: the scaled wall's body shape is at its scale again.
+    near_again = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [2.5, 0.5, 0.0], "name": "near probe", "parameters": block}]})["pieces"][0]
+    editor.wait_idle()
+    path = os.path.join(directory, "collision_scale.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    name = editor.load(path)
+    loaded = {p["name"]: p["id"] for p in pieces(editor, name)}
+    wall_id, probe_id = loaded.get("scale wall"), loaded.get("near probe")
+    if (wall_id is not None) and (probe_id is not None):
+        ok, detail = follows(wall_id, name)
+        check("save and reload: the wall at (3, 1, 1) has its body shape at (3, 1, 1) and the near probe overlaps it",
+              ok and close(body_scale(wall_id, name), [3.0, 1.0, 1.0], 1.0e-4) and overlaps(wall_id, probe_id, name), detail)
+    else:
+        check("save and reload keeps the wall and the probe", False, json.dumps(sorted(loaded))[:300])
+    del near_again
+    editor.close(name)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--editor", default=default_editor(), help="editor binary (relative to the repository root or absolute)")
@@ -11454,6 +13138,13 @@ def main():
     parser.add_argument("--path-image", default=DEFAULT_PATH_IMAGE, help="path layout PNG (relative to the repository root or absolute)")
     parser.add_argument("--only-layouts", action="store_true", help="run the kit layout node checks alone")
     parser.add_argument("--only-path-layouts", action="store_true", help="run the path layout checks alone")
+    parser.add_argument("--only-segments", action="store_true", help="run the segments layout checks alone")
+    parser.add_argument("--only-stairs-layout", action="store_true", help="run the stairs layout checks alone (U42)")
+    parser.add_argument("--stairs-image-prefix", default=DEFAULT_STAIRS_IMAGE_PREFIX, help="stairs layout PNG path prefix (relative to the repository root or absolute)")
+    parser.add_argument("--only-collision-scale", action="store_true", help="run the checks of collision shapes following node scale alone (U40)")
+    parser.add_argument("--segments-image", default=DEFAULT_SEGMENTS_IMAGE, help="segments layout PNG (relative to the repository root or absolute)")
+    parser.add_argument("--only-segment-handles", action="store_true", help="run the segment handle checks of segments layouts alone")
+    parser.add_argument("--segment-handles-image", default=DEFAULT_SEGMENT_HANDLES_IMAGE, help="segment handles screenshot PNG (relative to the repository root or absolute)")
     parser.add_argument("--only-window-layout", action="store_true", help="run the Level Kit window checks up to its Layout section alone")
     parser.add_argument("--only-layout-drags", action="store_true", help="run the live layout preview checks alone")
     parser.add_argument("--only-transform-rows", action="store_true", help="run the Properties transform row move hook checks alone")
@@ -11466,7 +13157,10 @@ def main():
     parser.add_argument("--only-connector-snap", action="store_true", help="run the connector snap checks of Transform tool drags alone")
     parser.add_argument("--only-layout-indicators", action="store_true", help="run the kit layout drawing checks alone")
     parser.add_argument("--only-region-handles", action="store_true", help="run the scatter region handle checks alone")
+    parser.add_argument("--only-layout-connectors", action="store_true", help="run the connector switch checks of path and segments layouts alone (U39)")
+    parser.add_argument("--layout-connectors-image", default=os.path.join("logs", "level_tools_layout_connectors"), help="prefix of the two layout connector screenshots (_off.png, _tangent.png)")
     parser.add_argument("--only-more-shapes", action="store_true", help="run the checks of the more shapes alone (doc/plans/level_kit_more_shapes.md build order 1 - 12)")
+    parser.add_argument("--only-recreated-shapes", action="store_true", help="run the checks of the recreated shapes beside their originals alone (U41)")
     parser.add_argument("--layout-drag-image", default=DEFAULT_LAYOUT_DRAG_IMAGE, help="mid-drag layout screenshot PNG (relative to the repository root or absolute)")
     args = parser.parse_args()
     image_path = args.image if os.path.isabs(args.image) else os.path.join(pav.REPO_ROOT, args.image)
@@ -11481,7 +13175,11 @@ def main():
     materials_image_path = args.materials_image if os.path.isabs(args.materials_image) else os.path.join(pav.REPO_ROOT, args.materials_image)
     transform_image_path = args.transform_image if os.path.isabs(args.transform_image) else os.path.join(pav.REPO_ROOT, args.transform_image)
     path_image_path = args.path_image if os.path.isabs(args.path_image) else os.path.join(pav.REPO_ROOT, args.path_image)
+    segments_image_path = args.segments_image if os.path.isabs(args.segments_image) else os.path.join(pav.REPO_ROOT, args.segments_image)
+    stairs_image_prefix = args.stairs_image_prefix if os.path.isabs(args.stairs_image_prefix) else os.path.join(pav.REPO_ROOT, args.stairs_image_prefix)
+    segment_handles_image_path = args.segment_handles_image if os.path.isabs(args.segment_handles_image) else os.path.join(pav.REPO_ROOT, args.segment_handles_image)
     layout_drag_image_path = args.layout_drag_image if os.path.isabs(args.layout_drag_image) else os.path.join(pav.REPO_ROOT, args.layout_drag_image)
+    layout_connectors_prefix = args.layout_connectors_image if os.path.isabs(args.layout_connectors_image) else os.path.join(pav.REPO_ROOT, args.layout_connectors_image)
     work = tempfile.mkdtemp(prefix="level_tools_verify_")
     # The window's checkboxes and its visibility rewrite these; the run gives them back as they were.
     restored = {}
@@ -11507,6 +13205,14 @@ def main():
             check_layout_tree(editor)
         elif args.only_path_layouts:
             check_path_layouts(editor, work, path_image_path)
+        elif args.only_segments:
+            check_segment_layouts(editor, work, segments_image_path)
+        elif args.only_stairs_layout:
+            check_stairs_layouts(editor, work, stairs_image_prefix)
+        elif args.only_collision_scale:
+            check_collision_scale(editor, work)
+        elif args.only_segment_handles:
+            check_segment_handles(editor, segment_handles_image_path)
         elif args.only_window_layout:
             window_scene, _ = check_level_kit_window(editor, window_image_path)
             check_window_layout(editor, window_scene, layout_image_path)
@@ -11532,10 +13238,14 @@ def main():
             check_connector_snap(editor)
         elif args.only_layout_indicators:
             check_layout_indicators(editor)
+        elif args.only_layout_connectors:
+            check_layout_connectors(editor, layout_connectors_prefix)
         elif args.only_more_shapes:
             check_more_shapes(editor)
             check_more_shapes_2(editor)
             check_more_shapes_3(editor)
+        elif args.only_recreated_shapes:
+            check_recreated_shapes(editor)
         elif args.only_region_handles:
             check_region_handles(editor)
         elif args.only_layout_selection:
@@ -11569,6 +13279,7 @@ def main():
                 check_connectors(editor)
                 check_layouts(editor, work)
                 check_path_layouts(editor, work, path_image_path)
+                check_segment_layouts(editor, work, segments_image_path)
                 check_layout_tree(editor)
                 check_locked_layout_selection(editor)
             walkable_scene = check_walkable_level(editor, walkable_image_path)
@@ -11596,9 +13307,14 @@ def main():
             check_connector_snap(editor)
             check_layout_indicators(editor)
             check_region_handles(editor)
+            check_segment_handles(editor, segment_handles_image_path)
             check_more_shapes(editor)
             check_more_shapes_2(editor)
             check_more_shapes_3(editor)
+            check_recreated_shapes(editor)
+            check_layout_connectors(editor, layout_connectors_prefix)
+            check_collision_scale(editor, work)
+            check_stairs_layouts(editor, work, stairs_image_prefix)
     except Exception as error:  # noqa: BLE001 - a failed step is a failed check
         check("run completed without an error", False, f"{type(error).__name__}: {error}")
     finally:

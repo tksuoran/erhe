@@ -53,6 +53,7 @@ public:
     void set_gravity_factor          (float gravity_factor)                         override;
     void set_linear_velocity         (const glm::vec3& velocity)                    override;
     void set_mass_properties         (float mass, const glm::mat4& local_inertia)   override;
+    void set_collision_shape         (const std::shared_ptr<ICollision_shape>& collision_shape) override;
     void set_motion_mode             (Motion_mode motion_mode)                      override;
     void set_restitution             (float restitution)                            override;
     void set_world_transform         (const Transform& transform)                   override;
