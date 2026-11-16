@@ -393,6 +393,8 @@ erhe_target_sources_grouped(
     level/kit_layout_region_tool.hpp
     level/kit_layout_values.cpp
     level/kit_layout_values.hpp
+    level/kit_leaf.cpp
+    level/kit_leaf.hpp
     level/kit_mesh_builder.cpp
     level/kit_mesh_builder.hpp
     level/kit_parameter_rows.cpp
@@ -412,7 +414,14 @@ erhe_target_sources_grouped(
     level/kit_shapes.hpp
     level/kit_shapes_architecture.cpp
     level/kit_shapes_basic.cpp
+    level/kit_shapes_classical.cpp
+    level/kit_shapes_japanese.cpp
+    level/kit_shapes_medieval.cpp
     level/kit_shapes_nature.cpp
+    level/kit_shapes_nature_plants.cpp
+    level/kit_shapes_nature_terrain.cpp
+    level/kit_shapes_nature_rocks.cpp
+    level/kit_shapes_roof.cpp
     level/level_kit_window.cpp
     level/level_kit_window.hpp
     level/level_kits.cpp
@@ -1593,6 +1602,11 @@ set_target_properties(
 )
 
 erhe_target_settings(${_target} "erhe-executables")
+
+if (MSVC)
+    # editor.cpp exceeds the default COFF section limit (C1128).
+    set_source_files_properties(editor.cpp PROPERTIES COMPILE_OPTIONS "/bigobj")
+endif ()
 
 ########
 

@@ -152,6 +152,10 @@ is started from this list alone.
     drag not along the handle's side (an axis drag of a turned node's
     handle, tangential motion of a disc handle) the gizmo parts from the
     handle until the release.
+65. Roofs and navigation (for the user): a roof has a triangle mesh body and
+    at pitches of 15 - 45 degrees its slopes are walkable navigation input, a
+    walkable island over every roofed room; decide whether a roof is
+    navigation input, passes through (no input) or counts only where reachable.
 12. The `[should]` requirements not named above, each as its own step:
     assemblies (R5.7), the further shapes
     (R4.2 - R4.4), texture coordinates (R2.8), the walkable area picture and

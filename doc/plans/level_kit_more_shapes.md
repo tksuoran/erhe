@@ -1,6 +1,6 @@
 # Level kit: more shapes
 
-Status: proposed
+Status: in progress
 
 The shape list for step 62 of `doc/plans/level_tools_implementation.md`
 ("Expand the kit with more shapes"), chosen by the orchestrator within
@@ -88,7 +88,7 @@ Where each unbuilt shape of R4.3 and R4.4 goes.
 | `nature.boulder_cluster` | Several rocks of the `nature.rock` hull forms heaped in a round footprint | **radius** (1 - 4 m), **count** (3 - 9), size_spread (0.3 - 0.8), form (`angular`, `worn`, `mixed`) | rock | none | mesh | scatter | hull and chamfer, as `nature.rock` | M |
 | `nature.rock_spire` | Standing rock family: pinnacle, sea stack, hoodoo with a cap, mesa with a flat top | form (`pinnacle`, `stack`, `hoodoo`, `mesa`), **height** (1 - 6 wh), **radius** (0.5 - 4 m), taper, **lean** (0 - 8 degrees), roughness | rock | base | mesh | scatter, ring | blob rings | M |
 | `nature.rock_arch` | Natural arch across X with a walkable opening and a rough ring | span (3 m, fixed minimum 2), rise (1 wh, fixed minimum), **thickness** (0.8 - 2 meters), depth, roughness | rock | start, end, base | mesh | line | ring with jittered section | M |
-| `nature.basalt_columns` | Cluster of hexagonal columns of seeded heights with flat tops | **radius** (1 - 4 m), column_width (0.5 m), height (1 wh), **height_spread** (0.1 - 0.6), step (the height quantum; at the agent's climb the tops are stairs) | rock | base | mesh | scatter, line | prism per column | S |
+| `nature.basalt_columns` | Cluster of hexagonal columns with flat tops in whole steps, neighbours at most one step apart | **radius** (1 - 3 m), column_width (0.5 m), height (1 wh), **height_spread** (0.1 - 0.6), step (the height quantum, fixed; at the agent's climb the tops are stairs) | rock | base | mesh | scatter, line | prism per column | M |
 | `nature.stepping_stone` | Flat-topped stone, walkable | **diameter** (0.6 - 1.5 m), thickness (0.2 - 0.5 meters), sides (5 - 9) | rock | base, top | hull | path, scatter, line | hull of a jittered ring, flat top polygon | S |
 
 ### Tropical plants (kit `nature`)
@@ -105,16 +105,16 @@ Where each unbuilt shape of R4.3 and R4.4 goes.
 
 | Shape | Description | Parameters | Slots | Connectors | Body | Layouts | Geometry | Size |
 |---|---|---|---|---|---|---|---|---|
-| `nature.palm` | Single-trunk palm; the species sets the trunk line and the crown kind | species (`coconut`: curved slender trunk, feather fronds, nuts; `date`: thick trunk with frond stubs; `royal`: straight column with a crownshaft; `fan`: palmate leaves, a skirt of dead ones; `bottle`: swollen trunk), **height** (1 - 5 wh), **bend** (0 - 0.35 of the height), **fronds** (8 - 20), frond_length, **droop** | bark, foliage | none | mesh | scatter, line, path | sweep for the trunk, leaf; a fan leaf is a polygon fan | L |
-| `nature.palm_clump` | Several slender stems from one root, each with a small crown | species (`areca`, `rhapis`, `nipa`), **stems** (3 - 9), **height** (0.6 - 2.5 wh), spread, fronds per stem (4 - 8) | bark, foliage | none | mesh | scatter | the trunk and crown of `nature.palm` | S |
+| `nature.palm` | Single-trunk palm; the species sets the trunk line and the crown kind | species (`coconut`: curved slender trunk, feather fronds, nuts; `date`: thick ringed trunk, stiff fronds; `royal`: straight column with a crownshaft; `fan`: palmate leaves, a skirt of dead ones; `bottle`: swollen trunk), **height** (1 - 5 wh), **bend** (0 - 0.35 of the height), **fronds** (8 - 20), frond_length, **droop** | bark, foliage | none | mesh | scatter, line, path | sweep for the trunk, leaf; a fan leaf is a polygon fan | L |
+| `nature.palm_clump` | Several slender stems from one root, each with a small crown; at most 40 fronds in all | species (`areca`, `rhapis`, `nipa`), **stems** (3 - 9), **height** (0.6 - 1.6 wh), spread, fronds per stem (4 - 8) | bark, foliage | none | mesh | scatter | the trunk and crown of `nature.palm` | M |
 | `nature.palm_shrub` | Trunkless crown at the ground | species (`palmetto`: fan leaves; `cycad`: stiff feather fronds on a short stump; `seedling`), **size** (0.6 - 2.5 meters), **fronds** (5 - 16) | foliage, bark | none | hull | scatter | the crown of `nature.palm` | S |
 
 ### Beach (kit `nature`)
 
 | Shape | Description | Parameters | Slots | Connectors | Body | Layouts | Geometry | Size |
 |---|---|---|---|---|---|---|---|---|
-| `nature.shore` | Beach tile along X: sand sloping from its back top edge down toward +Z to below the water level, with a seeded undulation; flat ends so tiles join | length (4 m), run (6 m), rise (1 m, fixed maximum slope), **undulation** (0 - 0.15 meters), berm (0 - 0.5 of the run, the flat part at the top) | sand | start, end, top (back edge), base | mesh | path, line | grid of height samples, polygon for the flat sides | M |
-| `nature.dune` | Elongated sand mound with a gentle windward and a steeper lee side | **length** (4 - 12 m), **width** (2 - 6 m), **height** (0.3 - 0.7 of the fixed walkable limit), asymmetry (0 - 0.6) | sand | none | hull | scatter, line | blob rings scaled along X, as `nature.hill` | S |
+| `nature.shore` | Beach tile along X: sand sloping from its back top edge down toward +Z to a low front lip, below the water level of a water piece placed over it, with a seeded undulation; flat ends so tiles join | length (4 m), run (6 m), rise (1 m, fixed maximum slope), **undulation** (0 - 0.15 meters), berm (0 - 0.4 of the run, the flat part at the top; the derive range that keeps the slope walkable) | sand | start, end, top (back edge), base | mesh | path, line | grid of height samples, polygon for the flat sides | M |
+| `nature.dune` | Elongated sand mound with a gentle windward and a steeper lee side; a length under 1.04 times the width is refused | **length** (9 - 15 meters), **width** (4.5 - 7 meters), **height** (0.5 - 0.85 meters: the lee's 45 degrees bound it by the narrowest width, so all three in meters), asymmetry (0 - 0.4) | sand | none | hull | scatter, line | stadium rings, the crest drifting toward the lee | S |
 | `nature.ground_patch` | Thin irregular patch that lies on other ground: sand, earth, grass | **size** (1 - 6 m), thickness (0.05 meters), **irregularity** (0.1 - 0.5), dome (0 - 0.1 of the size) | earth | none | hull | scatter | blob with a flat cap | S |
 | `nature.log` | Dead wood family | form (`log`, `stump`, `driftwood` with branch stubs), **length** (0.5 - 4 meters), **width** (0.2 - 0.8 meters), **bend**, stubs (0 - 4) | bark | base (stump: base, top) | hull | scatter | prism, sweep for a bent log | M |
 | `nature.shell` | Sea life left on the sand | form (`conch`, `scallop`, `starfish`), **size** (0.1 - 0.6 meters), ribs (5 - 12) | stone | none | none | scatter | sweep along a tapered helix, polygon fan | M |
@@ -124,8 +124,9 @@ The water piece is placed at the water level and other pieces pass through
 it (overlap is accepted, U20): `nature.shore` slopes down under it, the
 shoreline being where the two meet; a `nature.cliff` or a
 `nature.rock_spire` stands in it; step 63's quay wall and pier piles stand
-on the bed below and rise through it, and its boat and buoy sit on it by
-snap to surface. Patches tile by a grid layout or by their edge
+on the bed below and rise through it, and its boat and buoy float on it
+by a rule of their own (water is no snap to surface target: snapped pieces
+pass through it to the bed). Patches tile by a grid layout or by their edge
 connectors. The subdivisions give vertices for later vertex effects.
 
 ### Architecture, common modules (kit `architecture`)
@@ -143,14 +144,14 @@ connectors. The subdivisions give vertices for later vertex effects.
 
 | Shape | Description | Parameters | Slots | Connectors | Body | Layouts | Geometry | Size |
 |---|---|---|---|---|---|---|---|---|
-| `architecture.column` | Classical: column with base, tapered fluted shaft and capital | order (`doric`, `ionic`, `corinthian`), height (1 wh), width (0.5 m), flutes (0, 12 - 24), taper (0 - 0.2) | trim | base, top | hull | line, grid, ring | blob rings as a lathe with a star section for flutes, box for the abacus | M |
-| `architecture.entablature` | Classical: beam run of architrave, frieze and cornice that rests on column tops | length (2 m), height (0.25 wh), depth (0.5 m), cornice (0 - 0.3 meters) | trim | start, end, base, top | hull | line, path | profile polygon extruded along X | S |
+| `architecture.column` | Classical: column with base, tapered fluted shaft with entasis, and capital (echinus, volutes or a bell of leaves) under a square abacus | order (`doric`, `ionic`, `corinthian`), height (1 wh), width (0.5 m), flutes (0 - 24, 0 a plain shaft; derived 12 - 24), taper (0 - 0.2) | trim | base, top | hull | line, grid, ring | lathe of the fluted section, round lathes for base and capital, box for plinth and abacus, leaf for the corinthian leaves | M |
+| `architecture.entablature` | Classical: beam run of architrave, frieze and cornice that rests on column tops; half triglyphs at its ends | length (2 m), height (0.25 wh), depth (0.5 m), cornice (0 - 0.3 meters), frieze (`triglyph`, `plain`) | trim | base, top, start, end | mesh (a hull would fill under the cornice) | line, path | profile polygon extruded along X, box per triglyph bar and regula | S |
 | `architecture.pediment` | Classical: triangular gable front with a raking cornice | width (4 m), pitch (12 - 30 degrees), depth (0.5 m), recess (0 - 0.2 meters) | trim, wall (the recessed field) | base, start, end | mesh | line | polygon | S |
-| `architecture.battlement` | Medieval: parapet run of merlons and crenels on a wall top | length (2 m), height (0.9 meters), thickness (the wall's default), merlon_width, crenel_width, merlon (`square`, `swallowtail`, `pointed`) | wall | start, end, base | mesh | line, path | box, polygon | S |
-| `architecture.tower` | Medieval: round or square tower segment with a battered foot and a doorway; hollow, the top a walkable floor | profile (`round`, `square`), width (3 m), height (1.5 wh), batter (0 - 8 degrees), wall (0.4 meters), opening_width, opening_height (fixed minimums) | wall, floor | base, top, opening_front | mesh | line | polygon rings, ring for the doorway | L |
+| `architecture.battlement` | Medieval: parapet run of merlons and crenels on a wall top | length (2 m), height (the crenels' sill, 0.9 meters), thickness (the wall's default), merlon_height (0.9 meters), merlon_width, crenel_width, merlon (`square`, `swallowtail`, `pointed`) | wall | base, start, end | mesh | line, path | polygon columns of the front elevation extruded through the thickness | S |
+| `architecture.tower` | Medieval: round or square tower segment with a battered foot, a doorway under a projecting lintel and rows of arrow slits through the wall; hollow, the top a walkable floor behind a corbelled crenellated parapet, or flat for stacking | profile (`round`, `square`), width (3 meters: the doorway and the agent fix the least), height (1.5 wh), batter (0 - 8 degrees), wall (0.4 meters), opening_width, opening_height (fixed minimums; 1.2 by 2.2 meters), top (`battlement`, `flat`), slit_rows (0 - 2) | wall, floor | base, top, opening_front, left, right, back | mesh | line | rings of equal entries with cuts for the openings, box for the lintel | L |
 | `architecture.spiral_stairs` | Medieval: spiral stairs around a newel | rise (1 wh), radius (1.25 m, fixed minimum), step_rise_limit (fixed), turn (`left`, `right`), newel_width | stone | bottom, top, base | mesh | - | polygon wedge per step, prism for the newel | M |
 | `architecture.buttress` | Medieval: stepped buttress against a wall face | height (1 wh), depth (1 m), width (0.5 m), steps (1 - 4) | stone | back, base | hull | line, path | profile polygon extruded along X | S |
-| `architecture.torii` | Japanese: gate of two posts, a tie beam and a curved top beam | width (3 m), height (1.2 wh), **curve** (0 - 0.15 of the width), post_width, lean (0 - 4 degrees) | wood | base, opening_front, opening_back | mesh | path, line | prism, beam (P4), polygon strips for the curved beam | M |
+| `architecture.torii` | Japanese: gate of two posts, a tie beam and a curved top beam | width (3 meters), height (3.6 meters; both in meters: the agent fixes the least opening), **curve** (0 - 0.15 of the width), post_width, lean (0 - 4 degrees) | wood | base, opening_front, opening_back | mesh | path, line | prism, beam (P4), polygon strips for the curved beam | M |
 | `architecture.timber_bay` | Japanese: one bay of a post-and-beam wall with its infill | length (2 m), height (1 wh), post_width (0.15 meters), infill (`open`, `shoji`, `plaster`, `half`), rails (0 - 3) | wood, wall | the wall's six | mesh | line, path | box | M |
 | `architecture.stone_lantern` | Japanese: stone lantern of base, shaft, light box and cap; one point light | height (1.5 meters), width, cap (`square`, `hexagonal`), **cap_curve** | stone, glow | base | hull | path, line | prism, blob rings | M |
 
@@ -169,8 +170,9 @@ P1 - P5 are defined in the extra shapes document; Q1 - Q3 are this step's
 own. The first commit holds P1 and Q1; the others land in the commit of
 the first shape that needs them.
 
-- P1 (triangle ceiling): before the first shape. The cliff, the palms, the
-  tower and the boulder cluster pass 500 triangles at their defaults.
+- P1 (triangle ceiling): before the first shape. The palms, the tower and
+  the boulder cluster pass 500 triangles at their defaults (the built palm
+  has 1510, the built cliff 266).
 - P3 (slots and palette), in part: `wood` with `architecture.torii`,
   `water` and Kit Water with `nature.water`, `glow` and Kit Glow with
   `architecture.stone_lantern`.
@@ -189,8 +191,10 @@ the first shape that needs them.
 - Q2 Leaf helper (M): one function that adds a leaf, frond or blade to the
   builder: a section (flat, folded or thick) swept by `make_sweep()` along
   a bent spine with a taper to a point, taken in by `add_mesh()`; a
-  feather frond is a midrib with leaflet blades. Built with `nature.palm`;
-  every `leaf` in the tables calls it.
+  feather frond is a folded leaf, its two halves the leaflet rows (a midrib
+  with separate leaflet blades would pass the triangle ceiling at twenty
+  fronds). Built with `nature.palm` (`add_leaf()`, `kit_leaf.hpp`); every
+  `leaf` in the tables calls it.
 - Q3 Arch ring heads (S): `make_arch_points()` of
   `kit_shapes_architecture.cpp` shared through `kit_shapes.hpp` with a
   head form (`round`, `pointed`) and an optional seeded jitter. Built with
@@ -198,10 +202,21 @@ the first shape that needs them.
 
 ## Build order
 
-One commit per line, each with its checks in
+The lines are built in order, about four lines to a commit (one coder
+session and one review per commit), each shape with its checks in
 `scripts/level_tools_verify.py` and its entry in
 `doc/editor/level_tools.md`. The first ten put one strong silhouette of
 every category in front of the user; the rest follow by category.
+
+Built: lines 1 - 12 (P1, Q1, `nature.cliff`, `nature.palm` with P4
+`add_mesh()` and Q2, `nature.shore` and `nature.water` with P5,
+`architecture.column` and `architecture.entablature`, `nature.leaf_plant`,
+`architecture.torii` with P4 `add_beam()`, `architecture.battlement` and
+`architecture.tower`, `nature.rock_spire` and `nature.basalt_columns`,
+`architecture.roof`, `nature.palm_clump` and `nature.palm_shrub`,
+`nature.dune` and `nature.ground_patch`), with the `water` and `wood` slots
+of P3 and their palette materials; their checks run under
+`--only-more-shapes`.
 
 1. P1 and Q1.
 2. `nature.cliff`.

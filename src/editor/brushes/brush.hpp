@@ -44,6 +44,13 @@ namespace editor {
 
 class Brush_geometry_queue_state;
 
+// Whether a brush's instances get a physics body: from the collision shape or generator when given, else the
+// geometry's convex hull; or none at all (a surface such as water, doc/editor/brushes.md "Collision").
+enum class Brush_body : unsigned int {
+    from_geometry = 0,
+    none
+};
+
 class Brush_data
 {
 public:
@@ -69,6 +76,7 @@ public:
     Collision_volume_calculator                      collision_volume_calculator{};
     std::shared_ptr<erhe::physics::ICollision_shape> collision_shape            {};
     Collision_shape_generator                        collision_shape_generator  {};
+    Brush_body                                       body                       {Brush_body::from_geometry};
 };
 
 class Instance_create_info final

@@ -24,7 +24,7 @@ using editor::Repeat_scatter_region;
 
 constexpr float c_tolerance = 1.0e-5f;
 
-[[nodiscard]] auto near(const glm::vec3& a, const glm::vec3& b) -> bool
+[[nodiscard]] auto is_near(const glm::vec3& a, const glm::vec3& b) -> bool
 {
     return glm::length(a - b) <= c_tolerance;
 }
@@ -54,12 +54,12 @@ TEST(Kit_layout_outline, line_segment_and_ticks_across)
     ASSERT_EQ(outline_of(pattern, 0.5f, outline), "");
     ASSERT_EQ(outline.polyline.size(), 2u);
     EXPECT_FALSE(outline.closed);
-    EXPECT_TRUE(near(outline.polyline[0], glm::vec3{0.0f}));
-    EXPECT_TRUE(near(outline.polyline[1], glm::vec3{4.0f, 0.0f, 0.0f}));
+    EXPECT_TRUE(is_near(outline.polyline[0], glm::vec3{0.0f}));
+    EXPECT_TRUE(is_near(outline.polyline[1], glm::vec3{4.0f, 0.0f, 0.0f}));
     ASSERT_EQ(outline.ticks.size(), 3u);
     for (std::size_t i = 0; i < 3; ++i) {
-        EXPECT_TRUE(near(outline.ticks[i].position, glm::vec3{2.0f * static_cast<float>(i), 0.0f, 0.0f}));
-        EXPECT_TRUE(near(outline.ticks[i].direction, glm::vec3{0.0f, 0.0f, -1.0f}));
+        EXPECT_TRUE(is_near(outline.ticks[i].position, glm::vec3{2.0f * static_cast<float>(i), 0.0f, 0.0f}));
+        EXPECT_TRUE(is_near(outline.ticks[i].direction, glm::vec3{0.0f, 0.0f, -1.0f}));
     }
     EXPECT_TRUE(outline.arcs.empty());
     EXPECT_TRUE(outline.circles.empty());
@@ -67,8 +67,8 @@ TEST(Kit_layout_outline, line_segment_and_ticks_across)
     // A vertical line ticks along z.
     pattern.direction = glm::vec3{0.0f, 1.0f, 0.0f};
     ASSERT_EQ(outline_of(pattern, 0.5f, outline), "");
-    EXPECT_TRUE(near(outline.polyline[1], glm::vec3{0.0f, 4.0f, 0.0f}));
-    EXPECT_TRUE(near(outline.ticks[0].direction, glm::vec3{0.0f, 0.0f, 1.0f}));
+    EXPECT_TRUE(is_near(outline.polyline[1], glm::vec3{0.0f, 4.0f, 0.0f}));
+    EXPECT_TRUE(is_near(outline.ticks[0].direction, glm::vec3{0.0f, 0.0f, 1.0f}));
 }
 
 TEST(Kit_layout_outline, grid_cell_extent_and_row_column_ticks)
@@ -83,15 +83,15 @@ TEST(Kit_layout_outline, grid_cell_extent_and_row_column_ticks)
     ASSERT_EQ(outline_of(pattern, 0.5f, outline), "");
     ASSERT_EQ(outline.polyline.size(), 4u);
     EXPECT_TRUE(outline.closed);
-    EXPECT_TRUE(near(outline.polyline[0], glm::vec3{-1.0f, 0.0f, -0.75f}));
-    EXPECT_TRUE(near(outline.polyline[1], glm::vec3{ 5.0f, 0.0f, -0.75f}));
-    EXPECT_TRUE(near(outline.polyline[2], glm::vec3{ 5.0f, 0.0f,  2.25f}));
-    EXPECT_TRUE(near(outline.polyline[3], glm::vec3{-1.0f, 0.0f,  2.25f}));
+    EXPECT_TRUE(is_near(outline.polyline[0], glm::vec3{-1.0f, 0.0f, -0.75f}));
+    EXPECT_TRUE(is_near(outline.polyline[1], glm::vec3{ 5.0f, 0.0f, -0.75f}));
+    EXPECT_TRUE(is_near(outline.polyline[2], glm::vec3{ 5.0f, 0.0f,  2.25f}));
+    EXPECT_TRUE(is_near(outline.polyline[3], glm::vec3{-1.0f, 0.0f,  2.25f}));
     ASSERT_EQ(outline.ticks.size(), 5u);
-    EXPECT_TRUE(near(outline.ticks[2].position, glm::vec3{4.0f, 0.0f, -0.75f}));
-    EXPECT_TRUE(near(outline.ticks[2].direction, glm::vec3{0.0f, 0.0f, 1.0f}));
-    EXPECT_TRUE(near(outline.ticks[4].position, glm::vec3{-1.0f, 0.0f, 1.5f}));
-    EXPECT_TRUE(near(outline.ticks[4].direction, glm::vec3{1.0f, 0.0f, 0.0f}));
+    EXPECT_TRUE(is_near(outline.ticks[2].position, glm::vec3{4.0f, 0.0f, -0.75f}));
+    EXPECT_TRUE(is_near(outline.ticks[2].direction, glm::vec3{0.0f, 0.0f, 1.0f}));
+    EXPECT_TRUE(is_near(outline.ticks[4].position, glm::vec3{-1.0f, 0.0f, 1.5f}));
+    EXPECT_TRUE(is_near(outline.ticks[4].direction, glm::vec3{1.0f, 0.0f, 0.0f}));
 }
 
 TEST(Kit_layout_outline, ring_arc_through_its_elements_with_radial_ticks)
@@ -105,18 +105,18 @@ TEST(Kit_layout_outline, ring_arc_through_its_elements_with_radial_ticks)
     ASSERT_EQ(outline_of(pattern, 0.5f, outline), "");
     ASSERT_EQ(outline.arcs.size(), 1u);
     const Kit_layout_arc& arc = outline.arcs.front();
-    EXPECT_TRUE(near(arc.center, glm::vec3{0.0f, 0.0f, -2.0f}));
+    EXPECT_TRUE(is_near(arc.center, glm::vec3{0.0f, 0.0f, -2.0f}));
     EXPECT_FLOAT_EQ(arc.radius, 2.0f);
     EXPECT_FLOAT_EQ(arc.degrees, 180.0f);
-    EXPECT_TRUE(near(editor::get_arc_point(arc, 0.0f), glm::vec3{0.0f}));
-    EXPECT_TRUE(near(editor::get_arc_point(arc, 90.0f), glm::vec3{2.0f, 0.0f, -2.0f}));
+    EXPECT_TRUE(is_near(editor::get_arc_point(arc, 0.0f), glm::vec3{0.0f}));
+    EXPECT_TRUE(is_near(editor::get_arc_point(arc, 90.0f), glm::vec3{2.0f, 0.0f, -2.0f}));
     ASSERT_EQ(outline.ticks.size(), 3u);
     // The elements sit on the arc: the first at its start, the last at its end.
-    EXPECT_TRUE(near(outline.ticks[0].position, editor::get_arc_point(arc, 0.0f)));
-    EXPECT_TRUE(near(outline.ticks[1].position, editor::get_arc_point(arc, 90.0f)));
-    EXPECT_TRUE(near(outline.ticks[2].position, editor::get_arc_point(arc, 180.0f)));
-    EXPECT_TRUE(near(outline.ticks[1].direction, glm::vec3{1.0f, 0.0f, 0.0f}));
-    EXPECT_TRUE(near(outline.ticks[2].direction, glm::vec3{0.0f, 0.0f, -1.0f}));
+    EXPECT_TRUE(is_near(outline.ticks[0].position, editor::get_arc_point(arc, 0.0f)));
+    EXPECT_TRUE(is_near(outline.ticks[1].position, editor::get_arc_point(arc, 90.0f)));
+    EXPECT_TRUE(is_near(outline.ticks[2].position, editor::get_arc_point(arc, 180.0f)));
+    EXPECT_TRUE(is_near(outline.ticks[1].direction, glm::vec3{1.0f, 0.0f, 0.0f}));
+    EXPECT_TRUE(is_near(outline.ticks[2].direction, glm::vec3{0.0f, 0.0f, -1.0f}));
     EXPECT_TRUE(outline.polyline.empty());
 }
 
@@ -132,8 +132,8 @@ TEST(Kit_layout_outline, scatter_region_and_spacing_circles)
     ASSERT_EQ(outline_of(pattern, 0.5f, outline), "");
     ASSERT_EQ(outline.polyline.size(), 4u);
     EXPECT_TRUE(outline.closed);
-    EXPECT_TRUE(near(outline.polyline[0], glm::vec3{-5.0f, 0.0f, -3.0f}));
-    EXPECT_TRUE(near(outline.polyline[2], glm::vec3{ 5.0f, 0.0f,  3.0f}));
+    EXPECT_TRUE(is_near(outline.polyline[0], glm::vec3{-5.0f, 0.0f, -3.0f}));
+    EXPECT_TRUE(is_near(outline.polyline[2], glm::vec3{ 5.0f, 0.0f,  3.0f}));
     EXPECT_TRUE(outline.ticks.empty());
     ASSERT_EQ(outline.circles.size(), 12u);
     for (std::size_t i = 0; i < outline.circles.size(); ++i) {
@@ -151,7 +151,7 @@ TEST(Kit_layout_outline, scatter_region_and_spacing_circles)
     ASSERT_EQ(outline_of(pattern, 0.5f, outline), "");
     EXPECT_TRUE(outline.polyline.empty());
     ASSERT_EQ(outline.arcs.size(), 1u);
-    EXPECT_TRUE(near(outline.arcs[0].center, glm::vec3{0.0f}));
+    EXPECT_TRUE(is_near(outline.arcs[0].center, glm::vec3{0.0f}));
     EXPECT_FLOAT_EQ(outline.arcs[0].radius, 3.0f);
     EXPECT_FLOAT_EQ(outline.arcs[0].degrees, 360.0f);
     for (const editor::Kit_layout_spacing_circle& circle : outline.circles) {
@@ -182,10 +182,10 @@ TEST(Kit_layout_outline, scatter_region_handles_on_the_outline)
     ASSERT_EQ(outline.region_handles.size(), 8u);
     // The corners at the polyline's points, then the edge midpoints between each corner and the next.
     for (std::size_t i = 0; i < 4; ++i) {
-        EXPECT_TRUE(near(outline.region_handles[i].position, outline.polyline[i]));
+        EXPECT_TRUE(is_near(outline.region_handles[i].position, outline.polyline[i]));
         EXPECT_EQ(outline.region_handles[i].value, Kit_region_handle_value::size_x_z);
         const glm::vec3 midpoint = 0.5f * (outline.polyline[i] + outline.polyline[(i + 1) % 4]);
-        EXPECT_TRUE(near(outline.region_handles[4 + i].position, midpoint));
+        EXPECT_TRUE(is_near(outline.region_handles[4 + i].position, midpoint));
     }
     EXPECT_EQ(outline.region_handles[4].value, Kit_region_handle_value::size_z);
     EXPECT_EQ(outline.region_handles[5].value, Kit_region_handle_value::size_x);
@@ -198,7 +198,7 @@ TEST(Kit_layout_outline, scatter_region_handles_on_the_outline)
     ASSERT_EQ(outline.region_handles.size(), 4u);
     for (std::size_t i = 0; i < 4; ++i) {
         EXPECT_EQ(outline.region_handles[i].value, Kit_region_handle_value::region_radius);
-        EXPECT_TRUE(near(outline.region_handles[i].position, editor::get_arc_point(outline.arcs[0], 90.0f * static_cast<float>(i))));
+        EXPECT_TRUE(is_near(outline.region_handles[i].position, editor::get_arc_point(outline.arcs[0], 90.0f * static_cast<float>(i))));
     }
 
     pattern.kind = Repeat_pattern_kind::line;

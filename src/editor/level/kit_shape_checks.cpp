@@ -111,8 +111,9 @@ auto count_kit_triangles(const GEO::Mesh& mesh) -> unsigned int
     return count;
 }
 
-auto check_kit_mesh(const GEO::Mesh& mesh) -> Kit_mesh_report
+auto check_kit_mesh(const GEO::Mesh& mesh, const Kit_mesh_kind mesh_kind) -> Kit_mesh_report
 {
+    const bool closed = (mesh_kind == Kit_mesh_kind::solid);
     Kit_mesh_report report;
     const std::vector<glm::vec3> positions = read_positions(mesh);
     report.vertex_count   = static_cast<unsigned int>(positions.size());
@@ -197,7 +198,7 @@ auto check_kit_mesh(const GEO::Mesh& mesh) -> Kit_mesh_report
     }
 
     for (const std::pair<const std::pair<uint32_t, uint32_t>, uint32_t>& entry : edge_facet) {
-        if (!edge_facet.contains(std::make_pair(entry.first.second, entry.first.first))) {
+        if (closed && !edge_facet.contains(std::make_pair(entry.first.second, entry.first.first))) {
             report.problems.push_back(fmt::format("edge {} -> {} is open", entry.first.first, entry.first.second));
             break;
         }
@@ -209,8 +210,19 @@ auto check_kit_mesh(const GEO::Mesh& mesh) -> Kit_mesh_report
             continue;
         }
         // Around a manifold vertex the corners form one cycle: each corner's next vertex is the following corner's previous.
+        // On a surface's boundary they form one chain instead, from the corner whose previous vertex no corner leads to.
         const std::vector<std::pair<uint32_t, uint32_t>>& fan = vertex_fans[v];
-        uint32_t    current = fan.front().first;
+        uint32_t start = fan.front().first;
+        if (!closed) {
+            for (const std::pair<uint32_t, uint32_t>& corner : fan) {
+                const bool reached = std::any_of(fan.begin(), fan.end(), [&corner](const std::pair<uint32_t, uint32_t>& c) { return c.second == corner.first; });
+                if (!reached) {
+                    start = corner.first;
+                    break;
+                }
+            }
+        }
+        uint32_t    current = start;
         std::size_t steps   = 0;
         do {
             const std::vector<std::pair<uint32_t, uint32_t>>::const_iterator it = std::find_if(
@@ -221,8 +233,10 @@ auto check_kit_mesh(const GEO::Mesh& mesh) -> Kit_mesh_report
             }
             current = it->second;
             ++steps;
-        } while ((current != fan.front().first) && (steps <= fan.size()));
-        if ((current != fan.front().first) || (steps != fan.size())) {
+        } while ((current != start) && (steps <= fan.size()));
+        const bool cycle = (current == start);
+        const bool chain = !closed && !cycle && std::none_of(fan.begin(), fan.end(), [current](const std::pair<uint32_t, uint32_t>& c) { return c.first == current; });
+        if ((!cycle && !chain) || (steps != fan.size())) {
             report.problems.push_back(fmt::format("vertex {} is not manifold", v));
         }
     }
@@ -256,7 +270,7 @@ auto check_kit_mesh(const GEO::Mesh& mesh) -> Kit_mesh_report
     }
     report.component_count = static_cast<unsigned int>(component_volume.size());
     for (const std::pair<const std::size_t, double>& entry : component_volume) {
-        if (entry.second <= 0.0) {
+        if (closed && (entry.second <= 0.0)) {
             report.problems.push_back(fmt::format("a component has volume {}: winding is not outward", entry.second));
         }
     }
@@ -364,7 +378,7 @@ auto check_kit_shape(const Kit_parameter_values& values) -> Kit_mesh_report
     }
     GEO::Mesh mesh{3, true};
     shape->generator(values, mesh);
-    Kit_mesh_report report = check_kit_mesh(mesh);
+    Kit_mesh_report report = check_kit_mesh(mesh, shape->mesh_kind);
     if (!report.problems.empty()) {
         return report;
     }
@@ -376,7 +390,7 @@ auto check_kit_shape(const Kit_parameter_values& values) -> Kit_mesh_report
             }
         }
     }
-    const Kit_origin_rule rule = (shape->randomness == Kit_randomness::seeded) ? Kit_origin_rule::base_contains_origin : Kit_origin_rule::base_center;
+    const Kit_origin_rule rule = (shape->randomness == Kit_randomness::seeded) ? Kit_origin_rule::base_contains_origin : shape->origin_rule;
     std::string origin_problem = check_kit_origin(mesh, rule);
     if (!origin_problem.empty()) {
         report.problems.push_back(std::move(origin_problem));

@@ -102,7 +102,7 @@ public:
     std::optional<Navigation_item_state> item;
 };
 
-// The flag bits of a mesh admit it as navigation input: content, visible (the effective visibility), no proxy, not session-only.
+// The flag bits of a mesh admit it as navigation input: content, visible (the effective visibility), no proxy, not session-only, not pass_through.
 [[nodiscard]] auto is_navigation_input_flag_admitted(uint64_t flag_bits) -> bool;
 // The mesh is navigation input (doc/editor/navigation.md "Input"); animated_nodes from collect_animated_nodes().
 [[nodiscard]] auto is_navigation_input_mesh(const erhe::scene::Mesh& mesh, const std::unordered_set<const erhe::scene::Node*>& animated_nodes) -> bool;

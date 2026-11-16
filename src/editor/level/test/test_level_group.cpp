@@ -240,8 +240,9 @@ TEST(Kit_shape_library, declared_mirror_planes_hold_for_the_generated_meshes)
             }
         }
     }
-    // The nine shapes of the basic and architecture kits declare planes; the seeded nature shapes none.
-    EXPECT_EQ(declaring, 9u);
+    // The basic and architecture shapes but the column and the tower (whose leaves and door bands have no exact mirror
+    // triangulation), and the water, declare planes (the roof x alone: a shed rises toward -Z); the seeded nature shapes none.
+    EXPECT_EQ(declaring, 14u);
 }
 
 TEST(Kit_shape_library, seeded_shapes_declare_no_mirror_plane)

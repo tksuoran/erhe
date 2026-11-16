@@ -147,7 +147,16 @@ void generate_arch(const Kit_parameter_values& values, GEO::Mesh& mesh)
     builder.write(mesh);
 }
 
-auto check_opening(const Kit_shape_definition& shape, const float width, const float height, const Kit_agent& agent) -> std::string
+// "start" (-X) and "end" (+X) at the centers of the base's end edges, half_length from the origin.
+void add_end_connectors(std::vector<Kit_connector>& out_connectors, const float half_length)
+{
+    add_side_connector(out_connectors, "start", glm::vec3{-half_length, 0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f});
+    add_side_connector(out_connectors, "end",   glm::vec3{ half_length, 0.0f, 0.0f}, glm::vec3{ 1.0f, 0.0f, 0.0f});
+}
+
+} // anonymous namespace
+
+auto check_kit_opening(const Kit_shape_definition& shape, const float width, const float height, const Kit_agent& agent) -> std::string
 {
     const float min_width  = (2.0f * agent.radius) + kit_opening_margin;
     const float min_height = agent.height + kit_opening_margin;
@@ -159,15 +168,6 @@ auto check_opening(const Kit_shape_definition& shape, const float width, const f
     }
     return {};
 }
-
-// "start" (-X) and "end" (+X) at the centers of the base's end edges, half_length from the origin.
-void add_end_connectors(std::vector<Kit_connector>& out_connectors, const float half_length)
-{
-    add_side_connector(out_connectors, "start", glm::vec3{-half_length, 0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f});
-    add_side_connector(out_connectors, "end",   glm::vec3{ half_length, 0.0f, 0.0f}, glm::vec3{ 1.0f, 0.0f, 0.0f});
-}
-
-} // anonymous namespace
 
 auto get_arch_clear_width(const Kit_parameter_values& values, const float height) -> float
 {
@@ -241,7 +241,7 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
             return std::vector<Kit_side>{Kit_side::x_neg, Kit_side::x_pos, Kit_side::y_pos};
         };
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
-            return check_opening(*values.get_shape(), values.get_float("opening_width"), values.get_float("opening_height"), agent);
+            return check_kit_opening(*values.get_shape(), values.get_float("opening_width"), values.get_float("opening_height"), agent);
         };
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const float half_t = 0.5f * values.get_float("thickness");
@@ -307,7 +307,7 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.mirror_planes           = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.check_walkability       = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             const float clear_height = agent.height + kit_opening_margin;
-            return check_opening(*values.get_shape(), get_arch_clear_width(values, clear_height), values.get_float("rise"), agent);
+            return check_kit_opening(*values.get_shape(), get_arch_clear_width(values, clear_height), values.get_float("rise"), agent);
         };
         shape.get_connectors          = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const float thickness = values.get_float("thickness");
@@ -316,6 +316,10 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
         };
         shapes.push_back(std::move(shape));
     }
+    add_classical_shapes(shapes);
+    add_japanese_shapes (shapes);
+    add_medieval_shapes (shapes);
+    add_roof_shapes     (shapes);
 }
 
 } // namespace editor

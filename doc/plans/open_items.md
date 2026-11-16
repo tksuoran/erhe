@@ -146,6 +146,18 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- Derived walkability at other level lengths: the derive ranges of six built
+  kit shapes are stated in modules or wall heights while their walkability
+  checks use the agent's fixed size, so at other level lengths derived
+  values fail the check (`editor_level_tests`
+  `Kit_derive.derived_values_are_accepted_and_walkable_at_other_level_lengths`
+  leaves them out by name and records the counts; of 300 seeds): at module
+  0.5 m and wall height 2.5 m the wedge 97, stairs 97, floor slab 141, arch
+  150, land mass 21, shore 21; at module 1 m, wall height 2.4 m the arch 79;
+  at module 2 m, wall height 2.4 m the arch 54; at module 0.25 m nearly all.
+  The torii and the tower state their agent-bound sizes in meters
+  (`doc/editor/level_tools.md` "Derive from seed").
+
 - `erhe::raytrace` hit filters (`doc/erhe/raytrace.md` "Hit filters"): the
   tinybvh and embree paths are verified only by `erhe_raytrace_tests` in
   macOS arm64 Debug scratch builds (tinybvh 55/55, embree 36/36 without the
@@ -227,6 +239,10 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   drop the outline cache (`Level_kits::on_scene_materials_changed()` runs
   only when a Material itself is the inserted or removed item), so a layout
   naming such a material keeps its outline until its next value change.
+- Kit shapes: `nature.hill` takes at most 60 segments (the triangle ceiling
+  binds at every in-range value), so a piece saved with 61 - 64 segments
+  no longer reads its parameters; for the user to rule whether such pieces
+  read clamped.
 
 ## Interactive checks for the user
 

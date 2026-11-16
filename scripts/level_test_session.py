@@ -8,7 +8,13 @@ Usage:
 
 Every step is checked and the script stops with a message at the first one
 that fails: the config reset, the build, the launch (the MCP port is read
-for the launched pid only), each placed piece, each layout's child count,
+for the launched pid only), each placed piece (the beach corner's palms of
+each species, leaf plants of each form, palm clumps and palm shrubs snapped
+onto the shore's sand; spires in the water, basalt columns, a dune and a
+ground patch),
+each join of the cultural corners (a classical colonnade carrying its
+entablatures, a medieval wall run with battlements between two towers, torii
+along a path, a roof on a walled room), each layout's child count,
 the viewport that shows the level, and the connectors the viewport draws.
 The editor keeps running for the user; its pid is printed at the end.
 """
@@ -143,12 +149,95 @@ def build_level(editor, scene):
         {"shape": "basic.block", "position": [11, 0, 4], "name": "block 3"},
         {"shape": "basic.block", "position": [6, 2, 0], "name": "hovering block"},
         {"shape": "nature.rock", "position": [9, 0, 0], "name": "rock"},
+        # The beach corner: a cliff behind three shore tiles that slope into a water surface.
+        {"shape": "nature.cliff", "position": [-24, 0, 15.5], "name": "cliff"},
+        {"shape": "nature.shore", "position": [-28, 0, 22], "name": "shore a"},
+        {"shape": "nature.shore", "position": [-24, 0, 22], "name": "shore b"},
+        {"shape": "nature.shore", "position": [-20, 0, 22], "name": "shore c"},
+        {"shape": "nature.water", "position": [-24, 0.5, 28], "name": "water", "parameters": {"width": 16.0, "depth": 12.0}},
+        # The rock corner: spires standing in the water, basalt columns at the shore's end, a dune and a ground patch inland.
+        {"shape": "nature.rock_spire", "position": [-28, 0, 29], "name": "sea stack", "parameters": {"form": "stack", "height": 8.0, "derive": ["radius", "lean"]}},
+        {"shape": "nature.rock_spire", "position": [-21, 0, 31], "name": "pinnacle", "parameters": {"form": "pinnacle", "height": 6.0, "derive": ["radius", "lean"]}},
+        {"shape": "nature.basalt_columns", "position": [-15, 0, 23], "name": "basalt columns", "parameters": {"radius": 2.5, "derive": ["height_spread"]}},
+        {"shape": "nature.dune", "position": [-24, 0, 6], "name": "dune"},
+        {"shape": "nature.ground_patch", "position": [-16, 0, 10], "name": "ground patch"},
+        # A small walled room for the roof (joined below).
+        {"shape": "architecture.door_wall", "position": [22, 0, 22], "name": "room front"},
+        {"shape": "architecture.wall", "position": [22, 0, 18], "name": "room back", "rotation_xyzw": [0, 1, 0, 0]},
+        {"shape": "architecture.wall", "position": [20, 0, 20], "name": "room left", "rotation_xyzw": [0, -0.7071068, 0, 0.7071068]},
+        {"shape": "architecture.wall", "position": [24, 0, 20], "name": "room right", "rotation_xyzw": [0, 0.7071068, 0, 0.7071068]},
     ]
     missing = sorted({piece["shape"] for piece in pieces} - shapes)
     require(not missing, f"the level names shapes level_get_kits does not list: {missing}")
     placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": pieces})["pieces"]
     require(len(placed) == len(pieces), f"placed {len(placed)} of {len(pieces)} pieces")
     ids = {piece["name"]: piece["id"] for piece in placed}
+
+    # A palm of each species on the shore's berm, snapped down onto the sand.
+    palms = [
+        {"shape": "nature.palm", "position": [-29 + 2.5 * i, 2.5, 19.7], "name": f"{species} palm",
+         "parameters": {"species": species}, "surface_snap": True}
+        for i, species in enumerate(["coconut", "date", "royal", "fan", "bottle"])
+    ]
+    placed_palms = editor.call("level_place_pieces", {"scene_name": scene, "surface_max_distance": 3.0, "pieces": palms})["pieces"]
+    require(len(placed_palms) == len(palms), f"placed {len(placed_palms)} of {len(palms)} palms")
+    require(all(palm["surface_found"] for palm in placed_palms), "a palm found no sand under it")
+    ids.update({palm["name"]: palm["id"] for palm in placed_palms})
+
+    # Leaf plants of each form between the palms, snapped onto the berm.
+    plants = [
+        {"shape": "nature.leaf_plant", "position": [-27.75 + 2.5 * i, 2.5, 19.3], "name": f"{form} leaf plant",
+         "parameters": {"form": form}, "surface_snap": True}
+        for i, form in enumerate(["banana", "taro", "strelitzia", "fern", "tree_fern"])
+    ]
+    placed_plants = editor.call("level_place_pieces", {"scene_name": scene, "surface_max_distance": 3.0, "pieces": plants})["pieces"]
+    require(len(placed_plants) == len(plants), f"placed {len(placed_plants)} of {len(plants)} leaf plants")
+    require(all(plant["surface_found"] for plant in placed_plants), "a leaf plant found no surface under it")
+    ids.update({plant["name"]: plant["id"] for plant in placed_plants})
+
+    # Palm clumps and palm shrubs of each species on the berm behind them.
+    understory = [
+        {"shape": "nature.palm_clump", "position": [-28.5 + 5.5 * i, 2.5, 20.3 + 1.5 * i], "name": f"{species} palm clump",
+         "parameters": {"species": species}, "surface_snap": True}
+        for i, species in enumerate(["areca", "nipa"])
+    ] + [
+        {"shape": "nature.palm_shrub", "position": [-26.5 + 2.5 * i, 2.5, 20.3], "name": f"{species} palm shrub",
+         "parameters": {"species": species}, "surface_snap": True}
+        for i, species in enumerate(["palmetto", "cycad", "seedling"])
+    ]
+    placed_understory = editor.call("level_place_pieces", {"scene_name": scene, "surface_max_distance": 3.0, "pieces": understory})["pieces"]
+    require(len(placed_understory) == len(understory), f"placed {len(placed_understory)} of {len(understory)} palm clumps and shrubs")
+    require(all(piece["surface_found"] for piece in placed_understory),
+            "a palm clump or shrub found no sand under it: " + ", ".join(f"{p['shape']} {p['surface_found']} {p['position']}" for p in placed_understory))
+    ids.update({piece["name"]: piece["id"] for piece in placed_understory})
+
+    # The cultural corners, joined by their connectors (doc/editor/level_tools.md "Column" .. "Tower").
+    def join(piece, to_name, connector, to_connector):
+        joined = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [dict(piece, connect={
+            "connector": connector, "to_piece_id": ids[to_name], "to_connector": to_connector})]})["pieces"]
+        require(len(joined) == 1, f"'{piece['name']}' was not joined to '{to_name}'")
+        ids[piece["name"]] = joined[0]["id"]
+
+    corners = [
+        {"shape": "basic.floor_slab", "position": [-20, 0, -22], "name": "stylobate", "parameters": {"width": 10.0, "depth": 4.0, "thickness": 0.3}},
+        {"shape": "basic.floor_slab", "position": [0, 0, -21], "name": "torii path", "parameters": {"width": 2.6, "depth": 14.0, "thickness": 0.05}},
+        {"shape": "architecture.tower", "position": [16, 0, -24], "name": "round tower"},
+    ] + [
+        {"shape": "architecture.column", "position": [-23 + 2 * i, 0.3, -22], "name": f"column {i + 1}"} for i in range(4)
+    ] + [
+        {"shape": "architecture.torii", "position": [0, 0.05, -16 - 3 * i], "name": f"torii {i + 1}", "materials": {"wood": "Kit Vermilion"}} for i in range(4)
+    ]
+    placed_corners = editor.call("level_place_pieces", {"scene_name": scene, "pieces": corners})["pieces"]
+    require(len(placed_corners) == len(corners), f"placed {len(placed_corners)} of {len(corners)} cultural pieces")
+    ids.update({piece["name"]: piece["id"] for piece in placed_corners})
+    for i in range(4):
+        join({"shape": "architecture.entablature", "name": f"entablature {i + 1}"}, f"column {i + 1}", "base", "top")
+    join({"shape": "architecture.wall", "name": "castle wall a"}, "round tower", "start", "right")
+    join({"shape": "architecture.wall", "name": "castle wall b"}, "castle wall a", "start", "end")
+    join({"shape": "architecture.battlement", "name": "battlement a", "parameters": {"length": 4.0}}, "castle wall a", "base", "top")
+    join({"shape": "architecture.battlement", "name": "battlement b", "parameters": {"length": 4.0}}, "castle wall b", "base", "top")
+    join({"shape": "architecture.tower", "name": "square tower", "parameters": {"profile": "square"}}, "castle wall b", "left", "end")
+    join({"shape": "architecture.roof", "name": "roof"}, "room front", "front", "top")
 
     # The layouts come after the ground and the hill, which their surface snap puts them on.
     layouts = [

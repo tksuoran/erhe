@@ -55,7 +55,8 @@ auto is_navigation_input_flag_admitted(const uint64_t flag_bits) -> bool
         ((flag_bits & erhe::Item_flags::visible)            != 0) &&
         ((flag_bits & erhe::Item_flags::render_proxy)       == 0) &&
         ((flag_bits & erhe::Item_flags::session_only)       == 0) &&
-        ((flag_bits & Editor_item_flags::world_space_form)  == 0);
+        ((flag_bits & Editor_item_flags::world_space_form)  == 0) &&
+        ((flag_bits & Editor_item_flags::pass_through)      == 0);
 }
 
 auto is_navigation_input_mesh(const erhe::scene::Mesh& mesh, const std::unordered_set<const erhe::scene::Node*>& animated_nodes) -> bool

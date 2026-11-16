@@ -166,6 +166,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::geometry`: `shapes/sweep.hpp` - `make_sweep()` creates on the given mesh only the attribute
+  store it writes (corner texture coordinates 0), no longer every `Mesh_attributes` store.
 - `erhe::math`: `math_util.hpp` - `angle_of_rotation()` is the atan2 of the
   sine along the axis and the cosine: exactly 0 for equal directions, never
   NaN, in [-pi, pi] (was acos with a NaN path at zero angle; `test/test_angle_of_rotation.cpp`).

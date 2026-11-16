@@ -749,3 +749,64 @@ TEST(Kit_connector_drag_carry, pair_and_offset_of_rotate_step_poses)
 }
 
 } // anonymous namespace
+
+namespace {
+
+// The piece's connector after joining it to the target.
+auto joined_frame(const Kit_parameter_values& piece_values, const char* piece_connector, const Kit_connector& target, const int twist) -> Kit_connector
+{
+    const Kit_connector own  = connector(connectors_of(piece_values), piece_connector);
+    const Kit_join_pose pose = editor::join_connectors(own, target, twist, 0.0f);
+    return joined(own, pose);
+}
+
+} // anonymous namespace
+
+// Step 62's cultural modules join the built architecture shapes (doc/plans/level_kit_more_shapes.md).
+TEST(KitConnector, CulturalModulesHaveTheirConnectors)
+{
+    EXPECT_EQ(editor::connector_names_text(connectors_of(defaults("architecture.column"))),      "base, top");
+    EXPECT_EQ(editor::connector_names_text(connectors_of(defaults("architecture.entablature"))), "base, top, start, end");
+    EXPECT_EQ(editor::connector_names_text(connectors_of(defaults("architecture.battlement"))),  "base, start, end");
+    EXPECT_EQ(editor::connector_names_text(connectors_of(defaults("architecture.tower"))),       "base, top, opening_front, left, right, back");
+    EXPECT_EQ(editor::connector_names_text(connectors_of(defaults("architecture.torii"))),       "base, opening_front, opening_back");
+    EXPECT_EQ(editor::connector_names_text(connectors_of(defaults("nature.leaf_plant"))),        "(none)");
+}
+
+TEST(KitConnector, ColumnStandsOnASlabAndCarriesAnEntablature)
+{
+    Kit_parameter_values column = defaults("architecture.column");
+    ASSERT_TRUE(column.set_float("height", 3.5f));
+    const Kit_parameter_values slab = defaults("basic.floor_slab");
+    // The column's base on the slab's top: the column stands on the walking surface.
+    const Kit_join_pose on_slab = editor::join_connectors(connector(connectors_of(column), "base"), connector(connectors_of(slab), "top"), 0, 0.0f);
+    expect_near(on_slab.position, glm::vec3{0.0f, slab.get_float("thickness"), 0.0f});
+    // The entablature's base on the column's top, its run along the column's X.
+    const Kit_connector top   = connector(connectors_of(column), "top");
+    const Kit_connector moved = joined_frame(defaults("architecture.entablature"), "base", top, 0);
+    expect_near(moved.position, glm::vec3{0.0f, 3.5f, 0.0f});
+    const Kit_join_pose pose = editor::join_connectors(connector(connectors_of(defaults("architecture.entablature")), "base"), top, 0, 0.0f);
+    expect_near(glm::mat3_cast(pose.rotation) * glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f});
+    // Entablatures join end to start.
+    const Kit_parameter_values beam = defaults("architecture.entablature");
+    const Kit_join_pose run = editor::join_connectors(connector(connectors_of(beam), "start"), connector(connectors_of(beam), "end"), 0, 0.0f);
+    expect_near(run.position, glm::vec3{beam.get_float("length"), 0.0f, 0.0f});
+}
+
+TEST(KitConnector, BattlementOnAWallTopAndTowerAtAWallEnd)
+{
+    const Kit_parameter_values wall = defaults("architecture.wall");
+    const Kit_join_pose on_wall = editor::join_connectors(connector(connectors_of(defaults("architecture.battlement")), "base"), connector(connectors_of(wall), "top"), 0, 0.0f);
+    expect_near(on_wall.position, glm::vec3{0.0f, wall.get_float("height"), 0.0f});
+    EXPECT_NEAR(std::abs(on_wall.rotation.w), 1.0f, c_tolerance); // the run keeps the wall's direction
+
+    // A wall's start on the tower's right side: the wall's end face lies inside the tower's wall, across its middle.
+    const Kit_parameter_values tower = defaults("architecture.tower");
+    const float middle = (0.5f * tower.get_float("width")) - (0.5f * tower.get_float("wall"));
+    const Kit_join_pose at_tower = editor::join_connectors(connector(connectors_of(wall), "start"), connector(connectors_of(tower), "right"), 0, 0.0f);
+    expect_near(at_tower.position, glm::vec3{middle + (0.5f * wall.get_float("length")), 0.0f, 0.0f});
+    EXPECT_NEAR(std::abs(at_tower.rotation.w), 1.0f, c_tolerance);
+    // A tower's top carries another segment.
+    const Kit_join_pose stacked = editor::join_connectors(connector(connectors_of(tower), "base"), connector(connectors_of(tower), "top"), 0, 0.0f);
+    expect_near(stacked.position, glm::vec3{0.0f, tower.get_float("height"), 0.0f});
+}

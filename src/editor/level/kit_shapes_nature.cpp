@@ -463,7 +463,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("radius",   "Radius of the base",   3.0f, Kit_default_scale::modules, 0.5f,  128.0f), 2.5f, 6.0f, 0.5f),
             from_seed_by_default(derive_float(make_length_parameter("height",   "Height of the top",    1.0f, Kit_default_scale::modules, 0.05f, 32.0f), 0.5f, 1.25f, 0.05f)),
             make_seed_parameter  (),
-            make_count_parameter ("segments", "Sides around the axis; rings are a quarter of it", 16, 3, 64)
+            make_count_parameter ("segments", "Sides around the axis; rings are a quarter of it", 16, 3, 60)
         };
         shape.material_slots  = {"grass"};
         shape.normal_style    = Kit_normal_style::smooth;
@@ -531,6 +531,9 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.generator       = generate_bush;
         shapes.push_back(std::move(shape));
     }
+    add_nature_terrain_shapes(shapes);
+    add_nature_rock_shapes   (shapes);
+    add_nature_plant_shapes  (shapes);
 }
 
 } // namespace editor

@@ -245,7 +245,7 @@ adjustment. They hold for every shape of every kit.
   outward winding, no degenerate faces and no coincident duplicate faces.
 - R2.6 `[must]` Polygon budget. Each shape states a triangle budget for
   its default parameters, and a kit states the ceiling for its shapes
-  (the starter set: 500 triangles at default parameters).
+  (every kit: 2000 triangles, binding at every in-range value).
   Curved shapes expose their segment counts as parameters.
 - R2.7 `[must]` Normals. Each shape states its shading: faceted, smooth,
   or smooth with hard edges above a stated angle.

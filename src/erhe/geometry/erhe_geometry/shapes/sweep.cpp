@@ -106,7 +106,8 @@ void make_sweep(GEO::Mesh& mesh, const Sweep_parameters& parameters)
     // profile (j / profile_count). Written on the CORNER domain so the
     // profile wrap seam carries v = 1 (not 0) on its far side, exactly like
     // the box's face seams.
-    Mesh_attributes attributes{mesh};
+    // Only the corner texture coordinates are written; binding the whole Mesh_attributes set would cost more than the sweep.
+    Attribute_present<GEO::vec2f> corner_texcoord_0{mesh.facet_corners.attributes(), Attribute_descriptors::s_texcoord_0};
     const auto ring_u = [&](const int ring) -> float {
         return static_cast<float>(ring) / static_cast<float>(spine_steps);
     };
@@ -125,10 +126,10 @@ void make_sweep(GEO::Mesh& mesh, const Sweep_parameters& parameters)
                 ring_vertex(i + 1, j)
             );
             // v from j + 1 (not the wrapped jn) so the last quad spans ..1.
-            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 0), GEO::vec2f{ring_u(i    ), profile_v(j)});
-            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 1), GEO::vec2f{ring_u(i    ), profile_v(j + 1)});
-            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 2), GEO::vec2f{ring_u(i + 1), profile_v(j + 1)});
-            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 3), GEO::vec2f{ring_u(i + 1), profile_v(j)});
+            corner_texcoord_0.set(mesh.facets.corner(facet, 0), GEO::vec2f{ring_u(i    ), profile_v(j)});
+            corner_texcoord_0.set(mesh.facets.corner(facet, 1), GEO::vec2f{ring_u(i    ), profile_v(j + 1)});
+            corner_texcoord_0.set(mesh.facets.corner(facet, 2), GEO::vec2f{ring_u(i + 1), profile_v(j + 1)});
+            corner_texcoord_0.set(mesh.facets.corner(facet, 3), GEO::vec2f{ring_u(i + 1), profile_v(j)});
         }
     }
     if (tip_collapse) {
@@ -139,9 +140,9 @@ void make_sweep(GEO::Mesh& mesh, const Sweep_parameters& parameters)
             mesh.facets.set_vertex(facet, 0, ring_vertex(last, j));
             mesh.facets.set_vertex(facet, 1, ring_vertex(last, jn));
             mesh.facets.set_vertex(facet, 2, tip_vertex);
-            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 0), GEO::vec2f{ring_u(last), profile_v(j)});
-            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 1), GEO::vec2f{ring_u(last), profile_v(j + 1)});
-            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 2), GEO::vec2f{1.0f, profile_v(j) + 0.5f / static_cast<float>(profile_count)});
+            corner_texcoord_0.set(mesh.facets.corner(facet, 0), GEO::vec2f{ring_u(last), profile_v(j)});
+            corner_texcoord_0.set(mesh.facets.corner(facet, 1), GEO::vec2f{ring_u(last), profile_v(j + 1)});
+            corner_texcoord_0.set(mesh.facets.corner(facet, 2), GEO::vec2f{1.0f, profile_v(j) + 0.5f / static_cast<float>(profile_count)});
         }
     }
 
@@ -162,14 +163,14 @@ void make_sweep(GEO::Mesh& mesh, const Sweep_parameters& parameters)
         for (std::size_t j = 0; j < profile_count; ++j) {
             const std::size_t source = profile_count - 1 - j;
             mesh.facets.set_vertex(facet, static_cast<GEO::index_t>(j), ring_vertex(0, source));
-            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, static_cast<GEO::index_t>(j)), cap_uv(source));
+            corner_texcoord_0.set(mesh.facets.corner(facet, static_cast<GEO::index_t>(j)), cap_uv(source));
         }
     }
     if (parameters.end_cap && !tip_collapse) {
         const GEO::index_t facet = mesh.facets.create_polygon(static_cast<GEO::index_t>(profile_count));
         for (std::size_t j = 0; j < profile_count; ++j) {
             mesh.facets.set_vertex(facet, static_cast<GEO::index_t>(j), ring_vertex(ring_count - 1, j));
-            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, static_cast<GEO::index_t>(j)), cap_uv(j));
+            corner_texcoord_0.set(mesh.facets.corner(facet, static_cast<GEO::index_t>(j)), cap_uv(j));
         }
     }
 }

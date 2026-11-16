@@ -193,6 +193,7 @@ void Brush::late_initialize()
 
     if (
         m_data.app_settings.config().physics.static_enable &&
+        (m_data.body == Brush_body::from_geometry) &&
         !m_data.collision_shape &&
         !m_data.collision_shape_generator
     ) {

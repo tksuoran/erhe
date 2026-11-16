@@ -479,6 +479,7 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
             {"normal_style",    c_str(shape.normal_style)},
             {"triangle_budget", shape.triangle_budget},
             {"collision",       c_str(shape.collision)},
+            {"mesh_kind",       c_str(shape.mesh_kind)},
             {"mirror_planes",   mirror_planes_json(shape.mirror_planes)}
         });
     }
@@ -1369,6 +1370,7 @@ auto Mcp_server::query_level_pieces(const json& args) -> std::string
             {"collision_shape", collision_shape ? collision_shape->describe() : std::string{}},
             {"has_body",        get_node_rigid_body(*node) != nullptr}
         };
+        piece["pass_through"] = (node->get_flag_bits() & Editor_item_flags::pass_through) != 0;
         pieces.push_back(std::move(piece));
     }
     return make_json_content({

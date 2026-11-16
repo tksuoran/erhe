@@ -11,6 +11,7 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_outline.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_values.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_leaf.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_mesh_builder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_replace.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shape.cpp
@@ -18,7 +19,14 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shape_library.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_architecture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_basic.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_classical.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_japanese.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_medieval.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_nature.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_nature_plants.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_nature_terrain.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_nature_rocks.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_roof.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_group.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_region.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_repeat.cpp
@@ -42,6 +50,7 @@ target_link_libraries(${_target}
         erhe::log
         erhe::math
         erhe::profile
+        erhe::verify
         fmt::fmt
         glm::glm-header-only
         GTest::gtest

@@ -11,11 +11,6 @@ namespace GEO { class Mesh; }
 
 namespace editor {
 
-enum class Kit_origin_rule : unsigned int {
-    base_center = 0,     // the base's vertices average to the origin
-    base_contains_origin // the origin lies within the base's horizontal bounds (seeded shapes)
-};
-
 class Kit_mesh_report
 {
 public:
@@ -30,8 +25,9 @@ public:
     [[nodiscard]] auto is_valid() const -> bool;
 };
 
-// R2.5: closed manifold, consistent outward winding, convex planar non-degenerate facets, no duplicates.
-[[nodiscard]] auto check_kit_mesh(const GEO::Mesh& mesh) -> Kit_mesh_report;
+// R2.5: manifold, consistent winding, convex planar non-degenerate facets, no duplicates; a solid is closed with
+// outward winding, a surface may have an open boundary.
+[[nodiscard]] auto check_kit_mesh(const GEO::Mesh& mesh, Kit_mesh_kind mesh_kind = Kit_mesh_kind::solid) -> Kit_mesh_report;
 
 // R2.4: the facets on the given side of the bounds fill that side's rectangle exactly. Empty when it holds.
 [[nodiscard]] auto check_kit_seam_side(const GEO::Mesh& mesh, Kit_side side) -> std::string;

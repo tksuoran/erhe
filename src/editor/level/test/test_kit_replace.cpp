@@ -296,6 +296,43 @@ TEST(Kit_replace, kit_shapes_carry_the_seed)
     EXPECT_TRUE(to == expected);
 }
 
+// Step 62's cultural modules replace the similar built shapes in place: a pillar by a column and back, a wall by a
+// battlement and back, keeping the sizes the two have by name.
+TEST(Kit_replace, pillar_and_column_wall_and_battlement_carry_their_sizes)
+{
+    const Kit_shape_library& library = get_library();
+    const Kit_shape_definition* const pillar     = library.find("architecture.pillar");
+    const Kit_shape_definition* const column     = library.find("architecture.column");
+    const Kit_shape_definition* const wall       = library.find("architecture.wall");
+    const Kit_shape_definition* const battlement = library.find("architecture.battlement");
+    ASSERT_NE(column, nullptr);
+    ASSERT_NE(battlement, nullptr);
+    Kit_parameter_values from = editor::make_default_values(*pillar, c_lengths.module, c_lengths.wall_height);
+    ASSERT_TRUE(from.set_float("width", 0.7f));
+    ASSERT_TRUE(from.set_float("height", 4.0f));
+    Kit_parameter_values             as_column;
+    std::vector<Kit_parameter_carry> carry;
+    editor::carry_parameter_values(from, *column, c_lengths, as_column, carry);
+    EXPECT_EQ(as_column.get_float("width"), 0.7f);
+    EXPECT_EQ(as_column.get_float("height"), 4.0f);
+    EXPECT_EQ(carry_of(carry, "order"), Kit_carry::defaulted);
+    Kit_parameter_values back;
+    editor::carry_parameter_values(as_column, *pillar, c_lengths, back, carry);
+    EXPECT_EQ(back.get_float("width"), 0.7f);
+    EXPECT_EQ(back.get_float("height"), 4.0f);
+
+    Kit_parameter_values run = editor::make_default_values(*wall, c_lengths.module, c_lengths.wall_height);
+    ASSERT_TRUE(run.set_float("length", 6.0f));
+    ASSERT_TRUE(run.set_float("thickness", 0.4f));
+    Kit_parameter_values as_battlement;
+    editor::carry_parameter_values(run, *battlement, c_lengths, as_battlement, carry);
+    EXPECT_EQ(as_battlement.get_float("length"), 6.0f);
+    EXPECT_EQ(as_battlement.get_float("thickness"), 0.4f);
+    EXPECT_EQ(as_battlement.get_float("height"), 3.0f); // the wall's 3 m, the top of the sill's range
+    EXPECT_EQ(carry_of(carry, "height"), Kit_carry::carried);
+    EXPECT_EQ(as_battlement.validate(), "");
+}
+
 TEST(Kit_replace, defaults_of_every_shape_carry_to_valid_values_of_every_shape)
 {
     const Kit_shape_library& library = get_library();
@@ -305,7 +342,9 @@ TEST(Kit_replace, defaults_of_every_shape_carry_to_valid_values_of_every_shape)
         const Kit_parameter_values from = editor::make_default_values(from_shape, c_lengths.module, c_lengths.wall_height);
         for (const Kit_shape_definition& to_shape : library.get_shapes()) {
             editor::carry_parameter_values(from, to_shape, c_lengths, to, carry);
-            EXPECT_TRUE(to.validate().empty()) << from_shape.id << " -> " << to_shape.id << ": " << to.validate();
+            // A combination the new shape refuses (a dune shorter than 1.04 widths) refuses the replace; no value is out of range.
+            const bool refused_combination = to_shape.check_combination && !to_shape.check_combination(to).empty();
+            EXPECT_TRUE(to.validate().empty() || refused_combination) << from_shape.id << " -> " << to_shape.id << ": " << to.validate();
             if (&from_shape == &to_shape) {
                 EXPECT_TRUE(to == from) << from_shape.id;
             }

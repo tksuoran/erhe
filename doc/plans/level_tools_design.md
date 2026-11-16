@@ -46,9 +46,12 @@ R-numbers). The build order is in
 - D1.10 Mirror symmetry (R5.6). `Kit_shape_definition::mirror_planes` lists
   the planes through the shape's origin its mesh is symmetric about at every
   parameter value, as `Kit_mirror_plane` `x` (the plane x = 0) or `z`. The
-  block, floor slab, wall, door wall and arch declare x and z, the wedge and
-  the stairs x, the cylinder and the pillar z (a prism of an odd segment count
-  is not symmetric about x); the seeded nature shapes declare none.
+  block, floor slab, wall, door wall, arch, entablature, battlement and torii
+  declare x and z, the wedge and the stairs x, the cylinder and the pillar z
+  (a prism of an odd segment count is not symmetric about x); the column and
+  the tower declare none (their leaves and their bands between rings of
+  different corners have no exact mirror triangulation), nor do the seeded
+  nature shapes.
   `editor_level_tests` reflects the generated mesh of every declaring shape
   across each declared plane, at the defaults, at a seed-derived second
   parameter set and at every enum value, and finds each reflected facet among
@@ -86,7 +89,20 @@ R-numbers). The build order is in
     opening_back (the opening's threshold on each face);
   - `architecture.arch`: start and end (the outer foot ends), base, top (the
     crown's top);
-  - the nature shapes: none (their seeded outlines have no stated frame).
+  - `nature.cliff`: start, end (the base's end centers), base, top;
+  - `nature.shore`: start, end, top (the back edge at the berm's height,
+    facing -Z), base;
+  - `nature.water`: left, right, front, back (the edge centers);
+  - `architecture.column`: base, top (the abacus' top);
+  - `architecture.entablature`: base, top, start, end (it rests on a column's
+    top by its base);
+  - `architecture.battlement`: base, start, end (it rests on a wall's top by
+    its base);
+  - `architecture.tower`: base, top (the top floor), opening_front (the
+    doorway's outer threshold), left, right, back (the sides' wall middles at
+    the base, where a joined wall's end lies inside the tower's wall);
+  - `architecture.torii`: base, opening_front, opening_back;
+  - the other nature shapes: none (their seeded outlines have no stated frame).
   `editor_level_tests` checks every frame unit and orthogonal, the names equal
   at two parameter sets and unique, the first connector of each shape, and
   every shape's frames against the parameters its generator reads.

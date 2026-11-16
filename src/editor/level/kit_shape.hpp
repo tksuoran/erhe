@@ -43,12 +43,20 @@ enum class Kit_normal_style : unsigned int {
     smooth_with_hard_edges
 };
 
-// A side of a shape's bounds; a seam side is one whose facets fill that side's rectangle (R2.4).
-// The collision shape of a shape's pieces (R2.11, D2.3).
+// The collision shape of a shape's pieces (R2.11, D2.3); none: no physics body and no navigation input (P5).
 enum class Kit_collision : unsigned int {
     convex_hull = 0,
-    triangle_mesh
+    triangle_mesh,
+    none
 };
+
+// What the mesh checks hold a shape's mesh to (R2.5): a closed solid, or a stated surface whose boundary is open.
+enum class Kit_mesh_kind : unsigned int {
+    solid = 0,
+    surface
+};
+
+// A side of a shape's bounds; a seam side is one whose facets fill that side's rectangle (R2.4).
 
 enum class Kit_side : unsigned int {
     x_neg = 0,
@@ -57,6 +65,12 @@ enum class Kit_side : unsigned int {
     y_pos,
     z_neg,
     z_pos
+};
+
+// Where the origin sits in a shape's base (R2.2).
+enum class Kit_origin_rule : unsigned int {
+    base_center = 0,     // the base's vertices average to the origin
+    base_contains_origin // the origin lies within the base's horizontal bounds (seeded shapes)
 };
 
 // Whether a parameter can take its value from the seed (D1.8, R3.9).
@@ -83,6 +97,7 @@ enum class Kit_randomness : unsigned int {
 [[nodiscard]] auto c_str(Kit_normal_style style) -> const char*;
 [[nodiscard]] auto c_str(Kit_side side) -> const char*;
 [[nodiscard]] auto c_str(Kit_collision collision) -> const char*;
+[[nodiscard]] auto c_str(Kit_mesh_kind mesh_kind) -> const char*;
 [[nodiscard]] auto c_str(Kit_derive derive) -> const char*;
 
 // A plane through a shape's origin its mesh is symmetric about at every parameter value (D1.10): x is x = 0.
@@ -245,7 +260,9 @@ public:
     float                      hard_edge_angle_degrees{0.0f};
     unsigned int               triangle_budget        {0}; // at default parameters (R2.6)
     Kit_collision              collision              {Kit_collision::convex_hull};
+    Kit_mesh_kind              mesh_kind              {Kit_mesh_kind::solid};
     Kit_randomness             randomness             {Kit_randomness::none};
+    Kit_origin_rule            origin_rule            {Kit_origin_rule::base_center}; // an unseeded shape's; a seeded one's is always base_contains_origin
     std::vector<Kit_mirror_plane> mirror_planes;       // empty: no exact mirror image (D1.10)
     Kit_connectors_function    get_connectors;         // optional: the connectors at the values, the same names at every value (D1.12)
     Kit_generator              generator;

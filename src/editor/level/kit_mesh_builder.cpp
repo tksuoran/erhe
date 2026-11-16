@@ -1,6 +1,7 @@
 #include "level/kit_mesh_builder.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <geogram/mesh/mesh.h>
 
@@ -190,6 +191,131 @@ void Kit_mesh_builder::add_blob(const Kit_blob& blob, Kit_random& random)
     }
 }
 
+namespace {
+
+// The rings' points and their bands, two triangles per quad; returns the first vertex index.
+auto add_ring_bands(Kit_mesh_builder& builder, const std::span<const glm::vec3> ring_points, const uint32_t n) -> uint32_t
+{
+    const uint32_t ring_count = static_cast<uint32_t>(ring_points.size()) / n;
+    uint32_t base = 0;
+    for (std::size_t i = 0; i < ring_points.size(); ++i) {
+        const uint32_t v = builder.add_vertex(ring_points[i]);
+        if (i == 0) {
+            base = v;
+        }
+    }
+    for (uint32_t r = 0; r + 1 < ring_count; ++r) {
+        const uint32_t a = base + (r * n);
+        const uint32_t b = a + n;
+        for (uint32_t i = 0; i < n; ++i) {
+            const uint32_t j = (i + 1) % n;
+            builder.add_triangle(a + i, a + j, b + j);
+            builder.add_triangle(a + i, b + j, b + i);
+        }
+    }
+    return base;
+}
+
+} // anonymous namespace
+
+void Kit_mesh_builder::add_ring_solid_paired_caps(const std::span<const glm::vec3> ring_points, const int segments)
+{
+    ERHE_VERIFY((segments >= 4) && ((segments % 2) == 0) && ((ring_points.size() % static_cast<std::size_t>(segments)) == 0) && (ring_points.size() >= 2 * static_cast<std::size_t>(segments)));
+    const uint32_t n    = static_cast<uint32_t>(segments);
+    const uint32_t base = add_ring_bands(*this, ring_points, n);
+    const uint32_t last = base + (static_cast<uint32_t>(ring_points.size()) - n);
+    for (uint32_t i = 0; i + 1 < n / 2; ++i) {
+        add_quad(base + (n - 1 - i), base + (n - 2 - i), base + i + 1, base + i);
+        add_quad(last + i, last + i + 1, last + (n - 2 - i), last + (n - 1 - i));
+    }
+}
+
+void Kit_mesh_builder::add_ring_solid(const std::span<const glm::vec3> ring_points, const int segments, const glm::vec3& bottom_point, const glm::vec3& top_point)
+{
+    ERHE_VERIFY((segments >= 3) && ((ring_points.size() % static_cast<std::size_t>(segments)) == 0) && (ring_points.size() >= static_cast<std::size_t>(segments)));
+    const uint32_t n      = static_cast<uint32_t>(segments);
+    const uint32_t base   = add_ring_bands(*this, ring_points, n);
+    const uint32_t last   = base + (static_cast<uint32_t>(ring_points.size()) - n);
+    const uint32_t bottom = add_vertex(bottom_point);
+    const uint32_t top    = add_vertex(top_point);
+    for (uint32_t i = 0; i < n; ++i) {
+        const uint32_t j = (i + 1) % n;
+        add_triangle(bottom, base + j, base + i);
+        add_triangle(last + i, last + j, top);
+    }
+}
+
+void Kit_mesh_builder::add_mesh(const GEO::Mesh& mesh)
+{
+    const uint32_t base = static_cast<uint32_t>(m_positions.size());
+    for (GEO::index_t v = 0, end = mesh.vertices.nb(); v < end; ++v) {
+        const GEO::vec3f p = erhe::geometry::get_pointf(mesh.vertices, v);
+        add_vertex(glm::vec3{p.x, p.y, p.z});
+    }
+    for (GEO::index_t f = 0, end = mesh.facets.nb(); f < end; ++f) {
+        const GEO::index_t corner_count = mesh.facets.nb_vertices(f);
+        if (corner_count == 4) {
+            const uint32_t a = base + mesh.facets.vertex(f, 0);
+            const uint32_t b = base + mesh.facets.vertex(f, 1);
+            const uint32_t c = base + mesh.facets.vertex(f, 2);
+            const uint32_t d = base + mesh.facets.vertex(f, 3);
+            add_triangle(a, b, c);
+            add_triangle(a, c, d);
+            continue;
+        }
+        std::vector<uint32_t>& facet = m_facets.emplace_back();
+        for (GEO::index_t c = 0; c < corner_count; ++c) {
+            facet.push_back(base + mesh.facets.vertex(f, c));
+        }
+        m_facet_slots.push_back(m_slot);
+    }
+}
+
+void Kit_mesh_builder::add_beam(const glm::vec3& a, const glm::vec3& b, const float width, const float height)
+{
+    ERHE_VERIFY(glm::length(b - a) > 0.0f); // a beam has a length
+    const glm::vec3 direction = glm::normalize(b - a);
+    const glm::vec3 reference = (std::abs(direction.y) > 0.99f) ? glm::vec3{0.0f, 0.0f, -1.0f} : glm::vec3{0.0f, 1.0f, 0.0f};
+    const glm::vec3 side      = (0.5f * width)  * glm::normalize(glm::cross(direction, reference));
+    const glm::vec3 up        = (0.5f * height) * glm::normalize(glm::cross(side, direction));
+    // (axis, up, side) is right-handed like (x, y, z), so the corners and quads follow add_box().
+    const uint32_t v0 = add_vertex(a - up - side);
+    const uint32_t v1 = add_vertex(b - up - side);
+    const uint32_t v2 = add_vertex(a + up - side);
+    const uint32_t v3 = add_vertex(a - up + side);
+    const uint32_t v4 = add_vertex(b + up - side);
+    const uint32_t v5 = add_vertex(b - up + side);
+    const uint32_t v6 = add_vertex(a + up + side);
+    const uint32_t v7 = add_vertex(b + up + side);
+    add_quad(v1, v4, v7, v5);
+    add_quad(v2, v6, v7, v4);
+    add_quad(v3, v5, v7, v6);
+    add_quad(v0, v3, v6, v2);
+    add_quad(v0, v1, v5, v3);
+    add_quad(v0, v2, v4, v1);
+}
+
+void Kit_mesh_builder::add_band(
+    const std::span<const uint32_t> first,
+    const std::span<const float>    first_keys,
+    const std::span<const uint32_t> second,
+    const std::span<const float>    second_keys
+)
+{
+    std::size_t i = 0;
+    std::size_t j = 0;
+    while (((i + 1) < first.size()) || ((j + 1) < second.size())) {
+        const bool advance_first = ((j + 1) >= second.size()) || (((i + 1) < first.size()) && (first_keys[i + 1] <= second_keys[j + 1]));
+        if (advance_first) {
+            add_triangle(first[i], first[i + 1], second[j]);
+            ++i;
+        } else {
+            add_triangle(first[i], second[j + 1], second[j]);
+            ++j;
+        }
+    }
+}
+
 void Kit_mesh_builder::write(GEO::Mesh& mesh) const
 {
     const GEO::index_t first_vertex = mesh.vertices.create_vertices(static_cast<GEO::index_t>(m_positions.size()));
@@ -198,13 +324,23 @@ void Kit_mesh_builder::write(GEO::Mesh& mesh) const
         erhe::geometry::set_pointf(mesh.vertices, first_vertex + static_cast<GEO::index_t>(i), GEO::vec3f{p.x, p.y, p.z});
     }
     GEO::Attribute<GEO::index_t> slots{mesh.facets.attributes(), c_kit_slot_attribute};
-    for (std::size_t i = 0, end = m_facets.size(); i < end; ++i) {
-        const std::vector<uint32_t>& facet = m_facets[i];
-        const GEO::index_t f = mesh.facets.create_polygon(static_cast<GEO::index_t>(facet.size()));
-        for (std::size_t c = 0, corner_end = facet.size(); c < corner_end; ++c) {
-            mesh.facets.set_vertex(f, static_cast<GEO::index_t>(c), first_vertex + static_cast<GEO::index_t>(facet[c]));
+    // Facets are made in runs of equal corner count: one resize of the mesh's attribute stores per run, not per facet.
+    std::size_t i = 0;
+    while (i < m_facets.size()) {
+        const std::size_t corner_count = m_facets[i].size();
+        std::size_t       run_end      = i + 1;
+        while ((run_end < m_facets.size()) && (m_facets[run_end].size() == corner_count)) {
+            ++run_end;
         }
-        slots[f] = static_cast<GEO::index_t>(m_facet_slots[i]);
+        const GEO::index_t first = mesh.facets.create_facets(static_cast<GEO::index_t>(run_end - i), static_cast<GEO::index_t>(corner_count));
+        for (std::size_t j = i; j < run_end; ++j) {
+            const GEO::index_t f = first + static_cast<GEO::index_t>(j - i);
+            for (std::size_t c = 0; c < corner_count; ++c) {
+                mesh.facets.set_vertex(f, static_cast<GEO::index_t>(c), first_vertex + static_cast<GEO::index_t>(m_facets[j][c]));
+            }
+            slots[f] = static_cast<GEO::index_t>(m_facet_slots[j]);
+        }
+        i = run_end;
     }
 }
 

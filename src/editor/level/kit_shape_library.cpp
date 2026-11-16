@@ -40,6 +40,20 @@ auto make_ratio_parameter(const char* name, const char* description, const float
     return parameter;
 }
 
+auto make_angle_parameter(const char* name, const char* description, const float default_degrees, const float min_degrees, const float max_degrees) -> Kit_parameter
+{
+    Kit_parameter parameter;
+    parameter.name          = name;
+    parameter.description   = description;
+    parameter.type          = Kit_parameter_type::float_value;
+    parameter.unit          = Kit_unit::degrees;
+    parameter.default_scale = Kit_default_scale::meters;
+    parameter.float_default = default_degrees;
+    parameter.float_min     = min_degrees;
+    parameter.float_max     = max_degrees;
+    return parameter;
+}
+
 auto make_count_parameter(const char* name, const char* description, const int default_value, const int min_value, const int max_value) -> Kit_parameter
 {
     Kit_parameter parameter;
@@ -119,9 +133,9 @@ auto from_seed_by_default(Kit_parameter parameter) -> Kit_parameter
 Kit_shape_library::Kit_shape_library()
 {
     m_kits = {
-        Kit_definition{.name = "basic",        .display_name = "Basic",        .triangle_ceiling = 500},
-        Kit_definition{.name = "architecture", .display_name = "Architecture", .triangle_ceiling = 500},
-        Kit_definition{.name = "nature",       .display_name = "Nature",       .triangle_ceiling = 500}
+        Kit_definition{.name = "basic",        .display_name = "Basic",        .triangle_ceiling = 2000},
+        Kit_definition{.name = "architecture", .display_name = "Architecture", .triangle_ceiling = 2000},
+        Kit_definition{.name = "nature",       .display_name = "Nature",       .triangle_ceiling = 2000}
     };
     add_basic_shapes       (m_shapes);
     add_architecture_shapes(m_shapes);
@@ -133,24 +147,37 @@ Kit_shape_library::Kit_shape_library()
         Kit_palette_material{.name = "Kit Plaster",        .base_color = glm::vec3{0.78f, 0.72f, 0.60f}, .roughness = 0.90f},
         Kit_palette_material{.name = "Kit Trim",           .base_color = glm::vec3{0.60f, 0.56f, 0.50f}, .roughness = 0.80f},
         Kit_palette_material{.name = "Kit Wood",           .base_color = glm::vec3{0.45f, 0.29f, 0.15f}, .roughness = 0.70f},
+        Kit_palette_material{.name = "Kit Dark Wood",      .base_color = glm::vec3{0.16f, 0.09f, 0.05f}, .roughness = 0.70f},
+        Kit_palette_material{.name = "Kit Vermilion",      .base_color = glm::vec3{0.72f, 0.07f, 0.03f}, .roughness = 0.55f},
         Kit_palette_material{.name = "Kit Rock",           .base_color = glm::vec3{0.36f, 0.35f, 0.34f}, .roughness = 0.95f},
         Kit_palette_material{.name = "Kit Earth",          .base_color = glm::vec3{0.36f, 0.24f, 0.14f}, .roughness = 0.95f},
         Kit_palette_material{.name = "Kit Grass",          .base_color = glm::vec3{0.22f, 0.42f, 0.12f}, .roughness = 0.90f},
         Kit_palette_material{.name = "Kit Foliage",        .base_color = glm::vec3{0.10f, 0.32f, 0.08f}, .roughness = 0.85f},
         Kit_palette_material{.name = "Kit Autumn Foliage", .base_color = glm::vec3{0.48f, 0.22f, 0.05f}, .roughness = 0.85f},
-        Kit_palette_material{.name = "Kit Bark",           .base_color = glm::vec3{0.22f, 0.15f, 0.09f}, .roughness = 0.95f}
+        Kit_palette_material{.name = "Kit Bark",           .base_color = glm::vec3{0.22f, 0.15f, 0.09f}, .roughness = 0.95f},
+        Kit_palette_material{.name = "Kit Dark Rock",      .base_color = glm::vec3{0.13f, 0.12f, 0.11f}, .roughness = 0.95f},
+        Kit_palette_material{.name = "Kit Sand",           .base_color = glm::vec3{0.76f, 0.62f, 0.40f}, .roughness = 0.95f},
+        Kit_palette_material{.name = "Kit Shell",          .base_color = glm::vec3{0.85f, 0.78f, 0.70f}, .roughness = 0.60f},
+        Kit_palette_material{.name = "Kit Roof Tile",      .base_color = glm::vec3{0.52f, 0.20f, 0.12f}, .roughness = 0.80f},
+        Kit_palette_material{.name = "Kit Water",          .base_color = glm::vec3{0.04f, 0.18f, 0.30f}, .roughness = 0.10f},
+        Kit_palette_material{.name = "Kit Shallow Water",  .base_color = glm::vec3{0.10f, 0.40f, 0.42f}, .roughness = 0.10f}
     };
     // One default per slot name and a few alternatives (R2.9).
     m_slot_palettes = {
-        Kit_slot_palette{.slot = "stone",   .default_material = "Kit Stone",   .alternatives = {"Kit Rock", "Kit Plaster", "Kit Wood"}},
+        Kit_slot_palette{.slot = "stone",   .default_material = "Kit Stone",   .alternatives = {"Kit Rock", "Kit Plaster", "Kit Wood", "Kit Shell"}},
         Kit_slot_palette{.slot = "floor",   .default_material = "Kit Floor",   .alternatives = {"Kit Wood", "Kit Stone", "Kit Earth"}},
         Kit_slot_palette{.slot = "wall",    .default_material = "Kit Plaster", .alternatives = {"Kit Stone", "Kit Wood", "Kit Trim"}},
         Kit_slot_palette{.slot = "trim",    .default_material = "Kit Trim",    .alternatives = {"Kit Wood", "Kit Stone", "Kit Plaster"}},
         Kit_slot_palette{.slot = "rock",    .default_material = "Kit Rock",    .alternatives = {"Kit Stone", "Kit Earth"}},
-        Kit_slot_palette{.slot = "earth",   .default_material = "Kit Earth",   .alternatives = {"Kit Grass", "Kit Rock", "Kit Stone"}},
+        Kit_slot_palette{.slot = "earth",   .default_material = "Kit Earth",   .alternatives = {"Kit Grass", "Kit Rock", "Kit Stone", "Kit Sand"}},
         Kit_slot_palette{.slot = "grass",   .default_material = "Kit Grass",   .alternatives = {"Kit Earth", "Kit Foliage"}},
         Kit_slot_palette{.slot = "foliage", .default_material = "Kit Foliage", .alternatives = {"Kit Autumn Foliage", "Kit Grass"}},
-        Kit_slot_palette{.slot = "bark",    .default_material = "Kit Bark",    .alternatives = {"Kit Wood", "Kit Rock"}}
+        Kit_slot_palette{.slot = "bark",    .default_material = "Kit Bark",    .alternatives = {"Kit Wood", "Kit Rock"}},
+        Kit_slot_palette{.slot = "cliff",   .default_material = "Kit Dark Rock", .alternatives = {"Kit Rock", "Kit Stone", "Kit Sand"}},
+        Kit_slot_palette{.slot = "sand",    .default_material = "Kit Sand",    .alternatives = {"Kit Earth", "Kit Rock"}},
+        Kit_slot_palette{.slot = "roof",    .default_material = "Kit Roof Tile", .alternatives = {"Kit Wood", "Kit Stone"}},
+        Kit_slot_palette{.slot = "water",   .default_material = "Kit Water",   .alternatives = {"Kit Shallow Water"}},
+        Kit_slot_palette{.slot = "wood",    .default_material = "Kit Wood",    .alternatives = {"Kit Vermilion", "Kit Dark Wood", "Kit Bark"}}
     };
 }
 

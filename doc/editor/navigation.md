@@ -194,8 +194,13 @@ bounds, no rigid body of a motion mode other than none or static and no
 animation channel on the node or an ancestor; `is_moved_by_physics()` and
 `is_animated()` of `scene/static_mesh_set.hpp`, which the PVS bake uses too),
 translucent meshes included, whether or not the world-space bake admits it.
-Render proxies (the world-space form, bone proxies) and session-only nodes
-are not input.
+Render proxies (the world-space form, bone proxies), session-only nodes and
+meshes carrying the authored flag `Editor_item_flags::pass_through`
+(saved by name as `pass_through`) are not input; a kit piece of a
+shape without a body, the water, carries that flag
+(`doc/editor/level_tools.md` "Kit brushes"). The flag is part of the input
+admission (`is_navigation_input_flag_admitted()`), so setting or clearing it
+on a mesh changes the input as hiding or showing it does.
 
 The job's main-thread start lists the meshes with their root-relative
 transforms (`inverse(root.world_from_node) * world_from_node`, the

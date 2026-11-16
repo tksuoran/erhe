@@ -94,6 +94,9 @@ public:
     // its session-only meshes in the navigation layer, and of those the one of the reachable polygons.
     static constexpr uint64_t navigation_mesh           = erhe::Item_flags::application_bit(27);
     static constexpr uint64_t navigation_reachable      = erhe::Item_flags::application_bit(28);
+    // Authored: the mesh is no ground - not navigation input (doc/editor/navigation.md "Input"), no surface for snap
+    // to surface or support (doc/editor/level_tools.md "Surface placement"); a kit piece of a bodiless shape carries it.
+    static constexpr uint64_t pass_through              = erhe::Item_flags::application_bit(29);
 
     // The bits register_editor_item_bits() reports as transient
     // (erhe::Item_flags::get_transient_bits()) and as purpose inputs

@@ -79,7 +79,17 @@ auto c_str(const Kit_collision collision) -> const char*
     switch (collision) {
         case Kit_collision::convex_hull:   return "convex_hull";
         case Kit_collision::triangle_mesh: return "triangle_mesh";
+        case Kit_collision::none:          return "none";
         default:                           return "?";
+    }
+}
+
+auto c_str(const Kit_mesh_kind mesh_kind) -> const char*
+{
+    switch (mesh_kind) {
+        case Kit_mesh_kind::solid:   return "solid";
+        case Kit_mesh_kind::surface: return "surface";
+        default:                     return "?";
     }
 }
 

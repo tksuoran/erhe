@@ -3,6 +3,7 @@
 #include "level/kit_piece.hpp"
 #include "level/kit_shape_library.hpp"
 #include "level/surface_snap_search.hpp"
+#include "editor_item_bits.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/node_raytrace_mask.hpp"
@@ -82,7 +83,17 @@ public:
     return (raytrace_primitive != nullptr) ? raytrace_primitive->mesh : nullptr;
 }
 
-// A surface is a front face (its normal faces the ray) of a content mesh that is not excluded.
+// A mesh whose faces are surfaces: a content mesh that is neither excluded nor pass_through (water: what rests or snaps
+// passes through it to what is below). Every surface ray and search of this file asks it.
+[[nodiscard]] auto is_surface_mesh(const erhe::scene::Mesh* const mesh, const std::span<const erhe::scene::Mesh* const> excluded) -> bool
+{
+    return
+        (mesh != nullptr) &&
+        ((mesh->get_flag_bits() & Editor_item_flags::pass_through) == 0) &&
+        (std::find(excluded.begin(), excluded.end(), mesh) == excluded.end());
+}
+
+// A surface is a front face (its normal faces the ray) of a surface mesh.
 class Surface_hit_filter : public erhe::raytrace::IHit_filter
 {
 public:
@@ -98,8 +109,7 @@ public:
             return false;
         }
         // A hit without a mesh is no content surface (and cast_surface_ray() reads the mesh from the instance).
-        const erhe::scene::Mesh* const mesh = get_hit_mesh(candidate);
-        return (mesh != nullptr) && (std::find(m_excluded.begin(), m_excluded.end(), mesh) == m_excluded.end());
+        return is_surface_mesh(get_hit_mesh(candidate), m_excluded);
     }
 
 private:
@@ -235,8 +245,7 @@ public:
     if (std::abs(glm::dot(out_normal, direction)) < c_parallel_cosine) {
         return false;
     }
-    const erhe::scene::Mesh* const mesh = get_hit_mesh(candidate);
-    return (mesh != nullptr) && (std::find(excluded.begin(), excluded.end(), mesh) == excluded.end());
+    return is_surface_mesh(get_hit_mesh(candidate), excluded);
 }
 
 // Rejects every candidate, so one traversal sees every face on the ray within its interval, and appends each.

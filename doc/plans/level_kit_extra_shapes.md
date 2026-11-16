@@ -175,18 +175,22 @@ The quay top and the pier deck are walkable at every derived value; the
 pier's check bounds the gap between planks. A path layout of
 `harbour.buoy` marks a channel along a curve.
 
+- `harbour.boat` needs a "float on water" rule of its own: water is no snap
+  to surface target (`doc/editor/level_tools.md` "Surface placement").
+- `harbour.buoy` needs the same "float on water" rule.
+
 ## Prerequisites
 
 What the shapes need that is not built, each sized as the shapes are.
 
-- P1 Triangle ceiling (S). The per-shape limit at default parameters is
-  `Kit_definition::triangle_ceiling`, 500 for each kit in
-  `kit_shape_library.cpp`; each shape states its own
+- P1 Triangle ceiling (S), landed with step 62's first batch
+  (`doc/plans/level_kit_more_shapes.md` "Build order"). The per-shape limit at
+  default parameters is `Kit_definition::triangle_ceiling`, 2000 for every
+  kit in `kit_shape_library.cpp`, R2.6 restated; each shape states its own
   `Kit_shape_definition::triangle_budget` below it. `editor_level_tests`
   (`test_kit_shapes.cpp`) reads both: the count at the defaults against the
-  budget, the budget against the ceiling, and every rock form against the
-  ceiling. Proposed: 2000 for every kit, existing and new, with R2.6
-  restated. Reason: the largest shapes here are many boxes of 12 triangles
+  budget, the budget against the ceiling, and every rock form and palm
+  species against the ceiling. Reason: the largest shapes here are many boxes of 12 triangles
   (a rope bridge of 40 planks with four swept ropes is about 1100, a
   six-level cross-braced scaffold about 900), and 2000 holds them at their
   defaults with margin while a scattered run of a hundred pieces stays
@@ -222,19 +226,26 @@ What the shapes need that is not built, each sized as the shapes are.
   - Count: every lit piece makes its lights, without a limit (U36). Baking
     lights to vertices is a possible later direction, not planned here.
 - P3 Slots and palette (S). The slot names `wood`, `metal`, `cloth`,
-  `glow` and `water` with their `Kit_slot_palette`, and the palette
+  `glow` and `water` with their `Kit_slot_palette` (`water` landed with
+  `nature.water`: Kit Water, alternative Kit Shallow Water; `wood` landed with
+  `architecture.torii`: Kit Wood, alternatives Kit Vermilion, Kit Dark Wood
+  and Kit Bark, the first two new palette materials), and the palette
   materials Kit Metal, Kit Rust, Kit Cloth (two or three colors), Kit Clay
   (an alternative of `stone`), Kit Glow and Kit Water. `Kit_palette_material` gains a
   metallic value and an emissive color for them.
 - P4 Builder helpers (S). `Kit_mesh_builder::add_beam(a, b, width,
-  height)`, a box between two points, for every `beam`;
+  height)`, a box between two points, for every `beam` (landed with
+  `architecture.torii`);
   `Kit_mesh_builder::add_mesh(const GEO::Mesh&)`, which takes a generated
   mesh's facets under the current slot, for every `sweep` joined to other
-  parts.
-- P5 Pieces without a body (S). `Kit_collision::none`: the piece gets no
-  physics body, and the navigation build leaves it out of its input, so
-  `nature.water` is neither stood on nor walkable. The mesh checks accept
-  a shape stated to be a surface (R2.5) as an open mesh.
+  parts (landed with `nature.palm`; a quad becomes two triangles).
+- P5 Pieces without a body (S), landed with `nature.water`.
+  `Kit_collision::none`: the piece gets no physics body (`Brush_body::none`),
+  and the navigation build leaves it out of its input (the authored flag
+  `pass_through`), so `nature.water` is neither stood on nor
+  walkable; Replace moves the body and the flag with the collision kind. The
+  mesh checks accept a shape stated to be a surface (R2.5,
+  `Kit_mesh_kind::surface`) as an open mesh.
 - Navigation links ("Later" of `doc/plans/level_tools.md`): the reachable
   area crosses a `traversal.ladder` only with a link; before that the
   walkable reads report its two ends as separate islands.

@@ -77,6 +77,19 @@ public:
     // Regular prism around the Y axis; the first corner sits at phase_radians from +X toward -Z.
     void add_prism   (int segments, float radius, float y0, float y1, float phase_radians);
     void add_blob    (const Kit_blob& blob, Kit_random& random);
+    // A solid of rings bottom to top, each of the segment count, its points counter-clockwise seen from above, closed by
+    // fans to the cap points (a flat cap's point lies in its ring's plane); two triangles per quad, as add_blob().
+    void add_ring_solid(std::span<const glm::vec3> ring_points, int segments, const glm::vec3& bottom_point, const glm::vec3& top_point);
+    // As add_ring_solid(), the caps strips of quads pairing point i with point (segments - 1 - i) across the first and
+    // the last ring (an even count, each ring symmetric about x = 0 in z): a long narrow solid, where fans make slivers.
+    void add_ring_solid_paired_caps(std::span<const glm::vec3> ring_points, int segments);
+    // The facets of a generated mesh (a sweep) under the current slot; a quad becomes two triangles, since a bent sweep's quads are not planar.
+    void add_mesh    (const GEO::Mesh& mesh);
+    // A box from a to b (P4), a != b: width along the horizontal normal of the axis, height along the normal above it.
+    void add_beam    (const glm::vec3& a, const glm::vec3& b, float width, float height);
+    // Triangles between two polylines whose keys rise along each, advancing on the smaller next key; they wind
+    // (first[i], first[i + 1], second[j]). A closed ring repeats its first vertex at the end with its key plus a turn.
+    void add_band    (std::span<const uint32_t> first, std::span<const float> first_keys, std::span<const uint32_t> second, std::span<const float> second_keys);
 
     // Writes the facets and their slots (c_kit_slot_attribute).
     void write       (GEO::Mesh& mesh) const;

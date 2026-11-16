@@ -617,6 +617,22 @@ auto Level_kits::make_default_values(const Scene_root& scene_root, const Kit_sha
     return editor::make_default_values(shape, lengths.module, lengths.wall_height);
 }
 
+namespace {
+
+// The body and the ground flag a fresh placement of a shape gives its piece; Replace across a bodiless shape gives the same.
+auto get_placed_motion_mode(const Brush::Scaled& scaled) -> erhe::physics::Motion_mode
+{
+    // Brush::make_instance() gives a body exactly when the scale has a collision shape (none without static physics).
+    return scaled.collision_shape ? erhe::physics::Motion_mode::e_static : erhe::physics::Motion_mode::e_none;
+}
+
+auto get_placed_ground(const Kit_shape_definition& shape) -> Kit_piece_ground
+{
+    return (shape.collision == Kit_collision::none) ? Kit_piece_ground::pass_through : Kit_piece_ground::ground;
+}
+
+} // anonymous namespace
+
 auto Level_kits::get_mesh_key(const Kit_parameter_values& values) -> std::string
 {
     const Kit_shape_definition* shape = values.get_shape();
@@ -663,7 +679,11 @@ auto Level_kits::make_brush(const Kit_parameter_values& values) -> std::shared_p
             return {};
         }
     }
-    // A convex shape takes the brush's convex hull (Brush::late_initialize); the others their own triangles (D2.3).
+    // A convex shape takes the brush's convex hull (Brush::late_initialize); the others their own triangles (D2.3);
+    // a shape without a body has neither (P5).
+    if (shape.collision == Kit_collision::none) {
+        brush_data.body = Brush_body::none;
+    }
     if (shape.collision == Kit_collision::triangle_mesh) {
         brush_data.collision_shape_generator = [values](const float scale) -> std::shared_ptr<erhe::physics::ICollision_shape> {
             const std::shared_ptr<erhe::geometry::Geometry> geometry = make_kit_geometry(values);
@@ -1143,6 +1163,9 @@ auto Level_kits::prepare_placements(
             return fail(i, fmt::format("{}: the brush made no node", shape.id));
         }
         insert.node->set_name(placement.name.empty() ? shape.display_name : placement.name);
+        if (get_placed_ground(shape) == Kit_piece_ground::pass_through) {
+            insert.node->enable_flag_bits(Editor_item_flags::pass_through);
+        }
         write_kit_piece(*insert.node.get(), Kit_piece_data{.shape = shape.id, .parameters = values[i].to_canonical_text()});
         insert_operations.push_back(insert.operation);
         result.pieces.push_back(
@@ -1967,7 +1990,9 @@ auto Level_kits::preview_parameters(const std::shared_ptr<erhe::scene::Node>& no
                 .primitives      = mesh->get_primitives(),
                 .collision_shape = get_node_collision_shape(*mesh),
                 .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
-                .parameters      = record.parameters
+                .parameters      = record.parameters,
+                .motion_mode     = get_piece_motion_mode(*mesh),
+                .ground          = get_piece_ground(*mesh)
             },
             .brush  = {}
         };
@@ -2025,7 +2050,9 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
             .primitives      = mesh->get_primitives(),
             .collision_shape = get_node_collision_shape(*mesh),
             .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
-            .parameters      = record.parameters
+            .parameters      = record.parameters,
+            .motion_mode     = get_piece_motion_mode(*mesh),
+            .ground          = get_piece_ground(*mesh)
         };
     }
     const std::string parameters = values.to_canonical_text();
@@ -2041,7 +2068,9 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
         .primitives      = with_brush_primitives(before.primitives, *scaled),
         .collision_shape = carries_node_physics(*mesh) ? scaled->collision_shape : before.collision_shape,
         .brush           = result.brush,
-        .parameters      = parameters
+        .parameters      = parameters,
+        .motion_mode     = before.motion_mode,
+        .ground          = before.ground
     };
     m_context.operation_stack->execute_now(
         std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after))
@@ -2325,7 +2354,9 @@ auto Level_kits::replace_shape(
             .primitives      = mesh->get_primitives(),
             .collision_shape = get_node_collision_shape(*mesh),
             .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
-            .parameters      = read_kit_piece(*mesh).value().parameters
+            .parameters      = read_kit_piece(*mesh).value().parameters,
+            .motion_mode     = get_piece_motion_mode(*mesh),
+            .ground          = get_piece_ground(*mesh)
         };
         const std::vector<Kit_slot_material>& given = replacements[piece_replacement[i]].materials;
         std::vector<erhe::scene::Mesh_primitive> primitives;
@@ -2349,12 +2380,22 @@ auto Level_kits::replace_shape(
             snap_requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive>{primitives})});
             snap_pieces.push_back(i);
         }
+        // Across a bodiless shape (P5) the piece gets what a fresh placement of the new shape gets; between shapes with
+        // bodies it keeps its own body (or the lack of one) and flag.
+        const Kit_shape_definition* const old_shape = m_library.find(piece.old_shape);
+        const bool was_bodiless = (old_shape != nullptr) && (old_shape->collision == Kit_collision::none);
+        const bool is_bodiless  = (shape.collision == Kit_collision::none);
+        const bool fresh        = was_bodiless || is_bodiless;
+        const erhe::physics::Motion_mode motion_mode = fresh ? get_placed_motion_mode(scaled) : before.motion_mode;
+        const Kit_piece_ground navigation = fresh ? get_placed_ground(shape) : before.ground;
         Kit_piece_mesh_state after{
             .shape           = shape.id,
             .primitives      = std::move(primitives),
-            .collision_shape = carries_node_physics(*mesh) ? scaled.collision_shape : before.collision_shape,
+            .collision_shape = (motion_mode != erhe::physics::Motion_mode::e_none) ? scaled.collision_shape : (fresh ? std::shared_ptr<erhe::physics::ICollision_shape>{} : before.collision_shape),
             .brush           = brushes[i],
-            .parameters      = piece.values.to_canonical_text()
+            .parameters      = piece.values.to_canonical_text(),
+            .motion_mode     = motion_mode,
+            .ground          = navigation
         };
         piece_operations.push_back(std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after)));
         append_connector_switch_carry(mesh, piece.values, piece_operations);

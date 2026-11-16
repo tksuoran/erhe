@@ -2,6 +2,7 @@
 
 #include "operations/operation.hpp"
 
+#include "erhe_physics/irigid_body.hpp"
 #include "erhe_scene/mesh.hpp"
 
 #include <memory>
@@ -14,6 +15,12 @@ namespace editor {
 
 class Brush;
 
+// Whether a piece is ground: a piece of a shape without a body is not (Editor_item_flags::pass_through).
+enum class Kit_piece_ground : unsigned int {
+    ground = 0,
+    pass_through
+};
+
 // What a parameter change (D3.3) or a replace (D3.10) of a piece swaps.
 class Kit_piece_mesh_state
 {
@@ -23,9 +30,16 @@ public:
     std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
     std::shared_ptr<Brush>                           brush;      // Brush_placement.brush
     std::string                                      parameters; // Kit_piece.parameters
+    erhe::physics::Motion_mode                       motion_mode{erhe::physics::Motion_mode::e_none}; // e_none: no body
+    Kit_piece_ground                                 ground     {Kit_piece_ground::ground};
 };
 
-// Replaces a piece's shape id, mesh primitives, collision shape, brush and parameter text; undo restores them.
+// The motion mode and ground flag of a piece's mesh as they are, for a Kit_piece_mesh_state.
+[[nodiscard]] auto get_piece_motion_mode(const erhe::scene::Mesh& mesh) -> erhe::physics::Motion_mode;
+[[nodiscard]] auto get_piece_ground (const erhe::scene::Mesh& mesh) -> Kit_piece_ground;
+
+// Replaces a piece's shape id, mesh primitives, collision shape, body, pass_through flag, brush and parameter text;
+// undo restores them.
 class Kit_piece_parameters_operation : public Operation
 {
 public:

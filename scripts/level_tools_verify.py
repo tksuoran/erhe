@@ -4,9 +4,10 @@
 Launches a headless editor (ERHE_AI_DRIVER=1, stopped by its own pid), creates
 an empty scene and checks over MCP:
 
-- level_get_kits lists the 3 kits and the 14 shapes of the starter set;
-- the 14 shapes placed once each at their defaults in one call (the "catalog
-  row") are 14 pieces whose world_aabb matches the shape's default size, whose
+- level_get_kits lists the 3 kits and their 31 shapes (the starter set and the
+  built shapes of the more shapes inventory);
+- the 31 shapes placed once each at their defaults in one call (the "catalog
+  row") are 31 pieces whose world_aabb matches the shape's default size, whose
   parameters echo the catalog defaults, and whose materials are the palette
   materials of the shape's slots; a piece has a static physics body, the stairs
   a triangle mesh shape, the block a convex hull; a render_scene_image of the
@@ -209,7 +210,7 @@ Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png p
        [--walkable-image <png path>] [--window-image <png path>] [--properties-image <png path>] [--queries-image <png path>]
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
        [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-connector-snap]
-       [--only-layout-indicators] [--only-region-handles]
+       [--only-layout-indicators] [--only-region-handles] [--only-more-shapes]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
 
@@ -263,6 +264,12 @@ EXACT_DEFAULT_SIZES = {
     "architecture.door_wall": (4.0, 3.0, 0.25),
     "architecture.pillar":    (0.5, 3.0, 0.5),
     "architecture.arch":      (2.6, 2.7, 0.5),   # span 2 + 2 x 0.3, rise 2.4 + 0.3
+    "nature.water":           (8.0, 0.0, 8.0),   # a surface at y 0
+    "architecture.column":      (0.63, 3.0, 0.63),  # the doric abacus, 1.26 shaft diameters
+    "architecture.entablature": (2.0, 0.75, 0.88),  # depth 0.5 + 2 x (0.04 + cornice 0.15)
+    "architecture.battlement":  (2.0, 1.8, 0.25),   # sill 0.9 + merlons 0.9
+    "architecture.tower":       (3.3217, 6.4, 3.3564),  # 18 sides: the battered foot at +-X, the lintel at the front, the foot at the back
+    "architecture.roof":        (4.66, 1.8325, 4.6),    # 4 + 2 x 0.3 overhang, the ridge cap 0.03 beyond; rise 2.3 x tan 35 + slab, lap, cap
 }
 # Seeded shapes: nominal sizes, which the jitter moves by up to this share.
 NOMINAL_DEFAULT_SIZES = {
@@ -324,9 +331,9 @@ def create_scene(editor):
 def check_catalog(editor, scene):
     catalog = editor.call("level_get_kits", {"scene_name": scene})
     shapes = catalog["shapes"]
-    check("level_get_kits lists 14 shapes", (catalog["shape_count"] == 14) and (len(shapes) == 14), f"{catalog['shape_count']} shapes")
-    check("level_get_kits lists the basic, architecture and nature kits with 5, 4 and 5 shapes",
-          [(k["name"], len(k["shapes"])) for k in catalog["kits"]] == [("basic", 5), ("architecture", 4), ("nature", 5)],
+    check("level_get_kits lists 31 shapes", (catalog["shape_count"] == 31) and (len(shapes) == 31), f"{catalog['shape_count']} shapes")
+    check("level_get_kits lists the basic, architecture and nature kits with 5, 10 and 16 shapes",
+          [(k["name"], len(k["shapes"])) for k in catalog["kits"]] == [("basic", 5), ("architecture", 10), ("nature", 16)],
           json.dumps([(k["name"], len(k["shapes"])) for k in catalog["kits"]]))
     check("level_get_kits reports the default level lengths (module 1 m, wall height 3 m)",
           close([catalog["level"]["module"], catalog["level"]["wall_height"]], [1.0, 3.0]), json.dumps(catalog["level"]))
@@ -357,7 +364,7 @@ def echoes_defaults(shape, parameters):
 
 
 def check_catalog_row(editor, scene, catalog):
-    """The 14 shapes at their defaults in one row along X; returns (row pieces, row center x, row length)."""
+    """The 31 shapes at their defaults in one row along X; returns (row pieces, row center x, row length)."""
     shapes = catalog["shapes"]
     gap = 1.0
     cursor = 0.0
@@ -374,8 +381,8 @@ def check_catalog_row(editor, scene, catalog):
     reply = editor.call("level_place_pieces", {"scene_name": scene, "pieces": requests})
     editor.wait_idle()
     placed = reply["pieces"]
-    check("the catalog row places 14 pieces in one call and one undo entry",
-          (reply["count"] == 14) and (undo_depth(editor) == depth_before + 1), f"count {reply['count']}, undo {depth_before} -> {undo_depth(editor)}")
+    check("the catalog row places 31 pieces in one call and one undo entry",
+          (reply["count"] == 31) and (undo_depth(editor) == depth_before + 1), f"count {reply['count']}, undo {depth_before} -> {undo_depth(editor)}")
 
     by_id = {shape["id"]: shape for shape in shapes}
     size_problems = []
@@ -411,7 +418,7 @@ def check_catalog_row(editor, scene, catalog):
 
     listed = {p["id"]: p for p in pieces(editor, scene)}
     row_ids = [p["id"] for p in placed]
-    check("level_get_pieces lists the 14 pieces with their shape and record", all((i in listed) for i in row_ids) and
+    check("level_get_pieces lists the 31 pieces with their shape and record", all((i in listed) for i in row_ids) and
           all(listed[p["id"]]["shape"] == p["shape"] and listed[p["id"]]["parameters"] == p["parameters"] for p in placed))
     stairs = next(listed[p["id"]] for p in placed if p["shape"] == "basic.stairs")
     block  = next(listed[p["id"]] for p in placed if p["shape"] == "basic.block")
@@ -5185,8 +5192,11 @@ def check_reloaded(label, editor, before, materials_before, name):
     groups = sum(1 for p in after) - len(brushes)
     check(f"{label}: equal values share one mesh and different values do not ({groups} pieces share an earlier piece's mesh)",
           shared and distinct and (groups > 0 or label == "walkable level"), f"{len(brushes)} value sets")
-    bodies = [p["name"] for p in after if not (p["physics"]["has_body"] and p["physics"]["motion_mode"] == "static")]
-    check(f"{label}: every reloaded piece has its static body", not bodies, ", ".join(bodies[:5]))
+    # A water or leaf plant piece has no body (P5) and keeps its pass_through flag through the file.
+    no_body = ("nature.water", "nature.leaf_plant")
+    bodies = [p["name"] for p in after if (p["shape"] not in no_body) and not (p["physics"]["has_body"] and p["physics"]["motion_mode"] == "static")]
+    bodiless = [p["name"] for p in after if (p["shape"] in no_body) and (p["physics"]["has_body"] or not p["pass_through"])]
+    check(f"{label}: every reloaded piece has its static body, a water or leaf plant piece none and its pass_through flag", not bodies and not bodiless, ", ".join((bodies + bodiless)[:5]))
     check(f"{label}: the palette materials are back by name, none added",
           material_count(editor, name) <= materials_before and all(p["materials"] and all(p["materials"].values()) for p in after),
           f"{material_count(editor, name)} materials, {materials_before} before the save")
@@ -7872,11 +7882,12 @@ def check_connectors(editor):
     kits = editor.call("level_get_kits", {"scene_name": scene})
     by_id = {shape["id"]: shape for shape in kits["shapes"]}
     names = {shape_id: [c["name"] for c in shape["connectors"]] for shape_id, shape in by_id.items()}
-    check("level_get_kits lists the connectors of the architecture and basic shapes, none for the nature shapes",
+    check("level_get_kits lists the connectors of the architecture and basic shapes, none for the seeded nature shapes of the starter set, the palm and the leaf plant",
           (names["architecture.wall"] == ["start", "end", "base", "top", "front", "back"]) and
           (names["architecture.door_wall"] == ["start", "end", "base", "top", "opening_front", "opening_back"]) and
           (names["basic.stairs"] == ["bottom", "top", "base"]) and (names["basic.block"] == ["base", "top", "front", "back", "left", "right"]) and
-          (names["architecture.pillar"] == ["base", "top"]) and all(not names[i] for i in names if i.startswith("nature.")),
+          (names["architecture.pillar"] == ["base", "top"]) and
+          all(not names[i] for i in ("nature.rock", "nature.land_mass", "nature.hill", "nature.tree", "nature.bush", "nature.palm", "nature.leaf_plant")),
           json.dumps({k: v for k, v in names.items() if k in ("architecture.wall", "basic.stairs", "nature.rock")}))
     wall_end = next(c for c in by_id["architecture.wall"]["connectors"] if c["name"] == "end")
     check("the catalog's wall end connector sits at half the default length on the base, outward +X, up +Y",
@@ -10047,6 +10058,1070 @@ def check_layout_indicators(editor):
     close_without_leak(editor, scene, "kit layout indicators")
 
 
+MORE_SHAPES = ("nature.cliff", "nature.palm", "nature.shore", "nature.water")
+
+
+def render_shape_image(editor, scene, shape_id, index, target, distance, elevation=20.0, azimuth=30.0):
+    """One logs/shape_<id>_<n>.png of the scene, looking at target from the given distance and angles (degrees)."""
+    el = math.radians(elevation)
+    az = math.radians(azimuth)
+    eye = [target[0] + distance * math.cos(el) * math.sin(az), target[1] + distance * math.sin(el), target[2] + distance * math.cos(el) * math.cos(az)]
+    path = os.path.join(pav.REPO_ROOT, "logs", f"shape_{shape_id}_{index}.png")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    reply = editor.call("render_scene_image", {"scene": scene, "camera": {"eye": eye, "target": target, "fov_y_degrees": 40.0, "near": 0.1, "far": 400.0},
+                                               "width": 1200, "height": 800, "output": "png", "path": path})
+    return path if (os.path.isfile(path) and (reply.get("width") == 1200)) else None
+
+
+def check_more_shapes(editor):
+    """Step 62 of doc/plans/level_tools_implementation.md, first batch (doc/plans/level_kit_more_shapes.md "Build order" 1 - 4):
+    the cliff, the palm, the shore and the water - catalog, placement and bounds, ranges, slots, bodies, snap, scatter, Replace,
+    derive from seed and the navigation input - and the shape images logs/shape_<id>_<n>.png."""
+    scene = create_scene(editor)
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    by_id = {shape["id"]: shape for shape in kits["shapes"]}
+    check("level_get_kits lists 31 shapes; every kit's triangle ceiling is 2000 (P1)",
+          (kits["shape_count"] == 31) and all(k["triangle_ceiling"] == 2000 for k in kits["kits"]) and all(s in by_id for s in MORE_SHAPES),
+          f"{kits['shape_count']} shapes, ceilings {[k['triangle_ceiling'] for k in kits['kits']]}")
+    expected_catalog = {
+        "nature.cliff": (["cliff", "grass"], "triangle_mesh", "solid", "start, end, base, top"),
+        "nature.palm":  (["bark", "foliage"], "triangle_mesh", "solid", ""),
+        "nature.shore": (["sand"], "triangle_mesh", "solid", "start, end, top, base"),
+        "nature.water": (["water"], "none", "surface", "left, right, front, back"),
+    }
+    catalog_problems = []
+    for shape_id, (slots, collision, mesh_kind, connectors) in expected_catalog.items():
+        shape = by_id[shape_id]
+        names = ", ".join(c["name"] for c in shape["connectors"])
+        if ([s["slot"] for s in shape["material_slots"]] != slots) or (shape["collision"] != collision) or (shape["mesh_kind"] != mesh_kind) or (names != connectors):
+            catalog_problems.append(f"{shape_id}: slots {[s['slot'] for s in shape['material_slots']]} collision {shape['collision']} mesh_kind {shape['mesh_kind']} connectors '{names}'")
+    check("the catalog states each new shape's slots, collision kind, mesh kind and connectors", not catalog_problems, "; ".join(catalog_problems))
+    palette = {s["slot"]: s for shape in kits["shapes"] for s in shape["material_slots"]}
+    check("the sand slot's default is Kit Sand (alternatives Kit Earth, Kit Rock), the water slot's Kit Water (Q1, P3)",
+          (palette["sand"]["default_material"] == "Kit Sand") and (palette["sand"]["alternatives"] == ["Kit Earth", "Kit Rock"]) and
+          (palette["water"]["default_material"] == "Kit Water"),
+          f"sand {palette['sand']}, water {palette['water']}")
+
+    # Defaults, side by side on a ground slab (its top at y 0).
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ms ground", "parameters": {"width": 64.0, "depth": 64.0, "thickness": 0.2}}]})
+    editor.wait_idle()
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.cliff", "position": [-20.0, 0.0, -20.0], "name": "ms cliff"},
+        {"shape": "nature.palm",  "position": [0.0, 0.0, -20.0],   "name": "ms palm"},
+        {"shape": "nature.shore", "position": [20.0, 0.0, -20.0],  "name": "ms shore"},
+        {"shape": "nature.water", "position": [20.0, 0.5, -12.0],  "name": "ms water"},
+    ]})["pieces"]
+    editor.wait_idle()
+    cliff, palm, shore, water = placed
+    pieces_by_id = {p["id"]: p for p in pieces(editor, scene)}
+
+    def local_aabb(piece):
+        return [[a - b for a, b in zip(piece["world_aabb"]["min"], piece["position"])], [a - b for a, b in zip(piece["world_aabb"]["max"], piece["position"])]]
+
+    cp = cliff["parameters"]
+    lo, hi = local_aabb(cliff)
+    check("the cliff's bounds follow its values: x +-length/2, y 0 - height, back z -depth/2, the face in front of the back by at least 1.5 m",
+          close([lo[0], hi[0], lo[1], hi[1], lo[2]], [-0.5 * cp["length"], 0.5 * cp["length"], 0.0, cp["height"], -0.5 * cp["depth"]]) and (hi[2] >= lo[2] + 1.5),
+          f"{fmt3(lo)} .. {fmt3(hi)} for {json.dumps(cp)}")
+    sp = shore["parameters"]
+    lo, hi = local_aabb(shore)
+    check("the shore's bounds follow its values: x +-length/2, z +-run/2, y 0 - (lip 0.1 + rise + undulation)",
+          close([lo[0], hi[0], lo[2], hi[2], lo[1]], [-0.5 * sp["length"], 0.5 * sp["length"], -0.5 * sp["run"], 0.5 * sp["run"], 0.0]) and
+          (0.1 + sp["rise"] - TOLERANCE <= hi[1] <= 0.1 + sp["rise"] + sp["undulation"] + TOLERANCE),
+          f"{fmt3(lo)} .. {fmt3(hi)} for {json.dumps(sp)}")
+    wp = water["parameters"]
+    lo, hi = local_aabb(water)
+    check("the water's bounds are its width by its depth at y 0, two triangles at the defaults",
+          close([lo[0], hi[0], lo[2], hi[2], lo[1], hi[1]], [-0.5 * wp["width"], 0.5 * wp["width"], -0.5 * wp["depth"], 0.5 * wp["depth"], 0.0, 0.0]) and (water["triangle_count"] == 2),
+          f"{fmt3(lo)} .. {fmt3(hi)}, {water['triangle_count']} triangles")
+    pp = palm["parameters"]
+    lo, hi = local_aabb(palm)
+    check("the palm stands on its base (min y 0) with its crown at about its height (at most a frond length above), within the 2000 triangle ceiling",
+          (abs(lo[1]) < TOLERANCE) and (0.9 * pp["height"] <= hi[1] <= pp["height"] + pp["frond_length"]) and (palm["triangle_count"] <= 2000),
+          f"{fmt3(lo)} .. {fmt3(hi)}, {palm['triangle_count']} triangles for {json.dumps(pp)}")
+    defaults = {shape_id: {s["slot"]: s["default_material"] for s in by_id[shape_id]["material_slots"]} for shape_id in MORE_SHAPES}
+    check("each new piece has its slots' default palette materials",
+          all(p["materials"] == defaults[p["shape"]] for p in placed), "; ".join(f"{p['shape']}: {p['materials']}" for p in placed))
+    bodies = {p["shape"]: pieces_by_id[p["id"]] for p in placed}
+    check("the cliff, palm and shore have a static triangle mesh body and are navigation input; the water has no body and carries pass_through (P5)",
+          all(bodies[s]["physics"]["has_body"] and (bodies[s]["physics"]["motion_mode"] == "static") and ("mesh" in bodies[s]["physics"]["collision_shape"].lower()) and
+              not bodies[s]["pass_through"] for s in ("nature.cliff", "nature.palm", "nature.shore")) and
+          (not bodies["nature.water"]["physics"]["has_body"]) and (bodies["nature.water"]["physics"]["motion_mode"] == "none") and
+          (bodies["nature.water"]["physics"]["collision_shape"] == "") and bodies["nature.water"]["pass_through"],
+          "; ".join(f"{s}: {b['physics']} excluded {b['pass_through']}" for s, b in bodies.items()))
+
+    # Range ends accepted, values beyond refused naming the parameter (R3.6).
+    accepted = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.palm",  "position": [-30.0, 0.0, 10.0], "parameters": {"species": "fan", "fronds": 24, "derive": []}},
+        {"shape": "nature.palm",  "position": [-24.0, 0.0, 10.0], "parameters": {"species": "date", "fronds": 3, "height": 1.5, "derive": []}},
+        {"shape": "nature.cliff", "position": [-14.0, 0.0, 10.0], "parameters": {"ledges": 3, "overhang": -0.25, "roughness": 1.0, "depth": 1.5, "derive": []}},
+        {"shape": "nature.shore", "position": [-4.0, 0.0, 10.0], "parameters": {"rise": 0.1, "berm": 0.8, "undulation": 1.0, "derive": []}},
+        {"shape": "nature.water", "position": [6.0, 0.0, 10.0], "parameters": {"subdivisions": 31}},
+    ]})["pieces"]
+    editor.wait_idle()
+    check("the new shapes take values at the ends of their ranges (31 water subdivisions: 1922 triangles, within the ceiling)",
+          (len(accepted) == 5) and (accepted[4]["triangle_count"] == 1922) and all(abs(p["world_aabb"]["min"][1]) < TOLERANCE for p in accepted),
+          "; ".join(f"{p['shape']} {p['triangle_count']}" for p in accepted))
+    refusals = [
+        ("nature.cliff", {"overhang": 0.3, "derive": []}, "'overhang'"),
+        ("nature.palm",  {"fronds": 25, "derive": []}, "'fronds'"),
+        ("nature.shore", {"berm": 0.9}, "'berm'"),
+        ("nature.water", {"subdivisions": 32}, "'subdivisions'"),
+    ]
+    refusal_problems = []
+    count_before = len(pieces(editor, scene))
+    for shape_id, parameters, name in refusals:
+        error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [{"shape": shape_id, "parameters": parameters}]})
+        if (error is None) or (name not in error):
+            refusal_problems.append(f"{shape_id} {parameters}: {error}")
+    editor.wait_idle()
+    check("a value beyond a new shape's range is refused naming the parameter, and nothing is placed",
+          (not refusal_problems) and (len(pieces(editor, scene)) == count_before), "; ".join(refusal_problems))
+
+    # Derive from seed: two seeds, the masked values from each seed inside their derive ranges.
+    seeded = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.palm",  "position": [-30.0, 0.0, 25.0], "parameters": {"seed": 5}},
+        {"shape": "nature.palm",  "position": [-24.0, 0.0, 25.0], "parameters": {"seed": 6}},
+        {"shape": "nature.cliff", "position": [-14.0, 0.0, 25.0], "parameters": {"seed": 5}},
+        {"shape": "nature.cliff", "position": [-8.0, 0.0, 25.0],  "parameters": {"seed": 6}},
+    ]})["pieces"]
+    editor.wait_idle()
+    derive_problems = []
+    for piece in seeded:
+        shape = by_id[piece["shape"]]
+        for parameter in shape["parameters"]:
+            if parameter["name"] in piece["parameters"]["derive"]:
+                value = piece["parameters"][parameter["name"]]
+                if not (parameter["derive_min"] - TOLERANCE <= value <= parameter["derive_max"] + TOLERANCE):
+                    derive_problems.append(f"{piece['shape']} {parameter['name']} {value}")
+    differs = (seeded[0]["parameters"] != seeded[1]["parameters"]) and (seeded[2]["parameters"] != seeded[3]["parameters"]) and \
+              (seeded[0]["mesh_key"] != seeded[1]["mesh_key"]) and (seeded[2]["mesh_key"] != seeded[3]["mesh_key"])
+    check("the palm and the cliff derive their masked values from the seed (height, bend, fronds, droop; height, overhang) within their derive ranges, other seeds other meshes",
+          (seeded[0]["parameters"]["derive"] == ["height", "bend", "fronds", "droop"]) and (seeded[2]["parameters"]["derive"] == ["height", "overhang"]) and
+          differs and not derive_problems, "; ".join(derive_problems) or json.dumps([p["parameters"] for p in seeded])[:400])
+
+    # Snap to surface: dropped 1 m above a raised slab, the bases rest on its top.
+    platform = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [30.0, 0.0, 25.0], "name": "ms platform", "parameters": {"width": 20.0, "depth": 12.0, "thickness": 0.6}}]})["pieces"][0]
+    editor.wait_idle()
+    top = platform["world_aabb"]["max"][1]
+    snapped = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.palm",  "position": [24.0, top + 0.8, 25.0], "surface_snap": True},
+        {"shape": "nature.cliff", "position": [30.0, top + 0.8, 25.0], "surface_snap": True},
+        {"shape": "nature.shore", "position": [35.0, top + 0.8, 25.0], "surface_snap": True},
+    ]})["pieces"]
+    editor.wait_idle()
+    check("surface_snap rests the palm's, the cliff's and the shore's base on the slab's top",
+          all(p["surface_found"] and (abs(p["world_aabb"]["min"][1] - top) < TOLERANCE) for p in snapped),
+          "; ".join(f"{p['shape']} found {p['surface_found']} base {p['world_aabb']['min'][1]:.4f} top {top:.4f}" for p in snapped))
+
+    # Water is no surface (pass_through): a rock snapped from above the water rests on the sand under it.
+    under = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.shore", "position": [40.0, 0.0, -40.0], "name": "ms sand under water", "parameters": {"undulation": 0.0, "derive": []}},
+        {"shape": "nature.water", "position": [40.0, 0.8, -36.0], "name": "ms water over sand"}]})["pieces"]
+    editor.wait_idle()
+    sand_y = editor.call("raycast", {"scene_name": scene, "origin": [40.0, 5.0, -38.0], "direction": [0.0, -1.0, 0.0], "mask": 1})
+    rock = editor.call("level_place_pieces", {"scene_name": scene, "surface_max_distance": 3.0, "pieces": [
+        {"shape": "nature.rock", "position": [40.0, 1.5, -38.0], "name": "ms rock in water", "surface_snap": True}]})["pieces"][0]
+    editor.wait_idle()
+    check("a rock snapped from above water over sand passes through the water and rests on the sand below the water level",
+          rock["surface_found"] and (rock["position"][1] < 0.8 - 0.1) and (rock["position"][1] > 0.1),
+          f"rock at {fmt3(rock['position'])}, water at 0.8, raycast {json.dumps(sand_y)[:160]}")
+
+    # A scatter of palms and cliffs: footprints are the circles around the items' xz bounds.
+    layout = editor.call("level_create_layout", {"scene_name": scene, "name": "ms palm grove", "position": [0.0, 0.0, 45.0],
+                                                 "items": [{"shape": "nature.palm", "weight": 3}, {"shape": "nature.cliff"}],
+                                                 "pattern": {"kind": "scatter", "count": 8, "region": "disc", "region_radius": 14.0, "min_spacing": 0.5}})
+    editor.wait_idle()
+    radii = [item["footprint_radius"] for item in layout["items"]]
+
+    def reach_of(bounds):
+        return math.hypot(max(-bounds["min"][0], bounds["max"][0]), max(-bounds["min"][2], bounds["max"][2]))
+    item_of_shape = {item["shape"]: index for index, item in enumerate(layout["items"])}
+    points = scatter_local(layout)
+    child_radii = [radii[item_of_shape[c["shape"]]] for c in layout["children"]]
+    gap = min((math.hypot(points[i][0] - points[j][0], points[i][2] - points[j][2]) - child_radii[i] - child_radii[j]
+               for i in range(len(points)) for j in range(i + 1, len(points))), default=float("inf"))
+    check("a scatter of palms and cliffs places its pieces with each footprint the circle about the origin around the item's xz bounds (palm 1.5 - 6 m, cliff about half its diagonal), 0.5 m apart",
+          (layout["child_count"] >= 4) and all(abs(i["footprint_radius"] - reach_of(by_id[i["shape"]]["default_bounds"])) < 1.0e-4 for i in layout["items"]) and
+          (1.5 <= radii[0] <= 6.0) and (2.0 <= radii[1] <= 5.0) and (gap >= 0.5 - 1.0e-4),
+          f"{layout['child_count']} pieces, items {[(i['footprint_radius'], i.get('extent')) for i in layout['items']]}, gap {gap:.3f}")
+
+    # Replace: a palm by a tree and back, a cliff by a land mass, a shore by water (the body and the navigation flag follow) and back.
+    targets = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.palm",  "position": [-30.0, 0.0, -40.0], "name": "ms replace palm", "parameters": {"seed": 9}},
+        {"shape": "nature.shore", "position": [-20.0, 0.0, -40.0], "name": "ms replace shore"},
+        {"shape": "nature.cliff", "position": [-10.0, 0.0, -40.0], "name": "ms replace cliff"},
+    ]})["pieces"]
+    editor.wait_idle()
+    palm_id, shore_id, cliff_id = (p["id"] for p in targets)
+    palm_before = replace_state(editor, scene, palm_id)
+    as_tree = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [palm_id], "shape": "nature.tree"})["pieces"][0]
+    editor.wait_idle()
+    back = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [palm_id], "shape": "nature.palm"})["pieces"][0]
+    editor.wait_idle()
+    palm_after = replace_state(editor, scene, palm_id)
+    check("a palm by a tree and back: the seed carries both ways, bark and foliage keep their materials, the palm's mesh comes back",
+          (as_tree["shape"] == "nature.tree") and ("seed" in as_tree["carried"]) and (sorted(as_tree["kept_materials"]) == ["bark", "foliage"]) and
+          (back["parameters"]["seed"] == 9) and (palm_after["parameters_text"] == palm_before["parameters_text"]) and palm_after["has_body"] and kept_place(palm_before, palm_after),
+          f"tree {json.dumps({k: as_tree[k] for k in ('carried', 'kept_materials')})}, back {back['parameters'].get('seed')}")
+    as_land = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [cliff_id], "shape": "nature.land_mass"})["pieces"][0]
+    editor.wait_idle()
+    land_piece = piece_by_id(editor, scene, cliff_id)
+    check("a cliff by a land mass: the height carries, the land mass has its triangle mesh body",
+          (as_land["shape"] == "nature.land_mass") and ("height" in as_land["carried"]) and land_piece["physics"]["has_body"], json.dumps({k: as_land[k] for k in ("carried", "defaulted")}))
+    shore_before = piece_by_id(editor, scene, shore_id)
+    depth = undo_depth(editor)
+    to_water = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [shore_id], "shape": "nature.water"})["pieces"][0]
+    editor.wait_idle()
+    as_water = piece_by_id(editor, scene, shore_id)
+    check("a shore by water: one undo entry; the piece loses its body and carries pass_through; the length and run do not carry (the water has width and depth)",
+          (to_water["shape"] == "nature.water") and (undo_depth(editor) == depth + 1) and (not as_water["physics"]["has_body"]) and
+          (as_water["physics"]["motion_mode"] == "none") and as_water["pass_through"] and (as_water["physics"]["collision_shape"] == ""),
+          f"{as_water['physics']} excluded {as_water['pass_through']}")
+    editor.call("undo")
+    editor.wait_idle()
+    undone = piece_by_id(editor, scene, shore_id)
+    check("undo gives the shore back its static body and its navigation input",
+          (undone["shape"] == "nature.shore") and undone["physics"]["has_body"] and (undone["physics"]["motion_mode"] == "static") and
+          (not undone["pass_through"]) and (undone["physics"]["collision_shape"] == shore_before["physics"]["collision_shape"]),
+          f"{undone['physics']} excluded {undone['pass_through']}")
+    editor.call("redo")
+    editor.wait_idle()
+    back_to_shore = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [shore_id], "shape": "nature.shore"})["pieces"][0]
+    editor.wait_idle()
+    shore_again = piece_by_id(editor, scene, shore_id)
+    check("water by a shore: the piece gets a static triangle mesh body and is navigation input again",
+          (back_to_shore["shape"] == "nature.shore") and shore_again["physics"]["has_body"] and (shore_again["physics"]["motion_mode"] == "static") and
+          ("mesh" in shore_again["physics"]["collision_shape"].lower()) and not shore_again["pass_through"],
+          f"{shore_again['physics']} excluded {shore_again['pass_through']}")
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+    editor.close(scene)
+    editor.wait_idle()
+
+    # Navigation: a shore walked from its berm, the water above its front not navigation input (P5).
+    nav = create_scene(editor)
+    tiles = editor.call("level_place_pieces", {"scene_name": nav, "pieces": [
+        {"shape": "nature.shore", "position": [-2.0, 0.0, 0.0], "name": "nav shore a", "parameters": {"undulation": 0.0, "derive": []}},
+        {"shape": "nature.shore", "position": [2.0, 0.0, 0.0],  "name": "nav shore b", "parameters": {"undulation": 0.0, "derive": []}},
+        {"shape": "nature.water", "position": [0.0, 0.5, 6.0],  "name": "nav water", "parameters": {"width": 12.0, "depth": 12.0}},
+    ]})["pieces"]
+    editor.wait_idle()
+    berm = [0.0, tiles[0]["world_aabb"]["max"][1] + 0.05, -2.5]
+    node = editor.call("create_node", {"scene_name": nav, "name": "seed", "position": berm})
+    editor.wait_idle()
+    editor.call("navigation_set_seed", {"scene_name": nav, "node_id": node.get("node_id", node.get("id"))})
+    editor.set_export_settings(nav, {})
+    editor.wait_idle()
+    job = build_navigation(editor, nav)
+    status = editor.call("get_navigation_status", {"scene_name": nav})
+    check("the navigation mesh builds from the two shore tiles alone: the water is not input",
+          (job.get("state") == "done") and (status.get("input_mesh_count") == 2), f"{job.get('state')} {job.get('error', '')} meshes {status.get('input_mesh_count')}")
+    lip = editor.call("navigation_find_point", {"scene_name": nav, "position": [0.0, 0.3, 2.5]})
+    path = editor.call("navigation_find_path", {"scene_name": nav, "start": berm, "end": [0.0, 0.2, 2.5]})
+    check("the shore is walkable from its berm down to its front lip, under the water's level",
+          lip.get("found") and lip.get("reachable") and (lip["point"][1] < 0.5) and path.get("found") and path.get("complete"),
+          f"lip {json.dumps(lip)[:200]} path found {path.get('found')} complete {path.get('complete')}")
+    open_water = editor.call("navigation_find_point", {"scene_name": nav, "position": [0.0, 0.5, 9.0]})
+    check("no walkable polygon lies on the open water beyond the shore",
+          (not open_water.get("found")) or (math.dist(open_water["point"], [0.0, 0.5, 9.0]) > 2.0), json.dumps(open_water)[:200])
+    editor.close(nav)
+    editor.wait_idle()
+
+    # The images: each shape at its defaults and contrasting values, a 1.8 m block beside it for scale.
+    person = {"shape": "basic.block", "parameters": {"width": 0.5, "depth": 0.3, "height": 1.8}}
+    views = [
+        ("nature.palm", [[{"shape": "nature.palm", "position": [0.0, 0.0, 0.0]}], [0.0, 6.5, 0.0], 26.0]),
+        ("nature.palm", [[{"shape": "nature.palm", "position": [-10.0 + 5.0 * i, 0.0, 0.0], "parameters": {"species": species, "height": 7.5, "derive": ["bend", "fronds", "droop"]}}
+                          for i, species in enumerate(("coconut", "date", "royal", "fan", "bottle"))], [0.0, 4.5, 0.0], 24.0]),
+        ("nature.palm", [[{"shape": "nature.palm", "position": [-6.0, 0.0, 0.0], "parameters": {"species": "coconut", "seed": 21, "bend": 0.35, "droop": 0.7, "height": 9.0, "derive": ["fronds"]}},
+                          {"shape": "nature.palm", "position": [0.0, 0.0, 0.0], "parameters": {"species": "fan", "seed": 4, "height": 4.0, "fronds": 10, "derive": ["bend", "droop"]}},
+                          {"shape": "nature.palm", "position": [6.0, 0.0, 0.0], "parameters": {"species": "date", "seed": 8, "height": 12.0, "fronds": 20, "droop": 0.2, "derive": ["bend"]}}],
+                         [0.0, 7.0, 0.0], 32.0]),
+        ("nature.cliff", [[{"shape": "nature.cliff", "position": [0.0, 0.0, 0.0]}], [0.0, 3.0, 0.0], 15.0]),
+        ("nature.cliff", [[{"shape": "nature.cliff", "position": [0.0, 0.0, 0.0], "parameters": {"height": 12.0, "strata": "layered", "ledges": 2, "derive": ["overhang"]}}],
+                          [0.0, 5.5, 0.0], 22.0]),
+        ("nature.cliff", [[{"shape": "nature.cliff", "position": [0.0, 0.0, 0.0], "parameters": {"length": 12.0, "height": 5.0, "depth": 3.0, "strata": "blocky", "derive": ["overhang"]}}],
+                          [0.0, 2.5, 0.0], 20.0]),
+        ("nature.cliff", [[{"shape": "nature.cliff", "position": [-4.0 + 4.0 * i, 0.0, 0.0], "parameters": {"seed": 10 + i, "height": 7.0, "derive": []}} for i in range(3)],
+                          [0.0, 3.0, 0.0], 20.0]),
+        ("nature.shore", [[{"shape": "nature.shore", "position": [0.0, 0.0, 0.0]}], [0.0, 0.5, 0.0], 11.0]),
+        ("nature.shore", [[{"shape": "nature.shore", "position": [-4.0 + 4.0 * i, 0.0, 0.0], "parameters": {"seed": 40 + i}} for i in range(3)] +
+                          [{"shape": "nature.water", "position": [0.0, 0.45, 5.0], "parameters": {"width": 16.0, "depth": 10.0}}],
+                          [0.0, 0.5, 1.0], 15.0]),
+        ("nature.shore", [[{"shape": "nature.shore", "position": [0.0, 0.0, 0.0], "parameters": {"run": 10.0, "berm": 0.0, "undulation": 0.15, "derive": []}},
+                           {"shape": "nature.shore", "position": [6.0, 0.0, 0.0], "parameters": {"run": 5.0, "berm": 0.4, "rise": 1.5, "undulation": 0.0, "derive": []}}],
+                          [3.0, 0.6, 0.0], 14.0]),
+        ("nature.water", [[{"shape": "nature.water", "position": [0.0, 0.0, 0.0]}], [0.0, 0.0, 0.0], 14.0]),
+        ("nature.water", [[{"shape": "nature.water", "position": [-5.0, 0.0, 0.0], "parameters": {"width": 6.0, "depth": 6.0, "subdivisions": 6}},
+                           {"shape": "nature.water", "position": [4.0, 0.3, 0.0], "parameters": {"width": 10.0, "depth": 4.0}, "materials": {"water": "Kit Shallow Water"}}],
+                          [0.0, 0.0, 0.0], 16.0]),
+    ]
+    counters = {}
+    written = []
+    for shape_id, (requests, target, distance) in views:
+        view_scene = create_scene(editor)
+        editor.call("level_place_pieces", {"scene_name": view_scene, "pieces": [dict(person, position=[target[0] + 1.5, 0.0, 2.5])] + requests})
+        editor.wait_idle()
+        counters[shape_id] = counters.get(shape_id, 0) + 1
+        path = render_shape_image(editor, view_scene, shape_id, counters[shape_id], target, distance)
+        if path:
+            written.append(path)
+        editor.close(view_scene)
+        editor.wait_idle()
+    check(f"the {len(views)} shape images logs/shape_<id>_<n>.png are written", len(written) == len(views), ", ".join(os.path.basename(p) for p in written))
+    for path in written:
+        print(f"shape image: {path}", flush=True)
+
+
+MORE_SHAPES_2 = ("architecture.column", "architecture.entablature", "architecture.torii", "architecture.battlement", "architecture.tower", "nature.leaf_plant")
+
+
+def check_more_shapes_2(editor):
+    """Step 62 of doc/plans/level_tools_implementation.md, second batch (doc/plans/level_kit_more_shapes.md "Build order" 5 - 8):
+    the column, entablature, torii, battlement, tower and leaf plant - catalog, bounds from the values, ranges and refused
+    combinations, bodies, derive from seed, snap, line layouts, joins with the built architecture shapes, Replace, the
+    navigation through a tower's doorway and a torii - and the shape images logs/shape_<id>_<n>.png with one composed image
+    per culture (logs/shape_classical_1.png, logs/shape_medieval_1.png, logs/shape_japanese_1.png)."""
+    scene = create_scene(editor)
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    by_id = {shape["id"]: shape for shape in kits["shapes"]}
+    check("level_get_kits lists 31 shapes, the six of the second batch among them",
+          (kits["shape_count"] == 31) and all(s in by_id for s in MORE_SHAPES_2), f"{kits['shape_count']} shapes")
+    expected_catalog = {
+        "architecture.column":      (["trim"], "convex_hull", "base, top", "classical"),
+        "architecture.entablature": (["trim"], "triangle_mesh", "base, top, start, end", "classical"),
+        "architecture.torii":       (["wood"], "triangle_mesh", "base, opening_front, opening_back", "japanese"),
+        "architecture.battlement":  (["wall"], "triangle_mesh", "base, start, end", "medieval"),
+        "architecture.tower":       (["wall", "floor"], "triangle_mesh", "base, top, opening_front, left, right, back", "medieval"),
+        "nature.leaf_plant":        (["bark", "foliage"], "none", "", "tropical"),
+    }
+    catalog_problems = []
+    for shape_id, (slots, collision, connectors, tag) in expected_catalog.items():
+        shape = by_id[shape_id]
+        names = ", ".join(c["name"] for c in shape["connectors"])
+        if ([s["slot"] for s in shape["material_slots"]] != slots) or (shape["collision"] != collision) or (names != connectors) or (tag not in shape["tags"]):
+            catalog_problems.append(f"{shape_id}: slots {[s['slot'] for s in shape['material_slots']]} collision {shape['collision']} connectors '{names}' tags {shape['tags']}")
+    check("the catalog states each second batch shape's slots, collision kind, connectors and culture tag", not catalog_problems, "; ".join(catalog_problems))
+    wood = next(s for s in by_id["architecture.torii"]["material_slots"] if s["slot"] == "wood")
+    check("the wood slot's default is Kit Wood, alternatives Kit Vermilion, Kit Dark Wood and Kit Bark (P3)",
+          (wood["default_material"] == "Kit Wood") and (wood["alternatives"] == ["Kit Vermilion", "Kit Dark Wood", "Kit Bark"]), json.dumps(wood))
+
+    # Defaults on a ground slab: the bounds follow the values.
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ms2 ground", "parameters": {"width": 64.0, "depth": 64.0, "thickness": 0.2}}]})
+    editor.wait_idle()
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.column",      "position": [-20.0, 0.0, -20.0], "name": "ms2 column"},
+        {"shape": "architecture.entablature", "position": [-12.0, 0.0, -20.0], "name": "ms2 entablature"},
+        {"shape": "architecture.torii",       "position": [-4.0, 0.0, -20.0],  "name": "ms2 torii"},
+        {"shape": "architecture.battlement",  "position": [4.0, 0.0, -20.0],   "name": "ms2 battlement"},
+        {"shape": "architecture.tower",       "position": [12.0, 0.0, -20.0],  "name": "ms2 tower"},
+        {"shape": "nature.leaf_plant",        "position": [20.0, 0.0, -20.0],  "name": "ms2 leaf plant"},
+    ]})["pieces"]
+    editor.wait_idle()
+    column, entablature, torii, battlement, tower, plant = placed
+
+    def local_aabb(piece):
+        return [[a - b for a, b in zip(piece["world_aabb"]["min"], piece["position"])], [a - b for a, b in zip(piece["world_aabb"]["max"], piece["position"])]]
+
+    cp = column["parameters"]
+    lo, hi = local_aabb(column)
+    half = 0.5 * 1.26 * cp["width"]  # the doric abacus
+    check("the column's bounds: y 0 - height (the abacus' top), x and z +-the doric abacus' half side",
+          close([lo[1], hi[1], lo[0], hi[0], lo[2], hi[2]], [0.0, cp["height"], -half, half, -half, half]), f"{fmt3(lo)} .. {fmt3(hi)} for {json.dumps(cp)}")
+    ep = entablature["parameters"]
+    lo, hi = local_aabb(entablature)
+    depth = 0.5 * ep["depth"] + 0.04 + ep["cornice"]
+    check("the entablature's bounds: x +-length/2, y 0 - height, z +-(depth/2 + 0.04 + cornice), the corona's projection",
+          close([lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]], [-0.5 * ep["length"], 0.5 * ep["length"], 0.0, ep["height"], -depth, depth]), f"{fmt3(lo)} .. {fmt3(hi)} for {json.dumps(ep)}")
+    bp = battlement["parameters"]
+    lo, hi = local_aabb(battlement)
+    check("the battlement's bounds: x +-length/2, y 0 - (sill + merlon height), z +-thickness/2",
+          close([lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]], [-0.5 * bp["length"], 0.5 * bp["length"], 0.0, bp["height"] + bp["merlon_height"], -0.5 * bp["thickness"], 0.5 * bp["thickness"]]),
+          f"{fmt3(lo)} .. {fmt3(hi)} for {json.dumps(bp)}")
+    tp = torii["parameters"]
+    lo, hi = local_aabb(torii)
+    kasagi = 0.75 * tp["width"] + tp["post_width"]
+    check("the torii's bounds: y 0 - (height + curve x width at the turned-up ends), x +-(0.75 width + post width)",
+          close([lo[1], hi[1], lo[0], hi[0]], [0.0, tp["height"] + tp["curve"] * tp["width"], -kasagi, kasagi]), f"{fmt3(lo)} .. {fmt3(hi)} for {json.dumps(tp)}")
+    wp = tower["parameters"]
+    lo, hi = local_aabb(tower)
+    foot = 0.5 * wp["width"] + (wp["opening_height"] + 0.1) * math.tan(math.radians(wp["batter"]))
+    check("the tower's bounds: y 0 - (height + 1.9 m of parapet), x within the battered foot and the corbelled parapet",
+          close([lo[1], hi[1]], [0.0, wp["height"] + 1.9]) and (0.5 * wp["width"] <= hi[0] <= max(foot, 0.5 * wp["width"] + 0.15) + TOLERANCE),
+          f"{fmt3(lo)} .. {fmt3(hi)} for {json.dumps(wp)}")
+    lp = plant["parameters"]
+    lo, hi = local_aabb(plant)
+    check("the leaf plant stands on its base (min y 0) at about its height, within the 2000 triangle ceiling",
+          (abs(lo[1]) < TOLERANCE) and (0.5 * lp["height"] <= hi[1] <= 1.15 * lp["height"]) and (plant["triangle_count"] <= 2000),
+          f"{fmt3(lo)} .. {fmt3(hi)}, {plant['triangle_count']} triangles for {json.dumps(lp)}")
+    pieces_by_id = {p["id"]: p for p in pieces(editor, scene)}
+    bodies = {p["shape"]: pieces_by_id[p["id"]] for p in placed}
+    check("the column has a static convex hull body, the entablature, torii, battlement and tower triangle mesh bodies; "
+          "the leaf plant has no body and carries pass_through (P5)",
+          all(bodies[s]["physics"]["has_body"] and (bodies[s]["physics"]["motion_mode"] == "static") and not bodies[s]["pass_through"] for s in MORE_SHAPES_2[:5]) and
+          ("hull" in bodies["architecture.column"]["physics"]["collision_shape"].lower()) and
+          all("mesh" in bodies[s]["physics"]["collision_shape"].lower() for s in ("architecture.entablature", "architecture.torii", "architecture.battlement", "architecture.tower")) and
+          (not bodies["nature.leaf_plant"]["physics"]["has_body"]) and bodies["nature.leaf_plant"]["pass_through"],
+          "; ".join(f"{s}: {b['physics']} excluded {b['pass_through']}" for s, b in bodies.items()))
+    defaults = {shape_id: {s["slot"]: s["default_material"] for s in by_id[shape_id]["material_slots"]} for shape_id in MORE_SHAPES_2}
+    check("each second batch piece has its slots' default palette materials",
+          all(p["materials"] == defaults[p["shape"]] for p in placed), "; ".join(f"{p['shape']}: {p['materials']}" for p in placed))
+
+    # Range ends accepted; values beyond and refused combinations name the parameter or the reason, and place nothing.
+    accepted = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.column",      "position": [-20.0, 0.0, 10.0], "parameters": {"order": "corinthian", "flutes": 24, "segments": 20, "height": 0.5, "width": 4.0}},
+        {"shape": "architecture.entablature", "position": [-12.0, 0.0, 10.0], "parameters": {"length": 8.0, "height": 0.2}},
+        {"shape": "architecture.torii",       "position": [-4.0, 0.0, 10.0],  "parameters": {"curve": 0.2, "lean": 8.0, "derive": []}},
+        {"shape": "architecture.battlement",  "position": [4.0, 0.0, 10.0],   "parameters": {"length": 24.0, "merlon_width": 0.4, "crenel_width": 0.3, "merlon": "swallowtail"}},
+        {"shape": "architecture.tower",       "position": [16.0, 0.0, 10.0],  "parameters": {"width": 16.0, "height": 30.0, "wall": 0.7, "batter": 10.0}},
+        {"shape": "nature.leaf_plant",        "position": [28.0, 0.0, 10.0],  "parameters": {"form": "tree_fern", "height": 8.0, "leaves": 14, "droop": 1.0, "leaf_width": 0.6, "derive": []}},
+    ]})["pieces"]
+    editor.wait_idle()
+    check("the second batch shapes take values at the ends of their ranges, within the ceiling and on their bases",
+          (len(accepted) == 6) and all((p["triangle_count"] <= 2000) and (abs(p["world_aabb"]["min"][1]) < TOLERANCE) for p in accepted),
+          "; ".join(f"{p['shape']} {p['triangle_count']}" for p in accepted))
+    refusals = [
+        ("architecture.column",      {"flutes": 25}, "'flutes'"),
+        ("architecture.entablature", {"cornice": 0.4}, "'cornice'"),
+        ("architecture.torii",       {"lean": 9.0, "derive": []}, "'lean'"),
+        ("architecture.battlement",  {"merlon_width": 0.3}, "'merlon_width'"),
+        ("architecture.tower",       {"opening_height": 1.9}, "'opening_height'"),
+        ("nature.leaf_plant",        {"leaves": 15, "derive": []}, "'leaves'"),
+        ("architecture.tower",       {"width": 2.5, "wall": 0.7}, "narrower than the doorway"),
+        ("architecture.torii",       {"width": 1.0, "height": 15.0, "lean": 8.0, "derive": []}, "meet"),
+    ]
+    refusal_problems = []
+    count_before = len(pieces(editor, scene))
+    for shape_id, parameters, name in refusals:
+        error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [{"shape": shape_id, "parameters": parameters}]})
+        if (error is None) or (name not in error):
+            refusal_problems.append(f"{shape_id} {parameters}: {error}")
+    editor.wait_idle()
+    check("a value beyond a second batch shape's range, a tower whose inside is narrower than its doorway and a torii whose posts meet are refused, and nothing is placed",
+          (not refusal_problems) and (len(pieces(editor, scene)) == count_before), "; ".join(refusal_problems))
+
+    # Derive from seed: the leaf plant's height, leaves and droop, the torii's curve.
+    seeded = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.leaf_plant",  "position": [-30.0, 0.0, 25.0], "parameters": {"seed": 5}},
+        {"shape": "nature.leaf_plant",  "position": [-26.0, 0.0, 25.0], "parameters": {"seed": 6}},
+        {"shape": "architecture.torii", "position": [-20.0, 0.0, 25.0], "parameters": {"seed": 5}},
+        {"shape": "architecture.torii", "position": [-14.0, 0.0, 25.0], "parameters": {"seed": 6}},
+    ]})["pieces"]
+    editor.wait_idle()
+    derive_problems = []
+    for piece in seeded:
+        for parameter in by_id[piece["shape"]]["parameters"]:
+            if parameter["name"] in piece["parameters"]["derive"]:
+                value = piece["parameters"][parameter["name"]]
+                if not (parameter["derive_min"] - TOLERANCE <= value <= parameter["derive_max"] + TOLERANCE):
+                    derive_problems.append(f"{piece['shape']} {parameter['name']} {value}")
+    check("the leaf plant derives height, leaves and droop and the torii its curve from the seed, within their derive ranges, other seeds other meshes",
+          (seeded[0]["parameters"]["derive"] == ["height", "leaves", "droop"]) and (seeded[2]["parameters"]["derive"] == ["curve"]) and
+          (seeded[0]["mesh_key"] != seeded[1]["mesh_key"]) and (seeded[2]["mesh_key"] != seeded[3]["mesh_key"]) and not derive_problems,
+          "; ".join(derive_problems) or json.dumps([p["parameters"] for p in seeded])[:400])
+
+    # Snap to surface: dropped 1 m above a raised slab, the bases rest on its top.
+    platform = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [30.0, 0.0, 25.0], "name": "ms2 platform", "parameters": {"width": 24.0, "depth": 12.0, "thickness": 0.6}}]})["pieces"][0]
+    editor.wait_idle()
+    top = platform["world_aabb"]["max"][1]
+    snapped = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.column", "position": [21.0, top + 0.8, 25.0], "surface_snap": True},
+        {"shape": "architecture.torii",  "position": [26.0, top + 0.8, 25.0], "surface_snap": True},
+        {"shape": "architecture.tower",  "position": [33.0, top + 0.8, 25.0], "surface_snap": True},
+        {"shape": "nature.leaf_plant",   "position": [39.0, top + 0.8, 25.0], "surface_snap": True},
+    ]})["pieces"]
+    editor.wait_idle()
+    check("surface_snap rests the column's, torii's, tower's and leaf plant's base on the slab's top",
+          all(p["surface_found"] and (abs(p["world_aabb"]["min"][1] - top) < TOLERANCE) for p in snapped),
+          "; ".join(f"{p['shape']} found {p['surface_found']} base {p['world_aabb']['min'][1]:.4f} top {top:.4f}" for p in snapped))
+
+    # Line layouts: a colonnade of columns, a row of battlements on a wall's top.
+    colonnade = editor.call("level_create_layout", {"scene_name": scene, "name": "ms2 colonnade", "position": [-30.0, 0.0, -40.0],
+                                                    "items": [{"shape": "architecture.column"}], "pattern": {"kind": "line", "count": 5, "step": 2.0}})
+    editor.wait_idle()
+    column_boxes = sorted((p["world_aabb"] for p in pieces(editor, scene) if p["id"] in {c["id"] for c in colonnade["children"]}), key=lambda b: b["min"][0])
+    centers = [0.5 * (b["min"][0] + b["max"][0]) for b in column_boxes]
+    check("a line layout of columns places five at the module spacing (2 m)",
+          (len(column_boxes) == 5) and all(abs((b - a) - 2.0) < TOLERANCE for a, b in zip(centers, centers[1:])), f"{len(column_boxes)} at {[round(c, 3) for c in centers]}")
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [-10.0, 0.0, -40.0], "name": "ms2 wall", "parameters": {"length": 8.0}}]})
+    editor.wait_idle()
+    crenels = editor.call("level_create_layout", {"scene_name": scene, "name": "ms2 battlements", "position": [-12.0, 3.0, -40.0],
+                                                  "items": [{"shape": "architecture.battlement"}], "pattern": {"kind": "line", "count": 3}})
+    editor.wait_idle()
+    spans = sorted((p["world_aabb"] for p in pieces(editor, scene) if p["id"] in {c["id"] for c in crenels["children"]}), key=lambda b: b["min"][0])
+    check("a line layout of battlements without a step steps by their length: three 2 m runs touch end to end on the wall's top",
+          (len(spans) == 3) and all(abs(spans[i]["max"][0] - spans[i + 1]["min"][0]) < TOLERANCE for i in range(2)) and all(abs(b["min"][1] - 3.0) < TOLERANCE for b in spans),
+          f"{[(round(b['min'][0], 3), round(b['max'][0], 3), round(b['min'][1], 3)) for b in spans]}")
+
+    # Joins: a column on a slab carrying an entablature, a battlement on a wall top, walls at a tower's sides, a tower on a tower.
+    base = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, 0.0, 40.0], "name": "ms2 stylobate", "parameters": {"width": 4.0, "depth": 4.0, "thickness": 0.3}},
+        {"shape": "architecture.wall", "position": [20.0, 0.0, 40.0], "name": "ms2 joined wall"},
+        {"shape": "architecture.tower", "position": [30.0, 0.0, 40.0], "name": "ms2 joined tower", "parameters": {"top": "flat"}}]})["pieces"]
+    editor.wait_idle()
+    slab, joined_wall, flat_tower = base
+    col = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.column", "name": "ms2 joined column", "connect": {"connector": "base", "to_piece_id": slab["id"], "to_connector": "top"}}]})["pieces"][0]
+    editor.wait_idle()
+    beam = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.entablature", "name": "ms2 joined entablature", "connect": {"connector": "base", "to_piece_id": col["id"], "to_connector": "top"}}]})["pieces"][0]
+    crown = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.battlement", "name": "ms2 joined battlement", "parameters": {"length": 4.0},
+         "connect": {"connector": "base", "to_piece_id": joined_wall["id"], "to_connector": "top"}}]})["pieces"][0]
+    upper = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.tower", "name": "ms2 upper tower", "connect": {"connector": "base", "to_piece_id": flat_tower["id"], "to_connector": "top"}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("level_connect_pieces", {"scene_name": scene, "node_id": joined_wall["id"], "connector": "start", "to_piece_id": flat_tower["id"], "to_connector": "right"})
+    editor.wait_idle()
+    moved_wall = piece_by_id(editor, scene, joined_wall["id"])
+    crown_now = piece_by_id(editor, scene, crown["id"])
+    tower_inner = 30.0 + 0.5 * flat_tower["parameters"]["width"] - flat_tower["parameters"]["wall"]
+    tower_outer = 30.0 + 0.5 * flat_tower["parameters"]["width"]
+    check("joins: the column stands on the slab's top and the entablature on the column's top, centered over it; the battlement "
+          "rests on the wall's top; a flat tower carries a second segment; the wall joined to the tower's right side ends inside the tower's wall",
+          (abs(col["world_aabb"]["min"][1] - 0.3) < TOLERANCE) and (abs(beam["world_aabb"]["min"][1] - (0.3 + col["parameters"]["height"])) < TOLERANCE) and
+          (abs(0.5 * (beam["world_aabb"]["min"][0] + beam["world_aabb"]["max"][0]) - col["position"][0]) < TOLERANCE) and
+          (abs(crown["world_aabb"]["min"][1] - joined_wall["world_aabb"]["max"][1]) < TOLERANCE) and
+          (abs(upper["world_aabb"]["min"][1] - flat_tower["parameters"]["height"]) < TOLERANCE) and
+          (tower_inner < moved_wall["world_aabb"]["min"][0] < tower_outer),
+          f"column {col['world_aabb']['min'][1]:.3f}, entablature {beam['world_aabb']['min'][1]:.3f}, battlement {crown['world_aabb']['min'][1]:.3f} "
+          f"on {joined_wall['world_aabb']['max'][1]:.3f}, upper tower {upper['world_aabb']['min'][1]:.3f}, wall from x {moved_wall['world_aabb']['min'][0]:.3f} "
+          f"(tower wall {tower_inner:.3f} .. {tower_outer:.3f}), battlement after the wall's move {crown_now['world_aabb']['min'][0]:.3f}")
+
+    # Replace: a pillar by a column and back, a wall by a battlement and back (the body kind follows).
+    targets = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.pillar", "position": [-30.0, 0.0, -50.0], "name": "ms2 replace pillar", "parameters": {"width": 0.6, "height": 3.5}},
+        {"shape": "architecture.wall",   "position": [-20.0, 0.0, -50.0], "name": "ms2 replace wall", "parameters": {"length": 6.0, "thickness": 0.4}},
+    ]})["pieces"]
+    editor.wait_idle()
+    pillar_id, wall_id = (p["id"] for p in targets)
+    pillar_before = replace_state(editor, scene, pillar_id)
+    as_column = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [pillar_id], "shape": "architecture.column"})["pieces"][0]
+    editor.wait_idle()
+    column_piece = piece_by_id(editor, scene, pillar_id)
+    back = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [pillar_id], "shape": "architecture.pillar"})["pieces"][0]
+    editor.wait_idle()
+    pillar_after = replace_state(editor, scene, pillar_id)
+    check("a pillar by a column and back: the width and height carry both ways, trim keeps its material, the node keeps its place",
+          (as_column["shape"] == "architecture.column") and all(n in as_column["carried"] for n in ("width", "height")) and
+          close([column_piece["parameters"]["width"], column_piece["parameters"]["height"]], [0.6, 3.5]) and
+          (back["shape"] == "architecture.pillar") and (pillar_after["parameters_text"] == pillar_before["parameters_text"]) and kept_place(pillar_before, pillar_after),
+          f"column {json.dumps({k: as_column[k] for k in ('carried', 'defaulted')})}")
+    as_battlement = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [wall_id], "shape": "architecture.battlement"})["pieces"][0]
+    editor.wait_idle()
+    battlement_piece = piece_by_id(editor, scene, wall_id)
+    to_wall = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [wall_id], "shape": "architecture.wall"})["pieces"][0]
+    editor.wait_idle()
+    wall_piece = piece_by_id(editor, scene, wall_id)
+    check("a wall by a battlement and back: the length and thickness carry (the 3 m height to the sill's maximum), the battlement's body is a triangle mesh, the wall's again a hull",
+          (as_battlement["shape"] == "architecture.battlement") and close([battlement_piece["parameters"]["length"], battlement_piece["parameters"]["thickness"]], [6.0, 0.4]) and
+          ("mesh" in battlement_piece["physics"]["collision_shape"].lower()) and (to_wall["shape"] == "architecture.wall") and
+          close([wall_piece["parameters"]["length"]], [6.0]) and ("mesh" not in wall_piece["physics"]["collision_shape"].lower()),
+          f"battlement {json.dumps(battlement_piece['parameters'])} {battlement_piece['physics']['collision_shape']}; wall {wall_piece['physics']['collision_shape']}")
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+    editor.close(scene)
+    editor.wait_idle()
+
+    # Navigation: through a tower's doorway into its hollow, through a torii; a leaf plant is no input.
+    nav = create_scene(editor)
+    level = editor.call("level_place_pieces", {"scene_name": nav, "pieces": [
+        {"shape": "basic.floor_slab",   "position": [0.0, -0.2, 0.0], "name": "nav ground", "parameters": {"width": 30.0, "depth": 30.0, "thickness": 0.2}},
+        {"shape": "architecture.tower", "position": [-6.0, 0.0, 0.0], "name": "nav tower", "parameters": {"width": 4.0}},
+        {"shape": "architecture.torii", "position": [6.0, 0.0, 0.0],  "name": "nav torii"},
+        {"shape": "nature.leaf_plant",  "position": [0.0, 0.0, 6.0],  "name": "nav plant"},
+    ]})["pieces"]
+    editor.wait_idle()
+    start = [0.0, 0.05, 4.0]
+    node = editor.call("create_node", {"scene_name": nav, "name": "seed", "position": start})
+    editor.wait_idle()
+    editor.call("navigation_set_seed", {"scene_name": nav, "node_id": node.get("node_id", node.get("id"))})
+    editor.set_export_settings(nav, {})
+    editor.wait_idle()
+    job = build_navigation(editor, nav)
+    status = editor.call("get_navigation_status", {"scene_name": nav})
+    check("the navigation mesh builds from the ground, the tower and the torii: the leaf plant is not input",
+          (job.get("state") == "done") and (status.get("input_mesh_count") == 3), f"{job.get('state')} {job.get('error', '')} meshes {status.get('input_mesh_count')}")
+    inside = editor.call("navigation_find_point", {"scene_name": nav, "position": [-6.0, 0.05, 0.0]})
+    into   = editor.call("navigation_find_path", {"scene_name": nav, "start": start, "end": [-6.0, 0.05, 0.0]})
+    through = editor.call("navigation_find_path", {"scene_name": nav, "start": [6.0, 0.05, 3.0], "end": [6.0, 0.05, -3.0]})
+    walkway = editor.call("navigation_find_point", {"scene_name": nav, "position": [-6.0, level[1]["parameters"]["height"] + 0.05, 0.0]})
+    check("the tower's hollow is reachable through its doorway; a path walks straight through the torii; the tower's top is a walkable floor (its own island)",
+          inside.get("found") and inside.get("reachable") and into.get("found") and into.get("complete") and
+          through.get("found") and through.get("complete") and walkway.get("found") and (abs(walkway["point"][1] - level[1]["parameters"]["height"]) < 0.3),
+          f"inside {json.dumps(inside)[:160]} into {into.get('complete')} through {through.get('complete')} walkway {json.dumps(walkway)[:160]}")
+    editor.close(nav)
+    editor.wait_idle()
+
+    # The images: each shape at its defaults and contrasting values beside a 1.8 m block, from a low three-quarter view, and
+    # one composed scene per culture.
+    person = {"shape": "basic.block", "parameters": {"width": 0.5, "depth": 0.3, "height": 1.8}}
+    vermilion = {"wood": "Kit Vermilion"}
+    views = [
+        ("architecture.column", [[{"shape": "architecture.column", "position": [0.0, 0.0, 0.0]}], [0.0, 1.6, 0.0], 8.0], None, [1.2, 0.0, -0.8]),
+        ("architecture.column", [[{"shape": "architecture.column", "position": [-1.5 + 1.5 * i, 0.0, 0.0], "parameters": {"order": order}}
+                                  for i, order in enumerate(("doric", "ionic", "corinthian"))], [0.0, 1.6, 0.0], 9.0], None, None),
+        ("architecture.column", [[{"shape": "architecture.column", "position": [-2.5, 0.0, 0.0], "parameters": {"order": "corinthian", "height": 6.0, "width": 0.8, "flutes": 24}},
+                                  {"shape": "architecture.column", "position": [0.0, 0.0, 0.0], "parameters": {"order": "ionic", "height": 4.0, "width": 0.4, "flutes": 12, "taper": 0.05}},
+                                  {"shape": "architecture.column", "position": [2.0, 0.0, 0.0], "parameters": {"order": "doric", "height": 2.0, "width": 0.7, "flutes": 0, "taper": 0.0}}],
+                                 [0.0, 2.5, 0.0], 13.0], None, None),
+        ("architecture.column", [[{"shape": "architecture.column", "position": [-0.9, 0.0, 0.0], "parameters": {"order": "ionic"}},
+                                  {"shape": "architecture.column", "position": [0.9, 0.0, 0.0], "parameters": {"order": "corinthian"}}], [0.0, 2.7, 0.0], 3.5], 8.0, [0.0, 0.0, -3.0]),
+        ("architecture.entablature", [[{"shape": "architecture.entablature", "position": [0.0, 0.0, 0.0]}], [0.0, 0.4, 0.0], 5.0], 12.0, [1.9, 0.0, -1.2]),
+        ("architecture.entablature", [[{"shape": "architecture.entablature", "position": [-2.5, 0.0, 0.0], "parameters": {"length": 3.0, "frieze": "plain", "cornice": 0.3, "depth": 0.8}},
+                                       {"shape": "architecture.entablature", "position": [2.5, 0.0, 0.0], "parameters": {"length": 4.0, "height": 1.2, "cornice": 0.05}}], [0.0, 0.6, 0.0], 9.0], 12.0, [0.0, 0.0, -1.5]),
+        ("architecture.torii", [[{"shape": "architecture.torii", "position": [0.0, 0.0, 0.0]}], [0.0, 2.0, 0.0], 11.0], None, None),
+        ("architecture.torii", [[{"shape": "architecture.torii", "position": [-3.5, 0.0, 0.0], "parameters": {"curve": 0.15, "lean": 4.0, "derive": []}, "materials": vermilion},
+                                 {"shape": "architecture.torii", "position": [4.0, 0.0, 0.0], "parameters": {"curve": 0.0, "lean": 0.0, "width": 4.0, "post_width": 0.45, "derive": []}, "materials": {"wood": "Kit Dark Wood"}}],
+                                [0.0, 2.2, 0.0], 16.0], None, None),
+        ("architecture.battlement", [[{"shape": "architecture.battlement", "position": [0.0, 0.0, 0.0]}], [0.0, 0.9, 0.0], 6.0], None, [1.8, 0.0, -0.8]),
+        ("architecture.battlement", [[{"shape": "architecture.battlement", "position": [-5.0 + 5.0 * i, 0.0, 0.0], "parameters": {"merlon": merlon, "length": 4.0}}
+                                      for i, merlon in enumerate(("square", "swallowtail", "pointed"))], [0.0, 1.0, 0.0], 13.0], None, None),
+        ("architecture.battlement", [[{"shape": "architecture.wall", "position": [0.0, 0.0, 0.0], "parameters": {"length": 8.0, "thickness": 0.6}},
+                                      {"shape": "architecture.battlement", "position": [0.0, 3.0, 0.0], "parameters": {"length": 8.0, "thickness": 0.6, "merlon": "swallowtail"}}],
+                                     [0.0, 2.5, 0.0], 13.0], None, None),
+        ("architecture.tower", [[{"shape": "architecture.tower", "position": [0.0, 0.0, 0.0]}], [0.0, 3.0, 0.0], 14.0], None, None),
+        ("architecture.tower", [[{"shape": "architecture.tower", "position": [-4.0, 0.0, 0.0], "parameters": {"profile": "square", "height": 7.5, "slit_rows": 2}},
+                                 {"shape": "architecture.tower", "position": [4.0, 0.0, 0.0], "parameters": {"width": 5.0, "height": 9.0, "batter": 8.0, "wall": 0.6, "slit_rows": 2}}],
+                                [0.0, 4.5, 0.0], 24.0], None, None),
+        ("architecture.tower", [[{"shape": "architecture.tower", "position": [0.0, 0.0, 0.0]}], [0.0, 1.8, 0.0], 6.5], 8.0, [2.4, 0.0, 1.2]),
+        ("architecture.tower", [[{"shape": "architecture.tower", "position": [-4.0, 0.0, 0.0], "parameters": {"profile": "square", "top": "flat"}},
+                                 {"shape": "architecture.tower", "position": [-4.0, 4.5, 0.0], "parameters": {"profile": "square"}}],
+                                [-4.0, 4.5, 0.0], 22.0], None, [-1.5, 0.0, 2.5]),
+        ("nature.leaf_plant", [[{"shape": "nature.leaf_plant", "position": [0.0, 0.0, 0.0]}], [0.0, 0.7, 0.0], 5.0], None, [1.4, 0.0, -0.9]),
+        ("nature.leaf_plant", [[{"shape": "nature.leaf_plant", "position": [-4.5 + 2.25 * i, 0.0, 0.0], "parameters": {"form": form, "height": height, "derive": ["leaves", "droop"]}}
+                                for i, (form, height) in enumerate((("banana", 3.5), ("taro", 1.8), ("strelitzia", 1.8), ("fern", 1.2), ("tree_fern", 3.5)))],
+                               [0.0, 1.3, 0.0], 12.0], None, [0.0, 0.0, -2.0]),
+        ("nature.leaf_plant", [[{"shape": "nature.leaf_plant", "position": [-1.2, 0.0, 0.0], "parameters": {"form": "banana", "height": 3.0, "leaves": 9, "derive": ["droop"]}},
+                                {"shape": "nature.leaf_plant", "position": [1.2, 0.0, -0.5], "parameters": {"form": "taro", "height": 2.0, "leaves": 8, "leaf_width": 0.45, "derive": ["droop"]}},
+                                {"shape": "nature.leaf_plant", "position": [0.3, 0.0, -2.0], "parameters": {"form": "strelitzia", "height": 1.8, "leaves": 10, "derive": ["droop"]}}],
+                               [0.0, 1.2, 0.0], 7.0], None, [2.2, 0.0, -1.0]),
+        ("nature.leaf_plant", [[{"shape": "nature.palm", "position": [-3.0, 0.0, -3.0], "parameters": {"species": "coconut", "height": 7.0, "derive": ["bend", "fronds", "droop"]}},
+                                {"shape": "nature.palm", "position": [3.5, 0.0, -4.0], "parameters": {"species": "royal", "height": 8.0, "derive": ["bend", "fronds", "droop"]}}] +
+                               [{"shape": "nature.leaf_plant", "position": [-5.0 + 2.5 * i, 0.0, 0.6 * (i % 2)], "parameters": {"form": form, "seed": 30 + i}}
+                                for i, form in enumerate(("banana", "taro", "strelitzia", "fern", "tree_fern"))],
+                               [0.0, 3.0, -1.0], 20.0], None, [1.2, 0.0, 2.5]),
+    ]
+    counters = {}
+    written = []
+    for shape_id, (requests, target, distance), elevation, person_at in views:
+        view_scene = create_scene(editor)
+        at = person_at if (person_at is not None) else [target[0] + 1.5, 0.0, 2.5]
+        editor.call("level_place_pieces", {"scene_name": view_scene, "pieces": [dict(person, position=at)] + requests})
+        editor.wait_idle()
+        counters[shape_id] = counters.get(shape_id, 0) + 1
+        path = render_shape_image(editor, view_scene, shape_id, counters[shape_id], target, distance, elevation=(elevation if elevation is not None else 16.0))
+        if path:
+            written.append(path)
+        editor.close(view_scene)
+        editor.wait_idle()
+
+    # The cultures composed: a colonnade on a stylobate carrying entablatures; a wall run with battlements between towers;
+    # torii along a path. Each join is made with the connectors.
+    def compose(name, first, joins, target, distance, azimuth):
+        view_scene = create_scene(editor)
+        made = editor.call("level_place_pieces", {"scene_name": view_scene, "pieces": [dict(person, position=[target[0] + 1.5, 0.0, 3.0])] + first})["pieces"][1:]
+        editor.wait_idle()
+        for request, (connector, target_index, target_connector) in joins:
+            joined = editor.call("level_place_pieces", {"scene_name": view_scene, "pieces": [dict(request, connect={
+                "connector": connector, "to_piece_id": made[target_index]["id"], "to_connector": target_connector})]})["pieces"][0]
+            made.append(joined)
+            editor.wait_idle()
+        path = render_shape_image(editor, view_scene, name, 1, target, distance, elevation=14.0, azimuth=azimuth)
+        editor.close(view_scene)
+        editor.wait_idle()
+        return path, made
+
+    classical_first = [{"shape": "basic.floor_slab", "position": [3.0, 0.0, 0.0], "parameters": {"width": 10.0, "depth": 4.0, "thickness": 0.3}}] + \
+                      [{"shape": "architecture.column", "position": [2.0 * i, 0.3, 0.0]} for i in range(4)]
+    classical_joins = [({"shape": "architecture.entablature"}, ("base", 1 + i, "top")) for i in range(4)]
+    path, made = compose("classical", classical_first, classical_joins, [3.0, 2.2, 0.0], 15.0, 30.0)
+    written.append(path)
+    check("the classical composition: four columns on a stylobate each carrying an entablature by base on top, the entablatures meeting end to end",
+          all(abs(made[5 + i]["world_aabb"]["min"][1] - (0.3 + made[1 + i]["parameters"]["height"])) < TOLERANCE for i in range(4)) and
+          all(abs(made[5 + i]["world_aabb"]["max"][0] - made[6 + i]["world_aabb"]["min"][0]) < 0.05 for i in range(3)),
+          "; ".join(f"{p['world_aabb']['min'][0]:.2f}..{p['world_aabb']['max'][0]:.2f} y {p['world_aabb']['min'][1]:.2f}" for p in made[5:]))
+    medieval_first = [{"shape": "architecture.tower", "position": [0.0, 0.0, 0.0]}]
+    medieval_joins = [
+        ({"shape": "architecture.wall"}, ("start", 0, "right")),
+        ({"shape": "architecture.wall"}, ("start", 1, "end")),
+        ({"shape": "architecture.battlement", "parameters": {"length": 4.0}}, ("base", 1, "top")),
+        ({"shape": "architecture.battlement", "parameters": {"length": 4.0}}, ("base", 2, "top")),
+        ({"shape": "architecture.tower", "parameters": {"profile": "square"}}, ("left", 2, "end")),
+    ]
+    path, made = compose("medieval", medieval_first, medieval_joins, [5.0, 2.5, 0.0], 22.0, 25.0)
+    written.append(path)
+    check("the medieval composition: a wall run from a round tower's side with battlements on its tops, ending inside a square tower's side",
+          (abs(made[3]["world_aabb"]["min"][1] - 3.0) < TOLERANCE) and (abs(made[4]["world_aabb"]["min"][1] - 3.0) < TOLERANCE) and
+          (made[5]["world_aabb"]["min"][0] < made[2]["world_aabb"]["max"][0] < made[5]["position"][0]),
+          f"battlements y {made[3]['world_aabb']['min'][1]:.3f} {made[4]['world_aabb']['min'][1]:.3f}, wall end {made[2]['world_aabb']['max'][0]:.3f}, square tower x {made[5]['position'][0]:.3f}")
+    japanese_first = [{"shape": "basic.floor_slab", "position": [0.0, 0.0, -4.0], "parameters": {"width": 2.6, "depth": 16.0, "thickness": 0.05}}] + \
+                     [{"shape": "architecture.torii", "position": [0.0, 0.05, -3.0 * i], "materials": vermilion} for i in range(4)]
+    path, made = compose("japanese", japanese_first, [], [0.0, 2.0, -4.0], 14.0, 20.0)
+    written.append(path)
+    check(f"the {len(views) + 3} second batch images logs/shape_<id>_<n>.png are written", all(written) and (len(written) == len(views) + 3),
+          ", ".join(os.path.basename(p) for p in written if p))
+    for path in written:
+        print(f"shape image: {path}", flush=True)
+
+
+MORE_SHAPES_3 = ("nature.rock_spire", "nature.basalt_columns", "architecture.roof", "nature.palm_clump", "nature.palm_shrub", "nature.dune", "nature.ground_patch")
+
+
+def check_more_shapes_3(editor):
+    """Step 62 of doc/plans/level_tools_implementation.md, third batch (doc/plans/level_kit_more_shapes.md "Build order" 9 - 12):
+    the rock spire, basalt columns, roof, palm clump, palm shrub, dune and ground patch - catalog, bounds from the values,
+    ranges, bodies, derive from seed, snap, a scatter, Replace (rock and spire, palm and clump, hill and dune), a roof joined
+    to the tops of four walls, the navigation over a dune, a ground patch and basalt tops - and the shape images
+    logs/shape_<id>_<n>.png with one composed image per theme (logs/shape_rocky_coast_1.png, logs/shape_roofed_house_1.png,
+    logs/shape_beach_corner_1.png)."""
+    scene = create_scene(editor)
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    by_id = {shape["id"]: shape for shape in kits["shapes"]}
+    check("level_get_kits lists 31 shapes, the seven of the third batch among them",
+          (kits["shape_count"] == 31) and all(s in by_id for s in MORE_SHAPES_3), f"{kits['shape_count']} shapes")
+    expected_catalog = {
+        "nature.rock_spire":     (["rock"], "triangle_mesh", "base", ["height", "radius", "lean"]),
+        "nature.basalt_columns": (["rock"], "triangle_mesh", "base", ["radius", "height_spread"]),
+        "architecture.roof":     (["roof", "trim"], "triangle_mesh", "base, left, right, front, back", []),
+        "nature.palm_clump":     (["bark", "foliage"], "triangle_mesh", "", ["stems", "height"]),
+        "nature.palm_shrub":     (["bark", "foliage"], "convex_hull", "", ["size", "fronds"]),
+        "nature.dune":           (["sand"], "convex_hull", "", ["length", "width", "height"]),
+        "nature.ground_patch":   (["earth"], "convex_hull", "", ["size", "irregularity"]),
+    }
+    catalog_problems = []
+    for shape_id, (slots, collision, connectors, mask) in expected_catalog.items():
+        shape = by_id[shape_id]
+        names = ", ".join(c["name"] for c in shape["connectors"])
+        if ([s["slot"] for s in shape["material_slots"]] != slots) or (shape["collision"] != collision) or (names != connectors) or (shape["default_derive"] != mask):
+            catalog_problems.append(f"{shape_id}: slots {[s['slot'] for s in shape['material_slots']]} collision {shape['collision']} connectors '{names}' mask {shape['default_derive']}")
+    check("the catalog states each third batch shape's slots, collision kind, connectors and default derive mask", not catalog_problems, "; ".join(catalog_problems))
+    roof_slot = next(s for s in by_id["architecture.roof"]["material_slots"] if s["slot"] == "roof")
+    check("the roof slot's default is Kit Roof Tile (Q1)", roof_slot["default_material"] == "Kit Roof Tile", json.dumps(roof_slot))
+
+    # Defaults on a ground slab: the bounds follow the values.
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ms3 ground", "parameters": {"width": 64.0, "depth": 64.0, "thickness": 0.2}}]})
+    editor.wait_idle()
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": shape_id, "position": [-27.0 + 9.0 * i, 0.0, -25.0], "name": f"ms3 {shape_id}"} for i, shape_id in enumerate(MORE_SHAPES_3)]})["pieces"]
+    editor.wait_idle()
+    spire, basalt, roof, clump, shrub, dune, patch = placed
+
+    def local_aabb(piece):
+        return [[a - b for a, b in zip(piece["world_aabb"]["min"], piece["position"])], [a - b for a, b in zip(piece["world_aabb"]["max"], piece["position"])]]
+    bound_problems = []
+    for piece in placed:
+        lo, hi = local_aabb(piece)
+        if abs(lo[1]) > TOLERANCE:
+            bound_problems.append(f"{piece['shape']} base {lo[1]:.4f}")
+        if piece["triangle_count"] > by_id[piece["shape"]]["triangle_budget"]:
+            bound_problems.append(f"{piece['shape']} {piece['triangle_count']} triangles over its budget")
+    sp = spire["parameters"]
+    lo, hi = local_aabb(spire)
+    if not ((0.9 * sp["height"] <= hi[1] <= sp["height"] + sp["radius"]) and (hi[0] - lo[0] <= 2.0 * 1.9 * sp["radius"] + 2.0 * sp["height"] * math.tan(math.radians(sp["lean"])))):
+        bound_problems.append(f"spire {fmt3(lo)} .. {fmt3(hi)} for {json.dumps(sp)}")
+    bp = basalt["parameters"]
+    lo, hi = local_aabb(basalt)
+    if not ((bp["height"] * (1.0 - bp["height_spread"]) - TOLERANCE <= hi[1] <= bp["height"] + TOLERANCE) and (hi[0] <= bp["radius"] + TOLERANCE)):
+        bound_problems.append(f"basalt {fmt3(lo)} .. {fmt3(hi)} for {json.dumps(bp)}")
+    rp = roof["parameters"]
+    lo, hi = local_aabb(roof)
+    half_x = 0.5 * rp["width"] + rp["overhang"]
+    rise = (0.5 * rp["depth"] + rp["overhang"]) * math.tan(math.radians(rp["pitch"]))
+    if not (close([lo[0], hi[0], lo[2], hi[2]], [-half_x - 0.03, half_x + 0.03, -(0.5 * rp["depth"] + rp["overhang"]), 0.5 * rp["depth"] + rp["overhang"]], 0.02) and
+            (rise + 0.15 < hi[1] < rise + 0.3)):
+        bound_problems.append(f"roof {fmt3(lo)} .. {fmt3(hi)} for {json.dumps(rp)}")
+    dp = dune["parameters"]
+    lo, hi = local_aabb(dune)
+    if not ((0.85 * dp["length"] <= hi[0] - lo[0] <= 1.1 * dp["length"]) and (0.85 * dp["width"] <= hi[2] - lo[2] <= 1.1 * dp["width"]) and (0.9 * dp["height"] <= hi[1] <= dp["height"])):
+        bound_problems.append(f"dune {fmt3(lo)} .. {fmt3(hi)} for {json.dumps(dp)}")
+    gp = patch["parameters"]
+    lo, hi = local_aabb(patch)
+    if not (close([hi[1]], [gp["thickness"] + gp["dome"] * gp["size"]], 1.0e-3) and (hi[0] - lo[0] <= gp["size"] * (1.0 + gp["irregularity"]))):
+        bound_problems.append(f"patch {fmt3(lo)} .. {fmt3(hi)} for {json.dumps(gp)}")
+    check("the third batch shapes stand on their bases within their budgets; the spire reaches its height, the basalt tops lie "
+          "between height x (1 - spread) and the height, the roof spans the wall rectangle plus the overhang, the dune its length, "
+          "width and height, the ground patch its thickness plus the dome", not bound_problems, "; ".join(bound_problems))
+    pieces_by_id = {p["id"]: p for p in pieces(editor, scene)}
+    body_problems = []
+    for piece in placed:
+        listed = pieces_by_id[piece["id"]]
+        kind = "hull" if by_id[piece["shape"]]["collision"] == "convex_hull" else "mesh"
+        if not (listed["physics"]["has_body"] and (listed["physics"]["motion_mode"] == "static") and (kind in listed["physics"]["collision_shape"].lower()) and not listed["pass_through"]):
+            body_problems.append(f"{piece['shape']}: {listed['physics']} pass_through {listed['pass_through']}")
+    check("each third batch piece has its static body: a triangle mesh for the spire, basalt, roof and clump, a convex hull for "
+          "the shrub, dune and ground patch; none passes through", not body_problems, "; ".join(body_problems))
+
+    # Range ends accepted; values beyond refused naming the parameter.
+    accepted = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.rock_spire",     "position": [-27.0, 0.0, -5.0], "parameters": {"form": "pinnacle", "height": 60.0, "radius": 0.2, "segments": 20, "lean": 15.0, "derive": []}},
+        {"shape": "nature.basalt_columns", "position": [-18.0, 0.0, -5.0], "parameters": {"radius": 16.0, "column_width": 0.15, "height_spread": 0.9, "derive": []}},
+        {"shape": "architecture.roof",     "position": [-9.0, 0.0, -5.0],  "parameters": {"form": "hip", "width": 32.0, "depth": 20.0, "pitch": 60.0, "overhang": 0.6, "curve": 0.3}},
+        {"shape": "nature.palm_clump",     "position": [0.0, 0.0, -5.0],   "parameters": {"species": "areca", "stems": 9, "fronds": 10, "height": 0.5, "derive": []}},
+        {"shape": "nature.palm_shrub",     "position": [9.0, 0.0, -5.0],   "parameters": {"species": "cycad", "fronds": 16, "size": 6.0, "derive": []}},
+        {"shape": "nature.dune",           "position": [18.0, 0.0, -5.0],  "parameters": {"length": 64.0, "width": 2.0, "segments": 48, "asymmetry": 0.8, "derive": []}},
+        {"shape": "nature.ground_patch",   "position": [27.0, 0.0, -5.0],  "parameters": {"irregularity": 0.6, "dome": 0.1, "segments": 48, "derive": []}},
+    ]})["pieces"]
+    editor.wait_idle()
+    check("the third batch shapes take values at the ends of their ranges, within the 2000 triangle ceiling and on their bases",
+          (len(accepted) == 7) and all((p["triangle_count"] <= 2000) and (abs(p["world_aabb"]["min"][1]) < TOLERANCE) for p in accepted),
+          "; ".join(f"{p['shape']} {p['triangle_count']}" for p in accepted))
+    refusals = [
+        ("nature.rock_spire",     {"lean": 16.0, "derive": []}, "'lean'"),
+        ("nature.basalt_columns", {"height_spread": 0.95, "derive": []}, "'height_spread'"),
+        ("architecture.roof",     {"pitch": 10.0}, "'pitch'"),
+        ("nature.palm_clump",     {"stems": 10, "derive": []}, "'stems'"),
+        ("nature.palm_shrub",     {"fronds": 17, "derive": []}, "'fronds'"),
+        ("nature.dune",           {"asymmetry": 0.9}, "'asymmetry'"),
+        ("nature.ground_patch",   {"thickness": 0.5}, "'thickness'"),
+        ("nature.dune",           {"length": 5.0, "width": 5.0, "derive": []}, "1.04 times the width"),
+    ]
+    refusal_problems = []
+    count_before = len(pieces(editor, scene))
+    for shape_id, parameters, name in refusals:
+        error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [{"shape": shape_id, "parameters": parameters}]})
+        if (error is None) or (name not in error):
+            refusal_problems.append(f"{shape_id} {parameters}: {error}")
+    editor.wait_idle()
+    check("a value beyond a third batch shape's range is refused naming the parameter, a dune shorter than 1.04 widths is refused, and nothing is placed",
+          (not refusal_problems) and (len(pieces(editor, scene)) == count_before), "; ".join(refusal_problems))
+
+    # Derive from seed: the default masks' values inside their derive ranges, other seeds other meshes; the dune and the
+    # basalt stay walkable at every derived value.
+    seeded = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": shape_id, "position": [-27.0 + 9.0 * i, 0.0, 15.0 + 8.0 * k], "parameters": {"seed": 5 + k}} for k in range(2) for i, shape_id in enumerate(MORE_SHAPES_3)]})["pieces"]
+    editor.wait_idle()
+    derive_problems = []
+    for piece in seeded:
+        for parameter in by_id[piece["shape"]]["parameters"]:
+            if parameter["name"] in piece["parameters"]["derive"]:
+                value = piece["parameters"][parameter["name"]]
+                if not (parameter["derive_min"] - TOLERANCE <= value <= parameter["derive_max"] + TOLERANCE):
+                    derive_problems.append(f"{piece['shape']} {parameter['name']} {value}")
+    differs = [seeded[i]["mesh_key"] != seeded[i + 7]["mesh_key"] for i in range(7)]
+    check("the third batch shapes derive their default masks from the seed within the derive ranges; other seeds give other meshes",
+          all(differs) and not derive_problems, "; ".join(derive_problems) or f"{differs}")
+
+    # Snap to surface: dropped 1 m above a raised slab, the bases rest on its top.
+    platform = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, 0.0, 40.0], "name": "ms3 platform", "parameters": {"width": 40.0, "depth": 14.0, "thickness": 0.6}}]})["pieces"][0]
+    editor.wait_idle()
+    top = platform["world_aabb"]["max"][1]
+    snapped = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": shape_id, "position": [-15.0 + 5.0 * i, top + 0.8, 40.0], "surface_snap": True, "parameters": {"derive": []}} for i, shape_id in enumerate(MORE_SHAPES_3)]})["pieces"]
+    editor.wait_idle()
+    check("surface_snap rests every third batch shape's base on the slab's top",
+          all(p["surface_found"] and (abs(p["world_aabb"]["min"][1] - top) < TOLERANCE) for p in snapped),
+          "; ".join(f"{p['shape']} found {p['surface_found']} base {p['world_aabb']['min'][1]:.4f} top {top:.4f}" for p in snapped))
+
+    # A scatter of spires, clumps, shrubs and dunes: footprints are the circles around the items' xz bounds.
+    layout = editor.call("level_create_layout", {"scene_name": scene, "name": "ms3 scatter", "position": [0.0, 0.0, 70.0],
+                                                 "items": [{"shape": "nature.rock_spire"}, {"shape": "nature.palm_clump"}, {"shape": "nature.palm_shrub", "weight": 2}, {"shape": "nature.dune"}],
+                                                 "pattern": {"kind": "scatter", "count": 10, "region": "disc", "region_radius": 18.0, "min_spacing": 0.3}})
+    editor.wait_idle()
+    radii = [item["footprint_radius"] for item in layout["items"]]
+
+    def reach_of(bounds):
+        return math.hypot(max(-bounds["min"][0], bounds["max"][0]), max(-bounds["min"][2], bounds["max"][2]))
+    item_of_shape = {item["shape"]: index for index, item in enumerate(layout["items"])}
+    points = scatter_local(layout)
+    child_radii = [radii[item_of_shape[c["shape"]]] for c in layout["children"]]
+    gap = min((math.hypot(points[i][0] - points[j][0], points[i][2] - points[j][2]) - child_radii[i] - child_radii[j]
+               for i in range(len(points)) for j in range(i + 1, len(points))), default=float("inf"))
+    check("a scatter of spires, clumps, shrubs and dunes places its pieces with each footprint the circle around the item's xz bounds, 0.3 m apart",
+          (layout["child_count"] >= 4) and all(abs(i["footprint_radius"] - reach_of(by_id[i["shape"]]["default_bounds"])) < 1.0e-4 for i in layout["items"]) and (gap >= 0.3 - 1.0e-4),
+          f"{layout['child_count']} pieces, footprints {radii}, gap {gap:.3f}")
+
+    # Replace: a rock by a spire and back, a palm by a clump and back, a hill by a dune and back.
+    targets = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.rock", "position": [-30.0, 0.0, -50.0], "name": "ms3 replace rock", "parameters": {"roughness": 0.45, "seed": 3}},
+        {"shape": "nature.palm", "position": [-20.0, 0.0, -50.0], "name": "ms3 replace palm", "parameters": {"seed": 4}},
+        {"shape": "nature.hill", "position": [-5.0, 0.0, -50.0], "name": "ms3 replace hill", "parameters": {"height": 0.7, "seed": 5, "derive": []}},
+    ]})["pieces"]
+    editor.wait_idle()
+    replace_problems = []
+    for target, other, carried in ((targets[0], "nature.rock_spire", ("roughness", "seed")), (targets[1], "nature.palm_clump", ("height", "fronds", "seed")),
+                                   (targets[2], "nature.dune", ("height", "seed"))):
+        before = replace_state(editor, scene, target["id"])
+        there = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [target["id"]], "shape": other})["pieces"][0]
+        editor.wait_idle()
+        as_other = piece_by_id(editor, scene, target["id"])
+        back = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [target["id"]], "shape": target["shape"]})["pieces"][0]
+        editor.wait_idle()
+        after = replace_state(editor, scene, target["id"])
+        if not ((there["shape"] == other) and all(n in there["carried"] + there.get("clamped", []) for n in carried) and
+                all(as_other["parameters"][n] == target["parameters"][n] for n in carried if n not in target["parameters"].get("derive", [])) and as_other["physics"]["has_body"] and
+                (back["shape"] == target["shape"]) and (after["parameters_text"] == before["parameters_text"]) and kept_place(before, after)):
+            replace_problems.append(f"{target['shape']} -> {other}: {json.dumps({k: there.get(k) for k in ('carried', 'clamped', 'defaulted')})} {json.dumps(as_other['parameters'])[:200]}")
+    check("a rock by a spire (roughness carries), a palm by a clump (height and fronds carry, derived again from the seed) and a hill by a dune (height carries), "
+          "each with its body, and back to the same values and place", not replace_problems, "; ".join(replace_problems))
+
+    # A roof on a room of four walls whose fronts face out: joined by its front to the front wall's top.
+    room = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.door_wall", "position": [40.0, 0.0, 2.0],  "name": "ms3 front wall"},
+        {"shape": "architecture.wall",      "position": [40.0, 0.0, -2.0], "name": "ms3 back wall",  "rotation_xyzw": yaw_xyzw(180.0)},
+        {"shape": "architecture.wall",      "position": [38.0, 0.0, 0.0],  "name": "ms3 left wall",  "rotation_xyzw": yaw_xyzw(-90.0)},
+        {"shape": "architecture.wall",      "position": [42.0, 0.0, 0.0],  "name": "ms3 right wall", "rotation_xyzw": yaw_xyzw(90.0)},
+    ]})["pieces"]
+    editor.wait_idle()
+    joined = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.roof", "name": "ms3 roof", "connect": {"connector": "front", "to_piece_id": room[0]["id"], "to_connector": "top"}}]})["pieces"][0]
+    editor.wait_idle()
+    center = [0.5 * (joined["world_aabb"]["min"][i] + joined["world_aabb"]["max"][i]) for i in (0, 2)]
+    check("a roof joined by its front connector to the front wall's top rests its base on the wall tops (3 m) centred over the room",
+          (abs(joined["world_aabb"]["min"][1] - 3.0) < TOLERANCE) and close(center, [40.0, 0.0], 0.05), f"base {joined['world_aabb']['min'][1]:.4f}, center {fmt3(center)}")
+    editor.call("clear_undo_history")
+    editor.wait_idle()
+    editor.close(scene)
+    editor.wait_idle()
+
+    # Navigation: over a dune's crest, onto a ground patch, onto the basalt tops.
+    nav = create_scene(editor)
+    level = editor.call("level_place_pieces", {"scene_name": nav, "pieces": [
+        {"shape": "basic.floor_slab",      "position": [0.0, -0.2, 0.0], "name": "nav ground", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}},
+        {"shape": "nature.dune",           "position": [0.0, 0.0, 0.0],  "name": "nav dune", "parameters": {"length": 16.0, "width": 6.0, "height": 0.8, "derive": []}},
+        {"shape": "nature.ground_patch",   "position": [-10.0, 0.0, 8.0], "name": "nav patch"},
+        {"shape": "nature.basalt_columns", "position": [10.0, 0.0, 8.0], "name": "nav basalt", "parameters": {"radius": 3.0, "height": 1.2, "height_spread": 0.6, "derive": []}},
+    ]})["pieces"]
+    editor.wait_idle()
+    node = editor.call("create_node", {"scene_name": nav, "name": "seed", "position": [0.0, 0.05, -6.0]})
+    editor.wait_idle()
+    editor.call("navigation_set_seed", {"scene_name": nav, "node_id": node.get("node_id", node.get("id"))})
+    editor.set_export_settings(nav, {})
+    editor.wait_idle()
+    job = build_navigation(editor, nav)
+    over = editor.call("navigation_find_path", {"scene_name": nav, "start": [0.0, 0.05, -6.0], "end": [0.0, 0.05, 6.0]})
+    crest = editor.call("navigation_find_point", {"scene_name": nav, "position": [0.0, 0.85, 0.5]})
+    on_patch = editor.call("navigation_find_point", {"scene_name": nav, "position": [-10.0, 0.2, 8.0]})
+    basalt_top = level[3]["world_aabb"]["max"][1]
+    on_basalt = editor.call("navigation_find_point", {"scene_name": nav, "position": [10.0, basalt_top + 0.05, 8.0]})
+    check("the navigation mesh covers the dune (a path crosses it, a point lies on its crest), the ground patch and the basalt tops",
+          (job.get("state") == "done") and over.get("found") and over.get("complete") and crest.get("found") and (crest["point"][1] > 0.4) and
+          on_patch.get("found") and on_basalt.get("found") and (on_basalt["point"][1] > 0.5),
+          f"{job.get('state')} over {over.get('complete')} crest {json.dumps(crest)[:120]} patch {on_patch.get('found')} basalt {json.dumps(on_basalt)[:120]}")
+    editor.close(nav)
+    editor.wait_idle()
+
+    # The images: each shape at its defaults and contrasting values beside a 1.8 m block, from a low three-quarter view.
+    person = {"shape": "basic.block", "parameters": {"width": 0.5, "depth": 0.3, "height": 1.8}}
+    dark = {"rock": "Kit Dark Rock"}
+    views = [
+        ("nature.rock_spire", [[{"shape": "nature.rock_spire", "position": [0.0, 0.0, 0.0]}], [0.0, 3.0, 0.0], 18.0], None, [3.0, 0.0, 3.0]),
+        ("nature.rock_spire", [[{"shape": "nature.rock_spire", "position": [-7.0, 0.0, 0.0], "parameters": {"form": "pinnacle", "height": 9.0, "radius": 1.5, "derive": ["lean"]}},
+                                {"shape": "nature.rock_spire", "position": [-2.5, 0.0, 0.0], "parameters": {"form": "stack", "height": 8.0, "radius": 1.6, "derive": ["lean"]}},
+                                {"shape": "nature.rock_spire", "position": [2.0, 0.0, 0.0], "parameters": {"form": "hoodoo", "height": 6.0, "radius": 1.0, "derive": ["lean"]}},
+                                {"shape": "nature.rock_spire", "position": [8.0, 0.0, 0.0], "parameters": {"form": "mesa", "height": 5.0, "radius": 3.0, "derive": ["lean"]}}],
+                               [0.0, 3.0, 0.0], 24.0], None, [0.0, 0.0, 3.0]),
+        ("nature.rock_spire", [[{"shape": "nature.rock_spire", "position": [-3.0, 0.0, 0.0], "parameters": {"seed": 31, "height": 12.0, "radius": 2.0, "lean": 8.0, "roughness": 0.9, "derive": []}, "materials": dark},
+                                {"shape": "nature.rock_spire", "position": [3.0, 0.0, 0.0], "parameters": {"seed": 32, "form": "stack", "height": 6.0, "radius": 2.5, "taper": 0.1, "roughness": 0.3, "derive": []}, "materials": dark}],
+                               [0.0, 4.0, 0.0], 22.0], None, [0.0, 0.0, 3.0]),
+        ("nature.basalt_columns", [[{"shape": "nature.basalt_columns", "position": [0.0, 0.0, 0.0]}], [0.0, 1.5, 0.0], 12.0], None, [3.0, 0.0, 3.0]),
+        ("nature.basalt_columns", [[{"shape": "nature.basalt_columns", "position": [-5.0, 0.0, 0.0], "parameters": {"radius": 2.0, "height": 2.0, "height_spread": 0.6, "derive": []}, "materials": dark},
+                                    {"shape": "nature.basalt_columns", "position": [4.0, 0.0, 0.0], "parameters": {"radius": 3.0, "column_width": 0.6, "height": 2.4, "height_spread": 0.5, "seed": 7, "derive": []}, "materials": dark}],
+                                   [0.0, 1.0, 0.0], 17.0], None, [-1.0, 0.0, 3.0]),
+        ("architecture.roof", [[{"shape": "architecture.roof", "position": [0.0, 0.0, 0.0]}], [0.0, 1.0, 0.0], 10.0], None, [3.0, 0.0, 3.0]),
+        ("architecture.roof", [[{"shape": "architecture.roof", "position": [-10.0, 0.0, 0.0], "parameters": {"form": "hip", "width": 6.0}},
+                                {"shape": "architecture.roof", "position": [-2.0, 0.0, 0.0], "parameters": {"form": "shed", "pitch": 20.0}},
+                                {"shape": "architecture.roof", "position": [5.0, 0.0, 0.0], "parameters": {"form": "pyramid"}},
+                                {"shape": "architecture.roof", "position": [13.0, 0.0, 0.0], "parameters": {"form": "hip", "width": 6.0, "curve": 0.3, "overhang": 0.6, "pitch": 30.0}, "materials": {"roof": "Kit Dark Wood"}}],
+                               [1.0, 1.0, 0.0], 26.0], None, [0.0, 0.0, 4.0]),
+        ("nature.palm_clump", [[{"shape": "nature.palm_clump", "position": [0.0, 0.0, 0.0]}], [0.0, 2.0, 0.0], 12.0], None, [2.5, 0.0, 2.5]),
+        ("nature.palm_clump", [[{"shape": "nature.palm_clump", "position": [-4.0 + 4.0 * i, 0.0, 0.0], "parameters": {"species": species, "derive": ["stems", "height"]}}
+                                for i, species in enumerate(("areca", "rhapis", "nipa"))], [0.0, 2.0, 0.0], 18.0], None, [2.0, 0.0, 2.5]),
+        ("nature.palm_shrub", [[{"shape": "nature.palm_shrub", "position": [0.0, 0.0, 0.0]}], [0.0, 0.6, 0.0], 5.0], None, [1.2, 0.0, 1.0]),
+        ("nature.palm_shrub", [[{"shape": "nature.palm_shrub", "position": [-2.2 + 2.5 * i, 0.0, 0.0], "parameters": {"species": species, "size": size, "derive": ["fronds"]}}
+                                for i, (species, size) in enumerate((("palmetto", 1.5), ("cycad", 1.5), ("seedling", 1.0)))], [0.0, 0.7, 0.0], 8.0], None, [-0.8, 0.0, -1.5]),
+        ("nature.dune", [[{"shape": "nature.dune", "position": [0.0, 0.0, 0.0]}], [0.0, 0.4, 0.0], 13.0], 14.0, [-2.0, 0.0, -3.5]),
+        ("nature.dune", [[{"shape": "nature.dune", "position": [-6.0, 0.0, 0.0], "parameters": {"asymmetry": 0.4, "seed": 4}},
+                          {"shape": "nature.dune", "position": [6.0, 0.0, -3.0], "parameters": {"seed": 9, "asymmetry": 0.0}},
+                          {"shape": "nature.dune", "position": [1.0, 0.0, 5.0], "parameters": {"seed": 12, "length": 7.0, "width": 4.5, "height": 0.6, "asymmetry": 0.3, "derive": []}}],
+                         [0.0, 0.3, 0.0], 22.0], 18.0, [0.0, 0.0, -1.0]),
+        ("nature.ground_patch", [[{"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "parameters": {"width": 12.0, "depth": 12.0, "thickness": 0.2}, "materials": {"floor": "Kit Grass"}},
+                                  {"shape": "nature.ground_patch", "position": [0.0, 0.0, 0.0]},
+                                  {"shape": "nature.ground_patch", "position": [3.0, 0.0, -1.0], "parameters": {"irregularity": 0.6, "dome": 0.1, "size": 2.0, "derive": []}, "materials": {"earth": "Kit Sand"}}],
+                                 [1.0, 0.3, 0.0], 9.0], None, [-1.0, 0.0, 2.5]),
+    ]
+    counters = {}
+    written = []
+    for shape_id, (requests, target, distance), elevation, person_at in views:
+        view_scene = create_scene(editor)
+        editor.call("level_place_pieces", {"scene_name": view_scene, "pieces": [dict(person, position=person_at)] + requests})
+        editor.wait_idle()
+        counters[shape_id] = counters.get(shape_id, 0) + 1
+        path = render_shape_image(editor, view_scene, shape_id, counters[shape_id], target, distance, elevation=(elevation if elevation is not None else 16.0))
+        if path:
+            written.append(path)
+        editor.close(view_scene)
+        editor.wait_idle()
+
+    # The themes composed: a rocky coast, a roofed house of walls and a floor, a beach corner.
+    def compose(name, first, joins, target, distance, azimuth, elevation=14.0):
+        view_scene = create_scene(editor)
+        made = editor.call("level_place_pieces", {"scene_name": view_scene, "pieces": first})["pieces"]
+        editor.wait_idle()
+        for request, (connector, target_index, target_connector) in joins:
+            made.append(editor.call("level_place_pieces", {"scene_name": view_scene, "pieces": [dict(request, connect={
+                "connector": connector, "to_piece_id": made[target_index]["id"], "to_connector": target_connector})]})["pieces"][0])
+            editor.wait_idle()
+        path = render_shape_image(editor, view_scene, name, 1, target, distance, elevation=elevation, azimuth=azimuth)
+        editor.close(view_scene)
+        editor.wait_idle()
+        return path, made
+
+    water = {"shape": "nature.water", "parameters": {"width": 40.0, "depth": 24.0}}
+    coast = [dict(person, position=[2.0, 0.0, 4.0]),
+             {"shape": "basic.floor_slab", "position": [0.0, -0.6, 4.0], "parameters": {"width": 40.0, "depth": 30.0, "thickness": 0.2}, "materials": {"floor": "Kit Sand"}},
+             dict(water, position=[0.0, 0.0, 12.0])] + \
+            [{"shape": "nature.cliff", "position": [-12.0 + 8.0 * i, -0.4, -4.0], "parameters": {"length": 8.0, "height": 7.0, "derive": ["overhang"]}} for i in range(4)] + \
+            [{"shape": "nature.rock_spire", "position": [-8.0, -0.4, 9.0], "parameters": {"form": "stack", "height": 10.0, "radius": 2.0, "derive": ["lean"]}, "materials": dark},
+             {"shape": "nature.rock_spire", "position": [-3.0, -0.4, 13.0], "parameters": {"form": "pinnacle", "height": 7.0, "radius": 1.2, "seed": 6, "derive": ["lean"]}, "materials": dark},
+             {"shape": "nature.rock_spire", "position": [9.0, -0.4, 14.0], "parameters": {"form": "stack", "height": 5.0, "radius": 1.6, "seed": 9, "derive": ["lean"]}, "materials": dark},
+             {"shape": "nature.basalt_columns", "position": [6.0, -0.4, 3.0], "parameters": {"radius": 3.0, "height": 2.4, "height_spread": 0.6, "derive": []}, "materials": dark},
+             {"shape": "nature.rock", "position": [1.0, -0.4, 7.0], "parameters": {"size": 1.4, "derive": []}},
+             {"shape": "nature.rock", "position": [12.0, -0.4, 6.0], "parameters": {"size": 1.1, "seed": 4, "derive": []}}]
+    path, _ = compose("rocky_coast", coast, [], [0.0, 2.5, 4.0], 30.0, 25.0)
+    written.append(path)
+    house = [dict(person, position=[3.5, 0.0, 4.0]),
+             {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "parameters": {"width": 12.0, "depth": 12.0, "thickness": 0.2}, "materials": {"floor": "Kit Grass"}},
+             {"shape": "basic.floor_slab", "position": [0.0, 0.0, 0.0], "parameters": {"width": 4.2, "depth": 4.2, "thickness": 0.1}},
+             {"shape": "architecture.door_wall", "position": [0.0, 0.0, 2.0]},
+             {"shape": "architecture.wall", "position": [0.0, 0.0, -2.0], "rotation_xyzw": yaw_xyzw(180.0)},
+             {"shape": "architecture.wall", "position": [-2.0, 0.0, 0.0], "rotation_xyzw": yaw_xyzw(-90.0)},
+             {"shape": "architecture.wall", "position": [2.0, 0.0, 0.0], "rotation_xyzw": yaw_xyzw(90.0)}]
+    path, made = compose("roofed_house", house, [({"shape": "architecture.roof"}, ("front", 3, "top"))], [0.0, 2.6, 0.0], 15.0, 35.0)
+    written.append(path)
+    roof_piece = made[-1]
+    check("the roofed house: a gable roof joined by its front to the door wall's top rests on the wall tops over the room",
+          (abs(roof_piece["world_aabb"]["min"][1] - 3.0) < TOLERANCE) and close([0.5 * (roof_piece["world_aabb"]["min"][0] + roof_piece["world_aabb"]["max"][0])], [0.0], 0.05),
+          f"roof base {roof_piece['world_aabb']['min'][1]:.4f}")
+    beach = [dict(person, position=[3.0, 0.0, 3.0]),
+             {"shape": "basic.floor_slab", "position": [0.0, -0.2, -6.0], "parameters": {"width": 30.0, "depth": 10.0, "thickness": 0.2}, "materials": {"floor": "Kit Sand"}}] + \
+            [{"shape": "nature.shore", "position": [-8.0 + 4.0 * i, -1.1, 2.0], "parameters": {"seed": 50 + i}} for i in range(5)] + \
+            [dict(water, position=[0.0, -0.6, 10.0]),
+             {"shape": "nature.dune", "position": [-5.0, 0.0, -7.0], "parameters": {"seed": 3}},
+             {"shape": "nature.dune", "position": [6.0, 0.0, -9.0], "parameters": {"seed": 8}},
+             {"shape": "nature.palm", "position": [-6.0, 0.0, -2.0], "parameters": {"species": "coconut", "height": 8.0, "derive": ["bend", "fronds", "droop"]}},
+             {"shape": "nature.palm_clump", "position": [5.0, 0.0, -3.0], "parameters": {"species": "areca", "height": 3.6, "derive": ["stems"]}},
+             {"shape": "nature.palm_clump", "position": [-11.0, 0.0, -5.0], "parameters": {"species": "nipa", "height": 3.0, "derive": ["stems"]}},
+             {"shape": "nature.palm_shrub", "position": [0.5, 0.0, -1.5], "parameters": {"species": "palmetto"}},
+             {"shape": "nature.palm_shrub", "position": [9.0, 0.0, -1.0], "parameters": {"species": "cycad"}},
+             {"shape": "nature.palm_shrub", "position": [-2.0, 0.0, -4.0], "parameters": {"species": "seedling"}},
+             {"shape": "nature.ground_patch", "position": [2.0, 0.0, -6.0], "materials": {"earth": "Kit Grass"}}]
+    path, _ = compose("beach_corner", beach, [], [0.0, 1.2, -2.0], 24.0, 20.0, 16.0)
+    written.append(path)
+    check(f"the {len(views) + 3} third batch images logs/shape_<id>_<n>.png are written", all(written) and (len(written) == len(views) + 3),
+          ", ".join(os.path.basename(p) for p in written if p))
+    for path in written:
+        print(f"shape image: {path}", flush=True)
+
+
 REGION_HANDLE_IMAGE = os.path.join("logs", "level_region_handles.png")
 
 
@@ -10391,6 +11466,7 @@ def main():
     parser.add_argument("--only-connector-snap", action="store_true", help="run the connector snap checks of Transform tool drags alone")
     parser.add_argument("--only-layout-indicators", action="store_true", help="run the kit layout drawing checks alone")
     parser.add_argument("--only-region-handles", action="store_true", help="run the scatter region handle checks alone")
+    parser.add_argument("--only-more-shapes", action="store_true", help="run the checks of the more shapes alone (doc/plans/level_kit_more_shapes.md build order 1 - 12)")
     parser.add_argument("--layout-drag-image", default=DEFAULT_LAYOUT_DRAG_IMAGE, help="mid-drag layout screenshot PNG (relative to the repository root or absolute)")
     args = parser.parse_args()
     image_path = args.image if os.path.isabs(args.image) else os.path.join(pav.REPO_ROOT, args.image)
@@ -10456,6 +11532,10 @@ def main():
             check_connector_snap(editor)
         elif args.only_layout_indicators:
             check_layout_indicators(editor)
+        elif args.only_more_shapes:
+            check_more_shapes(editor)
+            check_more_shapes_2(editor)
+            check_more_shapes_3(editor)
         elif args.only_region_handles:
             check_region_handles(editor)
         elif args.only_layout_selection:
@@ -10516,6 +11596,9 @@ def main():
             check_connector_snap(editor)
             check_layout_indicators(editor)
             check_region_handles(editor)
+            check_more_shapes(editor)
+            check_more_shapes_2(editor)
+            check_more_shapes_3(editor)
     except Exception as error:  # noqa: BLE001 - a failed step is a failed check
         check("run completed without an error", False, f"{type(error).__name__}: {error}")
     finally:

@@ -6,8 +6,10 @@
 #include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
+#include "editor_item_bits.hpp"
 #include "editor_log.hpp"
 #include "operations/mesh_primitive_swap.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 
 #include "erhe_item/item_host.hpp"
@@ -19,6 +21,17 @@
 #include <mutex>
 
 namespace editor {
+
+auto get_piece_motion_mode(const erhe::scene::Mesh& mesh) -> erhe::physics::Motion_mode
+{
+    const std::optional<Node_physics_data> physics = read_node_physics(mesh);
+    return physics.has_value() ? physics.value().motion_mode : erhe::physics::Motion_mode::e_none;
+}
+
+auto get_piece_ground(const erhe::scene::Mesh& mesh) -> Kit_piece_ground
+{
+    return ((mesh.get_flag_bits() & Editor_item_flags::pass_through) != 0) ? Kit_piece_ground::pass_through : Kit_piece_ground::ground;
+}
 
 Kit_piece_parameters_operation::Kit_piece_parameters_operation(
     const std::shared_ptr<erhe::scene::Mesh>& mesh,
@@ -48,7 +61,21 @@ void Kit_piece_parameters_operation::apply(App_context& context, const Kit_piece
     }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
     swap_mesh_primitives(m_mesh, state.primitives);
+    // A body goes before its shape is taken (a body without a shape would get a stand-in); a body comes after its
+    // shape is given, so it is made with it (as Mesh_operation::restore_physics()).
+    const bool body_changes = (get_piece_motion_mode(*m_mesh) != state.motion_mode);
+    if (body_changes && (state.motion_mode == erhe::physics::Motion_mode::e_none)) {
+        clear_node_physics(*m_mesh);
+    }
     set_node_collision_shape(*m_mesh, state.collision_shape);
+    if (body_changes && (state.motion_mode != erhe::physics::Motion_mode::e_none)) {
+        m_mesh->set_value(Node_physics::motion_mode_property, state.motion_mode);
+    }
+    if (state.ground == Kit_piece_ground::pass_through) {
+        m_mesh->enable_flag_bits(Editor_item_flags::pass_through);
+    } else {
+        m_mesh->disable_flag_bits(Editor_item_flags::pass_through);
+    }
     set_brush_placement(*m_mesh, state.brush, GEO::NO_INDEX, GEO::NO_INDEX);
     m_mesh->set_value(Kit_piece::shape_property,      state.shape);
     m_mesh->set_value(Kit_piece::parameters_property, state.parameters);
