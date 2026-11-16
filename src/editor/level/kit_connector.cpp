@@ -1,6 +1,7 @@
 #include "level/kit_connector.hpp"
 #include "level/kit_shape.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <tuple>
 
@@ -36,6 +37,101 @@ auto connector_names_text(const std::span<const Kit_connector> connectors) -> st
         text += connector.name;
     }
     return text;
+}
+
+namespace {
+
+// Calls visit with each trimmed, non-empty name of a comma separated list until it returns true.
+template <typename Visit>
+auto for_each_listed_name(const std::string_view text, Visit&& visit) -> bool
+{
+    std::size_t begin = 0;
+    while (begin <= text.size()) {
+        std::size_t end = text.find(',', begin);
+        if (end == std::string_view::npos) {
+            end = text.size();
+        }
+        std::string_view name = text.substr(begin, end - begin);
+        while (!name.empty() && (name.front() == ' ')) {
+            name.remove_prefix(1);
+        }
+        while (!name.empty() && (name.back() == ' ')) {
+            name.remove_suffix(1);
+        }
+        if (!name.empty() && visit(name)) {
+            return true;
+        }
+        begin = end + 1;
+    }
+    return false;
+}
+
+} // anonymous namespace
+
+auto Kit_connector_switches::is_disabled(const std::string_view connector_name) const -> bool
+{
+    return for_each_listed_name(disabled_connectors, [connector_name](const std::string_view name) { return name == connector_name; });
+}
+
+auto Kit_connector_switches::is_enabled(const std::string_view connector_name) const -> bool
+{
+    return connectors_enabled && !is_disabled(connector_name);
+}
+
+auto parse_connector_names(const std::string_view text) -> std::vector<std::string>
+{
+    std::vector<std::string> names;
+    static_cast<void>(for_each_listed_name(text, [&names](const std::string_view name) { names.emplace_back(name); return false; }));
+    return names;
+}
+
+auto make_connector_names_text(std::vector<std::string> names) -> std::string
+{
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
+    std::string text;
+    for (const std::string& name : names) {
+        if (!text.empty()) {
+            text += ',';
+        }
+        text += name;
+    }
+    return text;
+}
+
+auto check_disabled_connectors_text(const std::string_view text, const std::span<const Kit_connector> connectors) -> std::string
+{
+    const std::vector<std::string> names = parse_connector_names(text);
+    std::string unknown;
+    for (const std::string& name : names) {
+        if (find_connector(connectors, name) == nullptr) {
+            unknown += unknown.empty() ? std::string{} : std::string{", "};
+            unknown += "'" + name + "'";
+        }
+    }
+    if (!unknown.empty()) {
+        return "no connector " + unknown + " (the shape's connectors: " + connector_names_text(connectors) + ")";
+    }
+    const std::string canonical = make_connector_names_text(names);
+    if (canonical != text) {
+        return "the list '" + std::string{text} + "' is not canonical (sorted, unique, comma separated, no spaces): write '" + canonical + "'";
+    }
+    return {};
+}
+
+auto set_connector_state(const std::string_view disabled_connectors, const std::string_view connector_name, const Kit_connector_state state) -> std::string
+{
+    std::vector<std::string> names = parse_connector_names(disabled_connectors);
+    std::erase(names, std::string{connector_name});
+    if (state == Kit_connector_state::disabled) {
+        names.emplace_back(connector_name);
+    }
+    return make_connector_names_text(std::move(names));
+}
+
+void remove_disabled_connectors(const Kit_connector_switches& switches, std::vector<Kit_connector>& connectors)
+{
+    std::erase_if(connectors, [&switches](const Kit_connector& connector) { return !switches.is_enabled(connector.name); });
 }
 
 auto transform_connector(const Kit_connector& connector, const glm::vec3& position, const glm::quat& rotation) -> Kit_connector
@@ -137,13 +233,36 @@ auto rotation_for_scale(const glm::mat3& linear, const glm::vec3& scale) -> std:
     return glm::normalize(glm::quat_cast(rotation));
 }
 
+auto is_degenerate_frame(const glm::mat3& linear) -> bool
+{
+    const float determinant = glm::determinant(linear);
+    const float volume      = glm::length(linear[0]) * glm::length(linear[1]) * glm::length(linear[2]);
+    return !(std::abs(determinant) > (c_singular_ratio * volume)) || !std::isfinite(determinant);
+}
+
+auto connector_in_root(const Kit_connector& connector, const glm::mat4& root_from_node) -> Kit_connector
+{
+    const glm::mat3 linear{root_from_node};
+    return Kit_connector{
+        .name     = connector.name,
+        .position = glm::vec3{root_from_node * glm::vec4{connector.position, 1.0f}},
+        .outward  = glm::inverse(glm::transpose(linear)) * connector.outward,
+        .up       = linear * connector.up
+    };
+}
+
+auto carry_connector_position(const glm::vec3& position_in_root, const glm::mat4& world_from_root) -> std::optional<glm::vec3>
+{
+    if (is_degenerate_frame(glm::mat3{world_from_root})) {
+        return std::nullopt;
+    }
+    return glm::vec3{world_from_root * glm::vec4{position_in_root, 1.0f}};
+}
+
 auto transform_connector(const Kit_connector& connector, const glm::mat4& world_from_node) -> std::optional<Kit_connector>
 {
     const glm::mat3 linear{world_from_node};
-    // Singular within 1e-6 of the product of the column lengths: an axis collapsed.
-    const float determinant = glm::determinant(linear);
-    const float volume      = glm::length(linear[0]) * glm::length(linear[1]) * glm::length(linear[2]);
-    if (!(std::abs(determinant) > (c_singular_ratio * volume)) || !std::isfinite(determinant)) {
+    if (is_degenerate_frame(linear)) {
         return std::nullopt;
     }
     // The outward axis is a face normal: it stays normal to the transformed face, so joined faces are flush under shear.
@@ -214,6 +333,16 @@ auto c_str(const Kit_connector_indicator_role role) -> const char*
         case Kit_connector_indicator_role::snapped: return "snapped";
         default:                                    return "?";
     }
+}
+
+auto constrain_connector_snap_offset(const glm::vec3& offset, const Kit_connector_snap_constraint& constraint) -> glm::vec3
+{
+    const float length_squared = glm::dot(constraint.direction, constraint.direction);
+    if ((constraint.kind == Kit_connector_snap_constraint_kind::free) || !(length_squared > 0.0f) || !std::isfinite(length_squared)) {
+        return offset;
+    }
+    const glm::vec3 along = constraint.direction * (glm::dot(offset, constraint.direction) / length_squared);
+    return (constraint.kind == Kit_connector_snap_constraint_kind::axis) ? along : (offset - along);
 }
 
 auto find_connector_snap(

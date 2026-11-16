@@ -362,13 +362,9 @@ void apply_record_properties(
     }
     erhe::gltf::clear_local_properties_not_listed(
         item,
-        [&properties](const std::string_view property_name) -> bool {
-            for (const std::pair<std::string, std::string>& property : properties) {
-                const std::size_t      separator = property.first.find('.');
-                const std::string_view listed    = (separator == std::string::npos)
-                    ? std::string_view{property.first}
-                    : std::string_view{property.first}.substr(separator + 1);
-                if (listed == property_name) {
+        [&item, &properties](const erhe::property::Dependency_property& property) -> bool {
+            for (const std::pair<std::string, std::string>& listed : properties) {
+                if (find_record_property(item, listed.first) == &property) {
                     return true;
                 }
             }

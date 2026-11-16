@@ -63,6 +63,7 @@
 #include "asset_browser/asset_browser.hpp"
 #include "assets/asset_load_tick_context.hpp"
 #include "assets/asset_fetch.hpp"
+#include "level/kit_layout_region_tool.hpp"
 #include "level/level_kit_window.hpp"
 #include "level/level_kits.hpp"
 #include "assets/asset_manager.hpp"
@@ -3922,6 +3923,12 @@ public:
                     *m_app_message_bus.get(),
                     *m_tools.get()
                 );
+                m_kit_layout_region_tool = std::make_unique<Kit_layout_region_tool>(
+                    *m_commands.get(),
+                    m_app_context,
+                    *m_app_message_bus.get(),
+                    *m_tools.get()
+                );
                 m_draw_mode_renderer = std::make_unique<Draw_mode_renderer>(
                     m_app_context,
                     *m_tools.get()
@@ -4497,6 +4504,9 @@ public:
         m_app_context.text_renderer_config     = &m_text_renderer_config;
         m_app_context.window_config            = &m_window_config;
         m_app_context.editor_settings          = &m_editor_settings;
+        if (m_level_kits) {
+            m_level_kits->validate_surface_settings();
+        }
         m_app_context.render_settings.frames   = &m_render_settings;
         // The main thread reads the latest copy from here on; the init
         // pump's renders use this one, the render phase of each frame the
@@ -4526,6 +4536,7 @@ public:
         m_app_context.inventory_window         = m_inventory_window      .get();
         m_app_context.lattice_tool             = m_lattice_tool          .get();
         m_app_context.curve_tool               = m_curve_tool            .get();
+        m_app_context.kit_layout_region_tool   = m_kit_layout_region_tool.get();
         m_app_context.material_paint_tool      = m_material_paint_tool   .get();
         m_app_context.material_preview         = m_material_preview      .get();
         m_app_context.brush_preview            = m_brush_preview         .get();
@@ -4611,6 +4622,11 @@ public:
         m_input_state->shift   = shift;
         m_input_state->control = control;
         m_input_state->alt     = alt;
+        m_input_state->modifier_mask = input_event.u.key_event.modifier_mask;
+        const erhe::window::Keycode keycode = input_event.u.key_event.keycode;
+        if ((keycode >= 0) && (keycode <= erhe::window::Key_last)) {
+            m_input_state->key_down[keycode] = input_event.u.key_event.pressed;
+        }
         // The modifier change site: the mesh component loop select preview
         // depends on Alt / Ctrl.
         if (changed && m_mesh_component_selection_tool) {
@@ -5930,6 +5946,7 @@ public:
     std::unique_ptr<Mesh_component_selection_tool>           m_mesh_component_selection_tool;
     std::unique_ptr<Lattice_tool>                            m_lattice_tool;
     std::unique_ptr<Curve_tool>                              m_curve_tool;
+    std::unique_ptr<Kit_layout_region_tool>                  m_kit_layout_region_tool;
     std::unique_ptr<Draw_mode_renderer>                      m_draw_mode_renderer;
     std::unique_ptr<Paint_tool         >                     m_paint_tool;
     std::unique_ptr<Weight_paint_tool  >                     m_weight_paint_tool;

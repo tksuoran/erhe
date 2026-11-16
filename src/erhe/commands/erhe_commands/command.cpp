@@ -85,6 +85,13 @@ auto Command::get_command_state() const -> State
     return m_state;
 }
 
+auto Command::accepts_binding(const Binding_desc& binding, std::string& out_reason) const -> bool
+{
+    static_cast<void>(binding);
+    static_cast<void>(out_reason);
+    return true;
+}
+
 auto Command::get_host() const -> Command_host*
 {
     return m_host;

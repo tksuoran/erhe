@@ -213,6 +213,7 @@ private:
     erhe::message_bus::Subscription<Active_item_changed_message>   m_active_item_subscription;
     erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
     erhe::message_bus::Subscription<Kit_values_changed_message>    m_kit_values_changed_subscription;
+    erhe::message_bus::Subscription<Kit_piece_connectors_changed_message> m_kit_piece_connectors_changed_subscription;
 };
 
 } // namespace editor

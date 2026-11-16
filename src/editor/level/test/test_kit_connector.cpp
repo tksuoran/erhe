@@ -4,6 +4,8 @@
 #include "level/kit_shapes.hpp"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <gtest/gtest.h>
@@ -485,6 +487,265 @@ TEST(Kit_connector_join, orthogonal_axes)
     glm::mat3 sheared{1.0f};
     sheared[1][0] = 0.1f;
     EXPECT_FALSE(editor::has_orthogonal_axes(sheared));
+}
+
+TEST(Kit_connector_switches, default_enables_every_connector)
+{
+    const editor::Kit_connector_switches switches{};
+    EXPECT_TRUE(switches.is_enabled("top"));
+    EXPECT_TRUE(switches.is_enabled("left"));
+    EXPECT_FALSE(switches.is_disabled("top"));
+}
+
+TEST(Kit_connector_switches, enabled_needs_both_switches)
+{
+    editor::Kit_connector_switches switches{.connectors_enabled = true, .disabled_connectors = "left,right"};
+    EXPECT_FALSE(switches.is_enabled("left"));
+    EXPECT_FALSE(switches.is_enabled("right"));
+    EXPECT_TRUE (switches.is_enabled("front"));
+    EXPECT_TRUE (switches.is_enabled("lef")); // whole names only
+    switches.connectors_enabled = false;
+    EXPECT_FALSE(switches.is_enabled("front"));
+    EXPECT_TRUE (switches.is_disabled("left"));
+    EXPECT_FALSE(switches.is_disabled("front"));
+}
+
+TEST(Kit_connector_switches, list_reads_leniently_and_writes_canonically)
+{
+    const editor::Kit_connector_switches spaced{.connectors_enabled = true, .disabled_connectors = " right , ,left,"};
+    EXPECT_TRUE (spaced.is_disabled("left"));
+    EXPECT_TRUE (spaced.is_disabled("right"));
+    EXPECT_FALSE(spaced.is_disabled(""));
+    EXPECT_EQ(editor::parse_connector_names(" right , ,left,"), (std::vector<std::string>{"right", "left"}));
+    EXPECT_EQ(editor::make_connector_names_text({"right", "left", "right"}), "left,right");
+    EXPECT_EQ(editor::make_connector_names_text({}), "");
+}
+
+TEST(Kit_connector_switches, set_state_adds_and_removes_names)
+{
+    using editor::Kit_connector_state;
+    std::string text = editor::set_connector_state("", "right", Kit_connector_state::disabled);
+    EXPECT_EQ(text, "right");
+    text = editor::set_connector_state(text, "left", Kit_connector_state::disabled);
+    EXPECT_EQ(text, "left,right");
+    EXPECT_EQ(editor::set_connector_state(text, "left", Kit_connector_state::disabled), "left,right");
+    text = editor::set_connector_state(text, "right", Kit_connector_state::enabled);
+    EXPECT_EQ(text, "left");
+    EXPECT_EQ(editor::set_connector_state(text, "front", Kit_connector_state::enabled), "left");
+    EXPECT_EQ(editor::set_connector_state(text, "left", Kit_connector_state::enabled), "");
+}
+
+TEST(Kit_connector_switches, remove_disabled_keeps_the_shape_order)
+{
+    std::vector<Kit_connector> slab = connectors_of(defaults("basic.floor_slab"));
+    const std::size_t count = slab.size();
+    ASSERT_GE(count, 3u);
+    const std::string first_name{slab.front().name};
+    const editor::Kit_connector_switches switches{.connectors_enabled = true, .disabled_connectors = "left,right"};
+    std::vector<Kit_connector> expected;
+    for (const Kit_connector& c : slab) {
+        if ((std::string_view{c.name} != "left") && (std::string_view{c.name} != "right")) {
+            expected.push_back(c);
+        }
+    }
+    editor::remove_disabled_connectors(switches, slab);
+    ASSERT_EQ(slab.size(), expected.size());
+    EXPECT_EQ(slab.size(), count - 2);
+    for (std::size_t i = 0; i < slab.size(); ++i) {
+        EXPECT_STREQ(slab[i].name, expected[i].name);
+    }
+    editor::remove_disabled_connectors(editor::Kit_connector_switches{.connectors_enabled = false, .disabled_connectors = {}}, slab);
+    EXPECT_TRUE(slab.empty());
+}
+
+TEST(Kit_connector_switches, write_check_refuses_unknown_names_and_non_canonical_text)
+{
+    const std::vector<Kit_connector> wall = connectors_of(defaults("architecture.wall"));
+    EXPECT_EQ(editor::check_disabled_connectors_text("", wall), "");
+    EXPECT_EQ(editor::check_disabled_connectors_text("end,start", wall), "");
+    const std::string unknown = editor::check_disabled_connectors_text("end,zz", wall);
+    EXPECT_NE(unknown.find("'zz'"), std::string::npos) << unknown;
+    EXPECT_NE(unknown.find("start, end, base, top, front, back"), std::string::npos) << unknown;
+    const std::string wrong_case = editor::check_disabled_connectors_text("Top", wall);
+    EXPECT_NE(wrong_case.find("'Top'"), std::string::npos) << wrong_case;
+    const std::string spaced = editor::check_disabled_connectors_text("start, end", wall);
+    EXPECT_NE(spaced.find("write 'end,start'"), std::string::npos) << spaced;
+    const std::string repeated = editor::check_disabled_connectors_text("end,end", wall);
+    EXPECT_NE(repeated.find("write 'end'"), std::string::npos) << repeated;
+    const std::vector<Kit_connector> rock = connectors_of(defaults("nature.rock"));
+    EXPECT_EQ(editor::check_disabled_connectors_text("", rock), "");
+    EXPECT_NE(editor::check_disabled_connectors_text("top", rock), "");
+}
+
+// U27: the stay-on-axis projection of the connector snap offset.
+
+using editor::Kit_connector_snap_constraint;
+using editor::Kit_connector_snap_constraint_kind;
+using editor::constrain_connector_snap_offset;
+
+auto near_vec3(const glm::vec3& a, const glm::vec3& b) -> bool
+{
+    return (std::abs(a.x - b.x) < c_tolerance) && (std::abs(a.y - b.y) < c_tolerance) && (std::abs(a.z - b.z) < c_tolerance);
+}
+
+TEST(Kit_connector_snap, free_constraint_keeps_the_full_offset)
+{
+    const glm::vec3 offset{0.3f, -0.2f, 0.1f};
+    EXPECT_EQ(constrain_connector_snap_offset(offset, Kit_connector_snap_constraint{}), offset);
+    const Kit_connector_snap_constraint free_with_direction{.kind = Kit_connector_snap_constraint_kind::free, .direction = glm::vec3{1.0f, 0.0f, 0.0f}};
+    EXPECT_EQ(constrain_connector_snap_offset(offset, free_with_direction), offset);
+}
+
+TEST(Kit_connector_snap, axis_constraint_keeps_the_component_along_the_axis)
+{
+    const glm::vec3 offset{0.3f, -0.2f, 0.1f};
+    const Kit_connector_snap_constraint x_axis{.kind = Kit_connector_snap_constraint_kind::axis, .direction = glm::vec3{1.0f, 0.0f, 0.0f}};
+    EXPECT_TRUE(near_vec3(constrain_connector_snap_offset(offset, x_axis), glm::vec3{0.3f, 0.0f, 0.0f}));
+    // A non-unit, turned axis: the result is parallel to it and the remainder perpendicular.
+    const glm::vec3 direction{2.0f, 2.0f, 0.0f};
+    const Kit_connector_snap_constraint diagonal{.kind = Kit_connector_snap_constraint_kind::axis, .direction = direction};
+    const glm::vec3 along = constrain_connector_snap_offset(offset, diagonal);
+    EXPECT_TRUE(near_vec3(along, glm::vec3{0.05f, 0.05f, 0.0f}));
+    EXPECT_NEAR(glm::dot(offset - along, direction), 0.0f, c_tolerance);
+}
+
+TEST(Kit_connector_snap, plane_constraint_drops_the_component_along_the_normal)
+{
+    const glm::vec3 offset{0.3f, -0.2f, 0.1f};
+    const Kit_connector_snap_constraint xz_plane{.kind = Kit_connector_snap_constraint_kind::plane, .direction = glm::vec3{0.0f, 3.0f, 0.0f}};
+    EXPECT_TRUE(near_vec3(constrain_connector_snap_offset(offset, xz_plane), glm::vec3{0.3f, 0.0f, 0.1f}));
+    // An offset along the normal leaves nothing to apply.
+    EXPECT_TRUE(near_vec3(constrain_connector_snap_offset(glm::vec3{0.0f, 0.4f, 0.0f}, xz_plane), glm::vec3{0.0f}));
+}
+
+TEST(Kit_connector_snap, degenerate_direction_keeps_the_full_offset)
+{
+    const glm::vec3 offset{0.3f, -0.2f, 0.1f};
+    const Kit_connector_snap_constraint zero_axis{.kind = Kit_connector_snap_constraint_kind::axis, .direction = glm::vec3{0.0f}};
+    EXPECT_EQ(constrain_connector_snap_offset(offset, zero_axis), offset);
+    const Kit_connector_snap_constraint nan_plane{.kind = Kit_connector_snap_constraint_kind::plane, .direction = glm::vec3{std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f}};
+    EXPECT_EQ(constrain_connector_snap_offset(offset, nan_plane), offset);
+}
+
+// D3.13 for rotate and scale drags: a moved connector taken into its root's frame at the drag begin follows the root's
+// step pose, rotation and scale included, as the node's own world matrix of that pose carries it.
+auto about_pivot(const glm::vec3& pivot, const glm::mat4& delta) -> glm::mat4
+{
+    glm::mat4 to_pivot{1.0f};
+    to_pivot[3] = glm::vec4{-pivot, 1.0f};
+    glm::mat4 from_pivot{1.0f};
+    from_pivot[3] = glm::vec4{pivot, 1.0f};
+    return from_pivot * delta * to_pivot;
+}
+
+void expect_carried(const glm::mat4& world_from_root_begin, const glm::mat4& root_from_node, const glm::mat4& step_delta)
+{
+    const glm::mat4 world_from_root_step = step_delta * world_from_root_begin;
+    const glm::mat4 world_from_node_step = world_from_root_step * root_from_node;
+    for (const Kit_connector& local : connectors_of(defaults("architecture.wall"))) {
+        const Kit_connector in_root = editor::connector_in_root(local, root_from_node);
+        const std::optional<glm::vec3> position = editor::carry_connector_position(in_root.position, world_from_root_step);
+        ASSERT_TRUE(position.has_value()) << local.name;
+        expect_near(position.value(), glm::vec3{world_from_node_step * glm::vec4{local.position, 1.0f}});
+        // The indicators' frame: in_root carried by the step's root matrix equals the node frame of the step pose.
+        const std::optional<Kit_connector> carried = editor::transform_connector(in_root, world_from_root_step);
+        const std::optional<Kit_connector> direct  = editor::transform_connector(local, world_from_node_step);
+        ASSERT_TRUE(carried.has_value() && direct.has_value()) << local.name;
+        expect_unit_frame(carried.value());
+        expect_near(carried->position, direct->position);
+        expect_near(carried->outward, direct->outward);
+        expect_near(carried->up, direct->up);
+    }
+}
+
+TEST(Kit_connector_drag_carry, rotation_about_the_pivot)
+{
+    const glm::mat4 root  = trs(glm::vec3{1.0f, 0.5f, -2.0f}, glm::angleAxis(0.4f, glm::vec3{0.0f, 1.0f, 0.0f}), glm::vec3{1.0f});
+    const glm::mat4 child = trs(glm::vec3{0.5f, 0.0f, 1.0f}, glm::angleAxis(-0.7f, glm::vec3{0.0f, 1.0f, 0.0f}), glm::vec3{1.0f, 1.5f, 1.0f});
+    const glm::quat turn  = glm::angleAxis(1.2f, glm::normalize(glm::vec3{0.2f, 1.0f, -0.1f}));
+    expect_carried(root, glm::mat4{1.0f}, about_pivot(glm::vec3{1.0f, 0.5f, -2.0f}, glm::mat4_cast(turn)));
+    expect_carried(root, child, about_pivot(glm::vec3{3.0f, 0.0f, 1.0f}, glm::mat4_cast(turn)));
+}
+
+TEST(Kit_connector_drag_carry, non_uniform_scale_of_a_turned_root_shears)
+{
+    const glm::mat4 root  = trs(glm::vec3{-1.0f, 0.0f, 2.0f}, glm::angleAxis(0.6f, glm::vec3{0.0f, 1.0f, 0.0f}), glm::vec3{1.0f, 2.0f, 1.0f});
+    const glm::mat4 child = trs(glm::vec3{0.0f, 1.0f, 0.5f}, glm::angleAxis(0.3f, glm::vec3{1.0f, 0.0f, 0.0f}), glm::vec3{1.0f});
+    const glm::mat4 scale = glm::scale(glm::mat4{1.0f}, glm::vec3{1.8f, 1.0f, 0.6f}); // world axes over a turned root: a sheared result
+    expect_carried(root, glm::mat4{1.0f}, about_pivot(glm::vec3{-1.0f, 0.0f, 2.0f}, scale));
+    expect_carried(root, child, about_pivot(glm::vec3{0.0f, 0.0f, 0.0f}, scale));
+    expect_carried(root, child, about_pivot(glm::vec3{-1.0f, 0.0f, 2.0f}, glm::scale(glm::mat4{1.0f}, glm::vec3{1.35f})));
+}
+
+TEST(Kit_connector_drag_carry, mirrored_scale_keeps_right_handed_frames)
+{
+    const glm::mat4 root   = trs(glm::vec3{2.0f, 0.0f, 0.0f}, glm::angleAxis(0.5f, glm::vec3{0.0f, 1.0f, 0.0f}), glm::vec3{1.0f});
+    const glm::mat4 mirror = about_pivot(glm::vec3{2.0f, 0.0f, 0.0f}, glm::scale(glm::mat4{1.0f}, glm::vec3{-1.0f, 1.0f, 1.0f}));
+    expect_carried(root, glm::mat4{1.0f}, mirror);
+    const Kit_connector end     = connector(connectors_of(defaults("architecture.wall")), "end");
+    const Kit_connector in_root = editor::connector_in_root(end, glm::mat4{1.0f});
+    const std::optional<Kit_connector> carried = editor::transform_connector(in_root, mirror * root);
+    ASSERT_TRUE(carried.has_value());
+    const glm::mat3 basis{carried->outward, carried->up, glm::cross(carried->outward, carried->up)};
+    EXPECT_NEAR(glm::determinant(basis), 1.0f, c_tolerance);
+}
+
+TEST(Kit_connector_drag_carry, collapsed_axis_carries_nothing)
+{
+    const glm::mat4 root     = trs(glm::vec3{0.0f, 0.0f, 1.0f}, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{1.0f});
+    const glm::mat4 collapse = about_pivot(glm::vec3{0.0f, 0.0f, 1.0f}, glm::scale(glm::mat4{1.0f}, glm::vec3{0.0f, 1.0f, 1.0f}));
+    const Kit_connector end     = connector(connectors_of(defaults("architecture.wall")), "end");
+    const Kit_connector in_root = editor::connector_in_root(end, glm::mat4{1.0f});
+    EXPECT_FALSE(editor::carry_connector_position(in_root.position, collapse * root).has_value());
+    EXPECT_FALSE(editor::transform_connector(in_root, collapse * root).has_value());
+    EXPECT_FALSE(editor::is_degenerate_frame(glm::mat3{root}));
+    EXPECT_TRUE(editor::is_degenerate_frame(glm::mat3{collapse * root}));
+}
+
+// The pair and offset of one rotate step's pose (stateless; the drag sequence without accumulation is checked by
+// scripts/level_tools_verify.py --only-connector-snap).
+auto rotate_step_snap(const float angle, const glm::vec3& pivot, const glm::mat4& world_from_root_begin, float max_distance)
+    -> std::optional<glm::vec3>
+{
+    const std::vector<Kit_connector> wall = connectors_of(defaults("architecture.wall"));
+    const glm::mat4 step = about_pivot(pivot, glm::mat4_cast(glm::angleAxis(angle, glm::vec3{0.0f, 1.0f, 0.0f}))) * world_from_root_begin;
+    std::vector<editor::Kit_connector_point> moved;
+    std::vector<editor::Kit_connector_point> targets;
+    for (std::size_t k = 0; k < wall.size(); ++k) {
+        const std::optional<glm::vec3> position = editor::carry_connector_position(editor::connector_in_root(wall[k], glm::mat4{1.0f}).position, step);
+        if (position.has_value()) {
+            moved.push_back(editor::Kit_connector_point{.position = position.value(), .piece_id = 2, .connector_index = k});
+        }
+        targets.push_back(editor::Kit_connector_point{.position = wall[k].position, .piece_id = 1, .connector_index = k}); // target wall at the origin
+    }
+    const editor::Kit_connector_snap_match match = editor::find_connector_snap(moved, targets, max_distance);
+    if (!match.found) {
+        return std::nullopt;
+    }
+    return targets[match.other].position - moved[match.moved].position;
+}
+
+TEST(Kit_connector_drag_carry, pair_and_offset_of_rotate_step_poses)
+{
+    const std::vector<Kit_connector> wall = connectors_of(defaults("architecture.wall"));
+    const glm::vec3 a_end  = connector(wall, "end").position;
+    const float     half   = -connector(wall, "start").position.x;
+    // B turned a quarter turn about its origin puts its start 0.3 m beside A's end.
+    const glm::vec3 pivot  = a_end + glm::vec3{0.0f, 0.0f, 0.3f - half};
+    const glm::mat4 b      = trs(pivot, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{1.0f});
+    const float     quarter = 0.5f * glm::pi<float>();
+    const std::optional<glm::vec3> snapped = rotate_step_snap(quarter, pivot, b, 0.5f);
+    ASSERT_TRUE(snapped.has_value());
+    expect_near(snapped.value(), glm::vec3{0.0f, 0.0f, -0.3f});
+    // Two thirds of the turn leaves the start about 1 m off: no pair; the pose is the unsnapped one.
+    EXPECT_FALSE(rotate_step_snap(glm::radians(60.0f), pivot, b, 0.5f).has_value());
+    // 85 degrees: the pair and offset of that pose.
+    const std::optional<glm::vec3> near_quarter = rotate_step_snap(glm::radians(85.0f), pivot, b, 0.5f);
+    ASSERT_TRUE(near_quarter.has_value());
+    const glm::quat turn  = glm::angleAxis(glm::radians(85.0f), glm::vec3{0.0f, 1.0f, 0.0f});
+    const glm::vec3 start = pivot + (turn * connector(wall, "start").position);
+    expect_near(near_quarter.value(), a_end - start);
+    EXPECT_LE(glm::length(near_quarter.value()), 0.5f);
 }
 
 } // anonymous namespace

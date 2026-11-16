@@ -21,6 +21,7 @@ class FieldSchema:
         removed_in: Optional[int] = None,
         default: Optional[str] = None,
         default_history: Optional[list[tuple[int, str]]] = None,
+        renamed_from: Optional[list[tuple[int, str]]] = None,
         short_desc: Optional[str] = None,
         long_desc: Optional[str] = None,
         path: str = "",
@@ -42,6 +43,9 @@ class FieldSchema:
         # as the default for this field. Used to reconstruct version-appropriate defaults
         # for absent fields. previous_default_value is a raw C++ expression string.
         self.default_history = default_history
+        # Ordered list of (renamed_in_version, previous_name). Each entry means documents
+        # whose _version is below renamed_in_version store this field under previous_name.
+        self.renamed_from = renamed_from
         self.short_desc = short_desc
         self.long_desc = long_desc
         self.path = path
@@ -184,6 +188,7 @@ def field(
     removed_in: Optional[int] = None,
     default: Optional[str] = None,
     default_history: Optional[list[tuple[int, str]]] = None,
+    renamed_from: Optional[list[tuple[int, str]]] = None,
     short_desc: Optional[str] = None,
     long_desc: Optional[str] = None,
     path: str = "",
@@ -202,6 +207,7 @@ def field(
         removed_in=removed_in,
         default=default,
         default_history=default_history,
+        renamed_from=renamed_from,
         short_desc=short_desc,
         long_desc=long_desc,
         path=path,
@@ -330,6 +336,29 @@ def _validate_struct(s: StructSchema) -> None:
                         f"default_history versions must be strictly ascending"
                     )
                 prev_version = changed_in
+
+        # Previous key names
+        if f.renamed_from:
+            field_names = {other.name for other in s.fields}
+            prev_version = None
+            for renamed_in, previous_name in f.renamed_from:
+                if renamed_in <= f.added_in or renamed_in > s.version:
+                    raise ValueError(
+                        f"Struct {s.name!r}, field {f.name!r}: "
+                        f"renamed_from version {renamed_in} must be in "
+                        f"(added_in={f.added_in}, version={s.version}]"
+                    )
+                if prev_version is not None and renamed_in <= prev_version:
+                    raise ValueError(
+                        f"Struct {s.name!r}, field {f.name!r}: "
+                        f"renamed_from versions must be strictly ascending"
+                    )
+                if previous_name in field_names:
+                    raise ValueError(
+                        f"Struct {s.name!r}, field {f.name!r}: "
+                        f"renamed_from name {previous_name!r} is the name of a field"
+                    )
+                prev_version = renamed_in
 
 
 def _validate_enum(e: EnumSchema) -> None:

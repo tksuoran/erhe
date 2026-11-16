@@ -231,6 +231,9 @@ void run_omit_defaults_tests();
 // Defined in test_version_upgrade.cpp
 void run_version_upgrade_tests();
 
+// Defined in test_renamed_fields.cpp
+void run_renamed_field_tests();
+
 int main()
 {
     register_settings_migrations();
@@ -242,6 +245,7 @@ int main()
 
     run_omit_defaults_tests();
     run_version_upgrade_tests();
+    run_renamed_field_tests();
 
     std::printf("\nAll migration tests passed!\n");
     return 0;

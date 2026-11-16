@@ -44,7 +44,8 @@ if (scene->intersect(ray, hit)) { /* hit.geometry, hit.triangle_id, etc. */ }
 the duration of `intersect()`. Every backend calls its `accept()` for each
 candidate hit within the ray's interval, in any order, with a `Hit` holding
 the fields `intersect()` would return for that candidate (normal, uv,
-triangle id, geometry, instance). A rejected candidate is passed as if absent:
+triangle id, geometry, instance, and `t`, its distance along the ray in units
+of the ray's direction, which `intersect()` also leaves in `t_far`). A rejected candidate is passed as if absent:
 it does not narrow `t_far`, and `intersect()` returns the nearest accepted
 candidate. Faces at the same distance are therefore each judged on their own,
 so the answer does not depend on which of two coincident faces the traversal

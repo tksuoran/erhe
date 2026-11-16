@@ -21,6 +21,7 @@
 
 #include <fmt/format.h>
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h> // ImGui::GetActiveID(): the open edit's widget
 
 #include <algorithm>
 #include <array>
@@ -109,7 +110,7 @@ constexpr std::array<Kit_layout_row, 8> c_scatter_disc_density_rows     {kind, s
         ImGui::SameLine();
         ended = kind_radio(kind, Repeat_pattern_kind::ring, "Ring", label, "Pieces on a ring about the node's up axis, its center Radius behind the node's front.") || ended;
         ImGui::SameLine();
-        ended = kind_radio(kind, Repeat_pattern_kind::scatter, "Scatter", label, "Pieces at seeded random points of a region centred on the node's origin, at least Min Spacing apart; Surface Snap rests them on the ground.") || ended;
+        ended = kind_radio(kind, Repeat_pattern_kind::scatter, "Scatter", label, "Pieces at seeded random points of a region centred on the node's origin, each item picked by its weight, their footprints at least Min Spacing apart; Surface Snap snaps them to the ground.") || ended;
     }
     if (kinds == Kit_layout_kinds::all) {
         ImGui::SameLine();
@@ -189,8 +190,9 @@ auto get_layout_setting_name(const Kit_layout_setting_row row) -> const char*
         case Kit_layout_setting_row::module_snap:    return "Module Snap";
         case Kit_layout_setting_row::surface_snap:   return "Surface Snap";
         case Kit_layout_setting_row::surface_orient: return "Surface Orient";
-        case Kit_layout_setting_row::random_seeds:   return "Random Seeds";
+        case Kit_layout_setting_row::per_piece_seed: return "Per Piece Seed";
         case Kit_layout_setting_row::seed:           return "Layout Seed";
+        case Kit_layout_setting_row::surface_max_distance: return "Surface Max Distance";
         default:                                     return "?";
     }
 }
@@ -340,19 +342,19 @@ auto layout_pattern_row(Kit_layout_pattern& pattern, const Kit_layout_row row, c
             break;
         }
         case Kit_layout_row::size_x: {
-            const bool changed = ImGui::DragFloat(name, &pattern.size_x, 0.01f, 0.01f, 10000.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            const bool changed = ImGui::DragFloat(name, &pattern.size_x, 0.01f, c_min_scatter_region_size, c_max_scatter_region_size, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
             edit = drag_edit(changed);
             tooltip("The region's extent along the node's x axis.");
             break;
         }
         case Kit_layout_row::size_z: {
-            const bool changed = ImGui::DragFloat(name, &pattern.size_z, 0.01f, 0.01f, 10000.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            const bool changed = ImGui::DragFloat(name, &pattern.size_z, 0.01f, c_min_scatter_region_size, c_max_scatter_region_size, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
             edit = drag_edit(changed);
             tooltip("The region's extent along the node's z axis.");
             break;
         }
         case Kit_layout_row::region_radius: {
-            const bool changed = ImGui::DragFloat(name, &pattern.region_radius, 0.01f, 0.01f, 10000.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            const bool changed = ImGui::DragFloat(name, &pattern.region_radius, 0.01f, c_min_scatter_region_size, c_max_scatter_region_size, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
             edit = drag_edit(changed);
             tooltip("The disc's radius about the node's origin.");
             break;
@@ -360,7 +362,7 @@ auto layout_pattern_row(Kit_layout_pattern& pattern, const Kit_layout_row row, c
         case Kit_layout_row::min_spacing: {
             const bool changed = ImGui::DragFloat(name, &pattern.min_spacing, 0.01f, 0.0f, 1000.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
             edit = drag_edit(changed);
-            tooltip("The least distance between two piece centers in the node's xz plane.");
+            tooltip("The least gap between two pieces' footprints in the node's xz plane: each footprint is the circle about the piece's vertical axis around its bounds.");
             break;
         }
         case Kit_layout_row::yaw_min: {
@@ -396,7 +398,7 @@ auto layout_setting_row(Kit_layout_data& data, const Kit_layout_setting_row row,
         case Kit_layout_setting_row::surface_snap: {
             bool value = (data.surface_snap == Surface_snap::on);
             const bool pressed = ImGui::Checkbox(name, &value);
-            tooltip("Each piece rests on the surface under it.");
+            tooltip("Each piece snaps to the surface under it.");
             data.surface_snap = to_surface_snap(value);
             return pressed_edit(pressed);
         }
@@ -407,7 +409,13 @@ auto layout_setting_row(Kit_layout_data& data, const Kit_layout_setting_row row,
             data.surface_orient = to_surface_orient(value);
             return pressed_edit(pressed);
         }
-        case Kit_layout_setting_row::random_seeds: {
+        case Kit_layout_setting_row::surface_max_distance: {
+            const bool changed = ImGui::DragFloat(name, &data.surface_max_distance, 0.01f, 0.0f, 1000.0f, "%.2f m", ImGuiSliderFlags_AlwaysClamp);
+            const Kit_row_edit edit = drag_edit(changed);
+            tooltip("Meters: each piece moves at most this far along the snap direction, up or down, to the nearest place where it rests and fits; beyond, it stays where the pattern puts it.");
+            return edit;
+        }
+        case Kit_layout_setting_row::per_piece_seed: {
             bool value = (data.seeds == Kit_layout_seeds::per_element);
             const bool pressed = ImGui::Checkbox(name, &value);
             tooltip("Each piece takes a seed of its own from the layout seed and its index; its item's seed mask derives from it.");
@@ -512,7 +520,7 @@ void Kit_layout_editor::run_line()
     } else if (m_data.pattern.kind == Repeat_pattern_kind::scatter) {
         if (m_run.count < m_run.requested) {
             ImGui::Text("%zu of %zu pieces fit over %.3f m2", m_run.count, m_run.requested, m_run.space);
-            tooltip("No more pieces fit the region at Min Spacing; the scatter places the ones that do.");
+            tooltip("No more pieces fit the region with Min Spacing between their footprints; the scatter places the ones that do.");
         } else {
             ImGui::Text("%zu pieces over %.3f m2", m_run.count, m_run.space);
         }
@@ -603,6 +611,20 @@ void Kit_layout_editor::item_material_row(const std::size_t item, const std::siz
     }
 }
 
+void Kit_layout_editor::item_weight_row(const std::size_t item)
+{
+    if (item >= m_data.items.size()) {
+        return;
+    }
+    // The row edits the shown copy in place, as the pattern rows do.
+    int weight = static_cast<int>(m_data.items[item].weight);
+    const bool changed = ImGui::DragInt("##", &weight, 0.1f, 0, static_cast<int>(c_max_scatter_weight), "%d", ImGuiSliderFlags_AlwaysClamp);
+    const Kit_row_edit edit = drag_edit(changed);
+    tooltip("The weight a scatter picks this item by for each point, against the other items' weights; 0 never picks it. A line, grid, ring or path takes item i modulo the item count.");
+    m_data.items[item].weight = static_cast<uint32_t>(weight);
+    on_row_edit(edit, m_data);
+}
+
 void Kit_layout_editor::item_remove_button(const std::size_t item)
 {
     ImGui::BeginDisabled(m_items.size() < 2);
@@ -632,8 +654,8 @@ void Kit_layout_editor::add_item_button()
     }
     ImGui::EndDisabled();
     tooltip(
-        "Adds the shape chosen in the Level Kit window, with its parameter rows' values and slot materials, as the layout's next item; "
-        "element i takes item i modulo the item count."
+        "Adds the shape chosen in the Level Kit window, with its parameter rows' values and slot materials, as the layout's next item of weight 1; "
+        "element i takes item i modulo the item count, a scatter picks each point's item by the weights."
     );
 }
 
@@ -689,6 +711,7 @@ void Kit_layout_editor::read_layout(Scene_root& scene_root, const erhe::scene::N
     m_run = Kit_layout_run{};
     m_run_problem.clear();
     m_item_extent = 0.0f;
+    m_item_sizes.clear();
     if (!m_problem.empty()) {
         return;
     }
@@ -700,6 +723,7 @@ void Kit_layout_editor::read_layout(Scene_root& scene_root, const erhe::scene::N
         Kit_placement placement;
         rows.problem = level_kits.read_layout_item(scene_root, item, placement);
         if (!rows.problem.empty()) {
+            m_item_sizes.add(item, erhe::math::Aabb{});
             continue;
         }
         rows.values = placement.values.value();
@@ -709,12 +733,10 @@ void Kit_layout_editor::read_layout(Scene_root& scene_root, const erhe::scene::N
             const bool given = (slot < item.materials.size()) && !item.materials[slot].empty();
             rows.materials.push_back(given ? item.materials[slot] : ((fallback != nullptr) ? fallback->name : std::string{}));
         }
-        const erhe::math::Aabb bounds = level_kits.get_layout_item_bounds(scene_root, item);
-        if (bounds.is_valid_3d()) {
-            m_item_extent = std::max(m_item_extent, bounds.max.x - bounds.min.x);
-        }
+        m_item_sizes.add(item, level_kits.get_layout_item_bounds(scene_root, item));
     }
-    m_run_problem = level_kits.resolve_layout_run(layout, m_data, m_item_extent, m_run);
+    m_item_extent = m_item_sizes.extent;
+    m_run_problem = level_kits.resolve_layout_run(layout, m_data, m_item_sizes, m_run);
 }
 
 void Kit_layout_editor::queue_read()
@@ -734,13 +756,48 @@ void Kit_layout_editor::queue_read()
     );
 }
 
+void Kit_layout_editor::end_lost_edit()
+{
+    // The immediate-mode change site: ImGui drops the active id of a widget that stops being drawn and reports no end.
+    if ((m_session_id != 0) && (ImGui::GetActiveID() != m_session_id)) {
+        end_edit_session();
+    }
+}
+
+void Kit_layout_editor::abandon_edit()
+{
+    if (m_session_id != 0) {
+        end_edit_session();
+    }
+}
+
+void Kit_layout_editor::end_edit_session()
+{
+    // As a cancel: a locked layout's preview gives the children and values back, an unlocked one's pending outline goes.
+    m_session_id = 0;
+    queue_end_preview();
+    m_context.imgui_windows->queue(
+        [this]() {
+            m_context.level_kits->get_layout_indicators().end_pending();
+        }
+    );
+    m_dirty = true;
+}
+
 void Kit_layout_editor::on_row_edit(const Kit_row_edit edit, const Kit_layout_data& data)
 {
+    if ((edit == Kit_row_edit::committed) || (edit == Kit_row_edit::cancelled)) {
+        m_session_id = 0;
+    } else if ((edit == Kit_row_edit::changed) && (m_session_id == 0)) {
+        m_session_id = ImGui::GetActiveID();
+    }
     switch (edit) {
         case Kit_row_edit::changed: {
-            // Unlocked, the values change alone at the commit.
+            // Unlocked, the values change alone at the commit; until then the outline shows them.
             if (data.lock == Kit_layout_lock::locked) {
                 queue_preview(data);
+            } else {
+                queue_pending_outline(data);
             }
             break;
         }
@@ -749,8 +806,7 @@ void Kit_layout_editor::on_row_edit(const Kit_row_edit edit, const Kit_layout_da
             break;
         }
         case Kit_row_edit::cancelled: {
-            queue_end_preview();
-            m_dirty = true;
+            end_edit_session();
             break;
         }
         default: {
@@ -788,6 +844,20 @@ void Kit_layout_editor::queue_preview(const Kit_layout_data& data)
     );
 }
 
+void Kit_layout_editor::queue_pending_outline(const Kit_layout_data& data)
+{
+    m_context.imgui_windows->queue(
+        [this, weak_scene_root = m_scene_root, weak_layout = m_layout, data]() {
+            const std::shared_ptr<Scene_root>        target = weak_scene_root.lock();
+            const std::shared_ptr<erhe::scene::Node> node   = weak_layout.lock();
+            if (!target || !node || !m_context.app_scenes->is_host_registered(target.get()) || !node->is_selected()) {
+                return;
+            }
+            m_context.level_kits->get_layout_indicators().set_pending_values(*target, *node, data);
+        }
+    );
+}
+
 void Kit_layout_editor::queue_end_preview()
 {
     m_context.imgui_windows->queue(
@@ -809,6 +879,8 @@ void Kit_layout_editor::queue_set(const Kit_layout_data& data)
             if (!target || !node || !m_context.app_scenes->is_host_registered(target.get())) {
                 return;
             }
+            // The committed values are drawn from the node again.
+            m_context.level_kits->get_layout_indicators().end_pending();
             const Kit_layout_result result = m_context.level_kits->set_layout(*target, node, data);
             m_failed = !result.error.empty();
             if (m_failed) {

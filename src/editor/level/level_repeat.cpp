@@ -126,13 +126,30 @@ void expand_path(const Repeat_pattern& pattern, const Repeat_pose& start, std::v
 
 // Grid cells per side at most: a scatter's spacing checks look at the 3 x 3 cells around a candidate.
 constexpr int c_scatter_cells_per_side = 64;
-// A cell a little wider than the spacing: a cell index rounded at an edge never hides a pair closer than the spacing.
+// A cell a little wider than the reach: a cell index rounded at an edge never hides a pair closer than it.
 constexpr float c_scatter_cell_margin = 1.0f + (1.0f / 1024.0f);
+
+[[nodiscard]] auto get_total_scatter_weight(const std::span<const Repeat_scatter_item> items) -> uint64_t
+{
+    uint64_t total = 0;
+    for (const Repeat_scatter_item& item : items) {
+        total += item.weight;
+    }
+    return total;
+}
 
 // Dart throwing over one candidate stream of the seed (doc/editor/level_tools.md "Scatter layouts"). Each product and
 // sum is its own statement, which the fp-contract policy of doc/cmake_conventions.md keeps unfused on every compiler.
 void expand_scatter(const Repeat_pattern& pattern, const Repeat_pose& start, std::vector<Repeat_pose>& out_poses)
 {
+    const std::span<const Repeat_scatter_item> items = pattern.scatter_items;
+    const uint64_t total_weight = get_total_scatter_weight(items);
+    float max_radius = 0.0f;
+    for (const Repeat_scatter_item& item : items) {
+        if (item.weight > 0) {
+            max_radius = std::max(max_radius, item.radius);
+        }
+    }
     const bool  disc            = (pattern.scatter_region == Repeat_scatter_region::disc);
     const float size_x          = disc ? (2.0f * pattern.scatter_radius) : pattern.scatter_size_x;
     const float size_z          = disc ? (2.0f * pattern.scatter_radius) : pattern.scatter_size_z;
@@ -140,17 +157,20 @@ void expand_scatter(const Repeat_pattern& pattern, const Repeat_pose& start, std
     const float half_z          = 0.5f * size_z;
     const float radius_squared  = pattern.scatter_radius * pattern.scatter_radius;
     const float spacing         = pattern.scatter_spacing;
-    const float spacing_squared = spacing * spacing;
-    const float cell            = std::max(spacing * c_scatter_cell_margin, std::max(size_x, size_z) / static_cast<float>(c_scatter_cells_per_side));
+    // The largest center distance a pair can need: two of the widest footprints and the spacing.
+    const float max_diameter    = 2.0f * max_radius;
+    const float reach           = max_diameter + spacing;
+    const float cell            = std::max(reach * c_scatter_cell_margin, std::max(size_x, size_z) / static_cast<float>(c_scatter_cells_per_side));
     const int   cells_x         = static_cast<int>(size_x / cell) + 1;
     const int   cells_z         = static_cast<int>(size_z / cell) + 1;
     const float yaw_range       = pattern.yaw_max_degrees - pattern.yaw_min_degrees;
     const glm::vec3 up          = start.rotation * c_axis_y;
 
-    // Leaf scratch: the first point of each cell (-1: none), the next point of the same cell, the accepted points.
+    // Leaf scratch: the first point of each cell (-1: none), the next point of the same cell, the accepted points
+    // (x, z and the footprint radius).
     static thread_local std::vector<int>       cell_heads;
     static thread_local std::vector<int>       next_in_cell;
-    static thread_local std::vector<glm::vec2> points;
+    static thread_local std::vector<glm::vec3> points;
     cell_heads.assign(static_cast<std::size_t>(cells_x) * static_cast<std::size_t>(cells_z), -1);
     next_in_cell.clear();
     points.clear();
@@ -159,12 +179,14 @@ void expand_scatter(const Repeat_pattern& pattern, const Repeat_pose& start, std
     const std::size_t attempts = wanted * c_scatter_attempts_per_piece;
     Kit_random random{pattern.scatter_seed, "layout scatter"};
     for (std::size_t attempt = 0; (attempt < attempts) && (points.size() < wanted); ++attempt) {
-        // Every candidate draws three values, taken or not, so the stream does not depend on the spacing.
-        const float u = random.next_unit() - 0.5f;
-        const float v = random.next_unit() - 0.5f;
-        const float w = random.next_unit();
-        const float x = u * size_x;
-        const float z = v * size_z;
+        // Every candidate draws four values (x, z, yaw, item), taken or not, so the stream depends on no value but the seed.
+        const float       u    = random.next_unit() - 0.5f;
+        const float       v    = random.next_unit() - 0.5f;
+        const float       w    = random.next_unit();
+        const uint32_t    draw = random.next_u32();
+        const std::size_t item = pick_scatter_item(items, total_weight, draw);
+        const float       x    = u * size_x;
+        const float       z    = v * size_z;
         if (disc) {
             const float xx = x * x;
             const float zz = z * z;
@@ -173,19 +195,24 @@ void expand_scatter(const Repeat_pattern& pattern, const Repeat_pose& start, std
                 continue;
             }
         }
+        const float radius = items[item].radius;
         const int cell_x = std::clamp(static_cast<int>((x + half_x) / cell), 0, cells_x - 1);
         const int cell_z = std::clamp(static_cast<int>((z + half_z) / cell), 0, cells_z - 1);
         bool too_close = false;
-        if (spacing > 0.0f) {
+        if (reach > 0.0f) {
             for (int nz = std::max(cell_z - 1, 0), end_z = std::min(cell_z + 1, cells_z - 1); (nz <= end_z) && !too_close; ++nz) {
                 for (int nx = std::max(cell_x - 1, 0), end_x = std::min(cell_x + 1, cells_x - 1); (nx <= end_x) && !too_close; ++nx) {
                     for (int j = cell_heads[static_cast<std::size_t>((nz * cells_x) + nx)]; j >= 0; j = next_in_cell[static_cast<std::size_t>(j)]) {
-                        const float dx  = x - points[static_cast<std::size_t>(j)].x;
-                        const float dz  = z - points[static_cast<std::size_t>(j)].y;
-                        const float dxx = dx * dx;
-                        const float dzz = dz * dz;
-                        const float dd  = dxx + dzz;
-                        if (dd < spacing_squared) {
+                        const glm::vec3& other = points[static_cast<std::size_t>(j)];
+                        const float dx       = x - other.x;
+                        const float dz       = z - other.y;
+                        const float dxx      = dx * dx;
+                        const float dzz      = dz * dz;
+                        const float dd       = dxx + dzz;
+                        const float radii    = radius + other.z;
+                        const float limit    = radii + spacing;
+                        const float limit_sq = limit * limit;
+                        if (dd < limit_sq) {
                             too_close = true;
                             break;
                         }
@@ -199,14 +226,15 @@ void expand_scatter(const Repeat_pattern& pattern, const Repeat_pose& start, std
         const std::size_t cell_index = static_cast<std::size_t>((cell_z * cells_x) + cell_x);
         next_in_cell.push_back(cell_heads[cell_index]);
         cell_heads[cell_index] = static_cast<int>(points.size());
-        points.push_back(glm::vec2{x, z});
+        points.push_back(glm::vec3{x, z, radius});
 
         const float yaw_offset = yaw_range * w;
         const float yaw        = pattern.yaw_min_degrees + yaw_offset;
         out_poses.push_back(
             Repeat_pose{
                 .position = start.position + (start.rotation * glm::vec3{x, 0.0f, z}),
-                .rotation = glm::normalize(glm::angleAxis(glm::radians(yaw), up) * start.rotation)
+                .rotation = glm::normalize(glm::angleAxis(glm::radians(yaw), up) * start.rotation),
+                .item     = item
             }
         );
     }
@@ -299,6 +327,25 @@ void expand_scatter(const Repeat_pattern& pattern, const Repeat_pose& start, std
             if (!std::isfinite(pattern.scatter_spacing) || (pattern.scatter_spacing < 0.0f)) {
                 return fmt::format("the minimum spacing is {} m, it must be zero or more", pattern.scatter_spacing);
             }
+            if (pattern.scatter_items.empty()) {
+                return "a scatter needs at least one item";
+            }
+            for (std::size_t i = 0, end = pattern.scatter_items.size(); i < end; ++i) {
+                const Repeat_scatter_item& item = pattern.scatter_items[i];
+                if (item.weight > c_max_scatter_weight) {
+                    return fmt::format("item {} has weight {}, more than {}", i, item.weight, c_max_scatter_weight);
+                }
+                if (!std::isfinite(item.radius) || (item.radius < 0.0f)) {
+                    return fmt::format("item {} has a footprint radius of {} m, it must be zero or more", i, item.radius);
+                }
+            }
+            const uint64_t total_weight = get_total_scatter_weight(pattern.scatter_items);
+            if (total_weight == 0) {
+                return "every item's weight is 0: a scatter needs an item of positive weight";
+            }
+            if (total_weight > uint64_t{0xffffffffu}) {
+                return fmt::format("the item weights sum to {}, more than the {} a pick draws over", total_weight, 0xffffffffu);
+            }
             if (
                 !std::isfinite(pattern.yaw_min_degrees) || !std::isfinite(pattern.yaw_max_degrees) ||
                 (pattern.yaw_min_degrees < -360.0f) || (pattern.yaw_max_degrees > 360.0f) || (pattern.yaw_min_degrees > pattern.yaw_max_degrees)
@@ -346,6 +393,19 @@ auto c_str(const Repeat_scatter_region region) -> const char*
         case Repeat_scatter_region::disc:      return "disc";
         default:                               return "?";
     }
+}
+
+auto pick_scatter_item(const std::span<const Repeat_scatter_item> items, const uint64_t total_weight, const uint32_t draw) -> std::size_t
+{
+    // The draw times the total, shifted down: an integer in [0, total) with no rounding on any platform.
+    uint64_t target = (static_cast<uint64_t>(draw) * total_weight) >> 32;
+    for (std::size_t i = 0, end = items.size(); i < end; ++i) {
+        if (target < items[i].weight) {
+            return i;
+        }
+        target -= items[i].weight;
+    }
+    return 0;
 }
 
 auto expand_repeat(const Repeat_pattern& pattern, const Repeat_pose& start, std::vector<Repeat_pose>& out_poses) -> std::string

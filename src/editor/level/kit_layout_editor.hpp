@@ -65,13 +65,14 @@ enum class Kit_layout_setting_row : unsigned int {
     module_snap = 0,
     surface_snap,
     surface_orient,
-    random_seeds,
-    seed
+    per_piece_seed,
+    seed,
+    surface_max_distance
 };
 
-inline constexpr std::array<Kit_layout_setting_row, 5> c_layout_setting_rows{
-    Kit_layout_setting_row::module_snap, Kit_layout_setting_row::surface_snap, Kit_layout_setting_row::surface_orient,
-    Kit_layout_setting_row::random_seeds, Kit_layout_setting_row::seed
+inline constexpr std::array<Kit_layout_setting_row, 6> c_layout_setting_rows{
+    Kit_layout_setting_row::module_snap, Kit_layout_setting_row::surface_snap, Kit_layout_setting_row::surface_max_distance,
+    Kit_layout_setting_row::surface_orient, Kit_layout_setting_row::per_piece_seed, Kit_layout_setting_row::seed
 };
 
 [[nodiscard]] auto get_layout_rows       (const Kit_layout_pattern& pattern) -> std::span<const Kit_layout_row>;
@@ -123,6 +124,7 @@ public:
     void item_shape_line      (std::size_t item);
     void item_parameter_row   (std::size_t item, std::size_t parameter);
     void item_material_row    (std::size_t item, std::size_t slot);
+    void item_weight_row      (std::size_t item);
     void item_remove_button   (std::size_t item);
     // Adds the shape the Brush tool places (the Level Kit window's chosen shape, its values and slot materials).
     void add_item_button      ();
@@ -130,11 +132,19 @@ public:
     void lock_buttons         ();
     void message_line         () const;
 
+    // After the rows are drawn: a value edit whose widget was not drawn this frame is given up as a cancel.
+    void end_lost_edit();
+    // The window stops drawing: an open value edit is given up as a cancel.
+    void abandon_edit();
+
 private:
+    void end_edit_session();
     void read_layout  (Scene_root& scene_root, const erhe::scene::Node& layout);
     void queue_read   ();
     void on_row_edit  (Kit_row_edit edit, const Kit_layout_data& data);
     void commit       (const Kit_layout_data& data);
+    // An unlocked layout's drag step: the outline shows the pending values (Kit_layout_indicators::set_pending_values()).
+    void queue_pending_outline(const Kit_layout_data& data);
     void queue_preview(const Kit_layout_data& data);
     void queue_end_preview();
     void queue_set    (const Kit_layout_data& data);
@@ -157,6 +167,10 @@ private:
     Kit_layout_run                    m_run;
     std::string                       m_run_problem;
     float                             m_item_extent{0.0f};
+    Kit_layout_item_sizes             m_item_sizes;
+
+    // The ImGui id of the widget of the open value edit (a drag or typed edit that changed), 0 when none.
+    unsigned int m_session_id{0};
 
     // The last edit's result: a refusal in red, else a confirmation.
     std::string m_message;

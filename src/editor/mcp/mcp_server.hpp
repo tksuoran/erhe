@@ -294,8 +294,13 @@ private:
     auto action_level_replace_pieces          (const nlohmann::json& args) -> std::string;
     auto query_level_connectors               (const nlohmann::json& args) -> std::string;
     auto action_level_connect_pieces          (const nlohmann::json& args) -> std::string;
+    auto action_level_set_piece_connectors    (const nlohmann::json& args) -> std::string;
     auto action_level_set_connector_visualization(const nlohmann::json& args) -> std::string;
     auto query_level_connector_indicators     (const nlohmann::json& args) -> std::string;
+    auto action_level_set_layout_visualization(const nlohmann::json& args) -> std::string;
+    auto query_level_layout_indicators        (const nlohmann::json& args) -> std::string;
+    auto action_level_select_region_handle    (const nlohmann::json& args) -> std::string;
+    auto query_level_region_handles           (const nlohmann::json& args) -> std::string;
     auto action_level_snap_to_surface         (const nlohmann::json& args) -> std::string;
     auto query_level_region_contents          (const nlohmann::json& args) -> std::string;
     auto query_level_height_map               (const nlohmann::json& args) -> std::string;
@@ -797,7 +802,7 @@ private:
         int                   frame          {0};
         bool                  release        {true};
         Surface_options       surface        {}; // translate drags only (D4.6)
-        float                 connector_snap_distance{0.0f}; // translate drags only (D3.13)
+        float                 connector_snap_distance{0.0f}; // every kind (D3.13)
     };
     std::optional<Selection_drag_steps>              m_selection_drag_steps;
     // The deltas of the held drag_selection drag (release=false), which

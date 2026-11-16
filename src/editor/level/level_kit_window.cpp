@@ -123,6 +123,12 @@ Level_kit_window::Level_kit_window(
             on_kit_values_changed();
         }
     );
+    // A connector switch edit, its undo and redo: the Connect rows offer the enabled connectors only (U33).
+    m_kit_piece_connectors_changed_subscription = app_message_bus.kit_piece_connectors_changed.subscribe(
+        [this](Kit_piece_connectors_changed_message&) {
+            m_connect_selection_changed = true;
+        }
+    );
     // A parameter change, its undo and redo all send it (Kit_piece_parameters_operation).
     m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
         [this](Mesh_geometry_changed_message&) {
@@ -181,6 +187,7 @@ void Level_kit_window::level_settings_imgui(Scene_root& scene_root)
     if (commit) {
         // As the Properties window and MCP set_scene_settings write Scene_settings: in place, not undoable.
         scene_root.get_scene_settings().level = Level_settings{.module = m_module, .wall_height = m_wall_height};
+        m_context.level_kits->on_level_lengths_changed();
     }
 }
 
@@ -429,7 +436,7 @@ void Level_kit_window::selection_imgui(const std::shared_ptr<Scene_root>& scene_
     if (ImGui::Button("Orient Selected To Surface")) {
         queue_snap_selected(scene_root, Surface_orient::on);
     }
-    tooltip("Rests the selected meshes of this scene on the surface under them with their up axis on its normal, one undo step.");
+    tooltip("Snaps the selected meshes of this scene to the surface under them with their up axis on its normal, one undo step.");
     ImGui::EndDisabled();
     replace_imgui(scene_root);
     connect_imgui(scene_root);
@@ -501,7 +508,7 @@ void Level_kit_window::update_connect_pieces(const Scene_root& scene_root)
         return;
     }
     m_connect_target = target;
-    const std::string target_error = m_context.level_kits->get_local_connectors(*target, m_connect_target_connectors);
+    const std::string target_error = m_context.level_kits->get_local_connectors(*target, m_connect_target_connectors, Kit_connector_set::enabled);
     m_connect_target_label = target_error.empty() ? fmt::format("Target: {}", target->get_name()) : target_error;
     keep_connector_choice(m_connect_target_connectors, m_connect_target_connector);
     if (piece_count != 2) {
@@ -510,7 +517,7 @@ void Level_kit_window::update_connect_pieces(const Scene_root& scene_root)
         return;
     }
     m_connect_moved = moved;
-    const std::string moved_error = m_context.level_kits->get_local_connectors(*moved, m_connect_moved_connectors);
+    const std::string moved_error = m_context.level_kits->get_local_connectors(*moved, m_connect_moved_connectors, Kit_connector_set::enabled);
     m_connect_moved_label = moved_error.empty() ? fmt::format("Moved: {}", moved->get_name()) : moved_error;
     keep_connector_choice(m_connect_moved_connectors, m_connect_moved_connector);
     publish_connect_choice();
@@ -692,8 +699,9 @@ void Level_kit_window::replace_imgui(const std::shared_ptr<Scene_root>& scene_ro
     }
     ImGui::EndDisabled();
     tooltip(
-        "Gives the selected kit pieces the shape, one undo step: transforms kept, parameters of the same name kept "
-        "(clamped to the new range), materials of same-named slots kept, the rest the shape's defaults."
+        "Gives the selected kit pieces the shape, one undo step: parameters of the same name kept (clamped to the new range), "
+        "materials of same-named slots kept, the rest the shape's defaults; with Snap To Surface on the pieces snap to the "
+        "surface again, else they keep their transforms. Groups and kit layout nodes are skipped and listed."
     );
     if (reason != nullptr) {
         ImGui::TextDisabled("%s", reason);
@@ -712,20 +720,34 @@ void Level_kit_window::queue_replace(const std::shared_ptr<Scene_root>& scene_ro
             if (!target || !m_context.app_scenes->is_host_registered(target.get())) {
                 return;
             }
+            // Every selected node of the scene: replace_shape() skips and reports what it cannot replace (U24).
             std::vector<Kit_replacement> replacements;
             for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
                 const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                if (node && (node->get_item_host() == target.get()) && carries_kit_piece(*node)) {
+                if (node && (node->get_item_host() == target.get())) {
                     replacements.push_back(Kit_replacement{.node = node, .values = {}, .materials = {}});
                 }
             }
-            const Kit_replace_result result = m_context.level_kits->replace_shape(*target, *shape, replacements);
-            m_replace_failed  = !result.error.empty();
-            m_replace_message = m_replace_failed
-                ? result.error
-                : (result.replaced_count == 0)
-                    ? fmt::format("The selected pieces are {} already.", shape->display_name)
-                    : fmt::format("Replaced {} pieces with {}.", result.replaced_count, shape->display_name);
+            const Surface_options     surface = m_context.level_kits->get_surface_settings();
+            const Kit_replace_result result  = m_context.level_kits->replace_shape(*target, *shape, replacements, surface);
+            m_replace_failed = !result.error.empty();
+            if (m_replace_failed) {
+                m_replace_message = result.error;
+            } else {
+                std::vector<Kit_replace_skipped_name> skipped;
+                for (const Kit_replace_skipped& entry : result.skipped) {
+                    skipped.push_back(Kit_replace_skipped_name{.name = entry.node->get_name(), .skip = entry.skip});
+                }
+                m_replace_message = make_replace_summary(
+                    Kit_replace_summary{
+                        .shape_name      = shape->display_name,
+                        .replaced_count  = result.replaced_count,
+                        .unchanged_count = result.pieces.size() - result.replaced_count,
+                        .snapped_count   = any_surface_option(surface) ? std::optional<std::size_t>{result.snapped_count} : std::optional<std::size_t>{},
+                        .skipped         = skipped
+                    }
+                );
+            }
             if (m_replace_failed) {
                 log_scene->warn("Level Kit: replace refused: {}", m_replace_message);
             } else {
@@ -773,7 +795,7 @@ void Level_kit_window::queue_snap_selected(const std::shared_ptr<Scene_root>& sc
                     meshes.push_back(std::static_pointer_cast<erhe::scene::Mesh>(item));
                 }
             }
-            Surface_options options;
+            Surface_options options = m_context.level_kits->get_surface_settings();
             options.snap   = Surface_snap::on;
             options.orient = orient;
             std::vector<Kit_snap_result> results;

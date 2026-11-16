@@ -163,7 +163,7 @@ void s_filter_function(const RTCFilterFunctionNArguments* args)
                 RTCHitN_instID(args->hit, args->N, i, 0)
             }
         };
-        if (!context->filter->accept(context->scene->make_hit(rtc_hit))) {
+        if (!context->filter->accept(context->scene->make_hit(rtc_hit, RTCRayN_tfar(args->ray, args->N, i)))) {
             args->valid[i] = 0;
         }
     }
@@ -229,18 +229,19 @@ auto Embree_scene::intersect(Ray& ray, Hit& hit) -> bool
 
     ray.t_near = ray_hit.ray.tnear;
     ray.t_far  = ray_hit.ray.tfar;
-    hit        = make_hit(ray_hit.hit);
+    hit        = make_hit(ray_hit.hit, ray_hit.ray.tfar);
     return true;
 }
 
-auto Embree_scene::make_hit(const RTCHit& rtc_hit) -> Hit
+auto Embree_scene::make_hit(const RTCHit& rtc_hit, const float t) -> Hit
 {
     Hit hit{
         .normal      = glm::vec3{rtc_hit.Ng_x, rtc_hit.Ng_y, rtc_hit.Ng_z},
         .uv          = glm::vec2{rtc_hit.u, rtc_hit.v},
         .triangle_id = rtc_hit.primID,
         .geometry    = nullptr,
-        .instance    = nullptr
+        .instance    = nullptr,
+        .t           = t
     };
 
     if (rtc_hit.instID[0] != RTC_INVALID_GEOMETRY_ID)

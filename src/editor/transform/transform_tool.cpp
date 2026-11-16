@@ -12,6 +12,7 @@
 #include "app_settings.hpp"
 #include "editor_log.hpp"
 #include "input_state.hpp"
+#include "level/kit_layout_region_tool.hpp"
 #include "level/level_kits.hpp"
 #include "level/level_queries.hpp"
 #include "level/surface_settings_ui.hpp"
@@ -38,6 +39,7 @@
 #include "windows/item_reference.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_commands/input_arguments.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/transform_tool_config.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
@@ -185,6 +187,31 @@ auto Transform_tool_cancel_drag_command::try_call() -> bool
     return (transform_tool != nullptr) && transform_tool->is_node_pointer_drag_active() && transform_tool->cancel_node_drag();
 }
 
+Transform_tool_suspend_connector_snap_command::Transform_tool_suspend_connector_snap_command(erhe::commands::Commands& commands, App_context& app_context)
+    : Command  {commands, "Transform_tool.suspend_connector_snap"}
+    , m_context{app_context}
+{
+}
+
+auto Transform_tool_suspend_connector_snap_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    static_cast<void>(input);
+    if (m_context.transform_tool != nullptr) {
+        m_context.transform_tool->on_connector_snap_suspend_key_edge();
+    }
+    // Not consumed: the key keeps its other meanings.
+    return false;
+}
+
+auto Transform_tool_suspend_connector_snap_command::accepts_binding(const erhe::commands::Binding_desc& binding, std::string& out_reason) const -> bool
+{
+    if (binding.kind == erhe::commands::Binding_kind::key) {
+        return true;
+    }
+    out_reason = "the connector snap suspend takes a key, whose held state the editor tracks";
+    return false;
+}
+
 Create_frame_node_command::Create_frame_node_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Transform_tool.create_frame_node"}
     , m_context{app_context}
@@ -218,6 +245,7 @@ Transform_tool::Transform_tool(
     , m_window                      {imgui_renderer, imgui_windows, "Transform", "transform", [this]() { window_imgui(); }}
     , m_drag_command                {commands, app_context}
     , m_cancel_drag_command         {commands, app_context}
+    , m_suspend_connector_snap_command{commands, app_context}
     , m_drag_redirect_update_command{commands, m_drag_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
     , m_create_frame_node_command   {commands, app_context}
@@ -239,10 +267,19 @@ Transform_tool::Transform_tool(
 
     commands.register_command(&m_drag_command);
     commands.bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_left, true);
-    // Exact mask 0 dispatches before the mask-less Escape bindings; it consumes the key only while it cancels.
+    // Any modifiers, so held suspend or grid snap keys do not block it; the drag's host takes its keys first
+    // (Commands::on_key_event()), and it consumes the key only while it cancels.
     commands.register_command(&m_cancel_drag_command);
-    commands.bind_command_to_key(&m_cancel_drag_command, erhe::window::Key_escape, erhe::commands::Button_trigger::Button_pressed, 0u);
+    commands.bind_command_to_key(&m_cancel_drag_command, erhe::window::Key_escape, erhe::commands::Button_trigger::Button_pressed);
     m_cancel_drag_command.set_host(this);
+    commands.register_command(&m_suspend_connector_snap_command);
+    commands.bind_command_to_key(&m_suspend_connector_snap_command, erhe::window::Key_left_shift,  erhe::commands::Button_trigger::Any);
+    commands.bind_command_to_key(&m_suspend_connector_snap_command, erhe::window::Key_right_shift, erhe::commands::Button_trigger::Any);
+    commands.add_bindings_changed_callback(
+        [this, &commands]() {
+            commands.get_effective_bindings(m_suspend_connector_snap_command, m_suspend_bindings);
+        }
+    );
 
     commands.register_command(&m_create_frame_node_command);
     commands.bind_command_to_key(&m_create_frame_node_command, erhe::window::Key_n);
@@ -899,6 +936,7 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
     }
 
     shared.world_from_anchor.set(updated_world_from_anchor);
+    apply_drag_connector_step();
     follow_layout_preview();
 }
 
@@ -917,8 +955,9 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
         );
         return;
     }
+    m_last_drag_translation = translation;
     if (translation == glm::vec3{0.0f}) {
-        // The step's pose is the start pose exactly; the surface options rest it as any step.
+        // The step's pose is the start pose exactly; the surface options snap it as any step.
         restore_start_entries();
         apply_drag_surface_step();
         apply_drag_connector_step();
@@ -960,18 +999,19 @@ void Transform_tool::apply_drag_surface_step()
     }
     if (is_surface_axis_drag(m_drag_surface.direction)) {
         for (Transform_entry& entry : shared.entries) {
-            entry.surface_found   = false;
-            entry.surface_settled = true;
+            entry.surface_found = false;
         }
         return;
     }
-    static_cast<void>(rest_on_surface(m_drag_surface));
+    static_cast<void>(snap_to_surface(m_drag_surface));
 }
 
 void Transform_tool::begin_connector_snap(const float distance)
 {
     using namespace erhe::utility;
     m_connector_snap.clear();
+    m_connector_snap_motion         = false;
+    m_connector_snap_step_suspended = false;
     if (!(distance > 0.0f) || shared.component_mode || shared.entries.empty() || (m_context.level_kits == nullptr)) {
         return;
     }
@@ -1017,9 +1057,19 @@ void Transform_tool::apply_drag_connector_step()
     if (!m_connector_snap.is_active()) {
         return;
     }
+    // U27: a press without motion changes nothing; the suspend key holds back pointer drags only (scripted drags read no input).
+    if (!m_connector_snap_motion) {
+        m_connector_snap.skip_step(Kit_connector_snap_skip::before_motion);
+        return;
+    }
+    m_connector_snap_step_suspended = !m_scripted_drag_active && is_connector_snap_suspend_held();
+    if (m_connector_snap_step_suspended) {
+        m_connector_snap.skip_step(Kit_connector_snap_skip::suspended);
+        return;
+    }
     const bool timed = log_trs_tool->should_log(spdlog::level::trace);
     const std::chrono::steady_clock::time_point start_time = timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-    std::optional<glm::vec3> offset = m_connector_snap.step();
+    std::optional<glm::vec3> offset = m_connector_snap.step(get_connector_snap_constraint());
     // A snap that cannot co-locate is not a snap: a root whose locked translate channel the offset needs keeps the step unsnapped.
     if (offset.has_value() && !can_translate_moved_roots(offset.value())) {
         m_connector_snap.reject_step();
@@ -1045,6 +1095,83 @@ void Transform_tool::apply_drag_connector_step()
         enforce_channel_locks(*node, entry.parent_from_node_before);
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor, offset.value());
+}
+
+auto Transform_tool::get_connector_snap_constraint() const -> Kit_connector_snap_constraint
+{
+    // A scripted drag has no handle, and only the Move tool's handles translate.
+    if (
+        (m_connector_snap_axis_mode != Connector_snap_axis_mode::stay_on_axis) ||
+        (m_active_handle == Handle::e_handle_none) ||
+        (m_active_tool == nullptr) ||
+        (m_active_tool == m_rotate_subtool) ||
+        (m_active_tool == m_scale_subtool)
+    ) {
+        return Kit_connector_snap_constraint{};
+    }
+    const unsigned int mask       = m_active_tool->get_axis_mask() & Axis_mask::xyz;
+    const int          axis_count = std::popcount(mask);
+    if ((axis_count != 1) && (axis_count != 2)) {
+        return Kit_connector_snap_constraint{};
+    }
+    // The axis (one axis) or the plane normal (two axes) in the basis the Move tool drags in (global, local, reference or selection).
+    const unsigned int axis_bit = (axis_count == 1) ? mask : (Axis_mask::xyz & ~mask);
+    const int          column   = (axis_bit == Axis_mask::x) ? 0 : (axis_bit == Axis_mask::y) ? 1 : 2;
+    return Kit_connector_snap_constraint{
+        .kind      = (axis_count == 1) ? Kit_connector_snap_constraint_kind::axis : Kit_connector_snap_constraint_kind::plane,
+        .direction = m_active_tool->get_basis()[column]
+    };
+}
+
+auto Transform_tool::is_connector_snap_suspend_held() const -> bool
+{
+    const Input_state* const input_state = m_context.input_state;
+    if (input_state == nullptr) {
+        return false;
+    }
+    for (const erhe::commands::Binding_desc& binding : m_suspend_bindings) {
+        if ((binding.kind != erhe::commands::Binding_kind::key) || (binding.code < 0) || (binding.code > erhe::window::Key_last)) {
+            continue;
+        }
+        const bool modifiers_match = !binding.modifier_mask.has_value() || (binding.modifier_mask.value() == input_state->modifier_mask);
+        if (input_state->key_down[binding.code] && modifiers_match) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Transform_tool::on_connector_snap_suspend_key_edge()
+{
+    log_trs_tool->trace("connector snap suspend key edge");
+    // The pose follows the key at its edge, without waiting for the pointer; a key repeat changes nothing.
+    if (
+        !is_node_pointer_drag_active() || !m_connector_snap.is_active() || !m_connector_snap_motion ||
+        (is_connector_snap_suspend_held() == m_connector_snap_step_suspended)
+    ) {
+        return;
+    }
+    if ((m_active_tool == m_rotate_subtool) || (m_active_tool == m_scale_subtool)) {
+        // The subtool evaluates its step again from the unchanged pointer: the same unsnapped pose.
+        if (m_drag_scene_view != nullptr) {
+            evaluate_handles_for(*m_drag_scene_view);
+            static_cast<void>(m_active_tool->update(m_drag_scene_view));
+        }
+        return;
+    }
+    adjust_translation(m_last_drag_translation);
+}
+
+void Transform_tool::note_translate_drag_motion(const glm::vec3& motion)
+{
+    if (motion != glm::vec3{0.0f}) {
+        m_connector_snap_motion = true;
+    }
+}
+
+void Transform_tool::note_node_drag_motion()
+{
+    m_connector_snap_motion = true;
 }
 
 auto Transform_tool::can_translate_moved_roots(const glm::vec3& offset) const -> bool
@@ -1078,6 +1205,7 @@ auto Transform_tool::can_translate_moved_roots(const glm::vec3& offset) const ->
 auto Transform_tool::snap_to_connectors(const float distance) -> bool
 {
     begin_connector_snap(distance);
+    m_connector_snap_motion = true; // the call's edits are its motion
     apply_drag_connector_step();
     const bool snapped = m_connector_snap.get_state().snapped;
     m_connector_snap.end();
@@ -1156,13 +1284,12 @@ auto Transform_tool::is_surface_axis_drag(const glm::vec3& direction) const -> b
     return std::abs(glm::dot(glm::normalize(basis[axis]), direction)) > c_parallel_cos;
 }
 
-auto Transform_tool::rest_on_surface(const Surface_options& options) -> std::size_t
+auto Transform_tool::snap_to_surface(const Surface_options& options) -> std::size_t
 {
     ERHE_PROFILE_FUNCTION();
 
     for (Transform_entry& entry : shared.entries) {
-        entry.surface_found   = false;
-        entry.surface_settled = true;
+        entry.surface_found = false;
     }
     if (!any_surface_option(options) || shared.component_mode || shared.entries.empty()) {
         return 0;
@@ -1229,12 +1356,11 @@ auto Transform_tool::rest_on_surface(const Surface_options& options) -> std::siz
             enforce_channel_locks(*node, entry.parent_from_node_before);
         }
         m_surface_deltas[i] = glm::vec3{node->world_from_node_transform().get_translation()} - glm::vec3{world.get_translation()};
-        entry.surface_found   = true;
-        entry.surface_settled = placement.settled;
+        entry.surface_found = true;
         ++found_count;
     }
     log_trs_tool->trace(
-        "surface step: {} entries, {} rested: {:.3f} ms", shared.entries.size(), found_count,
+        "surface step: {} entries, {} snapped: {:.3f} ms", shared.entries.size(), found_count,
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count()
     );
     if (found_count == 0) {
@@ -1365,6 +1491,7 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
             enforce_channel_locks(*node, entry.parent_from_node_before);
         }
         shared.world_from_anchor = erhe::scene::rotate(shared.world_from_anchor_initial_state, rotation);
+        apply_drag_connector_step();
         follow_layout_preview();
     } else {
         const mat4 translate   = erhe::math::create_translation<float>(vec3{-center_of_rotation});
@@ -1406,6 +1533,7 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
             enforce_channel_locks(*node, entry.parent_from_node_before);
         }
         shared.world_from_anchor = erhe::scene::scale(shared.world_from_anchor_initial_state, scale);
+        apply_drag_connector_step();
         follow_layout_preview();
     } else {
         const mat4 translate   = erhe::math::create_translation<float>(vec3{-center_of_scale});
@@ -1918,11 +2046,9 @@ auto Transform_tool::on_drag_ready() -> bool
             ((kind == Transform_drag_kind::translate) && (m_context.level_kits != nullptr))
                 ? m_context.level_kits->get_surface_settings()
                 : Surface_options{};
-        begin_connector_snap(
-            ((kind == Transform_drag_kind::translate) && (m_context.level_kits != nullptr))
-                ? m_context.level_kits->get_connector_snap_distance()
-                : 0.0f
-        );
+        m_connector_snap_axis_mode =
+            (m_context.level_kits != nullptr) ? m_context.level_kits->get_connector_snap_axis_mode() : Connector_snap_axis_mode::full_offset;
+        begin_connector_snap((m_context.level_kits != nullptr) ? m_context.level_kits->get_connector_snap_distance() : 0.0f);
     }
     if (started && shared.component_mode) {
         begin_component_edit();
@@ -2883,8 +3009,8 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
         if (!want_component) {
             // A designated lattice bound into the active scene owns the gizmo
             // (as a Houdini display flag would); then the selected points of
-            // the selected curve.
-            for (IPoint_set* candidate : {static_cast<IPoint_set*>(m_context.lattice_tool), static_cast<IPoint_set*>(m_context.curve_tool)}) {
+            // the selected curve, then the selected scatter region handle.
+            for (IPoint_set* candidate : {static_cast<IPoint_set*>(m_context.lattice_tool), static_cast<IPoint_set*>(m_context.curve_tool), static_cast<IPoint_set*>(m_context.kit_layout_region_tool)}) {
                 if ((candidate != nullptr) && candidate->update_point_set() && m_point_set_transform.update_anchor(*candidate, shared)) {
                     point_set = candidate;
                     break;
@@ -3225,6 +3351,12 @@ void Transform_tool::restore_start_entries()
 void Transform_tool::restore_start_pose()
 {
     restore_start_entries();
+    finish_drag_step();
+}
+
+void Transform_tool::finish_drag_step()
+{
+    apply_drag_connector_step();
     follow_layout_preview();
     update_transforms();
 }
@@ -3245,12 +3377,6 @@ void Transform_tool::record_transform_operation()
     }
 
     log_trs_tool->trace("creating transform operation");
-    const std::size_t unsettled_count = static_cast<std::size_t>(std::count_if(
-        shared.entries.begin(), shared.entries.end(), [](const Transform_entry& entry) -> bool { return !entry.surface_settled; }
-    ));
-    if (unsettled_count > 0) {
-        log_trs_tool->warn("Transform: {} of {} moved pieces still rose at their last surface cast (unsettled rest recorded)", unsettled_count, shared.entries.size());
-    }
 
     Compound_operation::Parameters compompound_parameters;
     for (auto& entry : shared.entries) {
@@ -3311,7 +3437,7 @@ void Transform_tool::record_transform_operation()
         }
     }
 
-    // A moved locked kit layout node with a surface setting rests its pieces again in the same entry (D3.9).
+    // A moved locked kit layout node with a surface setting snaps its pieces to the surface again in the same entry (D3.9).
     const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
     if (scene_root && (m_context.level_kits != nullptr)) {
         m_moved_nodes.clear();
@@ -3349,7 +3475,8 @@ auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind, const S
                                                 static_cast<Subtool*>(m_context.move_tool);
     m_physics_drag.begin(m_context, shared.entries, kind);
     m_drag_surface = (kind == Transform_drag_kind::translate) ? surface : Surface_options{};
-    begin_connector_snap((kind == Transform_drag_kind::translate) ? connector_snap_distance : 0.0f);
+    m_connector_snap_axis_mode = Connector_snap_axis_mode::full_offset; // no handle: the full offset
+    begin_connector_snap(connector_snap_distance);
     return true;
 }
 

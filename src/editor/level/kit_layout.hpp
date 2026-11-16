@@ -38,6 +38,7 @@ public:
     Kit_snap                     snap          {Kit_snap::none};
     Surface_snap                 surface_snap  {Surface_snap::off};
     Surface_orient               surface_orient{Surface_orient::off};
+    float                        surface_max_distance{c_default_surface_max_distance}; // meters (U30)
     Kit_layout_seeds             seeds         {Kit_layout_seeds::item};
     int                          seed          {0};
     Kit_layout_lock              lock          {Kit_layout_lock::locked};
@@ -58,7 +59,8 @@ public:
     static const erhe::property::Property<bool>        module_snap_property;
     static const erhe::property::Property<bool>        surface_snap_property;
     static const erhe::property::Property<bool>        surface_orient_property;
-    static const erhe::property::Property<bool>        random_seeds_property;
+    static const erhe::property::Property<float>       surface_max_distance_property;
+    static const erhe::property::Property<bool>        per_piece_seed_property;
     static const erhe::property::Property<int>         seed_property;
     static const erhe::property::Property<bool>        locked_property;
 };

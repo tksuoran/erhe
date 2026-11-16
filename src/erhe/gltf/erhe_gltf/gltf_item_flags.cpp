@@ -339,7 +339,7 @@ auto apply_item_local_property(erhe::Item_base& item, const std::string_view nam
     return apply_item_local_property(item, name, value);
 }
 
-void clear_local_properties_not_listed(erhe::Item_base& item, const std::function<bool(std::string_view name)>& is_listed)
+void clear_local_properties_not_listed(erhe::Item_base& item, const std::function<bool(const erhe::property::Dependency_property& property)>& is_listed)
 {
     const erhe::property::Owner_type owner_type = item.get_property_owner_type();
     erhe::property::Property_registry::get().for_each_property_of_object(
@@ -349,7 +349,7 @@ void clear_local_properties_not_listed(erhe::Item_base& item, const std::functio
             if (property.is_read_only() || metadata.bridge.is_bound() || metadata.is_computed() || !item.has_local_value(property)) {
                 return;
             }
-            if (is_listed(property.get_name())) {
+            if (is_listed(property)) {
                 return;
             }
             static_cast<void>(item.clear_value(property));

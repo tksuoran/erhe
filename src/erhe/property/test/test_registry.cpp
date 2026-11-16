@@ -11,6 +11,7 @@ const Property<float>       reg_float  = Property<float>::register_property("reg
 const Property<glm::vec3>   reg_vec3   = Property<glm::vec3>::register_property("reg_vec3", type_a());
 const Property<std::string> reg_string = Property<std::string>::register_property("reg_string", type_b(), Property_metadata{.default_value = std::string{"hello"}});
 const Property<int>         reg_attached = Property<int>::register_attached("reg_attached", type_c(), type_a());
+const Property<bool>        reg_renamed  = Property<bool>::register_attached("reg_renamed", type_c(), type_a()).with_former_name("reg_old_name");
 
 } // anonymous namespace
 
@@ -254,4 +255,16 @@ TEST(Property_registry, attached_property_resolves_by_qualified_name_on_its_hold
     std::vector<const Dependency_property*> local;
     a.for_each_local_value([&](const Dependency_property& p, const Property_value&) { local.push_back(&p); });
     EXPECT_NE(std::find(local.begin(), local.end(), reg_attached.get_ptr()), local.end());
+}
+
+TEST(Property_registry, a_former_name_resolves_to_the_renamed_property)
+{
+    Property_registry& registry = Property_registry::get();
+    EXPECT_EQ(registry.find(type_c(), "reg_old_name"), reg_renamed.get_ptr());
+    EXPECT_EQ(registry.find_for_object(type_a(), "type_c.reg_old_name"), reg_renamed.get_ptr());
+    EXPECT_EQ(registry.find_for_object(type_a(), "type_c.reg_renamed"), reg_renamed.get_ptr());
+    EXPECT_EQ(registry.qualified_name(reg_renamed.get()), "type_c.reg_renamed");
+    std::size_t listed = 0;
+    registry.for_each_attached_property([&](const Dependency_property& p) { if (&p == reg_renamed.get_ptr()) { ++listed; } });
+    EXPECT_EQ(listed, std::size_t{1});
 }

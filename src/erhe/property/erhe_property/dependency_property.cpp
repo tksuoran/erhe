@@ -243,6 +243,16 @@ void Property_registry::add_owner(const Dependency_property& property, const Own
     m_by_owner[owner_type].push_back(property.get_index());
 }
 
+void Property_registry::add_former_name(const Dependency_property& property, const std::string_view former_name)
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    const Owner_name_key key{.owner_type = property.get_owner_type(), .name = std::string{former_name}};
+    if (m_by_owner_and_name.contains(key)) {
+        ERHE_FATAL("property name '%s' is already registered for owner type %u (%s)", key.name.c_str(), static_cast<unsigned int>(key.owner_type), m_owner_types[key.owner_type].name.c_str());
+    }
+    m_by_owner_and_name.emplace(key, property.get_index());
+}
+
 auto Property_registry::find(const Owner_type owner_type, const std::string_view name) const -> const Dependency_property*
 {
     const std::lock_guard<std::mutex> lock{m_mutex};

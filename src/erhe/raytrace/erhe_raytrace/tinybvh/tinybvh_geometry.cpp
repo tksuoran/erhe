@@ -394,6 +394,7 @@ auto Tinybvh_geometry::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* 
         hit.normal      = glm::vec3{get_normal_transform(transform) * glm::vec4{local_normal, 0.0f}};
         hit.instance    = instance;
         hit.geometry    = this;
+        hit.t           = tinybvh_ray.hit.t;
         return true;
     }
     return false;
@@ -439,7 +440,8 @@ auto Tinybvh_geometry::intersect_filtered(Ray& ray, Hit& hit, Tinybvh_instance* 
                 .uv          = glm::vec2{u, v},
                 .triangle_id = prim_id,
                 .geometry    = this,
-                .instance    = instance
+                .instance    = instance,
+                .t           = t
             };
             if (!ray.filter->accept(candidate)) {
                 continue;

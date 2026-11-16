@@ -474,9 +474,16 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
             return export_settings.has_value() ? serialize(export_settings.value(), 0) : std::string{};
         };
         const bool export_settings_changed = (export_text(sr->get_scene_settings().export_settings) != export_text(new_settings.export_settings));
+        const auto lengths_of = [](const std::optional<Level_settings>& level) -> glm::vec2 {
+            return level.has_value() ? glm::vec2{level.value().module, level.value().wall_height} : glm::vec2{-1.0f};
+        };
+        const bool level_lengths_changed = (lengths_of(sr->get_scene_settings().level) != lengths_of(new_settings.level));
         sr->get_scene_settings() = new_settings;
         if (export_settings_changed) {
             sr->on_export_settings_changed();
+        }
+        if (level_lengths_changed && (m_context.level_kits != nullptr)) {
+            m_context.level_kits->on_level_lengths_changed();
         }
         changed = true;
     }
@@ -630,8 +637,16 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
     // Mirror that here so select_items always activates the target scene.
     m_context.selection->set_active_scene_root(sr->shared_from_this());
 
+    // The items now selected, a locked kit layout's child as its layout node.
+    std::vector<std::shared_ptr<erhe::Item_base>> now_selected;
+    for (const std::shared_ptr<erhe::Item_base>& item : items_to_select) {
+        const std::shared_ptr<erhe::Item_base> selected = get_selectable(item);
+        if (std::find(now_selected.begin(), now_selected.end(), selected) == now_selected.end()) {
+            now_selected.push_back(selected);
+        }
+    }
     json selected = json::array();
-    for (const auto& item : items_to_select) {
+    for (const auto& item : now_selected) {
         selected.push_back({
             {"name", item->get_name()},
             {"type", std::string{item->get_type_name()}},
@@ -640,7 +655,7 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
     }
 
     json result = {
-        {"selected_count", static_cast<int>(items_to_select.size())},
+        {"selected_count", static_cast<int>(now_selected.size())},
         {"items",          selected}
     };
     const std::shared_ptr<erhe::Item_base> resulting_active = m_context.selection->get_active_item();
@@ -1499,6 +1514,14 @@ namespace {
     }
     out_options.snap   = args.value("surface_snap",   false) ? Surface_snap::on   : Surface_snap::off;
     out_options.orient = args.value("surface_orient", false) ? Surface_orient::on : Surface_orient::off;
+    if (args.contains("surface_max_distance")) {
+        const json& value = args.at("surface_max_distance");
+        if (!value.is_number() || !check_surface_max_distance(value.get<float>()).empty()) {
+            out_error = "surface_max_distance must be a number >= 0, not " + value.dump();
+            return false;
+        }
+        out_options.max_distance = value.get<float>();
+    }
     return true;
 }
 
@@ -1534,14 +1557,25 @@ namespace {
 [[nodiscard]] auto connector_snap_json(const Kit_connector_drag_snap& snap) -> json
 {
     const Kit_connector_snap_state& state = snap.get_state();
+    const char* skipped =
+        (state.skip == Kit_connector_snap_skip::before_motion) ? "before_motion" :
+        (state.skip == Kit_connector_snap_skip::suspended)     ? "suspended"     :
+                                                                 "none";
+    const char* constraint =
+        (state.constraint.kind == Kit_connector_snap_constraint_kind::axis)  ? "axis"  :
+        (state.constraint.kind == Kit_connector_snap_constraint_kind::plane) ? "plane" :
+                                                                               "free";
     json reply{
         {"active",            snap.is_active()},
         {"moved_connectors",  snap.get_moved_count()},
         {"target_connectors", snap.get_target_count()},
-        {"snapped",           state.snapped}
+        {"snapped",           state.snapped},
+        {"skipped",           skipped}
     };
     if (state.snapped) {
         reply["distance"]         = state.distance;
+        reply["constraint"]       = constraint;
+        reply["full_offset"]      = {state.full_offset.x, state.full_offset.y, state.full_offset.z};
         reply["offset"]           = {state.offset.x, state.offset.y, state.offset.z};
         reply["piece_id"]         = node_id_json(state.piece);
         reply["piece"]            = node_name_json(state.piece);
@@ -1632,14 +1666,14 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         return make_error_content("transform_selection: " + parse_error);
     }
     if (any_surface_option(surface) && (!translation.has_value() || shared.component_mode)) {
-        return make_error_content("transform_selection: surface_snap and surface_orient rest moved meshes; they need a translation of a node selection");
+        return make_error_content("transform_selection: surface_snap and surface_orient snap moved meshes to the surface; they need a translation of a node selection");
     }
     float connector_snap_distance = 0.0f;
     if (!read_connector_snap_distance(args, connector_snap_distance, parse_error)) {
         return make_error_content("transform_selection: " + parse_error);
     }
-    if ((connector_snap_distance > 0.0f) && (!translation.has_value() || shared.component_mode)) {
-        return make_error_content("transform_selection: connector_snap_distance snaps moved nodes; it needs a translation of a node selection");
+    if ((connector_snap_distance > 0.0f) && ((!translation.has_value() && !rotation.has_value() && !scale.has_value()) || shared.component_mode)) {
+        return make_error_content("transform_selection: connector_snap_distance snaps moved nodes; it needs a translation, rotation or scale of a node selection");
     }
 
     json applied = json::object();
@@ -1660,7 +1694,7 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         applied["skew"] = {skew->x, skew->y, skew->z};
     }
     // After every edit of the call, so the rested transform is the one recorded.
-    const std::size_t surface_found_count = transform_tool->rest_on_surface(surface);
+    const std::size_t surface_found_count = transform_tool->snap_to_surface(surface);
     // After the rest, as a drag step orders them (doc/editor/level_tools.md "Connector snap").
     if (connector_snap_distance > 0.0f) {
         static_cast<void>(transform_tool->snap_to_connectors(connector_snap_distance));
@@ -1713,6 +1747,7 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         {"end_edit",            end_edit},
         {"surface_snap",        surface.snap == Surface_snap::on},
         {"surface_orient",      surface.orient == Surface_orient::on},
+        {"surface_max_distance", surface.max_distance},
         {"surface_found_count", surface_found_count},
         {"connector_snap_distance", connector_snap_distance},
         {"connector_snap",      connector_snap_json(transform_tool->get_connector_snap())},
@@ -1752,10 +1787,14 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
     auto apply_step = [transform_tool, &shared](const Selection_drag_steps& steps, const float fraction) {
         switch (steps.kind) {
             case Transform_drag_kind::translate: {
+                transform_tool->note_translate_drag_motion(steps.translation * fraction);
                 transform_tool->adjust_translation(steps.translation * fraction);
                 break;
             }
             case Transform_drag_kind::rotate: {
+                if ((steps.rotation_angle * fraction) != 0.0f) {
+                    transform_tool->note_node_drag_motion();
+                }
                 const glm::quat rotation    = glm::angleAxis(steps.rotation_angle * fraction, steps.rotation_axis);
                 const glm::mat4 translate   = erhe::math::create_translation<float>(-steps.center);
                 const glm::mat4 untranslate = erhe::math::create_translation<float>( steps.center);
@@ -1764,7 +1803,11 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
                 break;
             }
             case Transform_drag_kind::scale: {
-                transform_tool->adjust_scale(steps.center, glm::mix(glm::vec3{1.0f}, steps.scale, fraction));
+                const glm::vec3 scale = glm::mix(glm::vec3{1.0f}, steps.scale, fraction);
+                if (scale != glm::vec3{1.0f}) {
+                    transform_tool->note_node_drag_motion();
+                }
+                transform_tool->adjust_scale(steps.center, scale);
                 break;
             }
         }
@@ -1875,9 +1918,6 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         if (!read_connector_snap_distance(args, steps.connector_snap_distance, parse_error)) {
             return make_error_content("drag_selection: " + parse_error);
         }
-        if ((steps.connector_snap_distance > 0.0f) && (steps.kind != Transform_drag_kind::translate)) {
-            return make_error_content("drag_selection: connector_snap_distance applies to translate drags only");
-        }
 
         if (shared.component_mode) {
             return make_error_content("drag_selection drags node selections; a mesh component selection is active");
@@ -1917,6 +1957,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         {"released",       finished.release},
         {"surface_snap",   finished.surface.snap == Surface_snap::on},
         {"surface_orient", finished.surface.orient == Surface_orient::on},
+        {"surface_max_distance", finished.surface.max_distance},
         {"connector_snap_distance", finished.connector_snap_distance},
         {"connector_snap", connector_snap_json(transform_tool->get_connector_snap())},
         {"nodes",          nodes}
@@ -2222,7 +2263,7 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
             }
         )
     );
-    // A moved locked kit layout node with a surface setting rests its pieces again in the same entry (D3.9).
+    // A moved locked kit layout node with a surface setting snaps its pieces to the surface again in the same entry (D3.9).
     if (m_context.level_kits != nullptr) {
         node->update_world_from_node();
         m_context.level_kits->append_layout_move_operations(*sr, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, operations);

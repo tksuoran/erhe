@@ -227,8 +227,12 @@ def _deserialize_field_code(f: FieldSchema, indent: str = "    ") -> list[str]:
         lines.append(f"{indent}// {f.name}: added_in={f.added_in}")
         inner = indent
 
-    # Field access + deserialization
-    lines.append(f'{inner}if (!obj["{f.name}"].get(val)) {{')
+    # Field access + deserialization; a document older than a rename reads the previous key
+    key = f'"{f.name}"'
+    if f.renamed_from:
+        for renamed_in, previous_name in reversed(f.renamed_from):
+            key = f'((version < {renamed_in}) ? "{previous_name}" : {key})'
+    lines.append(f'{inner}if (!obj[{key}].get(val)) {{')
     lines.extend(_deserialize_value_code(f.type, f"out.{f.name}", inner + "    "))
 
     if f.default_history:

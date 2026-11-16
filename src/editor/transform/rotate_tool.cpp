@@ -220,6 +220,7 @@ auto Rotate_tool::update_arcball(Scene_view* scene_view) -> bool
         m_arcball_rotation = glm::angleAxis(angle, axis) * m_arcball_rotation;
         m_arcball_prev     = planar;
         m_current_angle += angle;
+        m_context.transform_tool->note_node_drag_motion();
     }
     m_context.transform_tool->adjust_rotation(m_center_of_rotation, m_arcball_rotation);
     return true;
@@ -325,6 +326,9 @@ void Rotate_tool::update_final()
 
     m_current_angle = angle;
 
+    if (angle != 0.0f) {
+        m_context.transform_tool->note_node_drag_motion();
+    }
     m_context.transform_tool->adjust_rotation(m_center_of_rotation, rotation);
 }
 

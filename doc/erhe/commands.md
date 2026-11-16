@@ -23,6 +23,8 @@ bindings, and a per-command override replaces them.
   press and release; the command reads the state from `Input_arguments::variant::button_pressed`
   (the fly camera's movement keys work this way). A mouse button binding is a click: the press
   readies the command, which is called on the press or on the release, so it takes no `Any`.
+- `Command::accepts_binding(binding, out_reason)` -- A command can refuse user bindings it
+  cannot serve (default: accepts all); `set_binding_override()` fails with its reason.
 - `Binding_desc` (`binding_desc.hpp`) -- One editable binding as a value: `Binding_kind` (key,
   mouse_button, mouse_drag, mouse_wheel, mouse_motion, controller_axis, controller_button), code
   (keycode, mouse button, axis or button index), optional modifier mask (empty matches any
@@ -75,7 +77,9 @@ bindings, and a per-command override replaces them.
   kept, and key bindings dispatch in that order with every binding that has a modifier mask ahead
   of every binding without one, so Ctrl+A reaches a Ctrl+A binding before a mask-less A binding
   (which matches any modifiers) can consume it; an overridden command's bindings take the place
-  of its first default. A command whose bindings changed is made inactive first, so a rebind during a
+  of its first default. While a mouse command is active, the key bindings of commands with the
+  same host dispatch first (in the same order), then the rest, so the tool running a drag gets
+  its keys (a cancel) before another host's binding of the same key. A command whose bindings changed is made inactive first, so a rebind during a
   drag leaves no active mouse command behind. The rebuild also recomputes the conflict list, the
   menu shortcut labels, and then calls the bindings-changed callbacks.
 - `apply_binding_overrides()` replaces all overrides at once. Entries naming commands this build
@@ -97,4 +101,5 @@ The editor's Input Bindings window, the `input_bindings.json` file and the MCP b
 - The state machine prevents conflicting commands from activating simultaneously.
 - Tests: `erhe_commands_tests` (`src/erhe/commands/test/`): `Binding_desc` text form round trips,
   overrides, input kind enforcement, conflicts, rebind during a drag, `sort_bindings()` from a
-  command dispatched by `tick()`, masked key bindings dispatching before mask-less ones.
+  command dispatched by `tick()`, masked key bindings dispatching before mask-less ones, the
+  active gesture's host taking its keys first, a command refusing a binding.

@@ -9,12 +9,14 @@
 #include "transform/physics_driven_drag.hpp"
 #include "transform/rotation_inspector.hpp"
 #include "level/kit_connector_snap.hpp"
+#include "config/generated/connector_snap_axis_mode.hpp"
 #include "level/level_queries.hpp"
 #include "scene/analytic_hover_provider.hpp"
 #include "tools/tool.hpp"
 
 #include "windows/property_editor.hpp"
 
+#include "erhe_commands/binding_desc.hpp"
 #include "erhe_commands/command.hpp"
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
@@ -118,6 +120,20 @@ private:
     App_context& m_context;
 };
 
+// The keys whose held state suspends the connector snap of a pointer node drag (U27). The held state is read
+// from Input_state; the key events this command sees only re-run a drag's last step. Never consumes the key.
+class Transform_tool_suspend_connector_snap_command : public erhe::commands::Command
+{
+public:
+    Transform_tool_suspend_connector_snap_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+    // Keys only: a key has a held state in Input_state.
+    auto accepts_binding(const erhe::commands::Binding_desc& binding, std::string& out_reason) const -> bool override;
+
+private:
+    App_context& m_context;
+};
+
 // Bakes the current gizmo anchor ("temp node") frame into a real, undoable scene Node.
 class Create_frame_node_command : public erhe::commands::Command
 {
@@ -139,9 +155,8 @@ public:
     erhe::scene::Trs_transform                world_from_node_before;
     std::optional<erhe::physics::Motion_mode> original_motion_mode;
     erhe::physics::Motion_mode                motion_mode{erhe::physics::Motion_mode::e_none};
-    // Whether the last surface step rested this node on a surface (D4.6).
+    // Whether the last surface step snapped this node to a surface (D4.6).
     bool                                      surface_found{false};
-    bool                                      surface_settled{true}; // Surface_placement::settled of that step
 };
 
 class Transform_tool_shared
@@ -335,8 +350,14 @@ public:
 
     // Records one undo entry when at least one entry's local transform differs from its drag-start value.
     void record_transform_operation();
-    // An identity delta puts every entry back at its drag-start pose exactly (no round-off from recomposing).
+    // An identity delta puts every entry back at its drag-start pose exactly (no round-off from recomposing); a drag's
+    // connector snap then snaps it as any step.
     void restore_start_pose();
+    // restore_start_pose() without the connector snap, the layout preview step and the gizmo refresh.
+    void restore_start_entries();
+    // After a subtool wrote a step's node transforms itself (box scale per node): the connector snap, the live layout
+    // preview and the gizmo refresh.
+    void finish_drag_step();
 
     // A drag driven by code instead of the pointer (the MCP drag_selection
     // tool): begin_scripted_drag() starts a node drag of the selection the
@@ -346,8 +367,8 @@ public:
     // undoable operation and releases the bodies like a gizmo release.
     // Refused while a pointer drag, a scripted drag or a component selection
     // is active, or when nothing is selected.
-    // A translate drag rests the moved meshes on the surface with `surface` (D4.6) and snaps to connectors
-    // within connector_snap_distance meters (D3.13, 0 = off).
+    // A translate drag snaps the moved meshes to the surface with `surface` (D4.6); a drag of any kind snaps to
+    // connectors within connector_snap_distance meters (D3.13, 0 = off).
     auto begin_scripted_drag(Transform_drag_kind kind, const Surface_options& surface, float connector_snap_distance) -> bool;
     void end_scripted_drag  ();
     // Cancels the gizmo drag of nodes (pointer or scripted): the entries, their bodies and the moved layouts'
@@ -359,15 +380,21 @@ public:
     // through physics instead of writing the node transform.
     [[nodiscard]] auto is_node_pulled_through_physics(const erhe::scene::Node* node) const -> bool;
 
-    // D4.6 (doc/editor/level_tools.md "Transform tool"): rests each moved mesh of the selection on
+    // D4.6 (doc/editor/level_tools.md "Transform tool"): snaps each moved mesh of the selection to
     // the surface under it, all moved meshes excluded from the rays; returns how many found one.
-    auto rest_on_surface(const Surface_options& options) -> std::size_t;
+    auto snap_to_surface(const Surface_options& options) -> std::size_t;
 
     // D3.13 once, outside a drag (MCP transform_selection): moves the selection so its connector nearest another
     // kit piece's connector within distance meets it; true when it snapped.
     auto snap_to_connectors(float distance) -> bool;
     // The pair of the last connector snap step (kept after the drag ends) and the counts gathered at its begin.
     [[nodiscard]] auto get_connector_snap() const -> const Kit_connector_drag_snap&;
+    // U27: a suspend key event; during a pointer node drag whose held state changed it re-runs the last step.
+    void on_connector_snap_suspend_key_edge();
+    // U27: the step's pointer motion from the press (before the grid snap); the connector snap starts at the first nonzero one.
+    void note_translate_drag_motion(const glm::vec3& motion);
+    // U27: a rotate or scale step's pointer motion from the press is nonzero (the angle or factor before the angle snap).
+    void note_node_drag_motion();
 
     // Create a real, undoable scene Node at the current gizmo anchor frame.
     void create_node_from_anchor();
@@ -527,6 +554,7 @@ private:
     erhe::message_bus::Subscription<Items_removed_message>     m_items_removed_subscription;
     Transform_tool_drag_command         m_drag_command;
     Transform_tool_cancel_drag_command  m_cancel_drag_command;
+    Transform_tool_suspend_connector_snap_command m_suspend_connector_snap_command;
     erhe::commands::Redirect_command    m_drag_redirect_update_command;
     erhe::commands::Drag_enable_command m_drag_enable_command;
     Create_frame_node_command           m_create_frame_node_command;
@@ -560,13 +588,20 @@ private:
     bool                                m_scripted_drag_active{false};
     // The surface options of the running translate drag (D4.6); off outside one.
     Surface_options                     m_drag_surface{};
-    // Scratch of rest_on_surface(): the moved meshes and their descendants, and per entry the move.
+    // Scratch of snap_to_surface(): the moved meshes and their descendants, and per entry the move.
     std::vector<const erhe::scene::Mesh*> m_surface_excluded;
     std::vector<glm::vec3>                m_surface_deltas;
     std::vector<std::shared_ptr<erhe::scene::Node>> m_moved_nodes; // drag end: the entries' nodes, kept for its capacity
-    // D3.13: the connector snap of the running translate drag, and the moved roots at its begin (scratch).
+    // D3.13: the connector snap of the running node drag, and the moved roots at its begin (scratch).
     Kit_connector_drag_snap             m_connector_snap;
     std::vector<std::shared_ptr<erhe::scene::Node>> m_connector_roots;
+    // U27: read at the drag's begin; the suspend command's effective bindings (refreshed when bindings change);
+    // whether the last step was suspended; the pointer has moved since the press; the last step's translation.
+    Connector_snap_axis_mode              m_connector_snap_axis_mode{Connector_snap_axis_mode::full_offset};
+    std::vector<erhe::commands::Binding_desc> m_suspend_bindings;
+    bool                                  m_connector_snap_step_suspended{false};
+    bool                                  m_connector_snap_motion{false};
+    glm::vec3                             m_last_drag_translation{0.0f};
     // Whether this edit began the live layout preview of the moved layouts (Level_kits::begin_layout_move_preview()).
     bool                                m_layout_preview_begun{false};
     Rotation_inspector                  m_rotation;
@@ -627,13 +662,15 @@ private:
     auto try_translate_ik(glm::vec3 translation) -> bool;
 
     // The surface step of a translate drag (D4.6), after the tool wrote the step's transforms.
-    // restore_start_pose() without the layout preview step and gizmo refresh.
-    void restore_start_entries();
     void apply_drag_surface_step();
-    // D3.13: gathers the connectors at a translate drag's begin (after m_physics_drag.begin()), then per step
-    // translates the moved roots by the snap offset of the unsnapped step pose.
+    // D3.13: gathers the connectors at a node drag's begin (after m_physics_drag.begin()), then per step (after the
+    // step's translate, rotation or scale) translates the moved roots by the snap offset of the unsnapped step pose.
     void begin_connector_snap(float distance);
     void apply_drag_connector_step();
+    // U27: the dragged handle's axis or plane with Connector_snap_axis_mode::stay_on_axis; free otherwise.
+    [[nodiscard]] auto get_connector_snap_constraint() const -> Kit_connector_snap_constraint;
+    // U27: a key of the suspend command is down now (Input_state), with its binding's modifiers.
+    [[nodiscard]] auto is_connector_snap_suspend_held() const -> bool;
     // False when a moved root's locked translate channel would hold back part of the offset.
     [[nodiscard]] auto can_translate_moved_roots(const glm::vec3& offset) const -> bool;
     // After the tool wrote a step's node transforms: the moved surface-snapped kit layouts follow live (D3.9).

@@ -17,6 +17,7 @@ namespace erhe::xr {
 
 namespace erhe::commands {
 
+class Binding_desc;
 class Commands;
 struct Input_arguments;
 
@@ -61,6 +62,8 @@ public:
     virtual void on_inactive        ();
     virtual auto get_host           () const -> Command_host*;
     virtual auto get_command_state  () const -> State;
+    // A command can refuse user bindings it cannot serve; out_reason says why. Accepts every binding by default.
+    virtual auto accepts_binding    (const Binding_desc& binding, std::string& out_reason) const -> bool;
 
     // Non-virtual public API
     [[nodiscard]] auto is_accepted() const -> bool;

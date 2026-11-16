@@ -8,7 +8,7 @@ from erhe_codegen import *
 # Debug_visualizations_config, the per-viewport light/camera visualization
 # modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
-    version=8,
+    version=9,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
@@ -32,6 +32,8 @@ struct("Debug_visualizations_settings",
         field("curves",                      EnumRef("Visualization_mode"), added_in=7, default="Visualization_mode::selected", short_desc="Curves", long_desc="Curve prims with their control points and handles: off, the selected curves, or all curves (unselected ones thin and dim)"),
         # Kit piece connector indicators (doc/editor/level_tools.md "Connector indicators").
         field("connectors",                  EnumRef("Visualization_mode"), added_in=8, default="Visualization_mode::selected", short_desc="Connectors", long_desc="Connector frames of kit pieces: off, those of the selected pieces (and of the pieces below selected nodes), or all; a snapping drag shows its own"),
+        # Kit layout node outlines (doc/editor/level_tools.md "Kit layout drawing").
+        field("kit_layouts",                 EnumRef("Visualization_mode"), added_in=9, default="Visualization_mode::selected", short_desc="Kit Layouts", long_desc="Outlines of line, grid, ring and scatter kit layout nodes with a tick per element, and a scatter's spacing circles: off, the layouts at or above the selection, or all"),
         field("physics",                     EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Physics"),
         field("raytrace",                    EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Raytrace"),
         field("vertex_labels",               EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Show Vertices"),

@@ -3,6 +3,7 @@
 #include "level/kit_mesh_builder.hpp"
 #include "level/kit_shape.hpp"
 
+#include "erhe_math/aabb.hpp"
 #include "erhe_math/curve_path.hpp"
 
 #include <fmt/format.h>
@@ -165,9 +166,16 @@ private:
 }
 
 // The pieces a scatter asks for and the ones its spacing lets in (doc/editor/level_tools.md "Scatter layouts").
-[[nodiscard]] auto resolve_scatter(const Kit_layout_pattern& pattern, const int seed, Kit_layout_run& out_run, std::vector<Repeat_pose>* const out_poses) -> std::string
+[[nodiscard]] auto resolve_scatter(
+    const Kit_layout_pattern&       pattern,
+    const int                       seed,
+    const Kit_layout_item_sizes&    items,
+    Kit_layout_run&                 out_run,
+    std::vector<Repeat_pose>* const out_poses
+) -> std::string
 {
     Repeat_pattern& run = out_run.pattern;
+    run.scatter_items   = items.items;
     run.scatter_region  = pattern.region;
     run.scatter_size_x  = pattern.size_x;
     run.scatter_size_z  = pattern.size_z;
@@ -369,7 +377,12 @@ auto to_canonical_text(const std::span<const Kit_layout_item> items) -> std::str
         if (parameters.is_discarded()) {
             parameters = json(item.parameters);
         }
-        list.push_back(json{{"shape", item.shape}, {"parameters", parameters}, {"materials", item.materials}});
+        json object{{"shape", item.shape}, {"parameters", parameters}, {"materials", item.materials}};
+        // The default weight is left out, so a text written before weights is the canonical text of its values.
+        if (item.weight != 1) {
+            object["weight"] = item.weight;
+        }
+        list.push_back(std::move(object));
     }
     return list.dump();
 }
@@ -411,6 +424,15 @@ auto parse_layout_items(const std::string_view text, std::vector<Kit_layout_item
                 }
             }
         }
+        if (object.contains("weight")) {
+            int weight = 1;
+            reader.read_int("weight", weight);
+            if ((weight < 0) || (static_cast<uint32_t>(weight) > c_max_scatter_weight)) {
+                reader.fail(fmt::format("'weight' is {}, outside 0 - {}", weight, c_max_scatter_weight));
+            } else {
+                item.weight = static_cast<uint32_t>(weight);
+            }
+        }
         const std::string error = reader.finish("item");
         if (!error.empty()) {
             return fmt::format("item {}: {}", i, error);
@@ -443,7 +465,7 @@ namespace {
 [[nodiscard]] auto resolve_pattern_run(
     const Kit_layout_pattern&                 pattern,
     const int                                 seed,
-    const float                               item_extent,
+    const Kit_layout_item_sizes&              items,
     const erhe::math::Curve_path_table* const path_table,
     Kit_layout_run&                           out_run,
     std::vector<Repeat_pose>* const           out_poses
@@ -451,6 +473,7 @@ namespace {
 {
     Repeat_pattern& run = out_run.pattern;
     run.kind = pattern.kind;
+    const float item_extent = items.extent;
     const bool counted  = (pattern.kind == Repeat_pattern_kind::line) || (pattern.kind == Repeat_pattern_kind::ring) || (pattern.kind == Repeat_pattern_kind::path);
     const bool gap_mode = (pattern.count_mode == Kit_layout_count_mode::gap) && counted;
     double     step_min = 0.0;
@@ -583,7 +606,7 @@ namespace {
             return {};
         }
         case Repeat_pattern_kind::scatter: {
-            return resolve_scatter(pattern, seed, out_run, out_poses);
+            return resolve_scatter(pattern, seed, items, out_run, out_poses);
         }
         default: {
             return "unknown pattern kind";
@@ -596,7 +619,7 @@ namespace {
 auto resolve_layout_pattern(
     const Kit_layout_pattern&                 pattern,
     const int                                 seed,
-    const float                               item_extent,
+    const Kit_layout_item_sizes&              items,
     const erhe::math::Curve_path_table* const path_table,
     Kit_layout_run&                           out_run,
     std::vector<Repeat_pose>* const           out_poses
@@ -606,7 +629,7 @@ auto resolve_layout_pattern(
     if (out_poses != nullptr) {
         out_poses->clear();
     }
-    std::string error = resolve_pattern_run(pattern, seed, item_extent, path_table, out_run, out_poses);
+    std::string error = resolve_pattern_run(pattern, seed, items, path_table, out_run, out_poses);
     if (!error.empty()) {
         return error;
     }
@@ -616,8 +639,39 @@ auto resolve_layout_pattern(
     // A scatter's poses are made while resolving it; the other kinds expand here.
     if ((out_poses != nullptr) && (pattern.kind != Repeat_pattern_kind::scatter)) {
         error = expand_repeat(out_run.pattern, Repeat_pose{}, *out_poses);
+        for (std::size_t i = 0, end = out_poses->size(); i < end; ++i) {
+            (*out_poses)[i].item = get_layout_item_index(i, items.items.size());
+        }
     }
     return error;
+}
+
+void Kit_layout_item_sizes::clear()
+{
+    extent = 0.0f;
+    items.clear();
+}
+
+void Kit_layout_item_sizes::add(const Kit_layout_item& item, const erhe::math::Aabb& bounds)
+{
+    if (bounds.is_valid_3d()) {
+        extent = std::max(extent, bounds.max.x - bounds.min.x);
+    }
+    items.push_back(Repeat_scatter_item{.weight = item.weight, .radius = get_scatter_footprint_radius(bounds)});
+}
+
+auto get_scatter_footprint_radius(const erhe::math::Aabb& bounds) -> float
+{
+    if (!bounds.is_valid_3d()) {
+        return 0.0f;
+    }
+    // Each product and sum its own statement: unfused on every compiler (doc/cmake_conventions.md).
+    const float x  = std::max(std::abs(bounds.min.x), std::abs(bounds.max.x));
+    const float z  = std::max(std::abs(bounds.min.z), std::abs(bounds.max.z));
+    const float xx = x * x;
+    const float zz = z * z;
+    const float rr = xx + zz;
+    return std::sqrt(rr);
 }
 
 auto get_layout_item_index(const std::size_t element, const std::size_t item_count) -> std::size_t

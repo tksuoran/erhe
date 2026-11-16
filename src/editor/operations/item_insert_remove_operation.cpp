@@ -6,6 +6,7 @@
 #include "app_context.hpp"
 #include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
+#include "level/level_kits.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_primitive/material.hpp"
@@ -81,9 +82,7 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
     m_index_in_parent_insert = parameters.index_in_parent;
 
     if (parameters.mode == Mode::insert) {
-        m_selection_after   = selection.get_selected_items();
-        m_active_item_after = selection.get_active_item();
-        m_after_parent    = parameters.parent;
+        m_after_parent = parameters.parent;
     }
 
     if (parameters.mode == Mode::remove) {
@@ -142,6 +141,14 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
     );
 }
 
+void Item_insert_remove_operation::on_materials_changed(App_context& context) const
+{
+    // A material entering or leaving a content library changes which kit layout items read.
+    if ((context.level_kits != nullptr) && erhe::is<erhe::primitive::Material>(m_item.get())) {
+        context.level_kits->on_scene_materials_changed();
+    }
+}
+
 void Item_insert_remove_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
@@ -183,6 +190,7 @@ void Item_insert_remove_operation::execute(App_context& context)
         note_subtree_removed(context, m_item);
     }
 
+    const bool first_insert = (m_mode == Mode::insert) && !m_inserted_once;
     if ((m_mode == Mode::insert) && m_inserted_once) {
         // A redo: the item kept the local transform the first insert gave it.
         reattach_keeping_local_transform(m_item, m_after_parent, m_index_in_parent);
@@ -193,6 +201,14 @@ void Item_insert_remove_operation::execute(App_context& context)
     }
     if (m_mode == Mode::insert) {
         m_inserted_once = true;
+    }
+    on_materials_changed(context);
+
+    if (first_insert) {
+        // An insert leaves the selection as the operations before it in the entry made it; a redo gives that back.
+        m_selection_after   = context.selection->get_selected_items();
+        m_active_item_after = context.selection->get_active_item();
+        return;
     }
 
     if (m_mode == Mode::remove) {
@@ -237,6 +253,7 @@ void Item_insert_remove_operation::undo(App_context& context)
         auto& child_parent_change = *i;
         child_parent_change->undo(context);
     }
+    on_materials_changed(context);
 
     context.selection->set_selection(m_selection_before, m_active_item_before.lock());
 }

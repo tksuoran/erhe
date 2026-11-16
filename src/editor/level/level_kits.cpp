@@ -22,12 +22,14 @@
 #include "operations/mesh_primitive_swap.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/property_set_operation.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_verify/verify.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_item/hierarchy.hpp"
@@ -36,6 +38,7 @@
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_raytrace/iscene.hpp"
 #include "erhe_scene/curve.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -304,7 +307,7 @@ private:
 }
 
 // The module snap first, then the surface options (D3.2, D4.4); excludes nothing from the rays.
-[[nodiscard]] auto rest_pose(
+[[nodiscard]] auto snapped_pose(
     Scene_root&             scene_root,
     const erhe::math::Aabb& local_bounds,
     const glm::vec3&        position,
@@ -323,6 +326,7 @@ private:
 Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
     : m_context             {context}
     , m_connector_indicators{*this}
+    , m_layout_indicators   {*this}
 {
     // A live parameter drag ends without an entry when its piece is deselected, removed or its scene closes (D3.6).
     m_selection_subscription = app_message_bus.selection.subscribe(
@@ -355,11 +359,34 @@ Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
             }
         }
     );
+    // An operation wrote a Kit_layout value of the node.
+    m_kit_layout_changed_subscription = app_message_bus.kit_layout_changed.subscribe(
+        [this](Kit_layout_changed_message& message) {
+            m_layout_indicators.forget_layout(message.node_id);
+        }
+    );
 }
 
 auto Level_kits::get_connector_indicators() -> Kit_connector_indicators&
 {
     return m_connector_indicators;
+}
+
+auto Level_kits::get_layout_indicators() -> Kit_layout_indicators&
+{
+    return m_layout_indicators;
+}
+
+void Level_kits::on_scene_materials_changed()
+{
+    // A layout item names its slot materials: every outline is refused or accepted again.
+    m_layout_indicators.forget_all();
+}
+
+void Level_kits::on_level_lengths_changed()
+{
+    // Item footprints and extents derive from the lengths: every outline resolves again.
+    m_layout_indicators.forget_all();
 }
 
 void Level_kits::on_kit_piece_record_changed(const erhe::scene::Node& node)
@@ -416,7 +443,8 @@ auto Level_kits::get_layout_initial_values() const -> Kit_layout_initial_values
     values.data.snap           = config.layout_module_snap    ? Kit_snap::module              : Kit_snap::none;
     values.data.surface_snap   = config.layout_surface_snap   ? Surface_snap::on              : Surface_snap::off;
     values.data.surface_orient = config.layout_surface_orient ? Surface_orient::on            : Surface_orient::off;
-    values.data.seeds          = config.layout_random_seeds   ? Kit_layout_seeds::per_element : Kit_layout_seeds::item;
+    values.data.surface_max_distance = config.layout_surface_max_distance;
+    values.data.seeds          = config.layout_per_piece_seed   ? Kit_layout_seeds::per_element : Kit_layout_seeds::item;
     values.data.seed           = config.layout_seed;
     values.data.lock           = config.layout_locked         ? Kit_layout_lock::locked       : Kit_layout_lock::unlocked;
     values.spacing             = config.layout_spacing_from_item ? Kit_layout_spacing::from_item : Kit_layout_spacing::as_given;
@@ -434,7 +462,8 @@ void Level_kits::set_layout_initial_values(const Kit_layout_initial_values& valu
     config.layout_module_snap       = (values.data.snap == Kit_snap::module);
     config.layout_surface_snap      = (values.data.surface_snap == Surface_snap::on);
     config.layout_surface_orient    = (values.data.surface_orient == Surface_orient::on);
-    config.layout_random_seeds      = (values.data.seeds == Kit_layout_seeds::per_element);
+    config.layout_surface_max_distance = values.data.surface_max_distance;
+    config.layout_per_piece_seed      = (values.data.seeds == Kit_layout_seeds::per_element);
     config.layout_seed              = values.data.seed;
     config.layout_locked            = (values.data.lock == Kit_layout_lock::locked);
     config.layout_spacing_from_item = (values.spacing == Kit_layout_spacing::from_item);
@@ -453,7 +482,35 @@ auto Level_kits::get_surface_settings() const -> Surface_options
     const Surface_snap_config& config = m_context.editor_settings->surface_snap;
     options.snap   = config.snap_to_surface   ? Surface_snap::on   : Surface_snap::off;
     options.orient = config.orient_to_surface ? Surface_orient::on : Surface_orient::off;
+    options.max_distance = config.max_distance;
     return options;
+}
+
+void Level_kits::validate_surface_settings()
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    // The settings file is where an out-of-range distance enters; it is reported and replaced there.
+    for (float* const distance : {&m_context.editor_settings->surface_snap.max_distance, &m_context.editor_settings->level_kit.layout_surface_max_distance}) {
+        const std::string error = check_surface_max_distance(*distance);
+        if (!error.empty()) {
+            log_scene->error("editor_settings.json: {}; the default {} m is used", error, c_default_surface_max_distance);
+            *distance = c_default_surface_max_distance;
+        }
+    }
+}
+
+void Level_kits::set_surface_max_distance(const float distance)
+{
+    ERHE_VERIFY(check_surface_max_distance(distance).empty());
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.max_distance = distance;
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
 }
 
 void Level_kits::set_surface_snap(const Surface_snap snap)
@@ -494,6 +551,22 @@ void Level_kits::set_connector_snap_distance(const float distance)
     }
 }
 
+auto Level_kits::get_connector_snap_axis_mode() const -> Connector_snap_axis_mode
+{
+    return (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.connector_snap_axis_mode : Connector_snap_axis_mode::full_offset;
+}
+
+void Level_kits::set_connector_snap_axis_mode(const Connector_snap_axis_mode mode)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.connector_snap_axis_mode = mode;
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
+}
+
 auto Level_kits::make_placement_pose(
     Scene_root&                   scene_root,
     const erhe::math::Aabb&       local_bounds,
@@ -506,7 +579,7 @@ auto Level_kits::make_placement_pose(
     const Kit_snap    snap     = (lengths.module > 0.0f) ? settings.snap : Kit_snap::none;
     const float       yaw      = glm::radians(static_cast<float>(yaw_steps) * settings.rotation_step_degrees);
     const glm::quat   rotation = glm::angleAxis(yaw, glm::vec3{0.0f, 1.0f, 0.0f});
-    const Surface_placement placement = rest_pose(scene_root, local_bounds, point, rotation, snap, lengths.module, settings.surface);
+    const Surface_placement placement = snapped_pose(scene_root, local_bounds, point, rotation, snap, lengths.module, settings.surface);
     return Kit_placement_pose{
         .position      = placement.pose.position,
         .rotation      = placement.pose.rotation,
@@ -722,6 +795,30 @@ auto Level_kits::refresh_scene(Scene_root& scene_root) -> Kit_refresh_report
         set_brush_placement(*mesh, brush, GEO::NO_INDEX, GEO::NO_INDEX);
         ++report.follow_count;
     }
+    // U33: switch values a write would refuse (a hand-edited file) are kept as loaded and named in one warning.
+    std::string switch_problems;
+    std::size_t switch_problem_count = 0;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : pieces) {
+        const Kit_piece_data record = read_kit_piece(*mesh).value();
+        for (const erhe::property::Dependency_property* property : {&Kit_piece::connectors_enabled_property.get(), &Kit_piece::disabled_connectors_property.get()}) {
+            if (!mesh->read_local_state(*property).has_value()) {
+                continue;
+            }
+            const std::string problem = check_connector_switch_write(record, *property, mesh->get_value(*property));
+            if (problem.empty()) {
+                continue;
+            }
+            ++switch_problem_count;
+            switch_problems += fmt::format("{}'{}' (id {}) {}: {}", switch_problems.empty() ? "" : "; ", mesh->get_name(), mesh->get_id(), property->get_name(), problem);
+        }
+    }
+    if (switch_problem_count > 0) {
+        log_scene->warn(
+            "Scene '{}': {} kit piece connector switch value(s) kept as loaded although a write would refuse them (a listed name "
+            "that is a connector of the shape is off, any other has no effect): {}",
+            scene_root.get_name(), switch_problem_count, switch_problems
+        );
+    }
     if (report.piece_count > 0) {
         log_scene->info(
             "Scene '{}': {} kit pieces, {} follow the kit, {} keep their loaded mesh",
@@ -730,6 +827,116 @@ auto Level_kits::refresh_scene(Scene_root& scene_root) -> Kit_refresh_report
     }
     return report;
 }
+
+namespace {
+
+class Surface_snap_request
+{
+public:
+    std::shared_ptr<erhe::scene::Mesh> mesh;
+    erhe::math::Aabb                   local_bounds;
+};
+
+class Surface_snap_plan
+{
+public:
+    Surface_placement          placement;
+    std::shared_ptr<Operation> operation; // null when the node keeps its transform
+    bool                       moved{false};
+};
+
+// Which found places get a transform operation.
+enum class Snap_record : unsigned int {
+    when_found = 0,
+    when_moved
+};
+
+class Planned_world
+{
+public:
+    const erhe::scene::Node* node{nullptr};
+    glm::mat4                world_from_node{1.0f};
+};
+
+// The node's world matrix once the planned snaps of it and of its ancestors apply; none when no such snap is planned.
+[[nodiscard]] auto find_planned_world(const erhe::scene::Node& node, const std::span<const Planned_world> planned) -> std::optional<glm::mat4>
+{
+    if (planned.empty()) {
+        return {};
+    }
+    glm::mat4 ancestor_from_node{1.0f};
+    const erhe::scene::Node*           current = &node;
+    std::shared_ptr<erhe::scene::Node> parent;
+    while (current != nullptr) {
+        for (const Planned_world& entry : planned) {
+            if (entry.node == current) {
+                return entry.world_from_node * ancestor_from_node;
+            }
+        }
+        ancestor_from_node = current->parent_from_node() * ancestor_from_node;
+        parent  = current->get_parent_node();
+        current = parent.get();
+    }
+    return {};
+}
+
+// D7.3 for each mesh, parents before children: a child's search starts from its pose after its ancestors' snaps, and
+// its local transform is taken against its parent's pose after the parent's snap. out_plans is per request, in order.
+void plan_surface_snaps(
+    erhe::raytrace::IScene&                         committed_rt_scene,
+    const std::span<const Surface_snap_request>     requests,
+    const Surface_options&                          options,
+    const std::span<const erhe::scene::Mesh* const> excluded,
+    const Snap_record                               record,
+    std::vector<Surface_snap_plan>&                 out_plans
+)
+{
+    out_plans.clear();
+    out_plans.resize(requests.size());
+    std::vector<std::size_t> order(requests.size());
+    for (std::size_t i = 0, end = requests.size(); i < end; ++i) {
+        order[i] = i;
+    }
+    std::stable_sort(order.begin(), order.end(), [&requests](const std::size_t lhs, const std::size_t rhs) -> bool {
+        return requests[lhs].mesh->get_depth() < requests[rhs].mesh->get_depth();
+    });
+    std::vector<Planned_world> planned;
+    for (const std::size_t i : order) {
+        const std::shared_ptr<erhe::scene::Mesh>& mesh  = requests[i].mesh;
+        const std::optional<glm::mat4>            moved = find_planned_world(*mesh, planned);
+        const erhe::scene::Trs_transform world = moved.has_value() ? erhe::scene::Trs_transform{moved.value()} : mesh->world_from_node_transform();
+        const Surface_pose start{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()};
+        Surface_snap_plan& plan = out_plans[i];
+        plan.placement = find_surface_placement(committed_rt_scene, requests[i].local_bounds, start, options, excluded);
+        plan.moved = plan.placement.surface_found &&
+            ((plan.placement.pose.position != start.position) || (plan.placement.pose.rotation != start.rotation));
+        const bool records = (record == Snap_record::when_found) ? plan.placement.surface_found : plan.moved;
+        if (!records) {
+            continue;
+        }
+        const glm::mat4 world_from_node =
+            erhe::math::create_translation<float>(plan.placement.pose.position) *
+            glm::mat4_cast(plan.placement.pose.rotation) *
+            erhe::math::create_scale<float>(plan.placement.pose.scale);
+        const std::shared_ptr<erhe::scene::Node> parent = mesh->get_parent_node();
+        glm::mat4 parent_from_node = world_from_node;
+        if (parent) {
+            const std::optional<glm::mat4> parent_moved = find_planned_world(*parent, planned);
+            parent_from_node = (parent_moved.has_value() ? glm::inverse(parent_moved.value()) : parent->node_from_world()) * world_from_node;
+        }
+        plan.operation = std::make_shared<Node_transform_operation>(
+            Node_transform_operation::Parameters{
+                .node                    = mesh,
+                .parent_from_node_before = mesh->parent_from_node_transform(),
+                .parent_from_node_after  = erhe::scene::Trs_transform{parent_from_node},
+                .xform_op_stack_before   = mesh->copy_xform_op_stack()
+            }
+        );
+        planned.push_back(Planned_world{.node = mesh.get(), .world_from_node = world_from_node});
+    }
+}
+
+} // anonymous namespace
 
 auto Level_kits::snap_to_surface(
     Scene_root&                                               scene_root,
@@ -741,48 +948,35 @@ auto Level_kits::snap_to_surface(
 {
     out_results.clear();
     std::vector<const erhe::scene::Mesh*> excluded;
+    std::vector<Surface_snap_request>     requests;
     excluded.reserve(meshes.size());
+    requests.reserve(meshes.size());
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
         excluded.push_back(mesh.get());
+        requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(*mesh)});
     }
     std::vector<std::shared_ptr<Operation>> operations;
-    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
-        const erhe::scene::Trs_transform world = mesh->world_from_node_transform();
-        const Surface_placement placement = find_surface_placement(
-            scene_root,
-            mesh_local_bounds(*mesh),
-            Surface_pose{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()},
-            options,
-            excluded
-        );
-        out_results.push_back(Kit_snap_result{.mesh = mesh, .placement = placement});
-        if ((apply == Kit_snap_apply::query_only) || !placement.surface_found) {
-            continue;
+    if (any_surface_option(options)) {
+        erhe::raytrace::IScene& rt_scene = scene_root.get_raytrace_scene();
+        rt_scene.commit();
+        std::vector<Surface_snap_plan> plans;
+        plan_surface_snaps(rt_scene, requests, options, excluded, Snap_record::when_found, plans);
+        for (std::size_t i = 0, end = meshes.size(); i < end; ++i) {
+            out_results.push_back(Kit_snap_result{.mesh = meshes[i], .placement = plans[i].placement});
+            if ((apply == Kit_snap_apply::move) && plans[i].operation) {
+                operations.push_back(plans[i].operation);
+            }
         }
-        const glm::mat4 world_from_node =
-            erhe::math::create_translation<float>(placement.pose.position) *
-            glm::mat4_cast(placement.pose.rotation) *
-            erhe::math::create_scale<float>(placement.pose.scale);
-        const std::shared_ptr<erhe::scene::Node> parent = mesh->get_parent_node();
-        const glm::mat4 parent_from_node = parent ? (parent->node_from_world() * world_from_node) : world_from_node;
-        operations.push_back(
-            std::make_shared<Node_transform_operation>(
-                Node_transform_operation::Parameters{
-                    .node                    = mesh,
-                    .parent_from_node_before = mesh->parent_from_node_transform(),
-                    .parent_from_node_after  = erhe::scene::Trs_transform{parent_from_node},
-                    .xform_op_stack_before   = mesh->copy_xform_op_stack()
-                }
-            )
-        );
+    } else {
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+            const erhe::scene::Trs_transform world = mesh->world_from_node_transform();
+            out_results.push_back(Kit_snap_result{
+                .mesh      = mesh,
+                .placement = Surface_placement{.pose = Surface_pose{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()}}
+            });
+        }
     }
-    const std::size_t moved_count     = operations.size();
-    const std::size_t unsettled_count = static_cast<std::size_t>(std::count_if(
-        out_results.begin(), out_results.end(), [](const Kit_snap_result& result) -> bool { return !result.placement.settled; }
-    ));
-    if ((apply == Kit_snap_apply::move) && (unsettled_count > 0)) {
-        log_scene->warn("Level Kit: snap to surface moved {} pieces, {} still rose at their last surface cast (unsettled rest recorded)", moved_count, unsettled_count);
-    }
+    const std::size_t moved_count = operations.size();
     if (!operations.empty()) {
         m_context.operation_stack->execute_now(
             (operations.size() == 1)
@@ -883,7 +1077,8 @@ auto Level_kits::prepare_placements(
         std::optional<Kit_join_pose> join{};
         if (placement.connect.has_value()) {
             Kit_join_pose pose{};
-            const std::string connect_problem = resolve_connect(scene_root, piece_values, placement.connect.value(), glm::mat4{1.0f}, pose);
+            // A new piece has every connector enabled (U33).
+            const std::string connect_problem = resolve_connect(scene_root, piece_values, Kit_connector_switches{}, placement.connect.value(), glm::mat4{1.0f}, pose);
             if (!connect_problem.empty()) {
                 return fail(i, connect_problem);
             }
@@ -902,7 +1097,6 @@ auto Level_kits::prepare_placements(
     std::vector<std::shared_ptr<erhe::primitive::Material>>           materials;
     std::vector<std::shared_ptr<Operation>>                           insert_operations;
     std::map<const erhe::Hierarchy*, std::size_t>                     batch_children;
-    std::size_t                                                       unsettled_count{0};
     for (std::size_t i = 0, end = placements.size(); i < end; ++i) {
         const Kit_placement&        placement = placements[i];
         const Kit_shape_definition& shape     = *placement.shape;
@@ -919,13 +1113,10 @@ auto Level_kits::prepare_placements(
             materials.push_back(resolver.resolve(m_library, shape.material_slots[slot], given));
         }
 
-        // The earlier pieces of this call are not surfaces yet; a connector join is exact, so it is not rested.
+        // The earlier pieces of this call are not surfaces yet; a connector join is exact, so it is not snapped to the surface.
         const Surface_placement surface = joins[i].has_value()
             ? Surface_placement{.pose = Surface_pose{.position = joins[i]->position, .rotation = joins[i]->rotation, .scale = glm::vec3{1.0f}}}
-            : rest_pose(scene_root, brush->get_bounding_box(), placement.position, placement.rotation, snap, lengths.module, placement.surface);
-        if (!surface.settled) {
-            ++unsettled_count;
-        }
+            : snapped_pose(scene_root, brush->get_bounding_box(), placement.position, placement.rotation, snap, lengths.module, placement.surface);
         const glm::vec3 position        = surface.pose.position;
         const glm::quat rotation        = surface.pose.rotation;
         const glm::mat4 world_from_node = erhe::math::create_translation<float>(position) * glm::mat4_cast(rotation);
@@ -967,9 +1158,6 @@ auto Level_kits::prepare_placements(
         );
     }
 
-    if (unsettled_count > 0) {
-        log_scene->warn("Level Kit: {} of {} placed pieces still rose at their last surface cast (unsettled rest recorded)", unsettled_count, placements.size());
-    }
     // Materials are inserted first, so an undo takes the pieces out before the materials they use.
     out_operations = resolver.take_operations();
     for (std::shared_ptr<Operation>& operation : insert_operations) {
@@ -1031,7 +1219,7 @@ void collect_descendant_nodes(const erhe::Hierarchy& hierarchy, std::vector<std:
 
 } // anonymous namespace
 
-auto Level_kits::get_local_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors) const -> std::string
+auto Level_kits::get_local_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors, const Kit_connector_set set) const -> std::string
 {
     out_connectors.clear();
     const std::optional<Kit_piece_data> record = read_kit_piece(node);
@@ -1044,14 +1232,17 @@ auto Level_kits::get_local_connectors(const erhe::scene::Node& node, std::vector
         return fmt::format("'{}': {}", node.get_name(), problem);
     }
     get_shape_connectors(values, out_connectors);
+    if (set == Kit_connector_set::enabled) {
+        remove_disabled_connectors(read_connector_switches(node), out_connectors);
+    }
     return {};
 }
 
-auto Level_kits::get_world_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors) const -> std::string
+auto Level_kits::get_world_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors, const Kit_connector_set set) const -> std::string
 {
     out_connectors.clear();
     std::vector<Kit_connector> local_connectors;
-    const std::string problem = get_local_connectors(node, local_connectors);
+    const std::string problem = get_local_connectors(node, local_connectors, set);
     if (!problem.empty()) {
         return problem;
     }
@@ -1062,11 +1253,12 @@ auto Level_kits::get_world_connectors(const erhe::scene::Node& node, std::vector
 }
 
 auto Level_kits::resolve_connect(
-    const Scene_root&           scene_root,
-    const Kit_parameter_values& values,
-    const Kit_connect&          connect,
-    const glm::mat4&            world_from_node,
-    Kit_join_pose&              out_motion
+    const Scene_root&             scene_root,
+    const Kit_parameter_values&   values,
+    const Kit_connector_switches& switches,
+    const Kit_connect&            connect,
+    const glm::mat4&              world_from_node,
+    Kit_join_pose&                out_motion
 ) const -> std::string
 {
     const Kit_shape_definition* const shape = values.get_shape();
@@ -1079,6 +1271,10 @@ auto Level_kits::resolve_connect(
     if (piece_connector == nullptr) {
         return fmt::format("{} has no connector '{}' (its connectors: {})", shape->id, connect.connector, connector_names_text(connectors));
     }
+    if (!switches.is_enabled(connect.connector)) {
+        remove_disabled_connectors(switches, connectors);
+        return fmt::format("{} connector '{}' is disabled (its enabled connectors: {})", shape->id, connect.connector, connector_names_text(connectors));
+    }
     if (!connect.target) {
         return "no target piece";
     }
@@ -1089,7 +1285,7 @@ auto Level_kits::resolve_connect(
         return "the gap must be a finite number";
     }
     std::vector<Kit_connector> target_connectors;
-    const std::string target_problem = get_world_connectors(*connect.target, target_connectors);
+    const std::string target_problem = get_world_connectors(*connect.target, target_connectors, Kit_connector_set::all);
     if (!target_problem.empty()) {
         return "target " + target_problem;
     }
@@ -1100,6 +1296,14 @@ auto Level_kits::resolve_connect(
             "target '{}' ({}) has no connector '{}' (its connectors: {})",
             connect.target->get_name(), record.has_value() ? record->shape : std::string{}, connect.target_connector,
             connector_names_text(target_connectors)
+        );
+    }
+    const Kit_connector_switches target_switches = read_connector_switches(*connect.target);
+    if (!target_switches.is_enabled(connect.target_connector)) {
+        remove_disabled_connectors(target_switches, target_connectors);
+        return fmt::format(
+            "target '{}' connector '{}' is disabled (its enabled connectors: {})",
+            connect.target->get_name(), connect.target_connector, connector_names_text(target_connectors)
         );
     }
     const std::optional<Kit_join_pose> motion = join_motion(*piece_connector, world_from_node, *target_connector, connect.twist_steps, connect.gap);
@@ -1144,7 +1348,7 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
         }
     }
     Kit_join_pose motion{};
-    result.error = resolve_connect(scene_root, values, connect, node->world_from_node(), motion);
+    result.error = resolve_connect(scene_root, values, read_connector_switches(*node), connect, node->world_from_node(), motion);
     if (!result.error.empty()) {
         return result;
     }
@@ -1183,6 +1387,171 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
         )
     );
     append_layout_move_operations(scene_root, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, operations);
+    m_context.operation_stack->execute_now(
+        (operations.size() == 1)
+            ? operations.front()
+            : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
+    );
+    result.changed = true;
+    return result;
+}
+
+namespace {
+
+// U33: a replaced piece keeps the switches of the connector names its new shape has; the others are cleared in the entry.
+void append_connector_switch_carry(
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    const Kit_parameter_values&               values,
+    std::vector<std::shared_ptr<Operation>>&  out_operations
+)
+{
+    std::vector<Kit_connector> connectors;
+    get_shape_connectors(values, connectors);
+    const erhe::property::Dependency_property& enabled_property  = Kit_piece::connectors_enabled_property.get();
+    const erhe::property::Dependency_property& disabled_property = Kit_piece::disabled_connectors_property.get();
+    const std::optional<erhe::property::Local_state> enabled_before = mesh->read_local_state(enabled_property);
+    if (connectors.empty() && enabled_before.has_value()) {
+        out_operations.push_back(std::make_shared<Property_set_operation>(mesh, enabled_property, enabled_before, std::optional<erhe::property::Local_state>{}));
+    }
+    const std::optional<erhe::property::Local_state> disabled_before = mesh->read_local_state(disabled_property);
+    if (!disabled_before.has_value()) {
+        return;
+    }
+    std::vector<std::string> kept;
+    for (const std::string& name : parse_connector_names(mesh->get_value(Kit_piece::disabled_connectors_property))) {
+        if (find_connector(connectors, name) != nullptr) {
+            kept.push_back(name);
+        }
+    }
+    const std::string text = make_connector_names_text(std::move(kept));
+    if (text == mesh->get_value(Kit_piece::disabled_connectors_property)) {
+        return;
+    }
+    out_operations.push_back(
+        std::make_shared<Property_set_operation>(
+            mesh, disabled_property, disabled_before,
+            text.empty() ? std::optional<erhe::property::Local_state>{} : std::optional<erhe::property::Local_state>{erhe::property::Property_value{text}}
+        )
+    );
+}
+
+} // anonymous namespace
+
+auto Level_kits::check_connector_switch_write(
+    const Kit_piece_data&                      record,
+    const erhe::property::Dependency_property& property,
+    const erhe::property::Property_value&      value
+) const -> std::string
+{
+    if (!is_connector_switch_property(property)) {
+        return {};
+    }
+    Kit_parameter_values values;
+    const std::string problem = read_piece_values(record, values);
+    if (!problem.empty()) {
+        return fmt::format("the piece's record does not read: {}", problem);
+    }
+    std::vector<Kit_connector> connectors;
+    get_shape_connectors(values, connectors);
+    if (&property == &Kit_piece::connectors_enabled_property.get()) {
+        if (std::get_if<bool>(&value) == nullptr) {
+            return "Kit_piece.connectors_enabled takes true or false";
+        }
+        return connectors.empty() ? fmt::format("{} has no connectors to switch", record.shape) : std::string{};
+    }
+    const std::string* const text = std::get_if<std::string>(&value);
+    if (text == nullptr) {
+        return "Kit_piece.disabled_connectors takes a text";
+    }
+    const std::string error = check_disabled_connectors_text(*text, connectors);
+    return error.empty() ? std::string{} : fmt::format("{}: {}", record.shape, error);
+}
+
+auto Level_kits::check_connector_switch_write(
+    const erhe::Item_base&                     item,
+    const erhe::property::Dependency_property& property,
+    const erhe::property::Property_value&      value
+) const -> std::string
+{
+    if (!is_connector_switch_property(property)) {
+        return {};
+    }
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&item);
+    const std::optional<Kit_piece_data> record = (node != nullptr) ? read_kit_piece(*node) : std::optional<Kit_piece_data>{};
+    if (!record.has_value()) {
+        return fmt::format("'{}' is not a kit piece", item.get_name());
+    }
+    return check_connector_switch_write(record.value(), property, value);
+}
+
+auto Level_kits::set_connector_switches(
+    Scene_root&                               scene_root,
+    const std::shared_ptr<erhe::scene::Node>& node,
+    const Kit_connector_switch_edit&          edit
+) -> Kit_connector_switch_result
+{
+    Kit_connector_switch_result result;
+    result.error = check_scene_node(scene_root, node);
+    if (!result.error.empty()) {
+        return result;
+    }
+    const std::optional<std::string> refusal = locked_layout_refusal(*node);
+    if (refusal.has_value()) {
+        result.error = refusal.value();
+        return result;
+    }
+    std::vector<Kit_connector> connectors;
+    result.error = get_local_connectors(*node, connectors, Kit_connector_set::all);
+    if (!result.error.empty()) {
+        return result;
+    }
+    if (connectors.empty()) {
+        const std::optional<Kit_piece_data> record = read_kit_piece(*node);
+        result.error = fmt::format("'{}' ({}) has no connectors to switch", node->get_name(), record.has_value() ? record->shape : std::string{});
+        return result;
+    }
+    const Kit_connector_switches before = read_connector_switches(*node);
+    Kit_connector_switches after = before;
+    if (edit.piece.has_value()) {
+        after.connectors_enabled = (edit.piece.value() == Kit_connector_state::enabled);
+    }
+    for (const Kit_connector_switch_edit::Connector& connector : edit.connectors) {
+        if (find_connector(connectors, connector.name) == nullptr) {
+            const std::optional<Kit_piece_data> record = read_kit_piece(*node);
+            result.error = fmt::format(
+                "'{}' ({}) has no connector '{}' (its connectors: {})",
+                node->get_name(), record.has_value() ? record->shape : std::string{}, connector.name, connector_names_text(connectors)
+            );
+            return result;
+        }
+        after.disabled_connectors = set_connector_state(after.disabled_connectors, connector.name, connector.state);
+    }
+    result.switches = after;
+    std::vector<std::shared_ptr<Operation>> operations;
+    // The default value is written as no local value, so a piece with every switch on carries none in the file.
+    if (after.connectors_enabled != before.connectors_enabled) {
+        operations.push_back(
+            std::make_shared<Property_set_operation>(
+                node, Kit_piece::connectors_enabled_property.get(),
+                node->read_local_state(Kit_piece::connectors_enabled_property.get()),
+                after.connectors_enabled ? std::optional<erhe::property::Local_state>{} : std::optional<erhe::property::Local_state>{erhe::property::Property_value{false}}
+            )
+        );
+    }
+    if (after.disabled_connectors != before.disabled_connectors) {
+        operations.push_back(
+            std::make_shared<Property_set_operation>(
+                node, Kit_piece::disabled_connectors_property.get(),
+                node->read_local_state(Kit_piece::disabled_connectors_property.get()),
+                after.disabled_connectors.empty()
+                    ? std::optional<erhe::property::Local_state>{}
+                    : std::optional<erhe::property::Local_state>{erhe::property::Property_value{after.disabled_connectors}}
+            )
+        );
+    }
+    if (operations.empty()) {
+        return result;
+    }
     m_context.operation_stack->execute_now(
         (operations.size() == 1)
             ? operations.front()
@@ -1502,6 +1871,7 @@ void Level_kits::on_selection()
 {
     // The Level Kit window publishes its Connect choice again for the new selection.
     m_connector_indicators.clear_connect_choice();
+    m_layout_indicators.end_pending_unless_selected();
     if (m_parameter_preview.has_value() && !m_parameter_preview.value().mesh->is_selected()) {
         cancel_parameter_preview();
     }
@@ -1542,6 +1912,7 @@ void Level_kits::on_items_removed(const Removed_items& removed)
 {
     // The cached connector frames of removed pieces go (a regenerated layout's children are new nodes).
     m_connector_indicators.forget_removed(removed);
+    m_layout_indicators.forget_removed(removed);
     if (m_parameter_preview.has_value() && removed.lookup.contains(m_parameter_preview.value().mesh.get())) {
         cancel_parameter_preview();
     }
@@ -1556,6 +1927,7 @@ void Level_kits::on_items_removed(const Removed_items& removed)
 void Level_kits::on_close_scene(const erhe::Item_host* const closing_host)
 {
     m_connector_indicators.forget_all();
+    m_layout_indicators.forget_all();
     if (m_parameter_preview.has_value() && (m_parameter_preview.value().mesh->get_item_host() == closing_host)) {
         cancel_parameter_preview();
     }
@@ -1767,10 +2139,57 @@ auto Level_kits::make_replace_values(
     return {};
 }
 
+auto Level_kits::find_replace_skip(const std::shared_ptr<erhe::scene::Node>& node_in) const -> std::optional<Kit_replace_skipped>
+{
+    const erhe::scene::Node&                 node   = *node_in;
+    const std::shared_ptr<erhe::scene::Mesh> mesh   = std::dynamic_pointer_cast<erhe::scene::Mesh>(node_in);
+    const std::optional<std::string>         locked = locked_layout_refusal(node);
+    const std::optional<Kit_piece_data>      record = mesh ? read_kit_piece(*mesh) : std::optional<Kit_piece_data>{};
+    Kit_parameter_values old_values;
+    const std::string record_problem = record.has_value() ? read_piece_values(record.value(), old_values) : std::string{};
+    const Kit_shape_definition* const old_shape = (record.has_value() && record_problem.empty()) ? old_values.get_shape() : nullptr;
+    const Kit_replace_target_facts facts{
+        .kit_layout_node     = carries_kit_layout(node),
+        .below_locked_layout = locked.has_value(),
+        .mesh                = static_cast<bool>(mesh),
+        .group_node          = (dynamic_cast<const erhe::scene::Xform*>(&node) != nullptr),
+        .kit_piece_record    = record.has_value(),
+        .record_reads        = (old_shape != nullptr),
+        .slot_count_matches  = (old_shape != nullptr) && (mesh->get_primitives().size() == old_shape->material_slots.size())
+    };
+    const std::optional<Kit_replace_skip> skip = classify_replace_target(facts);
+    if (!skip.has_value()) {
+        return {};
+    }
+    std::string message;
+    switch (skip.value()) {
+        case Kit_replace_skip::kit_layout_node:
+            message = fmt::format("'{}' is a kit layout node: the shapes of its items are its own values (level_set_layout)", node.get_name());
+            break;
+        case Kit_replace_skip::locked_layout_child:
+            message = locked.value();
+            break;
+        case Kit_replace_skip::unreadable_record:
+            message = fmt::format("piece '{}': {}", node.get_name(), record_problem);
+            break;
+        case Kit_replace_skip::loaded_mesh:
+            message = fmt::format(
+                "piece '{}' keeps a loaded mesh: it has {} primitives, its shape {} material slots",
+                node.get_name(), mesh->get_primitives().size(), old_shape->material_slots.size()
+            );
+            break;
+        default:
+            message = fmt::format("'{}' is {}", node.get_name(), describe(skip.value()));
+            break;
+    }
+    return Kit_replace_skipped{.node = node_in, .skip = skip.value(), .message = std::move(message)};
+}
+
 auto Level_kits::replace_shape(
     Scene_root&                            scene_root,
     const Kit_shape_definition&            shape,
-    const std::span<const Kit_replacement> replacements
+    const std::span<const Kit_replacement> replacements,
+    const Surface_options&                 surface
 ) -> Kit_replace_result
 {
     Kit_replace_result result;
@@ -1789,53 +2208,53 @@ auto Level_kits::replace_shape(
         result.error = "the scene has no content library";
         return result;
     }
+    if (any_surface_option(surface)) {
+        if (!(std::abs(glm::length(surface.direction) - 1.0f) < 1.0e-3f)) {
+            result.error = "the surface direction must be a unit vector";
+            return result;
+        }
+        const std::string distance_problem = check_surface_max_distance(surface.max_distance);
+        if (!distance_problem.empty()) {
+            result.error = distance_problem;
+            return result;
+        }
+    }
     const Kit_lengths lengths = get_lengths(scene_root);
 
-    // Every piece is checked before anything changes.
+    // Every node is checked before anything changes; the ones that cannot be replaced are skipped (U24).
+    std::vector<std::size_t> piece_replacement; // per result piece, its index in replacements
     for (std::size_t i = 0, end = replacements.size(); i < end; ++i) {
         const Kit_replacement& replacement = replacements[i];
         if (!replacement.node) {
             return fail(i, "no node");
         }
         const erhe::scene::Node& node = *replacement.node;
-        if (carries_kit_layout(node)) {
-            return fail(i, fmt::format("'{}' is a kit layout node: the shapes of its items are its own values (level_set_layout)", node.get_name()));
-        }
-        const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(replacement.node);
-        if (!mesh || (mesh->get_item_host() != &scene_root)) {
-            return fail(i, fmt::format("'{}' is not a mesh of scene '{}'", node.get_name(), scene_root.get_name()));
+        if (node.get_item_host() != &scene_root) {
+            return fail(i, fmt::format("'{}' is not a node of scene '{}'", node.get_name(), scene_root.get_name()));
         }
         for (std::size_t j = 0; j < i; ++j) {
             if (replacements[j].node == replacement.node) {
                 return fail(i, fmt::format("'{}' is listed twice", node.get_name()));
             }
         }
-        const std::optional<std::string> refusal = locked_layout_refusal(*mesh);
-        if (refusal.has_value()) {
-            return fail(i, refusal.value());
+        std::optional<Kit_replace_skipped> skipped = find_replace_skip(replacement.node);
+        if (skipped.has_value()) {
+            result.skipped.push_back(std::move(skipped.value()));
+            continue;
         }
-        const std::optional<Kit_piece_data> record = read_kit_piece(*mesh);
-        if (!record.has_value()) {
-            return fail(i, fmt::format("'{}' is not a kit piece", node.get_name()));
-        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh   = std::dynamic_pointer_cast<erhe::scene::Mesh>(replacement.node);
+        const std::optional<Kit_piece_data>      record = read_kit_piece(*mesh);
+        Kit_parameter_values old_values;
+        const std::string record_problem = read_piece_values(record.value(), old_values);
+        ERHE_VERIFY(record_problem.empty()); // find_replace_skip() skips a record that does not read
+        const Kit_shape_definition* const old_shape = old_values.get_shape();
         Kit_replaced_piece piece;
         piece.mesh      = mesh;
         piece.old_shape = record.value().shape;
-        Kit_parameter_values old_values;
-        const std::string problem = read_piece_values(record.value(), old_values);
-        if (!problem.empty()) {
-            return fail(i, fmt::format("piece '{}': {}", node.get_name(), problem));
-        }
-        const Kit_shape_definition& old_shape = *old_values.get_shape();
-        if (mesh->get_primitives().size() != old_shape.material_slots.size()) {
-            return fail(i, fmt::format(
-                "piece '{}' keeps a loaded mesh: it has {} primitives, its shape {} material slots",
-                node.get_name(), mesh->get_primitives().size(), old_shape.material_slots.size()
-            ));
-        }
-        if (&old_shape == &shape) {
+        if (old_shape == &shape) {
             piece.values = std::move(old_values);
             result.pieces.push_back(std::move(piece));
+            piece_replacement.push_back(i);
             continue;
         }
         carry_parameter_values(old_values, shape, lengths, piece.values, piece.parameters);
@@ -1853,9 +2272,10 @@ auto Level_kits::replace_shape(
         if (!material_problem.empty()) {
             return fail(i, material_problem);
         }
-        match_material_slots(old_shape.material_slots, shape.material_slots, piece.slot_matches);
+        match_material_slots(old_shape->material_slots, shape.material_slots, piece.slot_matches);
         piece.replaced = true;
         result.pieces.push_back(std::move(piece));
+        piece_replacement.push_back(i);
     }
 
     // The brushes last: a call refused by a check above builds none.
@@ -1868,13 +2288,27 @@ auto Level_kits::replace_shape(
         std::shared_ptr<Brush>     brush  = get_brush(result.pieces[i].values);
         const Brush::Scaled* const scaled = brush ? brush->get_scaled(1.0) : nullptr;
         if ((scaled == nullptr) || (scaled->part_primitives.size() != shape.material_slots.size())) {
-            return fail(i, fmt::format("{}: the shape made no geometry of one part per material slot", shape.id));
+            return fail(piece_replacement[i], fmt::format("{}: the shape made no geometry of one part per material slot", shape.id));
         }
         brushes.push_back(std::move(brush));
     }
 
+    // The replaced pieces are not surfaces for each other (their old geometry is still in the raytrace scene).
+    const bool snap = any_surface_option(surface);
+    std::vector<const erhe::scene::Mesh*> excluded;
+    if (snap) {
+        for (const Kit_replaced_piece& piece : result.pieces) {
+            if (piece.replaced) {
+                excluded.push_back(piece.mesh.get());
+            }
+        }
+        scene_root.get_raytrace_scene().commit();
+    }
+
     Palette_material_resolver               resolver{m_context, library};
     std::vector<std::shared_ptr<Operation>> piece_operations;
+    std::vector<Surface_snap_request>       snap_requests;
+    std::vector<std::size_t>                snap_pieces; // per snap request, its index in result.pieces
     for (std::size_t i = 0, end = result.pieces.size(); i < end; ++i) {
         Kit_replaced_piece& piece = result.pieces[i];
         if (!piece.replaced) {
@@ -1893,7 +2327,7 @@ auto Level_kits::replace_shape(
             .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
             .parameters      = read_kit_piece(*mesh).value().parameters
         };
-        const std::vector<Kit_slot_material>& given = replacements[i].materials;
+        const std::vector<Kit_slot_material>& given = replacements[piece_replacement[i]].materials;
         std::vector<erhe::scene::Mesh_primitive> primitives;
         for (std::size_t slot = 0, slot_end = shape.material_slots.size(); slot < slot_end; ++slot) {
             const bool is_given = (slot < given.size()) && (given[slot].material || !given[slot].palette_name.empty());
@@ -1911,6 +2345,10 @@ auto Level_kits::replace_shape(
             piece.materials.push_back(material);
             primitives.emplace_back(scaled.part_primitives[slot], material);
         }
+        if (snap) {
+            snap_requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive>{primitives})});
+            snap_pieces.push_back(i);
+        }
         Kit_piece_mesh_state after{
             .shape           = shape.id,
             .primitives      = std::move(primitives),
@@ -1919,15 +2357,34 @@ auto Level_kits::replace_shape(
             .parameters      = piece.values.to_canonical_text()
         };
         piece_operations.push_back(std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after)));
+        append_connector_switch_carry(mesh, piece.values, piece_operations);
         ++result.replaced_count;
     }
     if (piece_operations.empty()) {
         return result;
     }
-    // Materials are inserted first, so an undo takes them out after the pieces stop using them.
+    // The search of D7.3 for the new shapes' bounds; a pose that rests already stays bit for bit.
+    std::vector<std::shared_ptr<Operation>> snap_operations;
+    if (snap) {
+        std::vector<Surface_snap_plan> plans;
+        plan_surface_snaps(scene_root.get_raytrace_scene(), snap_requests, surface, excluded, Snap_record::when_moved, plans);
+        for (std::size_t j = 0, end = plans.size(); j < end; ++j) {
+            Kit_replaced_piece& piece = result.pieces[snap_pieces[j]];
+            piece.surface = plans[j].placement;
+            piece.snapped = plans[j].moved;
+            if (plans[j].operation) {
+                snap_operations.push_back(plans[j].operation);
+                ++result.snapped_count;
+            }
+        }
+    }
+    // Materials are inserted first, so an undo takes them out after the pieces stop using them; the snaps follow the shapes.
     Compound_operation::Parameters parameters;
     parameters.operations = resolver.take_operations();
     for (std::shared_ptr<Operation>& operation : piece_operations) {
+        parameters.operations.push_back(std::move(operation));
+    }
+    for (std::shared_ptr<Operation>& operation : snap_operations) {
         parameters.operations.push_back(std::move(operation));
     }
     m_context.operation_stack->execute_now(

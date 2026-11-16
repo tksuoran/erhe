@@ -119,6 +119,14 @@ class Kit_values_changed_message
 // A Kit_layout value of a node was written by an operation (execute, undo, redo; App_context::on_item_property_changed()).
 class Kit_layout_changed_message
 {
+public:
+    uint64_t node_id{0}; // the node's id, not a reference: the message is queued
+};
+
+// A Kit_piece connector switch of a node was written (App_context::on_item_property_changed()): the Connect rows read
+// the piece's enabled connectors again.
+class Kit_piece_connectors_changed_message
+{
 };
 
 // A curve's path or world transform changed (doc/editor/curves.md "Change notification"): sent once per

@@ -3,10 +3,12 @@
 Stability: experimental
 
 Viewport editing of points that belong to one target - a lattice node's
-control points, a curve prim's control points and handle ends - shares one
-interface and one gizmo path. The two users are described in
-`doc/editor/lattice_deform_geometry_node.md` "Viewport editing" and
-`doc/editor/curves.md` "Viewport editing".
+control points, a curve prim's control points and handle ends, a scatter kit
+layout node's region handles - shares one interface and one gizmo path. The
+three users are described in
+`doc/editor/lattice_deform_geometry_node.md` "Viewport editing",
+`doc/editor/curves.md` "Viewport editing" and `doc/editor/level_tools.md`
+"Scatter region handles".
 
 ## The interface
 
@@ -37,8 +39,9 @@ interface and one gizmo path. The two users are described in
 
 ## Shared code
 
-`Point_set_tool` (`tools/point_set_tool.*`) is the base of `Lattice_tool` and
-`Curve_tool`, a background tool at priority 4 (above the object selection):
+`Point_set_tool` (`tools/point_set_tool.*`) is the base of `Lattice_tool`,
+`Curve_tool` and `Kit_layout_region_tool`, a background tool at priority 4
+(above the object selection):
 
 - The pick: the point within 12 px of the pointer (screen space, through
   `Viewport_scene_view::project_to_viewport()`), nearest to the camera
@@ -84,11 +87,15 @@ next drag needs no new click.
   between.
 - The lattice tool's selected point is a value of the lattice node and is
   always one point; a drag leaves it selected.
+- The region tool holds at most one selected handle, kept through its drags
+  and their undo and redo, and cleared when the target changes or its
+  region or kind does (the indices then name other handles). Its drag gives
+  up when the node leaves the selection mid-drag, restoring the start.
 
 `Point_set_transform` (`transform/point_set_transform.*`) is the gizmo
 adapter. `Transform_tool::update_for_view()` asks, each idle frame while no
-mesh component mode is active, the lattice tool and then the curve tool; the
-first whose `update_point_set()` holds and that has a selected point owns the
+mesh component mode is active, the lattice tool, the curve tool and then the
+region tool; the first whose `update_point_set()` holds and that has a selected point owns the
 gizmo (`Component_source::point_set`, `Transform_tool_shared::component_mode`).
 The anchor is the centroid of the selected points in the provider's frame
 rotation; a drag, a numeric Transform window edit and MCP `transform_selection`
@@ -99,5 +106,5 @@ What the point path honors: the Move tool's axis and plane constraints and
 its translate snap (Snap Enable or Ctrl held, relative or absolute); the
 Rotate and Scale tools turn and scale the selected points about the anchor.
 The surface settings (Snap To Surface, Orient To Surface) rest moved
-meshes and do not act on points (`Transform_tool::rest_on_surface()` refuses
+meshes and do not act on points (`Transform_tool::snap_to_surface()` refuses
 component mode).

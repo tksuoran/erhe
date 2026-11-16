@@ -36,6 +36,17 @@ alone; `clear_selection()` clears everything. The host-scoped form takes an
 `doc/editor/active_item.md` D2): `keep` for a plain click or an MCP `select_items`
 reset, `forget_hosted` for a closing scene.
 
+## What can be selected
+
+Every way into the selection - `add_to_selection()`, `set_selection()`,
+`set_active_item()` and a viewport click (`toggle_node_selection()`) - takes
+`get_selectable()` of each item: a scene node in no scene (one an undo entry
+holds for redo) is dropped, and a child of a locked kit layout node stands for
+the outermost locked layout node above it (`doc/editor/level_tools.md` "Kit
+layout nodes"). A set that drops the active item clears it. A selection an
+operation puts back on undo or redo passes the same rule, so it never brings a
+removed node back into the selection.
+
 ## Scoped selection semantics
 
 - A plain click in a viewport or a hierarchy window clears only that scene's

@@ -499,6 +499,13 @@ auto Mcp_server::action_set_item_property(const json& args) -> std::string
             return make_error_content("set_item_property: " + refusal + "; nothing was changed (level_set_layout changes kit layout values)");
         }
     }
+    // A kit piece's connector switch the piece's shape cannot take is refused here (U33).
+    if (after.has_value() && !sub_object.has_value() && (m_context.level_kits != nullptr)) {
+        const std::string refusal = m_context.level_kits->check_connector_switch_write(*item, *property, after.value());
+        if (!refusal.empty()) {
+            return make_error_content("set_item_property: " + refusal + "; nothing was changed (level_set_piece_connectors switches connectors)");
+        }
+    }
     const std::optional<erhe::property::Local_state> before = target->read_local_state(*property);
     m_context.operation_stack->queue(std::make_shared<Property_set_operation>(item, sub_object, *property, before, to_local_state(after)));
 

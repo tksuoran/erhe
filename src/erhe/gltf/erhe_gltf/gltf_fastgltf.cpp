@@ -34,6 +34,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/prebuilt_bvh.hpp"
 #include "erhe_property/dependency_object.hpp"
+#include "erhe_property/dependency_property.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/curve.hpp"
@@ -754,9 +755,15 @@ void clear_local_properties_not_listed(erhe::Item_base& item, const simdjson::do
     }
     erhe::gltf::clear_local_properties_not_listed(
         item,
-        [&properties_object](const std::string_view name) -> bool {
-            std::string_view listed_value;
-            return properties_object.at_key(name).get_string().get(listed_value) == simdjson::SUCCESS;
+        [&item, &properties_object](const erhe::property::Dependency_property& property) -> bool {
+            const erhe::property::Property_registry& registry = erhe::property::Property_registry::get();
+            for (const simdjson::dom::key_value_pair entry : properties_object) {
+                std::string_view listed_value;
+                if ((entry.value.get_string().get(listed_value) == simdjson::SUCCESS) && (registry.find_for_object(item, entry.key) == &property)) {
+                    return true;
+                }
+            }
+            return false;
         }
     );
 }

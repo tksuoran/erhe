@@ -272,7 +272,8 @@ R-numbers). The build order is in
   - `Kit_layout.module_snap`, `Kit_layout.surface_snap`,
     `Kit_layout.surface_orient`: the snap settings applied per element (D3.2,
     D7.3, the downward direction);
-  - `Kit_layout.random_seeds` and `Kit_layout.seed`: on, element i takes the
+  - `Kit_layout.per_piece_seed` (Per Piece Seed, U24, U32; the former name
+    `Kit_layout.random_seeds` still reads) and `Kit_layout.seed`: on, element i takes the
     seed `derive_layout_element_seed(seed, i)` (the D1.4 integer stream of the
     layout seed and the index) and its item's masked parameters derive from
     it;
@@ -476,7 +477,7 @@ R-numbers). The build order is in
   - Region: a rectangle `size_x` by `size_z` or a disc of `region_radius`
     (`Repeat_scatter_region`), centred on the node's origin in its xz plane;
     a piece's center lies inside it. "Over a surface" is the layout's
-    surface snap and orient (D7.3) resting each piece on what is under it.
+    surface snap and orient (D7.3) snapping each piece to what is under it.
   - Count: `scatter_mode` `count` (the shared `count`) or `density` (pieces
     per square meter times the region's area, rounded, at least 1); a count
     above `c_max_repeat_count` is refused. A line's `count_mode` does not
@@ -502,7 +503,7 @@ R-numbers). The build order is in
     yaw_min) w degrees (within -360 - 360, `yaw_min` <= `yaw_max`); the angle is exact, its
     rotation takes the platform's sine and cosine as every kind's does.
   - Items: element i takes item i modulo the item count, as every kind; with
-    random seeds on, its seed is `derive_layout_element_seed(seed, i)`, a
+    Per Piece Seed on, its seed is `derive_layout_element_seed(seed, i)`, a
     stream apart from the points.
   - Scale: a scatter places every piece at scale 1. Per-piece random scale
     needs a scaled brush per piece (a node scale leaves the collision shape
@@ -596,7 +597,8 @@ R-numbers). The build order is in
     the smallest (moved piece id, moved connector index, other piece id,
     other connector index), a total order independent of the input order.
   - Drag consumer: `Kit_connector_drag_snap` (`level/kit_connector_snap.hpp`),
-    owned by the Transform tool, gathers at a translate drag's begin, as
+    owned by the Transform tool, gathers at a translate, rotate or scale
+    drag's begin (U27), as
     D3.12 foresees: the moved roots (targets not locked and without a moved
     ancestor), the connector positions of every kit piece at or below a root
     in that root's frame, and per other kit piece of the scene (not a drag
@@ -607,10 +609,14 @@ R-numbers). The build order is in
     translation only, so it co-locates the transformed positions. A step multiplies the
     positions by each root's and target's world matrix into reserved
     vectors and searches; no allocation, no per-scene list.
-  - Step order: grid snap, translate, surface rest (D4.6), connector snap,
+  - Step order: grid snap, translate, snap to surface (D4.6), connector snap,
     layout preview (D3.9). Last because co-located connectors define the
-    pose; resting after it would separate them. Each step starts from the
+    pose; a snap to surface after it would separate them. Each step starts from the
     step's unsnapped pose, so release beyond the distance needs no latch.
+    A rotate or scale step (plan step 56) is the tool's rotation or scale of
+    the drag-start pose about the press pivot, then the connector snap (full
+    offset; no snap to surface), then the layout preview; the roots' world
+    matrices of the step carry the moved connectors through it.
   - Apply: every moved root translates by the pair's offset (translation
     only), the anchor with it; the undo record and cancel are those of any
     drag. A snap that cannot co-locate is not made: a moved root whose locked
@@ -627,7 +633,7 @@ R-numbers). The build order is in
   (`level/kit_connector_indicators.hpp`, owned by `Level_kits`) collects what
   a view draws; `Debug_visualizations::connectors_visualization()` draws it
   and `level_get_connector_indicators` reads the same collection.
-  - What: in the views of the drag's scene, during a translate drag with a
+  - What: in the views of the drag's scene, during a node drag with a
     connector snap, the drag's moved connectors, the targets within 4 snap distances of one and the snapped
     pair, whatever the setting; otherwise by the per-view setting
     `Debug_visualizations_settings::connectors` (off, selected (default),
@@ -755,7 +761,7 @@ R-numbers). The build order is in
   with the shape it places, element 0 at the preview's pose. The new node is
   selected. MCP: `level_create_layout {scene_name, name, parent_id, position,
   rotation_xyzw, pattern, items | from_piece_id | curve_id, points, closed,
-  snap, surface_snap, surface_orient, random_seeds, seed, locked}` (`pattern`
+  snap, surface_snap, surface_orient, per_piece_seed, seed, locked}` (`pattern`
   an object of the `Kit_layout_pattern` keys over the defaults, the step and
   grid spacings defaulting to the largest item extent; `items` a list of
   `{shape, parameters, materials}`; `from_piece_id` Make Layout's call, not
@@ -763,7 +769,7 @@ R-numbers). The build order is in
   plain curve node made the path layout itself; `points` and `closed` a path
   layout's curve as `create_curve` takes them; locked by default),
   `level_set_layout {scene_name, layout_id, pattern, items, snap,
-  surface_snap, surface_orient, random_seeds, seed}` (the values given merge
+  surface_snap, surface_orient, per_piece_seed, seed}` (the values given merge
   over the node's: the pattern key by key, the items as a list),
   `level_get_layouts {scene_name}`, `level_set_layout_lock {scene_name,
   layout_id, locked}` and `level_refresh_layout {scene_name, layout_id}`,
@@ -829,7 +835,7 @@ R-numbers). The build order is in
     options of D7.3, and a piece may state its own.
   - `level_snap_to_surface {scene_name, node_ids, orient, direction,
     query_only}`: D7.3 on placed pieces, one undo entry; returns per node
-    the resting `position`, `rotation_xyzw`, `distance` and
+    the snapped `position`, `rotation_xyzw`, `distance` and
     `surface_found`.
   - `level_get_pieces {scene_name}`: every piece with shape, parameters,
     transform, world bounds and `materials` per slot.
@@ -892,35 +898,36 @@ scene root's space (R10.1).
   scene's raytrace scene, committed once; with a navigation mesh, the
   walkable flag and island id of the nearest polygon at the hit. The text
   picture maps heights to digits and marks cells without a hit.
-- D7.3 Surface placement (R5.11, R10.5): `find_surface_placement()`
+- D7.3 Surface placement (R5.11, R10.5, U23, U30): `find_surface_placement()`
   takes a piece's mesh bounds, a start transform, a direction (down by
-  default) and the two options, and returns the resting transform. It
-  casts rays along the direction through the scene's raytrace scene: for
-  the base center, and for the base corners too when only snapping. Its
-  surface is the nearest front face of a mesh that is not moved, each
-  candidate hit judged on its own (a hit filter), so the moved pieces are
-  invisible to it and the answer does not depend on which of two coincident
-  faces the traversal meets first. A snap ray starts on the bounds' top
-  face above its base point, the orient ray one piece height back from the
-  base center against the direction, each at least 1 mm back from its base
-  point, so a piece sunk into a surface by less than its own height rises
-  onto it, and one cast never lifts it more than its own height. Snap moves
-  the piece by the smallest hit distance, so its base rests on the highest
-  surface under it, and casts again after a rise until a cast rises no
-  more, so a piece climbs a chain of surfaces each within its height of the
-  one before (a coursed wall it overlaps) to the top; resting the rested
-  pose again with the same excluded meshes moves it by nothing
-  (`doc/editor/level_tools.md` "Surface placement", which also names each
-  caller's excluded meshes and the order that picks the normal where faces
-  tie at an edge). Orient rotates the piece about its base center by the
-  shortest rotation that takes its up axis to the center hit's normal,
-  which keeps the heading of an upright piece, and rests the base center on
-  the hit point; the turn moves no ray, so a rested oriented pose turns and
-  moves by nothing, and orient casts again after a rise as snap does.
+  default), a maximum distance (1 m by default) and the two options, and
+  returns the snapped transform: the nearest place along the direction,
+  either way and within the distance, where the piece's base rests on a
+  surface and the piece fits along the direction. Through the scene's
+  raytrace scene it gathers the hit points of the meshes that are not moved
+  on the line through each base point (the base center, and the base corners
+  too when only snapping), within the search window, measured from the base
+  point, with hit filters so the moved pieces are invisible. A place is a
+  displacement at which one line's base point lies on a hit whose face is
+  against the direction and no line has a hit strictly inside the piece's
+  span; solids are not reconstructed (U31), so a piece inside a solid taller
+  than itself can rest on a surface inside it. The smallest displacement
+  wins, a tie going along the direction. No place within the distance
+  leaves the pose unchanged with no surface found. A snapped pose is its own
+  nearest place, so snapping it again with the same excluded meshes moves it
+  by nothing (`doc/editor/level_tools.md` "Surface placement", which also
+  names each caller's excluded meshes and the order that picks the normal
+  where faces tie at an edge). Orient rotates the piece about its base
+  center by the shortest rotation that takes its up axis to the normal of
+  the face at the place, which keeps the heading of an upright piece, and
+  rests the base center there; the turn moves no line, so a rested oriented
+  pose turns and moves by nothing.
   Placement (D3.2) applies it to the new piece before the insert; the tool
   form applies it to placed pieces as one transform operation.
-- D7.4 Support report (R10.4): the snap rays of D7.3 without the move; a piece
-  whose smallest distance exceeds the tolerance is unsupported.
+- D7.4 Support report (R10.4): one ray down from the bounds' top plane above
+  the base center and above each base corner of D7.3 (1 mm inside the
+  footprint); a piece whose smallest distance from the base to a hit exceeds
+  the tolerance is unsupported.
 - D7.5 Overlap report (R10.3): bounds as the first pass, then the physics
   world's body intersection test with the tolerance.
 - D7.6 Level check (R10.7): runs D7.4, D7.5, the unreachable islands of

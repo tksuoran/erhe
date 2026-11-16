@@ -1039,7 +1039,13 @@ table, see D2a), and references to other objects (D28).
   registration order, a shadowed name or a multiply-owned property
   (`add_owner`) once at its nearest level. Ids are run-local: nothing
   persists them, properties serialize by name everywhere (glTF extras,
-  MCP, clipboard); the id's name serves logs only. `Item_type` bits keep
+  MCP, clipboard); the id's name serves logs only. A renamed property keeps
+  its former name readable: `Property_registry::add_former_name(property,
+  name)` (or `Property<T>::with_former_name(name)` chained onto the
+  registration) makes `find()` of the former name on the property's owner
+  type answer the property, so a qualified former name resolves in
+  `find_for_object()` and older files and calls read; listings and
+  `qualified_name()` give the current name only, so every write uses it. `Item_type` bits keep
   serving `Item_filter`, `is<T>`, the content library cache and the
   editor's type masks, and the library knows nothing of them.
 

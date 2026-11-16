@@ -36,14 +36,11 @@ live preview for a node moved through the Properties window's transform rows
 or `set_item_property`, step 30, the Escape cancel of a Transform
 tool node drag (the moved layouts get their children from before the drag
 back), and of step 29 the snap rest that agrees with itself for one
-exclusion set
-(a layout element rests on its own brush's bounds, snap casts again
-after a rise until a cast rises no more), step 35, the oriented rest that
-agrees with itself likewise (its ray passes through the base center, the
-pivot of the turn, and it casts again after a rise), and step 34, surface rays whose
-answer does not depend on hit order among coincident faces (a hit filter in
-`erhe::raytrace` takes the nearest front face of a mesh that is not
-excluded), and step 33, a Transform tool edit recording an undo entry only when
+exclusion set (a layout element rests on its own brush's bounds), step 35,
+the oriented rest that agrees with itself likewise (its line passes through
+the base center, the pivot of the turn), and step 34, surface rays whose
+answer does not depend on hit order among coincident faces (hit filters in
+`erhe::raytrace` judge each candidate on its own), and step 33, a Transform tool edit recording an undo entry only when
 an entry's local transform at its end differs from its start (an unmoved
 pointer gives an exact identity delta, which puts the entries back at their
 start pose), and of step 12 replace (R5.8: the shape of selected pieces
@@ -61,17 +58,106 @@ and step 42, connector indicators with connectors that follow their node's
 full world transform, scale included (U22: an arrow and up tick per
 connector of the selected or all pieces, a snapping drag's pair
 highlighted, scaled pieces and targets in joins and the drag snap),
+and steps 45 and 46, snap to surface as a search (U23, U30, U31:
+the nearest place along the snap direction, up or down, where the base rests
+on a surface and no hit point lies inside the piece's span, within a maximum
+distance, 1 m by default, in the surface settings, the Move rows, the
+toolbar, the Level Kit window, the kit layout node and the MCP tools; no
+place leaves the pose unmoved), called "snap to surface" in the UI texts,
+MCP descriptions and documents, and step 49, the kit layout switch Per Piece
+Seed (U24, U32: `Kit_layout.per_piece_seed`, the MCP key `per_piece_seed` and
+the setting `layout_per_piece_seed`, each still reading its former name
+`random_seeds`), step 47, Replace snapping the replaced pieces to the surface
+again in the same undo entry when Snap To Surface is on (U24), and step 48,
+children of a locked kit layout node never selected by any selection path,
+a lock handing their place to the layout node, and Replace Selected and
+`level_replace_pieces` replacing what they can and listing the skipped nodes
+with their reasons (U24), and steps 50 and 51, a scatter picking each
+point's item at random from the layout seed by an integer weight per item
+(0 - 1000, default 1, an exact integer pick from the candidate's fourth
+draw) and holding `min_spacing` as the gap between piece footprints (the
+circle about each piece's vertical axis around its item's xz bounds) (U25),
+and step 52, connector switches per piece (U26, U33: a switch for all of a
+piece's connectors and one per connector name, saved with the node, in the
+Properties window and over MCP; a disabled connector is not drawn, offered,
+joined or snapped), and steps 53, 54 and 55, the connector snap of a
+translate drag refined (U27: a Connector Snap On Axis setting that applies
+only the offset's part along the dragged axis or in the dragged plane, a
+bindable suspend key, and the snap starting only after the
+pointer has moved, so a press and release changes nothing; the default
+suspend key, Shift, confirmed in U35), and step 56, rotate and scale
+drags snapping to connectors (U27: after the step's rotation or scale the
+moved set translates by the full offset of the closest pair, each step from
+its unsnapped pose), and the drawing of step 44, line, grid, ring and
+scatter kit layout nodes drawn flat in the node's plane with a tick per
+element and a selected scatter's footprint and spacing circles, under the
+Debug Visualization popup's Kit Layouts setting and read over MCP (U28;
+an unlocked layout's outline showing the pending values during a value
+drag is the orchestrator's choice, for the user's review), and the rest of
+step 44, the scatter region handles (U28: a selected scatter's rectangle
+corners and edge midpoints or disc points as a point set of the curve
+tool's kind, the gizmo on the selected handle resizing the region
+symmetrically about the node's origin, the live layout preview of a locked
+layout or the pending outline of an unlocked one during the drag, one undo
+entry per release, Escape restoring the start; shown while the node is the
+only selected item whatever the Kit Layouts setting, the coder's choice, for
+the user's review),
 are built and described in
 `doc/editor/level_tools.md` and `doc/editor/navigation.md`.
 
 ## Next steps
 
+### Active
+
+The steps to build, in this order (user, 2026-11-15).
+
+62. Expand the kit with more shapes (user, 2026-11-15), after step 44. The
+    user's list: geological rock formations such as cliffs, in diverse
+    sizes; tropical plants, in diverse sizes; palm trees of different
+    species; natural features found on beaches (U34: man-made harbour
+    shapes belong to step 63); architecture modules of different
+    historical cultures. It takes in the nature and architecture shapes of
+    R4.3 and R4.4 that are not built. First a shape list per category
+    (which shapes, their parameters and derive ranges, material slots,
+    connectors, the physics body kind) in
+    `doc/plans/level_kit_more_shapes.md`, chosen by the orchestrator (user,
+    2026-11-15: build from it, the user reviews the shapes afterwards), then
+    one commit per
+    shape or small family, each with its checks in
+    `scripts/level_tools_verify.py` and its entry in
+    `doc/editor/level_tools.md`. Hanging vines (foliage) and "path" from the
+    user's list are future work, not part of this step.
+63. Extra shapes of the orchestrator's choice (user, 2026-11-15), after
+    step 62 and only while the account's weekly usage is below 85 percent
+    of its limit: the orchestrator picks the topic and the shapes, whatever
+    it judges useful or good-looking, and builds them as step 62's shapes
+    are built. The figure is the seven-day usage percentage the status line
+    shows; read it before starting and before each further shape. The
+    inventory, with the rulings of U34, is
+    `doc/plans/level_kit_extra_shapes.md`.
+
+### On hold
+
+Every step below is on hold until the user chooses to make it active; none
+is started from this list alone.
+
+64. Viewport handles for line, grid and ring kit layouts (the line's step or
+    length, the grid's spacings, the ring's radius and arc), as the scatter
+    region handles are built (U28 asks for the scatter's only).
+    For the user's review (step 44): the Kit Layouts "selected" rule walks
+    upward only (a selected group above layouts shows no outlines), while
+    the Connectors "selected" rule walks downward; the region handles show
+    whatever the view's Kit Layouts setting, and a handle under the node
+    gizmo's arrow is picked only where it is clear of the arrow; during a
+    drag not along the handle's side (an axis drag of a turned node's
+    handle, tangential motion of a disc handle) the gizmo parts from the
+    handle until the release.
 12. The `[should]` requirements not named above, each as its own step:
     assemblies (R5.7), the further shapes
     (R4.2 - R4.4), texture coordinates (R2.8), the walkable area picture and
     "why not" (R9.7, R9.8), the remaining spatial tools (R10.8 - R10.12), the
     agent workflow document (R6.7).
-    Replace (R5.8): ruled in U24 (steps 47 - 49). Not yet asked: the carry
+    Replace (R5.8): ruled in U24 (steps 47 and 48; step 49 is built). Not yet asked: the carry
     matches parameters by name and type only, not by unit; a same-shape
     replace ignores given parameters and materials; the kept node name is the
     old shape's display name (a rock "Block").
@@ -84,7 +170,7 @@ are built and described in
     candidates outside it counting against them; a density-mode scatter
     changes its piece count when the region is resized; per-piece scale is
     step 39.
-    Connectors (R5.3): ruled in U26 (step 52; the active piece as the target
+    Connectors (R5.3): ruled in U26 (step 52 is built; the active piece as the target
     stays as built). Not yet asked: Place Connected's default new-piece
     connector is the shape's first (base, start or bottom); a side connector
     against a top connector tips the piece, the twist picking among the four
@@ -95,7 +181,7 @@ are built and described in
     connector names change sides; the target of a placement is an existing
     node, not a piece of the same `level_place_pieces` call; a joined piece
     keeps no link to its target (step 41).
-    Connector snap (R5.13): ruled in U27 (steps 53 - 56; the locked channel
+    Connector snap (R5.13): ruled in U27 (steps 53 - 55 built, 56 open; the locked channel
     rule and the scripted drags' default stay as built). Not yet asked:
     connectors of kit pieces below the dragged nodes count; the snap comes
     after the snap to surface and is not rested again; ties at equal
@@ -114,11 +200,6 @@ are built and described in
     while a parameter row is dragged (R6.2).
 14. `Level_kits::refresh_scene()` for USD opens, foreign glTF imports and
     prefab instances of a level file (D3.5 covers erhe glTF opens).
-15. Ruled in U23: steps 45 and 46 replace the question of when a snap to
-    surface lifts a piece that overlaps other pieces. Today a piece buried
-    deeper than its own height, placed or moved, drops to the first surface
-    under the solid's bottom, and a piece overlapping a stack or a coursed
-    wall climbs to its top in one snap (D7.3).
 16. A kit brush stays cached after its piece is placed with
     `level_place_pieces`, selected, the placement undone and the undo
     history cleared (`cached_brush_count` one too high): find what still
@@ -182,7 +263,7 @@ are built and described in
     piece's collision shape unscaled (bodies take no scale), so a scaled
     piece takes its brush's scaled form (`Brush::get_scaled()`) and the
     `Kit_piece` record carries the scale, so follows-kit (D3.5), load,
-    surface resting (scaled bounds), replace and the child match of D3.9
+    snap to surface (scaled bounds), replace and the child match of D3.9
     keep it; the scale key quantization bounds the meshes per item.
 40. Placing a connected piece from the Brush tool's viewport preview (R5.3):
     the kit mode preview snaps to the nearest connector of the hovered piece
@@ -190,111 +271,39 @@ are built and described in
 41. A persistent connector attachment (R5.3): a joined piece remembers its
     target and connectors and follows a move or parameter change of the
     target.
-44. Kit layout shape visualization (user, 2026-11-15: "Scatter node does not
-    have volume visualization"). Of the layout kinds only the path is drawn
-    today, as its curve (`doc/editor/curves.md` "Drawing"); a line, grid,
-    ring or scatter node shows nothing of its own. (The "Layouts" debug
-    visualization draws `erhe::scene::Layout` volumes, which kit layout nodes
-    do not have.) To build:
-    - What is drawn, in the node's frame from its `Kit_layout_pattern`
-      (`level/kit_layout_values.hpp`): scatter - the region outline (the
-      `size_x` by `size_z` rectangle or the `region_radius` disc) centred on
-      the origin; line - the segment from the first to the last element
-      center (`step` times count, or `length`) with a tick per element; grid
-      - the outline of the `count_x` by `count_z` extent with a tick per
-      row and column; ring - the circle or `arc_degrees` arc of `radius`
-      with a tick per element. The ticks come from the resolved run
-      (`Kit_layout_run`), so they sit where pieces are generated before
-      module snap and surface rest.
-    - When: a setting "Kit Layouts: off / selected / all" next to Curves and
-      Connectors in the Debug Visualization popup, default selected; selected
-      means the layout node or any piece below it is selected. X-ray lines,
-      screen-constant tick size, colors and widths in
-      `Debug_visualizations_style`, as the curves and connectors.
-    - Cost: the parsed pattern and resolved run are cached per layout node
-      and dropped on `Kit_layout_changed_message`, item removal and scene
-      close; a value drag's live preview sends that message, so the outline
-      follows the drag. World matrices are read at draw time; scratch keeps
-      its capacity (the pattern of `Kit_connector_indicators`).
-    - Checks: an MCP read of what a viewport draws (as
-      `level_get_connector_indicators`), expected from the pattern values;
-      one screenshot difference between off and all; the outline follows a
-      held value drag and a node move.
-    Ruled (U28): the outline is drawn flat in the node's plane in the first
-    version (the orchestrator's choice, left to it by the user); the scatter
-    also shows its `min_spacing`, a circle per piece; the scatter region
-    gets viewport handles to resize it (a point-set edit as the curve
-    tool's, `doc/editor/point_set_editing.md`), one undo entry per drag with
-    the live layout preview during it.
-45. Snap to surface casts both up and down (U23): from a piece's base
-    points one ray goes along the snap direction and one against it, and the
-    piece snaps to the nearer surface, so a piece buried in a solid comes to
-    the nearest of the surface above and the one below. The direction is
-    down today; a custom direction is future work. Replaces the "drops to
-    the floor under the solid" behaviour (D7.3, `find_surface_placement()`),
-    for snap and for orient; the checks of the buried block and of the
-    blocks in the hill change with it.
-46. Snap to surface has a maximum distance setting (U23): a surface farther
-    than the distance from the piece's base is not snapped to, in either
-    direction, so a crate beside a stack or a coursed wall stays unless the
-    step up is within the distance. Decide with the user whether the limit
-    is per cast or for the whole snap (the chain of casts, D7.3), the
-    default value, and where it is shown (with Snap To Surface in the
-    toolbar, Move rows, Level Kit window; `Surface_snap_config`; the kit
-    layout node's own surface snap). Rename "surface rest" to "snap to
-    surface" in the UI texts, MCP descriptions and documents.
-47. Replace snaps the replaced pieces to the surface again when Snap To
-    Surface is on, in the same undo entry, and keeps the transform when it
-    is off (U24).
-48. Children of a locked kit layout node are not selectable until the layout
-    is unlocked (U24): check every selection path (viewport click, box
-    select, the hierarchy window, `select_items`) against the existing
-    redirect of a child's selection to its layout node, and close what lets
-    a child be selected. Replace Selected replaces what it can and lists
-    the skipped pieces in its message and in the MCP reply, in place of all
-    or nothing; a selected group or kit layout node stays left out.
-49. The kit layout node has a boolean property "Per Piece Seed" (U24).
-    Today the switch is `Kit_layout.random_seeds`, shown as "Random Seeds":
-    confirm with the user that this is that switch under the new name (then
-    rename the row, the MCP key with a reader for the old one, and the
-    documents), or what else it adds - the ruling answered what a replace
-    does with pieces that share one seed.
-50. Scatter picks each point's item at random from the layout seed, with a
-    weight per item (U25): a weight value in `Kit_layout_item` (default 1,
-    in the canonical text, Properties and Level Kit window rows, MCP),
-    drawn from the scatter's integer stream so the pick is the same bits on
-    every platform; the other kinds keep item i modulo the item count.
-51. Scatter spacing is the gap between piece bounds (U25): each candidate is
-    accepted when its footprint (the item's bounds radius in the node's
-    plane, from the item's own brush, with its yaw) keeps `min_spacing`
-    clear of every accepted piece's footprint. State which footprint
-    (circle of the bounds, or the oriented box) and keep the test exact and
-    free of fused multiply-add as today.
-52. Connectors can be enabled and disabled per node (U26): a property (or
-    one per connector) on the kit piece, kept in the scene file, edited in
-    Properties and over MCP; a disabled connector is not drawn as available,
-    not offered by the Connect rows and Place Connected, not a snap source or
-    target (U27: "any pair when both connectors are enabled"). Decide with
-    the user: one switch per connector name or one for the whole piece, and
-    the default (all enabled). This is the ruling on where a floor slab's
-    side connectors sit: the author turns off the ones a piece should not
-    offer.
-53. Connector snap has a setting for axis and plane drags (U27): full
-    offset (default, as built) or stay on the dragged axis or plane, where
-    the snap applies only the offset's component along the handle's axis or
-    in its plane.
-54. A modifier key held during a drag suspends the connector snap (U27):
-    choose the key with the user against the Transform tool's existing
-    modifiers (`doc/editor/input_bindings.md`), bindable as the other
-    commands are.
-55. The connector snap starts only after the pointer has moved (U27): the
-    zero-motion step of a drag does not snap, so a press and release on a
-    handle changes nothing and records nothing; a drag out and back to the
-    start may snap. Removes the documented "zero step snaps" rule and its
-    check.
-56. Rotate and scale drags snap to connectors too (U27): after the step's
-    rotation or scale the moved set translates so the closest pair within
-    the distance co-locates, evaluated from the unsnapped pose each step as
-    the translate drag does; the moved connectors are gathered so they
-    follow the step's rotation and scale (today they are fixed in each
-    root's frame at drag begin, which already carries them).
+57. Future work, skipped in this plan (user, 2026-11-15): snap to surface
+    considering solidness (U31): free space from
+    the solids along a base-point line, so a piece inside a solid taller than
+    itself is not snapped to a surface inside that solid (the slab top under a
+    hill or a wall).
+58. The scatter footprint as the oriented box of the item's bounds at the
+    piece's yaw instead of the circle around it (a refinement of the
+    built step 51, U25): a tighter pack for long pieces, at the cost of an exact
+    box-against-box test in the candidate loop and a yaw-dependent reach for
+    the spacing grid.
+59. Scatter spacing by the seeded brush's footprint (a refinement of the
+    built step 51, U25): with Per Piece Seed a scatter element is spaced by
+    its item's unseeded brush, while its geometry comes from
+    `derive_layout_element_seed(seed, i)` (`nature.rock`, `nature.bush`
+    derive their size from it), so seeded pieces can come closer than
+    `min_spacing` or overlap. To build: the element index of a candidate is
+    the count of points accepted before it, so the sampler needs, per
+    candidate, the footprint of the brush that element i's seeded values
+    make: a callback from `expand_scatter()` into `Level_kits` (brushes made
+    or found in the cache during the dart throwing, which makes a resolve
+    without the scene impossible: the unit-level resolve and the Run row
+    would need the same callback), or a per-shape bound of the footprint
+    over the seeded range (cheaper, looser). The Run row's count and the
+    prefix stability of a raised count stay as they are, since element i's
+    seed depends on i alone.
+60. Connector switches per kit layout item (a follow-up of the built step
+    52, U33): a locked layout's children cannot be edited, so their
+    connectors are all enabled; an item could carry `connectors_enabled` and
+    the disabled names, written on each generated child and compared by the
+    kept-child rule.
+61. Connector snap on axis, the candidate choice (U27 follow-up, for the user
+    to rule on): with Connector Snap On Axis the pair is picked by its full
+    distance, so a near pair lying across the axis wins with an applied
+    offset near zero and reports snapped, shadowing a farther pair along the
+    axis that would co-locate. The alternative picks by the distance left
+    after the constrained offset.

@@ -184,9 +184,10 @@ void apply_scene_item_properties(
     }
     erhe::gltf::clear_local_properties_not_listed(
         scene_item,
-        [&entries](const std::string_view property_name) -> bool {
+        [&scene_item, &entries](const erhe::property::Dependency_property& property) -> bool {
+            const erhe::property::Property_registry& registry = erhe::property::Property_registry::get();
             for (const std::pair<std::string, std::string>& entry : entries) {
-                if (entry.first == property_name) {
+                if (registry.find_for_object(scene_item, entry.first) == &property) {
                     return true;
                 }
             }

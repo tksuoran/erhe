@@ -135,6 +135,7 @@ enum("Blend_mode",
 |--------|------|---------|-------------|
 | `added_in` | `int` | required | Version when field was added |
 | `removed_in` | `int` | `None` | Version when field was removed |
+| `renamed_from` | `list[tuple[int, str]]` | `None` | Earlier key names, ascending: `(renamed_in, previous_name)` reads `previous_name` from a document whose `_version` is below `renamed_in`; serialization writes the current name |
 | `default` | `str` | `None` | C++ default initializer value |
 | `short_desc` | `str` | `None` | Brief label for UI |
 | `long_desc` | `str` | `None` | Tooltip / detailed description |

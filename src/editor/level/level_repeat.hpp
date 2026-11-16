@@ -4,6 +4,8 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <cstddef>
+#include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -49,11 +51,23 @@ inline constexpr std::size_t c_scatter_attempts_per_piece = 64;
 
 inline constexpr std::size_t c_max_repeat_count = 1024;
 
+// The largest weight of one scatter item (doc/editor/level_tools.md "Scatter layouts").
+inline constexpr uint32_t c_max_scatter_weight = 1000;
+
 class Repeat_pose
 {
 public:
-    glm::vec3 position{0.0f};
-    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3   position{0.0f};
+    glm::quat   rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    std::size_t item    {0}; // the item a scatter picked for the element; the other kinds leave 0
+};
+
+// One item a scatter picks from: its weight (0: never picked) and its footprint radius about the piece's vertical axis.
+class Repeat_scatter_item
+{
+public:
+    uint32_t weight{1};
+    float    radius{0.0f};
 };
 
 // The fields of the kind in use count; lengths in meters, axes in the start frame unless stated.
@@ -77,11 +91,15 @@ public:
     float                  scatter_size_x {8.0f};
     float                  scatter_size_z {8.0f};
     float                  scatter_radius {4.0f};
-    float                  scatter_spacing{1.0f};   // scatter: the least distance between two piece centers
+    float                  scatter_spacing{1.0f};   // scatter: the least gap between two piece footprints
+    std::span<const Repeat_scatter_item> scatter_items; // scatter: the items picked from, at least one, not owned
     float                  yaw_min_degrees{0.0f};   // scatter: each piece turns about the start's up axis within the range
     float                  yaw_max_degrees{360.0f};
     int                    scatter_seed   {0};
 };
+
+// The item of a scatter candidate's pick draw: an exact integer pick over the weights, total_weight their sum (> 0).
+[[nodiscard]] auto pick_scatter_item(std::span<const Repeat_scatter_item> items, uint64_t total_weight, uint32_t draw) -> std::size_t;
 
 // The poses of the run, element 0 at the start; cleared and filled. Returns the refusal (empty when expanded),
 // which leaves out_poses empty.

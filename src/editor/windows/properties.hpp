@@ -184,6 +184,7 @@ private:
     erhe::message_bus::Subscription<Active_item_changed_message>   m_active_item_subscription;
     erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
     erhe::message_bus::Subscription<Kit_layout_changed_message>    m_kit_layout_changed_subscription;
+    erhe::message_bus::Subscription<Kit_piece_connectors_changed_message> m_kit_piece_connectors_changed_subscription;
     erhe::message_bus::Subscription<Curve_changed_message>         m_curve_changed_subscription;
 
     // The "Kit Piece" group of a single selected kit piece (doc/editor/level_tools.md "Parameter rows").

@@ -2,7 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
+#include <vector>
 
 namespace {
 
@@ -134,6 +136,44 @@ TEST(Hit_filter, AllRejectedIsMiss)
     EXPECT_FALSE(scene.root->intersect(ray, hit));
     EXPECT_EQ(hit.instance, nullptr);
     EXPECT_FLOAT_EQ(ray.t_far, 1.6f);
+}
+
+// Rejects every candidate and keeps the distance of each.
+class Distance_recorder : public IHit_filter
+{
+public:
+    auto accept(const Hit& candidate) const -> bool override
+    {
+        m_distances.push_back(candidate.t);
+        return false;
+    }
+
+    mutable std::vector<float> m_distances;
+};
+
+TEST(Hit_filter, CandidatesCarryTheirDistance)
+{
+    for (const Attach_order order : {Attach_order::first_first, Attach_order::second_first}) {
+        Test_geometry cube   = make_cube();
+        Test_geometry ground = make_floor();
+        Two_instances scene{cube, ground, order};
+        const Distance_recorder recorder{};
+        Ray ray = make_ray({0.1f, 2.0f, 0.2f}, {0.0f, -1.0f, 0.0f});
+        ray.filter = &recorder;
+        Hit hit{};
+        EXPECT_FALSE(scene.root->intersect(ray, hit));
+        std::vector<float> distances = recorder.m_distances;
+        std::sort(distances.begin(), distances.end());
+        ASSERT_EQ(distances.size(), 3u); // the cube's top and bottom, the floor
+        EXPECT_NEAR(distances[0], 1.5f, 1.0e-5f);
+        EXPECT_NEAR(distances[1], 2.5f, 1.0e-5f);
+        EXPECT_NEAR(distances[2], 2.5f, 1.0e-5f);
+
+        Ray plain = make_ray({0.1f, 2.0f, 0.2f}, {0.0f, -1.0f, 0.0f});
+        Hit nearest{};
+        EXPECT_TRUE(scene.root->intersect(plain, nearest));
+        EXPECT_FLOAT_EQ(nearest.t, plain.t_far);
+    }
 }
 
 TEST(Hit_filter, NoFilterKeepsNearestHit)

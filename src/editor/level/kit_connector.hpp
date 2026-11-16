@@ -26,6 +26,41 @@ public:
     glm::vec3   up      {0.0f, 1.0f, 0.0f};
 };
 
+// A connector switch's state (U33).
+enum class Kit_connector_state : unsigned int
+{
+    enabled = 0,
+    disabled
+};
+
+// The connector switches of a placed piece (U33, doc/editor/level_tools.md "Connector switches"): a connector is
+// enabled when the piece switch is on and its name is not in the disabled list.
+class Kit_connector_switches
+{
+public:
+    bool        connectors_enabled{true};
+    std::string disabled_connectors; // names separated by commas; canonical: sorted, unique, no spaces
+
+    [[nodiscard]] auto is_enabled (std::string_view connector_name) const -> bool;
+    [[nodiscard]] auto is_disabled(std::string_view connector_name) const -> bool; // listed, whatever the piece switch
+};
+
+// The names of a disabled list text, read leniently (spaces trimmed, empty entries skipped); allocates.
+[[nodiscard]] auto parse_connector_names(std::string_view text) -> std::vector<std::string>;
+
+// The canonical text of a disabled list (sorted, unique, comma separated).
+[[nodiscard]] auto make_connector_names_text(std::vector<std::string> names) -> std::string;
+
+// U33: why a disabled list text cannot be written for a shape of the connectors - the names it has not (exact, case
+// sensitive) or, with every name known, the text not canonical; empty when the text is accepted.
+[[nodiscard]] auto check_disabled_connectors_text(std::string_view text, std::span<const Kit_connector> connectors) -> std::string;
+
+// The disabled list text with the name's switch set to the state, canonical.
+[[nodiscard]] auto set_connector_state(std::string_view disabled_connectors, std::string_view connector_name, Kit_connector_state state) -> std::string;
+
+// Removes the connectors that the switches disable, keeping the others in their order.
+void remove_disabled_connectors(const Kit_connector_switches& switches, std::vector<Kit_connector>& connectors);
+
 // The pose (rotation, then translation) that joins a piece's connector to a target connector (D3.12).
 class Kit_join_pose
 {
@@ -59,6 +94,23 @@ public:
     float                                max_distance
 ) -> Kit_connector_snap_match;
 
+// U27: the handle a translate drag moves along; free (no handle, or Connector_snap_axis_mode::full_offset) keeps the full offset.
+enum class Kit_connector_snap_constraint_kind : unsigned int {
+    free = 0,
+    axis,  // direction: the dragged axis
+    plane  // direction: the dragged plane's normal
+};
+
+class Kit_connector_snap_constraint
+{
+public:
+    Kit_connector_snap_constraint_kind kind     {Kit_connector_snap_constraint_kind::free};
+    glm::vec3                          direction{0.0f}; // world, not necessarily unit
+};
+
+// U27: the snap offset's component along the axis or in the plane; the offset itself when free or the direction is degenerate.
+[[nodiscard]] auto constrain_connector_snap_offset(const glm::vec3& offset, const Kit_connector_snap_constraint& constraint) -> glm::vec3;
+
 // The linear part's columns are mutually orthogonal (within 1e-4 of their lengths): a translation, rotation and scale
 // (a Trs_transform) holds the matrix without shear.
 [[nodiscard]] auto has_orthogonal_axes(const glm::mat3& m) -> bool;
@@ -91,6 +143,17 @@ void transform_connectors(std::span<const Kit_connector> connectors, const glm::
 
 // As above for every connector into the caller's vector (cleared, capacity kept); false and empty when one degenerates.
 [[nodiscard]] auto transform_connectors(std::span<const Kit_connector> connectors, const glm::mat4& world_from_node, std::vector<Kit_connector>& out_connectors) -> bool;
+
+// The linear part collapses an axis (singular within 1e-6 of the product of its column lengths) or is not finite.
+[[nodiscard]] auto is_degenerate_frame(const glm::mat3& linear) -> bool;
+
+// D3.13: a moved connector in the frame of the moved root it rides with, from root_from_node at the drag begin: outward
+// as a normal, neither axis normalized, so transform_connector() by a step's world_from_root gives the node's frame.
+[[nodiscard]] auto connector_in_root(const Kit_connector& connector, const glm::mat4& root_from_node) -> Kit_connector;
+
+// D3.13: the world position of a connector_in_root() position at a step's world_from_root (any rotation, scale or
+// mirror the step applied); nullopt when that frame degenerates, so a collapsed root does not snap.
+[[nodiscard]] auto carry_connector_position(const glm::vec3& position_in_root, const glm::mat4& world_from_root) -> std::optional<glm::vec3>;
 
 // D3.12: the piece pose putting its local connector on the target's: positions coincide (moved gap along the target's
 // outward), outward axes oppose, up axes agree after twist_steps quarter turns about the target's outward axis.

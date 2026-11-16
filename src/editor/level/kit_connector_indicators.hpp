@@ -49,7 +49,7 @@ public:
     );
     void clear_connect_choice();
 
-    // The record of the piece may have changed: its local frames are read again when next drawn.
+    // The record or connector switches of the piece may have changed: its enabled local frames are read again when next drawn.
     void forget_piece(const erhe::scene::Node& node);
     void forget_all  ();
     void forget_removed(const Removed_items& removed);

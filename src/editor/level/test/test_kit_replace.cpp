@@ -331,4 +331,105 @@ TEST(Kit_replace, slots_match_by_name)
     EXPECT_FALSE(matches[0].has_value());
 }
 
+
+using editor::Kit_replace_skip;
+using editor::Kit_replace_skipped_name;
+using editor::Kit_replace_summary;
+using editor::Kit_replace_target_facts;
+
+// A kit piece that can be replaced; each test turns one fact off.
+constexpr Kit_replace_target_facts c_replaceable{
+    .kit_layout_node     = false,
+    .below_locked_layout = false,
+    .mesh                = true,
+    .group_node          = false,
+    .kit_piece_record    = true,
+    .record_reads        = true,
+    .slot_count_matches  = true
+};
+
+TEST(Kit_replace, a_kit_piece_is_replaced_and_every_other_node_is_skipped_with_its_reason)
+{
+    EXPECT_FALSE(editor::classify_replace_target(c_replaceable).has_value());
+
+    Kit_replace_target_facts layout = c_replaceable;
+    layout.kit_layout_node = true;
+    layout.mesh            = false;
+    layout.group_node      = true; // an Xform layout is a group node as well
+    EXPECT_EQ(editor::classify_replace_target(layout), std::optional<Kit_replace_skip>{Kit_replace_skip::kit_layout_node});
+
+    Kit_replace_target_facts child = c_replaceable;
+    child.below_locked_layout = true;
+    EXPECT_EQ(editor::classify_replace_target(child), std::optional<Kit_replace_skip>{Kit_replace_skip::locked_layout_child});
+
+    Kit_replace_target_facts group = c_replaceable;
+    group.mesh             = false;
+    group.group_node       = true;
+    group.kit_piece_record = false;
+    EXPECT_EQ(editor::classify_replace_target(group), std::optional<Kit_replace_skip>{Kit_replace_skip::group});
+
+    Kit_replace_target_facts camera = group;
+    camera.group_node = false;
+    EXPECT_EQ(editor::classify_replace_target(camera), std::optional<Kit_replace_skip>{Kit_replace_skip::not_a_kit_piece});
+
+    Kit_replace_target_facts plain_mesh = c_replaceable;
+    plain_mesh.kit_piece_record = false;
+    EXPECT_EQ(editor::classify_replace_target(plain_mesh), std::optional<Kit_replace_skip>{Kit_replace_skip::not_a_kit_piece});
+
+    Kit_replace_target_facts unreadable = c_replaceable;
+    unreadable.record_reads = false;
+    EXPECT_EQ(editor::classify_replace_target(unreadable), std::optional<Kit_replace_skip>{Kit_replace_skip::unreadable_record});
+
+    Kit_replace_target_facts loaded = c_replaceable;
+    loaded.slot_count_matches = false;
+    EXPECT_EQ(editor::classify_replace_target(loaded), std::optional<Kit_replace_skip>{Kit_replace_skip::loaded_mesh});
+}
+
+TEST(Kit_replace, a_locked_layout_child_is_skipped_as_one_before_its_record_is_looked_at)
+{
+    Kit_replace_target_facts child = c_replaceable;
+    child.below_locked_layout = true;
+    child.record_reads        = false;
+    child.slot_count_matches  = false;
+    EXPECT_EQ(editor::classify_replace_target(child), std::optional<Kit_replace_skip>{Kit_replace_skip::locked_layout_child});
+}
+
+TEST(Kit_replace, the_summary_names_what_was_replaced_snapped_and_skipped)
+{
+    EXPECT_EQ(editor::make_replace_summary(Kit_replace_summary{.shape_name = "Rock", .replaced_count = 2}), "Replaced 2 pieces with Rock.");
+    EXPECT_EQ(editor::make_replace_summary(Kit_replace_summary{.shape_name = "Rock", .replaced_count = 1}), "Replaced 1 piece with Rock.");
+    EXPECT_EQ(
+        editor::make_replace_summary(Kit_replace_summary{.shape_name = "Rock", .replaced_count = 3, .snapped_count = std::size_t{2}}),
+        "Replaced 3 pieces with Rock. Snapped 2 of them to the surface."
+    );
+    EXPECT_EQ(
+        editor::make_replace_summary(Kit_replace_summary{.shape_name = "Block", .replaced_count = 0, .unchanged_count = 2}),
+        "The selected pieces are Block already."
+    );
+    const std::vector<Kit_replace_skipped_name> skipped{
+        {.name = "Wall run", .skip = Kit_replace_skip::kit_layout_node},
+        {.name = "Group 1",  .skip = Kit_replace_skip::group}
+    };
+    EXPECT_EQ(
+        editor::make_replace_summary(Kit_replace_summary{.shape_name = "Rock", .replaced_count = 1, .skipped = skipped}),
+        "Replaced 1 piece with Rock. Skipped 2: 'Wall run' (a kit layout node), 'Group 1' (a group)."
+    );
+    EXPECT_EQ(
+        editor::make_replace_summary(Kit_replace_summary{.shape_name = "Rock", .skipped = skipped}),
+        "Replaced no piece. Skipped 2: 'Wall run' (a kit layout node), 'Group 1' (a group)."
+    );
+}
+
+TEST(Kit_replace, the_summary_lists_at_most_the_first_names_of_many_skips)
+{
+    std::vector<Kit_replace_skipped_name> skipped;
+    for (std::size_t i = 0; i < editor::c_replace_summary_max_names + 3; ++i) {
+        skipped.push_back(Kit_replace_skipped_name{.name = "n" + std::to_string(i), .skip = Kit_replace_skip::not_a_kit_piece});
+    }
+    const std::string text = editor::make_replace_summary(Kit_replace_summary{.shape_name = "Rock", .skipped = skipped});
+    EXPECT_NE(text.find("Skipped 11:"), std::string::npos) << text;
+    EXPECT_NE(text.find("'n7' (not a kit piece) and 3 more."), std::string::npos) << text;
+    EXPECT_EQ(text.find("'n8'"), std::string::npos) << text;
+}
+
 } // anonymous namespace

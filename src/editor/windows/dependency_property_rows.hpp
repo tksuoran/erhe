@@ -142,7 +142,7 @@ private:
     void end_edit   (const erhe::property::Dependency_property& property);
     void queue_set  (const erhe::property::Dependency_property& property, const std::optional<erhe::property::Local_state>& after);
     // D3.9: a Kit_layout write of item i its node cannot take is taken back here and not queued; true when refused.
-    [[nodiscard]] auto refuse_layout_write(std::size_t i, const erhe::property::Dependency_property& property, const std::optional<erhe::property::Local_state>& after) -> bool;
+    [[nodiscard]] auto refuse_kit_write(std::size_t i, const erhe::property::Dependency_property& property, const std::optional<erhe::property::Local_state>& after) -> bool;
     // The property an edit of `property` records: `property` itself, or
     // for a writable computed property (D26) the stored property its
     // setter writes.

@@ -150,14 +150,14 @@ def build_level(editor, scene):
     require(len(placed) == len(pieces), f"placed {len(placed)} of {len(pieces)} pieces")
     ids = {piece["name"]: piece["id"] for piece in placed}
 
-    # The layouts come after the ground and the hill, which their surface snap rests on.
+    # The layouts come after the ground and the hill, which their surface snap puts them on.
     layouts = [
         ("tree ring on the hill", [14, 0, -10], {"kind": "ring", "count": 8, "radius": 2.5},
-         [{"shape": "nature.tree"}], {"surface_snap": True, "random_seeds": True}, 8),
+         [{"shape": "nature.tree"}], {"surface_snap": True, "per_piece_seed": True}, 8),
         ("rock scatter", [14, 0, 12],
          {"kind": "scatter", "scatter_mode": "count", "count": 30, "region": "rectangle",
-          "size_x": 14.0, "size_z": 8.0, "min_spacing": 1.5},
-         [{"shape": "nature.rock"}, {"shape": "nature.bush"}], {"surface_snap": True, "random_seeds": True}, 30),
+          "size_x": 14.0, "size_z": 8.0, "min_spacing": 0.4},
+         [{"shape": "nature.rock"}, {"shape": "nature.bush"}], {"surface_snap": True, "per_piece_seed": True}, 30),
         ("pillar line", [-12, 0, -14], {"kind": "line", "count": 6}, [{"shape": "architecture.pillar"}], {}, 6),
     ]
     for name, position, pattern, items, options, count in layouts:

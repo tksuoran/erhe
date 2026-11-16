@@ -124,6 +124,8 @@ public:
     // thread other than main exists. (owner_type, name) must be unique.
     auto register_property(Dependency_property::Registration&& registration) -> const Dependency_property&;
     void add_owner        (const Dependency_property& property, Owner_type owner_type);
+    // find() of `former_name` on the property's owner type answers the property: data written before a rename reads.
+    void add_former_name  (const Dependency_property& property, std::string_view former_name);
 
     // Exact (owner type, name) lookup: the registration made for that id.
     [[nodiscard]] auto find(Owner_type owner_type, std::string_view name) const -> const Dependency_property*;
@@ -304,6 +306,13 @@ public:
     [[nodiscard]] auto get     () const -> const Dependency_property& { return *m_property; }
     [[nodiscard]] auto get_ptr () const -> const Dependency_property* { return m_property; }
     [[nodiscard]] operator const Dependency_property&() const         { return *m_property; }
+
+    // Property_registry::add_former_name, chained onto a registration.
+    [[nodiscard]] auto with_former_name(const std::string_view former_name) const -> Property<T>
+    {
+        Property_registry::get().add_former_name(*m_property, former_name);
+        return *this;
+    }
 
     // Registration entry points. The enum_info overload is the only one
     // valid for enumeration types; the other only for non-enumeration types.

@@ -18,20 +18,30 @@ namespace editor {
 class Level_kits;
 class Scene_root;
 
+// Why a step of an active drag did not look for a pair (U27).
+enum class Kit_connector_snap_skip : unsigned int {
+    none = 0,
+    before_motion, // the pointer has not moved since the press
+    suspended      // the suspend key is held
+};
+
 // The pair the last step of the drag snapped by (D3.13); snapped is false when that step stayed unsnapped. Kept after the drag ends.
 class Kit_connector_snap_state
 {
 public:
     bool                             snapped         {false};
+    Kit_connector_snap_skip          skip            {Kit_connector_snap_skip::none};
+    Kit_connector_snap_constraint    constraint;
     float                            distance        {0.0f}; // of the pair in the unsnapped pose
-    glm::vec3                        offset          {0.0f}; // added to the moved set's translation
+    glm::vec3                        full_offset     {0.0f}; // puts the moved connector on the target's
+    glm::vec3                        offset          {0.0f}; // added to the moved set's translation (full_offset constrained)
     std::weak_ptr<erhe::scene::Node> piece;
     const char*                      connector       {""};
     std::weak_ptr<erhe::scene::Node> target;
     const char*                      target_connector{""};
 };
 
-// D3.13: snap to connectors during a translate drag; gathers at drag begin, then each step only reads world transforms.
+// D3.13: snap to connectors during a translate, rotate or scale drag; gathers at drag begin, then each step only reads world transforms.
 class Kit_connector_drag_snap
 {
 public:
@@ -50,10 +60,13 @@ public:
     // The scene of the active drag; null when none is active.
     [[nodiscard]] auto get_scene_root() const -> const Scene_root*;
 
-    // The offset co-locating the closest pair of the moved roots' current (unsnapped) pose; nullopt when none is in reach.
-    auto step() -> std::optional<glm::vec3>;
+    // The offset co-locating the closest pair of the moved roots' current (unsnapped) pose, constrained to the dragged
+    // axis or plane (U27); nullopt when none is in reach. A root whose frame degenerates contributes no connector.
+    auto step(const Kit_connector_snap_constraint& constraint) -> std::optional<glm::vec3>;
     // The caller could not apply the last step's offset: that step reports unsnapped.
     void reject_step();
+    // The step does not snap and looks for no pair, for the reason given.
+    void skip_step(Kit_connector_snap_skip reason);
 
     // Appends, at the current world transforms, the moved connectors and the targets within reach_factor times the
     // distance of one (the last step's pair as snapped); nothing when the drag is not active. No allocation at capacity.

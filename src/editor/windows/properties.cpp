@@ -433,6 +433,12 @@ Properties::Properties(
             m_kit_piece_editor.mark_dirty();
         }
     );
+    // A connector switch edit, its undo and redo: the switch rows read the piece again.
+    m_kit_piece_connectors_changed_subscription = app_message_bus.kit_piece_connectors_changed.subscribe(
+        [this](Kit_piece_connectors_changed_message&) {
+            m_kit_piece_editor.mark_dirty();
+        }
+    );
 
     m_close_scene_subscription = app_message_bus.close_scene.subscribe(
         [this](Close_scene_message& message) {
@@ -1260,6 +1266,35 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
     if (!m_kit_piece_editor.get_message().empty()) {
         add_entry(Property_row_id::properties_message, "Message", [this]() { kit_message_line(m_kit_piece_editor.get_message()); });
     }
+    // U33: the piece switch and one switch per connector of the shape (doc/editor/level_tools.md "Connector switches").
+    const std::vector<Kit_connector>& connectors = m_kit_piece_editor.get_connectors();
+    if (connectors.empty()) {
+        return;
+    }
+    add_entry(Property_row_id::properties_kit_connectors, "Connectors", [this]() {
+        bool enabled = m_kit_piece_editor.get_connector_switches().connectors_enabled;
+        if (ImGui::Checkbox("##", &enabled)) {
+            m_kit_piece_editor.set_piece_connectors(enabled ? Kit_connector_state::enabled : Kit_connector_state::disabled);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", "Off disables every connector of the piece: none joins, snaps or is drawn.");
+        }
+    });
+    for (std::size_t i = 0, end = connectors.size(); i < end; ++i) {
+        const char* const name = connectors[i].name;
+        add_entry({Property_row_id::properties_kit_connector, i}, fmt::format("Connector {}", name), [this, name]() {
+            const Kit_connector_switches& switches = m_kit_piece_editor.get_connector_switches();
+            bool enabled = !switches.is_disabled(name);
+            ImGui::BeginDisabled(!switches.connectors_enabled);
+            if (ImGui::Checkbox("##", &enabled)) {
+                m_kit_piece_editor.set_connector(name, enabled ? Kit_connector_state::enabled : Kit_connector_state::disabled);
+            }
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                ImGui::SetTooltip("%s", "The connector joins and snaps when this and Connectors are both on.");
+            }
+        });
+    }
 }
 
 void Properties::kit_layout_properties(const std::shared_ptr<erhe::scene::Node>& layout)
@@ -1296,6 +1331,7 @@ void Properties::kit_layout_properties(const std::shared_ptr<erhe::scene::Node>&
                 add_entry({Property_row_id::properties_kit_layout_item_material, slot}, shape->material_slots[slot] + " material", [&editor, i, slot]() { editor.item_material_row(i, slot); });
             }
         }
+        add_entry(Property_row_id::properties_kit_layout_item_weight, "Weight", [&editor, i]() { editor.item_weight_row(i); });
         add_entry(Property_row_id::properties_kit_layout_item_remove, "Remove Item", [&editor, i]() { editor.item_remove_button(i); });
         pop_group();
     }
@@ -1887,6 +1923,7 @@ void Properties::target_selector_imgui()
 void Properties::hidden()
 {
     m_dependency_rows.abandon_edit();
+    m_kit_layout_editor.abandon_edit();
 }
 
 void Properties::imgui()
@@ -1967,6 +2004,7 @@ void Properties::imgui()
 
     show_entries();
     m_dependency_rows.end_lost_edit();
+    m_kit_layout_editor.end_lost_edit();
 
     material_properties(items);
 

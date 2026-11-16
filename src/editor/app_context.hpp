@@ -102,6 +102,7 @@ class Item_tree_state_store;
 class Input_bindings_window;
 class Input_state;
 class Curve_tool;
+class Kit_layout_region_tool;
 class Lattice_tool;
 class Level_kits;
 class Material_paint_tool;
@@ -364,6 +365,7 @@ public:
     Inventory_window*                  inventory_window     {nullptr};
     Lattice_tool*                      lattice_tool         {nullptr};
     Curve_tool*                        curve_tool           {nullptr};
+    Kit_layout_region_tool*            kit_layout_region_tool{nullptr};
     Level_kits*                        level_kits           {nullptr};
     Material_paint_tool*               material_paint_tool  {nullptr};
     Material_preview*                  material_preview     {nullptr};

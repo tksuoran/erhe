@@ -52,9 +52,10 @@ ask the user which to pick. Item 14 starts with writing its plan.
 14. Triangle classification from walkable sample points: a plan to write,
     then build (`doc/plans/navigation_mesh.md` "Triangle classification from
     walkable sample points"; the navigation mesh it reads is built).
-15. Level tools and curves: the user's rulings U23 - U29 of 2026-11-15
-    first (`doc/plans/level_tools_implementation.md` steps 44 - 56), then its
-    other "Next steps" and the "Steps" of `doc/plans/curves.md` (the user
+15. Level tools and curves: the "Active" steps of
+    `doc/plans/level_tools_implementation.md` "Next steps", in their order
+    (62, 63); its "On hold" steps and the "Steps" of
+    `doc/plans/curves.md` wait for the user to make them active (the user
     tests each change hands-on in the windowed Debug editor and rules on
     what comes next). State: `memory-bank/topics/level_tools.md`.
 
@@ -206,6 +207,26 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   seams keep no LOD chain; a reparent that changes only the carrier is not
   re-resolved.
 - fp16: the first render after a variant switch is an outlier in the chains.
+- Snap to surface, unverified: a base-point line that passes exactly
+  through an edge shared by two triangles (a base center over the diagonal
+  of a slab) may miss both triangles, so that line sees no surface there
+  (`find_surface_placement()`, `doc/editor/level_tools.md` "Surface
+  placement"). Check with a unit test of the bvh backend's triangle test.
+- Snap to surface, unverified: under a parent with non-uniform scale a
+  rotated child's local transform has shear, which the stored translate /
+  rotate / scale drops, so the child lands off its planned pose
+  (`plan_surface_snaps()`; `level_snap_to_surface` records an operation
+  whenever a place is found, so a node that does not move can shift).
+- Kit pieces: a Paste Properties (or raw write) of another shape's
+  `Kit_piece.shape` / `Kit_piece.parameters` changes the record without
+  rebuilding the mesh, so the mesh and the record disagree.
+- Kit pieces: `set_item_style` and `set_prefab_template_property` can
+  carry `Kit_piece.connectors_enabled` / `Kit_piece.disabled_connectors`
+  values without the write check of `check_connector_switch_write()`.
+- Kit layout outlines: removing a whole Scope that holds materials does not
+  drop the outline cache (`Level_kits::on_scene_materials_changed()` runs
+  only when a Material itself is the inserted or removed item), so a layout
+  naming such a material keeps its outline until its next value change.
 
 ## Interactive checks for the user
 

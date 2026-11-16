@@ -52,6 +52,8 @@ public:
     void collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const override;
 
 private:
+    void on_materials_changed(App_context& context) const;
+
     Mode                                                       m_mode;
     std::shared_ptr<erhe::Hierarchy>                           m_item         {};
     std::shared_ptr<erhe::Hierarchy>                           m_before_parent{};

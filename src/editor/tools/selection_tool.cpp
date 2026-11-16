@@ -843,19 +843,19 @@ auto item_set_sort_predicate(const std::shared_ptr<erhe::Item_base>& lhs, const 
     return out_items;
 }
 
-namespace {
-
-// A child of a locked kit layout node is not selected: its layout node is (doc/editor/level_tools.md "Kit layout nodes").
-[[nodiscard]] auto get_selectable(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<erhe::Item_base>
+auto get_selectable(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<erhe::Item_base>
 {
     if (!item) {
         return item;
     }
+    // A scene node that left its scene (held by the undo history) is not selectable.
+    const erhe::scene::Xformable* const xformable = dynamic_cast<const erhe::scene::Xformable*>(item.get());
+    if ((xformable != nullptr) && (xformable->get_item_host() == nullptr)) {
+        return {};
+    }
     const std::shared_ptr<erhe::scene::Node> layout = find_locking_kit_layout(*item);
     return layout ? std::shared_ptr<erhe::Item_base>{layout} : item;
 }
-
-} // anonymous namespace
 
 void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item_base>>& selection)
 {
@@ -871,22 +871,26 @@ void Selection::set_selection(
 {
     Scoped_selection_change selection_change{*this};
 
-    // Children of locked kit layout nodes stand for their layout node, each item once.
+    // Children of locked kit layout nodes stand for their layout node, each item once; nodes in no scene are dropped.
     const bool redirects = std::any_of(
         selection_in.begin(), selection_in.end(),
-        [](const std::shared_ptr<erhe::Item_base>& item) -> bool { return item && static_cast<bool>(find_locking_kit_layout(*item)); }
+        [](const std::shared_ptr<erhe::Item_base>& item) -> bool { return get_selectable(item) != item; }
     );
     std::vector<std::shared_ptr<erhe::Item_base>> redirected;
     if (redirects) {
         for (const std::shared_ptr<erhe::Item_base>& item : selection_in) {
             const std::shared_ptr<erhe::Item_base> selectable = get_selectable(item);
-            if (std::find(redirected.begin(), redirected.end(), selectable) == redirected.end()) {
+            if (selectable && (std::find(redirected.begin(), redirected.end(), selectable) == redirected.end())) {
                 redirected.push_back(selectable);
             }
         }
     }
     const std::vector<std::shared_ptr<erhe::Item_base>>& selection = redirects ? redirected : selection_in;
     const std::shared_ptr<erhe::Item_base> active = get_selectable(active_in);
+    const std::shared_ptr<erhe::Item_base> current_active = m_active_item.lock();
+    if (!active && current_active && !get_selectable(current_active)) {
+        set_active_item({});
+    }
 
     // Membership of the incoming selection by pointer: Item_tree::select_all()
     // hands in every item of a tree, and a linear scan of `selection` per
@@ -1453,7 +1457,11 @@ auto Selection::add_to_selection(const std::shared_ptr<erhe::Item_base>& item_in
     const std::shared_ptr<erhe::Item_base> item = get_selectable(item_in);
 
     if (!item) {
-        log_selection->warn("Trying to add empty item to selection");
+        if (item_in) {
+            log_selection->warn("Not adding '{}' to selection: it is in no scene", item_in->get_name());
+        } else {
+            log_selection->warn("Trying to add empty item to selection");
+        }
         return false;
     }
 
@@ -1497,25 +1505,6 @@ auto Selection::remove_from_selection(const std::shared_ptr<erhe::Item_base>& it
     return false;
 }
 
-void Selection::update_selection_from_scene_item(const std::shared_ptr<erhe::Item_base>& item, const bool added)
-{
-    Scoped_selection_change selection_change{*this};
-
-    if (item->is_selected() && added) {
-        if (!is_in(item, m_selection)) {
-            m_selection.push_back(item);
-            update_last_selected(item);
-        }
-    } else {
-        if (is_in(item, m_selection)) {
-            const auto i = std::remove(m_selection.begin(), m_selection.end(), item);
-            if (i != m_selection.end()) {
-                m_selection.erase(i, m_selection.end());
-            }
-        }
-    }
-}
-
 void Selection::sanity_check()
 {
 #if !defined(NDEBUG)
@@ -1537,6 +1526,10 @@ void Selection::sanity_check()
                 is_in(item, m_selection)
             ) {
                 log_selection->error("Node does not have selection flag set while being in selection");
+                ++error_count;
+            }
+            if (node->is_selected() && find_locking_kit_layout(*node)) {
+                log_selection->error("Node '{}' is selected below a locked kit layout node", node->get_name());
                 ++error_count;
             }
             return true;

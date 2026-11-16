@@ -385,6 +385,12 @@ erhe_target_sources_grouped(
     level/kit_layout.hpp
     level/kit_layout_editor.cpp
     level/kit_layout_editor.hpp
+    level/kit_layout_indicators.cpp
+    level/kit_layout_indicators.hpp
+    level/kit_layout_outline.cpp
+    level/kit_layout_outline.hpp
+    level/kit_layout_region_tool.cpp
+    level/kit_layout_region_tool.hpp
     level/kit_layout_values.cpp
     level/kit_layout_values.hpp
     level/kit_mesh_builder.cpp
@@ -1129,6 +1135,8 @@ set(_config_sources
     ${_config_out}/camera_controls_config.hpp
     ${_config_out}/camera_controls_config_serialization.hpp
     ${_config_out}/camera_controls_config.cpp
+    ${_config_out}/connector_snap_axis_mode.hpp
+    ${_config_out}/connector_snap_axis_mode.cpp
     ${_config_out}/cpu_mesh_data_retention.hpp
     ${_config_out}/cpu_mesh_data_retention.cpp
     ${_config_out}/developer_config.hpp

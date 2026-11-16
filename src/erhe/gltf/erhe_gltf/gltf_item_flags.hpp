@@ -8,6 +8,7 @@
 #include <vector>
 
 namespace erhe { class Hierarchy; class Item_base; }
+namespace erhe::property { class Dependency_property; }
 
 namespace erhe::gltf {
 
@@ -121,9 +122,10 @@ void drop_unresolved_object_properties(
 // own chain that holds a local value `is_listed` does not accept is
 // cleared, so a value the core glTF fields carried (a KHR_lights_punctual
 // color, a KHR_physics_rigid_bodies friction) does not turn an inherited
-// value into a local one on reload. Call after the listed values are
-// applied.
-void clear_local_properties_not_listed(erhe::Item_base& item, const std::function<bool(std::string_view name)>& is_listed);
+// value into a local one on reload. `is_listed` resolves the file's keys
+// the way they were applied, so a former property name lists the property.
+// Call after the listed values are applied.
+void clear_local_properties_not_listed(erhe::Item_base& item, const std::function<bool(const erhe::property::Dependency_property& property)>& is_listed);
 
 // Older files list visible / shadow_cast / lightmapped in the flags
 // arrays: a listed shadow_cast / lightmapped becomes a local true, an

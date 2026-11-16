@@ -1562,7 +1562,7 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
             {"pieces", json::array({
                 json{{"shape", "basic.block"},  {"position", {20.0, 0.0, 20.0}}},
                 json{{"shape", "nature.bush"},  {"position", {22.0, 0.0, 20.0}}},
-                json{{"shape", "basic.block"},  {"position", {20.0, 5.0, 20.0}}, {"name", "undo test raised block"}}
+                json{{"shape", "basic.block"},  {"position", {20.0, 1.5, 20.0}}, {"name", "undo test raised block"}} // 0.5 m over the 1 m block, within the 1 m snap distance
             })}
         }
     );
@@ -1579,6 +1579,8 @@ TEST_F(Mcp_test, document_edits_record_one_undo_entry_each)
         check_one_entry("level_set_piece_parameters", json{{"scene_name", scene}, {"node_id", raised_id}, {"parameters", {{"width", 1.5}}}});
         // A palette material the scene does not hold yet and the slot's assignment are one entry.
         check_one_entry("level_set_piece_material", json{{"scene_name", scene}, {"node_id", raised_id}, {"slot", "stone"}, {"material", "Kit Wood"}});
+        // Both connector switches of one call are one entry.
+        check_one_entry("level_set_piece_connectors", json{{"scene_name", scene}, {"node_id", raised_id}, {"connectors_enabled", false}, {"connectors", {{"top", false}}}});
         // The raised block comes to rest on the block below it.
         check_one_entry("level_snap_to_surface", json{{"scene_name", scene}, {"node_ids", json::array({raised_id})}});
         // The group tools are one entry each; redo gives the same nodes back, so the ids stay valid.
@@ -5303,6 +5305,31 @@ TEST_F(Mcp_test, key_press_runs_the_bound_undo_command)
 
     client.call_tool("redo", json::object());
     advance_frames(client, 2);
+}
+
+// U27: set_surface_snap_settings takes connector_snap_axis_mode, refuses an unknown mode and reports it.
+TEST_F(Mcp_test, set_surface_snap_settings_round_trips_connector_snap_axis_mode)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    Mcp_client::Tool_result initial = client.call_tool("get_surface_snap_settings", json::object());
+    ASSERT_FALSE(initial.is_error) << initial.text;
+    const std::string initial_mode = initial.payload.value("connector_snap_axis_mode", std::string{});
+    ASSERT_TRUE((initial_mode == "full_offset") || (initial_mode == "stay_on_axis")) << initial.payload.dump();
+
+    Mcp_client::Tool_result set = client.call_tool("set_surface_snap_settings", json{{"connector_snap_axis_mode", "stay_on_axis"}});
+    ASSERT_FALSE(set.is_error) << set.text;
+    EXPECT_EQ(set.payload.value("connector_snap_axis_mode", std::string{}), "stay_on_axis");
+
+    Mcp_client::Tool_result refused = client.call_tool("set_surface_snap_settings", json{{"connector_snap_axis_mode", "sideways"}});
+    EXPECT_TRUE(refused.is_error) << "an unknown connector_snap_axis_mode was accepted";
+    Mcp_client::Tool_result kept = client.call_tool("get_surface_snap_settings", json::object());
+    EXPECT_EQ(kept.payload.value("connector_snap_axis_mode", std::string{}), "stay_on_axis");
+
+    Mcp_client::Tool_result restored = client.call_tool("set_surface_snap_settings", json{{"connector_snap_axis_mode", initial_mode}});
+    ASSERT_FALSE(restored.is_error) << restored.text;
+    EXPECT_EQ(restored.payload.value("connector_snap_axis_mode", std::string{}), initial_mode);
 }
 
 // A user binding override replaces the default bindings of a command: after

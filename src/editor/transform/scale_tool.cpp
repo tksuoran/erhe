@@ -192,6 +192,9 @@ void Scale_tool::update(const vec3 drag_position_in_world)
         }
     }();
 
+    if (s != 1.0f) {
+        m_context.transform_tool->note_node_drag_motion();
+    }
     m_context.transform_tool->adjust_scale(center_of_scale, scale);
 }
 
@@ -246,6 +249,9 @@ auto Scale_tool::update_uniform(Scene_view* scene_view) -> bool
 
     const float drive = glm::dot(closest_point.value() - m_uniform_initial_point, drag_direction);
     const float s     = std::exp2(drive / gizmo_radius);
+    if (drive != 0.0f) {
+        m_context.transform_tool->note_node_drag_motion();
+    }
     m_context.transform_tool->adjust_scale(center_of_scale, vec3{s, s, s});
     return true;
 }
@@ -297,6 +303,7 @@ auto Scale_tool::update_box(Scene_view* scene_view) -> bool
         m_context.transform_tool->restore_start_pose();
         return true;
     }
+    m_context.transform_tool->note_node_drag_motion();
 
     float pivot   {0.0f};
     float new_size{0.0f};
@@ -394,6 +401,8 @@ auto Scale_tool::apply_box_per_node(const float pivot, const float old_size, con
     const float     box_center = pivot + dir * (glm::max(new_size, 0.0f) * 0.5f);
 
     Transform_tool_shared& shared = get_shared();
+    // Every entry starts the step at its drag-start pose: one the loop skips cannot keep an earlier step's snap offset.
+    m_context.transform_tool->restore_start_entries();
     bool                   any    = false;
     for (Transform_entry& entry : shared.entries) {
         const std::shared_ptr<erhe::scene::Node>& node = entry.node;
@@ -472,9 +481,7 @@ auto Scale_tool::apply_box_per_node(const float pivot, const float old_size, con
         any = true;
     }
 
-    if (any) {
-        m_context.transform_tool->update_transforms();
-    }
+    m_context.transform_tool->finish_drag_step();
     return any;
 }
 

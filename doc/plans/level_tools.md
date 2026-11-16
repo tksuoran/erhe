@@ -112,6 +112,50 @@ The user's rulings (2026-11-15):
   and its region has viewport handles to resize it.
 - U29 (2026-11-15), window defaults. The PVS, LOD and Light Mixer windows
   are hidden by default.
+- U30 (2026-11-15), snap to surface as a search. In the user's words: "Snap
+  should try to snap to nearest free space where the piece fits (at least
+  along the ray direction), along the ray direction, up to max search
+  distance. If not found, stay unmoved, so at distance 0 for curve kit
+  layout, at the path." It settles: the maximum distance limits the whole
+  snap, measured from the start pose's base, in either direction; a piece
+  fits where the span from its base to its top along the direction is free
+  of solids at its base points (not a volume test); with no place within
+  the distance the piece stays unmoved (a kit layout element at its
+  generated position, a path layout's on the path). The default maximum
+  distance is 1 m (confirmed in U35).
+- U31 (2026-11-15), free space without solids. In the user's words: "Solid /
+  non-solid sounds like risky (potentially complex) for snapping. If the fix
+  turns out to be expensive (now or later): Try to come up with simpler rules
+  ignoring face sidedness and only use vertices as evidence for "free" space
+  for now, and mark considering solidness future work." It settles: the hit
+  points on the base-point lines are the evidence; a span is free when no hit
+  lies strictly inside it, whatever the face's facing; a hit is a surface to
+  rest on when its face's normal is against the snap direction. A piece
+  inside a solid taller than itself sees no hit in its span and can rest on a
+  surface inside the solid; considering solidness is future work.
+- U32 (2026-11-15), per-piece seed. "Per Piece Seed" (U24) is the kit layout
+  switch shown as "Random Seeds" under a new name; a replace carries each
+  piece's seed unchanged, as built.
+- U33 (2026-11-15), connector switches. A kit piece has both a switch for
+  all of its connectors and a switch per connector; a connector is enabled
+  when both are on, and all are on by default.
+- U34 (2026-11-15), more shapes (plan steps 62, 63). New shapes may join
+  the existing kits, and the five new kits of
+  `doc/plans/level_kit_extra_shapes.md` are wanted as well. The beach
+  shapes of step 62 are natural shapes; a harbour kit of man-made shapes is
+  free for step 63. A shape can carry a light source. An industrial kit
+  yes; a science fiction kit is future work. Shapes may use more
+  triangles: the limit can be raised for all kits. Hanging vines and
+  "path" are future work.
+- U35 (2026-11-15), confirmations. Shift is the default key that suspends
+  the connector snap. The default maximum snap to surface distance is 1 m.
+  The scatter is good as built; further scatter improvements, a weight
+  setting in the Level Kit window among them, are future work. Disabled
+  connectors are not drawn, as built.
+- U36 (2026-11-15), extra shapes. Water: yes, a simple plane shape. A light
+  a shape carries is a light node, and its values are that node's own
+  properties, not shape parameters. No limit on the number of kit lights
+  for now ("we may end up baking lights to vertices").
 
 ## Terms
 

@@ -7,6 +7,7 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     test_migration.cpp
     test_omit_defaults.cpp
+    test_renamed_fields.cpp
     test_version_upgrade.cpp
     test_check.hpp
 )
@@ -22,6 +23,9 @@ set(_generated_sources
     ${_codegen_out}/demo_slot.hpp
     ${_codegen_out}/demo_slot_serialization.hpp
     ${_codegen_out}/demo_slot.cpp
+    ${_codegen_out}/demo_renamed.hpp
+    ${_codegen_out}/demo_renamed_serialization.hpp
+    ${_codegen_out}/demo_renamed.cpp
 )
 erhe_codegen_source_settings(${_generated_sources})
 target_sources(${_target} PRIVATE ${_generated_sources})

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "level/kit_connector.hpp"
 #include "level/kit_shape.hpp"
 #include "level/kit_shape_library.hpp"
 
@@ -13,6 +14,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace erhe::scene { class Mesh; }
 
@@ -119,6 +121,13 @@ public:
     [[nodiscard]] auto get_values    () -> Kit_parameter_values&;
     [[nodiscard]] auto get_lengths   () const -> const Kit_lengths&;          // of the piece's scene, read with the record
 
+    // U33: every connector of the piece's shape and the piece's switches, read with the record.
+    [[nodiscard]] auto get_connectors        () const -> const std::vector<Kit_connector>&;
+    [[nodiscard]] auto get_connector_switches() const -> const Kit_connector_switches&;
+    // Queues Level_kits::set_connector_switches() for the piece switch or one connector's switch: one undo entry.
+    void set_piece_connectors(Kit_connector_state state);
+    void set_connector       (const char* connector_name, Kit_connector_state state);
+
 private:
     App_context&                     m_context;
     std::weak_ptr<erhe::scene::Mesh> m_piece;
@@ -129,6 +138,8 @@ private:
     Kit_parameter_values             m_values;
     Kit_lengths                      m_lengths;
     std::string                      m_message;
+    std::vector<Kit_connector>       m_connectors;
+    Kit_connector_switches           m_connector_switches;
 };
 
 } // namespace editor

@@ -5,12 +5,13 @@
 #include <glm/glm.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
-namespace erhe::math { class Curve_path; class Curve_path_table; }
+namespace erhe::math { class Aabb; class Curve_path; class Curve_path_table; }
 
 // Scene-free values of a kit layout node (doc/editor/level_tools.md "Kit layout nodes", D3.9).
 
@@ -32,6 +33,10 @@ enum class Kit_scatter_mode : unsigned int {
     count = 0,
     density
 };
+
+// The range of a scatter region's size_x, size_z and region_radius, as the rows and the region handles clamp them (meters).
+inline constexpr float c_min_scatter_region_size{0.01f};
+inline constexpr float c_max_scatter_region_size{10000.0f};
 
 [[nodiscard]] auto c_str(Kit_layout_count_mode mode) -> const char*;
 [[nodiscard]] auto c_str(Kit_scatter_mode mode) -> const char*;
@@ -62,20 +67,22 @@ public:
     float                  size_x       {8.0f};                             // scatter rectangle
     float                  size_z       {8.0f};                             // scatter rectangle
     float                  region_radius{4.0f};                             // scatter disc
-    float                  min_spacing  {1.0f};                             // scatter: between piece centers
+    float                  min_spacing  {1.0f};                             // scatter: between piece footprints
     float                  yaw_min      {0.0f};                             // scatter: degrees about the node's up axis
     float                  yaw_max      {360.0f};                           // scatter
 
     [[nodiscard]] auto operator==(const Kit_layout_pattern& other) const -> bool = default;
 };
 
-// One kit item a layout places: a shape, its parameter values and a material name per slot (empty: the default).
+// One kit item a layout places: a shape, its parameter values, a material name per slot (empty: the default) and the
+// weight a scatter picks it by.
 class Kit_layout_item
 {
 public:
     std::string              shape;
     std::string              parameters; // Kit_parameter_values canonical text, its derive mask the item's seed mask
     std::vector<std::string> materials;
+    uint32_t                 weight{1};  // 0 - c_max_scatter_weight; the other kinds take item i modulo the item count
 
     [[nodiscard]] auto operator==(const Kit_layout_item& other) const -> bool = default;
 };
@@ -91,6 +98,21 @@ void set_layout_spacing_from_extent(Kit_layout_pattern& pattern, const glm::vec3
 [[nodiscard]] auto parse_layout_pattern(std::string_view text, Kit_layout_pattern& out_pattern) -> std::string;
 [[nodiscard]] auto parse_layout_items  (std::string_view text, std::vector<Kit_layout_item>& out_items) -> std::string;
 
+// What a pattern reads of the items: the largest extent along x (gap mode), and per item its weight and footprint.
+class Kit_layout_item_sizes
+{
+public:
+    float                            extent{0.0f};
+    std::vector<Repeat_scatter_item> items;
+
+    void clear();
+    // bounds: the item's brush bounds; invalid bounds (an item that does not read) count as a point.
+    void add(const Kit_layout_item& item, const erhe::math::Aabb& bounds);
+};
+
+// The radius of the circle about the origin's vertical axis around the bounds' xz rectangle; 0 for invalid bounds.
+[[nodiscard]] auto get_scatter_footprint_radius(const erhe::math::Aabb& bounds) -> float;
+
 // The run a pattern makes: a count mode Repeat_pattern for expand_repeat() from the node's origin (a path: the node is
 // its curve, so its own frame).
 class Kit_layout_run
@@ -103,13 +125,13 @@ public:
     std::size_t    requested{0}; // the pieces the values ask for; a scatter holds fewer when no more fit the spacing
 };
 
-// seed: the layout seed, a scatter's point stream; item_extent: the largest extent along x of the items placed, read in
-// gap mode; path_table: a path's curve (the run refers to it), null for the other kinds; out_poses: when given, the run's
-// poses from the node's origin, cleared and filled. Returns the refusal, empty when resolved.
+// seed: the layout seed, a scatter's point stream; items: one entry per layout item (the run refers to them);
+// path_table: a path's curve (the run refers to it), null for the other kinds; out_poses: when given, the run's poses
+// from the node's origin with each pose's item, cleared and filled. Returns the refusal, empty when resolved.
 [[nodiscard]] auto resolve_layout_pattern(
     const Kit_layout_pattern&           pattern,
     int                                 seed,
-    float                               item_extent,
+    const Kit_layout_item_sizes&        items,
     const erhe::math::Curve_path_table* path_table,
     Kit_layout_run&                     out_run,
     std::vector<Repeat_pose>*           out_poses

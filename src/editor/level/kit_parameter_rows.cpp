@@ -267,6 +267,11 @@ void Kit_piece_editor::update(const std::shared_ptr<erhe::scene::Mesh>& piece)
     const Scene_root* const scene_root = static_cast<const Scene_root*>(piece->get_item_host());
     m_lengths = (scene_root != nullptr) ? m_context.level_kits->get_lengths(*scene_root) : Kit_lengths{};
     m_shape_text = (shape != nullptr) ? shape->display_name : (record.has_value() ? record.value().shape : std::string{});
+    get_shape_connectors(m_values, m_connectors);
+    if (!m_problem.empty()) {
+        m_connectors.clear();
+    }
+    m_connector_switches = read_connector_switches(*piece);
 }
 
 void Kit_piece_editor::on_edit(const Kit_row_edit edit)
@@ -317,6 +322,51 @@ void Kit_piece_editor::on_edit(const Kit_row_edit edit)
             }
         }
     );
+}
+
+namespace {
+
+void queue_connector_switch_edit(App_context& context, const std::weak_ptr<erhe::scene::Mesh>& weak_piece, Kit_connector_switch_edit edit)
+{
+    context.imgui_windows->queue(
+        [&context, weak_piece, edit = std::move(edit)]() {
+            const std::shared_ptr<erhe::scene::Mesh> mesh = weak_piece.lock();
+            if (!mesh || !context.app_scenes->is_host_registered(mesh->get_item_host())) {
+                return;
+            }
+            // Scene items are hosted by their Scene_root.
+            Scene_root& scene_root = *static_cast<Scene_root*>(mesh->get_item_host());
+            const Kit_connector_switch_result result = context.level_kits->set_connector_switches(scene_root, mesh, edit);
+            if (!result.error.empty()) {
+                log_scene->warn("Kit piece: connector switch of '{}' failed: {}", mesh->get_name(), result.error);
+            }
+        }
+    );
+}
+
+} // anonymous namespace
+
+void Kit_piece_editor::set_piece_connectors(const Kit_connector_state state)
+{
+    queue_connector_switch_edit(m_context, m_piece, Kit_connector_switch_edit{.piece = state, .connectors = {}});
+}
+
+void Kit_piece_editor::set_connector(const char* const connector_name, const Kit_connector_state state)
+{
+    queue_connector_switch_edit(
+        m_context, m_piece,
+        Kit_connector_switch_edit{.piece = {}, .connectors = {Kit_connector_switch_edit::Connector{.name = connector_name, .state = state}}}
+    );
+}
+
+auto Kit_piece_editor::get_connectors() const -> const std::vector<Kit_connector>&
+{
+    return m_connectors;
+}
+
+auto Kit_piece_editor::get_connector_switches() const -> const Kit_connector_switches&
+{
+    return m_connector_switches;
 }
 
 auto Kit_piece_editor::get_shape() const -> const Kit_shape_definition*

@@ -663,7 +663,8 @@ template <typename T>
     return projected_point;
 }
 
-// Returns angle of rotation in radians for point q from reference_direction
+// Signed angle in radians, in [-pi, pi], from reference_direction to q about axis_for_rotation (right-handed);
+// exactly 0 when q equals reference_direction, and never NaN for nonzero inputs.
 template <typename T>
 [[nodiscard]] auto angle_of_rotation(
     const typename vector_types<T>::vec3& q,
@@ -673,13 +674,11 @@ template <typename T>
 {
     using vec3 = typename vector_types<T>::vec3;
 
-    const vec3 q_      = normalize(q);
-    const vec3 r_      = normalize(reference_direction);
-    const vec3 m       = normalize(cross(q_, r_));
-    const T    n_dot_m = dot(axis_for_rotation, m);
-    const T    q_dot_r = glm::clamp(dot(q_, r_), T{-1.0}, T{1.0});
-    const T    angle   = (n_dot_m < 0) ? std::acos(q_dot_r) : -std::acos(q_dot_r);
-    return angle;
+    // cross(r, q - r) == cross(r, q), and is exactly zero for q == r even with fused multiply-adds.
+    const vec3 sine_vector = glm::cross(reference_direction, q - reference_direction);
+    const T    sine        = glm::dot(axis_for_rotation, sine_vector);
+    const T    cosine      = glm::dot(reference_direction, q);
+    return std::atan2(sine, cosine);
 }
 
 template <typename T>

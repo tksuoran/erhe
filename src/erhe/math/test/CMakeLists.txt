@@ -1,6 +1,7 @@
 set(_target "erhe_math_tests")
 add_executable(${_target}
     main.cpp
+    test_angle_of_rotation.cpp
     test_box_hull.cpp
     test_curve_path.cpp
     test_euler_angles.cpp

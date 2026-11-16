@@ -52,8 +52,10 @@ void Move_tool::imgui(Property_editor& property_editor)
     p.add_entry(Property_row_id::move_snap_enable, "Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.translate_snap_enable); });
     if (m_context.level_kits != nullptr) {
         p.add_entry(Property_row_id::move_snap_to_surface, "Snap To Surface",   [this]() { surface_snap_checkbox  (*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_surface_max_distance, "Surface Max Distance", [this]() { surface_max_distance_input(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_orient_to_surface, "Orient To Surface", [this]() { surface_orient_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_connector_snap, "Connector Snap", [this]() { connector_snap_distance_input(*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_connector_snap_axis, "Connector Snap On Axis", [this]() { connector_snap_axis_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
     }
     p.add_entry(Property_row_id::move_bone_ik, "Bone IK", [this]() {
         ImGui::Checkbox("##", &get_shared().settings.translate_ik_enable);
@@ -361,6 +363,7 @@ void Move_tool::update(const vec3 drag_position_in_world)
     const vec3 translation_vector  = drag_position_in_world - m_drag_origin;
     const vec3 snapped_translation = snap(translation_vector);
 
+    m_context.transform_tool->note_translate_drag_motion(translation_vector);
     m_context.transform_tool->adjust_translation(snapped_translation);
 }
 

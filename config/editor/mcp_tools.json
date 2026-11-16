@@ -950,7 +950,7 @@
     "name": "geometry_query"
   },
   {
-    "description": "Select items by ID or by name / path (scene nodes, materials, etc.). Mirrors UI selection semantics: replaces the selection within the target scene only (other scenes' selections persist; ids=[] with no paths clears the target scene only) and makes the target scene the active scene. The last listed item becomes the active item unless 'active' names another one of them.",
+    "description": "Select items by ID or by name / path (scene nodes, materials, etc.). Mirrors UI selection semantics: replaces the selection within the target scene only (other scenes' selections persist; ids=[] with no paths clears the target scene only) and makes the target scene the active scene. The last listed item becomes the active item unless 'active' names another one of them. A child of a locked kit layout node selects the outermost locked layout node above it instead (doc/editor/level_tools.md \"Kit layout nodes\"). Returns selected_count and items: the items now selected, each once, in the order listed.",
     "inputSchema": {
       "properties": {
         "active": {
@@ -1061,7 +1061,7 @@
     "name": "set_active_scene"
   },
   {
-    "description": "Apply a Transform tool edit (translation / rotation / scale / skew) to the currently selected node(s), through the same code path as the Transform window numeric entry. space=local applies values in parent space (requires exactly one selected node); space=global applies in world (anchor) space. end_edit=true (default) records an undo operation and refreshes the edit baselines; end_edit=false keeps the edit session open like an active drag, so repeated calls re-apply against the same initial state. surface_snap / surface_orient (default false, never the UI's Snap To Surface / Orient To Surface) rest each moved mesh of the selection on the surface under it after the call's edits (doc/editor/level_tools.md \"Transform tool\"); they need a translation. The reply echoes surface_snap, surface_orient and surface_found_count, and per node surface_found. connector_snap_distance (default 0 = off, never the UI's Connector Snap) snaps the selection to the nearest connector pair after the edits and the surface rest; it needs a translation. The reply echoes connector_snap_distance and gives connector_snap {active, moved_connectors, target_connectors, snapped, and when snapped distance (in the unsnapped pose), offset, piece_id, piece, connector, target_id, target, target_connector}.",
+    "description": "Apply a Transform tool edit (translation / rotation / scale / skew) to the currently selected node(s), through the same code path as the Transform window numeric entry. space=local applies values in parent space (requires exactly one selected node); space=global applies in world (anchor) space. end_edit=true (default) records an undo operation and refreshes the edit baselines; end_edit=false keeps the edit session open like an active drag, so repeated calls re-apply against the same initial state. surface_snap / surface_orient (default false, never the UI's Snap To Surface / Orient To Surface) move each moved mesh along the snap direction (down), either way, to the nearest place within surface_max_distance (meters, default 1) where its base rests on a surface and it fits along the direction; a mesh with no such place keeps its pose (doc/editor/level_tools.md \"Surface placement\"), after the call's edits (doc/editor/level_tools.md \"Transform tool\"); they need a translation. The reply echoes surface_snap, surface_orient, surface_max_distance and surface_found_count, and per node surface_found. connector_snap_distance (default 0 = off, never the UI's Connector Snap) snaps the selection to the nearest connector pair after the edits and the snap to surface; it needs a translation, rotation_xyzw or scale (the rotation and scale are kept, only the translation moves). The reply echoes connector_snap_distance and gives connector_snap {active, moved_connectors, target_connectors, snapped, and when snapped distance (in the unsnapped pose), offset, piece_id, piece, connector, target_id, target, target_connector}.",
     "inputSchema": {
       "properties": {
         "connector_snap_distance": {
@@ -1104,12 +1104,16 @@
           "type": "string"
         },
         "surface_orient": {
-          "description": "Turn each moved mesh's up axis to the surface normal under it, keeping its heading, and rest it there (default false)",
+          "description": "Snap as surface_snap does through the base center, then turn the mesh's up axis to that surface's normal, keeping its heading (default false)",
           "type": "boolean"
         },
         "surface_snap": {
-          "description": "Rest the base of each moved mesh on the highest surface under it (default false)",
+          "description": "Move each moved mesh to the nearest place within surface_max_distance where its base rests on a surface and it fits along the direction; none: it keeps its pose (default false)",
           "type": "boolean"
+        },
+        "surface_max_distance": {
+          "description": "Meters >= 0 (default 1): with surface_snap or surface_orient, the farthest a moved mesh moves along the snap direction, either way, to snap to the surface (U30)",
+          "type": "number"
         },
         "translation": {
           "description": "Translation [x, y, z]",
@@ -1126,7 +1130,7 @@
     "name": "transform_selection"
   },
   {
-    "description": "Drag the currently selected node(s) through the Transform tool's drag path - the same one a gizmo mouse drag takes - spread over real editor frames: the drag starts like a gizmo press on a handle of that kind (the Move / Rotate / Scale tool is the active subtool, so a translate drag of one selected bone solves its IK chain when Bone IK is on, drawing the chain visualization), the target moves linearly from the start pose to the full delta over `frames` frames (one step per frame, the call returns when the last step is applied), and with release=true it ends like a gizmo release (one undoable operation). Give exactly one of translation, rotation_axis + rotation_angle_deg, or scale. A dynamic rigid body held by a live joint is pulled toward the target by a spring and moved by the physics simulation (the joints keep holding; release keeps its velocity); other dynamic bodies are held kinematic for the drag. With release=false the drag stays held after the last step (query the scene mid-drag); end it with action='release'. Keep frames small enough for the steps to finish inside the MCP request timeout (5 s); an expired call leaves the drag held. A translate drag with surface_snap / surface_orient (default false, never the UI's settings) rests each moved mesh on the surface under it at every step, all moved meshes excluded from the rays (doc/editor/level_tools.md \"Transform tool\"); the reply echoes both and per node surface_found and world_rotation_xyzw. A translate drag with connector_snap_distance (default 0 = off, never the UI's Connector Snap) gathers the connectors when the drag starts and at every step snaps the step's pose, taken after the surface rest, to the nearest connector pair within the distance; each step is judged from the unsnapped pose, so the drag unsnaps when the pair is farther. Every reply (drag, move, release) gives connector_snap: the last step's pair as transform_selection reports it.",
+    "description": "Drag the currently selected node(s) through the Transform tool's drag path - the same one a gizmo mouse drag takes - spread over real editor frames: the drag starts like a gizmo press on a handle of that kind (the Move / Rotate / Scale tool is the active subtool, so a translate drag of one selected bone solves its IK chain when Bone IK is on, drawing the chain visualization), the target moves linearly from the start pose to the full delta over `frames` frames (one step per frame, the call returns when the last step is applied), and with release=true it ends like a gizmo release (one undoable operation). Give exactly one of translation, rotation_axis + rotation_angle_deg, or scale. A dynamic rigid body held by a live joint is pulled toward the target by a spring and moved by the physics simulation (the joints keep holding; release keeps its velocity); other dynamic bodies are held kinematic for the drag. With release=false the drag stays held after the last step (query the scene mid-drag); end it with action='release'. Keep frames small enough for the steps to finish inside the MCP request timeout (5 s); an expired call leaves the drag held. A translate drag with surface_snap / surface_orient (default false, never the UI's settings) at every step move each moved mesh along the snap direction (down), either way, to the nearest place within surface_max_distance (meters, default 1) where its base rests on a surface and it fits along the direction; a mesh with no such place keeps its pose (doc/editor/level_tools.md \"Surface placement\"), all moved meshes excluded (doc/editor/level_tools.md \"Transform tool\"); the reply echoes both, surface_max_distance and per node surface_found and world_rotation_xyzw. A drag of any kind with connector_snap_distance (default 0 = off, never the UI's Connector Snap) gathers the connectors when the drag starts and at every step snaps the step's pose, taken after the snap to surface (translate) or the step's rotation or scale about center (rotate, scale: the rotation and scale are kept, only the translation moves), to the nearest connector pair within the distance by its full offset; each step is judged from the unsnapped pose, so the drag unsnaps when the pair is farther; a step snaps only after the drag has moved (U27: a zero translation, a zero angle or a scale of 1 since the start does not snap until a step that moves), and the suspend key (Transform_tool.suspend_connector_snap) does not apply to drag_selection. Every reply (drag, move, release) gives connector_snap: the last step's pair as transform_selection reports it.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -1143,7 +1147,7 @@
           "type": "array"
         },
         "connector_snap_distance": {
-          "description": "Translate drags only: Snap to connectors (doc/editor/level_tools.md \"Connector snap\"): when > 0, a connector of the moved nodes or of kit pieces below them within this many meters of a connector of another kit piece of the scene (not moved, not below a moved node) moves the whole moved set by the one offset that puts the closest such pair on one point (translation only; ties by node id, then connector order) (default 0; read when the drag starts)",
+          "description": "Translate, rotate and scale drags: Snap to connectors (doc/editor/level_tools.md \"Connector snap\"): when > 0, a connector of the moved nodes or of kit pieces below them within this many meters of a connector of another kit piece of the scene (not moved, not below a moved node) moves the whole moved set by the one offset that puts the closest such pair on one point (translation only; ties by node id, then connector order) (default 0; read when the drag starts)",
           "type": "number"
         },
         "frames": {
@@ -1177,12 +1181,16 @@
           "type": "array"
         },
         "surface_orient": {
-          "description": "Translate drags only: turn each moved mesh's up axis to the surface normal under it at every step, keeping its heading (default false; read when the drag starts)",
+          "description": "Translate drags only: at every step snap as surface_snap does through the base center, then turn the mesh's up axis to that surface's normal, keeping its heading (default false; read when the drag starts)",
           "type": "boolean"
         },
         "surface_snap": {
-          "description": "Translate drags only: rest the base of each moved mesh on the highest surface under it at every step (default false; read when the drag starts)",
+          "description": "Translate drags only: move each moved mesh down or up to the nearest place where its base rests on a surface and it fits, within surface_max_distance at every step (default false; read when the drag starts)",
           "type": "boolean"
+        },
+        "surface_max_distance": {
+          "description": "Meters >= 0 (default 1): with surface_snap or surface_orient, the farthest a moved mesh moves along the snap direction, either way, to snap to the surface (U30)",
+          "type": "number"
         },
         "translation": {
           "description": "World translation delta [x, y, z] of a translate drag",
@@ -1199,7 +1207,7 @@
     "name": "drag_selection"
   },
   {
-    "description": "Cancel the Transform tool's node drag the way Escape cancels a gizmo drag: a pointer gizmo drag of nodes (any handle - translate, rotate, scale - held with mouse_drag hold=true) or a held drag_selection drag (release=false). Every dragged node returns to its drag-start transform (surface rests and orients undone), its rigid body rests there, a moved locked kit layout gets its children from before the drag back, and no operation is recorded. After a pointer drag the still-held button moves nothing and its release records nothing. Refused while a drag_selection drag is still stepping. Returns cancelled (false when no node drag was active) and drag: 'pointer', 'drag_selection' or 'none'. Mesh component and point edits cancel with cancel_component_edit.",
+    "description": "Cancel the Transform tool's node drag the way Escape cancels a gizmo drag: a pointer gizmo drag of nodes (any handle - translate, rotate, scale - held with mouse_drag hold=true) or a held drag_selection drag (release=false). Every dragged node returns to its drag-start transform (snaps to the surface and orients undone), its rigid body rests there, a moved locked kit layout gets its children from before the drag back, and no operation is recorded. After a pointer drag the still-held button moves nothing and its release records nothing. Refused while a drag_selection drag is still stepping. Returns cancelled (false when no node drag was active) and drag: 'pointer', 'drag_selection' or 'none'. Mesh component and point edits cancel with cancel_component_edit.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -1207,7 +1215,7 @@
     "name": "cancel_transform_drag"
   },
   {
-    "description": "Read the Transform tool's connector snap (doc/editor/level_tools.md \"Connector snap\") of the current or last translate drag, a pointer gizmo drag or a drag_selection drag. Read-only. Returns active (a running drag gathered connectors to snap by), moved_connectors and target_connectors (gathered at the drag's begin), snapped (the last step snapped), and when snapped distance (of the pair in the unsnapped pose), offset (added to the moved nodes' translation), piece_id, piece, connector (the moved piece's connector), target_id, target and target_connector. The last step's pair stays readable after the release or cancel.",
+    "description": "Read the Transform tool's connector snap (doc/editor/level_tools.md \"Connector snap\") of the current or last node drag (translate, rotate or scale), a pointer gizmo drag or a drag_selection drag. Read-only. Returns active (a running drag gathered connectors to snap by), moved_connectors and target_connectors (gathered at the drag's begin; enabled connectors only, U33), snapped (the last step snapped), skipped ('none'; 'before_motion': the pointer has not moved since the press; 'suspended': the suspend key Transform_tool.suspend_connector_snap is held during a pointer drag), and when snapped distance (of the pair in the unsnapped pose), constraint ('free', 'axis' or 'plane': Connector Snap On Axis with an axis or plane handle of a translate drag, U27; a rotate or scale drag is always free), full_offset (puts the moved connector on the target's), offset (added to the moved nodes' translation: full_offset, or its part along the dragged axis or in the dragged plane), piece_id, piece, connector (the moved piece's connector), target_id, target and target_connector. The last step's pair stays readable after the release or cancel.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -1397,7 +1405,7 @@
     "name": "level_get_kits"
   },
   {
-    "description": "Place kit pieces (doc/editor/level_tools.md \"Placing\") as ONE undo entry. Each piece is a mesh node sharing the mesh of every piece of the same shape and parameter values, with its kit record (Kit_piece.shape, Kit_piece.parameters), one mesh primitive per material slot of its shape with that slot's material (materials: slot name to material name; a slot not named takes its default palette material), and a static physics body (convex hull, or a triangle mesh for stairs, door wall, arch, land mass and tree). Parameters not given take their defaults at the scene's level settings (set_scene_settings settings.level). Derive from seed (doc/editor/level_tools.md \"Derive from seed\"): the parameters named in parameters.derive (default: the shape's default mask) take values derived from the seed and their derive range; giving a value for such a parameter is an error naming it. Every piece is checked before any is placed: an unknown key, an unknown shape or parameter, a value outside its range (the message names the parameter and its range), a bad rotation, an unknown slot or a material neither in the scene nor in the palette fails the call naming the piece index, and nothing is placed. Positions and rotations are in the scene root's space (meters). The module snap applies first, then the surface options (doc/editor/level_tools.md \"Surface placement\"): rays start one piece height back against surface_direction, so a piece rests on the highest surface within its own height above its base or anywhere below (a sunk piece rises); surface_snap rests the piece's base on the highest such surface under its base center and corners; surface_orient tilts the piece's up axis to the surface normal under its base center (heading kept) and rests the base center there; both = orient. Pieces of the same call are not surfaces for each other. No surface found: the piece stays at the given point and reports surface_found false. Returns scene_name, snap, level {module, wall_height}, count and per piece id, name, shape, parameters (effective values and derive, the derived names), position and rotation_xyzw (after snapping and the surface options), surface_found (false also when no surface option applied), world_aabb {min, max}, triangle_count, materials (slot name to material name), brush_id (pieces with equal brush_id share one mesh) and mesh_key (shape id + canonical parameter text). A piece with connect takes its pose from a connector join (doc/editor/level_tools.md \"Connectors\"): its connector meets the to_connector of the existing kit piece to_piece_id exactly, so snap, surface_snap and surface_orient do not apply to it and it gives no position, rotation_xyzw, surface_snap or surface_orient.",
+    "description": "Place kit pieces (doc/editor/level_tools.md \"Placing\") as ONE undo entry. Each piece is a mesh node sharing the mesh of every piece of the same shape and parameter values, with its kit record (Kit_piece.shape, Kit_piece.parameters), one mesh primitive per material slot of its shape with that slot's material (materials: slot name to material name; a slot not named takes its default palette material), and a static physics body (convex hull, or a triangle mesh for stairs, door wall, arch, land mass and tree). Parameters not given take their defaults at the scene's level settings (set_scene_settings settings.level). Derive from seed (doc/editor/level_tools.md \"Derive from seed\"): the parameters named in parameters.derive (default: the shape's default mask) take values derived from the seed and their derive range; giving a value for such a parameter is an error naming it. Every piece is checked before any is placed: an unknown key, an unknown shape or parameter, a value outside its range (the message names the parameter and its range), a bad rotation, an unknown slot or a material neither in the scene nor in the palette fails the call naming the piece index, and nothing is placed. Positions and rotations are in the scene root's space (meters). The module snap applies first, then the surface options (doc/editor/level_tools.md \"Surface placement\"): the piece moves along surface_direction, either way, to the nearest place where its base rests on a surface (the top face of a solid) and the piece fits along the direction (no solid between its base and its top at its base points), at most surface_max_distance (meters, default 1) from where it was given; equal distances along and against the direction go along it. surface_snap uses the base center and base corners; surface_orient uses the base center, then tilts the piece's up axis to that surface's normal (heading kept); both = orient. Pieces of the same call are not surfaces for each other. No such place within the distance: the piece stays at the given point and reports surface_found false. Returns scene_name, snap, surface_max_distance, level {module, wall_height}, count and per piece id, name, shape, parameters (effective values and derive, the derived names), position and rotation_xyzw (after snapping and the surface options), surface_found (false also when no surface option applied), world_aabb {min, max}, triangle_count, materials (slot name to material name), brush_id (pieces with equal brush_id share one mesh) and mesh_key (shape id + canonical parameter text). A piece with connect takes its pose from a connector join (doc/editor/level_tools.md \"Connectors\"): its connector meets the to_connector of the existing kit piece to_piece_id exactly, so snap, surface_snap and surface_orient do not apply to it and it gives no position, rotation_xyzw, surface_snap or surface_orient.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -1413,11 +1421,11 @@
           "type": "string"
         },
         "surface_snap": {
-          "description": "Rest each piece's base on the surface found along surface_direction (default false); a piece may override it",
+          "description": "Move each piece along surface_direction, either way, to the nearest place within surface_max_distance where its base rests on a surface and it fits along the direction; none: it stays (default false); a piece may override it",
           "type": "boolean"
         },
         "surface_orient": {
-          "description": "Tilt each piece's up axis to the surface normal under its base center and rest it there, keeping its heading (default false); a piece may override it",
+          "description": "Snap through the base center as surface_snap does, then tilt the piece's up axis to that surface's normal, keeping its heading (default false); a piece may override it",
           "type": "boolean"
         },
         "surface_direction": {
@@ -1428,6 +1436,10 @@
           "maxItems": 3,
           "minItems": 3,
           "type": "array"
+        },
+        "surface_max_distance": {
+          "description": "Meters >= 0 (default 1): the farthest a piece moves along or against surface_direction to snap to the surface (U30)",
+          "type": "number"
         },
         "pieces": {
           "description": "Pieces to place, in order",
@@ -1485,7 +1497,7 @@
                 "type": "boolean"
               },
               "connect": {
-                "description": "Place the piece by a connector join instead of position and rotation_xyzw: its connector (level_get_kits: connectors) meets the to_connector of the kit piece to_piece_id (an existing node, not a piece of this call; it is not edited, a child of a locked kit layout included): positions coincide, outward axes oppose, up axes agree after twist_steps quarter turns about the target connector's outward axis, then the piece moves gap meters along that axis. An unknown connector name fails the call listing the valid ones.",
+                "description": "Place the piece by a connector join instead of position and rotation_xyzw: its connector (level_get_kits: connectors) meets the to_connector of the kit piece to_piece_id (an existing node, not a piece of this call; it is not edited, a child of a locked kit layout included): positions coincide, outward axes oppose, up axes agree after twist_steps quarter turns about the target connector's outward axis, then the piece moves gap meters along that axis. An unknown connector name fails the call listing the valid ones; a disabled connector of the target (level_set_piece_connectors) fails it naming the connector.",
                 "additionalProperties": false,
                 "properties": {
                   "connector": {
@@ -1659,7 +1671,7 @@
     "name": "level_mirror_group"
   },
   {
-    "description": "Create a kit layout node (doc/editor/level_tools.md \"Kit layout nodes\", R5.12) as ONE undo entry: an Xform node carrying the Kit_layout values (a path layout: a Curve node carrying them, R5.12.8) at position / rotation_xyzw (world; it keeps scale 1) under parent_id (default the scene root), or in the place of the piece from_piece_id names, or on the plain curve node curve_id names, and the pieces its values make as its children, element i at the pattern's i-th pose in the node's frame. locked (default true): the node makes its children and they cannot be edited directly (selecting one selects the layout node; transform, parameter, material, reparent, delete and paste tools refuse it naming the node); unlocked, the children are ordinary pieces. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, requested, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length, the curve's world length or the scatter region's area; requested is the count the values ask for, more than count when a scatter's spacing lets fewer in), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "description": "Create a kit layout node (doc/editor/level_tools.md \"Kit layout nodes\", R5.12) as ONE undo entry: an Xform node carrying the Kit_layout values (a path layout: a Curve node carrying them, R5.12.8) at position / rotation_xyzw (world; it keeps scale 1) under parent_id (default the scene root), or in the place of the piece from_piece_id names, or on the plain curve node curve_id names, and the pieces its values make as its children, element i at the pattern's i-th pose in the node's frame. locked (default true): the node makes its children and they cannot be edited directly (selecting one selects the layout node; transform, parameter, material, reparent, delete and paste tools refuse it naming the node); unlocked, the children are ordinary pieces. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, weight, extent, bounds (the item mesh box in its own frame), footprint_radius), snap, surface_snap, surface_orient, per_piece_seed, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, requested, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length, the curve's world length or the scatter region's area; requested is the count the values ask for, more than count when a scatter's spacing lets fewer in), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
     "inputSchema": {
       "properties": {
         "from_piece_id": {
@@ -1682,7 +1694,7 @@
           "type": "boolean"
         },
         "items": {
-          "description": "The kit items, element i taking item i modulo the item count: [{shape, parameters (over the shape's defaults; 'derive' names the item's seed mask), materials ({slot: scene or palette material name})}]; required unless from_piece_id is given",
+          "description": "The kit items: [{shape, parameters (over the shape's defaults; 'derive' names the item's seed mask), materials ({slot: scene or palette material name}), weight (an integer in 0 - 1000, default 1)}]. A line, grid, ring or path takes item i modulo the item count; a scatter picks each point's item at random from the layout seed with the weights' odds (weight 0: never picked; every weight 0 is refused); required unless from_piece_id is given",
           "items": {
             "type": "object"
           },
@@ -1701,8 +1713,12 @@
           "type": "integer"
         },
         "pattern": {
-          "description": "The arrangement in the layout node's frame, element 0 at its origin; a path runs along the layout node's own curve, the node being a Curve prim (doc/editor/level_tools.md \"Kit layout nodes\", \"Path layouts\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|path|scatter (a polyline is a path along a curve of corner points). count_mode (line, ring, path): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring or a closed curve floor(length / step) spread evenly around, so the stated gap is a minimum; at least element 0). count (line, ring, path in count mode; an open curve holds one at each end, a closed one spreads them around without one twice at the seam), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), orientation (path: upright (default; each piece turns about the world up axis to the curve's heading) or tangent (its x axis takes the curve's tangent and it pitches with the curve)). Scatter (doc/editor/level_tools.md \"Scatter layouts\"): pieces at seeded points of a region centred on the node's origin in its xz plane, from the layout seed (the same on every platform), each turned about the node's up axis by a seeded yaw; scatter_mode count (count pieces) or density (pieces per square meter times the region's area, rounded, at least 1); region rectangle (size_x by size_z) or disc (region_radius); min_spacing (meters between piece centers, held exactly; a spacing or region size change moves the pieces, a raised count keeps the first ones; when no more fit within 64 candidate points per piece the scatter holds the ones that do and run.count < run.requested reports it); yaw_min, yaw_max (degrees, within -360 - 360, yaw_min <= yaw_max); surface_snap rests each piece on the ground under it. A locked path layout is laid out again in the same undo entry as each edit of its curve (set_curve, curve_add_point, curve_remove_points, curve_set_point_kind, the curve tool, the Properties Curve rows); a move of the node carries its pieces rigidly (a surface setting rests them again in the move's entry). The kind and the node type agree: path only on a Curve node, line, grid and ring only on an Xform; a change between them is refused.",
+          "description": "The arrangement in the layout node's frame, element 0 at its origin; a path runs along the layout node's own curve, the node being a Curve prim (doc/editor/level_tools.md \"Kit layout nodes\", \"Path layouts\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|path|scatter (a polyline is a path along a curve of corner points). count_mode (line, ring, path): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring or a closed curve floor(length / step) spread evenly around, so the stated gap is a minimum; at least element 0). count (line, ring, path in count mode; an open curve holds one at each end, a closed one spreads them around without one twice at the seam), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), orientation (path: upright (default; each piece turns about the world up axis to the curve's heading) or tangent (its x axis takes the curve's tangent and it pitches with the curve)). Scatter (doc/editor/level_tools.md \"Scatter layouts\"): pieces at seeded points of a region centred on the node's origin in its xz plane, from the layout seed (the same on every platform), each turned about the node's up axis by a seeded yaw; scatter_mode count (count pieces) or density (pieces per square meter times the region's area, rounded, at least 1); region rectangle (size_x by size_z) or disc (region_radius); min_spacing (meters of gap between piece footprints, each the circle about the piece's vertical axis around its item's bounds in the node's xz plane (the reply's items[].footprint_radius), tested in deterministic float steps between the sampled points (Per Piece Seed sizes, module snap and surface orient act after it); the region holds the piece centers; a spacing or region size change moves the pieces, a raised count keeps the first ones; when no more fit within 64 candidate points per piece the scatter holds the ones that do and run.count < run.requested reports it); yaw_min, yaw_max (degrees, within -360 - 360, yaw_min <= yaw_max); surface_snap snaps each piece to the ground under it. A locked path layout is laid out again in the same undo entry as each edit of its curve (set_curve, curve_add_point, curve_remove_points, curve_set_point_kind, the curve tool, the Properties Curve rows); a move of the node carries its pieces rigidly (a surface setting snaps them to the surface again in the move's entry). The kind and the node type agree: path only on a Curve node, line, grid and ring only on an Xform; a change between them is refused.",
           "type": "object"
+        },
+        "per_piece_seed": {
+          "description": "Each element takes a seed derived from the layout seed and its index, and the item's masked parameters derive from it (default false: each element keeps its item's seed)",
+          "type": "boolean"
         },
         "position": {
           "description": "World position [x,y,z]",
@@ -1712,7 +1728,7 @@
           "type": "array"
         },
         "random_seeds": {
-          "description": "Each element takes a seed derived from the layout seed and its index, and the item's masked parameters derive from it (default false: each element keeps its item's seed)",
+          "description": "The former name of per_piece_seed, still read; give one of the two",
           "type": "boolean"
         },
         "rotation_xyzw": {
@@ -1743,8 +1759,12 @@
           "type": "boolean"
         },
         "surface_snap": {
-          "description": "Each element rests on the surface under it (default false)",
+          "description": "Each element moves to the nearest place where it rests on a surface and fits, within surface_max_distance (default false)",
           "type": "boolean"
+        },
+        "surface_max_distance": {
+          "description": "Meters >= 0 (default 1 for a new layout): the farthest an element moves to snap to the surface when surface_snap or surface_orient is on; an element with no place within it stays where the pattern puts it",
+          "type": "number"
         }
       },
       "required": [
@@ -1756,11 +1776,11 @@
     "name": "level_create_layout"
   },
   {
-    "description": "Change a kit layout node's values as ONE undo entry (D4.9): the values given merge over the node's (a pattern object merges key by key; items replace the list). A locked node makes its children equal the new values in the same entry, keeping each child that already matches (same shape, parameters, materials and pose); an unlocked node changes its values alone and leaves its children untouched. No entry when nothing changes. The lock is set by level_set_layout_lock. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, requested, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length, the curve's world length or the scatter region's area; requested is the count the values ask for, more than count when a scatter's spacing lets fewer in), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "description": "Change a kit layout node's values as ONE undo entry (D4.9): the values given merge over the node's (a pattern object merges key by key; items replace the list). A locked node makes its children equal the new values in the same entry, keeping each child that already matches (same shape, parameters, materials and pose); an unlocked node changes its values alone and leaves its children untouched. No entry when nothing changes. The lock is set by level_set_layout_lock. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, weight, extent, bounds (the item mesh box in its own frame), footprint_radius), snap, surface_snap, surface_orient, per_piece_seed, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, requested, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length, the curve's world length or the scatter region's area; requested is the count the values ask for, more than count when a scatter's spacing lets fewer in), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
     "inputSchema": {
       "properties": {
         "items": {
-          "description": "The kit items, element i taking item i modulo the item count: [{shape, parameters (over the shape's defaults; 'derive' names the item's seed mask), materials ({slot: scene or palette material name})}]",
+          "description": "The kit items: [{shape, parameters (over the shape's defaults; 'derive' names the item's seed mask), materials ({slot: scene or palette material name}), weight (an integer in 0 - 1000, default 1)}]. A line, grid, ring or path takes item i modulo the item count; a scatter picks each point's item at random from the layout seed with the weights' odds (weight 0: never picked; every weight 0 is refused)",
           "items": {
             "type": "object"
           },
@@ -1771,11 +1791,15 @@
           "type": "integer"
         },
         "pattern": {
-          "description": "The arrangement in the layout node's frame, element 0 at its origin; a path runs along the layout node's own curve, the node being a Curve prim (doc/editor/level_tools.md \"Kit layout nodes\", \"Path layouts\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|path|scatter (a polyline is a path along a curve of corner points). count_mode (line, ring, path): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring or a closed curve floor(length / step) spread evenly around, so the stated gap is a minimum; at least element 0). count (line, ring, path in count mode; an open curve holds one at each end, a closed one spreads them around without one twice at the seam), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), orientation (path: upright (default; each piece turns about the world up axis to the curve's heading) or tangent (its x axis takes the curve's tangent and it pitches with the curve)). Scatter (doc/editor/level_tools.md \"Scatter layouts\"): pieces at seeded points of a region centred on the node's origin in its xz plane, from the layout seed (the same on every platform), each turned about the node's up axis by a seeded yaw; scatter_mode count (count pieces) or density (pieces per square meter times the region's area, rounded, at least 1); region rectangle (size_x by size_z) or disc (region_radius); min_spacing (meters between piece centers, held exactly; a spacing or region size change moves the pieces, a raised count keeps the first ones; when no more fit within 64 candidate points per piece the scatter holds the ones that do and run.count < run.requested reports it); yaw_min, yaw_max (degrees, within -360 - 360, yaw_min <= yaw_max); surface_snap rests each piece on the ground under it. A locked path layout is laid out again in the same undo entry as each edit of its curve (set_curve, curve_add_point, curve_remove_points, curve_set_point_kind, the curve tool, the Properties Curve rows); a move of the node carries its pieces rigidly (a surface setting rests them again in the move's entry). The kind and the node type agree: path only on a Curve node, line, grid and ring only on an Xform; a change between them is refused.",
+          "description": "The arrangement in the layout node's frame, element 0 at its origin; a path runs along the layout node's own curve, the node being a Curve prim (doc/editor/level_tools.md \"Kit layout nodes\", \"Path layouts\"). Keys given merge over the current pattern (level_create_layout: over the defaults, step and spacing_x/spacing_z defaulting to the largest item's extent). kind: line|grid|ring|path|scatter (a polyline is a path along a curve of corner points). count_mode (line, ring, path): count (the count is stated) or gap (the free distance between neighbours is stated and the space determines the count: floor(space / (item extent + gap)) + 1 element centers spread evenly from the first to the last, a full ring or a closed curve floor(length / step) spread evenly around, so the stated gap is a minimum; at least element 0). count (line, ring, path in count mode; an open curve holds one at each end, a closed one spreads them around without one twice at the seam), gap (meters, gap mode), direction (line, [x,y,z]), step (line in count mode: center to center), length (line in gap mode: first to last center), count_x, count_z, spacing_x, spacing_z (grid), radius, arc_degrees (ring; 360 is a full ring, an arc has elements at both ends), facing (ring: outward|start), orientation (path: upright (default; each piece turns about the world up axis to the curve's heading) or tangent (its x axis takes the curve's tangent and it pitches with the curve)). Scatter (doc/editor/level_tools.md \"Scatter layouts\"): pieces at seeded points of a region centred on the node's origin in its xz plane, from the layout seed (the same on every platform), each turned about the node's up axis by a seeded yaw; scatter_mode count (count pieces) or density (pieces per square meter times the region's area, rounded, at least 1); region rectangle (size_x by size_z) or disc (region_radius); min_spacing (meters of gap between piece footprints, each the circle about the piece's vertical axis around its item's bounds in the node's xz plane (the reply's items[].footprint_radius), tested in deterministic float steps between the sampled points (Per Piece Seed sizes, module snap and surface orient act after it); the region holds the piece centers; a spacing or region size change moves the pieces, a raised count keeps the first ones; when no more fit within 64 candidate points per piece the scatter holds the ones that do and run.count < run.requested reports it); yaw_min, yaw_max (degrees, within -360 - 360, yaw_min <= yaw_max); surface_snap snaps each piece to the ground under it. A locked path layout is laid out again in the same undo entry as each edit of its curve (set_curve, curve_add_point, curve_remove_points, curve_set_point_kind, the curve tool, the Properties Curve rows); a move of the node carries its pieces rigidly (a surface setting snaps them to the surface again in the move's entry). The kind and the node type agree: path only on a Curve node, line, grid and ring only on an Xform; a change between them is refused.",
           "type": "object"
         },
-        "random_seeds": {
+        "per_piece_seed": {
           "description": "Each element takes a seed derived from the layout seed and its index, and the item's masked parameters derive from it (default false: each element keeps its item's seed)",
+          "type": "boolean"
+        },
+        "random_seeds": {
+          "description": "The former name of per_piece_seed, still read; give one of the two",
           "type": "boolean"
         },
         "scene_name": {
@@ -1799,8 +1823,12 @@
           "type": "boolean"
         },
         "surface_snap": {
-          "description": "Each element rests on the surface under it (default false)",
+          "description": "Each element moves to the nearest place where it rests on a surface and fits, within surface_max_distance (default false)",
           "type": "boolean"
+        },
+        "surface_max_distance": {
+          "description": "Meters >= 0 (default 1 for a new layout): the farthest an element moves to snap to the surface when surface_snap or surface_orient is on; an element with no place within it stays where the pattern puts it",
+          "type": "number"
         }
       },
       "required": [
@@ -1828,7 +1856,7 @@
     "name": "level_get_layouts"
   },
   {
-    "description": "Lock or unlock a kit layout node as ONE undo entry (R5.12.5, R5.12.6). Unlocking writes the lock value alone and changes no child. Locking discards the edits made while unlocked: every child is replaced by the pieces the values make; undo puts the children back exactly as they were (the same nodes, ids, transforms, parameters and materials). No entry when the node already has the state. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, requested, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length, the curve's world length or the scatter region's area; requested is the count the values ask for, more than count when a scatter's spacing lets fewer in), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "description": "Lock or unlock a kit layout node as ONE undo entry (R5.12.5, R5.12.6). Unlocking writes the lock value alone and changes no child. Locking discards the edits made while unlocked: every child is replaced by the pieces the values make; undo puts the children back exactly as they were (the same nodes, ids, transforms, parameters and materials). No entry when the node already has the state. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, weight, extent, bounds (the item mesh box in its own frame), footprint_radius), snap, surface_snap, surface_orient, per_piece_seed, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, requested, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length, the curve's world length or the scatter region's area; requested is the count the values ask for, more than count when a scatter's spacing lets fewer in), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
     "inputSchema": {
       "properties": {
         "layout_id": {
@@ -1854,7 +1882,7 @@
     "name": "level_set_layout_lock"
   },
   {
-    "description": "Make a locked kit layout node's children equal its values again (after a level settings change or a kit change), as ONE undo entry; no entry when they already are. An unlocked node is refused: it leaves its children alone. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, extent), snap, surface_snap, surface_orient, random_seeds, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, requested, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length, the curve's world length or the scatter region's area; requested is the count the values ask for, more than count when a scatter's spacing lets fewer in), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
+    "description": "Make a locked kit layout node's children equal its values again (after a level settings change or a kit change), as ONE undo entry; no entry when they already are. An unlocked node is refused: it leaves its children alone. The reply: id, name, position, rotation_xyzw (world), locked, pattern, pattern_text, items (shape, parameters, parameters_text, materials, weight, extent, bounds (the item mesh box in its own frame), footprint_radius), snap, surface_snap, surface_orient, per_piece_seed, seed, type (Curve for a path layout, which is its own curve node, else Xform), curve (a path layout's own curve: point_count, closed and length; null for an Xform), run {count, requested, step, space, item_extent} (the run the values make; space is the line's first-to-last span, the ring's arc length, the curve's world length or the scatter region's area; requested is the count the values ask for, more than count when a scatter's spacing lets fewer in), child_count and children (id, name, position, rotation_xyzw, shape, parameters, parameters_text, materials), and for an edit changed, kept_count, added_count and removed_count.",
     "inputSchema": {
       "properties": {
         "layout_id": {
@@ -1948,7 +1976,7 @@
     "name": "level_set_piece_material"
   },
   {
-    "description": "Give kit pieces another shape (doc/editor/level_tools.md \"Replace\") as ONE undo entry for all of them; undo restores each piece's shape, parameters, materials, mesh and collision shape exactly. Each node keeps its id, name, transform (bit for bit; it is not rested again - level_snap_to_surface does that), parent, children, group and selection. Parameters of the new shape that the old shape has with the same name and type keep their value clamped to the new range (a seed-derived one stays derived, again from the seed), the rest take the new shape's defaults; parameters (as level_set_piece_parameters takes them, derive included) merge over those carried values. A slot of the new shape keeps the material of the old slot of the same name, the others take their palette default; materials ({slot: material}, as level_place_pieces takes them) overrides per slot. Without node_ids the selected kit pieces of the scene are replaced. A piece of the shape already is left unchanged (replaced false) and records nothing; when all are, no entry. All or nothing: an unknown key or shape, a node that is not a kit piece, a kit layout node (its items are its own values: level_set_layout), a child of a locked kit layout node, a piece whose record does not read or whose loaded mesh has another primitive count than its shape has slots, a node listed twice, or values the new shape refuses fail the call naming the piece, and nothing changes. Returns scene_name, shape, replaced_count and per piece id, name, old_shape, shape, replaced, parameters (the effective values with derive), carried, clamped and defaulted (parameter names of the new shape by what the carry did with them), given (the names parameters set), materials (slot name to material name), kept_materials (slots that kept the same-named slot's material), world_aabb and collision_shape.",
+    "description": "Give kit pieces another shape (doc/editor/level_tools.md \"Replace\") as ONE undo entry for all of them; undo restores each piece's shape, parameters, materials, mesh, collision shape and transform exactly. Each node keeps its id, name, parent, children, group and selection, and its transform bit for bit unless the call snaps. With surface_snap or surface_orient (the call's own arguments, as level_place_pieces takes them; the Snap To Surface setting of the UI is not read) each replaced piece snaps to the surface from its pose with the new shape's bounds, in the same undo entry; the replaced pieces of the call are not surfaces for each other, every other mesh is. Parameters of the new shape that the old shape has with the same name and type keep their value clamped to the new range (a seed-derived one stays derived, again from the seed), the rest take the new shape's defaults; parameters (as level_set_piece_parameters takes them, derive included) merge over those carried values. A slot of the new shape keeps the material of the old slot of the same name, the others take their palette default; materials ({slot: material}, as level_place_pieces takes them) overrides per slot. Without node_ids the selected nodes of the scene are taken. A piece of the shape already is left unchanged (replaced false, not snapped) and records nothing; when nothing changes, no entry. A node that cannot be replaced is skipped and the others are replaced: a kit layout node (its items are its own values: level_set_layout), a child of a locked kit layout node, a group node, a node that is not a kit piece, a piece whose record does not read, and a piece whose loaded mesh has another primitive count than its shape has slots. Refused, naming the piece, and nothing changes: an unknown key or shape, a node listed twice, values the new shape refuses, an unknown material and a bad surface argument. Returns scene_name, shape, replaced_count, snapped_count, skipped_count, skipped (per skipped node in the order given: id, name, reason - kit_layout_node, locked_layout_child, group, not_a_kit_piece, unreadable_record or loaded_mesh - and message) and pieces (per replaced or unchanged piece in the order given: id, name, old_shape, shape, replaced, parameters (the effective values with derive), carried, clamped and defaulted (parameter names of the new shape by what the carry did with them), given (the names parameters set), materials (slot name to material name), kept_materials (slots that kept the same-named slot's material), world_aabb, collision_shape, snapped (the snap moved it) and, for a replaced piece of a snapping call, surface_found and snap_distance (how far the base moved along the direction; negative when it rose)).",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -1973,6 +2001,27 @@
         "materials": {
           "description": "Material per slot name of the new shape (scene or palette material names); a slot not named keeps the same-named old slot's material, else its default",
           "type": "object"
+        },
+        "surface_snap": {
+          "description": "Snap each replaced piece to the surface again (D7.3: the nearest resting place along surface_direction within surface_max_distance); default false keeps the transforms",
+          "type": "boolean"
+        },
+        "surface_orient": {
+          "description": "Also turn each replaced piece's up axis to the surface normal, keeping its heading (implies the snap); default false",
+          "type": "boolean"
+        },
+        "surface_direction": {
+          "description": "Direction of the surface rays, default [0, -1, 0]; normalized",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "surface_max_distance": {
+          "description": "Meters the base may move along the direction, either way; default 1",
+          "type": "number"
         }
       },
       "required": [
@@ -1984,7 +2033,7 @@
     "name": "level_replace_pieces"
   },
   {
-    "description": "The connectors of placed kit pieces in world space (doc/editor/level_tools.md \"Connectors\"): per piece id, name, shape and connectors (name, position, outward and up, unit axes; the piece's local connectors at its parameter values carried by its full world matrix, scale, shear and mirror included: the position by the matrix, outward as the transformed face's normal, up along the transformed face). Without node_ids the selected kit pieces of the scene. A node that is not a kit piece, whose record does not read, or whose world matrix has a zero scale axis fails the call.",
+    "description": "The connectors of placed kit pieces in world space (doc/editor/level_tools.md \"Connectors\"): per piece id, name, shape, connectors_enabled (the piece switch), disabled_connectors (the names switched off, a name the shape does not have included; it has no effect) and connectors, every connector of the shape (name, position, outward and up, unit axes, and enabled: the piece switch and the connector's own switch both on, U33; the piece's local connectors at its parameter values carried by its full world matrix, scale, shear and mirror included: the position by the matrix, outward as the transformed face's normal, up along the transformed face). Without node_ids the selected kit pieces of the scene. A node that is not a kit piece, whose record does not read, or whose world matrix has a zero scale axis fails the call.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -2008,7 +2057,7 @@
     "name": "level_get_connectors"
   },
   {
-    "description": "Move a placed kit piece so one of its connectors meets a connector of another kit piece (doc/editor/level_tools.md \"Connectors\") as ONE undo entry (a Node_transform_operation; no entry when the piece is there already, within 0.1 mm and 1e-4 rad). Scaled pieces and targets join: the frames are the connectors under each node's world matrix, and the piece keeps its own scale while a rigid world motion carries its frame onto the target's: positions coincide, outward axes oppose, up axes agree after twist_steps quarter turns about the target connector's outward axis, then gap meters along it. The piece's children ride with it; the target is not edited (a child of a locked kit layout may be the target). Refused, changing nothing: a node that is not a kit piece (a group or kit layout node included), a child of a locked kit layout node, a piece or target whose world matrix has a zero scale axis, a piece whose parent chain has non-uniform scale or shear such that the joined pose would need a sheared local transform (the message says so), the piece itself or a node below it as the target, an unknown connector name (the reply lists the valid ones). No module snap or surface rest is applied. Returns scene_name, id, name, the new world position and rotation_xyzw, changed, world_aabb and the piece's connectors in world space.",
+    "description": "Move a placed kit piece so one of its connectors meets a connector of another kit piece (doc/editor/level_tools.md \"Connectors\") as ONE undo entry (a Node_transform_operation; no entry when the piece is there already, within 0.1 mm and 1e-4 rad). Scaled pieces and targets join: the frames are the connectors under each node's world matrix, and the piece keeps its own scale while a rigid world motion carries its frame onto the target's: positions coincide, outward axes oppose, up axes agree after twist_steps quarter turns about the target connector's outward axis, then gap meters along it. The piece's children ride with it; the target is not edited (a child of a locked kit layout may be the target). Refused, changing nothing: a node that is not a kit piece (a group or kit layout node included), a child of a locked kit layout node, a piece or target whose world matrix has a zero scale axis, a piece whose parent chain has non-uniform scale or shear such that the joined pose would need a sheared local transform (the message says so), the piece itself or a node below it as the target, an unknown connector name (the reply lists the valid ones), a disabled connector of the piece or the target (U33; the reply names it and lists the enabled ones). No module snap or snap to surface is applied. Returns scene_name, id, name, the new world position and rotation_xyzw, changed, world_aabb and the piece's connectors in world space, each with enabled.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -2052,7 +2101,39 @@
     "name": "level_connect_pieces"
   },
   {
-    "description": "The per-viewport Connectors setting of the Debug Visualization popup (doc/editor/level_tools.md \"Connector indicators\"): off, selected (the connectors of the selected kit pieces and of the kit pieces below selected nodes; the default) or all (every kit piece of the view's scene). A translate drag with a connector snap distance shows its own indicators whatever the setting. Returns viewports [{viewport, mode}].",
+    "description": "Switch a placed kit piece's connectors on or off (doc/editor/level_tools.md \"Connector switches\", U33) as ONE undo entry (no entry when nothing changes). A connector is enabled when the piece switch (connectors_enabled) and its own switch are both on; all are on by default and a piece without stored switches (an old scene) has every connector enabled. A disabled connector is not drawn by the connector indicators, not offered by the Level Kit window's Connect rows or Place Connected, refused by level_connect_pieces and level_place_pieces connect, and is neither a source nor a target of the connector snap. The switches are the node values Kit_piece.connectors_enabled (bool) and Kit_piece.disabled_connectors (the disabled names, comma separated), also written by set_item_property and Copy / Paste Properties, which refuse a value the piece's shape cannot take (connectors_enabled on a shape without connectors, a list naming a connector the shape does not have, case sensitive, or not canonical: sorted, unique, no spaces). Refused, changing nothing: a node that is not a kit piece, a shape without connectors (a rock), a child of a locked kit layout node, a connector name the piece's shape does not have (the reply lists the valid ones), neither key given. Returns scene_name, id, name, shape, changed, connectors_enabled, disabled_connectors and the piece's connectors in world space, each with enabled.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_id": {
+          "description": "Id of the kit piece",
+          "type": "integer"
+        },
+        "connectors_enabled": {
+          "description": "The switch of all of the piece's connectors",
+          "type": "boolean"
+        },
+        "connectors": {
+          "description": "Per connector name of the piece's shape its own switch, e.g. {\"left\": false}; names not given keep their switch",
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        }
+      },
+      "required": [
+        "scene_name",
+        "node_id"
+      ],
+      "type": "object"
+    },
+    "name": "level_set_piece_connectors"
+  },
+  {
+    "description": "The per-viewport Connectors setting of the Debug Visualization popup (doc/editor/level_tools.md \"Connector indicators\"): off, selected (the connectors of the selected kit pieces and of the kit pieces below selected nodes; the default) or all (every kit piece of the view's scene). A Transform tool drag (translate, rotate or scale) with a connector snap distance shows its own indicators whatever the setting. Returns viewports [{viewport, mode}].",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -2078,7 +2159,7 @@
     "name": "level_set_connector_visualization"
   },
   {
-    "description": "The connector indicators a viewport draws this frame (doc/editor/level_tools.md \"Connector indicators\"), collected as the drawing collects them: during a translate drag with a connector snap distance the moved connectors (role moved), the target connectors within 4 snap distances of one (target) and the last step's pair (snapped); otherwise by the viewport's Connectors setting the connectors of the selected or all kit pieces (piece), those chosen in the Level Kit window's Connect rows as chosen. A drag shows only in the views of its own scene. Returns viewport, scene_name, mode, drag_active, cached_pieces (entries of the per-piece frame cache), count and indicators [{name, position, outward, up (world space, unit axes), piece_id, role, color (linear RGBA of the role's style color)}].",
+    "description": "The connector indicators a viewport draws this frame (doc/editor/level_tools.md \"Connector indicators\"), collected as the drawing collects them: during a Transform tool drag (translate, rotate or scale) with a connector snap distance the moved connectors at the step's pose (role moved), the target connectors within 4 snap distances of one (target) and the last step's pair (snapped); otherwise by the viewport's Connectors setting the connectors of the selected or all kit pieces (piece), those chosen in the Level Kit window's Connect rows as chosen. A drag shows only in the views of its own scene. Returns viewport, scene_name, mode, drag_active, cached_pieces (entries of the per-piece frame cache), count and indicators [{name, position, outward, up (world space, unit axes), piece_id, role, color (linear RGBA of the role's style color)}].",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -2092,7 +2173,82 @@
     "name": "level_get_connector_indicators"
   },
   {
-    "description": "Snap mesh nodes (kit pieces or any other mesh) to the surface along a direction (doc/editor/level_tools.md \"Surface placement\") as ONE undo entry for all of them. Rays start one piece height back against direction (the top plane of the mesh bounds), so a node rests on the highest surface within its own height above its base or anywhere below, and distance (measured from the base) is negative when it rises. Without orient each node moves along direction by the smallest such distance over its base center and base corners; with orient its up axis turns by the shortest rotation to the normal under its base center (heading kept) and its base center rests on that hit. The listed nodes are not surfaces for each other. A node with no surface keeps its transform and reports surface_found false. query_only returns the resting transforms and changes nothing. Returns scene_name, orient, direction, query_only, moved_count and per node id, name, position and rotation_xyzw (the resting world transform), distance and surface_found. Positions are in the scene root's space.",
+    "description": "Set the Kit Layouts debug visualization of a viewport, or of every viewport (doc/editor/level_tools.md \"Kit layout drawing\"): off, selected (the default: the kit layout nodes that are selected or have a selected node below them) or all (every kit layout node of the viewport's scene). The setting is per view and saved with the view's settings. Returns viewports [{viewport, mode}].",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "description": "off, selected or all",
+          "enum": [
+            "off",
+            "selected",
+            "all"
+          ],
+          "type": "string"
+        },
+        "viewport": {
+          "description": "Title of the viewport window (see get_viewports); default every viewport",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "name": "level_set_layout_visualization"
+  },
+  {
+    "description": "The kit layout outlines a viewport draws this frame (doc/editor/level_tools.md \"Kit layout drawing\"), collected as the drawing collects them by the viewport's Kit Layouts setting; path layouts (drawn as their curve) and layouts whose values refuse are not listed. Per layout node, in world space: id, name, kind (line, grid, ring or scatter), polyline (the outline's points; closed: the last joins the first), arcs [{center, start (the point at angle 0), normal (the node's up axis), radius, degrees}], ticks [{position, direction (unit)}] at the elements as generated before module snap and snap to surface, circles_shown (a scatter selected or with a selected node below it) and circles [{center, footprint_radius, spacing_radius}] of a scatter's points (radii in the node's frame, spacing_radius = footprint_radius + min_spacing / 2), and region_handles [{index, value (size_x, size_z, size_x_z or region_radius), position}] of a scatter's region (a rectangle's 4 corners then its 4 edge midpoints, a disc's 4 points at +z, +x, -z, -x; doc/editor/level_tools.md \"Scatter region handles\"). Returns viewport, scene_name, mode, cached_layouts (entries of the per-node outline cache), count and layouts.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "viewport": {
+          "description": "Title of the viewport window (see get_viewports); default the first viewport",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "level_get_layout_indicators"
+  },
+  {
+    "description": "Make the kit layout node the only selected item and select one of its scatter region handles (doc/editor/level_tools.md \"Scatter region handles\"); the Transform gizmo then sits on the handle and its drag resizes the region, so a script drags it with get_transform_handles and mouse_drag, or moves it with transform_selection, as a user does; cancel_component_edit cancels a held drag. index omitted clears the handle selection (the gizmo returns to the node). Refused for a node that is not a kit layout node and for an index outside its handles (a scatter whose outline is drawn has 8 for a rectangle, 4 for a disc; other kinds none). Returns what level_get_region_handles returns.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "layout_id": {
+          "description": "Id of the scatter kit layout node",
+          "type": "integer"
+        },
+        "index": {
+          "description": "Handle index (see level_get_region_handles); omitted clears the handle selection",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scene_name",
+        "layout_id"
+      ],
+      "type": "object"
+    },
+    "name": "level_select_region_handle"
+  },
+  {
+    "description": "The scatter region handle tool's state (doc/editor/level_tools.md \"Scatter region handles\"): layout {id, name, scene_name} (null when the one selected item is not a kit layout node), handles [{index, value (size_x, size_z, size_x_z or region_radius), position (world)}] (empty for a kind other than scatter or an outline that is not drawn), selected (the selected handle's index or null) and gizmo_on_handle.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "name": "level_get_region_handles"
+  },
+  {
+    "description": "Snap mesh nodes (kit pieces or any other mesh) to the surface along a direction (doc/editor/level_tools.md \"Surface placement\") as ONE undo entry for all of them. Each node moves along direction, either way, to the nearest place where its base rests on a surface (the top face of a solid) and the node fits along the direction (no solid between its base and its top at its base points), at most max_distance (meters, default 1) from where it is; equal distances along and against the direction go along it; distance (measured from the base along direction) is negative when it rises. Without orient the base center and base corners count; with orient the base center alone, and the up axis turns by the shortest rotation to that surface's normal (heading kept). The listed nodes are not surfaces for each other. A node with no such place within max_distance keeps its transform and reports surface_found false. query_only returns the snapped transforms and changes nothing. Returns scene_name, orient, direction, max_distance, query_only, moved_count and per node id, name, position and rotation_xyzw (the snapped world transform), distance and surface_found. Positions are in the scene root's space.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -2120,8 +2276,12 @@
           "minItems": 3,
           "type": "array"
         },
+        "max_distance": {
+          "description": "Meters >= 0 (default 1): the farthest a node moves along or against direction to snap to the surface (U30)",
+          "type": "number"
+        },
         "query_only": {
-          "description": "Return the resting transforms without moving anything (default false)",
+          "description": "Return the snapped transforms without moving anything (default false)",
           "type": "boolean"
         }
       },
@@ -2352,7 +2512,7 @@
     "name": "level_get_placement_preview"
   },
   {
-    "description": "Read the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"): snap (Snap To Surface), orient (Orient To Surface) and connector_snap_distance (Connector Snap, meters, 0 = off), the settings the Level Kit window, the viewport toolbar buttons and the Transform window's Move tool rows show, which kit placement in the viewport and the Transform tool's gizmo translate drags follow (the connector snap: gizmo translate drags only). Read-only.",
+    "description": "Read the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"): snap (Snap To Surface), orient (Orient To Surface), max_distance (Surface Max Distance, meters), connector_snap_distance (Connector Snap, meters, 0 = off) and connector_snap_axis_mode (Connector Snap On Axis: 'full_offset' or 'stay_on_axis'), the settings the Level Kit window, the viewport toolbar buttons and the Transform window's Move tool rows show, which kit placement in the viewport and the Transform tool's gizmo translate drags follow (the connector snap: gizmo translate, rotate and scale drags). Read-only.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -2360,16 +2520,24 @@
     "name": "get_surface_snap_settings"
   },
   {
-    "description": "Set the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"), editor state saved to editor_settings.json, not a document edit (no undo entry). Omitted arguments keep their value. Returns snap, orient and connector_snap_distance in effect. MCP placement and transform tools never read them: they take their own surface arguments.",
+    "description": "Set the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"), editor state saved to editor_settings.json, not a document edit (no undo entry). Omitted arguments keep their value. Returns snap, orient, max_distance, connector_snap_distance and connector_snap_axis_mode in effect. MCP placement and transform tools never read them: they take their own surface arguments.",
     "inputSchema": {
       "properties": {
         "connector_snap_distance": {
           "description": "Connector Snap: meters, >= 0; 0 = off",
           "type": "number"
         },
+        "connector_snap_axis_mode": {
+          "description": "Connector Snap On Axis (U27): 'full_offset' (default) - a gizmo axis or plane drag moves by the full snap offset, the pair meets; 'stay_on_axis' - only the offset's part along the dragged axis or in the dragged plane (the pair may stay apart). Read when a gizmo drag starts; a rotate or scale drag names no axis, and drag_selection and transform_selection have no handle: they take the full offset",
+          "type": "string"
+        },
         "orient": {
           "description": "Orient To Surface",
           "type": "boolean"
+        },
+        "max_distance": {
+          "description": "Surface Max Distance: meters >= 0, the farthest Snap To Surface moves a mesh (default 1)",
+          "type": "number"
         },
         "snap": {
           "description": "Snap To Surface",

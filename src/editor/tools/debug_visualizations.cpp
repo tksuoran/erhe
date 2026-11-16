@@ -29,6 +29,7 @@
 #include "tools/mesh_component_selection.hpp"
 #include "tools/selection_tool.hpp"
 #include "level/kit_connector_indicators.hpp"
+#include "level/kit_layout_outline.hpp"
 #include "level/kit_connector_snap.hpp"
 #include "level/level_kits.hpp"
 #include "transform/transform_tool.hpp"
@@ -67,6 +68,7 @@
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene_renderer/texel_renderer.hpp"
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <imgui/imgui.h>
 #include <nlohmann/json.hpp>
@@ -76,7 +78,9 @@
 
 #include <geogram/mesh/mesh_geometry.h>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <optional>
 
 using erhe::geometry::Mesh_attributes;
@@ -1844,6 +1848,107 @@ void Debug_visualizations::connectors_visualization(const Render_context& contex
     }
 }
 
+namespace {
+
+constexpr int c_kit_layout_circle_segments = 64;
+constexpr int c_kit_spacing_circle_segments = 24;
+
+// The unit circle (sin a, 0, cos a) at the spacing circle segment ends, made once.
+[[nodiscard]] auto get_spacing_circle_points() -> const std::array<glm::vec3, c_kit_spacing_circle_segments + 1>&
+{
+    static const std::array<glm::vec3, c_kit_spacing_circle_segments + 1> points = []() {
+        std::array<glm::vec3, c_kit_spacing_circle_segments + 1> result{};
+        for (int i = 0; i <= c_kit_spacing_circle_segments; ++i) {
+            const float a = (2.0f * glm::pi<float>() * static_cast<float>(i)) / static_cast<float>(c_kit_spacing_circle_segments);
+            result[static_cast<std::size_t>(i)] = glm::vec3{std::sin(a), 0.0f, std::cos(a)};
+        }
+        return result;
+    }();
+    return points;
+}
+
+} // anonymous namespace
+
+// Kit layout node outlines (doc/editor/level_tools.md "Kit layout drawing"): the cached outline in the node's frame,
+// taken through the node's world matrix as it is drawn.
+void Debug_visualizations::kit_layouts_visualization(const Render_context& context, Scene_root& scene_root)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    App_context& app_context = context.app_context;
+    if ((app_context.level_kits == nullptr) || (app_context.selection == nullptr)) {
+        return;
+    }
+    app_context.level_kits->get_layout_indicators().collect(scene_root, m_settings.kit_layouts, *app_context.selection, m_kit_layouts_shown);
+    if (m_kit_layouts_shown.empty()) {
+        return;
+    }
+    const Debug_visualizations_style& style = app_context.editor_settings->debug_visualizations_style;
+    const erhe::scene::Node* const camera_node = context.get_camera_node();
+    const glm::vec3 camera_position = (camera_node != nullptr) ? glm::vec3{camera_node->world_from_node()[3]} : glm::vec3{0.0f};
+
+    // X-ray, as the curves: an outline on the ground stays visible.
+    erhe::renderer::Primitive_renderer line_renderer = context.get(
+        {
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .thin_lines        = false,
+            .xray              = true
+        }
+    );
+    const glm::vec4& color        = style.kit_layout_color;
+    const float      width        = style.kit_layout_width;
+    const float      circle_width = style.kit_layout_circle_width;
+    const std::array<glm::vec3, c_kit_spacing_circle_segments + 1>& unit_circle = get_spacing_circle_points();
+    for (const Kit_layout_shown& shown : m_kit_layouts_shown) {
+        const Kit_layout_outline& outline         = *shown.outline;
+        const glm::mat4           world_from_node = shown.node->world_from_node();
+        const auto to_world = [&world_from_node](const glm::vec3& p) -> glm::vec3 {
+            return glm::vec3{world_from_node * glm::vec4{p, 1.0f}};
+        };
+        const std::size_t point_count = outline.polyline.size();
+        for (std::size_t i = 1; i < point_count; ++i) {
+            line_renderer.add_line(color, width, to_world(outline.polyline[i - 1]), color, width, to_world(outline.polyline[i]));
+        }
+        if (outline.closed && (point_count > 2)) {
+            line_renderer.add_line(color, width, to_world(outline.polyline[point_count - 1]), color, width, to_world(outline.polyline[0]));
+        }
+        for (const Kit_layout_arc& arc : outline.arcs) {
+            const int segments = std::max(1, static_cast<int>(std::ceil((static_cast<float>(c_kit_layout_circle_segments) * arc.degrees) / 360.0f)));
+            glm::vec3 previous = to_world(get_arc_point(arc, 0.0f));
+            for (int k = 1; k <= segments; ++k) {
+                const glm::vec3 next = to_world(get_arc_point(arc, (arc.degrees * static_cast<float>(k)) / static_cast<float>(segments)));
+                line_renderer.add_line(color, width, previous, color, width, next);
+                previous = next;
+            }
+        }
+        for (const Kit_layout_tick& tick : outline.ticks) {
+            const glm::vec3 p         = to_world(tick.position);
+            const glm::vec3 direction = glm::normalize(glm::mat3{world_from_node} * tick.direction);
+            const float     h         = style.kit_layout_tick_size * std::max(glm::distance(camera_position, p), 0.1f);
+            line_renderer.add_line(color, width, p - (h * direction), color, width, p + (h * direction));
+        }
+        if (shown.circles != Kit_layout_circles::shown) {
+            continue;
+        }
+        const auto add_circle = [&](const glm::vec3& center, const float radius, const glm::vec4& circle_color) {
+            glm::vec3 previous = to_world(center + (radius * unit_circle[0]));
+            for (std::size_t k = 1; k < unit_circle.size(); ++k) {
+                const glm::vec3 next = to_world(center + (radius * unit_circle[k]));
+                line_renderer.add_line(circle_color, circle_width, previous, circle_color, circle_width, next);
+                previous = next;
+            }
+        };
+        for (const Kit_layout_spacing_circle& circle : outline.circles) {
+            add_circle(circle.center, circle.footprint_radius, style.kit_layout_footprint_color);
+            add_circle(circle.center, circle.spacing_radius,   style.kit_layout_spacing_color);
+        }
+    }
+    m_kit_layouts_shown.clear();
+}
+
 void Debug_visualizations::animation_paths_visualization(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
@@ -2468,6 +2573,10 @@ void Debug_visualizations::render(const Render_context& context)
 
     connectors_visualization(context, *scene_root);
 
+    if (m_settings.kit_layouts != Visualization_mode::off) {
+        kit_layouts_visualization(context, *scene_root);
+    }
+
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
         for (const auto& mesh : layer->meshes) {
             mesh_labels(context, mesh.get());
@@ -2836,6 +2945,27 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     p.add_entry(Property_row_id::debug_connector_size, "Size", [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.connector_size, 0.001f, 0.0f, 0.5f, "%.3f"); });
     p.pop_group();
 
+    // Kit layout node outlines (doc/editor/level_tools.md "Kit layout drawing").
+    p.push_group(Property_row_id::debug_kit_layouts_style, "Kit Layouts", ImGuiTreeNodeFlags_None);
+    p.add_entry(Property_row_id::debug_kit_layout_colors, "Colors", [&style]() {
+        ImGui::ColorEdit4("##outline",   &style.kit_layout_color.x,           ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##w", &style.kit_layout_width, 0.1f, -100.0f, 100.0f, "%.1f");
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##footprint", &style.kit_layout_footprint_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##spacing",   &style.kit_layout_spacing_color.x,   ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##cw", &style.kit_layout_circle_width, 0.1f, -100.0f, 100.0f, "%.1f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Outline and ticks, their width; scatter footprint and spacing circles, their width (negative is pixels)");
+        }
+    });
+    p.add_entry(Property_row_id::debug_kit_layout_tick_size, "Tick Size", [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.kit_layout_tick_size, 0.001f, 0.0f, 0.5f, "%.3f"); });
+    p.pop_group();
+
     p.add_entry(Property_row_id::debug_primitive_boxes, "Primitive Boxes",   [style_row, &style](){ style_row(&style.mesh_primitive_box_color, &style.mesh_primitive_box_width); });
     p.add_entry(Property_row_id::debug_bone_boxes, "Bone Boxes",        [style_row, &style](){ style_row(&style.bone_box_color,           &style.bone_box_width); });
     // Skin bone visualization: colors alternate by joint hierarchy depth (A = even, B = odd) + line width.
@@ -3023,7 +3153,23 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
             m_settings.connectors = c_connector_modes[index];
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Kit piece connectors: an outward arrow and an up tick.\nA translate drag with Connector Snap shows its own: the moved ones,\nthe targets in reach and the snapped pair.");
+            ImGui::SetTooltip("Kit piece connectors: an outward arrow and an up tick.\nA Transform tool drag with Connector Snap shows its own: the moved ones,\nthe targets in reach and the snapped pair.");
+        }
+    });
+    p.add_entry(Property_row_id::debug_kit_layouts, "Kit Layouts", [this](){
+        static constexpr const char* c_kit_layout_mode_strings[] = { "Off", "Selected", "All" };
+        static constexpr Visualization_mode c_kit_layout_modes[] = { Visualization_mode::off, Visualization_mode::selected, Visualization_mode::all };
+        int index = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (c_kit_layout_modes[i] == m_settings.kit_layouts) {
+                index = i;
+            }
+        }
+        if (ImGui::Combo("##", &index, c_kit_layout_mode_strings, 3)) {
+            m_settings.kit_layouts = c_kit_layout_modes[index];
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Kit layout nodes: the line, grid, ring or scatter region outline with a tick per element;\na selected scatter also shows a footprint and a spacing circle per piece.");
         }
     });
     p.add_entry(Property_row_id::debug_path_interval, "Path Interval", [this](){ ImGui::DragFloat("##", &m_settings.animation_path_interval, 0.01f, 0.001f, 10.0f, "%.3f s"); });

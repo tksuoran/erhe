@@ -7,6 +7,7 @@
 #include "erhe_gltf/gltf_uri.hpp"
 
 #include "erhe_item/item.hpp"
+#include "erhe_property/dependency_property.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_primitive/build_info.hpp"
@@ -199,6 +200,37 @@ TEST(Gltf_roundtrip, local_properties)
     ASSERT_TRUE(loaded_camera);
     EXPECT_EQ(loaded_camera->get_exposure(), 2.5f);
     EXPECT_FALSE(loaded_camera->has_local_value(erhe::scene::Camera::shadow_range_property));
+}
+
+const erhe::property::Property<float> c_renamed_light_value = erhe::property::Property<float>::register_property(
+    "test_renamed_value", erhe::scene::Light::property_owner_type(), erhe::property::Property_metadata{.default_value = 0.0f}
+).with_former_name("test_former_value");
+
+// A file that names a property by its former name: the value is applied and
+// the complete-local-set pass keeps it (the key lists the renamed property).
+TEST(Gltf_roundtrip, a_former_property_name_keeps_its_local_value)
+{
+    erhe::scene::Scene scene{"source", nullptr};
+    const std::shared_ptr<erhe::scene::Light> light = std::make_shared<erhe::scene::Light>("Lamp");
+    make_content(*light);
+    light->set_parent(scene.get_root_node());
+    light->set_value(c_renamed_light_value, 3.5f);
+
+    std::string text = erhe::gltf::export_gltf(erhe::gltf::Gltf_export_arguments{.root_node = *scene.get_root_node(), .binary = false});
+    const std::string current_key = "\"test_renamed_value\"";
+    std::size_t replaced = 0;
+    for (std::size_t at = text.find(current_key); at != std::string::npos; at = text.find(current_key, at)) {
+        text.replace(at, current_key.size(), "\"test_former_value\"");
+        ++replaced;
+    }
+    ASSERT_GT(replaced, std::size_t{0}) << text;
+
+    erhe::scene::Scene          loaded{"loaded", nullptr};
+    const erhe::gltf::Gltf_data data = parse_file(write_temporary_file("former_property_name.gltf", text), loaded);
+    const std::shared_ptr<erhe::scene::Light> loaded_light = find_by_name(data.lights, "Lamp");
+    ASSERT_TRUE(loaded_light);
+    EXPECT_TRUE(loaded_light->has_local_value(c_renamed_light_value));
+    EXPECT_EQ(loaded_light->get_value(c_renamed_light_value), 3.5f);
 }
 
 // The fixture survives parse -> export -> parse: node, mesh primitives with

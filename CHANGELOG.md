@@ -9,6 +9,18 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::commands`: `command.hpp` - `Command::accepts_binding()`, a command's
+  refusal of user bindings it cannot serve; `Commands::set_binding_override()`
+  fails with its reason (`doc/erhe/commands.md`).
+- `erhe::property`: `dependency_property.hpp` - `Property_registry::add_former_name()`
+  and `Property<T>::with_former_name()`: a former property name resolves to
+  the renamed property (`doc/erhe/property_system.md` D27).
+- `erhe::codegen`: the `field()` option `renamed_from` - earlier key names a
+  document older than the rename is read with (`doc/erhe/codegen.md` "Field
+  Options").
+- `erhe::raytrace`: `ray.hpp` - `Hit::t`, the hit's distance along the ray, set
+  on every backend for the returned hit and for each candidate a hit filter
+  sees (`doc/erhe/raytrace.md` "Hit filters").
 - `erhe::raytrace`: `ray.hpp` - `IHit_filter` and `Ray::filter`; `intersect()`
   returns the nearest candidate hit the filter accepts, on every backend
   (`doc/erhe/raytrace.md` "Hit filters").
@@ -154,6 +166,16 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::math`: `math_util.hpp` - `angle_of_rotation()` is the atan2 of the
+  sine along the axis and the cosine: exactly 0 for equal directions, never
+  NaN, in [-pi, pi] (was acos with a NaN path at zero angle; `test/test_angle_of_rotation.cpp`).
+- `erhe::commands`: key dispatch - while a mouse command is active, the key
+  bindings of commands with the same host dispatch before all others
+  (`doc/erhe/commands.md` "Binding model").
+- `erhe::gltf`: `gltf_item_flags.hpp` - `clear_local_properties_not_listed()`
+  takes an `is_listed` predicate on the `Dependency_property` instead of its
+  name, so a key resolved through the registry (a former property name)
+  lists its property.
 - `erhe::raytrace`: `Hit::normal` points out of the solid also for a mirrored
   instance (negative determinant), and the embree backend reports it in the
   instance's parent space as the other backends do (`normal_transform.hpp`).

@@ -9,6 +9,7 @@
 #include <vector>
 
 namespace GEO { class Mesh; }
+namespace erhe::math { class Aabb; }
 
 namespace editor {
 
@@ -255,5 +256,9 @@ public:
     [[nodiscard]] auto find_parameter(std::string_view name) const -> std::optional<std::size_t>;
     [[nodiscard]] auto has_tag       (std::string_view tag) const -> bool;
 };
+
+// The bounds of the values' mesh from the generator's CPU geometry alone (no renderable mesh, no upload): the min and
+// max of the facet corners' single precision points, the box a brush of the values reports. Invalid without facets.
+[[nodiscard]] auto get_kit_geometry_bounds(const Kit_parameter_values& values) -> erhe::math::Aabb;
 
 } // namespace editor

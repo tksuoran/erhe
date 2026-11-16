@@ -4,6 +4,8 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
+
 namespace editor {
 
 class Input_state
@@ -14,6 +16,9 @@ public:
     bool      shift  {false};
     bool      control{false};
     bool      alt    {false};
+    // Every key event updates these, whichever window owns the keyboard.
+    bool      key_down[static_cast<int>(erhe::window::Key_last) + 1]{};
+    uint32_t  modifier_mask{0};
 };
 
 }

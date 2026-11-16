@@ -59,16 +59,20 @@ const Property<bool> Kit_layout::module_snap_property = Property<bool>::register
 );
 const Property<bool> Kit_layout::surface_snap_property = Property<bool>::register_attached(
     "surface_snap", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
-    make_metadata(false, "Snap To Surface", "Each element rests on the surface under it", false)
+    make_metadata(false, "Snap To Surface", "Each element snaps to the surface under it", false)
 );
 const Property<bool> Kit_layout::surface_orient_property = Property<bool>::register_attached(
     "surface_orient", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
     make_metadata(false, "Orient To Surface", "Each element's up axis takes the surface normal", false)
 );
-const Property<bool> Kit_layout::random_seeds_property = Property<bool>::register_attached(
-    "random_seeds", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
-    make_metadata(false, "Random Seeds", "Each element takes a seed derived from the layout seed and its index", false)
+const Property<float> Kit_layout::surface_max_distance_property = Property<float>::register_attached(
+    "surface_max_distance", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(c_default_surface_max_distance, "Surface Max Distance", "Meters: an element moves at most this far along the snap direction to snap to the surface; beyond, it stays", false)
 );
+const Property<bool> Kit_layout::per_piece_seed_property = Property<bool>::register_attached(
+    "per_piece_seed", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(false, "Per Piece Seed", "Each element takes a seed derived from the layout seed and its index", false)
+).with_former_name("random_seeds");
 const Property<int> Kit_layout::seed_property = Property<int>::register_attached(
     "seed", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
     make_metadata(0, "Seed", "The layout seed the element seeds derive from", false)
@@ -86,7 +90,8 @@ auto is_kit_layout_property(const erhe::property::Dependency_property& property)
         &Kit_layout::module_snap_property.get(),
         &Kit_layout::surface_snap_property.get(),
         &Kit_layout::surface_orient_property.get(),
-        &Kit_layout::random_seeds_property.get(),
+        &Kit_layout::surface_max_distance_property.get(),
+        &Kit_layout::per_piece_seed_property.get(),
         &Kit_layout::seed_property.get(),
         &Kit_layout::locked_property.get()
     }) {
@@ -135,7 +140,12 @@ auto read_kit_layout(const erhe::scene::Node& node, Kit_layout_data& out_data) -
     data.snap           = node.get_value(Kit_layout::module_snap_property)    ? Kit_snap::module           : Kit_snap::none;
     data.surface_snap   = node.get_value(Kit_layout::surface_snap_property)   ? Surface_snap::on           : Surface_snap::off;
     data.surface_orient = node.get_value(Kit_layout::surface_orient_property) ? Surface_orient::on         : Surface_orient::off;
-    data.seeds          = node.get_value(Kit_layout::random_seeds_property)   ? Kit_layout_seeds::per_element : Kit_layout_seeds::item;
+    data.surface_max_distance = node.get_value(Kit_layout::surface_max_distance_property);
+    error = check_surface_max_distance(data.surface_max_distance);
+    if (!error.empty()) {
+        return fmt::format("'{}': {}", node.get_name(), error);
+    }
+    data.seeds          = node.get_value(Kit_layout::per_piece_seed_property)   ? Kit_layout_seeds::per_element : Kit_layout_seeds::item;
     data.seed           = node.get_value(Kit_layout::seed_property);
     data.lock           = node.get_value(Kit_layout::locked_property)         ? Kit_layout_lock::locked    : Kit_layout_lock::unlocked;
     out_data = std::move(data);
@@ -149,7 +159,8 @@ void write_kit_layout(erhe::scene::Node& node, const Kit_layout_data& data)
     node.set_value(Kit_layout::module_snap_property,    data.snap == Kit_snap::module);
     node.set_value(Kit_layout::surface_snap_property,   data.surface_snap == Surface_snap::on);
     node.set_value(Kit_layout::surface_orient_property, data.surface_orient == Surface_orient::on);
-    node.set_value(Kit_layout::random_seeds_property,   data.seeds == Kit_layout_seeds::per_element);
+    node.set_value(Kit_layout::surface_max_distance_property, data.surface_max_distance);
+    node.set_value(Kit_layout::per_piece_seed_property,   data.seeds == Kit_layout_seeds::per_element);
     node.set_value(Kit_layout::seed_property,           data.seed);
     node.set_value(Kit_layout::locked_property,         data.lock == Kit_layout_lock::locked);
 }

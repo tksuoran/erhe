@@ -76,6 +76,25 @@ private:
     Commands& m_commands;
 };
 
+// Takes keys only, as a command whose binding must report a held state does.
+class Keys_only_command : public erhe::commands::Command
+{
+public:
+    Keys_only_command(Commands& commands, const std::string_view name)
+        : Command{commands, name}
+    {
+    }
+
+    auto accepts_binding(const Binding_desc& binding, std::string& out_reason) const -> bool override
+    {
+        if (binding.kind == Binding_kind::key) {
+            return true;
+        }
+        out_reason = "keys only";
+        return false;
+    }
+};
+
 auto key_event(const erhe::window::Keycode keycode, const bool pressed, const uint32_t modifier_mask = 0) -> erhe::window::Input_event
 {
     erhe::window::Input_event event{};
@@ -237,6 +256,24 @@ TEST(Binding_overrides, input_kind_is_enforced)
     EXPECT_TRUE(effective[0].drag_call_on_button_down_without_motion);
 }
 
+TEST(Binding_overrides, command_refuses_bindings_it_does_not_accept)
+{
+    Commands commands;
+    Keys_only_command command{commands, "Test.keys_only"};
+    commands.register_command(&command);
+    commands.bind_command_to_key(&command, erhe::window::Key_a, Button_trigger::Any);
+
+    std::string error;
+    const std::vector<Binding_desc> button{Binding_desc{.kind = Binding_kind::mouse_button, .code = erhe::window::Mouse_button_x1}};
+    EXPECT_FALSE(commands.set_binding_override(command, button, &error));
+    EXPECT_NE(error.find("keys only"), std::string::npos) << error;
+    EXPECT_FALSE(commands.has_binding_override(command));
+
+    const std::vector<Binding_desc> other_key{key(erhe::window::Key_b, std::nullopt)};
+    EXPECT_TRUE(commands.set_binding_override(command, other_key, &error)) << error;
+    EXPECT_TRUE(commands.has_binding_override(command));
+}
+
 TEST(Binding_overrides, unknown_commands_round_trip)
 {
     Commands commands;
@@ -320,6 +357,38 @@ TEST(Binding_overrides, rebind_mid_drag_inactivates_command)
     send(commands, mouse_move_event(12.0f, 10.0f, 2.0f, 0.0f));
     EXPECT_EQ(command.get_command_state(), erhe::commands::State::Inactive);
     EXPECT_EQ(commands.get_active_mouse_command(), nullptr);
+    send(commands, mouse_button_event(erhe::window::Mouse_button_left, false));
+}
+
+TEST(Binding_overrides, active_gesture_host_takes_its_keys_first)
+{
+    Commands commands;
+    erhe::commands::Command_host other_host;
+    erhe::commands::Command_host gesture_host;
+    Counting_command earlier{commands, "Test.earlier"};
+    Counting_command cancel {commands, "Test.cancel"};
+    Drag_command     drag   {commands, "Test.drag"};
+    earlier.set_host(&other_host);
+    cancel .set_host(&gesture_host);
+    drag   .set_host(&gesture_host);
+    commands.register_command(&earlier);
+    commands.register_command(&cancel);
+    commands.register_command(&drag);
+    // Both mask-less; the other host's binding is declared first.
+    commands.bind_command_to_key(&earlier, erhe::window::Key_escape);
+    commands.bind_command_to_key(&cancel,  erhe::window::Key_escape);
+    commands.bind_command_to_mouse_drag(&drag, erhe::window::Mouse_button_left, false);
+
+    send(commands, key_event(erhe::window::Key_escape, true, erhe::window::Key_modifier_bit_shift | erhe::window::Key_modifier_bit_ctrl));
+    EXPECT_EQ(earlier.call_count, 1);
+    EXPECT_EQ(cancel.call_count,  0);
+
+    send(commands, mouse_button_event(erhe::window::Mouse_button_left, true));
+    send(commands, mouse_move_event(10.0f, 10.0f, 5.0f, 0.0f));
+    ASSERT_EQ(commands.get_active_mouse_command(), &drag);
+    send(commands, key_event(erhe::window::Key_escape, true, erhe::window::Key_modifier_bit_shift | erhe::window::Key_modifier_bit_ctrl));
+    EXPECT_EQ(earlier.call_count, 1);
+    EXPECT_EQ(cancel.call_count,  1);
     send(commands, mouse_button_event(erhe::window::Mouse_button_left, false));
 }
 

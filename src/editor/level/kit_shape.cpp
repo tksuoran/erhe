@@ -1,6 +1,11 @@
 #include "level/kit_shape.hpp"
 #include "level/kit_mesh_builder.hpp"
 
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_math/aabb.hpp"
+
+#include <geogram/mesh/mesh.h>
+
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
@@ -720,6 +725,24 @@ auto parse_canonical_text(const Kit_shape_definition& shape, const std::string_v
     }
     out_values = values;
     return {};
+}
+
+auto get_kit_geometry_bounds(const Kit_parameter_values& values) -> erhe::math::Aabb
+{
+    erhe::math::Aabb bounds{};
+    const Kit_shape_definition* const shape = values.get_shape();
+    if ((shape == nullptr) || !shape->generator) {
+        return bounds;
+    }
+    GEO::Mesh mesh{3, true};
+    shape->generator(values, mesh);
+    for (const GEO::index_t facet : mesh.facets) {
+        for (const GEO::index_t corner : mesh.facets.corners(facet)) {
+            const GEO::vec3f p = erhe::geometry::get_pointf(mesh.vertices, mesh.facet_corners.vertex(corner));
+            bounds.include(glm::vec3{p.x, p.y, p.z});
+        }
+    }
+    return bounds;
 }
 
 } // namespace editor

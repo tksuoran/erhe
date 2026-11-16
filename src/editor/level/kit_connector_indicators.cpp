@@ -43,8 +43,8 @@ auto Kit_connector_indicators::get_local_connectors(const erhe::scene::Node& nod
     }
     Cached_piece& piece = m_local_connectors[id];
     piece.item = &node;
-    // An unreadable record caches no frames, as get_world_connectors() refuses it.
-    static_cast<void>(m_level_kits.get_local_connectors(node, piece.connectors));
+    // An unreadable record caches no frames, as get_world_connectors() refuses it; a disabled connector is not drawn (U33).
+    static_cast<void>(m_level_kits.get_local_connectors(node, piece.connectors, Kit_connector_set::enabled));
     return piece.connectors;
 }
 

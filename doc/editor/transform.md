@@ -160,15 +160,23 @@ the first step that moves a vertex, as for a move.
 
 With Snap To Surface or Orient To Surface on (the viewport toolbar, the Move
 tool group of the Transform window, the Level Kit window), a translate drag of
-the gizmo rests each moved mesh on the surface under it at every step;
+the gizmo snaps each moved mesh to its nearest place on the surface within
+the Surface Max Distance at every step;
 `transform_selection` and `drag_selection` do so with their `surface_snap` /
 `surface_orient` arguments. The rules (the axis rule, rotate and scale left
 alone, the anchor, undo) are in `doc/editor/level_tools.md` "Surface settings".
-With Connector Snap above 0 a translate drag then moves the dragged nodes so
-that their connector nearest another kit piece's connector meets it within
-the distance; `drag_selection` and `transform_selection` take
-`connector_snap_distance`. A translate step's order is the tool's translate,
-the surface rest, the connector snap, then the live layout preview
+With Connector Snap above 0 a translate, rotate or scale drag then moves the
+dragged nodes so that their connector nearest another kit piece's connector
+meets it within the distance; `drag_selection` and `transform_selection` take
+`connector_snap_distance`. The connector snap starts only after the pointer
+has moved, Connector Snap On Axis keeps a translate drag on its axis or plane
+handle (a rotate or scale drag takes the full offset),
+and `Transform_tool.suspend_connector_snap` (Shift) held suspends it. A translate step's order is the tool's translate,
+the snap to surface, the connector snap, then the live layout preview; a
+rotate or scale step's is the tool's rotation or scale about the press pivot,
+the connector snap, then the live layout preview. An identity step
+(`restore_start_pose()`) and the box scale's per node path
+(`finish_drag_step()`) run the connector snap too
 (`doc/editor/level_tools.md` "Connector snap").
 
 ## Rigid descendants
@@ -191,9 +199,11 @@ record. An identity delta - an unmoved pointer, a pointer back on the press
 pixel, an unmoved box scale face, a value edited back to its start - puts
 every entry back at its drag-start pose exactly (`restore_start_pose()`)
 rather than recomposing it, so it compares equal. A zero translate step with
-surface snap or orient on then rests as any step does (`doc/editor/level_tools.md`
-"Transform tool"), and the connector snap snaps it ("Connector snap"): a
-hovering piece rests and records, a resting one stays equal. The move and scale subtools take their pointer baseline from the
+surface snap or orient on then snaps to the surface as any step does (`doc/editor/level_tools.md`
+"Transform tool"): a hovering piece snaps and records, a snapped one stays
+equal. The connector snap does not snap a drag that has not moved
+(`doc/editor/level_tools.md` "Connector snap"), so a press and release with
+only the connector snap on records nothing. The move and scale subtools take their pointer baseline from the
 line or plane projection their updates use, at the press (`Move_tool::begin()`,
 `Scale_tool::begin()`). The Transform window's rotation fields give back the
 shown rotation exactly when their values equal the ones shown at the edit
@@ -208,7 +218,7 @@ drag - and records nothing. It ends the subtool without its record
 layouts get their children from before the drag back, `doc/editor/level_tools.md`
 "Live layout preview"), hands the bodies the drag took over back (springs
 detached, kinematic holds ended), restores every entry's
-`parent_from_node_before` and xform op stack (so surface rests, orients and
+`parent_from_node_before` and xform op stack (so snaps to the surface, orients and
 an IK chain's joints are undone too), snaps each restored node's rigid
 body to that pose at rest as an undo does, ends the IK part and rebuilds the
 entries from the selection. For a jointed body pulled by a spring only the
@@ -217,9 +227,12 @@ their simulated pose, as after an undo of such a drag. A pointer drag's command 
 rest of the held drag moves nothing and its release records nothing; the
 next press starts a new drag.
 
-- Escape (`Transform_tool.cancel_drag`, exact modifier mask 0, so it
-  dispatches before the mask-less Escape bindings) cancels a pointer drag of
-  nodes; it consumes the key only then.
+- Escape (`Transform_tool.cancel_drag`, any modifiers, so the connector
+  snap's suspend key or the grid snap's Ctrl may be held) cancels a pointer
+  drag of nodes; it consumes the key only then. While the drag runs, the
+  key bindings of the drag command's host (the Transform tool) dispatch
+  before all others (`doc/erhe/commands.md` "Binding model"), so the cancel
+  wins over earlier mask-less Escape bindings such as the log window's pause.
 - MCP `cancel_transform_drag` cancels a pointer drag of nodes or a held
   `drag_selection` drag (refused while one is still stepping) and replies
   `cancelled` and `drag` (`pointer`, `drag_selection` or `none`).

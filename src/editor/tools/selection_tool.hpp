@@ -37,6 +37,10 @@ class Scene_root;
 class Selection;
 class Tools;
 
+// What a request to select the item selects: a child of a locked kit layout node stands for the
+// outermost locked layout node above it (doc/editor/level_tools.md "Kit layout nodes"), else the item.
+[[nodiscard]] auto get_selectable(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<erhe::Item_base>;
+
 // Clears the selection (every scene's): Edit menu and the Selection window.
 class Selection_clear_command : public erhe::commands::Command
 {
@@ -296,7 +300,6 @@ public:
     auto add_to_selection                (const std::shared_ptr<erhe::Item_base>& item) -> bool;
     auto clear_selection                 () -> bool;
     auto remove_from_selection           (const std::shared_ptr<erhe::Item_base>& item) -> bool;
-    void update_selection_from_scene_item(const std::shared_ptr<erhe::Item_base>& item, const bool added);
     void sanity_check                    ();
 
     // Commands

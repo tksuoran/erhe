@@ -37,8 +37,9 @@ opened from the Window menu or the Settings window's User Interface group
   the text form directly.
 - OK replaces or appends the binding; a list equal to the command's defaults
   clears the override instead, so the command follows its defaults again. A
-  binding of the wrong input kind is refused with the reason shown in the
-  modal.
+  binding of the wrong input kind, or one the command refuses
+  (`Command::accepts_binding()`: `Transform_tool.suspend_connector_snap` takes
+  keys only), is refused with the reason shown in the modal.
 - The rows are cached and rebuilt only when `Commands` reports a rebuild
   (`add_bindings_changed_callback()`), so edits from MCP show up too and an
   open window costs no per-frame work beyond drawing.

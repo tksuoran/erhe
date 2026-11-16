@@ -5,12 +5,15 @@
 #include "level/kit_shapes.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_math/aabb.hpp"
 
 #include <fmt/format.h>
 #include <geogram/mesh/mesh.h>
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <bit>
+#include <cstdint>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -694,3 +697,49 @@ TEST(Kit_rock, every_form_and_bevel_count_passes_the_checks)
 }
 
 } // anonymous namespace
+
+namespace {
+
+// The box of the corner points of the geometry a brush is built from: generated, then processed as a brush's is.
+auto processed_corner_bounds(const Kit_parameter_values& values) -> erhe::math::Aabb
+{
+    erhe::geometry::Geometry geometry{"bounds"};
+    values.get_shape()->generator(values, geometry.get_mesh());
+    geometry.process(
+        {
+            .flags =
+                erhe::geometry::Geometry::process_flag_connect |
+                erhe::geometry::Geometry::process_flag_build_edges |
+                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+        }
+    );
+    const GEO::Mesh& mesh = geometry.get_mesh();
+    erhe::math::Aabb bounds{};
+    for (const GEO::index_t facet : mesh.facets) {
+        for (const GEO::index_t corner : mesh.facets.corners(facet)) {
+            const GEO::vec3f p = erhe::geometry::get_pointf(mesh.vertices, mesh.facet_corners.vertex(corner));
+            bounds.include(glm::vec3{p.x, p.y, p.z});
+        }
+    }
+    return bounds;
+}
+
+} // anonymous namespace
+
+TEST(Kit_shape_library, geometry_bounds_equal_the_processed_geometry_bit_for_bit)
+{
+    for (const Kit_shape_definition& shape : get_library().get_shapes()) {
+        for (const int seed : {0, 3, 17}) {
+            Kit_parameter_values values = defaults(shape);
+            static_cast<void>(values.set_int("seed", seed));
+            values.resolve_derived(default_module, default_wall_height);
+            const erhe::math::Aabb cpu       = editor::get_kit_geometry_bounds(values);
+            const erhe::math::Aabb processed = processed_corner_bounds(values);
+            ASSERT_TRUE(cpu.is_valid_3d()) << shape.id;
+            for (int axis = 0; axis < 3; ++axis) {
+                EXPECT_EQ(std::bit_cast<uint32_t>(cpu.min[axis]), std::bit_cast<uint32_t>(processed.min[axis])) << shape.id << " seed " << seed;
+                EXPECT_EQ(std::bit_cast<uint32_t>(cpu.max[axis]), std::bit_cast<uint32_t>(processed.max[axis])) << shape.id << " seed " << seed;
+            }
+        }
+    }
+}

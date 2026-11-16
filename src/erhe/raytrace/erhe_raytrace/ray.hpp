@@ -45,6 +45,7 @@ public:
     unsigned int triangle_id{0};
     IGeometry*   geometry   {nullptr};
     IInstance*   instance   {nullptr};
+    float        t          {0.0f}; // the hit's distance along the ray, in units of the ray's direction
 };
 
 } // namespace erhe::raytrace

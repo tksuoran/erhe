@@ -485,7 +485,8 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
                             .uv          = glm::vec2{std::get<1>(*hit), std::get<2>(*hit)},
                             .triangle_id = static_cast<unsigned int>(m_bvh.prim_ids[i]),
                             .geometry    = this,
-                            .instance    = instance
+                            .instance    = instance,
+                            .t           = std::get<0>(*hit)
                         };
                         if (!ray.filter->accept(candidate)) {
                             continue;
@@ -510,6 +511,7 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
         hit.normal      = glm::vec3{get_hit_normal_transform() * glm::vec4{from_bvh(triangle.n), 0.0f}};
         hit.instance    = instance;
         hit.geometry    = this;
+        hit.t           = bvh_ray.tmax;
         return true;
     }
     return false;

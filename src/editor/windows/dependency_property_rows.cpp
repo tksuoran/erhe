@@ -1600,7 +1600,7 @@ void Dependency_property_rows::end_edit(const Dependency_property& property)
     std::vector<std::shared_ptr<Operation>> operations;
     for (std::size_t i = 0; i < m_items->size(); ++i) {
         const std::optional<erhe::property::Local_state> after = target(i)->read_local_state(recorded);
-        if (refuse_layout_write(i, recorded, after)) {
+        if (refuse_kit_write(i, recorded, after)) {
             continue;
         }
         operations.push_back(std::make_shared<Property_set_operation>((*m_items)[i], m_sub_object, recorded, m_edit_before[i], after));
@@ -1656,14 +1656,14 @@ void Dependency_property_rows::queue_set(const Dependency_property& property, co
         return;
     }
     if (m_items->size() == 1) {
-        if (!refuse_layout_write(0, property, after)) {
+        if (!refuse_kit_write(0, property, after)) {
             m_context.operation_stack->queue(std::make_shared<Property_set_operation>(m_items->front(), m_sub_object, property, m_edit_before.front(), after));
         }
         return;
     }
     Compound_operation::Parameters parameters;
     for (std::size_t i = 0; i < m_items->size(); ++i) {
-        if (refuse_layout_write(i, property, after)) {
+        if (refuse_kit_write(i, property, after)) {
             continue;
         }
         parameters.operations.push_back(std::make_shared<Property_set_operation>((*m_items)[i], m_sub_object, property, m_edit_before[i], after));
@@ -1673,7 +1673,7 @@ void Dependency_property_rows::queue_set(const Dependency_property& property, co
     }
 }
 
-auto Dependency_property_rows::refuse_layout_write(
+auto Dependency_property_rows::refuse_kit_write(
     const std::size_t                                 i,
     const Dependency_property&                        property,
     const std::optional<erhe::property::Local_state>& after
@@ -1681,6 +1681,17 @@ auto Dependency_property_rows::refuse_layout_write(
 {
     erhe::Item_base& item = *(*m_items)[i];
     const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&item);
+    if (!m_sub_object.has_value() && (m_context.level_kits != nullptr) && is_connector_switch_property(property)) {
+        const erhe::property::Property_value* const value = after.has_value() ? std::get_if<erhe::property::Property_value>(&after.value()) : nullptr;
+        const std::string refusal = (value != nullptr) ? m_context.level_kits->check_connector_switch_write(item, property, *value) : std::string{};
+        if (refusal.empty()) {
+            return false;
+        }
+        // The row's live edit already wrote the value: it is taken back, and no undo entry is recorded.
+        log_operations->warn("Kit piece value '{}' of '{}' not set: {}", property.get_name(), item.get_name(), refusal);
+        static_cast<void>(apply_item_property(m_context, item, *target(i), property, m_edit_before[i]));
+        return true;
+    }
     if (m_sub_object.has_value() || (m_context.level_kits == nullptr) || !is_kit_layout_property(property) || (node == nullptr) || !carries_kit_layout(*node)) {
         return false;
     }
@@ -1840,6 +1851,41 @@ void Dependency_property_rows::clear_style()
     m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(parameters)));
 }
 
+namespace {
+
+// The Kit_piece record a paste of the values leaves on the item, and the refusal of its connector switches (U33).
+[[nodiscard]] auto check_pasted_connector_switches(const Level_kits& level_kits, const erhe::Item_base& item, const erhe::property::Property_set& values) -> std::string
+{
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&item);
+    std::optional<Kit_piece_data> record = (node != nullptr) ? read_kit_piece(*node) : std::optional<Kit_piece_data>{};
+    for (const erhe::property::Property_set::Entry& entry : values.entries()) {
+        const std::string* const text = std::get_if<std::string>(&entry.value);
+        if (text == nullptr) {
+            continue;
+        }
+        if (entry.property == &Kit_piece::shape_property.get()) {
+            record = Kit_piece_data{.shape = *text, .parameters = record.has_value() ? record->parameters : std::string{}};
+        } else if ((entry.property == &Kit_piece::parameters_property.get()) && record.has_value()) {
+            record->parameters = *text;
+        }
+    }
+    for (const erhe::property::Property_set::Entry& entry : values.entries()) {
+        if (!is_connector_switch_property(*entry.property)) {
+            continue;
+        }
+        if (!record.has_value()) {
+            return fmt::format("'{}' is not a kit piece", item.get_name());
+        }
+        const std::string refusal = level_kits.check_connector_switch_write(record.value(), *entry.property, entry.value);
+        if (!refusal.empty()) {
+            return refusal;
+        }
+    }
+    return {};
+}
+
+} // anonymous namespace
+
 void Dependency_property_rows::paste_properties()
 {
     if ((m_context.clipboard == nullptr) || (m_context.operation_stack == nullptr)) {
@@ -1860,6 +1906,14 @@ void Dependency_property_rows::paste_properties()
             }
             if (registry.find_for_object(item->get_property_owner_type(), registry.qualified_name(*entry.property)) == entry.property) {
                 filtered.set(*entry.property, entry.value);
+            }
+        }
+        // U33: connector switches are checked against the record the paste leaves on the piece; a refusal pastes nothing.
+        if (m_context.level_kits != nullptr) {
+            const std::string refusal = check_pasted_connector_switches(*m_context.level_kits, *item, filtered);
+            if (!refusal.empty()) {
+                log_operations->warn("Paste Properties onto '{}' refused, nothing pasted: {}", item->get_name(), refusal);
+                return;
             }
         }
         if (!filtered.empty()) {

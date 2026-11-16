@@ -6,8 +6,10 @@ add_executable(${_target}
     # library to link against. The kit shape library needs erhe::geometry
     # (with its erhe::math headers), glm and fmt only; the region and height
     # map helpers need glm and erhe::math; the repeat expansion glm and fmt; the
-    # group mirror glm and erhe::math; the kit layout values nlohmann_json.
+    # group mirror glm and erhe::math; the kit layout values and outlines nlohmann_json; the snap to
+    # surface search (surface_snap_search.hpp) is header-only.
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_outline.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_values.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_mesh_builder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_replace.cpp
@@ -21,12 +23,14 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_region.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_repeat.cpp
     test_kit_connector.cpp
+    test_kit_layout_outline.cpp
     test_kit_layout_values.cpp
     test_kit_replace.cpp
     test_kit_shapes.cpp
     test_level_group.cpp
     test_level_region.cpp
     test_level_repeat.cpp
+    test_surface_snap_search.cpp
 )
 
 # "level/kit_shape.hpp" is reached relative to the editor source root.

@@ -283,6 +283,7 @@ auto Tinybvh_scene::intersect_tlas(Ray& ray, Hit& hit) -> bool
             hit.normal      = glm::vec3{get_normal_transform(transform) * glm::vec4{local_normal, 0.0f}};
             hit.instance    = erhe_instance;
             hit.geometry    = erhe_geometry;
+            hit.t           = tinybvh_ray.hit.t;
             return true;
         }
     }

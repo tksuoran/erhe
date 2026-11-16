@@ -17,16 +17,18 @@
 
 namespace erhe::physics  { class ICollision_shape; }
 namespace erhe::raytrace { class IScene; }
-namespace erhe::scene    { class Mesh; }
+namespace erhe::scene    { class Mesh; class Mesh_primitive; }
 
 namespace editor {
 
 class Kit_shape_library;
 class Scene_root;
 
+inline constexpr float c_default_surface_max_distance = 1.0f;
+
 enum class Surface_snap : unsigned int {
     off = 0,
-    on      // the base rests on the highest surface under it (R5.11)
+    on      // the base moves along the direction to the nearest place where it rests and the piece fits (R5.11, U23, U30)
 };
 
 enum class Surface_orient : unsigned int {
@@ -40,6 +42,7 @@ public:
     Surface_snap   snap     {Surface_snap::off};
     Surface_orient orient   {Surface_orient::off};
     glm::vec3      direction{0.0f, -1.0f, 0.0f}; // unit length
+    float          max_distance{c_default_surface_max_distance}; // meters from the start base, either way along the direction
 };
 
 // A transform in the scene root's space.
@@ -54,19 +57,23 @@ public:
 class Surface_placement
 {
 public:
-    Surface_pose pose;          // the resting pose; the start pose itself when no surface was found or the start already rests
+    Surface_pose pose;          // the resting pose; the start pose itself when no place was found or the start already rests
     float        distance{0.0f}; // how far the base moved along the direction; negative when it rose
-    bool         surface_found{false};
-    bool         settled{true};  // false when the rest still rose at its last allowed cast (doc/editor/level_tools.md "Surface placement")
+    bool         surface_found{false}; // false when no resting place lies within the maximum distance
 };
 
 [[nodiscard]] auto any_surface_option(const Surface_options& options) -> bool;
 
+// Empty when the distance is a finite number >= 0, else why not.
+[[nodiscard]] auto check_surface_max_distance(float distance) -> std::string;
+
 // Bounds of the mesh's primitives in the mesh's own space.
 [[nodiscard]] auto mesh_local_bounds(const erhe::scene::Mesh& mesh) -> erhe::math::Aabb;
+// The same of primitives a mesh is about to take.
+[[nodiscard]] auto mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive> primitives) -> erhe::math::Aabb;
 
-// D7.3: casts rays through the scene's raytrace scene (committed here) from the top plane of
-// `local_bounds` placed at `start`; hits on `excluded` meshes are passed through.
+// D7.3: finds the nearest resting place along the direction for `local_bounds` placed at `start` through the scene's
+// raytrace scene (committed here); `excluded` meshes are not there.
 [[nodiscard]] auto find_surface_placement(
     Scene_root&                              scene_root,
     const erhe::math::Aabb&                  local_bounds,

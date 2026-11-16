@@ -325,6 +325,13 @@ auto Commands::set_binding_override_nolock(Command& command, const std::span<con
             }
             return false;
         }
+        std::string reason;
+        if (!command.accepts_binding(desc, reason)) {
+            if (error != nullptr) {
+                *error = fmt::format("binding '{}': {}", desc.to_string(), reason);
+            }
+            return false;
+        }
         Binding_desc stored = desc;
         stored.drag_call_on_button_down_without_motion = drag_call_on_button_down_without_motion;
         new_override.bindings.push_back(stored);
@@ -916,8 +923,20 @@ auto Commands::on_key_event(const erhe::window::Input_event& input_event) -> boo
         }
     };
 
+    // The host of the active mouse gesture takes its keys first (a drag's Escape cancel), then the table order.
+    const Command_host* const gesture_host = (m_active_mouse_command != nullptr) ? m_active_mouse_command->get_host() : nullptr;
+    if (gesture_host != nullptr) {
+        for (auto& binding : m_key_bindings) {
+            if ((binding.get_command()->get_host() != gesture_host) || !binding.is_command_host_enabled()) {
+                continue;
+            }
+            if (binding.on_key(context, input_event.u.key_event.pressed, input_event.u.key_event.keycode, input_event.u.key_event.modifier_mask)) {
+                return true;
+            }
+        }
+    }
     for (auto& binding : m_key_bindings) {
-        if (!binding.is_command_host_enabled()) {
+        if (!binding.is_command_host_enabled() || ((gesture_host != nullptr) && (binding.get_command()->get_host() == gesture_host))) {
             continue;
         }
         if (binding.on_key(context, input_event.u.key_event.pressed, input_event.u.key_event.keycode, input_event.u.key_event.modifier_mask)) {

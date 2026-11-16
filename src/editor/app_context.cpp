@@ -65,16 +65,26 @@ void App_context::on_item_property_changed(erhe::Item_base& item, const erhe::pr
         app_message_bus->scene_lighting_changed.queue_message(Scene_lighting_changed_message{});
     }
 
-    if ((app_message_bus != nullptr) && is_kit_layout_property(property)) {
-        app_message_bus->kit_layout_changed.queue_message(Kit_layout_changed_message{});
+    // Kit layout items name their slot materials (Level_kits::read_layout_item()).
+    if ((level_kits != nullptr) && lighting_item && erhe::is<erhe::primitive::Material>(&item) && (&property == &erhe::Item_base::name_property.get())) {
+        level_kits->on_scene_materials_changed();
     }
 
-    // A raw write of a piece record (a developer-mode row, set_item_property): the connector frames are read again.
-    if ((level_kits != nullptr) && ((&property == &Kit_piece::shape_property.get()) || (&property == &Kit_piece::parameters_property.get()))) {
+    if ((app_message_bus != nullptr) && is_kit_layout_property(property)) {
+        const erhe::scene::Node* const layout = dynamic_cast<const erhe::scene::Node*>(&item);
+        app_message_bus->kit_layout_changed.queue_message(Kit_layout_changed_message{.node_id = (layout != nullptr) ? static_cast<uint64_t>(layout->get_id()) : 0});
+    }
+
+    // A raw write of a piece record (a developer-mode row, set_item_property) or a connector switch: the connector frames are read again.
+    const bool connector_switch = is_connector_switch_property(property);
+    if ((level_kits != nullptr) && (connector_switch || (&property == &Kit_piece::shape_property.get()) || (&property == &Kit_piece::parameters_property.get()))) {
         const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&item);
         if (node != nullptr) {
             level_kits->on_kit_piece_record_changed(*node);
         }
+    }
+    if ((app_message_bus != nullptr) && connector_switch) {
+        app_message_bus->kit_piece_connectors_changed.queue_message(Kit_piece_connectors_changed_message{});
     }
 
     // A kit layout node that becomes locked (a lock, the undo of an unlock) takes over its selected children.

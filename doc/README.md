@@ -494,6 +494,8 @@ flowchart TD
 - [plans/level_tools.md](plans/level_tools.md) (proposed): Level tools: requirements (kit-bashing shape kits, basic and parametric shapes, placement tools, walkable area reads and spatial queries over UI and MCP)
 - [plans/level_tools_design.md](plans/level_tools_design.md) (in progress): Level tools: design (shape definitions, pieces as brush placements with a saved record, MCP and UI exposure, walkable area reads, spatial tools)
 - [plans/level_tools_implementation.md](plans/level_tools_implementation.md) (in progress): Level tools: implementation steps (the steps after the first testable version)
+- [plans/level_kit_more_shapes.md](plans/level_kit_more_shapes.md) (proposed): Level kit: more shapes (the shape list for step 62 of the level tools implementation: rock formations, tropical plants, palms, beach, common and cultural architecture modules, with parameters, slots, connectors, prerequisites and build order)
+- [plans/level_kit_extra_shapes.md](plans/level_kit_extra_shapes.md) (proposed): Level kit: extra shapes (the inventory for step 63 of the level tools implementation: traversal, props, lights, ruins, industrial and harbour shapes with parameters, slots, connectors, build order and open questions)
 - [plans/navigation_mesh.md](plans/navigation_mesh.md) (in progress): Navigation mesh: outstanding work (triangle classification from walkable sample points, open items, unverified paths)
 - [plans/occlusion_culling.md](plans/occlusion_culling.md) (proposed): Raster occlusion culling
 - [plans/quest_fragment_shader.md](plans/quest_fragment_shader.md) (proposed): Quest fragment shader: the mobile shading variant (mobile shadow lookup, fp16 chain, 16-bit material record, measured Adreno 740 costs)

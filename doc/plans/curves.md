@@ -130,7 +130,7 @@ The user's rulings (2026-11-14):
 8. Surface snap of point drags (C4 "surface snap"): with Snap To Surface on,
    a translate drag of curve points (and lattice control points) rests the
    moved points on the surface under them, as a node drag rests a moved
-   mesh; `Transform_tool::rest_on_surface()` acts on node entries only
+   mesh; `Transform_tool::snap_to_surface()` acts on node entries only
    today.
 
 ## Later

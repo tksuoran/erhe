@@ -1,5 +1,7 @@
 #include "level/kit_replace.hpp"
 
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <string>
 #include <string_view>
@@ -84,6 +86,86 @@ void match_material_slots(
         const std::span<const std::string>::iterator i = std::find(from_slots.begin(), from_slots.end(), slot);
         out_matches.push_back((i != from_slots.end()) ? std::optional<std::size_t>{static_cast<std::size_t>(i - from_slots.begin())} : std::optional<std::size_t>{});
     }
+}
+
+auto c_str(const Kit_replace_skip skip) -> const char*
+{
+    switch (skip) {
+        case Kit_replace_skip::kit_layout_node:     return "kit_layout_node";
+        case Kit_replace_skip::locked_layout_child: return "locked_layout_child";
+        case Kit_replace_skip::group:               return "group";
+        case Kit_replace_skip::not_a_kit_piece:     return "not_a_kit_piece";
+        case Kit_replace_skip::unreadable_record:   return "unreadable_record";
+        case Kit_replace_skip::loaded_mesh:         return "loaded_mesh";
+        default:                                    return "?";
+    }
+}
+
+auto describe(const Kit_replace_skip skip) -> const char*
+{
+    switch (skip) {
+        case Kit_replace_skip::kit_layout_node:     return "a kit layout node";
+        case Kit_replace_skip::locked_layout_child: return "a child of a locked kit layout node";
+        case Kit_replace_skip::group:               return "a group";
+        case Kit_replace_skip::not_a_kit_piece:     return "not a kit piece";
+        case Kit_replace_skip::unreadable_record:   return "its record does not read";
+        case Kit_replace_skip::loaded_mesh:         return "a loaded mesh";
+        default:                                    return "?";
+    }
+}
+
+auto classify_replace_target(const Kit_replace_target_facts& facts) -> std::optional<Kit_replace_skip>
+{
+    if (facts.kit_layout_node) {
+        return Kit_replace_skip::kit_layout_node;
+    }
+    if (facts.below_locked_layout) {
+        return Kit_replace_skip::locked_layout_child;
+    }
+    if (!facts.mesh) {
+        return facts.group_node ? Kit_replace_skip::group : Kit_replace_skip::not_a_kit_piece;
+    }
+    if (!facts.kit_piece_record) {
+        return Kit_replace_skip::not_a_kit_piece;
+    }
+    if (!facts.record_reads) {
+        return Kit_replace_skip::unreadable_record;
+    }
+    if (!facts.slot_count_matches) {
+        return Kit_replace_skip::loaded_mesh;
+    }
+    return {};
+}
+
+auto make_replace_summary(const Kit_replace_summary& summary) -> std::string
+{
+    std::string text;
+    if (summary.replaced_count > 0) {
+        text = fmt::format(
+            "Replaced {} {} with {}.",
+            summary.replaced_count, (summary.replaced_count == 1) ? "piece" : "pieces", summary.shape_name
+        );
+        if (summary.snapped_count.has_value()) {
+            text += fmt::format(" Snapped {} of them to the surface.", summary.snapped_count.value());
+        }
+    } else if (summary.unchanged_count > 0) {
+        text = fmt::format("The selected pieces are {} already.", summary.shape_name);
+    } else {
+        text = "Replaced no piece.";
+    }
+    if (!summary.skipped.empty()) {
+        text += fmt::format(" Skipped {}:", summary.skipped.size());
+        const std::size_t shown = std::min(summary.skipped.size(), c_replace_summary_max_names);
+        for (std::size_t i = 0; i < shown; ++i) {
+            const Kit_replace_skipped_name& entry = summary.skipped[i];
+            text += fmt::format("{} '{}' ({})", (i == 0) ? "" : ",", entry.name, describe(entry.skip));
+        }
+        if (summary.skipped.size() > shown) {
+            text += fmt::format(" and {} more", summary.skipped.size() - shown);
+        }
+        text += ".";
+    }
+    return text;
 }
 
 } // namespace editor

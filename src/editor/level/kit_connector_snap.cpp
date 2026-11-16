@@ -59,7 +59,11 @@ void Kit_connector_drag_snap::begin(
                     if (!carries_kit_piece(node)) {
                         return true;
                     }
-                    if (!level_kits.get_local_connectors(node, m_local_connectors).empty()) {
+                    if (!level_kits.get_local_connectors(node, m_local_connectors, Kit_connector_set::all).empty()) {
+                        return true;
+                    }
+                    const Kit_connector_switches switches = read_connector_switches(node);
+                    if (!switches.connectors_enabled) {
                         return true;
                     }
                     // D1.12: the full world matrix; a piece whose frames degenerate (a zero scale axis) takes no part.
@@ -67,16 +71,19 @@ void Kit_connector_drag_snap::begin(
                     if (!transform_connectors(m_local_connectors, root_from_node, m_world_connectors)) {
                         return true;
                     }
-                    const glm::mat3 root_from_node_linear{root_from_node};
-                    const glm::mat3 root_from_node_normal = glm::inverse(glm::transpose(root_from_node_linear)); // D1.12: outward is a normal
                     const std::shared_ptr<erhe::scene::Node> shared_node = as_node(node);
                     for (std::size_t k = 0, k_end = m_local_connectors.size(); k < k_end; ++k) {
+                        // U27: a disabled connector is neither a source nor a target; k stays the shape's index.
+                        if (!switches.is_enabled(m_local_connectors[k].name)) {
+                            continue;
+                        }
+                        const Kit_connector in_root = connector_in_root(m_local_connectors[k], root_from_node);
                         m_moved.push_back(
                             Moved_point{
                                 .root             = root_index,
-                                .position_in_root = m_world_connectors[k].position,
-                                .outward_in_root  = root_from_node_normal * m_local_connectors[k].outward,
-                                .up_in_root       = root_from_node_linear * m_local_connectors[k].up,
+                                .position_in_root = in_root.position,
+                                .outward_in_root  = in_root.outward,
+                                .up_in_root       = in_root.up,
                                 .piece            = shared_node,
                                 .piece_id         = static_cast<std::uint64_t>(node.get_id()),
                                 .connector_index  = k,
@@ -104,22 +111,22 @@ void Kit_connector_drag_snap::begin(
                     return true;
                 }
             }
-            if (!level_kits.get_local_connectors(*node, m_local_connectors).empty() || m_local_connectors.empty()) {
+            if (!level_kits.get_local_connectors(*node, m_local_connectors, Kit_connector_set::all).empty() || m_local_connectors.empty()) {
+                return true;
+            }
+            const Kit_connector_switches switches = read_connector_switches(*node);
+            if (!switches.connectors_enabled) {
                 return true;
             }
             if (!transform_connectors(m_local_connectors, node->world_from_node(), m_world_connectors)) {
                 return true;
             }
             const std::size_t piece_index = m_target_pieces.size();
-            m_target_pieces.push_back(
-                Target_piece{
-                    .node        = node,
-                    .piece_id    = static_cast<std::uint64_t>(node->get_id()),
-                    .first_point = m_target_points.size(),
-                    .point_count = m_local_connectors.size()
-                }
-            );
+            const std::size_t first_point = m_target_points.size();
             for (std::size_t k = 0, k_end = m_local_connectors.size(); k < k_end; ++k) {
+                if (!switches.is_enabled(m_local_connectors[k].name)) {
+                    continue;
+                }
                 m_target_points.push_back(
                     Target_point{
                         .local_position  = m_local_connectors[k].position,
@@ -128,6 +135,16 @@ void Kit_connector_drag_snap::begin(
                         .piece           = piece_index,
                         .connector_index = k,
                         .name            = m_local_connectors[k].name
+                    }
+                );
+            }
+            if (m_target_points.size() > first_point) {
+                m_target_pieces.push_back(
+                    Target_piece{
+                        .node        = node,
+                        .piece_id    = static_cast<std::uint64_t>(node->get_id()),
+                        .first_point = first_point,
+                        .point_count = m_target_points.size() - first_point
                     }
                 );
             }
@@ -180,11 +197,12 @@ auto Kit_connector_drag_snap::get_scene_root() const -> const Scene_root*
     return m_active ? m_scene_root : nullptr;
 }
 
-auto Kit_connector_drag_snap::step() -> std::optional<glm::vec3>
+auto Kit_connector_drag_snap::step(const Kit_connector_snap_constraint& constraint) -> std::optional<glm::vec3>
 {
     ERHE_PROFILE_FUNCTION();
 
     m_state = Kit_connector_snap_state{};
+    m_state.constraint = constraint;
     m_snapped_moved.reset();
     m_snapped_target.reset();
     if (!m_active) {
@@ -199,9 +217,14 @@ auto Kit_connector_drag_snap::step() -> std::optional<glm::vec3>
         if (!root || !is_hosted(*root)) {
             continue;
         }
+        // The root's pose of this step carries its connectors through the step's rotation and scale too.
+        const std::optional<glm::vec3> position = carry_connector_position(point.position_in_root, root->world_from_node());
+        if (!position.has_value()) {
+            continue;
+        }
         m_moved_world.push_back(
             Kit_connector_point{
-                .position        = glm::vec3{root->world_from_node() * glm::vec4{point.position_in_root, 1.0f}},
+                .position        = position.value(),
                 .piece_id        = point.piece_id,
                 .connector_index = point.connector_index
             }
@@ -238,7 +261,8 @@ auto Kit_connector_drag_snap::step() -> std::optional<glm::vec3>
     const Target_point& target = m_target_points[m_target_world_source[match.other]];
     m_state.snapped          = true;
     m_state.distance         = match.distance;
-    m_state.offset           = m_target_world[match.other].position - m_moved_world[match.moved].position;
+    m_state.full_offset      = m_target_world[match.other].position - m_moved_world[match.moved].position;
+    m_state.offset           = constrain_connector_snap_offset(m_state.full_offset, constraint);
     m_state.piece            = moved.piece;
     m_state.connector        = moved.name;
     m_state.target           = m_target_pieces[target.piece].node;
@@ -251,6 +275,14 @@ auto Kit_connector_drag_snap::step() -> std::optional<glm::vec3>
 void Kit_connector_drag_snap::reject_step()
 {
     m_state = Kit_connector_snap_state{};
+    m_snapped_moved.reset();
+    m_snapped_target.reset();
+}
+
+void Kit_connector_drag_snap::skip_step(const Kit_connector_snap_skip reason)
+{
+    m_state = Kit_connector_snap_state{};
+    m_state.skip = reason;
     m_snapped_moved.reset();
     m_snapped_target.reset();
 }

@@ -320,19 +320,44 @@ kind's ("Kit layout nodes"). Its values in `Kit_layout_pattern`:
 - `scatter_mode`: `count` (the shared `count`) or `density` (`density` pieces
   per square meter, default 0.25, times the region's area, rounded to the
   nearest count and at least 1); a count above 1024 is refused, naming it;
-- `min_spacing` (default 1 m): the least distance between two piece centers
-  in the node's xz plane, held exactly;
+- `min_spacing` (default 1 m): the least gap between two sampled points'
+  footprints in the node's xz plane. A footprint is the circle about the
+  point's vertical axis (the node's up axis) around the xz rectangle of its
+  item's bounds, of radius `get_scatter_footprint_radius()` =
+  sqrt(max(|min.x|, |max.x|)^2 + max(|min.z|, |max.z|)^2), from the item's
+  own bounds ("Kit layout drawing", Item sizes); it does not depend on the yaw, and spacing 0 lets footprints
+  touch. A candidate is accepted when its squared center distance is not
+  below the square of the two radii plus `min_spacing` against every
+  accepted point, in the sampler's float steps: the test is deterministic
+  and free of fused multiply-add on every platform, though a pair within
+  about one float step of touching may go either way of the real
+  comparison. The region holds the piece centers, not the footprints.
+  The gap holds between the sampled points; the generation after sampling
+  can narrow it: with Per Piece Seed an element is spaced by its item's
+  unseeded bounds while its geometry comes from its seed (`nature.rock` and
+  `nature.bush` derive their size, 0.6 - 1.5 and 0.6 - 1.4 module, from
+  it), Module Snap moves each position in xz after the spacing test, and
+  Surface Orient tilts a piece, which makes it wider in plan (plan step 59
+  is spacing by the seeded brush's footprint);
 - `yaw_min`, `yaw_max` (degrees, default 0 - 360, within -360 - 360 with
   `yaw_min` <= `yaw_max`, refused otherwise): each piece turns about the
   node's up axis by a seeded angle in the range.
 
-The points come from the layout seed (`Kit_layout.seed`, the Layout Seed
-row) whether Random Seeds is on or not: `expand_repeat()` throws darts from
-one candidate stream, `Kit_random(seed, "layout scatter")`, each candidate
-three exact 24-bit draws (x, z, yaw) whether taken or not. A disc's candidate
-outside it and a candidate closer than the spacing to a taken point are
-skipped (the spacing grid's cells are a little wider than the spacing, so
-every pair closer than it is compared); the scatter stops at the count or after 64 candidates per piece
+The points and their items come from the layout seed (`Kit_layout.seed`, the
+Layout Seed row) whether Per Piece Seed is on or not: `expand_repeat()` throws
+darts from one candidate stream, `Kit_random(seed, "layout scatter")`, each
+candidate four draws whether taken or not: three exact 24-bit draws (x, z,
+yaw) and then a 32-bit draw that picks its item (`pick_scatter_item()`). The
+pick is an integer computation: with item weights w_0 ... w_n-1 summing to
+W, target = (draw * W) >> 32 in 64 bits, and the item is the first whose
+running sum of weights passes the target, so item k is picked with odds
+w_k / W and the pick is the same on every platform. The item is picked
+before the spacing test, which needs its footprint. A disc's candidate
+outside it and a candidate whose footprint comes closer than the spacing to
+a taken piece's are skipped (the spacing grid's cells are a little wider
+than two of the widest footprints of a picked item plus the spacing, so
+every pair that could be too close is compared, and the grid and the taken
+points are leaf scratch that keeps its capacity); the scatter stops at the count or after 64 candidates per piece
 asked for, holding the points that fit, and the run reports both (`count`,
 `requested`; the Run row "n of m pieces fit"). The points in the node's
 frame are integer draws and single float operations, each its own statement,
@@ -345,15 +370,35 @@ them as matching children), another seed places all of them elsewhere. A
 region size change scales every point and so moves every piece; a spacing
 change decides every candidate again, so the pieces after the first
 candidate whose decision changes move; in density mode a region size change
-changes the count as well. Each generation samples once: the resolve that
-counts the points hands them to the generation. Element i
-takes item i modulo the item count; with Random Seeds on its parameters
+changes the count as well; a weight change picks other items and so, with
+their footprints, decides every candidate again from the first candidate
+whose decision changes. Each generation samples once: the resolve that
+counts the points hands them to the generation, each pose with its item
+(`Repeat_pose::item`). With Per Piece Seed on element i's parameters
 derive from `derive_layout_element_seed(seed, i)`, a stream apart from the
 points. The run's `space` is the region's area.
 
+Item weights (`Kit_layout_item.weight`) are integers in 0 - 1000
+(`c_max_scatter_weight`), default 1; weight 0 is an item a scatter never
+picks. A scatter whose every item has weight 0 is refused ("every item's
+weight is 0"), and so is a sum of weights above 2^32 - 1. The other kinds do
+not read the weights: element i takes item i modulo the item count.
+
+A scatter in a file written before item weights (its points from three
+draws per candidate, spaced between piece centers) loads as it was saved:
+loading regenerates no layout ("Persistence": a load gives the pieces their
+brushes, no layout makes children), so a locked or unlocked scatter keeps
+its children as saved, and its item texts read with weight 1. A locked one regenerates by the current
+rule at its next generation (a value edit, Refresh, a lock), which places
+other points; an unlocked one changes no child until it is locked.
+
 "Over a surface" is the layout's Surface Snap and Surface Orient: each piece
-rests on what is under its point (a scatter over a hill). Make Layout from a
+snaps to the nearest place within the Surface Max Distance of its point (a
+scatter over a hill), else stays at its point. Make Layout from a
 piece centres the region on the piece, which is replaced by the scatter.
+Make Layout and Place As Layout give the new node's one item weight 1; the
+Level Kit window holds no item rows, and an item's Weight is edited in the
+Properties window ("Kit layout rows") or over MCP.
 Every piece has scale 1 (per-piece scale is plan step 39).
 
 ## Groups
@@ -379,7 +424,7 @@ as the glTF node hierarchy. Every group tool is one undo entry.
   group node.
 - Moving a group is a transform of the group node, which the pieces ride
   with: the Transform tool, `set_node_transform` and `transform_selection`,
-  each one entry. The surface options rest moved mesh nodes and let a node
+  each one entry. The surface options snap moved mesh nodes to the surface and let a node
   with a moved ancestor ride with it ("Transform tool"), so a dragged group
   node, which has no mesh, moves its pieces rigidly. Deleting a group is Edit > Delete
   or `delete_nodes` on the group node: the subtree in one entry, and undo
@@ -437,10 +482,13 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
 
 - The values (`Kit_layout_data`): `Kit_layout.pattern`, the canonical text of
   a `Kit_layout_pattern`; `Kit_layout.items`, the canonical text of the
-  `Kit_layout_item` list; `Kit_layout.module_snap`, `surface_snap` and
-  `surface_orient`, the snap settings applied to every element as a placement
+  `Kit_layout_item` list; `Kit_layout.module_snap`, `surface_snap`,
+  `surface_orient` and `surface_max_distance` (meters, 1 when a saved node
+  has no value; a negative or non-finite one makes the values not read), the snap settings applied to every element as a placement
   applies them (`Kit_snap`, `Surface_options` with the downward direction);
-  `Kit_layout.random_seeds` and `Kit_layout.seed`; `Kit_layout.locked`. The
+  `Kit_layout.per_piece_seed` (its former name `Kit_layout.random_seeds`
+  still reads, in scene files and property writes) and `Kit_layout.seed`;
+  `Kit_layout.locked`. The
   pattern text is the key value: a node carries the group while it holds one.
   The Properties window edits them in its "Kit Layout" group ("Kit layout
   rows"); the raw rows are developer-only. A write of a
@@ -482,11 +530,18 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     so moving or turning the node moves the run. A pattern text of a kind that
     no longer exists (the former `polyline` with its `points`) does not read.
   - `Kit_layout_item`: a shape id, the canonical parameter text of its values
-    (D1.3) and a material name per slot, an empty name taking the slot's
-    default. The parameter text's `derive` list is the item's seed mask
-    (R3.9). Element i takes item `get_layout_item_index(i, n)` = i modulo n.
-  - `resolve_layout_pattern(pattern, seed, item_extent, path_table, out_run)`
-    (the seed: the layout seed, a scatter's point stream) turns
+    (D1.3), a material name per slot, an empty name taking the slot's
+    default, and the `weight` a scatter picks it by ("Scatter layouts"),
+    written as the key `weight` only when it is not 1, so an item text written
+    before weights reads with weight 1 and stays the canonical text of its
+    values. The parameter text's `derive` list is the item's seed mask
+    (R3.9). In a line, grid, ring or path element i takes item
+    `get_layout_item_index(i, n)` = i modulo n.
+  - `resolve_layout_pattern(pattern, seed, items, path_table, out_run)`
+    (the seed: the layout seed, a scatter's point stream; `items` a
+    `Kit_layout_item_sizes`: the largest item extent along x and per item its
+    weight and footprint radius, which `Level_kits::get_layout_item_sizes()`
+    reads from the items' brushes; the run refers to them) turns
     the pattern into a count mode `Repeat_pattern` that `expand_repeat()`
     expands from the node's origin ("Pattern expansion"), a path's along
     `path_table` (the node's own curve table, which the run refers to; null
@@ -535,7 +590,7 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
   makes one `Kit_placement` per element at the node's world transform times
   the element's pose, the module snap and then the surface options applied
   with the node's current children excluded from the rays, each element
-  resting on its own brush's bounds. With per-element seeds
+  snapping by its own brush's bounds. With per-element seeds
   the element's values take `derive_layout_element_seed()` as their seed and
   derive their masked parameters from it, so the run's derived values are
   stable across regenerations. Child i is kept when it already is element i:
@@ -610,15 +665,28 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     rigidly and nothing regenerates.
   - A curve edit: see "Path layouts".
 - A locked node's children cannot be edited directly (R5.12.3):
-  - Selection: `Selection` never holds a child of a locked layout node;
-    `add_to_selection()`, `set_selection()`, `set_active_item()` and a
-    viewport click (`toggle_node_selection()`) take the outermost locked
-    layout node above it instead, so every selection-driven tool (the
+  - Selection (U24): `Selection` never holds a child of a locked layout
+    node: `get_selectable()` puts the outermost locked layout node above it
+    in its place on every way into the selection, a selection an operation
+    puts back on undo or redo included (`doc/editor/selection.md` "What can
+    be selected"; the insert and remove selection rules are in
+    `doc/editor/operations.md`). That covers a viewport click, the
+    hierarchy window's click, shift range (`Range_selection::end()`) and
+    Ctrl+A select all, and `select_items` (whose reply lists the items now
+    selected). So every
+    selection-driven tool (the
     Transform tool and its gizmo, `transform_selection`, `drag_selection`,
     the Properties window, the Level Kit window's piece rows, Edit > Delete,
-    cut, copy, duplicate) works on the layout node. When a node becomes locked
-    (a lock, the undo of an unlock) `App_context::on_item_property_changed()`
-    hands its selected children's place in the selection to it.
+    cut, copy, duplicate) works on the layout node. A write of
+    `Kit_layout.locked` true (a lock, a raw write, the undo of an unlock)
+    hands the selected children's place in the selection to the node in
+    `App_context::on_item_property_changed()`; a lock's value is the first
+    operation of its entry, before the regeneration replaces those children.
+    The undo of a lock leaves the layout node selected, not the children
+    selected before it: the removals' undo puts the pre-lock selection back
+    while the node is still locked (its value is undone last), so it
+    redirects. Redo selects the node again. A Debug build's
+    `Selection::sanity_check()` reports a selected child of a locked layout.
   - Structure: `instance_structure_refusal()` and `instance_child_refusal()`
     (`prefabs/instance_structure.hpp`) and their bool forms refuse an item
     below a locked kit layout node and an insert under one
@@ -702,14 +770,17 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
   depend on, the children follow at every step without an undo entry, and
   the gesture's commit records one entry from the children before the drag
   (`Level_kits::begin_layout_preview()`, `step_layout_preview()`,
-  `preview_layout_values()`, `end_layout_preview()`). Four drags drive it:
+  `preview_layout_values()`, `end_layout_preview()`). Five drags drive it:
   a curve point drag of a path layout ("Path layouts"), a drag of a value
   row of the Properties window's "Kit Layout" group ("Kit layout rows"), a
-  Transform tool move of nodes at or above locked layouts with surface
+  Transform tool drag of nodes at or above locked layouts with surface
   snap or orient on (the set `append_layout_move_operations()` regenerates,
-  `begin_layout_move_preview()`), and a drag of a node's Translation,
+  `begin_layout_move_preview()`; every step of a translate, rotate or scale
+  drag runs it after the connector snap, the box scale's per node path
+  included), a drag of a node's Translation,
   Rotation or Scale row in the Properties window's "Local Transform" group
-  (the same set, `begin_layout_transform_preview()`).
+  (the same set, `begin_layout_transform_preview()`), and a drag of a
+  scatter's region handle ("Scatter region handles").
   - A step undoes the previous step's generation, so the layouts stand with
     the children from before the drag, runs one scene transform pass (a
     moved node's descendants take the move), builds every layout's
@@ -717,7 +788,7 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     and curve - as the release builds it, every generation built before any
     runs - and executes them. Pieces are added and removed as the count
     changes; module snap, surface snap and orient and per-element seeds
-    apply per piece (a piece rests on the bounds of its own brush), the
+    apply per piece (a piece snaps by the bounds of its own brush), the
     previous step's pieces excluded from the rays; a
     piece whose pose does not change keeps its node (the keep-matching rule).
     So a step shows exactly what the release records.
@@ -782,6 +853,187 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
   level check, support and overlap reports, region contents, height map and
   navigation input read the children as the pieces they are.
 
+## Kit layout drawing
+
+Line, grid, ring and scatter kit layout nodes draw their shape in the
+viewports (U28, `level/kit_layout_outline.hpp`,
+`level/kit_layout_indicators.hpp`,
+`Debug_visualizations::kit_layouts_visualization()`), flat in the node's xz
+plane and taken through its world matrix, x-ray as the curves are. A path
+layout draws its curve ("Drawing" in `doc/editor/curves.md`) and nothing of
+its own. The outline comes from the node's values and the run they resolve
+to (`Kit_layout_run` and its poses), so the ticks and points sit where the
+pieces are generated, before Module Snap and Surface Snap move them:
+
+- line: the segment from the first to the last element center, and a tick
+  per element across it in the node's xz plane (a line along the node's y
+  axis ticks along z);
+- grid: the closed outline of the elements' cells, half a spacing beyond the
+  outer centers (`count_x` times `spacing_x` by `count_z` times
+  `spacing_z`), with a tick per column on its -z edge and per row on its -x
+  edge, each across the edge;
+- ring: the circle, or the `arc_degrees` arc from element 0, of `radius`
+  about the center `radius` behind the node (along -z), with a radial tick at
+  each element;
+- scatter: the region outline centred on the node, the `size_x` by `size_z`
+  rectangle or the `region_radius` circle. For a scatter that is selected
+  (the node or a node below it), per generated point two circles about the
+  point's vertical axis: the footprint circle, of its item's footprint radius
+  ("Scatter layouts"), and the spacing circle, of that radius plus half of
+  `min_spacing`. Two points exactly the minimum gap apart show touching
+  spacing circles, and accepted points' spacing circles never overlap. An
+  unselected scatter shown by All draws its region alone, which keeps a view
+  of many large scatters to their outlines.
+
+- Which: the Debug Visualization popup's Kit Layouts (per view, saved with
+  the view's settings): Off, Selected (the default: the kit layout nodes that
+  are selected or have a selected node below them) or All (every kit layout
+  node of the view's scene). A node is drawn only where a generation of its
+  values would stand: the outline is made by the generation's own first part,
+  `Level_kits::prepare_layout_generation()`, which refuses in the
+  generation's order (items read with their materials, item geometry, kind,
+  run, scale 1, module snap, per-element seeded values), and a node whose
+  world matrix does not keep scale 1 (`is_layout_scale_kept()`, checked as it
+  is drawn, as the cache holds no transform) is not drawn. A refused layout,
+  locked or unlocked, is not drawn and not listed over MCP. A brush that makes
+  no renderable mesh is found by a generation only.
+- Item sizes: the outline, the scatter sampler and every other reader of an
+  item's size (the Run row, the MCP `items` reply) take the item's bounds
+  from its CPU geometry, `get_kit_geometry_bounds()` (`level/kit_shape.hpp`):
+  the min and max of the generator's facet corner points, with no brush, no
+  mesh memory and no upload. They are bit for bit the box a brush of the
+  values reports, so the outline's circles and the generation's spacing use
+  the same footprint radius. A generation makes the brushes its pieces need
+  after the preparation.
+- Unlocked value drags (the orchestrator's choice, for the user's review):
+  an unlocked layout's values are written at the release and its children
+  stay as they are, so during a value drag in the Properties window the
+  outline shows the pending values instead (`Kit_layout_indicators::
+  set_pending_values()` at each drag step); values the generation refuses
+  keep the last shown outline. The release, Escape and a deselection end it,
+  and the node's values are drawn again.
+- A value edit whose widget stops being drawn mid-edit (the Properties window
+  hidden or closed, the Kit Layout group collapsed, the row no longer shown)
+  ends as a cancel: ImGui drops the widget's active id and reports no end, so
+  `Kit_layout_editor::end_lost_edit()` checks, after the Properties rows are
+  drawn, that the open edit's widget is still the active one, and the
+  window's hide path calls `abandon_edit()`. A locked layout's preview gives
+  the children and values back and an unlocked layout's pending outline goes,
+  with no undo entry.
+- Colors and size: Settings > Debug Visualizations Style > Kit Layouts
+  (`kit_layout_color` and `kit_layout_width` for the outline and ticks,
+  `kit_layout_tick_size` the tick's half length per meter of distance to the
+  camera (screen-constant), `kit_layout_footprint_color`,
+  `kit_layout_spacing_color` and `kit_layout_circle_width` for the scatter
+  circles).
+- Cost: the parsed values, the resolved run and the outline are cached per
+  layout node and made on the first draw after a change. The cache drops the
+  named node's entry on `Kit_layout_changed_message` (an operation wrote one
+  of its values: an edit, its undo or redo; the message carries the node's
+  id), the node's entry when a live layout preview writes its values and
+  when the preview ends and gives them back (so the outline follows a held
+  value drag), a removed node's entry, and every entry at a scene close and
+  at a write of a scene's Level lengths (the Level Kit window's Module and
+  Wall Height, MCP `set_scene_settings`), since item footprints and extents
+  derive from the lengths, and at a material entering, leaving or renamed in
+  a content library (`Item_insert_remove_operation` of a Material, its undo,
+  and a write of a Material's name), since layout items name their slot
+  materials (`Level_kits::on_scene_materials_changed()`). The outline therefore shows what the next
+  generation places; after a lengths change that differs from the placed
+  pieces until the layout is generated again. World matrices are read at
+  draw time, so a node move needs no new entry; the drawing's scratch keeps
+  its capacity and a steady frame allocates nothing.
+- MCP: `level_set_layout_visualization {mode, viewport}` sets the setting
+  (off, selected, all); `level_get_layout_indicators {viewport}` returns what
+  that viewport draws this frame, collected as the drawing collects it:
+  `viewport`, `scene_name`, `mode`, `cached_layouts` (entries of the outline
+  cache), `count` and per layout node `id`, `name`, `kind`, `polyline` (world
+  points; `closed` joins the last to the first), `arcs` (`center`, `start`
+  (the point at angle 0), `normal` (the node's up axis), `radius`,
+  `degrees`), `ticks` (`position`, unit `direction`), `circles_shown` and
+  `circles` (`center`, `footprint_radius`, `spacing_radius`; radii in the
+  node's frame, which keeps scale 1) and `region_handles` (a scatter's:
+  `index`, `value`, world `position`; "Scatter region handles").
+
+## Scatter region handles
+
+A selected scatter kit layout node shows handles on its region outline in the
+viewport, and a drag of one resizes the region (U28,
+`level/kit_layout_region_tool.hpp`). The region tool is a point set tool
+(`doc/editor/point_set_editing.md`), its points the handles:
+
+- Which handles: the outline's `Kit_region_handle` list
+  (`Kit_layout_outline::region_handles`, made with the outline from the
+  values it draws, so the handles sit on the drawn outline and follow a live
+  preview and a pending outline). A rectangle has 8: its corners in the
+  polyline's order (-x -z, +x -z, +x +z, -x +z), each editing `size_x` and
+  `size_z`, then the midpoints of the edges between them (-z, +x, +z, -x),
+  each editing the size across it; a disc has 4 on its circle at +z, +x,
+  -z and -x, each editing `region_radius`. They lie in the node's xz plane
+  and go through its world matrix, so a turned or moved node carries them.
+- When they show: while the kit layout node is the only selected item (a
+  piece of a locked scatter selects the node), in every viewport of its
+  scene, whatever the view's Kit Layouts setting, as the curve tool's
+  handles show whatever the Curves setting. A node whose outline is not
+  drawn (values the generation refuses, a world scale other than 1) shows
+  none; a line, grid, ring or path layout has none. They are drawn and
+  picked as every point set's: camera-facing quads of the Point Handles
+  style, orange, white hovered, yellow selected, picked within 12 px.
+- Selection: a click on a handle selects it; one handle is selected at a
+  time (two handles of one size would pull it two ways), and Ctrl or Shift
+  on the selected handle deselects it. A plain click off the handles clears
+  the handle first, so the next click reaches the object selection. The
+  handle stays selected through its drags and their undo and redo; a change
+  of the target, or of its region or kind, clears it.
+- With the Transform gizmo: with a handle selected the gizmo sits on it in
+  the node's frame (Local mode turns with the node) and moves it; with none
+  the gizmo is the node's, at its origin. The gizmo's handles win the pick
+  over a region handle under them, so a handle on a gizmo arrow (the +x edge
+  of an unturned node, below the node's X arrow) is picked where it is clear
+  of the arrow or from another view; an unhovered region handle takes no
+  click from the gizmo or the object selection.
+- The drag: the handle's position at the press moved by the gizmo's
+  world-space delta, taken into the node's frame, gives the new values
+  (`apply_region_handle()`, scene-free): an edge's size is twice its reach
+  from the node's origin along its side, a corner's both sizes, a disc's
+  radius its distance from the origin in the xz plane; the node's y is
+  ignored. The region stays centred on the node's origin and resizes
+  symmetrically about it: the pattern is defined about the origin (a
+  scatter's points scale with the region about it), so moving the node to
+  hold the opposite edge would also move every piece's frame and make one
+  drag two edits. Each size is clamped to 0.01 - 10000 m
+  (`c_min_scatter_region_size`, `c_max_scatter_region_size`, the Properties
+  rows' range); an edge pulled past the origin holds the minimum. The gizmo
+  path's constraints and the Move tool's translate snap (Snap Enable or
+  Ctrl) act on the handle's position; the XZ plane handle in Local mode
+  keeps it on the node's plane. A rotate or scale drag moves nothing (it
+  turns and scales the handle about itself).
+- Steps: a step whose values differ from the previous step's goes through
+  the path a Properties value drag takes: a locked layout through
+  `Level_kits::preview_layout_values()` ("Live layout preview"; the children
+  regenerate, in density mode with the count the new area gives), an
+  unlocked one through `Kit_layout_indicators::set_pending_values()` (the
+  outline shows the pending values, the node and its children stay). Values
+  a step cannot take keep the last shown step. Nothing runs while the
+  pointer rests.
+- The end: the release gives the layout its values and children from before
+  the drag back and records the last shown values with
+  `Level_kits::set_layout()`, one undo entry (with the regeneration of a
+  locked layout), none when the values end where they began; Escape and
+  `cancel_component_edit` restore the start exactly and record nothing. A
+  drag whose node leaves the selection or its scene is given up: the start
+  is restored and the release records nothing; a removed node or a closed
+  scene cancels it.
+- MCP: `level_select_region_handle {scene_name, layout_id, index}` makes the
+  node the only selected item and selects the handle (`index` omitted
+  clears it); `level_get_region_handles {}` returns the tool's `layout`
+  (`id`, `name`, `scene_name`), its `handles` (`index`, `value` - `size_x`,
+  `size_z`, `size_x_z` or `region_radius` - and world `position`),
+  `selected` and `gizmo_on_handle`. A script drags a handle with
+  `get_transform_handles` and `mouse_drag` as a user does, or moves it
+  exactly with `transform_selection` (the anchor's world translation;
+  `end_edit` false holds the edit as a held drag).
+
 ## Parameter changes
 
 `Level_kits::set_parameters(node, values)` gives a placed piece new parameter
@@ -827,17 +1079,34 @@ step").
 
 ## Replace
 
-`Level_kits::replace_shape(scene_root, shape, replacements)` (R5.8, D3.10)
-gives placed pieces another shape as one undo entry. Per piece it executes a
-`Kit_piece_parameters_operation` that swaps `Kit_piece.shape` with the other
-four ("Parameter changes"): the mesh primitives become one per slot of the
-new shape, the collision shape the new brush's (the static body rebuilt),
-`Brush_placement.brush` and `Kit_piece.parameters` the new values. Palette
-materials the new slots need are inserted first in the same entry. The node
-keeps its id, name, transform bit for bit (it is not rested on a surface;
-`level_snap_to_surface` or Snap Selected To Surface does that), parent,
-children, group and selection; undo gives back the shape, parameters, mesh
-primitives with their materials, brush and collision shape exactly.
+`Level_kits::replace_shape(scene_root, shape, replacements, surface)` (R5.8,
+D3.10, U24) gives placed pieces another shape as one undo entry. Per piece it
+executes a `Kit_piece_parameters_operation` that swaps `Kit_piece.shape` with
+the other four ("Parameter changes"): the mesh primitives become one per slot
+of the new shape, the collision shape the new brush's (the static body
+rebuilt), `Brush_placement.brush` and `Kit_piece.parameters` the new values.
+Palette materials the new slots need are inserted first in the same entry.
+The node keeps its id, name, parent, children, group and selection; undo
+gives back the shape, parameters, mesh primitives with their materials,
+brush, collision shape and transform exactly.
+
+- Snap (U24): with `surface` snapping (Snap To Surface on, or Orient To
+  Surface, which implies the snap as for placement) each replaced piece
+  takes the resting pose `find_surface_placement()` ("Surface placement")
+  finds for the new shape's bounds from the node's world pose, in the same
+  entry: a `Node_transform_operation` after the shape swaps, its children
+  riding with it. Parents are searched before children: a replaced piece
+  below another one starts its search from the pose its ancestor's snap
+  carries it to, and its local transform is taken against that ancestor's
+  snapped pose, as `snap_to_surface()` does (`plan_surface_snaps()`). The
+  replaced pieces of the call are not surfaces for each other (their old geometry is still in the raytrace scene); every other
+  mesh is, a listed piece of the shape already included. A piece that finds
+  no place within the maximum distance, or rests already, keeps its
+  transform bit for bit, as every piece does when `surface` does not snap.
+  A piece of the shape already is not snapped. The Level Kit window passes
+  the Surface_snap_config pair (`get_surface_settings()`);
+  `level_replace_pieces` takes its own surface arguments, as
+  `level_place_pieces` does, and does not read the UI setting.
 
 - Parameters (`carry_parameter_values()`, `kit_replace.hpp`): a parameter of
   the new shape that the old shape has with the same name and type keeps its
@@ -853,17 +1122,26 @@ primitives with their materials, brush and collision shape exactly.
 - Material slots (`match_material_slots()`): a new slot keeps the material of
   the old slot of the same name (a tree's foliage on a bush), the others take
   their palette default; a given material per slot overrides both.
-- Refused, naming the piece and changing nothing for any piece: a node that
-  is not a kit piece of the scene, a kit layout node (its items' shapes are
-  its own values, "Kit layout nodes"), a child of a locked kit layout node
-  (the layout refusal), a node listed twice, a record that does not read, a
-  mesh whose primitive count is not its shape's slot count (a piece that
-  keeps a loaded mesh) and values the new shape refuses. A child of an
+- Skipped (U24), the other nodes replaced: a kit layout node (its items'
+  shapes are its own values, "Kit layout nodes"; a selected one is not
+  replaced through), a child of a locked kit layout node (the layout
+  refusal; the selection never holds one, so it is reached by id only), a
+  group node (an `Xform`; not replaced through), a node that is not a kit
+  piece, a record that does not read and a mesh whose primitive count is not
+  its shape's slot count (a piece that keeps a loaded mesh), decided in that
+  order (`classify_replace_target()`, `kit_replace.hpp`). The result lists
+  each skipped node with its `Kit_replace_skip` reason and a message naming
+  it (`find_replace_skip()`, which `level_replace_pieces` also asks before it
+  reads `parameters` for a node, so a skipped node never refuses them).
+- Refused, naming the replacement and changing nothing for any piece: a node
+  of another scene, a node listed twice, values the new shape refuses, a
+  material the slots refuse and a surface direction or maximum distance out
+  of range. A child of an
   unlocked kit layout node is replaced as any piece is; a later lock or
   regeneration of the layout discards the replace, as it discards parameter
   edits. A piece of the shape
-  already is left as it is (`replaced` false); when every piece is, no entry
-  is recorded.
+  already is left as it is (`replaced` false); when nothing is replaced, no
+  entry is recorded.
 
 ## Connectors
 
@@ -919,6 +1197,102 @@ to a top connector tips the piece over; the twist chooses its heading.
   of names across that plane (start and end, left and right, front and back)
   changing sides.
 
+### Connector switches
+
+A placed piece's connectors can be switched off (U26, U33): the author turns
+off the ones a piece should not offer, such as a floor slab's side
+connectors.
+
+- Values: two attached values of the Kit_piece group on the piece's node
+  (`level/kit_piece.hpp`), both saved with it: `Kit_piece.connectors_enabled`
+  (true by default), the switch of all of the piece's connectors, and
+  `Kit_piece.disabled_connectors` (empty by default), the names of the
+  connectors switched off one by one, comma separated, sorted, unique and
+  without spaces, each a connector of the piece's shape (every write path
+  holds this; "Raw writes" below). A connector is enabled
+  when the piece switch is on and its name is not listed
+  (`Kit_connector_switches::is_enabled()`, `level/kit_connector.hpp`). A
+  switch at its default is written as no local value, so a piece with every
+  connector on carries neither value in the file, and a node without them
+  (an older scene) has every connector enabled. The list keeps the names off
+  rather than on, so a connector a shape gains later is on.
+- One query: `Level_kits::get_local_connectors()` and
+  `get_world_connectors()` take `Kit_connector_set::all` or `enabled`, the
+  latter dropping the disabled connectors in the shape's order; every consumer
+  reads through them or through `Kit_connector_switches::is_enabled()`:
+  - Connector indicators: a disabled connector is not drawn. A distinct
+    "disabled" style would put connectors in the view that nothing can join,
+    and the Properties rows already show which are off.
+  - The Level Kit window's Connect rows offer the target's and the moved
+    piece's enabled connectors; a chosen connector switched off gives way to
+    the first enabled one. Place Connected joins to an enabled target
+    connector; a new piece has every connector enabled.
+  - Joins (`resolve_connect()`: `connect_piece()`, `level_connect_pieces`,
+    `level_place_pieces` connect): a disabled connector of the moved piece or
+    of the target is refused, the message naming it and listing the enabled
+    ones.
+  - Connector snap: a disabled connector is neither a moved connector nor a
+    target (U27: "any pair when both connectors are enabled"); the gathered
+    points keep their index in the shape's order for the tie rule.
+  - `level_get_connectors` lists every connector with `enabled` and the
+    piece's `connectors_enabled` and `disabled_connectors`.
+- Editing: `Level_kits::set_connector_switches()` writes the piece switch and
+  any connector switches of one edit as one undo entry (a
+  `Property_set_operation` per changed value), none when nothing changes. A
+  name the piece's shape does not have, a shape without connectors (a rock), a node that is not a kit piece and a
+  child of a locked kit layout node are refused. The Properties window's
+  "Kit Piece" group of a piece whose shape has connectors shows a Connectors
+  checkbox and one "Connector <name>" checkbox per connector (disabled while
+  Connectors is off), each click one entry. Over MCP:
+  `level_set_piece_connectors`.
+- Raw writes: `set_item_property`, the developer-mode raw rows (a
+  multi-selection included) and Paste Properties write the values directly.
+  Each write is checked against the piece's shape at that time
+  (`Level_kits::check_connector_switch_write()`, as
+  `check_layout_value_write()` checks kit layout values) and refused with a
+  message, nothing changed: `connectors_enabled` on a shape without
+  connectors, a list naming a connector the shape does not have (exact and
+  case sensitive: `Top` is not `top`), and a list that is not in the
+  canonical form (the message gives that form to write). A refused raw row
+  edit is taken back without an undo entry. Paste Properties checks the
+  record the paste leaves on each target: a paste carries every local value
+  of the source, the record included, so a piece pasted from a piece of
+  another shape takes that shape's record and switches together; a paste
+  whose switches the left record refuses pastes nothing on any target, logged
+  as `Paste Properties onto '<name>' refused, nothing pasted: <reason>`. A
+  source with every connector on holds no switch value and leaves the
+  target's switches: Paste Properties copies local values only
+  (`doc/erhe/property_system.md` D12: Copy Properties reads the item's local
+  values), for every property.
+- Change: every write of either value, its undo and redo reach
+  `App_context::on_item_property_changed()`, which drops the piece's cached
+  indicator frames and queues `Kit_piece_connectors_changed_message`; the
+  Connect rows and the Properties rows read the piece again on it. A drag
+  gathers the switches at its start.
+- Shape changes: the names are the same at every parameter value (D1.12),
+  so a parameter change keeps the switches. Replace keeps the switch of each
+  listed name the new shape also has and clears the others in the replace's
+  undo entry; a new shape without connectors also clears
+  `connectors_enabled`. Undo of the replace gives both values back.
+- A file whose switch values a write would refuse (hand-edited: unknown or
+  wrong-case names, spaces, an unsorted list, `connectors_enabled` on a shape
+  without connectors) loads with the values as they are:
+  `Level_kits::refresh_scene()` names them in one `editor.scene` warning per
+  scene (`... connector switch value(s) kept as loaded ...`). The list is
+  then read with spaces trimmed and empty entries skipped; a listed name that
+  is a connector of the shape is off, any other has no effect, and the next
+  write through any path is checked as above.
+- Mirror and duplicate: a duplicated piece copies its switches; a mirrored
+  piece keeps them by name, so a switch follows its name to the other side
+  of the mirror plane.
+- Kit layout children: a generated child has every connector enabled (the
+  placement writes no switches). The kept-child rule compares record,
+  materials and pose only, so a child kept by a regeneration keeps its
+  switches and a child made again has every connector on. A locked layout's
+  children are not edited directly, so their switches are refused while it
+  is locked; switches per layout item are a later step
+  (`doc/plans/level_tools_implementation.md`).
+
 ## Parameter rows
 
 `kit_parameter_rows.hpp` draws a piece's parameters for both windows that edit
@@ -948,8 +1322,9 @@ valid change in the same way, without an undo entry.
 
 The Properties window draws a single selected piece's "Kit Piece" group with
 it (`Property_group_rows`, `doc/editor/properties_window.md`): the shape's
-display name (its id and description as tooltip), one row per parameter and,
-for stairs, the layout line. A piece whose record does not read shows its shape
+display name (its id and description as tooltip), one row per parameter,
+for stairs, the layout line, and for a shape with connectors the connector
+switches ("Connector switches"). A piece whose record does not read shows its shape
 id and the problem instead. A multi-selection shows the group for no piece, as
 the window's other hand-written groups. The Level Kit window's Selection section
 is the same editor ("Level Kit window").
@@ -986,11 +1361,13 @@ spread, and the space - a path's curve length; the Curve group beside it
 shows the curve's own rows), per item a group "Item <n>: <shape>" with its
 Shape line (and the stairs line and a refusal), its parameter rows
 ("Parameter rows", seed mask toggles included), one `<slot> material` combo
-per slot (the slot's default shown for an empty name) and Remove Item
+per slot (the slot's default shown for an empty name), Weight (0 - 1000, the
+odds a scatter picks the item by; the other kinds take item i modulo the item
+count) and Remove Item
 (disabled for the last item); Add Shape Item (the shape the Brush tool
 places, chosen in the Level Kit window, with its rows' values and slot
-materials); Module Snap, Surface Snap, Surface Orient, Random Seeds and
-Layout Seed; Lock (its tooltip warns that it discards the edits made to the
+materials); Module Snap, Surface Snap, Surface Max Distance, Surface Orient,
+Per Piece Seed and Layout Seed; Lock (its tooltip warns that it discards the edits made to the
 children), Unlock and Refresh; a Message row with the last result or refusal
 in red. A drag commits when it ends, a radio button, checkbox, combo entry or
 button at once; each commit queues one `set_layout()`, `set_layout_lock()` or
@@ -1005,7 +1382,7 @@ is recomputed per frame. A refused or unchanged edit reads the node's values
 back. A drag of a row of a locked layout (an item's parameter rows, the
 pattern's Count, Gap, Direction, Step, Length, Count X / Z, Spacing X / Z,
 Radius, Arc, Density, Size X / Z, Region Radius, Min Spacing and Yaw Min /
-Max, the Layout Seed) previews each change through
+Max, an item's Weight, the Layout Seed, the Surface Max Distance) previews each change through
 `Level_kits::preview_layout_values()` ("Live layout preview"), queued like the
 commit; the Run line shows the previewed run. Typed input previews each
 typed character the same way and commits on Enter; Escape gives the starting
@@ -1016,95 +1393,94 @@ unlocked layout's row changes the value alone at the release.
 
 ## Surface placement
 
-`find_surface_placement()` (`level_queries.hpp`) computes the resting
-transform of a mesh from its node-space bounds, a start pose (position,
+`find_surface_placement()` (`level_queries.hpp`) computes the snap to
+surface transform of a mesh from its node-space bounds, a start pose (position,
 rotation, scale in the scene root's space) and `Surface_options` (`snap`,
-`orient`, a unit `direction`, down by default). It commits the scene's
-raytrace scene and casts rays along the direction against content meshes.
-A ray's surface is its nearest front face (geometric normal against the ray)
-of a content mesh that is not excluded - the excluded meshes are the ones
-being moved. A `erhe::raytrace::IHit_filter` (`doc/erhe/raytrace.md` "Hit
-filters") judges each candidate hit on its own, so the excluded meshes are
-invisible to the ray, faces that leave a solid are not surfaces, and of two
-coincident faces the front face is the surface whichever the traversal meets
-first: a piece on a hill sitting flush on a slab rests on the hill whether its
-own bottom face or the hill's top is met first, and a ray that starts inside
-the hill reaches the slab top on the hill's bottom.
+`orient`, a unit `direction`, down by default, and `max_distance`, meters, 1
+by default). It commits the scene's raytrace scene and searches along the
+direction, either way, for the nearest place where the piece rests and fits
+(U23, U30). The excluded meshes - the ones being moved - are not there.
 
-- Every ray belongs to a base point and travels along the direction. A snap
-  ray starts on the bounds' top face, at the point above its base point
-  along the piece's up axis; the orient ray starts one piece height (the
-  bounds' height times the scale) back from the base center against the
-  direction. Either start lies at least 1 mm back from its base point along
-  the direction, so a flat piece (zero height or Y scale) reaches the
-  surface it rests on. The resting distance is measured from the base, so it
-  is negative when the piece rises. A ray rests its base point on the
-  highest surface farther than 0.1 mm from its start, so one cast lifts a
-  piece by less than its own height (1 mm for a flat piece): a roof at or
-  over the piece's height above its base is not a surface, nor is the top of
-  an equally high piece standing flush beside it.
-- Snap casts above the base center and the four base corners (the bounds'
-  minimum Y face) and moves the mesh along the direction by the smallest
-  resting distance, so the base rests on the highest surface under any of
-  them; a piece hanging over an edge rests on the edge. After a rise of
-  more than 0.1 mm snap casts again from the moved pose, whose higher top
-  plane can reach a further surface under a base point, until a cast rises
-  no more. A piece therefore climbs a chain of surfaces each within its own
-  height of the one before - a stack of thin slabs, stairs under its base
-  points, a wall built of courses no higher than the piece - to its top in
-  one rest; a single solid piece more than its height taller (a crate
-  against a 3 m wall) keeps it where it is, and a piece buried deeper than
-  its own height, with every ray starting inside the solid, drops to the
-  first surface under the solid's bottom (a block inside a hill on a slab
-  rests on the slab top under the hill), placed or moved alike.
-- Orient casts one ray, through the base center. The mesh turns by the
-  shortest rotation that takes its start pose's up axis to the hit's normal
-  (turned to face against the ray), which keeps the heading of a piece that
-  starts upright and otherwise turns it only as that rotation does, and its
-  base center comes to rest on the hit point. The normal comes from the
-  surfaces within 0.1 mm of the nearest hit, by one order that does not
-  depend on traversal: the normal most against the ray first, then the
-  normal's components. A base center exactly on an edge between faces of
-  different normals - a piece on the grid line where a ramp's low edge meets
-  the floor - takes the flatter face (the floor). Where that face continues
-  under the other one (ground running under a ramp) a rest again from a
-  start that differs by rounding takes it again; where both faces end at the
-  edge (a ramp tile beside a floor tile, a ridge) a start one rounding step
-  to either side sees one face only and takes its normal. The base center is the pivot of
-  the turn and moves only along the direction, so the turn moves no ray: a
-  rested pose casts onto its own hit and turns by nothing. After a rise of
-  more than 0.1 mm orient casts again from the raised base center, as snap
-  does, so an oriented piece climbs a chain of surfaces under its base center.
-  The surface under the base center alone decides: a piece straddling the
-  crease between a slope and flat ground takes the slope's normal when its
-  base center is over the slope and stays upright when it is over the ground.
-  Orient with snap is orient.
-- After sixteen casts that still rise the pose is returned with `settled`
-  false; the sites that record a rest (placement, a layout generation that
-  is recorded, `snap_to_surface()` applied, the Transform tool's recorded
-  edit) log one warning per operation with the count of such pieces, and
-  preview steps do not log.
-- A face that leaves a solid is no surface: an overhang over the base, the
-  bottom face of a piece resting on the start plane (on the moved piece's
-  top), or the bottom of a solid the ray starts in.
-- With no hit the pose is unchanged and `surface_found` is false.
+- A line runs along the direction through each base point: for snap the
+  base center and the four base corners (the bounds' minimum Y face, the
+  corners 1 mm in world units inside the footprint so a face flush with a
+  side of the piece is not met along its edge), for orient the base center
+  alone. Two rays from the base point, one each way along the line, collect
+  the hit points of the line's search window, from `max_distance` below the
+  base point to `max_distance` plus the piece's extent above it: every face
+  of a content mesh that is not excluded and not parallel to the line, as a
+  height from the base point, in one traversal per ray (a hit filter that
+  records each candidate with its distance and accepts none,
+  `doc/erhe/raytrace.md` "Hit filters"). Heights are measured from the base
+  point, so their precision near the base does not depend on the search
+  distance. The hit points are kept in per-thread buffers that grow and keep
+  their capacity; nothing caps their count.
+- A place is a displacement along the direction at which one line's base
+  point lies on a surface hit - a face whose normal is against the direction,
+  the one use of a face's facing - and no line has a hit point strictly
+  inside the piece's span there (from the base point to the piece's top
+  along the direction, taken from the start pose, at least 1 mm, and 0.1 mm
+  in from both ends). Free space is the absence of hit points: a face of
+  either facing blocks a span it lies in, and solids are not reconstructed,
+  so fit is tested along the lines only, not as a volume overlap.
+- A piece inside a solid taller than itself has no hit point in its span,
+  so the search can snap it to a surface inside that solid (the slab top
+  under a hill, inside the hill; the slab top under a wall the piece
+  overlaps) when that is nearer than the solid's top (U31; considering
+  solidness is future work).
+- The place with the smallest displacement within `max_distance` is the
+  one taken; of two at the same distance, along and against the direction, the
+  one along the direction (lower) wins. Snap moves the mesh by it; a piece
+  hanging over an edge rests on the edge, a piece whose span holds the top
+  of a solid it stands in rises onto that top or drops to the nearer free
+  surface, a piece in a gap lower than itself goes elsewhere, and a piece
+  over a stack of thin slabs with gaps lower than itself goes to the top
+  slab when that is within the distance.
+- Orient searches its line the same way and then turns the mesh by the
+  shortest rotation that takes its start pose's up axis to the normal of the
+  top face at the place, which keeps the heading of a piece that starts
+  upright and otherwise turns it only as that rotation does; its base center
+  comes to rest on that face. Where several top faces meet at the place the
+  normal comes from one order that does not depend on traversal: the normal
+  most against the direction first, then the normal's components. A base
+  center exactly on an edge between faces of different normals - a piece on
+  the grid line where a ramp's low edge meets the floor - takes the flatter
+  face (the floor). Where that face continues under the other one (ground
+  running under a ramp) a snap again from a start that differs by rounding
+  takes it again; where both faces end at the edge (a ramp tile beside a
+  floor tile, a ridge) a start one rounding step to either side sees one face
+  only and takes its normal. The base center is the pivot of the turn and
+  moves only along the direction, so the turn moves no line: a snapped pose
+  finds its own place and turns by nothing. The surface under the base
+  center alone decides: a piece straddling the crease between a slope and
+  flat ground takes the slope's normal when its base center is over the
+  slope and stays upright when it is over the ground. Orient with snap is
+  orient.
+- With no place within the distance the pose is unchanged and
+  `surface_found` is false; a kit layout element (a path layout's included)
+  then stays where its pattern puts it.
 
-A rest is idempotent for one exclusion set: resting again with the same
-excluded meshes answers zero, and with orient keeps the rotation, except
-for an oriented piece whose base center is on an edge where both faces end.
-The
-answers of different callers for the same
-pose agree only as far as their exclusion sets do. Layout generation and its
-preview steps exclude the layout's own pieces (the previous generation),
-`Level_kits::snap_to_surface()` (`level_snap_to_surface`) excludes every
-mesh of the call, the Transform tool excludes the moved nodes and the
+Snap to surface is idempotent for one exclusion set: only hit points within the
+piece's span at a candidate within `max_distance` are read, so the answer
+does not depend on where the window ends; a snapped pose's surface hit is at
+its base, outside its span, so the pose is a place at displacement 0 (within
+0.1 mm), the nearest there is, and snapping again with the same excluded
+meshes answers zero and returns the pose bit for bit, with orient keeping
+the rotation, except for an oriented piece whose base center is on an edge
+where both faces end. A pose that found no place finds none again. The answers of different callers for the same pose agree only as far as their
+exclusion sets do. Layout generation and its preview steps exclude the
+layout's own pieces (the previous generation),
+`Level_kits::snap_to_surface()` (`level_snap_to_surface`) searches parents
+before children, a child from the pose its ancestor's snap carries it to and
+its local transform taken against that ancestor's snapped pose
+(`plan_surface_snaps()`), and excludes every mesh of the call, the Transform tool excludes the moved nodes and the
 meshes below them, and the support report (`find_support()`) excludes only
-the piece itself: a tree of a rested ring reports a negative distance where
+the piece itself: a tree of a snapped ring reports a negative distance where
 a neighbour's canopy lies within its height above its base, while
 `level_snap_to_surface` over the whole ring answers zero.
 
-Placement computes the resting transform before the insert, so the pieces of
-one `place()` call are not surfaces for each other: each rests on what was in
+Placement computes the snapped transform before the insert, so the pieces of
+one `place()` call are not surfaces for each other: each snaps to what was in
 the scene before the call. The module snap applies first, then the surface
 options.
 
@@ -1126,41 +1502,54 @@ the `find_surface_placement()` overload that takes a committed
 Snap To Surface and Orient To Surface are one pair of editor settings,
 `surface_snap` (`Surface_snap_config`, `editor_settings.json`; both off by
 default, because they change how the Transform tool moves every mesh). The
-same config holds Connector Snap, `connector_snap_distance` (meters, 0 = off,
-the default; "Connector snap" below). The settings have one owner:
+same config holds Surface Max Distance, `max_distance` (meters, 1 by default;
+"Surface placement"; a loaded value that is not a finite number >= 0 is
+reported in the log and replaced by 1, as is `level_kit.layout_surface_max_distance`,
+`Level_kits::validate_surface_settings()`), Connector Snap, `connector_snap_distance` (meters, 0 = off,
+the default; "Connector snap" below), and Connector Snap On Axis, `connector_snap_axis_mode`
+(`Connector_snap_axis_mode`: `full_offset`, the default, or `stay_on_axis`; a file older than
+`Surface_snap_config` version 4 reads the default). The settings have one owner:
 `Level_kits::get_surface_settings()`, `set_surface_snap()`,
-`set_surface_orient()`, `get_connector_snap_distance()` and
+`set_surface_orient()`, `set_surface_max_distance()` (the distance must be
+a finite number >= 0, `check_surface_max_distance()`; the widgets clamp to 0 -
+1000 m and the MCP tools refuse other values), `get_connector_snap_distance()` and
 `set_connector_snap_distance()` (a negative or non-finite value is stored as
-0), which touch the settings store. Every widget writes through them at its
+0), `get_connector_snap_axis_mode()` and `set_connector_snap_axis_mode()`, which touch the settings store. Every widget writes through them at its
 change (`level/surface_settings_ui.hpp`), so all of them show the same state:
 
-- the Level Kit window's checkboxes and its "Connector Snap" drag;
-- two toggle buttons and a narrow Connector Snap drag, labelled with the
+- the Level Kit window's checkboxes, its "Surface Max Distance" drag after
+  Snap To Surface, its "Connector Snap" drag and its "Connector Snap On Axis" checkbox;
+- two toggle buttons with a narrow Surface Max Distance drag between them
+  (named "Surface Max Distance") and a narrow Connector Snap drag, labelled with the
   magnet icon ("Connect" without the icon font), in every viewport's
   toolbar, after the Move / Rotate / Scale buttons (icons arrow-collapse-down
   and slope-uphill, tooltips "Snap To Surface" and "Orient To Surface"; they
   report a checked state to the item recorder, so `get_imgui_items` lists
   them as checkable items named "Snap To Surface" and "Orient To Surface";
-  the drag is named "Connector Snap");
-- the rows "Snap To Surface", "Orient To Surface" and "Connector Snap" of the
-  Transform window's Move tool group, after "Snap Enable".
+  the drag is named "Connector Snap"), followed by a toggle button for
+  Connector Snap On Axis (icon axis-arrow-lock, "Axis" without the icon font,
+  named "Connector Snap On Axis");
+- the rows "Snap To Surface", "Surface Max Distance", "Orient To Surface",
+  "Connector Snap" and "Connector Snap On Axis" of the Transform window's Move tool group, after "Snap
+  Enable".
 
 Kit placement in the viewport reads the pair through
 `get_placement_settings()`. MCP `get_surface_snap_settings {}` reads the
-settings and `set_surface_snap_settings {snap, orient,
-connector_snap_distance}` sets them (editor state, no undo entry; an omitted
-argument keeps its value; a negative or non-number distance is refused); both
-reply `snap`, `orient` and `connector_snap_distance`. The MCP placement and
+settings and `set_surface_snap_settings {snap, orient, max_distance,
+connector_snap_distance, connector_snap_axis_mode}` sets them (editor state, no undo entry; an omitted
+argument keeps its value; a negative or non-number distance and a mode other than
+`full_offset` or `stay_on_axis` are refused); both
+reply `snap`, `orient`, `max_distance`, `connector_snap_distance` and `connector_snap_axis_mode`. The MCP placement and
 transform tools never read them: they take their own arguments.
 
 ### Transform tool
 
-With the pair on, a translate drag of the gizmo rests the moved meshes on the
-surface under them at every step (D4.6), a zero step included (a press without
+With the pair on, a translate drag of the gizmo snaps the moved meshes to their
+nearest places on the surface ("Surface placement") at every step (D4.6), a zero step included (a press without
 motion, a drag back to the press point or under half a move grid step, a zero
 `drag_selection`). After `Transform_tool::adjust_translation()` writes the
 step's transforms (for a zero step the drag-start pose exactly),
-`apply_drag_surface_step()` runs `Transform_tool::rest_on_surface()`:
+`apply_drag_surface_step()` runs `Transform_tool::snap_to_surface()`:
 
 - It acts on the drag's targets that are meshes (kit pieces or not), with the
   meshes' own bounds (`mesh_local_bounds()`). Nodes without a mesh, nodes
@@ -1178,7 +1567,7 @@ step's transforms (for a zero step the drag-start pose exactly),
 - The gizmo anchor moves by the average move of the targets (a ridden target
   counts its ancestor's move), so the handles stay with the selection.
 - The step allocates nothing (scratch members); the trace line "surface step:
-  N entries, M rested: T ms" of `editor.transform_tool` times it. A step over
+  N entries, M snapped: T ms" of `editor.transform_tool` times it. A step over
   50 pieces takes about 1.7 ms (headless release build).
 
 Rules:
@@ -1187,41 +1576,45 @@ Rules:
   direction (the Y arrow, with the default direction down) is left as the
   tool computed it, so a piece lifts off a surface. Axis arrows along other
   axes and the plane handles snap.
-- Only translate drags rest: rotate and scale drags are left as computed
+- Only translate drags snap to the surface: rotate and scale drags are left as computed
   (the scale tool has three write paths, and orient would fight a rotation).
-- The drag is one undo entry, recorded at release from the rested transforms;
+- The drag is one undo entry, recorded at release from the snapped transforms;
   its undo restores the transforms from before the drag, rotation included.
 - The gizmo reads the pair when the drag starts. The Transform window's
-  numeric edits do not rest.
+  numeric edits do not snap to the surface.
 
 MCP calls take explicit arguments instead of the UI pair
 (`doc/agents/mcp_api_guidelines.md`):
 
-- `transform_selection {..., surface_snap, surface_orient}` (both default
-  false): after all edits of the call, `rest_on_surface()` with those options;
-  they need a translation of a node selection. The reply adds `surface_snap`,
-  `surface_orient`, `surface_found_count` and per node `surface_found`.
-- `drag_selection {..., surface_snap, surface_orient}` (both default false,
+- `transform_selection {..., surface_snap, surface_orient,
+  surface_max_distance}` (default false, false, 1 m): after all edits of the
+  call, `snap_to_surface()` with those options; they need a translation of a
+  node selection. The reply adds `surface_snap`, `surface_orient`,
+  `surface_max_distance`, `surface_found_count` and per node `surface_found`.
+- `drag_selection {..., surface_snap, surface_orient, surface_max_distance}`
+  (default false, false, 1 m,
   read when the drag starts; refused on a rotate or scale drag): every step of
-  the translate drag rests as a gizmo drag does, without the axis rule. The
+  the translate drag snaps to the surface as a gizmo drag does, without the axis rule. The
   reply adds both options and per node `surface_found` and
   `world_rotation_xyzw`.
-- `set_node_transform` does not rest.
+- `set_node_transform` does not snap to the surface.
 
 ### Connector snap
 
-With Connector Snap above 0, a translate drag of the gizmo moves the dragged
-nodes so that a connector of theirs meets a connector of another kit piece
-when the two are within the distance (R5.13, D3.13,
+With Connector Snap above 0, a translate, rotate or scale drag of the gizmo
+moves the dragged nodes so that a connector of theirs meets a connector of
+another kit piece when the two are within the distance (R5.13, D3.13, U27,
 `level/kit_connector_snap.hpp`); the drag goes on uninterrupted:
 
 - Moved set: the drag's targets that are not locked against viewport
   transforms and have no moved ancestor (the moved roots). Their connectors
-  are those of every kit piece at or below a moved root, so a dragged group
+  are the enabled connectors ("Connector switches") of every kit piece at or below a moved root, so a dragged group
   or layout node snaps by its pieces' connectors. The moved connectors are fixed at drag
-  begin in their root's frame, so the children a locked layout regenerates
-  during the live preview snap by their pre-drag positions.
-- Targets: every kit piece of the scene that is not a drag target or below
+  begin in their root's frame (`connector_in_root()`, `level/kit_connector.hpp`),
+  so each step carries them with the root's pose of that step, its rotation
+  and scale included, and the children a locked layout regenerates during
+  the live preview snap by their pre-drag positions.
+- Targets: the enabled connectors of every kit piece of the scene that is not a drag target or below
   one, children of locked kit layout nodes included. A selected piece locked
   against viewport transforms is neither moved nor a target.
 - Every piece's connectors are taken through its full world matrix, so
@@ -1234,11 +1627,36 @@ when the two are within the distance (R5.13, D3.13,
   connector positions, into persistent scratch (`Kit_connector_drag_snap`).
   A drag with a body pulled through physics does not snap: the simulation
   writes that node, so the set could not move by one offset.
-- Step order: the Move tool's grid snap, the tool's translate, the surface
-  rest ("Transform tool" above), then the connector snap, then the live
+- Step order: the Move tool's grid snap, the tool's translate, the snap to
+  surface ("Transform tool" above), then the connector snap, then the live
   layout preview, so the preview and the release take the snapped pose. The
-  snap comes last and is not rested again, because co-located connectors
-  define the pose; a rest after it would part them again.
+  connector snap comes last and is not snapped to the surface again, because
+  co-located connectors define the pose; a snap to surface after it would
+  part them again. A rotate or scale step is the tool's rotation or scale
+  (after the Rotate tool's angle snap), then the connector snap, then the
+  live layout preview; it has no snap to surface.
+- Rotate and scale drags (U27): the rotate ring and arcball, and the scale
+  axis, plane, uniform and box face handles. The step's rotation or scale is
+  about the pivot fixed at the press (the rotation center, the scale
+  center or the box face opposite the dragged one, all where they were at the
+  press) and applies to the drag-start pose, then the moved set translates
+  by the pair's offset; the snap never changes the step's rotation or scale.
+  So while a step is snapped the pivot does not stay put: the rotation
+  center moves with the set, and the box's opposite face moves off its press
+  position by the offset. The gizmo anchor translates with the set, but the
+  next step again rotates or scales the drag-start pose of every entry about
+  the press pivot (the box scale's per node path first puts every entry back
+  at its drag-start pose, the ones it does not resize included), so no
+  offset carries into a later step.
+- Scaled and mirrored moved sets: the moved connectors follow the root's
+  full world matrix of the step (U22: non-uniform scale and the shear it
+  makes over a turned root, a mirror; outward stays the face normal), as the
+  unit tests `Kit_connector_drag_carry` check. A step whose scale collapses
+  a root's axis to zero (a degenerate frame, `is_degenerate_frame()`) takes
+  that root's connectors out of the search: the step stays unsnapped unless
+  another root's pair is in reach. Editor runs do not drag a placed piece to
+  a negative scale (that aborts the Debug build in `draw_list_scene`,
+  `doc/plans/open_items.md`); the mirror is covered by the unit tests.
 - Each step carries the moved connectors by their root's world transform and
   the targets' by theirs (expired or hostless nodes skipped) and
   `find_connector_snap()` takes the closest (moved, target) pair whose
@@ -1254,12 +1672,75 @@ when the two are within the distance (R5.13, D3.13,
 - Every step starts from the unsnapped pose of that step, so there is no
   latch: the drag snaps again when it comes back and unsnaps when the
   unsnapped pair is farther than the distance.
-- The drag is one undo entry recorded at release with the snapped pose, by
-  the rule of `doc/editor/transform.md` "Undo record"; a press without motion
-  with a connector at rest within the distance snaps and records that entry.
+- Motion first (U27): the snap starts only after the pointer has moved. Steps
+  look for no pair until one step of the drag has a nonzero pointer motion
+  since the press (`Transform_tool::note_translate_drag_motion()`: the Move
+  tool's projected pointer position minus the press point, before the grid
+  snap; for `drag_selection` the step's translation;
+  `Transform_tool::note_node_drag_motion()` for the others: the Rotate
+  tool's ring angle before the angle snap or an arcball displacement, the
+  Scale tool's factor other than 1, its uniform drive or a moved box face,
+  and for `drag_selection` a nonzero angle or a scale other than 1); from
+  then on every step may snap, a drag out and back to the press point, under
+  half a move grid step or snapped back to angle 0 included. A press and release on a handle changes nothing and records
+  nothing ("Undo record" of `doc/editor/transform.md`); `transform_selection`
+  counts its edits as motion.
+- Stay on axis (U27): with Connector Snap On Axis (`stay_on_axis`, read when
+  the drag starts) an axis handle drag applies only the offset's component
+  along the dragged axis and a plane handle drag only its part in the dragged
+  plane (`constrain_connector_snap_offset()`, `level/kit_connector.hpp`), in
+  the basis the Move tool drags in (`Subtool::get_basis()`: global, or the
+  anchor's orientation in local, reference and selection space), so the piece
+  stays on its axis or plane. The candidate is still the closest pair by
+  their full distance within the setting, and the pair may stay apart (an
+  offset across the axis applies nothing). So a near pair lying across the
+  axis wins over a farther pair along it: the step reports `snapped` with an
+  applied offset near zero, and the pair along the axis does not snap. A drag without a handle
+  (`drag_selection`, `transform_selection`) and `full_offset` apply the full
+  offset. The setting constrains translate drags only: a rotate ring or a
+  scale handle names no direction to translate along, so a rotate or scale
+  drag applies the full offset (`constraint` `free`) whatever the setting.
+  The locked channel rule tests the applied offset.
+- Suspend key (U27): while a key of the command
+  `Transform_tool.suspend_connector_snap` is down (left or right Shift by
+  default, any other modifiers; bindable in the Input Bindings window,
+  `doc/editor/input_bindings.md`) the steps of a pointer drag do not snap.
+  Shift is the default because it has no meaning during a Transform node
+  drag, also when held at the handle press (the drag binding takes any
+  modifiers; the Shift selection gestures belong to the mesh component modes,
+  where the connector snap does not run) and in ImGui; Alt is not, because
+  an Alt press and release with no active item toggles ImGui's menu layer on
+  the viewport window (`ImGuiWindowFlags_MenuBar`), and some X11 window
+  managers take Alt + drag.
+  - Held state: read at each step from the live key state
+    (`Input_state::key_down` and `modifier_mask`, which `Editor` updates from
+    every key event before ImGui or the commands see it, whichever window
+    owns the keyboard) against the command's effective bindings
+    (`Transform_tool::is_connector_snap_suspend_held()`; the bindings are
+    copied when the bindings change). A key released over another window, or
+    with the window unfocused (SDL sends the releases at focus loss), so ends
+    the suspend for the next step.
+  - Keys only: the command refuses any other binding kind
+    (`Command::accepts_binding()`), with the reason shown in the Edit Binding
+    modal and by `set_command_bindings`, since only a key has a held state.
+  - Key edge: the command's key events (reaching it only while the viewport
+    owns the keyboard; it never consumes them) re-run the drag's last step
+    when the held state differs from the one that step used
+    (`Transform_tool::on_connector_snap_suspend_key_edge()`: a translate drag
+    applies its last translation again, a rotate or scale drag runs the
+    subtool's update from the unchanged pointer, the same unsnapped pose), so
+    the pose snaps or unsnaps at the edge with the pointer still. A drag that
+    has not moved does not re-run.
+  - Escape cancels with the suspend key or any other modifiers held
+    (`doc/editor/transform.md` "Drag cancel").
+  - Scripted drags read no key state. Over MCP the key is injected
+    (`mouse_drag {modifiers: ["shift"]}`, a `key` event of
+    `inject_input_events`).
+- The drag is one undo entry recorded at release with the pose of its last
+  step, by the rule of `doc/editor/transform.md` "Undo record".
   Escape (`doc/editor/transform.md` "Drag cancel") restores the drag start.
-- Not applied to rotate and scale drags, IK bone drags, mesh component edits
-  and the Transform window's numeric edits.
+- Not applied to IK bone drags, mesh component edits and the Transform
+  window's numeric edits.
 - Cost: a step allocates nothing; the trace lines "connector snap begin: ..."
   and "connector snap step: ..." of `editor.transform_tool` time the gather
   and the steps (the clock is read only with that level on). With 6 moved
@@ -1269,17 +1750,20 @@ when the two are within the distance (R5.13, D3.13,
 MCP (explicit arguments, default off, never the UI setting):
 
 - `drag_selection {..., connector_snap_distance}`: read when the drag starts,
-  translate drags only. Every reply (drag, move, release) adds
+  for a translate, rotate or scale drag. Every reply (drag, move, release) adds
   `connector_snap`: `active`, `moved_connectors`, `target_connectors`,
-  `snapped`, and when snapped `distance` (in the unsnapped pose), `offset`,
+  `snapped`, `skipped` (`none`, `before_motion` or `suspended`), and when
+  snapped `distance` (in the unsnapped pose), `constraint` (`free`, `axis` or
+  `plane`), `full_offset` (the pair's), `offset` (the applied one),
   `piece_id`, `piece`, `connector`, `target_id`, `target` and
   `target_connector`.
 - `transform_selection {..., connector_snap_distance}`: one snap after the
-  call's edits and surface rest; it needs a translation of a node selection.
+  call's edits and snap to surface; it needs a translation, rotation or scale
+  of a node selection.
   The reply adds `connector_snap_distance` and `connector_snap`.
 - `get_connector_snap {}` reads `connector_snap` of the current or last drag
-  (a pointer drag included); the last step's pair stays readable after the
-  release or cancel.
+  of any kind (a pointer drag included); the last step's pair stays readable
+  after the release or cancel.
 
 ### Connector indicators
 
@@ -1289,7 +1773,8 @@ Connectors are drawn in the viewports (U22, D3.14,
 square across its outward axis at its world position, an arrow along the
 outward axis and a tick half as long along the up axis, sized per meter of
 distance to the camera (screen-constant) and drawn x-ray, as the curves are,
-so a connector on a face stays visible.
+so a connector on a face stays visible. A disabled connector is not drawn
+("Connector switches").
 
 - Which: the Debug Visualization popup's Connectors (per view, saved with
   the view's settings): Off, Selected (the default: the connectors of the
@@ -1297,16 +1782,17 @@ so a connector on a face stays visible.
   layout nodes) or All (every kit piece of the view's scene). The two
   connectors chosen in the Level Kit window's Connect rows (Target
   Connector, Moved Connector) are drawn in the chosen color.
-- During a translate drag with Connector Snap above 0, in the views of the
-  drag's scene, whatever the setting: the moved set's connectors, the target connectors within 4 snap
+- During a translate, rotate or scale drag with Connector Snap above 0, in
+  the views of the drag's scene, whatever the setting: the moved set's
+  connectors at the step's pose (turned and scaled with it), the target connectors within 4 snap
   distances of a moved one and, in its own color, the pair the step snapped
   by; the highlight ends with the drag.
 - Colors and size: Settings > Debug Visualizations Style > Connectors
   (`connector_color`, `connector_chosen_color`, `connector_moved_color`,
   `connector_target_color`, `connector_snapped_color`, `connector_size`,
   `connector_width`).
-- Cost: the local frames are cached per piece and read again only after a
-  change of its record (parameters, replace, undo of either, a raw record
+- Cost: the enabled local frames are cached per piece and read again only after a
+  change of its record or switches (parameters, replace, a switch edit, undo of each, a raw
   write); a removed piece's entry goes, and a scene close empties the cache; world matrices are read at draw time, a drag
   reuses the snap's gathered points, and a steady frame allocates nothing.
 - No connector name labels.
@@ -1405,7 +1891,7 @@ Top to bottom:
   tool their brush.
 - Snap To Module, Snap To Surface, Orient To Surface, New Seed Per Piece and
   Rotation Step (90, 45 or 15 degrees): the editor setting `level_kit`
-  (`Level_kit_config` version 4, `editor_settings.json`; on, off, 90) for
+  (`Level_kit_config`, `editor_settings.json`; on, off, 90) for
   the module snap, the seed and the step, and the shared pair `surface_snap`
   for the surface options ("Surface settings").
   With New Seed Per Piece each click's piece is followed by
@@ -1424,15 +1910,18 @@ Top to bottom:
   path of `level_snap_to_surface` - over the selected meshes of the scene, one
   undo entry. Replace With (a combo of every shape, shown as
   `<display name> (<id>)`) and Replace Selected: the press queues
-  `Level_kits::replace_shape()` ("Replace") for the selected kit pieces of the
-  scene and shows the result or refusal under the button, logged as a
-  `Level Kit:` line; the button is disabled, its reason shown, while no kit
+  `Level_kits::replace_shape()` ("Replace") for the selected nodes of the
+  scene with the Snap To Surface and Orient To Surface settings and shows the
+  result (`make_replace_summary()`: the replaced count, how many snapped, and
+  each skipped node by name with its reason) or the refusal under the
+  button, logged as a `Level Kit:` line; the button is disabled, its reason shown, while no kit
   piece of the scene is selected or no shape is chosen. The count of selected
   pieces is taken again on the selection and active item messages, which
   also clear the shown result. Connect ("Connectors"): the target is the
   active item when it is a selected kit piece of the scene, else the first
   selected kit piece; with exactly two kit pieces selected the other one moves.
-  Target Connector and Moved Connector choose the two connectors by name,
+  Target Connector and Moved Connector choose the two connectors by name
+  among the pieces' enabled ones ("Connector switches"),
   Twist Steps (0 - 3) and Gap are the join's, and Connect Selected queues
   `connect_piece()`. New Piece Connector (a connector of the shape to place,
   the first by default) and Place Connected queue a `place()` of the shape to
@@ -1452,9 +1941,11 @@ Top to bottom:
   kind keeping its values), Spacing From Item (on by default: the new
   layout's line step and grid spacings are its item's extent, so Step,
   Spacing X and Spacing Z show disabled), Module Snap, Surface Snap, Surface
-  Orient, Random Seeds, Layout Seed and Locked (on by default). They are the
-  editor setting `level_kit` (`Level_kit_config` version 5, the pattern as
-  its canonical text in `layout_pattern`), read once and written at each
+  Max Distance (1 m by default), Surface Orient, Per Piece Seed, Layout Seed and
+  Locked (on by default). They are the
+  editor setting `level_kit` (`Level_kit_config` version 7, the pattern as
+  its canonical text in `layout_pattern`; a version 6 file's
+  `layout_random_seeds` reads as `layout_per_piece_seed`), read once and written at each
   edit, as the placement settings are. The window adds layout nodes with
   them (`Level_kits::get_layout_initial_values()`), and the new node is
   selected, so its values are at once editable in the Properties window:
@@ -1535,12 +2026,12 @@ stays in kit mode for the next piece.
   ("Groups"); the scene's level lengths and the `palette` (`name`,
   `base_color`, `roughness`).
 - `level_place_pieces {scene_name, snap, surface_snap, surface_orient,
-  surface_direction, pieces: [{shape, parameters, position, rotation_xyzw,
+  surface_direction, surface_max_distance, pieces: [{shape, parameters, position, rotation_xyzw,
   name, materials, parent_id, parent_index, surface_snap, surface_orient}]}`:
   one undo entry. `materials` maps slot names to material names: a material
   of the scene, else a palette material (added to the scene the first time it
   is needed); a slot not named takes its default. `surface_snap` and `surface_orient` are booleans (default
-  false) a piece may override; `surface_direction` defaults to `[0, -1, 0]`. `parameters.derive`
+  false) a piece may override; `surface_direction` defaults to `[0, -1, 0]` and `surface_max_distance` to 1 m. `parameters.derive`
   lists the parameters derived from the seed, replacing the default mask; the
   masked values are derived at the scene's lengths. A value given for a masked
   parameter, or a name in `derive` that is not a derivable parameter, fails
@@ -1579,8 +2070,9 @@ stays in kit mode for the next piece.
   `set_node_transform`, `transform_selection` and `delete_nodes`.
 - `level_create_layout {scene_name, name, parent_id, position,
   rotation_xyzw, pattern, items | from_piece_id | curve_id, points, closed,
-  snap, surface_snap, surface_orient, random_seeds, seed, locked}`:
-  `create_layout()` ("Kit layout nodes"), locked by default; with
+  snap, surface_snap, surface_orient, surface_max_distance, per_piece_seed, seed,
+  locked}` (`random_seeds`, the former name of `per_piece_seed`, still reads;
+  both together are refused): `create_layout()` ("Kit layout nodes"), locked by default; with
   `from_piece_id` `make_layout_from_piece()`, as the Level Kit window's Make
   Layout, which takes the item, parent, place and world transform from the
   piece (not combined with `items`, `position`, `rotation_xyzw` or
@@ -1597,12 +2089,15 @@ stays in kit mode for the next piece.
   Curve node: `points` (as `create_curve` takes them, in the node's frame)
   and `closed` (which needs `points`) give its curve, else it is straight
   along its x axis; they are refused for another kind. `items` is a list of
-  `{shape, parameters, materials}` read as a `level_place_pieces` piece reads
-  them. The reply: the node's `id`, `name`, `type` (`Curve` for a path
+  `{shape, parameters, materials, weight}` read as a `level_place_pieces` piece reads
+  them, `weight` an integer in 0 - 1000, 1 when not given ("Scatter
+  layouts"). The reply: the node's `id`, `name`, `type` (`Curve` for a path
   layout, else `Xform`), world `position` and `rotation_xyzw`, `curve` (a
   path layout's own curve: `point_count`, `closed` and `length`; null for an
   Xform), `locked`, `pattern`, `pattern_text`, `items` (`shape`,
-  `parameters`, `parameters_text`, `materials`, `extent`), the snap and seed
+  `parameters`, `parameters_text`, `materials`, `weight`, `extent`,
+  `bounds` (the item's mesh box in its own frame, from its CPU geometry),
+  `footprint_radius`), the snap and seed
   values, `run {count, requested, step, space, item_extent}` (or
   `{problem}`; `requested` is the count the values ask for, more than `count`
   when a scatter's spacing lets fewer in),
@@ -1611,7 +2106,8 @@ stays in kit mode for the next piece.
   `parameters`, `parameters_text`, `materials`), and `changed`,
   `kept_count`, `added_count` and `removed_count`.
 - `level_set_layout {scene_name, layout_id, pattern, items, snap,
-  surface_snap, surface_orient, random_seeds, seed}`: `set_layout()`; the
+  surface_snap, surface_orient, surface_max_distance, per_piece_seed, seed}`
+  (`random_seeds` as above): `set_layout()`; the
   values given merge over the node's (the pattern key by key, the items as a
   whole list). The reply as above.
 - `level_get_layouts {scene_name}`: every kit layout node as above; a node
@@ -1644,40 +2140,58 @@ stays in kit mode for the next piece.
   material the scene already holds the same way; this tool adds the slot
   names and the palette materials the scene does not hold yet.
 - `level_replace_pieces {scene_name, node_ids, shape, parameters,
-  materials}`: `replace_shape()` ("Replace") for the listed pieces, else the
-  selected kit pieces of the scene; `parameters` merge over each piece's
-  carried values as `level_set_piece_parameters` merges them over a piece's
-  values, `materials` read as `level_place_pieces` reads them. One undo
-  entry, none when every piece has the shape already. The reply:
-  `replaced_count` and per piece `id`, `name`, `old_shape`, `shape`,
-  `replaced`, the effective `parameters`, the parameter names `carried`,
-  `clamped`, `defaulted` and `given`, `materials`, `kept_materials` (the
-  slots that kept the same-named slot's material), `world_aabb` and
-  `collision_shape`. A refusal names the piece's index and id.
+  materials, surface_snap, surface_orient, surface_direction,
+  surface_max_distance}`: `replace_shape()` ("Replace") for the listed
+  nodes, else the selected nodes of the scene; `parameters` merge over each
+  piece's carried values as `level_set_piece_parameters` merges them over a
+  piece's values, `materials` read as `level_place_pieces` reads them, and
+  the surface keys as `level_place_pieces` reads its call-wide ones
+  (default off). One undo entry, none when nothing is replaced. The reply:
+  `replaced_count`, `snapped_count`, `skipped_count`, `skipped` (per skipped
+  node `id`, `name`, `reason` - `kit_layout_node`, `locked_layout_child`,
+  `group`, `not_a_kit_piece`, `unreadable_record` or `loaded_mesh` - and
+  `message`) and per replaced or unchanged piece `id`, `name`, `old_shape`,
+  `shape`, `replaced`, the effective `parameters`, the parameter names
+  `carried`, `clamped`, `defaulted` and `given`, `materials`,
+  `kept_materials` (the slots that kept the same-named slot's material),
+  `world_aabb`, `collision_shape`, `snapped` and, for a replaced piece of a
+  snapping call, `surface_found` and `snap_distance`. A refusal names the
+  piece's index and id.
 - `level_place_pieces` piece key `connect {connector, to_piece_id,
   to_connector, twist_steps, gap}` ("Connectors"): the piece's pose is the
   join; with `connect` a piece gives no `position`, `rotation_xyzw`,
   `surface_snap` or `surface_orient`, and the call's `snap` and surface
   options do not apply to it.
 - `level_get_connectors {scene_name, node_ids}`: per listed piece (else the
-  selected kit pieces of the scene) `id`, `name`, `shape` and `connectors`
-  in world space (`name`, `position`, `outward`, `up`).
+  selected kit pieces of the scene) `id`, `name`, `shape`,
+  `connectors_enabled`, `disabled_connectors` and `connectors`, every
+  connector of the shape in world space (`name`, `position`, `outward`, `up`,
+  `enabled`).
 - `level_connect_pieces {scene_name, node_id, connector, to_piece_id,
   to_connector, twist_steps, gap}`: `connect_piece()`; the reply gives the new
   world `position` and `rotation_xyzw`, `changed`, `world_aabb` and the
-  piece's world `connectors`.
+  piece's world `connectors` (each with `enabled`).
+- `level_set_piece_connectors {scene_name, node_id, connectors_enabled,
+  connectors}` ("Connector switches"): `set_connector_switches()` with the
+  piece switch and, in `connectors`, a switch per connector name (`{"left":
+  false}`), one undo entry; the reply gives `changed`, `connectors_enabled`,
+  `disabled_connectors` and the piece's world `connectors` with `enabled`.
 - `level_set_connector_visualization {mode, viewport}` and
   `level_get_connector_indicators {viewport}`: "Connector indicators".
+- `level_set_layout_visualization {mode, viewport}` and
+  `level_get_layout_indicators {viewport}`: "Kit layout drawing".
+- `level_select_region_handle {scene_name, layout_id, index}` and
+  `level_get_region_handles {}`: "Scatter region handles".
 - `level_snap_to_surface {scene_name, node_ids, orient, direction,
-  query_only}`: `Level_kits::snap_to_surface()`, which runs
+  max_distance, query_only}` (`max_distance` 1 m by default): `Level_kits::snap_to_surface()`, which runs
   `find_surface_placement()` with snap, and orient when asked, for any mesh
   nodes, the listed nodes excluded from the hits. The nodes that found a
-  surface move by one `Node_transform_operation` each, all in one undo entry
+  place move by one `Node_transform_operation` each, all in one undo entry
   (none when no node moves); `query_only` moves nothing. The
   reply: `moved_count` and per node `id`, `name`, the resting world
-  `position` and `rotation_xyzw`, `distance`, `surface_found` and
-  `settled` (false when snap still rose at its last cast, "Surface
-  placement").
+  `position` and `rotation_xyzw`, `distance` and `surface_found` (false when
+  no place lies within `max_distance`, "Surface placement"); the reply also
+  echoes `max_distance`.
 - `level_get_region_contents {scene_name, box: {min, max} | sphere: {center,
   radius}}` (read-only): `find_region_contents()`; exactly one of box and
   sphere, a box's min not above its max, a sphere's radius positive. The reply
@@ -1775,9 +2289,11 @@ Kit window and the MCP tools both call; their scene-free parts are in
   shows its island id as 0 - 9 then a - z (modulo 36), `#` a hit that is not
   walkable and `.` no hit.
 - `find_support(scene_root, meshes, tolerance, out_results)` (D7.4, R10.4):
-  per mesh the snap rays of `find_surface_placement()` straight down (the one
-  ray-casting function both share), with only the mesh itself passed through,
-  so pieces support pieces. The smallest distance from the base to a hit is
+  per mesh one ray straight down from the top plane of its bounds above the
+  base center and each base corner (the corners of the snap lines, 1 mm
+  inside the footprint; at least 1 mm above the base), the
+  nearest front face of a content mesh, with only the mesh itself passed
+  through, so pieces support pieces. The smallest distance from the base to a hit is
   the result's `distance` (negative when the base is below the surface); the
   mesh is supported when a hit exists and the distance is at most the
   tolerance. `get_kit_piece_meshes()` gives the content meshes carrying a kit
@@ -1882,6 +2398,18 @@ Kit window and the MCP tools both call; their scene-free parts are in
   and expanding the run giving the same points; spacing 0 taking every
   candidate, a spacing wider than the region and a count of 1 holding one
   piece, a yaw beyond 360 degrees and a scatter key of the wrong type refused.
+  Item weights and footprints: the item text writing `weight` only when it
+  is not 1 and reading it back, weights above 1000, negative or not an
+  integer refused; `pick_scatter_item()` at the boundaries of its integer
+  ranges (a weight 0 item never picked); 400 points over three items
+  weighted 1, 0 and 3 with spacing 0, each pose's item the pick of its
+  candidate's fourth draw from `Kit_random`, and a line over the same items
+  taking item i modulo 3; every weight 0 refused for a scatter and not for a
+  line; `get_scatter_footprint_radius()` of an off-center box and of no
+  bounds; two items of footprint radius 0.25 and 1 m over a rectangle and a
+  disc at spacing 0 and 0.5 m, every pair's centers at least both radii plus
+  the spacing apart in the sampler's arithmetic and both items placed, and
+  the crowded run pinned by its count and position hash.
   The pattern expansion: a line in a yawed start frame, the grid's element
   order, a full ring facing outward and a half ring with both ends, the
   ring keeping the start rotation, a path along corner points turning at a
@@ -1913,7 +2441,20 @@ Kit window and the MCP tools both call; their scene-free parts are in
   outward opposed, the motion's rotation determinant +1, the moved
   matrix's column lengths kept), a wall mirrored by scale (-1, 1, 1) joined
   and rebuilt with that scale as stored, a joined piece needing no motion, and the
-  rotation-matrix and orthogonal-axes tests.
+  rotation-matrix and orthogonal-axes tests. `get_kit_geometry_bounds()` of
+  every shape at three seeds equal bit for bit to the corner box of the
+  geometry processed as a brush's is. Kit layout outlines
+  (`make_layout_outline()`): a line's segment and ticks across it (and along
+  z for a vertical line), a grid's cell outline and its column and row ticks,
+  a half ring's arc through its elements with radial ticks, a rectangle and a
+  disc scatter's region with a footprint and spacing circle per point whose
+  spacing circles do not overlap, and a path drawing nothing; a scatter's
+  region handles (a rectangle's corners at the polyline's points and edge
+  midpoints between them, a disc's on its circle, none for a line) and
+  `apply_region_handle()` (an edge's size twice its reach with the other
+  values and y ignored, a corner's both sizes, a disc's radius the xz
+  distance, the clamp past the origin and beyond the range, a point that is
+  not finite changing nothing).
   `erhe_physics_tests` (Jolt) measures two boxes 0.25 m into each other,
   touching and apart, a hull placed by its corner and turned half a turn, a
   box 0.2 m into a triangle mesh cube and no answer for two meshes.
@@ -1935,8 +2476,10 @@ Kit window and the MCP tools both call; their scene-free parts are in
   brush no piece uses. Surface placement: a block snapped onto a slab's top, a
   yawed bush and a yawed block oriented to a wedge's slope normal with the
   tilt as the only change, `level_snap_to_surface` with `query_only` and as
-  one undo entry, a block over a slab's edge resting on the slab, and a
-  placement over empty space reporting `surface_found` false; a sunk block
+  one undo entry (dropped from 3 m with the maximum distance raised to 5 m;
+  with the default 1 m the query finds no place and keeps the pose), a block
+  over a slab's edge resting on the slab, and a placement over empty space
+  reporting `surface_found` false; a sunk block
   rising onto a slab (with a negative `distance` from
   `level_snap_to_surface`), a bush placed inside a hill where the slope is
   lower than the bush ending on its surface,
@@ -2033,30 +2576,38 @@ Kit window and the MCP tools both call; their scene-free parts are in
   with their pieces and positions; `min_island_area` 1000 drops the island;
   refused arguments; after moving the pieces apart, resetting the opening and
   seeding the platform it reports the mesh stale, and after the rebuild no
-  finding. Surface resting, in a scene of its own (closed afterwards) with
+  finding. Snap to surface, in a scene of its own (closed afterwards) with
   two hills flush on a ground slab (each hill bottom coincident with the
   slab top; the live layout drag checks put their hill flush on the slab
   too) and a 3 m wall on it: a ring of
-  blocks rests where the rule computed from the hill's height map under
-  each block's base points puts it (a block deeper in the hill than its
-  height stays), answers 0 to `level_snap_to_surface` `query_only` and the
-  support report, and snapping it again moves none; a block placed flush
-  against a rested block of the ring on its downhill side rests on the hill
-  below it and answers 0 to the query over both and to the support report;
-  each tree of a ring
-  with per-element seeds rests between the hill's height under its base
-  center and the hill's top under its footprint and answers 0, also in three
-  repeated queries, the support
-  report lists every tree as supported; a line of overlapping 1.4 m rocks
-  answers 0 and three held Transform drags of it rest every rock where the
-  release rests it, both answering 0; a 0.5 m block flush against the wall
-  and one 5 cm into it keep y 0 through `level_snap_to_surface` and a
+  blocks rests where the rule over the hill's hit points under each block's
+  base points (sampled from the height map before the blocks stand there)
+  puts it, answers 0 to `level_snap_to_surface` `query_only` with
+  `surface_found` exactly where the rule finds a place, the support report
+  answers 0 for those, snapping again moves none, and a query with
+  `max_distance` 1000 keeps each rested block's pose bit for bit; a block
+  placed flush against a rested block of the ring on its downhill side rests
+  on the hill below it and answers 0 to the query over both and to the
+  support report; each tree of a ring with per-element seeds that found a
+  place rests between the hill's height under its base center and the hill's
+  top under its footprint, each that found none stays at y 0 over a hill top
+  more than 1 m up, and all answer 0 with the same `surface_found` in three
+  repeated queries, the support report lists every tree as supported; a line
+  of overlapping 1.4 m rocks answers 0 and three held Transform drags of it
+  rest every rock where the release rests it, both answering 0; for the trees
+  and the rocks, `surface_found` is checked against the hill sampled before
+  they stand there (an element whose footprint's hill top is within 1 m must
+  find a place); a 0.5 m block flush against the wall and one 5 cm into it
+  rest on the slab (U31), keeping y 0 through `level_snap_to_surface` and a
   surface-snapped drag along the wall; a 0.5 m block overlapping a stack of
-  three slabs 0.3 m apart rests on the top one in one
-  `level_snap_to_surface`, settled, and over twenty such slabs stops at the
-  cast cap with `settled` false; a 0.2 m block placed under a hill's top,
-  deeper than its height, keeps y 0 (plan step 15), and one placed 0.3 m
-  above the slab inside the hill rests on the slab top under the hill.
+  three slabs 0.3 m apart rests on the top one in one `level_snap_to_surface`,
+  over twenty such slabs it stays at y 0 with `surface_found` false, and with
+  `max_distance` 6.5 it rests on the twentieth; 0.2 m blocks placed at a
+  hill's foot and 0.3 m up inside it rest on the slab top under the hill
+  (U31); inside a floating slab a block 0.6 m up drops to the free ground
+  under it and one 1.3 m up rises onto the slab top; surface-snapped line and
+  path layouts over nothing generate their elements where the same layouts
+  without surface snap do.
   Oriented rests, in a scene of their own (closed afterwards) with a wedge
   of slope normal (0, 2, 1) / sqrt(5) on a ground slab: a yawed block placed
   with snap and orient rests its base center on the slope with up on the
@@ -2065,7 +2616,7 @@ Kit window and the MCP tools both call; their scene-free parts are in
   a held oriented drag uphill rests where its release does, on the slope; an
   oriented layout of three blocks rests on the slope and answers 0 with its
   poses; a block sunk 0.3 m into the slope rises onto it; a block inside a
-  stack of three slabs climbs to the top one, upright; blocks straddling the
+  stack of three slabs goes to the top one, upright; blocks straddling the
   slope's low edge take the slope or the ground by their base center, and
   one with its base center exactly on the edge stands upright on the
   ground, each answering 0 with identical poses to three repeated queries;
@@ -2132,7 +2683,7 @@ Kit window and the MCP tools both call; their scene-free parts are in
   component, Grid, Count X, Spacing Z, Ring, Radius, Arc, Face Outward,
   Line, Add Shape Item (the Level Kit window's wedge, the pieces
   alternating), the first item's width row and slot material combo, Remove
-  Item, Module Snap, Surface Snap, Surface Orient, Random Seeds and Layout
+  Item, Module Snap, Surface Snap, Surface Orient, Per Piece Seed and Layout
   Seed each regenerate or change the values as one entry; Step 0 for four
   pieces is refused with its message (logged), recording nothing; Unlock
   changes no child, Count typed while unlocked changes the value and leaves
@@ -2178,16 +2729,34 @@ Kit window and the MCP tools both call; their scene-free parts are in
   pillar clamped to 16 m; given parameters and materials; a block by a block
   no entry, also with parameters and materials given; the selection
   replaced in one entry and staying selected, one
-  undo exact; a locked layout's child (beside another piece), the layout
-  node, a piece listed twice and an unknown shape refused with no entry; an
+  undo exact; a locked layout's child and the layout node skipped with their
+  reasons while the piece listed beside them is replaced in one entry, undo
+  exact; skipped nodes alone recording no entry; a piece listed twice and an
+  unknown shape refused with no entry; an
   unlocked layout's child replaced in place and a lock giving the layout its
   blocks back; a piece whose mesh has another primitive count than its
-  record's shape (a tree mesh under a block record written raw) refused; a
-  grouped piece staying in its group. The window: Replace Selected disabled
+  record's shape (a tree mesh under a block record written raw) skipped as
+  `loaded_mesh`; a grouped piece staying in its group; a selected group
+  skipped as `group` beside a replaced piece. Snap, in a scene of its own:
+  two pieces floating over a ground block snapping onto its top in the
+  replace's one entry, the upper one passing the lower one (pieces of the
+  call are not surfaces for each other), heading kept, resting for
+  `level_snap_to_surface`, one undo exact; a listed piece of the shape
+  already unchanged and a surface for the replaced piece over it; a piece
+  2 m over its ground kept in place at the default 1 m maximum distance and
+  snapped 2 m down with 3 m; redo giving the snapped pieces again bit for
+  bit; a uniformly and a non-uniformly scaled piece resting with their
+  scales; a child piece and its parent piece both resting, replaced with
+  snap and with `level_snap_to_surface`; parameters given with only skipped
+  nodes listed not refused; `surface_orient` alone snapping; a negative
+  maximum distance refused. The window: Replace Selected disabled
   without a selected piece, Rock chosen in Replace With and Replace Selected
   replacing two selected pieces in one entry with the logged message, one
-  undo exact, and a refused press (a piece keeping a loaded mesh) recording
-  no entry with its logged refusal. Connectors (`--only-connectors` runs
+  undo exact; a piece keeping a loaded mesh skipped and listed in the logged
+  message while the other selected piece is replaced; a selected kit layout
+  node and group skipped and listed; with Snap To Surface on a raised piece
+  replaced and snapped onto the slab in one entry, the message saying so,
+  one undo exact. Connectors (`--only-connectors` runs
   them with the window's), in a scene of their own: the catalog's connector
   names per shape and the wall's end frame at the defaults; a wall's start
   placed on another wall's end collinear and touching in one entry; a 0.5 m
@@ -2216,7 +2785,33 @@ Kit window and the MCP tools both call; their scene-free parts are in
   connector indicators, Connect Selected joining the other wall's start to the active wall's
   end in one entry with the logged message, and Place Connected putting a
   pillar's base on the wall's top in one entry with the pillar selected.
-  Connector snap (`--only-connector-snap` runs it alone; last in a full run),
+  Connector switches, in a scene of their own: a new piece with every
+  connector enabled; one connector switched off in one entry, again no entry,
+  undo and redo exact; a join naming it as target or moved connector and a
+  placement on it refused naming it, an enabled pair of the same pieces
+  joining; with All the disabled connector not drawn; the piece switch off
+  disabling every connector in one entry (none drawn, a join refused) and its
+  undo; two connectors in one call one entry; `set_item_property` of the raw
+  list disabling a connector; an unknown name, a locked layout's child, a
+  layout node, no switch and a non-boolean value refused with no entry; a
+  generated layout child all enabled; raw `set_item_property` lists with an
+  unknown name, a wrong-case name, spaces or a repeated name refused naming
+  the problem and the canonical list written in one entry; `connectors_enabled`
+  on a rock refused by both tools; a duplicated group's wall keeping its
+  disabled end and a mirrored one keeping it by name; Replace in one entry
+  keeping a wall's front off on the block and dropping its end, undo giving
+  both back, and a rock clearing both values; the saved file holding only the
+  switches off their defaults, save and reload keeping each piece's switches,
+  the file with the switches removed (an older scene) reading every connector
+  enabled, and a hand-edited list (`start, Top,zz`) loading as it is with one
+  warning naming the piece. Paste Properties through the Properties window's
+  context menu: a wall's onto a block in one entry, the block taking the
+  wall's record and switches; from the hand-edited piece onto a wall refused,
+  nothing pasted, the refusal logged. The window: the
+  Target Connector combo without the target's disabled connector; the
+  Properties window's Connectors and per-connector rows, one entry per click,
+  undone exactly.
+  Connector snap (`--only-connector-snap` runs it alone),
   with walls whose expected poses come from the catalog's local connectors:
   `set_surface_snap_settings` round trip of `connector_snap_distance` and its
   refusals; Connector Snap shown in the Level Kit window, the Move rows and
@@ -2233,6 +2828,10 @@ Kit window and the MCP tools both call; their scene-free parts are in
   negative-distance refusals; a two-wall selection moving by one offset; a
   group snapping by its member's connector; the nearer of two target
   connectors winning both ways; `transform_selection` snapping in one entry;
+  with the target's end, the moved start or the target's piece switch off
+  the drag staying unsnapped and `get_connector_snap` counting the enabled
+  connectors only, each switch one entry, the drag snapping again after the
+  undos;
   200 more blocks (1212 target connectors) gathered and the steps timed
   (printed); a connected `level_place_pieces` under a parent scaled (2, 1, 1)
   and turned refused with `connect_piece()`'s message; a wall scaled 1.2
@@ -2248,14 +2847,35 @@ Kit window and the MCP tools both call; their scene-free parts are in
   snap last (the wall lifted onto a raised wall's end, not rested again); a
   locked surface-snapped layout below the dragged wall following the snapped
   pose in the preview and at the release, and `transform_selection` moving
-  it so in one entry; a press without motion on a wall resting 0.3 m from
-  the pair snapping in one entry; a locked y translate channel the offset
+  it so in one entry; motion first (U27): a press and release without motion
+  on a wall resting 0.3 m from the pair changing nothing with no entry
+  (`skipped` `before_motion`) on the X handle and on the XZ plane handle (the
+  translate gizmo has no view-plane handle), a drag out of reach and back to the press pixel
+  snapping in one entry, a zero `drag_selection` not snapping and a held one
+  moved out and back to zero snapping; the suspend key (U27): the binding
+  listed by `list_input_bindings` (left and right Shift), a pointer drag with Shift
+  held staying unsnapped (`suspended`), Shift released with the pointer still
+  snapping at the key edge and pressed again unsnapping, the release recording
+  the unsnapped pose, Escape with Shift held and with Shift and Ctrl held cancelling with no entry, a
+  mouse button binding refused, Shift held through a drag and released over
+  the Level Kit window leaving the next drag snapping (the count of key edges
+  that reached the command printed), and rebound to left Alt, Alt suspending
+  while Shift no longer does; Connector Snap On Axis (U27) shown in the three sites, each
+  click setting the shared mode, an unknown mode refused, an X axis drag and
+  an XZ plane drag of a wall raised 0.2 m keeping its height (`constraint`
+  `axis` / `plane`, the y part of `full_offset` dropped) and with
+  `full_offset` co-locating, in local space a wall yawed 30 degrees moving
+  only along its own X, an X drag with the grid snap and the snap to surface
+  on taking the 0.1 m grid step, resting on ground 0.5 m below and snapping
+  only in x, `drag_selection` taking the full offset; a locked y translate channel the offset
   needs leaving the drag unsnapped and a locked z it does not need snapping;
   a wall under a parent turned 30 degrees co-locating in world space; Orient
   To Surface with the snap keeping the oriented rest; each scene's close
   leaving no item named by the scene-close watchdog but the Hotbar's
   rendertarget node; and a second editor reading the
-  distance and Snap To Surface from an `editor_settings.json` stating them.
+  distance and Snap To Surface from an `editor_settings.json` stating them,
+  `connector_snap_axis_mode` as `full_offset` from a version 2 `surface_snap`
+  and as the `stay_on_axis` a version 4 one states.
   The run first hides the floating windows over a
   viewport (a window `desktop_windows.json` has no entry for opens floating
   there) and gives back `config/editor/editor_settings.json` and
@@ -2318,6 +2938,20 @@ Kit window and the MCP tools both call; their scene-free parts are in
   Create and offers Rename; dragging a free piece onto another reparents it
   (the control), dragging the child out and a piece onto the layout change
   nothing.
+  Selection paths (`--only-layout-selection` runs them alone), in a scene of
+  their own: `select_items` of a child by id and by name, and of two
+  children beside a free piece, selecting the layout node once (the reply
+  naming it); a viewport click on a child, a hierarchy click on a child's
+  row, a shift range from a free piece's row to a child's and Ctrl+A in the
+  hierarchy selecting no child; an unlocked layout's children selectable,
+  and a lock while they are selected selecting the layout node in their
+  place with no replaced child left selected; the lock's undo keeping the
+  layout node and the free piece selected with the old children back, its
+  redo the same with no child selected; the undo of an unlock selecting the
+  node in place of its selected child; `level_create_layout` from the
+  selected piece leaving the removed piece out of the selection right after
+  the call and its redo, its undo selecting the piece again; no
+  `sanity_check()` report of a selected child.
   Path layouts, in a scene of their own (closed afterwards): a path layout
   over an L of corner points is one node of type Curve carrying the values,
   its pieces its children, listed by `get_curves`, giving the former
@@ -2390,8 +3024,16 @@ Kit window and the MCP tools both call; their scene-free parts are in
   (ids, records, transforms) bit-equal to the drag start.
   Scatter layouts, in a scene of their own over a ground slab and the hill: a
   count mode scatter of 30 over 8 x 6 m (one entry, every piece inside the
-  region on the ground, every pair 0.8 m apart, yaw within -45 - 45 degrees,
-  the run's space 48 square meters) and a density mode disc of 14; another
+  region on the ground, every pair's footprints 0.5 m apart, yaw within -45 - 45 degrees,
+  the run's space 48 square meters) and a density mode disc of 14; three
+  block items weighted 1, 3 and 0 (the replies' weights and footprint radii,
+  the circle around each item's xz bounds; the children exactly the points
+  and items of a Python model of the candidate stream - `Kit_random`, the
+  four draws, the integer pick, the footprint test in float steps -, the
+  weight 0 item never placed, every footprint gap at least the spacing;
+  every weight 0 and a weight above 1000 refused) and, after the reopen,
+  the last item's Weight row typed 2 as one entry with the children the
+  model's for the new weights; another
   seed elsewhere, undo giving the first placement back exactly and redo the
   second; a count raised to 40 keeping the 30 (kept as children); 200 pieces
   2 m apart holding what fits and reporting 200; refusals of a density over
@@ -2408,6 +3050,68 @@ Kit window and the MCP tools both call; their scene-free parts are in
   entry and the release's one entry equal to the last step (the median
   preview step printed); the Level Kit window's Layout section showing the
   scatter rows for Scatter.
+  Kit layout drawing (`--only-layout-indicators` runs it alone; last in a
+  full run), in a scene of its own: a tilted and turned line, a one-element
+  line, a turned grid, a turned 120 degree ring, a full ring, a turned
+  rectangle scatter, a disc scatter, a density-mode scatter, a path layout
+  and an unlocked line; with All the nine non-path nodes listed by
+  `level_get_layout_indicators` with no circles while nothing is selected,
+  each outline, arc and tick equal in world space to the one computed in the
+  script from the pattern values and the node transform (the line's and
+  rings' ticks at the children); with Selected only the selected line, only
+  the grid above a selected grid piece, a selected scatter piece's scatter
+  with a footprint and spacing circle at each child (radius the item's
+  footprint radius, plus half the spacing), the same for the selected disc
+  and density scatters, and with All only the selected scatter's circles;
+  Off listing nothing, a mode "hovered" refused; a camera framing every
+  layout node, a screenshot with All differing from one with Off, and a
+  close one with the scatter selected differing from it unselected (its
+  circles); a value edit, its undo and redo each drawn, with no other entry
+  made again; a moved line's outline following with no new cache entry; an
+  unlocked layout whose item names an unknown shape or a material that does
+  not exist, and one scaled by 2, not drawn and drawn again after undo; one
+  naming a scene material drawn, not drawn once the material is deleted and
+  drawn after the undo; the items' CPU bounds of a block, rock, bush, wall,
+  stairs and tree equal to the box of pieces placed at the origin, float for
+  float; a scaled layout with module snap and module 0 refused naming its
+  scale; the Properties window hidden mid-drag ending a locked and an
+  unlocked value drag as a cancel with no entry; a
+  held Size X drag of the locked scatter with the outline at the previewed
+  width and the circles at the previewed children and no entry, the
+  release's one entry and its undo giving the 6 m outline back; held Step
+  drags of the unlocked line showing the pending step with the node's values
+  and children unchanged, Escape drawing the node's step again with no entry,
+  the release committing the shown step as one entry with the children
+  unchanged; a Level lengths change emptying the cache; a deleted layout's
+  entry leaving the cache.
+  Scatter region handles (`--only-region-handles` runs it alone; after the
+  kit layout drawing in a full run), in a scene of its own: the handles of a
+  turned rectangle scatter (8, at its corners and edge midpoints) and of a
+  disc (4) equal in world space to the ones computed in the script, the same
+  in `level_get_layout_indicators`, none for a line (whose handle selection
+  is refused), the node the target when one of its pieces is selected; for
+  the turned rectangle's +x edge, -z edge and +x +z corner, the disc's +x
+  handle and a density scatter's +x edge, the gizmo anchored at the
+  selected handle and a `transform_selection` of it setting exactly the
+  values the node-frame point gives (a 6 x 4 m density scatter holding 12
+  pieces), the other values kept, one entry, undo exact and redo; an edge
+  pulled past the origin clamped to 0.01 m; a held `transform_selection`
+  (`end_edit` false) previewing the 9 m region with 6 regenerated pieces
+  and no entry, `cancel_component_edit` restoring exactly; in the viewport a
+  click at the -x edge handle selecting it with the node still selected, a
+  plain click off the handles clearing it and the gizmo back on the node,
+  the node gizmo dragging the node 0.5 m with the values kept; a held gizmo
+  drag of the locked density scatter's +x edge previewing a wider region
+  with more pieces and no entry, Escape restoring exactly, a release of one
+  entry with size_x 4 + 2 x the drag within the drag tolerance and the
+  pieces of the last step, undo exact and redo; a press and release without
+  motion recording nothing; a held drag of the locked disc's +x handle
+  keeping 5 regenerated pieces and its release of one entry; held drags of
+  an unlocked scatter showing the pending size on the outline's handle with
+  the node's values and children unchanged, Escape drawing the node's
+  region again, the release recording the pending size as one entry with the
+  children unchanged; and a screenshot with the handles of the selected
+  turned rectangle (`logs/level_region_handles.png`).
   `--only-walkable` runs the walkable level, persistence (of the walkable
   level) and window checks alone, `--only-transform` the surface settings
   checks, `--only-layouts` the kit layout node checks (path layouts
@@ -2416,10 +3120,13 @@ Kit window and the MCP tools both call; their scene-free parts are in
   the Properties Kit Layout group and the Properties write, and
   `--only-layout-drags` the live layout preview checks,
   `--only-drag-cancel` the Transform drag cancel checks,
-  `--only-surface-resting` the surface resting checks, `--only-replace`
+  `--only-snap-to-surface` the snap to surface checks, `--only-replace`
   the replace checks (with the Level Kit window checks its window check
-  needs), `--only-scatter` the scatter layout checks and
-  `--only-connector-snap` the connector snap checks.
+  needs), `--only-layout-selection` the selection paths of a locked
+  layout's children, `--only-scatter` the scatter layout checks,
+  `--only-connector-snap` the connector snap checks,
+  `--only-layout-indicators` the kit layout drawing checks and
+  `--only-region-handles` the scatter region handle checks.
 - `Mcp_test.document_edits_record_one_undo_entry_each` places three pieces as
   one undo entry, changes a piece's parameters and snaps a raised piece onto
   the one below it, groups it, mirrors the group, duplicates it and ungroups
@@ -2434,3 +3141,4 @@ Kit window and the MCP tools both call; their scene-free parts are in
 - [Level tools: requirements](../plans/level_tools.md)
 - [Level tools: design](../plans/level_tools_design.md)
 - [Level tools: implementation steps](../plans/level_tools_implementation.md)
+- [Level kit: extra shapes](../plans/level_kit_extra_shapes.md)

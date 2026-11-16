@@ -97,7 +97,7 @@ own frame, driven by the change, never by a poll:
   layouts"); the release's operation records the layout change.
 - A move of the node: the pieces are its children and ride with it rigidly;
   with a surface setting on, the Transform tool's end of move and
-  `set_node_transform` add the generation that rests them again to the move's
+  `set_node_transform` add the generation that snaps them to the surface again to the move's
   entry (`Level_kits::append_layout_move_operations()`).
 - `Level_kits::mirror()` reflects a curve's points across its local x = 0
   plane in the mirror's entry, so a mirrored curve is the exact mirror image.

@@ -8,7 +8,7 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=11,
+    version=12,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
@@ -103,6 +103,14 @@ struct("Debug_visualizations_style",
         field("connector_snapped_color",           Vec4,  added_in=11, default="1.0f, 0.2f, 0.9f, 1.0f",  short_desc="Connector Snapped Color",  long_desc="The connector pair the drag snapped by"),
         field("connector_size",                    Float, added_in=11, default="0.04f",                   short_desc="Connector Size",           long_desc="Outward arrow length per metre of distance to the camera; the up tick is half of it"),
         field("connector_width",                   Float, added_in=11, default="-2.0f",                   short_desc="Connector Width",          long_desc="Line width of the connector indicators; negative is pixels"),
+
+        # Kit layout node outlines (doc/editor/level_tools.md "Kit layout drawing").
+        field("kit_layout_color",                  Vec4,  added_in=12, default="1.0f, 0.6f, 0.15f, 1.0f", short_desc="Kit Layout Color",         long_desc="Outline and element ticks of a kit layout node"),
+        field("kit_layout_width",                  Float, added_in=12, default="-2.0f",                   short_desc="Kit Layout Width",         long_desc="Line width of the outline and ticks; negative is pixels"),
+        field("kit_layout_tick_size",              Float, added_in=12, default="0.015f",                  short_desc="Kit Layout Tick Size",     long_desc="Half length of an element tick per metre of distance to the camera"),
+        field("kit_layout_footprint_color",        Vec4,  added_in=12, default="0.9f, 0.9f, 0.3f, 0.8f",  short_desc="Scatter Footprint Color",  long_desc="Footprint circle of a scatter point"),
+        field("kit_layout_spacing_color",          Vec4,  added_in=12, default="0.4f, 0.8f, 1.0f, 0.6f",  short_desc="Scatter Spacing Color",    long_desc="Circle at the footprint radius plus half the minimum spacing; two points at the minimum gap touch"),
+        field("kit_layout_circle_width",           Float, added_in=12, default="-1.5f",                   short_desc="Scatter Circle Width",     long_desc="Line width of the scatter circles; negative is pixels"),
 
         field("skin_bone_color_a",                 Vec4,  added_in=1, default="0.0f, 1.0f, 1.0f, 1.0f", short_desc="Skin Bone Color A", long_desc="Color for joints at even hierarchy depth; alternates with Skin Bone Color B"),
         field("skin_bone_color_b",                 Vec4,  added_in=1, default="1.0f, 0.0f, 1.0f, 1.0f", short_desc="Skin Bone Color B", long_desc="Color for joints at odd hierarchy depth; alternates with Skin Bone Color A"),
