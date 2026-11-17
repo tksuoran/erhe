@@ -239,10 +239,15 @@ void Viewport_window::draw_toolbar()
 
 void Viewport_window::hidden()
 {
+    // A window not drawn (e.g. an unselected dock tab) is not hovered: imgui_viewport() does not run to say so.
+    m_viewport_input_requested      = false;
+    m_viewport_child_window_hovered = false;
+    m_viewport_child_window_focused = false;
     std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
     if (!viewport_scene_view) {
         return;
     }
+    viewport_scene_view->set_is_scene_view_hovered(false);
     viewport_scene_view->set_enabled(false);
 }
 

@@ -1168,18 +1168,51 @@ void Kit_layout_initial_editor::imgui(const std::shared_ptr<Scene_root>& scene_r
         store();
     }
 
-    ImGui::BeginDisabled(!piece);
+    // U47: a new node of the shown kind needs no selection; its own button names the kind ("Add Path Stairs").
+    const Repeat_pattern_kind kind = m_values.data.pattern.kind;
+    ImGui::BeginDisabled(!scene_root);
+    if (ImGui::Button(get_layout_add_button_label(kind))) {
+        queue_add(scene_root, kind);
+    }
+    ImGui::EndDisabled();
+    tooltip(
+        (kind == Repeat_pattern_kind::stairs)
+            ? "Adds a staircase generated along a new curve (a stairs kit layout) at the scene's origin with the values above: a flight "
+              "rising along +x. Edit the curve's points with the node selected to shape it. One undo step; selects the node."
+            : "Adds a kit layout node of this kind at the scene's origin with the values above and the shape chosen above as its item "
+              "(a basic block when none is chosen). One undo step; selects the node."
+    );
+    const bool stairs = (kind == Repeat_pattern_kind::stairs);
+    ImGui::BeginDisabled(!piece || stairs);
     if (ImGui::Button("Make Layout")) {
         queue_make(scene_root, piece);
     }
     ImGui::EndDisabled();
     tooltip(
-        "Makes a kit layout node in the selected piece's place with the piece's shape, values and slot materials as its item and the values above; "
-        "the piece becomes its element 0 (a path or segments layout is a curve node, straight along the piece's x axis). One undo step; selects the node."
+        stairs
+            ? "A stairs layout places no piece: use the button above, or Make Layout On Curve with a curve selected."
+            : "Makes a kit layout node in the selected piece's place with the piece's shape, values and slot materials as its item and the values above; "
+              "the piece becomes its element 0 (a path or segments layout is a curve node, straight along the piece's x axis). One undo step; selects the node."
     );
     if (piece) {
         ImGui::SameLine();
         ImGui::Text("from %s", piece->get_name().c_str());
+    }
+    const std::shared_ptr<erhe::scene::Curve> curve = scene_root ? find_plain_curve(*scene_root) : std::shared_ptr<erhe::scene::Curve>{};
+    ImGui::BeginDisabled(!curve || !is_curve_layout_kind(kind));
+    if (ImGui::Button("Make Layout On Curve")) {
+        queue_make_on_curve(scene_root, curve, kind);
+    }
+    ImGui::EndDisabled();
+    tooltip(
+        is_curve_layout_kind(kind)
+            ? "Makes the selected curve node (no children, not a layout yet) a kit layout of this kind with the values above, "
+              "laid out along the curve as it is. One undo step."
+            : "Only a path, segments or stairs layout is a curve node: choose one of these kinds."
+    );
+    if (curve) {
+        ImGui::SameLine();
+        ImGui::Text("on %s", curve->get_name().c_str());
     }
     bool as_layout = (m_values.place_as == Kit_place_as::layout);
     if (ImGui::Checkbox("Place As Layout", &as_layout)) {
@@ -1193,6 +1226,91 @@ void Kit_layout_initial_editor::imgui(const std::shared_ptr<Scene_root>& scene_r
         ImGui::TextWrapped("%s", m_message.c_str());
     }
     ImGui::PopID();
+}
+
+auto Kit_layout_initial_editor::get_layout_add_button_label(const Repeat_pattern_kind kind) -> const char*
+{
+    switch (kind) {
+        case Repeat_pattern_kind::line:     return "Add Line Layout";
+        case Repeat_pattern_kind::grid:     return "Add Grid Layout";
+        case Repeat_pattern_kind::ring:     return "Add Ring Layout";
+        case Repeat_pattern_kind::path:     return "Add Path Layout";
+        case Repeat_pattern_kind::scatter:  return "Add Scatter Layout";
+        case Repeat_pattern_kind::segments: return "Add Segments Layout";
+        case Repeat_pattern_kind::stairs:   return "Add Path Stairs";
+        default:                            return "Add Layout";
+    }
+}
+
+auto Kit_layout_initial_editor::find_plain_curve(const Scene_root& scene_root) const -> std::shared_ptr<erhe::scene::Curve>
+{
+    if (m_context.selection == nullptr) {
+        return {};
+    }
+    for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+        if (!item || (item->get_item_host() != &scene_root)) {
+            continue;
+        }
+        const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(item.get());
+        if ((curve != nullptr) && !carries_kit_layout(*curve) && (curve->get_child_count() == 0)) {
+            return std::static_pointer_cast<erhe::scene::Curve>(item);
+        }
+    }
+    return {};
+}
+
+auto Kit_layout_initial_editor::get_chosen_item() const -> std::optional<Kit_layout_item>
+{
+    const Brush_tool* const           brush_tool = m_context.brush_tool;
+    const Kit_shape_definition* const shape      = (brush_tool != nullptr) ? brush_tool->get_kit_shape() : nullptr;
+    if (shape == nullptr) {
+        return std::nullopt;
+    }
+    Kit_layout_item item;
+    item.shape      = shape->id;
+    item.parameters = brush_tool->get_kit_values().to_canonical_text();
+    const std::vector<std::string>& materials = brush_tool->get_kit_slot_materials();
+    item.materials.assign(materials.begin(), materials.end());
+    return item;
+}
+
+void Kit_layout_initial_editor::queue_add(const std::shared_ptr<Scene_root>& scene_root, const Repeat_pattern_kind kind)
+{
+    m_context.imgui_windows->queue(
+        [this, weak_scene_root = std::weak_ptr<Scene_root>{scene_root}, kind, item = get_chosen_item()]() {
+            const std::shared_ptr<Scene_root> target = weak_scene_root.lock();
+            if (!target || !m_context.app_scenes->is_host_registered(target.get())) {
+                return;
+            }
+            const Kit_layout_result result = m_context.level_kits->add_layout_of_kind(
+                *target, kind, {}, glm::vec3{0.0f}, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, item
+            );
+            m_failed  = !result.error.empty();
+            m_message = m_failed ? result.error : fmt::format("Added '{}' with {} pieces.", result.node->get_name(), result.added_count);
+            if (m_failed) {
+                log_scene->warn("Level Kit: {} refused: {}", get_layout_kind_create_label(kind), result.error);
+            }
+        }
+    );
+}
+
+void Kit_layout_initial_editor::queue_make_on_curve(const std::shared_ptr<Scene_root>& scene_root, const std::shared_ptr<erhe::scene::Curve>& curve, const Repeat_pattern_kind kind)
+{
+    m_context.imgui_windows->queue(
+        [this, weak_scene_root = std::weak_ptr<Scene_root>{scene_root}, weak_curve = std::weak_ptr<erhe::scene::Curve>{curve}, kind, item = get_chosen_item()]() {
+            const std::shared_ptr<Scene_root>         target = weak_scene_root.lock();
+            const std::shared_ptr<erhe::scene::Curve> node   = weak_curve.lock();
+            if (!target || !node || !m_context.app_scenes->is_host_registered(target.get())) {
+                return;
+            }
+            const Kit_layout_result result = m_context.level_kits->make_initial_layout_on_curve(*target, node, kind, item);
+            m_failed  = !result.error.empty();
+            m_message = m_failed ? result.error : fmt::format("Made '{}' a {} with {} pieces.", node->get_name(), get_layout_kind_create_label(kind), result.added_count);
+            if (m_failed) {
+                log_scene->warn("Level Kit: layout on curve '{}' refused: {}", node->get_name(), result.error);
+            }
+        }
+    );
 }
 
 void Kit_layout_initial_editor::queue_make(const std::shared_ptr<Scene_root>& scene_root, const std::shared_ptr<erhe::scene::Mesh>& piece)

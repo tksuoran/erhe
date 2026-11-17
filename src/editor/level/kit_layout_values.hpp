@@ -93,6 +93,28 @@ public:
 // The line step and the grid spacings of a contiguous run of an item with this bounds extent (x for the step).
 void set_layout_spacing_from_extent(Kit_layout_pattern& pattern, const glm::vec3& extent);
 
+// Every layout kind, in the order the Create menu lists them (U47).
+inline constexpr Repeat_pattern_kind c_layout_kinds[] = {
+    Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::scatter,
+    Repeat_pattern_kind::path, Repeat_pattern_kind::segments, Repeat_pattern_kind::stairs
+};
+
+// U47: the Create menu's entry and the new node's name for a layout of the kind ("Line Layout", ..., "Path Stairs").
+[[nodiscard]] auto get_layout_kind_create_label(Repeat_pattern_kind kind) -> const char*;
+
+// Wrap with Path (U45): the fewest elements its straight curve holds.
+inline constexpr std::size_t c_wrap_path_min_count{4};
+
+// U45: a path in gap mode with no gap, so the wrapped items stand as a contiguous run that grows with the curve.
+[[nodiscard]] auto make_wrap_path_pattern() -> Kit_layout_pattern;
+
+// U45: the length of the straight curve: c_wrap_path_min_count elements of the extent, or one per item when there are
+// more; 1 m when the extent is not positive.
+[[nodiscard]] auto get_wrap_path_length(float item_extent, std::size_t item_count) -> float;
+
+// Appends the item unless an equal one is listed; returns true when appended.
+auto append_distinct_layout_item(std::vector<Kit_layout_item>& items, const Kit_layout_item& item) -> bool;
+
 // JSON objects with sorted keys and hexadecimal float strings; equal values give equal text.
 [[nodiscard]] auto to_canonical_text(const Kit_layout_pattern& pattern) -> std::string;
 [[nodiscard]] auto to_canonical_text(std::span<const Kit_layout_item> items) -> std::string;

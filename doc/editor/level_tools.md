@@ -1422,6 +1422,11 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     `Property_set_operation` each, and a locked layout's generated children,
     one entry. The kind must be path or segments. Taking the values off a layout node is
     not offered: an unlocked layout's children are ordinary pieces already.
+  - `wrap_with_path(scene_root, nodes)`: one path layout in the place of
+    the first of several pieces, the pieces its items ("Wrap with Path").
+  - `add_layout_of_kind()` and `make_initial_layout_on_curve()`: the Create
+    menu's layout entries and the Level Kit window's Add and Make Layout On
+    Curve buttons ("Create menu", "Level Kit window").
   - `make_layout_from_piece_initial()` and `add_layout_initial()`: Make
     Layout and the Brush tool's Place As Layout with the initial values of a
     new layout node ("Level Kit window").
@@ -1916,7 +1921,115 @@ its target changes and at each `Kit_layout_changed_message` of it).
   tool drag of the same curve is held. A script drags a handle with
   `get_transform_handles` and `mouse_drag` as a user does.
 
+## Wrap with Path
+
+Wrap with Path (U45) turns placed kit pieces into one path layout ("Kit layout
+nodes", "Path layouts") that repeats them along a curve the author then
+shapes. The Scene Hierarchy window's context menu offers it on every node row
+(`Scene_root`'s item context menu): on a selected row it takes the scene's
+selected nodes, on another row the clicked node alone. The entry is greyed
+with the refusal as its tooltip when `Level_kits::find_wrap_with_path_refusal()`
+refuses the nodes; a child of a locked kit layout node shows "Locked by its
+kit layout" in its place. The entry and MCP `level_wrap_with_path` ("MCP")
+call `Level_kits::wrap_with_path(scene_root, nodes)`:
+
+- The pieces are taken once each, in hierarchy order (pre-order of the scene
+  tree). The layout's items are their distinct items, in that order, each read
+  as Make Layout reads a piece (`read_piece_layout_item()`: shape, parameter
+  text with its seed mask, slot material names), so equal pieces give one
+  item; element i takes item i modulo the item count.
+- The node is a new locked path layout, a Curve prim named after the first
+  piece followed by " Path", under the first piece's parent at its index,
+  at its world translation and rotation. The values: `make_wrap_path_pattern()`
+  (`kit_layout_values.hpp`), a path in gap mode with gap 0 and the default
+  `upright` orientation, so the run stays contiguous and grows as the curve
+  is lengthened; per-item seeds; no module snap, surface snap or orient; no
+  connector hidden.
+- The curve: two corner points along the node's x axis (the first piece's x
+  axis), `get_wrap_path_length()` long: `c_wrap_path_min_count` (4) elements
+  of the largest item x extent, or one element per item when there are more.
+  Element 0 stands exactly where the first piece stood.
+- One `Compound_operation`: the removal of every piece with its kit light
+  nodes (last in hierarchy order first; each element makes its own lights at
+  the frames' starting values), the node's insert and its generated children,
+  the pieces excluded from the surface rays. Undo gives back the same piece
+  nodes with their records, meshes, materials, bodies, light nodes (with
+  their edits), places and transforms, and the selection from before; redo
+  makes the same layout node and children again. The copies carry the
+  items alone: node state beyond the kit record (a piece's name, physics
+  edits such as a dynamic motion mode, visibility and the other flags, tags,
+  styles and other attached properties) is not carried to them, and with
+  several pieces the place of every piece after the first is dropped (only
+  its item stays); undo gives all of it back. After the wrap the new node
+  is the selection, so its curve's points can be edited at once (a redo
+  leaves the selection the removals left).
+- Refused, changing nothing, naming the node: no node, a node of another
+  scene, a node that is not a kit piece (a plain mesh, a group, a kit layout
+  node, a light, a camera), a child of a locked kit layout node or a node
+  inside a reference instance (`instance_structure_refusal()`), a first piece
+  whose parent is an unlocked kit layout node (a lock of that layout would
+  replace the nested path layout with its generated children; Make Layout
+  from a piece does not refuse this case), a piece with
+  children other than its kit light nodes, a scaled piece (a kit layout node
+  keeps scale 1), a piece with a connector switched off (a layout item
+  carries no connector switches, plan step 60), and a piece whose primitive
+  count is not its shape's slot count, an item without extent along x (the
+  path's step would be 0) and more distinct items than a layout holds
+  (`c_max_repeat_count`). One refused node refuses the whole set.
+- The menu reads its nodes and the refusal once, when the menu opens
+  (`Scene_root`'s scratch), and the entry's tooltip shows that refusal; the
+  queued operation holds the scene root and the nodes weakly, runs only while
+  the scene is registered (`App_scenes::is_host_registered()`), and
+  `wrap_with_path()` checks the nodes again.
+
+## Create menu
+
+The Create menu has a "Level Kit" submenu (U47) in both places it is
+offered: the Scene Hierarchy window's row menu "Create" (on a prim row and
+on the scene header row, `Scene_root::make_browser_window()`) and the main
+menu's Commands > Create (the command menu bindings `Create.*`, to which
+`App_windows::viewport_menu()` appends the submenu). Both draw it with
+`level_kit_create_menu()` (`level/level_kit_create_menu.hpp`):
+
+- One submenu per kit (Basic, Architecture, Nature) listing every shape of
+  the library by display name in library order, a recreated shape beside its
+  original as the Level Kit window lists it ("Arch" and "Arch (F)"); the
+  tooltip names the shape id and its description. An entry places a piece of
+  the shape at its defaults (`Level_kits::add_piece_of_shape()`, through
+  `place()`: the kit brush, its static body, the slots' default materials).
+- "Layouts": Line Layout, Grid Layout, Ring Layout, Scatter Layout, Path
+  Layout, Segments Layout and Path Stairs (`c_layout_kinds`,
+  `get_layout_kind_create_label()`), each a new kit layout node of that kind
+  (`Level_kits::add_layout_of_kind()`) with the Level Kit window's initial
+  values for the kind, a `basic.block` at its defaults as its item (none for
+  stairs) and the name of its entry. Path Stairs is a staircase along a new
+  curve: a flight of ten steps rising along +x at the stairs values ("Stairs
+  layouts").
+- Where: the hierarchy menu creates under the clicked prim (under the scene
+  root for the scene row), the main menu under the active scene's root, at
+  the parent's origin (its world translation and rotation), as the other
+  Create entries put a new node there. The new node is selected; each entry
+  is one undo entry. The creation is queued (`Imgui_windows::queue()`) with
+  the scene and the parent held weakly, and runs only while the scene is
+  registered.
+- Disabled with the reason as tooltip: the whole submenu without a scene or
+  under a prim that is not a node; a layout entry under a kit layout node (a
+  lock would replace the nested layout), under a scaled parent (a layout
+  node keeps world scale 1) and, for Path Stairs, under a tilted parent
+  (`Level_kits::find_layout_parent_refusal()`). The whole Create menu is
+  disabled under a locked layout or a reference instance, as before.
+- The menu reads the library's kit and shape lists in place (fixed after
+  startup) and allocates nothing while open.
+
 ## Stairs layouts
+
+Path stairs from the UI (U46): Create > Level Kit > Layouts > Path Stairs in
+either Create menu ("Create menu"); the Level Kit window's Layout section
+with the kind Stairs and Add Path Stairs; Make Layout On Curve there with a
+plain Curve node selected (Create > Curve, its points shaped first); or the
+Properties window's Kind row of a path or segments layout switched to
+Stairs.
+
 
 A stairs layout (U42, R5.12.13) is a Curve prim like a path layout - one node
 carrying the `Kit_layout` values and its own curve - whose generation makes
@@ -2689,17 +2802,21 @@ reported in the log and replaced by 1, as is `level_kit.layout_surface_max_dista
 `Level_kits::validate_surface_settings()`), Connector Snap, `connector_snap_distance` (meters, 0 = off,
 the default; "Connector snap" below), and Connector Snap On Axis, `connector_snap_axis_mode`
 (`Connector_snap_axis_mode`: `full_offset`, the default, or `stay_on_axis`; a file older than
-`Surface_snap_config` version 4 reads the default). The settings have one owner:
+`Surface_snap_config` version 4 reads the default), and Connector Snap Orientation,
+`connector_snap_orientation` (`Connector_snap_orientation`: `keep`, the default, or `align`;
+a file older than version 5 reads the default). The settings have one owner:
 `Level_kits::get_surface_settings()`, `set_surface_snap()`,
 `set_surface_orient()`, `set_surface_max_distance()` (the distance must be
 a finite number >= 0, `check_surface_max_distance()`; the widgets clamp to 0 -
 1000 m and the MCP tools refuse other values), `get_connector_snap_distance()` and
 `set_connector_snap_distance()` (a negative or non-finite value is stored as
-0), `get_connector_snap_axis_mode()` and `set_connector_snap_axis_mode()`, which touch the settings store. Every widget writes through them at its
+0), `get_connector_snap_axis_mode()` and `set_connector_snap_axis_mode()`,
+`get_connector_snap_orientation()` and `set_connector_snap_orientation()`, which touch the settings store. Every widget writes through them at its
 change (`level/surface_settings_ui.hpp`), so all of them show the same state:
 
 - the Level Kit window's checkboxes, its "Surface Max Distance" drag after
-  Snap To Surface, its "Connector Snap" drag and its "Connector Snap On Axis" checkbox;
+  Snap To Surface, its "Connector Snap" drag and its "Connector Snap On Axis" and
+  "Connector Snap Orientation" checkboxes;
 - two toggle buttons with a narrow Surface Max Distance drag between them
   (named "Surface Max Distance") and a narrow Connector Snap drag, labelled with the
   magnet icon ("Connect" without the icon font), in every viewport's
@@ -2709,18 +2826,21 @@ change (`level/surface_settings_ui.hpp`), so all of them show the same state:
   them as checkable items named "Snap To Surface" and "Orient To Surface";
   the drag is named "Connector Snap"), followed by a toggle button for
   Connector Snap On Axis (icon axis-arrow-lock, "Axis" without the icon font,
-  named "Connector Snap On Axis");
+  named "Connector Snap On Axis") and one for Connector Snap Orientation (icon
+  rotate-3d-variant, "Turn" without the icon font, named "Connector Snap
+  Orientation");
 - the rows "Snap To Surface", "Surface Max Distance", "Orient To Surface",
-  "Connector Snap" and "Connector Snap On Axis" of the Transform window's Move tool group, after "Snap
-  Enable".
+  "Connector Snap", "Connector Snap On Axis" and "Connector Snap Orientation" of the Transform
+  window's Move tool group, after "Snap Enable".
 
 Kit placement in the viewport reads the pair through
 `get_placement_settings()`. MCP `get_surface_snap_settings {}` reads the
 settings and `set_surface_snap_settings {snap, orient, max_distance,
-connector_snap_distance, connector_snap_axis_mode}` sets them (editor state, no undo entry; an omitted
-argument keeps its value; a negative or non-number distance and a mode other than
-`full_offset` or `stay_on_axis` are refused); both
-reply `snap`, `orient`, `max_distance`, `connector_snap_distance` and `connector_snap_axis_mode`. The MCP placement and
+connector_snap_distance, connector_snap_axis_mode, connector_snap_orientation}` sets them (editor
+state, no undo entry; an omitted argument keeps its value; a negative or non-number distance, a mode
+other than `full_offset` or `stay_on_axis` and an orientation other than `keep` or `align` are
+refused); both reply `snap`, `orient`, `max_distance`, `connector_snap_distance`,
+`connector_snap_axis_mode` and `connector_snap_orientation`. The MCP placement and
 transform tools never read them: they take their own arguments.
 
 ### Transform tool
@@ -2800,8 +2920,9 @@ another kit piece when the two are within the distance (R5.13, D3.13, U27,
   against viewport transforms is neither moved nor a target.
 - Every piece's connectors are taken through its full world matrix, so
   scaled moved pieces, scaled targets and pieces under scaled or sheared
-  parents take part (U22); the snap is translation only and co-locates the
-  transformed positions. A piece whose frames degenerate takes no part.
+  parents take part (U22); the snap co-locates the transformed positions, by
+  translation only unless Connector Snap Orientation turns the set
+  ("Orientation" below). A piece whose frames degenerate takes no part.
 - Begin: `Transform_tool::begin_connector_snap()` at the drag's start (after
   the physics drag begins) gathers the moved connectors in the frame of their
   moved root and, per target piece, a weak node reference and its local
@@ -2845,8 +2966,8 @@ another kit piece when the two are within the distance (R5.13, D3.13, U27,
   smallest (moved piece id, moved connector index, target piece id, target
   connector index), so the choice does not depend on gather order. Any pair
   counts, whatever their outward axes. Every moved root then translates by
-  the offset that puts the moved connector on the target's (translation only:
-  no rotation), and the gizmo anchor with them. A snap that cannot
+  the offset that puts the moved connector on the target's (translation only,
+  unless "Orientation" below turns the set), and the gizmo anchor with them. A snap that cannot
   co-locate is not made: when a moved root's locked translate channel
   (`lock_translation_x` / `_y` / `_z`, in its parent's space) would hold back
   part of the offset, the step stays unsnapped and reports so.
@@ -2917,6 +3038,42 @@ another kit piece when the two are within the distance (R5.13, D3.13, U27,
   - Scripted drags read no key state. Over MCP the key is injected
     (`mouse_drag {modifiers: ["shift"]}`, a `key` event of
     `inject_input_events`).
+- Orientation (U44): with Connector Snap Orientation `align` (read when the
+  drag starts) a snapped step of a translate drag also turns the moved set,
+  so the pair's frames face each other as a connector join does
+  (`join_connectors()`, "Connectors" above: outward axes opposed, up axes
+  agreeing after a quarter twist about the target's outward axis, no gap).
+  - The motion: the moved connector's world frame (its root's frame of the
+    step, `transform_connector()`) and the target's give, through
+    `align_connector_frames()` (`level/kit_connector.hpp`), one rigid world
+    motion, a turn about the moved connector followed by the full offset;
+    every moved root takes it, so a multi-selection or a group turns rigidly
+    about that connector, each node keeping its stored scale (a mirror
+    included) as a join writes it (`make_joined_local_transform()`), and the
+    gizmo anchor with them.
+  - The twist: of the join's four quarter twists the one whose turn is
+    smallest (`closest_join_twist()`: the largest quaternion |w|; a later
+    twist wins only by more than 1e-6, so equal ones take the smaller twist),
+    so the piece does not spin about the pair's axis.
+  - Translation only, reported in `alignment`: a rotate or scale drag
+    (`off`: the setting applies to translate drags only; the step's rotation
+    or scale stays the tool's), an axis or plane handle drag with Connector
+    Snap On Axis (`on_axis`: the constrained offset, no turn), a moved root
+    whose locked rotate channel would hold back the turn or whose locked
+    translate channel the motion moves (`locked`), a moved root whose
+    resulting local transform would be sheared, under a parent with
+    non-uniform scale or with a skew of its own (`shear`,
+    `has_orthogonal_axes()`, the refusal a join under such a parent gives),
+    and a pair frame that degenerated since the drag began, a target scaled
+    to zero (`degenerate`). The step then snaps by the offset as without the
+    setting.
+  - With Snap To Surface and Orient To Surface on as well, the connector
+    alignment comes after the surface step and replaces the surface
+    orientation of the snapped step.
+  - Every step starts from its unsnapped pose, so the drag-start orientation
+    comes back when the pair leaves the distance, the suspend key is down or
+    Escape cancels; the release records the turned pose in the drag's one
+    undo entry.
 - The drag is one undo entry recorded at release with the pose of its last
   step, by the rule of `doc/editor/transform.md` "Undo record".
   Escape (`doc/editor/transform.md` "Drag cancel") restores the drag start.
@@ -2936,12 +3093,21 @@ MCP (explicit arguments, default off, never the UI setting):
   `snapped`, `skipped` (`none`, `before_motion` or `suspended`), and when
   snapped `distance` (in the unsnapped pose), `constraint` (`free`, `axis` or
   `plane`), `full_offset` (the pair's), `offset` (the applied one),
-  `piece_id`, `piece`, `connector`, `target_id`, `target` and
-  `target_connector`.
+  `piece_id`, `piece`, `connector`, `target_id`, `target`,
+  `target_connector`, `alignment` (`off`, `aligned`, `on_axis`, `locked`,
+  `shear` or `degenerate`), `rotation_xyzw` and `motion_translation` (the rigid world motion
+  of an aligned step, the rotation first; identity otherwise) and
+  `twist_steps`.
+- `drag_selection {..., connector_snap_orientation}` (`keep`, the default,
+  or `align`; never the UI setting): read when the drag starts; `align` is
+  refused on a rotate or scale drag and without `connector_snap_distance`. The reply echoes it.
 - `transform_selection {..., connector_snap_distance}`: one snap after the
   call's edits and snap to surface; it needs a translation, rotation or scale
-  of a node selection.
-  The reply adds `connector_snap_distance` and `connector_snap`.
+  of a node selection. `connector_snap_orientation` `align` turns the set as
+  a translate drag does; it needs `connector_snap_distance` and a translation
+  without a rotation, scale or skew (refused otherwise).
+  The reply adds `connector_snap_distance`, `connector_snap_orientation` and
+  `connector_snap`.
 - `get_connector_snap {}` reads `connector_snap` of the current or last drag
   of any kind (a pointer drag included); the last step's pair stays readable
   after the release or cancel.
@@ -3134,11 +3300,24 @@ Top to bottom:
   edit, as the placement settings are. The window adds layout nodes with
   them (`Level_kits::get_layout_initial_values()`), and the new node is
   selected, so its values are at once editable in the Properties window:
+  - Add <Kind> Layout, for the stairs kind Add Path Stairs (U46; needs a
+    scene only, whatever is selected), queues `Level_kits::add_layout_of_kind()`: a
+    new layout node of the shown kind at the scene root's origin with the
+    values above, its one item the shape the window places (its parameter
+    rows' values and slot materials) or, with no shape chosen, a
+    `basic.block` at its defaults; a stairs layout has no item. Named as the
+    Create menu names it ("Create menu"). One undo entry.
   - Make Layout (disabled without a selected kit piece, as Selection finds
-    it) queues `make_layout_from_piece_initial()`: the piece's shape, values
+    it, and for the stairs kind, which places no piece) queues
+    `make_layout_from_piece_initial()`: the piece's shape, values
     and slot materials as the one item, the piece replaced by element 0; a
     path layout is a Curve node straight along the piece's x axis. One undo
     entry.
+  - Make Layout On Curve (enabled for a path, segments or stairs kind with a
+    selected Curve node that has no children and no layout values) queues
+    `Level_kits::make_initial_layout_on_curve()`: the curve becomes a layout
+    of the kind with the values above, laid out along its points as they
+    are (`make_layout_on_curve()`), the item as for Add. One undo entry.
   - Place As Layout (the `level_kit.place_as_layout` setting): a Brush tool
     click in kit mode places, in place of one piece, a kit layout node of the
     shape the window places (its parameter rows' values and slot materials as
@@ -3317,6 +3496,13 @@ stays in kit mode for the next piece.
   or a curve that is a layout already or has children, an unknown
   orientation, scatter mode or region, a `layout_id` that names no kit layout node, and what the
   `Level_kits` call refuses, changing nothing.
+- `level_wrap_with_path {scene_name, node_ids}`: `wrap_with_path()` ("Wrap
+  with Path"), the Scene Hierarchy window's entry; `node_ids` default to the
+  scene's selected nodes. The reply is `level_create_layout`'s for the new
+  node plus `scene_name` and `wrapped_piece_ids` (the ids given). It refuses
+  an unknown key, an empty or non-id `node_ids`, an id that names no node of
+  the scene, no selected node without `node_ids`, and what `wrap_with_path()`
+  refuses, changing nothing.
 - `level_set_piece_parameters {scene_name, node_id, parameters}`: the given
   parameters merge over the piece's current values (`derive` replaces the
   mask; a value for a masked parameter fails naming it), the masked values are
@@ -4566,7 +4752,41 @@ Kit window and the MCP tools both call; their scene-free parts are in
   nodes carrying the edits; Replace by `basic.block` removing them in its one
   entry and its undo giving the same nodes back; a locked line layout's
   pieces lit with the starting values and kept by a refresh; and save,
-  close and load keeping the edits. The full run ends with it.
+  close and load keeping the edits.
+  `--only-create-menu` runs the checks of U46 and U47 (the full run runs
+  them last, with the earlier groups' viewports left as unselected dock
+  tabs): the Level Kit window with the kind Stairs offering Add Path
+  Stairs and disabling Make Layout; Add Path Stairs making a locked stairs
+  layout at the origin with a generated staircase that Level Check passes,
+  selected, one undo entry, undo and redo; Make Layout On Curve on a plain
+  three-point curve; Commands > Create > Level Kit > Layouts making each of
+  the seven kinds at the scene root, with `basic.block` as the item,
+  selected, one undo entry each; every catalog shape listed under its kit
+  by display name; the Scene Hierarchy window's Create > Level Kit placing
+  the first shape of each kit and Path Stairs under a translated node at its
+  origin; the layout entries disabled under a kit layout node.
+  `--only-wrap-with-path` runs the Wrap with Path checks (U45), which the
+  full run ends with: every refusal over MCP (no node, a group, a plain
+  mesh, a light, a camera, a kit layout node, a locked layout's child, a
+  scaled piece, a piece with a user child, a piece with a connector switched
+  off, a good piece with a bad one, a piece of an unlocked kit layout) naming
+  its reason and changing nothing;
+  a yawed piece with values and a material off the defaults under a
+  translated parent wrapped: one locked path layout in gap mode with gap 0,
+  its one item the piece's, a straight curve 3 extents long holding 4
+  pieces, the piece's parent, index and world transform, element 0 on the
+  piece's pose and the others along its x axis, the node selected; one undo
+  giving back the piece exactly (record, materials, body, place, transforms)
+  and the selection, redo the same layout; four selected pieces in two
+  parents in mixed order: one layout in the first's place in hierarchy
+  order with the two distinct items cycling, one undo giving back all of
+  them; a wrapped `architecture.stone_lantern` with an edited light: every
+  element lit on its frames, undo giving back the edited light node; the
+  context menu: the entry greyed on a group, a plain mesh, a kit layout node,
+  a scaled piece and the new layout's row, enabled on a piece, wrapping an
+  unselected clicked row alone and a selected row's whole selection; save,
+  close and load keeping the wrapped layout's kind, values, curve and
+  children.
 - `Mcp_test.document_edits_record_one_undo_entry_each` places three pieces as
   one undo entry, changes a piece's parameters and snaps a raised piece onto
   the one below it, groups it, mirrors the group, duplicates it and ungroups

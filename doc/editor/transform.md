@@ -171,6 +171,8 @@ meets it within the distance; `drag_selection` and `transform_selection` take
 `connector_snap_distance`. The connector snap starts only after the pointer
 has moved, Connector Snap On Axis keeps a translate drag on its axis or plane
 handle (a rotate or scale drag takes the full offset),
+Connector Snap Orientation also turns a translate drag's snapped set so the
+pair's frames face each other (U44),
 and `Transform_tool.suspend_connector_snap` (Shift) held suspends it. A translate step's order is the tool's translate,
 the snap to surface, the connector snap, then the live layout preview; a
 rotate or scale step's is the tool's rotation or scale about the press pivot,

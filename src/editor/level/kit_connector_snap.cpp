@@ -197,7 +197,7 @@ auto Kit_connector_drag_snap::get_scene_root() const -> const Scene_root*
     return m_active ? m_scene_root : nullptr;
 }
 
-auto Kit_connector_drag_snap::step(const Kit_connector_snap_constraint& constraint) -> std::optional<glm::vec3>
+auto Kit_connector_drag_snap::step(const Kit_connector_snap_constraint& constraint, const Connector_snap_orientation orientation) -> std::optional<glm::vec3>
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -269,7 +269,40 @@ auto Kit_connector_drag_snap::step(const Kit_connector_snap_constraint& constrai
     m_state.target_connector = target.name;
     m_snapped_moved          = m_moved_world_source[match.moved];
     m_snapped_target         = m_target_world_source[match.other];
+    if (orientation == Connector_snap_orientation::align) {
+        align_step(moved, target);
+    }
     return m_state.offset;
+}
+
+void Kit_connector_drag_snap::align_step(const Moved_point& moved, const Target_point& target)
+{
+    if (m_state.constraint.kind != Kit_connector_snap_constraint_kind::free) {
+        m_state.alignment = Kit_connector_snap_alignment::on_axis;
+        return;
+    }
+    // Both nodes were read by this step's search, which skips expired or hostless ones.
+    const std::shared_ptr<erhe::scene::Node> root        = m_roots[moved.root].lock();
+    const std::shared_ptr<erhe::scene::Node> target_node = m_target_pieces[target.piece].node.lock();
+    const Kit_connector in_root{.name = moved.name, .position = moved.position_in_root, .outward = moved.outward_in_root, .up = moved.up_in_root};
+    const Kit_connector local  {.name = target.name, .position = target.local_position, .outward = target.local_outward, .up = target.local_up};
+    const std::optional<Kit_connector> moved_world  = transform_connector(in_root, root->world_from_node());
+    const std::optional<Kit_connector> target_world = transform_connector(local, target_node->world_from_node());
+    if (!moved_world.has_value() || !target_world.has_value()) {
+        m_state.alignment = Kit_connector_snap_alignment::degenerate; // the snap translates only
+        return;
+    }
+    const Kit_connector_alignment alignment = align_connector_frames(moved_world.value(), target_world.value());
+    m_state.alignment   = Kit_connector_snap_alignment::aligned;
+    m_state.motion      = alignment.motion;
+    m_state.twist_steps = alignment.twist_steps;
+}
+
+void Kit_connector_drag_snap::drop_alignment(const Kit_connector_snap_alignment reason)
+{
+    m_state.alignment   = reason;
+    m_state.motion      = Kit_join_pose{};
+    m_state.twist_steps = 0;
 }
 
 void Kit_connector_drag_snap::reject_step()

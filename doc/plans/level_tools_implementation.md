@@ -143,7 +143,38 @@ refused naming the place and the previous staircase stays; a static
 triangle mesh body, navigation input; regenerated in the entry of each
 curve edit and live during a drag; the fit readback over MCP and in the
 Properties Run line; the orchestrator's and the coder's choices listed
-under U42, for the user's review),
+under U42, for the user's review), and step 72, snap orientation (U44:
+Connector Snap Orientation, `Surface_snap_config` version 5, off by
+default, in the Level Kit window, the Transform window's Move rows and the
+viewport toolbar; with it a snapped step of a translate drag without a
+handle constraint turns the moved set rigidly about the moved connector so
+the pair's frames face each other as `join_connectors()` joins them, at the
+quarter twist that turns least, each node keeping its stored scale; live
+during the drag, the drag-start orientation back when the pair leaves the
+distance, the suspend key is down or Escape cancels, one undo entry; locked
+channels and a shearing parent fall back to the translation-only snap and
+are reported; MCP `connector_snap_orientation` on
+`set_surface_snap_settings`, `drag_selection` and `transform_selection`,
+the motion in `get_connector_snap`; the coder's choices listed under U44,
+for the user's review), and step 73, Wrap with Path (U45: a Scene Hierarchy
+context menu entry and MCP `level_wrap_with_path`, one shared
+`Level_kits::wrap_with_path()`, that puts one locked path layout in the
+place of the first selected kit piece in hierarchy order - its parent,
+index and world transform - with the pieces' distinct items repeated in gap
+mode with gap 0 along a straight curve of 4 elements from the piece's
+origin, element 0 on the piece, one undo entry giving the pieces back
+exactly; greyed with the reason for anything that is not a wrappable kit
+piece; the coder's choices listed under U45, for the user's review), step
+74, path stairs from the UI (U46: the Level Kit window's Layout section adds
+a layout of the shown kind with no selection - "Add Path Stairs" for stairs
+- and makes a selected plain curve a layout (Make Layout On Curve); Make
+Layout disabled for stairs; the coder's choices listed under U46), and step
+75, the Create menu's Level Kit submenu (U47: in the Scene Hierarchy
+window's Create menu and the main menu's Commands > Create, one
+`level_kit_create_menu()`: every shape per kit and every layout kind, at the
+parent's origin, selected, one undo entry each, layout entries disabled with
+the reason under a kit layout node or a scaled or (stairs) tilted parent;
+the coder's choices listed under U47),
 are built and described in
 `doc/editor/level_tools.md` and `doc/editor/navigation.md`.
 

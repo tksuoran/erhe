@@ -10,6 +10,7 @@
 #include "transform/rotation_inspector.hpp"
 #include "level/kit_connector_snap.hpp"
 #include "config/generated/connector_snap_axis_mode.hpp"
+#include "config/generated/connector_snap_orientation.hpp"
 #include "level/level_queries.hpp"
 #include "scene/analytic_hover_provider.hpp"
 #include "tools/tool.hpp"
@@ -368,8 +369,13 @@ public:
     // Refused while a pointer drag, a scripted drag or a component selection
     // is active, or when nothing is selected.
     // A translate drag snaps the moved meshes to the surface with `surface` (D4.6); a drag of any kind snaps to
-    // connectors within connector_snap_distance meters (D3.13, 0 = off).
-    auto begin_scripted_drag(Transform_drag_kind kind, const Surface_options& surface, float connector_snap_distance) -> bool;
+    // connectors within connector_snap_distance meters (D3.13, 0 = off); a translate drag's snap with align also turns (U44).
+    auto begin_scripted_drag(
+        Transform_drag_kind        kind,
+        const Surface_options&     surface,
+        float                      connector_snap_distance,
+        Connector_snap_orientation connector_snap_orientation
+    ) -> bool;
     void end_scripted_drag  ();
     // Cancels the gizmo drag of nodes (pointer or scripted): the entries, their bodies and the moved layouts'
     // children return to the drag start and nothing is recorded. False when no node drag is active.
@@ -385,8 +391,8 @@ public:
     auto snap_to_surface(const Surface_options& options) -> std::size_t;
 
     // D3.13 once, outside a drag (MCP transform_selection): moves the selection so its connector nearest another
-    // kit piece's connector within distance meets it; true when it snapped.
-    auto snap_to_connectors(float distance) -> bool;
+    // kit piece's connector within distance meets it, with align also turned to face it (U44); true when it snapped.
+    auto snap_to_connectors(float distance, Connector_snap_orientation orientation) -> bool;
     // The pair of the last connector snap step (kept after the drag ends) and the counts gathered at its begin.
     [[nodiscard]] auto get_connector_snap() const -> const Kit_connector_drag_snap&;
     // U27: a suspend key event; during a pointer node drag whose held state changed it re-runs the last step.
@@ -598,6 +604,7 @@ private:
     // U27: read at the drag's begin; the suspend command's effective bindings (refreshed when bindings change);
     // whether the last step was suspended; the pointer has moved since the press; the last step's translation.
     Connector_snap_axis_mode              m_connector_snap_axis_mode{Connector_snap_axis_mode::full_offset};
+    Connector_snap_orientation            m_connector_snap_orientation{Connector_snap_orientation::keep}; // U44: keep for rotate and scale drags
     std::vector<erhe::commands::Binding_desc> m_suspend_bindings;
     bool                                  m_connector_snap_step_suspended{false};
     bool                                  m_connector_snap_motion{false};
@@ -665,8 +672,11 @@ private:
     void apply_drag_surface_step();
     // D3.13: gathers the connectors at a node drag's begin (after m_physics_drag.begin()), then per step (after the
     // step's translate, rotation or scale) translates the moved roots by the snap offset of the unsnapped step pose.
-    void begin_connector_snap(float distance);
+    void begin_connector_snap(float distance, Connector_snap_orientation orientation);
     void apply_drag_connector_step();
+    // U44: why the step's aligned motion cannot move the moved roots (locked channels, shear); aligned when it can.
+    [[nodiscard]] auto check_aligned_motion(const Kit_join_pose& motion) const -> Kit_connector_snap_alignment;
+    void apply_aligned_motion(const Kit_join_pose& motion);
     // U27: the dragged handle's axis or plane with Connector_snap_axis_mode::stay_on_axis; free otherwise.
     [[nodiscard]] auto get_connector_snap_constraint() const -> Kit_connector_snap_constraint;
     // U27: a key of the suspend command is down now (Input_state), with its binding's modifiers.

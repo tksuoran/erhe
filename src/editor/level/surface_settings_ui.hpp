@@ -22,11 +22,13 @@ void surface_max_distance_input   (Level_kits& level_kits, Surface_widget_label 
 void connector_snap_distance_input(Level_kits& level_kits, Surface_widget_label label);
 // U27: on, an axis or plane drag applies only the snap offset's part along the dragged axis or in the plane.
 void connector_snap_axis_checkbox (Level_kits& level_kits, Surface_widget_label label);
+// U44: on, a translate drag's connector snap also turns the moved nodes so the connector frames face each other.
+void connector_snap_orientation_checkbox(Level_kits& level_kits, Surface_widget_label label);
 
-// Both checkboxes, the surface max distance, the connector snap distance and its axis checkbox with their labels (the Level Kit window).
+// Both checkboxes, the surface max distance, the connector snap distance, its axis and orientation checkboxes with their labels (the Level Kit window).
 void surface_settings_checkboxes(Level_kits& level_kits);
 
-// Two toggle buttons, the surface max distance, the connector snap distance and its axis toggle of the viewport toolbar; text buttons without the icon font.
+// Two toggle buttons, the surface max distance, the connector snap distance, its axis and orientation toggles of the viewport toolbar; text buttons without the icon font.
 void surface_settings_toolbar_buttons(Level_kits& level_kits, ImFont* icon_font, float font_size);
 
 } // namespace editor

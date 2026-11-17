@@ -14,6 +14,7 @@
 #define ICON_MDI_SLOPE_UPHILL        "\xf3\xb0\xb8\x80" // U+F0E00
 #define ICON_MDI_MAGNET              "\xf3\xb0\x8d\x87" // U+F0347
 #define ICON_MDI_AXIS_ARROW_LOCK     "\xf3\xb0\xb5\x8a" // U+F0D4A
+#define ICON_MDI_ROTATE_3D_VARIANT   "\xf3\xb0\x91\xa4" // U+F0464
 
 namespace editor {
 
@@ -26,6 +27,8 @@ constexpr const char* c_connector_label   = "Connector Snap";
 constexpr const char* c_connector_tooltip = "Connector Snap (m): a Transform tool drag (translate, rotate or scale) moves the dragged nodes so that their connector nearest another kit piece's connector meets it when within this distance; 0 = off.";
 constexpr const char* c_connector_axis_label   = "Connector Snap On Axis";
 constexpr const char* c_connector_axis_tooltip = "Connector Snap On Axis: an axis or plane drag applies only the snap offset's part along the dragged axis or in the dragged plane, so the piece stays on it and the pair may stay apart; off, the pair meets.";
+constexpr const char* c_connector_orientation_label   = "Connector Snap Orientation";
+constexpr const char* c_connector_orientation_tooltip = "Connector Snap Orientation: a translate drag's connector snap also turns the moved nodes about the moved connector so the two connector frames face each other, as a connector join does, at the quarter twist closest to their orientation; rotate and scale drags and Connector Snap On Axis handle drags translate only.";
 constexpr const char* c_max_distance_label   = "Surface Max Distance";
 constexpr const char* c_max_distance_tooltip = "Surface Max Distance (m): Snap To Surface moves each mesh at most this far along the snap direction, up or down, to the nearest place where it rests and fits; beyond, it stays.";
 constexpr const char* c_orient_tooltip = "Orient To Surface: the moved mesh's up axis takes the surface normal, keeping its heading.";
@@ -131,6 +134,16 @@ void connector_snap_axis_checkbox(Level_kits& level_kits, const Surface_widget_l
     tooltip(c_connector_axis_tooltip);
 }
 
+void connector_snap_orientation_checkbox(Level_kits& level_kits, const Surface_widget_label label)
+{
+    const bool value = (level_kits.get_connector_snap_orientation() == Connector_snap_orientation::align);
+    if (checkbox(c_connector_orientation_label, "##connector_snap_orientation", label, value)) {
+        level_kits.set_connector_snap_orientation(value ? Connector_snap_orientation::keep : Connector_snap_orientation::align);
+    }
+    erhe::imgui::set_item_debug_label(c_connector_orientation_label);
+    tooltip(c_connector_orientation_tooltip);
+}
+
 void surface_settings_checkboxes(Level_kits& level_kits)
 {
     surface_snap_checkbox        (level_kits, Surface_widget_label::shown);
@@ -138,6 +151,7 @@ void surface_settings_checkboxes(Level_kits& level_kits)
     surface_orient_checkbox      (level_kits, Surface_widget_label::shown);
     connector_snap_distance_input(level_kits, Surface_widget_label::shown);
     connector_snap_axis_checkbox (level_kits, Surface_widget_label::shown);
+    connector_snap_orientation_checkbox(level_kits, Surface_widget_label::shown);
 }
 
 void surface_settings_toolbar_buttons(Level_kits& level_kits, ImFont* const icon_font, const float font_size)
@@ -178,6 +192,12 @@ void surface_settings_toolbar_buttons(Level_kits& level_kits, ImFont* const icon
         level_kits.set_connector_snap_axis_mode(on_axis ? Connector_snap_axis_mode::full_offset : Connector_snap_axis_mode::stay_on_axis);
     }
     tooltip(c_connector_axis_tooltip);
+    ImGui::SameLine(0.0f, 2.0f);
+    const bool align = (level_kits.get_connector_snap_orientation() == Connector_snap_orientation::align);
+    if (toggle_button(icon_font, font_size, ICON_MDI_ROTATE_3D_VARIANT "##connector_snap_orientation", "Turn##connector_snap_orientation", c_connector_orientation_label, align)) {
+        level_kits.set_connector_snap_orientation(align ? Connector_snap_orientation::keep : Connector_snap_orientation::align);
+    }
+    tooltip(c_connector_orientation_tooltip);
     ImGui::PopID();
 }
 

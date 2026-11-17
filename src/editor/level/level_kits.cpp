@@ -29,6 +29,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/selection_tool.hpp"
 
 #include "erhe_verify/verify.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -58,10 +59,7 @@
 
 namespace editor {
 
-namespace {
-
-// D3.12: the local transform of a joined piece, keeping its stored scale when the matrix allows, else decomposed.
-[[nodiscard]] auto make_joined_local_transform(const glm::mat4& parent_from_node, const glm::vec3& scale) -> erhe::scene::Trs_transform
+auto make_joined_local_transform(const glm::mat4& parent_from_node, const glm::vec3& scale) -> erhe::scene::Trs_transform
 {
     const glm::vec3 translation{parent_from_node[3]};
     const std::optional<glm::quat> rotation = rotation_for_scale(glm::mat3{parent_from_node}, scale);
@@ -71,6 +69,8 @@ namespace {
     const erhe::scene::Trs_transform decomposed{parent_from_node};
     return erhe::scene::Trs_transform{decomposed.get_translation(), decomposed.get_rotation(), decomposed.get_scale()};
 }
+
+namespace {
 
 [[nodiscard]] auto sheared_join_message(const std::string_view piece, const std::string_view parent) -> std::string
 {
@@ -437,6 +437,26 @@ auto Level_kits::get_placement_settings() const -> Kit_placement_settings
     return settings;
 }
 
+auto Level_kits::add_piece_of_shape(
+    Scene_root&                             scene_root,
+    const Kit_shape_definition&             shape,
+    const std::shared_ptr<erhe::Hierarchy>& parent,
+    const glm::vec3&                        position,
+    const glm::quat&                        rotation
+) -> Kit_place_result
+{
+    Kit_placement placement;
+    placement.shape    = &shape;
+    placement.parent   = parent;
+    placement.position = position;
+    placement.rotation = rotation;
+    Kit_place_result result = place(scene_root, std::span<const Kit_placement>{&placement, 1}, Kit_snap::none);
+    if (result.error.empty() && !result.pieces.empty() && (m_context.selection != nullptr)) {
+        m_context.selection->set_selection({result.pieces.front().node}, result.pieces.front().node);
+    }
+    return result;
+}
+
 auto Level_kits::get_layout_initial_values() const -> Kit_layout_initial_values
 {
     Kit_layout_initial_values values;
@@ -591,6 +611,22 @@ void Level_kits::set_connector_snap_axis_mode(const Connector_snap_axis_mode mod
         return;
     }
     m_context.editor_settings->surface_snap.connector_snap_axis_mode = mode;
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
+}
+
+auto Level_kits::get_connector_snap_orientation() const -> Connector_snap_orientation
+{
+    return (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.connector_snap_orientation : Connector_snap_orientation::keep;
+}
+
+void Level_kits::set_connector_snap_orientation(const Connector_snap_orientation orientation)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.connector_snap_orientation = orientation;
     if (m_context.app_settings != nullptr) {
         m_context.app_settings->settings_store().touch();
     }
@@ -1140,6 +1176,11 @@ auto Level_kits::place(Scene_root& scene_root, const std::span<const Kit_placeme
 {
     Kit_place_result result;
     for (std::size_t i = 0, end = placements.size(); i < end; ++i) {
+        if (placements[i].parent && (placements[i].parent->get_item_host() != &scene_root)) {
+            result.error       = fmt::format("parent '{}' is not in scene '{}'", placements[i].parent->get_name(), scene_root.get_name());
+            result.error_index = i;
+            return result;
+        }
         const std::optional<std::string> refusal = placements[i].parent
             ? locked_layout_child_refusal(*placements[i].parent)
             : std::optional<std::string>{};

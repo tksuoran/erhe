@@ -896,6 +896,10 @@ private:
     Variant_table                                   m_variant_table;
 
     std::shared_ptr<Item_tree_window>               m_node_tree_window;
+    // Wrap with Path (U45): the context menu's nodes and refusal, read once when the menu opens.
+    std::vector<std::weak_ptr<erhe::scene::Node>>   m_wrap_menu_nodes;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_wrap_menu_scratch;
+    std::string                                     m_wrap_menu_refusal;
 
     // Last: destroyed first, joining a running key check before the members it reads go.
     std::unique_ptr<Prepared_keys>                  m_prepared_keys;

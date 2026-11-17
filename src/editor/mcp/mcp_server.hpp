@@ -24,6 +24,7 @@
 #include "erhe_primitive/lod.hpp"
 #include "erhe_window/window_event_handler.hpp"
 #include "level/level_queries.hpp"
+#include "config/generated/connector_snap_orientation.hpp"
 
 #include <optional>
 
@@ -294,6 +295,7 @@ private:
     auto query_level_layouts                  (const nlohmann::json& args) -> std::string;
     auto action_level_set_layout_lock         (const nlohmann::json& args) -> std::string;
     auto action_level_refresh_layout          (const nlohmann::json& args) -> std::string;
+    auto action_level_wrap_with_path          (const nlohmann::json& args) -> std::string;
     auto query_level_pieces                   (const nlohmann::json& args) -> std::string;
     auto action_level_set_piece_parameters    (const nlohmann::json& args) -> std::string;
     auto action_level_set_piece_material      (const nlohmann::json& args) -> std::string;
@@ -830,6 +832,7 @@ private:
         bool                  release        {true};
         Surface_options       surface        {}; // translate drags only (D4.6)
         float                 connector_snap_distance{0.0f}; // every kind (D3.13)
+        Connector_snap_orientation connector_snap_orientation{Connector_snap_orientation::keep}; // translate drags (U44)
     };
     std::optional<Selection_drag_steps>              m_selection_drag_steps;
     // The deltas of the held drag_selection drag (release=false), which

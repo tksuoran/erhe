@@ -621,8 +621,9 @@ R-numbers). The build order is in
     target, not below one) a weak node reference and its local connector
     positions, each through the piece's full world matrix (D1.12 "World
     frames": scaled pieces, scaled targets and pieces under scaled or sheared
-    parents take part; a piece whose frames degenerate does not). The snap is
-    translation only, so it co-locates the transformed positions. A step multiplies the
+    parents take part; a piece whose frames degenerate does not). The snap
+    co-locates the transformed positions, by translation only unless the
+    orientation snap below turns the set. A step multiplies the
     positions by each root's and target's world matrix into reserved
     vectors and searches; no allocation, no per-scene list.
   - Step order: grid snap, translate, snap to surface (D4.6), connector snap,
@@ -640,6 +641,19 @@ R-numbers). The build order is in
     step unsnapped. A drag pulling a body through physics does not snap (the
     simulation writes that node).
   - Pairs: any orientation; the outward axes are not compared.
+  - Orientation (U44, plan step 72): `connector_snap_orientation` in
+    `Surface_snap_config` (version 5; `keep` or `align`, default `keep`) and
+    an explicit `connector_snap_orientation` argument on `drag_selection` and
+    `transform_selection`. With `align` a snapped step of a translate drag
+    without a handle constraint applies one rigid world motion to every moved
+    root: the join of D3.12 between the moved connector's and the target's
+    world frames (no gap) at the quarter twist that turns least
+    (`align_connector_frames()`, `closest_join_twist()`), each root keeping
+    its stored scale as a join writes it. A root whose locked rotate or
+    translate channel the motion needs, or whose resulting local transform
+    would be sheared, or a pair frame degenerated since the gather, makes the
+    step translate only, reported in
+    `Kit_connector_snap_state::alignment`.
   - Indicators (U22): the drag's gathered points also keep their axes (the
     moved ones in the root's frame, the targets' local), so the connector
     indicators of a drag read them with the current world matrices

@@ -176,6 +176,23 @@ void transform_connectors(std::span<const Kit_connector> connectors, const glm::
     float                gap
 ) -> std::optional<Kit_join_pose>;
 
+// U44: the quarter twist (0 - 3) of join_connectors() whose rotation turns the piece least; the smallest twist among equal ones.
+[[nodiscard]] auto closest_join_twist(const Kit_connector& piece_connector, const Kit_connector& target_connector) -> int;
+
+// U44: the rigid world motion turning a world connector frame to face the target's (join_connectors() at
+// closest_join_twist(), no gap) about the connector, which it then moves onto the target's position.
+class Kit_connector_alignment
+{
+public:
+    Kit_join_pose motion;
+    int           twist_steps{0};
+};
+[[nodiscard]] auto align_connector_frames(const Kit_connector& moved_world, const Kit_connector& target_world) -> Kit_connector_alignment;
+
+// U44: the parent_from_node of a node moved by the motion (world_from_node before it, parent_from_world of its parent,
+// identity for a root); nullopt when that matrix has shear, which the node's translation, rotation and scale cannot hold.
+[[nodiscard]] auto moved_parent_from_node(const Kit_join_pose& motion, const glm::mat4& world_from_node, const glm::mat4& parent_from_world) -> std::optional<glm::mat4>;
+
 // The motion's matrix (translation times rotation) times m.
 [[nodiscard]] auto apply_motion(const Kit_join_pose& motion, const glm::mat4& m) -> glm::mat4;
 

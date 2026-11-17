@@ -402,6 +402,14 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
   `device_loss_repro.py`) keep the wall clock; their editor waits still
   follow the rule.
 
+- Optimized editor for verify script runs (user, 2026-11-17: future work,
+  because of the build time). A RelWithDebInfo headless editor runs the full
+  `level_tools_verify.py` in about 220 s against 290 s in Debug and
+  `curve_verify.py` in about 27 s against 65 s, with the same results;
+  building it from scratch takes about 5 minutes. `ERHE_VERIFY` /
+  `ERHE_FATAL` stay active; `assert()` and the libraries' debug checks do
+  not.
+
 ## Editor features
 
 - Property rows: migrate the remaining hand-written `Property_editor` rows

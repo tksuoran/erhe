@@ -751,6 +751,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "level_get_layouts",              &Mcp_server::query_level_layouts                  },
         { "level_set_layout_lock",          &Mcp_server::action_level_set_layout_lock         },
         { "level_refresh_layout",           &Mcp_server::action_level_refresh_layout          },
+        { "level_wrap_with_path",           &Mcp_server::action_level_wrap_with_path          },
         { "level_get_pieces",               &Mcp_server::query_level_pieces                   },
         { "level_set_piece_parameters",     &Mcp_server::action_level_set_piece_parameters    },
         { "level_set_piece_material",       &Mcp_server::action_level_set_piece_material      },

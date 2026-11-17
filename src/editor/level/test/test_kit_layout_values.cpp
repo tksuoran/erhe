@@ -748,6 +748,67 @@ TEST(Kit_layout_values, spacing_from_extent)
     EXPECT_EQ(pattern.spacing_z, 1.0f);
 }
 
+TEST(Kit_layout_values, wrap_path_holds_a_contiguous_run_from_the_wrapped_piece)
+{
+    // U45: element 0 at the curve's start unturned (the wrapped piece's pose), the others one extent apart.
+    const Kit_layout_pattern pattern = editor::make_wrap_path_pattern();
+    EXPECT_EQ(pattern.kind, Repeat_pattern_kind::path);
+    EXPECT_EQ(pattern.count_mode, Kit_layout_count_mode::gap);
+    EXPECT_EQ(pattern.gap, 0.0f);
+    for (const float extent : {0.37f, 1.0f, 2.5f, 3.3f}) {
+        const float length = editor::get_wrap_path_length(extent, 1);
+        EXPECT_NEAR(length, 3.0f * extent, c_tolerance);
+        const erhe::math::Curve_path_table table = make_table(corner_path({glm::vec3{0.0f}, {length, 0.0f, 0.0f}}, erhe::math::Curve_closure::open));
+        for (const Repeat_path_orientation orientation : {Repeat_path_orientation::upright, Repeat_path_orientation::tangent}) {
+            Kit_layout_pattern oriented = pattern;
+            oriented.orientation = orientation;
+            Kit_layout_run run;
+            std::vector<Repeat_pose> poses;
+            ASSERT_EQ(run_of(oriented, extent, run, poses, &table), "");
+            ASSERT_EQ(poses.size(), editor::c_wrap_path_min_count) << "extent " << extent;
+            for (std::size_t i = 0; i < poses.size(); ++i) {
+                EXPECT_NEAR(poses[i].position.x, static_cast<float>(i) * extent, c_tolerance);
+                EXPECT_NEAR(poses[i].position.y, 0.0f, c_tolerance);
+                EXPECT_NEAR(poses[i].position.z, 0.0f, c_tolerance);
+                EXPECT_NEAR(std::abs(poses[i].rotation.w), 1.0f, c_tolerance);
+            }
+        }
+    }
+    // More items than the minimum: one element per item.
+    EXPECT_NEAR(editor::get_wrap_path_length(2.0f, 6), 10.0f, c_tolerance);
+    EXPECT_NEAR(editor::get_wrap_path_length(2.0f, 3), 6.0f, c_tolerance);
+    EXPECT_EQ(editor::get_wrap_path_length(0.0f, 2), 1.0f);
+    EXPECT_EQ(editor::get_wrap_path_length(std::nanf(""), 2), 1.0f);
+}
+
+TEST(Kit_layout_values, every_layout_kind_has_its_own_create_label)
+{
+    std::set<std::string> labels;
+    for (const Repeat_pattern_kind kind : editor::c_layout_kinds) {
+        labels.insert(editor::get_layout_kind_create_label(kind));
+    }
+    EXPECT_EQ(labels.size(), std::size(editor::c_layout_kinds));
+    EXPECT_EQ(labels.count("Kit Layout"), 0u);
+    // A user looking for stairs along a curve finds the stairs kind by its name.
+    EXPECT_STREQ(editor::get_layout_kind_create_label(Repeat_pattern_kind::stairs), "Path Stairs");
+    std::set<Repeat_pattern_kind> kinds{std::begin(editor::c_layout_kinds), std::end(editor::c_layout_kinds)};
+    EXPECT_EQ(kinds.size(), static_cast<std::size_t>(Repeat_pattern_kind::stairs) + 1);
+}
+
+TEST(Kit_layout_values, wrap_path_items_are_distinct)
+{
+    std::vector<Kit_layout_item> items;
+    const Kit_layout_item block{.shape = "basic.block", .parameters = "{}", .materials = {"Kit Stone"}};
+    Kit_layout_item other_material = block;
+    other_material.materials.front() = "Kit Rock";
+    EXPECT_TRUE (editor::append_distinct_layout_item(items, block));
+    EXPECT_FALSE(editor::append_distinct_layout_item(items, block));
+    EXPECT_TRUE (editor::append_distinct_layout_item(items, other_material));
+    EXPECT_FALSE(editor::append_distinct_layout_item(items, other_material));
+    ASSERT_EQ(items.size(), 2u);
+    EXPECT_EQ(items[0], block);
+    EXPECT_EQ(items[1], other_material);
+}
 
 TEST(Kit_layout_values, segments_text_and_resolve)
 {

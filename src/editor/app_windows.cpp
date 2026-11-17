@@ -1,8 +1,11 @@
 #include "app_windows.hpp"
 #include "app_context.hpp"
 #include "app_rendering.hpp"
+#include "level/level_kit_create_menu.hpp"
 #include "operations/operations_window.hpp"
+#include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "tools/selection_tool.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -147,6 +150,13 @@ void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
                         }
                     }
                 }
+            }
+            // U47: the Level Kit submenu appends to Create, in the active scene under its root.
+            if (ImGui::BeginMenu("Create")) {
+                ImGui::Separator();
+                const std::shared_ptr<Scene_root> scene_root = (m_context.selection != nullptr) ? m_context.selection->get_active_scene_root() : std::shared_ptr<Scene_root>{};
+                static_cast<void>(level_kit_create_menu(m_context, scene_root, {}));
+                ImGui::EndMenu();
             }
             ImGui::EndMenu();
         }

@@ -810,3 +810,156 @@ TEST(KitConnector, BattlementOnAWallTopAndTowerAtAWallEnd)
     const Kit_join_pose stacked = editor::join_connectors(connector(connectors_of(tower), "base"), connector(connectors_of(tower), "top"), 0, 0.0f);
     expect_near(stacked.position, glm::vec3{0.0f, tower.get_float("height"), 0.0f});
 }
+
+// U44: the orientation snap of translate drags (doc/editor/level_tools.md "Connector snap").
+namespace {
+
+using editor::Kit_connector_alignment;
+
+void expect_near_matrix(const glm::mat4& actual, const glm::mat4& expected)
+{
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            EXPECT_NEAR(actual[column][row], expected[column][row], c_tolerance) << column << ", " << row;
+        }
+    }
+}
+
+// The drag's view of a moved connector: in its root's frame, carried by the root's world matrix.
+void expect_aligned_drag(const glm::mat4& world_from_root, const glm::mat4& root_from_node, const Kit_connector& local, const Kit_connector& target)
+{
+    const Kit_connector in_root = editor::connector_in_root(local, root_from_node);
+    const std::optional<Kit_connector> moved = editor::transform_connector(in_root, world_from_root);
+    ASSERT_TRUE(moved.has_value());
+    const Kit_connector_alignment alignment = editor::align_connector_frames(moved.value(), target);
+    EXPECT_GE(alignment.twist_steps, 0);
+    EXPECT_LE(alignment.twist_steps, 3);
+    EXPECT_NEAR(glm::determinant(glm::mat3_cast(alignment.motion.rotation)), 1.0f, c_tolerance);
+
+    // One source of truth: the explicit join of the piece's connector at the same twist, without a gap.
+    const std::optional<Kit_join_pose> join = editor::join_motion(local, world_from_root * root_from_node, target, alignment.twist_steps, 0.0f);
+    ASSERT_TRUE(join.has_value());
+    expect_near_matrix(editor::apply_motion(alignment.motion, world_from_root), editor::apply_motion(join.value(), world_from_root));
+
+    const glm::mat4 joined_root = editor::apply_motion(alignment.motion, world_from_root);
+    const std::optional<Kit_connector> joined_frame = editor::transform_connector(in_root, joined_root);
+    ASSERT_TRUE(joined_frame.has_value());
+    expect_near(joined_frame->position, target.position);
+    expect_near(joined_frame->outward, -target.outward);
+    EXPECT_NEAR(std::abs(glm::dot(joined_frame->up, target.up)) + std::abs(glm::dot(joined_frame->up, glm::cross(target.outward, target.up))), 1.0f, c_tolerance);
+    // The turn is rigid: the root keeps its scale.
+    for (int column = 0; column < 3; ++column) {
+        EXPECT_NEAR(glm::length(glm::vec3{joined_root[column]}), glm::length(glm::vec3{world_from_root[column]}), c_tolerance);
+    }
+}
+
+auto wall_end_target(const glm::mat4& target_world) -> Kit_connector
+{
+    const std::optional<Kit_connector> target = editor::transform_connector(connector(connectors_of(defaults("architecture.wall")), "end"), target_world);
+    EXPECT_TRUE(target.has_value());
+    return target.value_or(Kit_connector{});
+}
+
+} // anonymous namespace
+
+TEST(Kit_connector_orientation_snap, turned_scaled_and_mirrored_pieces_face_their_target)
+{
+    const Kit_connector start = connector(connectors_of(defaults("architecture.wall")), "start");
+    const glm::quat     none{1.0f, 0.0f, 0.0f, 0.0f};
+    const glm::vec3     up_axis{0.0f, 1.0f, 0.0f};
+    const Kit_connector target       = wall_end_target(trs(glm::vec3{3.0f, 0.0f, -2.0f}, glm::angleAxis(1.1f, up_axis), glm::vec3{1.0f}));
+    const Kit_connector scaled_target = wall_end_target(trs(glm::vec3{-1.0f, 0.5f, 2.0f}, glm::angleAxis(-0.6f, up_axis), glm::vec3{0.8f, 1.4f, 2.0f}));
+    const glm::mat4 turned   = trs(glm::vec3{-5.0f, 1.0f, 4.0f}, glm::angleAxis(-0.4f, up_axis), glm::vec3{1.0f});
+    const glm::mat4 tilted   = trs(glm::vec3{2.0f, 3.0f, 1.0f}, glm::angleAxis(0.9f, glm::normalize(glm::vec3{1.0f, 2.0f, 0.5f})), glm::vec3{1.0f});
+    const glm::mat4 scaled   = trs(glm::vec3{0.5f, 0.0f, 7.0f}, glm::angleAxis(2.5f, up_axis), glm::vec3{1.3f, 0.9f, 2.2f});
+    const glm::mat4 mirrored = trs(glm::vec3{2.0f, 0.0f, 1.0f}, glm::angleAxis(0.4f, up_axis), glm::vec3{-1.0f, 1.0f, 1.0f});
+    const glm::mat4 child    = trs(glm::vec3{1.0f, 0.0f, -0.5f}, glm::angleAxis(0.3f, up_axis), glm::vec3{1.0f, 2.0f, 1.0f});
+    for (const Kit_connector& goal : {target, scaled_target}) {
+        expect_aligned_drag(turned,   glm::mat4{1.0f}, start, goal);
+        expect_aligned_drag(tilted,   glm::mat4{1.0f}, start, goal);
+        expect_aligned_drag(scaled,   glm::mat4{1.0f}, start, goal);
+        expect_aligned_drag(mirrored, glm::mat4{1.0f}, start, goal);
+        // A piece below a moved group root: the root turns rigidly about the piece's connector.
+        expect_aligned_drag(turned,   child,           start, goal);
+        expect_aligned_drag(trs(glm::vec3{0.0f}, none, glm::vec3{2.0f}), child, start, goal);
+    }
+}
+
+TEST(Kit_connector_orientation_snap, mirrored_piece_keeps_its_stored_scale)
+{
+    const Kit_connector start  = connector(connectors_of(defaults("architecture.wall")), "start");
+    const glm::vec3     scale{-1.0f, 1.0f, 1.0f};
+    const glm::mat4     moved  = trs(glm::vec3{2.0f, 0.0f, 1.0f}, glm::angleAxis(0.4f, glm::vec3{0.0f, 1.0f, 0.0f}), scale);
+    const Kit_connector target = wall_end_target(trs(glm::vec3{-3.0f, 0.0f, 5.0f}, glm::angleAxis(-1.2f, glm::vec3{0.0f, 1.0f, 0.0f}), glm::vec3{1.0f}));
+    const std::optional<Kit_connector> frame = editor::transform_connector(start, moved);
+    ASSERT_TRUE(frame.has_value());
+    const glm::mat4 joined = editor::apply_motion(editor::align_connector_frames(frame.value(), target).motion, moved);
+    EXPECT_TRUE(editor::rotation_for_scale(glm::mat3{joined}, scale).has_value());
+}
+
+TEST(Kit_connector_orientation_snap, closest_twist_keeps_the_roll_nearest_the_current_one)
+{
+    const glm::vec3     outward{1.0f, 0.0f, 0.0f};
+    const Kit_connector target{.name = "end", .position = glm::vec3{1.0f, 2.0f, 3.0f}, .outward = outward, .up = glm::vec3{0.0f, 1.0f, 0.0f}};
+    const glm::vec3     tilt_axis = glm::normalize(glm::vec3{0.0f, 1.0f, 1.0f});
+    for (int twist = 0; twist < 4; ++twist) {
+        for (const float off_degrees : {-30.0f, 0.0f, 10.0f, 35.0f}) {
+            // Facing the target, rolled about the pair's axis a quarter turns plus off degrees, then tipped by a small tilt.
+            const glm::quat roll = glm::angleAxis(glm::radians((90.0f * static_cast<float>(twist)) + off_degrees), outward);
+            const glm::quat tip  = glm::angleAxis(glm::radians(5.0f), tilt_axis);
+            const Kit_connector moved{
+                .name     = "start",
+                .position = glm::vec3{1.2f, 2.1f, 2.9f},
+                .outward  = tip * -outward,
+                .up       = tip * (roll * target.up)
+            };
+            EXPECT_EQ(editor::closest_join_twist(moved, target), twist) << twist << " " << off_degrees;
+            const Kit_connector_alignment alignment = editor::align_connector_frames(moved, target);
+            EXPECT_EQ(alignment.twist_steps, twist);
+            const float angle = 2.0f * std::acos(std::min(1.0f, std::abs(alignment.motion.rotation.w)));
+            EXPECT_LE(angle, glm::radians(std::abs(off_degrees) + 5.0f) + 1.0e-4f) << twist << " " << off_degrees;
+        }
+    }
+}
+
+TEST(Kit_connector_orientation_snap, equal_rolls_take_the_smaller_twist)
+{
+    const glm::vec3     outward{0.0f, 0.0f, 1.0f};
+    const Kit_connector target{.name = "end", .position = glm::vec3{0.0f}, .outward = outward, .up = glm::vec3{0.0f, 1.0f, 0.0f}};
+    // Rolled 45 degrees: twists 0 and 1 turn it equally far.
+    const Kit_connector halfway{.name = "start", .position = glm::vec3{0.1f, 0.0f, 0.0f}, .outward = -outward, .up = glm::angleAxis(glm::radians(45.0f), outward) * target.up};
+    EXPECT_EQ(editor::closest_join_twist(halfway, target), 0);
+    // The same tie rolled the other way (-45 degrees) is between twists 0 and 3: again the smaller.
+    const Kit_connector other_way{.name = "start", .position = glm::vec3{0.1f, 0.0f, 0.0f}, .outward = -outward, .up = glm::angleAxis(glm::radians(-45.0f), outward) * target.up};
+    EXPECT_EQ(editor::closest_join_twist(other_way, target), 0);
+    // Between twists 1 and 2 (135 degrees): twist 1.
+    const Kit_connector past_quarter{.name = "start", .position = glm::vec3{0.1f, 0.0f, 0.0f}, .outward = -outward, .up = glm::angleAxis(glm::radians(135.0f), outward) * target.up};
+    EXPECT_EQ(editor::closest_join_twist(past_quarter, target), 1);
+    // Already facing: no turn, only the translation onto the target.
+    const Kit_connector facing{.name = "start", .position = glm::vec3{0.3f, 0.0f, 0.2f}, .outward = -outward, .up = target.up};
+    const Kit_connector_alignment still = editor::align_connector_frames(facing, target);
+    EXPECT_EQ(still.twist_steps, 0);
+    EXPECT_NEAR(std::abs(still.motion.rotation.w), 1.0f, c_tolerance);
+    expect_near(still.motion.position, target.position - facing.position);
+}
+
+TEST(Kit_connector_orientation_snap, a_turn_under_a_non_uniformly_scaled_parent_is_refused)
+{
+    const glm::quat none{1.0f, 0.0f, 0.0f, 0.0f};
+    const glm::mat4 world_from_parent_uniform = trs(glm::vec3{1.0f, 0.0f, 2.0f}, glm::angleAxis(0.5f, glm::vec3{0.0f, 1.0f, 0.0f}), glm::vec3{2.0f});
+    const glm::mat4 world_from_parent_stretch = trs(glm::vec3{1.0f, 0.0f, 2.0f}, none, glm::vec3{2.0f, 1.0f, 1.0f});
+    const glm::mat4 parent_from_node          = trs(glm::vec3{0.5f, 0.0f, 0.0f}, glm::angleAxis(0.2f, glm::vec3{0.0f, 1.0f, 0.0f}), glm::vec3{1.0f});
+    const Kit_join_pose turn{.position = glm::vec3{0.3f, 0.0f, -0.1f}, .rotation = glm::angleAxis(0.7f, glm::vec3{0.0f, 1.0f, 0.0f})};
+    const Kit_join_pose slide{.position = glm::vec3{0.3f, 0.0f, -0.1f}};
+
+    const std::optional<glm::mat4> uniform = editor::moved_parent_from_node(turn, world_from_parent_uniform * parent_from_node, glm::inverse(world_from_parent_uniform));
+    ASSERT_TRUE(uniform.has_value());
+    expect_near_matrix(world_from_parent_uniform * uniform.value(), editor::apply_motion(turn, world_from_parent_uniform * parent_from_node));
+    EXPECT_FALSE(editor::moved_parent_from_node(turn, world_from_parent_stretch * parent_from_node, glm::inverse(world_from_parent_stretch)).has_value());
+    // Without a turn the same parent keeps the child's axes orthogonal (the translation-only snap).
+    EXPECT_TRUE(editor::moved_parent_from_node(slide, world_from_parent_stretch * parent_from_node, glm::inverse(world_from_parent_stretch)).has_value());
+    // A root: the parent_from_world is the identity.
+    const std::optional<glm::mat4> root = editor::moved_parent_from_node(turn, parent_from_node, glm::mat4{1.0f});
+    ASSERT_TRUE(root.has_value());
+    expect_near_matrix(root.value(), editor::apply_motion(turn, parent_from_node));
+}

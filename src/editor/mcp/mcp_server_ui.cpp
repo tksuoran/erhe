@@ -60,6 +60,8 @@
 #include "windows/viewport_window.hpp"
 #include "time.hpp"
 
+#include "erhe_commands/command.hpp"
+#include "erhe_commands/commands.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -1159,7 +1161,15 @@ auto Mcp_server::query_input_state(const nlohmann::json& args) -> std::string
     const Input_gesture_steps& steps = m_input_gesture_steps;
     const bool                 active = (steps.request != nullptr);
 
+    erhe::commands::Command* const active_mouse_command =
+        (m_context.commands != nullptr) ? m_context.commands->get_active_mouse_command() : nullptr;
+    const std::shared_ptr<Viewport_scene_view> last_scene_view =
+        (m_context.scene_views != nullptr) ? m_context.scene_views->last_scene_view() : std::shared_ptr<Viewport_scene_view>{};
+    const std::shared_ptr<Scene_root> last_scene_root = last_scene_view ? last_scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
+
     return make_json_content({
+        {"active_mouse_command", (active_mouse_command != nullptr) ? nlohmann::json(active_mouse_command->get_name()) : nlohmann::json()},
+        {"last_hovered_scene",   last_scene_root ? nlohmann::json(last_scene_root->get_name()) : nlohmann::json()},
         {"pointer", {
             {"x",     m_input_pointer_state.x},
             {"y",     m_input_pointer_state.y},

@@ -41,6 +41,8 @@
 #include "operations/operation_stack.hpp"
 #include "operations/variant_select_operation.hpp"
 #include "level/kit_layout.hpp"
+#include "level/level_kit_create_menu.hpp"
+#include "level/level_kits.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "rig/bone_commands.hpp"
 #include "rig/bone_structure.hpp"
@@ -749,6 +751,11 @@ auto Scene_root::make_browser_window(
                 entry("Style",                  [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_style           (&p)); });
                 entry("Graph Texture",          [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_graph_texture   (&p)); });
                 entry("Graph Mesh",             [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_graph_mesh      (&p)); });
+                ImGui::Separator();
+                // U47: kit pieces and layouts, the same submenu as the main menu's Commands > Create.
+                if (level_kit_create_menu(context, shared_from_this(), parent)) {
+                    close = true;
+                }
                 ImGui::EndMenu();
             }
             if (child_refusal.has_value()) {
@@ -777,6 +784,61 @@ auto Scene_root::make_browser_window(
                     ImGui::SetTooltip("%s", refusal.value().c_str());
                 }
                 return;
+            }
+            // Wrap with Path (U45): the selected nodes when the clicked one is selected, else the clicked one, and the
+            // refusal, read when the menu opens; wrap_with_path() checks them again when it runs.
+            if (context.level_kits != nullptr) {
+                if (ImGui::IsWindowAppearing()) {
+                    m_wrap_menu_scratch.clear();
+                    if (node->is_selected() && (context.selection != nullptr)) {
+                        for (const std::shared_ptr<erhe::Item_base>& selected_item : context.selection->get_selected_items()) {
+                            std::shared_ptr<erhe::scene::Node> selected_node = std::dynamic_pointer_cast<erhe::scene::Node>(selected_item);
+                            if (selected_node && (selected_node->get_item_host() == this)) {
+                                m_wrap_menu_scratch.push_back(std::move(selected_node));
+                            }
+                        }
+                    } else {
+                        m_wrap_menu_scratch.push_back(node);
+                    }
+                    m_wrap_menu_nodes.assign(m_wrap_menu_scratch.begin(), m_wrap_menu_scratch.end());
+                    const std::optional<std::string> refusal = context.level_kits->find_wrap_with_path_refusal(*this, m_wrap_menu_scratch);
+                    m_wrap_menu_refusal = refusal.value_or(std::string{});
+                    m_wrap_menu_scratch.clear();
+                }
+                const bool refused = !m_wrap_menu_refusal.empty();
+                if (ImGui::MenuItem("Wrap with Path", nullptr, false, !refused)) {
+                    deferred_operations.push_back(
+                        [&context, weak_scene_root = weak_from_this(), weak_nodes = m_wrap_menu_nodes]() {
+                            const std::shared_ptr<Scene_root> scene_root = weak_scene_root.lock();
+                            if (!scene_root || !context.app_scenes->is_host_registered(scene_root.get())) {
+                                return;
+                            }
+                            std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+                            for (const std::weak_ptr<erhe::scene::Node>& weak_node : weak_nodes) {
+                                std::shared_ptr<erhe::scene::Node> wrap_node = weak_node.lock();
+                                if (!wrap_node) {
+                                    log_scene->warn("Wrap with Path refused: a node of the menu is gone");
+                                    return;
+                                }
+                                nodes.push_back(std::move(wrap_node));
+                            }
+                            const Kit_layout_result result = context.level_kits->wrap_with_path(*scene_root, nodes);
+                            if (!result.error.empty()) {
+                                log_scene->warn("Wrap with Path refused: {}", result.error);
+                            }
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip(
+                        "%s",
+                        refused
+                            ? m_wrap_menu_refusal.c_str()
+                            : "A path layout in the place of the first piece, the pieces its items repeated along a\n"
+                              "straight curve from the piece's origin; edit the curve's points to shape the path; one undo step"
+                    );
+                }
             }
             // Rigging: offered only when the clicked subtree contains a bone
             // (early-exit walk; runs only while the popup is open).

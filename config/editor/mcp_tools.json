@@ -1061,7 +1061,7 @@
     "name": "set_active_scene"
   },
   {
-    "description": "Apply a Transform tool edit (translation / rotation / scale / skew) to the currently selected node(s), through the same code path as the Transform window numeric entry. space=local applies values in parent space (requires exactly one selected node); space=global applies in world (anchor) space. end_edit=true (default) records an undo operation and refreshes the edit baselines; end_edit=false keeps the edit session open like an active drag, so repeated calls re-apply against the same initial state. surface_snap / surface_orient (default false, never the UI's Snap To Surface / Orient To Surface) move each moved mesh along the snap direction (down), either way, to the nearest place within surface_max_distance (meters, default 1) where its base rests on a surface and it fits along the direction; a mesh with no such place keeps its pose (doc/editor/level_tools.md \"Surface placement\"), after the call's edits (doc/editor/level_tools.md \"Transform tool\"); they need a translation. The reply echoes surface_snap, surface_orient, surface_max_distance and surface_found_count, and per node surface_found. connector_snap_distance (default 0 = off, never the UI's Connector Snap) snaps the selection to the nearest connector pair after the edits and the snap to surface; it needs a translation, rotation_xyzw or scale (the rotation and scale are kept, only the translation moves). The reply echoes connector_snap_distance and gives connector_snap {active, moved_connectors, target_connectors, snapped, and when snapped distance (in the unsnapped pose), offset, piece_id, piece, connector, target_id, target, target_connector}.",
+    "description": "Apply a Transform tool edit (translation / rotation / scale / skew) to the currently selected node(s), through the same code path as the Transform window numeric entry. space=local applies values in parent space (requires exactly one selected node); space=global applies in world (anchor) space. end_edit=true (default) records an undo operation and refreshes the edit baselines; end_edit=false keeps the edit session open like an active drag, so repeated calls re-apply against the same initial state. surface_snap / surface_orient (default false, never the UI's Snap To Surface / Orient To Surface) move each moved mesh along the snap direction (down), either way, to the nearest place within surface_max_distance (meters, default 1) where its base rests on a surface and it fits along the direction; a mesh with no such place keeps its pose (doc/editor/level_tools.md \"Surface placement\"), after the call's edits (doc/editor/level_tools.md \"Transform tool\"); they need a translation. The reply echoes surface_snap, surface_orient, surface_max_distance and surface_found_count, and per node surface_found. connector_snap_distance (default 0 = off, never the UI's Connector Snap) snaps the selection to the nearest connector pair after the edits and the snap to surface; it needs a translation, rotation_xyzw or scale (the rotation and scale are kept, only the translation moves). connector_snap_orientation 'align' also turns the moved set to face the pair (U44). The reply echoes connector_snap_distance and connector_snap_orientation and gives connector_snap {active, moved_connectors, target_connectors, snapped, and when snapped distance (in the unsnapped pose), offset, piece_id, piece, connector, target_id, target, target_connector, alignment, rotation_xyzw, motion_translation, twist_steps}.",
     "inputSchema": {
       "properties": {
         "connector_snap_distance": {
@@ -1123,6 +1123,10 @@
           "maxItems": 3,
           "minItems": 3,
           "type": "array"
+        },
+        "connector_snap_orientation": {
+          "description": "Orientation snap (U44, doc/editor/level_tools.md \"Connector snap\"): 'keep' (default, never the UI's Connector Snap Orientation) - the snap translates only; 'align' - the snap also turns the moved set about the moved connector so the pair's frames face each other as a connector join does, at the quarter twist closest to the moved piece's orientation; a root whose locked translate or rotate channel or resulting local transform would be sheared cannot take the turn makes the step translate only (alignment 'locked' or 'shear'). Needs connector_snap_distance and a translation without rotation_xyzw, scale or skew (refused otherwise)",
+          "type": "string"
         }
       },
       "type": "object"
@@ -1130,7 +1134,7 @@
     "name": "transform_selection"
   },
   {
-    "description": "Drag the currently selected node(s) through the Transform tool's drag path - the same one a gizmo mouse drag takes - spread over real editor frames: the drag starts like a gizmo press on a handle of that kind (the Move / Rotate / Scale tool is the active subtool, so a translate drag of one selected bone solves its IK chain when Bone IK is on, drawing the chain visualization), the target moves linearly from the start pose to the full delta over `frames` frames (one step per frame, the call returns when the last step is applied), and with release=true it ends like a gizmo release (one undoable operation). Give exactly one of translation, rotation_axis + rotation_angle_deg, or scale. A dynamic rigid body held by a live joint is pulled toward the target by a spring and moved by the physics simulation (the joints keep holding; release keeps its velocity); other dynamic bodies are held kinematic for the drag. With release=false the drag stays held after the last step (query the scene mid-drag); end it with action='release'. Keep frames small enough for the steps to finish inside the MCP request timeout (5 s); an expired call leaves the drag held. A translate drag with surface_snap / surface_orient (default false, never the UI's settings) at every step move each moved mesh along the snap direction (down), either way, to the nearest place within surface_max_distance (meters, default 1) where its base rests on a surface and it fits along the direction; a mesh with no such place keeps its pose (doc/editor/level_tools.md \"Surface placement\"), all moved meshes excluded (doc/editor/level_tools.md \"Transform tool\"); the reply echoes both, surface_max_distance and per node surface_found and world_rotation_xyzw. A drag of any kind with connector_snap_distance (default 0 = off, never the UI's Connector Snap) gathers the connectors when the drag starts and at every step snaps the step's pose, taken after the snap to surface (translate) or the step's rotation or scale about center (rotate, scale: the rotation and scale are kept, only the translation moves), to the nearest connector pair within the distance by its full offset; each step is judged from the unsnapped pose, so the drag unsnaps when the pair is farther; a step snaps only after the drag has moved (U27: a zero translation, a zero angle or a scale of 1 since the start does not snap until a step that moves), and the suspend key (Transform_tool.suspend_connector_snap) does not apply to drag_selection. Every reply (drag, move, release) gives connector_snap: the last step's pair as transform_selection reports it.",
+    "description": "Drag the currently selected node(s) through the Transform tool's drag path - the same one a gizmo mouse drag takes - spread over real editor frames: the drag starts like a gizmo press on a handle of that kind (the Move / Rotate / Scale tool is the active subtool, so a translate drag of one selected bone solves its IK chain when Bone IK is on, drawing the chain visualization), the target moves linearly from the start pose to the full delta over `frames` frames (one step per frame, the call returns when the last step is applied), and with release=true it ends like a gizmo release (one undoable operation). Give exactly one of translation, rotation_axis + rotation_angle_deg, or scale. A dynamic rigid body held by a live joint is pulled toward the target by a spring and moved by the physics simulation (the joints keep holding; release keeps its velocity); other dynamic bodies are held kinematic for the drag. With release=false the drag stays held after the last step (query the scene mid-drag); end it with action='release'. Keep frames small enough for the steps to finish inside the MCP request timeout (5 s); an expired call leaves the drag held. A translate drag with surface_snap / surface_orient (default false, never the UI's settings) at every step move each moved mesh along the snap direction (down), either way, to the nearest place within surface_max_distance (meters, default 1) where its base rests on a surface and it fits along the direction; a mesh with no such place keeps its pose (doc/editor/level_tools.md \"Surface placement\"), all moved meshes excluded (doc/editor/level_tools.md \"Transform tool\"); the reply echoes both, surface_max_distance and per node surface_found and world_rotation_xyzw. A drag of any kind with connector_snap_distance (default 0 = off, never the UI's Connector Snap) gathers the connectors when the drag starts and at every step snaps the step's pose, taken after the snap to surface (translate) or the step's rotation or scale about center (rotate, scale: the rotation and scale are kept, only the translation moves), to the nearest connector pair within the distance by its full offset; each step is judged from the unsnapped pose, so the drag unsnaps when the pair is farther; a step snaps only after the drag has moved (U27: a zero translation, a zero angle or a scale of 1 since the start does not snap until a step that moves), and the suspend key (Transform_tool.suspend_connector_snap) does not apply to drag_selection. A translate drag with connector_snap_orientation 'align' also turns the moved set at a snapped step (U44). Every reply (drag, move, release) gives connector_snap: the last step's pair as transform_selection reports it.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -1200,6 +1204,10 @@
           "maxItems": 3,
           "minItems": 3,
           "type": "array"
+        },
+        "connector_snap_orientation": {
+          "description": "Orientation snap (U44, doc/editor/level_tools.md \"Connector snap\"): 'keep' (default, never the UI's Connector Snap Orientation) - the snap translates only; 'align' - the snap also turns the moved set about the moved connector so the pair's frames face each other as a connector join does, at the quarter twist closest to the moved piece's orientation; a root whose locked translate or rotate channel or resulting local transform would be sheared cannot take the turn makes the step translate only (alignment 'locked' or 'shear'). Needs connector_snap_distance > 0 and a translate drag (refused otherwise)",
+          "type": "string"
         }
       },
       "type": "object"
@@ -1215,7 +1223,7 @@
     "name": "cancel_transform_drag"
   },
   {
-    "description": "Read the Transform tool's connector snap (doc/editor/level_tools.md \"Connector snap\") of the current or last node drag (translate, rotate or scale), a pointer gizmo drag or a drag_selection drag. Read-only. Returns active (a running drag gathered connectors to snap by), moved_connectors and target_connectors (gathered at the drag's begin; enabled connectors only, U33), snapped (the last step snapped), skipped ('none'; 'before_motion': the pointer has not moved since the press; 'suspended': the suspend key Transform_tool.suspend_connector_snap is held during a pointer drag), and when snapped distance (of the pair in the unsnapped pose), constraint ('free', 'axis' or 'plane': Connector Snap On Axis with an axis or plane handle of a translate drag, U27; a rotate or scale drag is always free), full_offset (puts the moved connector on the target's), offset (added to the moved nodes' translation: full_offset, or its part along the dragged axis or in the dragged plane), piece_id, piece, connector (the moved piece's connector), target_id, target and target_connector. The last step's pair stays readable after the release or cancel.",
+    "description": "Read the Transform tool's connector snap (doc/editor/level_tools.md \"Connector snap\") of the current or last node drag (translate, rotate or scale), a pointer gizmo drag or a drag_selection drag. Read-only. Returns active (a running drag gathered connectors to snap by), moved_connectors and target_connectors (gathered at the drag's begin; enabled connectors only, U33), snapped (the last step snapped), skipped ('none'; 'before_motion': the pointer has not moved since the press; 'suspended': the suspend key Transform_tool.suspend_connector_snap is held during a pointer drag), and when snapped distance (of the pair in the unsnapped pose), constraint ('free', 'axis' or 'plane': Connector Snap On Axis with an axis or plane handle of a translate drag, U27; a rotate or scale drag is always free), full_offset (puts the moved connector on the target's), offset (added to the moved nodes' translation: full_offset, or its part along the dragged axis or in the dragged plane), piece_id, piece, connector (the moved piece's connector), target_id, target, target_connector, alignment (U44: 'off' - not asked (Connector Snap Orientation keep, or a rotate or scale drag); 'aligned' - the step turned the moved set; asked but translated only: 'on_axis' (a Connector Snap On Axis handle drag), 'locked' (a moved root's locked translate or rotate channel), 'shear' (a moved root's resulting local transform would be sheared: a non-uniformly scaled parent or its own skew), 'degenerate' (a pair frame collapsed since the drag began)), rotation_xyzw and motion_translation (the rigid world motion of an aligned step: rotation first, then translation; identity otherwise) and twist_steps (the join's quarter twist about the target's outward axis, the one turning the piece least). The last step's pair stays readable after the release or cancel.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -1957,6 +1965,29 @@
     "name": "level_refresh_layout"
   },
   {
+    "description": "Wrap with Path (doc/editor/level_tools.md \"Wrap with Path\", U45), the same code path as the Scene Hierarchy window's context menu entry: the kit pieces become the items of ONE new locked path layout (a Curve node carrying the Kit_layout values) that takes the place of the first piece in hierarchy order - its parent, its index among the parent's children and its world translation and rotation - and the pieces are removed (each with its kit light nodes; the generated pieces make their own), as ONE undo entry that undo takes back exactly (the same nodes, ids, transforms, records, materials, bodies, lights and selection). The items are the pieces' distinct (shape, parameter text with its seed mask, slot material names) in hierarchy order; element i takes item i modulo the item count. The pattern is a path in gap mode with gap 0 (a contiguous run that grows with the curve), orientation upright, per-item seeds, no module or surface snap and no connector hidden; the curve is straight along the first piece's x axis, as long as 4 elements (or one per item when more) of the largest item x extent, so element 0 stands exactly where the first piece stood. The new node is selected. Refused, changing nothing, with a message: no nodes, a node of another scene, a node that is not a kit piece (a plain mesh, a group, a kit layout node, a light, a camera), a child of a locked kit layout node or a node inside a reference instance, a first piece whose parent is an unlocked kit layout node (its lock would replace the nested layout), a piece with children other than its kit lights, a scaled piece, a piece with connectors switched off (a layout item carries no connector switches) a piece whose primitive count is not its shape's slot count, an item without extent along x and more than 1024 distinct items. The reply is level_create_layout's (the node's values, run, curve and children) plus scene_name and wrapped_piece_ids.",
+    "inputSchema": {
+      "properties": {
+        "node_ids": {
+          "description": "Ids of the kit pieces to wrap; default: the nodes of the scene that are selected",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "level_wrap_with_path"
+  },
+  {
     "description": "Every kit piece of a scene (nodes carrying Kit_piece), in node id order: id, name, shape, known_shape, parameters (the values and derive, the names derived from the seed) and parameters_text (the saved canonical text with hexadecimal floats), stairs (straight stairs alone, original or recreated: step_count, step_rise, tread_depth, run, slope_degrees - the layout its values produce), mesh_key, position and rotation_xyzw (world), world_aabb {min, max}, materials (slot name to material name, from the mesh primitives in slot order), brush_id (equal ids share one mesh), shares_brush_primitive (each mesh primitive is its brush's part of that slot), follows_kit (the piece's mesh and collision shape are its kit brush's: true for every placed piece and for a loaded piece the load refreshed) and problem (why it does not follow: an unknown shape or parameter values that do not read or are out of range - such a piece keeps the mesh the file holds; empty when it follows), physics {motion_mode, collision_shape, has_body} and pass_through (the mesh carries the pass_through flag: it is not navigation input and no surface for snap to surface or support; a piece of a shape whose collision is none), light_frames (the shape's light frames at the piece's values, as level_get_kits lists them), lights (the piece's kit light nodes, children carrying Kit_light.frame: id, name, frame, position and direction (where it shines) in the piece's local space, type, color, intensity, range, inner_spot_angle, outer_spot_angle and cast_shadow; doc/editor/level_tools.md \"Lights on pieces\").",
     "inputSchema": {
       "properties": {
@@ -2633,7 +2664,7 @@
     "name": "level_get_placement_preview"
   },
   {
-    "description": "Read the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"): snap (Snap To Surface), orient (Orient To Surface), max_distance (Surface Max Distance, meters), connector_snap_distance (Connector Snap, meters, 0 = off) and connector_snap_axis_mode (Connector Snap On Axis: 'full_offset' or 'stay_on_axis'), the settings the Level Kit window, the viewport toolbar buttons and the Transform window's Move tool rows show, which kit placement in the viewport and the Transform tool's gizmo translate drags follow (the connector snap: gizmo translate, rotate and scale drags). Read-only.",
+    "description": "Read the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"): snap (Snap To Surface), orient (Orient To Surface), max_distance (Surface Max Distance, meters), connector_snap_distance (Connector Snap, meters, 0 = off) connector_snap_axis_mode (Connector Snap On Axis: 'full_offset' or 'stay_on_axis') and connector_snap_orientation (Connector Snap Orientation: 'keep' or 'align'), the settings the Level Kit window, the viewport toolbar buttons and the Transform window's Move tool rows show, which kit placement in the viewport and the Transform tool's gizmo translate drags follow (the connector snap: gizmo translate, rotate and scale drags). Read-only.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -2641,7 +2672,7 @@
     "name": "get_surface_snap_settings"
   },
   {
-    "description": "Set the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"), editor state saved to editor_settings.json, not a document edit (no undo entry). Omitted arguments keep their value. Returns snap, orient, max_distance, connector_snap_distance and connector_snap_axis_mode in effect. MCP placement and transform tools never read them: they take their own surface arguments.",
+    "description": "Set the editor's shared surface settings (doc/editor/level_tools.md \"Surface settings\"), editor state saved to editor_settings.json, not a document edit (no undo entry). Omitted arguments keep their value. Returns snap, orient, max_distance, connector_snap_distance, connector_snap_axis_mode and connector_snap_orientation in effect. MCP placement and transform tools never read them: they take their own surface arguments.",
     "inputSchema": {
       "properties": {
         "connector_snap_distance": {
@@ -2663,6 +2694,10 @@
         "snap": {
           "description": "Snap To Surface",
           "type": "boolean"
+        },
+        "connector_snap_orientation": {
+          "description": "Connector Snap Orientation (U44): 'keep' (default) - the snap translates only; 'align' - a gizmo translate drag's snap also turns the moved nodes about the moved connector so the two connector frames face each other as a connector join does (outward axes opposed, up axes agreeing after the quarter twist closest to the moved piece's orientation). Read when a gizmo drag starts; rotate and scale drags, and axis or plane handle drags with Connector Snap On Axis, translate only. drag_selection and transform_selection take their own connector_snap_orientation",
+          "type": "string"
         }
       },
       "type": "object"
@@ -11734,7 +11769,7 @@
     "name": "inject_input_events"
   },
   {
-    "description": "Report the input state the injected events (inject_input_events) have built up: the pointer position in window pixels and whether one has been set, the mouse buttons held, the modifier keys the next event without its own 'modifiers' will carry, whether cursor_enter / window_focus have been sent, and whether an input gesture is currently stepping (with its frame, total frames, injected event count, pending event count and held_frames: the frames a new click's press has been held so that ImGui does not read it as the second click of the previous one). The headless window reports no cursor position of its own, so this is the record of where the injected pointer is.",
+    "description": "Report the input state the injected events (inject_input_events) have built up, with active_mouse_command (the name of the mouse command a drag keeps active, null when none) and last_hovered_scene (the name of the scene of the last hovered viewport, which the Level Kit window acts on; null when none): the pointer position in window pixels and whether one has been set, the mouse buttons held, the modifier keys the next event without its own 'modifiers' will carry, whether cursor_enter / window_focus have been sent, and whether an input gesture is currently stepping (with its frame, total frames, injected event count, pending event count and held_frames: the frames a new click's press has been held so that ImGui does not read it as the second click of the previous one). The headless window reports no cursor position of its own, so this is the record of where the injected pointer is.",
     "inputSchema": {
       "properties": {},
       "required": [],

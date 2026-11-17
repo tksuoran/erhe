@@ -434,6 +434,7 @@ enum class Property_row_id : uint32_t
     move_orient_to_surface,
     move_connector_snap,
     move_connector_snap_axis,
+    move_connector_snap_orientation,
     move_surface_max_distance,
     move_bone_ik,
     move_effector_orientation,

@@ -16,12 +16,14 @@
 
 #include "app_message.hpp"
 #include "config/generated/connector_snap_axis_mode.hpp"
+#include "config/generated/connector_snap_orientation.hpp"
 
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/curve_path.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_property/expression.hpp"
 #include "erhe_property/property_value.hpp"
+#include "erhe_scene/trs_transform.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -142,6 +144,9 @@ public:
     // Releases the held items (their materials) and values; capacity kept.
     void clear();
 };
+
+// D3.12: the local transform of a joined piece, keeping its stored scale when the matrix allows, else decomposed.
+[[nodiscard]] auto make_joined_local_transform(const glm::mat4& parent_from_node, const glm::vec3& scale) -> erhe::scene::Trs_transform;
 
 // Whether the layout's world matrix keeps scale 1, as a generation requires.
 [[nodiscard]] auto is_layout_scale_kept(const glm::mat4& world_from_layout) -> bool;
@@ -369,6 +374,15 @@ public:
     std::optional<erhe::math::Curve_path> path;          // a path layout's curve; none: straight along the piece's x axis
 };
 
+// What Wrap with Path (U45) wraps: the pieces in hierarchy order, their distinct items and the largest item x extent.
+class Kit_wrap_plan
+{
+public:
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> pieces;
+    std::vector<Kit_layout_item>                    items;
+    float                                           extent{0.0f};
+};
+
 // Whether a new kit layout node's line step and grid spacings are as given or its item's extent (a contiguous run).
 enum class Kit_layout_spacing : unsigned int {
     as_given = 0,
@@ -438,6 +452,9 @@ public:
     // U27: whether an axis or plane drag applies the full connector snap offset or only its part along the handle.
     [[nodiscard]] auto get_connector_snap_axis_mode() const -> Connector_snap_axis_mode;
     void set_connector_snap_axis_mode(Connector_snap_axis_mode mode);
+    // U44: whether a translate drag's connector snap also turns the moved nodes so the connector frames face each other.
+    [[nodiscard]] auto get_connector_snap_orientation() const -> Connector_snap_orientation;
+    void set_connector_snap_orientation(Connector_snap_orientation orientation);
 
     // D4.4: the origin at the point (module-rounded), upright, turned by yaw_steps rotation steps
     // about the up axis, then the surface options; no allocation, raytrace scene committed here.
@@ -618,6 +635,48 @@ public:
     // R5.12.9: make_layout_from_piece() with the initial values, the spacings from the piece's extent when they say so.
     [[nodiscard]] auto make_layout_from_piece_initial(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Mesh>& piece) -> Kit_layout_result;
 
+    // U47: why a new kit layout node of the kind cannot go under the parent (a kit layout node, a scaled parent, a tilted
+    // parent for stairs); null when it can. Static text, no allocation.
+    [[nodiscard]] static auto find_layout_parent_refusal(const erhe::Hierarchy& parent, Repeat_pattern_kind kind) -> const char*;
+
+    // U47: a new kit layout node of the kind with the initial values (the Level Kit window's, the kind's own values),
+    // under the parent (none: the scene root) at the world pose, the item given or basic.block at its defaults (stairs:
+    // none); one undo entry; selects the node.
+    [[nodiscard]] auto add_layout_of_kind(
+        Scene_root&                             scene_root,
+        Repeat_pattern_kind                     kind,
+        const std::shared_ptr<erhe::Hierarchy>& parent,
+        const glm::vec3&                        position,
+        const glm::quat&                        rotation,
+        const std::optional<Kit_layout_item>&   item
+    ) -> Kit_layout_result;
+
+    // U47: the initial values on a plain curve node (no layout values, no children) with the curve kind; the item given or
+    // basic.block at its defaults (stairs: none); one undo entry; selects the node.
+    [[nodiscard]] auto make_initial_layout_on_curve(
+        Scene_root&                                scene_root,
+        const std::shared_ptr<erhe::scene::Curve>& curve,
+        Repeat_pattern_kind                        kind,
+        const std::optional<Kit_layout_item>&      item
+    ) -> Kit_layout_result;
+
+    // U47: a piece of the shape at its defaults under the parent (none: the scene root) at the world pose (the Create
+    // menu); one undo entry; selects the piece.
+    [[nodiscard]] auto add_piece_of_shape(
+        Scene_root&                             scene_root,
+        const Kit_shape_definition&             shape,
+        const std::shared_ptr<erhe::Hierarchy>& parent,
+        const glm::vec3&                        position,
+        const glm::quat&                        rotation
+    ) -> Kit_place_result;
+
+    // U45 (Wrap with Path): why wrap_with_path() refuses the nodes; none when it takes them. Reads the items' brushes.
+    [[nodiscard]] auto find_wrap_with_path_refusal(Scene_root& scene_root, std::span<const std::shared_ptr<erhe::scene::Node>> nodes) -> std::optional<std::string>;
+
+    // U45: one locked path layout in the place of the first piece in hierarchy order, the pieces its distinct items, the
+    // pieces removed; one undo entry; selects the node.
+    [[nodiscard]] auto wrap_with_path(Scene_root& scene_root, std::span<const std::shared_ptr<erhe::scene::Node>> nodes) -> Kit_layout_result;
+
     // R5.12.9: a new kit layout node of the initial values with the one item at a world pose (the Brush tool's
     // Place As Layout click), one undo entry.
     [[nodiscard]] auto add_layout_initial(Scene_root& scene_root, const Kit_layout_item& item, const glm::vec3& position, const glm::quat& rotation) -> Kit_layout_result;
@@ -735,6 +794,12 @@ public:
 
 private:
     [[nodiscard]] auto make_brush(const Kit_parameter_values& values) -> std::shared_ptr<Brush>;
+
+    // U47: the initial values with the kind and the item (basic.block at its defaults when none; stairs: no item).
+    [[nodiscard]] auto make_initial_layout_data(Scene_root& scene_root, Repeat_pattern_kind kind, const std::optional<Kit_layout_item>& item) -> Kit_layout_data;
+
+    // U45: the pieces in hierarchy order, their distinct items and the largest item x extent; returns the refusal.
+    [[nodiscard]] auto prepare_wrap_with_path(Scene_root& scene_root, std::span<const std::shared_ptr<erhe::scene::Node>> nodes, Kit_wrap_plan& out_plan) -> std::string;
 
     // place() without the refusals and without executing: the operations in order (materials, then pieces).
     [[nodiscard]] auto prepare_placements(

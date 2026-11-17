@@ -335,6 +335,40 @@ auto apply_motion(const Kit_join_pose& motion, const glm::mat4& m) -> glm::mat4
     return world_from_world * m;
 }
 
+auto closest_join_twist(const Kit_connector& piece_connector, const Kit_connector& target_connector) -> int
+{
+    // The rotation angle grows as the quaternion's |w| shrinks; a later twist wins only by a clear margin, so float noise keeps the order.
+    constexpr float c_margin = 1.0e-6f;
+    int   best_twist = 0;
+    float best_w     = -1.0f;
+    for (int twist = 0; twist < 4; ++twist) {
+        const float w = std::abs(join_connectors(piece_connector, target_connector, twist, 0.0f).rotation.w);
+        if (w > (best_w + c_margin)) {
+            best_w     = w;
+            best_twist = twist;
+        }
+    }
+    return best_twist;
+}
+
+auto align_connector_frames(const Kit_connector& moved_world, const Kit_connector& target_world) -> Kit_connector_alignment
+{
+    const int twist_steps = closest_join_twist(moved_world, target_world);
+    return Kit_connector_alignment{
+        .motion      = join_connectors(moved_world, target_world, twist_steps, 0.0f),
+        .twist_steps = twist_steps
+    };
+}
+
+auto moved_parent_from_node(const Kit_join_pose& motion, const glm::mat4& world_from_node, const glm::mat4& parent_from_world) -> std::optional<glm::mat4>
+{
+    const glm::mat4 parent_from_node = parent_from_world * apply_motion(motion, world_from_node);
+    if (!has_orthogonal_axes(glm::mat3{parent_from_node})) {
+        return std::nullopt;
+    }
+    return parent_from_node;
+}
+
 auto is_identity_motion(const Kit_join_pose& motion) -> bool
 {
     // The rotation angle is about twice the length of the quaternion's vector part.

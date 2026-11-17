@@ -1541,6 +1541,34 @@ namespace {
     return true;
 }
 
+// The optional connector_snap_orientation argument (U44): "keep" (the default) or "align".
+[[nodiscard]] auto read_connector_snap_orientation(const json& args, Connector_snap_orientation& out_orientation, std::string& out_error) -> bool
+{
+    out_orientation = Connector_snap_orientation::keep;
+    if (!args.contains("connector_snap_orientation")) {
+        return true;
+    }
+    const json& value = args.at("connector_snap_orientation");
+    if (!value.is_string() || !from_string(value.get<std::string>(), out_orientation)) {
+        out_error = "connector_snap_orientation must be \"keep\" or \"align\", not " + value.dump();
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] auto c_str(const Kit_connector_snap_alignment alignment) -> const char*
+{
+    switch (alignment) {
+        case Kit_connector_snap_alignment::off:     return "off";
+        case Kit_connector_snap_alignment::aligned: return "aligned";
+        case Kit_connector_snap_alignment::on_axis: return "on_axis";
+        case Kit_connector_snap_alignment::locked:  return "locked";
+        case Kit_connector_snap_alignment::shear:   return "shear";
+        case Kit_connector_snap_alignment::degenerate: return "degenerate";
+        default:                                    return "?";
+    }
+}
+
 [[nodiscard]] auto node_id_json(const std::weak_ptr<erhe::scene::Node>& weak_node) -> json
 {
     const std::shared_ptr<erhe::scene::Node> node = weak_node.lock();
@@ -1583,6 +1611,11 @@ namespace {
         reply["target_id"]        = node_id_json(state.target);
         reply["target"]           = node_name_json(state.target);
         reply["target_connector"] = state.target_connector;
+        // U44: the rigid motion of an aligned snap (world rotation, then translation); identity otherwise.
+        reply["alignment"]        = c_str(state.alignment);
+        reply["rotation_xyzw"]    = {state.motion.rotation.x, state.motion.rotation.y, state.motion.rotation.z, state.motion.rotation.w};
+        reply["motion_translation"] = {state.motion.position.x, state.motion.position.y, state.motion.position.z};
+        reply["twist_steps"]      = state.twist_steps;
     }
     return reply;
 }
@@ -1675,6 +1708,16 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     if ((connector_snap_distance > 0.0f) && ((!translation.has_value() && !rotation.has_value() && !scale.has_value()) || shared.component_mode)) {
         return make_error_content("transform_selection: connector_snap_distance snaps moved nodes; it needs a translation, rotation or scale of a node selection");
     }
+    Connector_snap_orientation connector_snap_orientation{Connector_snap_orientation::keep};
+    if (!read_connector_snap_orientation(args, connector_snap_orientation, parse_error)) {
+        return make_error_content("transform_selection: " + parse_error);
+    }
+    if (
+        (connector_snap_orientation == Connector_snap_orientation::align) &&
+        (!(connector_snap_distance > 0.0f) || rotation.has_value() || scale.has_value() || skew.has_value())
+    ) {
+        return make_error_content("transform_selection: connector_snap_orientation align turns a translate snap; it needs connector_snap_distance and a translation only");
+    }
 
     json applied = json::object();
     if (translation.has_value()) {
@@ -1697,7 +1740,7 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     const std::size_t surface_found_count = transform_tool->snap_to_surface(surface);
     // After the rest, as a drag step orders them (doc/editor/level_tools.md "Connector snap").
     if (connector_snap_distance > 0.0f) {
-        static_cast<void>(transform_tool->snap_to_connectors(connector_snap_distance));
+        static_cast<void>(transform_tool->snap_to_connectors(connector_snap_distance, connector_snap_orientation));
     }
 
     const bool end_edit = args.value("end_edit", true);
@@ -1750,6 +1793,7 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         {"surface_max_distance", surface.max_distance},
         {"surface_found_count", surface_found_count},
         {"connector_snap_distance", connector_snap_distance},
+        {"connector_snap_orientation", std::string{to_string(connector_snap_orientation)}},
         {"connector_snap",      connector_snap_json(transform_tool->get_connector_snap())},
         {"nodes",               nodes}
     }).dump();
@@ -1918,6 +1962,15 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         if (!read_connector_snap_distance(args, steps.connector_snap_distance, parse_error)) {
             return make_error_content("drag_selection: " + parse_error);
         }
+        if (!read_connector_snap_orientation(args, steps.connector_snap_orientation, parse_error)) {
+            return make_error_content("drag_selection: " + parse_error);
+        }
+        if ((steps.connector_snap_orientation == Connector_snap_orientation::align) && (steps.kind != Transform_drag_kind::translate)) {
+            return make_error_content("drag_selection: connector_snap_orientation align applies to translate drags only");
+        }
+        if ((steps.connector_snap_orientation == Connector_snap_orientation::align) && !(steps.connector_snap_distance > 0.0f)) {
+            return make_error_content("drag_selection: connector_snap_orientation align turns a connector snap; it needs connector_snap_distance > 0");
+        }
 
         if (shared.component_mode) {
             return make_error_content("drag_selection drags node selections; a mesh component selection is active");
@@ -1928,7 +1981,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         if (!has_center) {
             steps.center = shared.world_from_anchor_initial_state.get_translation();
         }
-        if (!transform_tool->begin_scripted_drag(steps.kind, steps.surface, steps.connector_snap_distance)) {
+        if (!transform_tool->begin_scripted_drag(steps.kind, steps.surface, steps.connector_snap_distance, steps.connector_snap_orientation)) {
             return make_error_content("Drag refused: a pointer drag is active");
         }
         steps.request = m_current_request;
@@ -1959,6 +2012,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         {"surface_orient", finished.surface.orient == Surface_orient::on},
         {"surface_max_distance", finished.surface.max_distance},
         {"connector_snap_distance", finished.connector_snap_distance},
+        {"connector_snap_orientation", std::string{to_string(finished.connector_snap_orientation)}},
         {"connector_snap", connector_snap_json(transform_tool->get_connector_snap())},
         {"nodes",          nodes}
     }).dump();

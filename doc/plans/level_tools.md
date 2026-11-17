@@ -368,6 +368,134 @@ The user's rulings (2026-11-15):
   of a piece the kit light nodes stand at every step where the release puts
   them; a cancel puts them back; the release is one undo entry. Built as
   D3.15 of `doc/plans/level_tools_design.md`.
+- U44 (2026-11-17), snap orientation. The user's request: "Add "snap
+  orientation" feature, off by default, when enabled, when connectors are
+  snapped, also alight orientation so connector tangent frames face each
+  other." The orchestrator's reading: a setting beside the connector snap
+  settings, off by default, with which a snapped step also turns the moved
+  set so the pair's frames face each other as an explicit connector join
+  does. The coder's choices, for the user's review:
+  - It applies to translate drags without a handle constraint; rotate and
+    scale drags, and axis or plane handle drags with Connector Snap On Axis,
+    snap by translation only as before (a rotate drag's turn is the
+    user's, and an axis-constrained drag cannot co-locate a turned pair).
+  - The roll about the pair's axis is the join's quarter twist that turns
+    the piece least, the smaller twist among equal ones; a piece rolled 45
+    degrees off every quarter takes the lower twist.
+  - A moved node whose locked rotate or translate channel would hold back
+    the turn, or whose resulting local transform would be sheared (a parent
+    with non-uniform scale, or a skew of its own), makes the step snap by
+    translation only; the reply names the reason (`alignment` `locked` or
+    `shear`).
+  - The MCP drags take their own argument (`connector_snap_orientation`,
+    default `keep`), never the UI setting, as they do for the distance.
+  - The toolbar button is the rotate-3d-variant icon, "Turn" without the
+    icon font.
+  Built as step 72 of `doc/plans/level_tools_implementation.md`,
+  `doc/editor/level_tools.md` "Connector snap".
+- U45 (2026-11-17), Wrap with Path. The user's request: "Add scene
+  hierarchy context menu operation: Wrap with path - so you can create curve
+  of selected nodes - inserting path in place of selected item and using the
+  selected item as child shape for the path." The orchestrator's reading:
+  several selected pieces become the items of one path layout in the place
+  of the first one in hierarchy order (pending the user's confirmation). The
+  coder's choices, for the user's review:
+  - The entry is on every node row of the Scene Hierarchy window's context
+    menu; on a selected row it takes the selection, on another row the
+    clicked node alone (as the bone entries do). Greyed with the reason as
+    its tooltip for anything that is not a wrappable kit piece; the Level Kit
+    window gets no button (its Make Layout with the kind `path` already makes
+    the one-piece form there).
+  - The layout's values are fixed, not the Level Kit window's initial values,
+    so element 0 always stands exactly on the wrapped piece: a locked path in
+    gap mode with gap 0 (a contiguous run that grows as the curve is
+    lengthened, rather than a stated count stretched over it), orientation
+    `upright`, per-item seeds (every copy has the piece's derived values), no
+    module or surface snap, no connector hidden.
+  - The curve is straight along the first piece's x axis (the axis a path
+    advances along), 4 elements long at the largest item x extent, or one
+    element per item when there are more.
+  - Several pieces: equal pieces (shape, parameter text, slot materials) give
+    one item; the items are in hierarchy order and the elements cycle them.
+    The pieces may have different parents; the node takes the first one's.
+    One refused node refuses the whole set.
+  - The node is named after the first piece followed by " Path" and is
+    selected afterwards; a redo leaves the selection the removals left, as
+    Make Layout's redo does.
+  - Kit light children go with their piece and each element makes its own
+    lights at the frames' starting values: an edit of the wrapped piece's
+    light (intensity, shadow casting) is not carried to the copies; undo gives
+    the edited light back.
+  - The copies carry the items alone: node state beyond the kit record (the
+    piece's name, physics edits such as a dynamic motion mode, visibility
+    and other flags, tags, styles, other attached properties) is not carried
+    to them, and with several pieces the place of every piece after the
+    first is dropped (only its item stays); undo gives all of it back.
+  - A first piece whose parent is an unlocked kit layout node is refused: a
+    lock of that layout would replace the nested path layout. Make Layout
+    from a piece shares that behaviour and is left as it is.
+  - An item without extent along x and more distinct items than a layout
+    holds (1024) are refused by the same check that greys the entry.
+  - Refused rather than dropped: a piece with children other than its kit
+    lights (user data under it is never deleted), a scaled piece (a layout
+    node keeps scale 1) and a piece with a connector switched off (a layout
+    item carries no connector switches until step 60).
+  Built as step 73 of `doc/plans/level_tools_implementation.md`,
+  `doc/editor/level_tools.md` "Wrap with Path".
+- U46 (2026-11-17), path stairs from the UI. The user's request: "Ensure
+  there is a way to create path stairs - I wasnt able to figure out how to
+  create path stairs using the UI." The finding: a stairs layout could be
+  made from the UI only by an unlikely route. The Level Kit window's Kind
+  row offered Stairs, but its one creation button, Make Layout, needs a
+  selected kit piece and then refuses the stairs kind ("a stairs layout
+  places no piece"); the working route was to pick some shape in the
+  window, tick Place As Layout and click in the viewport, which places a
+  default staircase that has nothing to do with the chosen shape. The
+  Properties window's Kind row switches a path or segments layout to
+  stairs, but a layout node to switch first had to exist; a plain Curve
+  node (Create > Curve) could be made a layout only over MCP
+  (`level_create_layout` with `curve_id`), and no Create menu listed a
+  layout. The coder's choices, for the user's review:
+  - The Level Kit window's Layout section gets a button named after the
+    shown kind, "Add Path Stairs" for stairs ("Add Line Layout", ...): a
+    new layout of the kind with the section's values at the scene root's
+    origin, no selection needed, selected afterwards. Make Layout is
+    disabled for the stairs kind with the reason in its tooltip.
+  - "Make Layout On Curve" in the same section turns a selected plain curve
+    into a path, segments or stairs layout with the section's values.
+  - The stairs kind is called "Path Stairs" wherever a new one is made (the
+    button, the Create menu entry, the new node's name), so it is found by
+    the word stairs and told apart from the `basic.stairs` shape
+    ("Straight stairs").
+  - The default staircase is the existing one: a flight of ten steps at the
+    values' slope (2 m over 3 m at the defaults), which Level Check passes.
+  - The Properties Kind row already switches among path, segments and
+    stairs in place; unchanged.
+  Built as step 74 of `doc/plans/level_tools_implementation.md`,
+  `doc/editor/level_tools.md` "Stairs layouts" and "Level Kit window".
+- U47 (2026-11-17), level kit nodes in the Create menu. The user's request:
+  "The Create menu (in scene hierarchy window and menubar) should list level
+  kit nodes." The coder's choices, for the user's review:
+  - One "Level Kit" submenu, drawn by one function, at the end of the Scene
+    Hierarchy window's Create menu and of the main menu's Commands > Create
+    (the menubar has no Create menu of its own; its Create entries are the
+    Commands menu's `Create.*` bindings).
+  - A submenu per kit lists all its shapes by display name, originals and
+    recreated "(F)" versions both, in library order as the Level Kit window
+    lists them. A shape entry places one piece at its defaults.
+  - "Layouts" lists every kind; a kind's node takes the Level Kit window's
+    initial values for that kind and a `basic.block` at its defaults as its
+    item (not the shape chosen in the Level Kit window, so the menu does not
+    depend on that window's state; the window's own Add button uses the
+    chosen shape). Path Stairs has no item.
+  - New nodes go at the parent's origin, under the clicked prim (the
+    hierarchy menu) or the active scene's root (the main menu), and are
+    selected; one undo entry each.
+  - Layout entries are disabled under a kit layout node, a scaled parent and
+    (stairs) a tilted parent, with the reason as tooltip; the submenu is
+    disabled without a scene or under a prim that is not a node.
+  Built as step 75 of `doc/plans/level_tools_implementation.md`,
+  `doc/editor/level_tools.md` "Create menu".
 
 ## Terms
 

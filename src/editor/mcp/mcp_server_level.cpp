@@ -2476,7 +2476,8 @@ namespace {
         {"orient",                  options.orient == Surface_orient::on},
         {"max_distance",            options.max_distance},
         {"connector_snap_distance", level_kits.get_connector_snap_distance()},
-        {"connector_snap_axis_mode", std::string{to_string(level_kits.get_connector_snap_axis_mode())}}
+        {"connector_snap_axis_mode", std::string{to_string(level_kits.get_connector_snap_axis_mode())}},
+        {"connector_snap_orientation", std::string{to_string(level_kits.get_connector_snap_orientation())}}
     };
 }
 
@@ -2493,15 +2494,25 @@ auto Mcp_server::query_surface_snap_settings(const json& args) -> std::string
 
 auto Mcp_server::action_set_surface_snap_settings(const json& args) -> std::string
 {
-    const std::string unrecognized = unrecognized_keys(args, {"snap", "orient", "max_distance", "connector_snap_distance", "connector_snap_axis_mode"});
+    const std::string unrecognized = unrecognized_keys(args, {"snap", "orient", "max_distance", "connector_snap_distance", "connector_snap_axis_mode", "connector_snap_orientation"});
     if (!unrecognized.empty()) {
-        return make_error_content("set_surface_snap_settings: unrecognized argument(s): " + unrecognized + " (accepted: snap, orient, max_distance, connector_snap_distance, connector_snap_axis_mode)");
+        return make_error_content(
+            "set_surface_snap_settings: unrecognized argument(s): " + unrecognized +
+            " (accepted: snap, orient, max_distance, connector_snap_distance, connector_snap_axis_mode, connector_snap_orientation)"
+        );
     }
     Connector_snap_axis_mode axis_mode{Connector_snap_axis_mode::full_offset};
     if (args.contains("connector_snap_axis_mode")) {
         const json& value = args.at("connector_snap_axis_mode");
         if (!value.is_string() || !from_string(value.get<std::string>(), axis_mode)) {
             return make_error_content("set_surface_snap_settings: connector_snap_axis_mode must be \"full_offset\" or \"stay_on_axis\", not " + value.dump());
+        }
+    }
+    Connector_snap_orientation orientation{Connector_snap_orientation::keep};
+    if (args.contains("connector_snap_orientation")) {
+        const json& value = args.at("connector_snap_orientation");
+        if (!value.is_string() || !from_string(value.get<std::string>(), orientation)) {
+            return make_error_content("set_surface_snap_settings: connector_snap_orientation must be \"keep\" or \"align\", not " + value.dump());
         }
     }
     std::string max_distance_error;
@@ -2535,6 +2546,9 @@ auto Mcp_server::action_set_surface_snap_settings(const json& args) -> std::stri
     }
     if (args.contains("connector_snap_axis_mode")) {
         level_kits.set_connector_snap_axis_mode(axis_mode);
+    }
+    if (args.contains("connector_snap_orientation")) {
+        level_kits.set_connector_snap_orientation(orientation);
     }
     return make_json_content(surface_settings_json(level_kits)).dump();
 }
@@ -3539,6 +3553,61 @@ auto Mcp_server::action_level_set_layout_lock(const json& args) -> std::string
     }
     json reply = layout_reply(level_kits, *scene_root, *node, &result);
     reply["scene_name"] = scene_root->get_name();
+    return make_json_content(reply).dump();
+}
+
+auto Mcp_server::action_level_wrap_with_path(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "node_ids"});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_wrap_with_path: unrecognized argument(s): " + unrecognized + " (accepted: scene_name, node_ids)");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::string tail = "; nothing was changed";
+    // node_ids, else the nodes of the scene's selection (the hierarchy window's entry takes the selection the same way).
+    std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+    if (args.contains("node_ids")) {
+        const json& node_ids = args.at("node_ids");
+        if (!node_ids.is_array() || node_ids.empty()) {
+            return make_error_content("level_wrap_with_path: node_ids must be a non-empty array of node ids" + tail);
+        }
+        for (const json& id : node_ids) {
+            if (!id.is_number_unsigned()) {
+                return make_error_content("level_wrap_with_path: node_ids holds " + id.dump() + ", not a node id" + tail);
+            }
+            const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*scene_root, json{{"node_id", id}}, "node_id", "node_name");
+            if (!node) {
+                return make_error_content("level_wrap_with_path: no node " + id.dump() + " in scene " + scene_root->get_name() + tail);
+            }
+            nodes.push_back(node);
+        }
+    } else {
+        for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+            const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (node && (node->get_item_host() == scene_root)) {
+                nodes.push_back(node);
+            }
+        }
+        if (nodes.empty()) {
+            return make_error_content("level_wrap_with_path: no node_ids given and no node of scene " + scene_root->get_name() + " is selected" + tail);
+        }
+    }
+    json wrapped_ids = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        wrapped_ids.push_back(node->get_id());
+    }
+    Level_kits& level_kits = *m_context.level_kits;
+    const Kit_layout_result result = level_kits.wrap_with_path(*scene_root, nodes);
+    if (!result.error.empty()) {
+        return make_error_content("level_wrap_with_path: " + result.error + tail);
+    }
+    json reply = layout_reply(level_kits, *scene_root, *result.node, &result);
+    reply["scene_name"]        = scene_root->get_name();
+    reply["wrapped_piece_ids"] = wrapped_ids;
     return make_json_content(reply).dump();
 }
 

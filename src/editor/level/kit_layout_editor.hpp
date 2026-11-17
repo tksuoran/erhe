@@ -207,6 +207,13 @@ public:
 private:
     void store();
     void queue_make(const std::shared_ptr<Scene_root>& scene_root, const std::shared_ptr<erhe::scene::Mesh>& piece);
+    void queue_add(const std::shared_ptr<Scene_root>& scene_root, Repeat_pattern_kind kind);
+    void queue_make_on_curve(const std::shared_ptr<Scene_root>& scene_root, const std::shared_ptr<erhe::scene::Curve>& curve, Repeat_pattern_kind kind);
+    [[nodiscard]] static auto get_layout_add_button_label(Repeat_pattern_kind kind) -> const char*;
+    // The first selected curve node of the scene without layout values and children.
+    [[nodiscard]] auto find_plain_curve(const Scene_root& scene_root) const -> std::shared_ptr<erhe::scene::Curve>;
+    // The shape the Brush tool places (chosen in the Level Kit window) with its values and slot materials; none when no shape is chosen.
+    [[nodiscard]] auto get_chosen_item() const -> std::optional<Kit_layout_item>;
 
     App_context&              m_context;
     // Read from the editor setting once, written back at each edit.

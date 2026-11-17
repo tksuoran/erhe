@@ -1006,10 +1006,11 @@ void Transform_tool::apply_drag_surface_step()
     static_cast<void>(snap_to_surface(m_drag_surface));
 }
 
-void Transform_tool::begin_connector_snap(const float distance)
+void Transform_tool::begin_connector_snap(const float distance, const Connector_snap_orientation orientation)
 {
     using namespace erhe::utility;
     m_connector_snap.clear();
+    m_connector_snap_orientation    = orientation;
     m_connector_snap_motion         = false;
     m_connector_snap_step_suspended = false;
     if (!(distance > 0.0f) || shared.component_mode || shared.entries.empty() || (m_context.level_kits == nullptr)) {
@@ -1069,18 +1070,29 @@ void Transform_tool::apply_drag_connector_step()
     }
     const bool timed = log_trs_tool->should_log(spdlog::level::trace);
     const std::chrono::steady_clock::time_point start_time = timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-    std::optional<glm::vec3> offset = m_connector_snap.step(get_connector_snap_constraint());
+    std::optional<glm::vec3> offset = m_connector_snap.step(get_connector_snap_constraint(), m_connector_snap_orientation);
+    if (offset.has_value() && (m_connector_snap.get_state().alignment == Kit_connector_snap_alignment::aligned)) {
+        const Kit_connector_snap_alignment check = check_aligned_motion(m_connector_snap.get_state().motion);
+        if (check != Kit_connector_snap_alignment::aligned) {
+            m_connector_snap.drop_alignment(check); // U44: the snap translates only
+        }
+    }
+    const bool aligned = offset.has_value() && (m_connector_snap.get_state().alignment == Kit_connector_snap_alignment::aligned);
     // A snap that cannot co-locate is not a snap: a root whose locked translate channel the offset needs keeps the step unsnapped.
-    if (offset.has_value() && !can_translate_moved_roots(offset.value())) {
+    if (offset.has_value() && !aligned && !can_translate_moved_roots(offset.value())) {
         m_connector_snap.reject_step();
         offset.reset();
     }
     if (timed) {
         log_trs_tool->trace(
-            "connector snap step: {} moved connectors, {} target connectors, snapped {}: {:.4f} ms",
-            m_connector_snap.get_moved_count(), m_connector_snap.get_target_count(), offset.has_value(),
+            "connector snap step: {} moved connectors, {} target connectors, snapped {}, aligned {}: {:.4f} ms",
+            m_connector_snap.get_moved_count(), m_connector_snap.get_target_count(), offset.has_value(), aligned,
             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count()
         );
+    }
+    if (aligned) {
+        apply_aligned_motion(m_connector_snap.get_state().motion);
+        return;
     }
     if (!offset.has_value() || (offset.value() == glm::vec3{0.0f})) {
         return;
@@ -1095,6 +1107,64 @@ void Transform_tool::apply_drag_connector_step()
         enforce_channel_locks(*node, entry.parent_from_node_before);
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor, offset.value());
+}
+
+auto Transform_tool::check_aligned_motion(const Kit_join_pose& motion) const -> Kit_connector_snap_alignment
+{
+    using namespace erhe::utility;
+    constexpr float c_locked_component_tolerance = 1.0e-5f;
+    constexpr float c_turn_tolerance             = 1.0e-6f;
+    const glm::vec3 turn_axis{motion.rotation.x, motion.rotation.y, motion.rotation.z};
+    const bool      turns = (glm::length(turn_axis) > c_turn_tolerance);
+    constexpr std::array<uint64_t, 3> c_axis_locks{
+        erhe::Item_flags::lock_translation_x, erhe::Item_flags::lock_translation_y, erhe::Item_flags::lock_translation_z
+    };
+    for (const Transform_entry& entry : shared.entries) {
+        const std::shared_ptr<erhe::scene::Node>& node = entry.node;
+        if (!node || test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform) || has_moved_ancestor_entry(*node)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        const std::optional<glm::mat4> parent_from_node = moved_parent_from_node(
+            motion, node->world_from_node(), parent ? parent->node_from_world() : glm::mat4{1.0f}
+        );
+        if (!parent_from_node.has_value()) {
+            return Kit_connector_snap_alignment::shear;
+        }
+        const uint64_t locks = node->get_flag_bits();
+        if (turns && ((locks & erhe::Item_flags::lock_rotation_mask) != 0)) {
+            return Kit_connector_snap_alignment::locked;
+        }
+        // Channel locks hold local components: the moved local translation keeps every locked one.
+        const glm::vec3 before = node->parent_from_node_transform().get_translation();
+        const glm::vec3 after  = glm::vec3{parent_from_node.value()[3]};
+        for (int axis = 0; axis < 3; ++axis) {
+            if (((locks & c_axis_locks[axis]) != 0) && (std::abs(after[axis] - before[axis]) > c_locked_component_tolerance)) {
+                return Kit_connector_snap_alignment::locked;
+            }
+        }
+    }
+    return Kit_connector_snap_alignment::aligned;
+}
+
+void Transform_tool::apply_aligned_motion(const Kit_join_pose& motion)
+{
+    using namespace erhe::utility;
+    // check_aligned_motion() accepted every root, so each moved local transform is free of shear.
+    for (const Transform_entry& entry : shared.entries) {
+        const std::shared_ptr<erhe::scene::Node>& node = entry.node;
+        if (!node || test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform) || has_moved_ancestor_entry(*node)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        const std::optional<glm::mat4> parent_from_node = moved_parent_from_node(
+            motion, node->world_from_node(), parent ? parent->node_from_world() : glm::mat4{1.0f}
+        );
+        // As a connector join writes it (D3.12): the node keeps its stored scale, a mirror included.
+        node->set_parent_from_node(make_joined_local_transform(parent_from_node.value(), node->parent_from_node_transform().get_scale()));
+        enforce_channel_locks(*node, entry.parent_from_node_before);
+    }
+    shared.world_from_anchor.set(apply_motion(motion, shared.world_from_anchor.get_matrix()));
 }
 
 auto Transform_tool::get_connector_snap_constraint() const -> Kit_connector_snap_constraint
@@ -1202,9 +1272,9 @@ auto Transform_tool::can_translate_moved_roots(const glm::vec3& offset) const ->
     return true;
 }
 
-auto Transform_tool::snap_to_connectors(const float distance) -> bool
+auto Transform_tool::snap_to_connectors(const float distance, const Connector_snap_orientation orientation) -> bool
 {
-    begin_connector_snap(distance);
+    begin_connector_snap(distance, orientation);
     m_connector_snap_motion = true; // the call's edits are its motion
     apply_drag_connector_step();
     const bool snapped = m_connector_snap.get_state().snapped;
@@ -2048,7 +2118,12 @@ auto Transform_tool::on_drag_ready() -> bool
                 : Surface_options{};
         m_connector_snap_axis_mode =
             (m_context.level_kits != nullptr) ? m_context.level_kits->get_connector_snap_axis_mode() : Connector_snap_axis_mode::full_offset;
-        begin_connector_snap((m_context.level_kits != nullptr) ? m_context.level_kits->get_connector_snap_distance() : 0.0f);
+        // U44: only a translate drag's snap turns the moved set.
+        const Connector_snap_orientation orientation =
+            ((kind == Transform_drag_kind::translate) && (m_context.level_kits != nullptr))
+                ? m_context.level_kits->get_connector_snap_orientation()
+                : Connector_snap_orientation::keep;
+        begin_connector_snap((m_context.level_kits != nullptr) ? m_context.level_kits->get_connector_snap_distance() : 0.0f, orientation);
     }
     if (started && shared.component_mode) {
         begin_component_edit();
@@ -3455,7 +3530,12 @@ void Transform_tool::record_transform_operation()
     );
 }
 
-auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind, const Surface_options& surface, const float connector_snap_distance) -> bool
+auto Transform_tool::begin_scripted_drag(
+    const Transform_drag_kind        kind,
+    const Surface_options&           surface,
+    const float                      connector_snap_distance,
+    const Connector_snap_orientation connector_snap_orientation
+) -> bool
 {
     if ((m_active_handle != Handle::e_handle_none) || m_scripted_drag_active) {
         return false;
@@ -3476,7 +3556,7 @@ auto Transform_tool::begin_scripted_drag(const Transform_drag_kind kind, const S
     m_physics_drag.begin(m_context, shared.entries, kind);
     m_drag_surface = (kind == Transform_drag_kind::translate) ? surface : Surface_options{};
     m_connector_snap_axis_mode = Connector_snap_axis_mode::full_offset; // no handle: the full offset
-    begin_connector_snap(connector_snap_distance);
+    begin_connector_snap(connector_snap_distance, (kind == Transform_drag_kind::translate) ? connector_snap_orientation : Connector_snap_orientation::keep);
     return true;
 }
 

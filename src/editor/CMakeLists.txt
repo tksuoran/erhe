@@ -437,6 +437,8 @@ erhe_target_sources_grouped(
     level/kit_shapes_nature_rocks.cpp
     level/kit_shapes_nature_rocks_v2.cpp
     level/kit_shapes_roof.cpp
+    level/level_kit_create_menu.cpp
+    level/level_kit_create_menu.hpp
     level/level_kit_window.cpp
     level/level_kit_window.hpp
     level/level_kits.cpp
@@ -1165,6 +1167,8 @@ set(_config_sources
     ${_config_out}/camera_controls_config.cpp
     ${_config_out}/connector_snap_axis_mode.hpp
     ${_config_out}/connector_snap_axis_mode.cpp
+    ${_config_out}/connector_snap_orientation.hpp
+    ${_config_out}/connector_snap_orientation.cpp
     ${_config_out}/cpu_mesh_data_retention.hpp
     ${_config_out}/cpu_mesh_data_retention.cpp
     ${_config_out}/developer_config.hpp

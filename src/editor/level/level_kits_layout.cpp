@@ -39,6 +39,7 @@
 #include <cmath>
 #include <functional>
 #include <set>
+#include <utility>
 
 namespace editor {
 
@@ -899,6 +900,269 @@ auto Level_kits::make_layout_from_piece_initial(Scene_root& scene_root, const st
         }
     }
     return make_layout_from_piece(scene_root, from_piece);
+}
+
+namespace {
+
+// The child indices from the scene's root node down to the item; pre-order is their lexicographic order.
+void get_hierarchy_path(const erhe::Hierarchy& item, std::vector<std::size_t>& out_path)
+{
+    out_path.clear();
+    const erhe::Hierarchy* current = &item;
+    for (;;) {
+        const std::shared_ptr<erhe::Hierarchy> parent = current->get_parent().lock();
+        if (!parent) {
+            break;
+        }
+        out_path.push_back(current->get_index_in_parent());
+        current = parent.get();
+    }
+    std::reverse(out_path.begin(), out_path.end());
+}
+
+} // anonymous namespace
+
+auto Level_kits::prepare_wrap_with_path(Scene_root& scene_root, const std::span<const std::shared_ptr<erhe::scene::Node>> nodes, Kit_wrap_plan& out_plan) -> std::string
+{
+    out_plan.pieces.clear();
+    out_plan.items.clear();
+    out_plan.extent = 0.0f;
+    if (nodes.empty()) {
+        return "nothing to wrap: select kit pieces";
+    }
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        if (!node) {
+            return "no node";
+        }
+        if (node->get_item_host() != &scene_root) {
+            return fmt::format("'{}' is not in scene '{}'", node->get_name(), scene_root.get_name());
+        }
+        std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
+        if (!mesh || !carries_kit_piece(*node)) {
+            return fmt::format("'{}' is not a kit piece: Wrap with Path wraps kit pieces", node->get_name());
+        }
+        const std::optional<std::string> refusal = instance_structure_refusal(*node);
+        if (refusal.has_value()) {
+            return refusal.value();
+        }
+        if (!has_only_kit_light_children(*node)) {
+            return fmt::format("'{}' has children other than its kit lights; move them off the piece first", node->get_name());
+        }
+        const erhe::scene::Trs_transform world = node->world_from_node_transform();
+        if (glm::any(glm::greaterThan(glm::abs(world.get_scale() - glm::vec3{1.0f}), glm::vec3{c_pose_tolerance}))) {
+            const glm::vec3 scale = world.get_scale();
+            return fmt::format("'{}' is scaled ({}, {}, {}): a kit layout node keeps scale 1", node->get_name(), scale.x, scale.y, scale.z);
+        }
+        // A layout item carries no connector switches (its pieces have all of them on), so switched-off ones would be lost.
+        const Kit_connector_switches switches = read_piece_connector_switches(*node);
+        if (!switches.connectors_enabled || !switches.disabled_connectors.empty()) {
+            return fmt::format("'{}' has connectors switched off, which a path layout's items do not carry; switch them on first", node->get_name());
+        }
+        if (std::find(out_plan.pieces.begin(), out_plan.pieces.end(), mesh) == out_plan.pieces.end()) {
+            out_plan.pieces.push_back(std::move(mesh));
+        }
+    }
+    // Hierarchy order: the child indices from the scene's root node down, compared lexicographically (pre-order).
+    std::vector<std::pair<std::vector<std::size_t>, std::shared_ptr<erhe::scene::Mesh>>> ordered;
+    ordered.reserve(out_plan.pieces.size());
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : out_plan.pieces) {
+        std::vector<std::size_t> path;
+        get_hierarchy_path(*mesh, path);
+        ordered.emplace_back(std::move(path), mesh);
+    }
+    std::sort(
+        ordered.begin(), ordered.end(),
+        [](const std::pair<std::vector<std::size_t>, std::shared_ptr<erhe::scene::Mesh>>& lhs, const std::pair<std::vector<std::size_t>, std::shared_ptr<erhe::scene::Mesh>>& rhs) {
+            return lhs.first < rhs.first;
+        }
+    );
+    for (std::size_t i = 0, end = ordered.size(); i < end; ++i) {
+        out_plan.pieces[i] = ordered[i].second;
+    }
+    const std::shared_ptr<erhe::scene::Mesh>& first = out_plan.pieces.front();
+    const std::shared_ptr<erhe::Hierarchy> parent = first->get_parent().lock();
+    if (!parent) {
+        return fmt::format("'{}' has no parent", first->get_name());
+    }
+    // An unlocked layout's children are its pieces; a lock would replace a path layout nested there.
+    const erhe::scene::Node* const parent_node = dynamic_cast<const erhe::scene::Node*>(parent.get());
+    if ((parent_node != nullptr) && carries_kit_layout(*parent_node)) {
+        return fmt::format(
+            "'{}' is a child of the unlocked kit layout node '{}': a path layout put there would be replaced when the layout is locked; "
+            "move the piece out of the layout first", first->get_name(), parent_node->get_name()
+        );
+    }
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : out_plan.pieces) {
+        Kit_layout_item item;
+        const std::string problem = read_piece_layout_item(*mesh, item);
+        if (!problem.empty()) {
+            return problem;
+        }
+        if (!append_distinct_layout_item(out_plan.items, item)) {
+            continue;
+        }
+        const erhe::math::Aabb bounds = get_layout_item_bounds(scene_root, item);
+        if (!bounds.is_valid_3d() || !(bounds.max.x > bounds.min.x)) {
+            return fmt::format("'{}' has no extent along its x axis, the axis a path layout steps along", mesh->get_name());
+        }
+        out_plan.extent = std::max(out_plan.extent, bounds.max.x - bounds.min.x);
+    }
+    if (out_plan.items.size() > c_max_repeat_count) {
+        return fmt::format("{} distinct pieces: a path layout holds at most {} pieces", out_plan.items.size(), c_max_repeat_count);
+    }
+    return {};
+}
+
+auto Level_kits::find_wrap_with_path_refusal(Scene_root& scene_root, const std::span<const std::shared_ptr<erhe::scene::Node>> nodes) -> std::optional<std::string>
+{
+    Kit_wrap_plan plan;
+    std::string error = prepare_wrap_with_path(scene_root, nodes, plan);
+    if (error.empty()) {
+        return std::nullopt;
+    }
+    return error;
+}
+
+auto Level_kits::wrap_with_path(Scene_root& scene_root, const std::span<const std::shared_ptr<erhe::scene::Node>> nodes) -> Kit_layout_result
+{
+    Kit_layout_result result;
+    Kit_wrap_plan     plan;
+    result.error = prepare_wrap_with_path(scene_root, nodes, plan);
+    if (!result.error.empty()) {
+        return result;
+    }
+    const std::shared_ptr<erhe::scene::Mesh>& first = plan.pieces.front();
+    const erhe::scene::Trs_transform world = first->world_from_node_transform();
+    Kit_layout_create create;
+    create.data.pattern = make_wrap_path_pattern();
+    create.data.items   = std::move(plan.items);
+    create.path         = make_straight_path(get_wrap_path_length(plan.extent, create.data.items.size()));
+    create.parent       = first->get_parent().lock();
+    create.position     = world.get_translation();
+    create.rotation     = world.get_rotation();
+    create.name         = fmt::format("{} Path", first->get_name());
+
+    // Removed last first, each with its kit lights (the elements make their own); the first piece's index stays valid.
+    const std::size_t index = first->get_index_in_parent();
+    std::vector<const erhe::scene::Mesh*>         excluded;
+    std::vector<std::shared_ptr<Operation>>       leading;
+    std::vector<std::shared_ptr<erhe::Hierarchy>> subtree;
+    for (std::size_t i = plan.pieces.size(); i > 0; --i) {
+        const std::shared_ptr<erhe::scene::Mesh>& piece = plan.pieces[i - 1];
+        excluded.push_back(piece.get());
+        subtree.clear();
+        collect_subtree_deepest_first(piece, subtree);
+        for (const std::shared_ptr<erhe::Hierarchy>& item : subtree) {
+            leading.push_back(
+                std::make_shared<Item_insert_remove_operation>(
+                    Item_insert_remove_operation::Parameters{
+                        .context = m_context,
+                        .item    = item,
+                        .parent  = item->get_parent().lock(),
+                        .mode    = Item_insert_remove_operation::Mode::remove
+                    }
+                )
+            );
+        }
+    }
+    result = create_layout_after(scene_root, create, index, excluded, leading);
+    if (result.error.empty() && result.node && (m_context.selection != nullptr)) {
+        m_context.selection->set_selection({result.node}, result.node);
+    }
+    return result;
+}
+
+auto Level_kits::find_layout_parent_refusal(const erhe::Hierarchy& parent, const Repeat_pattern_kind kind) -> const char*
+{
+    const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&parent);
+    if (node == nullptr) {
+        return "a kit layout node goes under a node";
+    }
+    if (carries_kit_layout(*node)) {
+        return "the parent is a kit layout node: it lays out its own children, and a lock would replace a layout nested in it";
+    }
+    const erhe::scene::Trs_transform world = node->world_from_node_transform();
+    if (glm::any(glm::greaterThan(glm::abs(world.get_scale() - glm::vec3{1.0f}), glm::vec3{c_pose_tolerance}))) {
+        return "the parent is scaled: a kit layout node keeps world scale 1";
+    }
+    if (kind == Repeat_pattern_kind::stairs) {
+        const glm::vec3 up = world.get_rotation() * glm::vec3{0.0f, 1.0f, 0.0f};
+        if (up.y < (1.0f - c_rotation_tolerance)) {
+            return "the parent is tilted: a stairs layout node stays upright, so its treads are level";
+        }
+    }
+    return nullptr;
+}
+
+auto Level_kits::make_initial_layout_data(Scene_root& scene_root, const Repeat_pattern_kind kind, const std::optional<Kit_layout_item>& item) -> Kit_layout_data
+{
+    const Kit_layout_initial_values initial = get_layout_initial_values();
+    Kit_layout_data data = initial.data;
+    data.pattern.kind = kind;
+    data.items.clear();
+    if (kind == Repeat_pattern_kind::stairs) {
+        return data;
+    }
+    if (item.has_value()) {
+        data.items.push_back(item.value());
+    } else {
+        const Kit_shape_definition* const block = m_library.find("basic.block");
+        if (block != nullptr) {
+            Kit_layout_item block_item;
+            block_item.shape      = block->id;
+            block_item.parameters = make_default_values(scene_root, *block).to_canonical_text();
+            block_item.materials.resize(block->material_slots.size());
+            data.items.push_back(std::move(block_item));
+        }
+    }
+    if ((initial.spacing == Kit_layout_spacing::from_item) && !data.items.empty()) {
+        const erhe::math::Aabb bounds = get_layout_item_bounds(scene_root, data.items.front());
+        set_layout_spacing_from_extent(data.pattern, bounds.is_valid_3d() ? (bounds.max - bounds.min) : glm::vec3{0.0f});
+    }
+    return data;
+}
+
+auto Level_kits::add_layout_of_kind(
+    Scene_root&                             scene_root,
+    const Repeat_pattern_kind               kind,
+    const std::shared_ptr<erhe::Hierarchy>& parent,
+    const glm::vec3&                        position,
+    const glm::quat&                        rotation,
+    const std::optional<Kit_layout_item>&   item
+) -> Kit_layout_result
+{
+    Kit_layout_result result;
+    const std::shared_ptr<erhe::Hierarchy> target_parent = parent ? parent : scene_root.get_scene().get_root_node();
+    const char* const refusal = find_layout_parent_refusal(*target_parent, kind);
+    if (refusal != nullptr) {
+        result.error = refusal;
+        return result;
+    }
+    Kit_layout_create create;
+    create.data     = make_initial_layout_data(scene_root, kind, item);
+    create.parent   = target_parent;
+    create.position = position;
+    create.rotation = rotation;
+    create.name     = get_layout_kind_create_label(kind);
+    result = create_layout(scene_root, create);
+    if (result.error.empty() && result.node && (m_context.selection != nullptr)) {
+        m_context.selection->set_selection({result.node}, result.node);
+    }
+    return result;
+}
+
+auto Level_kits::make_initial_layout_on_curve(
+    Scene_root&                                scene_root,
+    const std::shared_ptr<erhe::scene::Curve>& curve,
+    const Repeat_pattern_kind                  kind,
+    const std::optional<Kit_layout_item>&      item
+) -> Kit_layout_result
+{
+    Kit_layout_result result = make_layout_on_curve(scene_root, curve, make_initial_layout_data(scene_root, kind, item));
+    if (result.error.empty() && result.node && (m_context.selection != nullptr)) {
+        m_context.selection->set_selection({result.node}, result.node);
+    }
+    return result;
 }
 
 auto Level_kits::add_layout_initial(Scene_root& scene_root, const Kit_layout_item& item, const glm::vec3& position, const glm::quat& rotation) -> Kit_layout_result

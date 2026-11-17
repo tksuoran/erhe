@@ -817,4 +817,45 @@ void set_layout_spacing_from_extent(Kit_layout_pattern& pattern, const glm::vec3
     pattern.spacing_z = (extent.z > 0.0f) ? extent.z : 1.0f;
 }
 
+auto get_layout_kind_create_label(const Repeat_pattern_kind kind) -> const char*
+{
+    switch (kind) {
+        case Repeat_pattern_kind::line:     return "Line Layout";
+        case Repeat_pattern_kind::grid:     return "Grid Layout";
+        case Repeat_pattern_kind::ring:     return "Ring Layout";
+        case Repeat_pattern_kind::path:     return "Path Layout";
+        case Repeat_pattern_kind::scatter:  return "Scatter Layout";
+        case Repeat_pattern_kind::segments: return "Segments Layout";
+        case Repeat_pattern_kind::stairs:   return "Path Stairs";
+        default:                            return "Kit Layout";
+    }
+}
+
+auto make_wrap_path_pattern() -> Kit_layout_pattern
+{
+    Kit_layout_pattern pattern;
+    pattern.kind       = Repeat_pattern_kind::path;
+    pattern.count_mode = Kit_layout_count_mode::gap;
+    pattern.gap        = 0.0f;
+    return pattern;
+}
+
+auto get_wrap_path_length(const float item_extent, const std::size_t item_count) -> float
+{
+    if (!std::isfinite(item_extent) || (item_extent <= 0.0f)) {
+        return 1.0f;
+    }
+    const std::size_t count = std::max(c_wrap_path_min_count, item_count);
+    return static_cast<float>(count - 1) * item_extent;
+}
+
+auto append_distinct_layout_item(std::vector<Kit_layout_item>& items, const Kit_layout_item& item) -> bool
+{
+    if (std::find(items.begin(), items.end(), item) != items.end()) {
+        return false;
+    }
+    items.push_back(item);
+    return true;
+}
+
 } // namespace editor

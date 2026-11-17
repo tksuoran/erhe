@@ -199,6 +199,14 @@ an empty scene and checks over MCP:
   lock / unlock / refresh, surface snap over the hill, the Properties rows
   clicked by id, a held Yaw Max drag of 200 pieces (its median preview step
   printed) and the Level Kit window's scatter rows.
+- Wrap with Path (U45, doc/editor/level_tools.md "Wrap with Path"): over MCP
+  and through the Scene Hierarchy window's context menu, every refusal, the
+  layout's values, place and element 0 on the piece, undo and redo, several
+  pieces, a lit piece, save and reload.
+- Path stairs from the UI and the Create menu's Level Kit submenu (U46, U47,
+  doc/editor/level_tools.md "Create menu"): the Level Kit window's Add Path
+  Stairs and Make Layout On Curve, every layout kind and the shapes through
+  Commands > Create and the Scene Hierarchy window's Create menu.
 
 The run restores config/editor/editor_settings.json, desktop_windows.json,
 user_state.json and desktop_window_imgui_host_imgui.ini, which the window's
@@ -212,7 +220,7 @@ Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png p
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
        [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-connector-snap]
        [--only-layout-indicators] [--only-region-handles] [--only-segment-handles] [--only-more-shapes] [--only-recreated-shapes] [--only-layout-connectors] [--only-stairs-layout]
-       [--only-piece-lights] [--piece-lights-shape <shape id>]
+       [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
 
@@ -9949,6 +9957,7 @@ def check_connector_snap(editor):
     check_connector_snap_rotate_scale(editor)
     check_connector_snap_surface(editor)
     check_connector_snap_persistence(editor)
+    check_connector_snap_orientation(editor)
 
 
 
@@ -10191,6 +10200,19 @@ def check_connector_snap_rotate_scale(editor):
     editor.call("undo")
     editor.wait_idle()
     check("undo restores B's rotate drag start", transforms(b["id"]) == before, "")
+    # U44: Connector Snap Orientation does not apply to rotate drags: the snap translates only.
+    editor.call("set_surface_snap_settings", {"connector_snap_orientation": "align"})
+    ring_drag(90.0)
+    turned_held = editor.call("get_connector_snap", {})
+    turned_ok = offset_ok(turned_held, pivot) and close(b_start(), a_end_world, 1.0e-5) and turned_by(90.0, 2.0)
+    editor.call("key_press", {"key": escape})
+    editor.wait_idle()
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    editor.call("set_surface_snap_settings", {"connector_snap_orientation": "keep"})
+    check("with Connector Snap Orientation align a pointer rotate drag still snaps by translation only (alignment off), the ring's turn kept",
+          turned_held["snapped"] and (turned_held["alignment"] == "off") and turned_ok and (transforms(b["id"]) == before) and (undo_depth(editor) == depth),
+          json.dumps(turned_held))
     # The suspend key during a rotate drag, and its edges with the pointer still (the step re-runs from the same pointer).
     ring_drag(90.0, modifiers=["shift"])
     suspended = editor.call("get_connector_snap", {})
@@ -10437,7 +10459,7 @@ def check_connector_snap_persistence(editor):
         original = f.read()
     loaded = {}
     try:
-        for version, extra in ((2, {}), (4, {"connector_snap_axis_mode": "stay_on_axis"})):
+        for version, extra in ((2, {}), (4, {"connector_snap_axis_mode": "stay_on_axis"}), (5, {"connector_snap_orientation": "align"})):
             settings = json.loads(original.decode("utf-8"))
             # surface_snap is read from editor settings version 20 on (editor_settings_config.py).
             settings["_version"] = max(settings.get("_version", 1), 20)
@@ -10459,6 +10481,304 @@ def check_connector_snap_persistence(editor):
     check("a surface_snap of version 2 reads connector_snap_axis_mode full_offset (the default); version 4 reads the stay_on_axis it states",
           (loaded[2].get("connector_snap_axis_mode") == "full_offset") and (loaded[4].get("connector_snap_axis_mode") == "stay_on_axis") and
           (abs(loaded[4]["connector_snap_distance"] - 0.3) < 1.0e-6), json.dumps(loaded))
+    check("a surface_snap of version 2 or 4 reads connector_snap_orientation keep (the default); version 5 reads the align it states (U44)",
+          (loaded[2].get("connector_snap_orientation") == "keep") and (loaded[4].get("connector_snap_orientation") == "keep") and
+          (loaded[5].get("connector_snap_orientation") == "align"), json.dumps(loaded))
+
+
+def check_connector_snap_orientation(editor):
+    """U44: Connector Snap Orientation turns a translate drag's snapped set so the pair's frames face, as a join does
+    (doc/editor/level_tools.md "Connector snap")."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    distance = 0.5
+    initial = editor.call("get_surface_snap_settings", {})
+    check("Connector Snap Orientation is keep by default", initial.get("connector_snap_orientation") == "keep", json.dumps(initial))
+    editor.call("set_surface_snap_settings", {"snap": False, "orient": False, "connector_snap_distance": distance, "connector_snap_axis_mode": "full_offset"})
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    wall_shape = next(shape for shape in kits["shapes"] if shape["id"] == "architecture.wall")
+    local = {c["name"]: c["position"] for c in wall_shape["connectors"]}
+    turn = yaw_xyzw(20.0)
+    a, b, c = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 0.0], "name": "orient a"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 0.0], "name": "orient b"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 6.0], "name": "orient c"}]})["pieces"]
+    editor.wait_idle()
+    a_frame = connectors_of(editor, scene, a["id"])["end"]
+    a_end = a_frame["position"]
+    # B yawed 20 degrees, its start 1.5 m past A's end along +X: a -1.2 m X drag leaves the pair 0.3 m apart.
+    b_origin = [a_end[i] + [1.5, 0.0, 0.0][i] - q_rotate(turn, local["start"])[i] for i in range(3)]
+    c_origin = [b_origin[0], b_origin[1], b_origin[2] + 6.0]
+    place_at(editor, scene, b["id"], b_origin, turn)
+    place_at(editor, scene, c["id"], c_origin, turn)
+
+    def world(node_id):
+        return editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})["world_transform"]
+
+    def transforms(node_id):
+        details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+        return json.dumps([details["local_transform"], details["world_transform"]], sort_keys=True)
+
+    def b_start():
+        return connectors_of(editor, scene, b["id"])["start"]
+
+    def faces(frame, target=None):
+        """The frame on the target's: positions co-located, outward axes opposed, up axes agreeing (twist 0)."""
+        target = target or a_frame
+        return close(frame["position"], target["position"], 1.0e-4) and close(frame["outward"], [-v for v in target["outward"]], 1.0e-4) and \
+            close(frame["up"], target["up"], 1.0e-4)
+
+    def aligned_pose(node_id):
+        w = world(node_id)
+        return same_xyzw(w["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]) and close(w["scale"], [1.0, 1.0, 1.0], 1.0e-5)
+
+    # Settings: MCP round trip and refusal, the three UI sites.
+    reply = editor.call("set_surface_snap_settings", {"connector_snap_orientation": "align"})
+    got = editor.call("get_surface_snap_settings", {})
+    refused = call_error(editor, "set_surface_snap_settings", {"connector_snap_orientation": "sideways"})
+    check("set_surface_snap_settings connector_snap_orientation align is read back; an unknown value is refused, the setting kept",
+          (reply.get("connector_snap_orientation") == "align") and (got.get("connector_snap_orientation") == "align") and (refused is not None) and
+          (editor.call("get_surface_snap_settings", {}).get("connector_snap_orientation") == "align") and (abs(got["connector_snap_distance"] - distance) < 1.0e-6),
+          f"{json.dumps(got)} | {refused}")
+    editor.call("set_surface_snap_settings", {"connector_snap_orientation": "keep"})
+    kit_open = open_window(editor, WINDOW)
+    transform_open = open_window(editor, TRANSFORM_WINDOW)
+    viewport = cv.frame_camera(editor, scene, [1.0, 7.0, 12.0], [1.0, 0.0, 2.0],
+                               [[-2.5, 0.0, -0.5], [-2.5, 0.0, 6.5], [8.0, 0.0, -0.5], [8.0, 0.0, 6.5], [1.0, 3.0, 0.0]], limit=0.92)
+    hover(editor, viewport, [1.0, 0.0, 2.0])
+    select(editor, scene, [b["id"]])
+    editor.call("key_press", {"key": binding_input(editor, "Hotbar.activate_slot_1", "key")})
+    editor.wait_idle()
+    editor.call("set_gizmo_visibility", {"translate": True, "rotate": False, "scale": False})
+    editor.call("set_transform_reference_mode", {"mode": "global"})
+    editor.wait_idle()
+    snap_rows, unchecked_snaps = transform_snaps_off(editor)
+    sites = connector_snap_sites(editor, "Connector Snap Orientation")
+    check("Connector Snap Orientation shows in the Level Kit window, the Transform window's Move rows and the viewport toolbar",
+          kit_open and transform_open and (set(sites.keys()) == {"kit", "move", "toolbar"}), json.dumps(sites))
+    for site, expected in (("toolbar", "align"), ("move", "keep"), ("kit", "align")):
+        if site in sites:
+            editor.call("imgui_scroll_to_item", {"window": sites[site]["window"], "id": sites[site]["id"], "align": "nearest"})
+            editor.call("imgui_click", {"window": sites[site]["window"], "id": sites[site]["id"]})
+            editor.wait_idle()
+        got = editor.call("get_surface_snap_settings", {}).get("connector_snap_orientation")
+        check(f"clicking the {site} Connector Snap Orientation sets the shared setting to {expected}", got == expected, f"{got}")
+
+    escape = binding_input(editor, "Transform_tool.cancel_drag", "key")
+
+    def x_drag(delta, modifiers=None):
+        """A held pointer drag on the X handle by delta meters; returns the press pixel, the grab point and the pointer pixel."""
+        start, grab = gizmo_grab(editor, viewport, TRANSLATE_X)
+        target = window_point(viewport, [grab[0] + delta, grab[1], grab[2]])
+        to = (round(target[0]), round(target[1]))
+        arguments = {"from": [start[0], start[1]], "to": [to[0], to[1]], "frames": 10, "hold": True}
+        if modifiers:
+            arguments["modifiers"] = modifiers
+        editor.call("mouse_drag", arguments)
+        editor.wait_idle()
+        return start, grab, to
+
+    def cancel_pointer():
+        editor.call("key_press", {"key": escape})
+        editor.wait_idle()
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+
+    # Off: the snap translates only, as before the setting existed.
+    editor.call("set_surface_snap_settings", {"connector_snap_orientation": "keep"})
+    before = transforms(b["id"])
+    depth = undo_depth(editor)
+    x_drag(-1.2)
+    kept = editor.call("get_connector_snap", {})
+    kept_world = world(b["id"])
+    cancel_pointer()
+    check("with Connector Snap Orientation keep a pointer X drag snaps by translation only: alignment off, identity rotation, B keeps its 20 degree yaw",
+          kept["snapped"] and (kept["alignment"] == "off") and same_xyzw(kept["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0], 1.0e-7) and
+          (kept["twist_steps"] == 0) and same_xyzw(kept_world["rotation_xyzw"], turn, 1.0e-6) and
+          close(kept["offset"], kept["full_offset"], 1.0e-7) and (transforms(b["id"]) == before) and (undo_depth(editor) == depth),
+          json.dumps(kept))
+
+    # On: the pointer drag turns B to face A's end.
+    editor.call("set_surface_snap_settings", {"connector_snap_orientation": "align"})
+    start, grab, to = x_drag(-1.2)
+    held = editor.call("get_connector_snap", {})
+    held_frame = b_start()
+    check("with align a pointer X drag of B (yawed 20 degrees) snaps and turns it mid-drag: B's start faces A's end, B unturned, its scale kept, no entry yet",
+          held["active"] and held["snapped"] and (held["alignment"] == "aligned") and (held["connector"] == "start") and (held["target_id"] == a["id"]) and
+          (held["twist_steps"] == 0) and same_xyzw(held["rotation_xyzw"], yaw_xyzw(-20.0)) and faces(held_frame) and aligned_pose(b["id"]) and
+          (undo_depth(editor) == depth), f"{json.dumps(held)} {json.dumps(held_frame)}")
+    out_pixel = window_point(viewport, [grab[0] + 1.0, grab[1], grab[2]])
+    out_pixel = (round(out_pixel[0]), round(out_pixel[1]))
+    pointer_path(editor, to, out_pixel)
+    out = editor.call("get_connector_snap", {})
+    out_world = world(b["id"])
+    pointer_path(editor, out_pixel, to)
+    back = editor.call("get_connector_snap", {})
+    back_ok = faces(b_start()) and aligned_pose(b["id"])
+    check("leaving the snap distance restores B's drag-start orientation (unsnapped, alignment off); coming back turns it again (no latch)",
+          (not out["snapped"]) and same_xyzw(out_world["rotation_xyzw"], turn, 1.0e-6) and close(out_world["scale"], [1.0, 1.0, 1.0], 1.0e-6) and
+          back["snapped"] and (back["alignment"] == "aligned") and back_ok, f"{json.dumps(out)} {json.dumps(out_world)} | {json.dumps(back)}")
+    shift_key(editor, True)
+    suspended = editor.call("get_connector_snap", {})
+    suspended_world = world(b["id"])
+    shift_key(editor, False)
+    resumed = editor.call("get_connector_snap", {})
+    resumed_ok = faces(b_start()) and aligned_pose(b["id"])
+    check("Shift (the suspend key) with the pointer still puts back B's drag-start orientation; releasing it turns B again",
+          (not suspended["snapped"]) and (suspended["skipped"] == "suspended") and same_xyzw(suspended_world["rotation_xyzw"], turn, 1.0e-6) and
+          resumed["snapped"] and (resumed["alignment"] == "aligned") and resumed_ok, f"{json.dumps(suspended)} | {json.dumps(resumed)}")
+    editor.call("key_press", {"key": escape})
+    editor.wait_idle()
+    after_cancel = transforms(b["id"])
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    check("Escape while turned puts B back at its drag start bit-exact (rotation included), the release records nothing",
+          (after_cancel == before) and (transforms(b["id"]) == before) and (undo_depth(editor) == depth), "")
+    x_drag(-1.2)
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    released = transforms(b["id"])
+    released_ok = faces(b_start()) and aligned_pose(b["id"])
+    check("a pointer drag released while turned records the turned pose (rotation and translation), one undo entry",
+          released_ok and (undo_depth(editor) == depth + 1), f"undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    undone = transforms(b["id"])
+    editor.call("redo")
+    editor.wait_idle()
+    redone = transforms(b["id"])
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo restores B's drag-start pose bit-exact; redo the turned pose", (undone == before) and (redone == released), "")
+
+    # Stay on axis: an axis handle drag translates only.
+    editor.call("set_surface_snap_settings", {"connector_snap_axis_mode": "stay_on_axis"})
+    x_drag(-1.2)
+    on_axis = editor.call("get_connector_snap", {})
+    on_axis_world = world(b["id"])
+    cancel_pointer()
+    editor.call("set_surface_snap_settings", {"connector_snap_axis_mode": "full_offset"})
+    check("with Connector Snap On Axis an X handle drag snaps without turning: alignment on_axis, B keeps its yaw",
+          on_axis["snapped"] and (on_axis["constraint"] == "axis") and (on_axis["alignment"] == "on_axis") and
+          same_xyzw(on_axis_world["rotation_xyzw"], turn, 1.0e-6) and (transforms(b["id"]) == before), json.dumps(on_axis))
+    transform_snaps_restore(editor, unchecked_snaps)
+
+    # MCP drags: explicit argument, never the UI setting.
+    editor.call("set_surface_snap_settings", {"connector_snap_orientation": "keep"})
+    scripted = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False,
+                                              "connector_snap_distance": distance, "connector_snap_orientation": "align"})
+    scripted_ok = faces(b_start()) and aligned_pose(b["id"])
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("drag_selection with connector_snap_orientation align turns B whatever the UI setting (keep); the reply echoes the argument",
+          scripted["connector_snap"]["snapped"] and (scripted["connector_snap"]["alignment"] == "aligned") and scripted_ok and
+          (scripted["connector_snap_orientation"] == "align") and (transforms(b["id"]) == before), json.dumps(scripted["connector_snap"]))
+    editor.call("set_surface_snap_settings", {"connector_snap_orientation": "align"})
+    plain = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False, "connector_snap_distance": distance})
+    plain_world = world(b["id"])
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("drag_selection without the argument translates only, whatever the UI setting (align)",
+          plain["connector_snap"]["snapped"] and (plain["connector_snap"]["alignment"] == "off") and same_xyzw(plain_world["rotation_xyzw"], turn, 1.0e-6),
+          json.dumps(plain["connector_snap"]))
+    rotate_refused = call_error(editor, "drag_selection", {"rotation_axis": [0, 1, 0], "rotation_angle_deg": 10.0, "connector_snap_distance": distance,
+                                                           "connector_snap_orientation": "align"})
+    unknown = call_error(editor, "drag_selection", {"translation": [-1.2, 0.0, 0.0], "connector_snap_distance": distance, "connector_snap_orientation": "up"})
+    no_distance = call_error(editor, "drag_selection", {"translation": [-1.2, 0.0, 0.0], "connector_snap_orientation": "align"})
+    check("drag_selection refuses connector_snap_orientation align on a rotate drag, without connector_snap_distance and an unknown value",
+          (rotate_refused is not None) and ("translate" in rotate_refused) and (no_distance is not None) and ("connector_snap_distance" in no_distance) and
+          (unknown is not None) and (transforms(b["id"]) == before) and (not editor.call("get_connector_snap", {})["active"]),
+          f"{rotate_refused} | {no_distance} | {unknown}")
+
+    # Multi-selection: B and C turn rigidly about B's snapped connector.
+    select(editor, scene, [b["id"], c["id"]])
+    b_world_before = world(b["id"])
+    c_world_before = world(c["id"])
+
+    def relative(bw, cw):
+        inverse = q_conj(bw["rotation_xyzw"])
+        return q_mul(inverse, cw["rotation_xyzw"]), q_rotate(inverse, [cw["translation"][i] - bw["translation"][i] for i in range(3)])
+
+    multi = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False,
+                                           "connector_snap_distance": distance, "connector_snap_orientation": "align"})
+    rotation_before, offset_before = relative(b_world_before, c_world_before)
+    c_world_after = world(c["id"])
+    rotation_after, offset_after = relative(world(b["id"]), c_world_after)
+    multi_ok = faces(b_start()) and aligned_pose(b["id"])
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("with B and C selected the aligned snap turns both rigidly about B's start: C keeps its pose relative to B",
+          multi["connector_snap"]["snapped"] and (multi["connector_snap"]["piece_id"] == b["id"]) and (multi["connector_snap"]["alignment"] == "aligned") and
+          multi_ok and same_xyzw(rotation_after, rotation_before) and close(offset_after, offset_before, 1.0e-4) and same_xyzw(c_world_after["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0]),
+          f"{fmt3(offset_before)} -> {fmt3(offset_after)} rot {rotation_before} -> {rotation_after} faces {multi_ok} c {json.dumps(c_world_after)} {json.dumps(multi['connector_snap'])}")
+    depth = undo_depth(editor)
+    editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "connector_snap_distance": distance, "connector_snap_orientation": "align"})
+    editor.wait_idle()
+    multi_released = faces(b_start())
+    editor.call("undo")
+    editor.wait_idle()
+    check("the released multi-selection aligned drag is one undo entry; undo puts B and C back",
+          multi_released and (undo_depth(editor) == depth) and same_xyzw(world(c["id"])["rotation_xyzw"], turn, 1.0e-6) and
+          close(world(c["id"])["translation"], c_world_before["translation"], 1.0e-6) and (transforms(b["id"]) == before), "")
+    select(editor, scene, [b["id"]])
+
+    # A locked rotate channel, and a parent scaled non-uniformly: the snap translates only and says why.
+    editor.call("set_item_property", {"item_id": b["id"], "property": "lock_rotation_y", "value": "true"})
+    editor.wait_idle()
+    locked = editor.call("drag_selection", {"translation": [-1.2, 0.0, 0.0], "frames": 3, "release": False,
+                                            "connector_snap_distance": distance, "connector_snap_orientation": "align"})
+    locked_world = world(b["id"])
+    locked_start = b_start()["position"]
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    editor.call("set_item_property", {"item_id": b["id"], "property": "lock_rotation_y", "value": "false"})
+    editor.wait_idle()
+    check("with lock_rotation_y on B the aligned snap translates only (alignment locked): B's start on A's end, its yaw kept",
+          locked["connector_snap"]["snapped"] and (locked["connector_snap"]["alignment"] == "locked") and
+          same_xyzw(locked_world["rotation_xyzw"], turn, 1.0e-6) and close(locked_start, a_end, 1.0e-5) and
+          same_xyzw(locked["connector_snap"]["rotation_xyzw"], [0.0, 0.0, 0.0, 1.0], 1.0e-7), json.dumps(locked["connector_snap"]))
+    s = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "position": [0.0, 0.0, -8.0], "name": "orient sheared"}]})["pieces"][0]
+    editor.wait_idle()
+    stretched = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [s["id"]], "name": "orient stretched"})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": stretched["id"], "scale": [2.0, 1.0, 1.0]})
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": s["id"], "rotation_xyzw": turn, "space": "local"})
+    editor.wait_idle()
+    s_start = connectors_of(editor, scene, s["id"])["start"]["position"]
+    select(editor, scene, [s["id"]])
+    reach = [a_end[i] - s_start[i] + [0.2, 0.0, 0.0][i] for i in range(3)]
+    sheared = editor.call("drag_selection", {"translation": reach, "frames": 3, "release": False,
+                                             "connector_snap_distance": distance, "connector_snap_orientation": "align"})
+    sheared_start = connectors_of(editor, scene, s["id"])["start"]["position"]
+    sheared_local = editor.call("get_node_details", {"scene_name": scene, "node_id": s["id"]})["local_transform"]
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("a wall yawed 20 degrees in its parent's space under a parent scaled (2, 1, 1): turning it would shear its local transform, so the snap translates only (alignment shear)",
+          sheared["connector_snap"]["snapped"] and (sheared["connector_snap"]["alignment"] == "shear") and close(sheared_start, a_end, 1.0e-4) and
+          same_xyzw(sheared_local["rotation_xyzw"], turn, 1.0e-6),
+          f"{json.dumps(sheared['connector_snap'])} local {json.dumps(sheared_local)}")
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [stretched["id"]]})
+    editor.wait_idle()
+    select(editor, scene, [b["id"]])
+
+    # transform_selection: one aligned snap after the call's translation.
+    place_at(editor, scene, b["id"], b_origin, turn)
+    depth = undo_depth(editor)
+    reply = editor.call("transform_selection", {"translation": [b_origin[0] - 1.2, b_origin[1], b_origin[2]],
+                                                "connector_snap_distance": distance, "connector_snap_orientation": "align"})
+    editor.wait_idle()
+    check("transform_selection with connector_snap_orientation align turns and snaps B, one undo entry",
+          reply["connector_snap"]["snapped"] and (reply["connector_snap"]["alignment"] == "aligned") and faces(b_start()) and aligned_pose(b["id"]) and
+          (reply["connector_snap_orientation"] == "align") and (undo_depth(editor) == depth + 1), json.dumps(reply["connector_snap"]))
+    editor.call("undo")
+    editor.wait_idle()
+    with_rotation = call_error(editor, "transform_selection", {"translation": [0.0, 0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0],
+                                                               "connector_snap_distance": distance, "connector_snap_orientation": "align"})
+    check("transform_selection refuses connector_snap_orientation align with a rotation (it turns a translate snap)",
+          (with_rotation is not None) and ("translation only" in with_rotation) and (undo_depth(editor) == depth), str(with_rotation))
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.0, "connector_snap_orientation": "keep"})
+    close_without_leak(editor, scene, "connector snap orientation")
 
 
 def check_connector_snap_surface(editor):
@@ -13431,6 +13751,582 @@ def check_collision_scale(editor, directory):
     editor.close(name)
 
 
+
+def node_ids_by_name(editor, scene):
+    return {n["name"]: n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
+
+
+def piece_state(editor, scene, node_id):
+    """What undo must give back of a piece: its record, materials, body, lights and its node's place and transforms."""
+    piece = next((p for p in pieces(editor, scene) if p["id"] == node_id), None)
+    if piece is None:
+        return None
+    details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+    lights = [(l["id"], l["name"], l["frame"], round(l["intensity"], 4), l["cast_shadow"]) for l in piece.get("lights", [])]
+    return (piece["name"], piece["shape"], piece["parameters_text"], json.dumps(piece["materials"], sort_keys=True),
+            json.dumps(piece["physics"], sort_keys=True), piece.get("brush_id"), tuple(lights), details["parent"],
+            json.dumps(details["local_transform"], sort_keys=True), json.dumps(details["world_transform"], sort_keys=True))
+
+
+def selected_ids(editor):
+    return sorted(i["id"] for i in editor.call("get_selection").get("items", []))
+
+
+def check_wrap_with_path(editor, directory):
+    """U45 Wrap with Path: MCP and the Scene Hierarchy context menu, refusals, undo and redo, several pieces, a lit piece, save and reload."""
+    scene = create_scene(editor)
+    editor.call("create_node", {"scene_name": scene, "name": "wrap holder", "position": [1.0, 0.5, 2.0]})
+    editor.wait_idle()
+    holder_id = node_ids_by_name(editor, scene)["wrap holder"]
+    yaw = [0.0, 0.3826834, 0.0, 0.9238795]
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "name": "wrap before", "parent_id": holder_id, "position": [0.0, 0.0, 5.0]},
+        {"shape": "basic.block", "name": "wrap target", "parent_id": holder_id, "position": [3.0, 0.0, 0.0], "rotation_xyzw": yaw,
+         "parameters": {"width": 2.0}, "materials": {"stone": "Kit Rock"}},
+        {"shape": "basic.block", "name": "wrap after", "parent_id": holder_id, "position": [0.0, 0.0, -5.0]},
+        {"shape": "basic.wedge", "name": "wrap wedge", "position": [-6.0, 0.0, 0.0]},
+        {"shape": "basic.block", "name": "wrap twin", "position": [-9.0, 0.0, 0.0]},
+        {"shape": "basic.block", "name": "wrap scaled", "position": [-12.0, 0.0, 0.0]},
+        {"shape": "basic.block", "name": "wrap parent", "position": [-15.0, 0.0, 0.0]},
+        {"shape": "basic.block", "name": "wrap switched", "position": [-18.0, 0.0, 0.0]},
+        {"shape": "basic.block", "name": "wrap ui", "position": [0.0, 0.0, 12.0]},
+        {"shape": "basic.block", "name": "wrap ui second", "position": [3.0, 0.0, 12.0]}]})["pieces"]
+    ids = {p["name"]: p["id"] for p in placed}
+    editor.call("create_shape", {"scene_name": scene, "shape": "box", "name": "wrap plain mesh", "position": [0.0, 0.0, -12.0]})
+    editor.call("create_light", {"scene_name": scene, "type": "point", "name": "wrap light", "position": [0.0, 4.0, 0.0]})
+    editor.call("create_node", {"scene_name": scene, "name": "wrap user child"})
+    editor.wait_idle()
+    names = node_ids_by_name(editor, scene)
+    editor.call("reparent_item", {"scene_name": scene, "item_id": names["wrap user child"], "parent_id": ids["wrap parent"]})
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": ids["wrap scaled"], "translation": [-12.0, 0.0, 0.0],
+                                       "rotation_xyzw": [0.0, 0.0, 0.0, 1.0], "scale": [1.5, 1.0, 1.0]})
+    connector = editor.call("level_get_connectors", {"scene_name": scene, "node_ids": [ids["wrap switched"]]})["pieces"][0]["connectors"][0]["name"]
+    editor.call("level_set_piece_connectors", {"scene_name": scene, "node_id": ids["wrap switched"], "connectors": {connector: False}})
+    other = editor.call("level_create_layout", {"scene_name": scene, "name": "wrap other layout", "items": [{"shape": "basic.block"}],
+                                                "pattern": {"kind": "line", "count": 2}, "position": [0.0, 0.0, 20.0]})
+    unlocked = editor.call("level_create_layout", {"scene_name": scene, "name": "wrap unlocked layout", "items": [{"shape": "basic.block"}],
+                                                   "pattern": {"kind": "line", "count": 2}, "position": [0.0, 0.0, 24.0], "locked": False})
+    editor.wait_idle()
+    cameras = editor.call("get_scene_cameras", {"scene_name": scene}).get("cameras", [])
+
+    # Refusals: each names its reason and changes nothing.
+    depth = undo_depth(editor)
+    count = len(scene_tree(editor, scene))
+    refusals = [
+        ("no node", [], "non-empty array"),
+        ("a group node", [holder_id], "is not a kit piece"),
+        ("a plain mesh", [names["wrap plain mesh"]], "is not a kit piece"),
+        ("a light", [names["wrap light"]], "is not a kit piece"),
+        ("a kit layout node", [other["id"]], "is not a kit piece"),
+        ("a locked layout's child", [other["children"][0]["id"]], "child of the locked kit layout node"),
+        ("a scaled piece", [ids["wrap scaled"]], "is scaled"),
+        ("a piece with a user child", [ids["wrap parent"]], "has children other than its kit lights"),
+        ("a piece with a connector switched off", [ids["wrap switched"]], "connectors switched off"),
+        ("a good piece with a bad one", [ids["wrap twin"], holder_id], "is not a kit piece"),
+        ("a piece of an unlocked kit layout", [unlocked["children"][0]["id"]], "child of the unlocked kit layout node"),
+    ]
+    if cameras:
+        refusals.append(("a camera", [cameras[0]["id"]], "is not a kit piece"))
+    for label, node_ids, expected in refusals:
+        error = call_error(editor, "level_wrap_with_path", {"scene_name": scene, "node_ids": node_ids})
+        check(f"Wrap with Path refuses {label} naming the reason", (error is not None) and (expected in error), error or "no error")
+    check("the refused wraps changed nothing and recorded no entry",
+          (undo_depth(editor) == depth) and (len(scene_tree(editor, scene)) == count), f"depth {undo_depth(editor)} vs {depth}")
+
+    # One piece over MCP: the layout takes its place, parent, index and world transform; element 0 stands where it stood.
+    editor.call("select_items", {"scene_name": scene, "ids": [ids["wrap target"]]})
+    editor.wait_idle()
+    target = piece_by_id(editor, scene, ids["wrap target"])
+    target_state = piece_state(editor, scene, ids["wrap target"])
+    holder_children = editor.call("get_node_details", {"scene_name": scene, "node_id": holder_id})["children"]
+    depth = undo_depth(editor)
+    wrapped = editor.call("level_wrap_with_path", {"scene_name": scene, "node_ids": [ids["wrap target"]]})
+    editor.wait_idle()
+    layout = layouts_by_id(editor, scene).get(wrapped["id"])
+    check("Wrap with Path makes one locked path layout, a Curve node, in gap mode with no gap, one undo entry",
+          (layout is not None) and (layout["type"] == "Curve") and (layout["pattern"]["kind"] == "path") and
+          (layout["pattern"]["count_mode"] == "gap") and (layout["pattern"]["gap"] == 0.0) and layout["locked"] and
+          (undo_depth(editor) == depth + 1) and (wrapped["wrapped_piece_ids"] == [ids["wrap target"]]),
+          json.dumps({k: (layout or {}).get(k) for k in ("type", "locked")}))
+    item = (layout or {}).get("items", [{}])[0]
+    check("its one item is the piece's shape, values and slot materials",
+          (len(layout["items"]) == 1) and (item["shape"] == "basic.block") and (item["parameters"] == target["parameters"]) and
+          (item["materials"] == target["materials"]) and (item["materials"]["stone"] == "Kit Rock"),
+          json.dumps(item)[:300])
+    check("the curve is straight, 3 piece extents long, and holds 4 pieces one extent apart",
+          close([layout["curve"]["length"]], [6.0]) and (layout["run"]["count"] == 4) and close([layout["run"]["step"]], [2.0]) and
+          (layout["curve"]["point_count"] == 2) and not layout["curve"]["closed"], json.dumps({"curve": layout["curve"], "run": layout["run"]}))
+    tree_now = scene_tree(editor, scene)
+    holder_after = editor.call("get_node_details", {"scene_name": scene, "node_id": holder_id})["children"]
+    check("the layout takes the piece's parent and its index among the parent's children, and the piece is gone",
+          (tree_now[layout["id"]]["parent_id"] == holder_id) and (ids["wrap target"] not in tree_now) and
+          (holder_after == [layout["name"] if n == "wrap target" else n for n in holder_children]) and (layout["name"] == "wrap target Path"),
+          f"{holder_children} -> {holder_after}")
+    check("the layout node stands at the piece's world translation and rotation",
+          close(layout["position"], target["position"]) and same_xyzw(layout["rotation_xyzw"], target["rotation_xyzw"]),
+          f"{fmt3(layout['position'])} vs {fmt3(target['position'])}")
+    first = layout["children"][0]
+    axis = x_axis_of(target["rotation_xyzw"])
+    expected = [[target["position"][j] + 2.0 * i * axis[j] for j in range(3)] for i in range(4)]
+    check("element 0 coincides with the wrapped piece's pose and the others follow its x axis one extent apart",
+          close(first["position"], target["position"]) and same_xyzw(first["rotation_xyzw"], target["rotation_xyzw"]) and
+          positions_match(child_positions(layout), expected) and all(same_xyzw(c["rotation_xyzw"], target["rotation_xyzw"]) for c in layout["children"]),
+          f"{[fmt3(p) for p in child_positions(layout)]}")
+    generated = pieces_by_id(editor, scene)
+    check("every element carries the piece's values, materials and a static body",
+          all((generated[c["id"]]["parameters"] == target["parameters"]) and (generated[c["id"]]["materials"] == target["materials"]) and
+              generated[c["id"]]["physics"]["has_body"] and (generated[c["id"]]["physics"]["motion_mode"] == "static") for c in layout["children"]), "")
+    check("the new layout is the selection", selected_ids(editor) == [layout["id"]], f"{selected_ids(editor)}")
+    snapshot = child_snapshot(layout)
+    editor.call("undo")
+    editor.wait_idle()
+    check("one undo gives the piece back exactly (record, materials, body, place, transforms) and its selection; the layout is gone",
+          (piece_state(editor, scene, ids["wrap target"]) == target_state) and (layout["id"] not in scene_tree(editor, scene)) and
+          (editor.call("get_node_details", {"scene_name": scene, "node_id": holder_id})["children"] == holder_children) and
+          (selected_ids(editor) == [ids["wrap target"]]) and (undo_depth(editor) == depth),
+          f"{piece_state(editor, scene, ids['wrap target'])} vs {target_state}")
+    editor.call("redo")
+    editor.wait_idle()
+    redone = layouts_by_id(editor, scene).get(layout["id"])
+    check("redo makes the same layout again (same node, children ids, poses, records)",
+          (redone is not None) and (child_snapshot(redone) == snapshot) and (ids["wrap target"] not in scene_tree(editor, scene)), "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Several pieces: one layout in the place of the first in hierarchy order; equal pieces give one item.
+    editor.call("select_items", {"scene_name": scene, "ids": [ids["wrap wedge"], ids["wrap after"], ids["wrap twin"], ids["wrap before"]]})
+    editor.wait_idle()
+    states = {name: piece_state(editor, scene, ids[name]) for name in ("wrap before", "wrap after", "wrap wedge", "wrap twin")}
+    before_piece = piece_by_id(editor, scene, ids["wrap before"])
+    depth = undo_depth(editor)
+    multi = editor.call("level_wrap_with_path", {"scene_name": scene})
+    editor.wait_idle()
+    multi = layouts_by_id(editor, scene)[multi["id"]]
+    tree_now = scene_tree(editor, scene)
+    holder_after = editor.call("get_node_details", {"scene_name": scene, "node_id": holder_id})["children"]
+    shapes = [c["shape"] for c in multi["children"]]
+    check("several selected pieces become the items of one path layout: the distinct ones, in hierarchy order",
+          [i["shape"] for i in multi["items"]] == ["basic.block", "basic.wedge"], json.dumps([i["shape"] for i in multi["items"]]))
+    check("the layout stands in the place of the first piece in hierarchy order, the others are removed",
+          (tree_now[multi["id"]]["parent_id"] == holder_id) and (holder_after[0] == multi["name"]) and (multi["name"] == "wrap before Path") and
+          all(ids[n] not in tree_now for n in states) and close(multi["children"][0]["position"], before_piece["position"]) and
+          (undo_depth(editor) == depth + 1), f"{holder_after}")
+    check("the elements cycle the items (element i takes item i modulo 2) over 4 elements",
+          shapes == ["basic.block", "basic.wedge", "basic.block", "basic.wedge"], f"{shapes}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("one undo gives back every wrapped piece exactly and the selection",
+          all(piece_state(editor, scene, ids[n]) == states[n] for n in states) and (multi["id"] not in scene_tree(editor, scene)) and
+          (selected_ids(editor) == sorted(ids[n] for n in states)) and
+          (editor.call("get_node_details", {"scene_name": scene, "node_id": holder_id})["children"] == holder_children), "")
+
+    # A lit piece: its kit lights go with it, every element has its own; undo gives the edited light back.
+    lantern = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": PIECE_LIGHTS_SHAPE, "name": "wrap lantern", "position": [10.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    light = piece_by_id(editor, scene, lantern["id"])["lights"][0]
+    editor.call("set_item_property", {"item_id": light["id"], "property": "intensity", "value": 123.0})
+    editor.wait_idle()
+    lantern_state = piece_state(editor, scene, lantern["id"])
+    lit = editor.call("level_wrap_with_path", {"scene_name": scene, "node_ids": [lantern["id"]]})
+    editor.wait_idle()
+    lit = layouts_by_id(editor, scene)[lit["id"]]
+    lit_pieces = pieces_by_id(editor, scene)
+    check(f"a wrapped {PIECE_LIGHTS_SHAPE} piece: its light nodes leave with it and every element has its own lights on its frames",
+          (light["id"] not in scene_tree(editor, scene)) and (len(lit["children"]) >= 2) and
+          all(lights_on_frames(lit_pieces[c["id"]]) for c in lit["children"]), f"{len(lit['children'])} elements")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the lit wrap gives the piece back with its edited light node",
+          piece_state(editor, scene, lantern["id"]) == lantern_state, f"{piece_state(editor, scene, lantern['id'])} vs {lantern_state}")
+
+    # The Scene Hierarchy window's context menu entry.
+    def items(label, window=None):
+        arguments = {"limit": 400, "visible_only": False, "label_contains": label}
+        if window is not None:
+            arguments["window"] = window
+        return editor.call("get_imgui_items", arguments).get("items", [])
+
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    rows = [i for i in items("wrap ui") if i["label"] == "wrap ui"]
+    hierarchies = [w["display_name"] for w in editor.call("get_imgui_windows").get("windows", []) if w.get("display_name", "").startswith("Scene Hierarchy")]
+    for name in hierarchies:
+        if rows:
+            break
+        editor.call("imgui_click", {"label": "Window"})
+        editor.call("imgui_click", {"window": "Window###Menu_00", "label": name})
+        wait_until(editor, lambda: any(i["label"] == "wrap ui" for i in items("wrap ui")))
+        rows = [i for i in items("wrap ui") if i["label"] == "wrap ui"]
+    if not check("the Scene Hierarchy window shows the piece rows", bool(rows), "" if rows else "no row"):
+        editor.close(scene)
+        return
+    tree = rows[0]["window"]
+
+    def row(label):
+        return next((i for i in items(label, tree) if i["label"] == label), None)
+
+    def open_menu(label):
+        target_row = row(label)
+        editor.call("mouse_click", {"x": target_row["center_x"], "y": target_row["center_y"], "button": "right"})
+        return wait_until(editor, lambda: popup_item(editor, "Wrap with Path") is not None)
+
+    def close_menu():
+        editor.call("key_press", {"key": "escape"})
+        wait_until(editor, lambda: not popup_open(editor))
+
+    def entry_disabled(label):
+        opened = open_menu(label)
+        entry = popup_item(editor, "Wrap with Path")
+        disabled = opened and (entry is not None) and bool(entry["status"].get("disabled"))
+        close_menu()
+        return disabled
+
+    depth = undo_depth(editor)
+    check("the context menu's Wrap with Path is disabled on a group node, a plain mesh, a kit layout node and a scaled piece",
+          entry_disabled("wrap holder") and entry_disabled("wrap plain mesh") and entry_disabled("wrap other layout") and entry_disabled("wrap scaled"),
+          "")
+    ui_state = piece_state(editor, scene, ids["wrap ui"])
+    open_menu("wrap ui")
+    entry = popup_item(editor, "Wrap with Path")
+    check("the context menu's Wrap with Path is enabled on a kit piece", (entry is not None) and not entry["status"].get("disabled"), "")
+    if entry is not None:
+        editor.call("mouse_click", {"x": entry["center_x"], "y": entry["center_y"]})
+        wait_until(editor, lambda: not popup_open(editor))
+    editor.wait_idle()
+    made = [l for l in layouts_by_id(editor, scene).values() if l["name"] == "wrap ui Path"]
+    check("the menu entry wraps the clicked piece (an unselected row) into a selected path layout at its place, one undo entry",
+          (len(made) == 1) and (ids["wrap ui"] not in scene_tree(editor, scene)) and (selected_ids(editor) == [made[0]["id"]]) and
+          close(made[0]["children"][0]["position"], [0.0, 0.0, 12.0]) and (undo_depth(editor) == depth + 1) and (made[0]["run"]["count"] == 4),
+          f"{len(made)} layouts")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the menu's wrap gives the piece back exactly", piece_state(editor, scene, ids["wrap ui"]) == ui_state, "")
+
+    # A selected row wraps the selection: two pieces, one item.
+    editor.call("select_items", {"scene_name": scene, "ids": [ids["wrap ui second"], ids["wrap ui"]]})
+    editor.wait_idle()
+    open_menu("wrap ui second")
+    entry = popup_item(editor, "Wrap with Path")
+    if entry is not None:
+        editor.call("mouse_click", {"x": entry["center_x"], "y": entry["center_y"]})
+        wait_until(editor, lambda: not popup_open(editor))
+    editor.wait_idle()
+    made = [l for l in layouts_by_id(editor, scene).values() if l["name"] == "wrap ui Path"]
+    tree_now = scene_tree(editor, scene)
+    check("on a selected row the entry wraps the whole selection into one layout in the place of the first piece (equal pieces: one item)",
+          (len(made) == 1) and (len(made[0]["items"]) == 1) and (ids["wrap ui"] not in tree_now) and (ids["wrap ui second"] not in tree_now),
+          f"{len(made)} layouts")
+    if made:
+        open_menu(made[0]["name"])
+        entry = popup_item(editor, "Wrap with Path")
+        check("on the new layout's own row the entry is disabled", (entry is not None) and entry["status"].get("disabled"), "")
+        close_menu()
+
+    # Save and reload: the wrapped layout comes back with its values, curve and children.
+    kept = layouts_by_id(editor, scene)[made[0]["id"]] if made else None
+    path = os.path.join(directory, "wrap_with_path.gltf")
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.save(scene, path)
+    editor.close(scene)
+    loaded = editor.load(path)
+    back = [l for l in editor.call("level_get_layouts", {"scene_name": loaded})["layouts"] if (kept is not None) and (l["name"] == kept["name"])]
+    check("a saved and reloaded wrapped layout keeps its kind, values, curve and children",
+          (len(back) == 1) and (back[0]["type"] == "Curve") and (back[0]["pattern"] == kept["pattern"]) and (back[0]["items"] == kept["items"]) and
+          back[0]["locked"] and close([back[0]["curve"]["length"]], [kept["curve"]["length"]]) and
+          (len(back[0]["children"]) == len(kept["children"])) and positions_match(child_positions(back[0]), child_positions(kept)),
+          f"{len(back)} layouts named {(kept or {}).get('name')}")
+    editor.close(loaded)
+
+
+
+def menu_items(editor, window_prefix):
+    """The items of the open menu window whose name starts with the prefix ("Create###", "##Popup")."""
+    items = editor.call("get_imgui_items", {"limit": 800, "visible_only": False}).get("items", [])
+    return [i for i in items if i["window"].startswith(window_prefix) and (i["label"] != i["window"])]
+
+
+def click_menu_path(editor, window_prefix, labels):
+    """Opens each submenu of the path and activates its last entry; returns the last entry's item (None when not found)."""
+    prefix = window_prefix
+    for label in labels:
+        found = [None]
+
+        def find():
+            found[0] = next((i for i in menu_items(editor, prefix) if i["label"] == label), None)
+            return found[0] is not None
+        if not wait_until(editor, find, frames=30):
+            editor.call("key_press", {"key": "escape"})
+            return None
+        if found[0]["status"].get("disabled"):
+            return found[0]
+        editor.call("imgui_click", {"window": found[0]["window"], "label": label})
+        prefix = label + "###"
+    return found[0]
+
+
+def close_menus(editor):
+    for _ in range(4):
+        if not popup_open(editor) and not any(w.get("name", "").find("###Menu_") >= 0 and w.get("active") and not w.get("hidden")
+                                              for w in editor.call("get_imgui_windows").get("windows", [])):
+            return
+        editor.call("key_press", {"key": "escape"})
+        editor.wait_frames()
+
+
+def open_commands_menu(editor):
+    """Opens the main menu's Commands menu unless it is open (a click on an open menu closes it)."""
+    def is_open():
+        return any(w.get("name", "").startswith("Commands###") and w.get("active") and not w.get("hidden")
+                   for w in editor.call("get_imgui_windows").get("windows", []))
+    if not is_open():
+        editor.call("imgui_click", {"window": "##MainMenuBar", "label": "Commands"})
+        wait_until(editor, is_open, frames=30)
+
+
+def find_hierarchy_rows(editor, label):
+    """The item tree rows with exactly the label, showing (and focusing) each Scene Hierarchy window in turn until one lists it."""
+    def rows():
+        return [i for i in editor.call("get_imgui_items", {"limit": 400, "visible_only": False, "label_contains": label}).get("items", [])
+                if (i["label"] == label) and i["window"].startswith("Scene Hierarchy")]
+    found = rows()
+    for window in editor.call("get_imgui_windows").get("windows", []):
+        if found:
+            break
+        if not (window.get("display_name") or "").startswith("Scene Hierarchy"):
+            continue
+        try:
+            editor.call("set_window_visibility", {"title": window["name"], "visible": True, "focus": True})
+        except RuntimeError:
+            continue
+        wait_until(editor, lambda: bool(rows()), frames=10)
+        found = rows()
+    return found
+
+
+def new_layouts(editor, scene, known):
+    return [l for i, l in layouts_by_id(editor, scene).items() if i not in known]
+
+
+def check_create_menu(editor):
+    """U46, U47: path stairs from the Level Kit window, the Create menu's Level Kit submenu in the Scene Hierarchy window
+    and in the main menu (Commands > Create): every shape, every layout kind, parent, place, selection, undo."""
+    scene = create_scene(editor)
+    # The main menu creates in the active scene and the Level Kit window acts on the last hovered viewport's scene.
+    editor.call("set_active_scene", {"scene_name": scene})
+    editor.wait_idle()
+    hide_windows_over_viewports(editor)
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+
+    def stairs_ok(layout):
+        child = (layout or {}).get("children", [{}])[0] if (layout or {}).get("children") else {}
+        return (layout is not None) and (layout["type"] == "Curve") and (layout["pattern"]["kind"] == "stairs") and layout["locked"] and \
+            (len(layout["children"]) == 1) and child.get("generated") and (layout.get("stairs", {}).get("step_count", 0) >= 2) and \
+            (layout["stairs"].get("total_rise", 0.0) > 0.5) and layout["stairs"].get("mesh", {}).get("valid")
+
+    def walk_findings(node_ids):
+        result = editor.call("level_check", {"scene_name": scene})
+        return [f for f in result["findings"] if (f["kind"] in ("unwalkable_parameters", "unreadable_piece")) and (set(f.get("ids", [])) & set(node_ids))]
+
+    # C: the Level Kit window's Layout section adds path stairs with no selection (the window shows the last hovered viewport's scene).
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    if not check("the Level Kit window opens", open_window(editor, WINDOW), ""):
+        editor.close(scene)
+        return
+    viewport = cv.frame_camera(editor, scene, [0.0, 9.0, 12.0], [0.0, 0.0, 0.0], [[x, 0.0, z] for x in (-4.0, 4.0) for z in (-4.0, 4.0)])
+    # The pointer over a pixel of the viewport that no other window covers, so the viewport is the last hovered one.
+    viewport_names = {v["title"].split("###")[0] for v in editor.call("get_viewports")["viewports"]}
+    covers = [w for w in editor.call("get_imgui_windows").get("windows", [])
+              if w.get("active") and not w.get("hidden") and not w.get("docked") and (w.get("display_name") or "") and
+              not (w.get("display_name") or "").startswith("erhe root window") and (w.get("display_name") not in viewport_names) and
+              ("/" not in (w.get("name") or ""))]
+    hover_pixel = None
+    for fy in (0.5, 0.3, 0.7, 0.15, 0.85):
+        for fx in (0.5, 0.3, 0.7, 0.15, 0.85):
+            px, py = viewport["x"] + fx * viewport["width"], viewport["y"] + fy * viewport["height"]
+            if not any((w["x"] <= px < w["x"] + w["width"]) and (w["y"] <= py < w["y"] + w["height"]) for w in covers):
+                hover_pixel = (px, py)
+                break
+        if hover_pixel is not None:
+            break
+    check("the test scene's viewport has a pixel no other window covers", hover_pixel is not None,
+          f"{[(w.get('name'), w.get('x'), w.get('y'), w.get('width'), w.get('height')) for w in covers]} viewport {[viewport[k] for k in ('title', 'x', 'y', 'width', 'height')]} "
+          f"viewports {[(v['title'], v.get('scene')) for v in editor.call('get_viewports')['viewports']]}")
+    if hover_pixel is not None:
+        editor.call("mouse_wheel", {"x": hover_pixel[0], "y": hover_pixel[1], "dy": 0.0})
+        editor.wait_idle()
+    input_state = editor.call("get_input_state")
+    check("the Level Kit window's scene is the hovered viewport's and no mouse command is active",
+          (input_state.get("last_hovered_scene") == scene) and (input_state.get("active_mouse_command") is None), json.dumps(input_state))
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    click(editor, "Stairs")
+    editor.wait_idle()
+    make = next((i for i in imgui_items(editor, "Make Layout") if i.get("display_label") == "Make Layout"), None)
+    add = next((i for i in imgui_items(editor, "Add Path Stairs") if i.get("display_label") == "Add Path Stairs"), None)
+    check("with the kind Stairs the Layout section offers Add Path Stairs and disables Make Layout (a staircase places no piece)",
+          (add is not None) and not add["status"].get("disabled") and (make is not None) and make["status"].get("disabled"), "")
+    known = set(layouts_by_id(editor, scene))
+    depth = undo_depth(editor)
+    click(editor, "Add Path Stairs")
+    editor.wait_idle()
+    made = new_layouts(editor, scene, known)
+    window_stairs = made[0] if len(made) == 1 else None
+    check("Add Path Stairs makes a locked stairs layout with a generated staircase rising along +x at the origin, selected, one undo entry",
+          stairs_ok(window_stairs) and (selected_ids(editor) == [window_stairs["id"]]) and (undo_depth(editor) == depth + 1) and
+          close(window_stairs["position"], [0.0, 0.0, 0.0]) and (window_stairs["name"] == "Path Stairs"),
+          json.dumps({k: (window_stairs or {}).get(k) for k in ("name", "position")}) + " " + json.dumps((window_stairs or {}).get("stairs", {}))[:300] +
+          f" made {len(made)}, input {input_state}, selection {editor.call('get_selection').get('items')}, depth {undo_depth(editor)} vs {depth}, message {[i.get('display_label') for i in imgui_items(editor, 'Added') + imgui_items(editor, 'refused')][:2]}")
+    check("Level Check reports no walkability finding for the default path stairs",
+          (window_stairs is not None) and not walk_findings([window_stairs["id"]] + [c["id"] for c in window_stairs["children"]]), "")
+    snapshot = child_snapshot(window_stairs) if window_stairs else None
+    editor.call("undo")
+    editor.wait_idle()
+    gone = (window_stairs is not None) and (window_stairs["id"] not in scene_tree(editor, scene))
+    editor.call("redo")
+    editor.wait_idle()
+    back = layouts_by_id(editor, scene).get((window_stairs or {}).get("id"))
+    check("undo removes the path stairs and redo gives back the same node and staircase",
+          gone and (back is not None) and (child_snapshot(back) == snapshot), "")
+
+    # A plain curve made into path stairs from the window (Make Layout On Curve).
+    curve = create_curve(editor, scene, "stairs curve", [[0.0, 0.0, 0.0], [2.0, 1.0, 0.0], [4.0, 2.0, 2.0]], position=[0.0, 0.0, 8.0])
+    curve_id = node_ids_by_name(editor, scene)["stairs curve"]
+    editor.call("select_items", {"scene_name": scene, "ids": [curve_id]})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    click(editor, "Make Layout On Curve")
+    editor.wait_idle()
+    on_curve_layout = layouts_by_id(editor, scene).get(curve_id)
+    check("Make Layout On Curve makes the selected plain curve a stairs layout along its own points, one undo entry",
+          stairs_ok(on_curve_layout) and (undo_depth(editor) == depth + 1) and (on_curve_layout["curve"]["point_count"] == 3), "")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo gives back the plain curve", (curve_id in scene_tree(editor, scene)) and (curve_id not in layouts_by_id(editor, scene)), "")
+    click(editor, "Line")
+    editor.wait_idle()
+
+    # D: the main menu's Commands > Create > Level Kit: every layout kind in the active scene at its root, selected.
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    kinds = {"Line Layout": "line", "Grid Layout": "grid", "Ring Layout": "ring", "Scatter Layout": "scatter",
+             "Path Layout": "path", "Segments Layout": "segments", "Path Stairs": "stairs"}
+    root_id = scene_tree(editor, scene)[window_stairs["id"]]["parent_id"] if window_stairs else None
+    for label, kind in kinds.items():
+        known = set(layouts_by_id(editor, scene))
+        depth = undo_depth(editor)
+        open_commands_menu(editor)
+        entry = click_menu_path(editor, "Commands###", ["Create", "Level Kit", "Layouts", label])
+        close_menus(editor)
+        editor.wait_idle()
+        made = new_layouts(editor, scene, known)
+        layout = made[0] if len(made) == 1 else None
+        ok = (entry is not None) and (layout is not None) and (layout["pattern"]["kind"] == kind) and layout["name"].startswith(label) and \
+            (scene_tree(editor, scene)[layout["id"]]["parent_id"] == root_id) and close(layout["position"], [0.0, 0.0, 0.0]) and \
+            (selected_ids(editor) == [layout["id"]]) and (undo_depth(editor) == depth + 1) and (layout["child_count"] >= 1) and \
+            ((kind == "stairs") or ([i["shape"] for i in layout["items"]] == ["basic.block"]))
+        if kind == "stairs":
+            ok = ok and stairs_ok(layout)
+        check(f"Commands > Create > Level Kit > Layouts > {label} makes a {kind} layout at the scene root's origin, selected, one undo entry",
+              ok, "no entry" if entry is None else json.dumps({
+                  "layout": {k: (layout or {}).get(k) for k in ("name", "child_count", "position")},
+                  "parent": scene_tree(editor, scene)[layout["id"]]["parent_id"] if layout else None, "root": root_id,
+                  "selection": selected_ids(editor), "depth": [undo_depth(editor), depth],
+                  "items": [i["shape"] for i in (layout or {}).get("items", [])]}))
+        if layout is not None:
+            editor.call("undo")
+            editor.wait_idle()
+            check(f"undo removes the {label}", layout["id"] not in scene_tree(editor, scene), "")
+
+    # Every catalog shape has its entry under its kit, by display name.
+    shapes_by_kit = {}
+    for shape in kits["shapes"]:
+        shapes_by_kit.setdefault(shape["kit"], []).append(shape.get("display_name") or shape["name"])
+    missing = []
+    for kit in kits["kits"]:
+        open_commands_menu(editor)
+        click_menu_path(editor, "Commands###", ["Create", "Level Kit"])
+        found = [None]
+
+        def kit_item():
+            found[0] = next((i for i in menu_items(editor, "Level Kit###") if i["label"] == kit["display_name"]), None)
+            return found[0] is not None
+        wait_until(editor, kit_item, frames=30)
+        labels = []
+        if found[0] is not None:
+            editor.call("imgui_click", {"window": found[0]["window"], "label": kit["display_name"]})
+            wanted = shapes_by_kit.get(kit["name"], [])
+            wait_until(editor, lambda: len(menu_items(editor, kit["display_name"] + "###")) >= len(wanted), frames=30)
+            labels = [i["label"] for i in menu_items(editor, kit["display_name"] + "###")]
+        close_menus(editor)
+        if sorted(labels) != sorted(shapes_by_kit.get(kit["name"], [])):
+            missing.append(f"{kit['name']}: {len(labels)} entries, differing {sorted(set(shapes_by_kit.get(kit['name'], [])) ^ set(labels))[:6]}")
+    check(f"the Level Kit submenu lists every catalog shape under its kit ({len(kits['shapes'])} shapes, originals and recreated versions)",
+          not missing, "; ".join(missing))
+
+    # The Scene Hierarchy window's Create menu: on a translated node row, a piece per kit and path stairs under that node.
+    editor.call("create_node", {"scene_name": scene, "name": "create parent", "position": [2.0, 0.5, -6.0]})
+    editor.wait_idle()
+    parent_id = node_ids_by_name(editor, scene)["create parent"]
+    rows = find_hierarchy_rows(editor, "create parent")
+    if not check("the Scene Hierarchy window shows the parent's row", bool(rows), "" if rows else "no row"):
+        editor.close(scene)
+        return
+    tree_window = rows[0]["window"]
+
+    def open_row_menu(label):
+        row = next((i for i in editor.call("get_imgui_items", {"window": tree_window, "limit": 400, "visible_only": False, "label_contains": label}).get("items", [])
+                    if i["label"] == label), None)
+        editor.call("mouse_click", {"x": row["center_x"], "y": row["center_y"], "button": "right"})
+        wait_until(editor, lambda: popup_open(editor))
+
+    for kit in kits["kits"]:
+        first = next((s for s in kits["shapes"] if s["kit"] == kit["name"]), None)
+        label = first.get("display_name") or first["name"]
+        before = {p["id"] for p in pieces(editor, scene)}
+        depth = undo_depth(editor)
+        open_row_menu("create parent")
+        entry = click_menu_path(editor, "##Popup", ["Create", "Level Kit", kit["display_name"], label])
+        close_menus(editor)
+        editor.wait_idle()
+        added = [p for p in pieces(editor, scene) if p["id"] not in before]
+        piece = added[0] if len(added) == 1 else None
+        check(f"Create > Level Kit > {kit['display_name']} > {label} on a node row places a {first['id']} piece at its defaults under that node "
+              f"at its origin, selected, one undo entry",
+              (entry is not None) and (piece is not None) and (piece["shape"] == first["id"]) and
+              (scene_tree(editor, scene)[piece["id"]]["parent_id"] == parent_id) and close(piece["position"], [2.0, 0.5, -6.0]) and
+              (selected_ids(editor) == [piece["id"]]) and (undo_depth(editor) == depth + 1) and piece["physics"]["has_body"] == (first["id"] not in ("nature.water", "nature.leaf_plant")),
+              "no entry" if entry is None else json.dumps({k: (piece or {}).get(k) for k in ("shape", "position")}))
+        if piece is not None:
+            editor.call("undo")
+            editor.wait_idle()
+            check(f"undo removes the {first['id']} piece", piece["id"] not in scene_tree(editor, scene), "")
+
+    known = set(layouts_by_id(editor, scene))
+    open_row_menu("create parent")
+    entry = click_menu_path(editor, "##Popup", ["Create", "Level Kit", "Layouts", "Path Stairs"])
+    close_menus(editor)
+    editor.wait_idle()
+    made = new_layouts(editor, scene, known)
+    tree_stairs = made[0] if len(made) == 1 else None
+    check("the Scene Hierarchy window's Create > Level Kit > Layouts > Path Stairs makes path stairs under the clicked node at its origin, selected",
+          (entry is not None) and stairs_ok(tree_stairs) and (scene_tree(editor, scene)[tree_stairs["id"]]["parent_id"] == parent_id) and
+          close(tree_stairs["position"], [2.0, 0.5, -6.0]) and (selected_ids(editor) == [tree_stairs["id"]]), "")
+
+    # Layouts are greyed with the reason under a kit layout node (a lock would replace a nested layout).
+    unlocked = editor.call("level_create_layout", {"scene_name": scene, "name": "create unlocked", "items": [{"shape": "basic.block"}],
+                                                   "pattern": {"kind": "line", "count": 2}, "position": [0.0, 0.0, -12.0], "locked": False})
+    editor.wait_idle()
+    open_row_menu("create unlocked")
+    entry = click_menu_path(editor, "##Popup", ["Create", "Level Kit", "Layouts", "Path Stairs"])
+    close_menus(editor)
+    editor.wait_idle()
+    check("under a kit layout node the Create menu's layout entries are disabled",
+          (entry is not None) and entry["status"].get("disabled") and (len(new_layouts(editor, scene, set(layouts_by_id(editor, scene)) - {unlocked["id"]})) <= 1), "")
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.close(scene)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--editor", default=default_editor(), help="editor binary (relative to the repository root or absolute)")
@@ -13474,6 +14370,8 @@ def main():
     parser.add_argument("--only-more-shapes", action="store_true", help="run the checks of the more shapes alone (doc/plans/level_kit_more_shapes.md build order 1 - 12)")
     parser.add_argument("--only-piece-lights", action="store_true", help="run the checks of light nodes on pieces alone (D3.15; needs a library shape with light frames)")
     parser.add_argument("--piece-lights-shape", default=PIECE_LIGHTS_SHAPE, help="the lit shape the piece light checks place")
+    parser.add_argument("--only-create-menu", action="store_true", help="run the checks of path stairs from the UI and the Create menu's Level Kit submenu alone (U46, U47)")
+    parser.add_argument("--only-wrap-with-path", action="store_true", help="run the Wrap with Path checks alone (MCP and the Scene Hierarchy context menu, U45)")
     parser.add_argument("--only-recreated-shapes", action="store_true", help="run the checks of the recreated shapes beside their originals alone (U41)")
     parser.add_argument("--layout-drag-image", default=DEFAULT_LAYOUT_DRAG_IMAGE, help="mid-drag layout screenshot PNG (relative to the repository root or absolute)")
     parser.add_argument("--timings", action="store_true", help="print where the run's time went: per group, per wait, per MCP tool (scripts/verify_timings.py)")
@@ -13564,6 +14462,10 @@ def main():
             check_more_shapes_3(editor)
         elif args.only_recreated_shapes:
             check_recreated_shapes(editor)
+        elif args.only_wrap_with_path:
+            check_wrap_with_path(editor, work)
+        elif args.only_create_menu:
+            check_create_menu(editor)
         elif args.only_piece_lights:
             check_piece_lights(editor, work, args.piece_lights_shape)
         elif args.only_region_handles:
@@ -13636,6 +14538,9 @@ def main():
             check_collision_scale(editor, work)
             check_stairs_layouts(editor, work, stairs_image_prefix)
             check_piece_lights(editor, work, args.piece_lights_shape)
+            check_wrap_with_path(editor, work)
+            # After groups that left viewports behind as unselected dock tabs: the Level Kit window follows the hovered one.
+            check_create_menu(editor)
     except Exception as error:  # noqa: BLE001 - a failed step is a failed check
         check("run completed without an error", False, f"{type(error).__name__}: {error}")
     finally:
