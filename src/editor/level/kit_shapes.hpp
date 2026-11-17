@@ -47,11 +47,23 @@ constexpr const char* c_kit_recreated_name_suffix = " (F)";
     unsigned int                             triangle_budget
 ) -> Kit_shape_definition;
 
+// Point i of n on the unit circle, (x, z) from +X toward -Z; mirror images are equal to the bit and axis points exact.
+[[nodiscard]] auto get_kit_circle_point(int i, int n) -> glm::vec2;
+
 void add_basic_shapes       (std::vector<Kit_shape_definition>& shapes);
-// The recreated shapes (doc/editor/level_tools.md "Recreated shapes"); each call follows its originals' call.
-void add_basic_shapes_v2    (std::vector<Kit_shape_definition>& shapes);
 void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes);
 void add_nature_shapes      (std::vector<Kit_shape_definition>& shapes);
+// The shapes of the build-order lines of doc/plans/level_kit_more_shapes.md, one file per batch.
+void add_build_13_16_shapes (std::vector<Kit_shape_definition>& shapes);
+void add_build_17_20_shapes (std::vector<Kit_shape_definition>& shapes);
+void add_build_21_24_shapes (std::vector<Kit_shape_definition>& shapes);
+// The recreated shapes (doc/editor/level_tools.md "Recreated shapes"); called after every original is added.
+void add_basic_shapes_v2        (std::vector<Kit_shape_definition>& shapes);
+void add_architecture_shapes_v2 (std::vector<Kit_shape_definition>& shapes);
+void add_medieval_shapes_v2     (std::vector<Kit_shape_definition>& shapes);
+void add_nature_shapes_v2       (std::vector<Kit_shape_definition>& shapes);
+void add_nature_plants_shapes_v2(std::vector<Kit_shape_definition>& shapes);
+void add_nature_rocks_shapes_v2 (std::vector<Kit_shape_definition>& shapes);
 // Called by add_nature_shapes(): the terrain (cliff, shore, water, dune, ground patch), the rocks and the plants.
 void add_nature_terrain_shapes(std::vector<Kit_shape_definition>& shapes);
 void add_nature_rock_shapes   (std::vector<Kit_shape_definition>& shapes);

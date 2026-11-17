@@ -10,6 +10,26 @@
 
 namespace editor {
 
+auto get_kit_circle_point(const int i, const int n) -> glm::vec2
+{
+    if ((2 * i) > n) {
+        const glm::vec2 mirrored = get_kit_circle_point(n - i, n);
+        return glm::vec2{mirrored.x, -mirrored.y};
+    }
+    if (((n % 2) == 0) && ((4 * i) > n)) {
+        const glm::vec2 mirrored = get_kit_circle_point((n / 2) - i, n);
+        return glm::vec2{-mirrored.x, mirrored.y};
+    }
+    if (i == 0) {
+        return glm::vec2{1.0f, 0.0f};
+    }
+    if ((4 * i) == n) {
+        return glm::vec2{0.0f, -1.0f};
+    }
+    const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / static_cast<float>(n);
+    return glm::vec2{std::cos(angle), -std::sin(angle)};
+}
+
 namespace {
 
 // A box on y = 0 around the Y axis; corner k has x at bit 0, y at bit 1 and z at bit 2.
@@ -65,27 +85,6 @@ void generate_wedge_v2(const Kit_parameter_values& values, GEO::Mesh& mesh)
     builder.write(mesh);
 }
 
-// Point i of n on the unit circle, (x, z) from +X toward -Z; mirror images are equal to the bit and axis points exact.
-auto get_circle_point_v2(const int i, const int n) -> glm::vec2
-{
-    if ((2 * i) > n) {
-        const glm::vec2 mirrored = get_circle_point_v2(n - i, n);
-        return glm::vec2{mirrored.x, -mirrored.y};
-    }
-    if (((n % 2) == 0) && ((4 * i) > n)) {
-        const glm::vec2 mirrored = get_circle_point_v2((n / 2) - i, n);
-        return glm::vec2{-mirrored.x, mirrored.y};
-    }
-    if (i == 0) {
-        return glm::vec2{1.0f, 0.0f};
-    }
-    if ((4 * i) == n) {
-        return glm::vec2{0.0f, -1.0f};
-    }
-    const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / static_cast<float>(n);
-    return glm::vec2{std::cos(angle), -std::sin(angle)};
-}
-
 void generate_cylinder_v2(const Kit_parameter_values& values, GEO::Mesh& mesh)
 {
     const int   segments = values.get_int("segments");
@@ -96,7 +95,7 @@ void generate_cylinder_v2(const Kit_parameter_values& values, GEO::Mesh& mesh)
     std::vector<uint32_t> bottom_ring;
     std::vector<uint32_t> top_ring;
     for (int i = 0; i < segments; ++i) {
-        const glm::vec2 point = radius * get_circle_point_v2(i, segments);
+        const glm::vec2 point = radius * get_kit_circle_point(i, segments);
         bottom_ring.push_back(builder.add_vertex(glm::vec3{point.x, 0.0f,   point.y}));
         top_ring   .push_back(builder.add_vertex(glm::vec3{point.x, height, point.y}));
     }

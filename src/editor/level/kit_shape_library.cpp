@@ -190,10 +190,18 @@ Kit_shape_library::Kit_shape_library()
         Kit_definition{.name = "architecture", .display_name = "Architecture", .triangle_ceiling = 2000},
         Kit_definition{.name = "nature",       .display_name = "Nature",       .triangle_ceiling = 2000}
     };
-    add_basic_shapes       (m_shapes);
-    add_architecture_shapes(m_shapes);
-    add_nature_shapes      (m_shapes);
-    add_basic_shapes_v2    (m_shapes);
+    add_basic_shapes           (m_shapes);
+    add_architecture_shapes    (m_shapes);
+    add_nature_shapes          (m_shapes);
+    add_build_13_16_shapes     (m_shapes);
+    add_build_17_20_shapes     (m_shapes);
+    add_build_21_24_shapes     (m_shapes);
+    add_basic_shapes_v2        (m_shapes);
+    add_architecture_shapes_v2 (m_shapes);
+    add_medieval_shapes_v2     (m_shapes);
+    add_nature_shapes_v2       (m_shapes);
+    add_nature_plants_shapes_v2(m_shapes);
+    add_nature_rocks_shapes_v2 (m_shapes);
     place_recreated_after_originals(m_shapes);
     // Base colors are linear.
     m_palette = {
@@ -232,7 +240,8 @@ Kit_shape_library::Kit_shape_library()
         Kit_slot_palette{.slot = "sand",    .default_material = "Kit Sand",    .alternatives = {"Kit Earth", "Kit Rock"}},
         Kit_slot_palette{.slot = "roof",    .default_material = "Kit Roof Tile", .alternatives = {"Kit Wood", "Kit Stone"}},
         Kit_slot_palette{.slot = "water",   .default_material = "Kit Water",   .alternatives = {"Kit Shallow Water"}},
-        Kit_slot_palette{.slot = "wood",    .default_material = "Kit Wood",    .alternatives = {"Kit Vermilion", "Kit Dark Wood", "Kit Bark"}}
+        Kit_slot_palette{.slot = "wood",    .default_material = "Kit Wood",    .alternatives = {"Kit Vermilion", "Kit Dark Wood", "Kit Bark"}},
+        Kit_slot_palette{.slot = "shoot",   .default_material = "Kit Grass",   .alternatives = {"Kit Foliage", "Kit Autumn Foliage"}}
     };
 }
 

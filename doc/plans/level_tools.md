@@ -285,7 +285,21 @@ The user's rulings (2026-11-15):
   and an image per pair (`scripts/level_shape_compare.py`); the user rules
   per shape which version keeps the canonical id; kit shape coders run on
   the Fable model at medium effort. Built as
-  `doc/editor/level_tools.md` "Recreated shapes".
+  `doc/editor/level_tools.md` "Recreated shapes". The user's refinement of
+  the scope (2026-11-16): "You judge which of the opus shapes can improve
+  from using Fable - then redo the selected shapes - then new shapes". The
+  orchestrator's judgment from renders at the default values, for the
+  user's review: the basic kit is recreated; selected for a redo are
+  `architecture.arch`, `architecture.door_wall`, `architecture.pillar`,
+  `architecture.battlement`, `architecture.tower`, `nature.rock`,
+  `nature.land_mass`, `nature.hill`, `nature.tree`, `nature.bush` and
+  `nature.palm_shrub`; kept as they are: `architecture.wall` (flush tiling
+  leaves no room), column, entablature, torii, roof, basalt columns, cliff,
+  shore, water, dune, ground patch, palm and palm clump. The user's further
+  ruling on recreated shapes (2026-11-16): "Feel free to add more
+  materials, we dont need backwards compatibilty" - a recreated shape
+  keeps only its original's kit and the `.v2` id; its parameters,
+  material slots, connectors and seam sides may differ.
 
 - U42 (2026-11-16), spline staircase. The user's request: "Add spline
   staircase support: The spline may curve on both XZ plane and height (Y) -

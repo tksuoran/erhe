@@ -415,15 +415,23 @@ erhe_target_sources_grouped(
     level/kit_shape_library.hpp
     level/kit_shapes.hpp
     level/kit_shapes_architecture.cpp
+    level/kit_shapes_architecture_v2.cpp
     level/kit_shapes_basic.cpp
     level/kit_shapes_basic_v2.cpp
+    level/kit_shapes_build_13_16.cpp
+    level/kit_shapes_build_17_20.cpp
+    level/kit_shapes_build_21_24.cpp
     level/kit_shapes_classical.cpp
     level/kit_shapes_japanese.cpp
     level/kit_shapes_medieval.cpp
+    level/kit_shapes_medieval_v2.cpp
     level/kit_shapes_nature.cpp
+    level/kit_shapes_nature_v2.cpp
     level/kit_shapes_nature_plants.cpp
+    level/kit_shapes_nature_plants_v2.cpp
     level/kit_shapes_nature_terrain.cpp
     level/kit_shapes_nature_rocks.cpp
+    level/kit_shapes_nature_rocks_v2.cpp
     level/kit_shapes_roof.cpp
     level/level_kit_window.cpp
     level/level_kit_window.hpp

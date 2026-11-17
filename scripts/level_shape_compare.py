@@ -13,13 +13,23 @@ logs/shape_compare_<original id>_<seed>.png).
 
 Usage:
     python3 scripts/level_shape_compare.py [--editor <editor binary>] [--only <id prefix>] [--gap <meters>]
+                                           [--parameters <json object>] [--recreated-parameters <json object>]
+                                           [--tag <name>] [--detail <x,y,z,distance>]
+                                           [--azimuth <degrees>] [--elevation <degrees>]
                                            [--save <scene path>] [--keep-open]
 
+--parameters gives both shapes of every row these values instead of their defaults
+(with --only naming the shape they belong to); --recreated-parameters gives values
+to the recreated shape alone, for the parameters its original lacks; --tag ends the image names with
+_<name>, so such a run keeps the default images. --detail renders a close-up
+instead of the pair: the camera looks at the point x,y,z in the recreated piece's
+own frame from the given distance. --azimuth and --elevation turn the camera.
 --save writes the scene (a .gltf or .glb path) so the windowed editor can open it;
 --keep-open leaves the launched editor running with the scene and prints its pid.
 """
 
 import argparse
+import json
 import math
 import os
 import sys
@@ -73,12 +83,17 @@ def list_pairs(editor, scene, only):
     return rows
 
 
-def measure(editor, scene, rows):
+def parameters_of(row, parameters, key):
+    """The row's values of its original or its recreated shape: --parameters for both, --recreated-parameters for the latter."""
+    return dict(parameters["both"], **(parameters["recreated"] if key == "recreated" else {}), seed=row["seed"])
+
+
+def measure(editor, scene, rows, parameters):
     """The local bounds of every row's two pieces, read from a placement that is undone."""
     requests = []
     for row in rows:
         for key in ("original", "recreated"):
-            requests.append({"shape": row[key], "position": [0.0, 0.0, 0.0], "parameters": {"seed": row["seed"]}})
+            requests.append({"shape": row[key], "position": [0.0, 0.0, 0.0], "parameters": parameters_of(row, parameters, key)})
     placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": requests})["pieces"]
     editor.wait_idle()
     for index, row in enumerate(rows):
@@ -115,16 +130,21 @@ def lay_out(rows, gap):
         row["center"] = [0.5 * (min_x + max_x), 0.0, z + (0.5 * (min_z + max_z))]
 
 
-def camera_of(row):
-    """The camera of the row's size class, relative to the row's center on the ground."""
+def camera_of(row, view):
+    """The camera of the row's size class, relative to the row's center on the ground; a detail view looks at its own point."""
     c = row["class"]
     distance = 4.2 * c
-    el = math.radians(ELEVATION_DEGREES)
-    az = math.radians(AZIMUTH_DEGREES)
+    el = math.radians(view["elevation"])
+    az = math.radians(view["azimuth"])
     target = [row["center"][0], 0.45 * c, row["center"][2]]
+    near = 0.05 * c
+    if view["detail"] is not None:
+        x, y, z, distance = view["detail"]
+        target = [row["recreated_x"] + x, y, row["z"] + z]
+        near = 0.05 * distance
     eye = [target[0] + (distance * math.cos(el) * math.sin(az)), target[1] + (distance * math.sin(el)), target[2] + (distance * math.cos(el) * math.cos(az))]
     # The far plane ends the view behind the row, so the rows beyond it stay out of the image.
-    return {"eye": eye, "target": target, "fov_y_degrees": FOV_Y_DEGREES, "near": 0.05 * c, "far": distance + (1.6 * c)}
+    return {"eye": eye, "target": target, "fov_y_degrees": FOV_Y_DEGREES, "near": near, "far": distance + (1.6 * c)}
 
 
 def pad_tiles(pad, name):
@@ -143,27 +163,27 @@ def pad_tiles(pad, name):
     return tiles
 
 
-def build(editor, scene, rows):
+def build(editor, scene, rows, parameters):
     requests = []
     for row in rows:
         label = f"{row['original']} seed {row['seed']}" if row["seeded"] else row["original"]
         requests.extend(pad_tiles(row["pad"], f"pad {label}"))
         requests.append({"shape": row["original"], "position": [row["original_x"], 0.0, row["z"]], "name": f"{label} original",
-                         "parameters": {"seed": row["seed"]}})
+                         "parameters": parameters_of(row, parameters, "original")})
         requests.append({"shape": row["recreated"], "position": [row["recreated_x"], 0.0, row["z"]], "name": f"{label} recreated",
-                         "parameters": {"seed": row["seed"]}})
+                         "parameters": parameters_of(row, parameters, "recreated")})
     placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": requests})["pieces"]
     editor.wait_idle()
     return placed
 
 
-def render(editor, scene, row):
-    name = f"shape_compare_{row['original']}" + (f"_{row['seed']}" if row["seeded"] else "") + ".png"
+def render(editor, scene, row, view):
+    name = f"shape_compare_{row['original']}" + (f"_{row['seed']}" if row["seeded"] else "") + (f"_{view['tag']}" if view["tag"] else "") + ".png"
     path = os.path.join(pav.REPO_ROOT, "logs", name)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if os.path.isfile(path):
         os.remove(path)
-    reply = editor.call("render_scene_image", {"scene": scene, "camera": camera_of(row), "width": IMAGE_WIDTH, "height": IMAGE_HEIGHT,
+    reply = editor.call("render_scene_image", {"scene": scene, "camera": camera_of(row, view), "width": IMAGE_WIDTH, "height": IMAGE_HEIGHT,
                                                "output": "png", "path": path})
     return path if (os.path.isfile(path) and (reply.get("width") == IMAGE_WIDTH)) else None
 
@@ -173,26 +193,35 @@ def main():
     parser.add_argument("--editor", default=default_editor(), help="editor binary (relative to the repository root or absolute)")
     parser.add_argument("--only", default="", help="compare only the originals whose id starts with this (for example basic. or nature.rock)")
     parser.add_argument("--gap", type=float, default=1.0, help="meters between the two shapes' bounds")
+    parser.add_argument("--parameters", default="{}", help="a JSON object of parameter values for both shapes of every row")
+    parser.add_argument("--recreated-parameters", default="{}", help="a JSON object of parameter values for the recreated shape of every row")
+    parser.add_argument("--tag", default="", help="ends the image names with _<tag>")
+    parser.add_argument("--detail", default="", help="x,y,z,distance: a close-up of that point of the recreated piece")
+    parser.add_argument("--azimuth", type=float, default=AZIMUTH_DEGREES, help="camera azimuth in degrees from +Z toward +X")
+    parser.add_argument("--elevation", type=float, default=ELEVATION_DEGREES, help="camera elevation in degrees")
     parser.add_argument("--save", default="", help="save the comparison scene to this .gltf or .glb path")
     parser.add_argument("--keep-open", action="store_true", help="leave the launched editor running with the scene")
     args = parser.parse_args()
 
     failures = []
     editor = None
+    parameters = {"both": json.loads(args.parameters), "recreated": json.loads(args.recreated_parameters)}
+    view = {"tag": args.tag, "azimuth": args.azimuth, "elevation": args.elevation,
+            "detail": [float(v) for v in args.detail.split(",")] if args.detail else None}
     try:
         editor = Editor(args.editor)
         scene = ltv.create_scene(editor)
         rows = list_pairs(editor, scene, args.only)
         if not rows:
             raise RuntimeError(f"level_get_kits lists no recreated shape whose original starts with '{args.only}'")
-        measure(editor, scene, rows)
+        measure(editor, scene, rows, parameters)
         lay_out(rows, args.gap)
-        placed = build(editor, scene, rows)
+        placed = build(editor, scene, rows, parameters)
         if len(placed) < 3 * len(rows):
             failures.append(f"placed {len(placed)} pieces for {len(rows)} rows")
         print(f"scene '{scene}': {len(rows)} rows, original at -X, recreated at +X, {args.gap} m apart; the rows run toward -Z")
         for row in rows:
-            path = render(editor, scene, row)
+            path = render(editor, scene, row, view)
             label = f"{row['original']} | {row['recreated']}" + (f" seed {row['seed']}" if row["seeded"] else "")
             if path is None:
                 failures.append(f"no image for {label}")

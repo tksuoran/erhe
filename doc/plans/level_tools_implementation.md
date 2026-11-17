@@ -177,21 +177,31 @@ The steps to build, in this order (user, 2026-11-15).
     shows; read it before starting and before each further shape. The
     inventory, with the rulings of U34, is
     `doc/plans/level_kit_extra_shapes.md`.
-70. Recreate the kit shapes (user, 2026-11-16, U41): every existing shape
-    written afresh from its description by a coder on the Fable model at
-    medium effort, registered beside its original
-    (`doc/editor/level_tools.md` "Recreated shapes"), one commit per batch,
-    each with the batch's rows in `generated_meshes_are_pinned`, its checks
-    in `scripts/level_tools_verify.py` and its images from
-    `scripts/level_shape_compare.py`. Built: the parallel-version
-    infrastructure (`recreates`, the pairing rule and its test, the
-    comparison script) and the basic kit. Batches to build, in this order:
-    architecture (wall, door wall, pillar, arch); japanese and classical
-    (torii, column, entablature); medieval and roof (battlement, tower,
-    roof); nature (rock, land mass, hill, tree, bush); nature rocks (rock
-    spire, basalt columns); nature terrain (cliff, shore, water, dune,
-    ground patch); nature plants (palm, leaf plant, palm clump, palm
-    shrub). The user then rules per shape which version keeps the
+70. Recreate the kit shapes (user, 2026-11-16, U41): a shape written afresh
+    from its description by a coder on the Fable model at medium effort,
+    registered beside its original (`doc/editor/level_tools.md` "Recreated
+    shapes"), one commit per batch, each with the batch's rows in
+    `generated_meshes_are_pinned`, its checks in
+    `scripts/level_tools_verify.py` and its images from
+    `scripts/level_shape_compare.py`. The user's scope (2026-11-16): "You
+    judge which of the opus shapes can improve from using Fable - then redo
+    the selected shapes - then new shapes". The orchestrator's judgment
+    from renders at the default values, for the user's review - selected
+    for a redo: `architecture.arch`, `architecture.door_wall`,
+    `architecture.pillar`; `architecture.battlement`, `architecture.tower`;
+    `nature.rock`, `nature.land_mass`, `nature.hill`, `nature.tree`,
+    `nature.bush`; `nature.palm_shrub`. Kept as they are:
+    `architecture.wall` (flush tiling leaves no room), column, entablature,
+    torii, roof, basalt columns, cliff, shore, water, dune, ground patch,
+    palm, palm clump. Built: the parallel-version infrastructure
+    (`recreates`, the pairing rule and its test, the comparison script),
+    the basic kit, and the arch, the door wall and the pillar. To build, in
+    this order: battlement and tower; rock, land mass, hill, tree and bush;
+    palm shrub. Open for the user: the square pillar's recreated version is
+    its original's box, because the square profile states every side as a
+    seam side; a base and a capital on it need the four upright sides taken
+    out of the recreated shape's seam sides, which is a change of the
+    pairing rule. The user then rules per shape which version keeps the
     canonical id. The ruling step (to build): the kept version takes the
     canonical id, the other definition is removed, and the dropped id
     becomes a former id of the kept shape that `Kit_shape_library::find()`

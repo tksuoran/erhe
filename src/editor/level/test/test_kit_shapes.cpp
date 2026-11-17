@@ -3,6 +3,7 @@
 #include "level/kit_shape_checks.hpp"
 #include "level/kit_shape_library.hpp"
 #include "level/kit_shapes.hpp"
+#include "kit_shape_test_support.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_math/aabb.hpp"
@@ -18,10 +19,14 @@
 #include <cstdint>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
+
+using namespace editor::kit_test;
 
 namespace {
 
@@ -36,108 +41,11 @@ using editor::Kit_shape_definition;
 using editor::Kit_shape_library;
 using editor::Kit_stairs_layout;
 
-constexpr unsigned int rock_default_triangles = 112;
-constexpr float default_module      = 1.0f;
-constexpr float default_wall_height = 3.0f;
-
-auto get_library() -> const Kit_shape_library&
-{
-    static const Kit_shape_library library;
-    return library;
-}
-
-auto get_shape(const char* id) -> const Kit_shape_definition&
-{
-    const Kit_shape_definition* shape = get_library().find(id);
-    EXPECT_NE(shape, nullptr) << id;
-    return *shape;
-}
-
-// The id the tests key a shape's expectations by: a recreated shape shares its original's.
-auto contract_id(const Kit_shape_definition& shape) -> const std::string&
-{
-    return editor::get_contract_id(shape);
-}
-
-// The originals that have a recreated shape beside them; a batch of recreated shapes adds its originals here.
-auto recreated_originals() -> const std::vector<std::string>&
-{
-    static const std::vector<std::string> ids{"basic.block", "basic.wedge", "basic.cylinder", "basic.stairs", "basic.floor_slab"};
-    return ids;
-}
-
-auto defaults(const Kit_shape_definition& shape) -> Kit_parameter_values
-{
-    return editor::make_default_values(shape, default_module, default_wall_height);
-}
-
-auto generate(const Kit_parameter_values& values) -> std::unique_ptr<GEO::Mesh>
-{
-    std::unique_ptr<GEO::Mesh> mesh = std::make_unique<GEO::Mesh>(3, true);
-    values.get_shape()->generator(values, *mesh);
-    return mesh;
-}
-
-auto describe(const Kit_mesh_report& report) -> std::string
-{
-    return fmt::format(
-        "{} vertices, {} facets, {} triangles, {} components; problems: {}",
-        report.vertex_count, report.facet_count, report.triangle_count, report.component_count,
-        report.problems.empty() ? std::string{"none"} : report.problems.front()
-    );
-}
-
-enum class Range_end : unsigned int { min = 0, max };
-
-auto c_str(const Range_end end) -> const char*
-{
-    return (end == Range_end::max) ? "max" : "min";
-}
-
-// One end of one parameter's range, with every other parameter at its default.
-auto make_range_end(const Kit_shape_definition& shape, const std::size_t index, const Range_end range_end) -> Kit_parameter_values
-{
-    const bool at_max = (range_end == Range_end::max);
-    Kit_parameter_values values    = defaults(shape);
-    const Kit_parameter& parameter = shape.parameters[index];
-    Kit_parameter_value  value     = values.get_values()[index];
-    if (parameter.type == Kit_parameter_type::float_value) {
-        value.float_value = at_max ? parameter.float_max : parameter.float_min;
-    } else {
-        value.int_value = at_max ? parameter.int_max : parameter.int_min;
-    }
-    values.set_value(index, value);
-    return values;
-}
-
-// Every derivable parameter of the shape in the mask, derived from the seed at the default lengths.
-auto all_derived(const Kit_shape_definition& shape, const int seed) -> Kit_parameter_values
-{
-    Kit_parameter_values values = defaults(shape);
-    EXPECT_TRUE(values.set_int("seed", seed));
-    for (std::size_t i = 0, end = shape.parameters.size(); i < end; ++i) {
-        if (shape.parameters[i].derive == editor::Kit_derive::derivable) {
-            values.set_value_source(i, editor::Kit_value_source::seed);
-        }
-    }
-    values.resolve_derived(default_module, default_wall_height);
-    return values;
-}
-
 TEST(Kit_shape_library, library_has_the_starter_set_and_the_more_shapes)
 {
-    // The 14 shapes of R4.1, then the built shapes of doc/plans/level_kit_more_shapes.md.
-    const std::vector<std::string> expected{
-        "basic.block", "basic.wedge", "basic.cylinder", "basic.stairs", "basic.floor_slab",
-        "architecture.wall", "architecture.door_wall", "architecture.pillar", "architecture.arch",
-        "nature.rock", "nature.land_mass", "nature.hill", "nature.tree", "nature.bush",
-        "architecture.column", "architecture.entablature", "architecture.torii", "architecture.battlement", "architecture.tower",
-        "nature.cliff", "nature.shore", "nature.water", "nature.palm", "nature.leaf_plant",
-        "nature.rock_spire", "nature.basalt_columns", "architecture.roof", "nature.palm_clump", "nature.palm_shrub",
-        "nature.dune", "nature.ground_patch"
-    };
-    // The recreated shapes stand beside them (doc/editor/level_tools.md "Recreated shapes").
-    const std::vector<std::string>& recreated = recreated_originals();
+    // The shapes each batch states (kit_shape_rows_<batch>.cpp), the recreated ones beside their originals.
+    const std::vector<std::string> expected  = get_union(&Kit_shape_rows::shapes);
+    const std::vector<std::string> recreated = get_union(&Kit_shape_rows::recreated_originals);
     const Kit_shape_library& library = get_library();
     ASSERT_EQ(library.get_shapes().size(), expected.size() + recreated.size());
     for (const std::string& id : recreated) {
@@ -262,6 +170,7 @@ TEST(Kit_shape_library, tree_has_bark_and_foliage_slots)
 
 TEST(Kit_shape_library, every_shape_passes_the_mesh_checks_at_defaults)
 {
+    const std::vector<Kit_component_row> components = get_union(&Kit_shape_rows::components);
     for (const Kit_shape_definition& shape : get_library().get_shapes()) {
         SCOPED_TRACE(shape.id);
         const Kit_parameter_values values = defaults(shape);
@@ -273,36 +182,27 @@ TEST(Kit_shape_library, every_shape_passes_the_mesh_checks_at_defaults)
         EXPECT_LE(report.triangle_count, shape.triangle_budget);
         EXPECT_LE(shape.triangle_budget, kit->triangle_ceiling);
         EXPECT_EQ(kit->triangle_ceiling, 2000u);
-        const std::string& id = contract_id(shape);
-        // The palms and the leaf plant are trunks and one closed part per leaf or leaf half, the basalt one part per
-        // column; the column, entablature, torii and roof are closed parts that overlap (base, shaft, capital; profile,
-        // triglyphs; posts, beams; slab, body, tile courses, caps).
-        if ((id == "nature.palm") || (id == "nature.leaf_plant") || (id == "nature.palm_clump") ||
-            (id == "nature.palm_shrub") || (id == "nature.basalt_columns")) {
-            EXPECT_GT(report.component_count, 10u);
-        } else if ((id == "architecture.column") || (id == "architecture.entablature") || (id == "architecture.torii") ||
-                   (id == "architecture.roof")) {
-            EXPECT_GT(report.component_count, 3u);
+        // The batch's row of the shape's id, else of its contract id, else one component.
+        Kit_component_row expected_components{};
+        for (const std::string* const id : {&contract_id(shape), &shape.id}) {
+            const std::vector<Kit_component_row>::const_iterator row = std::find_if(
+                components.begin(), components.end(), [id](const Kit_component_row& candidate) { return candidate.id == *id; }
+            );
+            if (row != components.end()) {
+                expected_components = *row;
+            }
+        }
+        if (expected_components.rule == Kit_component_rule::more_than) {
+            EXPECT_GT(report.component_count, expected_components.count);
         } else {
-            // The tree: trunk and canopy; the tower: its walls and the lintel over its doorway.
-            const unsigned int expected_components = ((id == "nature.tree") || (id == "architecture.tower")) ? 2u : 1u;
-            EXPECT_EQ(report.component_count, expected_components);
+            EXPECT_EQ(report.component_count, expected_components.count);
         }
     }
 }
 
 TEST(Kit_shape_library, triangle_counts_at_defaults)
 {
-    const std::vector<std::pair<std::string, unsigned int>> expected{
-        {"basic.block", 12}, {"basic.wedge", 8}, {"basic.cylinder", 60}, {"basic.stairs", 124}, {"basic.floor_slab", 12},
-        {"basic.block.v2", 12}, {"basic.wedge.v2", 8}, {"basic.cylinder.v2", 60}, {"basic.stairs.v2", 180}, {"basic.floor_slab.v2", 12},
-        {"architecture.wall", 12}, {"architecture.door_wall", 44}, {"architecture.pillar", 12}, {"architecture.arch", 100},
-        {"nature.rock", rock_default_triangles}, {"nature.land_mass", 128}, {"nature.hill", 128}, {"nature.tree", 68}, {"nature.bush", 48},
-        {"nature.cliff", 428}, {"nature.shore", 238}, {"nature.water", 2}, {"nature.palm", 1510},
-        {"architecture.column", 724}, {"architecture.entablature", 540}, {"architecture.torii", 400}, {"architecture.battlement", 44},
-        {"architecture.tower", 676}, {"nature.leaf_plant", 620}, {"nature.rock_spire", 720}, {"nature.basalt_columns", 740},
-        {"architecture.roof", 508}, {"nature.palm_clump", 1912}, {"nature.palm_shrub", 584}, {"nature.dune", 284}, {"nature.ground_patch", 144}
-    };
+    const std::vector<std::pair<std::string, unsigned int>> expected = get_union(&Kit_shape_rows::triangle_counts);
     for (const std::pair<std::string, unsigned int>& entry : expected) {
         EXPECT_EQ(editor::count_kit_triangles(*generate(defaults(get_shape(entry.first.c_str())))), entry.second) << entry.first;
     }
@@ -358,9 +258,8 @@ TEST(Kit_shape_library, every_shape_passes_the_mesh_checks_at_range_ends)
 
 TEST(Kit_shape_library, other_enum_values_pass_the_mesh_checks)
 {
-    for (const char* id : {"architecture.pillar", "nature.tree", "nature.rock", "nature.cliff", "nature.palm", "architecture.column",
-                           "architecture.entablature", "architecture.battlement", "architecture.tower", "nature.leaf_plant",
-                           "nature.rock_spire", "architecture.roof", "nature.palm_clump", "nature.palm_shrub"}) {
+    for (const std::string& enum_shape_id : get_union(&Kit_shape_rows::enum_shapes)) {
+        const char* const           id    = enum_shape_id.c_str();
         const Kit_shape_definition& shape = get_shape(id);
         for (const Kit_parameter& parameter : shape.parameters) {
             if (parameter.type != Kit_parameter_type::enum_value) {
@@ -393,14 +292,14 @@ TEST(Kit_shape_library, equal_values_give_equal_meshes)
 // R3.7: a seed gives one mesh; another seed gives another.
 TEST(Kit_shape_library, seeds_select_the_mesh)
 {
-    int seeded_count = 0;
+    std::vector<std::string> seeded;
     for (const Kit_shape_definition& shape : get_library().get_shapes()) {
         EXPECT_TRUE(shape.find_parameter("seed").has_value()) << shape.id;
         if (shape.randomness != editor::Kit_randomness::seeded) {
             continue;
         }
         SCOPED_TRACE(shape.id);
-        ++seeded_count;
+        seeded.push_back(shape.id);
         Kit_parameter_values seed_7a = defaults(shape);
         Kit_parameter_values seed_7b = defaults(shape);
         Kit_parameter_values seed_8  = defaults(shape);
@@ -411,7 +310,10 @@ TEST(Kit_shape_library, seeds_select_the_mesh)
         EXPECT_FALSE(editor::kit_meshes_equal(*generate(seed_7a), *generate(seed_8)));
         EXPECT_NE(seed_7a.to_canonical_text(), seed_8.to_canonical_text());
     }
-    EXPECT_EQ(seeded_count, 15);
+    std::vector<std::string> expected = get_union(&Kit_shape_rows::seeded_shapes);
+    std::sort(seeded.begin(), seeded.end());
+    std::sort(expected.begin(), expected.end());
+    EXPECT_EQ(seeded, expected);
 }
 
 TEST(Kit_parameter_values, canonical_text_round_trips)
@@ -756,52 +658,6 @@ TEST(Kit_rock, every_form_and_bevel_count_passes_the_checks)
     }
 }
 
-// Values of the shape with an empty mask (every value explicit) and the given seed.
-auto explicit_values(const Kit_shape_definition& shape, const int seed) -> Kit_parameter_values
-{
-    Kit_parameter_values values = defaults(shape);
-    for (std::size_t i = 0, end = shape.parameters.size(); i < end; ++i) {
-        values.set_value_source(i, editor::Kit_value_source::explicit_value);
-    }
-    EXPECT_TRUE(values.set_int("seed", seed));
-    return values;
-}
-
-// The positions of the mesh's vertices on the plane x = plane_x, sorted.
-auto vertices_on_x(const GEO::Mesh& mesh, const float plane_x) -> std::vector<std::array<float, 3>>
-{
-    std::vector<std::array<float, 3>> points;
-    for (GEO::index_t v = 0; v < mesh.vertices.nb(); ++v) {
-        const GEO::vec3f p = erhe::geometry::get_pointf(mesh.vertices, v);
-        if (p.x == plane_x) {
-            points.push_back({p.x, p.y, p.z});
-        }
-    }
-    std::sort(points.begin(), points.end());
-    return points;
-}
-
-// Every parameter of the shape at the minimum or the maximum of its range, an empty mask.
-auto range_corner(const Kit_shape_definition& shape, const Range_end range_end) -> Kit_parameter_values
-{
-    Kit_parameter_values values = defaults(shape);
-    for (std::size_t i = 0, end = shape.parameters.size(); i < end; ++i) {
-        values.set_value_source(i, editor::Kit_value_source::explicit_value);
-        const Kit_parameter& parameter = shape.parameters[i];
-        if (parameter.name == "seed") {
-            continue;
-        }
-        Kit_parameter_value value = values.get_values()[i];
-        if (parameter.type == Kit_parameter_type::float_value) {
-            value.float_value = (range_end == Range_end::max) ? parameter.float_max : parameter.float_min;
-        } else {
-            value.int_value = (range_end == Range_end::max) ? parameter.int_max : parameter.int_min;
-        }
-        values.set_value(i, value);
-    }
-    return values;
-}
-
 // R2.6: the kit's ceiling binds at every in-range value; the all-maximum corner is the most a shape makes.
 TEST(Kit_shape_library, every_shape_keeps_the_ceiling_at_the_range_maxima)
 {
@@ -911,149 +767,17 @@ TEST(Kit_cliff, top_connector_lies_on_the_walkable_top)
     }
 }
 
-// What generated_meshes_are_pinned keeps of a mesh: counts and slots exactly, positions within a tolerance.
-class Mesh_pin
-{
-public:
-    std::string          name;
-    unsigned int         vertices{0};
-    unsigned int         facets  {0};
-    unsigned int         corners {0};
-    uint64_t             slots   {0}; // FNV-1a 64 of the facet count of each slot, in slot order
-    std::array<float, 3> min     {};
-    std::array<float, 3> max     {};
-    std::array<float, 3> centroid{}; // mean of the vertex positions
-    float                area    {0.0f};
-};
-
-auto make_mesh_pin(const std::string& name, const GEO::Mesh& mesh) -> Mesh_pin
-{
-    Mesh_pin pin;
-    pin.name     = name;
-    pin.vertices = mesh.vertices.nb();
-    pin.facets   = mesh.facets.nb();
-    glm::dvec3 sum{0.0};
-    glm::vec3  low { std::numeric_limits<float>::max()};
-    glm::vec3  high{-std::numeric_limits<float>::max()};
-    const auto point = [&mesh](const GEO::index_t v) -> glm::vec3 {
-        const GEO::vec3f p = erhe::geometry::get_pointf(mesh.vertices, v);
-        return glm::vec3{p.x, p.y, p.z};
-    };
-    for (GEO::index_t v = 0; v < mesh.vertices.nb(); ++v) {
-        const glm::vec3 p = point(v);
-        sum  += glm::dvec3{p};
-        low   = glm::min(low, p);
-        high  = glm::max(high, p);
-    }
-    const glm::dvec3 mean = (pin.vertices > 0) ? (sum / static_cast<double>(pin.vertices)) : glm::dvec3{0.0};
-    std::vector<uint32_t> facet_slots;
-    editor::read_kit_facet_slots(mesh, facet_slots);
-    std::vector<uint32_t> slot_counts;
-    double area = 0.0;
-    for (GEO::index_t f = 0; f < mesh.facets.nb(); ++f) {
-        const GEO::index_t corner_count = mesh.facets.nb_vertices(f);
-        pin.corners += corner_count;
-        const glm::dvec3 origin{point(mesh.facets.vertex(f, 0))};
-        for (GEO::index_t c = 1; (c + 1) < corner_count; ++c) {
-            const glm::dvec3 a = glm::dvec3{point(mesh.facets.vertex(f, c))} - origin;
-            const glm::dvec3 b = glm::dvec3{point(mesh.facets.vertex(f, c + 1))} - origin;
-            area += 0.5 * glm::length(glm::cross(a, b));
-        }
-        if (facet_slots[f] >= slot_counts.size()) {
-            slot_counts.resize(facet_slots[f] + 1, 0);
-        }
-        ++slot_counts[facet_slots[f]];
-    }
-    pin.slots = 0xcbf29ce484222325ull;
-    for (const uint32_t count : slot_counts) {
-        for (int i = 0; i < 4; ++i) {
-            pin.slots ^= static_cast<uint64_t>((count >> (8 * i)) & 0xffu);
-            pin.slots *= 0x100000001b3ull;
-        }
-    }
-    for (int i = 0; i < 3; ++i) {
-        pin.min[i]      = low[i];
-        pin.max[i]      = high[i];
-        pin.centroid[i] = static_cast<float>(mean[i]);
-    }
-    pin.area = static_cast<float>(area);
-    return pin;
-}
-
 // Pins every shape's generated mesh across code versions and platforms: vertex, facet and corner counts and the
 // facet count of each slot exactly; bounds, centroid and surface area within a tolerance (doc/editor/level_tools.md).
 TEST(Kit_shape_library, generated_meshes_are_pinned)
 {
     constexpr float position_tolerance = 1.0e-4f; // meters
     constexpr float area_tolerance     = 1.0e-4f; // relative
-    const std::vector<Mesh_pin> expected{
-        {"basic.block 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 6.00000f},
-        {"basic.block.v2 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 6.00000f},
-        {"basic.wedge 1", 6, 5, 18, 0x2d401a55eec16520ull, {-0.50000f, 0.00000f, -1.00000f}, {0.50000f, 1.00000f, 1.00000f}, {0.00000f, 0.33333f, -0.33333f}, 7.23607f},
-        {"basic.wedge.v2 1", 6, 5, 18, 0x2d401a55eec16520ull, {-0.50000f, 0.00000f, -1.00000f}, {0.50000f, 1.00000f, 1.00000f}, {0.00000f, 0.33333f, -0.33333f}, 7.23607f},
-        {"basic.cylinder 1", 32, 18, 96, 0x8cc58f15ad955627ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 4.65218f},
-        {"basic.cylinder.v2 1", 32, 18, 96, 0x8cc58f15ad955627ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 4.65218f},
-        {"basic.stairs 1", 64, 92, 308, 0xcb65e93be76ff389ull, {-0.50000f, 0.00000f, -2.25000f}, {0.50000f, 3.00000f, 2.25000f}, {0.00000f, 1.50000f, 0.00000f}, 29.40000f},
-        {"basic.stairs.v2 1", 92, 104, 388, 0x4c5057cd16338a9dull, {-0.50000f, 0.00000f, -2.25000f}, {0.50000f, 3.00000f, 2.25000f}, {0.00000f, 1.04348f, 0.00000f}, 29.40000f},
-        {"basic.floor_slab 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-1.00000f, 0.00000f, -1.00000f}, {1.00000f, 0.20000f, 1.00000f}, {0.00000f, 0.10000f, 0.00000f}, 9.60000f},
-        {"basic.floor_slab.v2 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-1.00000f, 0.00000f, -1.00000f}, {1.00000f, 0.20000f, 1.00000f}, {0.00000f, 0.10000f, 0.00000f}, 9.60000f},
-        {"architecture.wall 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-2.00000f, 0.00000f, -0.12500f}, {2.00000f, 3.00000f, 0.12500f}, {0.00000f, 1.50000f, 0.00000f}, 27.50000f},
-        {"architecture.door_wall 1", 24, 22, 88, 0x0cdadef454be63e3ull, {-2.00000f, 0.00000f, -0.12500f}, {2.00000f, 3.00000f, 0.12500f}, {0.00000f, 1.73333f, 0.00000f}, 23.32000f},
-        {"architecture.pillar 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-0.25000f, 0.00000f, -0.25000f}, {0.25000f, 3.00000f, 0.25000f}, {0.00000f, 1.50000f, 0.00000f}, 6.50000f},
-        {"architecture.arch 1", 52, 50, 200, 0x8d700e0ae6ddc407ull, {-1.30000f, 0.00000f, -0.25000f}, {1.30000f, 2.70000f, 0.25000f}, {0.00000f, 1.48994f, 0.00000f}, 9.75364f},
-        {"architecture.column 1", 370, 454, 1632, 0x0087a9af94c808e8ull, {-0.31500f, 0.00000f, -0.31500f}, {0.31500f, 3.00000f, 0.31500f}, {0.00000f, 1.47232f, 0.00000f}, 6.95078f},
-        {"architecture.entablature 1", 344, 274, 1088, 0x841c1415a8ad577cull, {-1.00000f, 0.00000f, -0.44000f}, {1.00000f, 0.75000f, 0.44000f}, {0.00000f, 0.35913f, 0.00000f}, 9.52515f},
-        {"architecture.torii 1", 216, 168, 736, 0x4afb59e2a3a2aeddull, {-2.55000f, 0.00000f, -0.18750f}, {2.55000f, 3.78000f, 0.18750f}, {0.00000f, 2.32201f, 0.00000f}, 20.62952f},
-        {"architecture.battlement 1", 24, 22, 88, 0x0cdadef454be63e3ull, {-1.00000f, 0.00000f, -0.12500f}, {1.00000f, 1.80000f, 0.12500f}, {0.00000f, 0.90000f, 0.00000f}, 8.11000f},
-        {"architecture.tower 1", 334, 427, 1530, 0x73bb4286a4031605ull, {-1.66083f, 0.00000f, -1.63560f}, {1.66083f, 6.40000f, 1.72083f}, {0.00000f, 3.57305f, 0.01988f}, 125.54085f},
-        {"architecture.roof 1", 296, 254, 1016, 0xf10a827156626e1bull, {-2.33000f, 0.00000f, -2.30000f}, {2.33000f, 1.83248f, 2.30000f}, {0.00000f, 0.83722f, 0.00000f}, 156.34335f},
-        {"nature.rock 1", 58, 97, 306, 0xac804b820e4fe984ull, {-0.21238f, 0.00000f, -0.30518f}, {0.23571f, 0.35739f, 0.26512f}, {0.01986f, 0.12991f, -0.01321f}, 0.67238f},
-        {"nature.rock 3", 52, 89, 278, 0xab55ed54ea11293cull, {-0.42355f, 0.00000f, -0.52139f}, {0.53290f, 0.57794f, 0.56602f}, {-0.01152f, 0.21975f, -0.02118f}, 2.47714f},
-        {"nature.rock 17", 57, 99, 308, 0xec75a392babb62a6ull, {-0.53616f, 0.00000f, -0.41667f}, {0.53399f, 0.53632f, 0.47814f}, {-0.00520f, 0.21338f, 0.01204f}, 2.21727f},
-        {"nature.land_mass 1", 66, 128, 384, 0x4a7b7aaab8ac5c75ull, {-1.85458f, 0.00000f, -2.14295f}, {2.03018f, 1.00000f, 2.16942f}, {0.02663f, 0.49913f, -0.01562f}, 29.45218f},
-        {"nature.land_mass 3", 66, 128, 384, 0x4a7b7aaab8ac5c75ull, {-2.18004f, 0.00000f, -1.92235f}, {2.10604f, 1.00000f, 1.96032f}, {-0.03651f, 0.49683f, 0.00018f}, 29.59030f},
-        {"nature.land_mass 17", 66, 128, 384, 0x4a7b7aaab8ac5c75ull, {-2.12133f, 0.00000f, -2.04869f}, {2.29766f, 1.00000f, 2.03226f}, {0.00202f, 0.49771f, -0.00784f}, 30.76304f},
-        {"nature.hill 1", 66, 128, 384, 0x4a7b7aaab8ac5c75ull, {-2.83959f, 0.00000f, -3.13385f}, {2.99969f, 0.65000f, 3.16990f}, {0.02293f, 0.24571f, -0.01162f}, 56.45112f},
-        {"nature.hill 3", 66, 128, 384, 0x4a7b7aaab8ac5c75ull, {-3.12943f, 0.00000f, -2.82175f}, {3.05097f, 1.15000f, 2.90477f}, {-0.02655f, 0.43359f, 0.00287f}, 56.71866f},
-        {"nature.hill 17", 66, 128, 384, 0x4a7b7aaab8ac5c75ull, {-3.06270f, 0.00000f, -2.97855f}, {3.32143f, 0.70000f, 3.02918f}, {0.00343f, 0.26353f, -0.00586f}, 57.12008f},
-        {"nature.tree 1", 38, 56, 180, 0xa19deeea55812f9dull, {-0.94027f, 0.00000f, -0.89835f}, {0.80734f, 2.97000f, 0.93816f}, {-0.01557f, 1.79453f, -0.00565f}, 9.78669f},
-        {"nature.tree 3", 38, 56, 180, 0xa19deeea55812f9dull, {-1.33725f, 0.00000f, -1.40188f}, {1.23756f, 4.71000f, 1.59014f}, {-0.02287f, 2.82603f, 0.01781f}, 24.08631f},
-        {"nature.tree 17", 38, 56, 180, 0xa19deeea55812f9dull, {-0.98720f, 0.00000f, -1.07994f}, {1.16362f, 4.14000f, 1.06425f}, {-0.00568f, 2.66775f, 0.00670f}, 14.01106f},
-        {"nature.bush 1", 26, 48, 144, 0x4d7ab5fa3a724ae5ull, {-0.70145f, 0.00000f, -0.65352f}, {0.54069f, 0.78000f, 0.68968f}, {-0.02239f, 0.28680f, -0.00804f}, 3.62053f},
-        {"nature.bush 3", 26, 48, 144, 0x4d7ab5fa3a724ae5ull, {-0.55467f, 0.00000f, -0.59916f}, {0.48508f, 0.75000f, 0.72354f}, {-0.02115f, 0.27234f, 0.01868f}, 3.05131f},
-        {"nature.bush 17", 26, 48, 144, 0x4d7ab5fa3a724ae5ull, {-0.51817f, 0.00000f, -0.60427f}, {0.67877f, 0.69000f, 0.59587f}, {-0.00531f, 0.25871f, 0.00662f}, 2.91611f},
-        {"nature.cliff 1", 216, 395, 1218, 0xc108f4e24607d651ull, {-2.00000f, 0.00000f, -1.00000f}, {2.00000f, 6.90000f, 1.99953f}, {0.00022f, 3.45461f, 0.80411f}, 101.90959f},
-        {"nature.cliff 3", 144, 251, 786, 0x9500dab4b480d18eull, {-2.00000f, 0.00000f, -1.00000f}, {2.00000f, 3.30000f, 1.43399f}, {0.00098f, 1.65618f, 0.60090f}, 55.39624f},
-        {"nature.cliff 17", 168, 299, 930, 0x644c8f3b707981b1ull, {-2.00000f, 0.00000f, -1.00000f}, {2.00000f, 3.90000f, 1.31200f}, {-0.00100f, 1.95505f, 0.39021f}, 62.68912f},
-        {"nature.shore 1", 121, 237, 712, 0x29c0ffce82052448ull, {-2.00000f, 0.00000f, -3.00000f}, {2.00000f, 1.10450f, 3.00000f}, {0.00000f, 0.67512f, 0.00000f}, 62.04102f},
-        {"nature.shore 3", 121, 237, 712, 0x29c0ffce82052448ull, {-2.00000f, 0.00000f, -3.00000f}, {2.00000f, 1.10131f, 3.00000f}, {0.00000f, 0.69196f, 0.00000f}, 62.01799f},
-        {"nature.shore 17", 121, 237, 712, 0x29c0ffce82052448ull, {-2.00000f, 0.00000f, -3.00000f}, {2.00000f, 1.12084f, 3.00000f}, {0.00000f, 0.68936f, 0.00000f}, 62.01485f},
-        {"nature.water 1", 4, 1, 4, 0xad2aca7747985764ull, {-4.00000f, 0.00000f, -4.00000f}, {4.00000f, 0.00000f, 4.00000f}, {0.00000f, 0.00000f, 0.00000f}, 64.00000f},
-        {"nature.dune 1", 144, 270, 824, 0x045c03b19e2880b0ull, {-4.66538f, 0.00000f, -3.37500f}, {4.66538f, 0.63700f, 3.37500f}, {-0.04318f, 0.29990f, 0.46217f}, 107.53407f},
-        {"nature.dune 3", 144, 270, 824, 0x045c03b19e2880b0ull, {-5.16852f, 0.00000f, -3.25000f}, {5.16852f, 0.73500f, 3.25000f}, {-0.10119f, 0.34604f, 0.44383f}, 118.06809f},
-        {"nature.dune 17", 144, 270, 824, 0x045c03b19e2880b0ull, {-5.91538f, 0.00000f, -3.37500f}, {5.91538f, 0.68600f, 3.37500f}, {0.14362f, 0.32297f, 0.46524f}, 141.90427f},
-        {"nature.ground_patch 1", 74, 144, 432, 0x4a263b301c082585ull, {-2.87980f, 0.00000f, -2.64799f}, {2.60800f, 0.20750f, 2.34955f}, {0.00000f, 0.07099f, 0.00000f}, 43.67327f},
-        {"nature.ground_patch 3", 74, 144, 432, 0x4a263b301c082585ull, {-2.15619f, 0.00000f, -2.70255f}, {2.05114f, 0.18500f, 2.47553f}, {0.00000f, 0.06558f, -0.00000f}, 32.11528f},
-        {"nature.ground_patch 17", 74, 144, 432, 0x4a263b301c082585ull, {-2.23618f, 0.00000f, -2.43645f}, {2.14958f, 0.18500f, 2.34262f}, {0.00000f, 0.06558f, 0.00000f}, 31.79795f},
-        {"nature.rock_spire 1", 362, 720, 2160, 0x377e47459fa74c6full, {-3.64752f, 0.00000f, -4.11290f}, {3.52583f, 14.78250f, 3.67956f}, {0.01016f, 7.16546f, -0.19037f}, 238.56767f},
-        {"nature.rock_spire 3", 170, 336, 1008, 0x42d1be1a89b1029aull, {-3.07933f, 0.00000f, -3.00723f}, {3.88463f, 4.48500f, 2.16148f}, {0.10510f, 2.03278f, 0.13275f}, 84.62290f},
-        {"nature.rock_spire 17", 362, 720, 2160, 0x377e47459fa74c6full, {-2.64916f, 0.00000f, -4.44135f}, {3.23760f, 16.22400f, 3.17109f}, {0.33947f, 7.92638f, 0.28505f}, 228.92017f},
-        {"nature.basalt_columns 1", 444, 296, 1332, 0x44fbdab783dc67b2ull, {-1.71299f, 0.00000f, -1.55557f}, {1.72809f, 2.70000f, 1.56255f}, {0.00000f, 1.24459f, -0.00000f}, 148.30334f},
-        {"nature.basalt_columns 3", 732, 488, 2196, 0x40fce0f82c29d472ull, {-2.57168f, 0.00000f, -2.30863f}, {2.58082f, 2.70000f, 2.31266f}, {0.00000f, 1.19754f, -0.00000f}, 285.46548f},
-        {"nature.basalt_columns 17", 84, 56, 252, 0x4d50163cec202f6dull, {-0.72651f, 0.00000f, -0.69813f}, {0.72253f, 2.70000f, 0.68889f}, {0.00000f, 1.32857f, -0.00000f}, 30.45187f},
-        {"nature.palm 1", 843, 1495, 4500, 0x5d9ce96fdb009a31ull, {-3.05603f, 0.00000f, -1.48759f}, {2.37736f, 12.33090f, 3.88708f}, {-0.45316f, 10.53339f, 0.92783f}, 58.33212f},
-        {"nature.palm 3", 555, 983, 2964, 0x6eefdf6fe4d09787ull, {-3.48997f, 0.00000f, -2.01061f}, {1.86270f, 10.79839f, 3.08687f}, {-0.61547f, 9.04642f, 0.50534f}, 35.82668f},
-        {"nature.palm 17", 843, 1495, 4500, 0x5d9ce96fdb009a31ull, {-3.22049f, 0.00000f, -4.16760f}, {2.50953f, 12.78151f, 1.69860f}, {-0.43074f, 10.89694f, -1.16128f}, 58.57428f},
-        {"nature.leaf_plant 1", 348, 614, 1848, 0x2f2da5e5ed3504c9ull, {-0.53277f, 0.00000f, -0.40541f}, {0.64207f, 1.24859f, 0.47117f}, {0.01968f, 0.77218f, 0.01167f}, 1.48334f},
-        {"nature.leaf_plant 3", 603, 1064, 3198, 0xc7e7e0947ff42590ull, {-0.21391f, 0.00000f, -0.17556f}, {0.15538f, 0.37633f, 0.18560f}, {-0.00717f, 0.26109f, -0.00173f}, 0.28674f},
-        {"nature.leaf_plant 17", 348, 614, 1848, 0x2f2da5e5ed3504c9ull, {-0.71894f, 0.00000f, -0.64669f}, {1.00937f, 1.69909f, 0.95500f}, {0.03086f, 1.15130f, 0.08859f}, 3.90585f},
-        {"nature.palm_clump 1", 1134, 1865, 5642, 0x344df1114a183a71ull, {-1.56352f, 0.00000f, -2.17078f}, {1.37917f, 4.85206f, 1.75516f}, {-0.03700f, 2.77721f, -0.01980f}, 18.72364f},
-        {"nature.palm_clump 3", 670, 1097, 3322, 0x17ae610c8871716dull, {-0.39434f, 0.00000f, -0.74393f}, {0.88112f, 2.23237f, 0.61127f}, {0.11201f, 1.40232f, -0.03305f}, 2.72475f},
-        {"nature.palm_clump 17", 506, 825, 2502, 0x6dfb0758e807b7f2ull, {-1.68756f, 0.00000f, -0.69025f}, {0.93280f, 4.08483f, 0.83392f}, {-0.10641f, 2.28608f, -0.02681f}, 5.82635f},
-        {"nature.palm_shrub 1", 342, 470, 1524, 0x48d5df08b6c0da18ull, {-1.22554f, 0.00000f, -0.93309f}, {1.12310f, 1.30057f, 1.10304f}, {-0.00991f, 0.68600f, 0.02234f}, 15.22223f},
-        {"nature.palm_shrub 3", 288, 396, 1284, 0x84a19d9cbd27a482ull, {-0.82727f, 0.00000f, -0.82216f}, {0.97043f, 1.07892f, 0.80320f}, {0.03224f, 0.52061f, -0.01719f}, 7.73327f},
-        {"nature.palm_shrub 17", 396, 544, 1764, 0xfd0d30eb35555863ull, {-1.03428f, 0.00000f, -0.79639f}, {0.85171f, 1.18611f, 0.93885f}, {0.00018f, 0.60575f, 0.01251f}, 13.27199f}
-    };
+    const std::vector<Mesh_pin> expected = get_union(&Kit_shape_rows::pins);
+    std::map<std::string, const Mesh_pin*> expected_by_name;
+    for (const Mesh_pin& pin : expected) {
+        EXPECT_TRUE(expected_by_name.emplace(pin.name, &pin).second) << "two pin rows name " << pin.name;
+    }
     std::vector<Mesh_pin> actual;
     for (const Kit_shape_definition& shape : get_library().get_shapes()) {
         const std::vector<int> seeds = (shape.randomness == editor::Kit_randomness::seeded) ? std::vector<int>{1, 3, 17} : std::vector<int>{1};
@@ -1073,20 +797,32 @@ TEST(Kit_shape_library, generated_meshes_are_pinned)
             pin.centroid[0], pin.centroid[1], pin.centroid[2], pin.area
         );
     }
-    ASSERT_EQ(actual.size(), expected.size()) << table;
-    for (std::size_t i = 0; i < actual.size(); ++i) {
-        SCOPED_TRACE(fmt::format("{}\n{}", actual[i].name, table));
-        EXPECT_EQ(actual[i].name,     expected[i].name);
-        EXPECT_EQ(actual[i].vertices, expected[i].vertices);
-        EXPECT_EQ(actual[i].facets,   expected[i].facets);
-        EXPECT_EQ(actual[i].corners,  expected[i].corners);
-        EXPECT_EQ(actual[i].slots,    expected[i].slots);
-        for (std::size_t axis = 0; axis < 3; ++axis) {
-            EXPECT_NEAR(actual[i].min[axis],      expected[i].min[axis],      position_tolerance);
-            EXPECT_NEAR(actual[i].max[axis],      expected[i].max[axis],      position_tolerance);
-            EXPECT_NEAR(actual[i].centroid[axis], expected[i].centroid[axis], position_tolerance);
+    std::set<std::string> matched;
+    for (const Mesh_pin& pin : actual) {
+        SCOPED_TRACE(pin.name);
+        const std::map<std::string, const Mesh_pin*>::const_iterator found = expected_by_name.find(pin.name);
+        if (found == expected_by_name.end()) {
+            ADD_FAILURE() << "no pin row for " << pin.name;
+            continue;
         }
-        EXPECT_NEAR(actual[i].area, expected[i].area, area_tolerance * std::max(1.0f, expected[i].area));
+        matched.insert(pin.name);
+        const Mesh_pin& row = *found->second;
+        EXPECT_EQ(pin.vertices, row.vertices);
+        EXPECT_EQ(pin.facets,   row.facets);
+        EXPECT_EQ(pin.corners,  row.corners);
+        EXPECT_EQ(pin.slots,    row.slots);
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            EXPECT_NEAR(pin.min[axis],      row.min[axis],      position_tolerance);
+            EXPECT_NEAR(pin.max[axis],      row.max[axis],      position_tolerance);
+            EXPECT_NEAR(pin.centroid[axis], row.centroid[axis], position_tolerance);
+        }
+        EXPECT_NEAR(pin.area, row.area, area_tolerance * std::max(1.0f, row.area));
+    }
+    for (const Mesh_pin& row : expected) {
+        EXPECT_TRUE(matched.contains(row.name)) << "the pin row " << row.name << " names no generated shape and seed";
+    }
+    if (testing::Test::HasFailure()) {
+        ADD_FAILURE() << "actual pin rows, in library order (each goes in the pins of its batch's kit_shape_rows_<batch>.cpp):\n" << table;
     }
 }
 
@@ -1494,25 +1230,7 @@ TEST(Kit_tower, every_profile_and_top_passes_at_the_corners_with_a_walkable_top)
 // combination of range ends and random in-range values): each passes the mesh checks within the kit's ceiling.
 TEST(Kit_shape_library, worst_case_combinations_keep_the_ceiling)
 {
-    const std::vector<std::pair<std::string, std::string>> worst{
-        {"architecture.column",      R"({"order":"corinthian","height":"0x1p-1","width":"0x1.99999ap-4","flutes":24,"taper":"0x0p+0","seed":1,"segments":20})"},
-        {"architecture.entablature", R"({"length":"0x1p+3","height":"0x1.99999ap-3","depth":"0x1.99999ap-3","cornice":"0x0p+0","frieze":"triglyph","seed":1})"},
-        {"architecture.entablature", R"({"length":"0x1p+1","height":"0x1.99999ap-3","depth":"0x1p-1","cornice":"0x1.333334p-3","frieze":"triglyph","seed":1})"},
-        {"architecture.torii",       R"({"width":"0x1p+0","height":"0x1p+1","curve":"0x0p+0","post_width":"0x1.99999ap-4","lean":"0x0p+0","seed":1,"segments":24})"},
-        {"architecture.battlement",  R"({"length":"0x1.8p+4","height":"0x1.99999ap-3","thickness":"0x1.99999ap-5","merlon_height":"0x1.99999ap-3","merlon_width":"0x1.99999ap-2","crenel_width":"0x1.333334p-2","merlon":"swallowtail","seed":1})"},
-        {"architecture.tower",       R"({"profile":"round","width":"0x1p+4","height":"0x1.ep+4","batter":"0x0p+0","wall":"0x1.99999ap-3","opening_width":"0x1.99999ap-1","opening_height":"0x1p+1","top":"battlement","slit_rows":2,"seed":1})"},
-        {"architecture.tower",       R"({"profile":"round","width":"0x1p+4","height":"0x1.cp+1","batter":"0x0p+0","wall":"0x1.99999ap-3","opening_width":"0x1.99999ap-1","opening_height":"0x1p+1","top":"battlement","slit_rows":2,"seed":1})"},
-        {"nature.leaf_plant",        R"({"form":"banana","height":"0x1.333334p-2","leaves":14,"droop":"0x0p+0","leaf_width":"0x1.99999ap-4","seed":1})"},
-        {"nature.palm",              R"({"species":"coconut","height":"0x1.8p+0","bend":"0x0p+0","fronds":24,"frond_length":"0x1.333334p-2","droop":"0x0p+0","seed":1,"segments":12})"},
-        {"nature.rock_spire",        R"({"form":"pinnacle","height":"0x1.ep+5","radius":"0x1.99999ap-3","taper":"0x0p+0","lean":"0x0p+0","roughness":"0x0p+0","seed":1,"segments":20})"},
-        {"nature.basalt_columns",    R"({"radius":"0x1p+4","column_width":"0x1.333334p-3","height":"0x1.99999ap-3","height_spread":"0x0p+0","step":"0x1.99999ap-5","seed":1})"},
-        {"architecture.roof",        R"({"form":"hip","width":"0x1.9cf408p+3","depth":"0x1.76ffb6p+4","pitch":"0x1.6b7964p+5","overhang":"0x1.a87f5ep-4","curve":"0x1.175114p-4","seed":81079})"},
-        {"nature.palm_clump",        R"({"species":"areca","stems":9,"height":"0x1p-1","spread":"0x0p+0","fronds":10,"seed":1})"},
-        {"nature.palm_shrub",        R"({"species":"cycad","size":"0x1.333334p-2","fronds":16,"seed":1})"},
-        {"nature.dune",              R"({"length":"0x1p+2","width":"0x1p+1","height":"0x1.99999ap-5","asymmetry":"0x0p+0","seed":1,"segments":48})"},
-        {"nature.ground_patch",      R"({"size":"0x1.99999ap-3","thickness":"0x1.47ae14p-7","irregularity":"0x0p+0","dome":"0x0p+0","seed":1,"segments":48})"},
-        {"nature.cliff",             R"({"length":"0x1.ddc0f6p+5","height":"0x1.91c9fcp+3","depth":"0x1.ee5558p+3","strata":"layered","overhang":"0x1.c484fp-5","roughness":"0x1.9873fp-1","ledges":3,"seed":261})"}
-    };
+    const std::vector<std::pair<std::string, std::string>> worst = get_union(&Kit_shape_rows::worst_cases);
     for (const std::pair<std::string, std::string>& entry : worst) {
         const Kit_shape_definition& shape = get_shape(entry.first.c_str());
         Kit_parameter_values values;
@@ -1588,7 +1306,8 @@ INSTANTIATE_TEST_SUITE_P(Kit_shape_library, Kit_shape_random_values, testing::Va
 // left out of the walkability part (doc/plans/open_items.md "Derived walkability at other level lengths").
 TEST(Kit_derive, derived_values_are_accepted_and_walkable_at_other_level_lengths)
 {
-    const std::set<std::string> walkability_open{"basic.wedge", "basic.stairs", "basic.floor_slab", "architecture.arch", "nature.land_mass", "nature.shore"};
+    const std::vector<std::string> open_ids = get_union(&Kit_shape_rows::walkability_open);
+    const std::set<std::string>    walkability_open{open_ids.begin(), open_ids.end()};
     const Kit_agent agent{};
     for (const std::pair<float, float> lengths : {std::pair{0.5f, 2.5f}, std::pair{1.0f, 2.4f}, std::pair{2.0f, 4.0f}, std::pair{0.5f, 4.0f}, std::pair{2.0f, 2.4f}, std::pair{0.25f, 2.0f}}) {
         for (const Kit_shape_definition& shape : get_library().get_shapes()) {
@@ -1613,7 +1332,7 @@ TEST(Kit_derive, derived_values_are_accepted_and_walkable_at_other_level_lengths
             }
             SCOPED_TRACE(fmt::format("{} at module {} m, wall height {} m", shape.id, lengths.first, lengths.second));
             EXPECT_EQ(refused, 0);
-            if (!walkability_open.contains(contract_id(shape))) {
+            if (!walkability_open.contains(shape.id) && !walkability_open.contains(contract_id(shape))) {
                 EXPECT_EQ(unwalkable, 0);
             } else {
                 testing::Test::RecordProperty(fmt::format("{}_unwalkable_at_{}_{}", shape.id, lengths.first, lengths.second), unwalkable);
@@ -1902,40 +1621,8 @@ INSTANTIATE_TEST_SUITE_P(Kit_dune, Kit_dune_widths, testing::Values(2.0f, 2.75f,
 
 namespace {
 
-auto get_connectors(const Kit_parameter_values& values) -> std::vector<editor::Kit_connector>
-{
-    std::vector<editor::Kit_connector> connectors;
-    if (values.get_shape()->get_connectors) {
-        values.get_shape()->get_connectors(values, connectors);
-    }
-    return connectors;
-}
-
-void expect_equal_parameters(const Kit_parameter& a, const Kit_parameter& b)
-{
-    SCOPED_TRACE(a.name);
-    EXPECT_EQ(a.name,              b.name);
-    EXPECT_EQ(a.type,              b.type);
-    EXPECT_EQ(a.unit,              b.unit);
-    EXPECT_EQ(a.default_scale,     b.default_scale);
-    EXPECT_EQ(a.float_default,     b.float_default);
-    EXPECT_EQ(a.float_min,         b.float_min);
-    EXPECT_EQ(a.float_max,         b.float_max);
-    EXPECT_EQ(a.int_default,       b.int_default);
-    EXPECT_EQ(a.int_min,           b.int_min);
-    EXPECT_EQ(a.int_max,           b.int_max);
-    EXPECT_EQ(a.enum_values,       b.enum_values);
-    EXPECT_EQ(a.derive,            b.derive);
-    EXPECT_EQ(a.derive_float_min,  b.derive_float_min);
-    EXPECT_EQ(a.derive_float_max,  b.derive_float_max);
-    EXPECT_EQ(a.derive_float_step, b.derive_float_step);
-    EXPECT_EQ(a.derive_int_min,    b.derive_int_min);
-    EXPECT_EQ(a.derive_int_max,    b.derive_int_max);
-    EXPECT_EQ(a.default_source,    b.default_source);
-}
-
-// A recreated shape stands directly after its original and states the same contract, so a piece of one is replaced
-// by the other value for value (doc/editor/level_tools.md "Recreated shapes").
+// A recreated shape names an original of its kit, has its id plus the suffix and stands directly after it; the rest of
+// its definition is its own (doc/editor/level_tools.md "Recreated shapes").
 TEST(Kit_recreated, every_recreated_shape_pairs_with_its_original)
 {
     const std::vector<Kit_shape_definition>& shapes = get_library().get_shapes();
@@ -1954,129 +1641,12 @@ TEST(Kit_recreated, every_recreated_shape_pairs_with_its_original)
         EXPECT_EQ(&shapes[i - 1], original);
         EXPECT_EQ(shape.id,           original->id + editor::c_kit_recreated_id_suffix);
         EXPECT_EQ(shape.display_name, original->display_name + editor::c_kit_recreated_name_suffix);
-        EXPECT_EQ(shape.kit,            original->kit);
-        EXPECT_EQ(shape.material_slots, original->material_slots);
-        EXPECT_EQ(shape.origin_rule,    original->origin_rule);
-        EXPECT_EQ(shape.collision,      original->collision);
-        EXPECT_EQ(shape.mesh_kind,      original->mesh_kind);
-        EXPECT_EQ(shape.randomness,     original->randomness);
-        EXPECT_EQ(shape.mirror_planes,  original->mirror_planes);
-        EXPECT_EQ(shape.tags,           original->tags);
-        EXPECT_EQ(shape.description,    original->description);
-        EXPECT_EQ(shape.normal_style,   original->normal_style);
-        EXPECT_EQ(shape.hard_edge_angle_degrees, original->hard_edge_angle_degrees);
-        EXPECT_EQ(static_cast<bool>(shape.check_walkability), static_cast<bool>(original->check_walkability));
-        EXPECT_EQ(static_cast<bool>(shape.check_combination), static_cast<bool>(original->check_combination));
-        ASSERT_EQ(shape.parameters.size(), original->parameters.size());
-        for (std::size_t p = 0; p < shape.parameters.size(); ++p) {
-            expect_equal_parameters(shape.parameters[p], original->parameters[p]);
-        }
-        // Equal parameters derive equal values, so the connectors are compared at the same values.
-        for (const int seed : {1, 3, 17}) {
-            const Kit_parameter_values values          = all_derived(shape, seed);
-            const Kit_parameter_values original_values = all_derived(*original, seed);
-            ASSERT_EQ(values.get_values(), original_values.get_values());
-            const std::vector<editor::Kit_connector> connectors          = get_connectors(values);
-            const std::vector<editor::Kit_connector> original_connectors = get_connectors(original_values);
-            ASSERT_EQ(connectors.size(), original_connectors.size());
-            for (std::size_t c = 0; c < connectors.size(); ++c) {
-                EXPECT_EQ(std::string_view{connectors[c].name}, std::string_view{original_connectors[c].name});
-                EXPECT_LT(glm::distance(connectors[c].position, original_connectors[c].position), 1.0e-5f) << connectors[c].name;
-                EXPECT_LT(glm::distance(connectors[c].outward,  original_connectors[c].outward),  1.0e-5f) << connectors[c].name;
-                EXPECT_LT(glm::distance(connectors[c].up,       original_connectors[c].up),       1.0e-5f) << connectors[c].name;
-            }
-            if (shape.get_seam_sides) {
-                ASSERT_TRUE(static_cast<bool>(original->get_seam_sides));
-                EXPECT_EQ(shape.get_seam_sides(values), original->get_seam_sides(original_values));
-            }
-        }
+        EXPECT_EQ(shape.kit,          original->kit);
     }
-    std::vector<std::string> expected = recreated_originals();
+    std::vector<std::string> expected = get_union(&Kit_shape_rows::recreated_originals);
     std::sort(paired.begin(), paired.end());
     std::sort(expected.begin(), expected.end());
     EXPECT_EQ(paired, expected);
-}
-
-// The plain building blocks keep their originals' bounds at every value, so the two tile and stack alike.
-TEST(Kit_recreated, basic_shapes_keep_their_originals_bounds)
-{
-    int checked = 0;
-    int basic_count = 0;
-    for (const Kit_shape_definition& shape : get_library().get_shapes()) {
-        if (shape.recreates.empty() || (shape.kit != "basic")) {
-            continue;
-        }
-        ++basic_count;
-        const Kit_shape_definition& original = get_shape(shape.recreates.c_str());
-        std::vector<std::pair<Kit_parameter_values, Kit_parameter_values>> cases;
-        cases.emplace_back(defaults(shape), defaults(original));
-        cases.emplace_back(range_corner(shape, Range_end::min), range_corner(original, Range_end::min));
-        cases.emplace_back(range_corner(shape, Range_end::max), range_corner(original, Range_end::max));
-        for (const int seed : {1, 3, 17, 4242}) {
-            cases.emplace_back(all_derived(shape, seed), all_derived(original, seed));
-        }
-        for (const std::pair<Kit_parameter_values, Kit_parameter_values>& entry : cases) {
-            SCOPED_TRACE(fmt::format("{} {}", shape.id, entry.first.to_canonical_text()));
-            const Kit_mesh_report report          = editor::check_kit_shape(entry.first);
-            const Kit_mesh_report original_report = editor::check_kit_shape(entry.second);
-            EXPECT_TRUE(report.is_valid()) << describe(report);
-            const float tolerance = 1.0e-5f * std::max(1.0f, glm::length(original_report.bounds_max - original_report.bounds_min));
-            EXPECT_LT(glm::distance(report.bounds_min, original_report.bounds_min), tolerance);
-            EXPECT_LT(glm::distance(report.bounds_max, original_report.bounds_max), tolerance);
-            ++checked;
-        }
-    }
-    EXPECT_GT(basic_count, 0);
-    EXPECT_EQ(checked, basic_count * 7);
-}
-
-// The recreated stairs' side walls are a column per step: no vertex gathers a fan of facets, at any step count.
-TEST(Kit_recreated, stairs_sides_have_no_fan)
-{
-    const Kit_shape_definition& stairs = get_shape("basic.stairs.v2");
-    for (const float rise : {0.2f, 1.0f, 3.0f, 16.0f}) {
-        Kit_parameter_values values = defaults(stairs);
-        ASSERT_TRUE(values.set_float("rise", rise));
-        ASSERT_TRUE(values.set_float("step_rise_limit", (rise > 8.0f) ? 0.125f : 0.2f));
-        ASSERT_EQ(values.validate(), "");
-        const Kit_stairs_layout          layout = editor::get_stairs_layout(values);
-        const std::unique_ptr<GEO::Mesh> mesh   = generate(values);
-        SCOPED_TRACE(fmt::format("rise {}: {} steps", rise, layout.step_count));
-        EXPECT_EQ(editor::count_kit_triangles(*mesh), static_cast<unsigned int>(12 * layout.step_count));
-        std::vector<int> facets_at(mesh->vertices.nb(), 0);
-        for (GEO::index_t f = 0; f < mesh->facets.nb(); ++f) {
-            for (GEO::index_t c = 0; c < mesh->facets.nb_vertices(f); ++c) {
-                ++facets_at[mesh->facets.vertex(f, c)];
-            }
-        }
-        // A riser foot: its riser, the tread before it, two columns and two step triangles.
-        EXPECT_LE(*std::max_element(facets_at.begin(), facets_at.end()), 6);
-    }
-}
-
-// The recreated cylinder's mirror images are equal to the bit: about z = 0 always, about x = 0 at an even segment count.
-TEST(Kit_recreated, cylinder_is_exactly_symmetric)
-{
-    const Kit_shape_definition& cylinder = get_shape("basic.cylinder.v2");
-    for (const int segments : {3, 4, 5, 6, 7, 12, 16, 33, 64}) {
-        Kit_parameter_values values = defaults(cylinder);
-        ASSERT_TRUE(values.set_int("segments", segments));
-        ASSERT_TRUE(values.set_float("radius", 0.7f));
-        const std::unique_ptr<GEO::Mesh> mesh = generate(values);
-        std::set<std::array<float, 3>> points;
-        for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
-            const GEO::vec3f p = erhe::geometry::get_pointf(mesh->vertices, v);
-            points.insert({p.x, p.y, p.z});
-        }
-        SCOPED_TRACE(fmt::format("{} segments", segments));
-        EXPECT_EQ(points.size(), static_cast<std::size_t>(2 * segments));
-        for (const std::array<float, 3>& p : points) {
-            EXPECT_TRUE(points.contains({p[0], p[1], -p[2]}));
-            if ((segments % 2) == 0) {
-                EXPECT_TRUE(points.contains({-p[0], p[1], p[2]}));
-            }
-        }
-    }
 }
 
 } // anonymous namespace

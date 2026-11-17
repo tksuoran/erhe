@@ -719,20 +719,27 @@ its id, generator and pinned mesh.
 - `Kit_shape_definition::recreates` holds the original's id; it is empty for
   an original. Tools, tests and the comparison script pair the two by this
   field, never by parsing ids.
-- Pairing rule: a recreated shape has its original's kit, parameters
-  (names, types, units, ranges, defaults, derive ranges, default mask),
-  material slots, connectors, origin rule, collision kind, mesh kind,
-  randomness, mirror planes, seam sides and checks.
-  `make_recreated_shape()` builds the definition as a copy of the original's
-  with the new id, name, generator and triangle budget, so the contract is
-  stated once. A piece of either shape is replaced by the other ("Replace")
-  with every parameter value and slot material carried.
+- Pairing rule: a recreated shape names an existing original in
+  `recreates`, has the original's kit and the id `<original>.v2`. Its
+  parameters (added ones, other ranges and defaults), material slots,
+  connectors, seam sides and the rest of its definition are its own.
+  `make_recreated_shape()` returns a copy of the original's definition with
+  the new id, name, generator and triangle budget, which the generator file
+  changes before adding it. Replace ("Replace") from either shape to the
+  other carries the parameter values and slot materials the two share.
 - Order: the library places each recreated shape directly after its
   original, which is the order of the Level Kit window's rows, the Replace
   With list and `level_get_kits`.
 - Source files: the recreated generators of `kit_shapes_<name>.cpp` are in
   `kit_shapes_<name>_v2.cpp`, added by `add_<name>_shapes_v2()` after the
-  originals.
+  originals. A batch of shapes - recreated (`basic_v2`, `architecture_v2`,
+  `medieval_v2`, `nature_v2`, `nature_plants_v2`, `nature_rocks_v2`) or new
+  (`build_13_16`, `build_17_20`, `build_21_24`, by the build-order lines of
+  `doc/plans/level_kit_more_shapes.md`) - edits only its generator file
+  `kit_shapes_<batch>.cpp`, its expectation rows
+  `src/editor/level/test/kit_shape_rows_<batch>.cpp` and its tests
+  `src/editor/level/test/test_kit_shapes_<batch>.cpp`; the tests that go
+  over the library take the union of every batch's rows.
 - `get_contract_id(shape)` (`kit_shape.hpp`) is the original's id for a
   recreated shape and the shape's own otherwise. Code that acts on what a
   shape is - the stairs' "steps, step rise, tread depth" line of the
@@ -761,10 +768,64 @@ Recreated so far, the basic kit:
 
 These five have their originals' forms, bounds and shading: a plain
 building block's description leaves no room for a bevel that would keep it
-tiling flush.
+tiling flush. `get_kit_circle_point()` (`kit_shapes.hpp`) is the ring point
+the recreated round shapes share.
+
+The architecture kit (`kit_shapes_architecture_v2.cpp`); each keeps its
+original's bounds, so its detail is cut into the original's envelope:
+
+- `architecture.door_wall.v2`: a door frame on both faces - a chamfer from
+  the frame down to the opening's edge (the reveal), a flat frame band, and
+  a V groove around the band that turns out under the lintel and back over
+  it, so the lintel is a block with an ear past each jamb. The frame's face
+  is the wall's face; the opening is the stated clear width and height at
+  the reveal's edge, and the ends and the top are full rectangles. The
+  frame's widths (chamfer 0.07 m, band 0.10 m, groove 0.07 m) shrink with a
+  jamb narrower than 0.42 m and its heights (lintel 0.20 m) with a header
+  lower than 0.45 m; the groove is at most 0.16 and the reveal 0.28 of the
+  thickness deep. 572 triangles at every value (the original: 44). The wall
+  has no threshold: a sill would lower the stated clear height.
+  `Relief_slab_v2` builds it: a grid in the XY plane whose nodes lie at one
+  of a few depths below the faces, mirrored about z = 0; a cell between two
+  depths is a bevel (a quad), a cell with three corners at one depth is a
+  mitre (two triangles split through the fourth corner), and an open cell
+  is an opening with a wall through the slab on each of its edges.
+- `architecture.pillar.v2`, round: a base (a plinth and a torus), a shaft
+  that tapers from 0.80 to 0.70 of the radius, and a capital (an astragal, a
+  necking, an echinus and an abacus), all inside the original's cylinder:
+  the plinth and the abacus have the full radius. Base and capital follow
+  the width (0.34 and 0.40 of it), take at most 0.20 and 0.22 of a low
+  pillar's height and at least 0.02 of a thin tall one's. 15 rings of the
+  segment count, a quad per segment between two rings and a polygon per
+  cap: 30 triangles a segment less 4 (356 at 12 segments, 1916 at 64; the
+  original: 4 a segment less 4). Square: the original's box, since every
+  side of the square pillar is a seam side (`get_seam_sides`) and a box is
+  the only solid that fills all six.
+- `architecture.arch.v2`: a masonry arch. The opening is the half ellipse
+  of the span and the rise, its points on the ellipse at equal steps of the
+  angle, at least 32 of them and among them every vertex of the original's
+  opening, so `get_arch_clear_width()` holds for it. The ring is the
+  thickness measured along the ellipse's normal (the original's outer curve
+  is a second ellipse, thinner at the haunches). `segments` counts the
+  stones: one keystone at the crown, a springer at each foot and voussoirs
+  between them (11 stones at 12 segments: an even count has its keystone
+  across the crown and springers of one and a half segments; 2 segments
+  make 3 stones). The keystone and the springers fill the envelope - the
+  feet are the original's footprint, the keystone's top is at rise +
+  thickness; the voussoirs lie back from it (0.16 of the thickness at the
+  extrados, 0.16 of the half depth on each face, 0.05 of the thickness
+  outside the opening's curve), so every joint to them is a step. A joint
+  between two voussoirs is a V groove around the ring. The curve is smooth
+  shaded inside a stone and the steps and grooves are hard edges. 516
+  triangles at 12 segments, at most 1476 (48 segments); the original: 100.
+  An arch of an odd segment count is taller than its original by the
+  original's missing crown: the original's top is a chord below rise +
+  thickness there, where the `top` connector is.
 
 `scripts/level_shape_compare.py [--editor <binary>] [--only <id prefix>]
-[--gap <meters>] [--save <path>] [--keep-open]` launches the editor, lists
+[--gap <meters>] [--parameters <json object>] [--tag <name>]
+[--detail <x,y,z,distance>] [--azimuth <degrees>] [--elevation <degrees>]
+[--save <path>] [--keep-open]` launches the editor, lists
 the pairs from `level_get_kits` (`recreates`), and builds one scene with a
 row per pair at the default values: the original on the left (-X), the
 recreated shape on the right (+X), their bounds `--gap` (1 m) apart on a
@@ -773,7 +834,13 @@ than a slab's 64 m); a seeded shape makes three rows, at seeds 1, 3
 and 17. The rows run toward -Z. It writes one three-quarter view per row,
 `logs/shape_compare_<original id>.png` (a seeded shape's
 `..._<seed>.png`), every row of one size class through the same camera, its
-far plane ending the view behind the row. `--save` writes the scene for the
+far plane ending the view behind the row. `--parameters` gives both shapes
+of every row the given values (used with `--only` naming the shape they
+belong to) and `--tag` ends the image names with `_<name>`, so such a run
+keeps the default images; `--detail` renders a close-up of the point x, y, z
+of the recreated piece's own frame from the given distance instead of the
+pair (a negative x is written `--detail=-1,2,0,6`); `--azimuth` and
+`--elevation` turn the camera. `--save` writes the scene for the
 windowed editor to open; `--keep-open` leaves the launched editor running
 with the scene.
 
@@ -3499,15 +3566,27 @@ Kit window and the MCP tools both call; their scene-free parts are in
   libraries - and the order of a convex hull's vertices and facets (the
   rock) follows those bits. The recreated shapes ("Recreated shapes") are in
   every test that goes over the library (a test that keys an expectation by
-  shape id uses the original's for both). `Kit_recreated`: every shape with
-  `recreates` stands directly after an original of its kit and equals it in
-  parameters, slots, origin rule, collision kind, mesh kind, randomness,
-  mirror planes, the presence of its checks, and at three seeds of derived
-  values in its connectors and seam sides; the recreated basic shapes have
+  shape id takes a row of the recreated shape's own id first, else the
+  original's). Each batch's rows (`kit_shape_rows_<batch>.cpp`: its shape
+  ids, recreated originals, seeded and enum shapes, component counts,
+  walkability exceptions, triangle counts, worst cases and pins) and helpers
+  (`kit_shape_test_support.hpp`) are shared by the test sources; a pin
+  mismatch prints every actual row in that syntax. `Kit_recreated`: every
+  shape with `recreates` stands directly after an original of its kit, its
+  id and name the original's with the suffixes, and the recreated originals
+  are those the batches list; the recreated basic shapes have
   their originals' bounds at the defaults, both range corners and four
   derived seeds; the recreated stairs have 12 triangles a step and no vertex
   with more than six facets; the recreated cylinder's points are exact
-  mirror images at nine segment counts. The spatial query
+  mirror images at nine segment counts; the recreated door wall, pillar and
+  arch have their originals' bounds at the same seven value sets, and the
+  round pillar at six segment counts over the corners of width and height;
+  the door wall has no vertex inside its stated opening and vertices on its
+  edges; the arch at every segment count from 2 to 48 and five sizes passes
+  the mesh checks as one component within the ceiling, has no vertex inside
+  the opening's ellipse, its feet at the span and its crown at the rise; the
+  square pillar is the 12 triangle box and the round one stays inside its
+  cylinder with full radius at the base and the top. The spatial query
   helpers: box and sphere intersection with touching, containing, separate and
   invalid bounds; the grid's columns, rows and cell centers, a partial last
   cell and refused sizes; the height digits; both text pictures of a known
@@ -4365,7 +4444,12 @@ Kit window and the MCP tools both call; their scene-free parts are in
   bounds, body kind, materials and connectors; the recreated stairs report
   their original's `stairs` layout; Replace original ->
   recreated -> original carries every parameter and material, keeps the
-  node's place and returns the original piece exactly) and
+  node's place and returns the original piece exactly; the recreated door
+  wall between two walls has their ends, faces and top, the recreated arch
+  between two walls has its original's footprint, `level_check` reports no
+  overlap and no unwalkable opening for them, a navigation path leads
+  straight through the door wall's opening and the arch, and none does once
+  the door wall is replaced by a wall) and
   `--only-more-shapes` the checks of the more shapes, first the cliff, palm, shore and water: the
   catalog (36 shapes, ceilings 2000, each new shape's slots, collision and
   mesh kind and connectors, the sand and water palettes), the four at their

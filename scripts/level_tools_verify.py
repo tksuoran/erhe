@@ -288,7 +288,8 @@ NOMINAL_SHARE = 0.35
 # A later batch adds its originals here and, when a shape wants values off its defaults in check_recreated_shapes(),
 # an entry in that function's `values`.
 RECREATED_SUFFIX = ".v2"
-RECREATED_SHAPES = ("basic.block", "basic.wedge", "basic.cylinder", "basic.stairs", "basic.floor_slab")
+RECREATED_SHAPES = ("basic.block", "basic.wedge", "basic.cylinder", "basic.stairs", "basic.floor_slab",
+                    "architecture.door_wall", "architecture.pillar", "architecture.arch")
 ORIGINAL_SHAPE_COUNT = 31
 SHAPE_COUNT = ORIGINAL_SHAPE_COUNT + len(RECREATED_SHAPES)
 
@@ -12043,7 +12044,8 @@ REGION_HANDLE_IMAGE = os.path.join("logs", "level_region_handles.png")
 
 def check_recreated_shapes(editor):
     """Step 70 of doc/plans/level_tools_implementation.md (U41): each recreated shape beside its original - the catalog
-    pairing, equal bounds, bodies, materials and connectors of placed pieces, and Replace original -> recreated -> original."""
+    pairing, equal bounds, bodies, materials and connectors of placed pieces, Replace original -> recreated -> original,
+    and the recreated door wall and arch in runs of walls: flush, without a level check finding, walked through."""
     scene = create_scene(editor)
     kits = editor.call("level_get_kits", {"scene_name": scene})
     by_id = {shape["id"]: shape for shape in kits["shapes"]}
@@ -12076,7 +12078,13 @@ def check_recreated_shapes(editor):
         "basic.cylinder":   {"radius": 0.75, "height": 2.0, "segments": 12, "seed": 5},
         "basic.stairs":     {"rise": 2.0, "width": 1.5, "step_rise_limit": 0.25, "seed": 5},
         "basic.floor_slab": {"width": 3.0, "depth": 1.5, "thickness": 0.3, "seed": 5},
+        "architecture.door_wall": {"length": 5.0, "height": 3.5, "thickness": 0.3, "opening_width": 1.4, "opening_height": 2.3, "seed": 5, "derive": []},
+        "architecture.pillar":    {"profile": "round", "width": 0.6, "height": 4.0, "segments": 16, "seed": 5, "derive": []},
+        "architecture.arch":      {"span": 3.0, "rise": 2.6, "depth": 0.6, "thickness": 0.35, "segments": 12, "seed": 5, "derive": []},
     }
+    # The triangle counts of the recreated pieces whose form differs from the original's, at these values: 12 a stairs
+    # step; the door wall's frame; the round pillar's 14 bands of 16 segments and two caps; the arch's 11 stones.
+    recreated_triangles = {"basic.stairs": 96, "architecture.door_wall": 572, "architecture.pillar": 476, "architecture.arch": 516}
     requests = []
     for row, original in enumerate(RECREATED_SHAPES):
         for column, shape_id in enumerate((original, original + RECREATED_SUFFIX)):
@@ -12102,8 +12110,9 @@ def check_recreated_shapes(editor):
               (new["physics"]["collision_shape"].split()[0] == old["physics"]["collision_shape"].split()[0]) and
               (new["materials"] == old["materials"]) and (new["pass_through"] == old["pass_through"]) for old, new in pairs),
           "; ".join(f"{new['shape']}: {new['physics']['collision_shape']} / {old['physics']['collision_shape']}" for old, new in pairs))
-    check("the recreated stairs are 12 triangles a step (8 steps: 96), the other recreated pieces have their originals' triangle counts",
-          all((triangles[new["id"]] == (96 if old["shape"] == "basic.stairs" else triangles[old["id"]])) for old, new in pairs),
+    check("the recreated stairs are 12 triangles a step (8 steps: 96), the door wall 572, the round pillar 476 and the arch 516; "
+          "the other recreated pieces have their originals' triangle counts",
+          all((triangles[new["id"]] == recreated_triangles.get(old["shape"], triangles[old["id"]])) for old, new in pairs),
           "; ".join(f"{new['shape']} {triangles[new['id']]} / {triangles[old['id']]}" for old, new in pairs))
     stairs_old, stairs_new = next((old, new) for old, new in pairs if old["shape"] == "basic.stairs")
     check("level_get_pieces reports the recreated stairs' layout as the original's (8 steps of 0.25 m, treads 0.375 m, run 3 m); no other piece has one",
@@ -12156,6 +12165,61 @@ def check_recreated_shapes(editor):
     editor.wait_idle()
     last_old, last_new = pairs[-1]
     check("undo of the last replace gives the recreated piece back", replace_state(editor, scene, last_old["id"])["shape"] == last_new["shape"])
+
+    # A run of walls with the recreated door wall in it, and behind it a run with the recreated arch between two
+    # walls, on a slab no wider than the runs: the way from the front to the back leads through both openings.
+    run_z = 60.0
+    arch_z = run_z + 4.0
+    half_arch = 0.5 * size_of(by_id["architecture.arch.v2"]["default_bounds"])[0]
+    flank = 6.0 - half_arch
+    run = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, run_z + 2.0], "name": "rc run ground", "parameters": {"width": 12.0, "depth": 14.0, "thickness": 0.2}},
+        {"shape": "architecture.wall", "position": [-4.0, 0.0, run_z], "name": "rc run wall a", "parameters": {"derive": []}},
+        {"shape": "architecture.door_wall.v2", "position": [0.0, 0.0, run_z], "name": "rc run door", "parameters": {"derive": []}},
+        {"shape": "architecture.wall", "position": [4.0, 0.0, run_z], "name": "rc run wall b", "parameters": {"derive": []}},
+        {"shape": "architecture.wall", "position": [-(half_arch + 0.5 * flank), 0.0, arch_z], "name": "rc run wall c", "parameters": {"derive": [], "length": flank}},
+        {"shape": "architecture.arch.v2", "position": [0.0, 0.0, arch_z], "name": "rc run arch", "parameters": {"derive": []}},
+        {"shape": "architecture.wall", "position": [half_arch + 0.5 * flank, 0.0, arch_z], "name": "rc run wall d", "parameters": {"derive": [], "length": flank}},
+    ]})["pieces"]
+    editor.wait_idle()
+    ground, wall_a, door, wall_b, wall_c, arch, wall_d = run
+
+    def box(piece):
+        return piece["world_aabb"]["min"], piece["world_aabb"]["max"]
+
+    check("the recreated door wall stands flush in a run of walls: its ends meet the walls' ends, its faces and top are the walls' (no gap, no step)",
+          close([box(wall_a)[1][0], box(wall_b)[0][0]], [box(door)[0][0], box(door)[1][0]]) and
+          all(close([box(w)[0][1], box(w)[0][2], box(w)[1][1], box(w)[1][2]], [box(door)[0][1], box(door)[0][2], box(door)[1][1], box(door)[1][2]]) for w in (wall_a, wall_b)),
+          f"door {fmt3(box(door)[0])} .. {fmt3(box(door)[1])}, walls {fmt3(box(wall_a)[1])} / {fmt3(box(wall_b)[0])}")
+    check("the walls beside the recreated arch meet its feet: the arch keeps its original's footprint",
+          close([box(wall_c)[1][0], box(wall_d)[0][0]], [box(arch)[0][0], box(arch)[1][0]]) and close([box(arch)[0][1]], [0.0]),
+          f"arch {fmt3(box(arch)[0])} .. {fmt3(box(arch)[1])}")
+    run_ids = {p["id"] for p in run}
+    findings = [f for f in editor.call("level_check", {"scene_name": scene})["findings"]
+                if (f["kind"] in ("overlap", "unwalkable_parameters", "unreadable_piece")) and (set(f.get("ids", [])) & run_ids)]
+    check("level_check finds no overlap between the pieces of the two runs and no unwalkable opening in the recreated door wall and arch",
+          not findings, "; ".join(f"{f['kind']}: {f['detail']}" for f in findings))
+    start_point = [0.0, 0.05, run_z - 3.0]
+    end_point = [0.0, 0.05, arch_z + 3.0]
+    node = editor.call("create_node", {"scene_name": scene, "name": "rc run seed", "position": start_point})
+    editor.wait_idle()
+    editor.call("navigation_set_seed", {"scene_name": scene, "node_id": node.get("node_id", node.get("id"))})
+    editor.set_export_settings(scene, {})
+    editor.wait_idle()
+    job = build_navigation(editor, scene)
+    path = editor.call("navigation_find_path", {"scene_name": scene, "start": start_point, "end": end_point}) if job.get("state") == "done" else {}
+    corners = path.get("corners", [])
+    check("a path leads from the front of the run through the recreated door wall's opening and the recreated arch to the back, straight (10 m)",
+          path.get("found") and path.get("complete") and (10.0 - 0.05 <= path.get("length", 0.0) <= 10.3) and
+          all(abs(c[0]) <= 0.5 * 1.2 for c in corners),
+          f"job {job.get('state')}, found {path.get('found')}, complete {path.get('complete')}, length {path.get('length')}, {len(corners)} corners, reason {path.get('reason')}")
+    editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [door["id"]], "shape": "architecture.wall"})
+    editor.wait_idle()
+    job = build_navigation(editor, scene)
+    blocked = editor.call("navigation_find_path", {"scene_name": scene, "start": start_point, "end": end_point}) if job.get("state") == "done" else {}
+    check("with the door wall replaced by a wall no complete path leads to the back: the opening was the only way",
+          (job.get("state") == "done") and not (blocked.get("found") and blocked.get("complete")),
+          f"job {job.get('state')}, found {blocked.get('found')}, complete {blocked.get('complete')}, length {blocked.get('length')}")
 
 
 def check_region_handles(editor):
