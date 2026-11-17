@@ -139,10 +139,14 @@ these rather than clicking at a guessed offset. See
   answered "Request timed out". A request that advances frame by frame -
   `wait_frames`, an input gesture while it injects events or holds a press as
   ImGui's time moves on - counts each frame as progress, so it may take longer
-  than 5 s in all as long as no single frame does;
+  than 5 s in all as long as no single wait between its frames does;
   one that stops progressing (a frame that skips ImGui's NewFrame keeps a
   held press from ending) expires 5 s later, the gesture's remaining events
-  dropped (logged as "`<tool>` expired after N of M events").
+  dropped (logged as "`<tool>` expired after N of M events"). A request
+  does not expire while its handler runs: one call that takes longer than
+  5 s in a single frame (placing a whole kit catalog in a Debug build) is
+  answered when it is done, so a request is either answered or leaves the
+  editor state unchanged.
 - **A wait is a frame count, not a sleep.** `wait_frames` returns after the
   given number of frames; a script that waits for something no MCP query
   reports (a log line) reads it again after each `wait_frames`.

@@ -430,7 +430,9 @@ auto Mcp_server::handle_tools_call(
         std::chrono::steady_clock::time_point deadline;
         {
             std::lock_guard<std::mutex> lock{progress->mutex};
-            deadline = progress->last_progress_at + k_request_timeout;
+            deadline = progress->running
+                ? (std::chrono::steady_clock::now() + k_request_timeout)
+                : (progress->last_progress_at + k_request_timeout);
         }
         if (result_future.wait_until(deadline) == std::future_status::ready) {
             break;
@@ -498,10 +500,26 @@ namespace {
 auto Mcp_server::expire_if_stalled(Request_progress& progress, const std::chrono::steady_clock::time_point now) -> bool
 {
     std::lock_guard<std::mutex> lock{progress.mutex};
-    if (!progress.abandoned && ((now - progress.last_progress_at) >= k_request_timeout)) {
+    if (!progress.abandoned && !progress.running && ((now - progress.last_progress_at) >= k_request_timeout)) {
         progress.abandoned = true;
     }
     return progress.abandoned;
+}
+
+auto Mcp_server::start_unless_stalled(Request_progress& progress, const std::chrono::steady_clock::time_point now) -> bool
+{
+    std::lock_guard<std::mutex> lock{progress.mutex};
+    if (!progress.abandoned && ((now - progress.last_progress_at) >= k_request_timeout)) {
+        progress.abandoned = true;
+    }
+    progress.running = !progress.abandoned;
+    return progress.abandoned;
+}
+
+void Mcp_server::end_running(Request_progress& progress)
+{
+    std::lock_guard<std::mutex> lock{progress.mutex};
+    progress.running = false;
 }
 
 void Mcp_server::mark_current_request_progress()
@@ -549,7 +567,7 @@ auto Mcp_server::process_queued_requests() -> int
         // a slow editor frame would still mutate editor state for a
         // request the operator already considers failed. We still
         // settle the promise so the future destructor does not abort.
-        if (expire_if_stalled(*req->progress, now)) {
+        if (start_unless_stalled(*req->progress, now)) {
             req->result_promise.set_value(
                 make_jsonrpc_error(nullptr, -32000, "Request expired before processing: " + req->tool_name)
             );
@@ -625,6 +643,20 @@ auto Mcp_server::process_queued_requests() -> int
             log_mcp->warn("MCP server: dropped expired '{}' before processing", req->tool_name);
             continue;
         }
+
+        // From here the request is running: it does not expire while this pass handles it.
+        const std::shared_ptr<Request_progress> running_progress = req->progress;
+        class Running_scope
+        {
+        public:
+            explicit Running_scope(Request_progress& progress) : m_progress{progress} {}
+            ~Running_scope() { end_running(m_progress); }
+            Running_scope(const Running_scope&) = delete;
+            auto operator=(const Running_scope&) -> Running_scope& = delete;
+        private:
+            Request_progress& m_progress;
+        };
+        const Running_scope running_scope{*running_progress};
 
         // A running scene save reads the scenes on a worker: only tools that
         // neither edit the editor state nor wait for it run meanwhile.

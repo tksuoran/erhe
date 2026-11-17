@@ -775,6 +775,7 @@ private:
         std::mutex                            mutex;
         std::chrono::steady_clock::time_point last_progress_at{std::chrono::steady_clock::now()};
         bool                                  abandoned{false}; // the client was answered "timed out"
+        bool                                  running  {false}; // its handler runs on the main thread: it does not expire
     };
 
     // Request queue (populated by HTTP thread, drained by main thread)
@@ -789,6 +790,9 @@ private:
     };
     // True (and the request marked abandoned) when it has gone k_request_timeout without progress.
     [[nodiscard]] static auto expire_if_stalled(Request_progress& progress, std::chrono::steady_clock::time_point now) -> bool;
+    // As expire_if_stalled; a request that has not expired is marked running until end_running.
+    [[nodiscard]] static auto start_unless_stalled(Request_progress& progress, std::chrono::steady_clock::time_point now) -> bool;
+    static void end_running(Request_progress& progress);
     void mark_current_request_progress();
     std::mutex                                       m_queue_mutex;
     std::vector<std::unique_ptr<Queued_request>>     m_request_queue;
