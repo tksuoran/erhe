@@ -77,6 +77,11 @@ void add_nature_shapes      (std::vector<Kit_shape_definition>& shapes);
 void add_build_13_16_shapes (std::vector<Kit_shape_definition>& shapes);
 void add_build_17_20_shapes (std::vector<Kit_shape_definition>& shapes);
 void add_build_21_24_shapes (std::vector<Kit_shape_definition>& shapes);
+// The shapes of the build-order lines of doc/plans/level_kit_extra_shapes.md, one file per batch.
+void add_extra_01_08_shapes (std::vector<Kit_shape_definition>& shapes);
+void add_extra_09_16_shapes (std::vector<Kit_shape_definition>& shapes);
+void add_extra_17_24_shapes (std::vector<Kit_shape_definition>& shapes);
+void add_extra_25_32_shapes (std::vector<Kit_shape_definition>& shapes);
 // The recreated shapes (doc/editor/level_tools.md "Recreated shapes"); called after every original is added.
 void add_basic_shapes_v2        (std::vector<Kit_shape_definition>& shapes);
 void add_architecture_shapes_v2 (std::vector<Kit_shape_definition>& shapes);

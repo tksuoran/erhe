@@ -598,7 +598,7 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
     }
     json palette = json::array();
     for (const Kit_palette_material& material : library.get_palette()) {
-        palette.push_back({{"name", material.name}, {"base_color", vec3_json(material.base_color)}, {"roughness", material.roughness}, {"emissive", vec3_json(material.emissive)}});
+        palette.push_back({{"name", material.name}, {"base_color", vec3_json(material.base_color)}, {"roughness", material.roughness}, {"metallic", material.metallic}, {"emissive", vec3_json(material.emissive)}});
     }
     return make_json_content({
         {"scene_name",  scene_root->get_name()},

@@ -25,6 +25,7 @@ public:
     std::string name;
     glm::vec3   base_color{1.0f};
     float       roughness {0.8f};
+    float       metallic  {0.0f};
     glm::vec3   emissive  {0.0f}; // linear, added to the shaded color; non-zero for a glowing material (P3)
 };
 

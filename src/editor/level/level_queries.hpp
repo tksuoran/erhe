@@ -2,6 +2,7 @@
 
 #include "level/kit_shape.hpp"
 #include "level/level_region.hpp"
+#include "level/surface_base_frame.hpp"
 
 #include "erhe_math/aabb.hpp"
 
@@ -45,15 +46,6 @@ public:
     float          max_distance{c_default_surface_max_distance}; // meters from the start base, either way along the direction
 };
 
-// A transform in the scene root's space.
-class Surface_pose
-{
-public:
-    glm::vec3 position{0.0f};
-    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3 scale   {1.0f};
-};
-
 class Surface_placement
 {
 public:
@@ -72,11 +64,15 @@ public:
 // The same of primitives a mesh is about to take.
 [[nodiscard]] auto mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive> primitives) -> erhe::math::Aabb;
 
+// The base rule of a mesh in the scene: authored_y_up for a kit piece, else from_pose (U48).
+[[nodiscard]] auto get_surface_base_rule(const erhe::scene::Mesh& mesh) -> Surface_base_rule;
+
 // D7.3: finds the nearest resting place along the direction for `local_bounds` placed at `start` through the scene's
-// raytrace scene (committed here); `excluded` meshes are not there.
+// raytrace scene (committed here); `excluded` meshes are not there. The rule chooses the base face.
 [[nodiscard]] auto find_surface_placement(
     Scene_root&                              scene_root,
     const erhe::math::Aabb&                  local_bounds,
+    Surface_base_rule                        base_rule,
     const Surface_pose&                      start,
     const Surface_options&                   options,
     std::span<const erhe::scene::Mesh* const> excluded
@@ -87,6 +83,7 @@ public:
 [[nodiscard]] auto find_surface_placement(
     erhe::raytrace::IScene&                  committed_rt_scene,
     const erhe::math::Aabb&                  local_bounds,
+    Surface_base_rule                        base_rule,
     const Surface_pose&                      start,
     const Surface_options&                   options,
     std::span<const erhe::scene::Mesh* const> excluded
@@ -123,7 +120,7 @@ public:
 };
 
 // D7.4: the snap rays of D7.3 (down) under each mesh, only the mesh itself passed through; a mesh
-// is supported when a surface lies within tolerance under its base. Cleared and filled.
+// is supported when a surface lies within tolerance under its base (get_surface_base_rule()). Cleared and filled.
 void find_support(
     Scene_root&                                         scene_root,
     std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes,

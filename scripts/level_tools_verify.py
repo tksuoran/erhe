@@ -1786,6 +1786,119 @@ def check_oriented_snap_to_surface(editor):
     editor.close(scene)
 
 
+
+def check_rotated_mesh_snap(editor):
+    """U48 (doc/editor/level_tools.md "Surface placement"): the base face is the face of the node-space bounds whose outward normal
+    the world transform turns most along the snap direction. A Z-up box (not a kit piece) under an import root turned -90 / +90
+    degrees about X and scaled 0.0146 (the Bistro glTF's node transforms) rests on its world-bottom face: resting it answers 0,
+    the support report agrees, lifted 0.5 m it drops back onto the ground, and a Transform drag with Snap To Surface keeps it there.
+    A kit piece keeps its minimum Y face at any tilt below 90 degrees: oriented onto a 60 degree slope it rests and stays."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}}]})
+    editor.wait_idle()
+    scale = 0.0146
+    size = [60.0, 40.0, 80.0]  # centimeters; local +Z is the box's long axis
+
+    def world_box(node_id, x, z):
+        nodes = editor.call("level_get_region_contents", {"scene_name": scene, "box": {"min": [x - 2.0, 0.01, z - 2.0], "max": [x + 2.0, 5.0, z + 2.0]}})["nodes"]
+        return next((n["world_aabb"] for n in nodes if n["id"] == node_id), None)
+
+    def query(node_id):
+        return editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [node_id], "query_only": True})["nodes"][0]
+
+    def support(node_id):
+        return editor.call("level_get_support_report", {"scene_name": scene, "node_ids": [node_id]})["nodes"][0]
+
+    def text(answer):
+        return f"surface_found {answer.get('surface_found')}, distance {answer.get('distance', 9.0):.6f}"
+
+    for degrees, x in ((-90.0, -4.0), (90.0, 4.0)):
+        label = f"a Z-up box under an import root turned {degrees:+.0f} degrees about X and scaled {scale}"
+        half = math.radians(degrees) * 0.5
+        root = editor.call("create_node", {"scene_name": scene, "name": f"import root {degrees:+.0f}"})
+        editor.wait_idle()
+        root_id = root.get("node_id", root.get("id"))
+        editor.call("set_node_transform", {"scene_name": scene, "node_id": root_id, "translation": [x, 1.0, 0.0],
+                                           "rotation_xyzw": [math.sin(half), 0.0, 0.0, math.cos(half)], "scale": [scale, scale, scale]})
+        editor.wait_idle()
+        made = editor.call("create_shape", {"scene_name": scene, "shape": "box", "name": f"z-up box {degrees:+.0f}", "size": size,
+                                            "parent_node_id": root_id, "motion_mode": "none"})
+        editor.wait_idle()
+        box_id = made.get("node_id", made.get("id"))
+        # create_shape keeps the world identity under the parent; the import's child carries the identity in parent space.
+        editor.call("set_node_transform", {"scene_name": scene, "node_id": box_id, "space": "local", "translation": [0.0, 0.0, 0.0],
+                                           "rotation_xyzw": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]})
+        editor.wait_idle()
+        start = world_box(box_id, x, 0.0)
+        height = scale * size[2]
+        check(f"{label}: its world box is {height:.3f} m tall along Y (its local Z) and floats above the ground",
+              (start is not None) and (abs((start["max"][1] - start["min"][1]) - height) <= TOLERANCE) and (start["min"][1] > 0.1),
+              json.dumps(start))
+        applied = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [box_id]})["nodes"][0]
+        editor.wait_idle()
+        rested = world_box(box_id, x, 0.0)
+        check(f"{label}: level_snap_to_surface drops it onto the ground: world box bottom y 0, moved by the start height",
+              applied.get("surface_found") and (rested is not None) and (abs(rested["min"][1]) <= TOLERANCE) and
+              (abs(applied["distance"] - start["min"][1]) <= TOLERANCE),
+              f"{text(applied)}, box {json.dumps(rested)}")
+        answers = [query(box_id) for _ in range(2)]
+        check(f"{label}: resting, level_snap_to_surface query_only answers 0 (the rest is idempotent)",
+              all(a.get("surface_found") and (abs(a["distance"]) <= TOLERANCE) for a in answers), "; ".join(text(a) for a in answers))
+        report = support(box_id)
+        check(f"{label}: resting, the support report answers supported at distance 0",
+              report.get("supported") and (abs(report["distance"]) <= TOLERANCE), json.dumps(report))
+
+        position = answers[0]["position"]
+        editor.call("set_node_transform", {"scene_name": scene, "node_id": box_id, "space": "world", "translation": [position[0], position[1] + 0.5, position[2]]})
+        editor.wait_idle()
+        lifted = query(box_id)
+        lifted_report = support(box_id)
+        check(f"{label}: lifted 0.5 m, snap answers 0.5 and the support report agrees (distance 0.5, not supported)",
+              lifted.get("surface_found") and (abs(lifted["distance"] - 0.5) <= TOLERANCE) and
+              (not lifted_report.get("supported")) and (abs(lifted_report["distance"] - 0.5) <= TOLERANCE),
+              f"{text(lifted)}; support {json.dumps(lifted_report)}")
+        editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [box_id]})
+        editor.wait_idle()
+        dropped = world_box(box_id, x, 0.0)
+        check(f"{label}: lifted 0.5 m and snapped, it rests on the ground again (world box bottom y 0)",
+              (dropped is not None) and (abs(dropped["min"][1]) <= TOLERANCE), json.dumps(dropped))
+
+        editor.call("select_items", {"scene_name": scene, "ids": [box_id]})
+        editor.wait_idle()
+        editor.call("drag_selection", {"translation": [0.0, 0.0, 1.5], "frames": 10, "surface_snap": True})
+        editor.wait_idle()
+        dragged = world_box(box_id, x, 1.5)
+        after_drag = query(box_id)
+        check(f"{label}: a Transform drag of 1.5 m along Z with Snap To Surface keeps it on the ground (world box bottom y 0), "
+              "and snapping it again answers 0",
+              (dragged is not None) and (abs(dragged["min"][1]) <= TOLERANCE) and (abs(0.5 * (dragged["min"][2] + dragged["max"][2]) - 1.5) <= TOLERANCE) and
+              after_drag.get("surface_found") and (abs(after_drag["distance"]) <= TOLERANCE),
+              f"box {json.dumps(dragged)}, {text(after_drag)}")
+        editor.call("select_items", {"scene_name": scene, "ids": []})
+        editor.wait_idle()
+
+    # A kit piece is authored Y-up: on a 60 degree slope, oriented, it keeps its minimum Y face and orienting again turns nothing.
+    rise = math.tan(math.radians(60.0))
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.wedge", "position": [12.0, 0.0, 0.0], "name": "60 degree slope", "parameters": {"run": 1.0, "rise": rise, "width": 2.0}}]})
+    editor.wait_idle()
+    steep_normal = normalize([0.0, 1.0, rise])
+    steep = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "surface_orient": True, "pieces": [
+        {"shape": "basic.block", "name": "on the 60 degree slope", "position": [12.0, 0.5 * rise + 0.3, 0.0],
+         "parameters": {"width": 0.4, "depth": 0.4, "height": 0.4}}]})["pieces"][0]
+    editor.wait_idle()
+    again = [editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [steep["id"]], "orient": True, "query_only": True})["nodes"][0] for _ in range(3)]
+    check("a kit block oriented onto a 60 degree slope takes up = slope normal (its local +Y), and orienting it again three times answers 0 "
+          "with the same pose (a kit piece keeps its minimum Y face at any tilt)",
+          steep.get("surface_found") and close(q_rotate(steep["rotation_xyzw"], [0.0, 1.0, 0.0]), steep_normal) and
+          all(a.get("surface_found") and (abs(a["distance"]) <= TOLERANCE) and close(a["position"], steep["position"]) and
+              same_rotation(a["rotation_xyzw"], steep["rotation_xyzw"]) for a in again),
+          f"up {fmt3(q_rotate(steep['rotation_xyzw'], [0.0, 1.0, 0.0]))}, again {[(round(a['distance'], 6), fmt3(a['position'])) for a in again]}")
+    editor.close(scene)
+
+
 def yaw_xyzw(degrees):
     half = math.radians(degrees) * 0.5
     return [0.0, math.sin(half), 0.0, math.cos(half)]
@@ -14358,6 +14471,7 @@ def main():
     parser.add_argument("--only-transform-rows", action="store_true", help="run the Properties transform row move hook checks alone")
     parser.add_argument("--only-drag-cancel", action="store_true", help="run the Transform tool drag cancel checks alone")
     parser.add_argument("--only-snap-to-surface", action="store_true", help="run the snap to surface agreement checks alone")
+    parser.add_argument("--only-rotated-mesh-snap", action="store_true", help="run the snap to surface checks of meshes whose world up is another local axis alone (U48)")
     parser.add_argument("--only-replace", action="store_true", help="run the replace checks (MCP and the Level Kit window) alone")
     parser.add_argument("--only-layout-selection", action="store_true", help="run the selection paths checks of locked kit layout children alone")
     parser.add_argument("--only-scatter", action="store_true", help="run the scatter layout checks alone")
@@ -14444,6 +14558,8 @@ def main():
             check_transform_record_rule(editor)
         elif args.only_snap_to_surface:
             check_snap_to_surface(editor)
+        elif args.only_rotated_mesh_snap:
+            check_rotated_mesh_snap(editor)
         elif args.only_scatter:
             check_scatter_layouts(editor, work)
         elif args.only_connectors:
@@ -14525,6 +14641,7 @@ def main():
             check_transform_drag_cancel(editor)
             check_transform_record_rule(editor)
             check_snap_to_surface(editor)
+            check_rotated_mesh_snap(editor)
             check_scatter_layouts(editor, work)
             check_connector_snap(editor)
             check_layout_indicators(editor)

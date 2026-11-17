@@ -188,7 +188,13 @@ Kit_shape_library::Kit_shape_library()
     m_kits = {
         Kit_definition{.name = "basic",        .display_name = "Basic",        .triangle_ceiling = 2000},
         Kit_definition{.name = "architecture", .display_name = "Architecture", .triangle_ceiling = 2000},
-        Kit_definition{.name = "nature",       .display_name = "Nature",       .triangle_ceiling = 2000}
+        Kit_definition{.name = "nature",       .display_name = "Nature",       .triangle_ceiling = 2000},
+        Kit_definition{.name = "prop",         .display_name = "Props",        .triangle_ceiling = 2000},
+        Kit_definition{.name = "ruin",         .display_name = "Ruins",        .triangle_ceiling = 2000},
+        Kit_definition{.name = "traversal",    .display_name = "Traversal",    .triangle_ceiling = 2000},
+        Kit_definition{.name = "harbour",      .display_name = "Harbour",      .triangle_ceiling = 2000},
+        Kit_definition{.name = "light",        .display_name = "Lights",       .triangle_ceiling = 2000},
+        Kit_definition{.name = "industrial",   .display_name = "Industrial",   .triangle_ceiling = 2000}
     };
     add_basic_shapes           (m_shapes);
     add_architecture_shapes    (m_shapes);
@@ -196,6 +202,10 @@ Kit_shape_library::Kit_shape_library()
     add_build_13_16_shapes     (m_shapes);
     add_build_17_20_shapes     (m_shapes);
     add_build_21_24_shapes     (m_shapes);
+    add_extra_01_08_shapes     (m_shapes);
+    add_extra_09_16_shapes     (m_shapes);
+    add_extra_17_24_shapes     (m_shapes);
+    add_extra_25_32_shapes     (m_shapes);
     add_basic_shapes_v2        (m_shapes);
     add_architecture_shapes_v2 (m_shapes);
     add_medieval_shapes_v2     (m_shapes);
@@ -230,11 +240,17 @@ Kit_shape_library::Kit_shape_library()
         Kit_palette_material{.name = "Kit Pale Wood",      .base_color = glm::vec3{0.62f, 0.47f, 0.28f}, .roughness = 0.80f},
         Kit_palette_material{.name = "Kit Coral",          .base_color = glm::vec3{0.80f, 0.30f, 0.18f}, .roughness = 0.70f},
         Kit_palette_material{.name = "Kit Glow",           .base_color = glm::vec3{1.00f, 0.72f, 0.36f}, .roughness = 0.40f, .emissive = glm::vec3{2.20f, 1.20f, 0.35f}},
+        Kit_palette_material{.name = "Kit Metal",          .base_color = glm::vec3{0.22f, 0.23f, 0.25f}, .roughness = 0.50f, .metallic = 0.6f},
+        Kit_palette_material{.name = "Kit Rust",           .base_color = glm::vec3{0.32f, 0.13f, 0.06f}, .roughness = 0.85f, .metallic = 0.4f},
+        Kit_palette_material{.name = "Kit Cloth",          .base_color = glm::vec3{0.70f, 0.64f, 0.52f}, .roughness = 0.95f},
+        Kit_palette_material{.name = "Kit Red Cloth",      .base_color = glm::vec3{0.55f, 0.07f, 0.06f}, .roughness = 0.95f},
+        Kit_palette_material{.name = "Kit Blue Cloth",     .base_color = glm::vec3{0.08f, 0.17f, 0.42f}, .roughness = 0.95f},
+        Kit_palette_material{.name = "Kit Clay",           .base_color = glm::vec3{0.58f, 0.27f, 0.15f}, .roughness = 0.80f},
         Kit_palette_material{.name = "Kit Ember",          .base_color = glm::vec3{0.60f, 0.18f, 0.05f}, .roughness = 0.60f, .emissive = glm::vec3{1.60f, 0.45f, 0.08f}}
     };
     // One default per slot name and a few alternatives (R2.9).
     m_slot_palettes = {
-        Kit_slot_palette{.slot = "stone",   .default_material = "Kit Stone",   .alternatives = {"Kit Rock", "Kit Plaster", "Kit Wood", "Kit Shell"}},
+        Kit_slot_palette{.slot = "stone",   .default_material = "Kit Stone",   .alternatives = {"Kit Rock", "Kit Plaster", "Kit Wood", "Kit Shell", "Kit Clay"}},
         Kit_slot_palette{.slot = "floor",   .default_material = "Kit Floor",   .alternatives = {"Kit Wood", "Kit Stone", "Kit Earth"}},
         Kit_slot_palette{.slot = "wall",    .default_material = "Kit Plaster", .alternatives = {"Kit Stone", "Kit Wood", "Kit Trim"}},
         Kit_slot_palette{.slot = "trim",    .default_material = "Kit Trim",    .alternatives = {"Kit Wood", "Kit Stone", "Kit Plaster"}},
@@ -255,7 +271,9 @@ Kit_shape_library::Kit_shape_library()
         Kit_slot_palette{.slot = "heartwood", .default_material = "Kit Wood",      .alternatives = {"Kit Dark Wood", "Kit Bark", "Kit Pale Wood"}},
         Kit_slot_palette{.slot = "shell",     .default_material = "Kit Shell",     .alternatives = {"Kit Sand", "Kit Stone", "Kit Coral"}},
         Kit_slot_palette{.slot = "coral",     .default_material = "Kit Coral",     .alternatives = {"Kit Shell", "Kit Vermilion", "Kit Sand"}},
-        Kit_slot_palette{.slot = "glow",      .default_material = "Kit Glow",      .alternatives = {"Kit Ember"}}
+        Kit_slot_palette{.slot = "glow",      .default_material = "Kit Glow",      .alternatives = {"Kit Ember"}},
+        Kit_slot_palette{.slot = "metal",     .default_material = "Kit Metal",     .alternatives = {"Kit Rust", "Kit Dark Wood", "Kit Stone"}},
+        Kit_slot_palette{.slot = "cloth",     .default_material = "Kit Cloth",     .alternatives = {"Kit Red Cloth", "Kit Blue Cloth", "Kit Straw"}}
     };
 }
 

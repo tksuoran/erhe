@@ -463,7 +463,7 @@ auto Level_kits::build_layout_generation(
         }
         if (any_surface_option(element_surface)) {
             const Surface_placement snapped = find_surface_placement(
-                scene_root, bounds, Surface_pose{.position = position, .rotation = rotation, .scale = poses[i].scale}, element_surface, excluded
+                scene_root, bounds, Surface_base_rule::authored_y_up, Surface_pose{.position = position, .rotation = rotation, .scale = poses[i].scale}, element_surface, excluded
             );
             position = snapped.pose.position;
             rotation = snapped.pose.rotation;

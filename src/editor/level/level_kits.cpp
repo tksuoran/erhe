@@ -204,7 +204,7 @@ void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geo
     erhe::primitive::Material_values material_values{};
     material_values.base_color = palette.base_color;
     material_values.roughness  = glm::vec2{palette.roughness, palette.roughness};
-    material_values.metallic   = 0.0f;
+    material_values.metallic   = palette.metallic;
     material_values.emissive   = palette.emissive;
     return std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{.name = palette.name, .values = material_values}
@@ -321,7 +321,9 @@ private:
 ) -> Surface_placement
 {
     const glm::vec3 snapped = (snap == Kit_snap::module) ? Level_kits::snap_to_module(position, module) : position;
-    return find_surface_placement(scene_root, local_bounds, Surface_pose{.position = snapped, .rotation = rotation, .scale = scale}, surface, {});
+    return find_surface_placement(
+        scene_root, local_bounds, Surface_base_rule::authored_y_up, Surface_pose{.position = snapped, .rotation = rotation, .scale = scale}, surface, {}
+    );
 }
 
 } // anonymous namespace
@@ -1010,6 +1012,7 @@ class Surface_snap_request
 public:
     std::shared_ptr<erhe::scene::Mesh> mesh;
     erhe::math::Aabb                   local_bounds;
+    Surface_base_rule                  base_rule{Surface_base_rule::from_pose};
 };
 
 class Surface_snap_plan
@@ -1082,7 +1085,7 @@ void plan_surface_snaps(
         const erhe::scene::Trs_transform world = moved.has_value() ? erhe::scene::Trs_transform{moved.value()} : mesh->world_from_node_transform();
         const Surface_pose start{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()};
         Surface_snap_plan& plan = out_plans[i];
-        plan.placement = find_surface_placement(committed_rt_scene, requests[i].local_bounds, start, options, excluded);
+        plan.placement = find_surface_placement(committed_rt_scene, requests[i].local_bounds, requests[i].base_rule, start, options, excluded);
         plan.moved = plan.placement.surface_found &&
             ((plan.placement.pose.position != start.position) || (plan.placement.pose.rotation != start.rotation));
         const bool records = (record == Snap_record::when_found) ? plan.placement.surface_found : plan.moved;
@@ -1128,7 +1131,7 @@ auto Level_kits::snap_to_surface(
     requests.reserve(meshes.size());
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
         excluded.push_back(mesh.get());
-        requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(*mesh)});
+        requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(*mesh), .base_rule = get_surface_base_rule(*mesh)});
     }
     std::vector<std::shared_ptr<Operation>> operations;
     if (any_surface_option(options)) {
@@ -2625,7 +2628,11 @@ auto Level_kits::replace_shape(
             primitives.emplace_back(scaled.part_primitives[slot], material);
         }
         if (snap) {
-            snap_requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive>{primitives})});
+            snap_requests.push_back(Surface_snap_request{
+                .mesh         = mesh,
+                .local_bounds = mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive>{primitives}),
+                .base_rule    = Surface_base_rule::authored_y_up
+            });
             snap_pieces.push_back(i);
         }
         // Across a bodiless shape (P5) the piece gets what a fresh placement of the new shape gets; between shapes with

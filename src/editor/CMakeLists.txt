@@ -425,6 +425,10 @@ erhe_target_sources_grouped(
     level/kit_shapes_build_13_16.cpp
     level/kit_shapes_build_17_20.cpp
     level/kit_shapes_build_21_24.cpp
+    level/kit_shapes_extra_01_08.cpp
+    level/kit_shapes_extra_09_16.cpp
+    level/kit_shapes_extra_17_24.cpp
+    level/kit_shapes_extra_25_32.cpp
     level/kit_shapes_classical.cpp
     level/kit_shapes_japanese.cpp
     level/kit_shapes_medieval.cpp
@@ -456,6 +460,8 @@ erhe_target_sources_grouped(
     level/stairs_fit.hpp
     level/stairs_mesh.cpp
     level/stairs_mesh.hpp
+    level/surface_base_frame.cpp
+    level/surface_base_frame.hpp
     level/surface_settings_ui.cpp
     level/surface_settings_ui.hpp
     main.cpp

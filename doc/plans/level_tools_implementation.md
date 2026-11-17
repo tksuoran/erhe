@@ -174,7 +174,14 @@ window's Create menu and the main menu's Commands > Create, one
 `level_kit_create_menu()`: every shape per kit and every layout kind, at the
 parent's origin, selected, one undo entry each, layout entries disabled with
 the reason under a kit layout node or a scaled or (stairs) tilted parent;
-the coder's choices listed under U47),
+the coder's choices listed under U47), and step 76, the base face of snap to
+surface from the world transform (U48: a mesh that is not a kit piece rests on
+the face of its node-space bounds whose outward normal the start pose turns
+most along the snap direction, a kit piece on its minimum Y face at any
+tilt as before; one `get_surface_base_frame()` with a `Surface_base_rule`
+chosen by each caller, used by the snap, orient and the support report; a
+Z-up mesh under a -90 degree X rotation rests on its world-bottom face; the
+choices listed under U48),
 are built and described in
 `doc/editor/level_tools.md` and `doc/editor/navigation.md`.
 

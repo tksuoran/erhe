@@ -241,7 +241,11 @@ auto get_all_rows() -> const std::vector<Kit_shape_rows>&
         get_nature_rocks_v2_rows(),
         get_build_13_16_rows(),
         get_build_17_20_rows(),
-        get_build_21_24_rows()
+        get_build_21_24_rows(),
+        get_extra_01_08_rows(),
+        get_extra_09_16_rows(),
+        get_extra_17_24_rows(),
+        get_extra_25_32_rows()
     };
     return all;
 }

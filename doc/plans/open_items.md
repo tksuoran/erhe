@@ -147,6 +147,14 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- Mirroring a registered mesh at run time is fatal: `set_node_transform` with
+  scale [-1, 1, 1] on a placed kit piece, or `level_place_pieces` under a
+  mirrored parent, logs "Runtime negative-determinant flip on registered mesh
+  ... not supported in initial scope" and `Draw_list_scene::flush_pending()`
+  (`draw_list_scene.cpp`) asserts `observed_negative_determinant ==
+  object.negative_determinant`. A mirrored kit piece's snap to surface has
+  unit tests only until this is fixed (`doc/editor/level_tools.md` "Surface
+  placement").
 - Collision under scale, what remains (`doc/editor/physics.md` "Collision
   shapes follow the node's scale"): a brush of a density other than the
   default writes the mass of its placed volume, which a later scale change

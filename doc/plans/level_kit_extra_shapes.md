@@ -1,6 +1,6 @@
 # Level kit: extra shapes
 
-Status: proposed
+Status: in progress
 
 The inventory of shapes for step 63 of
 `doc/plans/level_tools_implementation.md` ("Extra shapes of the
@@ -225,14 +225,16 @@ What the shapes need that is not built, each sized as the shapes are.
     are copied to the others by Copy and Paste Properties.
   - Count: every lit piece makes its lights, without a limit (U36). Baking
     lights to vertices is a possible later direction, not planned here.
-- P3 Slots and palette (S). The slot names `wood`, `metal`, `cloth`,
-  `glow` and `water` with their `Kit_slot_palette` (`water` landed with
-  `nature.water`: Kit Water, alternative Kit Shallow Water; `wood` landed with
-  `architecture.torii`: Kit Wood, alternatives Kit Vermilion, Kit Dark Wood
-  and Kit Bark, the first two new palette materials), and the palette
-  materials Kit Metal, Kit Rust, Kit Cloth (two or three colors), Kit Clay
-  (an alternative of `stone`), Kit Glow and Kit Water. `Kit_palette_material` gains a
-  metallic value and an emissive color for them.
+- P3 Slots and palette (S), built. The slot names `wood`, `metal`, `cloth`,
+  `glow` and `water` have their `Kit_slot_palette`: `water` is Kit Water,
+  alternative Kit Shallow Water (with `nature.water`); `wood` is Kit Wood,
+  alternatives Kit Vermilion, Kit Dark Wood and Kit Bark (with
+  `architecture.torii`); `glow` is Kit Glow, alternative Kit Ember (with
+  `architecture.stone_lantern`); `metal` is Kit Metal, alternatives Kit Rust,
+  Kit Dark Wood and Kit Stone, and `cloth` is Kit Cloth, alternatives
+  Kit Red Cloth, Kit Blue Cloth and Kit Straw (with build-order lines 1 - 8).
+  Kit Clay is an alternative of `stone`. `Kit_palette_material` has a metallic
+  value (Kit Metal, Kit Rust) and an emissive color (Kit Glow, Kit Ember).
 - P4 Builder helpers (S). `Kit_mesh_builder::add_beam(a, b, width,
   height)`, a box between two points, for every `beam` (landed with
   `architecture.torii`);
@@ -256,7 +258,100 @@ What the shapes need that is not built, each sized as the shapes are.
 ## Build order
 
 P1 first. Then the first eight, by value per effort, if only part of the
-inventory is built:
+inventory is built.
+
+Built: lines 1 - 8 (`kit_shapes_extra_01_08.cpp`), with the kits `prop`,
+`ruin`, `traversal`, `harbour` and `light` and the rest of P3. A built shape
+differs from its row of the inventory in these points:
+
+- `ruin.broken_wall` has a count `steps`, the columns its top falls in, so
+  that its topology follows from integers; `course` is the height of a step
+  and of a tooth. It has the wall's connectors but `top`.
+- `prop.barrel`, `harbour.pier`, `harbour.mooring` and `light.lamp_post` have
+  a count `segments`, the points around their round parts.
+- `ruin.rubble` lays its blocks on a low mound of debris, so that no block
+  floats at any count and height.
+- `traversal.ladder` and `harbour.pier` take their rung, plank and bent counts
+  from lengths, as the stairs take their step count.
+- `harbour.pier` has `width` in meters, as `architecture.bridge_deck`.
+- `harbour.mooring` draws its rope in slot `wood`: every form has facets of
+  both slots with and without a rope.
+- `light.lamp_post` names its light frames `light_1` to `light_4`.
+
+Built: the next eight (`kit_shapes_extra_09_16.cpp`): `harbour.quay_wall`,
+`industrial.pipe` with the kit `industrial`, and the rest of the props
+(`prop.pot`, `prop.table`, `prop.market_stall`, `prop.cart`, `prop.well`,
+`prop.signpost`). The next shape to build is `ruin.broken_pillar`. A built
+shape differs from its row of the inventory in these points:
+
+- `harbour.quay_wall` keeps its top the thickness wide and lets the foot of
+  its water face stand out by the batter, so the top is walkable at every
+  batter; a timber kerb runs along the water's edge, so the piece has wood
+  without fenders. Its origin is under the middle of the top.
+- `industrial.pipe` has `bend_angle` as an angle of 15 - 90 degrees, derived
+  as 45 or 90, and states `branch` at every form: a tee's branch end, a
+  straight pipe's side, the outside of an elbow's bend.
+- `prop.pot`, `industrial.pipe`, `prop.cart` and `prop.well` have a count
+  `segments`.
+- `prop.table` has its sizes in meters; a bench has a back, and `legs`
+  `trestles` are boards under a stool and beside a shelf.
+- `prop.market_stall` has `overhang` in meters, at the front and the back
+  only, so stalls join side to side.
+- `prop.cart` stands on two legs under the bed's front at every tilt; the
+  tilt is at most what keeps the handles' ends over the ground.
+- `prop.well` has a wooden bucket on its rim at every roof, so the piece has
+  wood without a roof, and a windlass under a crossbar and a gable.
+
+Built: the third eight (`kit_shapes_extra_17_24.cpp`): `ruin.broken_pillar`,
+`ruin.broken_arch`, `light.lantern`, `light.fire`, `harbour.buoy`,
+`traversal.trestle`, `traversal.scaffold` and `architecture.tunnel`. The next
+shape to build is `harbour.cargo`. A built shape differs from its row of the
+inventory in these points:
+
+- `ruin.broken_arch` is two arms, each of a segment more than half the arch's
+  `segments`, cut across the ring at the breaks; an arm is at least 0.08 of
+  the ring, and `gap_center` lies within 0.25 - 0.75 of the ring.
+- `light.lantern` states base, top and back at every mount, and
+  `light.fire` base and back at every form: a shape's connector names are the
+  same at every value.
+- `light.fire` has a third slot `stone` (a brazier's plinth, the stone a torch
+  hangs on, a campfire's ring); a campfire stands under a tripod of rods, so
+  every form has metal.
+- `harbour.buoy` stands on its foot at the origin, has twelve rings up its
+  float whatever its `bands`, and a count `segments`.
+- `traversal.scaffold` has `level_height` in meters (2.4 m), and its braces
+  and base plates in slot `metal`; a guard rail runs over the top deck.
+- `architecture.tunnel` has its bore along X, so that segments chain along a
+  path and a line as the bridge deck does, `bore_height` in meters (2.4 m),
+  and the count `segments` of its head.
+
+Built: the fourth eight (`kit_shapes_extra_25_32.cpp`): `harbour.cargo`,
+`harbour.crane`, `harbour.lighthouse` and the rest of the industrial kit
+(`industrial.tank`, `industrial.truss`, `industrial.container`,
+`industrial.vent`, `industrial.antenna`). The next shape to build is
+`light.garland`; `traversal.rope_bridge`, `ruin.cracked_floor` and
+`harbour.boat` follow it and end the inventory. A built shape differs from its
+row of the inventory in these points:
+
+- `harbour.cargo` has four goods to a layer at every `fill`, which is the
+  share of the pallet they cover; a mixed load is crates under sacks under
+  barrels, and a folded tarp lies on every load, so every load has cloth.
+- `harbour.crane` takes `jib_heading` as a parameter in the default mask and
+  draws nothing from the seed; `jib_length` is in meters. The derrick's mast
+  and jib are wood and its lines and hook metal; the tower has a timber cab.
+- `harbour.lighthouse` has a count `segments` and a door toward +X; its spot
+  light stands beside the lantern room and shines level toward +X.
+- `industrial.tank` stands on legs or saddles of slot `trim`, so a tank
+  without bands has trim; it has a count `segments`.
+- `industrial.truss` has its lattice in its two faces toward +Z and -Z, and
+  struts across at the nodes.
+- `industrial.container` is 2.4 m wide and 2.6 m high and 3, 6 or 12 m long;
+  `ribs` counts the ribs of a side to every 3 m, and its front and back
+  connectors are its long sides.
+- `industrial.vent` has `width` and `height` only (its depth follows the
+  width), and `slats` are the louvres, a fan's blades or a stack's struts.
+- `industrial.antenna` has its whips over a short mast, the first up to the
+  height.
 
 1. `prop.crate` - S, brings P3's `wood`; stacks by base and top, the
    plainest scatter and grid item.

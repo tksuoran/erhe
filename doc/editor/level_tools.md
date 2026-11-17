@@ -2695,11 +2695,36 @@ the snap, the orient, the support report and the height map pass through it
 to what lies below (`is_surface_mesh()`, the one test every surface ray and
 search of `level_queries.cpp` asks).
 
+- The base face is chosen by a `Surface_base_rule` (U48;
+  `get_surface_base_frame()`, `surface_base_frame.hpp`); the top face is
+  the opposite one, and the piece's up axis is the node-space axis from the
+  base face toward the top face. A kit piece (a mesh carrying a kit piece
+  record, a kit layout's child, a piece the Brush tool or a replace is
+  about to place) is authored Y-up and takes `authored_y_up`: of its two Y
+  faces the one whose outward normal, taken to world space by the rotation
+  and the signs of the scale, is more along the direction: the minimum Y
+  face at any tilt below 90 degrees, mirrored along X or Z or not, and the
+  face that is below for a piece turned over (a world transform decomposes
+  a mirror into all-negative scale and a turned rotation, which this score
+  reads correctly). Any
+  other mesh takes `from_pose`: the face whose outward normal, taken to
+  world space by the start pose's rotation and the signs of its scale, is
+  most along the direction, so an imported Z-up glTF mesh under a -90
+  degree X rotation rests on the face that is down in the world; exact ties
+  go to the minimum Y face, then maximum Y, minimum and maximum X, minimum
+  and maximum Z. With orient, once the line through that face's center
+  finds the surface normal, a mesh that is not a kit piece takes the face
+  whose outward normal is most against the normal (the least turn onto it,
+  `get_orient_frame()`) and, when that is another face, searches the line
+  through its center once more and turns that face onto the surface; a kit
+  piece keeps its face. `get_surface_base_rule()` gives a scene mesh its rule; the
+  snap, orient and the support report all take their base points and spans
+  from the one frame.
 - A line runs along the direction through each base point: for snap the
-  base center and the four base corners (the bounds' minimum Y face, the
-  corners 1 mm in world units inside the footprint so a face flush with a
-  side of the piece is not met along its edge), for orient the base center
-  alone. Two rays from the base point, one each way along the line, collect
+  base center and the four base corners (the corners 1 mm in world units
+  inside the footprint, along the base face's two in-face axes, so a face
+  flush with a side of the piece is not met along its edge), for orient the
+  base center alone. Two rays from the base point, one each way along the line, collect
   the hit points of the line's search window, from `max_distance` below the
   base point to `max_distance` plus the piece's extent above it: every face
   of a content mesh that is not excluded and not parallel to the line, as a
@@ -2731,7 +2756,8 @@ search of `level_queries.cpp` asks).
   over a stack of thin slabs with gaps lower than itself goes to the top
   slab when that is within the distance.
 - Orient searches its line the same way and then turns the mesh by the
-  shortest rotation that takes its start pose's up axis to the normal of the
+  shortest rotation that takes its start pose's up axis (the base face's
+  inward axis, local +Y for an upright kit piece) to the normal of the
   top face at the place, which keeps the heading of a piece that starts
   upright and otherwise turns it only as that rotation does; its base center
   comes to rest on that face. Where several top faces meet at the place the
@@ -2761,7 +2787,9 @@ its base, outside its span, so the pose is a place at displacement 0 (within
 0.1 mm), the nearest there is, and snapping again with the same excluded
 meshes answers zero and returns the pose bit for bit, with orient keeping
 the rotation, except for an oriented piece whose base center is on an edge
-where both faces end. A pose that found no place finds none again. The answers of different callers for the same pose agree only as far as their
+where both faces end. A mesh oriented onto a plane, kit piece or not, stays
+there on any slope: a kit piece keeps its base face, and another mesh's
+second line finds the face that already lies on the surface. A pose that found no place finds none again. The answers of different callers for the same pose agree only as far as their
 exclusion sets do. Layout generation and its preview steps exclude the
 layout's own pieces (the previous generation),
 `Level_kits::snap_to_surface()` (`level_snap_to_surface`) searches parents

@@ -496,6 +496,36 @@ The user's rulings (2026-11-15):
     disabled without a scene or under a prim that is not a node.
   Built as step 75 of `doc/plans/level_tools_implementation.md`,
   `doc/editor/level_tools.md` "Create menu".
+- U48 (2026-11-17), snap to surface on meshes whose world up is another
+  local axis. The user, testing with the Bistro scene: "Perhaps the snap to
+  surface does not take full world transforms correctly into account?" The
+  finding: the snap, orient and the support report took a mesh's base from
+  its node-space minimum Y face, right for kit pieces (modelled Y-up) and
+  wrong for a mesh whose node turns another axis up - every mesh of the
+  Bistro glTF is Z-up under a -90 degree X rotation and a parent scale of
+  0.0146: a chair standing on the ground was told to move 0.29 m down,
+  bollards 0.94 m, a Vespa found no surface. The coder's choices, for the
+  user's review:
+  - A mesh that is not a kit piece takes its base face from the pose: the
+    face of the node-space bounds whose outward normal, taken to world
+    space by the start pose (rotation and the signs of the scale), is most
+    along the snap direction; exact ties go to minimum Y, then a fixed
+    order. With orient, once the surface normal is known, such a mesh
+    takes the face that turns least onto it (the outward normal most
+    against the surface normal), searching that face's center line once
+    more, so an oriented rest is a fixed point on any slope; dropped
+    upright onto a slope steeper than 45 degrees it lands on a side face.
+  - The orchestrator's choice: a kit piece (it carries a kit piece record,
+    a layout child, a Brush tool or replace placement) is authored Y-up and
+    keeps its minimum Y face at any tilt below 90 degrees, as before, so a
+    piece oriented onto a cliff steeper than 45 degrees stays put when
+    layout regeneration, a live drag or `level_snap_to_surface` snaps it
+    again. It chooses between its two Y faces by the same world-space score,
+    so a piece mirrored along any axis still rests on its authored base.
+  - No per-mesh "up axis" setting: the choice comes from being a kit piece
+    or not, and from the transform.
+  Built as step 76 of `doc/plans/level_tools_implementation.md`,
+  `doc/editor/level_tools.md` "Surface placement".
 
 ## Terms
 

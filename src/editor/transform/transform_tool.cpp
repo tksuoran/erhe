@@ -1408,6 +1408,7 @@ auto Transform_tool::snap_to_surface(const Surface_options& options) -> std::siz
         const Surface_placement    placement = find_surface_placement(
             rt_scene,
             mesh_local_bounds(mesh),
+            get_surface_base_rule(mesh),
             Surface_pose{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()},
             options,
             m_surface_excluded

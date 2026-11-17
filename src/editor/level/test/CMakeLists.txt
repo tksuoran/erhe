@@ -7,6 +7,10 @@ add_executable(${_target}
     kit_shape_rows_build_13_16.cpp
     kit_shape_rows_build_17_20.cpp
     kit_shape_rows_build_21_24.cpp
+    kit_shape_rows_extra_01_08.cpp
+    kit_shape_rows_extra_09_16.cpp
+    kit_shape_rows_extra_17_24.cpp
+    kit_shape_rows_extra_25_32.cpp
     kit_shape_rows_medieval_v2.cpp
     kit_shape_rows_nature_plants_v2.cpp
     kit_shape_rows_nature_rocks_v2.cpp
@@ -17,7 +21,7 @@ add_executable(${_target}
     # library to link against. The kit shape library needs erhe::geometry
     # (with its erhe::math headers), glm and fmt only; the region and height
     # map helpers need glm and erhe::math; the repeat expansion glm and fmt; the
-    # group mirror glm and erhe::math; the stairs fit and mesh erhe::math; the kit layout values and outlines nlohmann_json; the light frames glm and fmt; the snap to
+    # group mirror glm and erhe::math; the stairs fit and mesh erhe::math; the surface base frame glm and erhe::math; the kit layout values and outlines nlohmann_json; the light frames glm and fmt; the snap to
     # surface search (surface_snap_search.hpp) is header-only.
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_connectors.cpp
@@ -37,6 +41,10 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_build_13_16.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_build_17_20.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_build_21_24.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_extra_01_08.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_extra_09_16.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_extra_17_24.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_extra_25_32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_classical.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_japanese.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_medieval.cpp
@@ -54,6 +62,7 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_repeat.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../stairs_fit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../stairs_mesh.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../surface_base_frame.cpp
     test_kit_connector.cpp
     test_kit_layout_connectors.cpp
     test_kit_layout_outline.cpp
@@ -66,6 +75,10 @@ add_executable(${_target}
     test_kit_shapes_build_13_16.cpp
     test_kit_shapes_build_17_20.cpp
     test_kit_shapes_build_21_24.cpp
+    test_kit_shapes_extra_01_08.cpp
+    test_kit_shapes_extra_09_16.cpp
+    test_kit_shapes_extra_17_24.cpp
+    test_kit_shapes_extra_25_32.cpp
     test_kit_shapes_medieval_v2.cpp
     test_kit_shapes_nature_plants_v2.cpp
     test_kit_shapes_nature_rocks_v2.cpp
@@ -75,6 +88,7 @@ add_executable(${_target}
     test_level_repeat.cpp
     test_stairs_fit.cpp
     test_stairs_mesh.cpp
+    test_surface_base_frame.cpp
     test_surface_snap_search.cpp
 )
 
