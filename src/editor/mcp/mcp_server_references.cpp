@@ -316,7 +316,8 @@ auto Mcp_server::query_memory_usage(const json& args) -> std::string
     result["mesh_memory"] = {
         {"capacity_bytes",        total_capacity},
         {"used_bytes",            total_used},
-        {"pending_retired_bytes", total_pending}
+        {"pending_retired_bytes", total_pending},
+        {"late_upload_count",     (m_context.mesh_memory != nullptr) ? m_context.mesh_memory->get_late_upload_count() : std::size_t{0}}
     };
 
     // Textures: estimated from create info, and unlike the mesh pools this

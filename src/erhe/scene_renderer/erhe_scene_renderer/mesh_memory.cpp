@@ -14,6 +14,8 @@
 #include "erhe_primitive/buffer_writer.hpp"
 #include "erhe_primitive/primitive.hpp"
 
+#include "erhe_log/log.hpp"
+#include "erhe_utility/thread_roles.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
@@ -645,6 +647,7 @@ void Mesh_memory::enqueue_vertex_data_to(
 
 void Mesh_memory::enqueue_vertex_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data)
 {
+    check_interactive_upload_order(data.size());
     enqueue_vertex_data_to(m_buffer_transfer_queue, buffer_range, std::move(data));
 }
 
@@ -667,6 +670,7 @@ void Mesh_memory::vertex_writer_ready_to(
 
 void Mesh_memory::vertex_writer_ready(erhe::primitive::Vertex_buffer_writer& writer)
 {
+    check_interactive_upload_order(writer.vertex_data.size());
     vertex_writer_ready_to(m_buffer_transfer_queue, writer);
 }
 
@@ -727,6 +731,7 @@ void Mesh_memory::enqueue_index_data_to(
 
 void Mesh_memory::enqueue_index_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data)
 {
+    check_interactive_upload_order(data.size());
     enqueue_index_data_to(m_buffer_transfer_queue, buffer_range, std::move(data));
 }
 
@@ -749,6 +754,7 @@ void Mesh_memory::index_writer_ready_to(
 
 void Mesh_memory::index_writer_ready(erhe::primitive::Index_buffer_writer& writer)
 {
+    check_interactive_upload_order(writer.index_data.size());
     index_writer_ready_to(m_buffer_transfer_queue, writer);
 }
 
@@ -999,6 +1005,59 @@ void Mesh_memory::apply_ready_pending_frees()
     for (const Pending_free& pending : ready) {
         Buffer_pool::apply_retired(pending.ranges);
     }
+}
+
+void Mesh_memory::begin_draw_prepare()
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    ERHE_VERIFY(!m_in_draw_prepare);
+    m_in_draw_prepare = true;
+}
+
+void Mesh_memory::end_draw_prepare()
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    ERHE_VERIFY(m_in_draw_prepare);
+    m_in_draw_prepare = false;
+}
+
+auto Mesh_memory::get_late_upload_count() const -> std::size_t
+{
+    return m_late_upload_count;
+}
+
+void Mesh_memory::check_interactive_upload_order(const std::size_t byte_count)
+{
+    // Workers enqueue for meshes the main thread commits in a later frame's prepare, before its flush.
+    if (std::this_thread::get_id() != erhe::utility::Thread_roles::get_main_thread()) {
+        return;
+    }
+    if (!m_in_draw_prepare) {
+        return;
+    }
+    ++m_late_upload_count;
+    const uint64_t frame_index = m_graphics_device.get_frame_index();
+    if (m_late_upload_logged_frame == frame_index) {
+        return; // one error per frame; the counter counts every one
+    }
+    m_late_upload_logged_frame = frame_index;
+    // Error path only: the newest frame step named by a breadcrumb tells which step built the mesh.
+    std::string step;
+    const std::vector<erhe::log::Breadcrumb> recent = erhe::log::get_recent_breadcrumbs();
+    const std::size_t this_thread_hash = std::hash<std::thread::id>{}(std::this_thread::get_id());
+    for (std::vector<erhe::log::Breadcrumb>::const_reverse_iterator i = recent.crbegin(), end = recent.crend(); i != end; ++i) {
+        if ((i->thread_hash == this_thread_hash) && i->text.starts_with("tick: ")) {
+            step = i->text;
+            break;
+        }
+    }
+    log_mesh_memory->error(
+        "Interactive mesh upload of {} bytes enqueued after the frame's mesh flush (step '{}', frame {}, late upload #{}): mesh building belongs before flush_draw_lists",
+        byte_count,
+        step,
+        frame_index,
+        m_late_upload_count
+    );
 }
 
 void Mesh_memory::flush(erhe::graphics::Command_buffer& command_buffer)

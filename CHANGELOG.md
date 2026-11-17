@@ -9,6 +9,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `mesh_memory.hpp` - `Mesh_memory::begin_draw_prepare()`,
+  `end_draw_prepare()` and `get_late_upload_count()`: an interactive upload the
+  main thread enqueues between the frame's `flush()` and the end of its draw
+  prepare is counted, the first of a frame logged as an error
+  (`doc/erhe/mesh_memory.md` "Upload order").
 - `erhe::physics`: `irigid_body.hpp` - `IRigid_body::set_collision_shape()`, a body's shape
   replaced in place (broadphase bounds follow; an explicit mass stays, an implicit one is
   re-derived) (`doc/erhe/physics.md`).

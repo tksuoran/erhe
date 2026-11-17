@@ -17,6 +17,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -159,7 +160,8 @@ public:
     // (Shader_key::derive checks the vertex_format for joint attributes).
     [[nodiscard]] auto make_skinned_primitive_buffer_info(Mesh_memory_queue queue = Mesh_memory_queue::interactive) -> erhe::primitive::Buffer_info;
 
-    // Main thread, once per frame, before the frame's draws are recorded:
+    // Main thread, once per frame, after the frame's last mesh build and before
+    // its draws are prepared (doc/erhe/mesh_memory.md "Upload order"):
     // records the queued vertex / index uploads into command_buffer and
     // collects the pool ranges retired since the last call (Buffer_meshes
     // destroyed on any thread) into one device frame-completion handler,
@@ -167,6 +169,14 @@ public:
     // then the ranges stay allocated, so no new mesh can be written into
     // memory a frame in flight may still read.
     void flush(erhe::graphics::Command_buffer& command_buffer);
+
+    // Main thread: brackets the frame's draw prepare, from its flush() to the
+    // last step that reads meshes for the frame's draws; a main-thread
+    // interactive upload inside it is out of the frame order and is counted
+    // (first one per frame logged) - doc/erhe/mesh_memory.md "Upload order".
+    void begin_draw_prepare();
+    void end_draw_prepare  ();
+    [[nodiscard]] auto get_late_upload_count() const -> std::size_t;
 
     // Drains ONLY the loader queue, up to max_byte_count bytes, and returns
     // the bytes recorded. Called from the asset-load tick slot; never from
@@ -322,6 +332,9 @@ private:
     // passed. Called from flush().
     void apply_ready_pending_frees();
 
+    // Counts an interactive upload enqueued on the main thread inside the draw prepare bracket.
+    void check_interactive_upload_order(std::size_t byte_count);
+
     // The OWNER'S config instance, not a copy. Most of what is read from it -
     // pool block sizes, the position format - is consumed once while the pools
     // are being created, so a copy would have done. Mesh optimization is not:
@@ -364,6 +377,10 @@ private:
     std::shared_ptr<int>                  m_alive_token;
     ERHE_PROFILE_MUTEX(std::mutex, m_pending_free_mutex);
     std::vector<Pending_free>             m_pending_frees;
+    // Main thread only (begin_draw_prepare(), end_draw_prepare(), main-thread enqueues).
+    bool                                  m_in_draw_prepare         {false};
+    std::size_t                           m_late_upload_count       {0};
+    uint64_t                              m_late_upload_logged_frame{std::numeric_limits<uint64_t>::max()};
 };
 
 // Vertex input key / vertex buffer ranges of a Buffer_mesh for a primitive

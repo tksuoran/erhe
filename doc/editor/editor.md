@@ -273,9 +273,9 @@ In order:
    the controllers and the hotbar trail the eyes by one frame while
    moving.
 9. ImGui events, `Commands::tick`, `Mcp_server::process_queued_requests`,
-   network update, hover reset, hotbar rebuild, the ImGui windows
-   (`Imgui_windows::begin_frame` / `draw_imgui_windows` / `end_frame`),
-   settings autosave; on rendered frames `Thumbnails::update`, which
+   network update, hotbar rebuild (the slots the windows requested in the
+   previous M3; the windows themselves draw in M3, below); on rendered
+   frames `Thumbnails::update`, which
    renders the material and brush previews the windows requested into the
    upload command buffer (the ImGui hosts sample them after the GPU edge);
    hover info.
@@ -287,10 +287,14 @@ In order:
     commit (`Lightmap_partitioner::update`), the Lightmap window's deferred
     requests (`Lightmap_window::update`) and the streamer reload after an
     offline bake (`doc/editor/lightmap_baking.md` section 3a "Frame phases").
-12. `Mesh_memory::flush`; the resize request and window size go into the
-    packet.
+12. The resize request and window size go into the packet.
 13. Layout nodes, scene view and headset transforms, hotbar placement,
-    display color and draw mode proxy rebuilds, `App_scenes::flush_draw_lists`.
+    display color rebuilds, `App_scenes::flush_curve_changes` (whose
+    subscribers regenerate curve-driven meshes such as stairs layouts), draw
+    mode proxy rebuilds, `App_scenes::flush_draw_lists`, then
+    `Mesh_memory::flush` and `Mesh_memory::begin_draw_prepare`: every mesh
+    built so far in the frame has its upload recorded before any step below
+    prepares draws (`doc/erhe/mesh_memory.md` "Upload order").
     Rendered frames: `Scene_views::prepare_render`, every
     viewport's `Viewport_scene_view::prepare_render`: it fills the view's
     render state copy of the frame (`Viewport_render_state`,
@@ -510,8 +514,8 @@ In order:
     `update_material_sets` because the instance records carry forward set
     slots. R's ray trace, DDGI and radiance cascades consumers read only the
     slot.
-17. The upload command buffer ends and `current_command_buffer` is reset to
-    null.
+17. `Mesh_memory::end_draw_prepare`; the upload command buffer ends and
+    `current_command_buffer` is reset to null.
 
 `frame()` then sets the main phase to `none` and kicks R (with pipelining
 the kick first joins R of the previous frame).

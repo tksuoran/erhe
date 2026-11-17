@@ -219,7 +219,7 @@ Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png p
        [--walkable-image <png path>] [--window-image <png path>] [--properties-image <png path>] [--queries-image <png path>]
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
        [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-connector-snap]
-       [--only-layout-indicators] [--only-region-handles] [--only-segment-handles] [--only-more-shapes] [--only-recreated-shapes] [--only-layout-connectors] [--only-stairs-layout]
+       [--only-layout-indicators] [--only-region-handles] [--only-segment-handles] [--only-more-shapes] [--only-recreated-shapes] [--only-layout-connectors] [--only-stairs-layout] [--only-stairs-drag-uploads]
        [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
@@ -3176,6 +3176,83 @@ def check_stairs_layouts(editor, directory, image_prefix):
         editor.call("select_items", {"scene_name": name, "ids": []})
         editor.wait_idle()
     editor.close(name)
+
+
+def check_stairs_drag_uploads(editor):
+    """doc/erhe/mesh_memory.md "Upload order": a held drag of a stairs layout's end point regenerates the staircase in the
+    frame's curve change step; every regenerated mesh has its upload recorded in the frame's mesh flush (no late upload),
+    and once the frames retire the replaced meshes are freed: the pools settle to the meshes still referenced.
+    The Move tool stays chosen, as after the stairs and segment handle groups; a later group chooses its own tool."""
+    import curve_verify as cv  # noqa: E402 - the camera, viewport and Move tool helpers of the curve checks
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+
+    def mesh_memory():
+        return editor.call("get_memory_usage", {})["mesh_memory"]
+
+    def settled():
+        """The pool figures once no released range waits for its frames to retire (read again after each frame)."""
+        reading = {}
+
+        def retired():
+            reading.update(mesh_memory())
+            return reading["pending_retired_bytes"] == 0
+        ok = wait_until(editor, retired, frames=600)
+        return reading, ok
+
+    empty, empty_ok = settled()
+    made = editor.call("level_create_layout", {"scene_name": scene, "name": "upload stairs", "position": [0.0, 0.0, 0.0],
+                                               "pattern": {"kind": "stairs"}, "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [6.0, 2.0, 0.0]}]})
+    editor.wait_idle()
+    layout_id = made["id"]
+    before, before_ok = settled()
+    child_mesh_bytes = before["used_bytes"] - empty["used_bytes"]
+    viewport = cv.frame_camera(editor, scene, [3.0, 9.0, 12.0], [3.5, 1.0, 0.0], [[0.0, 0.0, 0.0], [6.0, 2.0, 0.0], [8.0, 2.0, 0.0]])
+    cv.choose_move_tool(editor, viewport)
+    select(editor, scene, [layout_id])
+    editor.call("select_curve_points", {"scene_name": scene, "curve_id": layout_id, "points": [{"index": 1}]})
+    editor.wait_idle()
+    cv.settle(editor)
+
+    def child_id():
+        return layouts_by_id(editor, scene)[layout_id]["children"][0]["id"]
+
+    first_child = child_id()
+    start, grab = gizmo_grab(editor, viewport, TRANSLATE_X)
+    target = window_point(viewport, [grab[0] + 1.0, grab[1], grab[2]])
+    to = [round(target[0]), round(target[1])]
+    editor.call("mouse_drag", {"from": [start[0], start[1]], "to": to, "frames": 10, "hold": True})
+    editor.wait_idle()
+
+    def wiggle(count):
+        # One pointer step per frame, back and forth over 8 px: each step moves the point and regenerates the staircase.
+        editor.call("inject_input_events", {"events": [{"type": "mouse_move", "frame": i, "x": to[0] + (8.0 if (i % 2) == 0 else 0.0), "y": to[1]}
+                                                       for i in range(count)]})
+        editor.wait_idle()
+
+    wiggle(20)
+    early_child = child_id()
+    for _ in range(4):
+        wiggle(20)
+    during = mesh_memory()
+    late_child = child_id()
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    cv.settle(editor)
+    editor.call("undo")
+    editor.wait_idle()
+    after, after_ok = settled()
+    check("stairs drag uploads: the held drag regenerated the staircase (the generated child changed at every sample)",
+          (first_child != early_child) and (early_child != late_child), f"{first_child} -> {early_child} -> {late_child}")
+    check("stairs drag uploads: no mesh upload was enqueued after a frame's mesh flush during the drag (mesh_memory.late_upload_count unchanged)",
+          after["late_upload_count"] == before["late_upload_count"], f"{before['late_upload_count']} -> {after['late_upload_count']}")
+    # Alive after the undo: the original staircase (in the scene) and the released one (held by the redo entry).
+    check("stairs drag uploads: after the release and its undo the pools settle (no range waits to retire) at the original staircase plus "
+          "the redo entry's, at most two generated meshes over the bytes before the drag, not the ~110 the drag generated",
+          empty_ok and before_ok and after_ok and (child_mesh_bytes > 0) and (after["used_bytes"] - before["used_bytes"] <= 2 * child_mesh_bytes),
+          f"used {empty['used_bytes']} -> {before['used_bytes']} (one generated mesh {child_mesh_bytes}) -> mid-drag {during['used_bytes']} "
+          f"(pending retired {during['pending_retired_bytes']}) -> settled {after['used_bytes']}")
+    editor.close(scene)
 
 
 def check_segment_handles(editor, image_path):
@@ -14461,6 +14538,7 @@ def main():
     parser.add_argument("--only-path-layouts", action="store_true", help="run the path layout checks alone")
     parser.add_argument("--only-segments", action="store_true", help="run the segments layout checks alone")
     parser.add_argument("--only-stairs-layout", action="store_true", help="run the stairs layout checks alone (U42)")
+    parser.add_argument("--only-stairs-drag-uploads", action="store_true", help="run the mesh upload order and pool bound checks of a held stairs drag alone")
     parser.add_argument("--stairs-image-prefix", default=DEFAULT_STAIRS_IMAGE_PREFIX, help="stairs layout PNG path prefix (relative to the repository root or absolute)")
     parser.add_argument("--only-collision-scale", action="store_true", help="run the checks of collision shapes following node scale alone (U40)")
     parser.add_argument("--segments-image", default=DEFAULT_SEGMENTS_IMAGE, help="segments layout PNG (relative to the repository root or absolute)")
@@ -14539,6 +14617,9 @@ def main():
             check_segment_layouts(editor, work, segments_image_path)
         elif args.only_stairs_layout:
             check_stairs_layouts(editor, work, stairs_image_prefix)
+            check_stairs_drag_uploads(editor)
+        elif args.only_stairs_drag_uploads:
+            check_stairs_drag_uploads(editor)
         elif args.only_collision_scale:
             check_collision_scale(editor, work)
         elif args.only_segment_handles:
@@ -14654,6 +14735,7 @@ def main():
             check_layout_connectors(editor, layout_connectors_prefix)
             check_collision_scale(editor, work)
             check_stairs_layouts(editor, work, stairs_image_prefix)
+            check_stairs_drag_uploads(editor)
             check_piece_lights(editor, work, args.piece_lights_shape)
             check_wrap_with_path(editor, work)
             # After groups that left viewports behind as unselected dock tabs: the Level Kit window follows the hovered one.

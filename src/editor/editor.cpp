@@ -1826,11 +1826,6 @@ public:
         }
         take_m2_term(m_phase_timing.m2_update_us);
 
-        // Unconditional: uploads enqueued during a hidden tick (deferred
-        // hotbar init, MCP-driven edits while the session is locked) must
-        // not sit in the queue until the next rendered frame.
-        m_mesh_memory->flush(command_buffer);
-
         packet.frame_begin_info = erhe::graphics::Frame_begin_info{
             .resize_width   = static_cast<uint32_t>(m_last_window_width),
             .resize_height  = static_cast<uint32_t>(m_last_window_height),
@@ -1885,6 +1880,17 @@ public:
 
         erhe::log::set_breadcrumb("tick: flush_draw_lists");
         m_app_scenes->flush_draw_lists();
+
+        // After every step of the frame that builds meshes (the curve change
+        // subscribers, the display color and draw mode proxy rebuilds above)
+        // and before the first step that prepares draws: a mesh built after
+        // the flush but registered before flush_draw_lists would be drawn by
+        // this frame before its data is written (doc/erhe/mesh_memory.md
+        // "Upload order"). Unconditional: uploads
+        // enqueued during a hidden tick must not wait for a rendered frame.
+        erhe::log::set_breadcrumb("tick: mesh_memory flush");
+        m_mesh_memory->flush(command_buffer);
+        m_mesh_memory->begin_draw_prepare();
 
         // The settings the render phase reads, copied after every window and
         // operation of this frame edited the live ones (doc/editor/
@@ -1992,6 +1998,8 @@ public:
             erhe::log::set_breadcrumb("tick: prepare_ray_trace_scenes");
             m_app_scenes->prepare_ray_trace_scenes();
         }
+
+        m_mesh_memory->end_draw_prepare();
 
         // The uploads of this frame are recorded; the render phase submits
         // them. No command buffer is published between the phases.

@@ -194,6 +194,43 @@ batches whose ticket the loader watermark has passed. With no loader traffic
 this simply means frees land one `flush()` later than the frame completion --
 strictly safer, never earlier.
 
+### Upload order
+
+A mesh built on the interactive queue is drawn correctly only by frames whose
+draws are prepared after its upload is recorded. On Metal `flush()` writes the
+bytes into the shared-storage pool buffer with a CPU copy; on Vulkan the copy
+is recorded into the upload command buffer the render phase submits ahead of
+the frame. The hazard is a mesh built after the frame's `flush()` and
+registered for the same frame's draws (before `flush_draw_lists`): that frame
+draws whatever its freshly allocated ranges held before (the data of a mesh
+freed earlier), and the next frame's `flush()` then writes those ranges while
+the GPU may still be reading them for the previous frame. The editor's
+earlier frame order, with `flush()` before the curve change step, did exactly
+this to a stairs layout regenerated on a curve point drag.
+
+The editor calls `flush()` once per frame after the frame's last mesh-building
+step: after the operation stack, the curve change subscribers
+(`App_scenes::flush_curve_changes`, which regenerate stairs and kit layouts on
+a curve point drag), the display color and draw mode proxy rebuilds and
+`flush_draw_lists`, and before the composition, ray trace and rendergraph
+prepares (`doc/editor/editor.md` "Frame phases and the render thread", steps
+13-17). Uploads enqueued in the ImGui phase (M3) are recorded by the next
+frame's `flush()`, before that frame prepares its draws.
+
+`begin_draw_prepare()` / `end_draw_prepare()` bracket the rest of the prepare
+phase as an ordering convention check: mesh building belongs before
+`flush_draw_lists`. The bracket is stricter than the hazard - a mesh built
+after `flush_draw_lists` is first drawn by the next frame, whose `flush()`
+uploads it - but a build there is out of place in the frame order. The first
+interactive enqueue of a frame made on the main thread inside the bracket is
+logged as an error naming the frame step (the newest `tick:` breadcrumb of the
+main thread); every one is counted in `get_late_upload_count()`, which MCP
+`get_memory_usage` reports as `mesh_memory.late_upload_count`. Every other
+thread is excluded, the render thread included: a worker's mesh reaches a
+scene through the commit queue at the start of a later prepare phase, before
+that frame's `flush()`, and the render thread draws only what the main thread
+prepared.
+
 ## Render bucketing
 
 Multi-draw rendering requires identical vertex/index bindings across the

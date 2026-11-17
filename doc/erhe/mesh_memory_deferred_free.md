@@ -45,10 +45,13 @@ or scene close, not only to loading.
 - The handler does not free directly; see "Frame-safe frees, and the loader
   free gate" in `doc/erhe/mesh_memory.md` for the second gate, the loader
   watermark.
-- Why it is safe: a range's last GPU use is recorded on the main thread before
-  the `Buffer_mesh` is destroyed (workers never record draws), and destruction
-  happens-before the drain, so the last-use frame is at most the frame index
-  at drain time, and frames complete in order.
+- Why it is safe: the last frame that may read a range is the last frame whose
+  draws the main thread prepared from the `Buffer_mesh` (the composition
+  prepare copies its ranges into the frame's records; the render thread reads
+  only those copies, and workers prepare no draws). Destruction
+  happens-before the drain, so that frame is at most the frame the draining
+  role's `Device::get_frame_index()` names at drain time, and frames complete
+  in order.
 - **On GL, `Device_impl::add_completion_handler` must set `m_need_sync`**, so a
   frame with a registered handler always gets a fence. Otherwise the handler
   waits until `wait_idle()`.
