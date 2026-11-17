@@ -341,8 +341,29 @@ def create_scene(editor):
         if added:
             editor.wait_idle()
             return added[0]
-        time.sleep(0.1)
     raise RuntimeError("create_scene made no scene")
+
+
+def wait_until(editor, predicate, frames=120):
+    """True once predicate() holds, read again after each editor frame (at most frames of them)."""
+    for _ in range(frames):
+        if predicate():
+            return True
+        editor.wait_frames()
+    return predicate()
+
+
+def popup_item(editor, label):
+    """The item with exactly the label in an open popup (a context menu), or None."""
+    found = [i for i in editor.call("get_imgui_items", {"limit": 400, "visible_only": False, "label_contains": label}).get("items", [])
+             if (i["label"] == label) and i["window"].startswith("##Popup")]
+    return found[0] if found else None
+
+
+def popup_open(editor):
+    """True while an ImGui popup window (a context menu) is shown."""
+    return any(w.get("name", "").startswith("##Popup") and w.get("active") and not w.get("hidden")
+               for w in editor.call("get_imgui_windows").get("windows", []))
 
 
 def check_catalog(editor, scene):
@@ -419,8 +440,10 @@ def check_catalog_row(editor, scene, catalog):
                 size_problems.append(f"{piece['shape']} {fmt3(size)} vs expected {fmt3(EXACT_DEFAULT_SIZES[size_key])}")
         elif not by_id[piece["shape"]]["default_derive"]:
             # A shape with a default mask has derived sizes; its catalog default_size is the check.
-            nominal = NOMINAL_DEFAULT_SIZES[size_key]
-            if not all(abs(s - n) <= NOMINAL_SHARE * n for s, n in zip(size, nominal)):
+            nominal = NOMINAL_DEFAULT_SIZES.get(size_key)
+            if nominal is None:
+                size_problems.append(f"{piece['shape']} has no expected size in EXACT_DEFAULT_SIZES or NOMINAL_DEFAULT_SIZES")
+            elif not all(abs(s - n) <= NOMINAL_SHARE * n for s, n in zip(size, nominal)):
                 size_problems.append(f"{piece['shape']} {fmt3(size)} vs nominal {fmt3(nominal)}")
     check("every catalog row piece's world_aabb matches its shape's default size (exact sizes for the unseeded shapes)",
           not size_problems, "; ".join(size_problems) if size_problems else f"{len(placed)} pieces")
@@ -867,7 +890,7 @@ def build_navigation(editor, scene, timeout=600.0):
         if job.get("state") in ("done", "failed"):
             editor.wait_idle()
             return job
-        time.sleep(0.05)
+        editor.wait_frames()  # get_save_status is answered off the main loop
     raise RuntimeError(f"navigation_build job {job_id} did not finish")
 
 
@@ -3674,7 +3697,7 @@ def check_layout_tree(editor):
             break
         editor.call("imgui_click", {"label": "Window"})
         editor.call("imgui_click", {"window": "Window###Menu_00", "label": name})
-        time.sleep(0.3)
+        wait_until(editor, lambda: any(i["label"] == "tree layout" for i in items("tree layout")))
         rows = [i for i in items("tree layout") if i["label"] == "tree layout"]
     if not rows:
         check("the item tree shows the layout's row", False, "no row")
@@ -3692,16 +3715,16 @@ def check_layout_tree(editor):
     def open_menu(label):
         target = row(label)
         editor.call("mouse_click", {"x": target["center_x"], "y": target["center_y"], "button": "right"})
-        time.sleep(0.2)
+        wait_until(editor, lambda: popup_open(editor))
 
     def close_menu():
         editor.call("key_press", {"key": "escape"})
-        time.sleep(0.2)
+        wait_until(editor, lambda: not popup_open(editor))
 
-    layout_row = row("tree layout")
-    editor.call("mouse_click", {"x": layout_row["x"] + 10.0, "y": layout_row["center_y"]})
-    time.sleep(0.2)
     child = layout["children"][0]
+    layout_row = row("tree layout")
+    editor.call("mouse_click", {"x": layout_row["x"] + 10.0, "y": layout_row["center_y"]})  # its arrow: the row opens and shows the children
+    wait_until(editor, lambda: row(child["name"]) is not None)
     before = child_snapshot(layouts_by_id(editor, scene)[layout["id"]])
     depth = undo_depth(editor)
 
@@ -3713,7 +3736,7 @@ def check_layout_tree(editor):
     delete = entries["Delete"]
     if delete is not None:
         editor.call("mouse_click", {"x": delete["center_x"], "y": delete["center_y"]})
-        time.sleep(0.2)
+        wait_until(editor, lambda: not popup_open(editor))
     else:
         close_menu()
     editor.wait_idle()
@@ -3734,7 +3757,6 @@ def check_layout_tree(editor):
     def drag(source_label, target_label):
         source, target = row(source_label), row(target_label)
         editor.call("mouse_drag", {"from": [source["center_x"], source["center_y"]], "to": [target["center_x"], target["center_y"]], "frames": 12})
-        time.sleep(0.3)
         editor.wait_idle()
 
     root_id = scene_tree(editor, scene)[layout["id"]]["parent_id"]
@@ -3796,7 +3818,6 @@ def check_locked_layout_selection(editor):
     viewport = cv.frame_camera(editor, scene, [aim[0], aim[1] + 4.0, aim[2] + 6.0], aim, [aim, [0.0, 0.0, 4.0]])
     select_button = binding_input(editor, "Selection.viewport_select", "mouse_button")
     hover(editor, viewport, aim)
-    time.sleep(0.2)
     x, y = window_point(viewport, aim)
     editor.call("mouse_click", {"x": x, "y": y, "button": select_button})
     editor.wait_idle()
@@ -3818,7 +3839,7 @@ def check_locked_layout_selection(editor):
             break
         editor.call("imgui_click", {"label": "Window"})
         editor.call("imgui_click", {"window": "Window###Menu_00", "label": name})
-        time.sleep(0.3)
+        wait_until(editor, lambda: any(i["label"] == "sel layout" for i in items("sel layout")))
         rows = [i for i in items("sel layout") if i["label"] == "sel layout"]
     if not rows:
         check("the item tree shows the layout's row", False, "no row")
@@ -3835,11 +3856,11 @@ def check_locked_layout_selection(editor):
         if modifiers:
             arguments["modifiers"] = modifiers
         editor.call("mouse_click", arguments)
-        time.sleep(0.2)
         editor.wait_idle()
 
     if row(layout["children"][1]["name"]) is None:
         click_row("sel layout")  # its arrow: the row opens and shows the children
+        wait_until(editor, lambda: row(layout["children"][1]["name"]) is not None)
     if row(layout["children"][1]["name"]) is None:
         check("the item tree shows the locked layout's child rows", False, "no child row")
         editor.close(scene)
@@ -3854,7 +3875,6 @@ def check_locked_layout_selection(editor):
           no_child() and (layout["id"] in selected()), f"{selected()}")
     click_row("sel free")
     editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
-    time.sleep(0.2)
     editor.wait_idle()
     check("the hierarchy's select all selects the layout node and no child of it", no_child() and (layout["id"] in selected()) and (free["id"] in selected()),
           f"{selected()}")
@@ -4894,8 +4914,7 @@ def check_layout_transform_rows(editor):
         editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
         rect = editor.call("get_imgui_item_rect", {"window": properties, "id": target["id"]})
         editor.call("mouse_click", {"x": rect["center_x"], "y": rect["center_y"], "button": "right"})
-        time.sleep(0.2)
-        editor.wait_idle()
+        wait_until(editor, lambda: popup_item(editor, label) is not None)
         editor.call("imgui_click", {"label": label})
         editor.wait_idle()
     pasted = lay(ring_id)
@@ -6243,7 +6262,6 @@ def wait_preview(editor, predicate, timeout=10.0):
     deadline = time.monotonic() + timeout
     reply = preview(editor)
     while (not predicate(reply)) and (time.monotonic() < deadline):
-        time.sleep(0.1)
         reply = preview(editor)
     return reply
 
@@ -7133,7 +7151,7 @@ def open_window(editor, name):
         editor.call("imgui_click", {"window": "Window###Menu_00", "label": name})
     deadline = time.monotonic() + 5.0
     while (not shown()) and (time.monotonic() < deadline):
-        time.sleep(0.1)
+        pass
     return shown()
 
 
@@ -7185,7 +7203,7 @@ def gizmo_grab(editor, viewport, values):
     cx, cy = round(center[0]), round(center[1])
     reach = 6
     points = [[cx + dx, cy + dy] for dy in range(-reach, reach + 1) for dx in range(-reach, reach + 1)]
-    probes = editor.call("get_transform_handles", {"viewport": viewport["title"], "probe_points": points})["probes"]
+    probes = editor.call("get_transform_handles", {"viewport": viewport["title"], "probe_points": points, "handles": False})["probes"]
     picks = {(int(p["x"]), int(p["y"])): p for p in probes}
 
     def holds(x, y):
@@ -8504,8 +8522,7 @@ def check_paste_connector_switches(editor, scene, edited_id, wall_id, other_wall
         editor.call("imgui_scroll_to_item", {"window": properties, "id": row["id"]})
         rect = editor.call("get_imgui_item_rect", {"window": properties, "id": row["id"]})
         editor.call("mouse_click", {"x": rect["center_x"], "y": rect["center_y"], "button": "right"})
-        time.sleep(0.2)
-        editor.wait_idle()
+        wait_until(editor, lambda: popup_item(editor, label) is not None)
         editor.call("imgui_click", {"label": label})
         editor.wait_idle()
 
@@ -9310,8 +9327,9 @@ def close_without_leak(editor, scene, label):
         elif any(("scene-close check: all" in line) and ("released" in line) for line in lines):
             verdict = "released"
         else:
-            time.sleep(0.2)
-    time.sleep(0.5)
+            editor.wait_frames()
+    # The watchdog writes all lines of one check in one frame: once a frame has passed after the verdict, they are all in the log.
+    editor.wait_frames()
     leaks = [line for line in pav.read_log()[log_start:].splitlines() if ("scene-close leak" in line) and (marker in line)]
     # The Hotbar's rendertarget node outlives any scene the Hotbar was shown in (found in passing; not the snap's).
     hotbar = ("'Hotbar imgui host RT node'", "'Rendertarget Node'")
@@ -13377,7 +13395,7 @@ def check_collision_scale(editor, directory):
             editor.call("advance_time", {"seconds": 0.05})
             deadline = time.monotonic() + 10.0
             while (editor.call("advance_time", {}).get("pending_seconds", 0.0) > 0.0) and (time.monotonic() < deadline):
-                time.sleep(0.02)
+                pass
             position = editor.call("get_physics_state", {"scene_name": scene, "node_id": faller["id"]}).get("position", [0.0, 0.0, 0.0])
             lowest = position[1] if (lowest is None) else min(lowest, position[1])
         editor.call("toggle_physics", {"enabled": False})
@@ -13458,7 +13476,11 @@ def main():
     parser.add_argument("--piece-lights-shape", default=PIECE_LIGHTS_SHAPE, help="the lit shape the piece light checks place")
     parser.add_argument("--only-recreated-shapes", action="store_true", help="run the checks of the recreated shapes beside their originals alone (U41)")
     parser.add_argument("--layout-drag-image", default=DEFAULT_LAYOUT_DRAG_IMAGE, help="mid-drag layout screenshot PNG (relative to the repository root or absolute)")
+    parser.add_argument("--timings", action="store_true", help="print where the run's time went: per group, per wait, per MCP tool (scripts/verify_timings.py)")
     args = parser.parse_args()
+    if args.timings:
+        import verify_timings
+        verify_timings.install([sys.modules[__name__]])
     image_path = args.image if os.path.isabs(args.image) else os.path.join(pav.REPO_ROOT, args.image)
     surface_image_path = args.surface_image if os.path.isabs(args.surface_image) else os.path.join(pav.REPO_ROOT, args.surface_image)
     walkable_image_path = args.walkable_image if os.path.isabs(args.walkable_image) else os.path.join(pav.REPO_ROOT, args.walkable_image)
@@ -13626,6 +13648,8 @@ def main():
             if current != content:
                 with open(path, "wb") as f:
                     f.write(content)
+    if args.timings:
+        verify_timings.report()
     failed = [label for label, ok in pav.RESULTS if not ok]
     print(f"\n{len(pav.RESULTS) - len(failed)}/{len(pav.RESULTS)} checks passed, {len(failed)} failed in {time.monotonic() - start:.0f} s")
     return 1 if failed else 0

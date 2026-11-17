@@ -304,7 +304,7 @@ def wait_stage_with_items(editor, job_id, stage, store_path):
         if (progress.get("stage") == stage) and (progress.get("done", 0) > 0):
             if (store_path is None) or (item_count(store_path) > 0):
                 return True, status
-        time.sleep(0.002)
+        editor.wait_frames()  # get_save_status is answered off the main loop
 
 
 def move_aside(paths, directory):
@@ -540,8 +540,10 @@ def phase_prepared_run(args, work, state):
         start = time.monotonic()
         reply = editor.call("load_scene", {"path": state["prepared_pc"]})
         listed = None
+        deadline = time.monotonic() + 600.0
         while reply["scene_name"] not in editor.scene_names():
-            time.sleep(0.05)
+            if time.monotonic() > deadline:
+                raise RuntimeError(f"load_scene {state['prepared_pc']} made no scene {reply['scene_name']}")
         listed = time.monotonic() - start
         editor.wait_idle()
         idle = time.monotonic() - start

@@ -8,6 +8,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace editor {
@@ -24,9 +25,14 @@ void Time::prepare_update(bool advance_simulation, int64_t simulation_advance_ns
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     ++m_frame_number;
-    int64_t host_system_frame_start_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    const int64_t host_system_frame_start_time_ns = (m_fixed_frame_duration_ns > 0)
+        ? (m_host_system_last_frame_start_time + m_fixed_frame_duration_ns)
+        : std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
     int64_t host_system_frame_duration_ns   = host_system_frame_start_time_ns - m_host_system_last_frame_start_time;
-    int64_t simulation_frame_duration_ns    = (simulation_advance_ns >= 0) ? simulation_advance_ns : host_system_frame_duration_ns;
+    // The deterministic clock's fixed step wins over a display (pacer, benchmark) advance.
+    const bool use_display_advance          = (simulation_advance_ns >= 0) && (m_fixed_frame_duration_ns == 0);
+    m_frame_advance_ns                      = use_display_advance ? simulation_advance_ns : host_system_frame_duration_ns;
+    int64_t simulation_frame_duration_ns    = m_frame_advance_ns;
 
     // Frame time average for the status bar: an exponential moving average
     // whose weight follows the elapsed time (time constant
@@ -111,6 +117,27 @@ void Time::prepare_update(bool advance_simulation, int64_t simulation_advance_ns
     }
 
     m_host_system_last_frame_start_time = host_system_frame_start_time_ns;
+}
+
+void Time::set_fixed_frame_duration_ns(const int64_t duration_ns)
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    m_fixed_frame_duration_ns = std::max(int64_t{0}, duration_ns);
+}
+
+auto Time::get_fixed_frame_duration_ns() const -> int64_t
+{
+    return m_fixed_frame_duration_ns;
+}
+
+auto Time::get_frame_advance_ns() const -> int64_t
+{
+    return m_frame_advance_ns;
+}
+
+auto Time::get_frame_start_time_ns() const -> int64_t
+{
+    return m_host_system_last_frame_start_time;
 }
 
 void Time::for_each_fixed_step(std::function<void(const Time_context&)> callback)

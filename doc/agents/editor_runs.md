@@ -81,6 +81,20 @@ into an AI chat):
 - Fatal behavior is unchanged (errors still abort); the log line names the
   file to read.
 
+`ERHE_DETERMINISTIC_CLOCK=1` runs the editor on its deterministic clock
+(`doc/editor/editor.md` "Clock"): every frame advances the host clock, ImGui,
+animation and the simulation by exactly 1/60 s, independent of the wall
+clock. Headless tests and verify scripts run with it (`prepared_asset_verify.Editor`
+and the `mcp_server_tests` launcher set it), so time-dependent behavior - an
+ImGui double-click window, a tooltip delay, a physics drop - takes the same
+number of frames on every run; the startup log says
+`ERHE_DETERMINISTIC_CLOCK = 1`, and `advance_time` reports `host_clock`.
+Leave it unset for what measures wall time (benchmarks, profiling) and for a
+user's interactive session. A script waits for the editor by reading a
+reported state - an MCP reply, or a log line read again after each
+`wait_frames` call - never with a time-based sleep (AGENTS.md "Waiting for
+the editor: no time-based sleeps").
+
 `ERHE_FORCE_DISABLE_REVERSE_DEPTH=1` (or `0`) overrides
 `force_disable_reverse_depth` of `config/editor/erhe_graphics.json` for one
 run, so a script launches a forward-Z editor without rewriting the config

@@ -207,7 +207,7 @@ TEST(Kit_timber_bay, parts_follow_the_counts)
 TEST(Kit_timber_bay, bounds_and_ends_follow_the_values)
 {
     const Kit_shape_definition& bay = get_shape("architecture.timber_bay");
-    for (int seed = 0; seed < 24; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(bay, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const float half_l = 0.5f * values.get_float("length");
@@ -269,7 +269,7 @@ TEST(Kit_railing, topology_follows_from_integers_alone)
 TEST(Kit_railing, parts_and_bounds_follow_the_values)
 {
     const Kit_shape_definition& railing = get_shape("architecture.railing");
-    for (int seed = 0; seed < 24; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(railing, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const unsigned int bays   = static_cast<unsigned int>(values.get_int("bays"));
@@ -362,7 +362,7 @@ INSTANTIATE_TEST_SUITE_P(Kit_bamboo, Kit_bamboo_culms, testing::Values(3, 4, 5, 
 TEST(Kit_bamboo, canes_stand_within_the_radius_and_reach_the_height)
 {
     const Kit_shape_definition& bamboo = get_shape("nature.bamboo");
-    for (int seed = 0; seed < 16; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(bamboo, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const float height = values.get_float("height");
@@ -450,7 +450,7 @@ TEST(Kit_stairs, topology_follows_from_integers_alone)
 TEST(Kit_stairs, treads_and_connectors_follow_the_form)
 {
     const Kit_shape_definition& stairs = get_shape("architecture.stairs");
-    for (int seed = 0; seed < 30; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(stairs, seed);
         SCOPED_TRACE(values.to_canonical_text());
         ASSERT_EQ(values.validate(), "");
@@ -549,7 +549,7 @@ TEST(Kit_spiral_stairs, topology_follows_from_integers_alone)
 TEST(Kit_spiral_stairs, steps_and_connectors_follow_the_values)
 {
     const Kit_shape_definition& spiral = get_shape("architecture.spiral_stairs");
-    for (int seed = 0; seed < 30; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(spiral, seed);
         SCOPED_TRACE(values.to_canonical_text());
         ASSERT_EQ(values.validate(), "");
@@ -645,7 +645,7 @@ class Kit_rock_arch_segments : public testing::TestWithParam<int>
 TEST_P(Kit_rock_arch_segments, corners_pass_over_seeds)
 {
     const Kit_shape_definition& arch = get_shape("nature.rock_arch");
-    for (const int seed : {0, 1, 2}) {
+    for (const int seed : sweep_seeds(arch)) {
         Kit_parameter_values values = explicit_values(arch, seed);
         ASSERT_TRUE(values.set_int("segments", GetParam()));
         for_each_corner(values, rock_arch_floats, expect_valid_with_every_slot);
@@ -674,7 +674,7 @@ INSTANTIATE_TEST_SUITE_P(Kit_rock_arch, Kit_rock_arch_segments, testing::Values(
 TEST(Kit_rock_arch, opening_is_at_least_the_stated_ellipse)
 {
     const Kit_shape_definition& arch = get_shape("nature.rock_arch");
-    for (int seed = 0; seed < 40; ++seed) {
+    for (const int seed : derive_seeds()) {
         Kit_parameter_values values = all_derived(arch, seed);
         ASSERT_TRUE(values.set_int("segments", 8 + (seed % 17)));
         SCOPED_TRACE(values.to_canonical_text());

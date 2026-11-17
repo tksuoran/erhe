@@ -92,7 +92,7 @@ TEST(Kit_recreated, rock_forms_pass_at_the_corners_over_seeds)
     const Kit_shape_definition& rock = get_shape("nature.rock.v2");
     ASSERT_EQ(rock.material_slots, (std::vector<std::string>{"rock"}));
     for (const std::string& form : rock.parameters[rock.find_parameter("form").value()].enum_values) {
-        for (int seed = 0; seed < 50; ++seed) {
+        for (const int seed : sweep_seeds(rock)) {
             Kit_parameter_values values = explicit_values(rock, seed);
             ASSERT_TRUE(values.set_enum("form", form));
             ASSERT_TRUE(values.set_int("pieces", 1 + (seed % 4)));
@@ -160,13 +160,13 @@ TEST(Kit_recreated, land_mass_passes_at_the_corners_with_a_flat_walkable_top)
 {
     const Kit_shape_definition& land_mass = get_shape("nature.land_mass.v2");
     ASSERT_EQ(land_mass.material_slots, (std::vector<std::string>{"grass", "earth", "rock"}));
-    for (int seed = 0; seed < 12; ++seed) {
+    for (const int seed : sweep_seeds(land_mass)) {
         for_each_corner(explicit_values(land_mass, seed), {"footprint", "height", "erosion", "segments"}, expect_valid_with_every_slot);
     }
     // The turf's top is the plane y = height, at least the agent's width across in every direction, over derived values.
     const Kit_agent agent{};
     const float     need = (2.0f * agent.radius) + editor::kit_opening_margin;
-    for (int seed = 0; seed < 100; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(land_mass, seed);
         SCOPED_TRACE(values.to_canonical_text());
         EXPECT_EQ(land_mass.check_walkability(values, agent), "");
@@ -241,11 +241,11 @@ TEST(Kit_recreated, hill_passes_at_the_corners_and_its_grass_is_walkable_over_se
 {
     const Kit_shape_definition& hill = get_shape("nature.hill.v2");
     ASSERT_EQ(hill.material_slots, (std::vector<std::string>{"grass", "rock"}));
-    for (int seed = 0; seed < 12; ++seed) {
+    for (const int seed : sweep_seeds(hill)) {
         for_each_corner(explicit_values(hill, seed), {"radius", "height", "rocks", "segments"}, expect_valid_with_every_slot);
     }
     const Kit_agent agent{};
-    for (int seed = 0; seed < 100; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(hill, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const Hill_grass grass = measure_hill_grass(values);
@@ -264,7 +264,7 @@ TEST(Kit_recreated, tree_species_pass_at_the_corners_and_stand_on_the_origin)
     const Kit_shape_definition& tree = get_shape("nature.tree.v2");
     ASSERT_EQ(tree.material_slots, (std::vector<std::string>{"bark", "foliage"}));
     for (const std::string& species : tree.parameters[tree.find_parameter("species").value()].enum_values) {
-        for (int seed = 0; seed < 25; ++seed) {
+        for (const int seed : sweep_seeds(tree)) {
             Kit_parameter_values values = explicit_values(tree, seed);
             ASSERT_TRUE(values.set_enum("species", species));
             for_each_corner(values, {"trunk_height", "canopy_size"}, expect_valid_with_every_slot);
@@ -293,7 +293,7 @@ TEST(Kit_recreated, bush_passes_at_the_corners_over_seeds)
 {
     const Kit_shape_definition& bush = get_shape("nature.bush.v2");
     ASSERT_EQ(bush.material_slots, (std::vector<std::string>{"foliage", "bark"}));
-    for (int seed = 0; seed < 50; ++seed) {
+    for (const int seed : sweep_seeds(bush)) {
         for_each_corner(explicit_values(bush, seed), {"size", "twigs"}, expect_valid_with_every_slot);
     }
 }

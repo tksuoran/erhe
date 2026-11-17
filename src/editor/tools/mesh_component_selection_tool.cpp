@@ -22,6 +22,7 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "time.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/transform_tool.hpp"
@@ -2084,7 +2085,7 @@ constexpr float c_knife_base_snap_radius_px     = 10.0f;
 constexpr float c_knife_vertex_radius_factor    = 0.75f;          // the vertex radius, of the edge radius
 constexpr float c_knife_angle_increment         = 0.52359877559f; // 30 degrees
 constexpr float c_knife_double_click_distance   = 6.0f;
-constexpr std::chrono::milliseconds c_knife_double_click_time{300};
+constexpr int64_t c_knife_double_click_time_ns   = 300'000'000;
 
 [[nodiscard]] auto to_geo_vec3f(const glm::vec3& v) -> GEO::vec3f
 {
@@ -2646,13 +2647,13 @@ void Mesh_component_selection_tool::knife_press()
     if (!cursor.has_value()) {
         return;
     }
-    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    const int64_t now_ns = m_context.time->get_frame_start_time_ns();
     const bool double_click =
         m_knife.has_last_press &&
-        ((now - m_knife.last_press_time) <= c_knife_double_click_time) &&
+        ((now_ns - m_knife.last_press_time_ns) <= c_knife_double_click_time_ns) &&
         (glm::distance(cursor.value(), m_knife.last_press_position) <= c_knife_double_click_distance);
     m_knife.has_last_press      = true;
-    m_knife.last_press_time     = now;
+    m_knife.last_press_time_ns  = now_ns;
     m_knife.last_press_position = cursor.value();
 
     // Double click: close the current polyline (the first press added the

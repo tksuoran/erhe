@@ -207,6 +207,8 @@ auto get_plane_shell_layout(
 }
 
 constexpr int  ring_arc_sample_count = 128;
+// Below this |cos| between the view direction and a plane's normal, the plane's sector counts as edge-on.
+constexpr float c_grab_plane_edge_on_cosine = 0.25f;
 
 // Camera-aligned view-rotate ring: light gray, outside the rotate sphere
 // with a gap. Dragging it rotates around the viewing axis.
@@ -1771,6 +1773,108 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
     }
 
     return best;
+}
+
+void Handle_visualizations::get_grab_candidates(const glm::vec3& eye_position, std::vector<Handle_grab_candidate>& out) const
+{
+    out.clear();
+    if (!has_target()) {
+        return;
+    }
+    const float s = m_view_scale;
+    if (!(s > 0.0f) || !std::isfinite(s)) {
+        return;
+    }
+    const vec3                     c             = m_world_from_anchor.get_translation();
+    const mat3                     basis         = get_basis();
+    const Gizmo_sizes              gz            = get_gizmo_sizes(m_context.editor_settings->transform_tool);
+    const Transform_tool_settings& settings      = m_context.transform_tool->shared.settings;
+    const bool                     positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
+    const std::array<bool, 3>      octant_signs  = get_octant_signs(eye_position, c, basis);
+    const float                    start         = m_context.rotate_tool->is_active()
+        ? m_context.editor_settings->transform_tool.rotate_ring_size
+        : gz.arrow_start;
+
+    const auto add = [this, &out](const Handle handle, const vec3& position, const Grab_candidate_expectation expectation) {
+        if (is_handle_shown(handle)) {
+            out.push_back(Handle_grab_candidate{.handle = handle, .position = position, .expectation = expectation});
+        }
+    };
+    // The single-arrow mode draws the camera-facing direction of an axis; the other one only on hover or drag.
+    const auto side_expectation = [&](const int axis, const int sign) -> Grab_candidate_expectation {
+        return (!positive_only || ((sign == 0) == octant_signs[axis])) ? Grab_candidate_expectation::expected : Grab_candidate_expectation::optional;
+    };
+
+    // Translate arrows: the head (the direct core), then the shaft.
+    for (int axis = 0; axis < 3; ++axis) {
+        for (int sign = 0; sign < 2; ++sign) {
+            const Handle handle = (sign == 0) ? translate_pos_handles[axis] : translate_neg_handles[axis];
+            const vec3   dir    = ((sign == 0) ? 1.0f : -1.0f) * basis[axis];
+            add(handle, c + (s * (start + gz.arrow_shaft_length + (0.5f * gz.translate_cone_length))) * dir, side_expectation(axis, sign));
+            add(handle, c + (s * (start + (0.5f * gz.arrow_shaft_length))) * dir, side_expectation(axis, sign));
+        }
+    }
+
+    // Basic-scale axis handles: the tip cube's center, then the shaft.
+    for (int axis = 0; axis < 3; ++axis) {
+        const float scale_start = settings.show_translate
+            ? (start + gz.arrow_shaft_length + gz.translate_cone_length + gz.scale_handle_gap)
+            : start;
+        const float shaft = settings.show_translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
+        for (int sign = 0; sign < 2; ++sign) {
+            const vec3 dir = ((sign == 0) ? 1.0f : -1.0f) * basis[axis];
+            add(scale_axis_handles[axis], c + (s * (scale_start + shaft + gz.scale_cube_half_length)) * dir, side_expectation(axis, sign));
+            add(scale_axis_handles[axis], c + (s * (scale_start + (0.5f * shaft))) * dir, side_expectation(axis, sign));
+        }
+    }
+
+    // Plane sectors and the uniform-scale wedges: the middle of the drawn (camera-facing) quadrant. A
+    // plane seen nearly edge-on is a sliver no press can aim at reliably, so it is optional there.
+    const bool               box_mode = settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box;
+    const Plane_shell_layout shells   = get_plane_shell_layout(gz, settings.show_scale, settings.show_translate, settings.show_scale && !box_mode);
+    const vec3               to_eye   = normalize(eye_position - c);
+    for (int perp = 0; perp < 3; ++perp) {
+        const vec3 su       = octant_signs[(perp + 1) % 3] ? basis[(perp + 1) % 3] : -basis[(perp + 1) % 3];
+        const vec3 sv       = octant_signs[(perp + 2) % 3] ? basis[(perp + 2) % 3] : -basis[(perp + 2) % 3];
+        const vec3 diagonal = normalize(su + sv);
+        const Grab_candidate_expectation plane_expectation = (std::abs(dot(to_eye, basis[perp])) >= c_grab_plane_edge_on_cosine)
+            ? Grab_candidate_expectation::expected
+            : Grab_candidate_expectation::optional;
+        add(translate_plane_handles[perp], c + (s * 0.5f * (shells.translate_inner + shells.translate_outer)) * diagonal, plane_expectation);
+        add(scale_plane_handles[perp],     c + (s * 0.5f * (shells.scale_inner     + shells.scale_outer    )) * diagonal, plane_expectation);
+        add(Handle::e_handle_scale_xyz,    c + (s * 0.5f * shells.uniform_outer) * diagonal,                             Grab_candidate_expectation::expected);
+    }
+
+    // Rotate rings: points around each ring, nearest the eye first (in visible-arcs mode the near arcs are the drawn ones).
+    constexpr int ring_candidate_count = 16;
+    const Rotate_ring_frames rings = m_context.transform_tool->get_rotate_ring_frames(basis);
+    std::array<std::pair<float, vec3>, ring_candidate_count> ring_points{};
+    for (int axis = 0; axis < 3; ++axis) {
+        const float radius = s * (gz.rotate_ring_major_radius - rings.radius_insets[axis]);
+        for (int i = 0; i < ring_candidate_count; ++i) {
+            const float theta = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ring_candidate_count);
+            const vec3  point = c + radius * ((std::cos(theta) * rings.frames[axis][1]) + (std::sin(theta) * rings.frames[axis][2]));
+            ring_points[static_cast<std::size_t>(i)] = {glm::distance(point, eye_position), point};
+        }
+        std::sort(ring_points.begin(), ring_points.end(), [](const std::pair<float, vec3>& a, const std::pair<float, vec3>& b) { return a.first < b.first; });
+        for (const std::pair<float, vec3>& point : ring_points) {
+            add(ring_handles[axis], point.second, Grab_candidate_expectation::expected);
+        }
+    }
+
+    // View-rotate ring and the arcball region, in the camera-aligned plane render() uses.
+    const vec3 view_dir = normalize(eye_position - c);
+    const vec3 ref      = (std::abs(view_dir.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
+    const vec3 vs1      = normalize(cross(view_dir, ref));
+    const vec3 vs2      = normalize(cross(view_dir, vs1));
+    for (int i = 0; i < 8; ++i) {
+        const float theta = glm::two_pi<float>() * static_cast<float>(i) / 8.0f;
+        add(Handle::e_handle_rotate_view, c + (s * gz.view_ring_radius) * ((std::cos(theta) * vs1) + (std::sin(theta) * vs2)), Grab_candidate_expectation::expected);
+    }
+    for (int i = 0; i < 8; ++i) {
+        const float theta = glm::two_pi<float>() * (static_cast<float>(i) + 0.5f) / 8.0f;
+        add(Handle::e_handle_rotate_free, c + (s * 0.85f * gz.rotate_ring_major_radius) * ((std::cos(theta) * vs1) + (std::sin(theta) * vs2)), Grab_candidate_expectation::expected);
+    }
 }
 
 auto Handle_visualizations::intersect_rotate_sphere(const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Rotate_sphere_intersection>

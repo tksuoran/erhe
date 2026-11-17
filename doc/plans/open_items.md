@@ -373,6 +373,35 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
 - Debug line anti-aliasing: joined polylines, content wide lines, a Metal run
   (`doc/plans/debug_renderer_anti_aliasing.md`).
 
+## Verify scripts
+
+- Deterministic clock and no time-based sleeps (AGENTS.md "Waiting for the
+  editor: no time-based sleeps"; `doc/testing.md` "Verify scripts"). The
+  scripts that launch the editor through `prepared_asset_verify.Editor` and
+  `mcp_server_tests` follow the rule. These launch the editor themselves
+  without `ERHE_DETERMINISTIC_CLOCK=1` and still sleep on editor waits:
+  `pvs_verify.py`, `shadow_map_cache_check.py`, `creations/common.py`,
+  `shadow_verify.py`, `gi_verify.py`, `visible_entries_check.py`,
+  `shader_fp16_verify.py`, `shadow_fit_ab.py`, `mesh_modeling_verify.py`,
+  `mesh_ab_capture.py`, `lod_dolly_verify.py`, `lod_roundtrip_verify.py`,
+  `physics_node_pose_gate.py`, `ik_interactive_pass_verify.py`,
+  `geometry_spreadsheet_verify.py`, `attr_encoding_ab.py`,
+  `brush_geometry_queue_soak.py`, `usd_wg_asset_survey.py`. Scripts that
+  drive an editor someone else started also sleep on editor waits:
+  `scene_roundtrip_verify.py`, `geometry_nodes_smoke_test.py`,
+  `test_editor_mcp.py`, `texture_graph_smoke_test.py`, `overdraw_verify.py`,
+  `rc_texel_verify.py`, `occlusion_wall_check.py`,
+  `geometry_graph_zoom_harness.py`, `physics_drag_joint_sweep.py`,
+  `content_draws_verify.py`, `joint_constraint_assets_verify.py`,
+  `reloadable_asset_loads_smoke_test.py`, `undo_reference_clearing_smoke_test.py`,
+  the `mcp_ragdoll_*.py` scripts and the creations. Wall-time measurements
+  (`bistro_frame_bench.py`, `render_thread_bench.py`,
+  `tracy_startup_profile.py`, `scene_load_profile.py`,
+  `frame_pacing_live_gate.py`, `vk_alloc_census.py`, `idle_memory_check.py`)
+  and device scripts (`quest_bench.py`, `soak_quest.py`,
+  `device_loss_repro.py`) keep the wall clock; their editor waits still
+  follow the rule.
+
 ## Editor features
 
 - Property rows: migrate the remaining hand-written `Property_editor` rows

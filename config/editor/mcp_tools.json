@@ -3846,7 +3846,7 @@
     "name": "toggle_physics"
   },
   {
-    "description": "Control the editor simulation clock. 'seconds' queues that much simulation time to run deterministically at 'max_step_ms' (default 250) of simulation per rendered frame, bypassing the 25 ms wall-clock dilation cap and the hidden-window pause - the call returns immediately, poll with an empty call until pending_seconds is 0. 'mode' switches the clock source: wall_clock (normal), paused / manual (simulation frozen except queued advances). Physics settling recipe: build with physics disabled, toggle_physics enabled + wake, mode=manual, advance_time seconds=N, poll, then freeze.",
+    "description": "Control the editor simulation clock. 'seconds' queues that much simulation time to run deterministically at 'max_step_ms' (default 250) of simulation per rendered frame, bypassing the 25 ms wall-clock dilation cap and the hidden-window pause - the call returns immediately, poll with an empty call until pending_seconds is 0. 'mode' switches the clock source: wall_clock (normal), paused / manual (simulation frozen except queued advances). Physics settling recipe: build with physics disabled, toggle_physics enabled + wake, mode=manual, advance_time seconds=N, poll, then freeze. The reply reports host_clock: 'deterministic' when the editor runs on its deterministic clock (ERHE_DETERMINISTIC_CLOCK=1: every frame advances the host clock, ImGui and animation by the same fixed step), else 'wall_clock'.",
     "inputSchema": {
       "properties": {
         "max_step_ms": {
@@ -3870,6 +3870,20 @@
       "type": "object"
     },
     "name": "advance_time"
+  },
+  {
+    "description": "Return after the given number of frames: the request is served once per frame and answers on the last. Each frame it waits counts as progress: a request expires 5 s after its last progress, so only a single frame longer than that expires it. A script that waits for something no MCP query reports (a log line) yields with this between its readings instead of a time-based sleep. Returns frames and the frame_number it answered in.",
+    "inputSchema": {
+      "properties": {
+        "frames": {
+          "description": "Frames to wait, an integer 1 - 3600 (default 1)",
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "wait_frames"
   },
   {
     "description": "Set the spdlog level of one or more log categories for this run, so a script can turn a diagnostic on without raising it in config/editor/logging.json for every run. Levels are the spdlog names: trace, debug, info, warn, err, critical, off. Reports the categories applied and the ones the process has no logger for.",
@@ -11720,7 +11734,7 @@
     "name": "inject_input_events"
   },
   {
-    "description": "Report the input state the injected events (inject_input_events) have built up: the pointer position in window pixels and whether one has been set, the mouse buttons held, the modifier keys the next event without its own 'modifiers' will carry, whether cursor_enter / window_focus have been sent, and whether an input gesture is currently stepping (with its frame, total frames, injected event count and pending event count). The headless window reports no cursor position of its own, so this is the record of where the injected pointer is.",
+    "description": "Report the input state the injected events (inject_input_events) have built up: the pointer position in window pixels and whether one has been set, the mouse buttons held, the modifier keys the next event without its own 'modifiers' will carry, whether cursor_enter / window_focus have been sent, and whether an input gesture is currently stepping (with its frame, total frames, injected event count, pending event count and held_frames: the frames a new click's press has been held so that ImGui does not read it as the second click of the previous one). The headless window reports no cursor position of its own, so this is the record of where the injected pointer is.",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -11783,7 +11797,7 @@
     "name": "reset_command_bindings"
   },
   {
-    "description": "Click a mouse button at a point in the editor window: the pointer moves there, settles for a few frames (the hover a click acts on is computed once per frame), then the button is pressed and released without moving - a move between press and release would make it a drag. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
+    "description": "Click a mouse button at a point in the editor window: the pointer moves there, settles for a few frames (the hover a click acts on is computed once per frame), then the button is pressed and released without moving - a move between press and release would make it a drag. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input. The press of a new click is held, a frame at a time, while ImGui would read it as the second click of the previous one (same button, within io.MouseDoubleClickTime and io.MouseDoubleClickMaxDist); get_input_state reports the held frames.",
     "inputSchema": {
       "properties": {
         "x": {
@@ -11824,7 +11838,7 @@
     "name": "mouse_click"
   },
   {
-    "description": "Drag a mouse button from one point to another in the editor window: the pointer moves to 'from', settles, the button is pressed, 'frames' interpolated move events follow one per frame (each carrying its dx / dy), and the button is released at 'to' unless hold is true. With hold the button stays down - report it with get_input_state and end the drag with mouse_release. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input.",
+    "description": "Drag a mouse button from one point to another in the editor window: the pointer moves to 'from', settles, the button is pressed, 'frames' interpolated move events follow one per frame (each carrying its dx / dy), and the button is released at 'to' unless hold is true. With hold the button stays down - report it with get_input_state and end the drag with mouse_release. The call spans the frames the gesture needs and returns one frame after the last event was dispatched, so a capture_screenshot right after it already shows the result. One gesture runs at a time: a second call while one is stepping is an error. In the windowed build the injected events interleave with the user's real input. The press of a new click is held, a frame at a time, while ImGui would read it as the second click of the previous one (same button, within io.MouseDoubleClickTime and io.MouseDoubleClickMaxDist); get_input_state reports the held frames.",
     "inputSchema": {
       "properties": {
         "from": {
@@ -11978,9 +11992,13 @@
     "name": "type_text"
   },
   {
-    "description": "Report where the transform gizmo's handles are, in the editor window pixels mouse_drag aims at. The gizmo has no meshes - it is hit tested analytically - so this runs the editor's own handle pick over a grid of rays through the gizmo's screen area and returns, per handle currently shown, a point that picks that handle (the sample deepest inside its region) plus the world point the ray hits. Each entry carries the handle's name (which names the axis, not the direction) and handle_value, the Handle enumerator debug_set_transform_hover takes. Also reports the gizmo anchor and its radius. Requires a selection; pass 'viewport' to probe a viewport other than the first. A rotate ring entry also carries ring_axis, the world axis that ring turns about, and euler_gimbal: in Euler gimbal mode (Transform window Rotation shown as Euler Angles, Orthogonal Gizmo off) the rings are the Euler order's rings, so the handle named 'Rotate X' is the first ring of the order (for ZYX it turns about Z) - choose a ring by ring_axis, not by name. Pass probe_points to also get, per given window point, the handle it picks (handle / handle_value, 'None' / 0 for no handle) and, when it picks one, the world point the ray hits (the grab point a press there starts the drag from) in 'probes' - to confirm a grab point before a mouse_drag, since a rotate ring is only a few pixels wide where it crosses another. The editor floors pointer positions to whole pixels, so probe and press at integer points.",
+    "description": "Report where the transform gizmo's handles are, in the editor window pixels mouse_drag aims at. The gizmo has no meshes - it is hit tested analytically - so this proposes points on each shown handle's geometry (arrow heads, cube centers, the middle of plane sectors, ring points) and keeps, per handle, the first one that the editor's own handle pick confirms together with the points one grid step around it; a handle with no confirmed point falls back to the pick over a grid of rays through the gizmo's screen area (the sample deepest inside its region). Returns per handle that point plus the world point the ray hits. The reported point is a whole window pixel, confirmed with the points 2 px (or a grid step, when larger) around it. A handle only a hover brings up (the back-facing arrow of the single-arrow mode) and a plane seen nearly edge-on are reported only when a point on them is confirmed; the grid fills in the other shown handles, so the handles reported do not depend on whether the grid ran. Each entry carries the handle's name (which names the axis, not the direction) and handle_value, the Handle enumerator debug_set_transform_hover takes. Also reports the gizmo anchor and its radius. Requires a selection; pass 'viewport' to probe a viewport other than the first. A rotate ring entry also carries ring_axis, the world axis that ring turns about, and euler_gimbal: in Euler gimbal mode (Transform window Rotation shown as Euler Angles, Orthogonal Gizmo off) the rings are the Euler order's rings, so the handle named 'Rotate X' is the first ring of the order (for ZYX it turns about Z) - choose a ring by ring_axis, not by name. Pass probe_points to also get, per given window point, the handle it picks (handle / handle_value, 'None' / 0 for no handle) and, when it picks one, the world point the ray hits (the grab point a press there starts the drag from) in 'probes' - to confirm a grab point before a mouse_drag, since a rotate ring is only a few pixels wide where it crosses another. The editor floors pointer positions to whole pixels, so probe and press at integer points. Pass handles false with probe_points to skip the handle grid (handles is then empty) when only the probes are wanted.",
     "inputSchema": {
       "properties": {
+        "handles": {
+          "description": "Find the handles over the probe grid (default true); false reports probes, anchor and radius alone",
+          "type": "boolean"
+        },
         "probe_points": {
           "description": "Window points [[x, y], ...] to report the picked handle for",
           "items": {
@@ -11990,6 +12008,14 @@
             "type": "array"
           },
           "type": "array"
+        },
+        "search": {
+          "description": "auto (default): analytic grab points with the grid as fallback; grid: the grid search for every handle",
+          "enum": [
+            "auto",
+            "grid"
+          ],
+          "type": "string"
         },
         "viewport": {
           "description": "Viewport window title (default: the first viewport showing a scene through a camera)",
@@ -12116,7 +12142,7 @@
     "name": "get_imgui_item_rect"
   },
   {
-    "description": "Click an ImGui item by label: the item is resolved to its rectangle in the frame after the call (exactly as get_imgui_item_rect does), then the pointer is moved to its center, settles, and the button is pressed and released there. The result carries 'target', the resolved rectangle, beside the injected event counts. A menu item exists only while its menu is open, so 'Window > Open Four View' is two calls: one on the menu bar item, then one on the item in the popup. Desktop window host only; one gesture runs at a time. In the windowed build the injected events interleave with the user's real input.",
+    "description": "Click an ImGui item by label: the item is resolved to its rectangle in the frame after the call (exactly as get_imgui_item_rect does), then the pointer is moved to its center, settles, and the button is pressed and released there. The result carries 'target', the resolved rectangle, beside the injected event counts. A menu item exists only while its menu is open, so 'Window > Open Four View' is two calls: one on the menu bar item, then one on the item in the popup. Desktop window host only; one gesture runs at a time. In the windowed build the injected events interleave with the user's real input. The press of a new click is held, a frame at a time, while ImGui would read it as the second click of the previous one (same button, within io.MouseDoubleClickTime and io.MouseDoubleClickMaxDist); get_input_state reports the held frames.",
     "inputSchema": {
       "type": "object",
       "required": [],

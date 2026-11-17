@@ -39,6 +39,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -377,11 +378,11 @@ protected:
 
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{timeout_ms};
         while (std::chrono::steady_clock::now() < deadline) {
+            // Each reading is an MCP call, served in a later frame than the one before.
             json details = material_details();
             if (pred(details)) {
                 return;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds{50});
         }
         FAIL() << "Edit did not become visible within " << timeout_ms
                << "ms. Last details: " << material_details().dump(2);
@@ -2268,7 +2269,6 @@ void advance_frames(Mcp_client& client, int frames)
         if (idle_reads >= 2) {
             return true;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds{50});
     }
     return false;
 }
@@ -2295,7 +2295,8 @@ void advance_frames(Mcp_client& client, int frames)
             }
             return status;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+        // get_save_status is answered off the main loop: a frame passes between readings.
+        client.call_tool("wait_frames", json{{"frames", 1}});
     }
     status.is_error = true;
     return status;
@@ -5215,6 +5216,62 @@ TEST_F(Mcp_test, mouse_drag_on_a_transform_handle_moves_the_selection)
     advance_frames(client, 3);
 }
 
+// get_transform_handles' analytic grab points (the default search) find every
+// handle the grid search it falls back to finds (and may find more: a scale
+// cube beyond the grid's box), and each analytic point picks its own handle.
+TEST_F(Mcp_test, transform_handle_grab_points_agree_with_the_grid_search)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const Viewport_rect viewport = first_viewport(client);
+    ASSERT_TRUE(viewport.found) << "no viewport";
+    ASSERT_TRUE(viewport.has_camera) << "the viewport has no camera";
+
+    const std::string box_name = "grab point test box";
+    ASSERT_TRUE(create_box_in_front_of_camera(client, env.scene_name(), viewport, box_name, 3.0f));
+    Mcp_client::Tool_result select = client.call_tool("select_items", json{
+        {"scene_name", env.scene_name()},
+        {"paths",      json::array({box_name})}
+    });
+    ASSERT_FALSE(select.is_error) << select.text;
+    advance_frames(client, 4);
+
+    Mcp_client::Tool_result analytic = client.call_tool("get_transform_handles", json::object());
+    ASSERT_FALSE(analytic.is_error) << analytic.text;
+    Mcp_client::Tool_result grid = client.call_tool("get_transform_handles", json{{"search", "grid"}});
+    ASSERT_FALSE(grid.is_error) << grid.text;
+
+    const auto handle_values = [](const json& payload) -> std::set<unsigned int> {
+        std::set<unsigned int> values;
+        for (const json& entry : payload.at("handles")) {
+            values.insert(entry.value("handle_value", 0u));
+        }
+        return values;
+    };
+    const std::set<unsigned int> analytic_values = handle_values(analytic.payload);
+    const std::set<unsigned int> grid_values     = handle_values(grid.payload);
+    ASSERT_FALSE(grid_values.empty()) << grid.payload.dump();
+    EXPECT_TRUE(std::includes(analytic_values.begin(), analytic_values.end(), grid_values.begin(), grid_values.end()))
+        << "analytic " << analytic.payload.dump() << "\ngrid " << grid.payload.dump();
+
+    json points = json::array();
+    for (const json& entry : analytic.payload.at("handles")) {
+        points.push_back(json::array({entry.value("x", 0.0f), entry.value("y", 0.0f)}));
+    }
+    Mcp_client::Tool_result probed = client.call_tool("get_transform_handles", json{{"probe_points", points}, {"handles", false}});
+    ASSERT_FALSE(probed.is_error) << probed.text;
+    const json& probes = probed.payload.at("probes");
+    ASSERT_EQ(probes.size(), analytic.payload.at("handles").size());
+    for (std::size_t i = 0; i < probes.size(); ++i) {
+        EXPECT_EQ(probes[i].value("handle_value", 0u), analytic.payload.at("handles")[i].value("handle_value", 0u))
+            << "the grab point of " << analytic.payload.at("handles")[i].dump() << " picks " << probes[i].dump();
+    }
+
+    client.call_tool("delete_nodes", json{{"scene_name", env.scene_name()}, {"names", json::array({box_name})}});
+    advance_frames(client, 3);
+}
+
 // A held drag leaves the button down until mouse_release ends it.
 TEST_F(Mcp_test, mouse_drag_hold_leaves_the_button_down_until_mouse_release)
 {
@@ -5812,13 +5869,11 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
     advance_frames(client, 3);
 
     // Dear ImGui chains clicks at one spot that come within
-    // io.MouseDoubleClickTime (0.30 s, wall clock) of each other into one
-    // click count, and the node toggles on a count of exactly two. Each
-    // gesture below starts a fresh chain: the clicks of the previous gesture
-    // (or of a previous run against the same editor) are waited out first.
-    const auto wait_out_double_click_time = []() {
-        std::this_thread::sleep_for(std::chrono::milliseconds{400});
-    };
+    // io.MouseDoubleClickTime (0.30 s of the editor clock) of each other into
+    // one click count, and the node toggles on a count of exactly two. The
+    // gesture tools hold the first press of a click until the previous
+    // click's window has passed, so each gesture below starts a fresh chain
+    // although it follows the previous one at once.
 
     const auto is_opened = [&]() -> bool {
         Mcp_client::Tool_result rect = client.call_tool("get_imgui_item_rect", json{
@@ -5831,7 +5886,6 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
     // The open state lives in the editor's ImGui storage across calls; a
     // previous run against the same editor may have left the node open.
     if (is_opened()) {
-        wait_out_double_click_time();
         client.call_tool("imgui_click", json{
             {"window", "Operation Stack"},
             {"label",  "Executed"},
@@ -5841,7 +5895,6 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
     }
     ASSERT_FALSE(is_opened()) << "the tree node could not be closed before the test";
 
-    wait_out_double_click_time();
     Mcp_client::Tool_result single = client.call_tool("imgui_click", json{
         {"window", "Operation Stack"},
         {"label",  "Executed"}
@@ -5850,7 +5903,6 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
     advance_frames(client, 3);
     EXPECT_FALSE(is_opened()) << "a single click opened a node that only opens on a double click";
 
-    wait_out_double_click_time();
     Mcp_client::Tool_result double_click = client.call_tool("imgui_click", json{
         {"window", "Operation Stack"},
         {"label",  "Executed"},
@@ -5861,7 +5913,6 @@ TEST_F(Mcp_test, imgui_click_double_is_read_as_a_double_click)
     EXPECT_TRUE(is_opened()) << "the two press/release pairs were not read as a double click";
 
     // Leave the node closed, as the test found it.
-    wait_out_double_click_time();
     client.call_tool("imgui_click", json{
         {"window", "Operation Stack"},
         {"label",  "Executed"},
@@ -6340,7 +6391,8 @@ void pin_medium_shadow_preset(Mcp_client& client, const float shadow_depth_bias_
             const std::string message = response["error"].value("message", std::string{});
             const bool        busy    = (message.find("timed out") != std::string::npos) || (message.find("Server busy") != std::string::npos);
             if (busy && (std::chrono::steady_clock::now() < deadline)) {
-                std::this_thread::sleep_for(std::chrono::milliseconds{250});
+                // A timed-out request still runs; the retry queues behind it, a frame later.
+                client.call_tool("wait_frames", json{{"frames", 1}});
                 continue;
             }
         }

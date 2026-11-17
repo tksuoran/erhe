@@ -85,7 +85,8 @@ def wait_for_save(call, job, timeout_s: float = 900.0) -> dict:
             return status
         if time.monotonic() > deadline:
             raise RuntimeError(f"save job {job['job_id']} did not finish in {timeout_s} s: {status}")
-        time.sleep(0.1)
+        # get_save_status is answered off the main loop; a frame passes between readings.
+        call("wait_frames", {"frames": 1})
 
 
 FAILURES: list[str] = []

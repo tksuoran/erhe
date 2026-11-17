@@ -17,4 +17,9 @@ namespace editor {
 //   ImGui layout .ini files honor, so an agent run leaves config/ untouched
 [[nodiscard]] auto is_ai_driver() -> bool;
 
+// ERHE_DETERMINISTIC_CLOCK=1: the editor clock advances a fixed step per frame
+// instead of following the wall clock (doc/editor/editor.md "Clock"), so a
+// driven run times ImGui, animation and simulation the same on every machine.
+[[nodiscard]] auto is_deterministic_clock() -> bool;
+
 }

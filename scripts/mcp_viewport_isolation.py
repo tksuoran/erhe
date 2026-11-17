@@ -61,7 +61,6 @@ def isolate_viewport(call, scene_name=None, title=None, timeout_s=20.0):
     deadline = time.time() + timeout_s
     state = ""
     while time.time() < deadline:
-        time.sleep(0.25)
         current = next((v for v in _viewports(call) if v.get("title") == target_title), None)
         hidden = _imgui_window_hidden(call)
         target_shown = (target_title in hidden) and not hidden[target_title]

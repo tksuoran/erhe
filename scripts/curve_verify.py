@@ -145,7 +145,6 @@ def create_scene(editor):
         if added:
             editor.wait_idle()
             return added[0]
-        time.sleep(0.1)
     raise RuntimeError("create_scene made no scene")
 
 
@@ -879,7 +878,9 @@ def check_curve_viewport(editor, image_path):
           (held[0] > 2.1) and (local_points(get_curve(editor, scene, curve_id)) == before) and (undo_depth(editor) == depth),
           f"held {held}, undo {depth} -> {undo_depth(editor)}")
 
-    # Handle drags: a smooth point keeps its handles aligned; Alt frees the dragged side.
+    # Handle drags: a smooth point keeps its handles aligned; Alt frees the dragged side. The pointer first rests
+    # off the gizmo, so no hovered handle keeps the back-facing +X arrow (over the out handle end) pickable.
+    ltv.hover(editor, viewport, [0.0, 0.0, 0.0])
     click_world(editor, viewport, [2.5, 0.0, 0.0])
     handle_pick = selection_of(editor)
     check("curve tool: a click at the out handle end selects the handle", [(p["index"], p["part"]) for p in handle_pick["points"]] == [(1, "out")], json.dumps(handle_pick))
@@ -1525,7 +1526,11 @@ def main():
     parser.add_argument("--image", default=DEFAULT_IMAGE, help="where the selected-curve screenshot is written")
     parser.add_argument("--keep", action="store_true", help="keep the work directory")
     parser.add_argument("--sections", default="base,lattice,viewport,level", help="comma-separated sections to run (base, lattice, viewport, level)")
+    parser.add_argument("--timings", action="store_true", help="print where the run's time went: per group, per wait, per MCP tool (scripts/verify_timings.py)")
     args = parser.parse_args()
+    if args.timings:
+        import verify_timings
+        verify_timings.install([sys.modules[__name__], ltv])
 
     restored = {}
     for name in RESTORED_CONFIG_FILES:
@@ -1560,6 +1565,8 @@ def main():
             print(f"kept {work}")
         else:
             shutil.rmtree(work, ignore_errors=True)
+    if args.timings:
+        verify_timings.report()
     failed = [label for label, ok in pav.RESULTS if not ok]
     print(f"\n{len(pav.RESULTS) - len(failed)}/{len(pav.RESULTS)} checks passed, {len(failed)} failed in {time.monotonic() - start:.0f} s")
     return 1 if failed else 0

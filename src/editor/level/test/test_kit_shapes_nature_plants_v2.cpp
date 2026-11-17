@@ -101,7 +101,7 @@ TEST(Kit_recreated, palm_shrub_species_pass_at_the_corners_over_seeds)
     const Kit_shape_definition& shrub = get_shape("nature.palm_shrub.v2");
     ASSERT_EQ(shrub.material_slots, plant_slots);
     for (const std::string& species : shrub.parameters[shrub.find_parameter("species").value()].enum_values) {
-        for (int seed = 0; seed < 12; ++seed) {
+        for (const int seed : sweep_seeds(shrub)) {
             Kit_parameter_values values = explicit_values(shrub, seed);
             ASSERT_TRUE(values.set_enum("species", species));
             for_each_corner(values, {"size", "fronds"}, expect_valid_plant);
@@ -114,7 +114,7 @@ TEST(Kit_recreated, leaf_plant_forms_pass_at_the_corners_over_seeds)
     const Kit_shape_definition& plant = get_shape("nature.leaf_plant.v2");
     ASSERT_EQ(plant.material_slots, plant_slots);
     for (const std::string& form : plant.parameters[plant.find_parameter("form").value()].enum_values) {
-        for (int seed = 0; seed < 3; ++seed) {
+        for (const int seed : sweep_seeds(plant)) {
             Kit_parameter_values values = explicit_values(plant, seed);
             ASSERT_TRUE(values.set_enum("form", form));
             for_each_corner(values, {"height", "leaves", "droop", "leaf_width"}, expect_valid_plant);
@@ -159,7 +159,7 @@ TEST(Kit_recreated, plants_keep_the_ceiling_at_every_leaf_count)
     const Kit_parameter&        fronds = shrub.parameters[shrub.find_parameter("fronds").value()];
     for (const std::string& species : shrub.parameters[shrub.find_parameter("species").value()].enum_values) {
         for (int count = fronds.int_min; count <= fronds.int_max; ++count) {
-            for (int seed = 0; seed < 4; ++seed) {
+            for (const int seed : sweep_seeds(shrub)) {
                 Kit_parameter_values values = explicit_values(shrub, seed);
                 ASSERT_TRUE(values.set_enum("species", species));
                 ASSERT_TRUE(values.set_int("fronds", count));
@@ -171,7 +171,7 @@ TEST(Kit_recreated, plants_keep_the_ceiling_at_every_leaf_count)
     const Kit_parameter&        leaves = plant.parameters[plant.find_parameter("leaves").value()];
     for (const std::string& form : plant.parameters[plant.find_parameter("form").value()].enum_values) {
         for (int count = leaves.int_min; count <= leaves.int_max; ++count) {
-            for (int seed = 0; seed < 4; ++seed) {
+            for (const int seed : sweep_seeds(plant)) {
                 Kit_parameter_values values = explicit_values(plant, seed);
                 ASSERT_TRUE(values.set_enum("form", form));
                 ASSERT_TRUE(values.set_int("leaves", count));
@@ -187,7 +187,7 @@ TEST(Kit_recreated, plants_stand_on_a_stem_at_the_origin)
     for (const char* const id : {"nature.palm_shrub.v2", "nature.leaf_plant.v2"}) {
         const Kit_shape_definition& shape = get_shape(id);
         for (const std::string& kind : shape.parameters[0].enum_values) {
-            for (int seed = 0; seed < 10; ++seed) {
+            for (const int seed : derive_seeds()) {
                 Kit_parameter_values values = all_derived(shape, seed);
                 ASSERT_TRUE(values.set_enum(shape.parameters[0].name, kind));
                 SCOPED_TRACE(values.to_canonical_text());

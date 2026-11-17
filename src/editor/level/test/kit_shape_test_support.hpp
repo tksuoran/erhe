@@ -44,6 +44,16 @@ enum class Range_end : unsigned int { min = 0, max };
 // Values of the shape with an empty mask (every value explicit) and the given seed.
 [[nodiscard]] auto explicit_values(const Kit_shape_definition& shape, int seed) -> Kit_parameter_values;
 
+// Seed sweeps. A shape whose generator draws nothing from the seed (Kit_randomness::none, which
+// seeds_select_the_mesh proves for every shape) gives one mesh for every seed of explicit values,
+// so its sweep is one seed; a seeded shape's is c_seed_sweep_count seeds.
+constexpr int c_seed_sweep_count = 2;
+[[nodiscard]] auto sweep_seeds(const Kit_shape_definition& shape) -> std::vector<int>;
+
+// Sweeps of derived values (all_derived): the seed picks the derived values of every shape.
+constexpr int c_derive_sweep_count = 8;
+[[nodiscard]] auto derive_seeds() -> std::vector<int>;
+
 // The positions of the mesh's vertices on the plane x = plane_x, sorted.
 [[nodiscard]] auto vertices_on_x(const GEO::Mesh& mesh, float plane_x) -> std::vector<std::array<float, 3>>;
 

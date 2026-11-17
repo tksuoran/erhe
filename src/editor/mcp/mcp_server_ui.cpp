@@ -58,6 +58,7 @@
 #include "transform/transform_tool.hpp"
 #include "windows/geometry_spreadsheet_window.hpp"
 #include "windows/viewport_window.hpp"
+#include "time.hpp"
 
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_item_recorder.hpp"
@@ -106,12 +107,6 @@ constexpr int c_pointer_settle_frames = 3;
 // working the same way in both.
 constexpr int c_click_hold_frames = 2;
 
-[[nodiscard]] auto now_ns() -> int64_t
-{
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()
-    ).count();
-}
 
 // "Key_left_shift", "left_shift", "LEFT SHIFT" -> "left shift", the spelling
 // erhe::window::c_str(Keycode) returns.
@@ -376,14 +371,19 @@ public:
         push(event);
     }
 
-    void mouse_button(const erhe::window::Mouse_button button, const Press_state state)
+    // A press is new_click_press unless it is the second click of a double click.
+    void mouse_button(
+        const erhe::window::Mouse_button     button,
+        const Press_state                    state,
+        const Mcp_input_event_role   role = Mcp_input_event_role::plain
+    )
     {
         ensure_entered();
         erhe::window::Input_event event = make_event(erhe::window::Input_event_type::mouse_button_event);
         event.u.mouse_button_event.button        = button;
         event.u.mouse_button_event.pressed       = (state == Press_state::pressed);
         event.u.mouse_button_event.modifier_mask = m_modifier_mask;
-        push(event);
+        push(event, role);
     }
 
     void mouse_wheel(const float dx, const float dy)
@@ -463,10 +463,11 @@ public:
 
     // Records an event built elsewhere (inject_input_events parses the whole
     // Input_event vocabulary), keeping the tracked state in step with it.
-    void push(const erhe::window::Input_event& event)
+    void push(const erhe::window::Input_event& event, const Mcp_input_event_role role = Mcp_input_event_role::plain)
     {
         m_steps.events.push_back(event);
         m_steps.event_frames.push_back(m_frame);
+        m_steps.event_roles.push_back(role);
         switch (event.type) {
             case erhe::window::Input_event_type::mouse_move_event: {
                 m_pointer_x     = event.u.mouse_move_event.x;
@@ -507,6 +508,48 @@ private:
 };
 
 // The three stages every gesture tool shares -------------------------------
+
+// The desktop window host's ImGui context, which the injected window events reach
+// (a rendertarget host keeps its own click state; its presses are not held).
+auto Mcp_server::desktop_imgui_context() const -> const ImGuiContext*
+{
+    if (m_context.imgui_windows == nullptr) {
+        return nullptr;
+    }
+    erhe::imgui::Imgui_host* const host = m_context.imgui_windows->get_window_imgui_host().get();
+    return (host != nullptr) ? host->get_imgui_context() : nullptr;
+}
+
+auto Mcp_server::desktop_imgui_time() const -> double
+{
+    const ImGuiContext* const imgui_context = desktop_imgui_context();
+    return (imgui_context != nullptr) ? imgui_context->Time : 0.0;
+}
+
+// ImGui counts a press as the next click of the previous one when it lands within
+// io.MouseDoubleClickTime and io.MouseDoubleClickMaxDist of it (NewFrame's click
+// update). The time is read one frame early, so the press lands later than that.
+auto Mcp_server::would_chain_as_double_click(const erhe::window::Input_event& press) const -> bool
+{
+    if (!m_input_pointer_state.position_known) {
+        return false;
+    }
+    const ImGuiContext* const imgui_context = desktop_imgui_context();
+    if (imgui_context == nullptr) {
+        return false;
+    }
+    const int button = static_cast<int>(press.u.mouse_button_event.button);
+    if ((button < 0) || (button >= ImGuiMouseButton_COUNT)) {
+        return false;
+    }
+    const ImGuiIO& io = imgui_context->IO;
+    if ((imgui_context->Time - io.MouseClickedTime[button]) >= static_cast<double>(io.MouseDoubleClickTime)) {
+        return false;
+    }
+    const float dx = m_input_pointer_state.x - io.MouseClickedPos[button].x;
+    const float dy = m_input_pointer_state.y - io.MouseClickedPos[button].y;
+    return ((dx * dx) + (dy * dy)) < (io.MouseDoubleClickMaxDist * io.MouseDoubleClickMaxDist);
+}
 
 auto Mcp_server::input_gesture_preamble() -> std::optional<std::string>
 {
@@ -562,8 +605,21 @@ auto Mcp_server::step_input_gesture() -> std::string
 
     Input_gesture_steps& steps = m_input_gesture_steps;
 
-    const int64_t timestamp_ns = now_ns();
+    // Injected events carry the editor clock, as deterministic as the frames they land in.
+    const int64_t timestamp_ns = (m_context.time != nullptr) ? m_context.time->get_frame_start_time_ns() : 0;
     while ((steps.next_event < steps.events.size()) && (steps.event_frames[steps.next_event] == steps.frame)) {
+        if ((steps.event_roles[steps.next_event] == Mcp_input_event_role::new_click_press) && would_chain_as_double_click(steps.events[steps.next_event])) {
+            // The schedule waits here, a frame at a time, until ImGui's double-click window of the previous click
+            // has passed. A held frame is progress while ImGui's time moves on (a frame that skips NewFrame is not).
+            const double imgui_time = desktop_imgui_time();
+            if (imgui_time > steps.held_imgui_time) {
+                mark_current_request_progress();
+            }
+            steps.held_imgui_time = imgui_time;
+            ++steps.held_frames;
+            m_defer_current_request = true;
+            return {};
+        }
         erhe::window::Input_event event = steps.events[steps.next_event];
         event.timestamp_ns = timestamp_ns;
         context_window->inject_input_event(event);
@@ -609,6 +665,7 @@ auto Mcp_server::step_input_gesture() -> std::string
 
     if (steps.frame < steps.last_frame) {
         ++steps.frame;
+        mark_current_request_progress();
         m_defer_current_request = true;
         return {};
     }
@@ -616,6 +673,7 @@ auto Mcp_server::step_input_gesture() -> std::string
         // R4: one further frame, so the caller's next capture_screenshot shows
         // the result of the last event.
         steps.tail_frame = true;
+        mark_current_request_progress();
         m_defer_current_request = true;
         return {};
     }
@@ -854,7 +912,7 @@ void record_click_gesture(
     builder.press_modifier_keys(modifier_mask);
     builder.move_to(position.x, position.y);
     builder.advance_frames(c_pointer_settle_frames);
-    builder.mouse_button(button, Input_gesture_builder::Press_state::pressed);
+    builder.mouse_button(button, Input_gesture_builder::Press_state::pressed, Mcp_input_event_role::new_click_press);
     builder.advance_frames(c_click_hold_frames);
     builder.mouse_button(button, Input_gesture_builder::Press_state::released);
     if (kind == Click_kind::double_click) {
@@ -954,7 +1012,7 @@ auto Mcp_server::action_mouse_drag(const nlohmann::json& args) -> std::string
     builder.press_modifier_keys(modifier_mask);
     builder.move_to(from.x, from.y);
     builder.advance_frames(c_pointer_settle_frames);
-    builder.mouse_button(button, Input_gesture_builder::Press_state::pressed);
+    builder.mouse_button(button, Input_gesture_builder::Press_state::pressed, Mcp_input_event_role::new_click_press);
     for (int step = 1; step <= frames; ++step) {
         const float     t     = static_cast<float>(step) / static_cast<float>(frames);
         const glm::vec2 point = from + ((to - from) * t);
@@ -1115,7 +1173,8 @@ auto Mcp_server::query_input_state(const nlohmann::json& args) -> std::string
             {"frame",            active ? steps.frame : 0},
             {"frames",           active ? (steps.last_frame + 1) : 0},
             {"injected",         active ? steps.injected : 0},
-            {"pending_events",   active ? static_cast<int>(steps.events.size() - steps.next_event) : 0}
+            {"pending_events",   active ? static_cast<int>(steps.events.size() - steps.next_event) : 0},
+            {"held_frames",      active ? steps.held_frames : 0}
         }}
     }).dump();
 }
@@ -1125,10 +1184,11 @@ auto Mcp_server::query_input_state(const nlohmann::json& args) -> std::string
 // Where the transform gizmo's handles are, in the window pixels mouse_drag
 // aims at. The gizmo is drawn and hit tested analytically
 // (Handle_visualizations::pick) with no meshes, so there is no scene object to
-// query for a handle's position. Rather than restate the gizmo's geometry
-// here, this runs the editor's own pick over a grid of rays through the
-// gizmo's screen area and reports, per handle, the sample deepest inside that
-// handle's own region - a point that by construction picks that handle.
+// query for a handle's position. Handle_visualizations::get_grab_candidates
+// proposes points on each handle's geometry and the editor's own pick confirms
+// one per handle; a handle with none confirmed falls back to the pick over a
+// grid of rays through the gizmo's screen area, which reports the sample
+// deepest inside the handle's own region (doc/agents/mcp_ui_driving.md).
 
 namespace {
 
@@ -1208,6 +1268,13 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
             content_y              + static_cast<float>(window_viewport.y)
         };
     };
+    const auto viewport_from_window = [&](const glm::vec2 position_in_window) -> glm::vec2 {
+        const float content_y = position_in_window.y - static_cast<float>(window_viewport.y);
+        return glm::vec2{
+            position_in_window.x - static_cast<float>(window_viewport.x),
+            flip_y ? (static_cast<float>(window_viewport.height) - content_y) : content_y
+        };
+    };
 
     // The gizmo's screen box: the anchor plus the radius along both camera
     // axes, projected.
@@ -1233,9 +1300,6 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
     const glm::vec2 box_min = glm::vec2{anchor_projected.value()} - glm::vec2{half_extent};
     const float     step    = (2.0f * half_extent) / static_cast<float>(c_handle_probe_samples - 1);
 
-    // One pick per grid sample.
-    std::vector<Handle_probe_cell> cells;
-    cells.resize(static_cast<std::size_t>(c_handle_probe_samples) * static_cast<std::size_t>(c_handle_probe_samples));
     const auto sample_position = [&](const int ix, const int iy) -> glm::vec2 {
         return glm::vec2{
             box_min.x + (step * static_cast<float>(ix)),
@@ -1260,73 +1324,166 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
         return visualizations->pick(eye_position, origin, glm::normalize(direction));
     };
 
-    for (int iy = 0; iy < c_handle_probe_samples; ++iy) {
-        for (int ix = 0; ix < c_handle_probe_samples; ++ix) {
-            const std::optional<Handle_pick> pick = pick_at(sample_position(ix, iy));
-            if (pick.has_value()) {
-                cells[(static_cast<std::size_t>(iy) * c_handle_probe_samples) + ix].handle = pick->handle;
+    // handles false: the caller asks for probes alone, and no handle is looked for. search "grid" skips the
+    // analytic grab points and searches the grid for every handle (the fallback path, for tests).
+    const bool find_handles = args.value("handles", true);
+    const std::string search = args.value("search", std::string{"auto"});
+    if ((search != "auto") && (search != "grid")) {
+        return make_error_content("search must be 'auto' or 'grid'");
+    }
+
+    // A handle's grab point: the window point aimed at, in viewport pixels.
+    class Found_handle
+    {
+    public:
+        Handle    handle{Handle::e_handle_none};
+        glm::vec2 position_in_viewport{0.0f};
+    };
+    std::vector<Found_handle> found;
+    const auto is_found = [&found](const Handle handle) -> bool {
+        return std::any_of(found.begin(), found.end(), [handle](const Found_handle& entry) { return entry.handle == handle; });
+    };
+
+    // Analytic first: the whole pixel a press lands on and its 8 neighbours at max(step, 2 px) must pick
+    // the handle (doc/agents/mcp_ui_driving.md, get_transform_handles).
+    std::vector<Handle_grab_candidate> candidates;
+    std::vector<Handle>                expected;
+    if (find_handles && (search == "auto")) {
+        visualizations->get_grab_candidates(eye_position, candidates);
+    }
+    // The handles drawn from this view come first in the reply, before those only a hover brings up.
+    for (const Handle_grab_candidate& candidate : candidates) {
+        if ((candidate.expectation == Grab_candidate_expectation::expected) && (std::find(expected.begin(), expected.end(), candidate.handle) == expected.end())) {
+            expected.push_back(candidate.handle);
+        }
+    }
+    std::stable_partition(candidates.begin(), candidates.end(), [](const Handle_grab_candidate& candidate) {
+        return candidate.expectation == Grab_candidate_expectation::expected;
+    });
+    for (const Handle_grab_candidate& candidate : candidates) {
+        if (is_found(candidate.handle)) {
+            continue;
+        }
+        const std::optional<glm::vec3> projected = scene_view->project_to_viewport(candidate.position);
+        if (!projected.has_value()) {
+            continue;
+        }
+        const glm::vec2 pixel  = glm::round(window_from_viewport(glm::vec2{projected.value()}));
+        const float     reach  = std::max(step, 2.0f);
+        bool holds = true;
+        for (int dy = -1; (dy <= 1) && holds; ++dy) {
+            for (int dx = -1; (dx <= 1) && holds; ++dx) {
+                const glm::vec2 point = pixel + (reach * glm::vec2{static_cast<float>(dx), static_cast<float>(dy)});
+                const std::optional<Handle_pick> pick = pick_at(viewport_from_window(point));
+                holds = pick.has_value() && (pick->handle == candidate.handle);
             }
+        }
+        if (holds) {
+            found.push_back(Found_handle{.handle = candidate.handle, .position_in_viewport = viewport_from_window(pixel)});
         }
     }
 
-    // Erode: a cell's depth grows while all eight of its neighbours carry the
-    // same handle at the previous depth. The deepest cell of a handle is the
-    // one furthest from any other handle's region and from the region's edge,
-    // which is the point to aim a drag at.
-    const auto cell_at = [&](const int ix, const int iy) -> const Handle_probe_cell& {
-        return cells[(static_cast<std::size_t>(iy) * c_handle_probe_samples) + ix];
-    };
-    for (int depth = 0; depth < (c_handle_probe_samples / 2); ++depth) {
-        bool grew = false;
-        for (int iy = 1; iy < (c_handle_probe_samples - 1); ++iy) {
-            for (int ix = 1; ix < (c_handle_probe_samples - 1); ++ix) {
-                Handle_probe_cell& cell = cells[(static_cast<std::size_t>(iy) * c_handle_probe_samples) + ix];
-                if ((cell.handle == Handle::e_handle_none) || (cell.depth != depth)) {
-                    continue;
+    // Fallback: the grid search, once, when an expected handle has no verified point.
+    std::vector<Handle> missing;
+    for (const Handle handle : expected) {
+        if (!is_found(handle)) {
+            missing.push_back(handle);
+        }
+    }
+    if (find_handles && (search == "grid")) {
+        log_mcp->info("get_transform_handles: grid search for every handle (search grid)");
+    }
+    if ((find_handles && (search == "grid")) || !missing.empty()) {
+        std::string names;
+        for (const Handle handle : missing) {
+            names += (names.empty() ? "" : ", ");
+            names += c_str(handle);
+        }
+        if (!missing.empty()) {
+            log_mcp->info("get_transform_handles: grid search for {} handle(s) without a verified grab point: {}", missing.size(), names);
+        }
+        // One pick per grid sample.
+        std::vector<Handle_probe_cell> cells;
+        cells.resize(static_cast<std::size_t>(c_handle_probe_samples) * static_cast<std::size_t>(c_handle_probe_samples));
+        for (int iy = 0; iy < c_handle_probe_samples; ++iy) {
+            for (int ix = 0; ix < c_handle_probe_samples; ++ix) {
+                const std::optional<Handle_pick> pick = pick_at(sample_position(ix, iy));
+                if (pick.has_value()) {
+                    cells[(static_cast<std::size_t>(iy) * c_handle_probe_samples) + ix].handle = pick->handle;
                 }
-                bool all = true;
-                for (int dy = -1; (dy <= 1) && all; ++dy) {
-                    for (int dx = -1; (dx <= 1) && all; ++dx) {
-                        const Handle_probe_cell& neighbor = cell_at(ix + dx, iy + dy);
-                        all = (neighbor.handle == cell.handle) && (neighbor.depth >= depth);
+            }
+        }
+
+        // Erode: a cell's depth grows while all eight of its neighbours carry the
+        // same handle at the previous depth. The deepest cell of a handle is the
+        // one furthest from any other handle's region and from the region's edge,
+        // which is the point to aim a drag at.
+        const auto cell_at = [&](const int ix, const int iy) -> const Handle_probe_cell& {
+            return cells[(static_cast<std::size_t>(iy) * c_handle_probe_samples) + ix];
+        };
+        for (int depth = 0; depth < (c_handle_probe_samples / 2); ++depth) {
+            bool grew = false;
+            for (int iy = 1; iy < (c_handle_probe_samples - 1); ++iy) {
+                for (int ix = 1; ix < (c_handle_probe_samples - 1); ++ix) {
+                    Handle_probe_cell& cell = cells[(static_cast<std::size_t>(iy) * c_handle_probe_samples) + ix];
+                    if ((cell.handle == Handle::e_handle_none) || (cell.depth != depth)) {
+                        continue;
+                    }
+                    bool all = true;
+                    for (int dy = -1; (dy <= 1) && all; ++dy) {
+                        for (int dx = -1; (dx <= 1) && all; ++dx) {
+                            const Handle_probe_cell& neighbor = cell_at(ix + dx, iy + dy);
+                            all = (neighbor.handle == cell.handle) && (neighbor.depth >= depth);
+                        }
+                    }
+                    if (all) {
+                        cell.depth = depth + 1;
+                        grew       = true;
                     }
                 }
-                if (all) {
-                    cell.depth = depth + 1;
-                    grew       = true;
-                }
             }
-        }
-        if (!grew) {
-            break;
-        }
-    }
-
-    // Best cell per handle.
-    std::vector<Handle_probe_cell> best_cells;
-    std::vector<int>               best_index;
-    for (int iy = 0; iy < c_handle_probe_samples; ++iy) {
-        for (int ix = 0; ix < c_handle_probe_samples; ++ix) {
-            const Handle_probe_cell& cell = cell_at(ix, iy);
-            if (cell.handle == Handle::e_handle_none) {
-                continue;
-            }
-            const int index = (iy * c_handle_probe_samples) + ix;
-            bool      found = false;
-            for (std::size_t i = 0; i < best_cells.size(); ++i) {
-                if (best_cells[i].handle != cell.handle) {
-                    continue;
-                }
-                found = true;
-                if (cell.depth > best_cells[i].depth) {
-                    best_cells[i] = cell;
-                    best_index[i] = index;
-                }
+            if (!grew) {
                 break;
             }
-            if (!found) {
-                best_cells.push_back(cell);
-                best_index.push_back(index);
+        }
+
+        // Best cell per handle.
+        std::vector<Handle_probe_cell> best_cells;
+        std::vector<int>               best_index;
+        for (int iy = 0; iy < c_handle_probe_samples; ++iy) {
+            for (int ix = 0; ix < c_handle_probe_samples; ++ix) {
+                const Handle_probe_cell& cell = cell_at(ix, iy);
+                if (cell.handle == Handle::e_handle_none) {
+                    continue;
+                }
+                const int index = (iy * c_handle_probe_samples) + ix;
+                bool      listed = false;
+                for (std::size_t i = 0; i < best_cells.size(); ++i) {
+                    if (best_cells[i].handle != cell.handle) {
+                        continue;
+                    }
+                    listed = true;
+                    if (cell.depth > best_cells[i].depth) {
+                        best_cells[i] = cell;
+                        best_index[i] = index;
+                    }
+                    break;
+                }
+                if (!listed) {
+                    best_cells.push_back(cell);
+                    best_index.push_back(index);
+                }
+            }
+        }
+        // The grid's handles: every one under search grid, else only the expected ones the analytic
+        // pass missed, so the reply's handle set does not depend on whether the grid ran.
+        const bool grid_only = (search == "grid");
+        for (std::size_t i = 0; i < best_cells.size(); ++i) {
+            const bool wanted = grid_only || (std::find(missing.begin(), missing.end(), best_cells[i].handle) != missing.end());
+            if (wanted && !is_found(best_cells[i].handle)) {
+                const int ix = best_index[i] % c_handle_probe_samples;
+                const int iy = best_index[i] / c_handle_probe_samples;
+                found.push_back(Found_handle{.handle = best_cells[i].handle, .position_in_viewport = sample_position(ix, iy)});
             }
         }
     }
@@ -1338,17 +1495,15 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
     const Rotate_ring_frames ring_frames = m_context.transform_tool->get_rotate_ring_frames(m_context.rotate_tool->get_basis());
 
     nlohmann::json handles = nlohmann::json::array();
-    for (std::size_t i = 0; i < best_cells.size(); ++i) {
-        const int       ix                  = best_index[i] % c_handle_probe_samples;
-        const int       iy                  = best_index[i] / c_handle_probe_samples;
-        const glm::vec2 position_in_viewport = sample_position(ix, iy);
+    for (const Found_handle& found_handle : found) {
+        const glm::vec2 position_in_viewport = found_handle.position_in_viewport;
         const glm::vec2 position_in_window   = window_from_viewport(position_in_viewport);
         // c_str(Handle) names the axis, not the direction: the positive and
         // negative arrow of an axis share a name. handle_value is the Handle
         // enumerator, the same value debug_set_transform_hover takes.
         nlohmann::json entry = {
-            {"handle",       c_str(best_cells[i].handle)},
-            {"handle_value", static_cast<unsigned int>(best_cells[i].handle)},
+            {"handle",       c_str(found_handle.handle)},
+            {"handle_value", static_cast<unsigned int>(found_handle.handle)},
             {"x",            position_in_window.x},
             {"y",            position_in_window.y}
         };
@@ -1356,7 +1511,7 @@ auto Mcp_server::query_transform_handles(const nlohmann::json& args) -> std::str
         if (pick.has_value()) {
             entry["world"] = {pick->position.x, pick->position.y, pick->position.z};
         }
-        const Handle ring_handle = best_cells[i].handle;
+        const Handle ring_handle = found_handle.handle;
         const int    ring        =
             (ring_handle == Handle::e_handle_rotate_x) ? 0 :
             (ring_handle == Handle::e_handle_rotate_y) ? 1 :

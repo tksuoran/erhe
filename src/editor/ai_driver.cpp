@@ -13,4 +13,13 @@ auto is_ai_driver() -> bool
     return s_ai_driver;
 }
 
+auto is_deterministic_clock() -> bool
+{
+    static const bool s_deterministic_clock = []() {
+        const char* const value = std::getenv("ERHE_DETERMINISTIC_CLOCK");
+        return (value != nullptr) && (value[0] == '1');
+    }();
+    return s_deterministic_clock;
+}
+
 }

@@ -969,6 +969,45 @@ Geometry operations can run asynchronously via `tf::Executor`. `async_for_nodes_
 
 The status bar (`Window_imgui_host::set_status_bar_callback`, a child of the root window under the dockspace) insets its content horizontally by one bar height, because the bottom corners of a macOS window are rounded and clip glyphs at the edges. Its frame time is `Time::get_frame_time_average_ms`, an exponential moving average of the host frame duration whose weight follows the elapsed time (`1 - exp(-dt / 0.25 s)`), so it settles within about a second at any frame rate.
 
+### Clock
+
+`Time` (`time.{hpp,cpp}`) is the editor's clock. `Time::prepare_update`, once
+per frame in M1, reads the host clock and derives the frame's times from it:
+
+- The host clock gives the frame start (`get_frame_start_time_ns`) and the
+  frame duration (`get_host_system_last_frame_duration_ns`). ImGui's
+  `io.DeltaTime` is the frame's own duration and `erhe::commands` ticks with
+  the frame's start time in every time mode, also in paused and manual mode
+  and with the window hidden, where no simulation step runs. The timestamps
+  of MCP-injected input events, transform animations, thumbnails, the HUD
+  long press and the knife tool's double click follow the host clock too.
+- The frame advance (`get_frame_advance_ns`) is what the simulation and
+  animation playback run on: the display advance the frame pacer or the
+  benchmark driver supplies, else the host frame duration.
+- The simulation clock runs fixed steps of 1/240 s from the frame advance
+  (capped at 25 ms) in `Time_mode::wall_clock`; `paused` and `manual` freeze it
+  except for the advances `advance_time` queues, and a hidden window pauses
+  it.
+- By default the host clock is the wall clock (`std::chrono::steady_clock`).
+  With `ERHE_DETERMINISTIC_CLOCK=1` (`is_deterministic_clock()`,
+  `ai_driver.hpp`) it is the deterministic clock: each frame starts exactly
+  `Time::c_deterministic_frame_duration_ns` (four 1/240 s steps, 1/60 s)
+  after the previous one, and that duration is also the frame advance - a
+  display advance of the pacer or the benchmark driver is ignored. ImGui
+  sees the same delta every frame, and a frame of the running simulation
+  (`wall_clock` mode, window shown) runs exactly four steps. Headless tests
+  and verify scripts run on it (`doc/testing.md` "Verify scripts");
+  interactive sessions, benchmarks and other runs that measure wall time do
+  not (a benchmark started with it would run on the fixed step, not on its
+  camera path's display timing).
+
+What still reads the wall clock does so to measure or to budget work, not as
+editor time: profiling and phase timing, log durations, per-frame load and
+scan time budgets (`Frame_load_budget`, the asset browser walk), MCP request
+expiry, the scene id's creation timestamp, and the windowed builds' window
+system (SDL event timestamps and the session lock probe, the debug fly camera
+input synthesizer and its path recording).
+
 ### Initialization Order
 
 Initialization is serial: `Editor::Editor()` constructs the parts in 25 named steps (`ERHE_INIT_STEP_BEGIN("<name>")` / `ERHE_INIT_STEP_END`), each a profile scope and a line on the init status display. Restoring parallel construction is planned (`doc/plans/parallel_editor_init.md`). Under OpenXR with a startup scene (`--scene`), the init status display stays up after init as the headset's loading screen, reading `Loading "<file name>"`: `Headset_view::set_loading_screen()` takes it over, and while the headset has no scene the render phase renders its frame (`Init_status_display::render_xr_multiview()`: transparent projection, the text on the world-placed quad) instead of an empty one; homing the headset in the opened scene releases it once the frames in flight completed. A failed load of the file turns it into `Could not load "<file name>"` with the load's error, received from `Asset_load_failed_message` (`doc/editor/async_asset_loading.md` "Failed loads"); when no load is in flight 30 frames in and the headset still has no scene, it reports that no scene was opened.

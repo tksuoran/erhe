@@ -126,7 +126,6 @@ def create_scene(editor):
         added = sorted({scene["name"] for scene in editor.call("list_scenes")["scenes"]} - before)
         if added:
             return added[0]
-        time.sleep(0.2)
     raise Step_failure("create_scene made no new scene within 60 s")
 
 
@@ -276,9 +275,12 @@ def show_level(editor, scene, ids):
     })
     editor.call("set_surface_snap_settings", {"snap": False, "orient": False, "connector_snap_distance": 0.5})
     editor.call("select_items", {"scene_name": scene, "ids": [ids["wall a"], ids["wall b (drag me to wall a)"]]})
-    time.sleep(1.0)
-    drawn = editor.call("level_get_connector_indicators", {"viewport": title})
-    count = len(drawn.get("connectors", drawn.get("indicators", [])))
+    # The indicators of the selection are drawn from the next frames on: read them until they show.
+    deadline = time.monotonic() + 60.0
+    count = 0
+    while (count == 0) and (time.monotonic() < deadline):
+        drawn = editor.call("level_get_connector_indicators", {"viewport": title})
+        count = len(drawn.get("connectors", drawn.get("indicators", [])))
     require(count > 0, f"the viewport '{title}' draws no connector of the two selected walls: {json.dumps(drawn)[:400]}")
     return title, count
 

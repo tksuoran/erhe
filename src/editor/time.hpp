@@ -52,6 +52,20 @@ public:
 class Time
 {
 public:
+    // The deterministic clock's frame step: four fixed simulation steps of
+    // 1/240 s, so every frame runs exactly four.
+    static constexpr int64_t c_deterministic_frame_duration_ns{4 * (1'000'000'000 / 240)};
+
+    // > 0: the host clock advances by exactly this much per frame instead of
+    // reading the wall clock (doc/editor/editor.md "Clock").
+    void set_fixed_frame_duration_ns(int64_t duration_ns);
+    [[nodiscard]] auto get_fixed_frame_duration_ns           () const -> int64_t;
+    // The host clock at the start of the current frame.
+    [[nodiscard]] auto get_frame_start_time_ns               () const -> int64_t;
+    // The advance of this frame that simulation and animation playback run on: the display
+    // advance prepare_update was given, else the host frame duration (always the latter on
+    // the deterministic clock).
+    [[nodiscard]] auto get_frame_advance_ns                  () const -> int64_t;
     [[nodiscard]] auto get_simulation_time_ns                () const -> int64_t;
     [[nodiscard]] auto get_host_system_time_ns               () const -> int64_t;
     [[nodiscard]] auto get_host_system_last_frame_duration_ns() const -> int64_t;
@@ -69,7 +83,8 @@ public:
     // frame pacing step P2.4: the caller passes the delta between successive
     // predicted display times, so simulated state is sampled at the time each
     // frame is shown rather than the time it is produced). Negative keeps the
-    // wall-clock path. The 25 ms dilation cap applies to both sources.
+    // wall-clock path. The 25 ms dilation cap applies to both sources. On the
+    // deterministic clock (set_fixed_frame_duration_ns) the advance is ignored.
     void prepare_update     (bool advance_simulation = true, int64_t simulation_advance_ns = -1);
     void for_each_fixed_step(std::function<void(const Time_context&)> callback);
 
@@ -95,6 +110,8 @@ public:
     );
 
 private:
+    int64_t  m_fixed_frame_duration_ns           {0};
+    int64_t  m_frame_advance_ns                  {0};
     int64_t  m_host_system_last_frame_start_time {0};
     int64_t  m_host_system_time_ns               {0};
     int64_t  m_host_system_last_frame_duration_ns{0};

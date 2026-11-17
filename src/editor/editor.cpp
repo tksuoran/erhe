@@ -1416,13 +1416,13 @@ public:
         erhe::log::set_breadcrumb("tick: fixed_step (physics)");
         m_app_scenes->before_physics_simulation_steps();
 
-        packet.host_system_dt_s    = 0.0f;
-        packet.host_system_time_ns = 0;
+        // ImGui and the commands follow the host clock frame by frame, whether or not
+        // the simulation stepped this frame (paused / manual time modes step none).
+        packet.host_system_dt_s    = static_cast<float>(static_cast<double>(m_time->get_host_system_last_frame_duration_ns()) * 1.0e-9);
+        packet.host_system_time_ns = m_time->get_frame_start_time_ns();
         m_time->for_each_fixed_step(
-            [this, &packet](const Time_context& time_context) {
+            [this](const Time_context& time_context) {
                 ERHE_PROFILE_SCOPE("fixed step physics simulation");
-                packet.host_system_dt_s += time_context.host_system_dt_s;
-                packet.host_system_time_ns = time_context.host_system_time_ns;
                 m_app_scenes->update_physics_simulation_fixed_step(time_context);
             }
         );
@@ -1623,9 +1623,9 @@ public:
             m_time->update_transform_animations(*m_app_message_bus.get());
         }
         // Scene animations advance on the same clock as the simulation:
-        // predicted display delta when pacing is active (P2.4), wall clock
-        // otherwise.
-        const int64_t animation_advance_ns = (packet.display_advance_ns >= 0) ? packet.display_advance_ns : m_time->get_host_system_last_frame_duration_ns();
+        // predicted display delta when pacing is active (P2.4), the host
+        // clock otherwise (Time::get_frame_advance_ns).
+        const int64_t animation_advance_ns = m_time->get_frame_advance_ns();
         if (!scene_save_active) {
             m_animation_player->update(static_cast<float>(animation_advance_ns) * 1.0e-9f);
         }
@@ -2882,6 +2882,13 @@ public:
             }
             m_input_state       = std::make_unique<Input_state                   >();
             m_time              = std::make_unique<Time                          >();
+            if (is_deterministic_clock()) {
+                m_time->set_fixed_frame_duration_ns(Time::c_deterministic_frame_duration_ns);
+                log_startup->info(
+                    "ERHE_DETERMINISTIC_CLOCK = 1: the editor clock advances {} ns per frame instead of following the wall clock",
+                    Time::c_deterministic_frame_duration_ns
+                );
+            }
             auto& commands        = *m_commands       .get();
             auto& app_message_bus = *m_app_message_bus.get();
 

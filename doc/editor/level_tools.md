@@ -3558,12 +3558,19 @@ Kit window and the MCP tools both call; their scene-free parts are in
   walkable shapes walkable at 300 seeds with every derivable parameter masked,
   the canonical text round trip with a mask, a refused mask on a fixed
   parameter, texts without a seed or with a bad `derive` refused, and
-  `kit_next_seed()`. Every rock form at 0, 1 and 2 bevels passes the mesh
-  checks and the triangle ceiling over 40 seeds and three roughness values; the
+  `kit_next_seed()`. Seed sweeps follow one rule (`sweep_seeds()`,
+  `derive_seeds()` in `kit_shape_test_support.hpp`): a shape that draws
+  nothing from its seed (`Kit_randomness::none`; `seeds_select_the_mesh`
+  proves that its explicit values at the defaults give one mesh at two
+  seeds, and that a seeded shape's do not, and the random value sets below
+  give one mesh at two seeds each) is swept at one seed, a seeded shape at two, and a
+  sweep of derived values at eight seeds. Every rock form at 0, 1 and 2
+  bevels passes the mesh checks and the triangle ceiling over the rock's
+  seed sweep and three roughness values; the
   counts are test properties (`--gtest_output=xml`). The more shapes: an open
   surface passes the mesh checks as a surface and fails them as a solid; the
   water is an open surface facing up without a body, two triangles per
-  subdivision squared; every palm species over 24 derived seeds passes the
+  subdivision squared; every palm species over the derived-value seeds passes the
   checks within the ceiling, its base at y = 0 and its crown at its height
   (the counts are test properties); the cliff's and the shore's end vertices
   are equal for two seeds of equal values, the cliff's grass facets lie at its
@@ -3572,7 +3579,7 @@ Kit window and the MCP tools both call; their scene-free parts are in
   every palm species at the corners of its size parameters; the cliff's top
   connector between the back and the rim; the second batch at the corners
   where parameters interact (every leaf plant form at the corners of height,
-  leaves, droop and leaf width over four seeds; every column order at the
+  leaves, droop and leaf width over the seed sweep; every column order at the
   corners of height, width, flutes, taper and segments, its top the
   abacus'; the entablature's, torii's, battlement's and tower's corners, the
   refused combinations left out; the third batch: every rock spire form, the
@@ -3594,8 +3601,9 @@ Kit window and the MCP tools both call; their scene-free parts are in
   battlement and back, carrying their sizes. Every shape keeps the ceiling
   and passes the mesh checks at the combinations where its triangle count
   is largest (found by a search over all range-end combinations and random
-  values; the most are test properties) and over 200 random in-range value
-  sets per shape (a fixed stream); every shape's values derived from 300
+  values; the most are test properties) and over 24 random in-range value
+  sets per shape (a fixed stream; one seed for a shape that draws nothing
+  from it); every shape's values derived from 300
   seeds are accepted at six (module, wall height) settings, and the walkable
   ones walkable but for six built shapes (`doc/plans/open_items.md`). Every shape at the all-minimum and
   all-maximum corners of its ranges passes the mesh checks, and at the

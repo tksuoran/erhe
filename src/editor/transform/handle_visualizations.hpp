@@ -31,6 +31,20 @@ public:
     glm::vec3 position{0.0f};   // world-space point on the handle
 };
 
+// Whether a handle should be pickable from the view (Handle_visualizations::get_grab_candidates):
+// expected handles a probe must find; optional ones (the single-arrow mode's
+// back-facing arrow, which a hover can bring up) are found only when a point picks them.
+enum class Grab_candidate_expectation : unsigned char { expected = 0, optional };
+
+// A world point on a handle's pickable geometry, to aim a press at once a pick confirms it.
+class Handle_grab_candidate
+{
+public:
+    Handle                     handle     {};
+    glm::vec3                  position   {0.0f};
+    Grab_candidate_expectation expectation{Grab_candidate_expectation::expected};
+};
+
 // World-space frames of the three rotate rings, see
 // Transform_tool::get_rotate_ring_frames().
 class Rotate_ring_frames
@@ -109,6 +123,12 @@ public:
     // aim ray, and passing it as the eye would pick against a different
     // handle arrangement than the one rendered.
     [[nodiscard]] auto pick(const glm::vec3& eye_position, const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Handle_pick>;
+
+    // World points on the shown handles' geometry, best first per handle: arrow
+    // heads, cube centers, the middle of plane sectors, ring points nearest the
+    // eye first. pick() decides; a point that does not pick its handle is not
+    // aimed at (get_transform_handles verifies each and falls back to a grid).
+    void get_grab_candidates(const glm::vec3& eye_position, std::vector<Handle_grab_candidate>& out) const;
 
     // Ray vs the rotation sphere (the sphere the rotate rings inscribe):
     // entry and exit points, or nullopt when the ray misses it or no rotate

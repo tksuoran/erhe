@@ -142,7 +142,7 @@ TEST(Kit_recreated, rock_spire_rows_rise_up_every_column)
 {
     const Kit_shape_definition& spire = get_shape("nature.rock_spire.v2");
     for (const std::string& form : spire.parameters[spire.find_parameter("form").value()].enum_values) {
-        for (int seed = 0; seed < 8; ++seed) {
+        for (const int seed : sweep_seeds(spire)) {
             Kit_parameter_values values = explicit_values(spire, seed);
             ASSERT_TRUE(values.set_enum("form", form));
             for_each_corner(values, {"height", "radius", "roughness", "strata"}, [](const Kit_parameter_values& corner) {
@@ -174,7 +174,7 @@ TEST(Kit_recreated, rock_spire_rows_rise_up_every_column)
 TEST(Kit_recreated, rock_spire_mesa_top_is_flat_turf)
 {
     const Kit_shape_definition& spire = get_shape("nature.rock_spire.v2");
-    for (int seed = 0; seed < 20; ++seed) {
+    for (const int seed : derive_seeds()) {
         Kit_parameter_values values = all_derived(spire, seed);
         ASSERT_TRUE(values.set_enum("form", "mesa"));
         SCOPED_TRACE(values.to_canonical_text());

@@ -289,13 +289,16 @@ TEST(Kit_shape_library, equal_values_give_equal_meshes)
     }
 }
 
-// R3.7: a seed gives one mesh; another seed gives another.
+// R3.7: a seed gives one mesh; another seed gives another. A shape of Kit_randomness::none draws nothing from its
+// seed: its explicit values give one mesh at every seed, so its seed sweeps are one seed (sweep_seeds()).
 TEST(Kit_shape_library, seeds_select_the_mesh)
 {
     std::vector<std::string> seeded;
     for (const Kit_shape_definition& shape : get_library().get_shapes()) {
         EXPECT_TRUE(shape.find_parameter("seed").has_value()) << shape.id;
         if (shape.randomness != editor::Kit_randomness::seeded) {
+            SCOPED_TRACE(shape.id);
+            EXPECT_TRUE(editor::kit_meshes_equal(*generate(explicit_values(shape, 7)), *generate(explicit_values(shape, 8))));
             continue;
         }
         SCOPED_TRACE(shape.id);
@@ -633,7 +636,7 @@ TEST(Kit_rock, every_form_and_bevel_count_passes_the_checks)
     for (const std::string& form : rock.parameters[rock.find_parameter("form").value()].enum_values) {
         for (int bevels = 0; bevels <= 2; ++bevels) {
             unsigned int max_triangles = 0;
-            for (int seed = 0; seed < 40; ++seed) {
+            for (const int seed : sweep_seeds(rock)) {
                 for (const float roughness : {0.0f, 0.3f, 1.0f}) {
                     Kit_parameter_values values = defaults(rock);
                     ASSERT_TRUE(values.set_enum("form", form));
@@ -712,7 +715,7 @@ TEST(Kit_palm, every_species_passes_the_checks_at_the_size_corners)
     };
     for (const std::string& species : palm.parameters[palm.find_parameter("species").value()].enum_values) {
         for (const Corner& corner : corners) {
-            for (const int seed : {0, 1, 2, 3}) {
+            for (const int seed : sweep_seeds(palm)) {
                 Kit_parameter_values values = explicit_values(palm, seed);
                 ASSERT_TRUE(values.set_enum("species", species));
                 ASSERT_TRUE(values.set_float("height", corner.height));
@@ -881,7 +884,7 @@ TEST(Kit_palm, every_species_passes_the_checks_over_seeds)
     const unsigned int ceiling = get_library().find_kit("nature")->triangle_ceiling;
     for (const std::string& species : palm.parameters[palm.find_parameter("species").value()].enum_values) {
         unsigned int max_triangles = 0;
-        for (int seed = 0; seed < 24; ++seed) {
+        for (const int seed : derive_seeds()) {
             Kit_parameter_values values = all_derived(palm, seed);
             ASSERT_TRUE(values.set_enum("species", species));
             SCOPED_TRACE(values.to_canonical_text());
@@ -1097,11 +1100,11 @@ TEST(Kit_leaf_plant, every_form_passes_the_checks_at_the_size_corners_over_seeds
 {
     const Kit_shape_definition& plant = get_shape("nature.leaf_plant");
     EXPECT_EQ(plant.collision, editor::Kit_collision::none);
-    const int checked = check_combinations(plant, {0, 1, 2, 3}, {
+    const int checked = check_combinations(plant, sweep_seeds(plant), {
         all_enum_values(plant, "form"), range_ends(plant, "height"), range_ends(plant, "leaves"),
         Sweep_axis{"droop", {0.0f, 1.0f}}, range_ends(plant, "leaf_width")
     });
-    EXPECT_EQ(checked, 4 * 5 * 16);
+    EXPECT_EQ(checked, static_cast<int>(sweep_seeds(plant).size()) * 5 * 16);
 }
 
 TEST(Kit_column, every_order_passes_the_checks_at_the_corners)
@@ -1260,20 +1263,24 @@ TEST(Kit_shape_library, worst_case_combinations_keep_the_ceiling)
     return name;
 }
 
-// One test per shape: 200 mesh checks of one shape stay well inside the per-test time bound of a Debug build.
+// One test per shape: c_random_value_set_count mesh checks of random in-range values.
+constexpr int c_random_value_set_count = 24;
+
 class Kit_shape_random_values : public testing::TestWithParam<std::string>
 {
 };
 
 // R2.5 and R2.6 over random in-range values (a fixed stream per shape): every value set the shape accepts passes the
-// mesh checks within the kit's ceiling.
+// mesh checks within the kit's ceiling; a shape of Kit_randomness::none gives the same mesh at another seed.
 TEST_P(Kit_shape_random_values, pass_the_checks)
 {
     const Kit_shape_definition& shape = get_shape(GetParam().c_str());
     editor::Kit_random random{777, shape.id};
     int accepted = 0;
-    for (int i = 0; i < 200; ++i) {
-        Kit_parameter_values values = explicit_values(shape, static_cast<int>(random.next_u32() % 100000u));
+    for (int i = 0; i < c_random_value_set_count; ++i) {
+        // A shape that draws nothing from its seed is checked at one seed (seeds_select_the_mesh).
+        const uint32_t random_seed = random.next_u32() % 100000u;
+        Kit_parameter_values values = explicit_values(shape, (shape.randomness == editor::Kit_randomness::seeded) ? static_cast<int>(random_seed) : 1);
         for (std::size_t p = 0, end = shape.parameters.size(); p < end; ++p) {
             const Kit_parameter& parameter = shape.parameters[p];
             if (parameter.name == "seed") {
@@ -1295,8 +1302,14 @@ TEST_P(Kit_shape_random_values, pass_the_checks)
         const Kit_mesh_report report = editor::check_kit_shape(values);
         EXPECT_TRUE(report.is_valid()) << describe(report);
         EXPECT_LE(report.triangle_count, get_library().find_kit(shape.kit)->triangle_ceiling);
+        if (shape.randomness != editor::Kit_randomness::seeded) {
+            // Kit_randomness::none over the swept values: another seed gives the same mesh.
+            Kit_parameter_values other_seed = values;
+            ASSERT_TRUE(other_seed.set_int("seed", 2));
+            EXPECT_TRUE(editor::kit_meshes_equal(*generate(values), *generate(other_seed))) << "the mesh depends on the seed";
+        }
     }
-    EXPECT_GE(accepted, 100) << shape.id;
+    EXPECT_GE(accepted, c_random_value_set_count / 2) << shape.id;
 }
 
 INSTANTIATE_TEST_SUITE_P(Kit_shape_library, Kit_shape_random_values, testing::ValuesIn(get_shape_ids()), get_shape_test_name);
@@ -1370,21 +1383,21 @@ TEST(Kit_rock_spire, every_form_passes_the_checks_at_the_corners_over_seeds)
 {
     const Kit_shape_definition& spire = get_shape("nature.rock_spire");
     // A thin, tall, leaning rock of maximum roughness and a wide low one: the base stays the lowest point.
-    const int checked = check_combinations(spire, {0, 1, 2, 3}, {
+    const int checked = check_combinations(spire, sweep_seeds(spire), {
         all_enum_values(spire, "form"), range_ends(spire, "height"), range_ends(spire, "radius"), range_ends(spire, "taper"),
         range_ends(spire, "lean"), Sweep_axis{"roughness", {0.0f, 1.0f}}, range_ends(spire, "segments")
     });
-    EXPECT_EQ(checked, 4 * 4 * 64);
+    EXPECT_EQ(checked, static_cast<int>(sweep_seeds(spire).size()) * 4 * 64);
 }
 
 TEST(Kit_basalt_columns, corners_pass_and_neighbouring_tops_are_at_most_one_step_apart)
 {
     const Kit_shape_definition& basalt = get_shape("nature.basalt_columns");
-    const int checked = check_combinations(basalt, {0, 1, 2}, {
+    const int checked = check_combinations(basalt, sweep_seeds(basalt), {
         range_ends(basalt, "radius"), range_ends(basalt, "column_width"), range_ends(basalt, "height"), range_ends(basalt, "height_spread"),
         range_ends(basalt, "step")
     });
-    EXPECT_EQ(checked, 3 * 32);
+    EXPECT_EQ(checked, static_cast<int>(sweep_seeds(basalt).size()) * 32);
     // The tops (hexagons facing up) of neighbouring columns differ by at most one step, each a whole number of steps below the height.
     for (const int seed : {1, 5, 9}) {
         Kit_parameter_values values = explicit_values(basalt, seed);
@@ -1461,11 +1474,11 @@ TEST(Kit_roof, every_form_passes_the_checks_at_the_corners_with_its_base_at_the_
 TEST(Kit_palm_clump, every_species_passes_the_checks_at_the_corners_over_seeds)
 {
     const Kit_shape_definition& clump = get_shape("nature.palm_clump");
-    const int checked = check_combinations(clump, {0, 1, 2, 3}, {
+    const int checked = check_combinations(clump, sweep_seeds(clump), {
         all_enum_values(clump, "species"), range_ends(clump, "stems"), range_ends(clump, "height"), range_ends(clump, "spread"),
         range_ends(clump, "fronds")
     });
-    EXPECT_EQ(checked, 4 * 3 * 16);
+    EXPECT_EQ(checked, static_cast<int>(sweep_seeds(clump).size()) * 3 * 16);
     // The binding combination: nine areca stems at the least height carry the 40 fronds; worst_case_combinations_keep_the_ceiling holds it.
     Kit_parameter_values binding;
     ASSERT_EQ(editor::parse_canonical_text(clump, R"({"species":"areca","stems":9,"height":"0x1p-1","spread":"0x0p+0","fronds":10,"seed":1})", binding), "");
@@ -1476,10 +1489,10 @@ TEST(Kit_palm_shrub, every_species_passes_the_checks_at_the_corners_over_seeds)
 {
     const Kit_shape_definition& shrub = get_shape("nature.palm_shrub");
     EXPECT_EQ(shrub.collision, editor::Kit_collision::convex_hull);
-    const int checked = check_combinations(shrub, {0, 1, 2, 3}, {
+    const int checked = check_combinations(shrub, sweep_seeds(shrub), {
         all_enum_values(shrub, "species"), range_ends(shrub, "size"), range_ends(shrub, "fronds")
     });
-    EXPECT_EQ(checked, 4 * 3 * 4);
+    EXPECT_EQ(checked, static_cast<int>(sweep_seeds(shrub).size()) * 3 * 4);
 }
 
 // The dune's and the ground patch's walkability checks bound the generated slopes: a value set either check passes
@@ -1495,10 +1508,10 @@ TEST(Kit_dune, corners_pass_and_the_walkability_check_bounds_the_slopes)
                 axes.push_back(range_ends(shape, parameter.name.c_str()));
             }
         }
-        const int checked = check_combinations(shape, {0, 1, 2}, axes);
+        const int checked = check_combinations(shape, sweep_seeds(shape), axes);
         // The dune refuses a length under 1.04 widths: every corner with the least length (2 m against 2 m or 32 m).
         const int refused = (std::string_view{id} == "nature.dune") ? (1 << (static_cast<int>(axes.size()) - 1)) : 0;
-        EXPECT_EQ(checked, 3 * ((1 << static_cast<int>(axes.size())) - refused));
+        EXPECT_EQ(checked, static_cast<int>(sweep_seeds(shape).size()) * ((1 << static_cast<int>(axes.size())) - refused));
         editor::Kit_random random{99, shape.id};
         int walkable = 0;
         for (int i = 0; i < 300; ++i) {

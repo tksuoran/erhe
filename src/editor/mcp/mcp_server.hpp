@@ -27,6 +27,8 @@
 
 #include <optional>
 
+struct ImGuiContext;
+
 namespace httplib {
     class Server;
 }
@@ -78,6 +80,10 @@ class Scene_root;
 class Viewport_scene_view;
 // Builds the event list of one input gesture (src/editor/mcp/mcp_server_ui.cpp).
 class Input_gesture_builder;
+
+// A press that starts a new click is held back while ImGui would chain it to
+// the previous click as a double-click (Mcp_server::step_input_gesture).
+enum class Mcp_input_event_role : unsigned char { plain = 0, new_click_press };
 
 // What imgui_click / imgui_hover / imgui_scroll do once they have resolved
 // their target (doc/agents/mcp_ui_driving.md).
@@ -380,6 +386,7 @@ private:
     auto action_edit_camera     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
     auto action_advance_time    (const nlohmann::json& args) -> std::string;
+    auto action_wait_frames     (const nlohmann::json& args) -> std::string;
     auto action_set_log_levels  (const nlohmann::json& args) -> std::string;
     auto action_create_child_prim(const nlohmann::json& args) -> std::string;
     auto action_reparent_item   (const nlohmann::json& args) -> std::string;
@@ -651,6 +658,9 @@ private:
     [[nodiscard]] auto input_gesture_preamble() -> std::optional<std::string>;
     [[nodiscard]] auto commit_input_gesture  () -> std::string;
     [[nodiscard]] auto step_input_gesture    () -> std::string;
+    [[nodiscard]] auto would_chain_as_double_click(const erhe::window::Input_event& press) const -> bool;
+    [[nodiscard]] auto desktop_imgui_context      () const -> const ImGuiContext*;
+    [[nodiscard]] auto desktop_imgui_time         () const -> double;
     auto action_open_four_view                (const nlohmann::json& args) -> std::string;
     auto query_four_views                     (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;
@@ -745,16 +755,25 @@ private:
     // JSON-RPC -32000 "server busy" instead of enqueuing.
     static constexpr std::size_t     k_max_queue_depth = 64;
 
-    // How long a queued request may sit before process_queued_requests
-    // drops it without mutating editor state. Must match the wait_for
-    // in handle_tools_call so an abandoned promise can never reach
-    // set_value (which would also leave the queue holding a
-    // result_promise that nobody is listening on).
+    // How long a queued request may go without progress before
+    // process_queued_requests drops it without mutating editor state, and
+    // handle_tools_call answers its client "Request timed out". Both decide
+    // on the request's Request_progress under its mutex, so they agree.
     static constexpr std::chrono::seconds k_request_timeout{5};
 
     // Tool info cache
     std::mutex                  m_tools_mutex;
     std::vector<Mcp_tool_info>  m_tool_infos;
+
+    // A request expires k_request_timeout after its last progress (doc/agents/mcp_ui_driving.md
+    // "Standing rules"); shared by the main thread and the HTTP thread that waits for it.
+    class Request_progress
+    {
+    public:
+        std::mutex                            mutex;
+        std::chrono::steady_clock::time_point last_progress_at{std::chrono::steady_clock::now()};
+        bool                                  abandoned{false}; // the client was answered "timed out"
+    };
 
     // Request queue (populated by HTTP thread, drained by main thread)
     struct Queued_request
@@ -763,7 +782,12 @@ private:
         nlohmann::json                                arguments;
         std::promise<std::string>                     result_promise;
         std::chrono::steady_clock::time_point         enqueued_at{std::chrono::steady_clock::now()};
+        std::shared_ptr<Request_progress>             progress{std::make_shared<Request_progress>()};
+        int                                           wait_frames_remaining{-1}; // wait_frames, main thread only; -1 before its first pass
     };
+    // True (and the request marked abandoned) when it has gone k_request_timeout without progress.
+    [[nodiscard]] static auto expire_if_stalled(Request_progress& progress, std::chrono::steady_clock::time_point now) -> bool;
+    void mark_current_request_progress();
     std::mutex                                       m_queue_mutex;
     std::vector<std::unique_ptr<Queued_request>>     m_request_queue;
     // True once process_queued_requests() has run: the main loop is
@@ -787,7 +811,7 @@ private:
     std::vector<std::unique_ptr<Queued_request>>     m_deferred_requests;
     // The request being dispatched (main thread only): lets a deferring
     // handler tell its own re-run from a new call of the same tool.
-    const Queued_request*                            m_current_request{nullptr};
+    Queued_request*                                  m_current_request{nullptr};
 
     // drag_selection: one scripted Transform tool drag stepping one frame per
     // pass of its deferred request (main thread only).
@@ -840,6 +864,9 @@ private:
         const Queued_request*                  request    {nullptr};
         std::vector<erhe::window::Input_event> events;       // injection order
         std::vector<int>                       event_frames; // frame offset of events[i]
+        std::vector<Mcp_input_event_role>      event_roles;  // role of events[i]
+        int                                    held_frames{0}; // frames a new click press was held back
+        double                                 held_imgui_time{-1.0}; // ImGui time at the last held frame
         std::size_t                            next_event {0};
         int                                    frame      {0}; // frame offset of this pass
         int                                    last_frame {0}; // frame offset of the last event
@@ -853,6 +880,9 @@ private:
             request = nullptr;
             events.clear();       // capacity kept
             event_frames.clear(); // capacity kept
+            event_roles.clear();  // capacity kept
+            held_frames = 0;
+            held_imgui_time = -1.0;
             next_event = 0;
             frame      = 0;
             last_frame = 0;

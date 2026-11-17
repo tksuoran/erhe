@@ -3843,7 +3843,35 @@ auto Mcp_server::action_advance_time(const json& args) -> std::string
         {"mode",              mode_name},
         {"pending_seconds",   static_cast<double>(time->get_pending_simulation_advance_ns()) * 1e-9},
         {"simulation_time_s", static_cast<double>(time->get_simulation_time_ns()) * 1e-9},
-        {"frame_number",      time->get_frame_number()}
+        {"frame_number",      time->get_frame_number()},
+        {"host_clock",        (time->get_fixed_frame_duration_ns() > 0) ? "deterministic" : "wall_clock"},
+        {"host_time_s",       static_cast<double>(time->get_frame_start_time_ns()) * 1e-9}
+    }).dump();
+}
+
+// Returns after the given number of frames; each pass is progress, so only a single frame over
+// k_request_timeout expires it (doc/agents/mcp_ui_driving.md "Standing rules").
+auto Mcp_server::action_wait_frames(const json& args) -> std::string
+{
+    constexpr int64_t c_max_wait_frames = 3600;
+    if (m_current_request->wait_frames_remaining < 0) {
+        const json frames_value = args.contains("frames") ? args.at("frames") : json(1);
+        if (!frames_value.is_number_integer() || (frames_value.get<int64_t>() < 1) || (frames_value.get<int64_t>() > c_max_wait_frames)) {
+            json r = make_text_content("frames must be an integer in [1, " + std::to_string(c_max_wait_frames) + "]");
+            r["isError"] = true;
+            return r.dump();
+        }
+        m_current_request->wait_frames_remaining = frames_value.get<int>();
+    }
+    if (m_current_request->wait_frames_remaining > 0) {
+        --m_current_request->wait_frames_remaining;
+        mark_current_request_progress();
+        m_defer_current_request = true;
+        return {};
+    }
+    return make_json_content({
+        {"frames",       args.value("frames", 1)},
+        {"frame_number", (m_context.time != nullptr) ? m_context.time->get_frame_number() : 0}
     }).dump();
 }
 

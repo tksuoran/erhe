@@ -409,6 +409,7 @@ auto Mcp_server::handle_tools_call(
     queued->tool_name = tool_name;
     queued->arguments = arguments;
     std::future<std::string> result_future = queued->result_promise.get_future();
+    const std::shared_ptr<Request_progress> progress = queued->progress;
 
     {
         std::lock_guard<std::mutex> lock{m_queue_mutex};
@@ -423,9 +424,24 @@ auto Mcp_server::handle_tools_call(
         m_request_queue.push_back(std::move(queued));
     }
 
-    const auto status = result_future.wait_for(k_request_timeout);
-    if (status == std::future_status::timeout) {
-        return make_jsonrpc_error(id, -32000, "Request timed out: " + tool_name);
+    // Wait until k_request_timeout after the request's last progress; a request that
+    // progresses (frame by frame) moves that deadline on.
+    while (true) {
+        std::chrono::steady_clock::time_point deadline;
+        {
+            std::lock_guard<std::mutex> lock{progress->mutex};
+            deadline = progress->last_progress_at + k_request_timeout;
+        }
+        if (result_future.wait_until(deadline) == std::future_status::ready) {
+            break;
+        }
+        if (expire_if_stalled(*progress, std::chrono::steady_clock::now())) {
+            // The main thread may have answered just before the request was marked abandoned.
+            if (result_future.wait_for(std::chrono::seconds{0}) == std::future_status::ready) {
+                break;
+            }
+            return make_jsonrpc_error(id, -32000, "Request timed out: " + tool_name);
+        }
     }
 
     std::string result_json;
@@ -457,8 +473,9 @@ namespace {
 
 [[nodiscard]] auto is_allowed_during_scene_save(const std::string& tool_name) -> bool
 {
-    static constexpr std::array<std::string_view, 14> allowed{
+    static constexpr std::array<std::string_view, 15> allowed{
         "get_async_status",
+        "wait_frames",
         "get_navigation_status",
         "get_navigation_summary",
         "navigation_find_point",
@@ -477,6 +494,26 @@ namespace {
 }
 
 } // anonymous namespace
+
+auto Mcp_server::expire_if_stalled(Request_progress& progress, const std::chrono::steady_clock::time_point now) -> bool
+{
+    std::lock_guard<std::mutex> lock{progress.mutex};
+    if (!progress.abandoned && ((now - progress.last_progress_at) >= k_request_timeout)) {
+        progress.abandoned = true;
+    }
+    return progress.abandoned;
+}
+
+void Mcp_server::mark_current_request_progress()
+{
+    if (m_current_request == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock{m_current_request->progress->mutex};
+    if (!m_current_request->progress->abandoned) {
+        m_current_request->progress->last_progress_at = std::chrono::steady_clock::now();
+    }
+}
 
 auto Mcp_server::process_queued_requests() -> int
 {
@@ -512,7 +549,7 @@ auto Mcp_server::process_queued_requests() -> int
         // a slow editor frame would still mutate editor state for a
         // request the operator already considers failed. We still
         // settle the promise so the future destructor does not abort.
-        if ((now - req->enqueued_at) >= k_request_timeout) {
+        if (expire_if_stalled(*req->progress, now)) {
             req->result_promise.set_value(
                 make_jsonrpc_error(nullptr, -32000, "Request expired before processing: " + req->tool_name)
             );
@@ -531,7 +568,8 @@ auto Mcp_server::process_queued_requests() -> int
                 // has been dispatched, so a held button stays held until the
                 // caller injects its release.
                 log_mcp->warn(
-                    "MCP server: inject_input_events expired after {} of {} events; the rest are dropped",
+                    "MCP server: {} expired after {} of {} events; the rest are dropped",
+                    req->tool_name,
                     m_input_gesture_steps.injected,
                     m_input_gesture_steps.events.size()
                 );
@@ -803,6 +841,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "edit_camera",                    &Mcp_server::action_edit_camera                   },
         { "toggle_physics",                 &Mcp_server::action_toggle_physics                },
         { "advance_time",                   &Mcp_server::action_advance_time                  },
+        { "wait_frames",                    &Mcp_server::action_wait_frames                   },
         { "set_log_levels",                 &Mcp_server::action_set_log_levels                },
         { "apply_physics_force",            &Mcp_server::action_apply_physics_force           },
         { "create_child_prim",              &Mcp_server::action_create_child_prim             },
@@ -1104,6 +1143,11 @@ auto Mcp_server::action_batch(const json& args) -> std::string
         // owns rendergraph nodes meanwhile; a batch answers within one pass.
         if (tool == "render_scene_image") {
             json r = make_text_content("render_scene_image needs several rendered frames and cannot run inside a batch; call it on its own");
+            r["isError"] = true;
+            return r.dump();
+        }
+        if (tool == "wait_frames") {
+            json r = make_text_content("wait_frames spans frames and cannot run inside a batch; call it on its own");
             r["isError"] = true;
             return r.dump();
         }

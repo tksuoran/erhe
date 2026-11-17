@@ -175,7 +175,7 @@ class Navigation:
             if job.get("state") in ("done", "failed"):
                 self.editor.wait_idle()
                 return job
-            time.sleep(0.02)
+            self.editor.wait_frames()  # get_save_status is answered off the main loop
         raise RuntimeError(f"navigation_build job {job_id} did not finish")
 
     def refusal(self):
@@ -577,7 +577,9 @@ def run(editor, work):
     deadline = time.monotonic() + 60.0
     marker = f"of closed scene '{scene}'"
     while (time.monotonic() < deadline) and not any((marker in line) and ("scene-close check" in line) for line in pav.read_log().splitlines()):
-        time.sleep(0.2)
+        editor.wait_frames()
+    # The watchdog writes all lines of one check in one frame: once a frame has passed, they are all in the log.
+    editor.wait_frames()
     leaks = [line for line in pav.read_log().splitlines() if ("scene-close leak" in line) and (scene in line)]
     released = any((marker in line) and ("scene-close check" in line) for line in pav.read_log().splitlines())
     check("closing the scene leaves nothing of it alive", released and not leaks, (leaks[:3] if leaks else "no all-released line") if not (released and not leaks) else "")

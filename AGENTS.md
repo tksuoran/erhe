@@ -57,6 +57,25 @@ the user's own instances. When a process the user started has to stop, ask
 the user to stop it - it may be attached to a debugger, where a signal does
 not end it and a kill can disrupt the user's debugging session.
 
+## Waiting for the editor: no time-based sleeps
+
+Code that drives the editor (verify scripts, tests, agent shell loops) never
+waits for it with a time-based sleep (`time.sleep`, `sleep`,
+`std::this_thread::sleep_for`). It waits for the editor to report the state
+it needs: a reply from the MCP server (`/health`, `get_async_status`, the
+tool that reads the awaited state) or a line in `logs/log.txt`. A wait is a
+loop on that reported condition with a timeout, never a guess at how long
+the editor takes.
+
+A script or test that launches the editor for a check sets
+`ERHE_DETERMINISTIC_CLOCK=1` (every frame advances all editor time by
+1/60 s), so everything that depends on time - ImGui double-click windows,
+tooltips, physics, animation - behaves the same on every run and every
+machine. Wall-clock runs are for what measures wall time (benchmarks,
+profiling) or for a user's interactive session. `doc/testing.md` "Verify
+scripts" describes the waits; the scripts not converted yet are listed in
+`doc/plans/open_items.md` "Verify scripts".
+
 ## No Band-Aid Fixes
 
 Every proposed solution must be evaluated with the question: "is this just a band-aid?" If the answer is yes, the solution must be rejected. A band-aid is any change that masks, works around, or tolerates the symptom of a bug without addressing the root cause - for example, a defensive null check that lets shutdown proceed when an object should not have been null in the first place, a try/catch that swallows an unexpected error, or a "tolerant" code path that accommodates state the system was not supposed to enter. Find and fix the actual cause; do not paper over it.

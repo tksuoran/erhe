@@ -83,6 +83,85 @@ dedicated editor started with a configure-time test token
 - Running the binary by hand against an editor you started yourself: point it
   at that editor with `ERHE_MCP_TEST_PORT` (default 3743); each case waits
   `ERHE_MCP_TEST_TIMEOUT_S` seconds (default 30) before launching one.
+- The editors run on the deterministic clock (`ERHE_DETERMINISTIC_CLOCK=1`,
+  set by the launcher; "Verify scripts" below), and no case waits with a
+  time-based sleep: `wait_until_idle()` reads `get_async_status` after two
+  `advance_time` frames until two consecutive reads are idle, a save is read
+  with `get_save_status` between `wait_frames` calls, and the double-click
+  case follows one click with the next at once (the gesture tools hold a new
+  click's press until ImGui's double-click window has passed). Only the
+  startup waits for `/health` with a sleep between attempts, before an MCP
+  server answers anything.
+
+## Verify scripts
+
+The MCP-driven verify scripts (`scripts/level_tools_verify.py`,
+`scripts/curve_verify.py`, `scripts/navigation_verify.py`,
+`scripts/prepared_asset_verify.py`, `scripts/prepared_asset_bistro_verify.py`,
+`scripts/level_shape_compare.py`) launch their headless editor through
+`prepared_asset_verify.Editor`. The editor runs on its deterministic clock
+and every wait reads the condition it waits for (AGENTS.md "Waiting for the
+editor: no time-based sleeps"):
+
+- `Editor` launches the editor with `ERHE_DETERMINISTIC_CLOCK=1`
+  (`doc/editor/editor.md` "Clock"): every frame advances the host clock, and
+  with it ImGui (double-click window, hover and tooltip delays, key repeat),
+  transform animations, animation playback and the simulation, by exactly
+  1/60 s. A run times the same on every machine: the ImGui double-click
+  window, for one, lasts the same number of frames on every run. A caller
+  that measures wall time sets
+  `ERHE_DETERMINISTIC_CLOCK=0` in its own environment before it constructs
+  `Editor`.
+- The main loop serves the MCP queue once per frame, so each call of a client
+  that waits for its reply lands in a later frame than the one before. A poll
+  loop on an MCP query therefore reads once per frame without a sleep.
+  `Editor.wait_idle()` returns once `get_async_status` reads settled in three
+  consecutive calls, that is three consecutive frames.
+- What no MCP query serves frame by frame - a line in `logs/log.txt`, or
+  `get_save_status`, which is answered off the main loop - is read again after
+  `Editor.wait_frames()` (the `wait_frames` MCP tool, which returns after the
+  given number of frames). A check that something does NOT happen watches a
+  window of frames (`NEGATIVE_WINDOW_FRAMES`, 30 frames).
+- A context menu, a window or a row is awaited by reading it
+  (`get_imgui_windows`, `get_imgui_items`) until it shows or is gone.
+- Separate press calls stay single clicks: the gesture tools hold the first
+  press of a click (`mouse_click`, `imgui_click`, `mouse_drag`) for whole
+  frames while ImGui would take it as the second click of the previous one
+  (`doc/agents/mcp_ui_driving.md` "Standing rules"); the `double` argument makes a
+  double-click on purpose.
+- Before the MCP server answers, the editor's startup is read from the
+  `MCP server: listening` line in the log; between readings the script waits
+  on the editor process itself (`Popen.wait` with a 0.1 s timeout), which
+  returns at once when the editor exits during startup.
+- `get_transform_handles` finds a grab point per handle from the handle's
+  geometry, confirmed by the editor's own pick, and searches the 81 x 81 grid
+  of picks (about 0.25 - 0.8 s in a Debug editor) only for an expected handle
+  it could not confirm (5 of 241 calls of a full level_tools_verify run, 12
+  of 55 in curve_verify, whose gizmo shows its XZ plane small); `handles:
+  false` answers `probe_points` alone, which the gizmo grab helper uses for
+  its probe call.
+
+`--timings` (level_tools_verify, curve_verify; `scripts/verify_timings.py`)
+prints where a run's time went: wall time per top-level check group, the time
+in each `Editor` wait (startup, wait_idle, save, close, ...), the sleeps by
+the wait or function that slept, and count and time per MCP tool.
+
+On an M4 Pro with `build_xcode_metal_headless` Debug, the full
+`level_tools_verify.py` run takes about 5 minutes and `curve_verify.py`
+about 1 minute (a RelWithDebInfo editor of the same tree, whose `ERHE_VERIFY`
+checks stay on: about 3.7 minutes and 30 s). Most of what remains is the
+editor's own work in a Debug build: piece generation (`level_place_pieces`),
+drags, renders, the glTF export of `save_scene` (about 3 s per scene) and the
+editor startups (about 9 s each).
+`editor_level_tests` takes about 67 s serially; its cases are independent,
+so gtest sharding runs every case in parallel processes
+(`seq 0 9 | xargs -P 10 -I{} env GTEST_TOTAL_SHARDS=10 GTEST_SHARD_INDEX={}
+bin/Debug/editor_level_tests --gtest_brief=1`; the slowest cases, the three
+`Kit_dune_widths` sweeps, take about 5 - 7 s each), as does
+`ctest -R Kit -j <N>`, which runs each discovered case as its own process
+(the `editor` label keeps `-j1`: its cases share the fixture editors).
+`ctest -C Debug -L editor -j1` takes about 43 s, of which the two fixture
+editors' startups are about 18 s.
 
 ## Build trees with tests
 

@@ -170,6 +170,10 @@ BASIS_IMAGES = ("MASTER_Trim_Cornice_BaseColor-MASTER_Trim_Cornice_BaseColor.ktx
 # pixel for pixel; the texture_encoding checks export with target.
 NO_BAKE = {"bake_static_to_world_space": False, "texture_encoding": "source"}
 
+# A check that something does NOT happen after an action watches this many frames of the
+# deterministic clock (0.5 s at its 1/60 s frame step).
+NEGATIVE_WINDOW_FRAMES = 30
+
 RESULTS = []
 LAUNCHED = []  # every Editor this script started; main() stops any still running
 
@@ -193,6 +197,9 @@ class Editor:
         os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
         open(LOG_PATH, "w").close()
         env = dict(os.environ, ERHE_AI_DRIVER="1")
+        # The deterministic clock (doc/testing.md "Verify scripts"): ImGui, animation and simulation
+        # advance a fixed step per frame, so a run times the same on every machine.
+        env.setdefault("ERHE_DETERMINISTIC_CLOCK", "1")
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         self.process = subprocess.Popen([self.exe], cwd=REPO_ROOT, env=env, creationflags=flags,
                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -210,12 +217,22 @@ class Editor:
                 # World-space mesh item are simplified from baked vertices, so coarse levels differ.
                 self.call("set_graphics_preset", {"lod_enabled": False})
                 return
-            time.sleep(0.25)
+            # Before the MCP server answers, the log is the only report: read it again once the
+            # process has run a while longer, or at once when it exits.
+            try:
+                self.process.wait(timeout=0.1)
+            except subprocess.TimeoutExpired:
+                pass
         self.process.kill()
         raise RuntimeError("editor did not become ready")
 
     def call(self, tool, arguments=None):
         return self.client.call(tool, arguments or {})
+
+    def wait_frames(self, frames=1):
+        """Returns after that many editor frames: the yield between readings of a condition no MCP
+        query serves frame by frame (a log line, a job status answered off the main loop)."""
+        self.call("wait_frames", {"frames": frames})
 
     def stop(self):
         if self.process.poll() is None:
@@ -235,6 +252,11 @@ class Editor:
     # Scenes
 
     def wait_idle(self, timeout=600.0):
+        """Returns once get_async_status reads settled in three consecutive frames.
+
+        The main loop serves the MCP queue once per frame, so each reading of a
+        waiting client lands in a later frame than the one before it.
+        """
         deadline = time.monotonic() + timeout
         idle_count = 0
         while time.monotonic() < deadline:
@@ -245,7 +267,6 @@ class Editor:
             idle_count = (idle_count + 1) if settled else 0
             if idle_count >= 3:
                 return
-            time.sleep(0.1)
         raise RuntimeError("editor not idle")
 
     def scene_names(self):
@@ -257,7 +278,6 @@ class Editor:
             if name in self.scene_names():
                 self.wait_idle()
                 return
-            time.sleep(0.1)
         raise RuntimeError(f"no scene {name}; scenes {self.scene_names()}")
 
     def load(self, path):
@@ -280,7 +300,6 @@ class Editor:
         while scene in self.scene_names():
             if time.monotonic() > deadline:
                 raise RuntimeError(f"scene {scene} did not close")
-            time.sleep(0.1)
         self.wait_idle()
 
     def save(self, scene, path):
@@ -317,7 +336,7 @@ class Editor:
             status = self.job(job_id)
             if status.get("state") in ("done", "failed"):
                 return status
-            time.sleep(0.05)
+            self.wait_frames()
         raise RuntimeError(f"export job {job_id} did not finish")
 
     def export(self, scene, target="pc"):
@@ -347,7 +366,6 @@ class Editor:
                 if "prepared_status" not in reply:
                     raise RuntimeError(f"no status of {scene}: {reply.get('error', '')}")
                 return reply["prepared_status"]
-            time.sleep(0.05)
         raise RuntimeError(f"the status of {scene} stayed pending")
 
     def render(self, scene, path, eye, target):
@@ -753,7 +771,6 @@ def wait_ray_hit(editor, scene, expected, timeout=60.0):
     deadline = time.monotonic() + timeout
     hit = ray_hit(editor, scene)
     while (not matches(hit)) and (time.monotonic() < deadline):
-        time.sleep(0.2)
         hit = ray_hit(editor, scene)
     return hit
 
@@ -1002,7 +1019,6 @@ def phase_export(args, work):
         deadline = time.monotonic() + 60.0
         reply = editor.call("get_prepared_status", {"scene_name": scene, "update": True})
         while reply.get("pending") and (time.monotonic() < deadline):
-            time.sleep(0.05)
             reply = editor.call("get_prepared_status", {"scene_name": scene})
         # R8.1 - R8.3: the open made the editor asset and stored the mesh and BVH items it derived.
         load_line = re.search(r"small\.glb: (\d+) primitives from items, (\d+) derived and stored, (\d+) BVH from items, (\d+) built and stored", read_log())
@@ -1160,8 +1176,9 @@ def phase_reexport_and_open(args, work, source, source_images, first_status):
         editor.wait_idle()
         after = editor.call("get_mesh_attribute_values", {"scene_name": scene, "node_name": "torus", "domain": "vertex", "indices": [0], "attributes": ["position"]})
         check("the MCP edit moved the torus vertex", json.dumps(position) != json.dumps(after), json.dumps(edit)[:200])
-        # The edit marks the status stale and computes nothing until an update is requested.
-        time.sleep(0.5)
+        # The edit marks the status stale and computes nothing until an update is requested: nothing
+        # starts within a window of frames (NEGATIVE_WINDOW_FRAMES).
+        editor.wait_frames(NEGATIVE_WINDOW_FRAMES)
         unrequested = editor.call("get_prepared_status", {"scene_name": scene})
         check(
             "status after the vertex edit, before an update is requested: stale, not pending, the earlier status still shown",
@@ -1607,7 +1624,7 @@ def phase_settings(args, work, source, source_images, source_hit):
         opened = editor.refusal("open_scene", {"path": usd_path}) is None
         deadline = time.monotonic() + 30.0
         while opened and ("usd_scene.usda" not in editor.scene_names()) and (time.monotonic() < deadline):
-            time.sleep(0.1)
+            pass
         if opened and ("usd_scene.usda" in editor.scene_names()):
             editor.wait_idle()
             refusal = editor.refusal("prepare_scene", {"scene_name": "usd_scene.usda", "target": "pc"})
@@ -1634,7 +1651,7 @@ def wait_for_stage(editor, job_id, stage, store_path=None, store_count=0):
                     return True, status
             except sqlite3.Error:
                 pass
-        time.sleep(0.002)
+        editor.wait_frames()
 
 
 def compare_stores(label, path_a, path_b):
@@ -2009,7 +2026,7 @@ def phase_texture_encoding(args, work):
                 stages.add(stage)
             if status.get("state") in ("done", "failed"):
                 break
-            time.sleep(0.01)
+            editor.wait_frames()
         editor.wait_idle()
         basis, textures = export_counts(status, "basis_texture"), export_counts(status, "texture")
         check("target Export makes two Basis texture items and two Texture items, copies the Texture items only, no image inside the Scene item",
@@ -2772,7 +2789,6 @@ def wait_pvs_views(editor, scene, predicate, timeout=60.0):
         status = pvs_status(editor, scene)
         if status.get("views") and predicate(status["views"]):
             return status
-        time.sleep(0.2)
     return status
 
 
@@ -2798,7 +2814,6 @@ def bake_pvs(editor, scene, timeout=1800.0):
             status["stages_seen"] = sorted(s for s in stages if s)
             editor.wait_idle()
             return status
-        time.sleep(0.1)
     raise RuntimeError("pvs_bake did not finish")
 
 
@@ -2864,7 +2879,7 @@ def phase_pvs(args, work):
             if (progress.get("stage") == "baking the PVS") and (refused_during is None):
                 progress_seen = progress
                 refused_during = editor.refusal("set_node_transform", {"scene_name": scene, "node_name": "floor", "space": "local", "translation": [0.0, 0.1, 0.0]})
-            time.sleep(0.05)
+            editor.wait_frames()
         rebake = editor.finish_export(job_id)
         editor.wait_idle()
         check("pvs: Export with pvs_mode rebake reports the PVS bake stage with its cell progress and holds the scene read-only meanwhile (R9.6, R9.7)",
@@ -3128,6 +3143,16 @@ def log_since(mark):
     return read_log()[mark:]
 
 
+def wait_log_line(editor, mark, text, timeout=120.0):
+    """True once logs/log.txt holds text after mark; the editor runs a frame between readings."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if text in log_since(mark):
+            return True
+        editor.wait_frames()
+    return False
+
+
 def phase_several_files(args, work):
     """R10: a host scene with two instances of a prefab that instantiates a prefab, and a material of a
     container file; per-file editor assets, the flat prepared asset, the bake, R10.5 - R10.8, R2.2, R2.5."""
@@ -3261,7 +3286,9 @@ def phase_several_files(args, work):
         editor.wait_idle()
         editor.save(name_b, prefab_b)
         editor.wait_idle()
-        time.sleep(0.5)
+        # The reload line, then a window of frames in which no key check may start.
+        wait_log_line(editor, mark, "Prefab instances of 'host' reloaded")
+        editor.wait_frames(NEGATIVE_WINDOW_FRAMES)
         log = log_since(mark)
         stale = editor.call("get_prepared_status", {"scene_name": scene})
         check("R10.6: the Save of the prefab source marks the status of the scene that instantiates it stale, computing nothing",
@@ -3534,7 +3561,7 @@ def phase_navigation(args, work):
                 stages.add(job["progress"].get("stage", ""))
             if job.get("state") in ("done", "failed"):
                 break
-            time.sleep(0.01)
+            editor.wait_frames()
         made = job
         editor.wait_idle()
         made_export = made.get("export", {})

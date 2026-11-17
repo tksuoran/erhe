@@ -206,7 +206,7 @@ TEST(Kit_window_wall, opening_is_clear_and_the_ends_are_plain)
 {
     const Kit_shape_definition& wall = get_shape("architecture.window_wall");
     for (const std::string& head : enum_values_of(wall, "head")) {
-        for (int seed = 0; seed < 12; ++seed) {
+        for (const int seed : derive_seeds()) {
             Kit_parameter_values values = all_derived(wall, seed);
             ASSERT_TRUE(values.set_enum("head", head));
             ASSERT_EQ(values.validate(), "");
@@ -297,7 +297,7 @@ TEST(Kit_pediment, topology_follows_from_integers_alone)
 TEST(Kit_pediment, bounds_follow_the_width_the_pitch_and_the_depth)
 {
     const Kit_shape_definition& pediment = get_shape("architecture.pediment");
-    for (int seed = 0; seed < 20; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(pediment, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const float half  = 0.5f * values.get_float("width");
@@ -411,7 +411,7 @@ void expect_forms_pass_at_the_corners(const char* const id, const std::vector<st
 {
     const Kit_shape_definition& shape = get_shape(id);
     for (const std::string& form : enum_values_of(shape, "form")) {
-        for (int seed = 0; seed < 6; ++seed) {
+        for (const int seed : sweep_seeds(shape)) {
             Kit_parameter_values values = explicit_values(shape, seed);
             ASSERT_TRUE(values.set_enum("form", form));
             for_each_corner(values, names, expect_valid_with_every_slot);
@@ -499,7 +499,7 @@ TEST(Kit_boulder_cluster, every_form_passes_at_the_corners_over_seeds)
 {
     const Kit_shape_definition& cluster = get_shape("nature.boulder_cluster");
     for (const std::string& form : enum_values_of(cluster, "form")) {
-        for (int seed = 0; seed < 8; ++seed) {
+        for (const int seed : sweep_seeds(cluster)) {
             Kit_parameter_values values = explicit_values(cluster, seed);
             ASSERT_TRUE(values.set_enum("form", form));
             for_each_corner(values, {"radius", "count", "size_spread", "roughness"}, [](const Kit_parameter_values& corner) {
@@ -531,7 +531,7 @@ TEST(Kit_boulder_cluster, seeds_give_several_topologies)
 TEST(Kit_boulder_cluster, heap_keeps_to_its_footprint)
 {
     const Kit_shape_definition& cluster = get_shape("nature.boulder_cluster");
-    for (int seed = 0; seed < 40; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(cluster, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const float radius = values.get_float("radius");
@@ -547,7 +547,7 @@ TEST(Kit_boulder_cluster, heap_keeps_to_its_footprint)
 TEST(Kit_stepping_stone, corners_pass_over_seeds_and_sides)
 {
     const Kit_shape_definition& stone = get_shape("nature.stepping_stone");
-    for (int seed = 0; seed < 40; ++seed) {
+    for (const int seed : sweep_seeds(stone)) {
         for_each_corner(explicit_values(stone, seed), {"diameter", "thickness", "sides"}, expect_valid_with_every_slot);
     }
 }
@@ -571,7 +571,7 @@ TEST(Kit_stepping_stone, topology_follows_from_integers_alone)
 TEST(Kit_stepping_stone, top_is_level_at_the_thickness)
 {
     const Kit_shape_definition& stone = get_shape("nature.stepping_stone");
-    for (int seed = 0; seed < 40; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(stone, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const float thickness = values.get_float("thickness");

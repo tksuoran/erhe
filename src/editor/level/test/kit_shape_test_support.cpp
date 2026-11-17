@@ -96,6 +96,25 @@ auto explicit_values(const Kit_shape_definition& shape, const int seed) -> Kit_p
     return values;
 }
 
+auto sweep_seeds(const Kit_shape_definition& shape) -> std::vector<int>
+{
+    const int count = (shape.randomness == Kit_randomness::seeded) ? c_seed_sweep_count : 1;
+    std::vector<int> seeds;
+    for (int seed = 0; seed < count; ++seed) {
+        seeds.push_back(seed);
+    }
+    return seeds;
+}
+
+auto derive_seeds() -> std::vector<int>
+{
+    std::vector<int> seeds;
+    for (int seed = 0; seed < c_derive_sweep_count; ++seed) {
+        seeds.push_back(seed);
+    }
+    return seeds;
+}
+
 auto vertices_on_x(const GEO::Mesh& mesh, const float plane_x) -> std::vector<std::array<float, 3>>
 {
     std::vector<std::array<float, 3>> points;

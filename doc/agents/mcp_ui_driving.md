@@ -114,13 +114,38 @@ these rather than clicking at a guessed offset. See
 | `key_press` | `key`, `modifiers`, `hold_frames` | Press a key with its modifiers, hold, release. `key` is an `erhe::window::Keycode` by name (`z`, `left shift`, `Key_f5`; case and `_` insensitive) or value |
 | `type_text` | `text` | UTF-8 text events to whatever holds keyboard focus, one 31-byte chunk per frame |
 | `inject_input_events` | `events` | The raw form: `erhe::window::Input_event` values with a `frame` offset each. Field names are the `*_event` member names; `modifiers` is a list of `ctrl` / `shift` / `super` / `menu` |
+| `wait_frames` | `frames` | Return after that many frames (an integer 1 - 3600); each frame counts as progress, so only a single frame longer than 5 s expires it |
 | `get_input_state` | - | Pointer position, held buttons, modifier mask, whether cursor-enter / focus were sent, and the stepping gesture if one runs |
-| `get_transform_handles` | `viewport`, `probe_points` | Per shown gizmo handle, a window point that picks it, the world point under it, its name and `handle_value`, and for a rotate ring `ring_axis` (the world axis it turns about) and `euler_gimbal`; plus the gizmo anchor and radius. `probe_points` adds `probes`: the handle each given window point picks and, when it picks one, the world point the press grabs. Needs a selection |
+| `get_transform_handles` | `viewport`, `probe_points`, `handles`, `search` | Per shown gizmo handle, a window point that picks it (a point on the handle's geometry: the whole window pixel a press there lands on and its 8 neighbours at max(grid step, 2 px) must pick the handle; else the deepest sample of an 81 x 81 grid of picks; `search: grid` takes the grid for every handle), the world point under it, its name and `handle_value`, and for a rotate ring `ring_axis` (the world axis it turns about) and `euler_gimbal`; plus the gizmo anchor and radius. `probe_points` adds `probes`: the handle each given window point picks and, when it picks one, the world point the press grabs. `handles: false` skips the handle grid (empty `handles`) when only the probes are wanted. Needs a selection |
 | `get_transform_rotation` | - | What the Transform window's Rotation group shows: representation, Euler order, the Euler angles in degrees as displayed, and the quaternion. The values a widget shows are not in `get_imgui_items`, which records labels and rectangles |
 | `capture_screenshot` | `path`, `annotate_imgui_items`, `annotate_window`, `annotate_limit` | The frame as a PNG; with annotation, numbered magenta rectangles over the recorded items and the number -> item table |
 
 ## Standing rules
 
+- **Separate clicks stay single clicks.** ImGui takes a press within
+  `io.MouseDoubleClickTime` (0.30 s) and `io.MouseDoubleClickMaxDist` (6 px) of
+  the previous press of that button as the next click of a chain - a double
+  click, which opens a drag row's text input. The first press of
+  `mouse_click`, `imgui_click` and `mouse_drag` is held, a whole frame at a
+  time, while ImGui's own click state says it would chain; the rest of the
+  gesture follows it unchanged (`get_input_state` reports the held frames).
+  On the deterministic clock the hold lasts the same number of frames on
+  every run. The check reads the desktop window host's ImGui context, which
+  the injected window events reach; a rendertarget host keeps its own click
+  state. `double` presses its second click at once, so it chains;
+  `inject_input_events` is injected as given.
+- **A request expires 5 s after its last progress.** A queued MCP request
+  that is not answered within 5 s of its last progress is dropped and
+  answered "Request timed out". A request that advances frame by frame -
+  `wait_frames`, an input gesture while it injects events or holds a press as
+  ImGui's time moves on - counts each frame as progress, so it may take longer
+  than 5 s in all as long as no single frame does;
+  one that stops progressing (a frame that skips ImGui's NewFrame keeps a
+  held press from ending) expires 5 s later, the gesture's remaining events
+  dropped (logged as "`<tool>` expired after N of M events").
+- **A wait is a frame count, not a sleep.** `wait_frames` returns after the
+  given number of frames; a script that waits for something no MCP query
+  reports (a log line) reads it again after each `wait_frames`.
 - **A click does not move.** A move between press and release makes the
   gesture a drag, and an `erhe::commands` click binding then never fires. The
   gesture tools keep the pointer still across a click; a hand-built

@@ -240,7 +240,7 @@ TEST(Kit_bridge_deck, bounds_ends_and_walking_surface_follow_the_values)
 {
     const Kit_shape_definition& deck = get_shape("architecture.bridge_deck");
     const Kit_agent agent{};
-    for (int seed = 0; seed < 24; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(deck, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const float half_l    = 0.5f * values.get_float("length");
@@ -328,7 +328,7 @@ TEST(Kit_buttress, topology_follows_from_integers_alone)
 TEST(Kit_buttress, bounds_back_and_parts_follow_the_values)
 {
     const Kit_shape_definition& buttress = get_shape("architecture.buttress");
-    for (int seed = 0; seed < 24; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(buttress, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const float        height = values.get_float("height");
@@ -368,7 +368,7 @@ TEST_P(Kit_log_forms, passes_at_the_corners_over_seeds_with_every_slot)
 {
     const Kit_shape_definition& log = get_shape("nature.log");
     ASSERT_EQ(log.material_slots, (std::vector<std::string>{"bark", "sapwood", "heartwood"}));
-    for (int seed = 0; seed < 6; ++seed) {
+    for (const int seed : sweep_seeds(log)) {
         for (const int stubs : {0, 4}) {
             for (const int segments : {6, 9, 14}) {
                 Kit_parameter_values values = explicit_form(log, GetParam(), seed);
@@ -384,7 +384,7 @@ TEST_P(Kit_log_forms, passes_at_the_corners_over_seeds_with_every_slot)
 TEST_P(Kit_log_forms, parts_and_size_follow_the_values)
 {
     const Kit_shape_definition& log = get_shape("nature.log");
-    for (int seed = 0; seed < 40; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = derived_form(log, GetParam(), seed);
         SCOPED_TRACE(values.to_canonical_text());
         const float length = values.get_float("length");
@@ -438,7 +438,7 @@ TEST_P(Kit_shell_forms, every_rib_count_passes_at_the_size_ends_over_seeds_with_
     ASSERT_EQ(shell.material_slots, (std::vector<std::string>{"shell", "coral"}));
     EXPECT_EQ(shell.collision, editor::Kit_collision::none);
     const Kit_parameter& size = shell.parameters[shell.find_parameter("size").value()];
-    for (int seed = 0; seed < 8; ++seed) {
+    for (const int seed : sweep_seeds(shell)) {
         for (int ribs = 5; ribs <= 12; ++ribs) {
             for (const float value : {size.float_min, 0.3f, size.float_max}) {
                 Kit_parameter_values values = explicit_form(shell, GetParam(), seed);
@@ -504,7 +504,7 @@ TEST_P(Kit_blocky_tree_forms, every_block_count_passes_at_the_corners_over_seeds
 {
     const Kit_shape_definition& tree = get_shape("nature.blocky_tree");
     ASSERT_EQ(tree.material_slots, (std::vector<std::string>{"bark", "foliage", "shoot"}));
-    for (int seed = 0; seed < 12; ++seed) {
+    for (const int seed : sweep_seeds(tree)) {
         for (int blocks = 1; blocks <= 4; ++blocks) {
             Kit_parameter_values values = explicit_form(tree, GetParam(), seed);
             ASSERT_TRUE(values.set_int("blocks", blocks));
@@ -518,7 +518,7 @@ TEST_P(Kit_blocky_tree_forms, every_block_count_passes_at_the_corners_over_seeds
 TEST_P(Kit_blocky_tree_forms, parts_and_size_follow_the_values)
 {
     const Kit_shape_definition& tree = get_shape("nature.blocky_tree");
-    for (int seed = 0; seed < 40; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = derived_form(tree, GetParam(), seed);
         SCOPED_TRACE(values.to_canonical_text());
         const unsigned int blocks       = static_cast<unsigned int>(values.get_int("blocks"));
@@ -582,7 +582,7 @@ TEST(Kit_stone_lantern, topology_follows_from_integers_alone)
 TEST(Kit_stone_lantern, bounds_parts_and_core_follow_the_values)
 {
     const Kit_shape_definition& lantern = get_shape("architecture.stone_lantern");
-    for (int seed = 0; seed < 24; ++seed) {
+    for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(lantern, seed);
         SCOPED_TRACE(values.to_canonical_text());
         const float        height = values.get_float("height");
